@@ -1,0 +1,47 @@
+import { MAX_EVENT_QUEUE_SIZE, STORAGE_KEYS } from "../shared/constants";
+import { defaultSettings } from "../shared/browser";
+import type { ClientMessage, FluxIQSession, FluxIQSettings } from "../shared/protocol";
+
+export async function readSettings(): Promise<FluxIQSettings> {
+  const stored = await chrome.storage.local.get(STORAGE_KEYS.settings);
+  return { ...defaultSettings(), ...((stored[STORAGE_KEYS.settings] as Partial<FluxIQSettings> | undefined) ?? {}) };
+}
+
+export async function writeSettings(settings: FluxIQSettings): Promise<void> {
+  await chrome.storage.local.set({ [STORAGE_KEYS.settings]: settings });
+}
+
+export async function readSession(): Promise<FluxIQSession | null> {
+  const stored = await chrome.storage.local.get(STORAGE_KEYS.session);
+  return (stored[STORAGE_KEYS.session] as FluxIQSession | undefined) ?? null;
+}
+
+export async function writeSession(session: FluxIQSession): Promise<void> {
+  await chrome.storage.local.set({ [STORAGE_KEYS.session]: session });
+}
+
+export async function readOrCreateClientId(): Promise<string> {
+  const stored = await chrome.storage.local.get(STORAGE_KEYS.clientId);
+  const existing = stored[STORAGE_KEYS.clientId] as string | undefined;
+  if (existing) return existing;
+  const clientId = `extension-${crypto.randomUUID()}`;
+  await chrome.storage.local.set({ [STORAGE_KEYS.clientId]: clientId });
+  return clientId;
+}
+
+export async function readQueuedEvents(): Promise<ClientMessage[]> {
+  const stored = await chrome.storage.local.get(STORAGE_KEYS.queuedEvents);
+  return (stored[STORAGE_KEYS.queuedEvents] as ClientMessage[] | undefined) ?? [];
+}
+
+export async function queueEvent(message: ClientMessage): Promise<number> {
+  const queued = await readQueuedEvents();
+  queued.push(message);
+  const trimmed = queued.slice(-MAX_EVENT_QUEUE_SIZE);
+  await chrome.storage.local.set({ [STORAGE_KEYS.queuedEvents]: trimmed });
+  return trimmed.length;
+}
+
+export async function clearQueuedEvents(): Promise<void> {
+  await chrome.storage.local.set({ [STORAGE_KEYS.queuedEvents]: [] });
+}
