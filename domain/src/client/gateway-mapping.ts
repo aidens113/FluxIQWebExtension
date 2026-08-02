@@ -35,6 +35,7 @@ export function webAutomationEventTypeForClientKind(kind: string): WebAutomation
   if (kind === "dom.focus") return WEB_AUTOMATION_EVENTS.elementFocused;
   if (kind === "dom.blur") return WEB_AUTOMATION_EVENTS.elementBlurred;
   if (kind === "dom.keydown") return WEB_AUTOMATION_EVENTS.keyboardPressed;
+  if (kind === "dom.wheel") return WEB_AUTOMATION_EVENTS.mouseWheel;
   if (kind === "dom.scroll") return WEB_AUTOMATION_EVENTS.scrollChanged;
   if (kind === "dom.mutation") return WEB_AUTOMATION_EVENTS.domMutated;
   if (kind === "dom.snapshot") return WEB_AUTOMATION_EVENTS.snapshotCaptured;

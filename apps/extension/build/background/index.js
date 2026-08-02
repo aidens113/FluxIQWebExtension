@@ -15,6 +15,7 @@ var RUNTIME_MESSAGES = {
   connect: "fluxiq.connect",
   disconnect: "fluxiq.disconnect",
   resetSession: "fluxiq.resetSession",
+  dismissRecordingLock: "fluxiq.dismissRecordingLock",
   startRecording: "fluxiq.startRecording",
   stopRecording: "fluxiq.stopRecording",
   contentReady: "fluxiq.contentReady",
@@ -219,6 +220,7 @@ var WEB_AUTOMATION_EVENTS = {
   elementFocused: "web.element.focused",
   elementBlurred: "web.element.blurred",
   keyboardPressed: "web.keyboard.pressed",
+  mouseWheel: "web.mouse.wheel",
   scrollChanged: "web.scroll.changed",
   domMutated: "web.dom.mutated",
   snapshotCaptured: "web.snapshot.captured",
@@ -282,6 +284,7 @@ function webAutomationEventTypeForClientKind(kind) {
   if (kind === "dom.focus") return WEB_AUTOMATION_EVENTS.elementFocused;
   if (kind === "dom.blur") return WEB_AUTOMATION_EVENTS.elementBlurred;
   if (kind === "dom.keydown") return WEB_AUTOMATION_EVENTS.keyboardPressed;
+  if (kind === "dom.wheel") return WEB_AUTOMATION_EVENTS.mouseWheel;
   if (kind === "dom.scroll") return WEB_AUTOMATION_EVENTS.scrollChanged;
   if (kind === "dom.mutation") return WEB_AUTOMATION_EVENTS.domMutated;
   if (kind === "dom.snapshot") return WEB_AUTOMATION_EVENTS.snapshotCaptured;
@@ -516,6 +519,9 @@ var FluxIQConnection = class {
   shouldStayConnected = false;
   eventCount = 0;
   recordingStartedAt;
+  activeRecordingId;
+  pendingRecordingStart;
+  recordingBlock;
   lastActivityAt;
   unsupportedPage;
   recentActivities = [];
@@ -538,6 +544,7 @@ var FluxIQConnection = class {
     if (this.recordingStartedAt !== void 0) status.recordingStartedAt = this.recordingStartedAt;
     if (this.lastActivityAt !== void 0) status.lastActivityAt = this.lastActivityAt;
     if (this.unsupportedPage) status.unsupportedPage = this.unsupportedPage;
+    if (this.recordingBlock) status.recordingBlock = this.recordingBlock;
     if (this.lastError) status.lastError = this.lastError;
     if (this.lastMessageAt !== void 0) status.lastMessageAt = this.lastMessageAt;
     return status;
@@ -594,6 +601,7 @@ var FluxIQConnection = class {
   disconnect() {
     this.shouldStayConnected = false;
     this.clearReconnect();
+    this.clearPendingRecordingStart();
     this.stopHeartbeat();
     void this.client?.close();
     this.client = null;
@@ -601,6 +609,10 @@ var FluxIQConnection = class {
     this.setState("disconnected");
   }
   async startRecording() {
+    if (this.pendingRecordingStart) {
+      this.addActivity("recording", "Recording is starting", "Waiting for FluxIQ project acceptance.", "warning");
+      return;
+    }
     if (this.connectionState !== "connected") {
       this.lastError = "Connect to FluxIQ before recording.";
       this.emitStatus();
@@ -613,47 +625,66 @@ var FluxIQConnection = class {
       this.emitStatus();
       return;
     }
-    this.eventCount = 0;
-    this.recentActivities.length = 0;
-    this.recordingStartedAt = Date.now();
-    this.recordingState = "recording";
-    this.addActivity("recording", "Recording started", this.activeTabUrl ?? "Active tab", "success");
-    this.emitStatus();
-    if (this.activeTabId !== void 0) await this.attachTabForRecording(this.activeTabId);
-    await this.sendBrowserState();
-    await this.handleRecordingEvent({
-      kind: "browser.tab",
-      sequence: Date.now(),
-      url: this.activeTabUrl ?? "",
-      title: "",
-      eventTimestampMs: Date.now(),
-      metadata: { recordingState: "started" }
+    this.recordingBlock = void 0;
+    const recordingId = `client.${this.session.clientId}.${Date.now()}`;
+    await this.sendClientMessage("client.start_recording", {
+      recordingId,
+      startedAt: Date.now(),
+      domainId: WEB_AUTOMATION_DOMAIN_ID,
+      initialState: { timestamp: Date.now(), namespaces: {} },
+      metadata: {
+        domainId: WEB_AUTOMATION_DOMAIN_ID,
+        requestedBy: "extension-record-button",
+        activeTabUrl: this.activeTabUrl ?? null
+      }
     });
-    await this.captureActiveSnapshot("Initial snapshot captured");
+    this.addActivity("recording", "Starting recording", "Waiting for FluxIQ project acceptance.", "warning");
+    this.pendingRecordingStart = {
+      recordingId,
+      timer: setTimeout(() => void this.beginAcceptedRecording(recordingId), 750)
+    };
+    this.emitStatus();
   }
-  async stopRecording() {
+  async stopRecording(notifyServer = true) {
     if (this.recordingState !== "recording") return;
     await this.captureActiveSnapshot("Final snapshot captured");
     this.recordingState = "idle";
-    this.addActivity("recording", "Recording stopped", `${this.eventCount} events captured`, "neutral");
+    this.addActivity("recording", "Recording stopped", `${this.eventCount} user actions captured`, "neutral");
     this.emitStatus();
     await this.broadcastToContent({ type: "recording", recording: false, settings: this.settings }, false);
-    await this.sendClientMessage("client.recording_event", gatewayRecordingEventFromPayload({
+    await this.sendRecordingEvidence({
       kind: "browser.tab",
       sequence: Date.now(),
       url: this.activeTabUrl ?? "",
       title: "",
       eventTimestampMs: Date.now(),
       metadata: { recordingState: "stopped" }
-    }));
+    });
+    if (notifyServer && this.activeRecordingId) {
+      await this.sendClientMessage("client.stop_recording", {
+        recordingId: this.activeRecordingId,
+        endedAt: Date.now()
+      });
+    }
+    this.activeRecordingId = void 0;
+  }
+  dismissRecordingBlock() {
+    this.recordingBlock = void 0;
+    if (this.lastError === "Open a FluxIQ project before recording.") this.lastError = void 0;
+    this.emitStatus();
   }
   async handleRecordingEvent(payload, tabId, frameId) {
     if (this.recordingState !== "recording") return;
-    if (payload.kind !== "content.ready") {
+    if (isPrimaryUserActionKind(payload.kind)) {
       this.eventCount += 1;
       this.addActivity(payload.kind, activityLabel(payload), activityDetail(payload));
+      await this.sendClientMessage("client.recording_event", gatewayRecordingEventFromPayload(payload, tabId, frameId));
+      return;
     }
-    await this.sendClientMessage("client.recording_event", gatewayRecordingEventFromPayload(payload, tabId, frameId));
+    if (payload.kind !== "content.ready") {
+      this.addActivity(payload.kind, `Evidence: ${activityLabel(payload)}`, activityDetail(payload));
+    }
+    await this.sendRecordingEvidence(payload, tabId, frameId);
   }
   async handleTabUpdated(tab) {
     const becameActive = Boolean(tab.active && tab.id !== void 0);
@@ -752,6 +783,10 @@ var FluxIQConnection = class {
     }
     if (message.type === "server.error") {
       this.lastError = message.payload.message;
+      if (message.payload.code === "recording.project_required") {
+        this.handleRecordingProjectRequired(message.payload.message);
+        return;
+      }
       this.setState("error");
       return;
     }
@@ -789,11 +824,11 @@ var FluxIQConnection = class {
       return;
     }
     if (payload.command === "start_recording") {
-      await this.startRecording();
+      await this.beginAcceptedRecording(payload.recordingId);
       return;
     }
     if (payload.command === "stop_recording") {
-      await this.stopRecording();
+      await this.stopRecording(false);
       return;
     }
     if (payload.command === "set_active_tab") {
@@ -840,8 +875,69 @@ var FluxIQConnection = class {
       await this.sendActionResult(result, tabId, action.frameId);
     }
   }
+  async beginAcceptedRecording(recordingId) {
+    this.clearPendingRecordingStart();
+    if (this.recordingState === "recording") return;
+    this.recordingBlock = void 0;
+    this.activeRecordingId = recordingId;
+    this.eventCount = 0;
+    this.recentActivities.length = 0;
+    this.recordingStartedAt = Date.now();
+    this.recordingState = "recording";
+    this.addActivity("recording", "Recording started", this.activeTabUrl ?? "Active tab", "success");
+    this.emitStatus();
+    if (this.activeTabId !== void 0) await this.attachTabForRecording(this.activeTabId);
+    await this.sendBrowserState();
+    await this.handleRecordingEvent({
+      kind: "browser.tab",
+      sequence: Date.now(),
+      url: this.activeTabUrl ?? "",
+      title: "",
+      eventTimestampMs: Date.now(),
+      metadata: { recordingState: "started", recordingId }
+    });
+    await this.captureActiveSnapshot("Initial snapshot captured");
+  }
+  handleRecordingProjectRequired(message) {
+    this.clearPendingRecordingStart();
+    if (this.recordingState === "recording") {
+      this.recordingState = "idle";
+      void this.broadcastToContent({ type: "recording", recording: false, settings: this.settings }, false);
+    }
+    this.recordingStartedAt = void 0;
+    this.activeRecordingId = void 0;
+    this.recordingBlock = {
+      code: "recording.project_required",
+      title: "Project Required",
+      message: message || "Open a FluxIQ project in the web panel before starting a recording."
+    };
+    this.lastError = "Open a FluxIQ project before recording.";
+    this.addActivity("recording", "Recording locked", "Open a FluxIQ project in the web panel.", "warning");
+    this.emitStatus();
+  }
+  clearPendingRecordingStart() {
+    if (!this.pendingRecordingStart) return;
+    clearTimeout(this.pendingRecordingStart.timer);
+    this.pendingRecordingStart = void 0;
+  }
   async sendBrowserState() {
     await this.sendClientMessage("client.state_update", browserStateFromTabs(await activeTab(), await allTabs(), this.recordingState));
+  }
+  async sendRecordingEvidence(payload, tabId, frameId) {
+    await this.sendClientMessage("client.state_update", createWebAutomationStateUpdate({
+      ...tabId === void 0 ? {} : { activeContextId: String(tabId) },
+      state: compactObject({
+        latestEvidence: recordingEvidencePayload(payload)
+      }),
+      metadata: compactObject({
+        reason: "recording-evidence",
+        clientKind: payload.kind,
+        eventTimestampMs: payload.eventTimestampMs,
+        ...tabId === void 0 ? {} : { tabId },
+        ...frameId === void 0 ? {} : { frameId },
+        ...payload.metadata ?? {}
+      })
+    }));
   }
   async sendActionResult(result, tabId, frameId) {
     await this.sendClientMessage("client.action_result", gatewayActionResultFromBrowserResult(result));
@@ -964,6 +1060,26 @@ var FluxIQConnection = class {
 function compactObject(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
+function isPrimaryUserActionKind(kind) {
+  return kind === "dom.click" || kind === "dom.keydown" || kind === "dom.wheel";
+}
+function recordingEvidencePayload(payload) {
+  return compactObject({
+    kind: payload.kind,
+    url: payload.url,
+    title: payload.title,
+    sequence: payload.sequence,
+    timestamp: payload.eventTimestampMs,
+    element: payload.element,
+    snapshot: payload.snapshot,
+    inputValue: payload.inputValue,
+    key: payload.key,
+    scroll: payload.scroll,
+    mutation: payload.mutation,
+    actionResult: payload.actionResult,
+    metadata: payload.metadata
+  });
+}
 function browserStateFromTabs(active, tabs, recordingState) {
   return createWebAutomationStateUpdate({
     ...active?.tabId === void 0 ? {} : { activeContextId: String(active.tabId) },
@@ -1067,6 +1183,7 @@ function activityLabel(payload) {
   if (payload.kind === "dom.change") return "Field changed";
   if (payload.kind === "dom.submit") return "Form submitted";
   if (payload.kind === "dom.keydown") return `Key ${payload.key ?? ""}`.trim();
+  if (payload.kind === "dom.wheel") return "Mouse wheel";
   if (payload.kind === "dom.scroll") return "Page scrolled";
   if (payload.kind === "dom.mutation") return "DOM changed";
   if (payload.kind === "browser.navigation") return "Navigation";
@@ -1152,6 +1269,10 @@ async function handleRuntimeMessage(message, sender) {
     connection = void 0;
     const next = await getConnection();
     return { ok: true, status: await statusWithQueue(next) };
+  }
+  if (typed.type === RUNTIME_MESSAGES.dismissRecordingLock) {
+    manager.dismissRecordingBlock();
+    return { ok: true, status: manager.status() };
   }
   if (typed.type === RUNTIME_MESSAGES.startRecording) {
     await manager.startRecording();

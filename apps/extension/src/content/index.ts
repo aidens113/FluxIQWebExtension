@@ -104,6 +104,7 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
 });
 
 document.addEventListener("click", (event) => {
+  if (!event.isTrusted) return;
   const target = event.target instanceof Element ? event.target : null;
   emit("dom.click", compactObject({ element: target ? describeElement(target) : undefined, metadata: pointerMetadata(event) }));
 }, true);
@@ -140,10 +141,28 @@ document.addEventListener("blur", (event) => {
 }, true);
 
 document.addEventListener("keydown", (event) => {
+  if (!event.isTrusted) return;
   emit("dom.keydown", compactObject({
     key: event.key,
     element: event.target instanceof Element ? describeElement(event.target) : undefined,
     metadata: {
+      altKey: event.altKey,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      shiftKey: event.shiftKey
+    }
+  }));
+}, true);
+
+document.addEventListener("wheel", (event) => {
+  if (!event.isTrusted) return;
+  emit("dom.wheel", compactObject({
+    scroll: { x: window.scrollX, y: window.scrollY },
+    metadata: {
+      deltaX: event.deltaX,
+      deltaY: event.deltaY,
+      deltaZ: event.deltaZ,
+      deltaMode: event.deltaMode,
       altKey: event.altKey,
       ctrlKey: event.ctrlKey,
       metaKey: event.metaKey,

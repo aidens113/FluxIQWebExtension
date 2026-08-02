@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const fluxiqRoot = path.resolve(repoRoot, "..", "!FluxIQ");
+const webPanelHostModule = path.join(repoRoot, "domain", "dist", "host", "web-panel-host.cjs");
 
 if (!existsSync(path.join(fluxiqRoot, "apps", "web", "package.json"))) {
   console.error(`Could not find FluxIQ web app at ${fluxiqRoot}`);
@@ -14,18 +15,20 @@ if (!existsSync(path.join(fluxiqRoot, "apps", "web", "package.json"))) {
 const env = {
   ...process.env,
   FLUXIQ_ROOT: repoRoot,
+  FLUXIQ_HOST_MODULE: process.env.FLUXIQ_HOST_MODULE ?? webPanelHostModule,
   FLUXIQ_CLIENT_GATEWAY_ENABLED: process.env.FLUXIQ_CLIENT_GATEWAY_ENABLED ?? "true",
   FLUXIQ_PUBLIC_CLIENT_WS_URL: process.env.FLUXIQ_PUBLIC_CLIENT_WS_URL ?? "ws://127.0.0.1:4777/client"
 };
 
 console.log(`[FluxIQ Web Automation] FLUXIQ_ROOT=${repoRoot}`);
 console.log("[FluxIQ Web Automation] Preparing repo-local FluxIQ runtime...");
+await run("node", [path.join(repoRoot, "domain", "scripts", "build-web-panel-host.mjs")], env);
 await run("node", [path.join(repoRoot, "domain", "scripts", "setup-fluxiq.mjs")], {
   ...env,
   FLUXIQ_WEB_AUTOMATION_ROOT: repoRoot
 });
 console.log("[FluxIQ Web Automation] Starting @fluxiq/web from the core framework workspace...");
-console.log("[FluxIQ Web Automation] Note: this points the panel at this repo's .fluxiq data. Core web still needs a host-module hook to auto-register runtime-only domain contracts in the panel process.");
+console.log(`[FluxIQ Web Automation] FLUXIQ_HOST_MODULE=${env.FLUXIQ_HOST_MODULE}`);
 
 const child = spawn("pnpm", ["--dir", fluxiqRoot, "--filter", "@fluxiq/web", "dev"], {
   env,

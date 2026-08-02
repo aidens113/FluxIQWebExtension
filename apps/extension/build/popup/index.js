@@ -5,6 +5,7 @@ var RUNTIME_MESSAGES = {
   connect: "fluxiq.connect",
   disconnect: "fluxiq.disconnect",
   resetSession: "fluxiq.resetSession",
+  dismissRecordingLock: "fluxiq.dismissRecordingLock",
   startRecording: "fluxiq.startRecording",
   stopRecording: "fluxiq.stopRecording",
   contentReady: "fluxiq.contentReady",
@@ -67,6 +68,9 @@ var settingsDrawer = element("settingsDrawer");
 var pairingOverlay = element("pairingOverlay");
 var pairingReferenceCode = element("pairingReferenceCode");
 var overlayCancelButton = element("overlayCancelButton");
+var recordingLockOverlay = element("recordingLockOverlay");
+var recordingLockMessage = element("recordingLockMessage");
+var recordingLockDismissButton = element("recordingLockDismissButton");
 var currentStatus;
 var timerHandle;
 void refresh();
@@ -98,6 +102,9 @@ stopButton.addEventListener("click", () => {
 });
 overlayCancelButton.addEventListener("click", () => {
   void sendCommand(RUNTIME_MESSAGES.disconnect);
+});
+recordingLockDismissButton.addEventListener("click", () => {
+  void sendCommand(RUNTIME_MESSAGES.dismissRecordingLock);
 });
 chrome.runtime.onMessage.addListener((message) => {
   const typed = message;
@@ -155,6 +162,7 @@ function renderStatus(status) {
   unsupportedReason.textContent = status.unsupportedPage?.reason ?? "";
   renderActivities(status.recentActivities);
   renderPairingOverlay(status);
+  renderRecordingLockOverlay(status);
   renderError(status.lastError);
   renderTimer();
 }
@@ -202,6 +210,11 @@ function renderPairingOverlay(status) {
   pairingOverlay.hidden = !shouldShow;
   if (!shouldShow) return;
   pairingReferenceCode.textContent = status.pairingReferenceCode ?? "------";
+}
+function renderRecordingLockOverlay(status) {
+  const block = status.recordingBlock;
+  recordingLockOverlay.hidden = !block;
+  recordingLockMessage.textContent = block?.message ?? "";
 }
 function startTimerLoop() {
   timerHandle = setInterval(renderTimer, 1e3);

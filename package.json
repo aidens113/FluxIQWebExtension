@@ -8,6 +8,7 @@
     "build": "pnpm -r build",
     "check": "pnpm -r check",
     "dev": "node scripts/run-fluxiq-web.mjs",
+    "fluxiq:host:build": "pnpm --filter @fluxiq-web-extension/domain host:build",
     "fluxiq:setup": "pnpm --filter @fluxiq-web-extension/domain fluxiq:setup",
     "fluxiq:web": "node scripts/run-fluxiq-web.mjs",
     "test": "pnpm -r test"

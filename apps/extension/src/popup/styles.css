@@ -424,6 +424,23 @@ dd {
   text-align: center;
 }
 
+.lock-dialog {
+  border-color: #5b4730;
+}
+
+.lock-symbol {
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid #5b4730;
+  border-radius: 50%;
+  background: #231d16;
+  color: #f5d38a;
+  font-size: 20px;
+}
+
 .pairing-kicker {
   color: #f1b84d;
   font-size: 11px;

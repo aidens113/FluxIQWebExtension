@@ -41,7 +41,7 @@
           </div>
           <div>
             <strong id="eventCount">0</strong>
-            <span>Events</span>
+            <span>Actions</span>
           </div>
           <div>
             <strong id="queueSize">0</strong>
@@ -96,6 +96,16 @@
           <div id="pairingReferenceCode" class="reference-code">------</div>
           <p>Approve the matching code in the FluxIQ web panel.</p>
           <button id="overlayCancelButton" type="button">Cancel</button>
+        </div>
+      </section>
+
+      <section id="recordingLockOverlay" class="pairing-overlay" aria-modal="true" role="dialog" aria-labelledby="recordingLockTitle" hidden>
+        <div class="pairing-dialog lock-dialog">
+          <span class="lock-symbol" aria-hidden="true">🔒</span>
+          <span class="pairing-kicker">Recording Locked</span>
+          <h2 id="recordingLockTitle">Open A Project First</h2>
+          <p id="recordingLockMessage">Open a FluxIQ project in the web panel before starting a recording.</p>
+          <button id="recordingLockDismissButton" type="button">Got It</button>
         </div>
       </section>
     </main>

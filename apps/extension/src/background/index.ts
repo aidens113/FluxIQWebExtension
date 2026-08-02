@@ -90,6 +90,11 @@ async function handleRuntimeMessage(message: unknown, sender: chrome.runtime.Mes
     return { ok: true, status: await statusWithQueue(next) };
   }
 
+  if (typed.type === RUNTIME_MESSAGES.dismissRecordingLock) {
+    manager.dismissRecordingBlock();
+    return { ok: true, status: manager.status() };
+  }
+
   if (typed.type === RUNTIME_MESSAGES.startRecording) {
     await manager.startRecording();
     return { ok: true, status: manager.status() };

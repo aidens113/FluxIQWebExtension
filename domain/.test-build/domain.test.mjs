@@ -457,7 +457,7 @@ function appendRecordingEntry(recording, input) {
   const sequence = nextTimelineSequence(recording);
   const entry = {
     ...input,
-    id: input.id ?? `entry.${sequence}`,
+    id: uniqueTimelineEntryId(recording, input.id ?? `entry.${sequence}`),
     recordingId: recording.recordingId,
     timestamp,
     monotonicOffsetMs: input.monotonicOffsetMs ?? Math.max(0, timestamp - recording.startedAt),
@@ -488,12 +488,28 @@ function appendRecordingStateDelta(recording, previous, current, input = {}) {
   };
   return appendTimelineEntry(recording, entry);
 }
+function appendRecordingNote(recording, note) {
+  const timestamp = note.timestamp ?? Date.now();
+  const id = note.id ?? `note.${recording.notes.length + 1}`;
+  const nextNote = { ...note, id, timestamp };
+  const withNote = { ...recording, notes: [...recording.notes, nextNote] };
+  const entry = {
+    ...baseAppendFields(withNote, { id: `entry.${id}`, timestamp }),
+    recordingId: withNote.recordingId,
+    sequence: nextTimelineSequence(withNote),
+    monotonicOffsetMs: 0,
+    type: "note",
+    noteId: id
+  };
+  return appendTimelineEntry(withNote, entry);
+}
 function finalizeRecordingSession(recording, endedAt = Date.now()) {
   return { ...recording, endedAt: Math.max(endedAt, recording.startedAt) };
 }
 function appendTimelineEntry(recording, entry) {
   const next = {
     ...entry,
+    id: uniqueTimelineEntryId(recording, entry.id),
     recordingId: recording.recordingId,
     sequence: nextTimelineSequence(recording),
     monotonicOffsetMs: Math.max(0, entry.timestamp - recording.startedAt)
@@ -503,7 +519,7 @@ function appendTimelineEntry(recording, entry) {
 function baseAppendFields(recording, input) {
   const timestamp = input.timestamp ?? Date.now();
   return {
-    id: input.id ?? `entry.${nextTimelineSequence(recording)}`,
+    id: uniqueTimelineEntryId(recording, input.id ?? `entry.${nextTimelineSequence(recording)}`),
     timestamp,
     sourceId: input.sourceId ?? recording.sources[0]?.id ?? "source.host",
     ...input.metadata !== void 0 ? { metadata: input.metadata } : {}
@@ -511,6 +527,13 @@ function baseAppendFields(recording, input) {
 }
 function nextTimelineSequence(recording) {
   return recording.timeline.reduce((max, entry) => Math.max(max, entry.sequence), -1) + 1;
+}
+function uniqueTimelineEntryId(recording, preferredId) {
+  const existing = new Set(recording.timeline.map((entry) => entry.id));
+  if (!existing.has(preferredId)) return preferredId;
+  let suffix = 2;
+  while (existing.has(`${preferredId}.${suffix}`)) suffix += 1;
+  return `${preferredId}.${suffix}`;
 }
 
 // ../../!FluxIQ/packages/fluxiq/src/programs/automation-studio/model/recording-domain.ts
@@ -2386,18 +2409,21 @@ function missingTargetTrace(startedAt, finishedAt, edge, attempts, values, effec
 }
 
 // ../../!FluxIQ/packages/fluxiq/src/programs/automation-studio/runtime/service.ts
-import { randomUUID } from "node:crypto";
+import { randomUUID as randomUUID2 } from "node:crypto";
 import { mkdir as mkdir2, readdir, rm as rm2 } from "node:fs/promises";
 import path2 from "node:path";
 
 // ../../!FluxIQ/packages/fluxiq/src/programs/_shared/storage.ts
+import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { setTimeout as delay } from "node:timers/promises";
 import path from "node:path";
-var ProgramJsonStore = class {
+var ProgramJsonStore = class _ProgramJsonStore {
   constructor(filePath, empty) {
     this.empty = empty;
     this.filePath = path.resolve(filePath);
   }
+  static writeLocks = /* @__PURE__ */ new Map();
   filePath;
   async read() {
     try {
@@ -2410,22 +2436,44 @@ var ProgramJsonStore = class {
     return this.empty();
   }
   async write(data) {
+    return await _ProgramJsonStore.withFileLock(this.filePath, async () => this.writeUnlocked(data));
+  }
+  async update(mutator) {
+    return await _ProgramJsonStore.withFileLock(this.filePath, async () => {
+      const data = await this.read();
+      const result = await mutator(data);
+      return this.writeUnlocked(result ?? data);
+    });
+  }
+  async writeUnlocked(data) {
     await mkdir(path.dirname(this.filePath), { recursive: true });
-    const tempPath = `${this.filePath}.${process.pid}.${Date.now()}.tmp`;
+    const tempPath = `${this.filePath}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`;
     await writeFile(tempPath, `${JSON.stringify({ version: 1, data }, null, 2)}
 `, "utf8");
     try {
-      await rename(tempPath, this.filePath);
+      await renameWithWindowsRetry(tempPath, this.filePath);
     } catch (error) {
       await rm(tempPath, { force: true });
       throw error;
     }
     return data;
   }
-  async update(mutator) {
-    const data = await this.read();
-    const result = await mutator(data);
-    return this.write(result ?? data);
+  static async withFileLock(filePath, operation) {
+    const key = path.resolve(filePath).toLowerCase();
+    const previous = _ProgramJsonStore.writeLocks.get(key) ?? Promise.resolve();
+    let release = () => void 0;
+    const current = new Promise((resolve) => {
+      release = resolve;
+    });
+    const chained = previous.then(() => current, () => current);
+    _ProgramJsonStore.writeLocks.set(key, chained);
+    await previous.catch(() => void 0);
+    try {
+      return await operation();
+    } finally {
+      release();
+      if (_ProgramJsonStore.writeLocks.get(key) === chained) _ProgramJsonStore.writeLocks.delete(key);
+    }
   }
 };
 function programDataFile(rootDir, programId, fileName) {
@@ -2433,6 +2481,19 @@ function programDataFile(rootDir, programId, fileName) {
 }
 function safeSegment(value) {
   return value.trim().toLowerCase().replace(/[^a-z0-9_.-]+/g, "_");
+}
+async function renameWithWindowsRetry(source, target) {
+  const delays = [4, 12, 28, 60, 120];
+  for (let attempt = 0; attempt <= delays.length; attempt += 1) {
+    try {
+      await rename(source, target);
+      return;
+    } catch (error) {
+      const code = error.code;
+      if (attempt >= delays.length || code !== "EPERM" && code !== "EACCES" && code !== "EBUSY") throw error;
+      await delay(delays[attempt]);
+    }
+  }
 }
 
 // ../../!FluxIQ/packages/fluxiq/src/programs/automation-studio/storage/ids.ts
@@ -2575,6 +2636,7 @@ var AutomationStudioService = class {
   projectRootDir;
   nodeRootDir;
   recordingDomains = new RecordingDomainRegistry();
+  recordingMutationLocks = /* @__PURE__ */ new Map();
   ready;
   storageReady;
   constructor(options = {}) {
@@ -2586,7 +2648,7 @@ var AutomationStudioService = class {
       this.projectIndexStore = new ProgramJsonStore(path2.join(this.projectRootDir, "index.json"), () => ({ categories: [], projects: [] }));
       this.legacyProjectStore = new ProgramJsonStore(programDataFile(options.dataDir, "automation-studio", "projects.json"), () => ({ categories: [], projects: [] }));
     }
-    this.ready = options.seedFixture === false ? Promise.resolve() : this.seedFixture();
+    this.ready = options.seedFixture === true ? this.seedFixture() : Promise.resolve();
   }
   async snapshot(domainId) {
     await this.ready;
@@ -2603,9 +2665,9 @@ var AutomationStudioService = class {
       },
       problems: [
         {
-          id: "automation-studio.prototype-data",
+          id: "automation-studio.host-artifacts",
           severity: "info",
-          message: "Automation Studio is showing framework fixture data until host-owned artifacts are connected."
+          message: "Automation Studio is ready for host-owned artifacts. Create or load a project to begin recording and authoring."
         }
       ]
     };
@@ -2630,18 +2692,22 @@ var AutomationStudioService = class {
     return recording;
   }
   async appendRecordingEvent(input) {
-    const recording = await this.getRecordingSession(input.recordingId, input.projectId);
-    const next = appendRecordingEntry(recording, input.entry);
-    await this.repositories.recordingSessions.put(next);
-    if (input.projectId) await this.writeProjectRecordingSession(input.projectId, next);
-    return next;
+    return await this.withRecordingMutationLock(input.projectId, input.recordingId, async () => {
+      const recording = await this.getRecordingSession(input.recordingId, input.projectId);
+      const next = appendRecordingEntry(recording, input.entry);
+      await this.repositories.recordingSessions.put(next);
+      if (input.projectId) await this.writeProjectRecordingSession(input.projectId, next);
+      return next;
+    });
   }
   async finalizeRecording(input) {
-    const recording = await this.getRecordingSession(input.recordingId, input.projectId);
-    const finalized = finalizeRecordingSession(recording, input.endedAt);
-    await this.repositories.recordingSessions.put(finalized);
-    if (input.projectId) await this.writeProjectRecordingSession(input.projectId, finalized);
-    return finalized;
+    return await this.withRecordingMutationLock(input.projectId, input.recordingId, async () => {
+      const recording = await this.getRecordingSession(input.recordingId, input.projectId);
+      const finalized = finalizeRecordingSession(recording, input.endedAt);
+      await this.repositories.recordingSessions.put(finalized);
+      if (input.projectId) await this.writeProjectRecordingSession(input.projectId, finalized);
+      return finalized;
+    });
   }
   async normalizeRecording(input) {
     const recording = await this.getRecordingSession(input.recordingId, input.projectId);
@@ -2649,6 +2715,266 @@ var AutomationStudioService = class {
     await this.repositories.normalizedTimelines.put(normalized);
     if (input.projectId) await this.writeProjectNormalizedTimeline(input.projectId, normalized);
     return normalized;
+  }
+  async updateRecording(input) {
+    return await this.withRecordingMutationLock(input.projectId, input.recordingId, async () => {
+      const recording = await this.getRecordingSession(input.recordingId, input.projectId);
+      const metadata = {
+        ...recording.metadata ?? {},
+        ...typeof input.name === "string" ? { name: input.name.trim() } : {},
+        ...typeof input.archived === "boolean" ? { archived: input.archived } : {}
+      };
+      const next = { ...recording, metadata };
+      await this.repositories.recordingSessions.put(next);
+      if (input.projectId) await this.writeProjectRecordingSession(input.projectId, next);
+      return next;
+    });
+  }
+  async deleteRecording(input) {
+    await this.repositories.recordingSessions.delete(input.recordingId);
+    if (input.projectId && this.projectRootDir) {
+      await rm2(this.projectFile(input.projectId, "recordings", "sessions", safeSegment(input.recordingId)), { recursive: true, force: true });
+      await this.writeRecordingIndex(input.projectId, (index) => ({
+        recordings: (index.recordings ?? []).filter((item) => item.recordingId !== input.recordingId),
+        normalizedTimelines: index.normalizedTimelines ?? []
+      }));
+    }
+    return { deletedRecordingId: input.recordingId };
+  }
+  async appendRecordingNoteEntry(input) {
+    return await this.withRecordingMutationLock(input.projectId, input.recordingId, async () => {
+      const recording = await this.getRecordingSession(input.recordingId, input.projectId);
+      const text = typeof input.text === "string" ? input.text.trim() : "";
+      if (!text) throw new Error("Note text is required.");
+      const linkedEntryIds = Array.isArray(input.linkedEntryIds) ? input.linkedEntryIds.map(String).filter(Boolean) : [];
+      const next = appendRecordingNote(recording, {
+        text,
+        source: "typed",
+        scope: input.endOffsetMs !== void 0 ? "interval" : linkedEntryIds.length ? "action" : "task",
+        ...typeof input.startOffsetMs === "number" ? { startOffsetMs: input.startOffsetMs } : {},
+        ...typeof input.endOffsetMs === "number" ? { endOffsetMs: input.endOffsetMs } : {},
+        ...linkedEntryIds.length ? { linkedEntryIds } : {}
+      });
+      await this.repositories.recordingSessions.put(next);
+      if (input.projectId) await this.writeProjectRecordingSession(input.projectId, next);
+      return next;
+    });
+  }
+  async appendRecordingMarkerEntry(input) {
+    const label = typeof input.label === "string" ? input.label.trim() : "";
+    if (!label) throw new Error("Marker label is required.");
+    const appendInput = {
+      recordingId: input.recordingId,
+      entry: {
+        type: "marker",
+        label,
+        ...typeof input.monotonicOffsetMs === "number" ? { monotonicOffsetMs: input.monotonicOffsetMs, timestamp: Date.now() } : {},
+        metadata: typeof input.linkedEntryId === "string" ? { linkedEntryId: input.linkedEntryId } : {}
+      }
+    };
+    if (input.projectId !== void 0) appendInput.projectId = input.projectId;
+    return await this.appendRecordingEvent(appendInput);
+  }
+  async createNormalizationReview(input) {
+    const recording = await this.getRecordingSession(input.recordingId, input.projectId);
+    let normalized = (await this.listProjectNormalizedTimelines(input.projectId)).find((item) => item.recordingId === input.recordingId);
+    normalized ??= await this.normalizeRecording({ projectId: input.projectId, recordingId: input.recordingId });
+    const rawIds = new Set(recording.timeline.map((entry) => entry.id));
+    const mappings = recording.timeline.map((entry) => ({
+      rawEntryId: entry.id,
+      normalizedEntryIds: normalized.timeline.filter((candidate) => candidate.id === entry.id || candidate.correlationId === entry.id || candidate.metadata?.normalizedFrom === entry.id).map((candidate) => candidate.id),
+      status: "preserved"
+    }));
+    for (const entry of normalized.timeline) {
+      const sourceId = typeof entry.metadata?.normalizedFrom === "string" ? entry.metadata.normalizedFrom : entry.correlationId;
+      if (sourceId && rawIds.has(sourceId)) continue;
+      if (!rawIds.has(entry.id)) mappings.push({ rawEntryId: sourceId ?? entry.id, normalizedEntryIds: [entry.id], status: "derived", reason: "Derived during normalization." });
+    }
+    const sorted = [...normalized.timeline].sort((left, right) => left.monotonicOffsetMs - right.monotonicOffsetMs);
+    const waitClips = sorted.slice(1).map((entry, index) => ({
+      beforeEntryId: sorted[index].id,
+      afterEntryId: entry.id,
+      waitMs: Math.max(0, entry.monotonicOffsetMs - sorted[index].monotonicOffsetMs)
+    })).filter((item) => item.waitMs >= 250);
+    const review = {
+      schemaVersion: "0.1",
+      reviewId: `review.${safeSegment(input.recordingId)}.${Date.now()}`,
+      recordingId: input.recordingId,
+      normalizedTimelineId: normalized.normalizedTimelineId,
+      mappings,
+      waitClips,
+      issues: normalized.issues,
+      generatedAt: Date.now()
+    };
+    await this.writePipelineArtifact(input.projectId, "normalizationReviews", review.reviewId, review);
+    return review;
+  }
+  async mineRecordingEvidence(input) {
+    const timeline = input.normalizedTimelineId ? await this.repositories.normalizedTimelines.get(input.normalizedTimelineId) : (await this.listProjectNormalizedTimelines(input.projectId)).find((item) => item.recordingId === input.recordingId);
+    if (!timeline) throw new Error("Normalized timeline is required before mining.");
+    const actions = timeline.timeline.filter((entry) => entry.type === "action" || entry.type === "domain_event");
+    const deltas = timeline.timeline.filter((entry) => entry.type === "state_delta");
+    const windows = actions.map((entry, index) => ({
+      id: `window.${entry.id}`,
+      kind: "immediate_post_action",
+      actionEntryId: entry.id,
+      startOffsetMs: entry.monotonicOffsetMs,
+      endOffsetMs: actions[index + 1]?.monotonicOffsetMs ?? timeline.timeline[timeline.timeline.length - 1]?.monotonicOffsetMs ?? entry.monotonicOffsetMs,
+      sourceEvidence: [{ layer: "normalized_timeline", artifactId: timeline.normalizedTimelineId, entryId: entry.id }]
+    }));
+    const actionEffects = actions.flatMap((action) => deltas.filter((delta) => delta.monotonicOffsetMs >= action.monotonicOffsetMs).slice(0, 3).flatMap((delta) => delta.deltas?.map((stateDelta) => ({
+      actionOccurrenceId: action.id,
+      signalPath: stateDelta.path,
+      relationship: "possible_effect",
+      probability: 0.55,
+      delayMs: { min: Math.max(0, delta.monotonicOffsetMs - action.monotonicOffsetMs), median: Math.max(0, delta.monotonicOffsetMs - action.monotonicOffsetMs), max: Math.max(0, delta.monotonicOffsetMs - action.monotonicOffsetMs) },
+      evidence: [{ layer: "normalized_timeline", artifactId: timeline.normalizedTimelineId, entryId: delta.id, signalPath: stateDelta.path }]
+    })) ?? []));
+    const conditionCandidates = [...new Map(actionEffects.map((effect) => [effect.signalPath, effect])).values()].map((effect) => ({
+      signalPath: effect.signalPath,
+      role: "context_signal",
+      probability: 0.5,
+      evidence: effect.evidence
+    }));
+    const result = {
+      schemaVersion: "0.1",
+      miningRunId: `mining.${safeSegment(timeline.normalizedTimelineId)}.${Date.now()}`,
+      normalizedTimelineId: timeline.normalizedTimelineId,
+      windows,
+      actionEffects,
+      conditionCandidates,
+      issues: actions.length ? [] : ["No action/domain events were available to mine."],
+      generatedAt: Date.now(),
+      metadata: { recordingId: timeline.recordingId }
+    };
+    await this.writePipelineArtifact(input.projectId, "miningRuns", result.miningRunId, result);
+    return result;
+  }
+  async learnTaskModel(input) {
+    const miningRun = input.miningRunId ? await this.readPipelineArtifact(input.projectId, "miningRuns", input.miningRunId) : (await this.listPipelineArtifacts(input.projectId)).miningRuns[0];
+    if (!miningRun) throw new Error("A mining run is required before learning a task model.");
+    const taskId = input.taskId ?? String(miningRun.metadata?.taskId ?? miningRun.metadata?.recordingId ?? "task.learned");
+    const actionClusters = miningRun.windows.filter((window) => window.actionEntryId).map((window, index) => ({
+      id: `cluster.${index + 1}`,
+      label: `Step ${index + 1}`,
+      actionTemplate: { id: `action.${index + 1}`, actionType: "learned.action", parameters: {}, sourceEvidence: window.sourceEvidence },
+      positiveRequirements: miningRun.conditionCandidates.slice(0, 3).map((candidate) => ({ signalPath: candidate.signalPath, operator: "exists", weight: candidate.probability })),
+      negativeRequirements: [],
+      expectedEffects: miningRun.actionEffects.filter((effect) => effect.actionOccurrenceId === window.actionEntryId).map((effect) => ({ signalPath: effect.signalPath, condition: { signalPath: effect.signalPath, operator: "changed" }, probability: effect.probability, evidence: effect.evidence })),
+      possibleSideEffects: [],
+      confidence: Math.min(0.85, 0.45 + miningRun.actionEffects.length * 0.05),
+      sourceOccurrences: window.actionEntryId ? [window.actionEntryId] : []
+    }));
+    const transitions = actionClusters.slice(0, -1).map((cluster, index) => ({
+      id: `transition.${index + 1}`,
+      fromClusterId: cluster.id,
+      toClusterId: actionClusters[index + 1].id,
+      probability: 0.8,
+      evidence: []
+    }));
+    const model = {
+      schemaVersion: "0.1",
+      learnedTaskModelId: `model.${safeSegment(taskId)}.${Date.now()}`,
+      taskId,
+      version: "0.1",
+      actionClusters,
+      transitions,
+      invariants: miningRun.conditionCandidates.slice(0, 5).map((candidate) => ({ signalPath: candidate.signalPath, operator: "exists" })),
+      unresolvedQuestions: miningRun.issues.map((issue, index) => ({ id: `question.${index + 1}`, question: issue, severity: "important", evidence: [] })),
+      sourceRecordings: [String(miningRun.metadata?.recordingId ?? "")].filter(Boolean),
+      sourceMiningRuns: [miningRun.miningRunId],
+      generatedAt: Date.now()
+    };
+    await this.repositories.learnedTaskModels.put(model);
+    await this.writePipelineArtifact(input.projectId, "learnedTaskModels", model.learnedTaskModelId, model);
+    return model;
+  }
+  async proposePolicyFromModel(input) {
+    const model = input.learnedTaskModelId ? await this.repositories.learnedTaskModels.get(input.learnedTaskModelId) ?? await this.readPipelineArtifact(input.projectId, "learnedTaskModels", input.learnedTaskModelId) : (await this.listPipelineArtifacts(input.projectId)).learnedTaskModels[0];
+    if (!model) throw new Error("A learned task model is required before proposing a policy.");
+    const nodes = model.actionClusters.map((cluster) => ({
+      id: `node.${cluster.id}`,
+      label: cluster.label,
+      description: `Generated from ${cluster.sourceOccurrences.length} recorded occurrence(s).`,
+      eligibility: { type: "all", conditions: cluster.positiveRequirements },
+      actions: [{ ...cluster.actionTemplate, id: cluster.actionTemplate.id }],
+      successConditions: { type: "all", conditions: cluster.expectedEffects.map((effect) => effect.condition) },
+      failureConditions: { type: "none", conditions: [] },
+      timeout: { timeoutMs: 5e3 },
+      retry: { maxAttempts: 1, backoffMs: 500 },
+      recovery: { strategy: "pause" },
+      outgoingEdges: [],
+      sourceEvidence: cluster.actionTemplate.sourceEvidence ?? [],
+      generatedMetadata: { generatedBy: "signal_miner", generatedAt: Date.now(), confidence: cluster.confidence }
+    }));
+    const edges = model.transitions.map((transition) => ({
+      id: `edge.${transition.id}`,
+      fromNodeId: `node.${transition.fromClusterId}`,
+      toNodeId: `node.${transition.toClusterId}`,
+      label: "Next",
+      probability: transition.probability
+    }));
+    const policy = {
+      schemaVersion: "0.1",
+      policyId: `policy.${safeSegment(model.taskId)}.${Date.now()}`,
+      taskId: model.taskId,
+      version: "0.1",
+      nodes: nodes.map((node) => ({ ...node, outgoingEdges: edges.filter((edge) => edge.fromNodeId === node.id) })),
+      edges,
+      sourceEvidence: [{ layer: "learned_task_model", artifactId: model.learnedTaskModelId }],
+      generatedMetadata: { generatedBy: "signal_miner", generatedAt: Date.now(), confidence: average(nodes.map((node) => node.generatedMetadata.confidence ?? 0)) },
+      metadata: { learnedTaskModelId: model.learnedTaskModelId }
+    };
+    const proposal = {
+      schemaVersion: "0.1",
+      proposalId: `proposal.${safeSegment(policy.policyId)}`,
+      learnedTaskModelId: model.learnedTaskModelId,
+      policy,
+      status: "draft",
+      summary: `${policy.nodes.length} nodes and ${policy.edges.length} edges proposed from learned evidence.`,
+      generatedAt: Date.now()
+    };
+    await this.writePipelineArtifact(input.projectId, "policyProposals", proposal.proposalId, proposal);
+    return proposal;
+  }
+  async approvePolicyProposal(input) {
+    const proposal = await this.readPipelineArtifact(input.projectId, "policyProposals", input.proposalId);
+    if (!proposal) throw new Error("Unknown policy proposal.");
+    const approved = { ...proposal, status: "approved", approvedAt: Date.now() };
+    await this.repositories.policyGraphs.put(approved.policy);
+    await this.writePipelineArtifact(input.projectId, "policyProposals", approved.proposalId, approved);
+    await new ProgramJsonStore(this.projectFile(input.projectId, "policies", `${safeSegment(approved.policy.policyId)}.json`), () => ({})).write({ policy: approved.policy });
+    return approved;
+  }
+  async replayPolicyAgainstRecording(input) {
+    const recording = await this.getRecordingSession(input.recordingId, input.projectId);
+    const proposalPolicy = (await this.listPipelineArtifacts(input.projectId)).policyProposals.find((proposal) => !input.policyId || proposal.policy.policyId === input.policyId)?.policy;
+    const policy = input.policyId ? await this.repositories.policyGraphs.get(input.policyId) ?? proposalPolicy : proposalPolicy ?? (await this.repositories.policyGraphs.list())[0];
+    if (!policy) throw new Error("A policy is required before replay.");
+    const recordedActions = recording.timeline.filter((entry) => entry.type === "action" || entry.type === "domain_event").map((entry) => entry.actionType ?? entry.eventType);
+    const expectedActions = policy.nodes.flatMap((node) => node.actions.map((action) => action.actionType));
+    const missingActions = expectedActions.filter((action) => !recordedActions.includes(action));
+    const unexpectedActions = recordedActions.filter((action) => !expectedActions.includes(action));
+    const timingWarnings = recording.timeline.slice(1).flatMap((entry, index) => {
+      const previous = recording.timeline[index];
+      const gap = Math.max(0, entry.monotonicOffsetMs - previous.monotonicOffsetMs);
+      return gap > 3e4 ? [`Long recorded wait before ${entry.id}: ${gap}ms`] : [];
+    });
+    const result = {
+      schemaVersion: "0.1",
+      replayId: `replay.${safeSegment(recording.recordingId)}.${Date.now()}`,
+      recordingId: recording.recordingId,
+      policyId: policy.policyId,
+      status: missingActions.length ? recordedActions.length ? "partial" : "failed" : "matched",
+      matchedActions: expectedActions.length - missingActions.length,
+      expectedActions: expectedActions.length,
+      missingActions,
+      unexpectedActions,
+      timingWarnings,
+      generatedAt: Date.now()
+    };
+    await this.writePipelineArtifact(input.projectId, "replayResults", result.replayId, result);
+    return result;
   }
   async inspectStateDiff(input) {
     return { deltas: diffStateSnapshots(input.previous, input.current, input.includeStable !== void 0 ? { includeStable: input.includeStable } : {}) };
@@ -2670,13 +2996,15 @@ var AutomationStudioService = class {
     return this.recordingDomains.validate(input);
   }
   async appendRecordingDomainEvent(input) {
-    const recording = await this.getRecordingSession(input.recordingId, input.projectId);
-    const result = await processRecordingDomainEvent(this.recordingDomains, recording, input);
-    if (result.accepted) {
-      await this.repositories.recordingSessions.put(result.recording);
-      if (input.projectId) await this.writeProjectRecordingSession(input.projectId, result.recording);
-    }
-    return result;
+    return await this.withRecordingMutationLock(input.projectId, input.recordingId, async () => {
+      const recording = await this.getRecordingSession(input.recordingId, input.projectId);
+      const result = await processRecordingDomainEvent(this.recordingDomains, recording, input);
+      if (result.accepted) {
+        await this.repositories.recordingSessions.put(result.recording);
+        if (input.projectId) await this.writeProjectRecordingSession(input.projectId, result.recording);
+      }
+      return result;
+    });
   }
   async listProjectArtifacts(projectId) {
     await this.findProject(projectId);
@@ -2735,7 +3063,7 @@ var AutomationStudioService = class {
     const now = Date.now();
     const session = {
       schemaVersion: "0.1",
-      runId: randomUUID(),
+      runId: randomUUID2(),
       ...input.projectId !== void 0 ? { projectId: input.projectId } : {},
       targetKind: input.targetKind ?? (flow.ownerKind === "policy" ? "flow" : flow.ownerKind),
       targetId: input.targetId ?? flow.ownerId,
@@ -2786,6 +3114,15 @@ var AutomationStudioService = class {
     }
     return sessions.sort((left, right) => (right.startedAt ?? right.queuedAt) - (left.startedAt ?? left.queuedAt));
   }
+  async listPipelineArtifacts(projectId) {
+    const index = await this.readPipelineIndex(projectId);
+    const normalizationReviews = await this.readPipelineArtifactList(projectId, "normalizationReviews", index.normalizationReviews.map((item) => item.reviewId));
+    const miningRuns = await this.readPipelineArtifactList(projectId, "miningRuns", index.miningRuns.map((item) => item.miningRunId));
+    const learnedTaskModels = await this.readPipelineArtifactList(projectId, "learnedTaskModels", index.learnedTaskModels.map((item) => item.learnedTaskModelId));
+    const policyProposals = await this.readPipelineArtifactList(projectId, "policyProposals", index.policyProposals.map((item) => item.proposalId));
+    const replayResults = await this.readPipelineArtifactList(projectId, "replayResults", index.replayResults.map((item) => item.replayId));
+    return { normalizationReviews, miningRuns, learnedTaskModels, policyProposals, replayResults };
+  }
   async listProjects() {
     const state = await this.readProjectIndex();
     return {
@@ -2799,7 +3136,7 @@ var AutomationStudioService = class {
     const now = Date.now();
     const categoryId = typeof input.categoryId === "string" && input.categoryId.trim() ? input.categoryId.trim() : null;
     const project = {
-      id: randomUUID(),
+      id: randomUUID2(),
       name,
       description: typeof input.description === "string" ? input.description.trim() : "",
       categoryId,
@@ -2848,7 +3185,7 @@ var AutomationStudioService = class {
     if (!name) throw new Error("Category name is required.");
     const now = Date.now();
     const state = await this.readProjectIndex();
-    const category = { id: randomUUID(), name, order: nextCategoryOrder(state.categories), createdAt: now, updatedAt: now };
+    const category = { id: randomUUID2(), name, order: nextCategoryOrder(state.categories), createdAt: now, updatedAt: now };
     await this.writeProjectIndex((state2) => ({ ...state2, categories: [category, ...state2.categories ?? []] }));
     return category;
   }
@@ -3014,6 +3351,13 @@ var AutomationStudioService = class {
       mkdir2(path2.join(root, "recordings", "snapshots"), { recursive: true }),
       mkdir2(path2.join(root, "recordings", "indexes"), { recursive: true }),
       mkdir2(path2.join(root, "policies"), { recursive: true }),
+      mkdir2(path2.join(root, "pipeline"), { recursive: true }),
+      mkdir2(path2.join(root, "pipeline", "normalization-reviews"), { recursive: true }),
+      mkdir2(path2.join(root, "pipeline", "mining-runs"), { recursive: true }),
+      mkdir2(path2.join(root, "pipeline", "learned-task-models"), { recursive: true }),
+      mkdir2(path2.join(root, "pipeline", "policy-proposals"), { recursive: true }),
+      mkdir2(path2.join(root, "pipeline", "replay-results"), { recursive: true }),
+      mkdir2(path2.join(root, "pipeline", "indexes"), { recursive: true }),
       mkdir2(path2.join(root, "runtime"), { recursive: true }),
       mkdir2(path2.join(root, "runtime", "sessions"), { recursive: true }),
       mkdir2(path2.join(root, "runtime", "indexes"), { recursive: true }),
@@ -3037,6 +3381,10 @@ var AutomationStudioService = class {
     await this.findProject(projectId);
     return await new ProgramJsonStore(this.projectFile(projectId, "runtime", "indexes", "sessions.json"), () => ({ sessions: [] })).read();
   }
+  async readPipelineIndex(projectId) {
+    await this.findProject(projectId);
+    return await new ProgramJsonStore(this.projectFile(projectId, "pipeline", "indexes", "pipeline.json"), () => emptyPipelineIndex()).read();
+  }
   async writeRuntimeSession(projectId, session) {
     await this.ensureProjectStructure(projectId);
     await new ProgramJsonStore(this.projectFile(projectId, "runtime", "sessions", `${safeSegment(session.runId)}.json`), () => ({})).write({ session });
@@ -3049,6 +3397,31 @@ var AutomationStudioService = class {
         updatedAt: Date.now()
       })
     }));
+  }
+  pipelineFolder(kind) {
+    if (kind === "normalizationReviews") return "normalization-reviews";
+    if (kind === "miningRuns") return "mining-runs";
+    if (kind === "learnedTaskModels") return "learned-task-models";
+    if (kind === "policyProposals") return "policy-proposals";
+    return "replay-results";
+  }
+  async writePipelineArtifact(projectId, kind, id, artifact) {
+    await this.ensureProjectStructure(projectId);
+    await new ProgramJsonStore(this.projectFile(projectId, "pipeline", this.pipelineFolder(kind), `${safeSegment(id)}.json`), () => ({})).write(artifact);
+    await new ProgramJsonStore(this.projectFile(projectId, "pipeline", "indexes", "pipeline.json"), () => emptyPipelineIndex()).update((index) => upsertPipelineIndex(index, kind, id, Date.now(), artifact.status));
+  }
+  async readPipelineArtifact(projectId, kind, id) {
+    await this.ensureProjectStructure(projectId);
+    const artifact = await new ProgramJsonStore(this.projectFile(projectId, "pipeline", this.pipelineFolder(kind), `${safeSegment(id)}.json`), () => ({})).read();
+    return Object.keys(artifact).length ? artifact : null;
+  }
+  async readPipelineArtifactList(projectId, kind, ids) {
+    const artifacts = [];
+    for (const id of ids) {
+      const artifact = await this.readPipelineArtifact(projectId, kind, id);
+      if (artifact) artifacts.push(artifact);
+    }
+    return artifacts;
   }
   async readProjectArtifactList(projectId, folder) {
     await this.ensureProjectStructure(projectId);
@@ -3084,6 +3457,23 @@ var AutomationStudioService = class {
   async writeRecordingIndex(projectId, mutator) {
     await this.findProject(projectId);
     return await new ProgramJsonStore(this.projectFile(projectId, "recordings", "indexes", "recordings.json"), () => ({ recordings: [], normalizedTimelines: [] })).update(mutator);
+  }
+  async withRecordingMutationLock(projectId, recordingId, operation) {
+    const key = `${safeSegment(projectId ?? "global")}:${safeSegment(recordingId)}`;
+    const previous = this.recordingMutationLocks.get(key) ?? Promise.resolve();
+    let release = () => void 0;
+    const current = new Promise((resolve) => {
+      release = resolve;
+    });
+    const chained = previous.then(() => current, () => current);
+    this.recordingMutationLocks.set(key, chained);
+    await previous.catch(() => void 0);
+    try {
+      return await operation();
+    } finally {
+      release();
+      if (this.recordingMutationLocks.get(key) === chained) this.recordingMutationLocks.delete(key);
+    }
   }
   async writeProjectRecordingSession(projectId, recording) {
     await this.ensureProjectStructure(projectId);
@@ -3162,6 +3552,22 @@ function upsertBy(items, key, item) {
   if (index < 0) return [item, ...items];
   return items.map((candidate, candidateIndex) => candidateIndex === index ? item : candidate);
 }
+function emptyPipelineIndex() {
+  return { normalizationReviews: [], miningRuns: [], learnedTaskModels: [], policyProposals: [], replayResults: [] };
+}
+function upsertPipelineIndex(index, kind, id, generatedAt, status) {
+  const item = kind === "normalizationReviews" ? { reviewId: id, generatedAt } : kind === "miningRuns" ? { miningRunId: id, generatedAt } : kind === "learnedTaskModels" ? { learnedTaskModelId: id, generatedAt } : kind === "policyProposals" ? { proposalId: id, generatedAt, status: status === "approved" ? "approved" : "draft" } : { replayId: id, generatedAt };
+  const key = Object.keys(item)[0];
+  return {
+    ...emptyPipelineIndex(),
+    ...index,
+    [kind]: upsertBy(index[kind] ?? [], key, item).sort((left, right) => right.generatedAt - left.generatedAt)
+  };
+}
+function average(values) {
+  const finite = values.filter((value) => Number.isFinite(value));
+  return finite.length ? finite.reduce((total, value) => total + value, 0) / finite.length : 0;
+}
 
 // src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
@@ -3177,6 +3583,7 @@ var WEB_AUTOMATION_EVENTS = {
   elementFocused: "web.element.focused",
   elementBlurred: "web.element.blurred",
   keyboardPressed: "web.keyboard.pressed",
+  mouseWheel: "web.mouse.wheel",
   scrollChanged: "web.scroll.changed",
   domMutated: "web.dom.mutated",
   snapshotCaptured: "web.snapshot.captured",
@@ -3381,6 +3788,7 @@ var webAutomationRecordingEvents = [
   event(WEB_AUTOMATION_EVENTS.elementFocused, "Element focused", "A DOM element received focus."),
   event(WEB_AUTOMATION_EVENTS.elementBlurred, "Element blurred", "A DOM element lost focus."),
   event(WEB_AUTOMATION_EVENTS.keyboardPressed, "Keyboard pressed", "A keyboard event was recorded."),
+  event(WEB_AUTOMATION_EVENTS.mouseWheel, "Mouse wheel", "A user moved the mouse wheel or equivalent pointing-device wheel input."),
   event(WEB_AUTOMATION_EVENTS.scrollChanged, "Scroll changed", "The page or context scroll position changed."),
   event(WEB_AUTOMATION_EVENTS.domMutated, "DOM mutated", "A DOM mutation summary was recorded."),
   event(WEB_AUTOMATION_EVENTS.snapshotCaptured, "Snapshot captured", "A structured page snapshot was captured."),
@@ -3440,6 +3848,7 @@ function webAutomationEventTypeForClientKind(kind) {
   if (kind === "dom.focus") return WEB_AUTOMATION_EVENTS.elementFocused;
   if (kind === "dom.blur") return WEB_AUTOMATION_EVENTS.elementBlurred;
   if (kind === "dom.keydown") return WEB_AUTOMATION_EVENTS.keyboardPressed;
+  if (kind === "dom.wheel") return WEB_AUTOMATION_EVENTS.mouseWheel;
   if (kind === "dom.scroll") return WEB_AUTOMATION_EVENTS.scrollChanged;
   if (kind === "dom.mutation") return WEB_AUTOMATION_EVENTS.domMutated;
   if (kind === "dom.snapshot") return WEB_AUTOMATION_EVENTS.snapshotCaptured;

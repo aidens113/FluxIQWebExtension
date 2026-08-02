@@ -36,6 +36,9 @@ const settingsDrawer = element<HTMLElement>("settingsDrawer");
 const pairingOverlay = element<HTMLElement>("pairingOverlay");
 const pairingReferenceCode = element<HTMLElement>("pairingReferenceCode");
 const overlayCancelButton = element<HTMLButtonElement>("overlayCancelButton");
+const recordingLockOverlay = element<HTMLElement>("recordingLockOverlay");
+const recordingLockMessage = element<HTMLElement>("recordingLockMessage");
+const recordingLockDismissButton = element<HTMLButtonElement>("recordingLockDismissButton");
 
 let currentStatus: ExtensionStatus | undefined;
 let timerHandle: ReturnType<typeof setInterval> | undefined;
@@ -77,6 +80,10 @@ stopButton.addEventListener("click", () => {
 
 overlayCancelButton.addEventListener("click", () => {
   void sendCommand(RUNTIME_MESSAGES.disconnect);
+});
+
+recordingLockDismissButton.addEventListener("click", () => {
+  void sendCommand(RUNTIME_MESSAGES.dismissRecordingLock);
 });
 
 chrome.runtime.onMessage.addListener((message: unknown) => {
@@ -142,6 +149,7 @@ function renderStatus(status: ExtensionStatus): void {
 
   renderActivities(status.recentActivities);
   renderPairingOverlay(status);
+  renderRecordingLockOverlay(status);
   renderError(status.lastError);
   renderTimer();
 }
@@ -194,6 +202,12 @@ function renderPairingOverlay(status: ExtensionStatus): void {
   pairingOverlay.hidden = !shouldShow;
   if (!shouldShow) return;
   pairingReferenceCode.textContent = status.pairingReferenceCode ?? "------";
+}
+
+function renderRecordingLockOverlay(status: ExtensionStatus): void {
+  const block = status.recordingBlock;
+  recordingLockOverlay.hidden = !block;
+  recordingLockMessage.textContent = block?.message ?? "";
 }
 
 function startTimerLoop(): void {

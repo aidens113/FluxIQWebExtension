@@ -57,6 +57,7 @@ export const webAutomationRecordingEvents: RecordingDomainEventDefinition[] = [
   event(WEB_AUTOMATION_EVENTS.elementFocused, "Element focused", "A DOM element received focus."),
   event(WEB_AUTOMATION_EVENTS.elementBlurred, "Element blurred", "A DOM element lost focus."),
   event(WEB_AUTOMATION_EVENTS.keyboardPressed, "Keyboard pressed", "A keyboard event was recorded."),
+  event(WEB_AUTOMATION_EVENTS.mouseWheel, "Mouse wheel", "A user moved the mouse wheel or equivalent pointing-device wheel input."),
   event(WEB_AUTOMATION_EVENTS.scrollChanged, "Scroll changed", "The page or context scroll position changed."),
   event(WEB_AUTOMATION_EVENTS.domMutated, "DOM mutated", "A DOM mutation summary was recorded."),
   event(WEB_AUTOMATION_EVENTS.snapshotCaptured, "Snapshot captured", "A structured page snapshot was captured."),

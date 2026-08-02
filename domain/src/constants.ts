@@ -12,6 +12,7 @@ export const WEB_AUTOMATION_EVENTS = {
   elementFocused: "web.element.focused",
   elementBlurred: "web.element.blurred",
   keyboardPressed: "web.keyboard.pressed",
+  mouseWheel: "web.mouse.wheel",
   scrollChanged: "web.scroll.changed",
   domMutated: "web.dom.mutated",
   snapshotCaptured: "web.snapshot.captured",

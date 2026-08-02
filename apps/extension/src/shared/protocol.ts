@@ -67,6 +67,12 @@ export type UnsupportedPageState = {
   reason: string;
 };
 
+export type RecordingBlockState = {
+  code: string;
+  title: string;
+  message: string;
+};
+
 export type ExtensionStatus = {
   connectionState: ConnectionState;
   recordingState: RecordingState;
@@ -83,6 +89,7 @@ export type ExtensionStatus = {
   lastActivityAt?: number | undefined;
   recentActivities: ActivityEntry[];
   unsupportedPage?: UnsupportedPageState | undefined;
+  recordingBlock?: RecordingBlockState | undefined;
   lastError?: string | undefined;
   lastMessageAt?: number | undefined;
 };
@@ -147,6 +154,7 @@ export type RecordingEventKind =
   | "dom.focus"
   | "dom.blur"
   | "dom.keydown"
+  | "dom.wheel"
   | "dom.scroll"
   | "dom.mutation"
   | "dom.snapshot"
