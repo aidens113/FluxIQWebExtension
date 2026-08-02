@@ -1,8 +1,8 @@
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #101418;
-  color: #f3f6f8;
+  background: #0f1419;
+  color: #f4f7fb;
 }
 
 * {
@@ -10,47 +10,140 @@
 }
 
 body {
-  width: 360px;
+  width: 380px;
+  min-width: 320px;
   margin: 0;
-  background: #101418;
+  background: #0f1419;
 }
 
 .shell {
   position: relative;
   display: grid;
+  grid-template-rows: auto auto auto 1fr auto;
   gap: 14px;
+  min-height: 100vh;
   padding: 16px;
-  min-height: 420px;
+  overflow: hidden;
 }
 
-.topbar {
-  display: flex;
+.app-header,
+.connection-row,
+.recorder-console,
+.activity-section,
+.settings-drawer,
+.notice {
+  border: 1px solid #263442;
+  border-radius: 8px;
+  background: #151c23;
+}
+
+.app-header {
+  display: grid;
+  grid-template-columns: 38px 1fr 34px;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
+  padding: 10px;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: #2d6f5f;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.header-copy {
+  min-width: 0;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
 }
 
 h1 {
-  margin: 0;
-  font-size: 20px;
+  font-size: 17px;
   line-height: 1.1;
 }
 
-p {
-  margin: 4px 0 0;
-  color: #aeb8c2;
+h2 {
+  font-size: 13px;
+}
+
+.header-copy p,
+.section-heading span,
+.empty-state,
+.pairing-dialog p {
+  color: #9ba9b7;
   font-size: 12px;
 }
 
+.header-copy p,
+dd {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.icon-button,
+.small-button,
+.stop-button,
+.danger-button,
+button {
+  border: 1px solid #344555;
+  border-radius: 6px;
+  background: #1d2832;
+  color: #f4f7fb;
+  padding: 8px 10px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.icon-button {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  line-height: 1;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.connection-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+}
+
+.connection-label {
+  min-width: 0;
+  color: #d9e2ea;
+  font-size: 12px;
+  font-weight: 750;
+  text-transform: capitalize;
+}
+
 .dot {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: #717a84;
-  box-shadow: 0 0 0 4px rgb(255 255 255 / 7%);
+  background: #737f8b;
+  box-shadow: 0 0 0 4px rgb(255 255 255 / 6%);
 }
 
 .dot.connected {
-  background: #3cc878;
+  background: #43c17c;
 }
 
 .dot.recording {
@@ -58,7 +151,165 @@ p {
 }
 
 .dot.connecting {
-  background: #f3b84f;
+  background: #f1b84d;
+}
+
+.notice {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  color: #f5d38a;
+  font-size: 12px;
+}
+
+.notice[hidden] {
+  display: none;
+}
+
+.recorder-console {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.record-button {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  justify-self: center;
+  width: 148px;
+  height: 148px;
+  border: 1px solid #56343c;
+  border-radius: 50%;
+  background: #261a20;
+  color: #ffffff;
+  box-shadow: inset 0 0 0 9px #151c23, 0 14px 34px rgb(0 0 0 / 26%);
+}
+
+.record-button.active {
+  border-color: #a64655;
+  background: #4f1f2c;
+}
+
+.record-glyph {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #ff4f5f;
+}
+
+.record-button.active .record-glyph {
+  border-radius: 6px;
+}
+
+#recordLabel {
+  font-size: 15px;
+}
+
+.recording-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.recording-stats div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  border: 1px solid #253442;
+  border-radius: 7px;
+  background: #10161c;
+  padding: 9px 8px;
+  text-align: center;
+}
+
+.recording-stats strong {
+  font-size: 16px;
+}
+
+.recording-stats span {
+  color: #8998a6;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.stop-button {
+  width: 100%;
+}
+
+.activity-section {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 8px;
+  min-height: 150px;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.activity-feed {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.activity-feed li {
+  display: grid;
+  gap: 3px;
+  border: 1px solid #24313e;
+  border-left: 3px solid #4d6f92;
+  border-radius: 7px;
+  background: #111820;
+  padding: 8px 9px;
+}
+
+.activity-feed li.success {
+  border-left-color: #43c17c;
+}
+
+.activity-feed li.warning {
+  border-left-color: #f1b84d;
+}
+
+.activity-feed li.danger {
+  border-left-color: #ff5b5b;
+}
+
+.activity-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #f4f7fb;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.activity-detail {
+  color: #98a7b5;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.empty-state {
+  align-self: center;
+  text-align: center;
+}
+
+.error {
+  margin: 0;
+  color: #ff9999;
+  font-size: 12px;
 }
 
 .field {
@@ -68,121 +319,82 @@ p {
   font-size: 12px;
 }
 
-input[type="url"],
-input[type="text"] {
+input[type="url"] {
   width: 100%;
-  border: 1px solid #33404c;
+  border: 1px solid #334555;
   border-radius: 6px;
-  background: #171d23;
-  color: #f3f6f8;
+  background: #10161c;
+  color: #f4f7fb;
   padding: 9px 10px;
   font-size: 13px;
 }
 
-.tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  padding: 3px;
-  border: 1px solid #26313b;
-  border-radius: 8px;
-  background: #151b21;
-}
-
-.tab {
-  border: 0;
-  background: transparent;
-  color: #aeb8c2;
-  padding: 7px 8px;
-}
-
-.tab.active {
-  background: #25303a;
-  color: #f3f6f8;
-}
-
-.panel {
-  display: none;
-  gap: 14px;
-}
-
-.panel.active {
-  display: grid;
-}
-
 .toggles {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px 10px;
-  font-size: 12px;
+  gap: 9px;
   color: #d4dce4;
+  font-size: 12px;
 }
 
 .toggles label {
   display: flex;
   align-items: center;
-  gap: 6px;
-}
-
-.actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
-button {
-  border: 1px solid #33404c;
-  border-radius: 6px;
-  background: #1d252d;
-  color: #f3f6f8;
-  padding: 9px 10px;
-  font-weight: 650;
-  cursor: pointer;
+.settings-drawer {
+  position: absolute;
+  inset: 0 0 0 auto;
+  z-index: 20;
+  display: grid;
+  align-content: start;
+  gap: 15px;
+  width: min(340px, 94%);
+  padding: 16px;
+  border-radius: 0;
+  box-shadow: -20px 0 48px rgb(0 0 0 / 35%);
 }
 
-button.primary {
-  border-color: #2f8d5c;
-  background: #1f6f48;
+.settings-drawer[hidden] {
+  display: none;
 }
 
-button:disabled {
-  cursor: default;
-  opacity: 0.45;
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
-.facts {
+.diagnostics {
   display: grid;
   gap: 8px;
   margin: 0;
-  padding-top: 8px;
-  border-top: 1px solid #26313b;
+  padding-top: 10px;
+  border-top: 1px solid #263442;
 }
 
-.facts div {
+.diagnostics div {
   display: grid;
-  grid-template-columns: 70px 1fr;
+  grid-template-columns: 68px 1fr;
   gap: 8px;
   min-width: 0;
 }
 
 dt {
-  color: #8f9ba7;
+  color: #8998a6;
   font-size: 11px;
 }
 
 dd {
   margin: 0;
-  color: #f3f6f8;
+  color: #f4f7fb;
   font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.error {
-  margin: 0;
-  color: #ff9999;
-  font-size: 12px;
+.danger-button {
+  border-color: #673743;
+  background: #2b1a20;
+  color: #ffb7be;
 }
 
 .pairing-overlay {
@@ -206,30 +418,27 @@ dd {
   width: 100%;
   border: 1px solid #40505f;
   border-radius: 8px;
-  background: #151b21;
+  background: #151c23;
   box-shadow: 0 20px 60px rgb(0 0 0 / 45%);
-  padding: 16px;
+  padding: 18px;
+  text-align: center;
 }
 
-.pairing-dialog h2 {
-  margin: 0;
-  font-size: 18px;
-}
-
-.pairing-dialog p {
-  margin: 0;
-  color: #aeb8c2;
-  font-size: 12px;
+.pairing-kicker {
+  color: #f1b84d;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .reference-code {
   border: 1px solid #40505f;
   border-radius: 8px;
   background: #0f1419;
-  color: #f3f6f8;
-  padding: 14px;
+  color: #f4f7fb;
+  padding: 16px;
   text-align: center;
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: 4px;
+  font-size: 31px;
+  font-weight: 850;
+  letter-spacing: 5px;
 }

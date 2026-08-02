@@ -1,8 +1,38 @@
+import {
+  CLIENT_GATEWAY_PROTOCOL_VERSION,
+  type ClientGatewayActionCommand,
+  type ClientGatewayActionResult,
+  type ClientGatewayCapability,
+  type ClientGatewayClientHello,
+  type ClientGatewayClientMessage,
+  type ClientGatewayClientType,
+  type ClientGatewayRecordingEvent,
+  type ClientGatewayServerMessage,
+  type ClientGatewaySnapshot,
+  type ClientGatewayStateUpdate
+} from "@fluxiq/client-gateway-websocket";
+import {
+  webAutomationClientCapabilities,
+  type WebAutomationActionType
+} from "@fluxiq-web-extension/domain/client";
+
+export {
+  CLIENT_GATEWAY_PROTOCOL_VERSION,
+  type ClientGatewayActionCommand,
+  type ClientGatewayActionResult,
+  type ClientGatewayCapability,
+  type ClientGatewayClientHello,
+  type ClientGatewayClientMessage,
+  type ClientGatewayClientType,
+  type ClientGatewayRecordingEvent,
+  type ClientGatewayServerMessage,
+  type ClientGatewaySnapshot,
+  type ClientGatewayStateUpdate
+};
+
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 export type JsonObject = { [key: string]: JsonValue };
-
-export const CLIENT_GATEWAY_PROTOCOL_VERSION = "0.1";
 
 export type ConnectionState = "disconnected" | "connecting" | "pairing" | "connected" | "reconnecting" | "error";
 export type RecordingState = "idle" | "recording" | "paused";
@@ -23,6 +53,20 @@ export type FluxIQSession = {
   connectedAt?: number | undefined;
 };
 
+export type ActivityEntry = {
+  id: string;
+  timestamp: number;
+  kind: string;
+  label: string;
+  detail?: string | undefined;
+  tone?: "neutral" | "success" | "warning" | "danger" | undefined;
+};
+
+export type UnsupportedPageState = {
+  url?: string | undefined;
+  reason: string;
+};
+
 export type ExtensionStatus = {
   connectionState: ConnectionState;
   recordingState: RecordingState;
@@ -34,29 +78,13 @@ export type ExtensionStatus = {
   activeTabUrl?: string | undefined;
   queueSize: number;
   pairingReferenceCode?: string | undefined;
+  eventCount: number;
+  recordingStartedAt?: number | undefined;
+  lastActivityAt?: number | undefined;
+  recentActivities: ActivityEntry[];
+  unsupportedPage?: UnsupportedPageState | undefined;
   lastError?: string | undefined;
   lastMessageAt?: number | undefined;
-};
-
-export type ProtocolEnvelope<TType extends string = string, TPayload extends object = JsonObject> = {
-  id: string;
-  type: TType;
-  protocolVersion: typeof CLIENT_GATEWAY_PROTOCOL_VERSION;
-  timestamp: number;
-  sessionId?: string | undefined;
-  clientId?: string | undefined;
-  correlationId?: string | undefined;
-  payload: TPayload;
-};
-
-export type ClientGatewayClientType = "browser-extension";
-
-export type ClientGatewayCapability = {
-  id: string;
-  label?: string | undefined;
-  kind: "recording" | "snapshot" | "action" | "state" | "runtime" | "custom";
-  actionTypes?: string[] | undefined;
-  metadata?: JsonObject | undefined;
 };
 
 export type BrowserDescriptor = {
@@ -77,23 +105,6 @@ export type TabDescriptor = {
   favIconUrl?: string | undefined;
   active?: boolean | undefined;
   status?: string | undefined;
-};
-
-export type ClientGatewayBrowserState = {
-  activeTabId?: string | undefined;
-  tabs?: Array<{
-    tabId: string;
-    url?: string | undefined;
-    title?: string | undefined;
-    faviconUrl?: string | undefined;
-    active?: boolean | undefined;
-    viewport?: { width: number; height: number; deviceScaleFactor?: number | undefined } | undefined;
-    frameTree?: JsonObject | undefined;
-    metadata?: JsonObject | undefined;
-  }> | undefined;
-  permissions?: string[] | undefined;
-  recording?: boolean | undefined;
-  metadata?: JsonObject | undefined;
 };
 
 export type RectDescriptor = {
@@ -123,15 +134,6 @@ export type DomSnapshot = {
   focusedElement?: DomElementDescriptor | undefined;
   selectedText?: string | undefined;
   interactiveElements: DomElementDescriptor[];
-};
-
-export type ClientGatewaySnapshot = {
-  snapshotId?: string | undefined;
-  timestamp?: number | undefined;
-  kind: "dom" | "state" | "screenshot" | "custom";
-  state?: JsonObject | undefined;
-  payload?: JsonObject | undefined;
-  metadata?: JsonObject | undefined;
 };
 
 export type RecordingEventKind =
@@ -167,29 +169,7 @@ export type RecordingEventPayload = {
   metadata?: JsonObject | undefined;
 };
 
-export type ClientGatewayRecordingEvent = {
-  eventId?: string | undefined;
-  recordingId?: string | undefined;
-  eventType: string;
-  timestamp?: number | undefined;
-  sourceId?: string | undefined;
-  target?: JsonObject | undefined;
-  payload?: JsonObject | undefined;
-  metadata?: JsonObject | undefined;
-};
-
-export type BrowserActionType =
-  | "browser.navigate"
-  | "dom.click"
-  | "dom.type"
-  | "dom.clear"
-  | "dom.select"
-  | "dom.scroll"
-  | "dom.keypress"
-  | "dom.wait_for_selector"
-  | "dom.wait_for_text"
-  | "dom.extract"
-  | "dom.capture_snapshot";
+export type BrowserActionType = WebAutomationActionType;
 
 export type BrowserActionCommand = {
   commandId: string;
@@ -206,15 +186,6 @@ export type BrowserActionCommand = {
   options?: JsonObject | undefined;
 };
 
-export type ClientGatewayActionCommand = {
-  commandId: string;
-  actionType: BrowserActionType;
-  parameters?: JsonObject | undefined;
-  target?: JsonObject | undefined;
-  timeoutMs?: number | undefined;
-  metadata?: JsonObject | undefined;
-};
-
 export type BrowserActionResult = {
   commandId: string;
   actionType: BrowserActionType;
@@ -229,39 +200,6 @@ export type BrowserActionResult = {
   finishedAt: number;
 };
 
-export type ClientGatewayActionResult = {
-  commandId: string;
-  status: "succeeded" | "failed" | "timed_out" | "cancelled" | "unknown";
-  startedAt?: number | undefined;
-  completedAt?: number | undefined;
-  message?: string | undefined;
-  target?: JsonObject | undefined;
-  payload?: JsonObject | undefined;
-  error?: string | undefined;
-  metadata?: JsonObject | undefined;
-};
-
-export type ClientHelloPayload = {
-  clientId?: string | undefined;
-  clientType: ClientGatewayClientType;
-  name?: string | undefined;
-  version?: string | undefined;
-  token?: string | undefined;
-  capabilities?: ClientGatewayCapability[] | undefined;
-  metadata?: JsonObject | undefined;
-};
-
-export type ServerPairingRequiredPayload = {
-  referenceCode?: string | undefined;
-  reason: string;
-};
-
-export type ServerSessionReadyPayload = {
-  sessionId: string;
-  token: string;
-  projectId?: string | null | undefined;
-};
-
 export type ServerCommandPayload =
   | { command: "start_recording"; recordingId: string; projectId?: string | null | undefined; taskId?: string | undefined }
   | { command: "stop_recording"; recordingId?: string | undefined }
@@ -271,68 +209,4 @@ export type ServerCommandPayload =
   | { command: "disconnect"; reason?: string | undefined }
   | { command: "ping"; nonce?: string | undefined };
 
-export type ClientMessage =
-  | ProtocolEnvelope<"client.hello", ClientHelloPayload>
-  | ProtocolEnvelope<"client.capabilities", { capabilities: ClientGatewayCapability[] }>
-  | ProtocolEnvelope<"client.browser_state", ClientGatewayBrowserState>
-  | ProtocolEnvelope<"client.tab_state", JsonObject>
-  | ProtocolEnvelope<"client.recording_event", ClientGatewayRecordingEvent>
-  | ProtocolEnvelope<"client.dom_snapshot", ClientGatewaySnapshot>
-  | ProtocolEnvelope<"client.action_result", ClientGatewayActionResult>
-  | ProtocolEnvelope<"client.error", { message: string; code?: string | undefined; metadata?: JsonObject | undefined }>;
-
-export type ServerMessage =
-  | ProtocolEnvelope<"server.pairing_required", ServerPairingRequiredPayload>
-  | ProtocolEnvelope<"server.session_ready", ServerSessionReadyPayload>
-  | ProtocolEnvelope<"server.start_recording", { recordingId: string; projectId?: string | null | undefined; taskId?: string | undefined }>
-  | ProtocolEnvelope<"server.stop_recording", { recordingId?: string | undefined }>
-  | ProtocolEnvelope<"server.capture_snapshot", { kind?: string | undefined; metadata?: JsonObject | undefined }>
-  | ProtocolEnvelope<"server.execute_action", ClientGatewayActionCommand>
-  | ProtocolEnvelope<"server.set_active_tab", { tabId: string }>
-  | ProtocolEnvelope<"server.ping", { nonce: string }>
-  | ProtocolEnvelope<"server.disconnect", { reason: string }>
-  | ProtocolEnvelope<"server.error", { message: string; code?: string | undefined; metadata?: JsonObject | undefined }>;
-
-export const browserExtensionCapabilities: ClientGatewayCapability[] = [
-  { id: "browser.state", label: "Browser state", kind: "state" },
-  { id: "dom.snapshot", label: "DOM snapshot", kind: "snapshot" },
-  { id: "recording.events", label: "Recording events", kind: "recording" },
-  {
-    id: "browser.actions",
-    label: "Browser actions",
-    kind: "action",
-    actionTypes: [
-      "browser.navigate",
-      "dom.click",
-      "dom.type",
-      "dom.clear",
-      "dom.select",
-      "dom.scroll",
-      "dom.keypress",
-      "dom.wait_for_selector",
-      "dom.wait_for_text",
-      "dom.extract",
-      "dom.capture_snapshot"
-    ]
-  }
-];
-
-export function createClientEnvelope<TType extends ClientMessage["type"], TPayload extends object>(params: {
-  type: TType;
-  clientId: string;
-  sessionId?: string | undefined;
-  correlationId?: string | undefined;
-  payload: TPayload;
-}): ProtocolEnvelope<TType, TPayload> {
-  const envelope: ProtocolEnvelope<TType, TPayload> = {
-    id: `${params.clientId}:${Date.now()}:${Math.random().toString(36).slice(2)}`,
-    type: params.type,
-    protocolVersion: CLIENT_GATEWAY_PROTOCOL_VERSION,
-    timestamp: Date.now(),
-    clientId: params.clientId,
-    payload: params.payload
-  };
-  if (params.sessionId) envelope.sessionId = params.sessionId;
-  if (params.correlationId) envelope.correlationId = params.correlationId;
-  return envelope;
-}
+export const browserExtensionCapabilities: ClientGatewayCapability[] = webAutomationClientCapabilities;

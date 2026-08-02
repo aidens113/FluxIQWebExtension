@@ -1,0 +1,25 @@
+{
+  "name": "@fluxiq-web-extension/domain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "fluxiq:setup": "node scripts/setup-fluxiq.mjs",
+    "test": "node scripts/test-domain.mjs"
+  },
+  "dependencies": {
+    "@fluxiq/client-gateway-websocket": "link:../../!FluxIQ/packages/client-gateway-websocket",
+    "fluxiq": "link:../../!FluxIQ/packages/fluxiq"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.7.0"
+  }
+}

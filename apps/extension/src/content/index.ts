@@ -78,6 +78,10 @@ sendReady();
 
 chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
   const typed = message as { type?: string; recording?: boolean; settings?: { captureMutations?: boolean; captureInputValues?: boolean; captureSnapshots?: boolean }; action?: BrowserActionCommand; commandId?: string };
+  if (typed.type === "fluxiq.ping") {
+    sendResponse({ ok: true });
+    return false;
+  }
   if (typed.type === "recording") {
     recording = Boolean(typed.recording);
     captureMutations = typed.settings?.captureMutations ?? captureMutations;
@@ -213,50 +217,50 @@ function basePayload(kind: string, details: Partial<RecordingEventPayload>): Rec
 async function executeAction(action: BrowserActionCommand): Promise<BrowserActionResult> {
   const startedAt = Date.now();
   try {
-    if (action.actionType === "dom.capture_snapshot") {
+    if (action.actionType === "web.dom.capture_snapshot" || action.actionType === "dom.capture_snapshot") {
       return success(action, startedAt, "Snapshot captured.", undefined, captureSnapshot());
     }
-    if (action.actionType === "dom.wait_for_selector") {
+    if (action.actionType === "web.dom.wait_for_selector" || action.actionType === "dom.wait_for_selector") {
       const element = await waitForElement(action.selector, action.timeoutMs);
       return success(action, startedAt, "Selector found.", describeElement(element));
     }
-    if (action.actionType === "dom.wait_for_text") {
+    if (action.actionType === "web.dom.wait_for_text" || action.actionType === "dom.wait_for_text") {
       await waitForText(action.text ?? action.value ?? "", action.timeoutMs);
       return success(action, startedAt, "Text found.");
     }
-    if (action.actionType === "dom.extract") {
+    if (action.actionType === "web.dom.extract" || action.actionType === "dom.extract") {
       const element = resolveTarget(action);
       const extracted = extractElement(element, action.options);
       return success(action, startedAt, "Value extracted.", describeElement(element), undefined, extracted);
     }
-    if (action.actionType === "dom.click") {
+    if (action.actionType === "web.dom.click" || action.actionType === "dom.click") {
       const element = resolveTarget(action);
       scrollElementIntoView(element);
       (element as HTMLElement).click();
       return success(action, startedAt, "Element clicked.", describeElement(element), captureSnapshot());
     }
-    if (action.actionType === "dom.type") {
+    if (action.actionType === "web.dom.type" || action.actionType === "dom.type") {
       const element = resolveTarget(action) as HTMLInputElement | HTMLTextAreaElement;
       element.focus();
       setElementValue(element, action.text ?? action.value ?? "");
       dispatchInputEvents(element);
       return success(action, startedAt, "Text entered.", describeElement(element), captureSnapshot());
     }
-    if (action.actionType === "dom.clear") {
+    if (action.actionType === "web.dom.clear" || action.actionType === "dom.clear") {
       const element = resolveTarget(action) as HTMLInputElement | HTMLTextAreaElement;
       element.focus();
       setElementValue(element, "");
       dispatchInputEvents(element);
       return success(action, startedAt, "Field cleared.", describeElement(element), captureSnapshot());
     }
-    if (action.actionType === "dom.select") {
+    if (action.actionType === "web.dom.select" || action.actionType === "dom.select") {
       const element = resolveTarget(action) as HTMLSelectElement;
       element.focus();
       element.value = action.value ?? "";
       dispatchInputEvents(element);
       return success(action, startedAt, "Option selected.", describeElement(element), captureSnapshot());
     }
-    if (action.actionType === "dom.scroll") {
+    if (action.actionType === "web.dom.scroll" || action.actionType === "dom.scroll") {
       window.scrollTo({
         left: Number(action.options?.x ?? action.coordinates?.x ?? window.scrollX),
         top: Number(action.options?.y ?? action.coordinates?.y ?? window.scrollY),
@@ -264,7 +268,7 @@ async function executeAction(action: BrowserActionCommand): Promise<BrowserActio
       });
       return success(action, startedAt, "Page scrolled.", undefined, captureSnapshot());
     }
-    if (action.actionType === "dom.keypress") {
+    if (action.actionType === "web.dom.keypress" || action.actionType === "dom.keypress") {
       const target = action.selector ? resolveTarget(action) : document.activeElement ?? document.body;
       const key = action.key ?? action.text ?? "";
       target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));

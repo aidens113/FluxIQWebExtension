@@ -3,7 +3,7 @@ import { defaultSettings } from "../shared/browser";
 import type { ExtensionStatus, FluxIQSettings, RecordingEventPayload } from "../shared/protocol";
 import { FluxIQConnection } from "./connection";
 import { describeTab } from "./tabs";
-import { readOrCreateClientId, readQueuedEvents, readSession, readSettings, writeSession, writeSettings } from "./storage";
+import { clearSession, readOrCreateClientId, readQueuedEvents, readSession, readSettings, writeSession, writeSettings } from "./storage";
 
 let connection: FluxIQConnection | undefined;
 
@@ -80,6 +80,14 @@ async function handleRuntimeMessage(message: unknown, sender: chrome.runtime.Mes
   if (typed.type === RUNTIME_MESSAGES.disconnect) {
     manager.disconnect();
     return { ok: true, status: manager.status() };
+  }
+
+  if (typed.type === RUNTIME_MESSAGES.resetSession) {
+    manager.disconnect();
+    await clearSession();
+    connection = undefined;
+    const next = await getConnection();
+    return { ok: true, status: await statusWithQueue(next) };
   }
 
   if (typed.type === RUNTIME_MESSAGES.startRecording) {

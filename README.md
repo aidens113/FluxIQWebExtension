@@ -4,7 +4,9 @@ Browser extension client for FluxIQ web automation.
 
 The extension does not run the FluxIQ framework. It connects to a local or
 hosted FluxIQ web panel through FluxIQ's generic client WebSocket gateway and
-acts as one browser-side recorder, observer, and action executor client.
+acts as one browser-side recorder, observer, and action executor client. The
+domain-specific FluxIQ code for web automation lives in the top-level
+`domain/` package.
 
 ## Shape
 
@@ -16,12 +18,32 @@ apps/
     src/popup/        connection and recording controls
     src/sidepanel/    compact live status view
     src/shared/       protocol, constants, browser-facing helpers
+domain/
+  src/                FluxIQ domain manifest, recording contracts, actions
 ```
 
 ## Development
 
 ```bash
 pnpm install
+pnpm dev
+```
+
+`pnpm dev` runs the repo-local FluxIQ setup first. That imports FluxIQ from
+this repo's domain host, creates `.fluxiq/` under this repo, registers the
+`web-automation` domain, then starts the FluxIQ web panel with
+`FLUXIQ_ROOT` pointed at this repo.
+
+You can run setup by itself with:
+
+```bash
+pnpm fluxiq:setup
+```
+
+Useful checks:
+
+```bash
+pnpm --filter @fluxiq-web-extension/domain check
 pnpm --filter @fluxiq-web-extension/extension check
 pnpm --filter @fluxiq-web-extension/extension build
 ```

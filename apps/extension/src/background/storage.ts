@@ -1,6 +1,6 @@
 import { MAX_EVENT_QUEUE_SIZE, STORAGE_KEYS } from "../shared/constants";
 import { defaultSettings } from "../shared/browser";
-import type { ClientMessage, FluxIQSession, FluxIQSettings } from "../shared/protocol";
+import type { ClientGatewayClientMessage, FluxIQSession, FluxIQSettings } from "../shared/protocol";
 
 export async function readSettings(): Promise<FluxIQSettings> {
   const stored = await chrome.storage.local.get(STORAGE_KEYS.settings);
@@ -20,6 +20,10 @@ export async function writeSession(session: FluxIQSession): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEYS.session]: session });
 }
 
+export async function clearSession(): Promise<void> {
+  await chrome.storage.local.remove(STORAGE_KEYS.session);
+}
+
 export async function readOrCreateClientId(): Promise<string> {
   const stored = await chrome.storage.local.get(STORAGE_KEYS.clientId);
   const existing = stored[STORAGE_KEYS.clientId] as string | undefined;
@@ -29,12 +33,12 @@ export async function readOrCreateClientId(): Promise<string> {
   return clientId;
 }
 
-export async function readQueuedEvents(): Promise<ClientMessage[]> {
+export async function readQueuedEvents(): Promise<ClientGatewayClientMessage[]> {
   const stored = await chrome.storage.local.get(STORAGE_KEYS.queuedEvents);
-  return (stored[STORAGE_KEYS.queuedEvents] as ClientMessage[] | undefined) ?? [];
+  return (stored[STORAGE_KEYS.queuedEvents] as ClientGatewayClientMessage[] | undefined) ?? [];
 }
 
-export async function queueEvent(message: ClientMessage): Promise<number> {
+export async function queueEvent(message: ClientGatewayClientMessage): Promise<number> {
   const queued = await readQueuedEvents();
   queued.push(message);
   const trimmed = queued.slice(-MAX_EVENT_QUEUE_SIZE);

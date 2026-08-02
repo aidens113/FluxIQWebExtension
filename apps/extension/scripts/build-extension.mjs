@@ -1,8 +1,13 @@
 import { copyFile, cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { build } from "esbuild";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const repoRoot = path.resolve(root, "..", "..");
+const fluxiqRoot = path.resolve(repoRoot, "..", "!FluxIQ");
+const fluxiqClientGatewayContracts = path.join(fluxiqRoot, "packages", "fluxiq", "src", "client-gateway", "contracts.ts");
+const webAutomationDomainClient = path.join(repoRoot, "domain", "src", "client", "index.ts");
 const buildDir = path.join(root, "build");
 const distDir = path.join(root, "dist");
 const placeholderPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAI" +
@@ -27,6 +32,46 @@ async function buildTarget(target, manifestName) {
   await copyStatic("sidepanel", out);
   await ensureIcons(path.join(out, "icons"));
   await copyFile(path.join(root, manifestName), path.join(out, "manifest.json"));
+}
+
+async function bundleExtension() {
+  await rm(buildDir, { recursive: true, force: true });
+  const shared = {
+    bundle: true,
+    platform: "browser",
+    target: ["chrome109", "firefox109"],
+    sourcemap: true,
+    legalComments: "none",
+    logLevel: "info",
+    plugins: [browserSafeWorkspacePlugin()]
+  };
+  for (const entry of [
+    { source: "src/background/index.ts", outfile: "background/index.js", format: "esm" },
+    { source: "src/content/index.ts", outfile: "content/index.js", format: "iife" },
+    { source: "src/popup/index.ts", outfile: "popup/index.js", format: "esm" },
+    { source: "src/sidepanel/index.ts", outfile: "sidepanel/index.js", format: "esm" }
+  ]) {
+    await build({
+      ...shared,
+      entryPoints: [path.join(root, entry.source)],
+      outfile: path.join(buildDir, entry.outfile),
+      format: entry.format
+    });
+  }
+}
+
+function browserSafeWorkspacePlugin() {
+  return {
+    name: "browser-safe-workspace-imports",
+    setup(buildContext) {
+      buildContext.onResolve({ filter: /^@fluxiq-web-extension\/domain\/client$/ }, () => ({
+        path: webAutomationDomainClient
+      }));
+      buildContext.onResolve({ filter: /^fluxiq\/client-gateway$/ }, () => ({
+        path: fluxiqClientGatewayContracts
+      }));
+    }
+  };
 }
 
 async function copyStatic(folder, out) {
@@ -72,5 +117,6 @@ async function rewriteModuleImports(directory) {
 }
 
 await rm(distDir, { recursive: true, force: true });
+await bundleExtension();
 await buildTarget("chrome", "manifest.chrome.json");
 await buildTarget("firefox", "manifest.firefox.json");

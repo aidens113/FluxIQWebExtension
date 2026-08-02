@@ -8,39 +8,66 @@
   </head>
   <body>
     <main class="shell">
-      <header class="topbar">
-        <div>
-          <h1>FluxIQ</h1>
-          <p id="connectionLabel">Disconnected</p>
+      <header class="app-header">
+        <div class="brand-mark">F</div>
+        <div class="header-copy">
+          <h1>FluxIQ Recorder</h1>
+          <p id="activeDomain">No active page</p>
         </div>
-        <span id="statusDot" class="dot"></span>
+        <button id="settingsButton" class="icon-button" type="button" title="Settings" aria-label="Settings">...</button>
       </header>
 
-      <nav class="tabs" aria-label="Extension sections">
-        <button id="statusTab" class="tab active" type="button">Status</button>
-        <button id="settingsTab" class="tab" type="button">Settings</button>
-      </nav>
-
-      <section id="statusPanel" class="panel active">
-        <div class="actions">
-          <button id="connectButton" type="button">Connect</button>
-          <button id="disconnectButton" type="button">Disconnect</button>
-        </div>
-
-        <div class="actions">
-          <button id="recordButton" type="button" class="primary">Record</button>
-          <button id="stopButton" type="button">Stop</button>
-        </div>
-
-        <dl class="facts">
-          <div><dt>Client</dt><dd id="clientId">-</dd></div>
-          <div><dt>Session</dt><dd id="sessionId">-</dd></div>
-          <div><dt>Tab</dt><dd id="activeTab">-</dd></div>
-          <div><dt>Queued</dt><dd id="queueSize">0</dd></div>
-        </dl>
+      <section class="connection-row">
+        <span id="statusDot" class="dot"></span>
+        <span id="connectionLabel" class="connection-label">Disconnected</span>
+        <button id="connectButton" class="small-button" type="button">Connect</button>
+        <button id="disconnectButton" class="small-button" type="button">Disconnect</button>
       </section>
 
-      <section id="settingsPanel" class="panel">
+      <section id="unsupportedCard" class="notice warning" hidden>
+        <strong>Unsupported Page</strong>
+        <span id="unsupportedReason">This page cannot be recorded.</span>
+      </section>
+
+      <section class="recorder-console">
+        <button id="recordButton" class="record-button" type="button" aria-label="Start recording">
+          <span id="recordGlyph" class="record-glyph"></span>
+          <span id="recordLabel">Record</span>
+        </button>
+        <div class="recording-stats">
+          <div>
+            <strong id="recordingTimer">00:00</strong>
+            <span>Timer</span>
+          </div>
+          <div>
+            <strong id="eventCount">0</strong>
+            <span>Events</span>
+          </div>
+          <div>
+            <strong id="queueSize">0</strong>
+            <span>Queued</span>
+          </div>
+        </div>
+        <button id="stopButton" class="stop-button" type="button">Stop Recording</button>
+      </section>
+
+      <section class="activity-section">
+        <div class="section-heading">
+          <h2>Latest Activity</h2>
+          <span id="lastActivity">Idle</span>
+        </div>
+        <ol id="activityFeed" class="activity-feed"></ol>
+        <p id="emptyActivity" class="empty-state">No activity yet.</p>
+      </section>
+
+      <p id="errorText" class="error" hidden></p>
+
+      <aside id="settingsDrawer" class="settings-drawer" aria-label="Settings" hidden>
+        <div class="drawer-header">
+          <h2>Settings</h2>
+          <button id="closeSettingsButton" class="icon-button" type="button" title="Close" aria-label="Close">x</button>
+        </div>
+
         <label class="field">
           <span>Gateway URL</span>
           <input id="gatewayUrl" type="url" spellcheck="false" autocomplete="off">
@@ -52,15 +79,22 @@
           <label><input id="captureInputValues" type="checkbox"> Input values</label>
           <label><input id="captureSnapshots" type="checkbox"> Snapshots</label>
         </section>
-      </section>
 
-      <p id="errorText" class="error" hidden></p>
+        <dl class="diagnostics">
+          <div><dt>Client</dt><dd id="clientId">-</dd></div>
+          <div><dt>Session</dt><dd id="sessionId">-</dd></div>
+          <div><dt>Tab</dt><dd id="activeTab">-</dd></div>
+        </dl>
+
+        <button id="resetSessionButton" class="danger-button" type="button">Reset Session</button>
+      </aside>
 
       <section id="pairingOverlay" class="pairing-overlay" aria-modal="true" role="dialog" aria-labelledby="pairingTitle" hidden>
         <div class="pairing-dialog">
+          <span class="pairing-kicker">Waiting For Approval</span>
           <h2 id="pairingTitle">Pair With FluxIQ</h2>
-          <p>Compare this reference code with the approval modal in the FluxIQ web panel.</p>
           <div id="pairingReferenceCode" class="reference-code">------</div>
+          <p>Approve the matching code in the FluxIQ web panel.</p>
           <button id="overlayCancelButton" type="button">Cancel</button>
         </div>
       </section>

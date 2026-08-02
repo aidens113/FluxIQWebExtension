@@ -1,0 +1,55 @@
+const selectorSchema = {
+    type: "object",
+    properties: {
+        selector: { type: "string", label: "CSS selector" },
+        timeoutMs: { type: "integer", label: "Timeout in ms" }
+    }
+};
+export const webAutomationActionDefinitions = [
+    {
+        actionType: "web.browser.navigate",
+        label: "Navigate",
+        description: "Navigate a browser tab to a URL.",
+        parameterSchema: { type: "object", required: ["url"], properties: { url: { type: "string", label: "URL" } } }
+    },
+    { actionType: "web.dom.click", label: "Click", description: "Click a DOM element.", parameterSchema: selectorSchema },
+    {
+        actionType: "web.dom.type",
+        label: "Type Text",
+        description: "Enter text into an editable DOM element.",
+        parameterSchema: { type: "object", required: ["selector"], properties: { selector: { type: "string" }, text: { type: "string" }, value: { type: "string" } } }
+    },
+    { actionType: "web.dom.clear", label: "Clear Field", description: "Clear an editable DOM element.", parameterSchema: selectorSchema },
+    {
+        actionType: "web.dom.select",
+        label: "Select Option",
+        description: "Set a select element value.",
+        parameterSchema: { type: "object", required: ["selector"], properties: { selector: { type: "string" }, value: { type: "string" } } }
+    },
+    {
+        actionType: "web.dom.scroll",
+        label: "Scroll",
+        description: "Scroll the page or targeted context.",
+        parameterSchema: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, smooth: { type: "boolean" } } }
+    },
+    {
+        actionType: "web.dom.keypress",
+        label: "Key Press",
+        description: "Dispatch a keyboard event.",
+        parameterSchema: { type: "object", properties: { selector: { type: "string" }, key: { type: "string" }, text: { type: "string" } } }
+    },
+    { actionType: "web.dom.wait_for_selector", label: "Wait For Selector", description: "Wait until an element exists.", parameterSchema: selectorSchema },
+    {
+        actionType: "web.dom.wait_for_text",
+        label: "Wait For Text",
+        description: "Wait until page text appears.",
+        parameterSchema: { type: "object", required: ["text"], properties: { text: { type: "string" }, timeoutMs: { type: "integer" } } }
+    },
+    { actionType: "web.dom.extract", label: "Extract", description: "Extract text, value, or attributes from an element.", parameterSchema: selectorSchema },
+    {
+        actionType: "web.dom.capture_snapshot",
+        label: "Capture Snapshot",
+        description: "Capture a structured DOM snapshot.",
+        parameterSchema: { type: "object", properties: {} }
+    }
+];

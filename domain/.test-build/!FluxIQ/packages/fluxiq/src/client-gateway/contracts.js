@@ -1,0 +1,1 @@
+export const CLIENT_GATEWAY_PROTOCOL_VERSION = "0.1";

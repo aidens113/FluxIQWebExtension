@@ -34,3 +34,16 @@ export async function sendToTab<TResponse = unknown>(tabId: number, message: unk
     else chrome.tabs.sendMessage(tabId, message, callback);
   });
 }
+
+export async function ensureContentScript(tabId: number): Promise<void> {
+  try {
+    await sendToTab(tabId, { type: "fluxiq.ping" });
+    return;
+  } catch {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["content/index.js"]
+    });
+  }
+  await sendToTab(tabId, { type: "fluxiq.ping" });
+}

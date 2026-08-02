@@ -4,12 +4,19 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/build-extension.mjs",
+    "build": "tsc -p tsconfig.json --noEmit && node scripts/build-extension.mjs",
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "node scripts/smoke-test.mjs"
   },
+  "dependencies": {
+    "@fluxiq/client-gateway-websocket": "link:../../../!FluxIQ/packages/client-gateway-websocket",
+    "@fluxiq-web-extension/domain": "workspace:*",
+    "fluxiq": "link:../../../!FluxIQ/packages/fluxiq"
+  },
   "devDependencies": {
     "@types/chrome": "^0.0.287",
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.24.2",
     "typescript": "^5.7.0"
   }
 }
