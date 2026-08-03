@@ -19,6 +19,8 @@ export const RUNTIME_MESSAGES = {
   disconnect: "fluxiq.disconnect",
   resetSession: "fluxiq.resetSession",
   dismissRecordingLock: "fluxiq.dismissRecordingLock",
+  getRecordingLog: "fluxiq.getRecordingLog",
+  listRecordings: "fluxiq.listRecordings",
   startRecording: "fluxiq.startRecording",
   stopRecording: "fluxiq.stopRecording",
   contentReady: "fluxiq.contentReady",

@@ -37,6 +37,9 @@ import {
   type RecordingState,
   type ServerCommandPayload,
   type ActivityEntry,
+  type CoreRecordingsPage,
+  type CoreRecordingSummary,
+  type RecordingLogPage,
   type RecordingBlockState,
   type UnsupportedPageState
 } from "../shared/protocol";
@@ -67,6 +70,7 @@ export class FluxIQConnection {
   private lastActivityAt: number | undefined;
   private unsupportedPage: UnsupportedPageState | undefined;
   private readonly recentActivities: ActivityEntry[] = [];
+  private readonly recordingLog: ActivityEntry[] = [];
   private readonly listeners = new Set<StatusListener>();
 
   constructor(
@@ -106,6 +110,32 @@ export class FluxIQConnection {
 
   updateSettings(settings: FluxIQSettings): void {
     this.settings = settings;
+  }
+
+  recordingLogPage(page: number, pageSize: number): RecordingLogPage {
+    const normalizedPageSize = Math.min(100, Math.max(5, Math.floor(pageSize) || 25));
+    const normalizedPage = Math.max(1, Math.floor(page) || 1);
+    const start = (normalizedPage - 1) * normalizedPageSize;
+    return {
+      items: this.recordingLog.slice(start, start + normalizedPageSize),
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      total: this.recordingLog.length
+    };
+  }
+
+  async listCoreRecordings(page: number, pageSize: number): Promise<CoreRecordingsPage> {
+    const normalizedPageSize = Math.min(50, Math.max(5, Math.floor(pageSize) || 10));
+    const normalizedPage = Math.max(1, Math.floor(page) || 1);
+    const sourceUrl = recordingsApiUrl(this.settings.coreApiUrl, normalizedPage, normalizedPageSize);
+    const response = await fetch(sourceUrl, {
+      headers: compactObject({
+        accept: "application/json",
+        ...(this.session.token ? { authorization: `Bearer ${this.session.token}` } : {})
+      }) as Record<string, string>
+    });
+    if (!response.ok) throw new Error(`FluxIQ recordings API returned ${response.status}.`);
+    return normalizeRecordingsResponse(await response.json(), normalizedPage, normalizedPageSize, sourceUrl);
   }
 
   async connect(): Promise<void> {
@@ -178,6 +208,7 @@ export class FluxIQConnection {
       this.emitStatus();
       return;
     }
+    this.resetRecordingLog();
     this.recordingBlock = undefined;
     const recordingId = `client.${this.session.clientId}.${Date.now()}`;
     await this.sendClientMessage("client.start_recording", {
@@ -447,6 +478,7 @@ export class FluxIQConnection {
   private async beginAcceptedRecording(recordingId: string): Promise<void> {
     this.clearPendingRecordingStart();
     if (this.recordingState === "recording") return;
+    this.resetRecordingLog();
     this.recordingBlock = undefined;
     this.activeRecordingId = recordingId;
     this.eventCount = 0;
@@ -636,16 +668,26 @@ export class FluxIQConnection {
   private addActivity(kind: string, label: string, detail?: string, tone: ActivityEntry["tone"] = "neutral"): void {
     const timestamp = Date.now();
     this.lastActivityAt = timestamp;
-    this.recentActivities.unshift(compactObject({
+    const entry = compactObject({
       id: `${kind}.${timestamp}.${Math.random().toString(36).slice(2)}`,
       timestamp,
       kind,
       label,
       detail,
       tone
-    }));
+    });
+    this.recentActivities.unshift(entry);
     this.recentActivities.splice(20);
+    this.recordingLog.unshift(entry);
+    this.recordingLog.splice(500);
     this.emitStatus();
+  }
+
+  private resetRecordingLog(): void {
+    this.eventCount = 0;
+    this.recentActivities.length = 0;
+    this.recordingLog.length = 0;
+    this.lastActivityAt = undefined;
   }
 
   private async attachTabForRecording(tabId: number): Promise<void> {
@@ -820,4 +862,48 @@ function activityDetail(payload: RecordingEventPayload): string | undefined {
   if (payload.mutation) return `${payload.mutation.added} added, ${payload.mutation.removed} removed`;
   if (payload.url) return payload.url;
   return undefined;
+}
+
+function recordingsApiUrl(coreApiUrl: string, page: number, pageSize: number): string {
+  const url = new URL("/api/recordings", coreApiUrl || "http://127.0.0.1:4777");
+  url.searchParams.set("page", String(page));
+  url.searchParams.set("pageSize", String(pageSize));
+  return url.toString();
+}
+
+function normalizeRecordingsResponse(value: unknown, page: number, pageSize: number, sourceUrl: string): CoreRecordingsPage {
+  const object = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const rawItems = Array.isArray(object.items) ? object.items : Array.isArray(object.recordings) ? object.recordings : [];
+  return {
+    items: rawItems.map(normalizeRecordingSummary).filter((item): item is CoreRecordingSummary => Boolean(item)),
+    page: numberValue(object.page) ?? page,
+    pageSize: numberValue(object.pageSize) ?? pageSize,
+    total: numberValue(object.total),
+    sourceUrl
+  };
+}
+
+function normalizeRecordingSummary(value: unknown): CoreRecordingSummary | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const object = value as Record<string, unknown>;
+  const id = stringValue(object.id) ?? stringValue(object.recordingId);
+  if (!id) return undefined;
+  return compactObject({
+    id,
+    title: stringValue(object.title) ?? stringValue(object.name) ?? id,
+    status: stringValue(object.status),
+    projectId: stringValue(object.projectId),
+    taskId: stringValue(object.taskId),
+    eventCount: numberValue(object.eventCount),
+    startedAt: timestampValue(object.startedAt),
+    endedAt: timestampValue(object.endedAt),
+    updatedAt: timestampValue(object.updatedAt)
+  });
+}
+
+function timestampValue(value: unknown): number | undefined {
+  if (typeof value === "number") return value;
+  if (typeof value !== "string") return undefined;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? undefined : parsed;
 }

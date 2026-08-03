@@ -95,6 +95,20 @@ async function handleRuntimeMessage(message: unknown, sender: chrome.runtime.Mes
     return { ok: true, status: manager.status() };
   }
 
+  if (typed.type === RUNTIME_MESSAGES.getRecordingLog) {
+    return {
+      ok: true,
+      log: manager.recordingLogPage(Number(typed.page), Number(typed.pageSize))
+    };
+  }
+
+  if (typed.type === RUNTIME_MESSAGES.listRecordings) {
+    return {
+      ok: true,
+      recordings: await manager.listCoreRecordings(Number(typed.page), Number(typed.pageSize))
+    };
+  }
+
   if (typed.type === RUNTIME_MESSAGES.startRecording) {
     await manager.startRecording();
     return { ok: true, status: manager.status() };

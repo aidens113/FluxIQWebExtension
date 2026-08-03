@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
-    <main class="shell">
+    <main id="shell" class="shell">
       <header class="app-header">
         <div class="brand-mark">F</div>
         <div class="header-copy">
@@ -29,7 +29,13 @@
         <span id="unsupportedReason">This page cannot be recorded.</span>
       </section>
 
-      <section class="recorder-console">
+      <nav class="view-tabs" aria-label="Extension sections">
+        <button id="recorderTab" class="tab-button active" type="button" data-view="recorder">Recorder</button>
+        <button id="eventsTab" class="tab-button" type="button" data-view="events">Events</button>
+        <button id="recordingsTab" class="tab-button" type="button" data-view="recordings">Recordings</button>
+      </nav>
+
+      <section id="recorderView" class="view-panel recorder-console">
         <button id="recordButton" class="record-button" type="button" aria-label="Start recording">
           <span id="recordGlyph" class="record-glyph"></span>
           <span id="recordLabel">Record</span>
@@ -48,16 +54,39 @@
             <span>Queued</span>
           </div>
         </div>
-        <button id="stopButton" class="stop-button" type="button">Stop Recording</button>
       </section>
 
-      <section class="activity-section">
+      <section id="eventsView" class="view-panel activity-section" hidden>
         <div class="section-heading">
-          <h2>Latest Activity</h2>
-          <span id="lastActivity">Idle</span>
+          <div>
+            <h2>Event Log</h2>
+            <span id="lastActivity">Idle</span>
+          </div>
+          <span id="eventPageLabel">Page 1</span>
         </div>
         <ol id="activityFeed" class="activity-feed"></ol>
         <p id="emptyActivity" class="empty-state">No activity yet.</p>
+        <div class="pager">
+          <button id="prevEventsButton" class="small-button" type="button">Prev</button>
+          <button id="nextEventsButton" class="small-button" type="button">Next</button>
+        </div>
+      </section>
+
+      <section id="recordingsView" class="view-panel recordings-section" hidden>
+        <div class="section-heading">
+          <div>
+            <h2>Recordings</h2>
+            <span id="recordingsSource">FluxIQ Core</span>
+          </div>
+          <button id="refreshRecordingsButton" class="small-button" type="button">Refresh</button>
+        </div>
+        <ol id="recordingsList" class="recordings-list"></ol>
+        <p id="emptyRecordings" class="empty-state">No recordings found.</p>
+        <div class="pager">
+          <button id="prevRecordingsButton" class="small-button" type="button">Prev</button>
+          <span id="recordingsPageLabel">Page 1</span>
+          <button id="nextRecordingsButton" class="small-button" type="button">Next</button>
+        </div>
       </section>
 
       <p id="errorText" class="error" hidden></p>
@@ -71,6 +100,11 @@
         <label class="field">
           <span>Gateway URL</span>
           <input id="gatewayUrl" type="url" spellcheck="false" autocomplete="off">
+        </label>
+
+        <label class="field">
+          <span>Core API URL</span>
+          <input id="coreApiUrl" type="url" spellcheck="false" autocomplete="off">
         </label>
 
         <section class="toggles">

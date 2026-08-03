@@ -1,10 +1,24 @@
 import { RUNTIME_MESSAGES } from "../shared/constants";
 import { defaultSettings, runtimeSendMessage } from "../shared/browser";
-import type { ActivityEntry, ExtensionStatus, FluxIQSettings } from "../shared/protocol";
+import type {
+  ActivityEntry,
+  CoreRecordingsPage,
+  CoreRecordingSummary,
+  ExtensionStatus,
+  FluxIQSettings,
+  RecordingLogPage
+} from "../shared/protocol";
 
 type RuntimeResponse<T> = ({ ok: true } & T) | { ok: false; error: string };
+type ViewName = "recorder" | "events" | "recordings";
 
+const eventPageSize = 25;
+const recordingsPageSize = 10;
+const tallLayoutQuery = window.matchMedia("(min-height: 620px)");
+
+const shell = element<HTMLElement>("shell");
 const gatewayUrl = element<HTMLInputElement>("gatewayUrl");
+const coreApiUrl = element<HTMLInputElement>("coreApiUrl");
 const autoReconnect = element<HTMLInputElement>("autoReconnect");
 const captureMutations = element<HTMLInputElement>("captureMutations");
 const captureInputValues = element<HTMLInputElement>("captureInputValues");
@@ -13,9 +27,14 @@ const connectButton = element<HTMLButtonElement>("connectButton");
 const disconnectButton = element<HTMLButtonElement>("disconnectButton");
 const resetSessionButton = element<HTMLButtonElement>("resetSessionButton");
 const recordButton = element<HTMLButtonElement>("recordButton");
-const stopButton = element<HTMLButtonElement>("stopButton");
 const settingsButton = element<HTMLButtonElement>("settingsButton");
 const closeSettingsButton = element<HTMLButtonElement>("closeSettingsButton");
+const recorderTab = element<HTMLButtonElement>("recorderTab");
+const eventsTab = element<HTMLButtonElement>("eventsTab");
+const recordingsTab = element<HTMLButtonElement>("recordingsTab");
+const recorderView = element<HTMLElement>("recorderView");
+const eventsView = element<HTMLElement>("eventsView");
+const recordingsView = element<HTMLElement>("recordingsView");
 const connectionLabel = element<HTMLElement>("connectionLabel");
 const activeDomain = element<HTMLElement>("activeDomain");
 const statusDot = element<HTMLElement>("statusDot");
@@ -32,6 +51,16 @@ const unsupportedReason = element<HTMLElement>("unsupportedReason");
 const activityFeed = element<HTMLOListElement>("activityFeed");
 const emptyActivity = element<HTMLElement>("emptyActivity");
 const lastActivity = element<HTMLElement>("lastActivity");
+const eventPageLabel = element<HTMLElement>("eventPageLabel");
+const prevEventsButton = element<HTMLButtonElement>("prevEventsButton");
+const nextEventsButton = element<HTMLButtonElement>("nextEventsButton");
+const recordingsList = element<HTMLOListElement>("recordingsList");
+const emptyRecordings = element<HTMLElement>("emptyRecordings");
+const recordingsSource = element<HTMLElement>("recordingsSource");
+const recordingsPageLabel = element<HTMLElement>("recordingsPageLabel");
+const refreshRecordingsButton = element<HTMLButtonElement>("refreshRecordingsButton");
+const prevRecordingsButton = element<HTMLButtonElement>("prevRecordingsButton");
+const nextRecordingsButton = element<HTMLButtonElement>("nextRecordingsButton");
 const settingsDrawer = element<HTMLElement>("settingsDrawer");
 const pairingOverlay = element<HTMLElement>("pairingOverlay");
 const pairingReferenceCode = element<HTMLElement>("pairingReferenceCode");
@@ -41,10 +70,20 @@ const recordingLockMessage = element<HTMLElement>("recordingLockMessage");
 const recordingLockDismissButton = element<HTMLButtonElement>("recordingLockDismissButton");
 
 let currentStatus: ExtensionStatus | undefined;
+let currentView: ViewName = "recorder";
+let eventPage = 1;
+let eventTotal = 0;
+let recordingsPage = 1;
+let recordingsTotal: number | undefined;
 let timerHandle: ReturnType<typeof setInterval> | undefined;
 
 void refresh();
 startTimerLoop();
+applyLayoutMode();
+tallLayoutQuery.addEventListener("change", () => {
+  applyLayoutMode();
+  if (tallLayoutQuery.matches) void refreshEventLog();
+});
 
 settingsButton.addEventListener("click", () => {
   settingsDrawer.hidden = false;
@@ -70,12 +109,9 @@ recordButton.addEventListener("click", () => {
   if (currentStatus?.recordingState === "recording") {
     void sendCommand(RUNTIME_MESSAGES.stopRecording);
   } else {
+    eventPage = 1;
     void sendCommand(RUNTIME_MESSAGES.startRecording);
   }
-});
-
-stopButton.addEventListener("click", () => {
-  void sendCommand(RUNTIME_MESSAGES.stopRecording);
 });
 
 overlayCancelButton.addEventListener("click", () => {
@@ -86,23 +122,68 @@ recordingLockDismissButton.addEventListener("click", () => {
   void sendCommand(RUNTIME_MESSAGES.dismissRecordingLock);
 });
 
+recorderTab.addEventListener("click", () => switchView("recorder"));
+eventsTab.addEventListener("click", () => switchView("events"));
+recordingsTab.addEventListener("click", () => switchView("recordings"));
+
+prevEventsButton.addEventListener("click", () => {
+  if (eventPage <= 1) return;
+  eventPage -= 1;
+  void refreshEventLog();
+});
+
+nextEventsButton.addEventListener("click", () => {
+  if (eventPage * eventPageSize >= eventTotal) return;
+  eventPage += 1;
+  void refreshEventLog();
+});
+
+refreshRecordingsButton.addEventListener("click", () => {
+  void refreshRecordings();
+});
+
+prevRecordingsButton.addEventListener("click", () => {
+  if (recordingsPage <= 1) return;
+  recordingsPage -= 1;
+  void refreshRecordings();
+});
+
+nextRecordingsButton.addEventListener("click", () => {
+  if (recordingsTotal !== undefined && recordingsPage * recordingsPageSize >= recordingsTotal) return;
+  recordingsPage += 1;
+  void refreshRecordings();
+});
+
 chrome.runtime.onMessage.addListener((message: unknown) => {
   const typed = message as { type?: string; status?: ExtensionStatus };
-  if (typed.type === RUNTIME_MESSAGES.statusChanged && typed.status) renderStatus(typed.status);
+  if (typed.type === RUNTIME_MESSAGES.statusChanged && typed.status) {
+    const previousStartedAt = currentStatus?.recordingStartedAt;
+    renderStatus(typed.status);
+    if (typed.status.recordingStartedAt !== previousStartedAt) eventPage = 1;
+    if (currentView === "events" || tallLayoutQuery.matches) void refreshEventLog();
+  }
 });
 
 async function refresh(): Promise<void> {
   const response = await runtimeSendMessage<RuntimeResponse<{ status: ExtensionStatus }>>({ type: RUNTIME_MESSAGES.getStatus });
-  if (response.ok) renderStatus(response.status);
-  else renderError(response.error);
+  if (response.ok) {
+    renderStatus(response.status);
+    await refreshEventLog();
+  } else {
+    renderError(response.error);
+  }
 }
 
 async function sendCommand(type: string, payload: Record<string, unknown> = {}): Promise<void> {
   setBusy(true);
   try {
     const response = await runtimeSendMessage<RuntimeResponse<{ status: ExtensionStatus }>>({ type, ...payload });
-    if (response.ok) renderStatus(response.status);
-    else renderError(response.error);
+    if (response.ok) {
+      renderStatus(response.status);
+      await refreshEventLog();
+    } else {
+      renderError(response.error);
+    }
   } catch (error) {
     renderError(error instanceof Error ? error.message : "Command failed.");
   } finally {
@@ -116,6 +197,7 @@ function renderStatus(status: ExtensionStatus): void {
   const defaults = defaultSettings();
   const settings = { ...defaults, ...status.settings };
   gatewayUrl.value = settings.gatewayUrl || status.gatewayUrl || defaults.gatewayUrl;
+  coreApiUrl.value = settings.coreApiUrl || defaults.coreApiUrl;
   autoReconnect.checked = settings.autoReconnect;
   captureMutations.checked = settings.captureMutations;
   captureInputValues.checked = settings.captureInputValues;
@@ -140,24 +222,58 @@ function renderStatus(status: ExtensionStatus): void {
   recordButton.classList.toggle("active", recording);
   recordLabel.textContent = recording ? "Recording" : "Record";
   recordButton.disabled = !connected || unsupported;
-  stopButton.disabled = !recording;
   connectButton.disabled = status.connectionState === "connected" || status.connectionState === "connecting";
   disconnectButton.disabled = status.connectionState === "disconnected";
 
   unsupportedCard.hidden = !status.unsupportedPage;
   unsupportedReason.textContent = status.unsupportedPage?.reason ?? "";
 
-  renderActivities(status.recentActivities);
   renderPairingOverlay(status);
   renderRecordingLockOverlay(status);
   renderError(status.lastError);
   renderTimer();
 }
 
-function renderActivities(activities: ActivityEntry[]): void {
+async function refreshEventLog(): Promise<void> {
+  const response = await runtimeSendMessage<RuntimeResponse<{ log: RecordingLogPage }>>({
+    type: RUNTIME_MESSAGES.getRecordingLog,
+    page: eventPage,
+    pageSize: eventPageSize
+  });
+  if (!response.ok) {
+    renderError(response.error);
+    return;
+  }
+  renderActivities(response.log);
+}
+
+async function refreshRecordings(): Promise<void> {
+  recordingsSource.textContent = "Loading...";
+  refreshRecordingsButton.disabled = true;
+  try {
+    const response = await runtimeSendMessage<RuntimeResponse<{ recordings: CoreRecordingsPage }>>({
+      type: RUNTIME_MESSAGES.listRecordings,
+      page: recordingsPage,
+      pageSize: recordingsPageSize
+    });
+    if (response.ok) {
+      renderRecordings(response.recordings);
+    } else {
+      renderRecordingsError(response.error);
+    }
+  } catch (error) {
+    renderRecordingsError(error instanceof Error ? error.message : "Could not load recordings.");
+  } finally {
+    refreshRecordingsButton.disabled = false;
+  }
+}
+
+function renderActivities(log: RecordingLogPage): void {
+  eventTotal = log.total;
+  eventPage = log.page;
   activityFeed.replaceChildren();
-  emptyActivity.hidden = activities.length > 0;
-  for (const activity of activities) {
+  emptyActivity.hidden = log.items.length > 0;
+  for (const activity of log.items) {
     const item = document.createElement("li");
     if (activity.tone) item.classList.add(activity.tone);
     const title = document.createElement("div");
@@ -176,11 +292,86 @@ function renderActivities(activities: ActivityEntry[]): void {
     }
     activityFeed.append(item);
   }
+  const totalPages = Math.max(1, Math.ceil(log.total / log.pageSize));
+  eventPageLabel.textContent = `Page ${log.page} of ${totalPages}`;
+  prevEventsButton.disabled = log.page <= 1;
+  nextEventsButton.disabled = log.page >= totalPages;
+}
+
+function renderRecordings(page: CoreRecordingsPage): void {
+  recordingsTotal = page.total;
+  recordingsPage = page.page;
+  recordingsSource.textContent = sourceHost(page.sourceUrl);
+  recordingsList.replaceChildren();
+  emptyRecordings.hidden = page.items.length > 0;
+  for (const recording of page.items) recordingsList.append(recordingItem(recording));
+  const totalPages = page.total === undefined ? undefined : Math.max(1, Math.ceil(page.total / page.pageSize));
+  recordingsPageLabel.textContent = totalPages ? `Page ${page.page} of ${totalPages}` : `Page ${page.page}`;
+  prevRecordingsButton.disabled = page.page <= 1;
+  nextRecordingsButton.disabled = totalPages ? page.page >= totalPages : page.items.length < page.pageSize;
+}
+
+function renderRecordingsError(message: string): void {
+  recordingsTotal = 0;
+  recordingsList.replaceChildren();
+  emptyRecordings.hidden = false;
+  emptyRecordings.textContent = message;
+  recordingsSource.textContent = "Unavailable";
+  recordingsPageLabel.textContent = `Page ${recordingsPage}`;
+  prevRecordingsButton.disabled = recordingsPage <= 1;
+  nextRecordingsButton.disabled = true;
+}
+
+function recordingItem(recording: CoreRecordingSummary): HTMLLIElement {
+  const item = document.createElement("li");
+  const title = document.createElement("div");
+  title.className = "recording-row-title";
+  const name = document.createElement("span");
+  name.textContent = recording.title;
+  const status = document.createElement("span");
+  status.className = "status-pill";
+  status.textContent = recording.status ?? "saved";
+  title.append(name, status);
+  item.append(title);
+
+  const meta = document.createElement("div");
+  meta.className = "recording-meta";
+  const count = recording.eventCount === undefined ? "events unknown" : `${recording.eventCount} events`;
+  const date = recording.startedAt ? relativeDate(recording.startedAt) : recording.updatedAt ? relativeDate(recording.updatedAt) : recording.id;
+  meta.textContent = `${count} - ${date}`;
+  item.append(meta);
+  return item;
+}
+
+function switchView(view: ViewName): void {
+  currentView = view;
+  applyLayoutMode();
+  if (view === "events" || tallLayoutQuery.matches) void refreshEventLog();
+  if (view === "recordings" && !tallLayoutQuery.matches) void refreshRecordings();
+}
+
+function applyLayoutMode(): void {
+  const tallLayout = tallLayoutQuery.matches;
+  shell.classList.toggle("tall-mode", tallLayout);
+  shell.classList.toggle("compact-mode", !tallLayout);
+  const combinedRecorderView = tallLayout && currentView !== "recordings";
+  recorderView.hidden = combinedRecorderView ? false : currentView !== "recorder";
+  eventsView.hidden = combinedRecorderView ? false : currentView !== "events";
+  recordingsView.hidden = currentView !== "recordings";
+  const tabBar = recorderTab.parentElement!;
+  recorderTab.hidden = combinedRecorderView || (!tallLayout && currentView === "recorder");
+  eventsTab.hidden = combinedRecorderView || (!tallLayout && currentView === "events");
+  recordingsTab.hidden = currentView === "recordings";
+  tabBar.hidden = [recorderTab, eventsTab, recordingsTab].every((button) => button.hidden);
+  for (const button of [recorderTab, eventsTab, recordingsTab]) {
+    button.classList.toggle("active", button.dataset.view === currentView);
+  }
 }
 
 function readSettingsFromForm(): FluxIQSettings {
   return {
     gatewayUrl: gatewayUrl.value.trim() || defaultSettings().gatewayUrl,
+    coreApiUrl: coreApiUrl.value.trim() || defaultSettings().coreApiUrl,
     autoReconnect: autoReconnect.checked,
     captureMutations: captureMutations.checked,
     captureInputValues: captureInputValues.checked,
@@ -189,7 +380,7 @@ function readSettingsFromForm(): FluxIQSettings {
 }
 
 function setBusy(busy: boolean): void {
-  for (const button of [connectButton, disconnectButton, resetSessionButton, overlayCancelButton, recordButton, stopButton]) button.disabled = busy;
+  for (const button of [connectButton, disconnectButton, resetSessionButton, overlayCancelButton, recordButton]) button.disabled = busy;
 }
 
 function renderError(message: string | undefined): void {
@@ -239,6 +430,14 @@ function domainLabel(url: string | undefined): string {
   }
 }
 
+function sourceHost(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return "FluxIQ Core";
+  }
+}
+
 function relativeTime(timestamp: number): string {
   const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1_000));
   if (seconds < 5) return "Now";
@@ -246,6 +445,11 @@ function relativeTime(timestamp: number): string {
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m`;
   return `${Math.floor(minutes / 60)}h`;
+}
+
+function relativeDate(timestamp: number): string {
+  const date = new Date(timestamp);
+  return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
 
 function element<T extends HTMLElement>(id: string): T {

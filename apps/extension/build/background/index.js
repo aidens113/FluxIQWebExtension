@@ -16,6 +16,8 @@ var RUNTIME_MESSAGES = {
   disconnect: "fluxiq.disconnect",
   resetSession: "fluxiq.resetSession",
   dismissRecordingLock: "fluxiq.dismissRecordingLock",
+  getRecordingLog: "fluxiq.getRecordingLog",
+  listRecordings: "fluxiq.listRecordings",
   startRecording: "fluxiq.startRecording",
   stopRecording: "fluxiq.stopRecording",
   contentReady: "fluxiq.contentReady",
@@ -29,6 +31,7 @@ var RUNTIME_MESSAGES = {
 function defaultSettings() {
   return {
     gatewayUrl: DEFAULT_GATEWAY_URL,
+    coreApiUrl: "http://127.0.0.1:4777",
     autoReconnect: true,
     captureMutations: true,
     captureInputValues: true,
@@ -525,6 +528,7 @@ var FluxIQConnection = class {
   lastActivityAt;
   unsupportedPage;
   recentActivities = [];
+  recordingLog = [];
   listeners = /* @__PURE__ */ new Set();
   status() {
     const status = {
@@ -556,6 +560,30 @@ var FluxIQConnection = class {
   }
   updateSettings(settings) {
     this.settings = settings;
+  }
+  recordingLogPage(page, pageSize) {
+    const normalizedPageSize = Math.min(100, Math.max(5, Math.floor(pageSize) || 25));
+    const normalizedPage = Math.max(1, Math.floor(page) || 1);
+    const start = (normalizedPage - 1) * normalizedPageSize;
+    return {
+      items: this.recordingLog.slice(start, start + normalizedPageSize),
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      total: this.recordingLog.length
+    };
+  }
+  async listCoreRecordings(page, pageSize) {
+    const normalizedPageSize = Math.min(50, Math.max(5, Math.floor(pageSize) || 10));
+    const normalizedPage = Math.max(1, Math.floor(page) || 1);
+    const sourceUrl = recordingsApiUrl(this.settings.coreApiUrl, normalizedPage, normalizedPageSize);
+    const response = await fetch(sourceUrl, {
+      headers: compactObject({
+        accept: "application/json",
+        ...this.session.token ? { authorization: `Bearer ${this.session.token}` } : {}
+      })
+    });
+    if (!response.ok) throw new Error(`FluxIQ recordings API returned ${response.status}.`);
+    return normalizeRecordingsResponse(await response.json(), normalizedPage, normalizedPageSize, sourceUrl);
   }
   async connect() {
     this.shouldStayConnected = true;
@@ -625,6 +653,7 @@ var FluxIQConnection = class {
       this.emitStatus();
       return;
     }
+    this.resetRecordingLog();
     this.recordingBlock = void 0;
     const recordingId = `client.${this.session.clientId}.${Date.now()}`;
     await this.sendClientMessage("client.start_recording", {
@@ -878,6 +907,7 @@ var FluxIQConnection = class {
   async beginAcceptedRecording(recordingId) {
     this.clearPendingRecordingStart();
     if (this.recordingState === "recording") return;
+    this.resetRecordingLog();
     this.recordingBlock = void 0;
     this.activeRecordingId = recordingId;
     this.eventCount = 0;
@@ -1041,16 +1071,25 @@ var FluxIQConnection = class {
   addActivity(kind, label, detail, tone = "neutral") {
     const timestamp = Date.now();
     this.lastActivityAt = timestamp;
-    this.recentActivities.unshift(compactObject({
+    const entry = compactObject({
       id: `${kind}.${timestamp}.${Math.random().toString(36).slice(2)}`,
       timestamp,
       kind,
       label,
       detail,
       tone
-    }));
+    });
+    this.recentActivities.unshift(entry);
     this.recentActivities.splice(20);
+    this.recordingLog.unshift(entry);
+    this.recordingLog.splice(500);
     this.emitStatus();
+  }
+  resetRecordingLog() {
+    this.eventCount = 0;
+    this.recentActivities.length = 0;
+    this.recordingLog.length = 0;
+    this.lastActivityAt = void 0;
   }
   async attachTabForRecording(tabId) {
     await ensureContentScript(tabId);
@@ -1167,6 +1206,12 @@ function elementTarget(element) {
     attributes: element.attributes
   });
 }
+function stringValue2(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function numberValue2(value) {
+  return typeof value === "number" ? value : void 0;
+}
 function unsupportedPageForUrl(url) {
   if (!url) return void 0;
   if (/^(chrome|edge|brave|opera|vivaldi|about|moz-extension|chrome-extension):\/\//.test(url)) {
@@ -1198,6 +1243,46 @@ function activityDetail(payload) {
   if (payload.mutation) return `${payload.mutation.added} added, ${payload.mutation.removed} removed`;
   if (payload.url) return payload.url;
   return void 0;
+}
+function recordingsApiUrl(coreApiUrl, page, pageSize) {
+  const url = new URL("/api/recordings", coreApiUrl || "http://127.0.0.1:4777");
+  url.searchParams.set("page", String(page));
+  url.searchParams.set("pageSize", String(pageSize));
+  return url.toString();
+}
+function normalizeRecordingsResponse(value, page, pageSize, sourceUrl) {
+  const object = value && typeof value === "object" ? value : {};
+  const rawItems = Array.isArray(object.items) ? object.items : Array.isArray(object.recordings) ? object.recordings : [];
+  return {
+    items: rawItems.map(normalizeRecordingSummary).filter((item) => Boolean(item)),
+    page: numberValue2(object.page) ?? page,
+    pageSize: numberValue2(object.pageSize) ?? pageSize,
+    total: numberValue2(object.total),
+    sourceUrl
+  };
+}
+function normalizeRecordingSummary(value) {
+  if (!value || typeof value !== "object") return void 0;
+  const object = value;
+  const id = stringValue2(object.id) ?? stringValue2(object.recordingId);
+  if (!id) return void 0;
+  return compactObject({
+    id,
+    title: stringValue2(object.title) ?? stringValue2(object.name) ?? id,
+    status: stringValue2(object.status),
+    projectId: stringValue2(object.projectId),
+    taskId: stringValue2(object.taskId),
+    eventCount: numberValue2(object.eventCount),
+    startedAt: timestampValue(object.startedAt),
+    endedAt: timestampValue(object.endedAt),
+    updatedAt: timestampValue(object.updatedAt)
+  });
+}
+function timestampValue(value) {
+  if (typeof value === "number") return value;
+  if (typeof value !== "string") return void 0;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? void 0 : parsed;
 }
 
 // src/background/index.ts
@@ -1273,6 +1358,18 @@ async function handleRuntimeMessage(message, sender) {
   if (typed.type === RUNTIME_MESSAGES.dismissRecordingLock) {
     manager.dismissRecordingBlock();
     return { ok: true, status: manager.status() };
+  }
+  if (typed.type === RUNTIME_MESSAGES.getRecordingLog) {
+    return {
+      ok: true,
+      log: manager.recordingLogPage(Number(typed.page), Number(typed.pageSize))
+    };
+  }
+  if (typed.type === RUNTIME_MESSAGES.listRecordings) {
+    return {
+      ok: true,
+      recordings: await manager.listCoreRecordings(Number(typed.page), Number(typed.pageSize))
+    };
   }
   if (typed.type === RUNTIME_MESSAGES.startRecording) {
     await manager.startRecording();

@@ -39,6 +39,7 @@ export type RecordingState = "idle" | "recording" | "paused";
 
 export type FluxIQSettings = {
   gatewayUrl: string;
+  coreApiUrl: string;
   autoReconnect: boolean;
   captureMutations: boolean;
   captureInputValues: boolean;
@@ -60,6 +61,33 @@ export type ActivityEntry = {
   label: string;
   detail?: string | undefined;
   tone?: "neutral" | "success" | "warning" | "danger" | undefined;
+};
+
+export type RecordingLogPage = {
+  items: ActivityEntry[];
+  page: number;
+  pageSize: number;
+  total: number;
+};
+
+export type CoreRecordingSummary = {
+  id: string;
+  title: string;
+  status?: string | undefined;
+  projectId?: string | undefined;
+  taskId?: string | undefined;
+  eventCount?: number | undefined;
+  startedAt?: number | undefined;
+  endedAt?: number | undefined;
+  updatedAt?: number | undefined;
+};
+
+export type CoreRecordingsPage = {
+  items: CoreRecordingSummary[];
+  page: number;
+  pageSize: number;
+  total?: number | undefined;
+  sourceUrl: string;
 };
 
 export type UnsupportedPageState = {

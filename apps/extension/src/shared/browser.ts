@@ -4,6 +4,7 @@ import type { BrowserDescriptor, FluxIQSettings } from "./protocol";
 export function defaultSettings(): FluxIQSettings {
   return {
     gatewayUrl: DEFAULT_GATEWAY_URL,
+    coreApiUrl: "http://127.0.0.1:4777",
     autoReconnect: true,
     captureMutations: true,
     captureInputValues: true,
