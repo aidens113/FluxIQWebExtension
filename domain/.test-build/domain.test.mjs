@@ -2684,6 +2684,30 @@ var AutomationStudioService = class {
     if (!recording) throw new Error(`Unknown Automation Studio recording: ${recordingId}`);
     return recording;
   }
+  async listRecordingSummaries(input = {}) {
+    await this.ready;
+    const page = normalizePositiveInteger(input.page, 1, 1, 1e6);
+    const pageSize = normalizePositiveInteger(input.pageSize, 10, 1, 100);
+    const { projects } = await this.listProjects();
+    const summaries = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const project of projects) {
+      if (this.projectRootDir) await this.loadProjectRecordings(project.id);
+      const recordingIds = this.projectRootDir ? (await this.readRecordingIndex(project.id)).recordings.map((item) => item.recordingId) : (await this.repositories.recordingSessions.list()).map((recording) => recording.recordingId);
+      for (const recordingId of recordingIds) {
+        const key = `${project.id}:${recordingId}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const recording = await this.repositories.recordingSessions.get(recordingId);
+        if (!recording) continue;
+        summaries.push(recordingSummaryFromSession(recording, project.id));
+      }
+    }
+    summaries.sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
+    const total = summaries.length;
+    const start = (page - 1) * pageSize;
+    return { items: summaries.slice(start, start + pageSize), page, pageSize, total };
+  }
   async createRecording(input) {
     await this.ready;
     const recording = createRecordingSession(input);
@@ -2733,10 +2757,11 @@ var AutomationStudioService = class {
   async deleteRecording(input) {
     await this.repositories.recordingSessions.delete(input.recordingId);
     if (input.projectId && this.projectRootDir) {
+      await this.deleteProjectRecordingPipeline(input.projectId, input.recordingId);
       await rm2(this.projectFile(input.projectId, "recordings", "sessions", safeSegment(input.recordingId)), { recursive: true, force: true });
       await this.writeRecordingIndex(input.projectId, (index) => ({
         recordings: (index.recordings ?? []).filter((item) => item.recordingId !== input.recordingId),
-        normalizedTimelines: index.normalizedTimelines ?? []
+        normalizedTimelines: (index.normalizedTimelines ?? []).filter((item) => item.recordingId !== input.recordingId)
       }));
     }
     return { deletedRecordingId: input.recordingId };
@@ -2812,8 +2837,20 @@ var AutomationStudioService = class {
   async mineRecordingEvidence(input) {
     const timeline = input.normalizedTimelineId ? await this.repositories.normalizedTimelines.get(input.normalizedTimelineId) : (await this.listProjectNormalizedTimelines(input.projectId)).find((item) => item.recordingId === input.recordingId);
     if (!timeline) throw new Error("Normalized timeline is required before mining.");
+    const miningRunId = `mining.${safeSegment(timeline.normalizedTimelineId)}.${Date.now()}`;
     const actions = timeline.timeline.filter((entry) => entry.type === "action" || entry.type === "domain_event");
     const deltas = timeline.timeline.filter((entry) => entry.type === "state_delta");
+    const facts = timeline.timeline.map((entry) => createEvidenceFact(miningRunId, timeline, entry, this.recordingDomains.get(String(entry.metadata?.domainId ?? ""))));
+    const factsByEntryId = new Map(facts.map((fact) => [String(fact.source.entryId ?? ""), fact]));
+    const observations = facts.flatMap((fact) => createEvidenceObservations(fact));
+    const observationsByFactId = /* @__PURE__ */ new Map();
+    for (const observation of observations) {
+      for (const factId of observation.factIds) {
+        observationsByFactId.set(factId, [...observationsByFactId.get(factId) ?? [], observation]);
+      }
+    }
+    const descriptors = stateElementDescriptorsForTimeline(timeline, this.recordingDomains.list());
+    const correlations = createStateActionCorrelations(miningRunId, timeline, actions, descriptors);
     const windows = actions.map((entry, index) => ({
       id: `window.${entry.id}`,
       kind: "immediate_post_action",
@@ -2824,11 +2861,11 @@ var AutomationStudioService = class {
     }));
     const actionEffects = actions.flatMap((action) => deltas.filter((delta) => delta.monotonicOffsetMs >= action.monotonicOffsetMs).slice(0, 3).flatMap((delta) => delta.deltas?.map((stateDelta) => ({
       actionOccurrenceId: action.id,
-      signalPath: stateDelta.path,
+      signalPath: formatStatePath(stateDelta.namespace, stateDelta.path),
       relationship: "possible_effect",
       probability: 0.55,
       delayMs: { min: Math.max(0, delta.monotonicOffsetMs - action.monotonicOffsetMs), median: Math.max(0, delta.monotonicOffsetMs - action.monotonicOffsetMs), max: Math.max(0, delta.monotonicOffsetMs - action.monotonicOffsetMs) },
-      evidence: [{ layer: "normalized_timeline", artifactId: timeline.normalizedTimelineId, entryId: delta.id, signalPath: stateDelta.path }]
+      evidence: [{ layer: "normalized_timeline", artifactId: timeline.normalizedTimelineId, entryId: delta.id, signalPath: formatStatePath(stateDelta.namespace, stateDelta.path) }]
     })) ?? []));
     const conditionCandidates = [...new Map(actionEffects.map((effect) => [effect.signalPath, effect])).values()].map((effect) => ({
       signalPath: effect.signalPath,
@@ -2836,10 +2873,22 @@ var AutomationStudioService = class {
       probability: 0.5,
       evidence: effect.evidence
     }));
+    const claims = [
+      ...correlations.map((correlation, index) => createCorrelationClaim(miningRunId, timeline, correlation, index, observations)),
+      ...createTransitionClaims(miningRunId, timeline, actions, factsByEntryId, observationsByFactId)
+    ];
     const result = {
       schemaVersion: "0.1",
-      miningRunId: `mining.${safeSegment(timeline.normalizedTimelineId)}.${Date.now()}`,
+      miningRunId,
       normalizedTimelineId: timeline.normalizedTimelineId,
+      evidenceFactIds: facts.map((fact) => fact.factId),
+      evidenceObservationIds: observations.map((observation) => observation.observationId),
+      stateActionCorrelationIds: correlations.map((correlation) => correlation.correlationId),
+      evidenceClaimIds: claims.map((claim) => claim.claimId),
+      facts,
+      observations,
+      correlations,
+      claims,
       windows,
       actionEffects,
       conditionCandidates,
@@ -2847,51 +2896,36 @@ var AutomationStudioService = class {
       generatedAt: Date.now(),
       metadata: { recordingId: timeline.recordingId }
     };
+    for (const fact of facts) await this.writePipelineArtifact(input.projectId, "evidenceFacts", fact.factId, fact);
+    for (const observation of observations) await this.writePipelineArtifact(input.projectId, "evidenceObservations", observation.observationId, observation);
+    for (const correlation of correlations) await this.writePipelineArtifact(input.projectId, "stateActionCorrelations", correlation.correlationId, correlation);
+    for (const claim of claims) await this.writePipelineArtifact(input.projectId, "evidenceClaims", claim.claimId, claim);
     await this.writePipelineArtifact(input.projectId, "miningRuns", result.miningRunId, result);
     return result;
   }
   async learnTaskModel(input) {
     const miningRun = input.miningRunId ? await this.readPipelineArtifact(input.projectId, "miningRuns", input.miningRunId) : (await this.listPipelineArtifacts(input.projectId)).miningRuns[0];
     if (!miningRun) throw new Error("A mining run is required before learning a task model.");
-    const taskId = input.taskId ?? String(miningRun.metadata?.taskId ?? miningRun.metadata?.recordingId ?? "task.learned");
-    const actionClusters = miningRun.windows.filter((window) => window.actionEntryId).map((window, index) => ({
-      id: `cluster.${index + 1}`,
-      label: `Step ${index + 1}`,
-      actionTemplate: { id: `action.${index + 1}`, actionType: "learned.action", parameters: {}, sourceEvidence: window.sourceEvidence },
-      positiveRequirements: miningRun.conditionCandidates.slice(0, 3).map((candidate) => ({ signalPath: candidate.signalPath, operator: "exists", weight: candidate.probability })),
-      negativeRequirements: [],
-      expectedEffects: miningRun.actionEffects.filter((effect) => effect.actionOccurrenceId === window.actionEntryId).map((effect) => ({ signalPath: effect.signalPath, condition: { signalPath: effect.signalPath, operator: "changed" }, probability: effect.probability, evidence: effect.evidence })),
-      possibleSideEffects: [],
-      confidence: Math.min(0.85, 0.45 + miningRun.actionEffects.length * 0.05),
-      sourceOccurrences: window.actionEntryId ? [window.actionEntryId] : []
-    }));
-    const transitions = actionClusters.slice(0, -1).map((cluster, index) => ({
-      id: `transition.${index + 1}`,
-      fromClusterId: cluster.id,
-      toClusterId: actionClusters[index + 1].id,
-      probability: 0.8,
-      evidence: []
-    }));
-    const model = {
-      schemaVersion: "0.1",
-      learnedTaskModelId: `model.${safeSegment(taskId)}.${Date.now()}`,
-      taskId,
-      version: "0.1",
-      actionClusters,
-      transitions,
-      invariants: miningRun.conditionCandidates.slice(0, 5).map((candidate) => ({ signalPath: candidate.signalPath, operator: "exists" })),
-      unresolvedQuestions: miningRun.issues.map((issue, index) => ({ id: `question.${index + 1}`, question: issue, severity: "important", evidence: [] })),
-      sourceRecordings: [String(miningRun.metadata?.recordingId ?? "")].filter(Boolean),
-      sourceMiningRuns: [miningRun.miningRunId],
-      generatedAt: Date.now()
-    };
+    const model = createTaskDraftModelFromMiningRun(miningRun, input.taskId);
     await this.repositories.learnedTaskModels.put(model);
     await this.writePipelineArtifact(input.projectId, "learnedTaskModels", model.learnedTaskModelId, model);
     return model;
   }
   async proposePolicyFromModel(input) {
-    const model = input.learnedTaskModelId ? await this.repositories.learnedTaskModels.get(input.learnedTaskModelId) ?? await this.readPipelineArtifact(input.projectId, "learnedTaskModels", input.learnedTaskModelId) : (await this.listPipelineArtifacts(input.projectId)).learnedTaskModels[0];
-    if (!model) throw new Error("A learned task model is required before proposing a policy.");
+    let model = input.learnedTaskModelId ? await this.repositories.learnedTaskModels.get(input.learnedTaskModelId) ?? await this.readPipelineArtifact(input.projectId, "learnedTaskModels", input.learnedTaskModelId) : null;
+    const artifacts = await this.listPipelineArtifacts(input.projectId);
+    if (!model && input.miningRunId) {
+      const miningRun = artifacts.miningRuns.find((run) => run.miningRunId === input.miningRunId) ?? await this.readPipelineArtifact(input.projectId, "miningRuns", input.miningRunId);
+      if (miningRun) model = createTaskDraftModelFromMiningRun(miningRun);
+    }
+    if (!model && input.recordingId) {
+      const timelines = await this.listProjectNormalizedTimelines(input.projectId);
+      const timelineIds = new Set(timelines.filter((timeline) => timeline.recordingId === input.recordingId).map((timeline) => timeline.normalizedTimelineId));
+      const miningRun = artifacts.miningRuns.find((run) => run.metadata?.recordingId === input.recordingId || timelineIds.has(run.normalizedTimelineId));
+      if (miningRun) model = createTaskDraftModelFromMiningRun(miningRun);
+    }
+    model ??= artifacts.learnedTaskModels[0] ?? null;
+    if (!model) throw new Error("Mined evidence is required before proposing a task.");
     const nodes = model.actionClusters.map((cluster) => ({
       id: `node.${cluster.id}`,
       label: cluster.label,
@@ -2921,7 +2955,7 @@ var AutomationStudioService = class {
       version: "0.1",
       nodes: nodes.map((node) => ({ ...node, outgoingEdges: edges.filter((edge) => edge.fromNodeId === node.id) })),
       edges,
-      sourceEvidence: [{ layer: "learned_task_model", artifactId: model.learnedTaskModelId }],
+      sourceEvidence: model.metadata?.source === "mined_evidence" && model.sourceMiningRuns[0] ? [{ layer: "signal_mining", artifactId: model.sourceMiningRuns[0] }] : [{ layer: "learned_task_model", artifactId: model.learnedTaskModelId }],
       generatedMetadata: { generatedBy: "signal_miner", generatedAt: Date.now(), confidence: average(nodes.map((node) => node.generatedMetadata.confidence ?? 0)) },
       metadata: { learnedTaskModelId: model.learnedTaskModelId }
     };
@@ -2931,8 +2965,13 @@ var AutomationStudioService = class {
       learnedTaskModelId: model.learnedTaskModelId,
       policy,
       status: "draft",
-      summary: `${policy.nodes.length} nodes and ${policy.edges.length} edges proposed from learned evidence.`,
-      generatedAt: Date.now()
+      summary: `${policy.nodes.length} nodes and ${policy.edges.length} edges proposed from mined evidence.`,
+      generatedAt: Date.now(),
+      metadata: {
+        source: input.learnedTaskModelId ? "learned_task_model" : "mined_evidence",
+        recordingId: model.sourceRecordings[0] ?? null,
+        miningRunId: model.sourceMiningRuns[0] ?? null
+      }
     };
     await this.writePipelineArtifact(input.projectId, "policyProposals", proposal.proposalId, proposal);
     return proposal;
@@ -3118,10 +3157,14 @@ var AutomationStudioService = class {
     const index = await this.readPipelineIndex(projectId);
     const normalizationReviews = await this.readPipelineArtifactList(projectId, "normalizationReviews", index.normalizationReviews.map((item) => item.reviewId));
     const miningRuns = await this.readPipelineArtifactList(projectId, "miningRuns", index.miningRuns.map((item) => item.miningRunId));
+    const evidenceFacts = await this.readPipelineArtifactList(projectId, "evidenceFacts", index.evidenceFacts.map((item) => item.factId));
+    const evidenceObservations = await this.readPipelineArtifactList(projectId, "evidenceObservations", index.evidenceObservations.map((item) => item.observationId));
+    const stateActionCorrelations = await this.readPipelineArtifactList(projectId, "stateActionCorrelations", (index.stateActionCorrelations ?? []).map((item) => item.correlationId));
+    const evidenceClaims = await this.readPipelineArtifactList(projectId, "evidenceClaims", index.evidenceClaims.map((item) => item.claimId));
     const learnedTaskModels = await this.readPipelineArtifactList(projectId, "learnedTaskModels", index.learnedTaskModels.map((item) => item.learnedTaskModelId));
     const policyProposals = await this.readPipelineArtifactList(projectId, "policyProposals", index.policyProposals.map((item) => item.proposalId));
     const replayResults = await this.readPipelineArtifactList(projectId, "replayResults", index.replayResults.map((item) => item.replayId));
-    return { normalizationReviews, miningRuns, learnedTaskModels, policyProposals, replayResults };
+    return { normalizationReviews, miningRuns, evidenceFacts, evidenceObservations, stateActionCorrelations, evidenceClaims, learnedTaskModels, policyProposals, replayResults };
   }
   async listProjects() {
     const state = await this.readProjectIndex();
@@ -3352,8 +3395,14 @@ var AutomationStudioService = class {
       mkdir2(path2.join(root, "recordings", "indexes"), { recursive: true }),
       mkdir2(path2.join(root, "policies"), { recursive: true }),
       mkdir2(path2.join(root, "pipeline"), { recursive: true }),
+      mkdir2(path2.join(root, "pipeline", "sessions"), { recursive: true }),
       mkdir2(path2.join(root, "pipeline", "normalization-reviews"), { recursive: true }),
       mkdir2(path2.join(root, "pipeline", "mining-runs"), { recursive: true }),
+      mkdir2(path2.join(root, "pipeline", "evidence"), { recursive: true }),
+      mkdir2(path2.join(root, "pipeline", "evidence", "facts"), { recursive: true }),
+      mkdir2(path2.join(root, "pipeline", "evidence", "observations"), { recursive: true }),
+      mkdir2(path2.join(root, "pipeline", "evidence", "correlations"), { recursive: true }),
+      mkdir2(path2.join(root, "pipeline", "evidence", "claims"), { recursive: true }),
       mkdir2(path2.join(root, "pipeline", "learned-task-models"), { recursive: true }),
       mkdir2(path2.join(root, "pipeline", "policy-proposals"), { recursive: true }),
       mkdir2(path2.join(root, "pipeline", "replay-results"), { recursive: true }),
@@ -3401,6 +3450,10 @@ var AutomationStudioService = class {
   pipelineFolder(kind) {
     if (kind === "normalizationReviews") return "normalization-reviews";
     if (kind === "miningRuns") return "mining-runs";
+    if (kind === "evidenceFacts") return path2.join("evidence", "facts");
+    if (kind === "evidenceObservations") return path2.join("evidence", "observations");
+    if (kind === "stateActionCorrelations") return path2.join("evidence", "correlations");
+    if (kind === "evidenceClaims") return path2.join("evidence", "claims");
     if (kind === "learnedTaskModels") return "learned-task-models";
     if (kind === "policyProposals") return "policy-proposals";
     return "replay-results";
@@ -3409,6 +3462,150 @@ var AutomationStudioService = class {
     await this.ensureProjectStructure(projectId);
     await new ProgramJsonStore(this.projectFile(projectId, "pipeline", this.pipelineFolder(kind), `${safeSegment(id)}.json`), () => ({})).write(artifact);
     await new ProgramJsonStore(this.projectFile(projectId, "pipeline", "indexes", "pipeline.json"), () => emptyPipelineIndex()).update((index) => upsertPipelineIndex(index, kind, id, Date.now(), artifact.status));
+    const recordingId = await this.pipelineArtifactRecordingId(projectId, kind, artifact);
+    if (recordingId) await this.writeRecordingPipelineArtifact(projectId, recordingId, kind, id, artifact);
+  }
+  async ensureProjectRecordingPipeline(projectId, recording) {
+    await this.ensureProjectStructure(projectId);
+    const pipelineId = recordingPipelineId(recording.recordingId);
+    const store = new ProgramJsonStore(
+      this.projectFile(projectId, "pipeline", "sessions", safeSegment(recording.recordingId), "pipeline.json"),
+      () => createRecordingPipelineDocument(recording)
+    );
+    const now = Date.now();
+    const existing = await store.read();
+    const next = {
+      ...createRecordingPipelineDocument(recording),
+      ...existing,
+      pipelineId,
+      recordingId: recording.recordingId,
+      ...recording.taskId !== void 0 ? { taskId: recording.taskId } : {},
+      updatedAt: now,
+      artifacts: {
+        ...createRecordingPipelineDocument(recording).artifacts,
+        ...existing.artifacts ?? {}
+      }
+    };
+    await mkdir2(this.projectFile(projectId, "pipeline", "sessions", safeSegment(recording.recordingId), "artifacts"), { recursive: true });
+    await Promise.all([
+      mkdir2(this.projectFile(projectId, "pipeline", "sessions", safeSegment(recording.recordingId), "artifacts", "normalized-timelines"), { recursive: true }),
+      mkdir2(this.projectFile(projectId, "pipeline", "sessions", safeSegment(recording.recordingId), "artifacts", "normalization-reviews"), { recursive: true }),
+      mkdir2(this.projectFile(projectId, "pipeline", "sessions", safeSegment(recording.recordingId), "artifacts", "mining-runs"), { recursive: true }),
+      mkdir2(this.projectFile(projectId, "pipeline", "sessions", safeSegment(recording.recordingId), "artifacts", "evidence"), { recursive: true }),
+      mkdir2(this.projectFile(projectId, "pipeline", "sessions", safeSegment(recording.recordingId), "artifacts", "evidence", "facts"), { recursive: true }),
+      mkdir2(this.projectFile(projectId, "pipeline", "sessions", safeSegment(recording.recordingId), "artifacts", "evidence", "observations"), { recursive: true }),
+      mkdir2(this.projectFile(projectId, "pipeline", "sessions", safeSegment(recording.recordingId), "artifacts", "evidence", "correlations"), { recursive: true }),
+      mkdir2(this.projectFile(projectId, "pipeline", "sessions", safeSegment(recording.recordingId), "artifacts", "evidence", "claims"), { recursive: true }),
+      mkdir2(this.projectFile(projectId, "pipeline", "sessions", safeSegment(recording.recordingId), "artifacts", "learned-task-models"), { recursive: true }),
+      mkdir2(this.projectFile(projectId, "pipeline", "sessions", safeSegment(recording.recordingId), "artifacts", "policy-proposals"), { recursive: true }),
+      mkdir2(this.projectFile(projectId, "pipeline", "sessions", safeSegment(recording.recordingId), "artifacts", "replay-results"), { recursive: true })
+    ]);
+    await store.write(next);
+    await new ProgramJsonStore(this.projectFile(projectId, "pipeline", "indexes", "pipeline.json"), () => emptyPipelineIndex()).update((index) => ({
+      ...emptyPipelineIndex(),
+      ...index,
+      pipelines: upsertBy(index.pipelines ?? [], "pipelineId", {
+        pipelineId,
+        recordingId: recording.recordingId,
+        ...recording.taskId !== void 0 ? { taskId: recording.taskId } : {},
+        updatedAt: now
+      })
+    }));
+    return next;
+  }
+  async writeRecordingPipelineArtifact(projectId, recordingId, kind, id, artifact) {
+    const recording = await this.repositories.recordingSessions.get(recordingId) ?? await this.getRecordingSession(recordingId, projectId).catch(() => null);
+    if (!recording) return;
+    await this.ensureProjectRecordingPipeline(projectId, recording);
+    const folder = this.recordingPipelineArtifactFolder(kind);
+    await new ProgramJsonStore(
+      this.projectFile(projectId, "pipeline", "sessions", safeSegment(recordingId), "artifacts", folder, `${safeSegment(id)}.json`),
+      () => ({})
+    ).write(artifact);
+    await this.updateRecordingPipeline(projectId, recordingId, (pipeline) => addRecordingPipelineArtifactId(pipeline, kind, id));
+  }
+  async writeRecordingPipelineNormalizedTimeline(projectId, normalized) {
+    const recording = await this.repositories.recordingSessions.get(normalized.recordingId) ?? await this.getRecordingSession(normalized.recordingId, projectId).catch(() => null);
+    if (!recording) return;
+    await this.ensureProjectRecordingPipeline(projectId, recording);
+    await new ProgramJsonStore(
+      this.projectFile(projectId, "pipeline", "sessions", safeSegment(normalized.recordingId), "artifacts", "normalized-timelines", `${safeSegment(normalized.normalizedTimelineId)}.json`),
+      () => ({})
+    ).write({ normalizedTimeline: normalized });
+    await this.updateRecordingPipeline(projectId, normalized.recordingId, (pipeline) => ({
+      ...pipeline,
+      updatedAt: Date.now(),
+      artifacts: {
+        ...pipeline.artifacts,
+        normalizedTimelineIds: uniqueStrings([normalized.normalizedTimelineId, ...pipeline.artifacts.normalizedTimelineIds ?? []])
+      }
+    }));
+  }
+  async updateRecordingPipeline(projectId, recordingId, mutator) {
+    const recording = await this.getRecordingSession(recordingId, projectId);
+    await this.ensureProjectRecordingPipeline(projectId, recording);
+    const store = new ProgramJsonStore(
+      this.projectFile(projectId, "pipeline", "sessions", safeSegment(recordingId), "pipeline.json"),
+      () => createRecordingPipelineDocument(recording)
+    );
+    const next = mutator(await store.read());
+    await store.write(next);
+    await new ProgramJsonStore(this.projectFile(projectId, "pipeline", "indexes", "pipeline.json"), () => emptyPipelineIndex()).update((index) => ({
+      ...emptyPipelineIndex(),
+      ...index,
+      pipelines: upsertBy(index.pipelines ?? [], "pipelineId", {
+        pipelineId: next.pipelineId,
+        recordingId: next.recordingId,
+        ...next.taskId !== void 0 ? { taskId: next.taskId } : {},
+        updatedAt: next.updatedAt
+      })
+    }));
+    return next;
+  }
+  recordingPipelineArtifactFolder(kind) {
+    return this.pipelineFolder(kind);
+  }
+  async pipelineArtifactRecordingId(projectId, kind, artifact) {
+    if (typeof artifact.recordingId === "string") return artifact.recordingId;
+    if ((kind === "evidenceFacts" || kind === "evidenceObservations" || kind === "stateActionCorrelations" || kind === "evidenceClaims") && typeof artifact.recordingId === "string") return artifact.recordingId;
+    if (kind === "miningRuns" && artifact.metadata && typeof artifact.metadata === "object" && !Array.isArray(artifact.metadata) && typeof artifact.metadata.recordingId === "string") return artifact.metadata.recordingId;
+    if (kind === "learnedTaskModels" && Array.isArray(artifact.sourceRecordings) && typeof artifact.sourceRecordings[0] === "string") return artifact.sourceRecordings[0];
+    if (kind === "policyProposals" && artifact.metadata && typeof artifact.metadata === "object" && !Array.isArray(artifact.metadata) && typeof artifact.metadata.recordingId === "string") return artifact.metadata.recordingId;
+    if (kind === "policyProposals" && typeof artifact.learnedTaskModelId === "string") {
+      const model = await this.readPipelineArtifact(projectId, "learnedTaskModels", artifact.learnedTaskModelId);
+      return model?.sourceRecordings[0] ?? null;
+    }
+    return null;
+  }
+  async deleteProjectRecordingPipeline(projectId, recordingId) {
+    const pipeline = await new ProgramJsonStore(
+      this.projectFile(projectId, "pipeline", "sessions", safeSegment(recordingId), "pipeline.json"),
+      () => createRecordingPipelineDocument({ recordingId, startedAt: Date.now() })
+    ).read();
+    await Promise.all([
+      ...pipeline.artifacts.normalizationReviewIds.map((id) => rm2(this.projectFile(projectId, "pipeline", "normalization-reviews", `${safeSegment(id)}.json`), { force: true })),
+      ...pipeline.artifacts.miningRunIds.map((id) => rm2(this.projectFile(projectId, "pipeline", "mining-runs", `${safeSegment(id)}.json`), { force: true })),
+      ...(pipeline.artifacts.evidenceFactIds ?? []).map((id) => rm2(this.projectFile(projectId, "pipeline", "evidence", "facts", `${safeSegment(id)}.json`), { force: true })),
+      ...(pipeline.artifacts.evidenceObservationIds ?? []).map((id) => rm2(this.projectFile(projectId, "pipeline", "evidence", "observations", `${safeSegment(id)}.json`), { force: true })),
+      ...(pipeline.artifacts.stateActionCorrelationIds ?? []).map((id) => rm2(this.projectFile(projectId, "pipeline", "evidence", "correlations", `${safeSegment(id)}.json`), { force: true })),
+      ...(pipeline.artifacts.evidenceClaimIds ?? []).map((id) => rm2(this.projectFile(projectId, "pipeline", "evidence", "claims", `${safeSegment(id)}.json`), { force: true })),
+      ...pipeline.artifacts.learnedTaskModelIds.map((id) => rm2(this.projectFile(projectId, "pipeline", "learned-task-models", `${safeSegment(id)}.json`), { force: true })),
+      ...pipeline.artifacts.policyProposalIds.map((id) => rm2(this.projectFile(projectId, "pipeline", "policy-proposals", `${safeSegment(id)}.json`), { force: true })),
+      ...pipeline.artifacts.replayResultIds.map((id) => rm2(this.projectFile(projectId, "pipeline", "replay-results", `${safeSegment(id)}.json`), { force: true }))
+    ]);
+    await rm2(this.projectFile(projectId, "pipeline", "sessions", safeSegment(recordingId)), { recursive: true, force: true });
+    await new ProgramJsonStore(this.projectFile(projectId, "pipeline", "indexes", "pipeline.json"), () => emptyPipelineIndex()).update((index) => ({
+      pipelines: (index.pipelines ?? []).filter((item) => item.recordingId !== recordingId),
+      normalizationReviews: (index.normalizationReviews ?? []).filter((item) => !pipeline.artifacts.normalizationReviewIds.includes(item.reviewId)),
+      miningRuns: (index.miningRuns ?? []).filter((item) => !pipeline.artifacts.miningRunIds.includes(item.miningRunId)),
+      evidenceFacts: (index.evidenceFacts ?? []).filter((item) => !(pipeline.artifacts.evidenceFactIds ?? []).includes(item.factId)),
+      evidenceObservations: (index.evidenceObservations ?? []).filter((item) => !(pipeline.artifacts.evidenceObservationIds ?? []).includes(item.observationId)),
+      stateActionCorrelations: (index.stateActionCorrelations ?? []).filter((item) => !(pipeline.artifacts.stateActionCorrelationIds ?? []).includes(item.correlationId)),
+      evidenceClaims: (index.evidenceClaims ?? []).filter((item) => !(pipeline.artifacts.evidenceClaimIds ?? []).includes(item.claimId)),
+      learnedTaskModels: (index.learnedTaskModels ?? []).filter((item) => !pipeline.artifacts.learnedTaskModelIds.includes(item.learnedTaskModelId)),
+      policyProposals: (index.policyProposals ?? []).filter((item) => !pipeline.artifacts.policyProposalIds.includes(item.proposalId)),
+      replayResults: (index.replayResults ?? []).filter((item) => !pipeline.artifacts.replayResultIds.includes(item.replayId))
+    }));
   }
   async readPipelineArtifact(projectId, kind, id) {
     await this.ensureProjectStructure(projectId);
@@ -3484,6 +3681,7 @@ var AutomationStudioService = class {
     await new ProgramJsonStore(path2.join(sessionDir, "recording.json"), () => ({ recording })).write({ recording });
     await new ProgramJsonStore(path2.join(sessionDir, "events", "timeline.json"), () => ({ timeline: [] })).write({ timeline: recording.timeline });
     await new ProgramJsonStore(path2.join(sessionDir, "snapshots", "initial-state.json"), () => ({ initialState: recording.initialState })).write({ initialState: recording.initialState });
+    await this.ensureProjectRecordingPipeline(projectId, recording);
     await this.writeRecordingIndex(projectId, (index) => ({
       recordings: upsertBy(index.recordings ?? [], "recordingId", {
         recordingId: recording.recordingId,
@@ -3499,6 +3697,7 @@ var AutomationStudioService = class {
     await this.ensureProjectStructure(projectId);
     const fileName = `${safeSegment(normalized.normalizedTimelineId)}.json`;
     await new ProgramJsonStore(this.projectFile(projectId, "recordings", "normalized", fileName), () => ({ normalizedTimeline: normalized })).write({ normalizedTimeline: normalized });
+    await this.writeRecordingPipelineNormalizedTimeline(projectId, normalized);
     await this.writeRecordingIndex(projectId, (index) => ({
       recordings: index.recordings ?? [],
       normalizedTimelines: upsertBy(index.normalizedTimelines ?? [], "normalizedTimelineId", {
@@ -3552,16 +3751,480 @@ function upsertBy(items, key, item) {
   if (index < 0) return [item, ...items];
   return items.map((candidate, candidateIndex) => candidateIndex === index ? item : candidate);
 }
+function recordingSummaryFromSession(recording, projectId) {
+  const title = stringMetadataValue(recording.metadata, "name") ?? stringMetadataValue(recording.metadata, "title") ?? recording.recordingId;
+  const updatedAt = Math.max(recording.endedAt ?? 0, latestTimelineTimestamp(recording), recording.startedAt);
+  return {
+    id: recording.recordingId,
+    title,
+    status: recording.endedAt === void 0 ? "recording" : "completed",
+    projectId,
+    taskId: recording.taskId ?? null,
+    eventCount: recording.timeline.length,
+    startedAt: new Date(recording.startedAt).toISOString(),
+    endedAt: recording.endedAt === void 0 ? null : new Date(recording.endedAt).toISOString(),
+    updatedAt: new Date(updatedAt).toISOString()
+  };
+}
+function latestTimelineTimestamp(recording) {
+  return recording.timeline.reduce((latest, entry) => Math.max(latest, typeof entry.timestamp === "number" ? entry.timestamp : 0), 0);
+}
+function stringMetadataValue(metadata, key) {
+  const value = metadata[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+function normalizePositiveInteger(value, fallback, min, max) {
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, Math.floor(parsed)));
+}
 function emptyPipelineIndex() {
-  return { normalizationReviews: [], miningRuns: [], learnedTaskModels: [], policyProposals: [], replayResults: [] };
+  return { pipelines: [], normalizationReviews: [], miningRuns: [], evidenceFacts: [], evidenceObservations: [], stateActionCorrelations: [], evidenceClaims: [], learnedTaskModels: [], policyProposals: [], replayResults: [] };
 }
 function upsertPipelineIndex(index, kind, id, generatedAt, status) {
-  const item = kind === "normalizationReviews" ? { reviewId: id, generatedAt } : kind === "miningRuns" ? { miningRunId: id, generatedAt } : kind === "learnedTaskModels" ? { learnedTaskModelId: id, generatedAt } : kind === "policyProposals" ? { proposalId: id, generatedAt, status: status === "approved" ? "approved" : "draft" } : { replayId: id, generatedAt };
+  const item = kind === "normalizationReviews" ? { reviewId: id, generatedAt } : kind === "miningRuns" ? { miningRunId: id, generatedAt } : kind === "evidenceFacts" ? { factId: id, generatedAt } : kind === "evidenceObservations" ? { observationId: id, generatedAt } : kind === "stateActionCorrelations" ? { correlationId: id, generatedAt } : kind === "evidenceClaims" ? { claimId: id, generatedAt } : kind === "learnedTaskModels" ? { learnedTaskModelId: id, generatedAt } : kind === "policyProposals" ? { proposalId: id, generatedAt, status: status === "approved" ? "approved" : "draft" } : { replayId: id, generatedAt };
   const key = Object.keys(item)[0];
   return {
     ...emptyPipelineIndex(),
     ...index,
     [kind]: upsertBy(index[kind] ?? [], key, item).sort((left, right) => right.generatedAt - left.generatedAt)
+  };
+}
+function recordingPipelineId(recordingId) {
+  return `pipeline.${safeSegment(recordingId)}`;
+}
+function createRecordingPipelineDocument(recording) {
+  return {
+    schemaVersion: "0.1",
+    pipelineId: recordingPipelineId(recording.recordingId),
+    recordingId: recording.recordingId,
+    ...recording.taskId !== void 0 ? { taskId: recording.taskId } : {},
+    status: "ready",
+    createdAt: recording.startedAt,
+    updatedAt: Date.now(),
+    artifacts: emptyRecordingPipelineArtifacts()
+  };
+}
+function emptyRecordingPipelineArtifacts() {
+  return {
+    normalizedTimelineIds: [],
+    normalizationReviewIds: [],
+    miningRunIds: [],
+    evidenceFactIds: [],
+    evidenceObservationIds: [],
+    stateActionCorrelationIds: [],
+    evidenceClaimIds: [],
+    learnedTaskModelIds: [],
+    policyProposalIds: [],
+    replayResultIds: []
+  };
+}
+function addRecordingPipelineArtifactId(pipeline, kind, id) {
+  const key = kind === "normalizationReviews" ? "normalizationReviewIds" : kind === "miningRuns" ? "miningRunIds" : kind === "evidenceFacts" ? "evidenceFactIds" : kind === "evidenceObservations" ? "evidenceObservationIds" : kind === "stateActionCorrelations" ? "stateActionCorrelationIds" : kind === "evidenceClaims" ? "evidenceClaimIds" : kind === "learnedTaskModels" ? "learnedTaskModelIds" : kind === "policyProposals" ? "policyProposalIds" : "replayResultIds";
+  return {
+    ...pipeline,
+    status: kind === "replayResults" || kind === "policyProposals" ? "complete" : "processing",
+    updatedAt: Date.now(),
+    artifacts: {
+      ...pipeline.artifacts,
+      [key]: uniqueStrings([id, ...pipeline.artifacts[key] ?? []])
+    }
+  };
+}
+function uniqueStrings(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+function createEvidenceFact(miningRunId, timeline, entry, domain) {
+  const domainId = typeof entry.metadata?.domainId === "string" ? entry.metadata.domainId : void 0;
+  const eventType = "eventType" in entry ? entry.eventType : void 0;
+  const eventDefinition = domain && eventType ? domain.events.find((event3) => event3.eventType === eventType) : void 0;
+  const title = factTitle(entry, eventDefinition?.label);
+  return {
+    schemaVersion: "0.1",
+    factId: `fact.${safeSegment(timeline.recordingId)}.${safeSegment(entry.id)}`,
+    miningRunId,
+    recordingId: timeline.recordingId,
+    normalizedTimelineId: timeline.normalizedTimelineId,
+    kind: entry.type,
+    title,
+    summary: factSummary(entry, title),
+    occurredAt: entry.timestamp,
+    offsetMs: entry.monotonicOffsetMs,
+    source: { layer: "normalized_timeline", artifactId: timeline.normalizedTimelineId, entryId: entry.id },
+    ...domainId ? { domain: { domainId, ...eventType ? { eventType } : {}, ...eventDefinition?.label ? { label: eventDefinition.label } : {} } } : {},
+    data: compactJsonObject2({
+      ...entry.type === "action" ? { actionType: entry.actionType, target: entry.target, parameters: entry.parameters } : {},
+      ...entry.type === "domain_event" ? { eventType: entry.eventType, payload: entry.payload } : {},
+      ...entry.type === "state_delta" ? { deltas: entry.deltas } : {},
+      ...entry.type === "observation" ? { observationType: entry.observationType, signals: entry.signals, payload: entry.payload } : {},
+      ...entry.type === "marker" ? { label: entry.label } : {},
+      ...entry.type === "note" ? { noteId: entry.noteId } : {}
+    }),
+    metadata: compactJsonObject2({
+      sourceId: entry.sourceId,
+      ...entry.correlationId ? { correlationId: entry.correlationId } : {},
+      ...entry.metadata ?? {}
+    })
+  };
+}
+function createEvidenceObservations(fact) {
+  if (fact.kind === "state_delta" && Array.isArray(fact.data?.deltas)) {
+    return fact.data.deltas.map((delta, index) => {
+      const statePath = formatStatePath(String(delta.namespace ?? ""), String(delta.path ?? ""));
+      const previous = delta.previous;
+      const current = delta.current;
+      return {
+        schemaVersion: "0.1",
+        observationId: `obs.${safeSegment(fact.factId)}.${index + 1}`,
+        miningRunId: fact.miningRunId,
+        recordingId: fact.recordingId,
+        normalizedTimelineId: fact.normalizedTimelineId,
+        kind: "state_changed",
+        title: `${readableStatePath(statePath)} ${readableTokenValue(String(delta.change ?? "changed"))}`,
+        summary: `${readableStatePath(statePath)} changed from ${stateValueSummary(previous)} to ${stateValueSummary(current)}.`,
+        factIds: [fact.factId],
+        subject: { type: "state", statePath, label: readableStatePath(statePath) },
+        ...previous && typeof previous === "object" && !Array.isArray(previous) ? { before: previous } : {},
+        ...current && typeof current === "object" && !Array.isArray(current) ? { after: current } : {},
+        metadata: compactJsonObject2({ change: delta.change })
+      };
+    });
+  }
+  const kind = fact.kind === "action" ? "action_performed" : fact.kind === "domain_event" ? "domain_event_observed" : fact.kind === "state_checkpoint" ? "state_recorded" : fact.kind === "note" ? "note_added" : fact.kind === "marker" ? "marker_added" : "condition_observed";
+  return [{
+    schemaVersion: "0.1",
+    observationId: `obs.${safeSegment(fact.factId)}`,
+    miningRunId: fact.miningRunId,
+    recordingId: fact.recordingId,
+    normalizedTimelineId: fact.normalizedTimelineId,
+    kind,
+    title: fact.title,
+    summary: fact.summary,
+    factIds: [fact.factId],
+    subject: compactJsonObject2({
+      type: fact.kind,
+      ...fact.domain?.eventType ? { eventType: fact.domain.eventType } : {},
+      ...fact.data?.target && typeof fact.data.target === "object" && !Array.isArray(fact.data.target) ? { target: fact.data.target } : {}
+    }),
+    ...fact.domain ? { metadata: { domain: fact.domain } } : {}
+  }];
+}
+function stateElementDescriptorsForTimeline(timeline, domains) {
+  const descriptors = /* @__PURE__ */ new Map();
+  const domainIds = /* @__PURE__ */ new Set([
+    ...typeof timeline.metadata?.domainId === "string" ? [timeline.metadata.domainId] : [],
+    ...timeline.timeline.map((entry) => typeof entry.metadata?.domainId === "string" ? entry.metadata.domainId : "").filter(Boolean)
+  ]);
+  for (const domain of domains) {
+    if (domainIds.size && !domainIds.has(domain.domainId)) continue;
+    for (const pathDefinition of domain.statePaths ?? []) {
+      const statePath = formatStatePath(pathDefinition.namespace, pathDefinition.path);
+      descriptors.set(statePath, {
+        namespace: pathDefinition.namespace,
+        path: pathDefinition.path,
+        kind: pathDefinition.elementKind ?? inferStateElementKind(pathDefinition.path, pathDefinition.type),
+        ...pathDefinition.label !== void 0 ? { label: pathDefinition.label } : {},
+        ...pathDefinition.description !== void 0 ? { description: pathDefinition.description } : {},
+        ...pathDefinition.entityId !== void 0 ? { entityId: pathDefinition.entityId } : {},
+        ...pathDefinition.entityKind !== void 0 ? { entityKind: pathDefinition.entityKind } : {},
+        ...pathDefinition.stableAcrossSessions !== void 0 ? { stableAcrossSessions: pathDefinition.stableAcrossSessions } : {},
+        ...pathDefinition.sensitive !== void 0 ? { sensitive: pathDefinition.sensitive } : {},
+        ...pathDefinition.metadata !== void 0 ? { metadata: pathDefinition.metadata } : {}
+      });
+    }
+  }
+  return descriptors;
+}
+function createStateActionCorrelations(miningRunId, timeline, actions, descriptors) {
+  const correlations = [];
+  const checkpoints = timeline.timeline.filter((entry) => entry.type === "state_checkpoint");
+  const stateDeltas = timeline.timeline.filter((entry) => entry.type === "state_delta");
+  actions.forEach((action, actionIndex) => {
+    const previousAction = actions[actionIndex - 1];
+    const nextAction = actions[actionIndex + 1];
+    const windowStartOffsetMs = previousAction?.monotonicOffsetMs ?? 0;
+    const windowEndOffsetMs = nextAction?.monotonicOffsetMs ?? timeline.timeline[timeline.timeline.length - 1]?.monotonicOffsetMs ?? action.monotonicOffsetMs;
+    const previousCheckpoint = [...checkpoints].reverse().find((checkpoint) => checkpoint.monotonicOffsetMs <= action.monotonicOffsetMs);
+    if (previousCheckpoint?.type === "state_checkpoint") {
+      let index = 0;
+      for (const [statePath, stateValue] of stateValuesFromSnapshot(previousCheckpoint.state)) {
+        if (!isValuableStateElement(statePath, stateValue, descriptors)) continue;
+        const descriptor = descriptorForStateValue(statePath, stateValue, descriptors);
+        correlations.push({
+          schemaVersion: "0.1",
+          correlationId: `corr.${safeSegment(timeline.recordingId)}.${safeSegment(action.id)}.before.${index + 1}`,
+          miningRunId,
+          recordingId: timeline.recordingId,
+          normalizedTimelineId: timeline.normalizedTimelineId,
+          actionEntryId: action.id,
+          statePath,
+          relation: descriptor.kind === "enabled" && stateValue.value === true ? "became_enabled_before_action" : "present_before_action",
+          elementKind: descriptor.kind,
+          descriptor,
+          before: stateValueToJson(stateValue),
+          timing: {
+            beforeMs: Math.max(0, action.monotonicOffsetMs - previousCheckpoint.monotonicOffsetMs),
+            windowStartOffsetMs,
+            actionOffsetMs: action.monotonicOffsetMs,
+            windowEndOffsetMs
+          },
+          support: [
+            { layer: "normalized_timeline", artifactId: timeline.normalizedTimelineId, entryId: previousCheckpoint.id, signalPath: statePath },
+            { layer: "normalized_timeline", artifactId: timeline.normalizedTimelineId, entryId: action.id }
+          ]
+        });
+        index += 1;
+      }
+    }
+    for (const deltaEntry of stateDeltas.filter((entry) => entry.monotonicOffsetMs >= action.monotonicOffsetMs && entry.monotonicOffsetMs <= windowEndOffsetMs)) {
+      if (deltaEntry.type !== "state_delta") continue;
+      deltaEntry.deltas.forEach((delta, deltaIndex) => {
+        const statePath = formatStatePath(delta.namespace, delta.path);
+        const stateValue = delta.current ?? delta.previous;
+        if (!stateValue || !isValuableStateElement(statePath, stateValue, descriptors)) return;
+        const descriptor = descriptorForStateValue(statePath, stateValue, descriptors);
+        correlations.push({
+          schemaVersion: "0.1",
+          correlationId: `corr.${safeSegment(timeline.recordingId)}.${safeSegment(action.id)}.after.${safeSegment(deltaEntry.id)}.${safeSegment(statePath)}.${deltaIndex + 1}`,
+          miningRunId,
+          recordingId: timeline.recordingId,
+          normalizedTimelineId: timeline.normalizedTimelineId,
+          actionEntryId: action.id,
+          statePath,
+          relation: correlationRelationForDelta(delta, descriptor.kind),
+          elementKind: descriptor.kind,
+          descriptor,
+          ...delta.previous ? { before: stateValueToJson(delta.previous) } : {},
+          ...delta.current ? { after: stateValueToJson(delta.current) } : {},
+          timing: {
+            afterMs: Math.max(0, deltaEntry.monotonicOffsetMs - action.monotonicOffsetMs),
+            windowStartOffsetMs,
+            actionOffsetMs: action.monotonicOffsetMs,
+            windowEndOffsetMs
+          },
+          support: [
+            { layer: "normalized_timeline", artifactId: timeline.normalizedTimelineId, entryId: action.id },
+            { layer: "normalized_timeline", artifactId: timeline.normalizedTimelineId, entryId: deltaEntry.id, signalPath: statePath }
+          ]
+        });
+      });
+    }
+  });
+  return correlations;
+}
+function createCorrelationClaim(miningRunId, timeline, correlation, index, observations) {
+  const relatedObservations = observations.filter((observation) => observation.subject?.statePath === correlation.statePath || observation.factIds.some((factId) => correlation.support.some((evidence) => evidence.artifactId === factId)));
+  const isAfter = correlation.relation.includes("after") || correlation.relation === "changed_between_actions";
+  const label = correlation.descriptor?.label ?? readableStatePath(correlation.statePath);
+  return {
+    schemaVersion: "0.1",
+    claimId: `claim.${safeSegment(timeline.recordingId)}.correlation.${index + 1}`,
+    miningRunId,
+    recordingId: timeline.recordingId,
+    normalizedTimelineId: timeline.normalizedTimelineId,
+    claimType: isAfter ? "action_effect" : "candidate_condition",
+    title: isAfter ? `${label} changed after action` : `${label} was present before action`,
+    summary: isAfter ? `${label} ${correlation.relation.replace(/_/g, " ")} within ${correlation.timing.afterMs ?? 0}ms after the action.` : `${label} was observed before the action and may identify context, readiness, or the action target.`,
+    observationIds: relatedObservations.map((observation) => observation.observationId),
+    factIds: uniqueStrings(relatedObservations.flatMap((observation) => observation.factIds)),
+    statement: {
+      subject: { kind: "action", entryId: correlation.actionEntryId },
+      relationship: correlation.relation,
+      object: { kind: "state_element", signalPath: correlation.statePath, elementKind: correlation.elementKind }
+    },
+    confidence: { score: confidenceForCorrelation(correlation), basis: "Inferred from state timing around a recorded action.", sampleSize: 1 },
+    sourceEvidence: [{ layer: "state_action_correlation", artifactId: correlation.correlationId, relationship: correlation.relation }, ...correlation.support],
+    metadata: { correlationId: correlation.correlationId }
+  };
+}
+function createTransitionClaims(miningRunId, timeline, actions, factsByEntryId, observationsByFactId) {
+  return actions.slice(0, -1).map((entry, index) => {
+    const next = actions[index + 1];
+    const currentFact = factsByEntryId.get(entry.id);
+    const nextFact = factsByEntryId.get(next.id);
+    const currentObservation = currentFact ? observationsByFactId.get(currentFact.factId)?.[0] : void 0;
+    const nextObservation = nextFact ? observationsByFactId.get(nextFact.factId)?.[0] : void 0;
+    const gapMs = Math.max(0, next.monotonicOffsetMs - entry.monotonicOffsetMs);
+    return {
+      schemaVersion: "0.1",
+      claimId: `claim.${safeSegment(timeline.recordingId)}.transition.${index + 1}`,
+      miningRunId,
+      recordingId: timeline.recordingId,
+      normalizedTimelineId: timeline.normalizedTimelineId,
+      claimType: gapMs >= 250 ? "wait" : "transition",
+      title: gapMs >= 250 ? `Waited ${gapMs}ms before ${nextObservation?.title ?? next.id}` : `${currentObservation?.title ?? entry.id} led to ${nextObservation?.title ?? next.id}`,
+      summary: `${nextObservation?.title ?? "Next action"} occurred ${gapMs}ms after ${currentObservation?.title ?? "the previous action"}.`,
+      observationIds: uniqueStrings([currentObservation?.observationId ?? "", nextObservation?.observationId ?? ""]),
+      factIds: uniqueStrings([currentFact?.factId ?? "", nextFact?.factId ?? ""]),
+      statement: {
+        subject: { kind: "observation", observationId: currentObservation?.observationId ?? null },
+        relationship: gapMs >= 250 ? "followed_after_wait" : "followed_by",
+        object: { kind: "observation", observationId: nextObservation?.observationId ?? null, waitMs: gapMs }
+      },
+      confidence: { score: 0.6, basis: "Observed ordering within one recording.", sampleSize: 1 },
+      sourceEvidence: [
+        { layer: "normalized_timeline", artifactId: timeline.normalizedTimelineId, entryId: entry.id },
+        { layer: "normalized_timeline", artifactId: timeline.normalizedTimelineId, entryId: next.id }
+      ]
+    };
+  });
+}
+function factTitle(entry, eventLabel) {
+  if (entry.type === "action") return `Action: ${readableTokenValue(entry.actionType)}`;
+  if (entry.type === "domain_event") return eventLabel ?? `Event: ${readableTokenValue(entry.eventType)}`;
+  if (entry.type === "state_delta") return `State changed: ${entry.deltas.map((delta) => readableStatePath(formatStatePath(delta.namespace, delta.path))).slice(0, 3).join(", ")}`;
+  if (entry.type === "state_checkpoint") return "State checkpoint recorded";
+  if (entry.type === "observation") return `Observation: ${readableTokenValue(entry.observationType)}`;
+  if (entry.type === "marker") return `Marker: ${entry.label}`;
+  return "Note added";
+}
+function factSummary(entry, title) {
+  if (entry.type === "domain_event" && entry.payload) return `${title} with ${Object.keys(entry.payload).join(", ") || "payload"}.`;
+  if (entry.type === "state_delta") return `${entry.deltas.length} state change${entry.deltas.length === 1 ? "" : "s"} observed.`;
+  if (entry.type === "observation" && entry.signals) return `${Object.keys(entry.signals).length} signal${Object.keys(entry.signals).length === 1 ? "" : "s"} observed.`;
+  return `${title} at ${entry.monotonicOffsetMs}ms.`;
+}
+function formatStatePath(namespace, pathValue) {
+  return namespace ? `${namespace}.${pathValue}` : pathValue;
+}
+function readableStatePath(pathValue) {
+  return pathValue.split(".").filter(Boolean).map(readableTokenValue).join(" / ");
+}
+function readableTokenValue(value) {
+  return value.replace(/[_:.-]+/g, " ").replace(/\s+/g, " ").trim().replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Unknown";
+}
+function stateValueSummary(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return String(value ?? "missing");
+  const stateValue = value;
+  if (stateValue.value === void 0) return "missing";
+  if (typeof stateValue.value === "object") return JSON.stringify(stateValue.value);
+  return String(stateValue.value);
+}
+function stateValuesFromSnapshot(snapshot) {
+  return Object.entries(snapshot.namespaces).flatMap(
+    ([namespace, stateNamespace]) => Object.entries(stateNamespace.values).map(([pathValue, stateValue]) => [formatStatePath(namespace, pathValue), stateValue])
+  );
+}
+function descriptorForStateValue(statePath, stateValue, descriptors) {
+  const existing = descriptors.get(statePath);
+  if (existing) return existing;
+  const [namespace, ...pathParts] = statePath.split(".");
+  const pathValue = pathParts.join(".");
+  return {
+    namespace: namespace || "custom",
+    path: pathValue,
+    kind: typeof stateValue.metadata?.elementKind === "string" ? stateValue.metadata.elementKind : inferStateElementKind(pathValue, stateValue.type),
+    ...typeof stateValue.semanticRole === "string" ? { description: stateValue.semanticRole } : {},
+    ...typeof stateValue.metadata?.label === "string" ? { label: stateValue.metadata.label } : {},
+    ...typeof stateValue.metadata?.entityId === "string" ? { entityId: stateValue.metadata.entityId } : {},
+    ...typeof stateValue.metadata?.entityKind === "string" ? { entityKind: stateValue.metadata.entityKind } : {},
+    ...typeof stateValue.metadata?.stableAcrossSessions === "boolean" ? { stableAcrossSessions: stateValue.metadata.stableAcrossSessions } : {},
+    ...stateValue.sensitive !== void 0 ? { sensitive: stateValue.sensitive } : {}
+  };
+}
+function isValuableStateElement(statePath, stateValue, descriptors) {
+  if (stateValue.sensitive || stateValue.comparable === false) return false;
+  const descriptor = descriptorForStateValue(statePath, stateValue, descriptors);
+  if (descriptor.kind === "unknown" || descriptor.kind === "position" || descriptor.kind === "bounds") return false;
+  const normalizedPath = statePath.toLowerCase();
+  if (normalizedPath.includes("mouse") || normalizedPath.includes("cursor") || normalizedPath.includes("hover")) return false;
+  return true;
+}
+function inferStateElementKind(pathValue, type) {
+  const normalized = pathValue.toLowerCase();
+  if (normalized.includes("selector")) return "selector";
+  if (normalized.includes("testid") || normalized.includes("test_id") || normalized.endsWith("id") || normalized.includes(".id")) return "static_id";
+  if (normalized.includes("internal")) return "internal_id";
+  if (normalized.includes("label")) return "label";
+  if (normalized.includes("text") || normalized.includes("title") || normalized.includes("message")) return "text";
+  if (normalized.includes("status") || normalized.includes("state")) return "status";
+  if (normalized.includes("route")) return "route";
+  if (normalized.includes("url") || normalized.includes("href")) return "url";
+  if (normalized.includes("visible") || normalized.includes("visibility")) return "visibility";
+  if (normalized.includes("enabled") || normalized.includes("disabled")) return "enabled";
+  if (normalized.includes("count") || normalized.includes("total") || normalized.includes("quantity")) return "count";
+  if (type === "point") return "position";
+  if (type === "rectangle") return "bounds";
+  if (type === "entity_ref" || type === "entity_ref_list") return "internal_id";
+  if (type === "json") return "json";
+  if (type === "string") return "text";
+  if (type === "number" || type === "integer") return "count";
+  if (type === "boolean") return "visibility";
+  return "unknown";
+}
+function correlationRelationForDelta(delta, kind) {
+  if (delta.change === "added") return "appeared_after_action";
+  if (delta.change === "removed") return "disappeared_after_action";
+  if (kind === "visibility" && delta.current?.value === true) return "became_visible_after_action";
+  return "changed_after_action";
+}
+function stateValueToJson(value) {
+  return compactJsonObject2({
+    type: value.type,
+    value: value.value,
+    observedAt: value.observedAt,
+    ...value.sourceId !== void 0 ? { sourceId: value.sourceId } : {},
+    ...value.volatility !== void 0 ? { volatility: value.volatility } : {},
+    ...value.semanticRole !== void 0 ? { semanticRole: value.semanticRole } : {},
+    ...value.metadata !== void 0 ? { metadata: value.metadata } : {}
+  });
+}
+function confidenceForCorrelation(correlation) {
+  if (correlation.relation === "changed_after_action" || correlation.relation === "appeared_after_action" || correlation.relation === "became_visible_after_action") return 0.68;
+  if (correlation.elementKind === "static_id" || correlation.elementKind === "selector" || correlation.elementKind === "label" || correlation.elementKind === "text") return 0.58;
+  return 0.5;
+}
+function compactJsonObject2(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== void 0));
+}
+function createTaskDraftModelFromMiningRun(miningRun, taskId) {
+  const resolvedTaskId = taskId ?? String(miningRun.metadata?.taskId ?? miningRun.metadata?.recordingId ?? "task.learned");
+  const actionClaims = (miningRun.claims ?? []).filter((claim) => claim.claimType === "action_effect");
+  const windows = miningRun.windows.filter((window) => window.actionEntryId);
+  const actionClusters = (actionClaims.length ? actionClaims : windows).map((item, index) => {
+    const claim = "claimId" in item ? item : void 0;
+    const window = "actionEntryId" in item ? item : windows[index];
+    const actionEntryId = typeof claim?.statement.subject.entryId === "string" ? claim.statement.subject.entryId : window?.actionEntryId;
+    const matchingEffects = miningRun.actionEffects.filter((effect) => effect.actionOccurrenceId === actionEntryId);
+    const claimEvidence = claim ? [{ layer: "evidence_claim", artifactId: claim.claimId, relationship: claim.claimType }] : window?.sourceEvidence ?? [];
+    return {
+      id: `cluster.${index + 1}`,
+      label: claim ? claim.title : `Step ${index + 1}`,
+      actionTemplate: { id: `action.${index + 1}`, actionType: "learned.action", parameters: {}, sourceEvidence: claimEvidence },
+      positiveRequirements: (miningRun.claims ?? []).filter((candidate) => candidate.claimType === "candidate_condition").slice(0, 3).map((candidate) => ({ signalPath: String(candidate.statement.subject.signalPath ?? ""), operator: "exists", weight: candidate.confidence.score })),
+      negativeRequirements: [],
+      expectedEffects: matchingEffects.map((effect) => ({
+        signalPath: effect.signalPath,
+        condition: { signalPath: effect.signalPath, operator: "changed" },
+        probability: actionClaims.find((candidate) => candidate.statement.object?.signalPath === effect.signalPath && candidate.statement.subject.entryId === actionEntryId)?.confidence.score ?? effect.probability,
+        evidence: actionClaims.filter((candidate) => candidate.statement.object?.signalPath === effect.signalPath && candidate.statement.subject.entryId === actionEntryId).map((candidate) => ({ layer: "evidence_claim", artifactId: candidate.claimId, relationship: candidate.claimType }))
+      })),
+      possibleSideEffects: [],
+      confidence: claim?.confidence.score ?? Math.min(0.85, 0.45 + matchingEffects.length * 0.05),
+      sourceOccurrences: actionEntryId ? [actionEntryId] : [],
+      ...claim ? { metadata: { sourceClaimId: claim.claimId, observationIds: claim.observationIds, factIds: claim.factIds } } : {}
+    };
+  });
+  const transitions = actionClusters.slice(0, -1).map((cluster, index) => ({
+    id: `transition.${index + 1}`,
+    fromClusterId: cluster.id,
+    toClusterId: actionClusters[index + 1].id,
+    probability: 0.8,
+    evidence: []
+  }));
+  return {
+    schemaVersion: "0.1",
+    learnedTaskModelId: `model.${safeSegment(resolvedTaskId)}.${Date.now()}`,
+    taskId: resolvedTaskId,
+    version: "0.1",
+    actionClusters,
+    transitions,
+    invariants: miningRun.conditionCandidates.slice(0, 5).map((candidate) => ({ signalPath: candidate.signalPath, operator: "exists" })),
+    unresolvedQuestions: miningRun.issues.map((issue, index) => ({ id: `question.${index + 1}`, question: issue, severity: "important", evidence: [] })),
+    sourceRecordings: [String(miningRun.metadata?.recordingId ?? "")].filter(Boolean),
+    sourceMiningRuns: [miningRun.miningRunId],
+    generatedAt: Date.now(),
+    metadata: { source: "mined_evidence" }
   };
 }
 function average(values) {
@@ -3712,6 +4375,131 @@ function inferStateType(value) {
   return "json";
 }
 
+// src/recording/web-state.ts
+var MAX_STATE_ELEMENTS = 40;
+function createWebAutomationStateFromSnapshot(snapshot, input = {}) {
+  const timestamp = input.timestamp ?? Date.now();
+  let state = createWebAutomationInitialState(timestamp);
+  state = putStateValue(state, "page.url", "string", snapshot.url, timestamp, input.sourceId, { elementKind: "url" });
+  state = putStateValue(state, "page.title", "string", snapshot.title, timestamp, input.sourceId, { elementKind: "text" });
+  state = putStateValue(state, "viewport.bounds", "rectangle", { x: 0, y: 0, width: snapshot.viewport.width, height: snapshot.viewport.height }, timestamp, input.sourceId, { elementKind: "bounds", volatility: "normal" });
+  state = putStateValue(state, "scroll.position", "point", { x: snapshot.viewport.scrollX, y: snapshot.viewport.scrollY }, timestamp, input.sourceId, { elementKind: "position", volatility: "rapid" });
+  if (snapshot.selectedText) state = putStateValue(state, "page.selectedText", "string", snapshot.selectedText, timestamp, input.sourceId, { elementKind: "text" });
+  if (snapshot.focusedElement) {
+    const target = webAutomationActionTargetFromElement(snapshot.focusedElement);
+    state = putStateValue(state, "focus.target", "json", target, timestamp, input.sourceId, { elementKind: "json", volatility: "rapid" });
+  }
+  const elements = filterStateElements(snapshot.interactiveElements);
+  state = putStateValue(state, "elements.count", "integer", elements.length, timestamp, input.sourceId, { elementKind: "count" });
+  for (const element of elements) state = addElementStateValues(state, element, timestamp, input.sourceId);
+  return state;
+}
+function filterStateElements(elements, limit = MAX_STATE_ELEMENTS) {
+  const seen = /* @__PURE__ */ new Set();
+  const filtered = [];
+  for (const element of elements) {
+    if (!shouldCaptureElementState(element)) continue;
+    const id = elementStateId(element);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    filtered.push(element);
+    if (filtered.length >= limit) break;
+  }
+  return filtered;
+}
+function shouldCaptureElementState(element) {
+  return Boolean(
+    meaningfulText(element.text) || meaningfulText(element.name) || meaningfulText(element.value) || meaningfulText(element.href) || stableAttribute(element, "data-testid") || stableAttribute(element, "aria-label") || stableAttribute(element, "name") || stableAttribute(element, "id")
+  );
+}
+function webAutomationActionTargetFromElement(element) {
+  return compactJsonObject3({
+    type: element.role ?? element.inputType ?? element.tagName,
+    id: stableAttribute(element, "data-testid") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name"),
+    label: element.name ?? element.text ?? element.value,
+    selector: element.selector,
+    bounds: element.bounds,
+    metadata: compactJsonObject3({
+      tagName: element.tagName,
+      role: element.role,
+      href: element.href,
+      inputType: element.inputType,
+      attributes: element.attributes
+    })
+  });
+}
+function addElementStateValues(state, element, timestamp, sourceId) {
+  const basePath = `elements.${elementStateId(element)}`;
+  let next = putStateValue(state, `${basePath}.selector`, "string", element.selector, timestamp, sourceId, { elementKind: "selector", stableAcrossSessions: true });
+  next = putStateValue(next, `${basePath}.tagName`, "string", element.tagName, timestamp, sourceId, { elementKind: "static_id", stableAcrossSessions: true });
+  next = putStateValue(next, `${basePath}.visible`, "boolean", isVisible(element), timestamp, sourceId, { elementKind: "visibility", volatility: "normal" });
+  next = putStateValue(next, `${basePath}.enabled`, "boolean", isEnabled(element), timestamp, sourceId, { elementKind: "enabled", volatility: "normal" });
+  if (element.text) next = putStateValue(next, `${basePath}.text`, "string", element.text, timestamp, sourceId, { elementKind: "text" });
+  if (element.name) next = putStateValue(next, `${basePath}.label`, "string", element.name, timestamp, sourceId, { elementKind: "label" });
+  if (element.value) next = putStateValue(next, `${basePath}.value`, "string", element.value, timestamp, sourceId, { elementKind: "text", sensitive: true });
+  if (element.href) next = putStateValue(next, `${basePath}.href`, "string", element.href, timestamp, sourceId, { elementKind: "url" });
+  if (element.bounds) next = putStateValue(next, `${basePath}.bounds`, "rectangle", element.bounds, timestamp, sourceId, { elementKind: "bounds", comparable: false });
+  const stableId = stableAttribute(element, "data-testid") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name");
+  if (stableId) next = putStateValue(next, `${basePath}.stableId`, "string", stableId, timestamp, sourceId, { elementKind: "static_id", stableAcrossSessions: true });
+  return next;
+}
+function putStateValue(snapshot, path3, type, value, observedAt, sourceId, input = {}) {
+  const namespace = snapshot.namespaces[WEB_AUTOMATION_STATE_NAMESPACE] ?? {
+    schemaId: WEB_AUTOMATION_DOMAIN_ID,
+    schemaVersion: WEB_AUTOMATION_SCHEMA_VERSION,
+    values: {},
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID }
+  };
+  const stateValue = compactJsonObject3({
+    type,
+    value,
+    observedAt,
+    sourceId,
+    confidence: input.confidence ?? 0.95,
+    volatility: input.volatility ?? "normal",
+    comparable: input.comparable ?? true,
+    sensitive: input.sensitive,
+    metadata: compactJsonObject3({
+      elementKind: input.elementKind,
+      stableAcrossSessions: input.stableAcrossSessions
+    })
+  });
+  return {
+    ...snapshot,
+    timestamp: observedAt,
+    namespaces: {
+      ...snapshot.namespaces,
+      [WEB_AUTOMATION_STATE_NAMESPACE]: {
+        ...namespace,
+        values: {
+          ...namespace.values,
+          [path3]: stateValue
+        }
+      }
+    }
+  };
+}
+function elementStateId(element) {
+  const stable = stableAttribute(element, "data-testid") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name") ?? element.selector;
+  return stable.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, 80) || "element";
+}
+function meaningfulText(value) {
+  return typeof value === "string" && value.trim().length >= 2;
+}
+function stableAttribute(element, name) {
+  const value = element.attributes?.[name];
+  return meaningfulText(value) ? value : void 0;
+}
+function isVisible(element) {
+  return !element.bounds || element.bounds.width > 0 && element.bounds.height > 0;
+}
+function isEnabled(element) {
+  return element.attributes?.disabled === void 0 && element.attributes?.["aria-disabled"] !== "true";
+}
+function compactJsonObject3(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
+}
+
 // src/recording/reducers.ts
 var webAutomationStateReducer = ({ event: event3, previousState }) => {
   const payload = event3.payload ?? {};
@@ -3724,17 +4512,47 @@ var webAutomationStateReducer = ({ event: event3, previousState }) => {
   };
   if (typeof payload.url === "string") next = withWebStateValue(next, "page.url", payload.url, source);
   if (typeof payload.title === "string") next = withWebStateValue(next, "page.title", payload.title, source);
-  if (payload.viewport && typeof payload.viewport === "object") next = withWebStateValue(next, "page.viewport", payload.viewport, source);
-  if (payload.element && typeof payload.element === "object") next = withWebStateValue(next, "page.lastInteraction", payload.element, source);
+  if (payload.element && typeof payload.element === "object") next = withWebStateValue(next, "focus.target", payload.element, source);
   if (typeof payload.inputValue === "string" && event3.target?.selector) {
     next = withWebStateValue(next, `forms.${String(event3.target.selector)}`, payload.inputValue, source);
   }
-  if (payload.scroll && typeof payload.scroll === "object") next = withWebStateValue(next, "page.scroll", payload.scroll, source);
-  if (payload.snapshot && typeof payload.snapshot === "object") next = withWebStateValue(next, "page.latestSnapshot", payload.snapshot, source);
+  if (payload.scroll && typeof payload.scroll === "object") next = withWebStateValue(next, "scroll.position", payload.scroll, source);
+  if (isSnapshotPayload(payload.snapshot)) {
+    const snapshotOptions = { timestamp };
+    if (event3.sourceId !== void 0) snapshotOptions.sourceId = event3.sourceId;
+    next = mergeWebState(next, createWebAutomationStateFromSnapshot(payload.snapshot, snapshotOptions));
+  }
   if (payload.actionResult && typeof payload.actionResult === "object") next = withWebStateValue(next, "runtime.lastActionResult", payload.actionResult, source);
   if (event3.eventType === "web.client.error") next = withWebStateValue(next, "runtime.lastError", payload, source);
   return next;
 };
+function isSnapshotPayload(value) {
+  if (!value || typeof value !== "object") return false;
+  const snapshot = value;
+  return typeof snapshot.url === "string" && typeof snapshot.title === "string" && Boolean(snapshot.viewport && typeof snapshot.viewport === "object") && Array.isArray(snapshot.interactiveElements);
+}
+function mergeWebState(previous, incoming) {
+  const previousWeb = previous.namespaces.web;
+  const incomingWeb = incoming.namespaces.web;
+  if (!incomingWeb) return previous;
+  const metadata = incomingWeb.metadata ?? previousWeb?.metadata;
+  return {
+    ...previous,
+    timestamp: incoming.timestamp,
+    namespaces: {
+      ...previous.namespaces,
+      web: {
+        schemaId: incomingWeb.schemaId,
+        schemaVersion: incomingWeb.schemaVersion,
+        ...metadata !== void 0 ? { metadata } : {},
+        values: {
+          ...previousWeb?.values ?? {},
+          ...incomingWeb.values
+        }
+      }
+    }
+  };
+}
 
 // src/recording/events.ts
 var elementSchema = {
@@ -3804,14 +4622,29 @@ var webAutomationRecordingDomain = {
   description: "Validated recording events, state updates, and observations for browser-based web automation.",
   events: webAutomationRecordingEvents,
   statePaths: [
-    { namespace: "web", path: "page.url", type: "string", label: "Page URL", volatility: "normal" },
-    { namespace: "web", path: "page.title", type: "string", label: "Page title", volatility: "normal" },
-    { namespace: "web", path: "page.viewport", type: "json", label: "Viewport", volatility: "normal" },
-    { namespace: "web", path: "page.lastInteraction", type: "json", label: "Last interaction", volatility: "rapid" },
-    { namespace: "web", path: "page.scroll", type: "json", label: "Scroll", volatility: "rapid" },
-    { namespace: "web", path: "page.latestSnapshot", type: "json", label: "Latest snapshot", volatility: "normal" },
-    { namespace: "web", path: "runtime.lastActionResult", type: "json", label: "Last action result", volatility: "normal" },
-    { namespace: "web", path: "runtime.lastError", type: "json", label: "Last client error", volatility: "normal" }
+    { namespace: "web", path: "page.url", type: "string", elementKind: "url", label: "Page URL", volatility: "normal", stableAcrossSessions: false },
+    { namespace: "web", path: "page.title", type: "string", elementKind: "text", label: "Page title", volatility: "normal" },
+    { namespace: "web", path: "page.selectedText", type: "string", elementKind: "text", label: "Selected text", volatility: "rapid" },
+    { namespace: "web", path: "viewport.bounds", type: "rectangle", elementKind: "bounds", label: "Viewport bounds", volatility: "normal" },
+    { namespace: "web", path: "scroll.position", type: "point", elementKind: "position", label: "Scroll position", volatility: "rapid" },
+    { namespace: "web", path: "focus.target", type: "json", elementKind: "json", label: "Focused target", volatility: "rapid" },
+    { namespace: "web", path: "elements.count", type: "integer", elementKind: "count", label: "Captured element count", volatility: "normal" },
+    { namespace: "web", path: "elements.*.selector", type: "string", elementKind: "selector", label: "Element selector", stableAcrossSessions: true, volatility: "slow" },
+    { namespace: "web", path: "elements.*.stableId", type: "string", elementKind: "static_id", label: "Element stable ID", stableAcrossSessions: true, volatility: "slow" },
+    { namespace: "web", path: "elements.*.tagName", type: "string", elementKind: "static_id", label: "Element tag", stableAcrossSessions: true, volatility: "slow" },
+    { namespace: "web", path: "elements.*.text", type: "string", elementKind: "text", label: "Element text", volatility: "normal" },
+    { namespace: "web", path: "elements.*.label", type: "string", elementKind: "label", label: "Element label", volatility: "normal" },
+    { namespace: "web", path: "elements.*.value", type: "string", elementKind: "text", label: "Element value", volatility: "normal", sensitive: true },
+    { namespace: "web", path: "elements.*.href", type: "string", elementKind: "url", label: "Element link URL", volatility: "slow" },
+    { namespace: "web", path: "elements.*.visible", type: "boolean", elementKind: "visibility", label: "Element visible", volatility: "normal" },
+    { namespace: "web", path: "elements.*.enabled", type: "boolean", elementKind: "enabled", label: "Element enabled", volatility: "normal" },
+    { namespace: "web", path: "elements.*.bounds", type: "rectangle", elementKind: "bounds", label: "Element bounds", volatility: "normal" },
+    { namespace: "web", path: "forms.*", type: "string", elementKind: "text", label: "Form field value", volatility: "normal", sensitive: true },
+    { namespace: "web", path: "runtime.lastActionResult", type: "json", elementKind: "json", label: "Last action result", volatility: "normal" },
+    { namespace: "web", path: "runtime.lastError", type: "json", elementKind: "json", label: "Last client error", volatility: "normal" },
+    { namespace: "web", path: "browser.activeTabId", type: "integer", elementKind: "internal_id", label: "Active tab ID", volatility: "normal" },
+    { namespace: "web", path: "browser.tabCount", type: "integer", elementKind: "count", label: "Browser tab count", volatility: "normal" },
+    { namespace: "web", path: "recording.active", type: "boolean", elementKind: "status", label: "Recording active", volatility: "normal" }
   ],
   metadata: {
     actionDefinitions: webAutomationActionDefinitions
@@ -3860,12 +4693,13 @@ function createWebAutomationRecordingEvent(payload, input = {}) {
   const target = payload.element;
   return {
     eventId: `web.${payload.sequence}.${payload.eventTimestampMs}`,
+    ...input.recordingId !== void 0 ? { recordingId: input.recordingId } : {},
     domainId: WEB_AUTOMATION_DOMAIN_ID,
     eventType,
     timestamp: payload.eventTimestampMs,
     ...input.tabId === void 0 ? {} : { sourceId: `tab:${input.tabId}${input.frameId === void 0 ? "" : `:frame:${input.frameId}`}` },
-    ...target !== void 0 ? { target } : {},
-    payload: compactJsonObject2({
+    ...target !== void 0 ? { target: webAutomationActionTargetFromElement(target) } : {},
+    payload: compactJsonObject4({
       url: payload.url,
       title: payload.title,
       sequence: payload.sequence,
@@ -3878,13 +4712,13 @@ function createWebAutomationRecordingEvent(payload, input = {}) {
       actionResult: payload.actionResult,
       ...payload.metadata?.recordingState !== void 0 ? { recordingState: payload.metadata.recordingState } : {}
     }),
-    metadata: compactJsonObject2({
+    metadata: compactJsonObject4({
       clientKind: payload.kind,
       ...payload.metadata ?? {}
     })
   };
 }
-function compactJsonObject2(value) {
+function compactJsonObject4(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
 
@@ -3910,4 +4744,23 @@ assert.equal(event2.domainId, WEB_AUTOMATION_DOMAIN_ID);
 assert.equal(event2.eventType, WEB_AUTOMATION_EVENTS.elementClicked);
 var initialState = createWebAutomationInitialState(1);
 assert.equal(initialState.namespaces.web?.schemaId, WEB_AUTOMATION_DOMAIN_ID);
+var filteredElements = filterStateElements([
+  { tagName: "button", selector: "button.icon" },
+  { tagName: "button", selector: "button.save", text: "Save" },
+  { tagName: "a", selector: "a.home", href: "https://example.test/home" },
+  { tagName: "input", selector: "input[name=search]", attributes: { name: "search" } }
+]);
+assert.deepEqual(filteredElements.map((item) => item.selector), ["button.save", "a.home", "input[name=search]"]);
+var snapshotState = createWebAutomationStateFromSnapshot({
+  url: "https://example.test/search",
+  title: "Search",
+  viewport: { width: 1280, height: 720, scrollX: 0, scrollY: 25 },
+  interactiveElements: filteredElements
+}, { timestamp: 20, sourceId: "tab:1" });
+var webValues = snapshotState.namespaces.web?.values ?? {};
+assert.equal(webValues["page.url"]?.value, "https://example.test/search");
+assert.equal(webValues["scroll.position"]?.type, "point");
+assert.equal(webValues["elements.count"]?.value, 3);
+assert.equal(Object.keys(webValues).some((path3) => path3.includes("button.icon")), false);
+assert.equal(Object.keys(webValues).some((path3) => path3.endsWith(".selector")), true);
 console.log("Web automation domain smoke test passed.");

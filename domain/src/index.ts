@@ -8,5 +8,6 @@ export * from "./actions/capabilities";
 export * from "./recording/domain";
 export * from "./recording/events";
 export * from "./recording/state";
+export * from "./recording/web-state";
 export * from "./client/capabilities";
 export * from "./client/gateway-mapping";

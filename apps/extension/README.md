@@ -6,8 +6,8 @@ Responsibilities:
 
 - connect to a FluxIQ gateway over WebSocket;
 - pair with the selected local or hosted FluxIQ web panel;
-- stream generic state updates, structured snapshots, and domain-tagged
-  recording events;
+- stream FluxIQ `StateSnapshot` updates, compact snapshots, domain-tagged
+  recording events, and selected recording timeline entries;
 - execute approved browser actions sent by FluxIQ;
 - keep only lightweight local settings and queued events.
 
@@ -24,10 +24,11 @@ The recorder console shows:
 
 - connection state and active page;
 - a primary record control with timer, event count, and queued count;
-- live recording activity;
+- a paginated event log for the current recording;
+- saved recording summaries from FluxIQ Core;
 - unsupported-page warnings;
-- a settings drawer for gateway URL, reconnect behavior, capture toggles,
-  diagnostics, and session reset.
+- a settings drawer for gateway/core API URLs, reconnect behavior, capture
+  toggles, diagnostics, and session reset.
 
 The default development gateway is:
 
@@ -44,6 +45,27 @@ user-entered pairing codes.
 
 Recording is available only after the gateway sends `server.session_ready`.
 Starting a recording resets local counters, enables content-script capture,
-sends `client.state_update`, and attempts an initial structured
-`client.snapshot`. Stopping captures a final snapshot and leaves the latest
-activity summary visible.
+sends `client.start_recording` with a compact initial `StateSnapshot`,
+environment descriptor, sources, and action channels. The initial state is
+derived from the active tab snapshot when possible and falls back to browser tab
+state if content scripts are unavailable.
+
+DOM snapshots are converted into factual `web` namespace state values. The
+extension filters element state aggressively: only interactive elements with
+meaningful text, label, value, href, or stable public identifiers are included,
+and each snapshot is capped to 40 elements. This avoids recording every DOM
+node while still giving FluxIQ useful targets and state deltas.
+
+Primary user actions are sent as domain events and as selected
+`client.recording_entry` action entries. Passive evidence, snapshots, and
+presence updates are kept as compact state updates or observations. Stopping
+captures a final snapshot and leaves the paginated local event log visible.
+
+The recordings tab loads saved summaries from FluxIQ Core:
+
+```text
+GET /api/recordings?page=1&pageSize=10
+```
+
+When the extension has a paired gateway token, it sends it as a bearer token for
+that request.

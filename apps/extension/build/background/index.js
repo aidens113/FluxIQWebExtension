@@ -212,6 +212,7 @@ function removeListener(socket, type, listener) {
 
 // ../../domain/src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
+var WEB_AUTOMATION_SCHEMA_VERSION = "0.1";
 var WEB_AUTOMATION_EVENTS = {
   clientReady: "web.client.ready",
   tabStateChanged: "web.tab.state_changed",
@@ -275,6 +276,158 @@ var webAutomationClientCapabilities = [
   }
 ];
 
+// ../../domain/src/recording/state.ts
+var WEB_AUTOMATION_STATE_NAMESPACE = "web";
+function createWebAutomationInitialState(timestamp = Date.now()) {
+  return {
+    timestamp,
+    namespaces: {
+      [WEB_AUTOMATION_STATE_NAMESPACE]: {
+        schemaId: WEB_AUTOMATION_DOMAIN_ID,
+        schemaVersion: WEB_AUTOMATION_SCHEMA_VERSION,
+        values: {},
+        metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID }
+      }
+    }
+  };
+}
+
+// ../../domain/src/recording/web-state.ts
+var MAX_STATE_ELEMENTS = 40;
+function createWebAutomationStateFromSnapshot(snapshot, input = {}) {
+  const timestamp = input.timestamp ?? Date.now();
+  let state = createWebAutomationInitialState(timestamp);
+  state = putStateValue(state, "page.url", "string", snapshot.url, timestamp, input.sourceId, { elementKind: "url" });
+  state = putStateValue(state, "page.title", "string", snapshot.title, timestamp, input.sourceId, { elementKind: "text" });
+  state = putStateValue(state, "viewport.bounds", "rectangle", { x: 0, y: 0, width: snapshot.viewport.width, height: snapshot.viewport.height }, timestamp, input.sourceId, { elementKind: "bounds", volatility: "normal" });
+  state = putStateValue(state, "scroll.position", "point", { x: snapshot.viewport.scrollX, y: snapshot.viewport.scrollY }, timestamp, input.sourceId, { elementKind: "position", volatility: "rapid" });
+  if (snapshot.selectedText) state = putStateValue(state, "page.selectedText", "string", snapshot.selectedText, timestamp, input.sourceId, { elementKind: "text" });
+  if (snapshot.focusedElement) {
+    const target = webAutomationActionTargetFromElement(snapshot.focusedElement);
+    state = putStateValue(state, "focus.target", "json", target, timestamp, input.sourceId, { elementKind: "json", volatility: "rapid" });
+  }
+  const elements = filterStateElements(snapshot.interactiveElements);
+  state = putStateValue(state, "elements.count", "integer", elements.length, timestamp, input.sourceId, { elementKind: "count" });
+  for (const element of elements) state = addElementStateValues(state, element, timestamp, input.sourceId);
+  return state;
+}
+function createWebAutomationStateFromTabs(active, tabs, input = {}) {
+  const timestamp = input.timestamp ?? Date.now();
+  let state = createWebAutomationInitialState(timestamp);
+  if (active?.url) state = putStateValue(state, "page.url", "string", active.url, timestamp, input.sourceId, { elementKind: "url" });
+  if (active?.title) state = putStateValue(state, "page.title", "string", active.title, timestamp, input.sourceId, { elementKind: "text" });
+  if (active?.tabId !== void 0) state = putStateValue(state, "browser.activeTabId", "integer", active.tabId, timestamp, input.sourceId, { elementKind: "internal_id" });
+  state = putStateValue(state, "browser.tabCount", "integer", tabs.length, timestamp, input.sourceId, { elementKind: "count" });
+  state = putStateValue(state, "recording.active", "boolean", input.recording === true, timestamp, input.sourceId, { elementKind: "status" });
+  if (input.permissions?.length) state = putStateValue(state, "browser.permissions", "json", input.permissions, timestamp, input.sourceId, { elementKind: "collection", comparable: false });
+  return state;
+}
+function filterStateElements(elements, limit = MAX_STATE_ELEMENTS) {
+  const seen = /* @__PURE__ */ new Set();
+  const filtered = [];
+  for (const element of elements) {
+    if (!shouldCaptureElementState(element)) continue;
+    const id = elementStateId(element);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    filtered.push(element);
+    if (filtered.length >= limit) break;
+  }
+  return filtered;
+}
+function shouldCaptureElementState(element) {
+  return Boolean(
+    meaningfulText(element.text) || meaningfulText(element.name) || meaningfulText(element.value) || meaningfulText(element.href) || stableAttribute(element, "data-testid") || stableAttribute(element, "aria-label") || stableAttribute(element, "name") || stableAttribute(element, "id")
+  );
+}
+function webAutomationActionTargetFromElement(element) {
+  return compactJsonObject({
+    type: element.role ?? element.inputType ?? element.tagName,
+    id: stableAttribute(element, "data-testid") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name"),
+    label: element.name ?? element.text ?? element.value,
+    selector: element.selector,
+    bounds: element.bounds,
+    metadata: compactJsonObject({
+      tagName: element.tagName,
+      role: element.role,
+      href: element.href,
+      inputType: element.inputType,
+      attributes: element.attributes
+    })
+  });
+}
+function addElementStateValues(state, element, timestamp, sourceId) {
+  const basePath = `elements.${elementStateId(element)}`;
+  let next = putStateValue(state, `${basePath}.selector`, "string", element.selector, timestamp, sourceId, { elementKind: "selector", stableAcrossSessions: true });
+  next = putStateValue(next, `${basePath}.tagName`, "string", element.tagName, timestamp, sourceId, { elementKind: "static_id", stableAcrossSessions: true });
+  next = putStateValue(next, `${basePath}.visible`, "boolean", isVisible(element), timestamp, sourceId, { elementKind: "visibility", volatility: "normal" });
+  next = putStateValue(next, `${basePath}.enabled`, "boolean", isEnabled(element), timestamp, sourceId, { elementKind: "enabled", volatility: "normal" });
+  if (element.text) next = putStateValue(next, `${basePath}.text`, "string", element.text, timestamp, sourceId, { elementKind: "text" });
+  if (element.name) next = putStateValue(next, `${basePath}.label`, "string", element.name, timestamp, sourceId, { elementKind: "label" });
+  if (element.value) next = putStateValue(next, `${basePath}.value`, "string", element.value, timestamp, sourceId, { elementKind: "text", sensitive: true });
+  if (element.href) next = putStateValue(next, `${basePath}.href`, "string", element.href, timestamp, sourceId, { elementKind: "url" });
+  if (element.bounds) next = putStateValue(next, `${basePath}.bounds`, "rectangle", element.bounds, timestamp, sourceId, { elementKind: "bounds", comparable: false });
+  const stableId = stableAttribute(element, "data-testid") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name");
+  if (stableId) next = putStateValue(next, `${basePath}.stableId`, "string", stableId, timestamp, sourceId, { elementKind: "static_id", stableAcrossSessions: true });
+  return next;
+}
+function putStateValue(snapshot, path, type, value, observedAt, sourceId, input = {}) {
+  const namespace = snapshot.namespaces[WEB_AUTOMATION_STATE_NAMESPACE] ?? {
+    schemaId: WEB_AUTOMATION_DOMAIN_ID,
+    schemaVersion: WEB_AUTOMATION_SCHEMA_VERSION,
+    values: {},
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID }
+  };
+  const stateValue = compactJsonObject({
+    type,
+    value,
+    observedAt,
+    sourceId,
+    confidence: input.confidence ?? 0.95,
+    volatility: input.volatility ?? "normal",
+    comparable: input.comparable ?? true,
+    sensitive: input.sensitive,
+    metadata: compactJsonObject({
+      elementKind: input.elementKind,
+      stableAcrossSessions: input.stableAcrossSessions
+    })
+  });
+  return {
+    ...snapshot,
+    timestamp: observedAt,
+    namespaces: {
+      ...snapshot.namespaces,
+      [WEB_AUTOMATION_STATE_NAMESPACE]: {
+        ...namespace,
+        values: {
+          ...namespace.values,
+          [path]: stateValue
+        }
+      }
+    }
+  };
+}
+function elementStateId(element) {
+  const stable = stableAttribute(element, "data-testid") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name") ?? element.selector;
+  return stable.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, 80) || "element";
+}
+function meaningfulText(value) {
+  return typeof value === "string" && value.trim().length >= 2;
+}
+function stableAttribute(element, name) {
+  const value = element.attributes?.[name];
+  return meaningfulText(value) ? value : void 0;
+}
+function isVisible(element) {
+  return !element.bounds || element.bounds.width > 0 && element.bounds.height > 0;
+}
+function isEnabled(element) {
+  return element.attributes?.disabled === void 0 && element.attributes?.["aria-disabled"] !== "true";
+}
+function compactJsonObject(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
+}
+
 // ../../domain/src/client/gateway-mapping.ts
 function webAutomationEventTypeForClientKind(kind) {
   if (kind === "content.ready") return WEB_AUTOMATION_EVENTS.clientReady;
@@ -299,12 +452,13 @@ function createWebAutomationRecordingEvent(payload, input = {}) {
   const target = payload.element;
   return {
     eventId: `web.${payload.sequence}.${payload.eventTimestampMs}`,
+    ...input.recordingId !== void 0 ? { recordingId: input.recordingId } : {},
     domainId: WEB_AUTOMATION_DOMAIN_ID,
     eventType,
     timestamp: payload.eventTimestampMs,
     ...input.tabId === void 0 ? {} : { sourceId: `tab:${input.tabId}${input.frameId === void 0 ? "" : `:frame:${input.frameId}`}` },
-    ...target !== void 0 ? { target } : {},
-    payload: compactJsonObject({
+    ...target !== void 0 ? { target: webAutomationActionTargetFromElement(target) } : {},
+    payload: compactJsonObject2({
       url: payload.url,
       title: payload.title,
       sequence: payload.sequence,
@@ -317,7 +471,7 @@ function createWebAutomationRecordingEvent(payload, input = {}) {
       actionResult: payload.actionResult,
       ...payload.metadata?.recordingState !== void 0 ? { recordingState: payload.metadata.recordingState } : {}
     }),
-    metadata: compactJsonObject({
+    metadata: compactJsonObject2({
       clientKind: payload.kind,
       ...payload.metadata ?? {}
     })
@@ -329,20 +483,7 @@ function createWebAutomationStateUpdate(input) {
     ...input.contexts !== void 0 ? { contexts: input.contexts } : {},
     ...input.state !== void 0 ? { state: input.state } : {},
     ...input.recording !== void 0 ? { recording: input.recording } : {},
-    metadata: compactJsonObject({
-      domainId: WEB_AUTOMATION_DOMAIN_ID,
-      ...input.metadata ?? {}
-    })
-  };
-}
-function createWebAutomationStructuredSnapshot(input) {
-  return {
-    ...input.snapshotId !== void 0 ? { snapshotId: input.snapshotId } : {},
-    ...input.timestamp !== void 0 ? { timestamp: input.timestamp } : {},
-    kind: "structured",
-    ...input.state !== void 0 ? { state: input.state } : {},
-    ...input.payload !== void 0 ? { payload: input.payload } : {},
-    metadata: compactJsonObject({
+    metadata: compactJsonObject2({
       domainId: WEB_AUTOMATION_DOMAIN_ID,
       ...input.metadata ?? {}
     })
@@ -352,7 +493,7 @@ function webAutomationActionFromGatewayCommand(command) {
   const parameters = command.parameters ?? {};
   const target = command.target ?? {};
   const actionType = normalizeWebAutomationActionType(command.actionType);
-  return compactJsonObject({
+  return compactJsonObject2({
     commandId: command.commandId,
     actionType,
     selector: stringValue(target.selector) ?? stringValue(parameters.selector),
@@ -366,7 +507,7 @@ function webAutomationActionFromGatewayCommand(command) {
   });
 }
 function webAutomationActionResultPayload(result) {
-  return compactJsonObject({
+  return compactJsonObject2({
     commandId: result.commandId,
     actionType: result.actionType,
     status: result.status,
@@ -408,7 +549,7 @@ function pointValue(value) {
   const point = value;
   return typeof point.x === "number" && typeof point.y === "number" ? { x: point.x, y: point.y } : void 0;
 }
-function compactJsonObject(value) {
+function compactJsonObject2(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
 
@@ -656,11 +797,16 @@ var FluxIQConnection = class {
     this.resetRecordingLog();
     this.recordingBlock = void 0;
     const recordingId = `client.${this.session.clientId}.${Date.now()}`;
+    const startedAt = Date.now();
+    const initialState = await this.buildInitialRecordingState(startedAt);
     await this.sendClientMessage("client.start_recording", {
       recordingId,
-      startedAt: Date.now(),
+      startedAt,
       domainId: WEB_AUTOMATION_DOMAIN_ID,
-      initialState: { timestamp: Date.now(), namespaces: {} },
+      initialState,
+      environment: this.recordingEnvironment(),
+      sources: this.recordingSources(),
+      actionChannels: this.recordingActionChannels(),
       metadata: {
         domainId: WEB_AUTOMATION_DOMAIN_ID,
         requestedBy: "extension-record-button",
@@ -707,7 +853,8 @@ var FluxIQConnection = class {
     if (isPrimaryUserActionKind(payload.kind)) {
       this.eventCount += 1;
       this.addActivity(payload.kind, activityLabel(payload), activityDetail(payload));
-      await this.sendClientMessage("client.recording_event", gatewayRecordingEventFromPayload(payload, tabId, frameId));
+      await this.sendClientMessage("client.recording_event", gatewayRecordingEventFromPayload(payload, tabId, frameId, this.activeRecordingId));
+      await this.sendRecordingActionEntry(payload, tabId, frameId);
       return;
     }
     if (payload.kind !== "content.ready") {
@@ -742,6 +889,12 @@ var FluxIQConnection = class {
         activeContextId: String(tab.id),
         contexts: [compactObject({ contextId: String(tab.id), url: tab.url, title: tab.title, status: tab.status })],
         recording: this.recordingState === "recording",
+        state: createWebAutomationStateFromTabs(describeActiveTabLike(tab), [describeActiveTabLike(tab)], {
+          timestamp: Date.now(),
+          sourceId: this.eventSourceId(),
+          recording: this.recordingState === "recording",
+          permissions: ["activeTab", "scripting", "storage", "tabs"]
+        }),
         metadata: { reason: "tab-updated" }
       }));
       await this.sendBrowserState();
@@ -954,11 +1107,15 @@ var FluxIQConnection = class {
     await this.sendClientMessage("client.state_update", browserStateFromTabs(await activeTab(), await allTabs(), this.recordingState));
   }
   async sendRecordingEvidence(payload, tabId, frameId) {
+    const state = isDomSnapshotPayload(payload.snapshot) ? createWebAutomationStateFromSnapshot(payload.snapshot, {
+      timestamp: payload.eventTimestampMs,
+      ...tabId === void 0 ? {} : { sourceId: this.tabSourceId(tabId, frameId) }
+    }) : compactObject({
+      latestEvidence: recordingEvidencePayload(payload)
+    });
     await this.sendClientMessage("client.state_update", createWebAutomationStateUpdate({
       ...tabId === void 0 ? {} : { activeContextId: String(tabId) },
-      state: compactObject({
-        latestEvidence: recordingEvidencePayload(payload)
-      }),
+      state,
       metadata: compactObject({
         reason: "recording-evidence",
         clientKind: payload.kind,
@@ -981,6 +1138,17 @@ var FluxIQConnection = class {
       snapshot: result.snapshot,
       actionResult: result
     }), tabId, frameId);
+  }
+  async sendRecordingActionEntry(payload, tabId, frameId) {
+    if (!this.activeRecordingId) return;
+    const entry = recordingActionEntryFromPayload(payload, {
+      sourceId: tabId === void 0 ? this.eventSourceId() : this.tabSourceId(tabId, frameId)
+    });
+    if (!entry) return;
+    await this.sendClientMessage("client.recording_entry", {
+      recordingId: this.activeRecordingId,
+      entry
+    });
   }
   async sendClientMessage(type, payload, _tabId, _frameId) {
     if (this.client?.connected) {
@@ -1095,6 +1263,64 @@ var FluxIQConnection = class {
     await ensureContentScript(tabId);
     await sendToTab(tabId, { type: "recording", recording: this.recordingState === "recording", settings: this.settings });
   }
+  async buildInitialRecordingState(timestamp) {
+    const tabId = this.activeTabId;
+    if (tabId !== void 0 && !this.unsupportedPage) {
+      try {
+        await this.attachTabForRecording(tabId);
+        const snapshot = await sendToTab(tabId, { type: "captureSnapshot" });
+        if (isDomSnapshotPayload(snapshot)) {
+          return createWebAutomationStateFromSnapshot(snapshot, {
+            timestamp,
+            sourceId: this.tabSourceId(tabId)
+          });
+        }
+      } catch {
+      }
+    }
+    return browserStateSnapshotFromTabs(await activeTab(), await allTabs(), this.recordingState, timestamp, this.eventSourceId());
+  }
+  recordingEnvironment() {
+    return compactObject({
+      id: `client.${this.session.clientId}.browser`,
+      label: "FluxIQ Browser Extension",
+      kind: "browser_extension",
+      domainId: WEB_AUTOMATION_DOMAIN_ID,
+      capabilities: browserExtensionCapabilities.map((capability) => capability.id),
+      metadata: compactObject({
+        browser: browserDescriptor(),
+        activeTabUrl: this.activeTabUrl
+      })
+    });
+  }
+  recordingSources() {
+    return [
+      { id: this.eventSourceId(), label: "Browser events", kind: "event", schemaId: WEB_AUTOMATION_DOMAIN_ID, metadata: { clientId: this.session.clientId } },
+      { id: this.observationSourceId(), label: "Browser observations", kind: "observation", schemaId: WEB_AUTOMATION_DOMAIN_ID, metadata: { clientId: this.session.clientId } },
+      { id: this.stateSourceId(), label: "Browser state", kind: "state", schemaId: WEB_AUTOMATION_DOMAIN_ID, metadata: { clientId: this.session.clientId } }
+    ];
+  }
+  recordingActionChannels() {
+    return [{
+      id: `client.${this.session.clientId}.actions`,
+      label: "Browser action channel",
+      actionTypes: actionTypesFromCapabilities(browserExtensionCapabilities),
+      capabilities: browserExtensionCapabilities.map((capability) => capability.id),
+      metadata: { clientId: this.session.clientId }
+    }];
+  }
+  eventSourceId() {
+    return `client.${this.session.clientId}.events`;
+  }
+  observationSourceId() {
+    return `client.${this.session.clientId}.observations`;
+  }
+  stateSourceId() {
+    return `client.${this.session.clientId}.state`;
+  }
+  tabSourceId(tabId, frameId) {
+    return `tab:${tabId}${frameId === void 0 ? "" : `:frame:${frameId}`}`;
+  }
 };
 function compactObject(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
@@ -1135,14 +1361,10 @@ function browserStateFromTabs(active, tabs, recordingState) {
         status: tab.status
       })
     })),
-    state: compactObject({
-      permissions: ["activeTab", "scripting", "storage", "tabs"],
-      activeUrl: active?.url,
-      activeTitle: active?.title
-    })
+    state: browserStateSnapshotFromTabs(active, tabs, recordingState, Date.now())
   });
 }
-function gatewayRecordingEventFromPayload(payload, tabId, frameId) {
+function gatewayRecordingEventFromPayload(payload, tabId, frameId, recordingId) {
   return createWebAutomationRecordingEvent({
     kind: payload.kind,
     sequence: payload.sequence,
@@ -1158,22 +1380,19 @@ function gatewayRecordingEventFromPayload(payload, tabId, frameId) {
     actionResult: payload.actionResult ? webAutomationActionResultPayload(payload.actionResult) : void 0,
     metadata: payload.metadata
   }, {
+    ...recordingId !== void 0 ? { recordingId } : {},
     ...tabId !== void 0 ? { tabId } : {},
     ...frameId !== void 0 ? { frameId } : {}
   });
 }
 function gatewaySnapshotFromDomSnapshot(snapshot) {
-  return createWebAutomationStructuredSnapshot({
-    snapshotId: `dom.${Date.now()}`,
-    timestamp: Date.now(),
-    state: {
-      url: snapshot.url,
-      title: snapshot.title,
-      viewport: snapshot.viewport,
-      focusedElement: snapshot.focusedElement,
-      selectedText: snapshot.selectedText ?? null,
-      interactiveElements: snapshot.interactiveElements
-    },
+  const timestamp = Date.now();
+  const state = isDomSnapshotPayload(snapshot) ? createWebAutomationStateFromSnapshot(snapshot, { timestamp }) : void 0;
+  return compactObject({
+    snapshotId: `dom.${timestamp}`,
+    timestamp,
+    kind: state ? "state" : "structured",
+    ...state !== void 0 ? { state } : {},
     payload: snapshot
   });
 }
@@ -1187,7 +1406,7 @@ function gatewayActionResultFromBrowserResult(result) {
     startedAt: result.startedAt,
     completedAt: result.finishedAt,
     message: result.message,
-    target: result.element ? elementTarget(result.element) : void 0,
+    target: result.element ? webAutomationActionTargetFromElement(result.element) : void 0,
     payload: compactObject({
       url: result.url,
       title: result.title,
@@ -1196,6 +1415,51 @@ function gatewayActionResultFromBrowserResult(result) {
     }),
     error: result.status === "failed" ? result.message : void 0
   });
+}
+function recordingActionEntryFromPayload(payload, input) {
+  const actionType = operatorActionType(payload.kind);
+  if (!actionType) return void 0;
+  return compactObject({
+    type: "action",
+    actionType,
+    parameters: operatorActionParameters(payload),
+    target: payload.element ? webAutomationActionTargetFromElement(payload.element) : void 0,
+    origin: "operator",
+    startedAt: payload.eventTimestampMs,
+    completedAt: payload.eventTimestampMs,
+    sourceId: input.sourceId,
+    correlationId: `web.${payload.sequence}.${payload.eventTimestampMs}`,
+    result: {
+      status: "succeeded",
+      metadata: compactObject({
+        clientKind: payload.kind,
+        url: payload.url,
+        title: payload.title
+      })
+    },
+    metadata: compactObject({
+      domainId: WEB_AUTOMATION_DOMAIN_ID,
+      sequence: payload.sequence
+    })
+  });
+}
+function operatorActionType(kind) {
+  if (kind === "dom.click") return "web.dom.click";
+  if (kind === "dom.keydown") return "web.dom.keypress";
+  if (kind === "dom.wheel") return "web.dom.scroll";
+  return void 0;
+}
+function operatorActionParameters(payload) {
+  if (payload.kind === "dom.keydown") {
+    return compactObject({ key: payload.key });
+  }
+  if (payload.kind === "dom.wheel") {
+    return compactObject({
+      x: payload.scroll?.x,
+      y: payload.scroll?.y
+    });
+  }
+  return {};
 }
 function elementTarget(element) {
   return compactObject({
@@ -1243,6 +1507,34 @@ function activityDetail(payload) {
   if (payload.mutation) return `${payload.mutation.added} added, ${payload.mutation.removed} removed`;
   if (payload.url) return payload.url;
   return void 0;
+}
+function isDomSnapshotPayload(value) {
+  if (!value || typeof value !== "object") return false;
+  const snapshot = value;
+  return typeof snapshot.url === "string" && typeof snapshot.title === "string" && Boolean(snapshot.viewport) && typeof snapshot.viewport?.width === "number" && typeof snapshot.viewport.height === "number" && typeof snapshot.viewport.scrollX === "number" && typeof snapshot.viewport.scrollY === "number" && Array.isArray(snapshot.interactiveElements);
+}
+function browserStateSnapshotFromTabs(active, tabs, recordingState, timestamp, sourceId) {
+  const options = {
+    timestamp,
+    recording: recordingState === "recording",
+    permissions: ["activeTab", "scripting", "storage", "tabs"]
+  };
+  if (sourceId !== void 0) options.sourceId = sourceId;
+  return createWebAutomationStateFromTabs(active, tabs, options);
+}
+function describeActiveTabLike(tab) {
+  const result = {
+    tabId: tab.id ?? -1
+  };
+  if (tab.windowId !== void 0) result.windowId = tab.windowId;
+  if (tab.url !== void 0) result.url = tab.url;
+  if (tab.title !== void 0) result.title = tab.title;
+  if (tab.active !== void 0) result.active = tab.active;
+  if (tab.status !== void 0) result.status = tab.status;
+  return result;
+}
+function actionTypesFromCapabilities(capabilities) {
+  return [...new Set(capabilities.flatMap((capability) => capability.actionTypes ?? []))];
 }
 function recordingsApiUrl(coreApiUrl, page, pageSize) {
   const url = new URL("/api/recordings", coreApiUrl || "http://127.0.0.1:4777");

@@ -1,6 +1,7 @@
 import type { ClientGatewayActionCommand, ClientGatewayRecordingEvent, ClientGatewaySnapshot, ClientGatewayStateUpdate } from "@fluxiq/client-gateway-websocket";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID, WEB_AUTOMATION_EVENTS, type WebAutomationEventType } from "../constants";
+import { webAutomationActionTargetFromElement, type WebAutomationElementStateInput } from "../recording/web-state";
 import {
   WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER,
   type WebAutomationActionCommand,
@@ -43,16 +44,17 @@ export function webAutomationEventTypeForClientKind(kind: string): WebAutomation
   return WEB_AUTOMATION_EVENTS.clientError;
 }
 
-export function createWebAutomationRecordingEvent(payload: WebAutomationRecordedPayload, input: { tabId?: number; frameId?: number } = {}): ClientGatewayRecordingEvent {
+export function createWebAutomationRecordingEvent(payload: WebAutomationRecordedPayload, input: { tabId?: number; frameId?: number; recordingId?: string } = {}): ClientGatewayRecordingEvent {
   const eventType = webAutomationEventTypeForClientKind(payload.kind);
   const target = payload.element;
   return {
     eventId: `web.${payload.sequence}.${payload.eventTimestampMs}`,
+    ...(input.recordingId !== undefined ? { recordingId: input.recordingId } : {}),
     domainId: WEB_AUTOMATION_DOMAIN_ID,
     eventType,
     timestamp: payload.eventTimestampMs,
     ...(input.tabId === undefined ? {} : { sourceId: `tab:${input.tabId}${input.frameId === undefined ? "" : `:frame:${input.frameId}`}` }),
-    ...(target !== undefined ? { target } : {}),
+    ...(target !== undefined ? { target: webAutomationActionTargetFromElement(target as unknown as WebAutomationElementStateInput) as unknown as JsonObject } : {}),
     payload: compactJsonObject({
       url: payload.url,
       title: payload.title,

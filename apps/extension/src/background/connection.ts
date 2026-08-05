@@ -5,7 +5,9 @@ import {
 import {
   createWebAutomationRecordingEvent,
   createWebAutomationStateUpdate,
-  createWebAutomationStructuredSnapshot,
+  createWebAutomationStateFromSnapshot,
+  createWebAutomationStateFromTabs,
+  webAutomationActionTargetFromElement,
   webAutomationActionFromGatewayCommand,
   webAutomationActionResultPayload,
   WEB_AUTOMATION_DOMAIN_ID
@@ -28,6 +30,7 @@ import {
   type ClientGatewayServerMessage,
   type ClientGatewaySnapshot,
   type ClientGatewayStateUpdate,
+  type ClientGatewayCapability,
   type ConnectionState,
   type ExtensionStatus,
   type FluxIQSession,
@@ -211,11 +214,16 @@ export class FluxIQConnection {
     this.resetRecordingLog();
     this.recordingBlock = undefined;
     const recordingId = `client.${this.session.clientId}.${Date.now()}`;
+    const startedAt = Date.now();
+    const initialState = await this.buildInitialRecordingState(startedAt);
     await this.sendClientMessage("client.start_recording", {
       recordingId,
-      startedAt: Date.now(),
+      startedAt,
       domainId: WEB_AUTOMATION_DOMAIN_ID,
-      initialState: { timestamp: Date.now(), namespaces: {} },
+      initialState: initialState as unknown as JsonObject,
+      environment: this.recordingEnvironment(),
+      sources: this.recordingSources(),
+      actionChannels: this.recordingActionChannels(),
       metadata: {
         domainId: WEB_AUTOMATION_DOMAIN_ID,
         requestedBy: "extension-record-button",
@@ -265,7 +273,8 @@ export class FluxIQConnection {
     if (isPrimaryUserActionKind(payload.kind)) {
       this.eventCount += 1;
       this.addActivity(payload.kind, activityLabel(payload), activityDetail(payload));
-      await this.sendClientMessage("client.recording_event", gatewayRecordingEventFromPayload(payload, tabId, frameId));
+      await this.sendClientMessage("client.recording_event", gatewayRecordingEventFromPayload(payload, tabId, frameId, this.activeRecordingId));
+      await this.sendRecordingActionEntry(payload, tabId, frameId);
       return;
     }
     if (payload.kind !== "content.ready") {
@@ -301,6 +310,12 @@ export class FluxIQConnection {
         activeContextId: String(tab.id),
         contexts: [compactObject({ contextId: String(tab.id), url: tab.url, title: tab.title, status: tab.status }) as JsonObject],
         recording: this.recordingState === "recording",
+        state: createWebAutomationStateFromTabs(describeActiveTabLike(tab), [describeActiveTabLike(tab)], {
+          timestamp: Date.now(),
+          sourceId: this.eventSourceId(),
+          recording: this.recordingState === "recording",
+          permissions: ["activeTab", "scripting", "storage", "tabs"]
+        }) as unknown as JsonObject,
         metadata: { reason: "tab-updated" }
       }));
       await this.sendBrowserState();
@@ -529,11 +544,17 @@ export class FluxIQConnection {
   }
 
   private async sendRecordingEvidence(payload: RecordingEventPayload, tabId?: number, frameId?: number): Promise<void> {
+    const state = isDomSnapshotPayload(payload.snapshot)
+      ? createWebAutomationStateFromSnapshot(payload.snapshot, {
+          timestamp: payload.eventTimestampMs,
+          ...(tabId === undefined ? {} : { sourceId: this.tabSourceId(tabId, frameId) })
+        }) as unknown as JsonObject
+      : compactObject({
+          latestEvidence: recordingEvidencePayload(payload)
+        }) as JsonObject;
     await this.sendClientMessage("client.state_update", createWebAutomationStateUpdate({
       ...(tabId === undefined ? {} : { activeContextId: String(tabId) }),
-      state: compactObject({
-        latestEvidence: recordingEvidencePayload(payload)
-      }) as JsonObject,
+      state,
       metadata: compactObject({
         reason: "recording-evidence",
         clientKind: payload.kind,
@@ -557,6 +578,18 @@ export class FluxIQConnection {
       snapshot: result.snapshot,
       actionResult: result
     }), tabId, frameId);
+  }
+
+  private async sendRecordingActionEntry(payload: RecordingEventPayload, tabId?: number, frameId?: number): Promise<void> {
+    if (!this.activeRecordingId) return;
+    const entry = recordingActionEntryFromPayload(payload, {
+      sourceId: tabId === undefined ? this.eventSourceId() : this.tabSourceId(tabId, frameId)
+    });
+    if (!entry) return;
+    await this.sendClientMessage("client.recording_entry", {
+      recordingId: this.activeRecordingId,
+      entry
+    });
   }
 
   private async sendClientMessage<TType extends ClientGatewayClientMessage["type"]>(
@@ -694,6 +727,73 @@ export class FluxIQConnection {
     await ensureContentScript(tabId);
     await sendToTab(tabId, { type: "recording", recording: this.recordingState === "recording", settings: this.settings });
   }
+
+  private async buildInitialRecordingState(timestamp: number): Promise<JsonObject> {
+    const tabId = this.activeTabId;
+    if (tabId !== undefined && !this.unsupportedPage) {
+      try {
+        await this.attachTabForRecording(tabId);
+        const snapshot = await sendToTab(tabId, { type: "captureSnapshot" });
+        if (isDomSnapshotPayload(snapshot)) {
+          return createWebAutomationStateFromSnapshot(snapshot, {
+            timestamp,
+            sourceId: this.tabSourceId(tabId)
+          }) as unknown as JsonObject;
+        }
+      } catch {
+        // Fall back to browser tab state below.
+      }
+    }
+    return browserStateSnapshotFromTabs(await activeTab(), await allTabs(), this.recordingState, timestamp, this.eventSourceId()) as unknown as JsonObject;
+  }
+
+  private recordingEnvironment(): JsonObject {
+    return compactObject({
+      id: `client.${this.session.clientId}.browser`,
+      label: "FluxIQ Browser Extension",
+      kind: "browser_extension",
+      domainId: WEB_AUTOMATION_DOMAIN_ID,
+      capabilities: browserExtensionCapabilities.map((capability) => capability.id),
+      metadata: compactObject({
+        browser: browserDescriptor() as unknown as JsonObject,
+        activeTabUrl: this.activeTabUrl
+      }) as JsonObject
+    }) as JsonObject;
+  }
+
+  private recordingSources(): JsonObject[] {
+    return [
+      { id: this.eventSourceId(), label: "Browser events", kind: "event", schemaId: WEB_AUTOMATION_DOMAIN_ID, metadata: { clientId: this.session.clientId } },
+      { id: this.observationSourceId(), label: "Browser observations", kind: "observation", schemaId: WEB_AUTOMATION_DOMAIN_ID, metadata: { clientId: this.session.clientId } },
+      { id: this.stateSourceId(), label: "Browser state", kind: "state", schemaId: WEB_AUTOMATION_DOMAIN_ID, metadata: { clientId: this.session.clientId } }
+    ] as JsonObject[];
+  }
+
+  private recordingActionChannels(): JsonObject[] {
+    return [{
+      id: `client.${this.session.clientId}.actions`,
+      label: "Browser action channel",
+      actionTypes: actionTypesFromCapabilities(browserExtensionCapabilities),
+      capabilities: browserExtensionCapabilities.map((capability) => capability.id),
+      metadata: { clientId: this.session.clientId }
+    }] as JsonObject[];
+  }
+
+  private eventSourceId(): string {
+    return `client.${this.session.clientId}.events`;
+  }
+
+  private observationSourceId(): string {
+    return `client.${this.session.clientId}.observations`;
+  }
+
+  private stateSourceId(): string {
+    return `client.${this.session.clientId}.state`;
+  }
+
+  private tabSourceId(tabId: number, frameId?: number): string {
+    return `tab:${tabId}${frameId === undefined ? "" : `:frame:${frameId}`}`;
+  }
 }
 
 function compactObject<T extends Record<string, unknown>>(value: T): T {
@@ -738,15 +838,11 @@ function browserStateFromTabs(active: Awaited<ReturnType<typeof activeTab>>, tab
         status: tab.status
       }) as JsonObject
     }) as JsonObject),
-    state: compactObject({
-      permissions: ["activeTab", "scripting", "storage", "tabs"],
-      activeUrl: active?.url,
-      activeTitle: active?.title
-    }) as JsonObject
+    state: browserStateSnapshotFromTabs(active, tabs, recordingState, Date.now()) as unknown as JsonObject
   });
 }
 
-function gatewayRecordingEventFromPayload(payload: RecordingEventPayload, tabId?: number, frameId?: number): ClientGatewayRecordingEvent {
+function gatewayRecordingEventFromPayload(payload: RecordingEventPayload, tabId?: number, frameId?: number, recordingId?: string): ClientGatewayRecordingEvent {
   return createWebAutomationRecordingEvent({
     kind: payload.kind,
     sequence: payload.sequence,
@@ -762,25 +858,24 @@ function gatewayRecordingEventFromPayload(payload: RecordingEventPayload, tabId?
     actionResult: payload.actionResult ? webAutomationActionResultPayload(payload.actionResult as never) : undefined,
     metadata: payload.metadata
   }, {
+    ...(recordingId !== undefined ? { recordingId } : {}),
     ...(tabId !== undefined ? { tabId } : {}),
     ...(frameId !== undefined ? { frameId } : {})
   });
 }
 
 function gatewaySnapshotFromDomSnapshot(snapshot: { url: string; title: string; viewport: unknown; focusedElement?: unknown; selectedText?: string; interactiveElements: unknown[] }): ClientGatewaySnapshot {
-  return createWebAutomationStructuredSnapshot({
-    snapshotId: `dom.${Date.now()}`,
-    timestamp: Date.now(),
-    state: {
-      url: snapshot.url,
-      title: snapshot.title,
-      viewport: snapshot.viewport as JsonObject,
-      focusedElement: snapshot.focusedElement as JsonObject,
-      selectedText: snapshot.selectedText ?? null,
-      interactiveElements: snapshot.interactiveElements as unknown as JsonObject
-    },
+  const timestamp = Date.now();
+  const state = isDomSnapshotPayload(snapshot)
+    ? createWebAutomationStateFromSnapshot(snapshot, { timestamp }) as unknown as JsonObject
+    : undefined;
+  return compactObject({
+    snapshotId: `dom.${timestamp}`,
+    timestamp,
+    kind: state ? "state" : "structured",
+    ...(state !== undefined ? { state } : {}),
     payload: snapshot as unknown as JsonObject
-  });
+  } satisfies ClientGatewaySnapshot) as ClientGatewaySnapshot;
 }
 
 function browserActionFromGatewayCommand(command: ClientGatewayActionCommand & { commandId: string }): BrowserActionCommand {
@@ -794,7 +889,7 @@ function gatewayActionResultFromBrowserResult(result: BrowserActionResult): Clie
     startedAt: result.startedAt,
     completedAt: result.finishedAt,
     message: result.message,
-    target: result.element ? elementTarget(result.element) : undefined,
+    target: result.element ? webAutomationActionTargetFromElement(result.element as never) as unknown as JsonObject : undefined,
     payload: compactObject({
       url: result.url,
       title: result.title,
@@ -803,6 +898,54 @@ function gatewayActionResultFromBrowserResult(result: BrowserActionResult): Clie
     }) as JsonObject,
     error: result.status === "failed" ? result.message : undefined
   }) as ClientGatewayActionResult;
+}
+
+function recordingActionEntryFromPayload(payload: RecordingEventPayload, input: { sourceId: string }): JsonObject | undefined {
+  const actionType = operatorActionType(payload.kind);
+  if (!actionType) return undefined;
+  return compactObject({
+    type: "action",
+    actionType,
+    parameters: operatorActionParameters(payload),
+    target: payload.element ? webAutomationActionTargetFromElement(payload.element as never) as unknown as JsonObject : undefined,
+    origin: "operator",
+    startedAt: payload.eventTimestampMs,
+    completedAt: payload.eventTimestampMs,
+    sourceId: input.sourceId,
+    correlationId: `web.${payload.sequence}.${payload.eventTimestampMs}`,
+    result: {
+      status: "succeeded",
+      metadata: compactObject({
+        clientKind: payload.kind,
+        url: payload.url,
+        title: payload.title
+      }) as JsonObject
+    },
+    metadata: compactObject({
+      domainId: WEB_AUTOMATION_DOMAIN_ID,
+      sequence: payload.sequence
+    }) as JsonObject
+  }) as JsonObject;
+}
+
+function operatorActionType(kind: string): string | undefined {
+  if (kind === "dom.click") return "web.dom.click";
+  if (kind === "dom.keydown") return "web.dom.keypress";
+  if (kind === "dom.wheel") return "web.dom.scroll";
+  return undefined;
+}
+
+function operatorActionParameters(payload: RecordingEventPayload): JsonObject {
+  if (payload.kind === "dom.keydown") {
+    return compactObject({ key: payload.key }) as JsonObject;
+  }
+  if (payload.kind === "dom.wheel") {
+    return compactObject({
+      x: payload.scroll?.x,
+      y: payload.scroll?.y
+    }) as JsonObject;
+  }
+  return {};
 }
 
 function elementTarget(element: { selector: string; tagName: string; text?: string | undefined; bounds?: unknown; attributes?: Record<string, string> | undefined }): JsonObject {
@@ -862,6 +1005,70 @@ function activityDetail(payload: RecordingEventPayload): string | undefined {
   if (payload.mutation) return `${payload.mutation.added} added, ${payload.mutation.removed} removed`;
   if (payload.url) return payload.url;
   return undefined;
+}
+
+function isDomSnapshotPayload(value: unknown): value is {
+  url: string;
+  title: string;
+  viewport: { width: number; height: number; scrollX: number; scrollY: number };
+  focusedElement?: RecordingEventPayload["element"];
+  selectedText?: string;
+  interactiveElements: NonNullable<RecordingEventPayload["element"]>[];
+} {
+  if (!value || typeof value !== "object") return false;
+  const snapshot = value as {
+    url?: unknown;
+    title?: unknown;
+    viewport?: { width?: unknown; height?: unknown; scrollX?: unknown; scrollY?: unknown };
+    interactiveElements?: unknown;
+  };
+  return typeof snapshot.url === "string" &&
+    typeof snapshot.title === "string" &&
+    Boolean(snapshot.viewport) &&
+    typeof snapshot.viewport?.width === "number" &&
+    typeof snapshot.viewport.height === "number" &&
+    typeof snapshot.viewport.scrollX === "number" &&
+    typeof snapshot.viewport.scrollY === "number" &&
+    Array.isArray(snapshot.interactiveElements);
+}
+
+function browserStateSnapshotFromTabs(
+  active: Awaited<ReturnType<typeof activeTab>>,
+  tabs: Awaited<ReturnType<typeof allTabs>>,
+  recordingState: RecordingState,
+  timestamp: number,
+  sourceId?: string
+): unknown {
+  const options: { timestamp?: number; sourceId?: string; recording?: boolean; permissions?: string[] } = {
+    timestamp,
+    recording: recordingState === "recording",
+    permissions: ["activeTab", "scripting", "storage", "tabs"]
+  };
+  if (sourceId !== undefined) options.sourceId = sourceId;
+  return createWebAutomationStateFromTabs(active, tabs, options);
+}
+
+function describeActiveTabLike(tab: chrome.tabs.Tab): {
+  tabId: number;
+  windowId?: number;
+  url?: string;
+  title?: string;
+  active?: boolean;
+  status?: string;
+} {
+  const result: { tabId: number; windowId?: number; url?: string; title?: string; active?: boolean; status?: string } = {
+    tabId: tab.id ?? -1
+  };
+  if (tab.windowId !== undefined) result.windowId = tab.windowId;
+  if (tab.url !== undefined) result.url = tab.url;
+  if (tab.title !== undefined) result.title = tab.title;
+  if (tab.active !== undefined) result.active = tab.active;
+  if (tab.status !== undefined) result.status = tab.status;
+  return result;
+}
+
+function actionTypesFromCapabilities(capabilities: ClientGatewayCapability[]): string[] {
+  return [...new Set(capabilities.flatMap((capability) => capability.actionTypes ?? []))];
 }
 
 function recordingsApiUrl(coreApiUrl: string, page: number, pageSize: number): string {

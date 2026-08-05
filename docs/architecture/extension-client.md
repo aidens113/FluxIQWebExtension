@@ -29,8 +29,8 @@ The extension:
 - tracks local recording timer, event count, queued messages, and recent
   activity summaries;
 - warns when the active page cannot be recorded by content scripts;
-- reports browser, tab, and DOM state;
-- captures raw recording evidence from pages;
+- reports browser, tab, and DOM state as FluxIQ `StateSnapshot` values;
+- captures compact recording evidence from pages;
 - executes browser actions requested by FluxIQ;
 - returns action results with evidence and timing;
 - stores only lightweight settings, pairing/session data, and unsent events.
@@ -70,6 +70,7 @@ Current client message groups:
 
 - `client.hello`
 - `client.state_update`
+- `client.recording_entry`
 - `client.recording_event`
 - `client.snapshot`
 - `client.action_result`
@@ -106,13 +107,24 @@ The first browser action set is deliberately small:
 - `web.dom.extract`
 - `web.dom.capture_snapshot`
 
-Each action returns `client.action_result` with status, message, URL/title,
-optional element evidence, optional snapshot evidence, extracted data, and
-start/finish timestamps.
+Server action commands use the current gateway shape:
+
+```json
+{
+  "actionType": "web.dom.click",
+  "parameters": {},
+  "target": { "selector": "button[type=submit]", "label": "Submit" },
+  "timeoutMs": 10000
+}
+```
+
+The extension maps those commands into browser operations and returns
+`client.action_result` with status, message, target evidence, payload evidence,
+and start/completion timestamps.
 
 ## Recording Evidence
 
-Content scripts emit raw browser evidence:
+Content scripts emit browser evidence:
 
 - page/content ready;
 - tab and navigation changes;
@@ -127,6 +139,33 @@ events such as `web.element.clicked`, `web.element.input_changed`,
 `client.recording_event`. FluxIQ validates those events against the registered
 `RecordingDomainDefinition` before deriving normalized timelines, signal
 registries, task models, or policies.
+
+Recording sessions start with a FluxIQ `StateSnapshot` rather than an empty
+state object. DOM snapshots are converted into compact, factual state paths
+under the `web` namespace, including page URL/title, viewport bounds, scroll
+position, focused target, selected text, and a capped set of interactive
+elements.
+
+Element state is intentionally filtered. The extension does not record every
+DOM element. It keeps only interactive elements that have meaningful text,
+label, value, href, or stable public identifiers such as `data-testid`,
+`aria-label`, `name`, or `id`, and caps each snapshot to 40 captured elements.
+This gives FluxIQ enough factual target data for mining without bloating
+recordings with anonymous DOM structure.
+
+Primary user actions are also sent as `client.recording_entry` action entries
+so Automation Studio timelines can distinguish operator actions from passive
+state observations. Raw snapshots and state updates remain available as
+recording observations through the client gateway bridge.
+
+The side panel recordings tab reads saved summaries from FluxIQ Core:
+
+```text
+GET /api/recordings?page=1&pageSize=10
+```
+
+The extension includes the paired client token as a bearer token when one is
+available.
 
 The extension keeps only transient recorder UI state for the active browser
 session. It does not persist canonical recordings locally.
