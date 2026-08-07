@@ -22,3 +22,8 @@ The browser extension should send `client.recording_event` messages with
 `domainId: "web-automation"` and one of the `WEB_AUTOMATION_EVENTS` event
 types. Generic state and snapshot messages use `client.state_update` and
 `client.snapshot`.
+
+Every gateway message that represents a registered domain input includes
+`metadata.inputId`. State and passive-evidence inputs have no output mapping.
+Operator action inputs map deterministically to one registered output, which
+is the only route by which a recording can create an executable policy action.

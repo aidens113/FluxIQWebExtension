@@ -2,6 +2,7 @@ export * from "../constants";
 export * from "../actions/types";
 export * from "../actions/schemas";
 export * from "../actions/capabilities";
+export * from "../io/input-model";
 export * from "../recording/state";
 export * from "../recording/web-state";
 export * from "./capabilities";

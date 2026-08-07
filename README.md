@@ -19,7 +19,7 @@ apps/
     src/sidepanel/    compact live status view
     src/shared/       protocol, constants, browser-facing helpers
 domain/
-  src/                FluxIQ domain manifest, recording contracts, actions
+  src/                FluxIQ domain manifest, registered inputs/outputs, recording contracts, actions
 ```
 
 ## Development
@@ -67,3 +67,12 @@ ws://127.0.0.1:4777/client
 ```
 
 You can change this from the popup. Production deployments should use `wss://`.
+
+## Input and output contract
+
+The domain has explicit FluxIQ inputs and output nodes. Browser/tab state and
+passive DOM evidence are state/event inputs only. Recorded clicks, text entry,
+clears, selections, key presses, scrolls, and navigations are action inputs
+that map one-to-one to registered browser outputs. A mapped action input is
+never available as policy state; an unmapped input can never create an
+executable policy node.

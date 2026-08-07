@@ -4,14 +4,8 @@
     "outDir": "build",
     "types": ["chrome", "node"],
     "paths": {
-      "@fluxiq/client-gateway-websocket": ["../../../!FluxIQ/packages/client-gateway-websocket/src/index.ts"],
       "@fluxiq-web-extension/domain": ["../../domain/src/index.ts"],
-      "@fluxiq-web-extension/domain/client": ["../../domain/src/client/index.ts"],
-      "fluxiq": ["../../../!FluxIQ/packages/fluxiq/src/index.ts"],
-      "fluxiq/automation-studio": ["../../../!FluxIQ/packages/fluxiq/src/programs/automation-studio/index.ts"],
-      "fluxiq/client-gateway": ["../../../!FluxIQ/packages/fluxiq/src/client-gateway/index.ts"],
-      "fluxiq/core": ["../../../!FluxIQ/packages/fluxiq/src/core/index.ts"],
-      "fluxiq/*": ["../../../!FluxIQ/packages/fluxiq/src/*"]
+      "@fluxiq-web-extension/domain/client": ["../../domain/src/client/index.ts"]
     },
     "declaration": true,
     "sourceMap": true

@@ -15,6 +15,12 @@ await build({
   platform: "node",
   target: ["node22"],
   format: "esm",
+  external: [
+    "fluxiq",
+    "fluxiq/*",
+    "@fluxiq/client-gateway-websocket",
+    "@fluxiq/client-gateway-websocket/*"
+  ],
   sourcemap: false,
   logLevel: "silent"
 });

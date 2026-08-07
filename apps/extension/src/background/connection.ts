@@ -7,6 +7,8 @@ import {
   createWebAutomationStateUpdate,
   createWebAutomationStateFromSnapshot,
   createWebAutomationStateFromTabs,
+  WEB_AUTOMATION_INPUT_IDS,
+  webAutomationInputIdForRecordedEvent,
   webAutomationActionTargetFromElement,
   webAutomationActionFromGatewayCommand,
   webAutomationActionResultPayload,
@@ -270,11 +272,10 @@ export class FluxIQConnection {
 
   async handleRecordingEvent(payload: RecordingEventPayload, tabId?: number, frameId?: number): Promise<void> {
     if (this.recordingState !== "recording") return;
-    if (isPrimaryUserActionKind(payload.kind)) {
+    if (isExecutableRecordedAction(payload)) {
       this.eventCount += 1;
       this.addActivity(payload.kind, activityLabel(payload), activityDetail(payload));
       await this.sendClientMessage("client.recording_event", gatewayRecordingEventFromPayload(payload, tabId, frameId, this.activeRecordingId));
-      await this.sendRecordingActionEntry(payload, tabId, frameId);
       return;
     }
     if (payload.kind !== "content.ready") {
@@ -316,7 +317,7 @@ export class FluxIQConnection {
           recording: this.recordingState === "recording",
           permissions: ["activeTab", "scripting", "storage", "tabs"]
         }) as unknown as JsonObject,
-        metadata: { reason: "tab-updated" }
+        metadata: { reason: "tab-updated", inputId: WEB_AUTOMATION_INPUT_IDS.browserState }
       }));
       await this.sendBrowserState();
     }
@@ -557,6 +558,7 @@ export class FluxIQConnection {
       state,
       metadata: compactObject({
         reason: "recording-evidence",
+        inputId: WEB_AUTOMATION_INPUT_IDS.recordingEvidence,
         clientKind: payload.kind,
         eventTimestampMs: payload.eventTimestampMs,
         ...(tabId === undefined ? {} : { tabId }),
@@ -578,18 +580,6 @@ export class FluxIQConnection {
       snapshot: result.snapshot,
       actionResult: result
     }), tabId, frameId);
-  }
-
-  private async sendRecordingActionEntry(payload: RecordingEventPayload, tabId?: number, frameId?: number): Promise<void> {
-    if (!this.activeRecordingId) return;
-    const entry = recordingActionEntryFromPayload(payload, {
-      sourceId: tabId === undefined ? this.eventSourceId() : this.tabSourceId(tabId, frameId)
-    });
-    if (!entry) return;
-    await this.sendClientMessage("client.recording_entry", {
-      recordingId: this.activeRecordingId,
-      entry
-    });
   }
 
   private async sendClientMessage<TType extends ClientGatewayClientMessage["type"]>(
@@ -800,8 +790,22 @@ function compactObject<T extends Record<string, unknown>>(value: T): T {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
 }
 
-function isPrimaryUserActionKind(kind: string): boolean {
-  return kind === "dom.click" || kind === "dom.keydown" || kind === "dom.wheel";
+function isExecutableRecordedAction(payload: RecordingEventPayload): boolean {
+  return recordedInputId(payload) !== undefined;
+}
+
+function recordedInputId(payload: RecordingEventPayload) {
+  return webAutomationInputIdForRecordedEvent({
+    kind: payload.kind,
+    url: payload.url,
+    title: payload.title,
+    sequence: payload.sequence,
+    ...(payload.element ? { element: elementTarget(payload.element) } : {}),
+    ...(payload.inputValue !== undefined ? { inputValue: payload.inputValue } : {}),
+    ...(payload.key !== undefined ? { key: payload.key } : {}),
+    ...(payload.scroll ? { scroll: payload.scroll } : {}),
+    ...(payload.metadata ? { metadata: payload.metadata } : {})
+  });
 }
 
 function recordingEvidencePayload(payload: RecordingEventPayload): JsonObject {
@@ -838,11 +842,13 @@ function browserStateFromTabs(active: Awaited<ReturnType<typeof activeTab>>, tab
         status: tab.status
       }) as JsonObject
     }) as JsonObject),
-    state: browserStateSnapshotFromTabs(active, tabs, recordingState, Date.now()) as unknown as JsonObject
+    state: browserStateSnapshotFromTabs(active, tabs, recordingState, Date.now()) as unknown as JsonObject,
+    metadata: { inputId: WEB_AUTOMATION_INPUT_IDS.browserState }
   });
 }
 
 function gatewayRecordingEventFromPayload(payload: RecordingEventPayload, tabId?: number, frameId?: number, recordingId?: string): ClientGatewayRecordingEvent {
+  const inputId = recordedInputId(payload);
   return createWebAutomationRecordingEvent({
     kind: payload.kind,
     sequence: payload.sequence,
@@ -856,7 +862,9 @@ function gatewayRecordingEventFromPayload(payload: RecordingEventPayload, tabId?
     scroll: payload.scroll as unknown as JsonObject,
     mutation: payload.mutation as unknown as JsonObject,
     actionResult: payload.actionResult ? webAutomationActionResultPayload(payload.actionResult as never) : undefined,
-    metadata: payload.metadata
+    metadata: inputId === undefined
+      ? payload.metadata
+      : { ...(payload.metadata ?? {}), inputId }
   }, {
     ...(recordingId !== undefined ? { recordingId } : {}),
     ...(tabId !== undefined ? { tabId } : {}),
@@ -900,53 +908,6 @@ function gatewayActionResultFromBrowserResult(result: BrowserActionResult): Clie
   }) as ClientGatewayActionResult;
 }
 
-function recordingActionEntryFromPayload(payload: RecordingEventPayload, input: { sourceId: string }): JsonObject | undefined {
-  const actionType = operatorActionType(payload.kind);
-  if (!actionType) return undefined;
-  return compactObject({
-    type: "action",
-    actionType,
-    parameters: operatorActionParameters(payload),
-    target: payload.element ? webAutomationActionTargetFromElement(payload.element as never) as unknown as JsonObject : undefined,
-    origin: "operator",
-    startedAt: payload.eventTimestampMs,
-    completedAt: payload.eventTimestampMs,
-    sourceId: input.sourceId,
-    correlationId: `web.${payload.sequence}.${payload.eventTimestampMs}`,
-    result: {
-      status: "succeeded",
-      metadata: compactObject({
-        clientKind: payload.kind,
-        url: payload.url,
-        title: payload.title
-      }) as JsonObject
-    },
-    metadata: compactObject({
-      domainId: WEB_AUTOMATION_DOMAIN_ID,
-      sequence: payload.sequence
-    }) as JsonObject
-  }) as JsonObject;
-}
-
-function operatorActionType(kind: string): string | undefined {
-  if (kind === "dom.click") return "web.dom.click";
-  if (kind === "dom.keydown") return "web.dom.keypress";
-  if (kind === "dom.wheel") return "web.dom.scroll";
-  return undefined;
-}
-
-function operatorActionParameters(payload: RecordingEventPayload): JsonObject {
-  if (payload.kind === "dom.keydown") {
-    return compactObject({ key: payload.key }) as JsonObject;
-  }
-  if (payload.kind === "dom.wheel") {
-    return compactObject({
-      x: payload.scroll?.x,
-      y: payload.scroll?.y
-    }) as JsonObject;
-  }
-  return {};
-}
 
 function elementTarget(element: { selector: string; tagName: string; text?: string | undefined; bounds?: unknown; attributes?: Record<string, string> | undefined }): JsonObject {
   return compactObject({

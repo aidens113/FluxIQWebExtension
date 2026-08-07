@@ -122,6 +122,20 @@ The extension maps those commands into browser operations and returns
 `client.action_result` with status, message, target evidence, payload evidence,
 and start/completion timestamps.
 
+## Declared Inputs And Outputs
+
+The domain registers browser state and passive recording evidence as unmapped
+inputs. They can be used as observations and policy conditions only. The
+extension classifies an operator click, text entry, clear, select, key press,
+scroll, or navigation into a distinct action input. Each action input carries
+`metadata.inputId` and has exactly one registered output binding. FluxIQ uses
+that binding to persist the output ID and mapped payload in a policy action.
+
+The extension never sends a generic executable action entry. Inputs without an
+output mapping remain non-executable even when they were captured during a
+recording. Registered input adapters also subscribe to the live gateway stream
+so runtime consumers can wait for browser confirmation events after dispatch.
+
 ## Recording Evidence
 
 Content scripts emit browser evidence:

@@ -7,9 +7,13 @@ import { build } from "esbuild";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(root, "..");
 const fluxiqRoot = path.resolve(repoRoot, "..", "!FluxIQ");
-const sqliteEntrypoint = path.join(fluxiqRoot, "node_modules", ".pnpm", "sqlite3@6.0.1", "node_modules", "sqlite3", "lib", "sqlite3.js");
+const fluxiqRequire = Module.createRequire(path.join(fluxiqRoot, "packages", "fluxiq", "package.json"));
+const externalEntrypoints = new Map([
+  ["sqlite3", fluxiqRequire.resolve("sqlite3")],
+  ["qrcode", fluxiqRequire.resolve("qrcode")]
+]);
 const outdir = path.join(root, ".script-build");
-const outfile = path.join(outdir, "setup-fluxiq.cjs");
+const outfile = path.join(outdir, "setup-fluxiq.mjs");
 
 await mkdir(outdir, { recursive: true });
 await build({
@@ -18,15 +22,14 @@ await build({
   bundle: true,
   platform: "node",
   target: ["node22"],
-  format: "cjs",
-  external: ["sqlite3"],
+  format: "esm",
+  external: [...externalEntrypoints.keys()],
   plugins: [{
     name: "sqlite3-realpath",
     setup(buildContext) {
-      buildContext.onResolve({ filter: /^sqlite3$/ }, () => ({
-        path: sqliteEntrypoint,
-        external: true
-      }));
+      for (const [packageName, entrypoint] of externalEntrypoints) {
+        buildContext.onResolve({ filter: new RegExp(`^${packageName}$`) }, () => ({ path: pathToFileURL(entrypoint).href, external: true }));
+      }
     }
   }],
   sourcemap: false,

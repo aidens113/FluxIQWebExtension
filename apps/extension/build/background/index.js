@@ -50,10 +50,10 @@ function browserDescriptor() {
   };
 }
 
-// ../../../!FluxIQ/packages/fluxiq/src/client-gateway/contracts.ts
+// ../../../!FluxIQ/packages/contracts/src/client-gateway.ts
 var CLIENT_GATEWAY_PROTOCOL_VERSION = "0.1";
 
-// ../../../!FluxIQ/packages/client-gateway-websocket/src/messages.ts
+// ../../../!FluxIQ/packages/client-gateway-websocket/dist/messages.js
 function createClientGatewayMessage(type, payload, options = {}) {
   return {
     id: options.idFactory?.() ?? `client-message.${Math.random().toString(36).slice(2)}`,
@@ -68,13 +68,15 @@ function createClientGatewayMessage(type, payload, options = {}) {
 }
 function parseServerMessage(data) {
   const text = typeof data === "string" ? data : data instanceof ArrayBuffer ? new TextDecoder().decode(data) : "";
-  if (!text) return null;
+  if (!text)
+    return null;
   const parsed = JSON.parse(text);
-  if (typeof parsed.type !== "string" || !parsed.type.startsWith("server.")) return null;
+  if (typeof parsed.type !== "string" || !parsed.type.startsWith("server."))
+    return null;
   return parsed;
 }
 
-// ../../../!FluxIQ/packages/client-gateway-websocket/src/transport.ts
+// ../../../!FluxIQ/packages/client-gateway-websocket/dist/transport.js
 var FluxIQClientGatewayWebSocketClient = class {
   options;
   handlers = /* @__PURE__ */ new Map();
@@ -91,9 +93,11 @@ var FluxIQClientGatewayWebSocketClient = class {
     return this.sessionId;
   }
   async connect() {
-    if (this.socket && this.socket.readyState <= 1) return;
+    if (this.socket && this.socket.readyState <= 1)
+      return;
     const WebSocketImpl = this.options.WebSocketImpl ?? globalThis.WebSocket;
-    if (!WebSocketImpl) throw new Error("A WebSocket implementation is required.");
+    if (!WebSocketImpl)
+      throw new Error("A WebSocket implementation is required.");
     const socket = new WebSocketImpl(this.options.url ?? "ws://127.0.0.1:4777/client");
     this.socket = socket;
     await waitForOpen(socket);
@@ -128,7 +132,8 @@ var FluxIQClientGatewayWebSocketClient = class {
       payload
     };
     const socket = this.socket;
-    if (!socket || socket.readyState !== 1) throw new Error("FluxIQ client gateway WebSocket is not connected.");
+    if (!socket || socket.readyState !== 1)
+      throw new Error("FluxIQ client gateway WebSocket is not connected.");
     socket.send(JSON.stringify(message));
     return message;
   }
@@ -155,7 +160,8 @@ var FluxIQClientGatewayWebSocketClient = class {
     addListener(socket, "message", (event) => {
       const data = typeof event === "object" && event && "data" in event ? event.data : event;
       const message = parseServerMessage(data);
-      if (message) void this.handleServerMessage(message);
+      if (message)
+        void this.handleServerMessage(message);
     });
     addListener(socket, "close", (event) => {
       this.socket = null;
@@ -164,7 +170,8 @@ var FluxIQClientGatewayWebSocketClient = class {
     addListener(socket, "error", (event) => this.emit({ type: "error", event }));
   }
   async handleServerMessage(message) {
-    if (message.sessionId) this.sessionId = message.sessionId;
+    if (message.sessionId)
+      this.sessionId = message.sessionId;
     this.emit({ type: "message", message });
     if (message.type === "server.session_ready") {
       this.sessionId = message.payload.sessionId;
@@ -173,14 +180,20 @@ var FluxIQClientGatewayWebSocketClient = class {
       this.emit({ type: "session_ready", message });
       return;
     }
-    if (message.type === "server.pairing_required") this.emit({ type: "pairing_required", message });
-    else if (message.type === "server.start_recording") this.emit({ type: "start_recording", message });
-    else if (message.type === "server.stop_recording") this.emit({ type: "stop_recording", message });
-    else if (message.type === "server.capture_snapshot") this.emit({ type: "capture_snapshot", message });
-    else if (message.type === "server.execute_action") this.emit({ type: "execute_action", message });
+    if (message.type === "server.pairing_required")
+      this.emit({ type: "pairing_required", message });
+    else if (message.type === "server.start_recording")
+      this.emit({ type: "start_recording", message });
+    else if (message.type === "server.stop_recording")
+      this.emit({ type: "stop_recording", message });
+    else if (message.type === "server.capture_snapshot")
+      this.emit({ type: "capture_snapshot", message });
+    else if (message.type === "server.execute_action")
+      this.emit({ type: "execute_action", message });
   }
   emit(event) {
-    for (const handler of this.handlers.get(event.type) ?? []) void handler(event);
+    for (const handler of this.handlers.get(event.type) ?? [])
+      void handler(event);
   }
 };
 function waitForOpen(socket) {
@@ -202,12 +215,16 @@ function waitForOpen(socket) {
   });
 }
 function addListener(socket, type, listener) {
-  if (socket.addEventListener) socket.addEventListener(type, listener);
-  else socket[`on${type}`] = listener;
+  if (socket.addEventListener)
+    socket.addEventListener(type, listener);
+  else
+    socket[`on${type}`] = listener;
 }
 function removeListener(socket, type, listener) {
-  if (socket.removeEventListener) socket.removeEventListener(type, listener);
-  else if (socket[`on${type}`] === listener) socket[`on${type}`] = null;
+  if (socket.removeEventListener)
+    socket.removeEventListener(type, listener);
+  else if (socket[`on${type}`] === listener)
+    socket[`on${type}`] = null;
 }
 
 // ../../domain/src/constants.ts
@@ -274,6 +291,43 @@ var webAutomationClientCapabilities = [
     kind: "action",
     actionTypes: WEB_AUTOMATION_ACTION_TYPES
   }
+];
+
+// ../../domain/src/io/input-model.ts
+var WEB_AUTOMATION_INPUT_IDS = {
+  browserState: "web.browser.state",
+  recordingEvidence: "web.recording.evidence",
+  navigationRequested: "web.user.navigation_requested",
+  elementClicked: "web.user.element_clicked",
+  textEntered: "web.user.text_entered",
+  fieldCleared: "web.user.field_cleared",
+  optionSelected: "web.user.option_selected",
+  keyPressed: "web.user.key_pressed",
+  pageScrolled: "web.user.page_scrolled"
+};
+function webAutomationInputIdForRecordedEvent(payload) {
+  if (payload.kind === "browser.navigation") return WEB_AUTOMATION_INPUT_IDS.navigationRequested;
+  if (payload.kind === "dom.click") return WEB_AUTOMATION_INPUT_IDS.elementClicked;
+  if (payload.kind === "dom.keydown") return WEB_AUTOMATION_INPUT_IDS.keyPressed;
+  if (payload.kind === "dom.wheel") return WEB_AUTOMATION_INPUT_IDS.pageScrolled;
+  if (payload.kind === "dom.input" || payload.kind === "dom.change") {
+    if (payload.element?.tagName === "select") return WEB_AUTOMATION_INPUT_IDS.optionSelected;
+    return payload.inputValue === "" ? WEB_AUTOMATION_INPUT_IDS.fieldCleared : WEB_AUTOMATION_INPUT_IDS.textEntered;
+  }
+  return void 0;
+}
+var stateInputDefinitions = [
+  { id: WEB_AUTOMATION_INPUT_IDS.browserState, title: "Browser state", description: "Current browser, tab, and compact DOM state available for policy conditions.", role: "state" },
+  { id: WEB_AUTOMATION_INPUT_IDS.recordingEvidence, title: "Web recording evidence", description: "Passive browser observations that may inform recordings but never execute a policy.", role: "event" }
+];
+var actionInputDefinitions = [
+  [WEB_AUTOMATION_INPUT_IDS.navigationRequested, "Navigation requested", "web.browser.navigate"],
+  [WEB_AUTOMATION_INPUT_IDS.elementClicked, "Element clicked", "web.dom.click"],
+  [WEB_AUTOMATION_INPUT_IDS.textEntered, "Text entered", "web.dom.type"],
+  [WEB_AUTOMATION_INPUT_IDS.fieldCleared, "Field cleared", "web.dom.clear"],
+  [WEB_AUTOMATION_INPUT_IDS.optionSelected, "Option selected", "web.dom.select"],
+  [WEB_AUTOMATION_INPUT_IDS.keyPressed, "Key pressed", "web.dom.keypress"],
+  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"]
 ];
 
 // ../../domain/src/recording/state.ts
@@ -850,11 +904,10 @@ var FluxIQConnection = class {
   }
   async handleRecordingEvent(payload, tabId, frameId) {
     if (this.recordingState !== "recording") return;
-    if (isPrimaryUserActionKind(payload.kind)) {
+    if (isExecutableRecordedAction(payload)) {
       this.eventCount += 1;
       this.addActivity(payload.kind, activityLabel(payload), activityDetail(payload));
       await this.sendClientMessage("client.recording_event", gatewayRecordingEventFromPayload(payload, tabId, frameId, this.activeRecordingId));
-      await this.sendRecordingActionEntry(payload, tabId, frameId);
       return;
     }
     if (payload.kind !== "content.ready") {
@@ -895,7 +948,7 @@ var FluxIQConnection = class {
           recording: this.recordingState === "recording",
           permissions: ["activeTab", "scripting", "storage", "tabs"]
         }),
-        metadata: { reason: "tab-updated" }
+        metadata: { reason: "tab-updated", inputId: WEB_AUTOMATION_INPUT_IDS.browserState }
       }));
       await this.sendBrowserState();
     }
@@ -1118,6 +1171,7 @@ var FluxIQConnection = class {
       state,
       metadata: compactObject({
         reason: "recording-evidence",
+        inputId: WEB_AUTOMATION_INPUT_IDS.recordingEvidence,
         clientKind: payload.kind,
         eventTimestampMs: payload.eventTimestampMs,
         ...tabId === void 0 ? {} : { tabId },
@@ -1138,17 +1192,6 @@ var FluxIQConnection = class {
       snapshot: result.snapshot,
       actionResult: result
     }), tabId, frameId);
-  }
-  async sendRecordingActionEntry(payload, tabId, frameId) {
-    if (!this.activeRecordingId) return;
-    const entry = recordingActionEntryFromPayload(payload, {
-      sourceId: tabId === void 0 ? this.eventSourceId() : this.tabSourceId(tabId, frameId)
-    });
-    if (!entry) return;
-    await this.sendClientMessage("client.recording_entry", {
-      recordingId: this.activeRecordingId,
-      entry
-    });
   }
   async sendClientMessage(type, payload, _tabId, _frameId) {
     if (this.client?.connected) {
@@ -1325,8 +1368,21 @@ var FluxIQConnection = class {
 function compactObject(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
-function isPrimaryUserActionKind(kind) {
-  return kind === "dom.click" || kind === "dom.keydown" || kind === "dom.wheel";
+function isExecutableRecordedAction(payload) {
+  return recordedInputId(payload) !== void 0;
+}
+function recordedInputId(payload) {
+  return webAutomationInputIdForRecordedEvent({
+    kind: payload.kind,
+    url: payload.url,
+    title: payload.title,
+    sequence: payload.sequence,
+    ...payload.element ? { element: elementTarget(payload.element) } : {},
+    ...payload.inputValue !== void 0 ? { inputValue: payload.inputValue } : {},
+    ...payload.key !== void 0 ? { key: payload.key } : {},
+    ...payload.scroll ? { scroll: payload.scroll } : {},
+    ...payload.metadata ? { metadata: payload.metadata } : {}
+  });
 }
 function recordingEvidencePayload(payload) {
   return compactObject({
@@ -1361,10 +1417,12 @@ function browserStateFromTabs(active, tabs, recordingState) {
         status: tab.status
       })
     })),
-    state: browserStateSnapshotFromTabs(active, tabs, recordingState, Date.now())
+    state: browserStateSnapshotFromTabs(active, tabs, recordingState, Date.now()),
+    metadata: { inputId: WEB_AUTOMATION_INPUT_IDS.browserState }
   });
 }
 function gatewayRecordingEventFromPayload(payload, tabId, frameId, recordingId) {
+  const inputId = recordedInputId(payload);
   return createWebAutomationRecordingEvent({
     kind: payload.kind,
     sequence: payload.sequence,
@@ -1378,7 +1436,7 @@ function gatewayRecordingEventFromPayload(payload, tabId, frameId, recordingId) 
     scroll: payload.scroll,
     mutation: payload.mutation,
     actionResult: payload.actionResult ? webAutomationActionResultPayload(payload.actionResult) : void 0,
-    metadata: payload.metadata
+    metadata: inputId === void 0 ? payload.metadata : { ...payload.metadata ?? {}, inputId }
   }, {
     ...recordingId !== void 0 ? { recordingId } : {},
     ...tabId !== void 0 ? { tabId } : {},
@@ -1415,51 +1473,6 @@ function gatewayActionResultFromBrowserResult(result) {
     }),
     error: result.status === "failed" ? result.message : void 0
   });
-}
-function recordingActionEntryFromPayload(payload, input) {
-  const actionType = operatorActionType(payload.kind);
-  if (!actionType) return void 0;
-  return compactObject({
-    type: "action",
-    actionType,
-    parameters: operatorActionParameters(payload),
-    target: payload.element ? webAutomationActionTargetFromElement(payload.element) : void 0,
-    origin: "operator",
-    startedAt: payload.eventTimestampMs,
-    completedAt: payload.eventTimestampMs,
-    sourceId: input.sourceId,
-    correlationId: `web.${payload.sequence}.${payload.eventTimestampMs}`,
-    result: {
-      status: "succeeded",
-      metadata: compactObject({
-        clientKind: payload.kind,
-        url: payload.url,
-        title: payload.title
-      })
-    },
-    metadata: compactObject({
-      domainId: WEB_AUTOMATION_DOMAIN_ID,
-      sequence: payload.sequence
-    })
-  });
-}
-function operatorActionType(kind) {
-  if (kind === "dom.click") return "web.dom.click";
-  if (kind === "dom.keydown") return "web.dom.keypress";
-  if (kind === "dom.wheel") return "web.dom.scroll";
-  return void 0;
-}
-function operatorActionParameters(payload) {
-  if (payload.kind === "dom.keydown") {
-    return compactObject({ key: payload.key });
-  }
-  if (payload.kind === "dom.wheel") {
-    return compactObject({
-      x: payload.scroll?.x,
-      y: payload.scroll?.y
-    });
-  }
-  return {};
 }
 function elementTarget(element) {
   return compactObject({

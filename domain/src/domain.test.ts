@@ -4,6 +4,7 @@ import { WEB_AUTOMATION_DOMAIN_ID, WEB_AUTOMATION_EVENTS } from "./constants";
 import { webAutomationRecordingDomain } from "./recording/domain";
 import { createWebAutomationInitialState } from "./recording/state";
 import { createWebAutomationRecordingEvent } from "./client/gateway-mapping";
+import { WEB_AUTOMATION_INPUT_IDS, webAutomationInputIdForRecordedEvent, actionInputDefinitions, stateInputDefinitions } from "./io/input-model";
 import { createWebAutomationStateFromSnapshot, filterStateElements } from "./recording/web-state";
 
 const service = new AutomationStudioService({ seedFixture: false });
@@ -51,5 +52,14 @@ assert.equal(webValues["scroll.position"]?.type, "point");
 assert.equal(webValues["elements.count"]?.value, 3);
 assert.equal(Object.keys(webValues).some((path) => path.includes("button.icon")), false);
 assert.equal(Object.keys(webValues).some((path) => path.endsWith(".selector")), true);
+
+assert.equal(webAutomationInputIdForRecordedEvent({ kind: "dom.click", url: "https://example.test", title: "Example", sequence: 2 }), WEB_AUTOMATION_INPUT_IDS.elementClicked);
+assert.equal(webAutomationInputIdForRecordedEvent({ kind: "dom.input", url: "https://example.test", title: "Example", sequence: 3, inputValue: "hello" }), WEB_AUTOMATION_INPUT_IDS.textEntered);
+assert.equal(webAutomationInputIdForRecordedEvent({ kind: "dom.input", url: "https://example.test", title: "Example", sequence: 4, inputValue: "" }), WEB_AUTOMATION_INPUT_IDS.fieldCleared);
+assert.equal(webAutomationInputIdForRecordedEvent({ kind: "dom.change", url: "https://example.test", title: "Example", sequence: 5, element: { tagName: "select" }, inputValue: "two" }), WEB_AUTOMATION_INPUT_IDS.optionSelected);
+assert.equal(webAutomationInputIdForRecordedEvent({ kind: "dom.submit", url: "https://example.test", title: "Example", sequence: 6 }), undefined);
+
+assert.deepEqual(actionInputDefinitions.find(([id]) => id === WEB_AUTOMATION_INPUT_IDS.elementClicked), [WEB_AUTOMATION_INPUT_IDS.elementClicked, "Element clicked", "web.dom.click"]);
+assert.equal(stateInputDefinitions.every((input) => input.role !== "action"), true);
 
 console.log("Web automation domain smoke test passed.");

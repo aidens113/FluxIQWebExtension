@@ -3,13 +3,6 @@
   "compilerOptions": {
     "outDir": "dist",
     "types": ["node"],
-    "paths": {
-      "@fluxiq/client-gateway-websocket": ["../../!FluxIQ/packages/client-gateway-websocket/src/index.ts"],
-      "fluxiq": ["../../!FluxIQ/packages/fluxiq/src/index.ts"],
-      "fluxiq/automation-studio": ["../../!FluxIQ/packages/fluxiq/src/programs/automation-studio/index.ts"],
-      "fluxiq/core": ["../../!FluxIQ/packages/fluxiq/src/core/index.ts"],
-      "fluxiq/*": ["../../!FluxIQ/packages/fluxiq/src/*"]
-    },
     "declaration": true,
     "sourceMap": true
   },
