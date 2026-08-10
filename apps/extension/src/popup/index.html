@@ -24,18 +24,19 @@
         <button id="disconnectButton" class="small-button" type="button">Disconnect</button>
       </section>
 
-      <section id="unsupportedCard" class="notice warning" hidden>
-        <strong>Unsupported Page</strong>
-        <span id="unsupportedReason">This page cannot be recorded.</span>
-      </section>
+      <div class="app-main">
+        <section id="unsupportedCard" class="notice warning" hidden>
+          <strong>Unsupported Page</strong>
+          <span id="unsupportedReason">This page cannot be recorded.</span>
+        </section>
 
-      <nav class="view-tabs" aria-label="Extension sections">
-        <button id="recorderTab" class="tab-button active" type="button" data-view="recorder">Recorder</button>
-        <button id="eventsTab" class="tab-button" type="button" data-view="events">Events</button>
-        <button id="recordingsTab" class="tab-button" type="button" data-view="recordings">Recordings</button>
-      </nav>
+        <nav class="view-tabs" role="tablist" aria-label="Extension sections">
+          <button id="recorderTab" class="tab-button active" type="button" role="tab" aria-selected="true" aria-controls="recorderView" data-view="recorder">Recorder</button>
+          <button id="eventsTab" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="eventsView" data-view="events">Events</button>
+          <button id="recordingsTab" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="recordingsView" data-view="recordings">Recordings</button>
+        </nav>
 
-      <section id="recorderView" class="view-panel recorder-console">
+        <section id="recorderView" class="view-panel recorder-console" role="tabpanel" aria-labelledby="recorderTab">
         <button id="recordButton" class="record-button" type="button" aria-label="Start recording">
           <span id="recordGlyph" class="record-glyph"></span>
           <span id="recordLabel">Record</span>
@@ -54,9 +55,9 @@
             <span>Queued</span>
           </div>
         </div>
-      </section>
+        </section>
 
-      <section id="eventsView" class="view-panel activity-section" hidden>
+        <section id="eventsView" class="view-panel activity-section" role="tabpanel" aria-labelledby="eventsTab" hidden>
         <div class="section-heading">
           <div>
             <h2>Event Log</h2>
@@ -64,15 +65,17 @@
           </div>
           <span id="eventPageLabel">Page 1</span>
         </div>
-        <ol id="activityFeed" class="activity-feed"></ol>
-        <p id="emptyActivity" class="empty-state">No activity yet.</p>
+        <div class="list-viewport">
+          <ol id="activityFeed" class="activity-feed"></ol>
+          <p id="emptyActivity" class="empty-state">No activity yet.</p>
+        </div>
         <div class="pager">
           <button id="prevEventsButton" class="small-button" type="button">Prev</button>
           <button id="nextEventsButton" class="small-button" type="button">Next</button>
         </div>
-      </section>
+        </section>
 
-      <section id="recordingsView" class="view-panel recordings-section" hidden>
+        <section id="recordingsView" class="view-panel recordings-section" role="tabpanel" aria-labelledby="recordingsTab" hidden>
         <div class="section-heading">
           <div>
             <h2>Recordings</h2>
@@ -80,20 +83,24 @@
           </div>
           <button id="refreshRecordingsButton" class="small-button" type="button">Refresh</button>
         </div>
-        <ol id="recordingsList" class="recordings-list"></ol>
-        <p id="emptyRecordings" class="empty-state">No recordings found.</p>
+        <div class="list-viewport">
+          <ol id="recordingsList" class="recordings-list"></ol>
+          <p id="emptyRecordings" class="empty-state">No recordings found.</p>
+        </div>
         <div class="pager">
           <button id="prevRecordingsButton" class="small-button" type="button">Prev</button>
           <span id="recordingsPageLabel">Page 1</span>
           <button id="nextRecordingsButton" class="small-button" type="button">Next</button>
         </div>
-      </section>
+        </section>
 
-      <p id="errorText" class="error" hidden></p>
+        <p id="errorText" class="error" hidden></p>
+      </div>
 
-      <aside id="settingsDrawer" class="settings-drawer" aria-label="Settings" hidden>
+      <div id="settingsBackdrop" class="settings-backdrop" hidden></div>
+      <aside id="settingsDrawer" class="settings-drawer" aria-label="Settings" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" hidden>
         <div class="drawer-header">
-          <h2>Settings</h2>
+          <h2 id="settingsTitle">Settings</h2>
           <button id="closeSettingsButton" class="icon-button" type="button" title="Close" aria-label="Close">x</button>
         </div>
 

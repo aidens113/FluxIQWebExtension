@@ -41,7 +41,6 @@ function runtimeSendMessage(message) {
 // src/popup/index.ts
 var eventPageSize = 25;
 var recordingsPageSize = 10;
-var tallLayoutQuery = window.matchMedia("(min-height: 620px)");
 var shell = element("shell");
 var gatewayUrl = element("gatewayUrl");
 var coreApiUrl = element("coreApiUrl");
@@ -88,6 +87,7 @@ var refreshRecordingsButton = element("refreshRecordingsButton");
 var prevRecordingsButton = element("prevRecordingsButton");
 var nextRecordingsButton = element("nextRecordingsButton");
 var settingsDrawer = element("settingsDrawer");
+var settingsBackdrop = element("settingsBackdrop");
 var pairingOverlay = element("pairingOverlay");
 var pairingReferenceCode = element("pairingReferenceCode");
 var overlayCancelButton = element("overlayCancelButton");
@@ -104,16 +104,13 @@ var timerHandle;
 void refresh();
 startTimerLoop();
 applyLayoutMode();
-tallLayoutQuery.addEventListener("change", () => {
-  applyLayoutMode();
-  if (tallLayoutQuery.matches) void refreshEventLog();
-});
 settingsButton.addEventListener("click", () => {
-  settingsDrawer.hidden = false;
+  setSettingsOpen(true);
 });
 closeSettingsButton.addEventListener("click", () => {
-  settingsDrawer.hidden = true;
+  setSettingsOpen(false);
 });
+settingsBackdrop.addEventListener("click", () => setSettingsOpen(false));
 connectButton.addEventListener("click", () => {
   void sendCommand(RUNTIME_MESSAGES.connect, { settings: readSettingsFromForm() });
 });
@@ -140,6 +137,12 @@ recordingLockDismissButton.addEventListener("click", () => {
 recorderTab.addEventListener("click", () => switchView("recorder"));
 eventsTab.addEventListener("click", () => switchView("events"));
 recordingsTab.addEventListener("click", () => switchView("recordings"));
+for (const tab of [recorderTab, eventsTab, recordingsTab]) {
+  tab.addEventListener("keydown", (event) => handleTabKeydown(event));
+}
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !settingsDrawer.hidden) setSettingsOpen(false);
+});
 prevEventsButton.addEventListener("click", () => {
   if (eventPage <= 1) return;
   eventPage -= 1;
@@ -169,7 +172,7 @@ chrome.runtime.onMessage.addListener((message) => {
     const previousStartedAt = currentStatus?.recordingStartedAt;
     renderStatus(typed.status);
     if (typed.status.recordingStartedAt !== previousStartedAt) eventPage = 1;
-    if (currentView === "events" || tallLayoutQuery.matches) void refreshEventLog();
+    if (currentView === "events") void refreshEventLog();
   }
 });
 async function refresh() {
@@ -224,7 +227,8 @@ function renderStatus(status) {
   const recording = status.recordingState === "recording";
   const unsupported = Boolean(status.unsupportedPage);
   recordButton.classList.toggle("active", recording);
-  recordLabel.textContent = recording ? "Recording" : "Record";
+  recordLabel.textContent = recording ? "Stop recording" : "Start recording";
+  recordButton.setAttribute("aria-label", recording ? "Stop recording" : "Start recording");
   recordButton.disabled = !connected || unsupported;
   connectButton.disabled = status.connectionState === "connected" || status.connectionState === "connecting";
   disconnectButton.disabled = status.connectionState === "disconnected";
@@ -340,25 +344,35 @@ function recordingItem(recording) {
 function switchView(view) {
   currentView = view;
   applyLayoutMode();
-  if (view === "events" || tallLayoutQuery.matches) void refreshEventLog();
-  if (view === "recordings" && !tallLayoutQuery.matches) void refreshRecordings();
+  if (view === "events") void refreshEventLog();
+  if (view === "recordings") void refreshRecordings();
 }
 function applyLayoutMode() {
-  const tallLayout = tallLayoutQuery.matches;
-  shell.classList.toggle("tall-mode", tallLayout);
-  shell.classList.toggle("compact-mode", !tallLayout);
-  const combinedRecorderView = tallLayout && currentView !== "recordings";
-  recorderView.hidden = combinedRecorderView ? false : currentView !== "recorder";
-  eventsView.hidden = combinedRecorderView ? false : currentView !== "events";
+  recorderView.hidden = currentView !== "recorder";
+  eventsView.hidden = currentView !== "events";
   recordingsView.hidden = currentView !== "recordings";
-  const tabBar = recorderTab.parentElement;
-  recorderTab.hidden = combinedRecorderView || !tallLayout && currentView === "recorder";
-  eventsTab.hidden = combinedRecorderView || !tallLayout && currentView === "events";
-  recordingsTab.hidden = currentView === "recordings";
-  tabBar.hidden = [recorderTab, eventsTab, recordingsTab].every((button) => button.hidden);
   for (const button of [recorderTab, eventsTab, recordingsTab]) {
-    button.classList.toggle("active", button.dataset.view === currentView);
+    const selected = button.dataset.view === currentView;
+    button.classList.toggle("active", selected);
+    button.setAttribute("aria-selected", String(selected));
+    button.tabIndex = selected ? 0 : -1;
   }
+}
+function handleTabKeydown(event) {
+  const tabs = [recorderTab, eventsTab, recordingsTab];
+  const currentIndex = tabs.indexOf(event.currentTarget);
+  const nextIndex = event.key === "ArrowRight" ? (currentIndex + 1) % tabs.length : event.key === "ArrowLeft" ? (currentIndex - 1 + tabs.length) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : void 0;
+  if (nextIndex === void 0) return;
+  event.preventDefault();
+  const nextTab = tabs[nextIndex];
+  nextTab.focus();
+  switchView(nextTab.dataset.view);
+}
+function setSettingsOpen(open) {
+  settingsDrawer.hidden = !open;
+  settingsBackdrop.hidden = !open;
+  if (open) closeSettingsButton.focus();
+  else settingsButton.focus();
 }
 function readSettingsFromForm() {
   return {

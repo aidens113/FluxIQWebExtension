@@ -8,3 +8,7 @@ body {
 .shell {
   min-height: 100vh;
 }
+
+.app-main {
+  padding: 16px;
+}
