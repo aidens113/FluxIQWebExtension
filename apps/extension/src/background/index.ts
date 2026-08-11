@@ -52,6 +52,16 @@ chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
   }
 });
 
+chrome.webNavigation.onCommitted.addListener((details) => {
+  if (details.frameId !== 0) return;
+  void getConnection().then((manager) => manager.handleNavigationCommitted(details));
+});
+
+chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
+  if (details.frameId !== 0) return;
+  void getConnection().then((manager) => manager.handleHistoryStateUpdated(details));
+});
+
 chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
   void handleRuntimeMessage(message, sender)
     .then(sendResponse)

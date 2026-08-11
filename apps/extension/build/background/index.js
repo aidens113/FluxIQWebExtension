@@ -280,6 +280,80 @@ var WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = Object.fromEntries(
   Object.entries(LEGACY_BROWSER_ACTION_TO_WEB_AUTOMATION).map(([legacy, canonical]) => [canonical, legacy])
 );
 
+// ../../domain/src/actions/schemas.ts
+var elementFingerprintSchema = {
+  type: "object",
+  label: "Element fingerprint",
+  properties: {
+    selector: { type: "string", label: "CSS selector" },
+    xpath: { type: "string", label: "XPath" },
+    id: { type: "string", label: "ID" },
+    classNames: { type: "array", label: "Class names" },
+    visibleText: { type: "string", label: "Visible text" },
+    tagName: { type: "string", label: "Tag name" },
+    role: { type: "string", label: "ARIA role" },
+    name: { type: "string", label: "Accessible name" },
+    href: { type: "string", label: "Link URL" },
+    attributes: { type: "object", label: "Attributes" }
+  }
+};
+var elementProperties = { selector: { type: "string", label: "CSS selector" }, element: elementFingerprintSchema };
+var selectorSchema = {
+  type: "object",
+  properties: {
+    ...elementProperties,
+    timeoutMs: { type: "integer", label: "Timeout in ms" }
+  }
+};
+var webAutomationActionDefinitions = [
+  {
+    actionType: "web.browser.navigate",
+    label: "Navigate",
+    description: "Navigate a browser tab to a URL.",
+    parameterSchema: { type: "object", required: ["url"], properties: { url: { type: "string", label: "URL" } } }
+  },
+  { actionType: "web.dom.click", label: "Click", description: "Click a DOM element.", parameterSchema: selectorSchema },
+  {
+    actionType: "web.dom.type",
+    label: "Type Text",
+    description: "Enter text into an editable DOM element.",
+    parameterSchema: { type: "object", required: ["selector"], properties: { ...elementProperties, text: { type: "string" }, value: { type: "string" } } }
+  },
+  { actionType: "web.dom.clear", label: "Clear Field", description: "Clear an editable DOM element.", parameterSchema: selectorSchema },
+  {
+    actionType: "web.dom.select",
+    label: "Select Option",
+    description: "Set a select element value.",
+    parameterSchema: { type: "object", required: ["selector"], properties: { ...elementProperties, value: { type: "string" } } }
+  },
+  {
+    actionType: "web.dom.scroll",
+    label: "Scroll",
+    description: "Scroll the page or targeted context.",
+    parameterSchema: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, smooth: { type: "boolean" } } }
+  },
+  {
+    actionType: "web.dom.keypress",
+    label: "Key Press",
+    description: "Dispatch a keyboard event.",
+    parameterSchema: { type: "object", properties: { ...elementProperties, key: { type: "string" }, text: { type: "string" } } }
+  },
+  { actionType: "web.dom.wait_for_selector", label: "Wait For Selector", description: "Wait until an element exists.", parameterSchema: selectorSchema },
+  {
+    actionType: "web.dom.wait_for_text",
+    label: "Wait For Text",
+    description: "Wait until page text appears.",
+    parameterSchema: { type: "object", required: ["text"], properties: { text: { type: "string" }, timeoutMs: { type: "integer" } } }
+  },
+  { actionType: "web.dom.extract", label: "Extract", description: "Extract text, value, or attributes from an element.", parameterSchema: selectorSchema },
+  {
+    actionType: "web.dom.capture_snapshot",
+    label: "Capture Snapshot",
+    description: "Capture a structured DOM snapshot.",
+    parameterSchema: { type: "object", properties: {} }
+  }
+];
+
 // ../../domain/src/actions/capabilities.ts
 var webAutomationClientCapabilities = [
   { id: "web.context.state", label: "Web context state", kind: "state" },
@@ -398,11 +472,15 @@ function webAutomationActionTargetFromElement(element) {
   return compactJsonObject({
     type: element.role ?? element.inputType ?? element.tagName,
     id: stableAttribute(element, "data-testid") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name"),
-    label: element.name ?? element.text ?? element.value,
+    label: element.name ?? element.visibleText ?? element.text ?? element.value,
     selector: element.selector,
     bounds: element.bounds,
     metadata: compactJsonObject({
       tagName: element.tagName,
+      xpath: element.xpath,
+      id: element.id,
+      classNames: element.classNames,
+      visibleText: element.visibleText,
       role: element.role,
       href: element.href,
       inputType: element.inputType,
@@ -722,6 +800,10 @@ var FluxIQConnection = class {
   recordingBlock;
   lastActivityAt;
   unsupportedPage;
+  recentExplanatoryActions = /* @__PURE__ */ new Map();
+  pendingNavigations = /* @__PURE__ */ new Map();
+  lastRecordedNavigation = /* @__PURE__ */ new Map();
+  backgroundEventSequence = 0;
   recentActivities = [];
   recordingLog = [];
   listeners = /* @__PURE__ */ new Set();
@@ -883,7 +965,7 @@ var FluxIQConnection = class {
     await this.broadcastToContent({ type: "recording", recording: false, settings: this.settings }, false);
     await this.sendRecordingEvidence({
       kind: "browser.tab",
-      sequence: Date.now(),
+      sequence: this.nextBackgroundEventSequence(),
       url: this.activeTabUrl ?? "",
       title: "",
       eventTimestampMs: Date.now(),
@@ -904,6 +986,9 @@ var FluxIQConnection = class {
   }
   async handleRecordingEvent(payload, tabId, frameId) {
     if (this.recordingState !== "recording") return;
+    if (tabId !== void 0 && isNavigationExplanation(payload)) {
+      this.recentExplanatoryActions.set(tabId, payload.eventTimestampMs);
+    }
     if (isExecutableRecordedAction(payload)) {
       this.eventCount += 1;
       this.addActivity(payload.kind, activityLabel(payload), activityDetail(payload));
@@ -916,7 +1001,7 @@ var FluxIQConnection = class {
     await this.sendRecordingEvidence(payload, tabId, frameId);
   }
   async handleTabUpdated(tab) {
-    const becameActive = Boolean(tab.active && tab.id !== void 0);
+    const becameActive = Boolean(tab.active && tab.id !== void 0 && this.activeTabId !== tab.id);
     if (tab.active && tab.id !== void 0) {
       this.activeTabId = tab.id;
       this.activeTabUrl = tab.url;
@@ -927,15 +1012,6 @@ var FluxIQConnection = class {
     if (becameActive && this.recordingState === "recording" && !this.unsupportedPage) {
       await this.attachTabForRecording(tab.id);
       this.addActivity("tab", "Recording active tab", tab.url ?? `Tab ${tab.id}`);
-    }
-    if (this.recordingState === "recording" && tab.url) {
-      await this.handleRecordingEvent({
-        kind: "browser.navigation",
-        sequence: Date.now(),
-        url: tab.url,
-        title: tab.title ?? "",
-        eventTimestampMs: Date.now()
-      }, tab.id);
     }
     if (this.connectionState === "connected") {
       await this.sendClientMessage("client.state_update", createWebAutomationStateUpdate({
@@ -953,11 +1029,48 @@ var FluxIQConnection = class {
       await this.sendBrowserState();
     }
   }
+  handleNavigationCommitted(details) {
+    if (details.transitionType === "link" || details.transitionType === "form_submit" || details.transitionType === "reload") return;
+    this.scheduleNavigation(details.tabId, details.url, details.timeStamp, details.transitionType === "typed");
+  }
+  handleHistoryStateUpdated(details) {
+    this.scheduleNavigation(details.tabId, details.url, details.timeStamp, false);
+  }
+  scheduleNavigation(tabId, url, timestamp, explicitlyTyped) {
+    if (this.recordingState !== "recording" || unsupportedPageForUrl(url)) return;
+    const existing = this.pendingNavigations.get(tabId);
+    if (existing) clearTimeout(existing.timer);
+    const timer = setTimeout(() => {
+      this.pendingNavigations.delete(tabId);
+      void this.recordNavigation(tabId, url, timestamp, explicitlyTyped);
+    }, 250);
+    this.pendingNavigations.set(tabId, { url, timer });
+  }
+  async recordNavigation(tabId, url, timestamp, explicitlyTyped) {
+    if (this.recordingState !== "recording") return;
+    const explainedAt = this.recentExplanatoryActions.get(tabId);
+    if (!explicitlyTyped && explainedAt !== void 0 && timestamp - explainedAt >= 0 && timestamp - explainedAt < 5e3) return;
+    const previous = this.lastRecordedNavigation.get(tabId);
+    if (previous?.url === url && timestamp - previous.timestamp < 1e3) return;
+    this.lastRecordedNavigation.set(tabId, { url, timestamp });
+    await this.handleRecordingEvent({
+      kind: "browser.navigation",
+      sequence: this.nextBackgroundEventSequence(),
+      url,
+      title: "",
+      eventTimestampMs: timestamp,
+      metadata: explicitlyTyped ? { transition: "typed" } : void 0
+    }, tabId);
+  }
   async onOpen() {
     this.reconnectAttempt = 0;
     this.lastError = void 0;
     this.setState(this.session.token ? "connecting" : "pairing");
     this.startHeartbeat();
+  }
+  nextBackgroundEventSequence() {
+    this.backgroundEventSequence = (this.backgroundEventSequence + 1) % 1e3;
+    return Date.now() * 1e3 + this.backgroundEventSequence;
   }
   onClose() {
     this.stopHeartbeat();
@@ -1126,12 +1239,22 @@ var FluxIQConnection = class {
     await this.sendBrowserState();
     await this.handleRecordingEvent({
       kind: "browser.tab",
-      sequence: Date.now(),
+      sequence: this.nextBackgroundEventSequence(),
       url: this.activeTabUrl ?? "",
       title: "",
       eventTimestampMs: Date.now(),
       metadata: { recordingState: "started", recordingId }
     });
+    if (this.activeTabUrl) {
+      await this.handleRecordingEvent({
+        kind: "browser.navigation",
+        sequence: this.nextBackgroundEventSequence(),
+        url: this.activeTabUrl,
+        title: "",
+        eventTimestampMs: Date.now(),
+        metadata: { reason: "recording_start" }
+      }, this.activeTabId);
+    }
     await this.captureActiveSnapshot("Initial snapshot captured");
   }
   handleRecordingProjectRequired(message) {
@@ -1184,7 +1307,7 @@ var FluxIQConnection = class {
     await this.sendClientMessage("client.action_result", gatewayActionResultFromBrowserResult(result));
     await this.handleRecordingEvent(compactObject({
       kind: "action.result",
-      sequence: Date.now(),
+      sequence: this.nextBackgroundEventSequence(),
       url: result.url ?? this.activeTabUrl ?? "",
       title: result.title ?? "",
       eventTimestampMs: result.finishedAt,
@@ -1371,6 +1494,9 @@ function compactObject(value) {
 function isExecutableRecordedAction(payload) {
   return recordedInputId(payload) !== void 0;
 }
+function isNavigationExplanation(payload) {
+  return payload.kind === "dom.click" || payload.kind === "dom.submit";
+}
 function recordedInputId(payload) {
   return webAutomationInputIdForRecordedEvent({
     kind: payload.kind,
@@ -1478,7 +1604,16 @@ function elementTarget(element) {
   return compactObject({
     selector: element.selector,
     tagName: element.tagName,
+    xpath: element.xpath,
+    id: element.id,
+    classNames: element.classNames,
+    visibleText: element.visibleText,
     text: element.text,
+    value: element.value,
+    role: element.role,
+    name: element.name,
+    href: element.href,
+    inputType: element.inputType,
     bounds: element.bounds,
     attributes: element.attributes
   });
@@ -1629,6 +1764,14 @@ chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
   if (changeInfo.url || changeInfo.title || changeInfo.status) {
     void getConnection().then((manager) => manager.handleTabUpdated(tab));
   }
+});
+chrome.webNavigation.onCommitted.addListener((details) => {
+  if (details.frameId !== 0) return;
+  void getConnection().then((manager) => manager.handleNavigationCommitted(details));
+});
+chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
+  if (details.frameId !== 0) return;
+  void getConnection().then((manager) => manager.handleHistoryStateUpdated(details));
 });
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   void handleRuntimeMessage(message, sender).then(sendResponse).catch((error) => {

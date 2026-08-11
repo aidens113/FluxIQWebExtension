@@ -8,6 +8,10 @@ export type WebAutomationRect = { x: number; y: number; width: number; height: n
 export type WebAutomationElementStateInput = {
   tagName: string;
   selector: string;
+  xpath?: string | undefined;
+  id?: string | undefined;
+  classNames?: string[] | undefined;
+  visibleText?: string | undefined;
   text?: string | undefined;
   value?: string | undefined;
   role?: string | undefined;
@@ -106,11 +110,15 @@ export function webAutomationActionTargetFromElement(element: WebAutomationEleme
   return compactJsonObject({
     type: element.role ?? element.inputType ?? element.tagName,
     id: stableAttribute(element, "data-testid") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name"),
-    label: element.name ?? element.text ?? element.value,
+    label: element.name ?? element.visibleText ?? element.text ?? element.value,
     selector: element.selector,
     bounds: element.bounds,
     metadata: compactJsonObject({
       tagName: element.tagName,
+      xpath: element.xpath,
+      id: element.id,
+      classNames: element.classNames,
+      visibleText: element.visibleText,
       role: element.role,
       href: element.href,
       inputType: element.inputType,

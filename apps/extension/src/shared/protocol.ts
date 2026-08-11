@@ -152,6 +152,10 @@ export type RectDescriptor = {
 export type DomElementDescriptor = {
   tagName: string;
   selector: string;
+  xpath?: string | undefined;
+  id?: string | undefined;
+  classNames?: string[] | undefined;
+  visibleText?: string | undefined;
   text?: string | undefined;
   value?: string | undefined;
   role?: string | undefined;

@@ -8,10 +8,24 @@ export type WebAutomationActionDefinition = {
   parameterSchema: JsonObject;
 };
 
+const elementFingerprintSchema = {
+  type: "object",
+  label: "Element fingerprint",
+  properties: {
+    selector: { type: "string", label: "CSS selector" }, xpath: { type: "string", label: "XPath" },
+    id: { type: "string", label: "ID" }, classNames: { type: "array", label: "Class names" },
+    visibleText: { type: "string", label: "Visible text" }, tagName: { type: "string", label: "Tag name" },
+    role: { type: "string", label: "ARIA role" }, name: { type: "string", label: "Accessible name" },
+    href: { type: "string", label: "Link URL" }, attributes: { type: "object", label: "Attributes" }
+  }
+} satisfies JsonObject;
+
+const elementProperties = { selector: { type: "string", label: "CSS selector" }, element: elementFingerprintSchema };
+
 const selectorSchema = {
   type: "object",
   properties: {
-    selector: { type: "string", label: "CSS selector" },
+    ...elementProperties,
     timeoutMs: { type: "integer", label: "Timeout in ms" }
   }
 } satisfies JsonObject;
@@ -28,14 +42,14 @@ export const webAutomationActionDefinitions: WebAutomationActionDefinition[] = [
     actionType: "web.dom.type",
     label: "Type Text",
     description: "Enter text into an editable DOM element.",
-    parameterSchema: { type: "object", required: ["selector"], properties: { selector: { type: "string" }, text: { type: "string" }, value: { type: "string" } } }
+    parameterSchema: { type: "object", required: ["selector"], properties: { ...elementProperties, text: { type: "string" }, value: { type: "string" } } }
   },
   { actionType: "web.dom.clear", label: "Clear Field", description: "Clear an editable DOM element.", parameterSchema: selectorSchema },
   {
     actionType: "web.dom.select",
     label: "Select Option",
     description: "Set a select element value.",
-    parameterSchema: { type: "object", required: ["selector"], properties: { selector: { type: "string" }, value: { type: "string" } } }
+    parameterSchema: { type: "object", required: ["selector"], properties: { ...elementProperties, value: { type: "string" } } }
   },
   {
     actionType: "web.dom.scroll",
@@ -47,7 +61,7 @@ export const webAutomationActionDefinitions: WebAutomationActionDefinition[] = [
     actionType: "web.dom.keypress",
     label: "Key Press",
     description: "Dispatch a keyboard event.",
-    parameterSchema: { type: "object", properties: { selector: { type: "string" }, key: { type: "string" }, text: { type: "string" } } }
+    parameterSchema: { type: "object", properties: { ...elementProperties, key: { type: "string" }, text: { type: "string" } } }
   },
   { actionType: "web.dom.wait_for_selector", label: "Wait For Selector", description: "Wait until an element exists.", parameterSchema: selectorSchema },
   {

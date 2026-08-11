@@ -8,6 +8,7 @@ import { WEB_AUTOMATION_INPUT_IDS } from "./io/input-model";
 import { webAutomationManifestInputs, webAutomationManifestOutputs } from "./io/manifest-definitions";
 import { webAutomationDomain } from "./manifest";
 import { webAutomationRecordingDomain } from "./recording/domain";
+import { outputTargetFromPayload, webAutomationOutputPayload } from "./web-panel/output-nodes";
 
 const IMPORTER_PACKAGE_ID = "@fluxiq-web-extension/web-automation";
 const IMPORTER_PACKAGE_VERSION = "0.1.0";
@@ -35,7 +36,7 @@ export function registerFluxIQHost(fluxiq: FluxIQ): FluxIQ {
           ...(typeof outputId === "string" ? {
             outputBinding: {
               outputId,
-              toPayload: (event) => outputPayload(outputId, event.payload)
+              toPayload: (event) => webAutomationOutputPayload(outputId, event.payload)
             }
           } : {})
         };
@@ -126,10 +127,11 @@ async function dispatchWebAction(fluxiq: FluxIQ, outputId: string, payload: Json
   );
   if (sessions.length !== 1) return { ok: false, outputId, error: "A single paired web-automation client must be selected before dispatching an output." };
   try {
+    const target = outputTargetFromPayload(payload);
     const result = await fluxiq.programs.automationStudioClientGateway.executeAction(sessions[0]!.sessionId, {
       actionType: outputId,
       parameters: payload,
-      ...(typeof payload.selector === "string" ? { target: { selector: payload.selector } } : {})
+      ...(target ? { target } : {})
     });
     return { ok: result.status === "succeeded", outputId, payload: { status: result.status, ...(result.message ? { message: result.message } : {}), ...(result.payload ? { result: result.payload } : {}) }, ...(result.error ? { error: result.error } : {}) };
   } catch (error) {
@@ -186,20 +188,6 @@ function recordedEventPayload(observation: AutomationStudioRecordingMapperObserv
     return (readObject(observation.payload.payload) ?? observation.payload) as JsonObject;
   }
   return observation.payload;
-}
-
-function outputPayload(outputId: string, payload: JsonObject): JsonObject {
-  const selector = readSelector(payload.element);
-  if (outputId === "web.browser.navigate") return compact({ url: readString(payload.url) });
-  if (outputId === "web.dom.click" || outputId === "web.dom.clear") return compact({ selector });
-  if (outputId === "web.dom.type") return compact({ selector, text: readString(payload.inputValue) ?? "" });
-  if (outputId === "web.dom.select") return compact({ selector, value: readString(payload.inputValue) ?? "" });
-  if (outputId === "web.dom.keypress") return compact({ selector, key: readString(payload.key) ?? "" });
-  if (outputId === "web.dom.scroll") {
-    const scroll = readObject(payload.scroll);
-    return compact({ x: readNumber(scroll?.x), y: readNumber(scroll?.y) });
-  }
-  return {};
 }
 
 function candidate(outputId: string, parameters: JsonObject, sourceInputId: string, label: string): AutomationStudioRecordingMapperCandidate {

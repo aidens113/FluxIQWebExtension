@@ -1,5 +1,69 @@
 "use strict";
 (() => {
+  // src/content/element-finder.ts
+  function findClosestFingerprint(fingerprint) {
+    const bySelector = query(fingerprint.selector);
+    if (bySelector) return bySelector;
+    if (fingerprint.xpath) {
+      const result = document.evaluate(fingerprint.xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+      if (result instanceof Element) return result;
+    }
+    if (fingerprint.id) {
+      const byId = document.getElementById(fingerprint.id);
+      if (byId) return byId;
+    }
+    const tag = fingerprint.tagName || "*";
+    const testId = fingerprint.attributes?.["data-testid"];
+    if (testId) {
+      const byTestId = query(`[data-testid="${cssString(testId)}"]`);
+      if (byTestId) return byTestId;
+    }
+    if (fingerprint.name) {
+      const byName = query(`${tag}[aria-label="${cssString(fingerprint.name)}"], ${tag}[name="${cssString(fingerprint.name)}"]`);
+      if (byName) return byName;
+    }
+    if (fingerprint.classNames?.length) {
+      const byClass = query(`${tag}${fingerprint.classNames.map((className) => `.${CSS.escape(className)}`).join("")}`);
+      if (byClass) return byClass;
+    }
+    if (fingerprint.visibleText) {
+      const normalized = normalizeText(fingerprint.visibleText);
+      return [...document.querySelectorAll(tag)].find((element) => normalizeText(element.textContent ?? "") === normalized) ?? null;
+    }
+    return null;
+  }
+  function xpathFor(element) {
+    const parts = [];
+    let current = element;
+    while (current) {
+      if (current.id) {
+        parts.unshift(`*[@id=${xpathString(current.id)}]`);
+        break;
+      }
+      const siblings = current.parentElement ? [...current.parentElement.children].filter((sibling) => sibling.tagName === current.tagName) : [];
+      parts.unshift(`${current.tagName.toLowerCase()}[${Math.max(1, siblings.indexOf(current) + 1)}]`);
+      current = current.parentElement;
+    }
+    return `/${parts.join("/")}`;
+  }
+  function query(selector) {
+    if (!selector) return null;
+    try {
+      return document.querySelector(selector);
+    } catch {
+      return null;
+    }
+  }
+  function normalizeText(value) {
+    return value.replace(/\s+/g, " ").trim();
+  }
+  function cssString(value) {
+    return CSS.escape(value).replace(/"/g, '\\"');
+  }
+  function xpathString(value) {
+    return `"${value.replace(/"/g, '\\"')}"`;
+  }
+
   // src/content/index.ts
   var CONTENT_EVENT = "fluxiq.contentEvent";
   var CONTENT_READY = "fluxiq.contentReady";
@@ -229,6 +293,11 @@
       if (!element) throw new Error("No element exists at the requested coordinates.");
       return element;
     }
+    const fingerprint = action.options?.element;
+    if (fingerprint && typeof fingerprint === "object" && !Array.isArray(fingerprint)) {
+      const element = findClosestFingerprint(fingerprint);
+      if (element) return element;
+    }
     const active = document.activeElement;
     if (active) return active;
     throw new Error("No selector, coordinates, or active element was available.");
@@ -287,7 +356,14 @@
       bounds: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
     };
     const text = visibleText(element);
-    if (text) descriptor.text = text;
+    if (text) {
+      descriptor.text = text;
+      descriptor.visibleText = text;
+    }
+    if (element.id) descriptor.id = element.id;
+    const classNames = [...element.classList];
+    if (classNames.length) descriptor.classNames = classNames;
+    descriptor.xpath = xpathFor(element);
     const value = readElementValue(element);
     if (value !== void 0 && captureInputValues) descriptor.value = value;
     const role = element.getAttribute("role");
@@ -307,9 +383,9 @@
   function selectorFor(element) {
     if (element.id) return `#${CSS.escape(element.id)}`;
     const testId = element.getAttribute("data-testid");
-    if (testId) return `[data-testid="${cssString(testId)}"]`;
+    if (testId) return `[data-testid="${cssString2(testId)}"]`;
     const name = element.getAttribute("name");
-    if (name) return `${element.tagName.toLowerCase()}[name="${cssString(name)}"]`;
+    if (name) return `${element.tagName.toLowerCase()}[name="${cssString2(name)}"]`;
     const parts = [];
     let current = element;
     while (current && current !== document.documentElement && parts.length < 5) {
@@ -348,7 +424,7 @@
       shiftKey: event.shiftKey
     };
   }
-  function cssString(value) {
+  function cssString2(value) {
     return CSS.escape(value).replace(/"/g, '\\"');
   }
   function scrollElementIntoView(element) {

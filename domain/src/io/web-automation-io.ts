@@ -19,6 +19,7 @@ import {
   type WebAutomationRecordedInputPayload
 } from "./input-model";
 import { webAutomationManifestInputs, webAutomationManifestOutputs } from "./manifest-definitions";
+import { outputTargetFromPayload, webAutomationOutputPayload } from "../web-panel/output-nodes";
 
 export * from "./input-model";
 
@@ -38,7 +39,7 @@ export function createWebAutomationDomainIo(fluxiq: FluxIQ): DomainIoRegistratio
         definition: { id, title, role: "action", outputId },
         mode: "stream",
         subscribe: (handler) => liveInputs.subscribe(id, handler),
-        outputBinding: { outputId, toPayload: (event) => outputPayload(outputId, event) }
+        outputBinding: { outputId, toPayload: (event) => webAutomationOutputPayload(outputId, event.payload) }
       }))
     ],
     outputs: WEB_AUTOMATION_ACTION_TYPES.map((outputId) => defineOutput({
@@ -94,19 +95,6 @@ class GatewayInputHub {
   }
 }
 
-function outputPayload(outputId: WebAutomationActionType, event: IoEnvelope<WebAutomationRecordedInputPayload>): JsonObject {
-  const payload = event.payload;
-  const selector = stringValue(payload.element?.selector);
-  if (outputId === "web.browser.navigate") return { url: payload.url };
-  if (outputId === "web.dom.click") return compact({ selector });
-  if (outputId === "web.dom.type") return compact({ selector, text: payload.inputValue ?? "" });
-  if (outputId === "web.dom.clear") return compact({ selector });
-  if (outputId === "web.dom.select") return compact({ selector, value: payload.inputValue ?? "" });
-  if (outputId === "web.dom.keypress") return compact({ selector, key: payload.key ?? "" });
-  if (outputId === "web.dom.scroll") return compact({ x: numberValue(payload.scroll?.x), y: numberValue(payload.scroll?.y) });
-  return {};
-}
-
 async function dispatchWebAutomationOutput(
   fluxiq: FluxIQ,
   request: OutputDispatchRequest<JsonObject>
@@ -114,7 +102,7 @@ async function dispatchWebAutomationOutput(
   const sessionId = targetSessionId(fluxiq, request.metadata);
   if (!sessionId) return { ok: false, outputId: request.outputId, error: "A single paired web-automation client must be selected before dispatching an output." };
   try {
-    const target = targetFromPayload(request.payload);
+    const target = outputTargetFromPayload(request.payload);
     const command = target ? {
       actionType: request.outputId,
       parameters: request.payload,
@@ -145,11 +133,6 @@ function targetSessionId(fluxiq: FluxIQ, metadata: JsonObject | undefined): stri
   );
   if (requested) return eligible.some((session) => session.sessionId === requested) ? requested : undefined;
   return eligible.length === 1 ? eligible[0]?.sessionId : undefined;
-}
-
-function targetFromPayload(payload: JsonObject): JsonObject | undefined {
-  const selector = stringValue(payload.selector);
-  return selector ? { selector } : undefined;
 }
 
 function compact(value: Record<string, unknown>): JsonObject {

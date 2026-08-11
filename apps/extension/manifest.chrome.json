@@ -18,6 +18,7 @@
     "scripting",
     "storage",
     "tabs",
+    "webNavigation",
     "sidePanel"
   ],
   "host_permissions": [

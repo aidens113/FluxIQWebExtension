@@ -74,6 +74,10 @@ export class FluxIQConnection {
   private recordingBlock: RecordingBlockState | undefined;
   private lastActivityAt: number | undefined;
   private unsupportedPage: UnsupportedPageState | undefined;
+  private readonly recentExplanatoryActions = new Map<number, number>();
+  private readonly pendingNavigations = new Map<number, { url: string; timer: ReturnType<typeof setTimeout> }>();
+  private readonly lastRecordedNavigation = new Map<number, { url: string; timestamp: number }>();
+  private backgroundEventSequence = 0;
   private readonly recentActivities: ActivityEntry[] = [];
   private readonly recordingLog: ActivityEntry[] = [];
   private readonly listeners = new Set<StatusListener>();
@@ -249,7 +253,7 @@ export class FluxIQConnection {
     await this.broadcastToContent({ type: "recording", recording: false, settings: this.settings }, false);
     await this.sendRecordingEvidence({
       kind: "browser.tab",
-      sequence: Date.now(),
+      sequence: this.nextBackgroundEventSequence(),
       url: this.activeTabUrl ?? "",
       title: "",
       eventTimestampMs: Date.now(),
@@ -272,6 +276,9 @@ export class FluxIQConnection {
 
   async handleRecordingEvent(payload: RecordingEventPayload, tabId?: number, frameId?: number): Promise<void> {
     if (this.recordingState !== "recording") return;
+    if (tabId !== undefined && isNavigationExplanation(payload)) {
+      this.recentExplanatoryActions.set(tabId, payload.eventTimestampMs);
+    }
     if (isExecutableRecordedAction(payload)) {
       this.eventCount += 1;
       this.addActivity(payload.kind, activityLabel(payload), activityDetail(payload));
@@ -285,7 +292,7 @@ export class FluxIQConnection {
   }
 
   async handleTabUpdated(tab: chrome.tabs.Tab): Promise<void> {
-    const becameActive = Boolean(tab.active && tab.id !== undefined);
+    const becameActive = Boolean(tab.active && tab.id !== undefined && this.activeTabId !== tab.id);
     if (tab.active && tab.id !== undefined) {
       this.activeTabId = tab.id;
       this.activeTabUrl = tab.url;
@@ -296,15 +303,6 @@ export class FluxIQConnection {
     if (becameActive && this.recordingState === "recording" && !this.unsupportedPage) {
       await this.attachTabForRecording(tab.id);
       this.addActivity("tab", "Recording active tab", tab.url ?? `Tab ${tab.id}`);
-    }
-    if (this.recordingState === "recording" && tab.url) {
-      await this.handleRecordingEvent({
-        kind: "browser.navigation",
-        sequence: Date.now(),
-        url: tab.url,
-        title: tab.title ?? "",
-        eventTimestampMs: Date.now()
-      }, tab.id);
     }
     if (this.connectionState === "connected") {
       await this.sendClientMessage("client.state_update", createWebAutomationStateUpdate({
@@ -323,11 +321,59 @@ export class FluxIQConnection {
     }
   }
 
+  handleNavigationCommitted(details: chrome.webNavigation.WebNavigationTransitionCallbackDetails): void {
+    // Browser-provided transition metadata is more reliable than tabs.onUpdated,
+    // which fires repeatedly for a single load (URL, title, and status changes).
+    if (details.transitionType === "link" || details.transitionType === "form_submit" || details.transitionType === "reload") return;
+    this.scheduleNavigation(details.tabId, details.url, details.timeStamp, details.transitionType === "typed");
+  }
+
+  handleHistoryStateUpdated(details: chrome.webNavigation.WebNavigationFramedCallbackDetails): void {
+    this.scheduleNavigation(details.tabId, details.url, details.timeStamp, false);
+  }
+
+  private scheduleNavigation(tabId: number, url: string, timestamp: number, explicitlyTyped: boolean): void {
+    if (this.recordingState !== "recording" || unsupportedPageForUrl(url)) return;
+    const existing = this.pendingNavigations.get(tabId);
+    if (existing) clearTimeout(existing.timer);
+    const timer = setTimeout(() => {
+      this.pendingNavigations.delete(tabId);
+      void this.recordNavigation(tabId, url, timestamp, explicitlyTyped);
+    }, 250);
+    this.pendingNavigations.set(tabId, { url, timer });
+  }
+
+  private async recordNavigation(tabId: number, url: string, timestamp: number, explicitlyTyped: boolean): Promise<void> {
+    if (this.recordingState !== "recording") return;
+    const explainedAt = this.recentExplanatoryActions.get(tabId);
+    // Let the click message arrive before classifying the URL update. A typed
+    // omnibox navigation remains intentional even if it follows a click.
+    if (!explicitlyTyped && explainedAt !== undefined && timestamp - explainedAt >= 0 && timestamp - explainedAt < 5_000) return;
+    const previous = this.lastRecordedNavigation.get(tabId);
+    if (previous?.url === url && timestamp - previous.timestamp < 1_000) return;
+    this.lastRecordedNavigation.set(tabId, { url, timestamp });
+    await this.handleRecordingEvent({
+      kind: "browser.navigation",
+      sequence: this.nextBackgroundEventSequence(),
+      url,
+      title: "",
+      eventTimestampMs: timestamp,
+      metadata: explicitlyTyped ? { transition: "typed" } : undefined
+    }, tabId);
+  }
+
   private async onOpen(): Promise<void> {
     this.reconnectAttempt = 0;
     this.lastError = undefined;
     this.setState(this.session.token ? "connecting" : "pairing");
     this.startHeartbeat();
+  }
+
+  private nextBackgroundEventSequence(): number {
+    // Event IDs include this sequence. Date.now() alone collides when related
+    // startup events are emitted in the same millisecond.
+    this.backgroundEventSequence = (this.backgroundEventSequence + 1) % 1_000;
+    return Date.now() * 1_000 + this.backgroundEventSequence;
   }
 
   private onClose(): void {
@@ -507,12 +553,22 @@ export class FluxIQConnection {
     await this.sendBrowserState();
     await this.handleRecordingEvent({
       kind: "browser.tab",
-      sequence: Date.now(),
+      sequence: this.nextBackgroundEventSequence(),
       url: this.activeTabUrl ?? "",
       title: "",
       eventTimestampMs: Date.now(),
       metadata: { recordingState: "started", recordingId }
     });
+    if (this.activeTabUrl) {
+      await this.handleRecordingEvent({
+        kind: "browser.navigation",
+        sequence: this.nextBackgroundEventSequence(),
+        url: this.activeTabUrl,
+        title: "",
+        eventTimestampMs: Date.now(),
+        metadata: { reason: "recording_start" }
+      }, this.activeTabId);
+    }
     await this.captureActiveSnapshot("Initial snapshot captured");
   }
 
@@ -572,7 +628,7 @@ export class FluxIQConnection {
     await this.sendClientMessage("client.action_result", gatewayActionResultFromBrowserResult(result));
     await this.handleRecordingEvent(compactObject({
       kind: "action.result",
-      sequence: Date.now(),
+      sequence: this.nextBackgroundEventSequence(),
       url: result.url ?? this.activeTabUrl ?? "",
       title: result.title ?? "",
       eventTimestampMs: result.finishedAt,
@@ -794,6 +850,10 @@ function isExecutableRecordedAction(payload: RecordingEventPayload): boolean {
   return recordedInputId(payload) !== undefined;
 }
 
+function isNavigationExplanation(payload: RecordingEventPayload): boolean {
+  return payload.kind === "dom.click" || payload.kind === "dom.submit";
+}
+
 function recordedInputId(payload: RecordingEventPayload) {
   return webAutomationInputIdForRecordedEvent({
     kind: payload.kind,
@@ -909,11 +969,20 @@ function gatewayActionResultFromBrowserResult(result: BrowserActionResult): Clie
 }
 
 
-function elementTarget(element: { selector: string; tagName: string; text?: string | undefined; bounds?: unknown; attributes?: Record<string, string> | undefined }): JsonObject {
+function elementTarget(element: { selector: string; tagName: string; xpath?: string | undefined; id?: string | undefined; classNames?: string[] | undefined; visibleText?: string | undefined; text?: string | undefined; value?: string | undefined; role?: string | undefined; name?: string | undefined; href?: string | undefined; inputType?: string | undefined; bounds?: unknown; attributes?: Record<string, string> | undefined }): JsonObject {
   return compactObject({
     selector: element.selector,
     tagName: element.tagName,
+    xpath: element.xpath,
+    id: element.id,
+    classNames: element.classNames,
+    visibleText: element.visibleText,
     text: element.text,
+    value: element.value,
+    role: element.role,
+    name: element.name,
+    href: element.href,
+    inputType: element.inputType,
     bounds: element.bounds as JsonObject,
     attributes: element.attributes as JsonObject
   }) as JsonObject;

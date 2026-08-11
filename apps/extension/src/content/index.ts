@@ -2,10 +2,16 @@ type JsonPrimitive = string | number | boolean | null;
 type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 type JsonObject = { [key: string]: JsonValue };
 
+import { findClosestFingerprint, xpathFor } from "./element-finder";
+
 type RectDescriptor = { x: number; y: number; width: number; height: number };
 type DomElementDescriptor = {
   tagName: string;
   selector: string;
+  xpath?: string | undefined;
+  id?: string | undefined;
+  classNames?: string[] | undefined;
+  visibleText?: string | undefined;
   text?: string | undefined;
   value?: string | undefined;
   role?: string | undefined;
@@ -311,6 +317,11 @@ function resolveTarget(action: BrowserActionCommand): Element {
     if (!element) throw new Error("No element exists at the requested coordinates.");
     return element;
   }
+  const fingerprint = action.options?.element;
+  if (fingerprint && typeof fingerprint === "object" && !Array.isArray(fingerprint)) {
+    const element = findClosestFingerprint(fingerprint as Parameters<typeof findClosestFingerprint>[0]);
+    if (element) return element;
+  }
   const active = document.activeElement;
   if (active) return active;
   throw new Error("No selector, coordinates, or active element was available.");
@@ -382,7 +393,14 @@ function describeElement(element: Element): DomElementDescriptor {
     bounds: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
   };
   const text = visibleText(element);
-  if (text) descriptor.text = text;
+  if (text) {
+    descriptor.text = text;
+    descriptor.visibleText = text;
+  }
+  if (element.id) descriptor.id = element.id;
+  const classNames = [...element.classList];
+  if (classNames.length) descriptor.classNames = classNames;
+  descriptor.xpath = xpathFor(element);
   const value = readElementValue(element);
   if (value !== undefined && captureInputValues) descriptor.value = value;
   const role = element.getAttribute("role");

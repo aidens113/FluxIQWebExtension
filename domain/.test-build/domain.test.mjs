@@ -25,10 +25,27 @@ var WEB_AUTOMATION_EVENTS = {
 };
 
 // src/actions/schemas.ts
+var elementFingerprintSchema = {
+  type: "object",
+  label: "Element fingerprint",
+  properties: {
+    selector: { type: "string", label: "CSS selector" },
+    xpath: { type: "string", label: "XPath" },
+    id: { type: "string", label: "ID" },
+    classNames: { type: "array", label: "Class names" },
+    visibleText: { type: "string", label: "Visible text" },
+    tagName: { type: "string", label: "Tag name" },
+    role: { type: "string", label: "ARIA role" },
+    name: { type: "string", label: "Accessible name" },
+    href: { type: "string", label: "Link URL" },
+    attributes: { type: "object", label: "Attributes" }
+  }
+};
+var elementProperties = { selector: { type: "string", label: "CSS selector" }, element: elementFingerprintSchema };
 var selectorSchema = {
   type: "object",
   properties: {
-    selector: { type: "string", label: "CSS selector" },
+    ...elementProperties,
     timeoutMs: { type: "integer", label: "Timeout in ms" }
   }
 };
@@ -44,14 +61,14 @@ var webAutomationActionDefinitions = [
     actionType: "web.dom.type",
     label: "Type Text",
     description: "Enter text into an editable DOM element.",
-    parameterSchema: { type: "object", required: ["selector"], properties: { selector: { type: "string" }, text: { type: "string" }, value: { type: "string" } } }
+    parameterSchema: { type: "object", required: ["selector"], properties: { ...elementProperties, text: { type: "string" }, value: { type: "string" } } }
   },
   { actionType: "web.dom.clear", label: "Clear Field", description: "Clear an editable DOM element.", parameterSchema: selectorSchema },
   {
     actionType: "web.dom.select",
     label: "Select Option",
     description: "Set a select element value.",
-    parameterSchema: { type: "object", required: ["selector"], properties: { selector: { type: "string" }, value: { type: "string" } } }
+    parameterSchema: { type: "object", required: ["selector"], properties: { ...elementProperties, value: { type: "string" } } }
   },
   {
     actionType: "web.dom.scroll",
@@ -63,7 +80,7 @@ var webAutomationActionDefinitions = [
     actionType: "web.dom.keypress",
     label: "Key Press",
     description: "Dispatch a keyboard event.",
-    parameterSchema: { type: "object", properties: { selector: { type: "string" }, key: { type: "string" }, text: { type: "string" } } }
+    parameterSchema: { type: "object", properties: { ...elementProperties, key: { type: "string" }, text: { type: "string" } } }
   },
   { actionType: "web.dom.wait_for_selector", label: "Wait For Selector", description: "Wait until an element exists.", parameterSchema: selectorSchema },
   {
@@ -186,11 +203,15 @@ function webAutomationActionTargetFromElement(element) {
   return compactJsonObject({
     type: element.role ?? element.inputType ?? element.tagName,
     id: stableAttribute(element, "data-testid") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name"),
-    label: element.name ?? element.text ?? element.value,
+    label: element.name ?? element.visibleText ?? element.text ?? element.value,
     selector: element.selector,
     bounds: element.bounds,
     metadata: compactJsonObject({
       tagName: element.tagName,
+      xpath: element.xpath,
+      id: element.id,
+      classNames: element.classNames,
+      visibleText: element.visibleText,
       role: element.role,
       href: element.href,
       inputType: element.inputType,
@@ -329,6 +350,10 @@ var elementSchema = {
   type: "object",
   properties: {
     selector: { type: "string", label: "Selector" },
+    xpath: { type: "string", label: "XPath" },
+    id: { type: "string", label: "Element ID" },
+    classNames: { type: "array", label: "Class names" },
+    visibleText: { type: "string", label: "Visible text" },
     tagName: { type: "string", label: "Tag name" },
     text: { type: "string", label: "Text" },
     value: { type: "string", label: "Value" },

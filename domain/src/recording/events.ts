@@ -7,6 +7,10 @@ const elementSchema: RecordingEventJsonSchema = {
   type: "object",
   properties: {
     selector: { type: "string", label: "Selector" },
+    xpath: { type: "string", label: "XPath" },
+    id: { type: "string", label: "Element ID" },
+    classNames: { type: "array", label: "Class names" },
+    visibleText: { type: "string", label: "Visible text" },
     tagName: { type: "string", label: "Tag name" },
     text: { type: "string", label: "Text" },
     value: { type: "string", label: "Value" },
