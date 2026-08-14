@@ -67,6 +67,34 @@
   // src/content/index.ts
   var CONTENT_EVENT = "fluxiq.contentEvent";
   var CONTENT_READY = "fluxiq.contentReady";
+  var SNAPSHOT_CANDIDATE_SELECTOR = [
+    "a[href]",
+    "button",
+    "input:not([type=hidden])",
+    "textarea",
+    "select",
+    "summary",
+    "label",
+    "[role=button]",
+    "[role=link]",
+    "[role=menuitem]",
+    "[role=checkbox]",
+    "[role=radio]",
+    "[role=tab]",
+    "[role=switch]",
+    "[contenteditable=true]",
+    "[onclick]",
+    "[aria-label]",
+    "[data-testid]",
+    "[data-test]",
+    "[data-cy]",
+    "[placeholder]",
+    "h1",
+    "h2",
+    "h3"
+  ].join(",");
+  var MAX_SNAPSHOT_CANDIDATES = 1e3;
+  var POINTER_CLICK_DEDUPE_MS = 750;
   var recording = false;
   var sequence = 0;
   var captureMutations = true;
@@ -75,6 +103,7 @@
   var scrollTimer;
   var mutationTimer;
   var pendingMutation = { added: 0, removed: 0, attributes: 0, text: 0 };
+  var lastPointerActivation;
   sendReady();
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     const typed = message;
@@ -100,10 +129,33 @@
     }
     return false;
   });
+  document.addEventListener("pointerdown", (event) => {
+    if (!event.isTrusted) return;
+    if (event.button !== 0 || event.isPrimary === false) return;
+    const target = event.target instanceof Element ? pointerActivationTarget(event.target) : null;
+    if (!target) return;
+    lastPointerActivation = { signature: eventTargetSignature(target), timestamp: Date.now() };
+    emit("dom.click", compactObject({
+      element: describeElement(target),
+      metadata: compactObject({
+        ...pointerMetadata(event),
+        pointerId: event.pointerId,
+        pointerType: event.pointerType,
+        sourceEvent: "pointerdown"
+      })
+    }));
+  }, true);
   document.addEventListener("click", (event) => {
     if (!event.isTrusted) return;
-    const target = event.target instanceof Element ? event.target : null;
-    emit("dom.click", compactObject({ element: target ? describeElement(target) : void 0, metadata: pointerMetadata(event) }));
+    const target = event.target instanceof Element ? actionEventTarget(event.target) : null;
+    if (target && shouldSkipClickAfterPointerActivation(target)) return;
+    emit("dom.click", compactObject({
+      element: target ? describeElement(target) : void 0,
+      metadata: compactObject({
+        ...pointerMetadata(event),
+        sourceEvent: "click"
+      })
+    }));
   }, true);
   document.addEventListener("input", (event) => {
     const target = event.target instanceof Element ? event.target : null;
@@ -207,7 +259,10 @@
       eventTimestampMs: Date.now()
     };
     if (details.element) payload.element = details.element;
-    if (details.snapshot && captureSnapshots) payload.snapshot = details.snapshot;
+    if (captureSnapshots) {
+      const snapshot = details.snapshot ?? (shouldAttachStateSnapshot(kind) ? captureSnapshot() : void 0);
+      if (snapshot) payload.snapshot = snapshot;
+    }
     if (details.inputValue !== void 0) payload.inputValue = details.inputValue;
     if (details.key !== void 0) payload.key = details.key;
     if (details.scroll) payload.scroll = details.scroll;
@@ -215,6 +270,9 @@
     if (details.actionResult) payload.actionResult = details.actionResult;
     if (details.metadata) payload.metadata = details.metadata;
     return payload;
+  }
+  function shouldAttachStateSnapshot(kind) {
+    return kind === "dom.click" || kind === "dom.input" || kind === "dom.change" || kind === "dom.submit" || kind === "dom.keydown" || kind === "dom.wheel" || kind === "dom.scroll" || kind === "dom.focus" || kind === "dom.blur";
   }
   async function executeAction(action) {
     const startedAt = Date.now();
@@ -224,16 +282,16 @@
       }
       if (action.actionType === "web.dom.wait_for_selector" || action.actionType === "dom.wait_for_selector") {
         const element = await waitForElement(action.selector, action.timeoutMs);
-        return success(action, startedAt, "Selector found.", describeElement(element));
+        return success(action, startedAt, "Selector found.", describeElement(element), captureSnapshot());
       }
       if (action.actionType === "web.dom.wait_for_text" || action.actionType === "dom.wait_for_text") {
         await waitForText(action.text ?? action.value ?? "", action.timeoutMs);
-        return success(action, startedAt, "Text found.");
+        return success(action, startedAt, "Text found.", void 0, captureSnapshot());
       }
       if (action.actionType === "web.dom.extract" || action.actionType === "dom.extract") {
         const element = resolveTarget(action);
         const extracted = extractElement(element, action.options);
-        return success(action, startedAt, "Value extracted.", describeElement(element), void 0, extracted);
+        return success(action, startedAt, "Value extracted.", describeElement(element), captureSnapshot(), extracted);
       }
       if (action.actionType === "web.dom.click" || action.actionType === "dom.click") {
         const element = resolveTarget(action);
@@ -275,7 +333,7 @@
         const key = action.key ?? action.text ?? "";
         target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
         target.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true, cancelable: true }));
-        return success(action, startedAt, "Key event dispatched.", target instanceof Element ? describeElement(target) : void 0);
+        return success(action, startedAt, "Key event dispatched.", target instanceof Element ? describeElement(target) : void 0, captureSnapshot());
       }
       throw new Error(`Unsupported action type: ${action.actionType}`);
     } catch (error) {
@@ -314,11 +372,12 @@
       finishedAt: Date.now()
     };
     if (element) result.element = element;
-    if (snapshot) result.snapshot = snapshot;
+    if (snapshot ?? captureSnapshots) result.snapshot = snapshot ?? captureSnapshot();
     if (extracted !== void 0) result.extracted = extracted;
     return result;
   }
   function actionFailure(action, error, startedAt = Date.now()) {
+    const snapshot = captureSnapshots ? captureSnapshot() : void 0;
     return {
       commandId: action.commandId,
       actionType: action.actionType,
@@ -326,6 +385,7 @@
       message: error instanceof Error ? error.message : "Action failed.",
       url: location.href,
       title: document.title,
+      ...snapshot ? { snapshot } : {},
       startedAt,
       finishedAt: Date.now()
     };
@@ -338,9 +398,10 @@
         width: window.innerWidth,
         height: window.innerHeight,
         scrollX: window.scrollX,
-        scrollY: window.scrollY
+        scrollY: window.scrollY,
+        devicePixelRatio: window.devicePixelRatio
       },
-      interactiveElements: [...document.querySelectorAll("a, button, input, textarea, select, [role=button], [contenteditable=true]")].slice(0, 200).map((element) => describeElement(element))
+      interactiveElements: snapshotElements()
     };
     const focused = document.activeElement instanceof Element ? describeElement(document.activeElement) : void 0;
     if (focused) snapshot.focusedElement = focused;
@@ -349,12 +410,12 @@
     return snapshot;
   }
   function describeElement(element) {
-    const rect = element.getBoundingClientRect();
+    const bounds = visibleViewportBounds(element);
     const descriptor = {
       tagName: element.tagName.toLowerCase(),
-      selector: selectorFor(element),
-      bounds: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+      selector: selectorFor(element)
     };
+    if (bounds) descriptor.bounds = bounds;
     const text = visibleText(element);
     if (text) {
       descriptor.text = text;
@@ -373,12 +434,97 @@
     if (element instanceof HTMLAnchorElement && element.href) descriptor.href = element.href;
     if (element instanceof HTMLInputElement && element.type) descriptor.inputType = element.type;
     const attributes = {};
-    for (const attribute of ["id", "class", "name", "type", "placeholder", "aria-label", "data-testid"]) {
+    for (const attribute of ["id", "class", "name", "type", "placeholder", "aria-label", "aria-disabled", "data-testid", "data-test", "data-cy", "disabled", "onclick"]) {
       const value2 = element.getAttribute(attribute);
-      if (value2) attributes[attribute] = value2.slice(0, 500);
+      if (value2 !== null) attributes[attribute] = value2.slice(0, 500);
     }
     if (Object.keys(attributes).length) descriptor.attributes = attributes;
     return descriptor;
+  }
+  function snapshotElements() {
+    const seen = /* @__PURE__ */ new Set();
+    const candidates = [];
+    for (const element of document.querySelectorAll(SNAPSHOT_CANDIDATE_SELECTOR)) {
+      if (seen.has(element) || !shouldIncludeSnapshotElement(element)) continue;
+      seen.add(element);
+      candidates.push(element);
+    }
+    return candidates.sort((left, right) => elementPriority(right) - elementPriority(left) || documentOrder(left, right)).slice(0, MAX_SNAPSHOT_CANDIDATES).map((element) => describeElement(element));
+  }
+  function shouldIncludeSnapshotElement(element) {
+    if (element.closest("script, style, noscript, template")) return false;
+    const bounds = visibleViewportBounds(element);
+    if (!bounds) return false;
+    const style = getComputedStyle(element);
+    if (style.visibility === "hidden" || style.display === "none" || Number(style.opacity) === 0) return false;
+    return isActionableElement(element) || Boolean(accessibleName(element) || visibleText(element) || readElementValue(element) || stableElementId(element));
+  }
+  function visibleViewportBounds(element) {
+    const rect = element.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const left = Math.max(0, rect.left);
+    const top = Math.max(0, rect.top);
+    const right = Math.min(viewportWidth, rect.right);
+    const bottom = Math.min(viewportHeight, rect.bottom);
+    const width = right - left;
+    const height = bottom - top;
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width < 2 || height < 2) return void 0;
+    return {
+      x: Math.round(left * 100) / 100,
+      y: Math.round(top * 100) / 100,
+      width: Math.round(width * 100) / 100,
+      height: Math.round(height * 100) / 100
+    };
+  }
+  function elementPriority(element) {
+    let score = 0;
+    if (isActionableElement(element)) score += 100;
+    if (stableElementId(element)) score += 40;
+    if (accessibleName(element)) score += 30;
+    if (readElementValue(element)) score += 20;
+    if (visibleText(element)) score += 10;
+    const bounds = visibleViewportBounds(element);
+    if (bounds) score += Math.min(20, Math.sqrt(bounds.width * bounds.height) / 8);
+    return score;
+  }
+  function documentOrder(left, right) {
+    if (left === right) return 0;
+    return left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+  }
+  function isActionableElement(element) {
+    const tagName = element.tagName.toLowerCase();
+    const role = element.getAttribute("role")?.toLowerCase();
+    return tagName === "a" || tagName === "button" || tagName === "input" || tagName === "textarea" || tagName === "select" || tagName === "summary" || tagName === "label" || role === "button" || role === "link" || role === "menuitem" || role === "checkbox" || role === "radio" || role === "tab" || role === "switch" || element.hasAttribute("onclick") || element instanceof HTMLElement && element.isContentEditable;
+  }
+  function actionEventTarget(element) {
+    return pointerActivationTarget(element) ?? element;
+  }
+  function pointerActivationTarget(element) {
+    let current = element;
+    for (let depth = 0; current && current !== document.documentElement && depth < 6; depth += 1) {
+      if (isActionableElement(current) || getComputedStyle(current).cursor === "pointer") return current;
+      current = current.parentElement;
+    }
+    return void 0;
+  }
+  function eventTargetSignature(element) {
+    const rect = element.getBoundingClientRect();
+    return [
+      selectorFor(element),
+      Math.round(rect.left),
+      Math.round(rect.top),
+      Math.round(rect.width),
+      Math.round(rect.height)
+    ].join("|");
+  }
+  function shouldSkipClickAfterPointerActivation(element) {
+    if (!lastPointerActivation) return false;
+    if (Date.now() - lastPointerActivation.timestamp > POINTER_CLICK_DEDUPE_MS) return false;
+    return lastPointerActivation.signature === eventTargetSignature(element);
+  }
+  function stableElementId(element) {
+    return element.getAttribute("data-testid") ?? element.getAttribute("data-test") ?? element.getAttribute("data-cy") ?? element.getAttribute("id") ?? element.getAttribute("name") ?? void 0;
   }
   function selectorFor(element) {
     if (element.id) return `#${CSS.escape(element.id)}`;

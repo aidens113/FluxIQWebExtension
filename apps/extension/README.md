@@ -30,10 +30,11 @@ The recorder console shows:
 - a settings drawer for gateway/core API URLs, reconnect behavior, capture
   toggles, diagnostics, and session reset.
 
-The default development gateway is:
+The default development endpoints are:
 
 ```text
-ws://127.0.0.1:4777/client
+Gateway: ws://127.0.0.1:4777/client
+Core API: http://127.0.0.1:3000
 ```
 
 When FluxIQ requires pairing, the extension displays a blocking approval panel
@@ -51,15 +52,18 @@ derived from the active tab snapshot when possible and falls back to browser tab
 state if content scripts are unavailable.
 
 DOM snapshots are converted into factual `web` namespace state values. The
-extension filters element state aggressively: only interactive elements with
-meaningful text, label, value, href, or stable public identifiers are included,
-and each snapshot is capped to 40 elements. This avoids recording every DOM
-node while still giving FluxIQ useful targets and state deltas.
+extension filters element state to visible, useful targets and public facts.
+The content script captures up to 1,000 visible candidates per snapshot, then
+the domain state layer keeps up to 300 state elements and 300 visual region
+layers. This avoids recording every DOM node while still giving FluxIQ useful
+targets and state deltas.
 
 Primary user actions are sent as domain events and as selected
 `client.recording_entry` action entries. Passive evidence, snapshots, and
-presence updates are kept as compact state updates or observations. Stopping
-captures a final snapshot and leaves the paginated local event log visible.
+presence updates are kept as compact state updates or observations. DOM-backed
+steps send one canonical `client.snapshot` state checkpoint so Core can batch
+high-frequency recording writes. Stopping sends `client.stop_recording`
+immediately and leaves the paginated local event log visible.
 
 The recordings tab loads saved summaries from FluxIQ Core:
 

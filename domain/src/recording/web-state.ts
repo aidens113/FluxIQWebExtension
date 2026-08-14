@@ -1,5 +1,5 @@
 import type { JsonObject } from "fluxiq/core";
-import type { ActionTarget, StateSnapshot, StateValue, StateValueType } from "fluxiq/automation-studio";
+import type { ActionTarget, EvidenceAnchor, StateBounds, StateSnapshot, StateValue, StateValueType, StateVisualFrame } from "fluxiq/automation-studio";
 import { WEB_AUTOMATION_DOMAIN_ID, WEB_AUTOMATION_SCHEMA_VERSION } from "../constants";
 import { createWebAutomationInitialState, WEB_AUTOMATION_STATE_NAMESPACE } from "./state";
 
@@ -25,7 +25,7 @@ export type WebAutomationElementStateInput = {
 export type WebAutomationDomSnapshotInput = {
   url: string;
   title: string;
-  viewport: { width: number; height: number; scrollX: number; scrollY: number };
+  viewport: { width: number; height: number; scrollX: number; scrollY: number; devicePixelRatio?: number | undefined };
   focusedElement?: WebAutomationElementStateInput | undefined;
   selectedText?: string | undefined;
   interactiveElements: WebAutomationElementStateInput[];
@@ -40,11 +40,14 @@ export type WebAutomationTabStateInput = {
   status?: string | undefined;
 };
 
-export const MAX_STATE_ELEMENTS = 40;
+export const MAX_STATE_ELEMENTS = 300;
+export const MAX_VISUAL_FRAME_ELEMENTS = 300;
+export const WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID = "web-automation.viewport";
+export const WEB_AUTOMATION_SCREEN_FRAME_ID = "screen";
 
 export function createWebAutomationStateFromSnapshot(
   snapshot: WebAutomationDomSnapshotInput,
-  input: { timestamp?: number; sourceId?: string } = {}
+  input: { timestamp?: number; sourceId?: string; screenContentRef?: string; projectId?: string } = {}
 ): StateSnapshot {
   const timestamp = input.timestamp ?? Date.now();
   let state = createWebAutomationInitialState(timestamp);
@@ -60,7 +63,7 @@ export function createWebAutomationStateFromSnapshot(
   const elements = filterStateElements(snapshot.interactiveElements);
   state = putStateValue(state, "elements.count", "integer", elements.length, timestamp, input.sourceId, { elementKind: "count" });
   for (const element of elements) state = addElementStateValues(state, element, timestamp, input.sourceId);
-  return state;
+  return withScreenVisualFrame(state, snapshot, elements, input);
 }
 
 export function createWebAutomationStateFromTabs(
@@ -95,6 +98,7 @@ export function filterStateElements(elements: WebAutomationElementStateInput[], 
 
 export function shouldCaptureElementState(element: WebAutomationElementStateInput): boolean {
   return Boolean(
+    (element.bounds !== undefined && isVisible(element) && isLikelyActionableElement(element)) ||
     meaningfulText(element.text) ||
     meaningfulText(element.name) ||
     meaningfulText(element.value) ||
@@ -129,18 +133,83 @@ export function webAutomationActionTargetFromElement(element: WebAutomationEleme
 
 function addElementStateValues(state: StateSnapshot, element: WebAutomationElementStateInput, timestamp: number, sourceId?: string): StateSnapshot {
   const basePath = `elements.${elementStateId(element)}`;
-  let next = putStateValue(state, `${basePath}.selector`, "string", element.selector, timestamp, sourceId, { elementKind: "selector", stableAcrossSessions: true });
-  next = putStateValue(next, `${basePath}.tagName`, "string", element.tagName, timestamp, sourceId, { elementKind: "static_id", stableAcrossSessions: true });
-  next = putStateValue(next, `${basePath}.visible`, "boolean", isVisible(element), timestamp, sourceId, { elementKind: "visibility", volatility: "normal" });
-  next = putStateValue(next, `${basePath}.enabled`, "boolean", isEnabled(element), timestamp, sourceId, { elementKind: "enabled", volatility: "normal" });
-  if (element.text) next = putStateValue(next, `${basePath}.text`, "string", element.text, timestamp, sourceId, { elementKind: "text" });
-  if (element.name) next = putStateValue(next, `${basePath}.label`, "string", element.name, timestamp, sourceId, { elementKind: "label" });
-  if (element.value) next = putStateValue(next, `${basePath}.value`, "string", element.value, timestamp, sourceId, { elementKind: "text", sensitive: true });
-  if (element.href) next = putStateValue(next, `${basePath}.href`, "string", element.href, timestamp, sourceId, { elementKind: "url" });
-  if (element.bounds) next = putStateValue(next, `${basePath}.bounds`, "rectangle", element.bounds, timestamp, sourceId, { elementKind: "bounds", comparable: false });
+  const anchor = boundsAnchor(element.bounds);
+  const elementLabel = element.name ?? element.visibleText ?? element.text ?? element.value ?? element.href ?? element.selector;
+  const elementPresentation = anchor ? { group: "Elements", anchor, visualKind: "bounds" as const } : { group: "Elements" };
+  let next = putStateValue(state, `${basePath}.selector`, "string", element.selector, timestamp, sourceId, { elementKind: "selector", stableAcrossSessions: true, presentation: { ...elementPresentation, label: `${elementLabel} selector`, visualKind: "text" } });
+  next = putStateValue(next, `${basePath}.tagName`, "string", element.tagName, timestamp, sourceId, { elementKind: "static_id", stableAcrossSessions: true, presentation: { ...elementPresentation, label: `${elementLabel} tag`, visualKind: "badge" } });
+  next = putStateValue(next, `${basePath}.visible`, "boolean", isVisible(element), timestamp, sourceId, { elementKind: "visibility", volatility: "normal", presentation: { ...elementPresentation, label: `${elementLabel} visible`, visualKind: "badge" } });
+  next = putStateValue(next, `${basePath}.enabled`, "boolean", isEnabled(element), timestamp, sourceId, { elementKind: "enabled", volatility: "normal", presentation: { ...elementPresentation, label: `${elementLabel} enabled`, visualKind: "badge" } });
+  if (element.text) next = putStateValue(next, `${basePath}.text`, "string", element.text, timestamp, sourceId, { elementKind: "text", presentation: { ...elementPresentation, label: elementLabel, visualKind: "text" } });
+  if (element.name) next = putStateValue(next, `${basePath}.label`, "string", element.name, timestamp, sourceId, { elementKind: "label", presentation: { ...elementPresentation, label: element.name, visualKind: "text" } });
+  if (element.value) next = putStateValue(next, `${basePath}.value`, "string", element.value, timestamp, sourceId, { elementKind: "text", sensitive: true, presentation: { ...elementPresentation, label: `${elementLabel} value`, visualKind: "text", sensitive: true } });
+  if (element.href) next = putStateValue(next, `${basePath}.href`, "string", element.href, timestamp, sourceId, { elementKind: "url", presentation: { ...elementPresentation, label: `${elementLabel} link`, visualKind: "text" } });
+  if (element.bounds) next = putStateValue(next, `${basePath}.bounds`, "rectangle", element.bounds, timestamp, sourceId, { elementKind: "bounds", comparable: false, presentation: { ...elementPresentation, label: elementLabel, visualKind: "bounds" } });
   const stableId = stableAttribute(element, "data-testid") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name");
-  if (stableId) next = putStateValue(next, `${basePath}.stableId`, "string", stableId, timestamp, sourceId, { elementKind: "static_id", stableAcrossSessions: true });
+  if (stableId) next = putStateValue(next, `${basePath}.stableId`, "string", stableId, timestamp, sourceId, { elementKind: "static_id", stableAcrossSessions: true, presentation: { ...elementPresentation, label: `${elementLabel} stable ID`, visualKind: "badge" } });
   return next;
+}
+
+function withScreenVisualFrame(
+  state: StateSnapshot,
+  snapshot: WebAutomationDomSnapshotInput,
+  elements: WebAutomationElementStateInput[],
+  input: { screenContentRef?: string; projectId?: string } = {}
+): StateSnapshot {
+  const width = positiveFinite(snapshot.viewport.width) ?? 1;
+  const height = positiveFinite(snapshot.viewport.height) ?? 1;
+  const layers: StateVisualFrame["layers"] = [];
+
+  if (input.screenContentRef) {
+    layers.push({
+      id: "screenshot",
+      kind: "image",
+      contentRef: input.screenContentRef,
+      bounds: { x: 0, y: 0, width, height },
+      metadata: compactJsonObject({ projectId: input.projectId, url: snapshot.url })
+    });
+  }
+
+  for (const [index, element] of elements.slice(0, MAX_VISUAL_FRAME_ELEMENTS).entries()) {
+    const bounds = stateBounds(element.bounds);
+    if (!bounds) continue;
+    const statePath = `${WEB_AUTOMATION_STATE_NAMESPACE}.elements.${elementStateId(element)}.bounds`;
+    layers.push({
+      id: `element.${safeLayerId(elementStateId(element), index + 1)}`,
+      kind: "region",
+      label: element.name ?? element.visibleText ?? element.text ?? element.value ?? element.href ?? element.tagName,
+      bounds,
+      statePath,
+      anchor: { type: "bounds", bounds },
+      metadata: { selector: element.selector, tagName: element.tagName }
+    });
+  }
+
+  const frame: StateVisualFrame = {
+    id: WEB_AUTOMATION_SCREEN_FRAME_ID,
+    rendererId: WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID,
+    label: "Screen",
+    coordinateSpace: { width, height, unit: "px", origin: "top-left" },
+    layers,
+    presentation: { label: snapshot.title || "Browser viewport", visualKind: "bounds", icon: "globe" },
+    metadata: compactJsonObject({
+      url: snapshot.url,
+      title: snapshot.title,
+      scrollX: snapshot.viewport.scrollX,
+      scrollY: snapshot.viewport.scrollY,
+      devicePixelRatio: snapshot.viewport.devicePixelRatio
+    })
+  };
+
+  return {
+    ...state,
+    id: state.id ?? `web.snapshot.${state.timestamp}`,
+    presentation: {
+      ...(state.presentation ?? {}),
+      defaultFrameId: WEB_AUTOMATION_SCREEN_FRAME_ID,
+      visualFrames: [frame]
+    }
+  };
 }
 
 function putStateValue(
@@ -167,6 +236,7 @@ function putStateValue(
     volatility: input.volatility ?? "normal",
     comparable: input.comparable ?? true,
     sensitive: input.sensitive,
+    presentation: input.presentation,
     metadata: compactJsonObject({
       elementKind: input.elementKind,
       stableAcrossSessions: input.stableAcrossSessions
@@ -189,8 +259,15 @@ function putStateValue(
 }
 
 function elementStateId(element: WebAutomationElementStateInput): string {
-  const stable = stableAttribute(element, "data-testid") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name") ?? element.selector;
-  return stable.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, 80) || "element";
+  const stable = stableAttribute(element, "data-testid") ?? stableAttribute(element, "id");
+  if (stable) return sanitizeStateId(stable);
+  const name = stableAttribute(element, "name");
+  if (name) return sanitizeStateId(`${name}.${element.selector}`);
+  return sanitizeStateId(element.selector);
+}
+
+function sanitizeStateId(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, 120) || "element";
 }
 
 function meaningfulText(value: string | undefined): boolean {
@@ -208,6 +285,55 @@ function isVisible(element: WebAutomationElementStateInput): boolean {
 
 function isEnabled(element: WebAutomationElementStateInput): boolean {
   return element.attributes?.disabled === undefined && element.attributes?.["aria-disabled"] !== "true";
+}
+
+function isLikelyActionableElement(element: WebAutomationElementStateInput): boolean {
+  const tagName = element.tagName.toLowerCase();
+  const role = element.role?.toLowerCase();
+  const inputType = element.inputType?.toLowerCase();
+  return tagName === "button" ||
+    tagName === "a" ||
+    tagName === "select" ||
+    tagName === "textarea" ||
+    tagName === "summary" ||
+    tagName === "label" ||
+    tagName === "input" && inputType !== "hidden" ||
+    role === "button" ||
+    role === "link" ||
+    role === "menuitem" ||
+    role === "checkbox" ||
+    role === "radio" ||
+    role === "tab" ||
+    role === "switch" ||
+    element.attributes?.onclick !== undefined;
+}
+
+function boundsAnchor(bounds: WebAutomationRect | undefined): EvidenceAnchor | undefined {
+  const normalized = stateBounds(bounds);
+  return normalized ? { type: "bounds", bounds: normalized } : undefined;
+}
+
+function stateBounds(bounds: WebAutomationRect | undefined): StateBounds | undefined {
+  if (!bounds) return undefined;
+  const x = finite(bounds.x);
+  const y = finite(bounds.y);
+  const width = positiveFinite(bounds.width);
+  const height = positiveFinite(bounds.height);
+  return x !== undefined && y !== undefined && width !== undefined && height !== undefined
+    ? { x, y, width, height }
+    : undefined;
+}
+
+function finite(value: number): number | undefined {
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function positiveFinite(value: number): number | undefined {
+  return Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+function safeLayerId(value: string, fallbackIndex: number): string {
+  return value.replace(/[^a-z0-9.]+/gi, ".").replace(/^\.+|\.+$/g, "").slice(0, 80) || String(fallbackIndex);
 }
 
 function compactJsonObject(value: Record<string, unknown>): JsonObject {

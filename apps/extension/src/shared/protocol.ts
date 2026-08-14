@@ -50,6 +50,7 @@ export type FluxIQSession = {
   clientId: string;
   token?: string | undefined;
   sessionId?: string | undefined;
+  projectId?: string | null | undefined;
   serverUrl?: string | undefined;
   connectedAt?: number | undefined;
 };
@@ -108,6 +109,7 @@ export type ExtensionStatus = {
   settings?: FluxIQSettings | undefined;
   clientId: string;
   sessionId?: string | undefined;
+  projectId?: string | null | undefined;
   activeTabId?: number | undefined;
   activeTabUrl?: string | undefined;
   queueSize: number;
@@ -169,7 +171,7 @@ export type DomElementDescriptor = {
 export type DomSnapshot = {
   url: string;
   title: string;
-  viewport: { width: number; height: number; scrollX: number; scrollY: number };
+  viewport: { width: number; height: number; scrollX: number; scrollY: number; devicePixelRatio?: number | undefined };
   focusedElement?: DomElementDescriptor | undefined;
   selectedText?: string | undefined;
   interactiveElements: DomElementDescriptor[];

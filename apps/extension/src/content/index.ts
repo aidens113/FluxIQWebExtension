@@ -24,7 +24,7 @@ type DomElementDescriptor = {
 type DomSnapshot = {
   url: string;
   title: string;
-  viewport: { width: number; height: number; scrollX: number; scrollY: number };
+  viewport: { width: number; height: number; scrollX: number; scrollY: number; devicePixelRatio?: number | undefined };
   focusedElement?: DomElementDescriptor | undefined;
   selectedText?: string | undefined;
   interactiveElements: DomElementDescriptor[];
@@ -71,6 +71,34 @@ type BrowserActionResult = {
 
 const CONTENT_EVENT = "fluxiq.contentEvent";
 const CONTENT_READY = "fluxiq.contentReady";
+const SNAPSHOT_CANDIDATE_SELECTOR = [
+  "a[href]",
+  "button",
+  "input:not([type=hidden])",
+  "textarea",
+  "select",
+  "summary",
+  "label",
+  "[role=button]",
+  "[role=link]",
+  "[role=menuitem]",
+  "[role=checkbox]",
+  "[role=radio]",
+  "[role=tab]",
+  "[role=switch]",
+  "[contenteditable=true]",
+  "[onclick]",
+  "[aria-label]",
+  "[data-testid]",
+  "[data-test]",
+  "[data-cy]",
+  "[placeholder]",
+  "h1",
+  "h2",
+  "h3"
+].join(",");
+const MAX_SNAPSHOT_CANDIDATES = 1_000;
+const POINTER_CLICK_DEDUPE_MS = 750;
 let recording = false;
 let sequence = 0;
 let captureMutations = true;
@@ -79,6 +107,7 @@ let captureSnapshots = true;
 let scrollTimer: ReturnType<typeof setTimeout> | undefined;
 let mutationTimer: ReturnType<typeof setTimeout> | undefined;
 let pendingMutation = { added: 0, removed: 0, attributes: 0, text: 0 };
+let lastPointerActivation: { signature: string; timestamp: number } | undefined;
 
 sendReady();
 
@@ -109,10 +138,34 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
   return false;
 });
 
+document.addEventListener("pointerdown", (event) => {
+  if (!event.isTrusted) return;
+  if (event.button !== 0 || event.isPrimary === false) return;
+  const target = event.target instanceof Element ? pointerActivationTarget(event.target) : null;
+  if (!target) return;
+  lastPointerActivation = { signature: eventTargetSignature(target), timestamp: Date.now() };
+  emit("dom.click", compactObject({
+    element: describeElement(target),
+    metadata: compactObject({
+      ...pointerMetadata(event),
+      pointerId: event.pointerId,
+      pointerType: event.pointerType,
+      sourceEvent: "pointerdown"
+    })
+  }));
+}, true);
+
 document.addEventListener("click", (event) => {
   if (!event.isTrusted) return;
-  const target = event.target instanceof Element ? event.target : null;
-  emit("dom.click", compactObject({ element: target ? describeElement(target) : undefined, metadata: pointerMetadata(event) }));
+  const target = event.target instanceof Element ? actionEventTarget(event.target) : null;
+  if (target && shouldSkipClickAfterPointerActivation(target)) return;
+  emit("dom.click", compactObject({
+    element: target ? describeElement(target) : undefined,
+    metadata: compactObject({
+      ...pointerMetadata(event),
+      sourceEvent: "click"
+    })
+  }));
 }, true);
 
 document.addEventListener("input", (event) => {
@@ -229,7 +282,10 @@ function basePayload(kind: string, details: Partial<RecordingEventPayload>): Rec
     eventTimestampMs: Date.now()
   };
   if (details.element) payload.element = details.element;
-  if (details.snapshot && captureSnapshots) payload.snapshot = details.snapshot;
+  if (captureSnapshots) {
+    const snapshot = details.snapshot ?? (shouldAttachStateSnapshot(kind) ? captureSnapshot() : undefined);
+    if (snapshot) payload.snapshot = snapshot;
+  }
   if (details.inputValue !== undefined) payload.inputValue = details.inputValue;
   if (details.key !== undefined) payload.key = details.key;
   if (details.scroll) payload.scroll = details.scroll;
@@ -239,24 +295,36 @@ function basePayload(kind: string, details: Partial<RecordingEventPayload>): Rec
   return payload;
 }
 
+function shouldAttachStateSnapshot(kind: string): boolean {
+  return kind === "dom.click" ||
+    kind === "dom.input" ||
+    kind === "dom.change" ||
+    kind === "dom.submit" ||
+    kind === "dom.keydown" ||
+    kind === "dom.wheel" ||
+    kind === "dom.scroll" ||
+    kind === "dom.focus" ||
+    kind === "dom.blur";
+}
+
 async function executeAction(action: BrowserActionCommand): Promise<BrowserActionResult> {
   const startedAt = Date.now();
   try {
     if (action.actionType === "web.dom.capture_snapshot" || action.actionType === "dom.capture_snapshot") {
       return success(action, startedAt, "Snapshot captured.", undefined, captureSnapshot());
     }
-    if (action.actionType === "web.dom.wait_for_selector" || action.actionType === "dom.wait_for_selector") {
+  if (action.actionType === "web.dom.wait_for_selector" || action.actionType === "dom.wait_for_selector") {
       const element = await waitForElement(action.selector, action.timeoutMs);
-      return success(action, startedAt, "Selector found.", describeElement(element));
+      return success(action, startedAt, "Selector found.", describeElement(element), captureSnapshot());
     }
     if (action.actionType === "web.dom.wait_for_text" || action.actionType === "dom.wait_for_text") {
       await waitForText(action.text ?? action.value ?? "", action.timeoutMs);
-      return success(action, startedAt, "Text found.");
+      return success(action, startedAt, "Text found.", undefined, captureSnapshot());
     }
     if (action.actionType === "web.dom.extract" || action.actionType === "dom.extract") {
       const element = resolveTarget(action);
       const extracted = extractElement(element, action.options);
-      return success(action, startedAt, "Value extracted.", describeElement(element), undefined, extracted);
+      return success(action, startedAt, "Value extracted.", describeElement(element), captureSnapshot(), extracted);
     }
     if (action.actionType === "web.dom.click" || action.actionType === "dom.click") {
       const element = resolveTarget(action);
@@ -298,7 +366,7 @@ async function executeAction(action: BrowserActionCommand): Promise<BrowserActio
       const key = action.key ?? action.text ?? "";
       target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
       target.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true, cancelable: true }));
-      return success(action, startedAt, "Key event dispatched.", target instanceof Element ? describeElement(target) : undefined);
+      return success(action, startedAt, "Key event dispatched.", target instanceof Element ? describeElement(target) : undefined, captureSnapshot());
     }
     throw new Error(`Unsupported action type: ${action.actionType}`);
   } catch (error) {
@@ -346,12 +414,13 @@ function success(
     finishedAt: Date.now()
   };
   if (element) result.element = element;
-  if (snapshot) result.snapshot = snapshot;
+  if (snapshot ?? captureSnapshots) result.snapshot = snapshot ?? captureSnapshot();
   if (extracted !== undefined) result.extracted = extracted;
   return result;
 }
 
 function actionFailure(action: BrowserActionCommand, error: unknown, startedAt = Date.now()): BrowserActionResult {
+  const snapshot = captureSnapshots ? captureSnapshot() : undefined;
   return {
     commandId: action.commandId,
     actionType: action.actionType,
@@ -359,6 +428,7 @@ function actionFailure(action: BrowserActionCommand, error: unknown, startedAt =
     message: error instanceof Error ? error.message : "Action failed.",
     url: location.href,
     title: document.title,
+    ...(snapshot ? { snapshot } : {}),
     startedAt,
     finishedAt: Date.now()
   };
@@ -372,11 +442,10 @@ function captureSnapshot(): DomSnapshot {
       width: window.innerWidth,
       height: window.innerHeight,
       scrollX: window.scrollX,
-      scrollY: window.scrollY
+      scrollY: window.scrollY,
+      devicePixelRatio: window.devicePixelRatio
     },
-    interactiveElements: [...document.querySelectorAll("a, button, input, textarea, select, [role=button], [contenteditable=true]")]
-      .slice(0, 200)
-      .map((element) => describeElement(element))
+    interactiveElements: snapshotElements()
   };
   const focused = document.activeElement instanceof Element ? describeElement(document.activeElement) : undefined;
   if (focused) snapshot.focusedElement = focused;
@@ -386,12 +455,12 @@ function captureSnapshot(): DomSnapshot {
 }
 
 function describeElement(element: Element): DomElementDescriptor {
-  const rect = element.getBoundingClientRect();
+  const bounds = visibleViewportBounds(element);
   const descriptor: DomElementDescriptor = {
     tagName: element.tagName.toLowerCase(),
-    selector: selectorFor(element),
-    bounds: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+    selector: selectorFor(element)
   };
+  if (bounds) descriptor.bounds = bounds;
   const text = visibleText(element);
   if (text) {
     descriptor.text = text;
@@ -410,12 +479,131 @@ function describeElement(element: Element): DomElementDescriptor {
   if (element instanceof HTMLAnchorElement && element.href) descriptor.href = element.href;
   if (element instanceof HTMLInputElement && element.type) descriptor.inputType = element.type;
   const attributes: Record<string, string> = {};
-  for (const attribute of ["id", "class", "name", "type", "placeholder", "aria-label", "data-testid"]) {
+  for (const attribute of ["id", "class", "name", "type", "placeholder", "aria-label", "aria-disabled", "data-testid", "data-test", "data-cy", "disabled", "onclick"]) {
     const value = element.getAttribute(attribute);
-    if (value) attributes[attribute] = value.slice(0, 500);
+    if (value !== null) attributes[attribute] = value.slice(0, 500);
   }
   if (Object.keys(attributes).length) descriptor.attributes = attributes;
   return descriptor;
+}
+
+function snapshotElements(): DomElementDescriptor[] {
+  const seen = new Set<Element>();
+  const candidates: Element[] = [];
+  for (const element of document.querySelectorAll(SNAPSHOT_CANDIDATE_SELECTOR)) {
+    if (seen.has(element) || !shouldIncludeSnapshotElement(element)) continue;
+    seen.add(element);
+    candidates.push(element);
+  }
+  return candidates
+    .sort((left, right) => elementPriority(right) - elementPriority(left) || documentOrder(left, right))
+    .slice(0, MAX_SNAPSHOT_CANDIDATES)
+    .map((element) => describeElement(element));
+}
+
+function shouldIncludeSnapshotElement(element: Element): boolean {
+  if (element.closest("script, style, noscript, template")) return false;
+  const bounds = visibleViewportBounds(element);
+  if (!bounds) return false;
+  const style = getComputedStyle(element);
+  if (style.visibility === "hidden" || style.display === "none" || Number(style.opacity) === 0) return false;
+  return isActionableElement(element) || Boolean(accessibleName(element) || visibleText(element) || readElementValue(element) || stableElementId(element));
+}
+
+function visibleViewportBounds(element: Element): RectDescriptor | undefined {
+  const rect = element.getBoundingClientRect();
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const left = Math.max(0, rect.left);
+  const top = Math.max(0, rect.top);
+  const right = Math.min(viewportWidth, rect.right);
+  const bottom = Math.min(viewportHeight, rect.bottom);
+  const width = right - left;
+  const height = bottom - top;
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width < 2 || height < 2) return undefined;
+  return {
+    x: Math.round(left * 100) / 100,
+    y: Math.round(top * 100) / 100,
+    width: Math.round(width * 100) / 100,
+    height: Math.round(height * 100) / 100
+  };
+}
+
+function elementPriority(element: Element): number {
+  let score = 0;
+  if (isActionableElement(element)) score += 100;
+  if (stableElementId(element)) score += 40;
+  if (accessibleName(element)) score += 30;
+  if (readElementValue(element)) score += 20;
+  if (visibleText(element)) score += 10;
+  const bounds = visibleViewportBounds(element);
+  if (bounds) score += Math.min(20, Math.sqrt(bounds.width * bounds.height) / 8);
+  return score;
+}
+
+function documentOrder(left: Element, right: Element): number {
+  if (left === right) return 0;
+  return left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+}
+
+function isActionableElement(element: Element): boolean {
+  const tagName = element.tagName.toLowerCase();
+  const role = element.getAttribute("role")?.toLowerCase();
+  return tagName === "a" ||
+    tagName === "button" ||
+    tagName === "input" ||
+    tagName === "textarea" ||
+    tagName === "select" ||
+    tagName === "summary" ||
+    tagName === "label" ||
+    role === "button" ||
+    role === "link" ||
+    role === "menuitem" ||
+    role === "checkbox" ||
+    role === "radio" ||
+    role === "tab" ||
+    role === "switch" ||
+    element.hasAttribute("onclick") ||
+    element instanceof HTMLElement && element.isContentEditable;
+}
+
+function actionEventTarget(element: Element): Element {
+  return pointerActivationTarget(element) ?? element;
+}
+
+function pointerActivationTarget(element: Element): Element | undefined {
+  let current: Element | null = element;
+  for (let depth = 0; current && current !== document.documentElement && depth < 6; depth += 1) {
+    if (isActionableElement(current) || getComputedStyle(current).cursor === "pointer") return current;
+    current = current.parentElement;
+  }
+  return undefined;
+}
+
+function eventTargetSignature(element: Element): string {
+  const rect = element.getBoundingClientRect();
+  return [
+    selectorFor(element),
+    Math.round(rect.left),
+    Math.round(rect.top),
+    Math.round(rect.width),
+    Math.round(rect.height)
+  ].join("|");
+}
+
+function shouldSkipClickAfterPointerActivation(element: Element): boolean {
+  if (!lastPointerActivation) return false;
+  if (Date.now() - lastPointerActivation.timestamp > POINTER_CLICK_DEDUPE_MS) return false;
+  return lastPointerActivation.signature === eventTargetSignature(element);
+}
+
+function stableElementId(element: Element): string | undefined {
+  return element.getAttribute("data-testid") ??
+    element.getAttribute("data-test") ??
+    element.getAttribute("data-cy") ??
+    element.getAttribute("id") ??
+    element.getAttribute("name") ??
+    undefined;
 }
 
 function selectorFor(element: Element): string {

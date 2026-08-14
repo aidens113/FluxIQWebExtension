@@ -8,6 +8,8 @@ import { WEB_AUTOMATION_INPUT_IDS } from "./io/input-model";
 import { webAutomationManifestInputs, webAutomationManifestOutputs } from "./io/manifest-definitions";
 import { webAutomationDomain } from "./manifest";
 import { webAutomationRecordingDomain } from "./recording/domain";
+import { WEB_AUTOMATION_STATE_NAMESPACE } from "./recording/state";
+import { WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID } from "./recording/web-state";
 import { outputTargetFromPayload, webAutomationOutputPayload } from "./web-panel/output-nodes";
 
 const IMPORTER_PACKAGE_ID = "@fluxiq-web-extension/web-automation";
@@ -59,6 +61,16 @@ export function registerFluxIQHost(fluxiq: FluxIQ): FluxIQ {
     packageVersion: IMPORTER_PACKAGE_VERSION,
     domainId: WEB_AUTOMATION_DOMAIN_ID,
     nodes: [],
+    stateVisualizers: [{
+      id: WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID,
+      version: IMPORTER_PACKAGE_VERSION,
+      label: "Web viewport",
+      description: "Renders browser DOM state as a viewport frame with anchored interactive elements.",
+      supportedNamespaces: [WEB_AUTOMATION_STATE_NAMESPACE],
+      supportedKinds: ["bounds", "text", "label", "selector", "url", "visibility", "enabled"],
+      supportedRendererIds: [WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID],
+      metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, packageId: IMPORTER_PACKAGE_ID }
+    }],
     recordingMappers: [{
       id: RECORDING_MAPPER_ID,
       version: IMPORTER_PACKAGE_VERSION,

@@ -1,6 +1,6 @@
 // src/domain.test.ts
 import assert from "node:assert/strict";
-import { AutomationStudioService } from "fluxiq/automation-studio";
+import { AutomationStudioService, validateStateSnapshot } from "fluxiq/automation-studio";
 
 // src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
@@ -163,7 +163,10 @@ function inferStateType(value) {
 }
 
 // src/recording/web-state.ts
-var MAX_STATE_ELEMENTS = 40;
+var MAX_STATE_ELEMENTS = 300;
+var MAX_VISUAL_FRAME_ELEMENTS = 300;
+var WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID = "web-automation.viewport";
+var WEB_AUTOMATION_SCREEN_FRAME_ID = "screen";
 function createWebAutomationStateFromSnapshot(snapshot, input = {}) {
   const timestamp = input.timestamp ?? Date.now();
   let state = createWebAutomationInitialState(timestamp);
@@ -179,7 +182,7 @@ function createWebAutomationStateFromSnapshot(snapshot, input = {}) {
   const elements = filterStateElements(snapshot.interactiveElements);
   state = putStateValue(state, "elements.count", "integer", elements.length, timestamp, input.sourceId, { elementKind: "count" });
   for (const element of elements) state = addElementStateValues(state, element, timestamp, input.sourceId);
-  return state;
+  return withScreenVisualFrame(state, snapshot, elements, input);
 }
 function filterStateElements(elements, limit = MAX_STATE_ELEMENTS) {
   const seen = /* @__PURE__ */ new Set();
@@ -196,7 +199,7 @@ function filterStateElements(elements, limit = MAX_STATE_ELEMENTS) {
 }
 function shouldCaptureElementState(element) {
   return Boolean(
-    meaningfulText(element.text) || meaningfulText(element.name) || meaningfulText(element.value) || meaningfulText(element.href) || stableAttribute(element, "data-testid") || stableAttribute(element, "aria-label") || stableAttribute(element, "name") || stableAttribute(element, "id")
+    element.bounds !== void 0 && isVisible(element) && isLikelyActionableElement(element) || meaningfulText(element.text) || meaningfulText(element.name) || meaningfulText(element.value) || meaningfulText(element.href) || stableAttribute(element, "data-testid") || stableAttribute(element, "aria-label") || stableAttribute(element, "name") || stableAttribute(element, "id")
   );
 }
 function webAutomationActionTargetFromElement(element) {
@@ -221,18 +224,73 @@ function webAutomationActionTargetFromElement(element) {
 }
 function addElementStateValues(state, element, timestamp, sourceId) {
   const basePath = `elements.${elementStateId(element)}`;
-  let next = putStateValue(state, `${basePath}.selector`, "string", element.selector, timestamp, sourceId, { elementKind: "selector", stableAcrossSessions: true });
-  next = putStateValue(next, `${basePath}.tagName`, "string", element.tagName, timestamp, sourceId, { elementKind: "static_id", stableAcrossSessions: true });
-  next = putStateValue(next, `${basePath}.visible`, "boolean", isVisible(element), timestamp, sourceId, { elementKind: "visibility", volatility: "normal" });
-  next = putStateValue(next, `${basePath}.enabled`, "boolean", isEnabled(element), timestamp, sourceId, { elementKind: "enabled", volatility: "normal" });
-  if (element.text) next = putStateValue(next, `${basePath}.text`, "string", element.text, timestamp, sourceId, { elementKind: "text" });
-  if (element.name) next = putStateValue(next, `${basePath}.label`, "string", element.name, timestamp, sourceId, { elementKind: "label" });
-  if (element.value) next = putStateValue(next, `${basePath}.value`, "string", element.value, timestamp, sourceId, { elementKind: "text", sensitive: true });
-  if (element.href) next = putStateValue(next, `${basePath}.href`, "string", element.href, timestamp, sourceId, { elementKind: "url" });
-  if (element.bounds) next = putStateValue(next, `${basePath}.bounds`, "rectangle", element.bounds, timestamp, sourceId, { elementKind: "bounds", comparable: false });
+  const anchor = boundsAnchor(element.bounds);
+  const elementLabel = element.name ?? element.visibleText ?? element.text ?? element.value ?? element.href ?? element.selector;
+  const elementPresentation = anchor ? { group: "Elements", anchor, visualKind: "bounds" } : { group: "Elements" };
+  let next = putStateValue(state, `${basePath}.selector`, "string", element.selector, timestamp, sourceId, { elementKind: "selector", stableAcrossSessions: true, presentation: { ...elementPresentation, label: `${elementLabel} selector`, visualKind: "text" } });
+  next = putStateValue(next, `${basePath}.tagName`, "string", element.tagName, timestamp, sourceId, { elementKind: "static_id", stableAcrossSessions: true, presentation: { ...elementPresentation, label: `${elementLabel} tag`, visualKind: "badge" } });
+  next = putStateValue(next, `${basePath}.visible`, "boolean", isVisible(element), timestamp, sourceId, { elementKind: "visibility", volatility: "normal", presentation: { ...elementPresentation, label: `${elementLabel} visible`, visualKind: "badge" } });
+  next = putStateValue(next, `${basePath}.enabled`, "boolean", isEnabled(element), timestamp, sourceId, { elementKind: "enabled", volatility: "normal", presentation: { ...elementPresentation, label: `${elementLabel} enabled`, visualKind: "badge" } });
+  if (element.text) next = putStateValue(next, `${basePath}.text`, "string", element.text, timestamp, sourceId, { elementKind: "text", presentation: { ...elementPresentation, label: elementLabel, visualKind: "text" } });
+  if (element.name) next = putStateValue(next, `${basePath}.label`, "string", element.name, timestamp, sourceId, { elementKind: "label", presentation: { ...elementPresentation, label: element.name, visualKind: "text" } });
+  if (element.value) next = putStateValue(next, `${basePath}.value`, "string", element.value, timestamp, sourceId, { elementKind: "text", sensitive: true, presentation: { ...elementPresentation, label: `${elementLabel} value`, visualKind: "text", sensitive: true } });
+  if (element.href) next = putStateValue(next, `${basePath}.href`, "string", element.href, timestamp, sourceId, { elementKind: "url", presentation: { ...elementPresentation, label: `${elementLabel} link`, visualKind: "text" } });
+  if (element.bounds) next = putStateValue(next, `${basePath}.bounds`, "rectangle", element.bounds, timestamp, sourceId, { elementKind: "bounds", comparable: false, presentation: { ...elementPresentation, label: elementLabel, visualKind: "bounds" } });
   const stableId = stableAttribute(element, "data-testid") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name");
-  if (stableId) next = putStateValue(next, `${basePath}.stableId`, "string", stableId, timestamp, sourceId, { elementKind: "static_id", stableAcrossSessions: true });
+  if (stableId) next = putStateValue(next, `${basePath}.stableId`, "string", stableId, timestamp, sourceId, { elementKind: "static_id", stableAcrossSessions: true, presentation: { ...elementPresentation, label: `${elementLabel} stable ID`, visualKind: "badge" } });
   return next;
+}
+function withScreenVisualFrame(state, snapshot, elements, input = {}) {
+  const width = positiveFinite(snapshot.viewport.width) ?? 1;
+  const height = positiveFinite(snapshot.viewport.height) ?? 1;
+  const layers = [];
+  if (input.screenContentRef) {
+    layers.push({
+      id: "screenshot",
+      kind: "image",
+      contentRef: input.screenContentRef,
+      bounds: { x: 0, y: 0, width, height },
+      metadata: compactJsonObject({ projectId: input.projectId, url: snapshot.url })
+    });
+  }
+  for (const [index, element] of elements.slice(0, MAX_VISUAL_FRAME_ELEMENTS).entries()) {
+    const bounds = stateBounds(element.bounds);
+    if (!bounds) continue;
+    const statePath = `${WEB_AUTOMATION_STATE_NAMESPACE}.elements.${elementStateId(element)}.bounds`;
+    layers.push({
+      id: `element.${safeLayerId(elementStateId(element), index + 1)}`,
+      kind: "region",
+      label: element.name ?? element.visibleText ?? element.text ?? element.value ?? element.href ?? element.tagName,
+      bounds,
+      statePath,
+      anchor: { type: "bounds", bounds },
+      metadata: { selector: element.selector, tagName: element.tagName }
+    });
+  }
+  const frame = {
+    id: WEB_AUTOMATION_SCREEN_FRAME_ID,
+    rendererId: WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID,
+    label: "Screen",
+    coordinateSpace: { width, height, unit: "px", origin: "top-left" },
+    layers,
+    presentation: { label: snapshot.title || "Browser viewport", visualKind: "bounds", icon: "globe" },
+    metadata: compactJsonObject({
+      url: snapshot.url,
+      title: snapshot.title,
+      scrollX: snapshot.viewport.scrollX,
+      scrollY: snapshot.viewport.scrollY,
+      devicePixelRatio: snapshot.viewport.devicePixelRatio
+    })
+  };
+  return {
+    ...state,
+    id: state.id ?? `web.snapshot.${state.timestamp}`,
+    presentation: {
+      ...state.presentation ?? {},
+      defaultFrameId: WEB_AUTOMATION_SCREEN_FRAME_ID,
+      visualFrames: [frame]
+    }
+  };
 }
 function putStateValue(snapshot, path, type, value, observedAt, sourceId, input = {}) {
   const namespace = snapshot.namespaces[WEB_AUTOMATION_STATE_NAMESPACE] ?? {
@@ -250,6 +308,7 @@ function putStateValue(snapshot, path, type, value, observedAt, sourceId, input 
     volatility: input.volatility ?? "normal",
     comparable: input.comparable ?? true,
     sensitive: input.sensitive,
+    presentation: input.presentation,
     metadata: compactJsonObject({
       elementKind: input.elementKind,
       stableAcrossSessions: input.stableAcrossSessions
@@ -271,8 +330,14 @@ function putStateValue(snapshot, path, type, value, observedAt, sourceId, input 
   };
 }
 function elementStateId(element) {
-  const stable = stableAttribute(element, "data-testid") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name") ?? element.selector;
-  return stable.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, 80) || "element";
+  const stable = stableAttribute(element, "data-testid") ?? stableAttribute(element, "id");
+  if (stable) return sanitizeStateId(stable);
+  const name = stableAttribute(element, "name");
+  if (name) return sanitizeStateId(`${name}.${element.selector}`);
+  return sanitizeStateId(element.selector);
+}
+function sanitizeStateId(value) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, 120) || "element";
 }
 function meaningfulText(value) {
   return typeof value === "string" && value.trim().length >= 2;
@@ -286,6 +351,33 @@ function isVisible(element) {
 }
 function isEnabled(element) {
   return element.attributes?.disabled === void 0 && element.attributes?.["aria-disabled"] !== "true";
+}
+function isLikelyActionableElement(element) {
+  const tagName = element.tagName.toLowerCase();
+  const role = element.role?.toLowerCase();
+  const inputType = element.inputType?.toLowerCase();
+  return tagName === "button" || tagName === "a" || tagName === "select" || tagName === "textarea" || tagName === "summary" || tagName === "label" || tagName === "input" && inputType !== "hidden" || role === "button" || role === "link" || role === "menuitem" || role === "checkbox" || role === "radio" || role === "tab" || role === "switch" || element.attributes?.onclick !== void 0;
+}
+function boundsAnchor(bounds) {
+  const normalized = stateBounds(bounds);
+  return normalized ? { type: "bounds", bounds: normalized } : void 0;
+}
+function stateBounds(bounds) {
+  if (!bounds) return void 0;
+  const x = finite(bounds.x);
+  const y = finite(bounds.y);
+  const width = positiveFinite(bounds.width);
+  const height = positiveFinite(bounds.height);
+  return x !== void 0 && y !== void 0 && width !== void 0 && height !== void 0 ? { x, y, width, height } : void 0;
+}
+function finite(value) {
+  return Number.isFinite(value) ? value : void 0;
+}
+function positiveFinite(value) {
+  return Number.isFinite(value) && value > 0 ? value : void 0;
+}
+function safeLayerId(value, fallbackIndex) {
+  return value.replace(/[^a-z0-9.]+/gi, ".").replace(/^\.+|\.+$/g, "").slice(0, 80) || String(fallbackIndex);
 }
 function compactJsonObject(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
@@ -417,23 +509,23 @@ var webAutomationRecordingDomain = {
   description: "Validated recording events, state updates, and observations for browser-based web automation.",
   events: webAutomationRecordingEvents,
   statePaths: [
-    { namespace: "web", path: "page.url", type: "string", elementKind: "url", label: "Page URL", volatility: "normal", stableAcrossSessions: false },
-    { namespace: "web", path: "page.title", type: "string", elementKind: "text", label: "Page title", volatility: "normal" },
-    { namespace: "web", path: "page.selectedText", type: "string", elementKind: "text", label: "Selected text", volatility: "rapid" },
-    { namespace: "web", path: "viewport.bounds", type: "rectangle", elementKind: "bounds", label: "Viewport bounds", volatility: "normal" },
+    { namespace: "web", path: "page.url", type: "string", elementKind: "url", label: "Page URL", volatility: "normal", stableAcrossSessions: false, metadata: { presentation: { group: "Page", icon: "link", visualKind: "text" } } },
+    { namespace: "web", path: "page.title", type: "string", elementKind: "text", label: "Page title", volatility: "normal", metadata: { presentation: { group: "Page", icon: "type", visualKind: "text" } } },
+    { namespace: "web", path: "page.selectedText", type: "string", elementKind: "text", label: "Selected text", volatility: "rapid", metadata: { presentation: { group: "Page", icon: "text-select", visualKind: "text" } } },
+    { namespace: "web", path: "viewport.bounds", type: "rectangle", elementKind: "bounds", label: "Viewport bounds", volatility: "normal", metadata: { presentation: { group: "Viewport", icon: "scan", visualKind: "bounds", metadata: { rendererId: WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID } } } },
     { namespace: "web", path: "scroll.position", type: "point", elementKind: "position", label: "Scroll position", volatility: "rapid" },
     { namespace: "web", path: "focus.target", type: "json", elementKind: "json", label: "Focused target", volatility: "rapid" },
     { namespace: "web", path: "elements.count", type: "integer", elementKind: "count", label: "Captured element count", volatility: "normal" },
-    { namespace: "web", path: "elements.*.selector", type: "string", elementKind: "selector", label: "Element selector", stableAcrossSessions: true, volatility: "slow" },
-    { namespace: "web", path: "elements.*.stableId", type: "string", elementKind: "static_id", label: "Element stable ID", stableAcrossSessions: true, volatility: "slow" },
-    { namespace: "web", path: "elements.*.tagName", type: "string", elementKind: "static_id", label: "Element tag", stableAcrossSessions: true, volatility: "slow" },
-    { namespace: "web", path: "elements.*.text", type: "string", elementKind: "text", label: "Element text", volatility: "normal" },
-    { namespace: "web", path: "elements.*.label", type: "string", elementKind: "label", label: "Element label", volatility: "normal" },
-    { namespace: "web", path: "elements.*.value", type: "string", elementKind: "text", label: "Element value", volatility: "normal", sensitive: true },
-    { namespace: "web", path: "elements.*.href", type: "string", elementKind: "url", label: "Element link URL", volatility: "slow" },
-    { namespace: "web", path: "elements.*.visible", type: "boolean", elementKind: "visibility", label: "Element visible", volatility: "normal" },
-    { namespace: "web", path: "elements.*.enabled", type: "boolean", elementKind: "enabled", label: "Element enabled", volatility: "normal" },
-    { namespace: "web", path: "elements.*.bounds", type: "rectangle", elementKind: "bounds", label: "Element bounds", volatility: "normal" },
+    { namespace: "web", path: "elements.*.selector", type: "string", elementKind: "selector", label: "Element selector", stableAcrossSessions: true, volatility: "slow", metadata: { presentation: { group: "Elements", icon: "locate-fixed", visualKind: "text" } } },
+    { namespace: "web", path: "elements.*.stableId", type: "string", elementKind: "static_id", label: "Element stable ID", stableAcrossSessions: true, volatility: "slow", metadata: { presentation: { group: "Elements", icon: "fingerprint", visualKind: "badge" } } },
+    { namespace: "web", path: "elements.*.tagName", type: "string", elementKind: "static_id", label: "Element tag", stableAcrossSessions: true, volatility: "slow", metadata: { presentation: { group: "Elements", icon: "code", visualKind: "badge" } } },
+    { namespace: "web", path: "elements.*.text", type: "string", elementKind: "text", label: "Element text", volatility: "normal", metadata: { presentation: { group: "Elements", icon: "type", visualKind: "text" } } },
+    { namespace: "web", path: "elements.*.label", type: "string", elementKind: "label", label: "Element label", volatility: "normal", metadata: { presentation: { group: "Elements", icon: "tag", visualKind: "text" } } },
+    { namespace: "web", path: "elements.*.value", type: "string", elementKind: "text", label: "Element value", volatility: "normal", sensitive: true, metadata: { presentation: { group: "Elements", icon: "text-cursor-input", visualKind: "text", sensitive: true } } },
+    { namespace: "web", path: "elements.*.href", type: "string", elementKind: "url", label: "Element link URL", volatility: "slow", metadata: { presentation: { group: "Elements", icon: "link", visualKind: "text" } } },
+    { namespace: "web", path: "elements.*.visible", type: "boolean", elementKind: "visibility", label: "Element visible", volatility: "normal", metadata: { presentation: { group: "Elements", icon: "eye", visualKind: "badge" } } },
+    { namespace: "web", path: "elements.*.enabled", type: "boolean", elementKind: "enabled", label: "Element enabled", volatility: "normal", metadata: { presentation: { group: "Elements", icon: "badge-check", visualKind: "badge" } } },
+    { namespace: "web", path: "elements.*.bounds", type: "rectangle", elementKind: "bounds", label: "Element bounds", volatility: "normal", metadata: { presentation: { group: "Elements", icon: "scan", visualKind: "bounds", metadata: { rendererId: WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID } } } },
     { namespace: "web", path: "forms.*", type: "string", elementKind: "text", label: "Form field value", volatility: "normal", sensitive: true },
     { namespace: "web", path: "runtime.lastActionResult", type: "json", elementKind: "json", label: "Last action result", volatility: "normal" },
     { namespace: "web", path: "runtime.lastError", type: "json", elementKind: "json", label: "Last client error", volatility: "normal" },
@@ -578,23 +670,44 @@ var initialState = createWebAutomationInitialState(1);
 assert.equal(initialState.namespaces.web?.schemaId, WEB_AUTOMATION_DOMAIN_ID);
 var filteredElements = filterStateElements([
   { tagName: "button", selector: "button.icon" },
-  { tagName: "button", selector: "button.save", text: "Save" },
-  { tagName: "a", selector: "a.home", href: "https://example.test/home" },
-  { tagName: "input", selector: "input[name=search]", attributes: { name: "search" } }
+  { tagName: "button", selector: "button.save", text: "Save", bounds: { x: 20, y: 30, width: 80, height: 32 } },
+  { tagName: "a", selector: "a.home", href: "https://example.test/home", bounds: { x: 120, y: 30, width: 96, height: 24 } },
+  { tagName: "input", selector: "input[name=search]", attributes: { name: "search" }, bounds: { x: 20, y: 80, width: 240, height: 36 } }
 ]);
 assert.deepEqual(filteredElements.map((item) => item.selector), ["button.save", "a.home", "input[name=search]"]);
+var repeatedNamedControlsState = createWebAutomationStateFromSnapshot({
+  url: "https://example.test/preferences",
+  title: "Preferences",
+  viewport: { width: 800, height: 600, scrollX: 0, scrollY: 0 },
+  interactiveElements: [
+    { tagName: "input", selector: "form > label:nth-of-type(1) > input", inputType: "radio", attributes: { name: "plan", type: "radio" }, bounds: { x: 10, y: 10, width: 16, height: 16 } },
+    { tagName: "input", selector: "form > label:nth-of-type(2) > input", inputType: "radio", attributes: { name: "plan", type: "radio" }, bounds: { x: 10, y: 40, width: 16, height: 16 } }
+  ]
+}, { timestamp: 18 });
+assert.equal(repeatedNamedControlsState.namespaces.web?.values["elements.count"]?.value, 2);
 var snapshotState = createWebAutomationStateFromSnapshot({
   url: "https://example.test/search",
   title: "Search",
   viewport: { width: 1280, height: 720, scrollX: 0, scrollY: 25 },
   interactiveElements: filteredElements
-}, { timestamp: 20, sourceId: "tab:1" });
+}, {
+  timestamp: 20,
+  sourceId: "tab:1",
+  projectId: "project.test",
+  screenContentRef: "automation-object://project/project.test/0000000000000000000000000000000000000000000000000000000000000000"
+});
 var webValues = snapshotState.namespaces.web?.values ?? {};
 assert.equal(webValues["page.url"]?.value, "https://example.test/search");
 assert.equal(webValues["scroll.position"]?.type, "point");
 assert.equal(webValues["elements.count"]?.value, 3);
 assert.equal(Object.keys(webValues).some((path) => path.includes("button.icon")), false);
 assert.equal(Object.keys(webValues).some((path) => path.endsWith(".selector")), true);
+assert.equal(snapshotState.presentation?.defaultFrameId, "screen");
+assert.equal(snapshotState.presentation?.visualFrames?.[0]?.rendererId, "web-automation.viewport");
+assert.equal(snapshotState.presentation?.visualFrames?.[0]?.layers[0]?.id, "screenshot");
+assert.equal(snapshotState.presentation?.visualFrames?.[0]?.layers.some((layer) => layer.kind === "region"), true);
+assert.equal(webValues["elements.button.save.bounds"]?.presentation?.anchor?.type, "bounds");
+assert.equal(validateStateSnapshot(snapshotState).ok, true);
 assert.equal(webAutomationInputIdForRecordedEvent({ kind: "dom.click", url: "https://example.test", title: "Example", sequence: 2 }), WEB_AUTOMATION_INPUT_IDS.elementClicked);
 assert.equal(webAutomationInputIdForRecordedEvent({ kind: "dom.input", url: "https://example.test", title: "Example", sequence: 3, inputValue: "hello" }), WEB_AUTOMATION_INPUT_IDS.textEntered);
 assert.equal(webAutomationInputIdForRecordedEvent({ kind: "dom.input", url: "https://example.test", title: "Example", sequence: 4, inputValue: "" }), WEB_AUTOMATION_INPUT_IDS.fieldCleared);

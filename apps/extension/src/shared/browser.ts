@@ -1,10 +1,10 @@
-import { DEFAULT_GATEWAY_URL } from "./constants";
+import { DEFAULT_CORE_API_URL, DEFAULT_GATEWAY_URL } from "./constants";
 import type { BrowserDescriptor, FluxIQSettings } from "./protocol";
 
 export function defaultSettings(): FluxIQSettings {
   return {
     gatewayUrl: DEFAULT_GATEWAY_URL,
-    coreApiUrl: "http://127.0.0.1:4777",
+    coreApiUrl: DEFAULT_CORE_API_URL,
     autoReconnect: true,
     captureMutations: true,
     captureInputValues: true,

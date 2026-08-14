@@ -186,8 +186,9 @@ session. It does not persist canonical recordings locally.
 
 ## Default Endpoint
 
-The default development gateway is:
+The default development endpoints are:
 
 ```text
-ws://127.0.0.1:4777/client
+Gateway: ws://127.0.0.1:4777/client
+Core API: http://127.0.0.1:3000
 ```

@@ -1,14 +1,19 @@
-import { MAX_EVENT_QUEUE_SIZE, STORAGE_KEYS } from "../shared/constants";
+import { DEFAULT_CORE_API_URL, LEGACY_GATEWAY_CORE_API_URL, MAX_EVENT_QUEUE_SIZE, STORAGE_KEYS } from "../shared/constants";
 import { defaultSettings } from "../shared/browser";
 import type { ClientGatewayClientMessage, FluxIQSession, FluxIQSettings } from "../shared/protocol";
 
 export async function readSettings(): Promise<FluxIQSettings> {
   const stored = await chrome.storage.local.get(STORAGE_KEYS.settings);
-  return { ...defaultSettings(), ...((stored[STORAGE_KEYS.settings] as Partial<FluxIQSettings> | undefined) ?? {}) };
+  return normalizeSettings({ ...defaultSettings(), ...((stored[STORAGE_KEYS.settings] as Partial<FluxIQSettings> | undefined) ?? {}) });
 }
 
 export async function writeSettings(settings: FluxIQSettings): Promise<void> {
-  await chrome.storage.local.set({ [STORAGE_KEYS.settings]: settings });
+  await chrome.storage.local.set({ [STORAGE_KEYS.settings]: normalizeSettings(settings) });
+}
+
+function normalizeSettings(settings: FluxIQSettings): FluxIQSettings {
+  if (settings.coreApiUrl.trim().replace(/\/+$/, "") !== LEGACY_GATEWAY_CORE_API_URL) return settings;
+  return { ...settings, coreApiUrl: DEFAULT_CORE_API_URL };
 }
 
 export async function readSession(): Promise<FluxIQSession | null> {

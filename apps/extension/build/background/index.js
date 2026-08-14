@@ -1,5 +1,7 @@
 // src/shared/constants.ts
 var DEFAULT_GATEWAY_URL = "ws://127.0.0.1:4777/client";
+var DEFAULT_CORE_API_URL = "http://127.0.0.1:3000";
+var LEGACY_GATEWAY_CORE_API_URL = "http://127.0.0.1:4777";
 var HEARTBEAT_INTERVAL_MS = 2e4;
 var RECONNECT_BASE_DELAY_MS = 1e3;
 var RECONNECT_MAX_DELAY_MS = 3e4;
@@ -31,7 +33,7 @@ var RUNTIME_MESSAGES = {
 function defaultSettings() {
   return {
     gatewayUrl: DEFAULT_GATEWAY_URL,
-    coreApiUrl: "http://127.0.0.1:4777",
+    coreApiUrl: DEFAULT_CORE_API_URL,
     autoReconnect: true,
     captureMutations: true,
     captureInputValues: true,
@@ -421,7 +423,10 @@ function createWebAutomationInitialState(timestamp = Date.now()) {
 }
 
 // ../../domain/src/recording/web-state.ts
-var MAX_STATE_ELEMENTS = 40;
+var MAX_STATE_ELEMENTS = 300;
+var MAX_VISUAL_FRAME_ELEMENTS = 300;
+var WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID = "web-automation.viewport";
+var WEB_AUTOMATION_SCREEN_FRAME_ID = "screen";
 function createWebAutomationStateFromSnapshot(snapshot, input = {}) {
   const timestamp = input.timestamp ?? Date.now();
   let state = createWebAutomationInitialState(timestamp);
@@ -437,7 +442,7 @@ function createWebAutomationStateFromSnapshot(snapshot, input = {}) {
   const elements = filterStateElements(snapshot.interactiveElements);
   state = putStateValue(state, "elements.count", "integer", elements.length, timestamp, input.sourceId, { elementKind: "count" });
   for (const element of elements) state = addElementStateValues(state, element, timestamp, input.sourceId);
-  return state;
+  return withScreenVisualFrame(state, snapshot, elements, input);
 }
 function createWebAutomationStateFromTabs(active, tabs, input = {}) {
   const timestamp = input.timestamp ?? Date.now();
@@ -465,7 +470,7 @@ function filterStateElements(elements, limit = MAX_STATE_ELEMENTS) {
 }
 function shouldCaptureElementState(element) {
   return Boolean(
-    meaningfulText(element.text) || meaningfulText(element.name) || meaningfulText(element.value) || meaningfulText(element.href) || stableAttribute(element, "data-testid") || stableAttribute(element, "aria-label") || stableAttribute(element, "name") || stableAttribute(element, "id")
+    element.bounds !== void 0 && isVisible(element) && isLikelyActionableElement(element) || meaningfulText(element.text) || meaningfulText(element.name) || meaningfulText(element.value) || meaningfulText(element.href) || stableAttribute(element, "data-testid") || stableAttribute(element, "aria-label") || stableAttribute(element, "name") || stableAttribute(element, "id")
   );
 }
 function webAutomationActionTargetFromElement(element) {
@@ -490,18 +495,73 @@ function webAutomationActionTargetFromElement(element) {
 }
 function addElementStateValues(state, element, timestamp, sourceId) {
   const basePath = `elements.${elementStateId(element)}`;
-  let next = putStateValue(state, `${basePath}.selector`, "string", element.selector, timestamp, sourceId, { elementKind: "selector", stableAcrossSessions: true });
-  next = putStateValue(next, `${basePath}.tagName`, "string", element.tagName, timestamp, sourceId, { elementKind: "static_id", stableAcrossSessions: true });
-  next = putStateValue(next, `${basePath}.visible`, "boolean", isVisible(element), timestamp, sourceId, { elementKind: "visibility", volatility: "normal" });
-  next = putStateValue(next, `${basePath}.enabled`, "boolean", isEnabled(element), timestamp, sourceId, { elementKind: "enabled", volatility: "normal" });
-  if (element.text) next = putStateValue(next, `${basePath}.text`, "string", element.text, timestamp, sourceId, { elementKind: "text" });
-  if (element.name) next = putStateValue(next, `${basePath}.label`, "string", element.name, timestamp, sourceId, { elementKind: "label" });
-  if (element.value) next = putStateValue(next, `${basePath}.value`, "string", element.value, timestamp, sourceId, { elementKind: "text", sensitive: true });
-  if (element.href) next = putStateValue(next, `${basePath}.href`, "string", element.href, timestamp, sourceId, { elementKind: "url" });
-  if (element.bounds) next = putStateValue(next, `${basePath}.bounds`, "rectangle", element.bounds, timestamp, sourceId, { elementKind: "bounds", comparable: false });
+  const anchor = boundsAnchor(element.bounds);
+  const elementLabel = element.name ?? element.visibleText ?? element.text ?? element.value ?? element.href ?? element.selector;
+  const elementPresentation = anchor ? { group: "Elements", anchor, visualKind: "bounds" } : { group: "Elements" };
+  let next = putStateValue(state, `${basePath}.selector`, "string", element.selector, timestamp, sourceId, { elementKind: "selector", stableAcrossSessions: true, presentation: { ...elementPresentation, label: `${elementLabel} selector`, visualKind: "text" } });
+  next = putStateValue(next, `${basePath}.tagName`, "string", element.tagName, timestamp, sourceId, { elementKind: "static_id", stableAcrossSessions: true, presentation: { ...elementPresentation, label: `${elementLabel} tag`, visualKind: "badge" } });
+  next = putStateValue(next, `${basePath}.visible`, "boolean", isVisible(element), timestamp, sourceId, { elementKind: "visibility", volatility: "normal", presentation: { ...elementPresentation, label: `${elementLabel} visible`, visualKind: "badge" } });
+  next = putStateValue(next, `${basePath}.enabled`, "boolean", isEnabled(element), timestamp, sourceId, { elementKind: "enabled", volatility: "normal", presentation: { ...elementPresentation, label: `${elementLabel} enabled`, visualKind: "badge" } });
+  if (element.text) next = putStateValue(next, `${basePath}.text`, "string", element.text, timestamp, sourceId, { elementKind: "text", presentation: { ...elementPresentation, label: elementLabel, visualKind: "text" } });
+  if (element.name) next = putStateValue(next, `${basePath}.label`, "string", element.name, timestamp, sourceId, { elementKind: "label", presentation: { ...elementPresentation, label: element.name, visualKind: "text" } });
+  if (element.value) next = putStateValue(next, `${basePath}.value`, "string", element.value, timestamp, sourceId, { elementKind: "text", sensitive: true, presentation: { ...elementPresentation, label: `${elementLabel} value`, visualKind: "text", sensitive: true } });
+  if (element.href) next = putStateValue(next, `${basePath}.href`, "string", element.href, timestamp, sourceId, { elementKind: "url", presentation: { ...elementPresentation, label: `${elementLabel} link`, visualKind: "text" } });
+  if (element.bounds) next = putStateValue(next, `${basePath}.bounds`, "rectangle", element.bounds, timestamp, sourceId, { elementKind: "bounds", comparable: false, presentation: { ...elementPresentation, label: elementLabel, visualKind: "bounds" } });
   const stableId = stableAttribute(element, "data-testid") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name");
-  if (stableId) next = putStateValue(next, `${basePath}.stableId`, "string", stableId, timestamp, sourceId, { elementKind: "static_id", stableAcrossSessions: true });
+  if (stableId) next = putStateValue(next, `${basePath}.stableId`, "string", stableId, timestamp, sourceId, { elementKind: "static_id", stableAcrossSessions: true, presentation: { ...elementPresentation, label: `${elementLabel} stable ID`, visualKind: "badge" } });
   return next;
+}
+function withScreenVisualFrame(state, snapshot, elements, input = {}) {
+  const width = positiveFinite(snapshot.viewport.width) ?? 1;
+  const height = positiveFinite(snapshot.viewport.height) ?? 1;
+  const layers = [];
+  if (input.screenContentRef) {
+    layers.push({
+      id: "screenshot",
+      kind: "image",
+      contentRef: input.screenContentRef,
+      bounds: { x: 0, y: 0, width, height },
+      metadata: compactJsonObject({ projectId: input.projectId, url: snapshot.url })
+    });
+  }
+  for (const [index, element] of elements.slice(0, MAX_VISUAL_FRAME_ELEMENTS).entries()) {
+    const bounds = stateBounds(element.bounds);
+    if (!bounds) continue;
+    const statePath = `${WEB_AUTOMATION_STATE_NAMESPACE}.elements.${elementStateId(element)}.bounds`;
+    layers.push({
+      id: `element.${safeLayerId(elementStateId(element), index + 1)}`,
+      kind: "region",
+      label: element.name ?? element.visibleText ?? element.text ?? element.value ?? element.href ?? element.tagName,
+      bounds,
+      statePath,
+      anchor: { type: "bounds", bounds },
+      metadata: { selector: element.selector, tagName: element.tagName }
+    });
+  }
+  const frame = {
+    id: WEB_AUTOMATION_SCREEN_FRAME_ID,
+    rendererId: WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID,
+    label: "Screen",
+    coordinateSpace: { width, height, unit: "px", origin: "top-left" },
+    layers,
+    presentation: { label: snapshot.title || "Browser viewport", visualKind: "bounds", icon: "globe" },
+    metadata: compactJsonObject({
+      url: snapshot.url,
+      title: snapshot.title,
+      scrollX: snapshot.viewport.scrollX,
+      scrollY: snapshot.viewport.scrollY,
+      devicePixelRatio: snapshot.viewport.devicePixelRatio
+    })
+  };
+  return {
+    ...state,
+    id: state.id ?? `web.snapshot.${state.timestamp}`,
+    presentation: {
+      ...state.presentation ?? {},
+      defaultFrameId: WEB_AUTOMATION_SCREEN_FRAME_ID,
+      visualFrames: [frame]
+    }
+  };
 }
 function putStateValue(snapshot, path, type, value, observedAt, sourceId, input = {}) {
   const namespace = snapshot.namespaces[WEB_AUTOMATION_STATE_NAMESPACE] ?? {
@@ -519,6 +579,7 @@ function putStateValue(snapshot, path, type, value, observedAt, sourceId, input 
     volatility: input.volatility ?? "normal",
     comparable: input.comparable ?? true,
     sensitive: input.sensitive,
+    presentation: input.presentation,
     metadata: compactJsonObject({
       elementKind: input.elementKind,
       stableAcrossSessions: input.stableAcrossSessions
@@ -540,8 +601,14 @@ function putStateValue(snapshot, path, type, value, observedAt, sourceId, input 
   };
 }
 function elementStateId(element) {
-  const stable = stableAttribute(element, "data-testid") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name") ?? element.selector;
-  return stable.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, 80) || "element";
+  const stable = stableAttribute(element, "data-testid") ?? stableAttribute(element, "id");
+  if (stable) return sanitizeStateId(stable);
+  const name = stableAttribute(element, "name");
+  if (name) return sanitizeStateId(`${name}.${element.selector}`);
+  return sanitizeStateId(element.selector);
+}
+function sanitizeStateId(value) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, 120) || "element";
 }
 function meaningfulText(value) {
   return typeof value === "string" && value.trim().length >= 2;
@@ -555,6 +622,33 @@ function isVisible(element) {
 }
 function isEnabled(element) {
   return element.attributes?.disabled === void 0 && element.attributes?.["aria-disabled"] !== "true";
+}
+function isLikelyActionableElement(element) {
+  const tagName = element.tagName.toLowerCase();
+  const role = element.role?.toLowerCase();
+  const inputType = element.inputType?.toLowerCase();
+  return tagName === "button" || tagName === "a" || tagName === "select" || tagName === "textarea" || tagName === "summary" || tagName === "label" || tagName === "input" && inputType !== "hidden" || role === "button" || role === "link" || role === "menuitem" || role === "checkbox" || role === "radio" || role === "tab" || role === "switch" || element.attributes?.onclick !== void 0;
+}
+function boundsAnchor(bounds) {
+  const normalized = stateBounds(bounds);
+  return normalized ? { type: "bounds", bounds: normalized } : void 0;
+}
+function stateBounds(bounds) {
+  if (!bounds) return void 0;
+  const x = finite(bounds.x);
+  const y = finite(bounds.y);
+  const width = positiveFinite(bounds.width);
+  const height = positiveFinite(bounds.height);
+  return x !== void 0 && y !== void 0 && width !== void 0 && height !== void 0 ? { x, y, width, height } : void 0;
+}
+function finite(value) {
+  return Number.isFinite(value) ? value : void 0;
+}
+function positiveFinite(value) {
+  return Number.isFinite(value) && value > 0 ? value : void 0;
+}
+function safeLayerId(value, fallbackIndex) {
+  return value.replace(/[^a-z0-9.]+/gi, ".").replace(/^\.+|\.+$/g, "").slice(0, 80) || String(fallbackIndex);
 }
 function compactJsonObject(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
@@ -736,10 +830,14 @@ async function ensureContentScript(tabId) {
 // src/background/storage.ts
 async function readSettings() {
   const stored = await chrome.storage.local.get(STORAGE_KEYS.settings);
-  return { ...defaultSettings(), ...stored[STORAGE_KEYS.settings] ?? {} };
+  return normalizeSettings({ ...defaultSettings(), ...stored[STORAGE_KEYS.settings] ?? {} });
 }
 async function writeSettings(settings) {
-  await chrome.storage.local.set({ [STORAGE_KEYS.settings]: settings });
+  await chrome.storage.local.set({ [STORAGE_KEYS.settings]: normalizeSettings(settings) });
+}
+function normalizeSettings(settings) {
+  if (settings.coreApiUrl.trim().replace(/\/+$/, "") !== LEGACY_GATEWAY_CORE_API_URL) return settings;
+  return { ...settings, coreApiUrl: DEFAULT_CORE_API_URL };
 }
 async function readSession() {
   const stored = await chrome.storage.local.get(STORAGE_KEYS.session);
@@ -775,6 +873,11 @@ async function clearQueuedEvents() {
 }
 
 // src/background/connection.ts
+var SCREENSHOT_SAMPLE_INTERVAL_MS = 100;
+var SCREENSHOT_SAMPLE_BUFFER_SIZE = 120;
+var SCREENSHOT_SAMPLE_MAX_AGE_MS = 15e3;
+var STATE_SCREENSHOT_DUPLICATE_RETRY_DELAY_MS = 150;
+var STATE_SCREENSHOT_DUPLICATE_RETRY_ATTEMPTS = 2;
 var FluxIQConnection = class {
   constructor(settings, session) {
     this.settings = settings;
@@ -796,8 +899,14 @@ var FluxIQConnection = class {
   eventCount = 0;
   recordingStartedAt;
   activeRecordingId;
+  activeRecordingProjectId;
   pendingRecordingStart;
   recordingBlock;
+  lastScreenshotSkipAt;
+  screenshotSamplerTimer;
+  screenshotSampleInFlight = false;
+  screenshotSamples = [];
+  lastStateScreenshotByTab = /* @__PURE__ */ new Map();
   lastActivityAt;
   unsupportedPage;
   recentExplanatoryActions = /* @__PURE__ */ new Map();
@@ -819,6 +928,7 @@ var FluxIQConnection = class {
       recentActivities: [...this.recentActivities]
     };
     if (this.session.sessionId) status.sessionId = this.session.sessionId;
+    if (this.session.projectId !== void 0) status.projectId = this.session.projectId;
     if (this.activeTabId !== void 0) status.activeTabId = this.activeTabId;
     if (this.activeTabUrl) status.activeTabUrl = this.activeTabUrl;
     if (this.pairingReferenceCode) status.pairingReferenceCode = this.pairingReferenceCode;
@@ -887,6 +997,7 @@ var FluxIQConnection = class {
           this.session = compactObject({
             clientId: this.session.clientId,
             sessionId: this.session.sessionId,
+            projectId: this.session.projectId,
             serverUrl: this.settings.gatewayUrl,
             connectedAt: this.session.connectedAt
           });
@@ -934,9 +1045,11 @@ var FluxIQConnection = class {
     this.recordingBlock = void 0;
     const recordingId = `client.${this.session.clientId}.${Date.now()}`;
     const startedAt = Date.now();
+    const projectId = await this.resolveRecordingProjectId("recording_start");
     const initialState = await this.buildInitialRecordingState(startedAt);
     await this.sendClientMessage("client.start_recording", {
       recordingId,
+      ...projectId ? { projectId } : {},
       startedAt,
       domainId: WEB_AUTOMATION_DOMAIN_ID,
       initialState,
@@ -946,38 +1059,37 @@ var FluxIQConnection = class {
       metadata: {
         domainId: WEB_AUTOMATION_DOMAIN_ID,
         requestedBy: "extension-record-button",
+        projectId: projectId ?? null,
         activeTabUrl: this.activeTabUrl ?? null
       }
     });
-    this.addActivity("recording", "Starting recording", "Waiting for FluxIQ project acceptance.", "warning");
+    this.addActivity("recording", "Starting recording", projectId ? "Waiting for FluxIQ project acceptance." : "Waiting for FluxIQ project context.", "warning");
     this.pendingRecordingStart = {
       recordingId,
-      timer: setTimeout(() => void this.beginAcceptedRecording(recordingId), 750)
+      timer: setTimeout(() => void this.handleRecordingStartTimeout(recordingId), 750)
     };
     this.emitStatus();
   }
   async stopRecording(notifyServer = true) {
     if (this.recordingState !== "recording") return;
-    await this.captureActiveSnapshot("Final snapshot captured");
+    const recordingId = this.activeRecordingId;
+    const projectId = this.activeRecordingProjectId;
+    const endedAt = Date.now();
+    const stopPayload = recordingId ? compactObject({
+      recordingId,
+      ...projectId !== void 0 ? { projectId } : {},
+      endedAt
+    }) : void 0;
     this.recordingState = "idle";
+    this.stopScreenshotSampler();
+    this.activeRecordingId = void 0;
+    this.activeRecordingProjectId = void 0;
     this.addActivity("recording", "Recording stopped", `${this.eventCount} user actions captured`, "neutral");
     this.emitStatus();
-    await this.broadcastToContent({ type: "recording", recording: false, settings: this.settings }, false);
-    await this.sendRecordingEvidence({
-      kind: "browser.tab",
-      sequence: this.nextBackgroundEventSequence(),
-      url: this.activeTabUrl ?? "",
-      title: "",
-      eventTimestampMs: Date.now(),
-      metadata: { recordingState: "stopped" }
-    });
-    if (notifyServer && this.activeRecordingId) {
-      await this.sendClientMessage("client.stop_recording", {
-        recordingId: this.activeRecordingId,
-        endedAt: Date.now()
-      });
+    if (notifyServer && stopPayload) {
+      await this.sendClientMessage("client.stop_recording", stopPayload);
     }
-    this.activeRecordingId = void 0;
+    void this.broadcastToContent({ type: "recording", recording: false, settings: this.settings }, false);
   }
   dismissRecordingBlock() {
     this.recordingBlock = void 0;
@@ -993,6 +1105,7 @@ var FluxIQConnection = class {
       this.eventCount += 1;
       this.addActivity(payload.kind, activityLabel(payload), activityDetail(payload));
       await this.sendClientMessage("client.recording_event", gatewayRecordingEventFromPayload(payload, tabId, frameId, this.activeRecordingId));
+      await this.sendRecordingEvidence(payload, tabId, frameId);
       return;
     }
     if (payload.kind !== "content.ready") {
@@ -1151,6 +1264,7 @@ var FluxIQConnection = class {
       ...this.session,
       sessionId: message.payload.sessionId,
       token: message.payload.token,
+      ...message.payload.projectId !== void 0 ? { projectId: message.payload.projectId } : {},
       serverUrl: this.settings.gatewayUrl,
       connectedAt: Date.now()
     });
@@ -1172,7 +1286,7 @@ var FluxIQConnection = class {
       return;
     }
     if (payload.command === "start_recording") {
-      await this.beginAcceptedRecording(payload.recordingId);
+      await this.beginAcceptedRecording(payload.recordingId, payload.projectId);
       return;
     }
     if (payload.command === "stop_recording") {
@@ -1223,16 +1337,28 @@ var FluxIQConnection = class {
       await this.sendActionResult(result, tabId, action.frameId);
     }
   }
-  async beginAcceptedRecording(recordingId) {
+  async beginAcceptedRecording(recordingId, projectId) {
     this.clearPendingRecordingStart();
-    if (this.recordingState === "recording") return;
+    if (projectId !== void 0) {
+      this.session = compactObject({ ...this.session, projectId });
+      await writeSession(this.session);
+    }
+    if (this.recordingState === "recording") {
+      if (projectId !== void 0 && this.activeRecordingProjectId !== projectId) {
+        this.activeRecordingProjectId = projectId;
+        await this.captureActiveSnapshot("Project-linked snapshot captured");
+      }
+      return;
+    }
     this.resetRecordingLog();
     this.recordingBlock = void 0;
     this.activeRecordingId = recordingId;
+    this.activeRecordingProjectId = projectId !== void 0 ? projectId : this.session.projectId;
     this.eventCount = 0;
     this.recentActivities.length = 0;
     this.recordingStartedAt = Date.now();
     this.recordingState = "recording";
+    this.startScreenshotSampler();
     this.addActivity("recording", "Recording started", this.activeTabUrl ?? "Active tab", "success");
     this.emitStatus();
     if (this.activeTabId !== void 0) await this.attachTabForRecording(this.activeTabId);
@@ -1261,10 +1387,12 @@ var FluxIQConnection = class {
     this.clearPendingRecordingStart();
     if (this.recordingState === "recording") {
       this.recordingState = "idle";
+      this.stopScreenshotSampler();
       void this.broadcastToContent({ type: "recording", recording: false, settings: this.settings }, false);
     }
     this.recordingStartedAt = void 0;
     this.activeRecordingId = void 0;
+    this.activeRecordingProjectId = void 0;
     this.recordingBlock = {
       code: "recording.project_required",
       title: "Project Required",
@@ -1279,16 +1407,58 @@ var FluxIQConnection = class {
     clearTimeout(this.pendingRecordingStart.timer);
     this.pendingRecordingStart = void 0;
   }
+  async handleRecordingStartTimeout(recordingId) {
+    if (!this.pendingRecordingStart || this.pendingRecordingStart.recordingId !== recordingId) return;
+    const projectId = await this.resolveRecordingProjectId("recording_start_timeout");
+    await this.beginAcceptedRecording(recordingId, projectId ?? null);
+    if (!projectId) {
+      this.addActivity("recording", "Project context pending", "Structured state will record; screenshots attach after FluxIQ links a project.", "warning");
+      this.emitStatus();
+    }
+  }
   async sendBrowserState() {
     await this.sendClientMessage("client.state_update", browserStateFromTabs(await activeTab(), await allTabs(), this.recordingState));
   }
   async sendRecordingEvidence(payload, tabId, frameId) {
-    const state = isDomSnapshotPayload(payload.snapshot) ? createWebAutomationStateFromSnapshot(payload.snapshot, {
+    if (this.recordingState !== "recording") return;
+    const projectId = await this.resolveRecordingProjectId("recording_evidence");
+    if (this.recordingState !== "recording") return;
+    const snapshot = isDomSnapshotPayload(payload.snapshot) ? payload.snapshot : await this.captureDomSnapshotForEvidence(payload, tabId, frameId);
+    if (this.recordingState !== "recording") return;
+    const hasDomSnapshot = isDomSnapshotPayload(snapshot);
+    const state = hasDomSnapshot ? await this.createStateFromDomSnapshot(snapshot, {
       timestamp: payload.eventTimestampMs,
-      ...tabId === void 0 ? {} : { sourceId: this.tabSourceId(tabId, frameId) }
+      eventKey: stateScreenshotEventKey(payload),
+      ...projectId ? { projectId } : {},
+      ...tabId === void 0 ? {} : {
+        sourceId: this.tabSourceId(tabId, frameId),
+        tabId
+      }
     }) : compactObject({
       latestEvidence: recordingEvidencePayload(payload)
     });
+    if (this.recordingState !== "recording") return;
+    const stateTimestampMs = numberValue2(objectValue(state)?.timestamp) ?? payload.eventTimestampMs;
+    if (hasDomSnapshot) {
+      const snapshotId = stateSnapshotIdFromPayload(payload);
+      await this.sendClientMessage("client.snapshot", compactObject({
+        snapshotId,
+        timestamp: stateTimestampMs,
+        kind: "state",
+        state,
+        metadata: compactObject({
+          reason: "recording-evidence",
+          clientKind: payload.kind,
+          eventTimestampMs: payload.eventTimestampMs,
+          stateTimestampMs,
+          sequence: payload.sequence,
+          ...tabId === void 0 ? {} : { tabId },
+          ...frameId === void 0 ? {} : { frameId },
+          ...payload.metadata ?? {}
+        })
+      }));
+      return;
+    }
     await this.sendClientMessage("client.state_update", createWebAutomationStateUpdate({
       ...tabId === void 0 ? {} : { activeContextId: String(tabId) },
       state,
@@ -1297,11 +1467,38 @@ var FluxIQConnection = class {
         inputId: WEB_AUTOMATION_INPUT_IDS.recordingEvidence,
         clientKind: payload.kind,
         eventTimestampMs: payload.eventTimestampMs,
+        stateTimestampMs,
         ...tabId === void 0 ? {} : { tabId },
         ...frameId === void 0 ? {} : { frameId },
         ...payload.metadata ?? {}
       })
     }));
+  }
+  async captureDomSnapshotForEvidence(payload, tabId, frameId) {
+    if (tabId === void 0 || this.unsupportedPage || !shouldRequireStateForEvidence(payload)) return void 0;
+    try {
+      await ensureContentScript(tabId);
+      const snapshot = await sendToTab(tabId, { type: "captureSnapshot" }, frameId);
+      if (isDomSnapshotPayload(snapshot)) {
+        console.info("FluxIQ evidence snapshot recovered", {
+          kind: payload.kind,
+          sequence: payload.sequence,
+          tabId,
+          frameId
+        });
+        return snapshot;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Fallback DOM snapshot failed.";
+      console.warn("FluxIQ evidence snapshot unavailable", {
+        kind: payload.kind,
+        sequence: payload.sequence,
+        tabId,
+        frameId,
+        message
+      });
+    }
+    return void 0;
   }
   async sendActionResult(result, tabId, frameId) {
     await this.sendClientMessage("client.action_result", gatewayActionResultFromBrowserResult(result));
@@ -1351,9 +1548,9 @@ var FluxIQConnection = class {
   scheduleReconnect() {
     if (this.reconnectTimer) return;
     this.setState("reconnecting");
-    const delay = Math.min(RECONNECT_MAX_DELAY_MS, RECONNECT_BASE_DELAY_MS * 2 ** this.reconnectAttempt);
+    const delay2 = Math.min(RECONNECT_MAX_DELAY_MS, RECONNECT_BASE_DELAY_MS * 2 ** this.reconnectAttempt);
     this.reconnectAttempt += 1;
-    this.reconnectTimer = setTimeout(() => void this.connect(), delay);
+    this.reconnectTimer = setTimeout(() => void this.connect(), delay2);
   }
   clearReconnect() {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
@@ -1393,7 +1590,7 @@ var FluxIQConnection = class {
     try {
       await this.attachTabForRecording(tabId);
       const snapshot = await sendToTab(tabId, { type: "captureSnapshot" });
-      await this.sendClientMessage("client.snapshot", gatewaySnapshotFromDomSnapshot(snapshot));
+      await this.sendClientMessage("client.snapshot", await this.gatewaySnapshotFromDomSnapshot(snapshot, tabId));
       this.addActivity("snapshot", label, this.activeTabUrl);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Content script is unavailable.";
@@ -1423,6 +1620,7 @@ var FluxIQConnection = class {
     this.eventCount = 0;
     this.recentActivities.length = 0;
     this.recordingLog.length = 0;
+    this.lastStateScreenshotByTab.clear();
     this.lastActivityAt = void 0;
   }
   async attachTabForRecording(tabId) {
@@ -1436,8 +1634,11 @@ var FluxIQConnection = class {
         await this.attachTabForRecording(tabId);
         const snapshot = await sendToTab(tabId, { type: "captureSnapshot" });
         if (isDomSnapshotPayload(snapshot)) {
-          return createWebAutomationStateFromSnapshot(snapshot, {
+          const projectId = await this.resolveRecordingProjectId("initial_state");
+          return await this.createStateFromDomSnapshot(snapshot, {
             timestamp,
+            ...projectId ? { projectId } : {},
+            tabId,
             sourceId: this.tabSourceId(tabId)
           });
         }
@@ -1487,15 +1688,309 @@ var FluxIQConnection = class {
   tabSourceId(tabId, frameId) {
     return `tab:${tabId}${frameId === void 0 ? "" : `:frame:${frameId}`}`;
   }
+  startScreenshotSampler() {
+    this.stopScreenshotSampler();
+    this.screenshotSamples.length = 0;
+    void this.captureScreenshotSample("recording_start");
+    this.screenshotSamplerTimer = setInterval(() => {
+      void this.captureScreenshotSample("interval");
+    }, SCREENSHOT_SAMPLE_INTERVAL_MS);
+    this.addActivity("snapshot", "Screenshot buffer active", `${SCREENSHOT_SAMPLE_INTERVAL_MS}ms in-memory cadence`, "neutral");
+  }
+  stopScreenshotSampler() {
+    if (this.screenshotSamplerTimer) clearInterval(this.screenshotSamplerTimer);
+    this.screenshotSamplerTimer = void 0;
+    this.screenshotSampleInFlight = false;
+    this.screenshotSamples.length = 0;
+  }
+  async captureScreenshotSample(reason) {
+    if (this.recordingState !== "recording" || this.screenshotSampleInFlight) return void 0;
+    const tabId = this.activeTabId;
+    if (tabId === void 0 || this.unsupportedPage) return void 0;
+    this.screenshotSampleInFlight = true;
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      if (tab.windowId === void 0) return void 0;
+      await ensureContentScript(tabId).catch(() => void 0);
+      const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+      const snapshot = await sendToTab(tabId, { type: "captureSnapshot" }).then((value) => isDomSnapshotPayload(value) ? value : void 0).catch(() => void 0);
+      const bytes = await bytesFromDataUrl(dataUrl);
+      const sample = {
+        tabId,
+        windowId: tab.windowId,
+        capturedAt: Date.now(),
+        ...snapshot ? { snapshot } : {},
+        bytes,
+        sha256: await sha256Hex(bytes),
+        contentRefByProjectId: {}
+      };
+      this.screenshotSamples.push(sample);
+      this.pruneScreenshotSamples();
+      return sample;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Screenshot sampling failed.";
+      console.warn("FluxIQ screenshot sample failed", { reason, message, tabId });
+      return void 0;
+    } finally {
+      this.screenshotSampleInFlight = false;
+    }
+  }
+  pruneScreenshotSamples(now = Date.now()) {
+    const fresh = this.screenshotSamples.filter((sample) => now - sample.capturedAt <= SCREENSHOT_SAMPLE_MAX_AGE_MS);
+    const trimmed = fresh.slice(-SCREENSHOT_SAMPLE_BUFFER_SIZE);
+    this.screenshotSamples.splice(0, this.screenshotSamples.length, ...trimmed);
+  }
+  async visualSampleForState(tabId, projectId, timestamp, eventKey) {
+    this.pruneScreenshotSamples();
+    const sample = this.bestScreenshotSample(tabId, timestamp);
+    if (sample) {
+      const cached = sample.contentRefByProjectId[projectId];
+      if (cached) return visualStateSample(sample, cached);
+      const screenContentRef2 = await this.uploadStateAsset(projectId, sample.sha256, sample.bytes, "image/png");
+      sample.contentRefByProjectId[projectId] = screenContentRef2;
+      this.addActivity("snapshot", "Screenshot stored", `${sample.sha256.slice(0, 12)} @ ${Math.max(0, timestamp - sample.capturedAt)}ms before state`, "success");
+      return visualStateSample(sample, screenContentRef2);
+    }
+    const fresh = await this.captureFreshVisualSampleForState(tabId, projectId, timestamp, eventKey);
+    if (fresh) return fresh;
+    const screenContentRef = await this.captureAndStoreScreenContentRef(tabId, projectId);
+    return screenContentRef ? { screenContentRef } : void 0;
+  }
+  async captureFreshVisualSampleForState(tabId, projectId, timestamp, eventKey) {
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      if (tab.windowId === void 0) return void 0;
+      let bytes;
+      let sha256;
+      let duplicateOfPrevious = false;
+      const maxAttempts = eventKey ? STATE_SCREENSHOT_DUPLICATE_RETRY_ATTEMPTS + 1 : 1;
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+        bytes = await bytesFromDataUrl(dataUrl);
+        sha256 = await sha256Hex(bytes);
+        const last = this.lastStateScreenshotByTab.get(tabId);
+        duplicateOfPrevious = Boolean(eventKey && last && last.eventKey !== eventKey && last.sha256 === sha256);
+        if (!duplicateOfPrevious || attempt >= maxAttempts) break;
+        await delay(STATE_SCREENSHOT_DUPLICATE_RETRY_DELAY_MS);
+      }
+      if (!bytes || !sha256) return void 0;
+      const screenContentRef = await this.uploadStateAsset(projectId, sha256, bytes, "image/png");
+      const capturedAt = Date.now();
+      if (eventKey) this.lastStateScreenshotByTab.set(tabId, { sha256, eventKey, capturedAt });
+      console.info("FluxIQ fresh state screenshot stored", {
+        tabId,
+        projectId,
+        sha256,
+        eventKey,
+        eventTimestampMs: timestamp,
+        capturedAt,
+        deltaMs: capturedAt - timestamp,
+        duplicateOfPrevious
+      });
+      this.addActivity("snapshot", "Fresh screenshot stored", `${sha256.slice(0, 12)} @ ${Math.max(0, capturedAt - timestamp)}ms after event`, "success");
+      return { screenContentRef, capturedAt };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Fresh screenshot capture failed.";
+      console.warn("FluxIQ fresh state screenshot failed", {
+        tabId,
+        projectId,
+        eventTimestampMs: timestamp,
+        message
+      });
+      return void 0;
+    }
+  }
+  bestScreenshotSample(tabId, timestamp) {
+    const samples = this.screenshotSamples.filter((sample) => sample.tabId === tabId);
+    return samples.filter((sample) => sample.capturedAt <= timestamp).sort((a, b) => b.capturedAt - a.capturedAt)[0];
+  }
+  async createStateFromDomSnapshot(snapshot, input) {
+    let screenContentRef;
+    let stateSnapshot = snapshot;
+    let stateTimestamp = input.timestamp;
+    let missingScreenReason;
+    if (input.projectId && input.tabId !== void 0) {
+      const visualSample = await this.visualSampleForState(input.tabId, input.projectId, input.timestamp, input.eventKey);
+      screenContentRef = visualSample?.screenContentRef;
+      if (visualSample?.snapshot) stateSnapshot = visualSample.snapshot;
+      if (!screenContentRef) missingScreenReason = "screenshot capture or upload failed";
+    } else {
+      missingScreenReason = input.projectId ? "no tab id" : "no project id";
+      this.noteScreenshotSkipped(input.projectId ? "No active tab id available for screenshot capture." : "No project id available for screenshot upload.");
+    }
+    const options = { timestamp: stateTimestamp };
+    if (input.sourceId !== void 0) options.sourceId = input.sourceId;
+    if (input.projectId !== void 0) options.projectId = input.projectId;
+    if (screenContentRef !== void 0) options.screenContentRef = screenContentRef;
+    const state = createWebAutomationStateFromSnapshot(stateSnapshot, options);
+    if (missingScreenReason) {
+      console.warn("FluxIQ state snapshot missing screenshot", {
+        reason: missingScreenReason,
+        timestamp: input.timestamp,
+        stateTimestamp,
+        sourceId: input.sourceId,
+        projectId: input.projectId,
+        tabId: input.tabId
+      });
+      this.addActivity("snapshot", "State screenshot missing", missingScreenReason, "warning");
+      const metadata = objectValue(state.metadata);
+      return {
+        ...state,
+        metadata: compactObject({
+          ...metadata ?? {},
+          missingScreenReason
+        })
+      };
+    }
+    return state;
+  }
+  async gatewaySnapshotFromDomSnapshot(snapshot, tabId) {
+    const timestamp = Date.now();
+    const projectId = await this.resolveRecordingProjectId("snapshot");
+    const state = isDomSnapshotPayload(snapshot) ? await this.createStateFromDomSnapshot(snapshot, {
+      timestamp,
+      ...projectId ? { projectId } : {},
+      ...tabId === void 0 ? {} : { tabId },
+      ...tabId === void 0 ? {} : { sourceId: this.tabSourceId(tabId) }
+    }) : void 0;
+    return compactObject({
+      snapshotId: `dom.${timestamp}`,
+      timestamp,
+      kind: state ? "state" : "structured",
+      ...state !== void 0 ? { state } : {},
+      payload: snapshot
+    });
+  }
+  async captureAndStoreScreenContentRef(tabId, projectId) {
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+      const bytes = await bytesFromDataUrl(dataUrl);
+      const sha256 = await sha256Hex(bytes);
+      const contentRef = await this.uploadStateAsset(projectId, sha256, bytes, "image/png");
+      this.addActivity("snapshot", "Screenshot stored", sha256.slice(0, 12), "success");
+      return contentRef;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Screenshot capture or upload failed.";
+      this.addActivity("snapshot", "Screenshot unavailable", message, "warning");
+      return void 0;
+    }
+  }
+  async uploadStateAsset(projectId, sha256, bytes, mediaType) {
+    const url = new URL(`/api/programs/automation-studio/state-assets/${encodeURIComponent(projectId)}/${sha256}`, this.settings.coreApiUrl || DEFAULT_CORE_API_URL);
+    const response = await fetch(url.toString(), {
+      method: "PUT",
+      headers: compactObject({
+        "content-type": mediaType,
+        "x-content-sha256": sha256,
+        ...this.session.token ? { authorization: `Bearer ${this.session.token}` } : {}
+      }),
+      body: bytes
+    });
+    const bodyText = await response.text().catch(() => "");
+    const payload = parseJsonBody(bodyText);
+    console.info("FluxIQ screenshot upload", {
+      url: url.toString(),
+      status: response.status,
+      body: payload ?? bodyText
+    });
+    const responseObject = objectValue(payload);
+    const responsePayload = objectValue(responseObject?.payload);
+    const contentRef = stringValue2(responsePayload?.contentRef);
+    if (!response.ok || responseObject?.ok !== true || !contentRef) {
+      throw new Error(`FluxIQ state asset upload failed (${response.status}).`);
+    }
+    return contentRef;
+  }
+  currentRecordingProjectId() {
+    const value = this.activeRecordingProjectId ?? this.session.projectId;
+    return typeof value === "string" && value.trim() ? value : void 0;
+  }
+  async resolveRecordingProjectId(reason) {
+    const current = this.currentRecordingProjectId();
+    if (current) return current;
+    const hydrated = await this.hydrateProjectIdFromCoreSnapshot(reason);
+    return hydrated ?? this.currentRecordingProjectId();
+  }
+  async hydrateProjectIdFromCoreSnapshot(reason) {
+    if (!this.session.token) return void 0;
+    try {
+      const url = new URL("/api/client-gateway/snapshot", this.settings.coreApiUrl || DEFAULT_CORE_API_URL);
+      const response = await fetch(url.toString(), {
+        headers: compactObject({
+          accept: "application/json",
+          authorization: `Bearer ${this.session.token}`
+        })
+      });
+      const bodyText = await response.text().catch(() => "");
+      const payload = parseJsonBody(bodyText);
+      console.info("FluxIQ project context lookup", {
+        url: url.toString(),
+        status: response.status,
+        reason,
+        body: payload ?? bodyText
+      });
+      if (!response.ok) return void 0;
+      const root = objectValue(payload);
+      if (root?.ok !== true) return void 0;
+      const body = objectValue(root.payload);
+      const sessions = arrayValue(body?.sessions);
+      const matchingSession = sessions.map(objectValue).find((session) => session && stringValue2(session.sessionId) === this.session.sessionId) ?? sessions.map(objectValue).find((session) => session && stringValue2(session.clientId) === this.session.clientId);
+      const sessionProjectId = stringValue2(matchingSession?.projectId);
+      const webRuntime = objectValue(body?.webRuntime);
+      const automationStudio = objectValue(webRuntime?.automationStudio);
+      const activeProjectId = stringValue2(automationStudio?.activeProjectId);
+      const projectId = sessionProjectId ?? activeProjectId;
+      if (!projectId) return void 0;
+      this.session = compactObject({ ...this.session, projectId });
+      this.activeRecordingProjectId ??= projectId;
+      await writeSession(this.session);
+      this.addActivity("recording", "Project context linked", projectId, "success");
+      return projectId;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Project context lookup failed.";
+      this.addActivity("recording", "Project context unavailable", message, "warning");
+      return void 0;
+    }
+  }
+  noteScreenshotSkipped(message) {
+    const now = Date.now();
+    if (this.lastScreenshotSkipAt !== void 0 && now - this.lastScreenshotSkipAt < 2e3) return;
+    this.lastScreenshotSkipAt = now;
+    console.warn("FluxIQ screenshot skipped", {
+      message,
+      sessionId: this.session.sessionId,
+      clientId: this.session.clientId,
+      projectId: this.session.projectId,
+      activeRecordingProjectId: this.activeRecordingProjectId,
+      activeTabId: this.activeTabId,
+      coreApiUrl: this.settings.coreApiUrl
+    });
+    this.addActivity("snapshot", "Screenshot skipped", message, "warning");
+  }
 };
 function compactObject(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
+function visualStateSample(sample, screenContentRef) {
+  const result = {
+    screenContentRef,
+    capturedAt: sample.capturedAt
+  };
+  if (sample.snapshot) result.snapshot = sample.snapshot;
+  return result;
+}
 function isExecutableRecordedAction(payload) {
   return recordedInputId(payload) !== void 0;
 }
+function shouldRequireStateForEvidence(payload) {
+  return isExecutableRecordedAction(payload) || payload.kind === "action.result" || payload.kind === "browser.navigation" || payload.kind === "browser.tab" || payload.kind === "dom.click" || payload.kind === "dom.input" || payload.kind === "dom.change" || payload.kind === "dom.submit" || payload.kind === "dom.keydown" || payload.kind === "dom.wheel" || payload.kind === "dom.scroll" || payload.kind === "dom.focus" || payload.kind === "dom.blur";
+}
 function isNavigationExplanation(payload) {
   return payload.kind === "dom.click" || payload.kind === "dom.submit";
+}
+function stateScreenshotEventKey(payload) {
+  return `${payload.kind}:${payload.sequence}:${payload.eventTimestampMs}`;
 }
 function recordedInputId(payload) {
   return webAutomationInputIdForRecordedEvent({
@@ -1526,6 +2021,10 @@ function recordingEvidencePayload(payload) {
     actionResult: payload.actionResult,
     metadata: payload.metadata
   });
+}
+function stateSnapshotIdFromPayload(payload) {
+  const kind = payload.kind.replace(/[^a-z0-9_.-]+/gi, "-");
+  return `state.${kind}.${payload.sequence}.${payload.eventTimestampMs}`;
 }
 function browserStateFromTabs(active, tabs, recordingState) {
   return createWebAutomationStateUpdate({
@@ -1569,17 +2068,6 @@ function gatewayRecordingEventFromPayload(payload, tabId, frameId, recordingId) 
     ...frameId !== void 0 ? { frameId } : {}
   });
 }
-function gatewaySnapshotFromDomSnapshot(snapshot) {
-  const timestamp = Date.now();
-  const state = isDomSnapshotPayload(snapshot) ? createWebAutomationStateFromSnapshot(snapshot, { timestamp }) : void 0;
-  return compactObject({
-    snapshotId: `dom.${timestamp}`,
-    timestamp,
-    kind: state ? "state" : "structured",
-    ...state !== void 0 ? { state } : {},
-    payload: snapshot
-  });
-}
 function browserActionFromGatewayCommand(command) {
   return webAutomationActionFromGatewayCommand(command);
 }
@@ -1620,6 +2108,20 @@ function elementTarget(element) {
 }
 function stringValue2(value) {
   return typeof value === "string" ? value : void 0;
+}
+function objectValue(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+function arrayValue(value) {
+  return Array.isArray(value) ? value : [];
+}
+function parseJsonBody(text) {
+  if (!text) return void 0;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return void 0;
+  }
 }
 function numberValue2(value) {
   return typeof value === "number" ? value : void 0;
@@ -1685,7 +2187,7 @@ function actionTypesFromCapabilities(capabilities) {
   return [...new Set(capabilities.flatMap((capability) => capability.actionTypes ?? []))];
 }
 function recordingsApiUrl(coreApiUrl, page, pageSize) {
-  const url = new URL("/api/recordings", coreApiUrl || "http://127.0.0.1:4777");
+  const url = new URL("/api/recordings", coreApiUrl || DEFAULT_CORE_API_URL);
   url.searchParams.set("page", String(page));
   url.searchParams.set("pageSize", String(pageSize));
   return url.toString();
@@ -1723,6 +2225,17 @@ function timestampValue(value) {
   if (typeof value !== "string") return void 0;
   const parsed = Date.parse(value);
   return Number.isNaN(parsed) ? void 0 : parsed;
+}
+async function bytesFromDataUrl(dataUrl) {
+  const response = await fetch(dataUrl);
+  return await response.arrayBuffer();
+}
+async function sha256Hex(bytes) {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // src/background/index.ts

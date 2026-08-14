@@ -1,5 +1,6 @@
 // src/shared/constants.ts
 var DEFAULT_GATEWAY_URL = "ws://127.0.0.1:4777/client";
+var DEFAULT_CORE_API_URL = "http://127.0.0.1:3000";
 var RUNTIME_MESSAGES = {
   getStatus: "fluxiq.getStatus",
   connect: "fluxiq.connect",
@@ -21,7 +22,7 @@ var RUNTIME_MESSAGES = {
 function defaultSettings() {
   return {
     gatewayUrl: DEFAULT_GATEWAY_URL,
-    coreApiUrl: "http://127.0.0.1:4777",
+    coreApiUrl: DEFAULT_CORE_API_URL,
     autoReconnect: true,
     captureMutations: true,
     captureInputValues: true,

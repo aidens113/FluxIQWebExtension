@@ -1,6 +1,8 @@
 export const EXTENSION_NAME = "FluxIQ Web Extension";
 export const PROTOCOL_VERSION = 1;
 export const DEFAULT_GATEWAY_URL = "ws://127.0.0.1:4777/client";
+export const DEFAULT_CORE_API_URL = "http://127.0.0.1:3000";
+export const LEGACY_GATEWAY_CORE_API_URL = "http://127.0.0.1:4777";
 export const HEARTBEAT_INTERVAL_MS = 20_000;
 export const RECONNECT_BASE_DELAY_MS = 1_000;
 export const RECONNECT_MAX_DELAY_MS = 30_000;

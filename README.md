@@ -63,10 +63,12 @@ another compatible browser.
 The extension defaults to:
 
 ```text
-ws://127.0.0.1:4777/client
+Gateway: ws://127.0.0.1:4777/client
+Core API: http://127.0.0.1:3000
 ```
 
-You can change this from the popup. Production deployments should use `wss://`.
+You can change these from the popup. Production deployments should use `wss://`
+for the gateway and the matching HTTPS web origin for Core API calls.
 
 ## Input and output contract
 
