@@ -40,8 +40,8 @@ export type WebAutomationTabStateInput = {
   status?: string | undefined;
 };
 
-export const MAX_STATE_ELEMENTS = 300;
-export const MAX_VISUAL_FRAME_ELEMENTS = 300;
+export const MAX_STATE_ELEMENTS = 150;
+export const MAX_VISUAL_FRAME_ELEMENTS = 100;
 export const WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID = "web-automation.viewport";
 export const WEB_AUTOMATION_SCREEN_FRAME_ID = "screen";
 
@@ -85,7 +85,11 @@ export function createWebAutomationStateFromTabs(
 export function filterStateElements(elements: WebAutomationElementStateInput[], limit = MAX_STATE_ELEMENTS): WebAutomationElementStateInput[] {
   const seen = new Set<string>();
   const filtered: WebAutomationElementStateInput[] = [];
-  for (const element of elements) {
+  const prioritized = [...elements].sort((left, right) =>
+    stateElementBucket(left) - stateElementBucket(right) ||
+    stateElementScore(right) - stateElementScore(left)
+  );
+  for (const element of prioritized) {
     if (!shouldCaptureElementState(element)) continue;
     const id = elementStateId(element);
     if (seen.has(id)) continue;
@@ -98,15 +102,17 @@ export function filterStateElements(elements: WebAutomationElementStateInput[], 
 
 export function shouldCaptureElementState(element: WebAutomationElementStateInput): boolean {
   return Boolean(
-    (element.bounds !== undefined && isVisible(element) && isLikelyActionableElement(element)) ||
+    (element.bounds !== undefined && isVisible(element) && isLikelyInteractableElement(element) && hasMeaningfulElementIdentity(element)) ||
+    stableAttribute(element, "data-testid") ||
+    stableAttribute(element, "data-test") ||
+    stableAttribute(element, "data-cy") ||
+    stableAttribute(element, "aria-label") ||
+    stableAttribute(element, "name") ||
+    stableAttribute(element, "id") ||
     meaningfulText(element.text) ||
     meaningfulText(element.name) ||
     meaningfulText(element.value) ||
-    meaningfulText(element.href) ||
-    stableAttribute(element, "data-testid") ||
-    stableAttribute(element, "aria-label") ||
-    stableAttribute(element, "name") ||
-    stableAttribute(element, "id")
+    meaningfulText(element.href)
   );
 }
 
@@ -285,6 +291,67 @@ function isVisible(element: WebAutomationElementStateInput): boolean {
 
 function isEnabled(element: WebAutomationElementStateInput): boolean {
   return element.attributes?.disabled === undefined && element.attributes?.["aria-disabled"] !== "true";
+}
+
+function stateElementBucket(element: WebAutomationElementStateInput): number {
+  if (isPrimaryControlElement(element) && hasMeaningfulElementIdentity(element)) return 0;
+  if (isLikelyInteractableElement(element) && hasMeaningfulElementIdentity(element)) return 1;
+  if (meaningfulText(element.text) || meaningfulText(element.visibleText) || meaningfulText(element.name) || meaningfulText(element.value)) return 2;
+  if (isVisible(element) && hasStableElementIdentity(element)) return 3;
+  return 4;
+}
+
+function stateElementScore(element: WebAutomationElementStateInput): number {
+  let score = 0;
+  if (isLikelyInteractableElement(element)) score += 200;
+  if (isLikelyActionableElement(element)) score += 100;
+  if (hasStableElementIdentity(element)) score += 60;
+  if (meaningfulText(element.name)) score += 45;
+  if (meaningfulText(element.value)) score += 35;
+  if (meaningfulText(element.text) || meaningfulText(element.visibleText)) score += 25;
+  if (element.bounds) score += Math.min(20, Math.sqrt(element.bounds.width * element.bounds.height) / 8);
+  return score;
+}
+
+function hasMeaningfulElementIdentity(element: WebAutomationElementStateInput): boolean {
+  return hasStableElementIdentity(element) ||
+    meaningfulText(element.text) ||
+    meaningfulText(element.visibleText) ||
+    meaningfulText(element.name) ||
+    meaningfulText(element.value) ||
+    meaningfulText(element.href);
+}
+
+function hasStableElementIdentity(element: WebAutomationElementStateInput): boolean {
+  return Boolean(
+    stableAttribute(element, "data-testid") ||
+    stableAttribute(element, "data-test") ||
+    stableAttribute(element, "data-cy") ||
+    stableAttribute(element, "aria-label") ||
+    stableAttribute(element, "name") ||
+    stableAttribute(element, "id")
+  );
+}
+
+function isLikelyInteractableElement(element: WebAutomationElementStateInput): boolean {
+  return isLikelyActionableElement(element) ||
+    element.attributes?.tabindex !== undefined ||
+    element.attributes?.["aria-expanded"] !== undefined ||
+    element.attributes?.["aria-controls"] !== undefined ||
+    element.attributes?.["aria-pressed"] !== undefined ||
+    element.attributes?.["aria-selected"] !== undefined;
+}
+
+function isPrimaryControlElement(element: WebAutomationElementStateInput): boolean {
+  const tagName = element.tagName.toLowerCase();
+  const role = element.role?.toLowerCase();
+  return tagName === "button" ||
+    tagName === "a" ||
+    tagName === "summary" ||
+    role === "button" ||
+    role === "link" ||
+    role === "menuitem" ||
+    role === "tab";
 }
 
 function isLikelyActionableElement(element: WebAutomationElementStateInput): boolean {

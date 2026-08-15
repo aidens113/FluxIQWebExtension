@@ -40,6 +40,14 @@ const filteredElements = filterStateElements([
 ]);
 assert.deepEqual(filteredElements.map((item) => item.selector), ["button.save", "a.home", "input[name=search]"]);
 
+const prioritizedElements = filterStateElements([
+  { tagName: "section", selector: "section.hero", attributes: { id: "hero" }, bounds: { x: 0, y: 0, width: 800, height: 300 } },
+  { tagName: "p", selector: "p.summary", text: "Account summary", bounds: { x: 20, y: 120, width: 220, height: 24 } },
+  { tagName: "button", selector: "button.deposit", text: "Deposit", bounds: { x: 20, y: 40, width: 90, height: 36 } },
+  { tagName: "div", selector: "div.empty", bounds: { x: 20, y: 180, width: 100, height: 20 } }
+]);
+assert.deepEqual(prioritizedElements.map((item) => item.selector), ["button.deposit", "p.summary", "section.hero"]);
+
 const repeatedNamedControlsState = createWebAutomationStateFromSnapshot({
   url: "https://example.test/preferences",
   title: "Preferences",

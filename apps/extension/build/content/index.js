@@ -89,11 +89,27 @@
     "[data-test]",
     "[data-cy]",
     "[placeholder]",
+    "[title]",
+    "[alt]",
+    "[role]",
     "h1",
     "h2",
-    "h3"
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "p",
+    "span",
+    "div",
+    "li",
+    "td",
+    "th",
+    "strong",
+    "em",
+    "small"
   ].join(",");
-  var MAX_SNAPSHOT_CANDIDATES = 1e3;
+  var MAX_SNAPSHOT_CANDIDATES = 150;
+  var MAX_SNAPSHOT_SCAN_ELEMENTS = 2e3;
   var POINTER_CLICK_DEDUPE_MS = 750;
   var recording = false;
   var sequence = 0;
@@ -102,6 +118,8 @@
   var captureSnapshots = true;
   var scrollTimer;
   var mutationTimer;
+  var inputTimer;
+  var pendingInput;
   var pendingMutation = { added: 0, removed: 0, attributes: 0, text: 0 };
   var lastPointerActivation;
   sendReady();
@@ -112,6 +130,7 @@
       return false;
     }
     if (typed.type === "recording") {
+      if (!typed.recording) flushPendingInput();
       recording = Boolean(typed.recording);
       captureMutations = typed.settings?.captureMutations ?? captureMutations;
       captureInputValues = typed.settings?.captureInputValues ?? captureInputValues;
@@ -159,13 +178,19 @@
   }, true);
   document.addEventListener("input", (event) => {
     const target = event.target instanceof Element ? event.target : null;
-    emit("dom.input", compactObject({
-      element: target ? describeElement(target) : void 0,
-      inputValue: captureInputValues ? readElementValue(target) : void 0
-    }));
+    if (target && isTextEntryElement(target)) {
+      scheduleInputEvent(target);
+      return;
+    }
+    emitInputEvent(target);
   }, true);
   document.addEventListener("change", (event) => {
     const target = event.target instanceof Element ? event.target : null;
+    if (target && isTextEntryElement(target)) {
+      flushPendingInput();
+      return;
+    }
+    if (target && !shouldRecordChangeEvent(target)) return;
     emit("dom.change", compactObject({
       element: target ? describeElement(target) : void 0,
       inputValue: captureInputValues ? readElementValue(target) : void 0
@@ -174,14 +199,6 @@
   document.addEventListener("submit", (event) => {
     const target = event.target instanceof Element ? event.target : null;
     emit("dom.submit", compactObject({ element: target ? describeElement(target) : void 0 }));
-  }, true);
-  document.addEventListener("focus", (event) => {
-    const target = event.target instanceof Element ? event.target : null;
-    emit("dom.focus", compactObject({ element: target ? describeElement(target) : void 0 }));
-  }, true);
-  document.addEventListener("blur", (event) => {
-    const target = event.target instanceof Element ? event.target : null;
-    emit("dom.blur", compactObject({ element: target ? describeElement(target) : void 0 }));
   }, true);
   document.addEventListener("keydown", (event) => {
     if (!event.isTrusted) return;
@@ -198,25 +215,29 @@
   }, true);
   document.addEventListener("wheel", (event) => {
     if (!event.isTrusted) return;
-    emit("dom.wheel", compactObject({
-      scroll: { x: window.scrollX, y: window.scrollY },
-      metadata: {
-        deltaX: event.deltaX,
-        deltaY: event.deltaY,
-        deltaZ: event.deltaZ,
-        deltaMode: event.deltaMode,
-        altKey: event.altKey,
-        ctrlKey: event.ctrlKey,
-        metaKey: event.metaKey,
-        shiftKey: event.shiftKey
-      }
-    }));
+    if (scrollTimer) clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(() => {
+      emit("dom.scroll", {
+        scroll: { x: window.scrollX, y: window.scrollY },
+        metadata: {
+          sourceEvent: "wheel",
+          deltaX: event.deltaX,
+          deltaY: event.deltaY,
+          deltaZ: event.deltaZ,
+          deltaMode: event.deltaMode,
+          altKey: event.altKey,
+          ctrlKey: event.ctrlKey,
+          metaKey: event.metaKey,
+          shiftKey: event.shiftKey
+        }
+      });
+    }, 400);
   }, true);
   window.addEventListener("scroll", () => {
     if (scrollTimer) clearTimeout(scrollTimer);
     scrollTimer = setTimeout(() => {
       emit("dom.scroll", { scroll: { x: window.scrollX, y: window.scrollY } });
-    }, 150);
+    }, 400);
   }, true);
   var observer = new MutationObserver((mutations) => {
     if (!captureMutations || !recording) return;
@@ -250,6 +271,28 @@
     const payload = basePayload(kind, details);
     void chrome.runtime.sendMessage({ type: CONTENT_EVENT, payload });
   }
+  function scheduleInputEvent(element) {
+    pendingInput = { element, inputValue: captureInputValues ? readElementValue(element) : void 0 };
+    if (inputTimer) clearTimeout(inputTimer);
+    inputTimer = setTimeout(() => flushPendingInput(), 350);
+  }
+  function flushPendingInput() {
+    if (inputTimer) clearTimeout(inputTimer);
+    inputTimer = void 0;
+    const pending = pendingInput;
+    pendingInput = void 0;
+    if (!pending) return;
+    emit("dom.input", compactObject({
+      element: describeElement(pending.element),
+      inputValue: pending.inputValue
+    }));
+  }
+  function emitInputEvent(element) {
+    emit("dom.input", compactObject({
+      element: element ? describeElement(element) : void 0,
+      inputValue: captureInputValues ? readElementValue(element) : void 0
+    }));
+  }
   function basePayload(kind, details) {
     const payload = {
       kind,
@@ -272,7 +315,7 @@
     return payload;
   }
   function shouldAttachStateSnapshot(kind) {
-    return kind === "dom.click" || kind === "dom.input" || kind === "dom.change" || kind === "dom.submit" || kind === "dom.keydown" || kind === "dom.wheel" || kind === "dom.scroll" || kind === "dom.focus" || kind === "dom.blur";
+    return kind === "dom.click" || kind === "dom.input" || kind === "dom.change" || kind === "dom.submit" || kind === "dom.keydown";
   }
   async function executeAction(action) {
     const startedAt = Date.now();
@@ -434,7 +477,7 @@
     if (element instanceof HTMLAnchorElement && element.href) descriptor.href = element.href;
     if (element instanceof HTMLInputElement && element.type) descriptor.inputType = element.type;
     const attributes = {};
-    for (const attribute of ["id", "class", "name", "type", "placeholder", "aria-label", "aria-disabled", "data-testid", "data-test", "data-cy", "disabled", "onclick"]) {
+    for (const attribute of ["id", "class", "name", "type", "placeholder", "title", "alt", "href", "tabindex", "aria-label", "aria-disabled", "aria-expanded", "aria-controls", "aria-pressed", "aria-selected", "data-testid", "data-test", "data-cy", "disabled", "onclick"]) {
       const value2 = element.getAttribute(attribute);
       if (value2 !== null) attributes[attribute] = value2.slice(0, 500);
     }
@@ -444,12 +487,14 @@
   function snapshotElements() {
     const seen = /* @__PURE__ */ new Set();
     const candidates = [];
-    for (const element of document.querySelectorAll(SNAPSHOT_CANDIDATE_SELECTOR)) {
+    for (const element of [...document.querySelectorAll(SNAPSHOT_CANDIDATE_SELECTOR)].slice(0, MAX_SNAPSHOT_SCAN_ELEMENTS)) {
       if (seen.has(element) || !shouldIncludeSnapshotElement(element)) continue;
       seen.add(element);
       candidates.push(element);
     }
-    return candidates.sort((left, right) => elementPriority(right) - elementPriority(left) || documentOrder(left, right)).slice(0, MAX_SNAPSHOT_CANDIDATES).map((element) => describeElement(element));
+    return candidates.sort(
+      (left, right) => snapshotElementBucket(left) - snapshotElementBucket(right) || elementPriority(right) - elementPriority(left) || documentOrder(left, right)
+    ).slice(0, MAX_SNAPSHOT_CANDIDATES).map((element) => describeElement(element));
   }
   function shouldIncludeSnapshotElement(element) {
     if (element.closest("script, style, noscript, template")) return false;
@@ -457,7 +502,19 @@
     if (!bounds) return false;
     const style = getComputedStyle(element);
     if (style.visibility === "hidden" || style.display === "none" || Number(style.opacity) === 0) return false;
-    return isActionableElement(element) || Boolean(accessibleName(element) || visibleText(element) || readElementValue(element) || stableElementId(element));
+    return hasMeaningfulElementIdentity(element);
+  }
+  function snapshotElementBucket(element) {
+    if (isPrimaryControlElement(element)) return 0;
+    if (isInteractableUiElement(element)) return 1;
+    if (meaningfulText(visibleText(element)) || meaningfulText(accessibleName(element)) || meaningfulText(readElementValue(element))) return 2;
+    if (visibleViewportBounds(element) && stableElementId(element)) return 3;
+    return 4;
+  }
+  function hasMeaningfulElementIdentity(element) {
+    return Boolean(
+      stableElementId(element) || meaningfulText(accessibleName(element)) || meaningfulText(visibleText(element)) || meaningfulText(readElementValue(element)) || meaningfulText(element.getAttribute("title")) || meaningfulText(element.getAttribute("alt")) || meaningfulText(element.getAttribute("placeholder")) || meaningfulText(element.getAttribute("href"))
+    );
   }
   function visibleViewportBounds(element) {
     const rect = element.getBoundingClientRect();
@@ -479,11 +536,12 @@
   }
   function elementPriority(element) {
     let score = 0;
+    if (isInteractableUiElement(element)) score += 200;
     if (isActionableElement(element)) score += 100;
-    if (stableElementId(element)) score += 40;
-    if (accessibleName(element)) score += 30;
-    if (readElementValue(element)) score += 20;
-    if (visibleText(element)) score += 10;
+    if (stableElementId(element)) score += 60;
+    if (meaningfulText(accessibleName(element))) score += 45;
+    if (meaningfulText(readElementValue(element))) score += 35;
+    if (meaningfulText(visibleText(element))) score += 25;
     const bounds = visibleViewportBounds(element);
     if (bounds) score += Math.min(20, Math.sqrt(bounds.width * bounds.height) / 8);
     return score;
@@ -496,6 +554,14 @@
     const tagName = element.tagName.toLowerCase();
     const role = element.getAttribute("role")?.toLowerCase();
     return tagName === "a" || tagName === "button" || tagName === "input" || tagName === "textarea" || tagName === "select" || tagName === "summary" || tagName === "label" || role === "button" || role === "link" || role === "menuitem" || role === "checkbox" || role === "radio" || role === "tab" || role === "switch" || element.hasAttribute("onclick") || element instanceof HTMLElement && element.isContentEditable;
+  }
+  function isInteractableUiElement(element) {
+    return isActionableElement(element) || element instanceof HTMLElement && getComputedStyle(element).cursor === "pointer" || element.hasAttribute("tabindex") || element.hasAttribute("aria-expanded") || element.hasAttribute("aria-controls") || element.hasAttribute("aria-pressed") || element.hasAttribute("aria-selected");
+  }
+  function isPrimaryControlElement(element) {
+    const tagName = element.tagName.toLowerCase();
+    const role = element.getAttribute("role")?.toLowerCase();
+    return tagName === "button" || tagName === "a" || tagName === "summary" || role === "button" || role === "link" || role === "menuitem" || role === "tab";
   }
   function actionEventTarget(element) {
     return pointerActivationTarget(element) ?? element;
@@ -548,6 +614,9 @@
     const text = element.textContent?.replace(/\s+/g, " ").trim();
     return text ? text.slice(0, 500) : void 0;
   }
+  function meaningfulText(value) {
+    return typeof value === "string" && value.trim().length > 0;
+  }
   function readElementValue(element) {
     if (!element) return void 0;
     if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) {
@@ -555,6 +624,19 @@
     }
     if (element instanceof HTMLElement && element.isContentEditable) return element.innerText.slice(0, 2e3);
     return void 0;
+  }
+  function isTextEntryElement(element) {
+    if (element instanceof HTMLTextAreaElement) return true;
+    if (element instanceof HTMLElement && element.isContentEditable) return true;
+    if (!(element instanceof HTMLInputElement)) return false;
+    const type = element.type.toLowerCase();
+    return type === "" || type === "text" || type === "search" || type === "email" || type === "password" || type === "tel" || type === "url" || type === "number";
+  }
+  function shouldRecordChangeEvent(element) {
+    if (element instanceof HTMLSelectElement) return true;
+    if (!(element instanceof HTMLInputElement)) return true;
+    const type = element.type.toLowerCase();
+    return type === "checkbox" || type === "radio" || type === "file" || type === "date" || type === "datetime-local" || type === "month" || type === "time" || type === "week" || type === "color" || type === "range";
   }
   function accessibleName(element) {
     return element.getAttribute("aria-label") ?? element.getAttribute("title") ?? element.getAttribute("alt") ?? void 0;

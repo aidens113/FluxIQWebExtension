@@ -163,8 +163,8 @@ function inferStateType(value) {
 }
 
 // src/recording/web-state.ts
-var MAX_STATE_ELEMENTS = 300;
-var MAX_VISUAL_FRAME_ELEMENTS = 300;
+var MAX_STATE_ELEMENTS = 150;
+var MAX_VISUAL_FRAME_ELEMENTS = 100;
 var WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID = "web-automation.viewport";
 var WEB_AUTOMATION_SCREEN_FRAME_ID = "screen";
 function createWebAutomationStateFromSnapshot(snapshot, input = {}) {
@@ -187,7 +187,10 @@ function createWebAutomationStateFromSnapshot(snapshot, input = {}) {
 function filterStateElements(elements, limit = MAX_STATE_ELEMENTS) {
   const seen = /* @__PURE__ */ new Set();
   const filtered = [];
-  for (const element of elements) {
+  const prioritized = [...elements].sort(
+    (left, right) => stateElementBucket(left) - stateElementBucket(right) || stateElementScore(right) - stateElementScore(left)
+  );
+  for (const element of prioritized) {
     if (!shouldCaptureElementState(element)) continue;
     const id = elementStateId(element);
     if (seen.has(id)) continue;
@@ -199,7 +202,7 @@ function filterStateElements(elements, limit = MAX_STATE_ELEMENTS) {
 }
 function shouldCaptureElementState(element) {
   return Boolean(
-    element.bounds !== void 0 && isVisible(element) && isLikelyActionableElement(element) || meaningfulText(element.text) || meaningfulText(element.name) || meaningfulText(element.value) || meaningfulText(element.href) || stableAttribute(element, "data-testid") || stableAttribute(element, "aria-label") || stableAttribute(element, "name") || stableAttribute(element, "id")
+    element.bounds !== void 0 && isVisible(element) && isLikelyInteractableElement(element) && hasMeaningfulElementIdentity(element) || stableAttribute(element, "data-testid") || stableAttribute(element, "data-test") || stableAttribute(element, "data-cy") || stableAttribute(element, "aria-label") || stableAttribute(element, "name") || stableAttribute(element, "id") || meaningfulText(element.text) || meaningfulText(element.name) || meaningfulText(element.value) || meaningfulText(element.href)
   );
 }
 function webAutomationActionTargetFromElement(element) {
@@ -351,6 +354,40 @@ function isVisible(element) {
 }
 function isEnabled(element) {
   return element.attributes?.disabled === void 0 && element.attributes?.["aria-disabled"] !== "true";
+}
+function stateElementBucket(element) {
+  if (isPrimaryControlElement(element) && hasMeaningfulElementIdentity(element)) return 0;
+  if (isLikelyInteractableElement(element) && hasMeaningfulElementIdentity(element)) return 1;
+  if (meaningfulText(element.text) || meaningfulText(element.visibleText) || meaningfulText(element.name) || meaningfulText(element.value)) return 2;
+  if (isVisible(element) && hasStableElementIdentity(element)) return 3;
+  return 4;
+}
+function stateElementScore(element) {
+  let score = 0;
+  if (isLikelyInteractableElement(element)) score += 200;
+  if (isLikelyActionableElement(element)) score += 100;
+  if (hasStableElementIdentity(element)) score += 60;
+  if (meaningfulText(element.name)) score += 45;
+  if (meaningfulText(element.value)) score += 35;
+  if (meaningfulText(element.text) || meaningfulText(element.visibleText)) score += 25;
+  if (element.bounds) score += Math.min(20, Math.sqrt(element.bounds.width * element.bounds.height) / 8);
+  return score;
+}
+function hasMeaningfulElementIdentity(element) {
+  return hasStableElementIdentity(element) || meaningfulText(element.text) || meaningfulText(element.visibleText) || meaningfulText(element.name) || meaningfulText(element.value) || meaningfulText(element.href);
+}
+function hasStableElementIdentity(element) {
+  return Boolean(
+    stableAttribute(element, "data-testid") || stableAttribute(element, "data-test") || stableAttribute(element, "data-cy") || stableAttribute(element, "aria-label") || stableAttribute(element, "name") || stableAttribute(element, "id")
+  );
+}
+function isLikelyInteractableElement(element) {
+  return isLikelyActionableElement(element) || element.attributes?.tabindex !== void 0 || element.attributes?.["aria-expanded"] !== void 0 || element.attributes?.["aria-controls"] !== void 0 || element.attributes?.["aria-pressed"] !== void 0 || element.attributes?.["aria-selected"] !== void 0;
+}
+function isPrimaryControlElement(element) {
+  const tagName = element.tagName.toLowerCase();
+  const role = element.role?.toLowerCase();
+  return tagName === "button" || tagName === "a" || tagName === "summary" || role === "button" || role === "link" || role === "menuitem" || role === "tab";
 }
 function isLikelyActionableElement(element) {
   const tagName = element.tagName.toLowerCase();
@@ -675,6 +712,13 @@ var filteredElements = filterStateElements([
   { tagName: "input", selector: "input[name=search]", attributes: { name: "search" }, bounds: { x: 20, y: 80, width: 240, height: 36 } }
 ]);
 assert.deepEqual(filteredElements.map((item) => item.selector), ["button.save", "a.home", "input[name=search]"]);
+var prioritizedElements = filterStateElements([
+  { tagName: "section", selector: "section.hero", attributes: { id: "hero" }, bounds: { x: 0, y: 0, width: 800, height: 300 } },
+  { tagName: "p", selector: "p.summary", text: "Account summary", bounds: { x: 20, y: 120, width: 220, height: 24 } },
+  { tagName: "button", selector: "button.deposit", text: "Deposit", bounds: { x: 20, y: 40, width: 90, height: 36 } },
+  { tagName: "div", selector: "div.empty", bounds: { x: 20, y: 180, width: 100, height: 20 } }
+]);
+assert.deepEqual(prioritizedElements.map((item) => item.selector), ["button.deposit", "p.summary", "section.hero"]);
 var repeatedNamedControlsState = createWebAutomationStateFromSnapshot({
   url: "https://example.test/preferences",
   title: "Preferences",

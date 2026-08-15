@@ -292,10 +292,10 @@ export class FluxIQConnection {
     this.activeRecordingProjectId = undefined;
     this.addActivity("recording", "Recording stopped", `${this.eventCount} user actions captured`, "neutral");
     this.emitStatus();
+    void this.broadcastToContent({ type: "recording", recording: false, settings: this.settings }, false);
     if (notifyServer && stopPayload) {
       await this.sendClientMessage("client.stop_recording", stopPayload);
     }
-    void this.broadcastToContent({ type: "recording", recording: false, settings: this.settings }, false);
   }
 
   dismissRecordingBlock(): void {
@@ -1300,16 +1300,11 @@ function shouldRequireStateForEvidence(payload: RecordingEventPayload): boolean 
   return isExecutableRecordedAction(payload) ||
     payload.kind === "action.result" ||
     payload.kind === "browser.navigation" ||
-    payload.kind === "browser.tab" ||
     payload.kind === "dom.click" ||
     payload.kind === "dom.input" ||
     payload.kind === "dom.change" ||
     payload.kind === "dom.submit" ||
-    payload.kind === "dom.keydown" ||
-    payload.kind === "dom.wheel" ||
-    payload.kind === "dom.scroll" ||
-    payload.kind === "dom.focus" ||
-    payload.kind === "dom.blur";
+    payload.kind === "dom.keydown";
 }
 
 function isNavigationExplanation(payload: RecordingEventPayload): boolean {
