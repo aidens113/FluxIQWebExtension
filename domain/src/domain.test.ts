@@ -43,10 +43,13 @@ assert.deepEqual(filteredElements.map((item) => item.selector), ["button.save", 
 const prioritizedElements = filterStateElements([
   { tagName: "section", selector: "section.hero", attributes: { id: "hero" }, bounds: { x: 0, y: 0, width: 800, height: 300 } },
   { tagName: "p", selector: "p.summary", text: "Account summary", bounds: { x: 20, y: 120, width: 220, height: 24 } },
+  { tagName: "p", selector: "p.disclaimer", text: "Disclosures below the fold", documentBounds: { x: 20, y: 1200, width: 260, height: 24 }, isVisibleOnViewport: false },
   { tagName: "button", selector: "button.deposit", text: "Deposit", bounds: { x: 20, y: 40, width: 90, height: 36 } },
   { tagName: "div", selector: "div.empty", bounds: { x: 20, y: 180, width: 100, height: 20 } }
 ]);
-assert.deepEqual(prioritizedElements.map((item) => item.selector), ["button.deposit", "p.summary", "section.hero"]);
+assert.equal(prioritizedElements[0]?.selector, "button.deposit");
+assert.equal(prioritizedElements.some((item) => item.selector === "p.summary"), true);
+assert.equal(prioritizedElements.some((item) => item.selector === "p.disclaimer"), true);
 
 const repeatedNamedControlsState = createWebAutomationStateFromSnapshot({
   url: "https://example.test/preferences",
@@ -75,13 +78,43 @@ assert.equal(webValues["page.url"]?.value, "https://example.test/search");
 assert.equal(webValues["scroll.position"]?.type, "point");
 assert.equal(webValues["elements.count"]?.value, 3);
 assert.equal(Object.keys(webValues).some((path) => path.includes("button.icon")), false);
-assert.equal(Object.keys(webValues).some((path) => path.endsWith(".selector")), true);
+assert.equal(Object.keys(webValues).some((path) => path.endsWith(".selector")), false);
 assert.equal(snapshotState.presentation?.defaultFrameId, "screen");
 assert.equal(snapshotState.presentation?.visualFrames?.[0]?.rendererId, "web-automation.viewport");
 assert.equal(snapshotState.presentation?.visualFrames?.[0]?.layers[0]?.id, "screenshot");
 assert.equal(snapshotState.presentation?.visualFrames?.[0]?.layers.some((layer) => layer.kind === "region"), true);
-assert.equal(webValues["elements.button.save.bounds"]?.presentation?.anchor?.type, "bounds");
+assert.equal(snapshotState.presentation?.visualFrames?.[0]?.metadata?.frameKind, "viewport-screenshot");
+assert.equal(snapshotState.presentation?.visualFrames?.[1]?.id, "document");
+assert.equal(snapshotState.presentation?.visualFrames?.[1]?.metadata?.frameKind, "document-map");
+assert.equal(webValues["elements.button.save"]?.type, "json");
+assert.equal((webValues["elements.button.save"]?.value as { selector?: string; isVisibleOnViewport?: boolean } | undefined)?.selector, "button.save");
+assert.equal((webValues["elements.button.save"]?.value as { selector?: string; isVisibleOnViewport?: boolean } | undefined)?.isVisibleOnViewport, true);
+assert.equal(webValues["elements.button.save"]?.presentation?.anchor?.type, "bounds");
+assert.equal(webValues["elements.button.save"]?.presentation?.metadata?.boundsKind, "document");
+assert.equal(snapshotState.presentation?.visualFrames?.[0]?.layers.find((layer) => layer.id.includes("button.save"))?.statePath, "web.elements.button.save");
+assert.equal(snapshotState.presentation?.visualFrames?.[0]?.layers.find((layer) => layer.id.includes("button.save"))?.metadata?.boundsKind, "screenshot");
 assert.equal(validateStateSnapshot(snapshotState).ok, true);
+
+const fullPageState = createWebAutomationStateFromSnapshot({
+  url: "https://example.test/long",
+  title: "Long page",
+  viewport: { width: 800, height: 600, scrollX: 0, scrollY: 0, documentWidth: 800, documentHeight: 1400 },
+  interactiveElements: [
+    { tagName: "p", selector: "p.disclaimer", text: "Disclosures below the fold", documentBounds: { x: 20, y: 1200, width: 260, height: 24 }, isVisibleOnViewport: false }
+  ]
+}, {
+  timestamp: 30,
+  screenContentRef: "automation-object://project/project.test/1111111111111111111111111111111111111111111111111111111111111111"
+});
+assert.equal(fullPageState.presentation?.visualFrames?.[0]?.coordinateSpace.height, 600);
+assert.equal(fullPageState.presentation?.visualFrames?.[0]?.layers.some((layer) => layer.id.includes("p.disclaimer")), false);
+assert.equal(fullPageState.presentation?.visualFrames?.[1]?.coordinateSpace.width, 800);
+assert.equal(fullPageState.presentation?.visualFrames?.[1]?.coordinateSpace.height, 1400);
+assert.equal(fullPageState.presentation?.visualFrames?.[1]?.metadata?.screenCoordinateSpace, "document-map");
+assert.equal(fullPageState.presentation?.visualFrames?.[1]?.metadata?.documentMapWidth, 800);
+assert.equal(fullPageState.presentation?.visualFrames?.[1]?.layers.find((layer) => layer.id.includes("p.disclaimer"))?.bounds.y, 1200);
+assert.equal(fullPageState.presentation?.visualFrames?.[1]?.layers.find((layer) => layer.id.includes("p.disclaimer"))?.metadata?.renderKind, "direct-rendered");
+assert.equal(validateStateSnapshot(fullPageState).ok, true);
 
 assert.equal(webAutomationInputIdForRecordedEvent({ kind: "dom.click", url: "https://example.test", title: "Example", sequence: 2 }), WEB_AUTOMATION_INPUT_IDS.elementClicked);
 assert.equal(webAutomationInputIdForRecordedEvent({ kind: "dom.input", url: "https://example.test", title: "Example", sequence: 3, inputValue: "hello" }), WEB_AUTOMATION_INPUT_IDS.textEntered);

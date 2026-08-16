@@ -131,7 +131,7 @@ async function handleRuntimeMessage(message: unknown, sender: chrome.runtime.Mes
 
   if (typed.type === RUNTIME_MESSAGES.contentReady) {
     const tabId = sender.tab?.id;
-    await manager.handleRecordingEvent(typed.payload as RecordingEventPayload, tabId, sender.frameId);
+    await manager.handleContentReady(typed.payload as RecordingEventPayload, tabId, sender.frameId);
     return { ok: true };
   }
 

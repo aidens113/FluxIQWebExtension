@@ -47,6 +47,7 @@ async function bundleExtension() {
   };
   for (const entry of [
     { source: "src/background/index.ts", outfile: "background/index.js", format: "esm" },
+    { source: "src/page/event-listener-tracker.ts", outfile: "page/event-listener-tracker.js", format: "iife" },
     { source: "src/content/index.ts", outfile: "content/index.js", format: "iife" },
     { source: "src/popup/index.ts", outfile: "popup/index.js", format: "esm" },
     { source: "src/sidepanel/index.ts", outfile: "sidepanel/index.js", format: "esm" }

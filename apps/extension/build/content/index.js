@@ -67,50 +67,14 @@
   // src/content/index.ts
   var CONTENT_EVENT = "fluxiq.contentEvent";
   var CONTENT_READY = "fluxiq.contentReady";
-  var SNAPSHOT_CANDIDATE_SELECTOR = [
-    "a[href]",
-    "button",
-    "input:not([type=hidden])",
-    "textarea",
-    "select",
-    "summary",
-    "label",
-    "[role=button]",
-    "[role=link]",
-    "[role=menuitem]",
-    "[role=checkbox]",
-    "[role=radio]",
-    "[role=tab]",
-    "[role=switch]",
-    "[contenteditable=true]",
-    "[onclick]",
-    "[aria-label]",
-    "[data-testid]",
-    "[data-test]",
-    "[data-cy]",
-    "[placeholder]",
-    "[title]",
-    "[alt]",
-    "[role]",
-    "h1",
-    "h2",
-    "h3",
-    "h4",
-    "h5",
-    "h6",
-    "p",
-    "span",
-    "div",
-    "li",
-    "td",
-    "th",
-    "strong",
-    "em",
-    "small"
-  ].join(",");
-  var MAX_SNAPSHOT_CANDIDATES = 150;
-  var MAX_SNAPSHOT_SCAN_ELEMENTS = 2e3;
-  var POINTER_CLICK_DEDUPE_MS = 750;
+  var MAX_SNAPSHOT_CANDIDATES = 800;
+  var MAX_SNAPSHOT_SCAN_ELEMENTS = 5e4;
+  var ACTIVE_CONTENT_INSTANCE_KEY = "__fluxiqWebAutomationActiveContentInstance";
+  var PAGE_LISTENER_ATTRIBUTE = "data-fluxiq-event-listeners";
+  var MAX_OBSERVED_EVENT_ELEMENTS = 500;
+  var CONTENT_INSTANCE_ID = `${Date.now()}.${Math.random().toString(36).slice(2)}`;
+  var contentWindow = window;
+  contentWindow[ACTIVE_CONTENT_INSTANCE_KEY] = CONTENT_INSTANCE_ID;
   var recording = false;
   var sequence = 0;
   var captureMutations = true;
@@ -121,14 +85,16 @@
   var inputTimer;
   var pendingInput;
   var pendingMutation = { added: 0, removed: 0, attributes: 0, text: 0 };
-  var lastPointerActivation;
+  var observedEventElements = /* @__PURE__ */ new WeakSet();
+  var observedEventElementQueue = [];
   sendReady();
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     const typed = message;
     if (typed.type === "fluxiq.ping") {
-      sendResponse({ ok: true });
+      sendResponse({ ok: true, active: isActiveContentInstance() });
       return false;
     }
+    if (!isActiveContentInstance()) return false;
     if (typed.type === "recording") {
       if (!typed.recording) flushPendingInput();
       recording = Boolean(typed.recording);
@@ -151,23 +117,26 @@
   document.addEventListener("pointerdown", (event) => {
     if (!event.isTrusted) return;
     if (event.button !== 0 || event.isPrimary === false) return;
-    const target = event.target instanceof Element ? pointerActivationTarget(event.target) : null;
+    rememberEventPathElements(event);
+    const eventElement = eventTargetElement(event);
+    const target = eventElement ? pointerActivationTarget(eventElement) : null;
     if (!target) return;
-    lastPointerActivation = { signature: eventTargetSignature(target), timestamp: Date.now() };
     emit("dom.click", compactObject({
       element: describeElement(target),
       metadata: compactObject({
         ...pointerMetadata(event),
         pointerId: event.pointerId,
         pointerType: event.pointerType,
-        sourceEvent: "pointerdown"
+        sourceEvent: "pointerdown",
+        captureTiming: "before-action"
       })
     }));
   }, true);
   document.addEventListener("click", (event) => {
     if (!event.isTrusted) return;
-    const target = event.target instanceof Element ? actionEventTarget(event.target) : null;
-    if (target && shouldSkipClickAfterPointerActivation(target)) return;
+    rememberEventPathElements(event);
+    const eventElement = eventTargetElement(event);
+    const target = eventElement ? actionEventTarget(eventElement) : null;
     emit("dom.click", compactObject({
       element: target ? describeElement(target) : void 0,
       metadata: compactObject({
@@ -177,6 +146,7 @@
     }));
   }, true);
   document.addEventListener("input", (event) => {
+    rememberEventPathElements(event);
     const target = event.target instanceof Element ? event.target : null;
     if (target && isTextEntryElement(target)) {
       scheduleInputEvent(target);
@@ -185,6 +155,7 @@
     emitInputEvent(target);
   }, true);
   document.addEventListener("change", (event) => {
+    rememberEventPathElements(event);
     const target = event.target instanceof Element ? event.target : null;
     if (target && isTextEntryElement(target)) {
       flushPendingInput();
@@ -197,11 +168,13 @@
     }));
   }, true);
   document.addEventListener("submit", (event) => {
+    rememberEventPathElements(event);
     const target = event.target instanceof Element ? event.target : null;
     emit("dom.submit", compactObject({ element: target ? describeElement(target) : void 0 }));
   }, true);
   document.addEventListener("keydown", (event) => {
     if (!event.isTrusted) return;
+    rememberEventPathElements(event);
     emit("dom.keydown", compactObject({
       key: event.key,
       element: event.target instanceof Element ? describeElement(event.target) : void 0,
@@ -260,6 +233,7 @@
     characterData: true
   });
   function sendReady() {
+    if (!isActiveContentInstance()) return;
     const payload = basePayload("content.ready", {
       snapshot: captureSnapshot(),
       metadata: { readyState: document.readyState }
@@ -267,9 +241,13 @@
     void chrome.runtime.sendMessage({ type: CONTENT_READY, payload });
   }
   function emit(kind, details) {
+    if (!isActiveContentInstance()) return;
     if (!recording && kind !== "content.ready") return;
     const payload = basePayload(kind, details);
     void chrome.runtime.sendMessage({ type: CONTENT_EVENT, payload });
+  }
+  function isActiveContentInstance() {
+    return contentWindow[ACTIVE_CONTENT_INSTANCE_KEY] === CONTENT_INSTANCE_ID;
   }
   function scheduleInputEvent(element) {
     pendingInput = { element, inputValue: captureInputValues ? readElementValue(element) : void 0 };
@@ -442,6 +420,8 @@
         height: window.innerHeight,
         scrollX: window.scrollX,
         scrollY: window.scrollY,
+        documentWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth, window.innerWidth),
+        documentHeight: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight, window.innerHeight),
         devicePixelRatio: window.devicePixelRatio
       },
       interactiveElements: snapshotElements()
@@ -453,13 +433,17 @@
     return snapshot;
   }
   function describeElement(element) {
-    const bounds = visibleViewportBounds(element);
+    const bounds = visualViewportBounds(element);
+    const docBounds = visualDocumentBounds(element);
     const descriptor = {
       tagName: element.tagName.toLowerCase(),
-      selector: selectorFor(element)
+      selector: selectorFor(element),
+      isVisibleOnViewport: Boolean(bounds)
     };
     if (bounds) descriptor.bounds = bounds;
-    const text = visibleText(element);
+    if (docBounds) descriptor.documentBounds = docBounds;
+    if (hasClickHandler(element)) descriptor.hasClickHandler = true;
+    const text = isInteractableUiElement(element) || isSemanticTextElement(element) ? visibleText(element) : directVisibleText(element);
     if (text) {
       descriptor.text = text;
       descriptor.visibleText = text;
@@ -474,7 +458,8 @@
     if (role) descriptor.role = role;
     const name = accessibleName(element);
     if (name) descriptor.name = name;
-    if (element instanceof HTMLAnchorElement && element.href) descriptor.href = element.href;
+    const href = linkHref(element);
+    if (href) descriptor.href = href;
     if (element instanceof HTMLInputElement && element.type) descriptor.inputType = element.type;
     const attributes = {};
     for (const attribute of ["id", "class", "name", "type", "placeholder", "title", "alt", "href", "tabindex", "aria-label", "aria-disabled", "aria-expanded", "aria-controls", "aria-pressed", "aria-selected", "data-testid", "data-test", "data-cy", "disabled", "onclick"]) {
@@ -486,38 +471,81 @@
   }
   function snapshotElements() {
     const seen = /* @__PURE__ */ new Set();
-    const candidates = [];
-    for (const element of [...document.querySelectorAll(SNAPSHOT_CANDIDATE_SELECTOR)].slice(0, MAX_SNAPSHOT_SCAN_ELEMENTS)) {
+    const candidates = snapshotCandidateElements();
+    const included = [];
+    for (const element of candidates) {
       if (seen.has(element) || !shouldIncludeSnapshotElement(element)) continue;
       seen.add(element);
-      candidates.push(element);
+      included.push(element);
     }
-    return candidates.sort(
+    return included.sort(
       (left, right) => snapshotElementBucket(left) - snapshotElementBucket(right) || elementPriority(right) - elementPriority(left) || documentOrder(left, right)
     ).slice(0, MAX_SNAPSHOT_CANDIDATES).map((element) => describeElement(element));
   }
+  function snapshotCandidateElements() {
+    const seen = /* @__PURE__ */ new Set();
+    const candidates = [];
+    const add = (element) => {
+      if (!element || seen.has(element)) return;
+      seen.add(element);
+      candidates.push(element);
+    };
+    for (const element of observedEventElementQueue) {
+      if (element.isConnected) add(element);
+    }
+    for (const element of document.querySelectorAll(`[${PAGE_LISTENER_ATTRIBUTE}]`)) add(element);
+    let scanned = 0;
+    for (const element of document.querySelectorAll("*")) {
+      scanned += 1;
+      if (scanned > MAX_SNAPSHOT_SCAN_ELEMENTS) break;
+      if (!hasElementPresentation(element)) continue;
+      add(element);
+    }
+    return candidates;
+  }
   function shouldIncludeSnapshotElement(element) {
+    if (element === document.documentElement || element === document.body) return false;
     if (element.closest("script, style, noscript, template")) return false;
-    const bounds = visibleViewportBounds(element);
+    if (element.closest("[hidden], [aria-hidden='true']")) return false;
+    const bounds = visualDocumentBounds(element);
     if (!bounds) return false;
     const style = getComputedStyle(element);
     if (style.visibility === "hidden" || style.display === "none" || Number(style.opacity) === 0) return false;
-    return hasMeaningfulElementIdentity(element);
+    return isEventBackedElement(element) ? hasEventElementPresentation(element) : hasElementPresentation(element);
   }
   function snapshotElementBucket(element) {
-    if (isPrimaryControlElement(element)) return 0;
-    if (isInteractableUiElement(element)) return 1;
-    if (meaningfulText(visibleText(element)) || meaningfulText(accessibleName(element)) || meaningfulText(readElementValue(element))) return 2;
-    if (visibleViewportBounds(element) && stableElementId(element)) return 3;
-    return 4;
+    if (isEventBackedElement(element)) return 0;
+    if (isPrimaryControlElement(element)) return 1;
+    if (isInteractableUiElement(element)) return 2;
+    if (isSemanticTextElement(element)) return 3;
+    if (meaningfulText(directVisibleText(element))) return 4;
+    if (hasVisualMedia(element)) return 5;
+    return 6;
   }
-  function hasMeaningfulElementIdentity(element) {
+  function hasMeaningfulInteractableIdentity(element) {
     return Boolean(
-      stableElementId(element) || meaningfulText(accessibleName(element)) || meaningfulText(visibleText(element)) || meaningfulText(readElementValue(element)) || meaningfulText(element.getAttribute("title")) || meaningfulText(element.getAttribute("alt")) || meaningfulText(element.getAttribute("placeholder")) || meaningfulText(element.getAttribute("href"))
+      stableElementId(element) || meaningfulText(accessibleName(element)) || meaningfulText(visibleText(element)) || meaningfulText(directVisibleText(element)) || meaningfulText(readElementValue(element)) || meaningfulText(element.getAttribute("title")) || meaningfulText(element.getAttribute("alt")) || meaningfulText(element.getAttribute("placeholder")) || meaningfulText(linkHref(element))
     );
+  }
+  function hasEventElementPresentation(element) {
+    return hasMeaningfulInteractableIdentity(element) || hasElementPresentation(element);
+  }
+  function hasElementPresentation(element) {
+    return meaningfulText(visibleText(element)) || meaningfulText(accessibleName(element)) || meaningfulText(readElementValue(element)) || hasVisualMedia(element);
+  }
+  function hasVisualMedia(element) {
+    return element.matches("svg,img,picture,canvas,video") || Boolean(element.querySelector("svg,img,picture,canvas,video"));
+  }
+  function isEventBackedElement(element) {
+    return observedEventElements.has(element) || hasTrackedPageEventListener(element) || hasClickHandler(element);
+  }
+  function hasTrackedPageEventListener(element) {
+    return Boolean(element.getAttribute(PAGE_LISTENER_ATTRIBUTE));
   }
   function visibleViewportBounds(element) {
     const rect = element.getBoundingClientRect();
+    const fallbackBounds = !hasUsableRect(rect) ? directTextViewportBounds(element) : void 0;
+    if (fallbackBounds) return fallbackBounds;
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const left = Math.max(0, rect.left);
@@ -534,15 +562,111 @@
       height: Math.round(height * 100) / 100
     };
   }
+  function visualViewportBounds(element) {
+    return visibleViewportBounds(element) ?? (isInteractableUiElement(element) ? renderedTextViewportBounds(element) : directTextViewportBounds(element));
+  }
+  function visualDocumentBounds(element) {
+    return documentBounds(element) ?? (isInteractableUiElement(element) ? renderedTextBounds(element) : directTextBounds(element));
+  }
+  function documentBounds(element) {
+    const rect = element.getBoundingClientRect();
+    if (!hasUsableRect(rect)) return void 0;
+    const width = rect.width;
+    const height = rect.height;
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width < 2 || height < 2) return void 0;
+    return {
+      x: Math.round((rect.left + window.scrollX) * 100) / 100,
+      y: Math.round((rect.top + window.scrollY) * 100) / 100,
+      width: Math.round(width * 100) / 100,
+      height: Math.round(height * 100) / 100
+    };
+  }
+  function directTextBounds(element) {
+    return textRangeBounds(element, "document", "direct");
+  }
+  function renderedTextBounds(element) {
+    return textRangeBounds(element, "document", "descendant");
+  }
+  function directTextViewportBounds(element) {
+    return textRangeBounds(element, "viewport", "direct");
+  }
+  function renderedTextViewportBounds(element) {
+    return textRangeBounds(element, "viewport", "descendant");
+  }
+  function textRangeBounds(element, coordinateSpace, scope) {
+    const textNodes = scope === "direct" ? directTextNodes(element) : descendantTextNodes(element);
+    if (!textNodes.length) return void 0;
+    const rects = [];
+    for (const node of textNodes) {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      for (const rect of range.getClientRects()) {
+        if (hasUsableRect(rect)) rects.push(rect);
+      }
+      range.detach();
+    }
+    return mergedBounds(rects, coordinateSpace);
+  }
+  function directTextNodes(element) {
+    return [...element.childNodes].filter(
+      (node) => node.nodeType === Node.TEXT_NODE && meaningfulText(node.textContent)
+    );
+  }
+  function descendantTextNodes(element) {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node) => meaningfulText(node.textContent) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
+    });
+    const nodes = [];
+    let current = walker.nextNode();
+    while (current) {
+      nodes.push(current);
+      current = walker.nextNode();
+    }
+    return nodes;
+  }
+  function mergedBounds(rects, coordinateSpace) {
+    if (!rects.length) return void 0;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    let left = Number.POSITIVE_INFINITY;
+    let top = Number.POSITIVE_INFINITY;
+    let right = Number.NEGATIVE_INFINITY;
+    let bottom = Number.NEGATIVE_INFINITY;
+    for (const rect of rects) {
+      const rectLeft = coordinateSpace === "viewport" ? Math.max(0, rect.left) : rect.left + window.scrollX;
+      const rectTop = coordinateSpace === "viewport" ? Math.max(0, rect.top) : rect.top + window.scrollY;
+      const rectRight = coordinateSpace === "viewport" ? Math.min(viewportWidth, rect.right) : rect.right + window.scrollX;
+      const rectBottom = coordinateSpace === "viewport" ? Math.min(viewportHeight, rect.bottom) : rect.bottom + window.scrollY;
+      if (rectRight - rectLeft < 2 || rectBottom - rectTop < 2) continue;
+      left = Math.min(left, rectLeft);
+      top = Math.min(top, rectTop);
+      right = Math.max(right, rectRight);
+      bottom = Math.max(bottom, rectBottom);
+    }
+    const width = right - left;
+    const height = bottom - top;
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width < 2 || height < 2) return void 0;
+    return {
+      x: Math.round(left * 100) / 100,
+      y: Math.round(top * 100) / 100,
+      width: Math.round(width * 100) / 100,
+      height: Math.round(height * 100) / 100
+    };
+  }
+  function hasUsableRect(rect) {
+    return Number.isFinite(rect.width) && Number.isFinite(rect.height) && rect.width >= 2 && rect.height >= 2;
+  }
   function elementPriority(element) {
     let score = 0;
     if (isInteractableUiElement(element)) score += 200;
     if (isActionableElement(element)) score += 100;
     if (stableElementId(element)) score += 60;
     if (meaningfulText(accessibleName(element))) score += 45;
+    if (meaningfulText(visibleText(element))) score += 35;
     if (meaningfulText(readElementValue(element))) score += 35;
-    if (meaningfulText(visibleText(element))) score += 25;
-    const bounds = visibleViewportBounds(element);
+    if (meaningfulText(directVisibleText(element))) score += 25;
+    if (meaningfulText(linkHref(element))) score += 40;
+    const bounds = visualDocumentBounds(element);
     if (bounds) score += Math.min(20, Math.sqrt(bounds.width * bounds.height) / 8);
     return score;
   }
@@ -553,7 +677,7 @@
   function isActionableElement(element) {
     const tagName = element.tagName.toLowerCase();
     const role = element.getAttribute("role")?.toLowerCase();
-    return tagName === "a" || tagName === "button" || tagName === "input" || tagName === "textarea" || tagName === "select" || tagName === "summary" || tagName === "label" || role === "button" || role === "link" || role === "menuitem" || role === "checkbox" || role === "radio" || role === "tab" || role === "switch" || element.hasAttribute("onclick") || element instanceof HTMLElement && element.isContentEditable;
+    return tagName === "a" || tagName === "button" || tagName === "input" || tagName === "textarea" || tagName === "select" || tagName === "summary" || tagName === "label" || role === "button" || role === "link" || role === "menuitem" || role === "checkbox" || role === "radio" || role === "tab" || role === "switch" || hasClickHandler(element) || element instanceof HTMLElement && element.isContentEditable;
   }
   function isInteractableUiElement(element) {
     return isActionableElement(element) || element instanceof HTMLElement && getComputedStyle(element).cursor === "pointer" || element.hasAttribute("tabindex") || element.hasAttribute("aria-expanded") || element.hasAttribute("aria-controls") || element.hasAttribute("aria-pressed") || element.hasAttribute("aria-selected");
@@ -563,31 +687,56 @@
     const role = element.getAttribute("role")?.toLowerCase();
     return tagName === "button" || tagName === "a" || tagName === "summary" || role === "button" || role === "link" || role === "menuitem" || role === "tab";
   }
+  function hasClickHandler(element) {
+    const htmlElement = element;
+    return element.hasAttribute("onclick") || typeof htmlElement.onclick === "function";
+  }
+  function isSemanticTextElement(element) {
+    const tagName = element.tagName.toLowerCase();
+    return tagName === "p" || tagName === "li" || tagName === "td" || tagName === "th" || tagName === "blockquote" || /^h[1-6]$/.test(tagName);
+  }
+  function rememberEventPathElements(event) {
+    const target = eventTargetElement(event);
+    const activationTarget = target ? pointerActivationTarget(target) ?? target : void 0;
+    rememberObservedEventElement(activationTarget);
+    for (const entry of event.composedPath()) {
+      if (!(entry instanceof Element)) continue;
+      if (entry === document.documentElement || entry === document.body) continue;
+      if (!hasTrackedPageEventListener(entry) && !hasClickHandler(entry)) continue;
+      rememberObservedEventElement(entry);
+    }
+  }
+  function rememberObservedEventElement(element) {
+    if (!element || observedEventElements.has(element)) return;
+    observedEventElements.add(element);
+    observedEventElementQueue.push(element);
+    while (observedEventElementQueue.length > MAX_OBSERVED_EVENT_ELEMENTS) observedEventElementQueue.shift();
+  }
   function actionEventTarget(element) {
     return pointerActivationTarget(element) ?? element;
   }
+  function eventTargetElement(event) {
+    for (const entry of event.composedPath()) {
+      if (entry instanceof Element) return entry;
+    }
+    return event.target instanceof Element ? event.target : void 0;
+  }
   function pointerActivationTarget(element) {
     let current = element;
-    for (let depth = 0; current && current !== document.documentElement && depth < 6; depth += 1) {
-      if (isActionableElement(current) || getComputedStyle(current).cursor === "pointer") return current;
+    for (let depth = 0; current && current !== document.documentElement && depth < 12; depth += 1) {
+      if (isActionableElement(current)) return current;
+      current = current.parentElement;
+    }
+    current = element;
+    for (let depth = 0; current && current !== document.documentElement && depth < 12; depth += 1) {
+      if (current instanceof HTMLElement && getComputedStyle(current).cursor === "pointer") return current;
       current = current.parentElement;
     }
     return void 0;
   }
-  function eventTargetSignature(element) {
-    const rect = element.getBoundingClientRect();
-    return [
-      selectorFor(element),
-      Math.round(rect.left),
-      Math.round(rect.top),
-      Math.round(rect.width),
-      Math.round(rect.height)
-    ].join("|");
-  }
-  function shouldSkipClickAfterPointerActivation(element) {
-    if (!lastPointerActivation) return false;
-    if (Date.now() - lastPointerActivation.timestamp > POINTER_CLICK_DEDUPE_MS) return false;
-    return lastPointerActivation.signature === eventTargetSignature(element);
+  function linkHref(element) {
+    if (element instanceof HTMLAnchorElement && element.href) return element.href;
+    return element.getAttribute("href") ?? element.getAttribute("xlink:href") ?? void 0;
   }
   function stableElementId(element) {
     return element.getAttribute("data-testid") ?? element.getAttribute("data-test") ?? element.getAttribute("data-cy") ?? element.getAttribute("id") ?? element.getAttribute("name") ?? void 0;
@@ -612,6 +761,10 @@
   }
   function visibleText(element) {
     const text = element.textContent?.replace(/\s+/g, " ").trim();
+    return text ? text.slice(0, 500) : void 0;
+  }
+  function directVisibleText(element) {
+    const text = [...element.childNodes].filter((node) => node.nodeType === Node.TEXT_NODE).map((node) => node.textContent ?? "").join(" ").replace(/\s+/g, " ").trim();
     return text ? text.slice(0, 500) : void 0;
   }
   function meaningfulText(value) {

@@ -18,6 +18,7 @@ export const webAutomationRecordingDomain: RecordingDomainDefinition = {
     { namespace: "web", path: "scroll.position", type: "point", elementKind: "position", label: "Scroll position", volatility: "rapid" },
     { namespace: "web", path: "focus.target", type: "json", elementKind: "json", label: "Focused target", volatility: "rapid" },
     { namespace: "web", path: "elements.count", type: "integer", elementKind: "count", label: "Captured element count", volatility: "normal" },
+    { namespace: "web", path: "elements.*", type: "json", elementKind: "json", label: "Element", stableAcrossSessions: true, volatility: "normal", metadata: { presentation: { group: "Elements", icon: "scan-search", visualKind: "bounds", metadata: { rendererId: WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID } } } },
     { namespace: "web", path: "elements.*.selector", type: "string", elementKind: "selector", label: "Element selector", stableAcrossSessions: true, volatility: "slow", metadata: { presentation: { group: "Elements", icon: "locate-fixed", visualKind: "text" } } },
     { namespace: "web", path: "elements.*.stableId", type: "string", elementKind: "static_id", label: "Element stable ID", stableAcrossSessions: true, volatility: "slow", metadata: { presentation: { group: "Elements", icon: "fingerprint", visualKind: "badge" } } },
     { namespace: "web", path: "elements.*.tagName", type: "string", elementKind: "static_id", label: "Element tag", stableAcrossSessions: true, volatility: "slow", metadata: { presentation: { group: "Elements", icon: "code", visualKind: "badge" } } },

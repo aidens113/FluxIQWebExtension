@@ -1,5 +1,11 @@
 import type { TabDescriptor } from "../shared/protocol";
 
+type MainWorldScriptInjection = {
+  target: chrome.scripting.InjectionTarget;
+  files: string[];
+  world: "MAIN";
+};
+
 export async function activeTab(): Promise<TabDescriptor | undefined> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return tab ? describeTab(tab) : undefined;
@@ -40,6 +46,11 @@ export async function ensureContentScript(tabId: number): Promise<void> {
     await sendToTab(tabId, { type: "fluxiq.ping" });
     return;
   } catch {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["page/event-listener-tracker.js"],
+      world: "MAIN"
+    } as MainWorldScriptInjection).catch(() => undefined);
     await chrome.scripting.executeScript({
       target: { tabId },
       files: ["content/index.js"]

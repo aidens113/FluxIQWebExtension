@@ -17,6 +17,9 @@ const elementSchema: RecordingEventJsonSchema = {
     role: { type: "string", label: "ARIA role" },
     name: { type: "string", label: "Accessible name" },
     bounds: { type: "object", label: "Bounds" },
+    documentBounds: { type: "object", label: "Document bounds" },
+    isVisibleOnViewport: { type: "boolean", label: "Visible in viewport" },
+    hasClickHandler: { type: "boolean", label: "Has click handler" },
     attributes: { type: "object", label: "Attributes" }
   }
 };

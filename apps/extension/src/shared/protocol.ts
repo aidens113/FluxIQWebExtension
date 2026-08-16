@@ -165,13 +165,16 @@ export type DomElementDescriptor = {
   href?: string | undefined;
   inputType?: string | undefined;
   bounds?: RectDescriptor | undefined;
+  documentBounds?: RectDescriptor | undefined;
+  isVisibleOnViewport?: boolean | undefined;
+  hasClickHandler?: boolean | undefined;
   attributes?: Record<string, string> | undefined;
 };
 
 export type DomSnapshot = {
   url: string;
   title: string;
-  viewport: { width: number; height: number; scrollX: number; scrollY: number; devicePixelRatio?: number | undefined };
+  viewport: { width: number; height: number; scrollX: number; scrollY: number; documentWidth?: number | undefined; documentHeight?: number | undefined; devicePixelRatio?: number | undefined };
   focusedElement?: DomElementDescriptor | undefined;
   selectedText?: string | undefined;
   interactiveElements: DomElementDescriptor[];

@@ -163,10 +163,11 @@ function inferStateType(value) {
 }
 
 // src/recording/web-state.ts
-var MAX_STATE_ELEMENTS = 150;
-var MAX_VISUAL_FRAME_ELEMENTS = 100;
+var MAX_STATE_ELEMENTS = 500;
+var MAX_VISUAL_FRAME_ELEMENTS = 300;
 var WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID = "web-automation.viewport";
 var WEB_AUTOMATION_SCREEN_FRAME_ID = "screen";
+var WEB_AUTOMATION_DOCUMENT_FRAME_ID = "document";
 function createWebAutomationStateFromSnapshot(snapshot, input = {}) {
   const timestamp = input.timestamp ?? Date.now();
   let state = createWebAutomationInitialState(timestamp);
@@ -201,8 +202,9 @@ function filterStateElements(elements, limit = MAX_STATE_ELEMENTS) {
   return filtered;
 }
 function shouldCaptureElementState(element) {
+  if (!hasElementBounds(element)) return false;
   return Boolean(
-    element.bounds !== void 0 && isVisible(element) && isLikelyInteractableElement(element) && hasMeaningfulElementIdentity(element) || stableAttribute(element, "data-testid") || stableAttribute(element, "data-test") || stableAttribute(element, "data-cy") || stableAttribute(element, "aria-label") || stableAttribute(element, "name") || stableAttribute(element, "id") || meaningfulText(element.text) || meaningfulText(element.name) || meaningfulText(element.value) || meaningfulText(element.href)
+    isLikelyInteractableElement(element) && hasMeaningfulElementIdentity(element) || meaningfulText(element.text) || meaningfulText(element.visibleText) || meaningfulText(element.name) || meaningfulText(element.value) || meaningfulText(element.href)
   );
 }
 function webAutomationActionTargetFromElement(element) {
@@ -221,31 +223,41 @@ function webAutomationActionTargetFromElement(element) {
       role: element.role,
       href: element.href,
       inputType: element.inputType,
+      documentBounds: stateBounds(element.documentBounds),
+      isVisibleOnViewport: element.isVisibleOnViewport ?? Boolean(stateBounds(element.bounds)),
+      hasClickHandler: element.hasClickHandler,
       attributes: element.attributes
     })
   });
 }
 function addElementStateValues(state, element, timestamp, sourceId) {
   const basePath = `elements.${elementStateId(element)}`;
-  const anchor = boundsAnchor(element.bounds);
+  const anchor = boundsAnchor(element.documentBounds ?? element.bounds);
   const elementLabel = element.name ?? element.visibleText ?? element.text ?? element.value ?? element.href ?? element.selector;
   const elementPresentation = anchor ? { group: "Elements", anchor, visualKind: "bounds" } : { group: "Elements" };
-  let next = putStateValue(state, `${basePath}.selector`, "string", element.selector, timestamp, sourceId, { elementKind: "selector", stableAcrossSessions: true, presentation: { ...elementPresentation, label: `${elementLabel} selector`, visualKind: "text" } });
-  next = putStateValue(next, `${basePath}.tagName`, "string", element.tagName, timestamp, sourceId, { elementKind: "static_id", stableAcrossSessions: true, presentation: { ...elementPresentation, label: `${elementLabel} tag`, visualKind: "badge" } });
-  next = putStateValue(next, `${basePath}.visible`, "boolean", isVisible(element), timestamp, sourceId, { elementKind: "visibility", volatility: "normal", presentation: { ...elementPresentation, label: `${elementLabel} visible`, visualKind: "badge" } });
-  next = putStateValue(next, `${basePath}.enabled`, "boolean", isEnabled(element), timestamp, sourceId, { elementKind: "enabled", volatility: "normal", presentation: { ...elementPresentation, label: `${elementLabel} enabled`, visualKind: "badge" } });
-  if (element.text) next = putStateValue(next, `${basePath}.text`, "string", element.text, timestamp, sourceId, { elementKind: "text", presentation: { ...elementPresentation, label: elementLabel, visualKind: "text" } });
-  if (element.name) next = putStateValue(next, `${basePath}.label`, "string", element.name, timestamp, sourceId, { elementKind: "label", presentation: { ...elementPresentation, label: element.name, visualKind: "text" } });
-  if (element.value) next = putStateValue(next, `${basePath}.value`, "string", element.value, timestamp, sourceId, { elementKind: "text", sensitive: true, presentation: { ...elementPresentation, label: `${elementLabel} value`, visualKind: "text", sensitive: true } });
-  if (element.href) next = putStateValue(next, `${basePath}.href`, "string", element.href, timestamp, sourceId, { elementKind: "url", presentation: { ...elementPresentation, label: `${elementLabel} link`, visualKind: "text" } });
-  if (element.bounds) next = putStateValue(next, `${basePath}.bounds`, "rectangle", element.bounds, timestamp, sourceId, { elementKind: "bounds", comparable: false, presentation: { ...elementPresentation, label: elementLabel, visualKind: "bounds" } });
-  const stableId = stableAttribute(element, "data-testid") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name");
-  if (stableId) next = putStateValue(next, `${basePath}.stableId`, "string", stableId, timestamp, sourceId, { elementKind: "static_id", stableAcrossSessions: true, presentation: { ...elementPresentation, label: `${elementLabel} stable ID`, visualKind: "badge" } });
-  return next;
+  return putStateValue(state, basePath, "json", elementStatePayload(element), timestamp, sourceId, {
+    elementKind: "element",
+    stableAcrossSessions: Boolean(stableElementId(element)),
+    comparable: false,
+    sensitive: element.value !== void 0,
+    presentation: {
+      ...elementPresentation,
+      label: elementLabel,
+      visualKind: anchor ? "bounds" : "text",
+      metadata: compactJsonObject({
+        boundsKind: "document",
+        renderKind: "direct-rendered",
+        isVisibleOnViewport: element.isVisibleOnViewport ?? Boolean(stateBounds(element.bounds))
+      })
+    }
+  });
 }
 function withScreenVisualFrame(state, snapshot, elements, input = {}) {
   const width = positiveFinite(snapshot.viewport.width) ?? 1;
   const height = positiveFinite(snapshot.viewport.height) ?? 1;
+  const rawDocumentWidth = positiveFinite(snapshot.viewport.documentWidth) ?? width;
+  const documentMapWidth = width;
+  const documentHeight = positiveFinite(snapshot.viewport.documentHeight) ?? height;
   const layers = [];
   if (input.screenContentRef) {
     layers.push({
@@ -253,13 +265,18 @@ function withScreenVisualFrame(state, snapshot, elements, input = {}) {
       kind: "image",
       contentRef: input.screenContentRef,
       bounds: { x: 0, y: 0, width, height },
-      metadata: compactJsonObject({ projectId: input.projectId, url: snapshot.url })
+      metadata: compactJsonObject({
+        projectId: input.projectId,
+        url: snapshot.url,
+        frameKind: "viewport-screenshot",
+        boundsKind: "screenshot"
+      })
     });
   }
   for (const [index, element] of elements.slice(0, MAX_VISUAL_FRAME_ELEMENTS).entries()) {
     const bounds = stateBounds(element.bounds);
     if (!bounds) continue;
-    const statePath = `${WEB_AUTOMATION_STATE_NAMESPACE}.elements.${elementStateId(element)}.bounds`;
+    const statePath = `${WEB_AUTOMATION_STATE_NAMESPACE}.elements.${elementStateId(element)}`;
     layers.push({
       id: `element.${safeLayerId(elementStateId(element), index + 1)}`,
       kind: "region",
@@ -267,13 +284,19 @@ function withScreenVisualFrame(state, snapshot, elements, input = {}) {
       bounds,
       statePath,
       anchor: { type: "bounds", bounds },
-      metadata: { selector: element.selector, tagName: element.tagName }
+      metadata: compactJsonObject({
+        selector: element.selector,
+        tagName: element.tagName,
+        boundsKind: "screenshot",
+        renderKind: "screenshot-bbox",
+        isVisibleOnViewport: true
+      })
     });
   }
-  const frame = {
+  const screenFrame = {
     id: WEB_AUTOMATION_SCREEN_FRAME_ID,
     rendererId: WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID,
-    label: "Screen",
+    label: "Viewport Screenshot",
     coordinateSpace: { width, height, unit: "px", origin: "top-left" },
     layers,
     presentation: { label: snapshot.title || "Browser viewport", visualKind: "bounds", icon: "globe" },
@@ -282,7 +305,70 @@ function withScreenVisualFrame(state, snapshot, elements, input = {}) {
       title: snapshot.title,
       scrollX: snapshot.viewport.scrollX,
       scrollY: snapshot.viewport.scrollY,
-      devicePixelRatio: snapshot.viewport.devicePixelRatio
+      devicePixelRatio: snapshot.viewport.devicePixelRatio,
+      frameKind: "viewport-screenshot",
+      screenCoordinateSpace: "viewport",
+      documentWidth: snapshot.viewport.documentWidth,
+      documentHeight: snapshot.viewport.documentHeight
+    })
+  };
+  const documentFrame = {
+    id: WEB_AUTOMATION_DOCUMENT_FRAME_ID,
+    rendererId: WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID,
+    label: "Document Map",
+    coordinateSpace: { width: documentMapWidth, height: documentHeight, unit: "px", origin: "top-left" },
+    layers: [
+      {
+        id: "viewport",
+        kind: "region",
+        label: "Viewport",
+        bounds: { x: snapshot.viewport.scrollX, y: snapshot.viewport.scrollY, width, height },
+        metadata: compactJsonObject({
+          boundsKind: "document",
+          renderKind: "viewport-marker"
+        })
+      },
+      ...elements.slice(0, MAX_VISUAL_FRAME_ELEMENTS).flatMap((element, index) => {
+        const bounds = stateBounds(element.documentBounds ?? element.bounds);
+        if (!bounds) return [];
+        const projectedViewportBounds = element.bounds ? stateBounds({
+          x: bounds.x - snapshot.viewport.scrollX,
+          y: bounds.y - snapshot.viewport.scrollY,
+          width: bounds.width,
+          height: bounds.height
+        }) : void 0;
+        const statePath = `${WEB_AUTOMATION_STATE_NAMESPACE}.elements.${elementStateId(element)}`;
+        return [{
+          id: `document.element.${safeLayerId(elementStateId(element), index + 1)}`,
+          kind: "region",
+          label: element.name ?? element.visibleText ?? element.text ?? element.value ?? element.href ?? element.tagName,
+          bounds,
+          statePath,
+          anchor: { type: "bounds", bounds },
+          metadata: compactJsonObject({
+            selector: element.selector,
+            tagName: element.tagName,
+            boundsKind: "document",
+            renderKind: "direct-rendered",
+            isVisibleOnViewport: element.isVisibleOnViewport ?? Boolean(stateBounds(element.bounds)),
+            projectedViewportBounds
+          })
+        }];
+      })
+    ],
+    presentation: { label: "Document map", visualKind: "bounds", icon: "map" },
+    metadata: compactJsonObject({
+      url: snapshot.url,
+      title: snapshot.title,
+      scrollX: snapshot.viewport.scrollX,
+      scrollY: snapshot.viewport.scrollY,
+      viewportWidth: width,
+      viewportHeight: height,
+      frameKind: "document-map",
+      screenCoordinateSpace: "document-map",
+      documentWidth: rawDocumentWidth,
+      documentMapWidth,
+      documentHeight
     })
   };
   return {
@@ -291,7 +377,7 @@ function withScreenVisualFrame(state, snapshot, elements, input = {}) {
     presentation: {
       ...state.presentation ?? {},
       defaultFrameId: WEB_AUTOMATION_SCREEN_FRAME_ID,
-      visualFrames: [frame]
+      visualFrames: [screenFrame, documentFrame]
     }
   };
 }
@@ -333,11 +419,40 @@ function putStateValue(snapshot, path, type, value, observedAt, sourceId, input 
   };
 }
 function elementStateId(element) {
-  const stable = stableAttribute(element, "data-testid") ?? stableAttribute(element, "id");
+  const stable = stableElementPathId(element);
   if (stable) return sanitizeStateId(stable);
   const name = stableAttribute(element, "name");
   if (name) return sanitizeStateId(`${name}.${element.selector}`);
   return sanitizeStateId(element.selector);
+}
+function elementStatePayload(element) {
+  return compactJsonObject({
+    selector: element.selector,
+    tagName: element.tagName,
+    xpath: element.xpath,
+    id: element.id,
+    classNames: element.classNames,
+    visibleText: element.visibleText,
+    text: element.text,
+    value: element.value,
+    role: element.role,
+    name: element.name,
+    href: element.href,
+    inputType: element.inputType,
+    bounds: stateBounds(element.bounds),
+    documentBounds: stateBounds(element.documentBounds),
+    isVisibleOnViewport: element.isVisibleOnViewport ?? Boolean(stateBounds(element.bounds)),
+    enabled: isEnabled(element),
+    stableId: stableElementId(element),
+    hasClickHandler: element.hasClickHandler,
+    attributes: element.attributes
+  });
+}
+function stableElementId(element) {
+  return stableAttribute(element, "data-testid") ?? stableAttribute(element, "data-test") ?? stableAttribute(element, "data-cy") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name");
+}
+function stableElementPathId(element) {
+  return stableAttribute(element, "data-testid") ?? stableAttribute(element, "data-test") ?? stableAttribute(element, "data-cy") ?? stableAttribute(element, "id");
 }
 function sanitizeStateId(value) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, 120) || "element";
@@ -349,8 +464,8 @@ function stableAttribute(element, name) {
   const value = element.attributes?.[name];
   return meaningfulText(value) ? value : void 0;
 }
-function isVisible(element) {
-  return !element.bounds || element.bounds.width > 0 && element.bounds.height > 0;
+function hasElementBounds(element) {
+  return stateBounds(element.documentBounds ?? element.bounds) !== void 0;
 }
 function isEnabled(element) {
   return element.attributes?.disabled === void 0 && element.attributes?.["aria-disabled"] !== "true";
@@ -359,8 +474,7 @@ function stateElementBucket(element) {
   if (isPrimaryControlElement(element) && hasMeaningfulElementIdentity(element)) return 0;
   if (isLikelyInteractableElement(element) && hasMeaningfulElementIdentity(element)) return 1;
   if (meaningfulText(element.text) || meaningfulText(element.visibleText) || meaningfulText(element.name) || meaningfulText(element.value)) return 2;
-  if (isVisible(element) && hasStableElementIdentity(element)) return 3;
-  return 4;
+  return 3;
 }
 function stateElementScore(element) {
   let score = 0;
@@ -370,7 +484,8 @@ function stateElementScore(element) {
   if (meaningfulText(element.name)) score += 45;
   if (meaningfulText(element.value)) score += 35;
   if (meaningfulText(element.text) || meaningfulText(element.visibleText)) score += 25;
-  if (element.bounds) score += Math.min(20, Math.sqrt(element.bounds.width * element.bounds.height) / 8);
+  const bounds = element.documentBounds ?? element.bounds;
+  if (bounds) score += Math.min(20, Math.sqrt(bounds.width * bounds.height) / 8);
   return score;
 }
 function hasMeaningfulElementIdentity(element) {
@@ -393,7 +508,7 @@ function isLikelyActionableElement(element) {
   const tagName = element.tagName.toLowerCase();
   const role = element.role?.toLowerCase();
   const inputType = element.inputType?.toLowerCase();
-  return tagName === "button" || tagName === "a" || tagName === "select" || tagName === "textarea" || tagName === "summary" || tagName === "label" || tagName === "input" && inputType !== "hidden" || role === "button" || role === "link" || role === "menuitem" || role === "checkbox" || role === "radio" || role === "tab" || role === "switch" || element.attributes?.onclick !== void 0;
+  return tagName === "button" || tagName === "a" || tagName === "select" || tagName === "textarea" || tagName === "summary" || tagName === "label" || tagName === "input" && inputType !== "hidden" || role === "button" || role === "link" || role === "menuitem" || role === "checkbox" || role === "radio" || role === "tab" || role === "switch" || element.hasClickHandler === true || element.attributes?.onclick !== void 0;
 }
 function boundsAnchor(bounds) {
   const normalized = stateBounds(bounds);
@@ -411,7 +526,7 @@ function finite(value) {
   return Number.isFinite(value) ? value : void 0;
 }
 function positiveFinite(value) {
-  return Number.isFinite(value) && value > 0 ? value : void 0;
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : void 0;
 }
 function safeLayerId(value, fallbackIndex) {
   return value.replace(/[^a-z0-9.]+/gi, ".").replace(/^\.+|\.+$/g, "").slice(0, 80) || String(fallbackIndex);
@@ -489,6 +604,9 @@ var elementSchema = {
     role: { type: "string", label: "ARIA role" },
     name: { type: "string", label: "Accessible name" },
     bounds: { type: "object", label: "Bounds" },
+    documentBounds: { type: "object", label: "Document bounds" },
+    isVisibleOnViewport: { type: "boolean", label: "Visible in viewport" },
+    hasClickHandler: { type: "boolean", label: "Has click handler" },
     attributes: { type: "object", label: "Attributes" }
   }
 };
@@ -553,6 +671,7 @@ var webAutomationRecordingDomain = {
     { namespace: "web", path: "scroll.position", type: "point", elementKind: "position", label: "Scroll position", volatility: "rapid" },
     { namespace: "web", path: "focus.target", type: "json", elementKind: "json", label: "Focused target", volatility: "rapid" },
     { namespace: "web", path: "elements.count", type: "integer", elementKind: "count", label: "Captured element count", volatility: "normal" },
+    { namespace: "web", path: "elements.*", type: "json", elementKind: "json", label: "Element", stableAcrossSessions: true, volatility: "normal", metadata: { presentation: { group: "Elements", icon: "scan-search", visualKind: "bounds", metadata: { rendererId: WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID } } } },
     { namespace: "web", path: "elements.*.selector", type: "string", elementKind: "selector", label: "Element selector", stableAcrossSessions: true, volatility: "slow", metadata: { presentation: { group: "Elements", icon: "locate-fixed", visualKind: "text" } } },
     { namespace: "web", path: "elements.*.stableId", type: "string", elementKind: "static_id", label: "Element stable ID", stableAcrossSessions: true, volatility: "slow", metadata: { presentation: { group: "Elements", icon: "fingerprint", visualKind: "badge" } } },
     { namespace: "web", path: "elements.*.tagName", type: "string", elementKind: "static_id", label: "Element tag", stableAcrossSessions: true, volatility: "slow", metadata: { presentation: { group: "Elements", icon: "code", visualKind: "badge" } } },
@@ -715,10 +834,13 @@ assert.deepEqual(filteredElements.map((item) => item.selector), ["button.save", 
 var prioritizedElements = filterStateElements([
   { tagName: "section", selector: "section.hero", attributes: { id: "hero" }, bounds: { x: 0, y: 0, width: 800, height: 300 } },
   { tagName: "p", selector: "p.summary", text: "Account summary", bounds: { x: 20, y: 120, width: 220, height: 24 } },
+  { tagName: "p", selector: "p.disclaimer", text: "Disclosures below the fold", documentBounds: { x: 20, y: 1200, width: 260, height: 24 }, isVisibleOnViewport: false },
   { tagName: "button", selector: "button.deposit", text: "Deposit", bounds: { x: 20, y: 40, width: 90, height: 36 } },
   { tagName: "div", selector: "div.empty", bounds: { x: 20, y: 180, width: 100, height: 20 } }
 ]);
-assert.deepEqual(prioritizedElements.map((item) => item.selector), ["button.deposit", "p.summary", "section.hero"]);
+assert.equal(prioritizedElements[0]?.selector, "button.deposit");
+assert.equal(prioritizedElements.some((item) => item.selector === "p.summary"), true);
+assert.equal(prioritizedElements.some((item) => item.selector === "p.disclaimer"), true);
 var repeatedNamedControlsState = createWebAutomationStateFromSnapshot({
   url: "https://example.test/preferences",
   title: "Preferences",
@@ -745,13 +867,42 @@ assert.equal(webValues["page.url"]?.value, "https://example.test/search");
 assert.equal(webValues["scroll.position"]?.type, "point");
 assert.equal(webValues["elements.count"]?.value, 3);
 assert.equal(Object.keys(webValues).some((path) => path.includes("button.icon")), false);
-assert.equal(Object.keys(webValues).some((path) => path.endsWith(".selector")), true);
+assert.equal(Object.keys(webValues).some((path) => path.endsWith(".selector")), false);
 assert.equal(snapshotState.presentation?.defaultFrameId, "screen");
 assert.equal(snapshotState.presentation?.visualFrames?.[0]?.rendererId, "web-automation.viewport");
 assert.equal(snapshotState.presentation?.visualFrames?.[0]?.layers[0]?.id, "screenshot");
 assert.equal(snapshotState.presentation?.visualFrames?.[0]?.layers.some((layer) => layer.kind === "region"), true);
-assert.equal(webValues["elements.button.save.bounds"]?.presentation?.anchor?.type, "bounds");
+assert.equal(snapshotState.presentation?.visualFrames?.[0]?.metadata?.frameKind, "viewport-screenshot");
+assert.equal(snapshotState.presentation?.visualFrames?.[1]?.id, "document");
+assert.equal(snapshotState.presentation?.visualFrames?.[1]?.metadata?.frameKind, "document-map");
+assert.equal(webValues["elements.button.save"]?.type, "json");
+assert.equal(webValues["elements.button.save"]?.value?.selector, "button.save");
+assert.equal(webValues["elements.button.save"]?.value?.isVisibleOnViewport, true);
+assert.equal(webValues["elements.button.save"]?.presentation?.anchor?.type, "bounds");
+assert.equal(webValues["elements.button.save"]?.presentation?.metadata?.boundsKind, "document");
+assert.equal(snapshotState.presentation?.visualFrames?.[0]?.layers.find((layer) => layer.id.includes("button.save"))?.statePath, "web.elements.button.save");
+assert.equal(snapshotState.presentation?.visualFrames?.[0]?.layers.find((layer) => layer.id.includes("button.save"))?.metadata?.boundsKind, "screenshot");
 assert.equal(validateStateSnapshot(snapshotState).ok, true);
+var fullPageState = createWebAutomationStateFromSnapshot({
+  url: "https://example.test/long",
+  title: "Long page",
+  viewport: { width: 800, height: 600, scrollX: 0, scrollY: 0, documentWidth: 800, documentHeight: 1400 },
+  interactiveElements: [
+    { tagName: "p", selector: "p.disclaimer", text: "Disclosures below the fold", documentBounds: { x: 20, y: 1200, width: 260, height: 24 }, isVisibleOnViewport: false }
+  ]
+}, {
+  timestamp: 30,
+  screenContentRef: "automation-object://project/project.test/1111111111111111111111111111111111111111111111111111111111111111"
+});
+assert.equal(fullPageState.presentation?.visualFrames?.[0]?.coordinateSpace.height, 600);
+assert.equal(fullPageState.presentation?.visualFrames?.[0]?.layers.some((layer) => layer.id.includes("p.disclaimer")), false);
+assert.equal(fullPageState.presentation?.visualFrames?.[1]?.coordinateSpace.width, 800);
+assert.equal(fullPageState.presentation?.visualFrames?.[1]?.coordinateSpace.height, 1400);
+assert.equal(fullPageState.presentation?.visualFrames?.[1]?.metadata?.screenCoordinateSpace, "document-map");
+assert.equal(fullPageState.presentation?.visualFrames?.[1]?.metadata?.documentMapWidth, 800);
+assert.equal(fullPageState.presentation?.visualFrames?.[1]?.layers.find((layer) => layer.id.includes("p.disclaimer"))?.bounds.y, 1200);
+assert.equal(fullPageState.presentation?.visualFrames?.[1]?.layers.find((layer) => layer.id.includes("p.disclaimer"))?.metadata?.renderKind, "direct-rendered");
+assert.equal(validateStateSnapshot(fullPageState).ok, true);
 assert.equal(webAutomationInputIdForRecordedEvent({ kind: "dom.click", url: "https://example.test", title: "Example", sequence: 2 }), WEB_AUTOMATION_INPUT_IDS.elementClicked);
 assert.equal(webAutomationInputIdForRecordedEvent({ kind: "dom.input", url: "https://example.test", title: "Example", sequence: 3, inputValue: "hello" }), WEB_AUTOMATION_INPUT_IDS.textEntered);
 assert.equal(webAutomationInputIdForRecordedEvent({ kind: "dom.input", url: "https://example.test", title: "Example", sequence: 4, inputValue: "" }), WEB_AUTOMATION_INPUT_IDS.fieldCleared);

@@ -19,12 +19,15 @@ type DomElementDescriptor = {
   href?: string | undefined;
   inputType?: string | undefined;
   bounds?: RectDescriptor | undefined;
+  documentBounds?: RectDescriptor | undefined;
+  isVisibleOnViewport?: boolean | undefined;
+  hasClickHandler?: boolean | undefined;
   attributes?: Record<string, string> | undefined;
 };
 type DomSnapshot = {
   url: string;
   title: string;
-  viewport: { width: number; height: number; scrollX: number; scrollY: number; devicePixelRatio?: number | undefined };
+  viewport: { width: number; height: number; scrollX: number; scrollY: number; documentWidth?: number | undefined; documentHeight?: number | undefined; devicePixelRatio?: number | undefined };
   focusedElement?: DomElementDescriptor | undefined;
   selectedText?: string | undefined;
   interactiveElements: DomElementDescriptor[];
@@ -71,50 +74,14 @@ type BrowserActionResult = {
 
 const CONTENT_EVENT = "fluxiq.contentEvent";
 const CONTENT_READY = "fluxiq.contentReady";
-const SNAPSHOT_CANDIDATE_SELECTOR = [
-  "a[href]",
-  "button",
-  "input:not([type=hidden])",
-  "textarea",
-  "select",
-  "summary",
-  "label",
-  "[role=button]",
-  "[role=link]",
-  "[role=menuitem]",
-  "[role=checkbox]",
-  "[role=radio]",
-  "[role=tab]",
-  "[role=switch]",
-  "[contenteditable=true]",
-  "[onclick]",
-  "[aria-label]",
-  "[data-testid]",
-  "[data-test]",
-  "[data-cy]",
-  "[placeholder]",
-  "[title]",
-  "[alt]",
-  "[role]",
-  "h1",
-  "h2",
-  "h3",
-  "h4",
-  "h5",
-  "h6",
-  "p",
-  "span",
-  "div",
-  "li",
-  "td",
-  "th",
-  "strong",
-  "em",
-  "small"
-].join(",");
-const MAX_SNAPSHOT_CANDIDATES = 150;
-const MAX_SNAPSHOT_SCAN_ELEMENTS = 2_000;
-const POINTER_CLICK_DEDUPE_MS = 750;
+const MAX_SNAPSHOT_CANDIDATES = 800;
+const MAX_SNAPSHOT_SCAN_ELEMENTS = 50_000;
+const ACTIVE_CONTENT_INSTANCE_KEY = "__fluxiqWebAutomationActiveContentInstance";
+const PAGE_LISTENER_ATTRIBUTE = "data-fluxiq-event-listeners";
+const MAX_OBSERVED_EVENT_ELEMENTS = 500;
+const CONTENT_INSTANCE_ID = `${Date.now()}.${Math.random().toString(36).slice(2)}`;
+const contentWindow = window as Window & { [ACTIVE_CONTENT_INSTANCE_KEY]?: string };
+contentWindow[ACTIVE_CONTENT_INSTANCE_KEY] = CONTENT_INSTANCE_ID;
 let recording = false;
 let sequence = 0;
 let captureMutations = true;
@@ -125,16 +92,18 @@ let mutationTimer: ReturnType<typeof setTimeout> | undefined;
 let inputTimer: ReturnType<typeof setTimeout> | undefined;
 let pendingInput: { element: Element; inputValue?: string | undefined } | undefined;
 let pendingMutation = { added: 0, removed: 0, attributes: 0, text: 0 };
-let lastPointerActivation: { signature: string; timestamp: number } | undefined;
+const observedEventElements = new WeakSet<Element>();
+const observedEventElementQueue: Element[] = [];
 
 sendReady();
 
 chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
-  const typed = message as { type?: string; recording?: boolean; settings?: { captureMutations?: boolean; captureInputValues?: boolean; captureSnapshots?: boolean }; action?: BrowserActionCommand; commandId?: string };
+  const typed = message as { type?: string; recording?: boolean; settings?: { captureMutations?: boolean; captureInputValues?: boolean; captureSnapshots?: boolean }; action?: BrowserActionCommand; commandId?: string; x?: number; y?: number };
   if (typed.type === "fluxiq.ping") {
-    sendResponse({ ok: true });
+    sendResponse({ ok: true, active: isActiveContentInstance() });
     return false;
   }
+  if (!isActiveContentInstance()) return false;
   if (typed.type === "recording") {
     if (!typed.recording) flushPendingInput();
     recording = Boolean(typed.recording);
@@ -160,24 +129,27 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
 document.addEventListener("pointerdown", (event) => {
   if (!event.isTrusted) return;
   if (event.button !== 0 || event.isPrimary === false) return;
-  const target = event.target instanceof Element ? pointerActivationTarget(event.target) : null;
+  rememberEventPathElements(event);
+  const eventElement = eventTargetElement(event);
+  const target = eventElement ? pointerActivationTarget(eventElement) : null;
   if (!target) return;
-  lastPointerActivation = { signature: eventTargetSignature(target), timestamp: Date.now() };
   emit("dom.click", compactObject({
     element: describeElement(target),
     metadata: compactObject({
       ...pointerMetadata(event),
       pointerId: event.pointerId,
       pointerType: event.pointerType,
-      sourceEvent: "pointerdown"
+      sourceEvent: "pointerdown",
+      captureTiming: "before-action"
     })
   }));
 }, true);
 
 document.addEventListener("click", (event) => {
   if (!event.isTrusted) return;
-  const target = event.target instanceof Element ? actionEventTarget(event.target) : null;
-  if (target && shouldSkipClickAfterPointerActivation(target)) return;
+  rememberEventPathElements(event);
+  const eventElement = eventTargetElement(event);
+  const target = eventElement ? actionEventTarget(eventElement) : null;
   emit("dom.click", compactObject({
     element: target ? describeElement(target) : undefined,
     metadata: compactObject({
@@ -188,6 +160,7 @@ document.addEventListener("click", (event) => {
 }, true);
 
 document.addEventListener("input", (event) => {
+  rememberEventPathElements(event);
   const target = event.target instanceof Element ? event.target : null;
   if (target && isTextEntryElement(target)) {
     scheduleInputEvent(target);
@@ -197,6 +170,7 @@ document.addEventListener("input", (event) => {
 }, true);
 
 document.addEventListener("change", (event) => {
+  rememberEventPathElements(event);
   const target = event.target instanceof Element ? event.target : null;
   if (target && isTextEntryElement(target)) {
     flushPendingInput();
@@ -210,12 +184,14 @@ document.addEventListener("change", (event) => {
 }, true);
 
 document.addEventListener("submit", (event) => {
+  rememberEventPathElements(event);
   const target = event.target instanceof Element ? event.target : null;
   emit("dom.submit", compactObject({ element: target ? describeElement(target) : undefined }));
 }, true);
 
 document.addEventListener("keydown", (event) => {
   if (!event.isTrusted) return;
+  rememberEventPathElements(event);
   emit("dom.keydown", compactObject({
     key: event.key,
     element: event.target instanceof Element ? describeElement(event.target) : undefined,
@@ -279,6 +255,7 @@ observer.observe(document.documentElement, {
 });
 
 function sendReady(): void {
+  if (!isActiveContentInstance()) return;
   const payload = basePayload("content.ready", {
     snapshot: captureSnapshot(),
     metadata: { readyState: document.readyState }
@@ -287,9 +264,14 @@ function sendReady(): void {
 }
 
 function emit(kind: string, details: Partial<RecordingEventPayload>): void {
+  if (!isActiveContentInstance()) return;
   if (!recording && kind !== "content.ready") return;
   const payload = basePayload(kind, details);
   void chrome.runtime.sendMessage({ type: CONTENT_EVENT, payload });
+}
+
+function isActiveContentInstance(): boolean {
+  return contentWindow[ACTIVE_CONTENT_INSTANCE_KEY] === CONTENT_INSTANCE_ID;
 }
 
 function scheduleInputEvent(element: Element): void {
@@ -483,6 +465,8 @@ function captureSnapshot(): DomSnapshot {
       height: window.innerHeight,
       scrollX: window.scrollX,
       scrollY: window.scrollY,
+      documentWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth, window.innerWidth),
+      documentHeight: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight, window.innerHeight),
       devicePixelRatio: window.devicePixelRatio
     },
     interactiveElements: snapshotElements()
@@ -495,13 +479,19 @@ function captureSnapshot(): DomSnapshot {
 }
 
 function describeElement(element: Element): DomElementDescriptor {
-  const bounds = visibleViewportBounds(element);
+  const bounds = visualViewportBounds(element);
+  const docBounds = visualDocumentBounds(element);
   const descriptor: DomElementDescriptor = {
     tagName: element.tagName.toLowerCase(),
-    selector: selectorFor(element)
+    selector: selectorFor(element),
+    isVisibleOnViewport: Boolean(bounds)
   };
   if (bounds) descriptor.bounds = bounds;
-  const text = visibleText(element);
+  if (docBounds) descriptor.documentBounds = docBounds;
+  if (hasClickHandler(element)) descriptor.hasClickHandler = true;
+  const text = isInteractableUiElement(element) || isSemanticTextElement(element)
+    ? visibleText(element)
+    : directVisibleText(element);
   if (text) {
     descriptor.text = text;
     descriptor.visibleText = text;
@@ -516,7 +506,8 @@ function describeElement(element: Element): DomElementDescriptor {
   if (role) descriptor.role = role;
   const name = accessibleName(element);
   if (name) descriptor.name = name;
-  if (element instanceof HTMLAnchorElement && element.href) descriptor.href = element.href;
+  const href = linkHref(element);
+  if (href) descriptor.href = href;
   if (element instanceof HTMLInputElement && element.type) descriptor.inputType = element.type;
   const attributes: Record<string, string> = {};
   for (const attribute of ["id", "class", "name", "type", "placeholder", "title", "alt", "href", "tabindex", "aria-label", "aria-disabled", "aria-expanded", "aria-controls", "aria-pressed", "aria-selected", "data-testid", "data-test", "data-cy", "disabled", "onclick"]) {
@@ -529,13 +520,14 @@ function describeElement(element: Element): DomElementDescriptor {
 
 function snapshotElements(): DomElementDescriptor[] {
   const seen = new Set<Element>();
-  const candidates: Element[] = [];
-  for (const element of [...document.querySelectorAll(SNAPSHOT_CANDIDATE_SELECTOR)].slice(0, MAX_SNAPSHOT_SCAN_ELEMENTS)) {
+  const candidates = snapshotCandidateElements();
+  const included: Element[] = [];
+  for (const element of candidates) {
     if (seen.has(element) || !shouldIncludeSnapshotElement(element)) continue;
     seen.add(element);
-    candidates.push(element);
+    included.push(element);
   }
-  return candidates
+  return included
     .sort((left, right) =>
       snapshotElementBucket(left) - snapshotElementBucket(right) ||
       elementPriority(right) - elementPriority(left) ||
@@ -545,38 +537,97 @@ function snapshotElements(): DomElementDescriptor[] {
     .map((element) => describeElement(element));
 }
 
+function snapshotCandidateElements(): Element[] {
+  const seen = new Set<Element>();
+  const candidates: Element[] = [];
+  const add = (element: Element | null | undefined) => {
+    if (!element || seen.has(element)) return;
+    seen.add(element);
+    candidates.push(element);
+  };
+
+  for (const element of observedEventElementQueue) {
+    if (element.isConnected) add(element);
+  }
+  for (const element of document.querySelectorAll(`[${PAGE_LISTENER_ATTRIBUTE}]`)) add(element);
+  let scanned = 0;
+  for (const element of document.querySelectorAll("*")) {
+    scanned += 1;
+    if (scanned > MAX_SNAPSHOT_SCAN_ELEMENTS) break;
+    if (!hasElementPresentation(element)) continue;
+    add(element);
+  }
+
+  return candidates;
+}
+
 function shouldIncludeSnapshotElement(element: Element): boolean {
+  if (element === document.documentElement || element === document.body) return false;
   if (element.closest("script, style, noscript, template")) return false;
-  const bounds = visibleViewportBounds(element);
+  if (element.closest("[hidden], [aria-hidden='true']")) return false;
+  const bounds = visualDocumentBounds(element);
   if (!bounds) return false;
   const style = getComputedStyle(element);
   if (style.visibility === "hidden" || style.display === "none" || Number(style.opacity) === 0) return false;
-  return hasMeaningfulElementIdentity(element);
+  return isEventBackedElement(element)
+    ? hasEventElementPresentation(element)
+    : hasElementPresentation(element);
 }
 
 function snapshotElementBucket(element: Element): number {
-  if (isPrimaryControlElement(element)) return 0;
-  if (isInteractableUiElement(element)) return 1;
-  if (meaningfulText(visibleText(element)) || meaningfulText(accessibleName(element)) || meaningfulText(readElementValue(element))) return 2;
-  if (visibleViewportBounds(element) && stableElementId(element)) return 3;
-  return 4;
+  if (isEventBackedElement(element)) return 0;
+  if (isPrimaryControlElement(element)) return 1;
+  if (isInteractableUiElement(element)) return 2;
+  if (isSemanticTextElement(element)) return 3;
+  if (meaningfulText(directVisibleText(element))) return 4;
+  if (hasVisualMedia(element)) return 5;
+  return 6;
 }
 
-function hasMeaningfulElementIdentity(element: Element): boolean {
+function hasMeaningfulInteractableIdentity(element: Element): boolean {
   return Boolean(
     stableElementId(element) ||
     meaningfulText(accessibleName(element)) ||
     meaningfulText(visibleText(element)) ||
+    meaningfulText(directVisibleText(element)) ||
     meaningfulText(readElementValue(element)) ||
     meaningfulText(element.getAttribute("title")) ||
     meaningfulText(element.getAttribute("alt")) ||
     meaningfulText(element.getAttribute("placeholder")) ||
-    meaningfulText(element.getAttribute("href"))
+    meaningfulText(linkHref(element))
   );
+}
+
+function hasEventElementPresentation(element: Element): boolean {
+  return hasMeaningfulInteractableIdentity(element) || hasElementPresentation(element);
+}
+
+function hasElementPresentation(element: Element): boolean {
+  return meaningfulText(visibleText(element)) ||
+    meaningfulText(accessibleName(element)) ||
+    meaningfulText(readElementValue(element)) ||
+    hasVisualMedia(element);
+}
+
+function hasVisualMedia(element: Element): boolean {
+  return element.matches("svg,img,picture,canvas,video") ||
+    Boolean(element.querySelector("svg,img,picture,canvas,video"));
+}
+
+function isEventBackedElement(element: Element): boolean {
+  return observedEventElements.has(element) ||
+    hasTrackedPageEventListener(element) ||
+    hasClickHandler(element);
+}
+
+function hasTrackedPageEventListener(element: Element): boolean {
+  return Boolean(element.getAttribute(PAGE_LISTENER_ATTRIBUTE));
 }
 
 function visibleViewportBounds(element: Element): RectDescriptor | undefined {
   const rect = element.getBoundingClientRect();
+  const fallbackBounds = !hasUsableRect(rect) ? directTextViewportBounds(element) : undefined;
+  if (fallbackBounds) return fallbackBounds;
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
   const left = Math.max(0, rect.left);
@@ -594,15 +645,126 @@ function visibleViewportBounds(element: Element): RectDescriptor | undefined {
   };
 }
 
+function visualViewportBounds(element: Element): RectDescriptor | undefined {
+  return visibleViewportBounds(element) ??
+    (isInteractableUiElement(element) ? renderedTextViewportBounds(element) : directTextViewportBounds(element));
+}
+
+function visualDocumentBounds(element: Element): RectDescriptor | undefined {
+  return documentBounds(element) ??
+    (isInteractableUiElement(element) ? renderedTextBounds(element) : directTextBounds(element));
+}
+
+function documentBounds(element: Element): RectDescriptor | undefined {
+  const rect = element.getBoundingClientRect();
+  if (!hasUsableRect(rect)) return undefined;
+  const width = rect.width;
+  const height = rect.height;
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width < 2 || height < 2) return undefined;
+  return {
+    x: Math.round((rect.left + window.scrollX) * 100) / 100,
+    y: Math.round((rect.top + window.scrollY) * 100) / 100,
+    width: Math.round(width * 100) / 100,
+    height: Math.round(height * 100) / 100
+  };
+}
+
+function directTextBounds(element: Element): RectDescriptor | undefined {
+  return textRangeBounds(element, "document", "direct");
+}
+
+function renderedTextBounds(element: Element): RectDescriptor | undefined {
+  return textRangeBounds(element, "document", "descendant");
+}
+
+function directTextViewportBounds(element: Element): RectDescriptor | undefined {
+  return textRangeBounds(element, "viewport", "direct");
+}
+
+function renderedTextViewportBounds(element: Element): RectDescriptor | undefined {
+  return textRangeBounds(element, "viewport", "descendant");
+}
+
+function textRangeBounds(element: Element, coordinateSpace: "document" | "viewport", scope: "direct" | "descendant"): RectDescriptor | undefined {
+  const textNodes = scope === "direct" ? directTextNodes(element) : descendantTextNodes(element);
+  if (!textNodes.length) return undefined;
+  const rects: DOMRect[] = [];
+  for (const node of textNodes) {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    for (const rect of range.getClientRects()) {
+      if (hasUsableRect(rect)) rects.push(rect);
+    }
+    range.detach();
+  }
+  return mergedBounds(rects, coordinateSpace);
+}
+
+function directTextNodes(element: Element): Text[] {
+  return [...element.childNodes].filter((node): node is Text =>
+    node.nodeType === Node.TEXT_NODE &&
+    meaningfulText(node.textContent)
+  );
+}
+
+function descendantTextNodes(element: Element): Text[] {
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) => meaningfulText(node.textContent) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
+  });
+  const nodes: Text[] = [];
+  let current = walker.nextNode();
+  while (current) {
+    nodes.push(current as Text);
+    current = walker.nextNode();
+  }
+  return nodes;
+}
+
+function mergedBounds(rects: DOMRect[], coordinateSpace: "document" | "viewport"): RectDescriptor | undefined {
+  if (!rects.length) return undefined;
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  let left = Number.POSITIVE_INFINITY;
+  let top = Number.POSITIVE_INFINITY;
+  let right = Number.NEGATIVE_INFINITY;
+  let bottom = Number.NEGATIVE_INFINITY;
+  for (const rect of rects) {
+    const rectLeft = coordinateSpace === "viewport" ? Math.max(0, rect.left) : rect.left + window.scrollX;
+    const rectTop = coordinateSpace === "viewport" ? Math.max(0, rect.top) : rect.top + window.scrollY;
+    const rectRight = coordinateSpace === "viewport" ? Math.min(viewportWidth, rect.right) : rect.right + window.scrollX;
+    const rectBottom = coordinateSpace === "viewport" ? Math.min(viewportHeight, rect.bottom) : rect.bottom + window.scrollY;
+    if (rectRight - rectLeft < 2 || rectBottom - rectTop < 2) continue;
+    left = Math.min(left, rectLeft);
+    top = Math.min(top, rectTop);
+    right = Math.max(right, rectRight);
+    bottom = Math.max(bottom, rectBottom);
+  }
+  const width = right - left;
+  const height = bottom - top;
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width < 2 || height < 2) return undefined;
+  return {
+    x: Math.round(left * 100) / 100,
+    y: Math.round(top * 100) / 100,
+    width: Math.round(width * 100) / 100,
+    height: Math.round(height * 100) / 100
+  };
+}
+
+function hasUsableRect(rect: DOMRect | DOMRectReadOnly): boolean {
+  return Number.isFinite(rect.width) && Number.isFinite(rect.height) && rect.width >= 2 && rect.height >= 2;
+}
+
 function elementPriority(element: Element): number {
   let score = 0;
   if (isInteractableUiElement(element)) score += 200;
   if (isActionableElement(element)) score += 100;
   if (stableElementId(element)) score += 60;
   if (meaningfulText(accessibleName(element))) score += 45;
+  if (meaningfulText(visibleText(element))) score += 35;
   if (meaningfulText(readElementValue(element))) score += 35;
-  if (meaningfulText(visibleText(element))) score += 25;
-  const bounds = visibleViewportBounds(element);
+  if (meaningfulText(directVisibleText(element))) score += 25;
+  if (meaningfulText(linkHref(element))) score += 40;
+  const bounds = visualDocumentBounds(element);
   if (bounds) score += Math.min(20, Math.sqrt(bounds.width * bounds.height) / 8);
   return score;
 }
@@ -629,7 +791,7 @@ function isActionableElement(element: Element): boolean {
     role === "radio" ||
     role === "tab" ||
     role === "switch" ||
-    element.hasAttribute("onclick") ||
+    hasClickHandler(element) ||
     element instanceof HTMLElement && element.isContentEditable;
 }
 
@@ -655,34 +817,68 @@ function isPrimaryControlElement(element: Element): boolean {
     role === "tab";
 }
 
+function hasClickHandler(element: Element): boolean {
+  const htmlElement = element as HTMLElement & { onclick?: unknown };
+  return element.hasAttribute("onclick") || typeof htmlElement.onclick === "function";
+}
+
+function isSemanticTextElement(element: Element): boolean {
+  const tagName = element.tagName.toLowerCase();
+  return tagName === "p" ||
+    tagName === "li" ||
+    tagName === "td" ||
+    tagName === "th" ||
+    tagName === "blockquote" ||
+    /^h[1-6]$/.test(tagName);
+}
+
+function rememberEventPathElements(event: Event): void {
+  const target = eventTargetElement(event);
+  const activationTarget = target ? pointerActivationTarget(target) ?? target : undefined;
+  rememberObservedEventElement(activationTarget);
+  for (const entry of event.composedPath()) {
+    if (!(entry instanceof Element)) continue;
+    if (entry === document.documentElement || entry === document.body) continue;
+    if (!hasTrackedPageEventListener(entry) && !hasClickHandler(entry)) continue;
+    rememberObservedEventElement(entry);
+  }
+}
+
+function rememberObservedEventElement(element: Element | undefined): void {
+  if (!element || observedEventElements.has(element)) return;
+  observedEventElements.add(element);
+  observedEventElementQueue.push(element);
+  while (observedEventElementQueue.length > MAX_OBSERVED_EVENT_ELEMENTS) observedEventElementQueue.shift();
+}
+
 function actionEventTarget(element: Element): Element {
   return pointerActivationTarget(element) ?? element;
 }
 
+function eventTargetElement(event: Event): Element | undefined {
+  for (const entry of event.composedPath()) {
+    if (entry instanceof Element) return entry;
+  }
+  return event.target instanceof Element ? event.target : undefined;
+}
+
 function pointerActivationTarget(element: Element): Element | undefined {
   let current: Element | null = element;
-  for (let depth = 0; current && current !== document.documentElement && depth < 6; depth += 1) {
-    if (isActionableElement(current) || getComputedStyle(current).cursor === "pointer") return current;
+  for (let depth = 0; current && current !== document.documentElement && depth < 12; depth += 1) {
+    if (isActionableElement(current)) return current;
+    current = current.parentElement;
+  }
+  current = element;
+  for (let depth = 0; current && current !== document.documentElement && depth < 12; depth += 1) {
+    if (current instanceof HTMLElement && getComputedStyle(current).cursor === "pointer") return current;
     current = current.parentElement;
   }
   return undefined;
 }
 
-function eventTargetSignature(element: Element): string {
-  const rect = element.getBoundingClientRect();
-  return [
-    selectorFor(element),
-    Math.round(rect.left),
-    Math.round(rect.top),
-    Math.round(rect.width),
-    Math.round(rect.height)
-  ].join("|");
-}
-
-function shouldSkipClickAfterPointerActivation(element: Element): boolean {
-  if (!lastPointerActivation) return false;
-  if (Date.now() - lastPointerActivation.timestamp > POINTER_CLICK_DEDUPE_MS) return false;
-  return lastPointerActivation.signature === eventTargetSignature(element);
+function linkHref(element: Element): string | undefined {
+  if (element instanceof HTMLAnchorElement && element.href) return element.href;
+  return element.getAttribute("href") ?? element.getAttribute("xlink:href") ?? undefined;
 }
 
 function stableElementId(element: Element): string | undefined {
@@ -715,6 +911,16 @@ function selectorFor(element: Element): string {
 
 function visibleText(element: Element): string | undefined {
   const text = element.textContent?.replace(/\s+/g, " ").trim();
+  return text ? text.slice(0, 500) : undefined;
+}
+
+function directVisibleText(element: Element): string | undefined {
+  const text = [...element.childNodes]
+    .filter((node) => node.nodeType === Node.TEXT_NODE)
+    .map((node) => node.textContent ?? "")
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
   return text ? text.slice(0, 500) : undefined;
 }
 
