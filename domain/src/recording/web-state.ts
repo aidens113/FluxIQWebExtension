@@ -29,9 +29,18 @@ export type WebAutomationDomSnapshotInput = {
   url: string;
   title: string;
   viewport: { width: number; height: number; scrollX: number; scrollY: number; documentWidth?: number | undefined; documentHeight?: number | undefined; devicePixelRatio?: number | undefined };
+  frame?: {
+    isTop: boolean;
+    viewportOffset?: WebAutomationRect | undefined;
+  } | undefined;
   focusedElement?: WebAutomationElementStateInput | undefined;
   selectedText?: string | undefined;
   interactiveElements: WebAutomationElementStateInput[];
+};
+
+export type WebAutomationScreenImageSize = {
+  width: number;
+  height: number;
 };
 
 export type WebAutomationTabStateInput = {
@@ -43,15 +52,15 @@ export type WebAutomationTabStateInput = {
   status?: string | undefined;
 };
 
-export const MAX_STATE_ELEMENTS = 500;
-export const MAX_VISUAL_FRAME_ELEMENTS = 300;
+export const MAX_STATE_ELEMENTS = 1_500;
+export const MAX_VISUAL_FRAME_ELEMENTS = 1_000;
 export const WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID = "web-automation.viewport";
 export const WEB_AUTOMATION_SCREEN_FRAME_ID = "screen";
 export const WEB_AUTOMATION_DOCUMENT_FRAME_ID = "document";
 
 export function createWebAutomationStateFromSnapshot(
   snapshot: WebAutomationDomSnapshotInput,
-  input: { timestamp?: number; sourceId?: string; screenContentRef?: string; projectId?: string } = {}
+  input: { timestamp?: number; sourceId?: string; screenContentRef?: string; projectId?: string; screenImageSize?: WebAutomationScreenImageSize } = {}
 ): StateSnapshot {
   const timestamp = input.timestamp ?? Date.now();
   let state = createWebAutomationInitialState(timestamp);
@@ -172,10 +181,15 @@ function withScreenVisualFrame(
   state: StateSnapshot,
   snapshot: WebAutomationDomSnapshotInput,
   elements: WebAutomationElementStateInput[],
-  input: { screenContentRef?: string; projectId?: string } = {}
+  input: { screenContentRef?: string; projectId?: string; screenImageSize?: WebAutomationScreenImageSize } = {}
 ): StateSnapshot {
   const width = positiveFinite(snapshot.viewport.width) ?? 1;
   const height = positiveFinite(snapshot.viewport.height) ?? 1;
+  const screenWidth = positiveFinite(input.screenImageSize?.width) ?? width;
+  const screenHeight = positiveFinite(input.screenImageSize?.height) ?? height;
+  const screenScaleX = screenWidth / width;
+  const screenScaleY = screenHeight / height;
+  const frameViewportOffset = stateBounds(snapshot.frame?.viewportOffset);
   const rawDocumentWidth = positiveFinite(snapshot.viewport.documentWidth) ?? width;
   const documentMapWidth = width;
   const documentHeight = positiveFinite(snapshot.viewport.documentHeight) ?? height;
@@ -186,18 +200,22 @@ function withScreenVisualFrame(
       id: "screenshot",
       kind: "image",
       contentRef: input.screenContentRef,
-      bounds: { x: 0, y: 0, width, height },
+      bounds: { x: 0, y: 0, width: screenWidth, height: screenHeight },
       metadata: compactJsonObject({
         projectId: input.projectId,
         url: snapshot.url,
         frameKind: "viewport-screenshot",
-        boundsKind: "screenshot"
+        boundsKind: "screenshot",
+        viewportWidth: width,
+        viewportHeight: height,
+        imageWidth: screenWidth,
+        imageHeight: screenHeight
       })
     });
   }
 
   for (const [index, element] of elements.slice(0, MAX_VISUAL_FRAME_ELEMENTS).entries()) {
-    const bounds = stateBounds(element.bounds);
+    const bounds = scaledScreenBounds(screenFrameBounds(element.bounds, frameViewportOffset), screenScaleX, screenScaleY);
     if (!bounds) continue;
     const statePath = `${WEB_AUTOMATION_STATE_NAMESPACE}.elements.${elementStateId(element)}`;
     layers.push({
@@ -221,7 +239,7 @@ function withScreenVisualFrame(
     id: WEB_AUTOMATION_SCREEN_FRAME_ID,
     rendererId: WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID,
     label: "Viewport Screenshot",
-    coordinateSpace: { width, height, unit: "px", origin: "top-left" },
+    coordinateSpace: { width: screenWidth, height: screenHeight, unit: "px", origin: "top-left" },
     layers,
     presentation: { label: snapshot.title || "Browser viewport", visualKind: "bounds", icon: "globe" },
     metadata: compactJsonObject({
@@ -233,8 +251,16 @@ function withScreenVisualFrame(
       frameKind: "viewport-screenshot",
       screenCoordinateSpace: "viewport",
       documentWidth: snapshot.viewport.documentWidth,
-      documentHeight: snapshot.viewport.documentHeight
-    })
+      documentHeight: snapshot.viewport.documentHeight,
+      viewportWidth: width,
+      viewportHeight: height,
+      imageWidth: screenWidth,
+        imageHeight: screenHeight,
+        imageScaleX: screenScaleX,
+        imageScaleY: screenScaleY,
+        frameViewportOffset: frameViewportOffset as JsonObject | undefined,
+        isTopFrame: snapshot.frame?.isTop
+      })
   };
   const documentFrame: StateVisualFrame = {
     id: WEB_AUTOMATION_DOCUMENT_FRAME_ID,
@@ -426,8 +452,10 @@ function isEnabled(element: WebAutomationElementStateInput): boolean {
 function stateElementBucket(element: WebAutomationElementStateInput): number {
   if (isPrimaryControlElement(element) && hasMeaningfulElementIdentity(element)) return 0;
   if (isLikelyInteractableElement(element) && hasMeaningfulElementIdentity(element)) return 1;
-  if (meaningfulText(element.text) || meaningfulText(element.visibleText) || meaningfulText(element.name) || meaningfulText(element.value)) return 2;
-  return 3;
+  if (isSemanticTextElement(element) && hasTextualElementIdentity(element)) return 2;
+  if (hasTextualElementIdentity(element)) return 3;
+  if (meaningfulText(element.href)) return 4;
+  return 5;
 }
 
 function stateElementScore(element: WebAutomationElementStateInput): number {
@@ -445,11 +473,15 @@ function stateElementScore(element: WebAutomationElementStateInput): number {
 
 function hasMeaningfulElementIdentity(element: WebAutomationElementStateInput): boolean {
   return hasStableElementIdentity(element) ||
-    meaningfulText(element.text) ||
+    hasTextualElementIdentity(element) ||
+    meaningfulText(element.href);
+}
+
+function hasTextualElementIdentity(element: WebAutomationElementStateInput): boolean {
+  return meaningfulText(element.text) ||
     meaningfulText(element.visibleText) ||
     meaningfulText(element.name) ||
-    meaningfulText(element.value) ||
-    meaningfulText(element.href);
+    meaningfulText(element.value);
 }
 
 function hasStableElementIdentity(element: WebAutomationElementStateInput): boolean {
@@ -484,6 +516,19 @@ function isPrimaryControlElement(element: WebAutomationElementStateInput): boole
     role === "tab";
 }
 
+function isSemanticTextElement(element: WebAutomationElementStateInput): boolean {
+  const tagName = element.tagName.toLowerCase();
+  return tagName === "p" ||
+    tagName === "li" ||
+    tagName === "td" ||
+    tagName === "th" ||
+    tagName === "dt" ||
+    tagName === "dd" ||
+    tagName === "figcaption" ||
+    tagName === "blockquote" ||
+    /^h[1-6]$/.test(tagName);
+}
+
 function isLikelyActionableElement(element: WebAutomationElementStateInput): boolean {
   const tagName = element.tagName.toLowerCase();
   const role = element.role?.toLowerCase();
@@ -509,6 +554,28 @@ function isLikelyActionableElement(element: WebAutomationElementStateInput): boo
 function boundsAnchor(bounds: WebAutomationRect | undefined): EvidenceAnchor | undefined {
   const normalized = stateBounds(bounds);
   return normalized ? { type: "bounds", bounds: normalized } : undefined;
+}
+
+function screenFrameBounds(bounds: WebAutomationRect | undefined, frameViewportOffset: StateBounds | undefined): StateBounds | undefined {
+  const normalized = stateBounds(bounds);
+  if (!normalized) return undefined;
+  if (!frameViewportOffset) return normalized;
+  return stateBounds({
+    x: frameViewportOffset.x + normalized.x,
+    y: frameViewportOffset.y + normalized.y,
+    width: normalized.width,
+    height: normalized.height
+  });
+}
+
+function scaledScreenBounds(bounds: StateBounds | undefined, scaleX: number, scaleY: number): StateBounds | undefined {
+  if (!bounds) return undefined;
+  return stateBounds({
+    x: bounds.x * scaleX,
+    y: bounds.y * scaleY,
+    width: bounds.width * scaleX,
+    height: bounds.height * scaleY
+  });
 }
 
 function stateBounds(bounds: WebAutomationRect | undefined): StateBounds | undefined {

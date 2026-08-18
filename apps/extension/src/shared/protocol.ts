@@ -175,6 +175,10 @@ export type DomSnapshot = {
   url: string;
   title: string;
   viewport: { width: number; height: number; scrollX: number; scrollY: number; documentWidth?: number | undefined; documentHeight?: number | undefined; devicePixelRatio?: number | undefined };
+  frame?: {
+    isTop: boolean;
+    viewportOffset?: RectDescriptor | undefined;
+  } | undefined;
   focusedElement?: DomElementDescriptor | undefined;
   selectedText?: string | undefined;
   interactiveElements: DomElementDescriptor[];

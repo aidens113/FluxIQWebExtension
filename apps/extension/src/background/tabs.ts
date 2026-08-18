@@ -1,11 +1,5 @@
 import type { TabDescriptor } from "../shared/protocol";
 
-type MainWorldScriptInjection = {
-  target: chrome.scripting.InjectionTarget;
-  files: string[];
-  world: "MAIN";
-};
-
 export async function activeTab(): Promise<TabDescriptor | undefined> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return tab ? describeTab(tab) : undefined;
@@ -14,6 +8,16 @@ export async function activeTab(): Promise<TabDescriptor | undefined> {
 export async function allTabs(): Promise<TabDescriptor[]> {
   const tabs = await chrome.tabs.query({});
   return tabs.map(describeTab);
+}
+
+export async function allTabFrames(tabId: number): Promise<chrome.webNavigation.GetAllFrameResultDetails[]> {
+  return new Promise((resolve) => {
+    chrome.webNavigation.getAllFrames({ tabId }, (frames) => {
+      const error = chrome.runtime.lastError;
+      if (error || !frames) resolve([]);
+      else resolve(frames);
+    });
+  });
 }
 
 export function describeTab(tab: chrome.tabs.Tab): TabDescriptor {
@@ -47,12 +51,7 @@ export async function ensureContentScript(tabId: number): Promise<void> {
     return;
   } catch {
     await chrome.scripting.executeScript({
-      target: { tabId },
-      files: ["page/event-listener-tracker.js"],
-      world: "MAIN"
-    } as MainWorldScriptInjection).catch(() => undefined);
-    await chrome.scripting.executeScript({
-      target: { tabId },
+      target: { tabId, allFrames: true },
       files: ["content/index.js"]
     });
   }

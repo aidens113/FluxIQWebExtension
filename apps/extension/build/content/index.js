@@ -67,10 +67,11 @@
   // src/content/index.ts
   var CONTENT_EVENT = "fluxiq.contentEvent";
   var CONTENT_READY = "fluxiq.contentReady";
-  var MAX_SNAPSHOT_CANDIDATES = 800;
+  var FRAME_GEOMETRY_REQUEST = "fluxiq.frameGeometryRequest";
+  var FRAME_GEOMETRY_RESPONSE = "fluxiq.frameGeometryResponse";
+  var MAX_SNAPSHOT_CANDIDATES = 2e3;
   var MAX_SNAPSHOT_SCAN_ELEMENTS = 5e4;
   var ACTIVE_CONTENT_INSTANCE_KEY = "__fluxiqWebAutomationActiveContentInstance";
-  var PAGE_LISTENER_ATTRIBUTE = "data-fluxiq-event-listeners";
   var MAX_OBSERVED_EVENT_ELEMENTS = 500;
   var CONTENT_INSTANCE_ID = `${Date.now()}.${Math.random().toString(36).slice(2)}`;
   var contentWindow = window;
@@ -87,7 +88,10 @@
   var pendingMutation = { added: 0, removed: 0, attributes: 0, text: 0 };
   var observedEventElements = /* @__PURE__ */ new WeakSet();
   var observedEventElementQueue = [];
+  var frameViewportOffset = isTopFrame() ? { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight } : void 0;
+  var frameGeometryRequestId = 0;
   sendReady();
+  installFrameGeometryBridge();
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     const typed = message;
     if (typed.type === "fluxiq.ping") {
@@ -96,16 +100,15 @@
     }
     if (!isActiveContentInstance()) return false;
     if (typed.type === "recording") {
-      if (!typed.recording) flushPendingInput();
-      recording = Boolean(typed.recording);
       captureMutations = typed.settings?.captureMutations ?? captureMutations;
       captureInputValues = typed.settings?.captureInputValues ?? captureInputValues;
       captureSnapshots = typed.settings?.captureSnapshots ?? captureSnapshots;
+      setRecordingState(Boolean(typed.recording));
       sendResponse({ ok: true });
       return true;
     }
     if (typed.type === "captureSnapshot") {
-      sendResponse(captureSnapshot());
+      void captureSnapshotForResponse().then(sendResponse);
       return true;
     }
     if (typed.type === "executeAction" && typed.action) {
@@ -115,6 +118,7 @@
     return false;
   });
   document.addEventListener("pointerdown", (event) => {
+    if (!recording) return;
     if (!event.isTrusted) return;
     if (event.button !== 0 || event.isPrimary === false) return;
     rememberEventPathElements(event);
@@ -133,6 +137,7 @@
     }));
   }, true);
   document.addEventListener("click", (event) => {
+    if (!recording) return;
     if (!event.isTrusted) return;
     rememberEventPathElements(event);
     const eventElement = eventTargetElement(event);
@@ -146,6 +151,7 @@
     }));
   }, true);
   document.addEventListener("input", (event) => {
+    if (!recording) return;
     rememberEventPathElements(event);
     const target = event.target instanceof Element ? event.target : null;
     if (target && isTextEntryElement(target)) {
@@ -155,6 +161,7 @@
     emitInputEvent(target);
   }, true);
   document.addEventListener("change", (event) => {
+    if (!recording) return;
     rememberEventPathElements(event);
     const target = event.target instanceof Element ? event.target : null;
     if (target && isTextEntryElement(target)) {
@@ -168,11 +175,13 @@
     }));
   }, true);
   document.addEventListener("submit", (event) => {
+    if (!recording) return;
     rememberEventPathElements(event);
     const target = event.target instanceof Element ? event.target : null;
     emit("dom.submit", compactObject({ element: target ? describeElement(target) : void 0 }));
   }, true);
   document.addEventListener("keydown", (event) => {
+    if (!recording) return;
     if (!event.isTrusted) return;
     rememberEventPathElements(event);
     emit("dom.keydown", compactObject({
@@ -187,6 +196,7 @@
     }));
   }, true);
   document.addEventListener("wheel", (event) => {
+    if (!recording) return;
     if (!event.isTrusted) return;
     if (scrollTimer) clearTimeout(scrollTimer);
     scrollTimer = setTimeout(() => {
@@ -207,6 +217,7 @@
     }, 400);
   }, true);
   window.addEventListener("scroll", () => {
+    if (!recording) return;
     if (scrollTimer) clearTimeout(scrollTimer);
     scrollTimer = setTimeout(() => {
       emit("dom.scroll", { scroll: { x: window.scrollX, y: window.scrollY } });
@@ -226,19 +237,16 @@
       pendingMutation = { added: 0, removed: 0, attributes: 0, text: 0 };
     }, 500);
   });
-  observer.observe(document.documentElement, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    characterData: true
-  });
   function sendReady() {
     if (!isActiveContentInstance()) return;
     const payload = basePayload("content.ready", {
-      snapshot: captureSnapshot(),
       metadata: { readyState: document.readyState }
     });
     void chrome.runtime.sendMessage({ type: CONTENT_READY, payload });
+  }
+  async function captureSnapshotForResponse() {
+    if (!isTopFrame()) await requestFrameGeometry();
+    return captureSnapshot();
   }
   function emit(kind, details) {
     if (!isActiveContentInstance()) return;
@@ -248,6 +256,99 @@
   }
   function isActiveContentInstance() {
     return contentWindow[ACTIVE_CONTENT_INSTANCE_KEY] === CONTENT_INSTANCE_ID;
+  }
+  function installFrameGeometryBridge() {
+    window.addEventListener("message", (event) => {
+      const data = event.data;
+      if (!data || typeof data !== "object") return;
+      if (data.type === FRAME_GEOMETRY_REQUEST) {
+        const requestId = typeof data.requestId === "number" ? data.requestId : void 0;
+        const geometry = childFrameViewportOffset(event.source);
+        if (!geometry || !event.source || typeof event.source.postMessage !== "function") return;
+        event.source.postMessage({
+          type: FRAME_GEOMETRY_RESPONSE,
+          requestId,
+          geometry
+        }, "*");
+        return;
+      }
+      if (data.type === FRAME_GEOMETRY_RESPONSE) {
+        const geometry = rectFromUnknown(data.geometry);
+        if (geometry) frameViewportOffset = geometry;
+      }
+    });
+    window.addEventListener("resize", () => {
+      if (isTopFrame()) frameViewportOffset = { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight };
+      else void requestFrameGeometry();
+    }, true);
+    window.addEventListener("scroll", () => {
+      if (!isTopFrame()) void requestFrameGeometry();
+    }, true);
+  }
+  function requestFrameGeometry() {
+    if (isTopFrame()) {
+      frameViewportOffset = { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight };
+      return Promise.resolve(frameViewportOffset);
+    }
+    const requestId = ++frameGeometryRequestId;
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => resolve(frameViewportOffset), 75);
+      const listener = (event) => {
+        const data = event.data;
+        if (!data || data.type !== FRAME_GEOMETRY_RESPONSE || data.requestId !== requestId) return;
+        const geometry = rectFromUnknown(data.geometry);
+        if (geometry) frameViewportOffset = geometry;
+        clearTimeout(timeout);
+        window.removeEventListener("message", listener);
+        resolve(frameViewportOffset);
+      };
+      window.addEventListener("message", listener);
+      window.parent.postMessage({ type: FRAME_GEOMETRY_REQUEST, requestId }, "*");
+    });
+  }
+  function childFrameViewportOffset(source) {
+    if (!source) return void 0;
+    const frameElement = [...document.querySelectorAll("iframe,frame")].find(
+      (element) => (element instanceof HTMLIFrameElement || element instanceof HTMLFrameElement) && element.contentWindow === source
+    );
+    if (!frameElement) return void 0;
+    const rect = frameElement.getBoundingClientRect();
+    const parentOffset = currentFrameViewportOffset() ?? { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight };
+    return {
+      x: Math.round((parentOffset.x + rect.left) * 100) / 100,
+      y: Math.round((parentOffset.y + rect.top) * 100) / 100,
+      width: Math.round(rect.width * 100) / 100,
+      height: Math.round(rect.height * 100) / 100
+    };
+  }
+  function currentFrameViewportOffset() {
+    if (isTopFrame()) return { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight };
+    return frameViewportOffset;
+  }
+  function isTopFrame() {
+    return window.top === window;
+  }
+  function rectFromUnknown(value) {
+    if (!value || typeof value !== "object") return void 0;
+    const rect = value;
+    return typeof rect.x === "number" && typeof rect.y === "number" && typeof rect.width === "number" && typeof rect.height === "number" ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : void 0;
+  }
+  function setRecordingState(nextRecording) {
+    if (!nextRecording) flushPendingInput();
+    recording = nextRecording;
+    if (recording && captureMutations) {
+      observer.observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        characterData: true
+      });
+    } else {
+      observer.disconnect();
+      if (mutationTimer) clearTimeout(mutationTimer);
+      mutationTimer = void 0;
+      pendingMutation = { added: 0, removed: 0, attributes: 0, text: 0 };
+    }
   }
   function scheduleInputEvent(element) {
     pendingInput = { element, inputValue: captureInputValues ? readElementValue(element) : void 0 };
@@ -424,6 +525,10 @@
         documentHeight: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight, window.innerHeight),
         devicePixelRatio: window.devicePixelRatio
       },
+      frame: compactObject({
+        isTop: isTopFrame(),
+        viewportOffset: currentFrameViewportOffset()
+      }),
       interactiveElements: snapshotElements()
     };
     const focused = document.activeElement instanceof Element ? describeElement(document.activeElement) : void 0;
@@ -493,7 +598,9 @@
     for (const element of observedEventElementQueue) {
       if (element.isConnected) add(element);
     }
-    for (const element of document.querySelectorAll(`[${PAGE_LISTENER_ATTRIBUTE}]`)) add(element);
+    for (const element of document.querySelectorAll("a[href],button,input:not([type=hidden]),textarea,select,summary,label,[role=button],[role=link],[role=menuitem],[role=checkbox],[role=radio],[role=tab],[role=switch],[contenteditable=true]")) add(element);
+    for (const element of document.querySelectorAll("p,h1,h2,h3,h4,h5,h6,li,td,th,blockquote,dt,dd,figcaption")) add(element);
+    for (const element of document.querySelectorAll("img,svg,picture,canvas,video")) add(element);
     let scanned = 0;
     for (const element of document.querySelectorAll("*")) {
       scanned += 1;
@@ -520,7 +627,8 @@
     if (isSemanticTextElement(element)) return 3;
     if (meaningfulText(directVisibleText(element))) return 4;
     if (hasVisualMedia(element)) return 5;
-    return 6;
+    if (meaningfulText(visibleText(element))) return 6;
+    return 7;
   }
   function hasMeaningfulInteractableIdentity(element) {
     return Boolean(
@@ -537,10 +645,7 @@
     return element.matches("svg,img,picture,canvas,video") || Boolean(element.querySelector("svg,img,picture,canvas,video"));
   }
   function isEventBackedElement(element) {
-    return observedEventElements.has(element) || hasTrackedPageEventListener(element) || hasClickHandler(element);
-  }
-  function hasTrackedPageEventListener(element) {
-    return Boolean(element.getAttribute(PAGE_LISTENER_ATTRIBUTE));
+    return observedEventElements.has(element) || hasClickHandler(element);
   }
   function visibleViewportBounds(element) {
     const rect = element.getBoundingClientRect();
@@ -693,7 +798,7 @@
   }
   function isSemanticTextElement(element) {
     const tagName = element.tagName.toLowerCase();
-    return tagName === "p" || tagName === "li" || tagName === "td" || tagName === "th" || tagName === "blockquote" || /^h[1-6]$/.test(tagName);
+    return tagName === "p" || tagName === "li" || tagName === "td" || tagName === "th" || tagName === "dt" || tagName === "dd" || tagName === "figcaption" || tagName === "blockquote" || /^h[1-6]$/.test(tagName);
   }
   function rememberEventPathElements(event) {
     const target = eventTargetElement(event);
@@ -702,7 +807,7 @@
     for (const entry of event.composedPath()) {
       if (!(entry instanceof Element)) continue;
       if (entry === document.documentElement || entry === document.body) continue;
-      if (!hasTrackedPageEventListener(entry) && !hasClickHandler(entry)) continue;
+      if (!hasClickHandler(entry)) continue;
       rememberObservedEventElement(entry);
     }
   }

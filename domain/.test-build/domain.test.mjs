@@ -163,8 +163,8 @@ function inferStateType(value) {
 }
 
 // src/recording/web-state.ts
-var MAX_STATE_ELEMENTS = 500;
-var MAX_VISUAL_FRAME_ELEMENTS = 300;
+var MAX_STATE_ELEMENTS = 1500;
+var MAX_VISUAL_FRAME_ELEMENTS = 1e3;
 var WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID = "web-automation.viewport";
 var WEB_AUTOMATION_SCREEN_FRAME_ID = "screen";
 var WEB_AUTOMATION_DOCUMENT_FRAME_ID = "document";
@@ -255,6 +255,11 @@ function addElementStateValues(state, element, timestamp, sourceId) {
 function withScreenVisualFrame(state, snapshot, elements, input = {}) {
   const width = positiveFinite(snapshot.viewport.width) ?? 1;
   const height = positiveFinite(snapshot.viewport.height) ?? 1;
+  const screenWidth = positiveFinite(input.screenImageSize?.width) ?? width;
+  const screenHeight = positiveFinite(input.screenImageSize?.height) ?? height;
+  const screenScaleX = screenWidth / width;
+  const screenScaleY = screenHeight / height;
+  const frameViewportOffset = stateBounds(snapshot.frame?.viewportOffset);
   const rawDocumentWidth = positiveFinite(snapshot.viewport.documentWidth) ?? width;
   const documentMapWidth = width;
   const documentHeight = positiveFinite(snapshot.viewport.documentHeight) ?? height;
@@ -264,17 +269,21 @@ function withScreenVisualFrame(state, snapshot, elements, input = {}) {
       id: "screenshot",
       kind: "image",
       contentRef: input.screenContentRef,
-      bounds: { x: 0, y: 0, width, height },
+      bounds: { x: 0, y: 0, width: screenWidth, height: screenHeight },
       metadata: compactJsonObject({
         projectId: input.projectId,
         url: snapshot.url,
         frameKind: "viewport-screenshot",
-        boundsKind: "screenshot"
+        boundsKind: "screenshot",
+        viewportWidth: width,
+        viewportHeight: height,
+        imageWidth: screenWidth,
+        imageHeight: screenHeight
       })
     });
   }
   for (const [index, element] of elements.slice(0, MAX_VISUAL_FRAME_ELEMENTS).entries()) {
-    const bounds = stateBounds(element.bounds);
+    const bounds = scaledScreenBounds(screenFrameBounds(element.bounds, frameViewportOffset), screenScaleX, screenScaleY);
     if (!bounds) continue;
     const statePath = `${WEB_AUTOMATION_STATE_NAMESPACE}.elements.${elementStateId(element)}`;
     layers.push({
@@ -297,7 +306,7 @@ function withScreenVisualFrame(state, snapshot, elements, input = {}) {
     id: WEB_AUTOMATION_SCREEN_FRAME_ID,
     rendererId: WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID,
     label: "Viewport Screenshot",
-    coordinateSpace: { width, height, unit: "px", origin: "top-left" },
+    coordinateSpace: { width: screenWidth, height: screenHeight, unit: "px", origin: "top-left" },
     layers,
     presentation: { label: snapshot.title || "Browser viewport", visualKind: "bounds", icon: "globe" },
     metadata: compactJsonObject({
@@ -309,7 +318,15 @@ function withScreenVisualFrame(state, snapshot, elements, input = {}) {
       frameKind: "viewport-screenshot",
       screenCoordinateSpace: "viewport",
       documentWidth: snapshot.viewport.documentWidth,
-      documentHeight: snapshot.viewport.documentHeight
+      documentHeight: snapshot.viewport.documentHeight,
+      viewportWidth: width,
+      viewportHeight: height,
+      imageWidth: screenWidth,
+      imageHeight: screenHeight,
+      imageScaleX: screenScaleX,
+      imageScaleY: screenScaleY,
+      frameViewportOffset,
+      isTopFrame: snapshot.frame?.isTop
     })
   };
   const documentFrame = {
@@ -473,8 +490,10 @@ function isEnabled(element) {
 function stateElementBucket(element) {
   if (isPrimaryControlElement(element) && hasMeaningfulElementIdentity(element)) return 0;
   if (isLikelyInteractableElement(element) && hasMeaningfulElementIdentity(element)) return 1;
-  if (meaningfulText(element.text) || meaningfulText(element.visibleText) || meaningfulText(element.name) || meaningfulText(element.value)) return 2;
-  return 3;
+  if (isSemanticTextElement(element) && hasTextualElementIdentity(element)) return 2;
+  if (hasTextualElementIdentity(element)) return 3;
+  if (meaningfulText(element.href)) return 4;
+  return 5;
 }
 function stateElementScore(element) {
   let score = 0;
@@ -489,7 +508,10 @@ function stateElementScore(element) {
   return score;
 }
 function hasMeaningfulElementIdentity(element) {
-  return hasStableElementIdentity(element) || meaningfulText(element.text) || meaningfulText(element.visibleText) || meaningfulText(element.name) || meaningfulText(element.value) || meaningfulText(element.href);
+  return hasStableElementIdentity(element) || hasTextualElementIdentity(element) || meaningfulText(element.href);
+}
+function hasTextualElementIdentity(element) {
+  return meaningfulText(element.text) || meaningfulText(element.visibleText) || meaningfulText(element.name) || meaningfulText(element.value);
 }
 function hasStableElementIdentity(element) {
   return Boolean(
@@ -504,6 +526,10 @@ function isPrimaryControlElement(element) {
   const role = element.role?.toLowerCase();
   return tagName === "button" || tagName === "a" || tagName === "summary" || role === "button" || role === "link" || role === "menuitem" || role === "tab";
 }
+function isSemanticTextElement(element) {
+  const tagName = element.tagName.toLowerCase();
+  return tagName === "p" || tagName === "li" || tagName === "td" || tagName === "th" || tagName === "dt" || tagName === "dd" || tagName === "figcaption" || tagName === "blockquote" || /^h[1-6]$/.test(tagName);
+}
 function isLikelyActionableElement(element) {
   const tagName = element.tagName.toLowerCase();
   const role = element.role?.toLowerCase();
@@ -513,6 +539,26 @@ function isLikelyActionableElement(element) {
 function boundsAnchor(bounds) {
   const normalized = stateBounds(bounds);
   return normalized ? { type: "bounds", bounds: normalized } : void 0;
+}
+function screenFrameBounds(bounds, frameViewportOffset) {
+  const normalized = stateBounds(bounds);
+  if (!normalized) return void 0;
+  if (!frameViewportOffset) return normalized;
+  return stateBounds({
+    x: frameViewportOffset.x + normalized.x,
+    y: frameViewportOffset.y + normalized.y,
+    width: normalized.width,
+    height: normalized.height
+  });
+}
+function scaledScreenBounds(bounds, scaleX, scaleY) {
+  if (!bounds) return void 0;
+  return stateBounds({
+    x: bounds.x * scaleX,
+    y: bounds.y * scaleY,
+    width: bounds.width * scaleX,
+    height: bounds.height * scaleY
+  });
 }
 function stateBounds(bounds) {
   if (!bounds) return void 0;
@@ -841,6 +887,21 @@ var prioritizedElements = filterStateElements([
 assert.equal(prioritizedElements[0]?.selector, "button.deposit");
 assert.equal(prioritizedElements.some((item) => item.selector === "p.summary"), true);
 assert.equal(prioritizedElements.some((item) => item.selector === "p.disclaimer"), true);
+var noisyElements = Array.from({ length: 1600 }, (_, index) => ({
+  tagName: "div",
+  selector: `div.wrapper-${index}`,
+  text: `Wrapper ${index}`,
+  bounds: { x: 0, y: index * 20, width: 800, height: 18 }
+}));
+var prioritySurvivors = filterStateElements([
+  ...noisyElements,
+  { tagName: "a", selector: "a.billing", href: "https://example.test/billing", text: "Billing", bounds: { x: 20, y: 20, width: 80, height: 24 } },
+  { tagName: "p", selector: "p.balance", text: "Available balance", bounds: { x: 20, y: 60, width: 160, height: 24 } },
+  { tagName: "h2", selector: "h2.accounts", text: "Accounts", bounds: { x: 20, y: 100, width: 140, height: 32 } }
+]);
+assert.equal(prioritySurvivors.some((item) => item.selector === "a.billing"), true);
+assert.equal(prioritySurvivors.some((item) => item.selector === "p.balance"), true);
+assert.equal(prioritySurvivors.some((item) => item.selector === "h2.accounts"), true);
 var repeatedNamedControlsState = createWebAutomationStateFromSnapshot({
   url: "https://example.test/preferences",
   title: "Preferences",
@@ -883,6 +944,51 @@ assert.equal(webValues["elements.button.save"]?.presentation?.metadata?.boundsKi
 assert.equal(snapshotState.presentation?.visualFrames?.[0]?.layers.find((layer) => layer.id.includes("button.save"))?.statePath, "web.elements.button.save");
 assert.equal(snapshotState.presentation?.visualFrames?.[0]?.layers.find((layer) => layer.id.includes("button.save"))?.metadata?.boundsKind, "screenshot");
 assert.equal(validateStateSnapshot(snapshotState).ok, true);
+var scaledScreenshotState = createWebAutomationStateFromSnapshot({
+  url: "https://example.test/scaled",
+  title: "Scaled",
+  viewport: { width: 800, height: 600, scrollX: 0, scrollY: 0, documentWidth: 800, documentHeight: 900 },
+  interactiveElements: [
+    { tagName: "a", selector: "a.statement", text: "Statement", bounds: { x: 100, y: 50, width: 80, height: 20 }, documentBounds: { x: 100, y: 50, width: 80, height: 20 } }
+  ]
+}, {
+  timestamp: 25,
+  screenContentRef: "automation-object://project/project.test/2222222222222222222222222222222222222222222222222222222222222222",
+  screenImageSize: { width: 1600, height: 1200 }
+});
+var scaledScreenFrame = scaledScreenshotState.presentation?.visualFrames?.find((frame) => frame.id === "screen");
+var scaledDocumentFrame = scaledScreenshotState.presentation?.visualFrames?.find((frame) => frame.id === "document");
+assert.equal(scaledScreenFrame?.coordinateSpace.width, 1600);
+assert.equal(scaledScreenFrame?.coordinateSpace.height, 1200);
+assert.equal(scaledScreenFrame?.layers.find((layer) => layer.id === "screenshot")?.bounds.width, 1600);
+assert.equal(scaledScreenFrame?.layers.find((layer) => layer.id.includes("a.statement"))?.bounds.x, 200);
+assert.equal(scaledScreenFrame?.layers.find((layer) => layer.id.includes("a.statement"))?.bounds.width, 160);
+assert.equal(scaledDocumentFrame?.coordinateSpace.width, 800);
+assert.equal(scaledDocumentFrame?.layers.find((layer) => layer.id.includes("a.statement"))?.bounds.x, 100);
+assert.equal(validateStateSnapshot(scaledScreenshotState).ok, true);
+var iframeScreenshotState = createWebAutomationStateFromSnapshot({
+  url: "https://widget.example.test",
+  title: "Widget",
+  viewport: { width: 400, height: 300, scrollX: 0, scrollY: 0, documentWidth: 400, documentHeight: 300 },
+  frame: {
+    isTop: false,
+    viewportOffset: { x: 900, y: 120, width: 400, height: 300 }
+  },
+  interactiveElements: [
+    { tagName: "button", selector: "button.pay", text: "Pay", bounds: { x: 20, y: 30, width: 100, height: 40 }, documentBounds: { x: 20, y: 30, width: 100, height: 40 } }
+  ]
+}, {
+  timestamp: 26,
+  screenContentRef: "automation-object://project/project.test/3333333333333333333333333333333333333333333333333333333333333333",
+  screenImageSize: { width: 1534, height: 945 }
+});
+var iframeScreenFrame = iframeScreenshotState.presentation?.visualFrames?.find((frame) => frame.id === "screen");
+var iframeDocumentFrame = iframeScreenshotState.presentation?.visualFrames?.find((frame) => frame.id === "document");
+assert.equal(iframeScreenFrame?.layers.find((layer) => layer.id.includes("button.pay"))?.bounds.x, 3528.2);
+assert.equal(iframeScreenFrame?.layers.find((layer) => layer.id.includes("button.pay"))?.bounds.y, 472.5);
+assert.equal(iframeDocumentFrame?.layers.find((layer) => layer.id.includes("button.pay"))?.bounds.x, 20);
+assert.equal(iframeScreenFrame?.metadata?.frameViewportOffset?.x, 900);
+assert.equal(validateStateSnapshot(iframeScreenshotState).ok, true);
 var fullPageState = createWebAutomationStateFromSnapshot({
   url: "https://example.test/long",
   title: "Long page",

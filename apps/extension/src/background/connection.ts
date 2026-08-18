@@ -49,14 +49,16 @@ import {
   type RecordingBlockState,
   type UnsupportedPageState
 } from "../shared/protocol";
-import { activeTab, allTabs, ensureContentScript, sendToTab } from "./tabs";
+import { activeTab, allTabFrames, allTabs, ensureContentScript, sendToTab } from "./tabs";
 import { clearQueuedEvents, queueEvent, readQueuedEvents, writeSession } from "./storage";
 
 type StatusListener = (status: ExtensionStatus) => void;
 type DomSnapshotPayload = Parameters<typeof createWebAutomationStateFromSnapshot>[0];
-type VisualStateSample = { snapshot?: DomSnapshotPayload; screenContentRef?: string; capturedAt?: number };
+type ScreenImageSize = { width: number; height: number };
+type VisualStateSample = { snapshot?: DomSnapshotPayload; screenContentRef?: string; screenImageSize?: ScreenImageSize; capturedAt?: number };
 
 const POINTER_CLICK_SUPPRESS_DELAY_MS = 750;
+const FRAME_SNAPSHOT_TIMEOUT_MS = 150;
 
 export class FluxIQConnection {
   private client: FluxIQClientGatewayWebSocketClient | null = null;
@@ -306,10 +308,17 @@ export class FluxIQConnection {
   }
 
   async handleContentReady(payload: RecordingEventPayload, tabId?: number, frameId?: number): Promise<void> {
+    let readyPayload = payload;
     if (this.recordingState === "recording" && tabId !== undefined && !this.unsupportedPage) {
       await this.setContentRecordingState(tabId, true, frameId).catch(() => undefined);
+      if (!payload.snapshot) {
+        const snapshot = await sendToTab(tabId, { type: "captureSnapshot" }, frameId)
+          .then((value) => isDomSnapshotPayload(value) ? value : undefined)
+          .catch(() => undefined);
+        if (snapshot) readyPayload = { ...payload, snapshot };
+      }
     }
-    await this.handleRecordingEvent(payload, tabId, frameId);
+    await this.handleRecordingEvent(readyPayload, tabId, frameId);
   }
 
   private async processRecordingEvent(payload: RecordingEventPayload, tabId?: number, frameId?: number): Promise<void> {
@@ -667,9 +676,7 @@ export class FluxIQConnection {
     if (this.recordingState !== "recording") return;
     const projectId = await this.resolveRecordingProjectId("recording_evidence");
     if (this.recordingState !== "recording") return;
-    const snapshot = isDomSnapshotPayload(payload.snapshot)
-      ? payload.snapshot
-      : await this.captureDomSnapshotForEvidence(payload, tabId, frameId);
+    const snapshot = await this.captureDomSnapshotForEvidence(payload, tabId, frameId);
     if (this.recordingState !== "recording") return;
     const hasDomSnapshot = isDomSnapshotPayload(snapshot);
     const state = hasDomSnapshot
@@ -678,7 +685,7 @@ export class FluxIQConnection {
           eventKey: stateScreenshotEventKey(payload),
           ...(projectId ? { projectId } : {}),
           ...(tabId === undefined ? {} : {
-            sourceId: this.tabSourceId(tabId, frameId),
+            sourceId: this.tabSourceId(tabId),
             tabId
           })
         })
@@ -731,7 +738,7 @@ export class FluxIQConnection {
     if (tabId === undefined || this.unsupportedPage || !shouldRequireStateForEvidence(payload)) return undefined;
     try {
       await ensureContentScript(tabId);
-      const snapshot = await sendToTab(tabId, { type: "captureSnapshot" }, frameId);
+      const snapshot = await this.captureMergedTabSnapshot(tabId, isDomSnapshotPayload(payload.snapshot) ? payload.snapshot : undefined, frameId);
       if (isDomSnapshotPayload(snapshot)) {
         console.info("FluxIQ evidence snapshot recovered", {
           kind: payload.kind,
@@ -752,6 +759,42 @@ export class FluxIQConnection {
       });
     }
     return undefined;
+  }
+
+  private async captureMergedTabSnapshot(
+    tabId: number,
+    seedSnapshot?: DomSnapshotPayload,
+    seedFrameId?: number
+  ): Promise<DomSnapshotPayload | undefined> {
+    const topFallback = await this.captureSingleFrameSnapshot(tabId, 0);
+    const fallback = topFallback ?? seedSnapshot;
+    const frames = await withTimeout(allTabFrames(tabId), FRAME_SNAPSHOT_TIMEOUT_MS, []);
+    const frameSnapshots: Array<{ frameId: number; snapshot: DomSnapshotPayload }> = [];
+    if (seedSnapshot && seedFrameId !== undefined) frameSnapshots.push({ frameId: seedFrameId, snapshot: seedSnapshot });
+    await withTimeout(Promise.allSettled(frames.map(async (frame) => {
+      if (seedFrameId !== undefined && frame.frameId === seedFrameId && seedSnapshot) return;
+      const snapshot = await this.captureSingleFrameSnapshot(tabId, frame.frameId);
+      if (snapshot) frameSnapshots.push({ frameId: frame.frameId, snapshot });
+    })), FRAME_SNAPSHOT_TIMEOUT_MS, []);
+    if (!frameSnapshots.length) return fallback;
+    const topSnapshot = frameSnapshots.find((entry) => entry.frameId === 0 || entry.snapshot.frame?.isTop)?.snapshot ?? topFallback;
+    if (!topSnapshot) return undefined;
+    const mergedElements: NonNullable<RecordingEventPayload["element"]>[] = [];
+    for (const entry of frameSnapshots) {
+      const elements = entry.snapshot === topSnapshot || entry.snapshot.frame?.isTop
+        ? entry.snapshot.interactiveElements
+        : translateFrameElements(entry.snapshot, topSnapshot, entry.frameId);
+      mergedElements.push(...elements);
+    }
+    return {
+      ...topSnapshot,
+      interactiveElements: mergedElements
+    };
+  }
+
+  private async captureSingleFrameSnapshot(tabId: number, frameId: number): Promise<DomSnapshotPayload | undefined> {
+    const snapshot = await withTimeout(sendToTab(tabId, { type: "captureSnapshot" }, frameId), FRAME_SNAPSHOT_TIMEOUT_MS, undefined);
+    return isDomSnapshotPayload(snapshot) ? snapshot : undefined;
   }
 
   private async sendActionResult(result: BrowserActionResult, tabId?: number, frameId?: number): Promise<void> {
@@ -1013,13 +1056,14 @@ export class FluxIQConnection {
         projectId,
         sha256,
         coordinateSpace: capture.coordinateSpace,
+        imageSize: capture.imageSize,
         eventKey,
         eventTimestampMs: timestamp,
         capturedAt,
         deltaMs: capturedAt - timestamp
       });
       this.addActivity("snapshot", "Fresh viewport screenshot stored", `${sha256.slice(0, 12)} @ ${Math.max(0, capturedAt - timestamp)}ms after event`, "success");
-      return { screenContentRef, capturedAt };
+      return { screenContentRef, screenImageSize: capture.imageSize, capturedAt };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Fresh screenshot capture failed.";
       console.warn("FluxIQ fresh state screenshot failed", {
@@ -1034,25 +1078,37 @@ export class FluxIQConnection {
 
   private async createStateFromDomSnapshot(
     snapshot: Parameters<typeof createWebAutomationStateFromSnapshot>[0],
-    input: { timestamp: number; sourceId?: string; projectId?: string; tabId?: number; eventKey?: string }
+    input: { timestamp: number; sourceId?: string; projectId?: string; tabId?: number; frameId?: number; eventKey?: string }
   ): Promise<JsonObject> {
     let screenContentRef: string | undefined;
     let stateSnapshot = snapshot;
     let stateTimestamp = input.timestamp;
+    let visualSample: VisualStateSample | undefined;
     let missingScreenReason: string | undefined;
-    if (input.projectId && input.tabId !== undefined) {
-      const visualSample = await this.visualSampleForState(input.tabId, input.projectId, input.timestamp, input.eventKey);
+    const hasFrameViewportOffset = hasSnapshotFrameViewportOffset(snapshot);
+    const canAttachFullTabScreenshot = input.frameId === undefined || input.frameId === 0 || hasFrameViewportOffset;
+    if (input.projectId && input.tabId !== undefined && canAttachFullTabScreenshot) {
+      visualSample = await this.visualSampleForState(input.tabId, input.projectId, input.timestamp, input.eventKey);
       screenContentRef = visualSample?.screenContentRef;
       if (visualSample?.snapshot) stateSnapshot = visualSample.snapshot;
       if (!screenContentRef) missingScreenReason = "screenshot capture or upload failed";
     } else {
-      missingScreenReason = input.projectId ? "no tab id" : "no project id";
-      this.noteScreenshotSkipped(input.projectId ? "No active tab id available for screenshot capture." : "No project id available for screenshot upload.");
+      missingScreenReason = input.frameId !== undefined && input.frameId !== 0
+        ? "frame-local state missing iframe viewport offset"
+        : input.projectId
+          ? "no tab id"
+          : "no project id";
+      this.noteScreenshotSkipped(input.frameId !== undefined && input.frameId !== 0
+        ? "Frame-local state cannot be safely paired with a full-tab screenshot until iframe viewport offset is available."
+        : input.projectId
+          ? "No active tab id available for screenshot capture."
+          : "No project id available for screenshot upload.");
     }
     const options: Parameters<typeof createWebAutomationStateFromSnapshot>[1] = { timestamp: stateTimestamp };
     if (input.sourceId !== undefined) options.sourceId = input.sourceId;
     if (input.projectId !== undefined) options.projectId = input.projectId;
     if (screenContentRef !== undefined) options.screenContentRef = screenContentRef;
+    if (visualSample?.screenImageSize !== undefined) options.screenImageSize = visualSample.screenImageSize;
     const state = createWebAutomationStateFromSnapshot(stateSnapshot, options) as unknown as JsonObject;
     if (missingScreenReason) {
       console.warn("FluxIQ state snapshot missing screenshot", {
@@ -1061,7 +1117,8 @@ export class FluxIQConnection {
         stateTimestamp,
         sourceId: input.sourceId,
         projectId: input.projectId,
-        tabId: input.tabId
+        tabId: input.tabId,
+        frameId: input.frameId
       });
       this.addActivity("snapshot", "State screenshot missing", missingScreenReason, "warning");
       const metadata = objectValue(state.metadata);
@@ -1105,7 +1162,7 @@ export class FluxIQConnection {
       const sha256 = await sha256Hex(capture.bytes);
       const screenContentRef = await this.uploadStateAsset(projectId, sha256, capture.bytes, "image/png");
       this.addActivity("snapshot", "Screenshot stored", sha256.slice(0, 12), "success");
-      return { screenContentRef, capturedAt: Date.now() };
+      return { screenContentRef, screenImageSize: capture.imageSize, capturedAt: Date.now() };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Screenshot capture or upload failed.";
       this.addActivity("snapshot", "Screenshot unavailable", message, "warning");
@@ -1113,15 +1170,16 @@ export class FluxIQConnection {
     }
   }
 
-  private async captureScreenPngBytes(tabId: number): Promise<{ bytes: ArrayBuffer; coordinateSpace: "viewport" }> {
+  private async captureScreenPngBytes(tabId: number): Promise<{ bytes: ArrayBuffer; imageSize: ScreenImageSize; coordinateSpace: "viewport" }> {
     return await this.captureVisibleViewportPngBytes(tabId);
   }
 
-  private async captureVisibleViewportPngBytes(tabId: number): Promise<{ bytes: ArrayBuffer; coordinateSpace: "viewport" }> {
+  private async captureVisibleViewportPngBytes(tabId: number): Promise<{ bytes: ArrayBuffer; imageSize: ScreenImageSize; coordinateSpace: "viewport" }> {
     const tab = await chrome.tabs.get(tabId);
     if (tab.windowId === undefined) throw new Error("Tab window is unavailable for screenshot capture.");
     const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
-    return { bytes: await bytesFromDataUrl(dataUrl), coordinateSpace: "viewport" };
+    const bytes = await bytesFromDataUrl(dataUrl);
+    return { bytes, imageSize: pngImageSize(bytes), coordinateSpace: "viewport" };
   }
 
   private async uploadStateAsset(projectId: string, sha256: string, bytes: ArrayBuffer, mediaType: string): Promise<string> {
@@ -1301,6 +1359,104 @@ function recordingEvidencePayload(payload: RecordingEventPayload): JsonObject {
   }) as JsonObject;
 }
 
+function translateFrameElements(
+  frameSnapshot: DomSnapshotPayload,
+  topSnapshot: DomSnapshotPayload,
+  frameId: number
+): NonNullable<RecordingEventPayload["element"]>[] {
+  const offset = rectValue(frameSnapshot.frame?.viewportOffset);
+  if (!offset) return frameSnapshot.interactiveElements;
+  return frameSnapshot.interactiveElements.map((element) => {
+    const viewportBounds = translateFrameRectToTopViewport(element.bounds, element.documentBounds, frameSnapshot, offset);
+    const documentBounds = viewportBounds
+      ? {
+          x: viewportBounds.x + topSnapshot.viewport.scrollX,
+          y: viewportBounds.y + topSnapshot.viewport.scrollY,
+          width: viewportBounds.width,
+          height: viewportBounds.height
+        }
+      : translateFrameDocumentRectToTopDocument(element.documentBounds, frameSnapshot, topSnapshot, offset);
+    return compactObject({
+      ...element,
+      selector: `frame[${frameId}] >> ${element.selector}`,
+      bounds: viewportBounds,
+      documentBounds,
+      isVisibleOnViewport: viewportBounds !== undefined,
+      attributes: compactObject({
+        ...(element.attributes ?? {}),
+        "data-fluxiq-frame-id": String(frameId),
+        "data-fluxiq-frame-url": frameSnapshot.url
+      })
+    }) as NonNullable<RecordingEventPayload["element"]>;
+  });
+}
+
+function translateFrameRectToTopViewport(
+  bounds: NonNullable<RecordingEventPayload["element"]>["bounds"],
+  documentBounds: NonNullable<RecordingEventPayload["element"]>["documentBounds"],
+  frameSnapshot: DomSnapshotPayload,
+  offset: { x: number; y: number; width: number; height: number }
+): NonNullable<RecordingEventPayload["element"]>["bounds"] {
+  const rect = rectValue(bounds) ??
+    translateFrameDocumentRectToFrameViewport(documentBounds, frameSnapshot);
+  if (!rect) return undefined;
+  return {
+    x: round2(offset.x + rect.x),
+    y: round2(offset.y + rect.y),
+    width: round2(rect.width),
+    height: round2(rect.height)
+  };
+}
+
+function translateFrameDocumentRectToFrameViewport(
+  documentBounds: NonNullable<RecordingEventPayload["element"]>["documentBounds"],
+  frameSnapshot: DomSnapshotPayload
+): NonNullable<RecordingEventPayload["element"]>["bounds"] {
+  const rect = rectValue(documentBounds);
+  if (!rect) return undefined;
+  return {
+    x: round2(rect.x - frameSnapshot.viewport.scrollX),
+    y: round2(rect.y - frameSnapshot.viewport.scrollY),
+    width: round2(rect.width),
+    height: round2(rect.height)
+  };
+}
+
+function translateFrameDocumentRectToTopDocument(
+  documentBounds: NonNullable<RecordingEventPayload["element"]>["documentBounds"],
+  frameSnapshot: DomSnapshotPayload,
+  topSnapshot: DomSnapshotPayload,
+  offset: { x: number; y: number; width: number; height: number }
+): NonNullable<RecordingEventPayload["element"]>["documentBounds"] {
+  const frameViewportRect = translateFrameDocumentRectToFrameViewport(documentBounds, frameSnapshot);
+  if (!frameViewportRect) return undefined;
+  return {
+    x: round2(topSnapshot.viewport.scrollX + offset.x + frameViewportRect.x),
+    y: round2(topSnapshot.viewport.scrollY + offset.y + frameViewportRect.y),
+    width: round2(frameViewportRect.width),
+    height: round2(frameViewportRect.height)
+  };
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), timeoutMs);
+    promise
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch(() => {
+        clearTimeout(timer);
+        resolve(fallback);
+      });
+  });
+}
+
 function stateSnapshotIdFromPayload(payload: RecordingEventPayload): string {
   const kind = payload.kind.replace(/[^a-z0-9_.-]+/gi, "-");
   return `state.${kind}.${payload.sequence}.${payload.eventTimestampMs}`;
@@ -1478,6 +1634,7 @@ function isDomSnapshotPayload(value: unknown): value is {
   url: string;
   title: string;
   viewport: { width: number; height: number; scrollX: number; scrollY: number };
+  frame?: { isTop: boolean; viewportOffset?: { x: number; y: number; width: number; height: number } };
   focusedElement?: RecordingEventPayload["element"];
   selectedText?: string;
   interactiveElements: NonNullable<RecordingEventPayload["element"]>[];
@@ -1497,6 +1654,15 @@ function isDomSnapshotPayload(value: unknown): value is {
     typeof snapshot.viewport.scrollX === "number" &&
     typeof snapshot.viewport.scrollY === "number" &&
     Array.isArray(snapshot.interactiveElements);
+}
+
+function hasSnapshotFrameViewportOffset(snapshot: Parameters<typeof createWebAutomationStateFromSnapshot>[0]): boolean {
+  const frame = objectValue((snapshot as { frame?: unknown }).frame);
+  const viewportOffset = objectValue(frame?.viewportOffset);
+  return typeof viewportOffset?.x === "number" &&
+    typeof viewportOffset.y === "number" &&
+    typeof viewportOffset.width === "number" &&
+    typeof viewportOffset.height === "number";
 }
 
 function browserStateSnapshotFromTabs(
@@ -1585,6 +1751,19 @@ function timestampValue(value: unknown): number | undefined {
 async function bytesFromDataUrl(dataUrl: string): Promise<ArrayBuffer> {
   const response = await fetch(dataUrl);
   return await response.arrayBuffer();
+}
+
+function pngImageSize(bytes: ArrayBuffer): ScreenImageSize {
+  const view = new DataView(bytes);
+  const hasPngSignature = view.byteLength >= 24 &&
+    view.getUint32(0) === 0x89504e47 &&
+    view.getUint32(4) === 0x0d0a1a0a &&
+    view.getUint32(12) === 0x49484452;
+  if (!hasPngSignature) throw new Error("Captured screenshot is not a PNG image.");
+  const width = view.getUint32(16);
+  const height = view.getUint32(20);
+  if (width <= 0 || height <= 0) throw new Error("Captured screenshot has invalid PNG dimensions.");
+  return { width, height };
 }
 
 async function sha256Hex(bytes: ArrayBuffer): Promise<string> {

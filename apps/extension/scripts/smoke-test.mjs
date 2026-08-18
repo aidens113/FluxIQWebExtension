@@ -6,7 +6,6 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 for (const file of [
   "src/background/index.ts",
   "src/content/index.ts",
-  "src/page/event-listener-tracker.ts",
   "src/popup/index.ts",
   "manifest.chrome.json",
   "manifest.firefox.json"

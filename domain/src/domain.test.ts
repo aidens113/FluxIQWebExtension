@@ -51,6 +51,22 @@ assert.equal(prioritizedElements[0]?.selector, "button.deposit");
 assert.equal(prioritizedElements.some((item) => item.selector === "p.summary"), true);
 assert.equal(prioritizedElements.some((item) => item.selector === "p.disclaimer"), true);
 
+const noisyElements = Array.from({ length: 1_600 }, (_, index) => ({
+  tagName: "div",
+  selector: `div.wrapper-${index}`,
+  text: `Wrapper ${index}`,
+  bounds: { x: 0, y: index * 20, width: 800, height: 18 }
+}));
+const prioritySurvivors = filterStateElements([
+  ...noisyElements,
+  { tagName: "a", selector: "a.billing", href: "https://example.test/billing", text: "Billing", bounds: { x: 20, y: 20, width: 80, height: 24 } },
+  { tagName: "p", selector: "p.balance", text: "Available balance", bounds: { x: 20, y: 60, width: 160, height: 24 } },
+  { tagName: "h2", selector: "h2.accounts", text: "Accounts", bounds: { x: 20, y: 100, width: 140, height: 32 } }
+]);
+assert.equal(prioritySurvivors.some((item) => item.selector === "a.billing"), true);
+assert.equal(prioritySurvivors.some((item) => item.selector === "p.balance"), true);
+assert.equal(prioritySurvivors.some((item) => item.selector === "h2.accounts"), true);
+
 const repeatedNamedControlsState = createWebAutomationStateFromSnapshot({
   url: "https://example.test/preferences",
   title: "Preferences",
@@ -94,6 +110,53 @@ assert.equal(webValues["elements.button.save"]?.presentation?.metadata?.boundsKi
 assert.equal(snapshotState.presentation?.visualFrames?.[0]?.layers.find((layer) => layer.id.includes("button.save"))?.statePath, "web.elements.button.save");
 assert.equal(snapshotState.presentation?.visualFrames?.[0]?.layers.find((layer) => layer.id.includes("button.save"))?.metadata?.boundsKind, "screenshot");
 assert.equal(validateStateSnapshot(snapshotState).ok, true);
+
+const scaledScreenshotState = createWebAutomationStateFromSnapshot({
+  url: "https://example.test/scaled",
+  title: "Scaled",
+  viewport: { width: 800, height: 600, scrollX: 0, scrollY: 0, documentWidth: 800, documentHeight: 900 },
+  interactiveElements: [
+    { tagName: "a", selector: "a.statement", text: "Statement", bounds: { x: 100, y: 50, width: 80, height: 20 }, documentBounds: { x: 100, y: 50, width: 80, height: 20 } }
+  ]
+}, {
+  timestamp: 25,
+  screenContentRef: "automation-object://project/project.test/2222222222222222222222222222222222222222222222222222222222222222",
+  screenImageSize: { width: 1600, height: 1200 }
+});
+const scaledScreenFrame = scaledScreenshotState.presentation?.visualFrames?.find((frame) => frame.id === "screen");
+const scaledDocumentFrame = scaledScreenshotState.presentation?.visualFrames?.find((frame) => frame.id === "document");
+assert.equal(scaledScreenFrame?.coordinateSpace.width, 1600);
+assert.equal(scaledScreenFrame?.coordinateSpace.height, 1200);
+assert.equal(scaledScreenFrame?.layers.find((layer) => layer.id === "screenshot")?.bounds.width, 1600);
+assert.equal(scaledScreenFrame?.layers.find((layer) => layer.id.includes("a.statement"))?.bounds.x, 200);
+assert.equal(scaledScreenFrame?.layers.find((layer) => layer.id.includes("a.statement"))?.bounds.width, 160);
+assert.equal(scaledDocumentFrame?.coordinateSpace.width, 800);
+assert.equal(scaledDocumentFrame?.layers.find((layer) => layer.id.includes("a.statement"))?.bounds.x, 100);
+assert.equal(validateStateSnapshot(scaledScreenshotState).ok, true);
+
+const iframeScreenshotState = createWebAutomationStateFromSnapshot({
+  url: "https://widget.example.test",
+  title: "Widget",
+  viewport: { width: 400, height: 300, scrollX: 0, scrollY: 0, documentWidth: 400, documentHeight: 300 },
+  frame: {
+    isTop: false,
+    viewportOffset: { x: 900, y: 120, width: 400, height: 300 }
+  },
+  interactiveElements: [
+    { tagName: "button", selector: "button.pay", text: "Pay", bounds: { x: 20, y: 30, width: 100, height: 40 }, documentBounds: { x: 20, y: 30, width: 100, height: 40 } }
+  ]
+}, {
+  timestamp: 26,
+  screenContentRef: "automation-object://project/project.test/3333333333333333333333333333333333333333333333333333333333333333",
+  screenImageSize: { width: 1534, height: 945 }
+});
+const iframeScreenFrame = iframeScreenshotState.presentation?.visualFrames?.find((frame) => frame.id === "screen");
+const iframeDocumentFrame = iframeScreenshotState.presentation?.visualFrames?.find((frame) => frame.id === "document");
+assert.equal(iframeScreenFrame?.layers.find((layer) => layer.id.includes("button.pay"))?.bounds.x, 3528.2);
+assert.equal(iframeScreenFrame?.layers.find((layer) => layer.id.includes("button.pay"))?.bounds.y, 472.5);
+assert.equal(iframeDocumentFrame?.layers.find((layer) => layer.id.includes("button.pay"))?.bounds.x, 20);
+assert.equal(iframeScreenFrame?.metadata?.frameViewportOffset?.x, 900);
+assert.equal(validateStateSnapshot(iframeScreenshotState).ok, true);
 
 const fullPageState = createWebAutomationStateFromSnapshot({
   url: "https://example.test/long",

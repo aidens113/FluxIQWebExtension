@@ -423,8 +423,8 @@ function createWebAutomationInitialState(timestamp = Date.now()) {
 }
 
 // ../../domain/src/recording/web-state.ts
-var MAX_STATE_ELEMENTS = 500;
-var MAX_VISUAL_FRAME_ELEMENTS = 300;
+var MAX_STATE_ELEMENTS = 1500;
+var MAX_VISUAL_FRAME_ELEMENTS = 1e3;
 var WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID = "web-automation.viewport";
 var WEB_AUTOMATION_SCREEN_FRAME_ID = "screen";
 var WEB_AUTOMATION_DOCUMENT_FRAME_ID = "document";
@@ -526,6 +526,11 @@ function addElementStateValues(state, element, timestamp, sourceId) {
 function withScreenVisualFrame(state, snapshot, elements, input = {}) {
   const width = positiveFinite(snapshot.viewport.width) ?? 1;
   const height = positiveFinite(snapshot.viewport.height) ?? 1;
+  const screenWidth = positiveFinite(input.screenImageSize?.width) ?? width;
+  const screenHeight = positiveFinite(input.screenImageSize?.height) ?? height;
+  const screenScaleX = screenWidth / width;
+  const screenScaleY = screenHeight / height;
+  const frameViewportOffset = stateBounds(snapshot.frame?.viewportOffset);
   const rawDocumentWidth = positiveFinite(snapshot.viewport.documentWidth) ?? width;
   const documentMapWidth = width;
   const documentHeight = positiveFinite(snapshot.viewport.documentHeight) ?? height;
@@ -535,17 +540,21 @@ function withScreenVisualFrame(state, snapshot, elements, input = {}) {
       id: "screenshot",
       kind: "image",
       contentRef: input.screenContentRef,
-      bounds: { x: 0, y: 0, width, height },
+      bounds: { x: 0, y: 0, width: screenWidth, height: screenHeight },
       metadata: compactJsonObject({
         projectId: input.projectId,
         url: snapshot.url,
         frameKind: "viewport-screenshot",
-        boundsKind: "screenshot"
+        boundsKind: "screenshot",
+        viewportWidth: width,
+        viewportHeight: height,
+        imageWidth: screenWidth,
+        imageHeight: screenHeight
       })
     });
   }
   for (const [index, element] of elements.slice(0, MAX_VISUAL_FRAME_ELEMENTS).entries()) {
-    const bounds = stateBounds(element.bounds);
+    const bounds = scaledScreenBounds(screenFrameBounds(element.bounds, frameViewportOffset), screenScaleX, screenScaleY);
     if (!bounds) continue;
     const statePath = `${WEB_AUTOMATION_STATE_NAMESPACE}.elements.${elementStateId(element)}`;
     layers.push({
@@ -568,7 +577,7 @@ function withScreenVisualFrame(state, snapshot, elements, input = {}) {
     id: WEB_AUTOMATION_SCREEN_FRAME_ID,
     rendererId: WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID,
     label: "Viewport Screenshot",
-    coordinateSpace: { width, height, unit: "px", origin: "top-left" },
+    coordinateSpace: { width: screenWidth, height: screenHeight, unit: "px", origin: "top-left" },
     layers,
     presentation: { label: snapshot.title || "Browser viewport", visualKind: "bounds", icon: "globe" },
     metadata: compactJsonObject({
@@ -580,7 +589,15 @@ function withScreenVisualFrame(state, snapshot, elements, input = {}) {
       frameKind: "viewport-screenshot",
       screenCoordinateSpace: "viewport",
       documentWidth: snapshot.viewport.documentWidth,
-      documentHeight: snapshot.viewport.documentHeight
+      documentHeight: snapshot.viewport.documentHeight,
+      viewportWidth: width,
+      viewportHeight: height,
+      imageWidth: screenWidth,
+      imageHeight: screenHeight,
+      imageScaleX: screenScaleX,
+      imageScaleY: screenScaleY,
+      frameViewportOffset,
+      isTopFrame: snapshot.frame?.isTop
     })
   };
   const documentFrame = {
@@ -744,8 +761,10 @@ function isEnabled(element) {
 function stateElementBucket(element) {
   if (isPrimaryControlElement(element) && hasMeaningfulElementIdentity(element)) return 0;
   if (isLikelyInteractableElement(element) && hasMeaningfulElementIdentity(element)) return 1;
-  if (meaningfulText(element.text) || meaningfulText(element.visibleText) || meaningfulText(element.name) || meaningfulText(element.value)) return 2;
-  return 3;
+  if (isSemanticTextElement(element) && hasTextualElementIdentity(element)) return 2;
+  if (hasTextualElementIdentity(element)) return 3;
+  if (meaningfulText(element.href)) return 4;
+  return 5;
 }
 function stateElementScore(element) {
   let score = 0;
@@ -760,7 +779,10 @@ function stateElementScore(element) {
   return score;
 }
 function hasMeaningfulElementIdentity(element) {
-  return hasStableElementIdentity(element) || meaningfulText(element.text) || meaningfulText(element.visibleText) || meaningfulText(element.name) || meaningfulText(element.value) || meaningfulText(element.href);
+  return hasStableElementIdentity(element) || hasTextualElementIdentity(element) || meaningfulText(element.href);
+}
+function hasTextualElementIdentity(element) {
+  return meaningfulText(element.text) || meaningfulText(element.visibleText) || meaningfulText(element.name) || meaningfulText(element.value);
 }
 function hasStableElementIdentity(element) {
   return Boolean(
@@ -775,6 +797,10 @@ function isPrimaryControlElement(element) {
   const role = element.role?.toLowerCase();
   return tagName === "button" || tagName === "a" || tagName === "summary" || role === "button" || role === "link" || role === "menuitem" || role === "tab";
 }
+function isSemanticTextElement(element) {
+  const tagName = element.tagName.toLowerCase();
+  return tagName === "p" || tagName === "li" || tagName === "td" || tagName === "th" || tagName === "dt" || tagName === "dd" || tagName === "figcaption" || tagName === "blockquote" || /^h[1-6]$/.test(tagName);
+}
 function isLikelyActionableElement(element) {
   const tagName = element.tagName.toLowerCase();
   const role = element.role?.toLowerCase();
@@ -784,6 +810,26 @@ function isLikelyActionableElement(element) {
 function boundsAnchor(bounds) {
   const normalized = stateBounds(bounds);
   return normalized ? { type: "bounds", bounds: normalized } : void 0;
+}
+function screenFrameBounds(bounds, frameViewportOffset) {
+  const normalized = stateBounds(bounds);
+  if (!normalized) return void 0;
+  if (!frameViewportOffset) return normalized;
+  return stateBounds({
+    x: frameViewportOffset.x + normalized.x,
+    y: frameViewportOffset.y + normalized.y,
+    width: normalized.width,
+    height: normalized.height
+  });
+}
+function scaledScreenBounds(bounds, scaleX, scaleY) {
+  if (!bounds) return void 0;
+  return stateBounds({
+    x: bounds.x * scaleX,
+    y: bounds.y * scaleY,
+    width: bounds.width * scaleX,
+    height: bounds.height * scaleY
+  });
 }
 function stateBounds(bounds) {
   if (!bounds) return void 0;
@@ -943,6 +989,15 @@ async function allTabs() {
   const tabs = await chrome.tabs.query({});
   return tabs.map(describeTab);
 }
+async function allTabFrames(tabId) {
+  return new Promise((resolve) => {
+    chrome.webNavigation.getAllFrames({ tabId }, (frames) => {
+      const error = chrome.runtime.lastError;
+      if (error || !frames) resolve([]);
+      else resolve(frames);
+    });
+  });
+}
 function describeTab(tab) {
   const descriptor = {
     tabId: tab.id ?? -1
@@ -972,12 +1027,7 @@ async function ensureContentScript(tabId) {
     return;
   } catch {
     await chrome.scripting.executeScript({
-      target: { tabId },
-      files: ["page/event-listener-tracker.js"],
-      world: "MAIN"
-    }).catch(() => void 0);
-    await chrome.scripting.executeScript({
-      target: { tabId },
+      target: { tabId, allFrames: true },
       files: ["content/index.js"]
     });
   }
@@ -1031,6 +1081,7 @@ async function clearQueuedEvents() {
 
 // src/background/connection.ts
 var POINTER_CLICK_SUPPRESS_DELAY_MS = 750;
+var FRAME_SNAPSHOT_TIMEOUT_MS = 150;
 var FluxIQConnection = class {
   constructor(settings, session) {
     this.settings = settings;
@@ -1264,10 +1315,15 @@ var FluxIQConnection = class {
     await this.processRecordingEvent(payload, tabId, frameId);
   }
   async handleContentReady(payload, tabId, frameId) {
+    let readyPayload = payload;
     if (this.recordingState === "recording" && tabId !== void 0 && !this.unsupportedPage) {
       await this.setContentRecordingState(tabId, true, frameId).catch(() => void 0);
+      if (!payload.snapshot) {
+        const snapshot = await sendToTab(tabId, { type: "captureSnapshot" }, frameId).then((value) => isDomSnapshotPayload(value) ? value : void 0).catch(() => void 0);
+        if (snapshot) readyPayload = { ...payload, snapshot };
+      }
     }
-    await this.handleRecordingEvent(payload, tabId, frameId);
+    await this.handleRecordingEvent(readyPayload, tabId, frameId);
   }
   async processRecordingEvent(payload, tabId, frameId) {
     if (this.recordingState !== "recording") return;
@@ -1595,7 +1651,7 @@ var FluxIQConnection = class {
     if (this.recordingState !== "recording") return;
     const projectId = await this.resolveRecordingProjectId("recording_evidence");
     if (this.recordingState !== "recording") return;
-    const snapshot = isDomSnapshotPayload(payload.snapshot) ? payload.snapshot : await this.captureDomSnapshotForEvidence(payload, tabId, frameId);
+    const snapshot = await this.captureDomSnapshotForEvidence(payload, tabId, frameId);
     if (this.recordingState !== "recording") return;
     const hasDomSnapshot = isDomSnapshotPayload(snapshot);
     const state = hasDomSnapshot ? await this.createStateFromDomSnapshot(snapshot, {
@@ -1603,7 +1659,7 @@ var FluxIQConnection = class {
       eventKey: stateScreenshotEventKey(payload),
       ...projectId ? { projectId } : {},
       ...tabId === void 0 ? {} : {
-        sourceId: this.tabSourceId(tabId, frameId),
+        sourceId: this.tabSourceId(tabId),
         tabId
       }
     }) : compactObject({
@@ -1650,7 +1706,7 @@ var FluxIQConnection = class {
     if (tabId === void 0 || this.unsupportedPage || !shouldRequireStateForEvidence(payload)) return void 0;
     try {
       await ensureContentScript(tabId);
-      const snapshot = await sendToTab(tabId, { type: "captureSnapshot" }, frameId);
+      const snapshot = await this.captureMergedTabSnapshot(tabId, isDomSnapshotPayload(payload.snapshot) ? payload.snapshot : void 0, frameId);
       if (isDomSnapshotPayload(snapshot)) {
         console.info("FluxIQ evidence snapshot recovered", {
           kind: payload.kind,
@@ -1671,6 +1727,34 @@ var FluxIQConnection = class {
       });
     }
     return void 0;
+  }
+  async captureMergedTabSnapshot(tabId, seedSnapshot, seedFrameId) {
+    const topFallback = await this.captureSingleFrameSnapshot(tabId, 0);
+    const fallback = topFallback ?? seedSnapshot;
+    const frames = await withTimeout(allTabFrames(tabId), FRAME_SNAPSHOT_TIMEOUT_MS, []);
+    const frameSnapshots = [];
+    if (seedSnapshot && seedFrameId !== void 0) frameSnapshots.push({ frameId: seedFrameId, snapshot: seedSnapshot });
+    await withTimeout(Promise.allSettled(frames.map(async (frame) => {
+      if (seedFrameId !== void 0 && frame.frameId === seedFrameId && seedSnapshot) return;
+      const snapshot = await this.captureSingleFrameSnapshot(tabId, frame.frameId);
+      if (snapshot) frameSnapshots.push({ frameId: frame.frameId, snapshot });
+    })), FRAME_SNAPSHOT_TIMEOUT_MS, []);
+    if (!frameSnapshots.length) return fallback;
+    const topSnapshot = frameSnapshots.find((entry) => entry.frameId === 0 || entry.snapshot.frame?.isTop)?.snapshot ?? topFallback;
+    if (!topSnapshot) return void 0;
+    const mergedElements = [];
+    for (const entry of frameSnapshots) {
+      const elements = entry.snapshot === topSnapshot || entry.snapshot.frame?.isTop ? entry.snapshot.interactiveElements : translateFrameElements(entry.snapshot, topSnapshot, entry.frameId);
+      mergedElements.push(...elements);
+    }
+    return {
+      ...topSnapshot,
+      interactiveElements: mergedElements
+    };
+  }
+  async captureSingleFrameSnapshot(tabId, frameId) {
+    const snapshot = await withTimeout(sendToTab(tabId, { type: "captureSnapshot" }, frameId), FRAME_SNAPSHOT_TIMEOUT_MS, void 0);
+    return isDomSnapshotPayload(snapshot) ? snapshot : void 0;
   }
   async sendActionResult(result, tabId, frameId) {
     await this.sendClientMessage("client.action_result", gatewayActionResultFromBrowserResult(result));
@@ -1893,13 +1977,14 @@ var FluxIQConnection = class {
         projectId,
         sha256,
         coordinateSpace: capture.coordinateSpace,
+        imageSize: capture.imageSize,
         eventKey,
         eventTimestampMs: timestamp,
         capturedAt,
         deltaMs: capturedAt - timestamp
       });
       this.addActivity("snapshot", "Fresh viewport screenshot stored", `${sha256.slice(0, 12)} @ ${Math.max(0, capturedAt - timestamp)}ms after event`, "success");
-      return { screenContentRef, capturedAt };
+      return { screenContentRef, screenImageSize: capture.imageSize, capturedAt };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Fresh screenshot capture failed.";
       console.warn("FluxIQ fresh state screenshot failed", {
@@ -1915,20 +2000,24 @@ var FluxIQConnection = class {
     let screenContentRef;
     let stateSnapshot = snapshot;
     let stateTimestamp = input.timestamp;
+    let visualSample;
     let missingScreenReason;
-    if (input.projectId && input.tabId !== void 0) {
-      const visualSample = await this.visualSampleForState(input.tabId, input.projectId, input.timestamp, input.eventKey);
+    const hasFrameViewportOffset = hasSnapshotFrameViewportOffset(snapshot);
+    const canAttachFullTabScreenshot = input.frameId === void 0 || input.frameId === 0 || hasFrameViewportOffset;
+    if (input.projectId && input.tabId !== void 0 && canAttachFullTabScreenshot) {
+      visualSample = await this.visualSampleForState(input.tabId, input.projectId, input.timestamp, input.eventKey);
       screenContentRef = visualSample?.screenContentRef;
       if (visualSample?.snapshot) stateSnapshot = visualSample.snapshot;
       if (!screenContentRef) missingScreenReason = "screenshot capture or upload failed";
     } else {
-      missingScreenReason = input.projectId ? "no tab id" : "no project id";
-      this.noteScreenshotSkipped(input.projectId ? "No active tab id available for screenshot capture." : "No project id available for screenshot upload.");
+      missingScreenReason = input.frameId !== void 0 && input.frameId !== 0 ? "frame-local state missing iframe viewport offset" : input.projectId ? "no tab id" : "no project id";
+      this.noteScreenshotSkipped(input.frameId !== void 0 && input.frameId !== 0 ? "Frame-local state cannot be safely paired with a full-tab screenshot until iframe viewport offset is available." : input.projectId ? "No active tab id available for screenshot capture." : "No project id available for screenshot upload.");
     }
     const options = { timestamp: stateTimestamp };
     if (input.sourceId !== void 0) options.sourceId = input.sourceId;
     if (input.projectId !== void 0) options.projectId = input.projectId;
     if (screenContentRef !== void 0) options.screenContentRef = screenContentRef;
+    if (visualSample?.screenImageSize !== void 0) options.screenImageSize = visualSample.screenImageSize;
     const state = createWebAutomationStateFromSnapshot(stateSnapshot, options);
     if (missingScreenReason) {
       console.warn("FluxIQ state snapshot missing screenshot", {
@@ -1937,7 +2026,8 @@ var FluxIQConnection = class {
         stateTimestamp,
         sourceId: input.sourceId,
         projectId: input.projectId,
-        tabId: input.tabId
+        tabId: input.tabId,
+        frameId: input.frameId
       });
       this.addActivity("snapshot", "State screenshot missing", missingScreenReason, "warning");
       const metadata = objectValue(state.metadata);
@@ -1974,7 +2064,7 @@ var FluxIQConnection = class {
       const sha256 = await sha256Hex(capture.bytes);
       const screenContentRef = await this.uploadStateAsset(projectId, sha256, capture.bytes, "image/png");
       this.addActivity("snapshot", "Screenshot stored", sha256.slice(0, 12), "success");
-      return { screenContentRef, capturedAt: Date.now() };
+      return { screenContentRef, screenImageSize: capture.imageSize, capturedAt: Date.now() };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Screenshot capture or upload failed.";
       this.addActivity("snapshot", "Screenshot unavailable", message, "warning");
@@ -1988,7 +2078,8 @@ var FluxIQConnection = class {
     const tab = await chrome.tabs.get(tabId);
     if (tab.windowId === void 0) throw new Error("Tab window is unavailable for screenshot capture.");
     const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
-    return { bytes: await bytesFromDataUrl(dataUrl), coordinateSpace: "viewport" };
+    const bytes = await bytesFromDataUrl(dataUrl);
+    return { bytes, imageSize: pngImageSize(bytes), coordinateSpace: "viewport" };
   }
   async uploadStateAsset(projectId, sha256, bytes, mediaType) {
     const url = new URL(`/api/programs/automation-studio/state-assets/${encodeURIComponent(projectId)}/${sha256}`, this.settings.coreApiUrl || DEFAULT_CORE_API_URL);
@@ -2142,6 +2233,76 @@ function recordingEvidencePayload(payload) {
     metadata: payload.metadata
   });
 }
+function translateFrameElements(frameSnapshot, topSnapshot, frameId) {
+  const offset = rectValue(frameSnapshot.frame?.viewportOffset);
+  if (!offset) return frameSnapshot.interactiveElements;
+  return frameSnapshot.interactiveElements.map((element) => {
+    const viewportBounds = translateFrameRectToTopViewport(element.bounds, element.documentBounds, frameSnapshot, offset);
+    const documentBounds = viewportBounds ? {
+      x: viewportBounds.x + topSnapshot.viewport.scrollX,
+      y: viewportBounds.y + topSnapshot.viewport.scrollY,
+      width: viewportBounds.width,
+      height: viewportBounds.height
+    } : translateFrameDocumentRectToTopDocument(element.documentBounds, frameSnapshot, topSnapshot, offset);
+    return compactObject({
+      ...element,
+      selector: `frame[${frameId}] >> ${element.selector}`,
+      bounds: viewportBounds,
+      documentBounds,
+      isVisibleOnViewport: viewportBounds !== void 0,
+      attributes: compactObject({
+        ...element.attributes ?? {},
+        "data-fluxiq-frame-id": String(frameId),
+        "data-fluxiq-frame-url": frameSnapshot.url
+      })
+    });
+  });
+}
+function translateFrameRectToTopViewport(bounds, documentBounds, frameSnapshot, offset) {
+  const rect = rectValue(bounds) ?? translateFrameDocumentRectToFrameViewport(documentBounds, frameSnapshot);
+  if (!rect) return void 0;
+  return {
+    x: round2(offset.x + rect.x),
+    y: round2(offset.y + rect.y),
+    width: round2(rect.width),
+    height: round2(rect.height)
+  };
+}
+function translateFrameDocumentRectToFrameViewport(documentBounds, frameSnapshot) {
+  const rect = rectValue(documentBounds);
+  if (!rect) return void 0;
+  return {
+    x: round2(rect.x - frameSnapshot.viewport.scrollX),
+    y: round2(rect.y - frameSnapshot.viewport.scrollY),
+    width: round2(rect.width),
+    height: round2(rect.height)
+  };
+}
+function translateFrameDocumentRectToTopDocument(documentBounds, frameSnapshot, topSnapshot, offset) {
+  const frameViewportRect = translateFrameDocumentRectToFrameViewport(documentBounds, frameSnapshot);
+  if (!frameViewportRect) return void 0;
+  return {
+    x: round2(topSnapshot.viewport.scrollX + offset.x + frameViewportRect.x),
+    y: round2(topSnapshot.viewport.scrollY + offset.y + frameViewportRect.y),
+    width: round2(frameViewportRect.width),
+    height: round2(frameViewportRect.height)
+  };
+}
+function round2(value) {
+  return Math.round(value * 100) / 100;
+}
+function withTimeout(promise, timeoutMs, fallback) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), timeoutMs);
+    promise.then((value) => {
+      clearTimeout(timer);
+      resolve(value);
+    }).catch(() => {
+      clearTimeout(timer);
+      resolve(fallback);
+    });
+  });
+}
 function stateSnapshotIdFromPayload(payload) {
   const kind = payload.kind.replace(/[^a-z0-9_.-]+/gi, "-");
   return `state.${kind}.${payload.sequence}.${payload.eventTimestampMs}`;
@@ -2291,6 +2452,11 @@ function isDomSnapshotPayload(value) {
   const snapshot = value;
   return typeof snapshot.url === "string" && typeof snapshot.title === "string" && Boolean(snapshot.viewport) && typeof snapshot.viewport?.width === "number" && typeof snapshot.viewport.height === "number" && typeof snapshot.viewport.scrollX === "number" && typeof snapshot.viewport.scrollY === "number" && Array.isArray(snapshot.interactiveElements);
 }
+function hasSnapshotFrameViewportOffset(snapshot) {
+  const frame = objectValue(snapshot.frame);
+  const viewportOffset = objectValue(frame?.viewportOffset);
+  return typeof viewportOffset?.x === "number" && typeof viewportOffset.y === "number" && typeof viewportOffset.width === "number" && typeof viewportOffset.height === "number";
+}
 function browserStateSnapshotFromTabs(active, tabs, recordingState, timestamp, sourceId) {
   const options = {
     timestamp,
@@ -2357,6 +2523,15 @@ function timestampValue(value) {
 async function bytesFromDataUrl(dataUrl) {
   const response = await fetch(dataUrl);
   return await response.arrayBuffer();
+}
+function pngImageSize(bytes) {
+  const view = new DataView(bytes);
+  const hasPngSignature = view.byteLength >= 24 && view.getUint32(0) === 2303741511 && view.getUint32(4) === 218765834 && view.getUint32(12) === 1229472850;
+  if (!hasPngSignature) throw new Error("Captured screenshot is not a PNG image.");
+  const width = view.getUint32(16);
+  const height = view.getUint32(20);
+  if (width <= 0 || height <= 0) throw new Error("Captured screenshot has invalid PNG dimensions.");
+  return { width, height };
 }
 async function sha256Hex(bytes) {
   const digest = await crypto.subtle.digest("SHA-256", bytes);
