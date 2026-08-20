@@ -171,6 +171,20 @@ export type DomElementDescriptor = {
   attributes?: Record<string, string> | undefined;
 };
 
+export type ActionVisualTarget = {
+  namespace: "web";
+  statePath: string;
+  selector?: string | undefined;
+  frameId?: string | undefined;
+  layerId?: string | undefined;
+  documentLayerId?: string | undefined;
+  bounds?: RectDescriptor | undefined;
+  documentBounds?: RectDescriptor | undefined;
+  anchor?: { type: "bounds"; bounds: RectDescriptor } | undefined;
+  confidence?: number | undefined;
+  metadata?: JsonObject | undefined;
+};
+
 export type DomSnapshot = {
   url: string;
   title: string;
@@ -209,6 +223,7 @@ export type RecordingEventPayload = {
   title: string;
   eventTimestampMs: number;
   element?: DomElementDescriptor | undefined;
+  visualTarget?: ActionVisualTarget | undefined;
   snapshot?: DomSnapshot | undefined;
   inputValue?: string | undefined;
   key?: string | undefined;
@@ -232,6 +247,7 @@ export type BrowserActionCommand = {
   url?: string | undefined;
   timeoutMs?: number | undefined;
   coordinates?: { x: number; y: number } | undefined;
+  visualTarget?: ActionVisualTarget | undefined;
   options?: JsonObject | undefined;
 };
 
@@ -243,6 +259,7 @@ export type BrowserActionResult = {
   url?: string | undefined;
   title?: string | undefined;
   element?: DomElementDescriptor | undefined;
+  visualTarget?: ActionVisualTarget | undefined;
   snapshot?: DomSnapshot | undefined;
   extracted?: JsonValue | undefined;
   startedAt: number;

@@ -15,6 +15,20 @@ export type WebAutomationActionType =
 
 export type WebAutomationPoint = { x: number; y: number };
 
+export type WebAutomationActionVisualTarget = {
+  namespace: "web";
+  statePath: string;
+  selector?: string | undefined;
+  frameId?: string | undefined;
+  layerId?: string | undefined;
+  documentLayerId?: string | undefined;
+  bounds?: { x: number; y: number; width: number; height: number } | undefined;
+  documentBounds?: { x: number; y: number; width: number; height: number } | undefined;
+  anchor?: { type: "bounds"; bounds: { x: number; y: number; width: number; height: number } } | undefined;
+  confidence?: number | undefined;
+  metadata?: JsonObject | undefined;
+};
+
 export type WebAutomationActionCommand = {
   commandId: string;
   actionType: WebAutomationActionType;
@@ -27,6 +41,7 @@ export type WebAutomationActionCommand = {
   url?: string | undefined;
   timeoutMs?: number | undefined;
   coordinates?: WebAutomationPoint | undefined;
+  visualTarget?: WebAutomationActionVisualTarget | undefined;
   options?: JsonObject | undefined;
 };
 
@@ -38,6 +53,7 @@ export type WebAutomationActionResult = {
   url?: string | undefined;
   title?: string | undefined;
   element?: JsonObject | undefined;
+  visualTarget?: WebAutomationActionVisualTarget | undefined;
   snapshot?: JsonObject | undefined;
   extracted?: JsonValue | undefined;
   startedAt: number;

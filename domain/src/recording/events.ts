@@ -24,6 +24,23 @@ const elementSchema: RecordingEventJsonSchema = {
   }
 };
 
+const visualTargetSchema: RecordingEventJsonSchema = {
+  type: "object",
+  properties: {
+    namespace: { type: "string", label: "State namespace" },
+    statePath: { type: "string", label: "Visual state path" },
+    selector: { type: "string", label: "Selector" },
+    frameId: { type: "string", label: "Visual frame" },
+    layerId: { type: "string", label: "Visual layer" },
+    documentLayerId: { type: "string", label: "Document visual layer" },
+    bounds: { type: "object", label: "Viewport bounds" },
+    documentBounds: { type: "object", label: "Document bounds" },
+    anchor: { type: "object", label: "Visual anchor" },
+    confidence: { type: "number", label: "Confidence" },
+    metadata: { type: "object", label: "Target metadata" }
+  }
+};
+
 const basePayloadSchema: RecordingEventJsonSchema = {
   type: "object",
   required: true,
@@ -32,6 +49,7 @@ const basePayloadSchema: RecordingEventJsonSchema = {
     title: { type: "string", label: "Title" },
     sequence: { type: "integer", label: "Sequence" },
     element: elementSchema,
+    visualTarget: visualTargetSchema,
     inputValue: { type: "string", label: "Input value" },
     key: { type: "string", label: "Key" },
     scroll: { type: "object", label: "Scroll position" },

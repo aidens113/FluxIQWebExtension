@@ -1,6 +1,7 @@
 import type { JsonObject } from "fluxiq/core";
 import type { ActionTarget, EvidenceAnchor, StateBounds, StateSnapshot, StateValue, StateValueType, StateVisualFrame } from "fluxiq/automation-studio";
 import { WEB_AUTOMATION_DOMAIN_ID, WEB_AUTOMATION_SCHEMA_VERSION } from "../constants";
+import type { WebAutomationActionVisualTarget } from "../actions/types";
 import { createWebAutomationInitialState, WEB_AUTOMATION_STATE_NAMESPACE } from "./state";
 
 export type WebAutomationRect = { x: number; y: number; width: number; height: number };
@@ -147,6 +148,43 @@ export function webAutomationActionTargetFromElement(element: WebAutomationEleme
       attributes: element.attributes as JsonObject | undefined
     })
   }) as ActionTarget;
+}
+
+export function webAutomationActionVisualTargetFromElement(
+  element: WebAutomationElementStateInput,
+  input: { confidence?: number; layerIndex?: number } = {}
+): WebAutomationActionVisualTarget | undefined {
+  const stateId = elementStateId(element);
+  const statePath = `${WEB_AUTOMATION_STATE_NAMESPACE}.elements.${stateId}`;
+  const bounds = stateBounds(element.bounds);
+  const documentBounds = stateBounds(element.documentBounds ?? element.bounds);
+  const anchorBounds = documentBounds ?? bounds;
+  const safeId = safeLayerId(stateId, input.layerIndex ?? 1);
+  return compactJsonObject({
+    namespace: WEB_AUTOMATION_STATE_NAMESPACE,
+    statePath,
+    selector: element.selector,
+    frameId: WEB_AUTOMATION_SCREEN_FRAME_ID,
+    layerId: `element.${safeId}`,
+    documentLayerId: `document.element.${safeId}`,
+    bounds,
+    documentBounds,
+    anchor: anchorBounds ? { type: "bounds", bounds: anchorBounds } : undefined,
+    confidence: input.confidence ?? (stableElementId(element) ? 0.98 : 0.88),
+    metadata: compactJsonObject({
+      tagName: element.tagName,
+      xpath: element.xpath,
+      id: element.id,
+      classNames: element.classNames,
+      visibleText: element.visibleText,
+      role: element.role,
+      name: element.name,
+      href: element.href,
+      inputType: element.inputType,
+      stableId: stableElementId(element),
+      isVisibleOnViewport: element.isVisibleOnViewport ?? Boolean(bounds)
+    })
+  }) as WebAutomationActionVisualTarget;
 }
 
 function addElementStateValues(

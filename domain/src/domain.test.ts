@@ -5,7 +5,7 @@ import { webAutomationRecordingDomain } from "./recording/domain";
 import { createWebAutomationInitialState } from "./recording/state";
 import { createWebAutomationRecordingEvent } from "./client/gateway-mapping";
 import { WEB_AUTOMATION_INPUT_IDS, webAutomationInputIdForRecordedEvent, actionInputDefinitions, stateInputDefinitions } from "./io/input-model";
-import { createWebAutomationStateFromSnapshot, filterStateElements } from "./recording/web-state";
+import { createWebAutomationStateFromSnapshot, filterStateElements, webAutomationActionVisualTargetFromElement } from "./recording/web-state";
 
 const service = new AutomationStudioService({ seedFixture: false });
 service.registerRecordingDomain(webAutomationRecordingDomain);
@@ -24,10 +24,12 @@ const event = createWebAutomationRecordingEvent({
   url: "https://example.test",
   title: "Example",
   eventTimestampMs: 10,
-  element: { selector: "button" }
+  element: { selector: "button", tagName: "button", text: "Submit", bounds: { x: 10, y: 20, width: 90, height: 30 } }
 });
 assert.equal(event.domainId, WEB_AUTOMATION_DOMAIN_ID);
 assert.equal(event.eventType, WEB_AUTOMATION_EVENTS.elementClicked);
+assert.equal((event.payload.visualTarget as { statePath?: string } | undefined)?.statePath, "web.elements.button");
+assert.equal((event.metadata?.visualTarget as { layerId?: string } | undefined)?.layerId, "element.button");
 
 const initialState = createWebAutomationInitialState(1);
 assert.equal(initialState.namespaces.web?.schemaId, WEB_AUTOMATION_DOMAIN_ID);
@@ -39,6 +41,9 @@ const filteredElements = filterStateElements([
   { tagName: "input", selector: "input[name=search]", attributes: { name: "search" }, bounds: { x: 20, y: 80, width: 240, height: 36 } }
 ]);
 assert.deepEqual(filteredElements.map((item) => item.selector), ["button.save", "a.home", "input[name=search]"]);
+const saveVisualTarget = webAutomationActionVisualTargetFromElement(filteredElements[0]!);
+assert.equal(saveVisualTarget?.statePath, "web.elements.button.save");
+assert.equal(saveVisualTarget?.documentLayerId, "document.element.button.save");
 
 const prioritizedElements = filterStateElements([
   { tagName: "section", selector: "section.hero", attributes: { id: "hero" }, bounds: { x: 0, y: 0, width: 800, height: 300 } },

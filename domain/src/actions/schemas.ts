@@ -20,7 +20,25 @@ const elementFingerprintSchema = {
   }
 } satisfies JsonObject;
 
-const elementProperties = { selector: { type: "string", label: "CSS selector" }, element: elementFingerprintSchema };
+const visualTargetSchema = {
+  type: "object",
+  label: "Visual target",
+  properties: {
+    namespace: { type: "string", label: "State namespace" },
+    statePath: { type: "string", label: "State path" },
+    selector: { type: "string", label: "CSS selector" },
+    frameId: { type: "string", label: "Visual frame" },
+    layerId: { type: "string", label: "Visual layer" },
+    documentLayerId: { type: "string", label: "Document visual layer" },
+    bounds: { type: "object", label: "Viewport bounds" },
+    documentBounds: { type: "object", label: "Document bounds" },
+    anchor: { type: "object", label: "Anchor" },
+    confidence: { type: "number", label: "Confidence" },
+    metadata: { type: "object", label: "Metadata" }
+  }
+} satisfies JsonObject;
+
+const elementProperties = { selector: { type: "string", label: "CSS selector" }, element: elementFingerprintSchema, visualTarget: visualTargetSchema };
 
 const selectorSchema = {
   type: "object",

@@ -1,9 +1,10 @@
 import type { ClientGatewayActionCommand, ClientGatewayRecordingEvent, ClientGatewaySnapshot, ClientGatewayStateUpdate } from "@fluxiq/client-gateway-websocket";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID, WEB_AUTOMATION_EVENTS, type WebAutomationEventType } from "../constants";
-import { webAutomationActionTargetFromElement, type WebAutomationElementStateInput } from "../recording/web-state";
+import { webAutomationActionTargetFromElement, webAutomationActionVisualTargetFromElement, type WebAutomationElementStateInput } from "../recording/web-state";
 import {
   WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER,
+  type WebAutomationActionVisualTarget,
   type WebAutomationActionCommand,
   type WebAutomationActionResult,
   type WebAutomationActionType
@@ -16,6 +17,7 @@ export type WebAutomationRecordedPayload = {
   title: string;
   eventTimestampMs: number;
   element?: JsonObject | undefined;
+  visualTarget?: JsonObject | undefined;
   snapshot?: JsonObject | undefined;
   inputValue?: string | undefined;
   key?: string | undefined;
@@ -47,6 +49,9 @@ export function webAutomationEventTypeForClientKind(kind: string): WebAutomation
 export function createWebAutomationRecordingEvent(payload: WebAutomationRecordedPayload, input: { tabId?: number; frameId?: number; recordingId?: string } = {}): ClientGatewayRecordingEvent {
   const eventType = webAutomationEventTypeForClientKind(payload.kind);
   const target = payload.element;
+  const visualTarget = payload.visualTarget ?? (target !== undefined
+    ? webAutomationActionVisualTargetFromElement(target as unknown as WebAutomationElementStateInput) as unknown as JsonObject
+    : undefined);
   return {
     eventId: `web.${payload.sequence}.${payload.eventTimestampMs}`,
     ...(input.recordingId !== undefined ? { recordingId: input.recordingId } : {}),
@@ -60,6 +65,7 @@ export function createWebAutomationRecordingEvent(payload: WebAutomationRecorded
       title: payload.title,
       sequence: payload.sequence,
       element: payload.element,
+      visualTarget,
       inputValue: payload.inputValue,
       key: payload.key,
       scroll: payload.scroll,
@@ -70,6 +76,7 @@ export function createWebAutomationRecordingEvent(payload: WebAutomationRecorded
     }),
     metadata: compactJsonObject({
       clientKind: payload.kind,
+      ...(visualTarget !== undefined ? { visualTarget } : {}),
       ...(payload.metadata ?? {})
     })
   };
@@ -116,6 +123,7 @@ export function webAutomationActionFromGatewayCommand(command: ClientGatewayActi
     url: stringValue(parameters.url),
     timeoutMs: numberValue(command.timeoutMs ?? parameters.timeoutMs),
     coordinates: pointValue(target.coordinates ?? parameters.coordinates),
+    visualTarget: jsonObject(target.visualTarget ?? parameters.visualTarget) as unknown as WebAutomationActionVisualTarget | undefined,
     options: parameters
   }) as unknown as WebAutomationActionCommand;
 }
@@ -133,6 +141,7 @@ export function webAutomationActionResultPayload(result: WebAutomationActionResu
     url: result.url,
     title: result.title,
     element: result.element,
+    visualTarget: result.visualTarget,
     snapshot: result.snapshot,
     extracted: result.extracted,
     startedAt: result.startedAt,
@@ -170,6 +179,10 @@ function pointValue(value: unknown): { x: number; y: number } | undefined {
   if (!value || typeof value !== "object") return undefined;
   const point = value as { x?: unknown; y?: unknown };
   return typeof point.x === "number" && typeof point.y === "number" ? { x: point.x, y: point.y } : undefined;
+}
+
+function jsonObject(value: unknown): JsonObject | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : undefined;
 }
 
 function compactJsonObject(value: Record<string, unknown>): JsonObject {

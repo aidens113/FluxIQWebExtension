@@ -122,6 +122,36 @@ The extension maps those commands into browser operations and returns
 `client.action_result` with status, message, target evidence, payload evidence,
 and start/completion timestamps.
 
+Action commands, recorded action events, and action results may also carry a
+`visualTarget` object. This object is the editor-facing reference to the state
+entity acted on, separate from the raw `element` fingerprint:
+
+```json
+{
+  "visualTarget": {
+    "namespace": "web",
+    "statePath": "web.elements.button.save",
+    "selector": "button.save",
+    "frameId": "screen",
+    "layerId": "element.button.save",
+    "documentLayerId": "document.element.button.save",
+    "bounds": { "x": 20, "y": 30, "width": 80, "height": 32 },
+    "documentBounds": { "x": 20, "y": 55, "width": 80, "height": 32 },
+    "anchor": {
+      "type": "bounds",
+      "bounds": { "x": 20, "y": 55, "width": 80, "height": 32 }
+    },
+    "confidence": 0.98
+  }
+}
+```
+
+`statePath` is the primary key for editor highlighting. It points at the
+`web.elements.*` state value generated from DOM snapshots; visual frames expose
+matching region layers with the same `statePath`. Consumers should prefer
+`statePath`, then `layerId`/`documentLayerId`, then selector and bounds as
+fallbacks.
+
 ## Declared Inputs And Outputs
 
 The domain registers browser state and passive recording evidence as unmapped
@@ -171,6 +201,11 @@ Primary user actions are also sent as `client.recording_entry` action entries
 so Automation Studio timelines can distinguish operator actions from passive
 state observations. Raw snapshots and state updates remain available as
 recording observations through the client gateway bridge.
+
+When a recorded action has an element, the background process derives
+`visualTarget` with the same state ID algorithm used by snapshot conversion.
+Executed action results do the same using the element actually resolved in the
+page, so editor playback can highlight what the browser interacted with.
 
 The side panel recordings tab reads saved summaries from FluxIQ Core:
 

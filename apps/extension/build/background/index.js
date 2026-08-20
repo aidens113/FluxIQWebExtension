@@ -299,7 +299,24 @@ var elementFingerprintSchema = {
     attributes: { type: "object", label: "Attributes" }
   }
 };
-var elementProperties = { selector: { type: "string", label: "CSS selector" }, element: elementFingerprintSchema };
+var visualTargetSchema = {
+  type: "object",
+  label: "Visual target",
+  properties: {
+    namespace: { type: "string", label: "State namespace" },
+    statePath: { type: "string", label: "State path" },
+    selector: { type: "string", label: "CSS selector" },
+    frameId: { type: "string", label: "Visual frame" },
+    layerId: { type: "string", label: "Visual layer" },
+    documentLayerId: { type: "string", label: "Document visual layer" },
+    bounds: { type: "object", label: "Viewport bounds" },
+    documentBounds: { type: "object", label: "Document bounds" },
+    anchor: { type: "object", label: "Anchor" },
+    confidence: { type: "number", label: "Confidence" },
+    metadata: { type: "object", label: "Metadata" }
+  }
+};
+var elementProperties = { selector: { type: "string", label: "CSS selector" }, element: elementFingerprintSchema, visualTarget: visualTargetSchema };
 var selectorSchema = {
   type: "object",
   properties: {
@@ -498,6 +515,39 @@ function webAutomationActionTargetFromElement(element) {
       isVisibleOnViewport: element.isVisibleOnViewport ?? Boolean(stateBounds(element.bounds)),
       hasClickHandler: element.hasClickHandler,
       attributes: element.attributes
+    })
+  });
+}
+function webAutomationActionVisualTargetFromElement(element, input = {}) {
+  const stateId = elementStateId(element);
+  const statePath = `${WEB_AUTOMATION_STATE_NAMESPACE}.elements.${stateId}`;
+  const bounds = stateBounds(element.bounds);
+  const documentBounds = stateBounds(element.documentBounds ?? element.bounds);
+  const anchorBounds = documentBounds ?? bounds;
+  const safeId = safeLayerId(stateId, input.layerIndex ?? 1);
+  return compactJsonObject({
+    namespace: WEB_AUTOMATION_STATE_NAMESPACE,
+    statePath,
+    selector: element.selector,
+    frameId: WEB_AUTOMATION_SCREEN_FRAME_ID,
+    layerId: `element.${safeId}`,
+    documentLayerId: `document.element.${safeId}`,
+    bounds,
+    documentBounds,
+    anchor: anchorBounds ? { type: "bounds", bounds: anchorBounds } : void 0,
+    confidence: input.confidence ?? (stableElementId(element) ? 0.98 : 0.88),
+    metadata: compactJsonObject({
+      tagName: element.tagName,
+      xpath: element.xpath,
+      id: element.id,
+      classNames: element.classNames,
+      visibleText: element.visibleText,
+      role: element.role,
+      name: element.name,
+      href: element.href,
+      inputType: element.inputType,
+      stableId: stableElementId(element),
+      isVisibleOnViewport: element.isVisibleOnViewport ?? Boolean(bounds)
     })
   });
 }
@@ -874,6 +924,7 @@ function webAutomationEventTypeForClientKind(kind) {
 function createWebAutomationRecordingEvent(payload, input = {}) {
   const eventType = webAutomationEventTypeForClientKind(payload.kind);
   const target = payload.element;
+  const visualTarget = payload.visualTarget ?? (target !== void 0 ? webAutomationActionVisualTargetFromElement(target) : void 0);
   return {
     eventId: `web.${payload.sequence}.${payload.eventTimestampMs}`,
     ...input.recordingId !== void 0 ? { recordingId: input.recordingId } : {},
@@ -887,6 +938,7 @@ function createWebAutomationRecordingEvent(payload, input = {}) {
       title: payload.title,
       sequence: payload.sequence,
       element: payload.element,
+      visualTarget,
       inputValue: payload.inputValue,
       key: payload.key,
       scroll: payload.scroll,
@@ -897,6 +949,7 @@ function createWebAutomationRecordingEvent(payload, input = {}) {
     }),
     metadata: compactJsonObject2({
       clientKind: payload.kind,
+      ...visualTarget !== void 0 ? { visualTarget } : {},
       ...payload.metadata ?? {}
     })
   };
@@ -927,6 +980,7 @@ function webAutomationActionFromGatewayCommand(command) {
     url: stringValue(parameters.url),
     timeoutMs: numberValue(command.timeoutMs ?? parameters.timeoutMs),
     coordinates: pointValue(target.coordinates ?? parameters.coordinates),
+    visualTarget: jsonObject(target.visualTarget ?? parameters.visualTarget),
     options: parameters
   });
 }
@@ -939,6 +993,7 @@ function webAutomationActionResultPayload(result) {
     url: result.url,
     title: result.title,
     element: result.element,
+    visualTarget: result.visualTarget,
     snapshot: result.snapshot,
     extracted: result.extracted,
     startedAt: result.startedAt,
@@ -972,6 +1027,9 @@ function pointValue(value) {
   if (!value || typeof value !== "object") return void 0;
   const point = value;
   return typeof point.x === "number" && typeof point.y === "number" ? { x: point.x, y: point.y } : void 0;
+}
+function jsonObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 function compactJsonObject2(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
@@ -1757,6 +1815,7 @@ var FluxIQConnection = class {
     return isDomSnapshotPayload(snapshot) ? snapshot : void 0;
   }
   async sendActionResult(result, tabId, frameId) {
+    const visualTarget = result.visualTarget ?? (result.element ? webAutomationActionVisualTargetFromElement(result.element) : void 0);
     await this.sendClientMessage("client.action_result", gatewayActionResultFromBrowserResult(result));
     await this.handleRecordingEvent(compactObject({
       kind: "action.result",
@@ -1765,6 +1824,7 @@ var FluxIQConnection = class {
       title: result.title ?? "",
       eventTimestampMs: result.finishedAt,
       element: result.element,
+      visualTarget,
       snapshot: result.snapshot,
       actionResult: result
     }), tabId, frameId);
@@ -2210,6 +2270,7 @@ function recordedInputId(payload) {
     title: payload.title,
     sequence: payload.sequence,
     ...payload.element ? { element: elementTarget(payload.element) } : {},
+    ...payload.visualTarget ? { visualTarget: payload.visualTarget } : {},
     ...payload.inputValue !== void 0 ? { inputValue: payload.inputValue } : {},
     ...payload.key !== void 0 ? { key: payload.key } : {},
     ...payload.scroll ? { scroll: payload.scroll } : {},
@@ -2217,6 +2278,7 @@ function recordedInputId(payload) {
   });
 }
 function recordingEvidencePayload(payload) {
+  const visualTarget = visualTargetFromPayload(payload);
   return compactObject({
     kind: payload.kind,
     url: payload.url,
@@ -2224,6 +2286,7 @@ function recordingEvidencePayload(payload) {
     sequence: payload.sequence,
     timestamp: payload.eventTimestampMs,
     element: payload.element,
+    visualTarget,
     snapshot: payload.snapshot,
     inputValue: payload.inputValue,
     key: payload.key,
@@ -2329,6 +2392,7 @@ function browserStateFromTabs(active, tabs, recordingState) {
 }
 function gatewayRecordingEventFromPayload(payload, tabId, frameId, recordingId) {
   const inputId = recordedInputId(payload);
+  const visualTarget = visualTargetFromPayload(payload);
   return createWebAutomationRecordingEvent({
     kind: payload.kind,
     sequence: payload.sequence,
@@ -2336,13 +2400,14 @@ function gatewayRecordingEventFromPayload(payload, tabId, frameId, recordingId) 
     title: payload.title,
     eventTimestampMs: payload.eventTimestampMs,
     element: payload.element ? elementTarget(payload.element) : void 0,
+    visualTarget,
     snapshot: payload.snapshot,
     inputValue: payload.inputValue,
     key: payload.key,
     scroll: payload.scroll,
     mutation: payload.mutation,
     actionResult: payload.actionResult ? webAutomationActionResultPayload(payload.actionResult) : void 0,
-    metadata: inputId === void 0 ? payload.metadata : { ...payload.metadata ?? {}, inputId }
+    metadata: inputId === void 0 ? payload.metadata : { ...payload.metadata ?? {}, inputId, ...visualTarget ? { visualTarget } : {} }
   }, {
     ...recordingId !== void 0 ? { recordingId } : {},
     ...tabId !== void 0 ? { tabId } : {},
@@ -2353,6 +2418,7 @@ function browserActionFromGatewayCommand(command) {
   return webAutomationActionFromGatewayCommand(command);
 }
 function gatewayActionResultFromBrowserResult(result) {
+  const visualTarget = result.visualTarget ?? (result.element ? webAutomationActionVisualTargetFromElement(result.element) : void 0);
   return compactObject({
     commandId: result.commandId,
     status: result.status,
@@ -2363,6 +2429,7 @@ function gatewayActionResultFromBrowserResult(result) {
     payload: compactObject({
       url: result.url,
       title: result.title,
+      visualTarget,
       snapshot: result.snapshot,
       extracted: result.extracted
     }),
@@ -2389,6 +2456,9 @@ function elementTarget(element) {
     hasClickHandler: element.hasClickHandler,
     attributes: element.attributes
   });
+}
+function visualTargetFromPayload(payload) {
+  return payload.visualTarget ?? (payload.element ? webAutomationActionVisualTargetFromElement(payload.element) : void 0);
 }
 function stringValue2(value) {
   return typeof value === "string" ? value : void 0;

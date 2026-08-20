@@ -78,3 +78,9 @@ clears, selections, key presses, scrolls, and navigations are action inputs
 that map one-to-one to registered browser outputs. A mapped action input is
 never available as policy state; an unmapped input can never create an
 executable policy node.
+
+Recorded and executed actions can include `visualTarget`, an editor-facing
+reference to the acted-on state entity. The extension derives it from the same
+DOM element fingerprint used for `web.elements.*` state paths, so Automation
+Studio can highlight the specific element region while keeping the raw
+`element` payload available for replay and selector fallback.

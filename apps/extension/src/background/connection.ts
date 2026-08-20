@@ -10,6 +10,7 @@ import {
   WEB_AUTOMATION_INPUT_IDS,
   webAutomationInputIdForRecordedEvent,
   webAutomationActionTargetFromElement,
+  webAutomationActionVisualTargetFromElement,
   webAutomationActionFromGatewayCommand,
   webAutomationActionResultPayload,
   WEB_AUTOMATION_DOMAIN_ID
@@ -798,6 +799,9 @@ export class FluxIQConnection {
   }
 
   private async sendActionResult(result: BrowserActionResult, tabId?: number, frameId?: number): Promise<void> {
+    const visualTarget = result.visualTarget ?? (result.element
+      ? webAutomationActionVisualTargetFromElement(result.element as never)
+      : undefined);
     await this.sendClientMessage("client.action_result", gatewayActionResultFromBrowserResult(result));
     await this.handleRecordingEvent(compactObject({
       kind: "action.result",
@@ -806,6 +810,7 @@ export class FluxIQConnection {
       title: result.title ?? "",
       eventTimestampMs: result.finishedAt,
       element: result.element,
+      visualTarget,
       snapshot: result.snapshot,
       actionResult: result
     }), tabId, frameId);
@@ -1334,6 +1339,7 @@ function recordedInputId(payload: RecordingEventPayload) {
     title: payload.title,
     sequence: payload.sequence,
     ...(payload.element ? { element: elementTarget(payload.element) } : {}),
+    ...(payload.visualTarget ? { visualTarget: payload.visualTarget as unknown as JsonObject } : {}),
     ...(payload.inputValue !== undefined ? { inputValue: payload.inputValue } : {}),
     ...(payload.key !== undefined ? { key: payload.key } : {}),
     ...(payload.scroll ? { scroll: payload.scroll } : {}),
@@ -1342,6 +1348,7 @@ function recordedInputId(payload: RecordingEventPayload) {
 }
 
 function recordingEvidencePayload(payload: RecordingEventPayload): JsonObject {
+  const visualTarget = visualTargetFromPayload(payload);
   return compactObject({
     kind: payload.kind,
     url: payload.url,
@@ -1349,6 +1356,7 @@ function recordingEvidencePayload(payload: RecordingEventPayload): JsonObject {
     sequence: payload.sequence,
     timestamp: payload.eventTimestampMs,
     element: payload.element as unknown as JsonObject,
+    visualTarget: visualTarget as unknown as JsonObject,
     snapshot: payload.snapshot as unknown as JsonObject,
     inputValue: payload.inputValue,
     key: payload.key,
@@ -1485,6 +1493,7 @@ function browserStateFromTabs(active: Awaited<ReturnType<typeof activeTab>>, tab
 
 function gatewayRecordingEventFromPayload(payload: RecordingEventPayload, tabId?: number, frameId?: number, recordingId?: string): ClientGatewayRecordingEvent {
   const inputId = recordedInputId(payload);
+  const visualTarget = visualTargetFromPayload(payload);
   return createWebAutomationRecordingEvent({
     kind: payload.kind,
     sequence: payload.sequence,
@@ -1492,6 +1501,7 @@ function gatewayRecordingEventFromPayload(payload: RecordingEventPayload, tabId?
     title: payload.title,
     eventTimestampMs: payload.eventTimestampMs,
     element: payload.element ? elementTarget(payload.element) : undefined,
+    visualTarget: visualTarget as unknown as JsonObject | undefined,
     snapshot: payload.snapshot as unknown as JsonObject,
     inputValue: payload.inputValue,
     key: payload.key,
@@ -1500,7 +1510,7 @@ function gatewayRecordingEventFromPayload(payload: RecordingEventPayload, tabId?
     actionResult: payload.actionResult ? webAutomationActionResultPayload(payload.actionResult as never) : undefined,
     metadata: inputId === undefined
       ? payload.metadata
-      : { ...(payload.metadata ?? {}), inputId }
+      : { ...(payload.metadata ?? {}), inputId, ...(visualTarget ? { visualTarget: visualTarget as unknown as JsonObject } : {}) }
   }, {
     ...(recordingId !== undefined ? { recordingId } : {}),
     ...(tabId !== undefined ? { tabId } : {}),
@@ -1513,6 +1523,9 @@ function browserActionFromGatewayCommand(command: ClientGatewayActionCommand & {
 }
 
 function gatewayActionResultFromBrowserResult(result: BrowserActionResult): ClientGatewayActionResult {
+  const visualTarget = result.visualTarget ?? (result.element
+    ? webAutomationActionVisualTargetFromElement(result.element as never)
+    : undefined);
   return compactObject({
     commandId: result.commandId,
     status: result.status,
@@ -1523,6 +1536,7 @@ function gatewayActionResultFromBrowserResult(result: BrowserActionResult): Clie
     payload: compactObject({
       url: result.url,
       title: result.title,
+      visualTarget: visualTarget as unknown as JsonObject,
       snapshot: result.snapshot as unknown as JsonObject,
       extracted: result.extracted as JsonObject
     }) as JsonObject,
@@ -1551,6 +1565,12 @@ function elementTarget(element: { selector: string; tagName: string; xpath?: str
     hasClickHandler: element.hasClickHandler,
     attributes: element.attributes as JsonObject
   }) as JsonObject;
+}
+
+function visualTargetFromPayload(payload: RecordingEventPayload) {
+  return payload.visualTarget ?? (payload.element
+    ? webAutomationActionVisualTargetFromElement(payload.element as never)
+    : undefined);
 }
 
 function stringValue(value: unknown): string | undefined {

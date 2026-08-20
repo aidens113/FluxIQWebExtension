@@ -41,7 +41,24 @@ var elementFingerprintSchema = {
     attributes: { type: "object", label: "Attributes" }
   }
 };
-var elementProperties = { selector: { type: "string", label: "CSS selector" }, element: elementFingerprintSchema };
+var visualTargetSchema = {
+  type: "object",
+  label: "Visual target",
+  properties: {
+    namespace: { type: "string", label: "State namespace" },
+    statePath: { type: "string", label: "State path" },
+    selector: { type: "string", label: "CSS selector" },
+    frameId: { type: "string", label: "Visual frame" },
+    layerId: { type: "string", label: "Visual layer" },
+    documentLayerId: { type: "string", label: "Document visual layer" },
+    bounds: { type: "object", label: "Viewport bounds" },
+    documentBounds: { type: "object", label: "Document bounds" },
+    anchor: { type: "object", label: "Anchor" },
+    confidence: { type: "number", label: "Confidence" },
+    metadata: { type: "object", label: "Metadata" }
+  }
+};
+var elementProperties = { selector: { type: "string", label: "CSS selector" }, element: elementFingerprintSchema, visualTarget: visualTargetSchema };
 var selectorSchema = {
   type: "object",
   properties: {
@@ -227,6 +244,39 @@ function webAutomationActionTargetFromElement(element) {
       isVisibleOnViewport: element.isVisibleOnViewport ?? Boolean(stateBounds(element.bounds)),
       hasClickHandler: element.hasClickHandler,
       attributes: element.attributes
+    })
+  });
+}
+function webAutomationActionVisualTargetFromElement(element, input = {}) {
+  const stateId = elementStateId(element);
+  const statePath = `${WEB_AUTOMATION_STATE_NAMESPACE}.elements.${stateId}`;
+  const bounds = stateBounds(element.bounds);
+  const documentBounds = stateBounds(element.documentBounds ?? element.bounds);
+  const anchorBounds = documentBounds ?? bounds;
+  const safeId = safeLayerId(stateId, input.layerIndex ?? 1);
+  return compactJsonObject({
+    namespace: WEB_AUTOMATION_STATE_NAMESPACE,
+    statePath,
+    selector: element.selector,
+    frameId: WEB_AUTOMATION_SCREEN_FRAME_ID,
+    layerId: `element.${safeId}`,
+    documentLayerId: `document.element.${safeId}`,
+    bounds,
+    documentBounds,
+    anchor: anchorBounds ? { type: "bounds", bounds: anchorBounds } : void 0,
+    confidence: input.confidence ?? (stableElementId(element) ? 0.98 : 0.88),
+    metadata: compactJsonObject({
+      tagName: element.tagName,
+      xpath: element.xpath,
+      id: element.id,
+      classNames: element.classNames,
+      visibleText: element.visibleText,
+      role: element.role,
+      name: element.name,
+      href: element.href,
+      inputType: element.inputType,
+      stableId: stableElementId(element),
+      isVisibleOnViewport: element.isVisibleOnViewport ?? Boolean(bounds)
     })
   });
 }
@@ -604,6 +654,7 @@ var webAutomationStateReducer = ({ event: event3, previousState }) => {
     next = mergeWebState(next, createWebAutomationStateFromSnapshot(payload.snapshot, snapshotOptions));
   }
   if (payload.actionResult && typeof payload.actionResult === "object") next = withWebStateValue(next, "runtime.lastActionResult", payload.actionResult, source);
+  if (payload.visualTarget && typeof payload.visualTarget === "object") next = withWebStateValue(next, "runtime.lastActionVisualTarget", payload.visualTarget, source);
   if (event3.eventType === "web.client.error") next = withWebStateValue(next, "runtime.lastError", payload, source);
   return next;
 };
@@ -656,6 +707,22 @@ var elementSchema = {
     attributes: { type: "object", label: "Attributes" }
   }
 };
+var visualTargetSchema2 = {
+  type: "object",
+  properties: {
+    namespace: { type: "string", label: "State namespace" },
+    statePath: { type: "string", label: "Visual state path" },
+    selector: { type: "string", label: "Selector" },
+    frameId: { type: "string", label: "Visual frame" },
+    layerId: { type: "string", label: "Visual layer" },
+    documentLayerId: { type: "string", label: "Document visual layer" },
+    bounds: { type: "object", label: "Viewport bounds" },
+    documentBounds: { type: "object", label: "Document bounds" },
+    anchor: { type: "object", label: "Visual anchor" },
+    confidence: { type: "number", label: "Confidence" },
+    metadata: { type: "object", label: "Target metadata" }
+  }
+};
 var basePayloadSchema = {
   type: "object",
   required: true,
@@ -664,6 +731,7 @@ var basePayloadSchema = {
     title: { type: "string", label: "Title" },
     sequence: { type: "integer", label: "Sequence" },
     element: elementSchema,
+    visualTarget: visualTargetSchema2,
     inputValue: { type: "string", label: "Input value" },
     key: { type: "string", label: "Key" },
     scroll: { type: "object", label: "Scroll position" },
@@ -730,6 +798,7 @@ var webAutomationRecordingDomain = {
     { namespace: "web", path: "elements.*.bounds", type: "rectangle", elementKind: "bounds", label: "Element bounds", volatility: "normal", metadata: { presentation: { group: "Elements", icon: "scan", visualKind: "bounds", metadata: { rendererId: WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID } } } },
     { namespace: "web", path: "forms.*", type: "string", elementKind: "text", label: "Form field value", volatility: "normal", sensitive: true },
     { namespace: "web", path: "runtime.lastActionResult", type: "json", elementKind: "json", label: "Last action result", volatility: "normal" },
+    { namespace: "web", path: "runtime.lastActionVisualTarget", type: "json", elementKind: "json", label: "Last action visual target", volatility: "normal", metadata: { presentation: { group: "Runtime", icon: "scan-search", visualKind: "bounds" } } },
     { namespace: "web", path: "runtime.lastError", type: "json", elementKind: "json", label: "Last client error", volatility: "normal" },
     { namespace: "web", path: "browser.activeTabId", type: "integer", elementKind: "internal_id", label: "Active tab ID", volatility: "normal" },
     { namespace: "web", path: "browser.tabCount", type: "integer", elementKind: "count", label: "Browser tab count", volatility: "normal" },
@@ -780,6 +849,7 @@ function webAutomationEventTypeForClientKind(kind) {
 function createWebAutomationRecordingEvent(payload, input = {}) {
   const eventType = webAutomationEventTypeForClientKind(payload.kind);
   const target = payload.element;
+  const visualTarget = payload.visualTarget ?? (target !== void 0 ? webAutomationActionVisualTargetFromElement(target) : void 0);
   return {
     eventId: `web.${payload.sequence}.${payload.eventTimestampMs}`,
     ...input.recordingId !== void 0 ? { recordingId: input.recordingId } : {},
@@ -793,6 +863,7 @@ function createWebAutomationRecordingEvent(payload, input = {}) {
       title: payload.title,
       sequence: payload.sequence,
       element: payload.element,
+      visualTarget,
       inputValue: payload.inputValue,
       key: payload.key,
       scroll: payload.scroll,
@@ -803,6 +874,7 @@ function createWebAutomationRecordingEvent(payload, input = {}) {
     }),
     metadata: compactJsonObject2({
       clientKind: payload.kind,
+      ...visualTarget !== void 0 ? { visualTarget } : {},
       ...payload.metadata ?? {}
     })
   };
@@ -864,10 +936,12 @@ var event2 = createWebAutomationRecordingEvent({
   url: "https://example.test",
   title: "Example",
   eventTimestampMs: 10,
-  element: { selector: "button" }
+  element: { selector: "button", tagName: "button", text: "Submit", bounds: { x: 10, y: 20, width: 90, height: 30 } }
 });
 assert.equal(event2.domainId, WEB_AUTOMATION_DOMAIN_ID);
 assert.equal(event2.eventType, WEB_AUTOMATION_EVENTS.elementClicked);
+assert.equal(event2.payload.visualTarget?.statePath, "web.elements.button");
+assert.equal(event2.metadata?.visualTarget?.layerId, "element.button");
 var initialState = createWebAutomationInitialState(1);
 assert.equal(initialState.namespaces.web?.schemaId, WEB_AUTOMATION_DOMAIN_ID);
 var filteredElements = filterStateElements([
@@ -877,6 +951,9 @@ var filteredElements = filterStateElements([
   { tagName: "input", selector: "input[name=search]", attributes: { name: "search" }, bounds: { x: 20, y: 80, width: 240, height: 36 } }
 ]);
 assert.deepEqual(filteredElements.map((item) => item.selector), ["button.save", "a.home", "input[name=search]"]);
+var saveVisualTarget = webAutomationActionVisualTargetFromElement(filteredElements[0]);
+assert.equal(saveVisualTarget?.statePath, "web.elements.button.save");
+assert.equal(saveVisualTarget?.documentLayerId, "document.element.button.save");
 var prioritizedElements = filterStateElements([
   { tagName: "section", selector: "section.hero", attributes: { id: "hero" }, bounds: { x: 0, y: 0, width: 800, height: 300 } },
   { tagName: "p", selector: "p.summary", text: "Account summary", bounds: { x: 20, y: 120, width: 220, height: 24 } },

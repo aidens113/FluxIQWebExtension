@@ -25,6 +25,7 @@ export const webAutomationStateReducer: RecordingDomainEventReducer = ({ event, 
     next = mergeWebState(next, createWebAutomationStateFromSnapshot(payload.snapshot, snapshotOptions));
   }
   if (payload.actionResult && typeof payload.actionResult === "object") next = withWebStateValue(next, "runtime.lastActionResult", payload.actionResult, source);
+  if (payload.visualTarget && typeof payload.visualTarget === "object") next = withWebStateValue(next, "runtime.lastActionVisualTarget", payload.visualTarget, source);
   if (event.eventType === "web.client.error") next = withWebStateValue(next, "runtime.lastError", payload, source);
 
   return next;
