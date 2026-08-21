@@ -373,19 +373,6 @@ var webAutomationActionDefinitions = [
   }
 ];
 
-// ../../domain/src/actions/capabilities.ts
-var webAutomationClientCapabilities = [
-  { id: "web.context.state", label: "Web context state", kind: "state" },
-  { id: "web.structured.snapshot", label: "Structured web snapshots", kind: "snapshot" },
-  { id: "web.recording.events", label: "Web recording events", kind: "recording" },
-  {
-    id: "web.actions",
-    label: "Web actions",
-    kind: "action",
-    actionTypes: WEB_AUTOMATION_ACTION_TYPES
-  }
-];
-
 // ../../domain/src/io/input-model.ts
 var WEB_AUTOMATION_INPUT_IDS = {
   browserState: "web.browser.state",
@@ -422,6 +409,159 @@ var actionInputDefinitions = [
   [WEB_AUTOMATION_INPUT_IDS.keyPressed, "Key pressed", "web.dom.keypress"],
   [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"]
 ];
+
+// ../../domain/src/runtime/capabilities.ts
+var webAutomationRuntimeCapabilities = [
+  {
+    id: "web.actions",
+    label: "Web actions",
+    kind: "action",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    actionTypes: WEB_AUTOMATION_ACTION_TYPES,
+    outputIds: WEB_AUTOMATION_ACTION_TYPES
+  },
+  {
+    id: "web.snapshots",
+    label: "Web snapshots",
+    kind: "snapshot",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence]
+  },
+  {
+    id: "web.state",
+    label: "Web state",
+    kind: "state",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState, WEB_AUTOMATION_INPUT_IDS.recordingEvidence]
+  },
+  {
+    id: "web.flow-runtime",
+    label: "Web flow runtime",
+    kind: "flow",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    metadata: { executionHost: "fluxiq-core", actionTransport: "extension" }
+  }
+];
+var webAutomationGatewayCapabilities = [
+  {
+    id: "web.context.state",
+    label: "Web context state",
+    kind: "state",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState],
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState] }
+  },
+  {
+    id: "web.structured.snapshot",
+    label: "Structured web snapshots",
+    kind: "snapshot",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence],
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence] }
+  },
+  {
+    id: "web.recording.events",
+    label: "Web recording events",
+    kind: "recording",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID }
+  },
+  {
+    id: "web.actions",
+    label: "Web actions",
+    kind: "action",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    actionTypes: WEB_AUTOMATION_ACTION_TYPES,
+    outputIds: WEB_AUTOMATION_ACTION_TYPES,
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, outputIds: WEB_AUTOMATION_ACTION_TYPES }
+  }
+];
+
+// ../../domain/src/actions/capabilities.ts
+var webAutomationClientCapabilities = webAutomationGatewayCapabilities;
+
+// ../../domain/src/output-nodes/definitions.ts
+var controlInput = { id: "in", label: "In", valueType: "signal", role: "control" };
+var outputPorts = [
+  { id: "success", label: "Success", valueType: "any", role: "success" },
+  { id: "failed", label: "Failed", valueType: "any", role: "failure" }
+];
+function webAutomationOutputNodeId(outputId) {
+  return `web.output.${outputId.replace(/^web\./, "").replace(/\./g, "-")}`;
+}
+var webAutomationOutputNodeDefinitions = webAutomationActionDefinitions.map(
+  (definition) => createWebAutomationOutputNodeDefinition(definition)
+);
+function createWebAutomationOutputNodeDefinition(definition) {
+  const safeOutput = isSafeOutput(definition.actionType);
+  return {
+    schemaVersion: "0.1",
+    id: webAutomationOutputNodeId(definition.actionType),
+    version: "1.0.0",
+    label: definition.label,
+    description: definition.description,
+    category: "web",
+    source: {
+      kind: "importer",
+      domainId: WEB_AUTOMATION_DOMAIN_ID,
+      packageId: "@fluxiq-web-extension/domain",
+      implementationKey: definition.actionType
+    },
+    availability: { kind: "domain", domainId: WEB_AUTOMATION_DOMAIN_ID },
+    capabilities: { executable: true, stateAware: true, recordable: true },
+    requiredRuntimeCapabilities: ["web.actions"],
+    safety: {
+      privileged: !safeOutput,
+      requiresOperatorApproval: !safeOutput,
+      requiredPermissions: ["web-automation.action"]
+    },
+    outputAction: { fixedOutputId: definition.actionType },
+    inputs: [controlInput],
+    outputs: outputPorts,
+    parameters: parametersForOutput(definition.actionType),
+    icon: iconForOutput(definition.actionType),
+    tags: ["web-automation", "output"],
+    metadata: {
+      domainId: WEB_AUTOMATION_DOMAIN_ID,
+      outputId: definition.actionType,
+      parameterSchema: definition.parameterSchema
+    }
+  };
+}
+function parametersForOutput(outputId) {
+  const selectorParameters = [
+    { id: "selector", label: "Selector", valueType: "string", ui: { control: "text", placeholder: "CSS selector" } },
+    { id: "element", label: "Element", valueType: "object", ui: { control: "value" } },
+    { id: "visualTarget", label: "Visual Target", valueType: "object", ui: { control: "value" } },
+    { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 1e4 }
+  ];
+  if (outputId === "web.browser.navigate") return [{ id: "url", label: "URL", valueType: "string", required: true, ui: { control: "text", placeholder: "https://example.com" } }];
+  if (outputId === "web.dom.type") return [...selectorParameters, { id: "text", label: "Text", valueType: "string", defaultValue: "", ui: { control: "textarea" } }];
+  if (outputId === "web.dom.select") return [...selectorParameters, { id: "value", label: "Value", valueType: "string", defaultValue: "", ui: { control: "text" } }];
+  if (outputId === "web.dom.keypress") return [...selectorParameters, { id: "key", label: "Key", valueType: "string", defaultValue: "", ui: { control: "text" } }];
+  if (outputId === "web.dom.scroll") return [
+    { id: "x", label: "X", valueType: "number", defaultValue: 0 },
+    { id: "y", label: "Y", valueType: "number", defaultValue: 0 },
+    { id: "smooth", label: "Smooth", valueType: "boolean", defaultValue: false }
+  ];
+  if (outputId === "web.dom.wait_for_text") return [
+    { id: "text", label: "Text", valueType: "string", required: true, ui: { control: "text" } },
+    { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 1e4 }
+  ];
+  if (outputId === "web.dom.capture_snapshot") return [];
+  return selectorParameters;
+}
+function isSafeOutput(outputId) {
+  return outputId === "web.dom.extract" || outputId === "web.dom.capture_snapshot" || outputId.startsWith("web.dom.wait");
+}
+function iconForOutput(outputId) {
+  if (outputId === "web.browser.navigate") return "navigation";
+  if (outputId === "web.dom.click") return "mouse-pointer-click";
+  if (outputId === "web.dom.type") return "text-cursor-input";
+  if (outputId === "web.dom.extract") return "scan-search";
+  if (outputId === "web.dom.capture_snapshot") return "camera";
+  return "square-dot";
+}
 
 // ../../domain/src/recording/state.ts
 var WEB_AUTOMATION_STATE_NAMESPACE = "web";
@@ -973,12 +1113,12 @@ function webAutomationActionFromGatewayCommand(command) {
   return compactJsonObject2({
     commandId: command.commandId,
     actionType,
-    selector: stringValue(target.selector) ?? stringValue(parameters.selector),
-    text: stringValue(parameters.text),
-    value: stringValue(parameters.value),
-    key: stringValue(parameters.key),
-    url: stringValue(parameters.url),
-    timeoutMs: numberValue(command.timeoutMs ?? parameters.timeoutMs),
+    selector: stringValue2(target.selector) ?? stringValue2(parameters.selector),
+    text: stringValue2(parameters.text),
+    value: stringValue2(parameters.value),
+    key: stringValue2(parameters.key),
+    url: stringValue2(parameters.url),
+    timeoutMs: numberValue2(command.timeoutMs ?? parameters.timeoutMs),
     coordinates: pointValue(target.coordinates ?? parameters.coordinates),
     visualTarget: jsonObject(target.visualTarget ?? parameters.visualTarget),
     options: parameters
@@ -1017,10 +1157,10 @@ function normalizeWebAutomationActionType(actionType) {
   };
   return legacy[actionType] ?? "web.dom.extract";
 }
-function stringValue(value) {
+function stringValue2(value) {
   return typeof value === "string" ? value : void 0;
 }
-function numberValue(value) {
+function numberValue2(value) {
   return typeof value === "number" ? value : void 0;
 }
 function pointValue(value) {
@@ -1137,6 +1277,202 @@ async function clearQueuedEvents() {
   await chrome.storage.local.set({ [STORAGE_KEYS.queuedEvents]: [] });
 }
 
+// src/runtime/automation-tab.ts
+var DEFAULT_AUTOMATION_URL = "about:blank";
+var automationTabId;
+async function resolveAutomationTab(input = {}) {
+  if (input.requestedTabId !== void 0) return input.requestedTabId;
+  const existing = input.forceNew === true ? void 0 : await existingAutomationTab();
+  if (existing !== void 0) {
+    if (input.initialUrl && input.initialUrl !== DEFAULT_AUTOMATION_URL) await updateTabUrl(existing, input.initialUrl);
+    return existing;
+  }
+  const tab = await chrome.tabs.create({
+    url: input.initialUrl ?? DEFAULT_AUTOMATION_URL,
+    active: input.active ?? true
+  });
+  if (tab.id === void 0) throw new Error("Unable to create FluxIQ automation tab.");
+  automationTabId = tab.id;
+  if (input.initialUrl && input.initialUrl !== DEFAULT_AUTOMATION_URL) await waitForTabReady(tab.id);
+  return tab.id;
+}
+async function existingAutomationTab() {
+  if (automationTabId === void 0) return void 0;
+  try {
+    const tab = await chrome.tabs.get(automationTabId);
+    return tab.id;
+  } catch {
+    automationTabId = void 0;
+    return void 0;
+  }
+}
+async function updateTabUrl(tabId, url) {
+  await chrome.tabs.update(tabId, { url, active: true });
+  await waitForTabReady(tabId);
+}
+function waitForTabReady(tabId) {
+  return new Promise((resolve) => {
+    let lastUrl;
+    let stableSince = 0;
+    const interval = setInterval(checkSettled, 250);
+    const timeout = setTimeout(done, 2e4);
+    function done() {
+      clearTimeout(timeout);
+      clearInterval(interval);
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve();
+    }
+    function listener(updatedTabId, changeInfo) {
+      if (updatedTabId !== tabId) return;
+      if (changeInfo.url) {
+        lastUrl = void 0;
+        stableSince = 0;
+      }
+      if (changeInfo.status === "complete") void checkSettled();
+    }
+    chrome.tabs.onUpdated.addListener(listener);
+    void checkSettled();
+    async function checkSettled() {
+      try {
+        const tab = await chrome.tabs.get(tabId);
+        const url = tab.url;
+        const now = Date.now();
+        if (url !== lastUrl) {
+          lastUrl = url;
+          stableSince = now;
+        }
+        if (tab.status !== "complete") return;
+        if (isTransientNavigationUrl(url)) return;
+        if (now - stableSince >= 1e3) done();
+      } catch {
+        done();
+      }
+    }
+  });
+}
+function isTransientNavigationUrl(url) {
+  return Boolean(url && /:\/\/accounts\.google\.com\/RotateCookiesPage\b/.test(url));
+}
+
+// src/runtime/action-runner.ts
+async function runBrowserActionCommand(request) {
+  const action = request.action;
+  const isNavigation = action.actionType === "web.browser.navigate" && Boolean(action.url);
+  const tabRequest = { active: true };
+  if (isNavigation && action.url) {
+    tabRequest.forceNew = true;
+    tabRequest.initialUrl = action.url;
+  } else if (action.tabId !== void 0) {
+    tabRequest.requestedTabId = action.tabId;
+  }
+  const tabId = await resolveAutomationTab(tabRequest);
+  const unsupportedReason = action.tabId === void 0 || isNavigation ? unsupportedPageReasonForAction(action) : request.unsupportedPageReason;
+  if (unsupportedReason && isMutatingAction(action.actionType)) return withTarget(actionFailure(action, unsupportedReason), tabId, action.frameId);
+  if (isNavigation && action.url) {
+    const startedAt = Date.now();
+    await request.attachTabForRecording(tabId);
+    return withTarget({
+      commandId: action.commandId,
+      actionType: action.actionType,
+      status: "succeeded",
+      message: "Navigation completed.",
+      url: action.url,
+      startedAt,
+      finishedAt: Date.now()
+    }, tabId, action.frameId);
+  }
+  await waitForTabReady(tabId);
+  await request.attachTabForRecording(tabId);
+  const frameId = action.frameId ?? 0;
+  return withTarget(await sendToTab(tabId, { type: "executeAction", action }, frameId), tabId, frameId);
+}
+function browserActionFailure(action, message) {
+  return actionFailure(action, message);
+}
+function unsupportedPageReasonForAction(action) {
+  const url = action.actionType === "web.browser.navigate" ? action.url : void 0;
+  if (!url) return void 0;
+  if (/^(chrome|edge|brave|opera|vivaldi|about|moz-extension|chrome-extension):\/\//.test(url)) return "Browser and extension pages cannot be automated.";
+  if (/^https:\/\/chrome\.google\.com\/webstore/.test(url)) return "Browser web store pages cannot be automated.";
+  return void 0;
+}
+function isMutatingAction(actionType) {
+  return actionType !== "web.dom.extract" && actionType !== "web.dom.capture_snapshot" && actionType !== "web.dom.wait_for_selector" && actionType !== "web.dom.wait_for_text";
+}
+function actionFailure(action, message) {
+  const now = Date.now();
+  return {
+    commandId: action.commandId,
+    actionType: action.actionType,
+    status: "failed",
+    message,
+    startedAt: now,
+    finishedAt: now
+  };
+}
+function withTarget(result, tabId, frameId) {
+  return {
+    result,
+    ...tabId !== void 0 ? { tabId } : {},
+    ...frameId !== void 0 ? { frameId } : {}
+  };
+}
+
+// src/runtime/snapshot-runner.ts
+async function runSnapshotCapture(request) {
+  await request.captureActiveSnapshot(request.label ?? "Snapshot captured");
+}
+
+// src/runtime/command-router.ts
+var ExtensionRuntimeCommandRouter = class {
+  constructor(options) {
+    this.options = options;
+  }
+  async captureSnapshot() {
+    await runSnapshotCapture({ captureActiveSnapshot: (label) => this.options.captureActiveSnapshot(label) });
+  }
+  async executeAction(action) {
+    const request = {
+      action,
+      attachTabForRecording: (targetTabId) => this.options.attachTabForRecording(targetTabId)
+    };
+    const activeTabId = this.options.activeTabId();
+    const unsupportedPageReason = this.options.unsupportedPageReason();
+    if (activeTabId !== void 0) request.activeTabId = activeTabId;
+    if (unsupportedPageReason !== void 0) request.unsupportedPageReason = unsupportedPageReason;
+    try {
+      const { result, tabId, frameId } = await runBrowserActionCommand(request);
+      await this.options.sendActionResult(result, tabId, frameId);
+    } catch (error) {
+      await this.options.sendActionResult(browserActionFailure(action, error instanceof Error ? error.message : "Runtime action failed."));
+    }
+  }
+};
+
+// src/runtime/result-mapping.ts
+function browserActionFromGatewayCommand(command) {
+  return webAutomationActionFromGatewayCommand(command);
+}
+function gatewayActionResultFromBrowserResult(result) {
+  const visualTarget = result.visualTarget ?? (result.element ? webAutomationActionVisualTargetFromElement(result.element) : void 0);
+  return compactObject({
+    commandId: result.commandId,
+    status: result.status,
+    startedAt: result.startedAt,
+    completedAt: result.finishedAt,
+    message: result.message,
+    target: result.element ? webAutomationActionTargetFromElement(result.element) : void 0,
+    payload: compactObject({
+      ...webAutomationActionResultPayload(result),
+      visualTarget
+    }),
+    error: result.status === "failed" ? result.message : void 0
+  });
+}
+function compactObject(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
+}
+
 // src/background/connection.ts
 var POINTER_CLICK_SUPPRESS_DELAY_MS = 750;
 var FRAME_SNAPSHOT_TIMEOUT_MS = 150;
@@ -1175,6 +1511,7 @@ var FluxIQConnection = class {
   recentActivities = [];
   recordingLog = [];
   listeners = /* @__PURE__ */ new Set();
+  runtimeStatus = { state: "idle" };
   status() {
     const status = {
       connectionState: this.connectionState,
@@ -1184,7 +1521,8 @@ var FluxIQConnection = class {
       clientId: this.session.clientId,
       queueSize: this.queueSize,
       eventCount: this.eventCount,
-      recentActivities: [...this.recentActivities]
+      recentActivities: [...this.recentActivities],
+      runtime: { ...this.runtimeStatus }
     };
     if (this.session.sessionId) status.sessionId = this.session.sessionId;
     if (this.session.projectId !== void 0) status.projectId = this.session.projectId;
@@ -1223,7 +1561,7 @@ var FluxIQConnection = class {
     const normalizedPage = Math.max(1, Math.floor(page) || 1);
     const sourceUrl = recordingsApiUrl(this.settings.coreApiUrl, normalizedPage, normalizedPageSize);
     const response = await fetch(sourceUrl, {
-      headers: compactObject({
+      headers: compactObject2({
         accept: "application/json",
         ...this.session.token ? { authorization: `Bearer ${this.session.token}` } : {}
       })
@@ -1244,7 +1582,7 @@ var FluxIQConnection = class {
       tokenStorage: {
         read: () => this.session.token,
         write: async (token) => {
-          this.session = compactObject({
+          this.session = compactObject2({
             ...this.session,
             token,
             serverUrl: this.settings.gatewayUrl,
@@ -1253,7 +1591,7 @@ var FluxIQConnection = class {
           await writeSession(this.session);
         },
         clear: async () => {
-          this.session = compactObject({
+          this.session = compactObject2({
             clientId: this.session.clientId,
             sessionId: this.session.sessionId,
             projectId: this.session.projectId,
@@ -1334,7 +1672,7 @@ var FluxIQConnection = class {
     const recordingId = this.activeRecordingId;
     const projectId = this.activeRecordingProjectId;
     const endedAt = Date.now();
-    const stopPayload = recordingId ? compactObject({
+    const stopPayload = recordingId ? compactObject2({
       recordingId,
       ...projectId !== void 0 ? { projectId } : {},
       endedAt
@@ -1358,7 +1696,7 @@ var FluxIQConnection = class {
   async handleRecordingEvent(payload, tabId, frameId) {
     if (this.recordingState !== "recording") return;
     if (payload.kind === "dom.click") {
-      const sourceEvent = stringValue2(objectValue(payload.metadata)?.sourceEvent);
+      const sourceEvent = stringValue3(objectValue2(payload.metadata)?.sourceEvent);
       const signature = clickEventSignature(payload, tabId, frameId);
       if (sourceEvent === "pointerdown" && signature) {
         if (this.isSuppressedClickDuplicate(signature)) return;
@@ -1416,7 +1754,7 @@ var FluxIQConnection = class {
     if (this.connectionState === "connected") {
       await this.sendClientMessage("client.state_update", createWebAutomationStateUpdate({
         activeContextId: String(tab.id),
-        contexts: [compactObject({ contextId: String(tab.id), url: tab.url, title: tab.title, status: tab.status })],
+        contexts: [compactObject2({ contextId: String(tab.id), url: tab.url, title: tab.title, status: tab.status })],
         recording: this.recordingState === "recording",
         state: createWebAutomationStateFromTabs(describeActiveTabLike(tab), [describeActiveTabLike(tab)], {
           timestamp: Date.now(),
@@ -1547,7 +1885,7 @@ var FluxIQConnection = class {
     }
   }
   async onSessionReady(message) {
-    this.session = compactObject({
+    this.session = compactObject2({
       ...this.session,
       sessionId: message.payload.sessionId,
       token: message.payload.token,
@@ -1588,46 +1926,41 @@ var FluxIQConnection = class {
       return;
     }
     if (payload.command === "capture_snapshot") {
-      await this.captureActiveSnapshot("Snapshot captured");
+      this.startRuntimeStatus({
+        commandId: messageId,
+        actionType: "web.dom.capture_snapshot",
+        label: "Capture snapshot",
+        target: this.activeTabUrl
+      });
+      await this.runtimeCommandRouter().captureSnapshot();
+      this.finishRuntimeStatus({
+        commandId: messageId,
+        actionType: "web.dom.capture_snapshot",
+        status: "succeeded",
+        message: "Snapshot command dispatched.",
+        startedAt: this.runtimeStatus.startedAt ?? Date.now(),
+        finishedAt: Date.now()
+      });
       return;
     }
     if (payload.command === "execute_action") {
-      const action = payload.action;
-      const tabId = action.tabId ?? this.activeTabId;
-      if (tabId === void 0) {
-        await this.sendActionResult({
-          commandId: action.commandId,
-          actionType: action.actionType,
-          status: "failed",
-          message: "No active tab is available.",
-          startedAt: Date.now(),
-          finishedAt: Date.now()
-        });
-        return;
-      }
-      if (action.actionType === "web.browser.navigate" && action.url) {
-        const startedAt = Date.now();
-        await chrome.tabs.update(tabId, { url: action.url });
-        await this.sendActionResult({
-          commandId: action.commandId,
-          actionType: action.actionType,
-          status: "succeeded",
-          message: "Navigation requested.",
-          url: action.url,
-          startedAt,
-          finishedAt: Date.now()
-        });
-        return;
-      }
-      await this.attachTabForRecording(tabId);
-      const result = await sendToTab(tabId, { type: "executeAction", action }, action.frameId);
-      await this.sendActionResult(result, tabId, action.frameId);
+      this.startRuntimeAction(payload.action);
+      await this.runtimeCommandRouter().executeAction(payload.action);
     }
+  }
+  runtimeCommandRouter() {
+    return new ExtensionRuntimeCommandRouter({
+      activeTabId: () => this.activeTabId,
+      unsupportedPageReason: () => this.unsupportedPage?.reason,
+      attachTabForRecording: (tabId) => this.attachTabForRecording(tabId),
+      captureActiveSnapshot: (label) => this.captureActiveSnapshot(label),
+      sendActionResult: (result, tabId, frameId) => this.sendActionResult(result, tabId, frameId)
+    });
   }
   async beginAcceptedRecording(recordingId, projectId) {
     this.clearPendingRecordingStart();
     if (projectId !== void 0) {
-      this.session = compactObject({ ...this.session, projectId });
+      this.session = compactObject2({ ...this.session, projectId });
       await writeSession(this.session);
     }
     if (this.recordingState === "recording") {
@@ -1720,19 +2053,19 @@ var FluxIQConnection = class {
         sourceId: this.tabSourceId(tabId),
         tabId
       }
-    }) : compactObject({
+    }) : compactObject2({
       latestEvidence: recordingEvidencePayload(payload)
     });
     if (this.recordingState !== "recording") return;
-    const stateTimestampMs = numberValue2(objectValue(state)?.timestamp) ?? payload.eventTimestampMs;
+    const stateTimestampMs = numberValue3(objectValue2(state)?.timestamp) ?? payload.eventTimestampMs;
     if (hasDomSnapshot) {
       const snapshotId = stateSnapshotIdFromPayload(payload);
-      await this.sendClientMessage("client.snapshot", compactObject({
+      await this.sendClientMessage("client.snapshot", compactObject2({
         snapshotId,
         timestamp: stateTimestampMs,
         kind: "state",
         state,
-        metadata: compactObject({
+        metadata: compactObject2({
           reason: "recording-evidence",
           clientKind: payload.kind,
           eventTimestampMs: payload.eventTimestampMs,
@@ -1748,7 +2081,7 @@ var FluxIQConnection = class {
     await this.sendClientMessage("client.state_update", createWebAutomationStateUpdate({
       ...tabId === void 0 ? {} : { activeContextId: String(tabId) },
       state,
-      metadata: compactObject({
+      metadata: compactObject2({
         reason: "recording-evidence",
         inputId: WEB_AUTOMATION_INPUT_IDS.recordingEvidence,
         clientKind: payload.kind,
@@ -1815,9 +2148,15 @@ var FluxIQConnection = class {
     return isDomSnapshotPayload(snapshot) ? snapshot : void 0;
   }
   async sendActionResult(result, tabId, frameId) {
+    this.finishRuntimeStatus({
+      ...result,
+      ...tabId !== void 0 ? { tabId } : {},
+      ...frameId !== void 0 ? { frameId } : {}
+    });
     const visualTarget = result.visualTarget ?? (result.element ? webAutomationActionVisualTargetFromElement(result.element) : void 0);
     await this.sendClientMessage("client.action_result", gatewayActionResultFromBrowserResult(result));
-    await this.handleRecordingEvent(compactObject({
+    await this.sendRuntimeActionConfirmation(result, tabId, frameId);
+    await this.handleRecordingEvent(compactObject2({
       kind: "action.result",
       sequence: this.nextBackgroundEventSequence(),
       url: result.url ?? this.activeTabUrl ?? "",
@@ -1828,6 +2167,34 @@ var FluxIQConnection = class {
       snapshot: result.snapshot,
       actionResult: result
     }), tabId, frameId);
+  }
+  async sendRuntimeActionConfirmation(result, tabId, frameId) {
+    if (result.status !== "succeeded") return;
+    const confirmation = runtimeConfirmationForActionResult(result);
+    if (!confirmation) return;
+    const event = createWebAutomationRecordingEvent({
+      kind: confirmation.kind,
+      sequence: this.nextBackgroundEventSequence(),
+      url: result.url ?? this.activeTabUrl ?? "",
+      title: result.title ?? "",
+      eventTimestampMs: result.finishedAt,
+      element: result.element,
+      visualTarget: result.visualTarget,
+      snapshot: result.snapshot,
+      inputValue: confirmation.inputValue,
+      key: confirmation.key,
+      scroll: confirmation.scroll,
+      actionResult: webAutomationActionResultPayload(result),
+      metadata: {
+        domainId: WEB_AUTOMATION_DOMAIN_ID,
+        inputId: confirmation.inputId,
+        runtimeConfirmation: true
+      }
+    }, {
+      ...tabId !== void 0 ? { tabId } : {},
+      ...frameId !== void 0 ? { frameId } : {}
+    });
+    await this.sendClientMessage("client.recording_event", event);
   }
   async sendClientMessage(type, payload, _tabId, _frameId) {
     if (this.client?.connected) {
@@ -1918,7 +2285,7 @@ var FluxIQConnection = class {
   addActivity(kind, label, detail, tone = "neutral") {
     const timestamp = Date.now();
     this.lastActivityAt = timestamp;
-    const entry = compactObject({
+    const entry = compactObject2({
       id: `${kind}.${timestamp}.${Math.random().toString(36).slice(2)}`,
       timestamp,
       kind,
@@ -1938,6 +2305,53 @@ var FluxIQConnection = class {
     this.recordingLog.length = 0;
     this.clearPendingPointerClicks();
     this.lastActivityAt = void 0;
+  }
+  startRuntimeAction(action) {
+    this.startRuntimeStatus({
+      commandId: action.commandId,
+      actionType: action.actionType,
+      label: runtimeActionLabel(action.actionType),
+      target: runtimeActionTarget(action),
+      startedAt: Date.now()
+    });
+  }
+  startRuntimeStatus(status) {
+    this.runtimeStatus = {
+      state: "running",
+      startedAt: Date.now(),
+      ...status
+    };
+    this.lastError = void 0;
+    this.addActivity("runtime", `Runtime started: ${this.runtimeStatus.label ?? this.runtimeStatus.actionType ?? "Command"}`, this.runtimeStatus.target, "warning");
+    this.emitStatus();
+  }
+  finishRuntimeStatus(result) {
+    const failed = result.status !== "succeeded";
+    const label = runtimeActionLabel(result.actionType);
+    this.runtimeStatus = {
+      state: failed ? "failed" : "succeeded",
+      commandId: result.commandId,
+      actionType: result.actionType,
+      label,
+      target: runtimeResultTarget(result) ?? this.runtimeStatus.target,
+      ...result.tabId !== void 0 ? { tabId: result.tabId } : {},
+      ...result.frameId !== void 0 ? { frameId: result.frameId } : {},
+      startedAt: result.startedAt,
+      finishedAt: result.finishedAt,
+      ...result.message ? { message: result.message } : {},
+      ...failed && result.message ? { error: result.message } : {},
+      ...result.url ? { url: result.url } : {}
+    };
+    if (result.tabId !== void 0) this.activeTabId = result.tabId;
+    if (result.url) this.activeTabUrl = result.url;
+    if (failed) this.lastError = result.message ?? `${label} failed.`;
+    this.addActivity(
+      "runtime",
+      failed ? `Runtime failed: ${label}` : `Runtime succeeded: ${label}`,
+      result.message ?? runtimeResultTarget(result),
+      failed ? "danger" : "success"
+    );
+    this.emitStatus();
   }
   suppressNextClickDuplicate(signature) {
     if (this.suppressedPointerClicks.has(signature)) return;
@@ -1981,13 +2395,13 @@ var FluxIQConnection = class {
     return browserStateSnapshotFromTabs(await activeTab(), await allTabs(), this.recordingState, timestamp, this.eventSourceId());
   }
   recordingEnvironment() {
-    return compactObject({
+    return compactObject2({
       id: `client.${this.session.clientId}.browser`,
       label: "FluxIQ Browser Extension",
       kind: "browser_extension",
       domainId: WEB_AUTOMATION_DOMAIN_ID,
       capabilities: browserExtensionCapabilities.map((capability) => capability.id),
-      metadata: compactObject({
+      metadata: compactObject2({
         browser: browserDescriptor(),
         activeTabUrl: this.activeTabUrl
       })
@@ -2090,10 +2504,10 @@ var FluxIQConnection = class {
         frameId: input.frameId
       });
       this.addActivity("snapshot", "State screenshot missing", missingScreenReason, "warning");
-      const metadata = objectValue(state.metadata);
+      const metadata = objectValue2(state.metadata);
       return {
         ...state,
-        metadata: compactObject({
+        metadata: compactObject2({
           ...metadata ?? {},
           missingScreenReason
         })
@@ -2110,7 +2524,7 @@ var FluxIQConnection = class {
       ...tabId === void 0 ? {} : { tabId },
       ...tabId === void 0 ? {} : { sourceId: this.tabSourceId(tabId) }
     }) : void 0;
-    return compactObject({
+    return compactObject2({
       snapshotId: `dom.${timestamp}`,
       timestamp,
       kind: state ? "state" : "structured",
@@ -2145,7 +2559,7 @@ var FluxIQConnection = class {
     const url = new URL(`/api/programs/automation-studio/state-assets/${encodeURIComponent(projectId)}/${sha256}`, this.settings.coreApiUrl || DEFAULT_CORE_API_URL);
     const response = await fetch(url.toString(), {
       method: "PUT",
-      headers: compactObject({
+      headers: compactObject2({
         "content-type": mediaType,
         "x-content-sha256": sha256,
         ...this.session.token ? { authorization: `Bearer ${this.session.token}` } : {}
@@ -2159,9 +2573,9 @@ var FluxIQConnection = class {
       status: response.status,
       body: payload ?? bodyText
     });
-    const responseObject = objectValue(payload);
-    const responsePayload = objectValue(responseObject?.payload);
-    const contentRef = stringValue2(responsePayload?.contentRef);
+    const responseObject = objectValue2(payload);
+    const responsePayload = objectValue2(responseObject?.payload);
+    const contentRef = stringValue3(responsePayload?.contentRef);
     if (!response.ok || responseObject?.ok !== true || !contentRef) {
       throw new Error(`FluxIQ state asset upload failed (${response.status}).`);
     }
@@ -2182,7 +2596,7 @@ var FluxIQConnection = class {
     try {
       const url = new URL("/api/client-gateway/snapshot", this.settings.coreApiUrl || DEFAULT_CORE_API_URL);
       const response = await fetch(url.toString(), {
-        headers: compactObject({
+        headers: compactObject2({
           accept: "application/json",
           authorization: `Bearer ${this.session.token}`
         })
@@ -2196,18 +2610,18 @@ var FluxIQConnection = class {
         body: payload ?? bodyText
       });
       if (!response.ok) return void 0;
-      const root = objectValue(payload);
+      const root = objectValue2(payload);
       if (root?.ok !== true) return void 0;
-      const body = objectValue(root.payload);
+      const body = objectValue2(root.payload);
       const sessions = arrayValue(body?.sessions);
-      const matchingSession = sessions.map(objectValue).find((session) => session && stringValue2(session.sessionId) === this.session.sessionId) ?? sessions.map(objectValue).find((session) => session && stringValue2(session.clientId) === this.session.clientId);
-      const sessionProjectId = stringValue2(matchingSession?.projectId);
-      const webRuntime = objectValue(body?.webRuntime);
-      const automationStudio = objectValue(webRuntime?.automationStudio);
-      const activeProjectId = stringValue2(automationStudio?.activeProjectId);
+      const matchingSession = sessions.map(objectValue2).find((session) => session && stringValue3(session.sessionId) === this.session.sessionId) ?? sessions.map(objectValue2).find((session) => session && stringValue3(session.clientId) === this.session.clientId);
+      const sessionProjectId = stringValue3(matchingSession?.projectId);
+      const webRuntime = objectValue2(body?.webRuntime);
+      const automationStudio = objectValue2(webRuntime?.automationStudio);
+      const activeProjectId = stringValue3(automationStudio?.activeProjectId);
       const projectId = sessionProjectId ?? activeProjectId;
       if (!projectId) return void 0;
-      this.session = compactObject({ ...this.session, projectId });
+      this.session = compactObject2({ ...this.session, projectId });
       this.activeRecordingProjectId ??= projectId;
       await writeSession(this.session);
       this.addActivity("recording", "Project context linked", projectId, "success");
@@ -2234,7 +2648,7 @@ var FluxIQConnection = class {
     this.addActivity("snapshot", "Screenshot skipped", message, "warning");
   }
 };
-function compactObject(value) {
+function compactObject2(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
 function isExecutableRecordedAction(payload) {
@@ -2279,7 +2693,7 @@ function recordedInputId(payload) {
 }
 function recordingEvidencePayload(payload) {
   const visualTarget = visualTargetFromPayload(payload);
-  return compactObject({
+  return compactObject2({
     kind: payload.kind,
     url: payload.url,
     title: payload.title,
@@ -2307,13 +2721,13 @@ function translateFrameElements(frameSnapshot, topSnapshot, frameId) {
       width: viewportBounds.width,
       height: viewportBounds.height
     } : translateFrameDocumentRectToTopDocument(element.documentBounds, frameSnapshot, topSnapshot, offset);
-    return compactObject({
+    return compactObject2({
       ...element,
       selector: `frame[${frameId}] >> ${element.selector}`,
       bounds: viewportBounds,
       documentBounds,
       isVisibleOnViewport: viewportBounds !== void 0,
-      attributes: compactObject({
+      attributes: compactObject2({
         ...element.attributes ?? {},
         "data-fluxiq-frame-id": String(frameId),
         "data-fluxiq-frame-url": frameSnapshot.url
@@ -2374,13 +2788,13 @@ function browserStateFromTabs(active, tabs, recordingState) {
   return createWebAutomationStateUpdate({
     ...active?.tabId === void 0 ? {} : { activeContextId: String(active.tabId) },
     recording: recordingState === "recording",
-    contexts: tabs.map((tab) => compactObject({
+    contexts: tabs.map((tab) => compactObject2({
       contextId: String(tab.tabId),
       url: tab.url,
       title: tab.title,
       faviconUrl: tab.favIconUrl,
       active: tab.active,
-      metadata: compactObject({
+      metadata: compactObject2({
         kind: "browser.tab",
         windowId: tab.windowId,
         status: tab.status
@@ -2414,30 +2828,8 @@ function gatewayRecordingEventFromPayload(payload, tabId, frameId, recordingId) 
     ...frameId !== void 0 ? { frameId } : {}
   });
 }
-function browserActionFromGatewayCommand(command) {
-  return webAutomationActionFromGatewayCommand(command);
-}
-function gatewayActionResultFromBrowserResult(result) {
-  const visualTarget = result.visualTarget ?? (result.element ? webAutomationActionVisualTargetFromElement(result.element) : void 0);
-  return compactObject({
-    commandId: result.commandId,
-    status: result.status,
-    startedAt: result.startedAt,
-    completedAt: result.finishedAt,
-    message: result.message,
-    target: result.element ? webAutomationActionTargetFromElement(result.element) : void 0,
-    payload: compactObject({
-      url: result.url,
-      title: result.title,
-      visualTarget,
-      snapshot: result.snapshot,
-      extracted: result.extracted
-    }),
-    error: result.status === "failed" ? result.message : void 0
-  });
-}
 function elementTarget(element) {
-  return compactObject({
+  return compactObject2({
     selector: element.selector,
     tagName: element.tagName,
     xpath: element.xpath,
@@ -2460,10 +2852,10 @@ function elementTarget(element) {
 function visualTargetFromPayload(payload) {
   return payload.visualTarget ?? (payload.element ? webAutomationActionVisualTargetFromElement(payload.element) : void 0);
 }
-function stringValue2(value) {
+function stringValue3(value) {
   return typeof value === "string" ? value : void 0;
 }
-function objectValue(value) {
+function objectValue2(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 function arrayValue(value) {
@@ -2477,7 +2869,7 @@ function parseJsonBody(text) {
     return void 0;
   }
 }
-function numberValue2(value) {
+function numberValue3(value) {
   return typeof value === "number" ? value : void 0;
 }
 function rectValue(value) {
@@ -2517,14 +2909,45 @@ function activityDetail(payload) {
   if (payload.url) return payload.url;
   return void 0;
 }
+function runtimeActionLabel(actionType) {
+  if (actionType === "web.browser.navigate") return "Navigate";
+  if (actionType === "web.dom.click") return "Click";
+  if (actionType === "web.dom.type") return "Type";
+  if (actionType === "web.dom.clear") return "Clear";
+  if (actionType === "web.dom.select") return "Select";
+  if (actionType === "web.dom.keypress") return "Key press";
+  if (actionType === "web.dom.scroll") return "Scroll";
+  if (actionType === "web.dom.wait_for_selector") return "Wait for selector";
+  if (actionType === "web.dom.wait_for_text") return "Wait for text";
+  if (actionType === "web.dom.extract") return "Extract";
+  if (actionType === "web.dom.capture_snapshot") return "Capture snapshot";
+  return actionType;
+}
+function runtimeActionTarget(action) {
+  return action.url ?? action.selector ?? action.text ?? action.value ?? action.key ?? action.visualTarget?.selector;
+}
+function runtimeResultTarget(result) {
+  if (result.actionType === "web.browser.navigate") return result.url ?? result.title;
+  return result.element?.name ?? result.element?.selector ?? result.element?.text;
+}
+function runtimeConfirmationForActionResult(result) {
+  if (result.actionType === "web.browser.navigate") return { kind: "browser.navigation", inputId: WEB_AUTOMATION_INPUT_IDS.navigationRequested };
+  if (result.actionType === "web.dom.click") return { kind: "dom.click", inputId: WEB_AUTOMATION_INPUT_IDS.elementClicked };
+  if (result.actionType === "web.dom.type") return { kind: "dom.input", inputId: WEB_AUTOMATION_INPUT_IDS.textEntered };
+  if (result.actionType === "web.dom.clear") return { kind: "dom.input", inputId: WEB_AUTOMATION_INPUT_IDS.fieldCleared, inputValue: "" };
+  if (result.actionType === "web.dom.select") return { kind: "dom.change", inputId: WEB_AUTOMATION_INPUT_IDS.optionSelected };
+  if (result.actionType === "web.dom.keypress") return { kind: "dom.keydown", inputId: WEB_AUTOMATION_INPUT_IDS.keyPressed };
+  if (result.actionType === "web.dom.scroll") return { kind: "dom.scroll", inputId: WEB_AUTOMATION_INPUT_IDS.pageScrolled };
+  return void 0;
+}
 function isDomSnapshotPayload(value) {
   if (!value || typeof value !== "object") return false;
   const snapshot = value;
   return typeof snapshot.url === "string" && typeof snapshot.title === "string" && Boolean(snapshot.viewport) && typeof snapshot.viewport?.width === "number" && typeof snapshot.viewport.height === "number" && typeof snapshot.viewport.scrollX === "number" && typeof snapshot.viewport.scrollY === "number" && Array.isArray(snapshot.interactiveElements);
 }
 function hasSnapshotFrameViewportOffset(snapshot) {
-  const frame = objectValue(snapshot.frame);
-  const viewportOffset = objectValue(frame?.viewportOffset);
+  const frame = objectValue2(snapshot.frame);
+  const viewportOffset = objectValue2(frame?.viewportOffset);
   return typeof viewportOffset?.x === "number" && typeof viewportOffset.y === "number" && typeof viewportOffset.width === "number" && typeof viewportOffset.height === "number";
 }
 function browserStateSnapshotFromTabs(active, tabs, recordingState, timestamp, sourceId) {
@@ -2561,24 +2984,24 @@ function normalizeRecordingsResponse(value, page, pageSize, sourceUrl) {
   const rawItems = Array.isArray(object.items) ? object.items : Array.isArray(object.recordings) ? object.recordings : [];
   return {
     items: rawItems.map(normalizeRecordingSummary).filter((item) => Boolean(item)),
-    page: numberValue2(object.page) ?? page,
-    pageSize: numberValue2(object.pageSize) ?? pageSize,
-    total: numberValue2(object.total),
+    page: numberValue3(object.page) ?? page,
+    pageSize: numberValue3(object.pageSize) ?? pageSize,
+    total: numberValue3(object.total),
     sourceUrl
   };
 }
 function normalizeRecordingSummary(value) {
   if (!value || typeof value !== "object") return void 0;
   const object = value;
-  const id = stringValue2(object.id) ?? stringValue2(object.recordingId);
+  const id = stringValue3(object.id) ?? stringValue3(object.recordingId);
   if (!id) return void 0;
-  return compactObject({
+  return compactObject2({
     id,
-    title: stringValue2(object.title) ?? stringValue2(object.name) ?? id,
-    status: stringValue2(object.status),
-    projectId: stringValue2(object.projectId),
-    taskId: stringValue2(object.taskId),
-    eventCount: numberValue2(object.eventCount),
+    title: stringValue3(object.title) ?? stringValue3(object.name) ?? id,
+    status: stringValue3(object.status),
+    projectId: stringValue3(object.projectId),
+    taskId: stringValue3(object.taskId),
+    eventCount: numberValue3(object.eventCount),
     startedAt: timestampValue(object.startedAt),
     endedAt: timestampValue(object.endedAt),
     updatedAt: timestampValue(object.updatedAt)

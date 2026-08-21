@@ -44,6 +44,13 @@ const eventCount = element<HTMLElement>("eventCount");
 const recordingTimer = element<HTMLElement>("recordingTimer");
 const recordLabel = element<HTMLElement>("recordLabel");
 const errorText = element<HTMLElement>("errorText");
+const runtimeCard = element<HTMLElement>("runtimeCard");
+const runtimeStateDot = element<HTMLElement>("runtimeStateDot");
+const runtimeState = element<HTMLElement>("runtimeState");
+const runtimeCommand = element<HTMLElement>("runtimeCommand");
+const runtimeTarget = element<HTMLElement>("runtimeTarget");
+const runtimeTab = element<HTMLElement>("runtimeTab");
+const runtimeMessage = element<HTMLElement>("runtimeMessage");
 const unsupportedCard = element<HTMLElement>("unsupportedCard");
 const unsupportedReason = element<HTMLElement>("unsupportedReason");
 const activityFeed = element<HTMLOListElement>("activityFeed");
@@ -235,8 +242,26 @@ function renderStatus(status: ExtensionStatus): void {
 
   renderPairingOverlay(status);
   renderRecordingLockOverlay(status);
+  renderRuntime(status);
   renderError(status.lastError);
   renderTimer();
+}
+
+function renderRuntime(status: ExtensionStatus): void {
+  const runtime = status.runtime;
+  const state = runtime?.state ?? "idle";
+  runtimeCard.classList.toggle("running", state === "running");
+  runtimeCard.classList.toggle("succeeded", state === "succeeded");
+  runtimeCard.classList.toggle("failed", state === "failed");
+  runtimeStateDot.className = `runtime-state-dot ${state}`;
+  runtimeState.textContent = state === "idle" ? "Runtime idle"
+    : state === "running" ? "Runtime running"
+      : state === "succeeded" ? "Runtime succeeded"
+        : "Runtime failed";
+  runtimeCommand.textContent = runtime?.label ?? runtime?.actionType ?? "No command running";
+  runtimeTarget.textContent = runtime?.target ?? runtime?.url ?? "-";
+  runtimeTab.textContent = runtime?.tabId === undefined ? "-" : `Tab ${runtime.tabId}`;
+  runtimeMessage.textContent = runtime?.error ?? runtime?.message ?? (runtime?.startedAt ? relativeTime(runtime.startedAt) : "-");
 }
 
 async function refreshEventLog(): Promise<void> {

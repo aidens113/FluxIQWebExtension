@@ -64,6 +64,79 @@
     return `"${value.replace(/"/g, '\\"')}"`;
   }
 
+  // src/content/actions.ts
+  async function executeContentAction(action, deps) {
+    const startedAt = Date.now();
+    try {
+      if (action.actionType === "web.dom.capture_snapshot" || action.actionType === "dom.capture_snapshot") {
+        return deps.success(action, startedAt, "Snapshot captured.", void 0, deps.captureSnapshot());
+      }
+      if (action.actionType === "web.dom.wait_for_selector" || action.actionType === "dom.wait_for_selector") {
+        const element = await deps.waitForElement(action.selector, action.timeoutMs);
+        return deps.success(action, startedAt, "Selector found.", deps.describeElement(element), deps.captureSnapshot());
+      }
+      if (action.actionType === "web.dom.wait_for_text" || action.actionType === "dom.wait_for_text") {
+        await deps.waitForText(action.text ?? action.value ?? "", action.timeoutMs);
+        return deps.success(action, startedAt, "Text found.", void 0, deps.captureSnapshot());
+      }
+      if (action.actionType === "web.dom.extract" || action.actionType === "dom.extract") {
+        const element = deps.resolveTarget(action);
+        const extracted = deps.extractElement(element, action.options);
+        return deps.success(action, startedAt, "Value extracted.", deps.describeElement(element), deps.captureSnapshot(), extracted);
+      }
+      if (action.actionType === "web.dom.click" || action.actionType === "dom.click") {
+        const element = deps.resolveTarget(action);
+        deps.scrollElementIntoView(element);
+        element.click();
+        return deps.success(action, startedAt, "Element clicked.", deps.describeElement(element), deps.captureSnapshot());
+      }
+      if (action.actionType === "web.dom.type" || action.actionType === "dom.type") {
+        const element = deps.resolveTarget(action);
+        element.focus();
+        deps.setElementValue(element, action.text ?? action.value ?? "");
+        deps.dispatchInputEvents(element);
+        return deps.success(action, startedAt, "Text entered.", deps.describeElement(element), deps.captureSnapshot());
+      }
+      if (action.actionType === "web.dom.clear" || action.actionType === "dom.clear") {
+        const element = deps.resolveTarget(action);
+        element.focus();
+        deps.setElementValue(element, "");
+        deps.dispatchInputEvents(element);
+        return deps.success(action, startedAt, "Field cleared.", deps.describeElement(element), deps.captureSnapshot());
+      }
+      if (action.actionType === "web.dom.select" || action.actionType === "dom.select") {
+        const element = deps.resolveTarget(action);
+        element.focus();
+        element.value = action.value ?? "";
+        deps.dispatchInputEvents(element);
+        return deps.success(action, startedAt, "Option selected.", deps.describeElement(element), deps.captureSnapshot());
+      }
+      if (action.actionType === "web.dom.scroll" || action.actionType === "dom.scroll") {
+        window.scrollTo({
+          left: Number(action.options?.x ?? action.coordinates?.x ?? window.scrollX),
+          top: Number(action.options?.y ?? action.coordinates?.y ?? window.scrollY),
+          behavior: action.options?.smooth === true ? "smooth" : "instant"
+        });
+        return deps.success(action, startedAt, "Page scrolled.", void 0, deps.captureSnapshot());
+      }
+      if (action.actionType === "web.dom.keypress" || action.actionType === "dom.keypress") {
+        const target = action.selector ? deps.resolveTarget(action) : document.activeElement ?? document.body;
+        const key = action.key ?? action.text ?? "";
+        target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+        target.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true, cancelable: true }));
+        return deps.success(action, startedAt, "Key event dispatched.", target instanceof Element ? deps.describeElement(target) : void 0, deps.captureSnapshot());
+      }
+      throw new Error(`Unsupported action type: ${action.actionType}`);
+    } catch (error) {
+      return deps.failure(action, error, startedAt);
+    }
+  }
+
+  // src/content/snapshots.ts
+  function shouldAttachStateSnapshot(kind) {
+    return kind === "dom.click" || kind === "dom.input" || kind === "dom.change" || kind === "dom.submit" || kind === "dom.keydown";
+  }
+
   // src/content/index.ts
   var CONTENT_EVENT = "fluxiq.contentEvent";
   var CONTENT_READY = "fluxiq.contentReady";
@@ -393,94 +466,63 @@
     if (details.metadata) payload.metadata = details.metadata;
     return payload;
   }
-  function shouldAttachStateSnapshot(kind) {
-    return kind === "dom.click" || kind === "dom.input" || kind === "dom.change" || kind === "dom.submit" || kind === "dom.keydown";
-  }
   async function executeAction(action) {
-    const startedAt = Date.now();
-    try {
-      if (action.actionType === "web.dom.capture_snapshot" || action.actionType === "dom.capture_snapshot") {
-        return success(action, startedAt, "Snapshot captured.", void 0, captureSnapshot());
-      }
-      if (action.actionType === "web.dom.wait_for_selector" || action.actionType === "dom.wait_for_selector") {
-        const element = await waitForElement(action.selector, action.timeoutMs);
-        return success(action, startedAt, "Selector found.", describeElement(element), captureSnapshot());
-      }
-      if (action.actionType === "web.dom.wait_for_text" || action.actionType === "dom.wait_for_text") {
-        await waitForText(action.text ?? action.value ?? "", action.timeoutMs);
-        return success(action, startedAt, "Text found.", void 0, captureSnapshot());
-      }
-      if (action.actionType === "web.dom.extract" || action.actionType === "dom.extract") {
-        const element = resolveTarget(action);
-        const extracted = extractElement(element, action.options);
-        return success(action, startedAt, "Value extracted.", describeElement(element), captureSnapshot(), extracted);
-      }
-      if (action.actionType === "web.dom.click" || action.actionType === "dom.click") {
-        const element = resolveTarget(action);
-        scrollElementIntoView(element);
-        element.click();
-        return success(action, startedAt, "Element clicked.", describeElement(element), captureSnapshot());
-      }
-      if (action.actionType === "web.dom.type" || action.actionType === "dom.type") {
-        const element = resolveTarget(action);
-        element.focus();
-        setElementValue(element, action.text ?? action.value ?? "");
-        dispatchInputEvents(element);
-        return success(action, startedAt, "Text entered.", describeElement(element), captureSnapshot());
-      }
-      if (action.actionType === "web.dom.clear" || action.actionType === "dom.clear") {
-        const element = resolveTarget(action);
-        element.focus();
-        setElementValue(element, "");
-        dispatchInputEvents(element);
-        return success(action, startedAt, "Field cleared.", describeElement(element), captureSnapshot());
-      }
-      if (action.actionType === "web.dom.select" || action.actionType === "dom.select") {
-        const element = resolveTarget(action);
-        element.focus();
-        element.value = action.value ?? "";
-        dispatchInputEvents(element);
-        return success(action, startedAt, "Option selected.", describeElement(element), captureSnapshot());
-      }
-      if (action.actionType === "web.dom.scroll" || action.actionType === "dom.scroll") {
-        window.scrollTo({
-          left: Number(action.options?.x ?? action.coordinates?.x ?? window.scrollX),
-          top: Number(action.options?.y ?? action.coordinates?.y ?? window.scrollY),
-          behavior: action.options?.smooth === true ? "smooth" : "instant"
-        });
-        return success(action, startedAt, "Page scrolled.", void 0, captureSnapshot());
-      }
-      if (action.actionType === "web.dom.keypress" || action.actionType === "dom.keypress") {
-        const target = action.selector ? resolveTarget(action) : document.activeElement ?? document.body;
-        const key = action.key ?? action.text ?? "";
-        target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
-        target.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true, cancelable: true }));
-        return success(action, startedAt, "Key event dispatched.", target instanceof Element ? describeElement(target) : void 0, captureSnapshot());
-      }
-      throw new Error(`Unsupported action type: ${action.actionType}`);
-    } catch (error) {
-      return actionFailure(action, error, startedAt);
-    }
+    return executeContentAction(action, {
+      captureSnapshot,
+      resolveTarget,
+      describeElement,
+      waitForElement,
+      waitForText,
+      extractElement,
+      scrollElementIntoView,
+      setElementValue,
+      dispatchInputEvents,
+      success,
+      failure: actionFailure
+    });
   }
   function resolveTarget(action) {
+    const misses = [];
     if (action.selector) {
       const element = document.querySelector(action.selector);
-      if (!element) throw new Error(`No element matches selector: ${action.selector}`);
-      return element;
+      if (element) return element;
+      misses.push(`selector ${action.selector}`);
     }
     if (action.coordinates) {
       const element = document.elementFromPoint(action.coordinates.x, action.coordinates.y);
-      if (!element) throw new Error("No element exists at the requested coordinates.");
-      return element;
+      if (element) return element;
+      misses.push(`coordinates ${action.coordinates.x},${action.coordinates.y}`);
+    }
+    const visualPoint = pointFromVisualTarget(action.visualTarget);
+    if (visualPoint) {
+      const element = document.elementFromPoint(visualPoint.x, visualPoint.y);
+      if (element) return element;
+      misses.push(`visual target ${Math.round(visualPoint.x)},${Math.round(visualPoint.y)}`);
     }
     const fingerprint = action.options?.element;
     if (fingerprint && typeof fingerprint === "object" && !Array.isArray(fingerprint)) {
       const element = findClosestFingerprint(fingerprint);
       if (element) return element;
+      misses.push("element fingerprint");
     }
-    const active = document.activeElement;
-    if (active) return active;
+    if (!misses.length) {
+      const active = document.activeElement;
+      if (active) return active;
+    }
+    if (misses.length) throw new Error(`No target resolved from ${misses.join(", ")}.`);
     throw new Error("No selector, coordinates, or active element was available.");
+  }
+  function pointFromVisualTarget(visualTarget) {
+    const bounds = visualTarget?.bounds ?? visualTarget?.anchor?.bounds;
+    if (bounds) return centerPoint(bounds);
+    if (visualTarget?.documentBounds) {
+      const center = centerPoint(visualTarget.documentBounds);
+      return { x: center.x - window.scrollX, y: center.y - window.scrollY };
+    }
+    return void 0;
+  }
+  function centerPoint(rect) {
+    return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
   }
   function success(action, startedAt, message, element, snapshot, extracted) {
     const result = {
@@ -494,6 +536,7 @@
       finishedAt: Date.now()
     };
     if (element) result.element = element;
+    if (action.visualTarget) result.visualTarget = action.visualTarget;
     if (snapshot ?? captureSnapshots) result.snapshot = snapshot ?? captureSnapshot();
     if (extracted !== void 0) result.extracted = extracted;
     return result;

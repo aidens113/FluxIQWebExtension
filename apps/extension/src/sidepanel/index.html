@@ -41,6 +41,20 @@
           <span id="recordGlyph" class="record-glyph"></span>
           <span id="recordLabel">Record</span>
         </button>
+        <section id="runtimeCard" class="runtime-card" aria-live="polite">
+          <div class="runtime-card-header">
+            <span id="runtimeStateDot" class="runtime-state-dot"></span>
+            <div>
+              <h2 id="runtimeState">Runtime idle</h2>
+              <span id="runtimeCommand">No command running</span>
+            </div>
+          </div>
+          <dl class="runtime-details">
+            <div><dt>Target</dt><dd id="runtimeTarget">-</dd></div>
+            <div><dt>Tab</dt><dd id="runtimeTab">-</dd></div>
+            <div><dt>Result</dt><dd id="runtimeMessage">-</dd></div>
+          </dl>
+        </section>
         <div class="recording-stats">
           <div>
             <strong id="recordingTimer">00:00</strong>

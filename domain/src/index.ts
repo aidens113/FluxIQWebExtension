@@ -6,6 +6,8 @@ export * from "./actions/types";
 export * from "./actions/schemas";
 export * from "./actions/capabilities";
 export * from "./io/web-automation-io";
+export * from "./output-nodes";
+export * from "./runtime";
 export * from "./recording/domain";
 export * from "./recording/events";
 export * from "./recording/state";

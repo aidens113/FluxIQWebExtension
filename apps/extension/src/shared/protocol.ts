@@ -102,6 +102,21 @@ export type RecordingBlockState = {
   message: string;
 };
 
+export type RuntimeCommandStatus = {
+  state: "idle" | "running" | "succeeded" | "failed";
+  commandId?: string | undefined;
+  actionType?: BrowserActionType | undefined;
+  label?: string | undefined;
+  target?: string | undefined;
+  tabId?: number | undefined;
+  frameId?: number | undefined;
+  startedAt?: number | undefined;
+  finishedAt?: number | undefined;
+  message?: string | undefined;
+  error?: string | undefined;
+  url?: string | undefined;
+};
+
 export type ExtensionStatus = {
   connectionState: ConnectionState;
   recordingState: RecordingState;
@@ -118,6 +133,7 @@ export type ExtensionStatus = {
   recordingStartedAt?: number | undefined;
   lastActivityAt?: number | undefined;
   recentActivities: ActivityEntry[];
+  runtime?: RuntimeCommandStatus | undefined;
   unsupportedPage?: UnsupportedPageState | undefined;
   recordingBlock?: RecordingBlockState | undefined;
   lastError?: string | undefined;

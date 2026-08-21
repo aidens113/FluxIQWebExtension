@@ -72,6 +72,13 @@ var eventCount = element("eventCount");
 var recordingTimer = element("recordingTimer");
 var recordLabel = element("recordLabel");
 var errorText = element("errorText");
+var runtimeCard = element("runtimeCard");
+var runtimeStateDot = element("runtimeStateDot");
+var runtimeState = element("runtimeState");
+var runtimeCommand = element("runtimeCommand");
+var runtimeTarget = element("runtimeTarget");
+var runtimeTab = element("runtimeTab");
+var runtimeMessage = element("runtimeMessage");
 var unsupportedCard = element("unsupportedCard");
 var unsupportedReason = element("unsupportedReason");
 var activityFeed = element("activityFeed");
@@ -237,8 +244,22 @@ function renderStatus(status) {
   unsupportedReason.textContent = status.unsupportedPage?.reason ?? "";
   renderPairingOverlay(status);
   renderRecordingLockOverlay(status);
+  renderRuntime(status);
   renderError(status.lastError);
   renderTimer();
+}
+function renderRuntime(status) {
+  const runtime = status.runtime;
+  const state = runtime?.state ?? "idle";
+  runtimeCard.classList.toggle("running", state === "running");
+  runtimeCard.classList.toggle("succeeded", state === "succeeded");
+  runtimeCard.classList.toggle("failed", state === "failed");
+  runtimeStateDot.className = `runtime-state-dot ${state}`;
+  runtimeState.textContent = state === "idle" ? "Runtime idle" : state === "running" ? "Runtime running" : state === "succeeded" ? "Runtime succeeded" : "Runtime failed";
+  runtimeCommand.textContent = runtime?.label ?? runtime?.actionType ?? "No command running";
+  runtimeTarget.textContent = runtime?.target ?? runtime?.url ?? "-";
+  runtimeTab.textContent = runtime?.tabId === void 0 ? "-" : `Tab ${runtime.tabId}`;
+  runtimeMessage.textContent = runtime?.error ?? runtime?.message ?? (runtime?.startedAt ? relativeTime(runtime.startedAt) : "-");
 }
 async function refreshEventLog() {
   const response = await runtimeSendMessage({

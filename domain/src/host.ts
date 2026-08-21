@@ -2,6 +2,7 @@ import { FluxIQ, type FluxIQOptions } from "fluxiq";
 import { webAutomationDomain } from "./manifest";
 import { createWebAutomationDomainIo } from "./io/web-automation-io";
 import { webAutomationRecordingDomain } from "./recording/domain";
+import { registerWebAutomationRuntime } from "./runtime/service";
 
 export function registerWebAutomationDomain(fluxiq: FluxIQ): FluxIQ {
   if (!fluxiq.domains.maybeGet(webAutomationDomain.manifest.id)) {
@@ -13,6 +14,7 @@ export function registerWebAutomationDomain(fluxiq: FluxIQ): FluxIQ {
   if (!fluxiq.programs.automationStudio.listRecordingDomains().some((domain) => domain.domainId === webAutomationRecordingDomain.domainId)) {
     fluxiq.programs.automationStudio.registerRecordingDomain(webAutomationRecordingDomain);
   }
+  registerWebAutomationRuntime(fluxiq);
   return fluxiq;
 }
 

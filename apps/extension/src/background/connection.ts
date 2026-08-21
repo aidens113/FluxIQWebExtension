@@ -9,9 +9,7 @@ import {
   createWebAutomationStateFromTabs,
   WEB_AUTOMATION_INPUT_IDS,
   webAutomationInputIdForRecordedEvent,
-  webAutomationActionTargetFromElement,
   webAutomationActionVisualTargetFromElement,
-  webAutomationActionFromGatewayCommand,
   webAutomationActionResultPayload,
   WEB_AUTOMATION_DOMAIN_ID
 } from "@fluxiq-web-extension/domain/client";
@@ -25,9 +23,6 @@ import { browserDescriptor } from "../shared/browser";
 import {
   browserExtensionCapabilities,
   type BrowserActionResult,
-  type BrowserActionCommand,
-  type ClientGatewayActionCommand,
-  type ClientGatewayActionResult,
   type ClientGatewayClientHello,
   type ClientGatewayClientMessage,
   type ClientGatewayRecordingEvent,
@@ -43,15 +38,18 @@ import {
   type RecordingEventPayload,
   type RecordingState,
   type ServerCommandPayload,
+  type BrowserActionCommand,
   type ActivityEntry,
   type CoreRecordingsPage,
   type CoreRecordingSummary,
   type RecordingLogPage,
   type RecordingBlockState,
-  type UnsupportedPageState
+  type UnsupportedPageState,
+  type RuntimeCommandStatus
 } from "../shared/protocol";
 import { activeTab, allTabFrames, allTabs, ensureContentScript, sendToTab } from "./tabs";
 import { clearQueuedEvents, queueEvent, readQueuedEvents, writeSession } from "./storage";
+import { ExtensionRuntimeCommandRouter, browserActionFromGatewayCommand, gatewayActionResultFromBrowserResult } from "../runtime";
 
 type StatusListener = (status: ExtensionStatus) => void;
 type DomSnapshotPayload = Parameters<typeof createWebAutomationStateFromSnapshot>[0];
@@ -92,6 +90,7 @@ export class FluxIQConnection {
   private readonly recentActivities: ActivityEntry[] = [];
   private readonly recordingLog: ActivityEntry[] = [];
   private readonly listeners = new Set<StatusListener>();
+  private runtimeStatus: RuntimeCommandStatus = { state: "idle" };
 
   constructor(
     private settings: FluxIQSettings,
@@ -107,7 +106,8 @@ export class FluxIQConnection {
       clientId: this.session.clientId,
       queueSize: this.queueSize,
       eventCount: this.eventCount,
-      recentActivities: [...this.recentActivities]
+      recentActivities: [...this.recentActivities],
+      runtime: { ...this.runtimeStatus }
     };
     if (this.session.sessionId) status.sessionId = this.session.sessionId;
     if (this.session.projectId !== undefined) status.projectId = this.session.projectId;
@@ -550,41 +550,37 @@ export class FluxIQConnection {
       return;
     }
     if (payload.command === "capture_snapshot") {
-      await this.captureActiveSnapshot("Snapshot captured");
+      this.startRuntimeStatus({
+        commandId: messageId,
+        actionType: "web.dom.capture_snapshot",
+        label: "Capture snapshot",
+        target: this.activeTabUrl
+      });
+      await this.runtimeCommandRouter().captureSnapshot();
+      this.finishRuntimeStatus({
+        commandId: messageId,
+        actionType: "web.dom.capture_snapshot",
+        status: "succeeded",
+        message: "Snapshot command dispatched.",
+        startedAt: this.runtimeStatus.startedAt ?? Date.now(),
+        finishedAt: Date.now()
+      });
       return;
     }
-      if (payload.command === "execute_action") {
-      const action = payload.action;
-      const tabId = action.tabId ?? this.activeTabId;
-      if (tabId === undefined) {
-        await this.sendActionResult({
-          commandId: action.commandId,
-          actionType: action.actionType,
-          status: "failed",
-          message: "No active tab is available.",
-          startedAt: Date.now(),
-          finishedAt: Date.now()
-        });
-        return;
-      }
-      if (action.actionType === "web.browser.navigate" && action.url) {
-        const startedAt = Date.now();
-        await chrome.tabs.update(tabId, { url: action.url });
-        await this.sendActionResult({
-          commandId: action.commandId,
-          actionType: action.actionType,
-          status: "succeeded",
-          message: "Navigation requested.",
-          url: action.url,
-          startedAt,
-          finishedAt: Date.now()
-        });
-        return;
-      }
-      await this.attachTabForRecording(tabId);
-      const result = await sendToTab<BrowserActionResult>(tabId, { type: "executeAction", action }, action.frameId);
-      await this.sendActionResult(result, tabId, action.frameId);
+    if (payload.command === "execute_action") {
+      this.startRuntimeAction(payload.action);
+      await this.runtimeCommandRouter().executeAction(payload.action);
     }
+  }
+
+  private runtimeCommandRouter(): ExtensionRuntimeCommandRouter {
+    return new ExtensionRuntimeCommandRouter({
+      activeTabId: () => this.activeTabId,
+      unsupportedPageReason: () => this.unsupportedPage?.reason,
+      attachTabForRecording: (tabId) => this.attachTabForRecording(tabId),
+      captureActiveSnapshot: (label) => this.captureActiveSnapshot(label),
+      sendActionResult: (result, tabId, frameId) => this.sendActionResult(result, tabId, frameId)
+    });
   }
 
   private async beginAcceptedRecording(recordingId: string, projectId?: string | null): Promise<void> {
@@ -799,10 +795,16 @@ export class FluxIQConnection {
   }
 
   private async sendActionResult(result: BrowserActionResult, tabId?: number, frameId?: number): Promise<void> {
+    this.finishRuntimeStatus({
+      ...result,
+      ...(tabId !== undefined ? { tabId } : {}),
+      ...(frameId !== undefined ? { frameId } : {})
+    });
     const visualTarget = result.visualTarget ?? (result.element
       ? webAutomationActionVisualTargetFromElement(result.element as never)
       : undefined);
     await this.sendClientMessage("client.action_result", gatewayActionResultFromBrowserResult(result));
+    await this.sendRuntimeActionConfirmation(result, tabId, frameId);
     await this.handleRecordingEvent(compactObject({
       kind: "action.result",
       sequence: this.nextBackgroundEventSequence(),
@@ -814,6 +816,35 @@ export class FluxIQConnection {
       snapshot: result.snapshot,
       actionResult: result
     }), tabId, frameId);
+  }
+
+  private async sendRuntimeActionConfirmation(result: BrowserActionResult, tabId?: number, frameId?: number): Promise<void> {
+    if (result.status !== "succeeded") return;
+    const confirmation = runtimeConfirmationForActionResult(result);
+    if (!confirmation) return;
+    const event = createWebAutomationRecordingEvent({
+      kind: confirmation.kind,
+      sequence: this.nextBackgroundEventSequence(),
+      url: result.url ?? this.activeTabUrl ?? "",
+      title: result.title ?? "",
+      eventTimestampMs: result.finishedAt,
+      element: result.element as unknown as JsonObject | undefined,
+      visualTarget: result.visualTarget as unknown as JsonObject | undefined,
+      snapshot: result.snapshot as unknown as JsonObject,
+      inputValue: confirmation.inputValue,
+      key: confirmation.key,
+      scroll: confirmation.scroll,
+      actionResult: webAutomationActionResultPayload(result as never),
+      metadata: {
+        domainId: WEB_AUTOMATION_DOMAIN_ID,
+        inputId: confirmation.inputId,
+        runtimeConfirmation: true
+      }
+    }, {
+      ...(tabId !== undefined ? { tabId } : {}),
+      ...(frameId !== undefined ? { frameId } : {})
+    });
+    await this.sendClientMessage("client.recording_event", event);
   }
 
   private async sendClientMessage<TType extends ClientGatewayClientMessage["type"]>(
@@ -946,6 +977,56 @@ export class FluxIQConnection {
     this.recordingLog.length = 0;
     this.clearPendingPointerClicks();
     this.lastActivityAt = undefined;
+  }
+
+  private startRuntimeAction(action: BrowserActionCommand): void {
+    this.startRuntimeStatus({
+      commandId: action.commandId,
+      actionType: action.actionType,
+      label: runtimeActionLabel(action.actionType),
+      target: runtimeActionTarget(action),
+      startedAt: Date.now()
+    });
+  }
+
+  private startRuntimeStatus(status: Omit<RuntimeCommandStatus, "state">): void {
+    this.runtimeStatus = {
+      state: "running",
+      startedAt: Date.now(),
+      ...status
+    };
+    this.lastError = undefined;
+    this.addActivity("runtime", `Runtime started: ${this.runtimeStatus.label ?? this.runtimeStatus.actionType ?? "Command"}`, this.runtimeStatus.target, "warning");
+    this.emitStatus();
+  }
+
+  private finishRuntimeStatus(result: BrowserActionResult & { tabId?: number; frameId?: number }): void {
+    const failed = result.status !== "succeeded";
+    const label = runtimeActionLabel(result.actionType);
+    this.runtimeStatus = {
+      state: failed ? "failed" : "succeeded",
+      commandId: result.commandId,
+      actionType: result.actionType,
+      label,
+      target: runtimeResultTarget(result) ?? this.runtimeStatus.target,
+      ...(result.tabId !== undefined ? { tabId: result.tabId } : {}),
+      ...(result.frameId !== undefined ? { frameId: result.frameId } : {}),
+      startedAt: result.startedAt,
+      finishedAt: result.finishedAt,
+      ...(result.message ? { message: result.message } : {}),
+      ...(failed && result.message ? { error: result.message } : {}),
+      ...(result.url ? { url: result.url } : {})
+    };
+    if (result.tabId !== undefined) this.activeTabId = result.tabId;
+    if (result.url) this.activeTabUrl = result.url;
+    if (failed) this.lastError = result.message ?? `${label} failed.`;
+    this.addActivity(
+      "runtime",
+      failed ? `Runtime failed: ${label}` : `Runtime succeeded: ${label}`,
+      result.message ?? runtimeResultTarget(result),
+      failed ? "danger" : "success"
+    );
+    this.emitStatus();
   }
 
   private suppressNextClickDuplicate(signature: string): void {
@@ -1518,33 +1599,6 @@ function gatewayRecordingEventFromPayload(payload: RecordingEventPayload, tabId?
   });
 }
 
-function browserActionFromGatewayCommand(command: ClientGatewayActionCommand & { commandId: string }): BrowserActionCommand {
-  return webAutomationActionFromGatewayCommand(command) as BrowserActionCommand;
-}
-
-function gatewayActionResultFromBrowserResult(result: BrowserActionResult): ClientGatewayActionResult {
-  const visualTarget = result.visualTarget ?? (result.element
-    ? webAutomationActionVisualTargetFromElement(result.element as never)
-    : undefined);
-  return compactObject({
-    commandId: result.commandId,
-    status: result.status,
-    startedAt: result.startedAt,
-    completedAt: result.finishedAt,
-    message: result.message,
-    target: result.element ? webAutomationActionTargetFromElement(result.element as never) as unknown as JsonObject : undefined,
-    payload: compactObject({
-      url: result.url,
-      title: result.title,
-      visualTarget: visualTarget as unknown as JsonObject,
-      snapshot: result.snapshot as unknown as JsonObject,
-      extracted: result.extracted as JsonObject
-    }) as JsonObject,
-    error: result.status === "failed" ? result.message : undefined
-  }) as ClientGatewayActionResult;
-}
-
-
 function elementTarget(element: { selector: string; tagName: string; xpath?: string | undefined; id?: string | undefined; classNames?: string[] | undefined; visibleText?: string | undefined; text?: string | undefined; value?: string | undefined; role?: string | undefined; name?: string | undefined; href?: string | undefined; inputType?: string | undefined; bounds?: unknown; documentBounds?: unknown; isVisibleOnViewport?: boolean | undefined; hasClickHandler?: boolean | undefined; attributes?: Record<string, string> | undefined }): JsonObject {
   return compactObject({
     selector: element.selector,
@@ -1647,6 +1701,47 @@ function activityDetail(payload: RecordingEventPayload): string | undefined {
   if (payload.scroll) return `${payload.scroll.x}, ${payload.scroll.y}`;
   if (payload.mutation) return `${payload.mutation.added} added, ${payload.mutation.removed} removed`;
   if (payload.url) return payload.url;
+  return undefined;
+}
+
+function runtimeActionLabel(actionType: string): string {
+  if (actionType === "web.browser.navigate") return "Navigate";
+  if (actionType === "web.dom.click") return "Click";
+  if (actionType === "web.dom.type") return "Type";
+  if (actionType === "web.dom.clear") return "Clear";
+  if (actionType === "web.dom.select") return "Select";
+  if (actionType === "web.dom.keypress") return "Key press";
+  if (actionType === "web.dom.scroll") return "Scroll";
+  if (actionType === "web.dom.wait_for_selector") return "Wait for selector";
+  if (actionType === "web.dom.wait_for_text") return "Wait for text";
+  if (actionType === "web.dom.extract") return "Extract";
+  if (actionType === "web.dom.capture_snapshot") return "Capture snapshot";
+  return actionType;
+}
+
+function runtimeActionTarget(action: BrowserActionCommand): string | undefined {
+  return action.url ?? action.selector ?? action.text ?? action.value ?? action.key ?? action.visualTarget?.selector;
+}
+
+function runtimeResultTarget(result: BrowserActionResult): string | undefined {
+  if (result.actionType === "web.browser.navigate") return result.url ?? result.title;
+  return result.element?.name ?? result.element?.selector ?? result.element?.text;
+}
+
+function runtimeConfirmationForActionResult(result: BrowserActionResult): {
+  kind: RecordingEventPayload["kind"];
+  inputId: string;
+  inputValue?: string;
+  key?: string;
+  scroll?: { x: number; y: number };
+} | undefined {
+  if (result.actionType === "web.browser.navigate") return { kind: "browser.navigation", inputId: WEB_AUTOMATION_INPUT_IDS.navigationRequested };
+  if (result.actionType === "web.dom.click") return { kind: "dom.click", inputId: WEB_AUTOMATION_INPUT_IDS.elementClicked };
+  if (result.actionType === "web.dom.type") return { kind: "dom.input", inputId: WEB_AUTOMATION_INPUT_IDS.textEntered };
+  if (result.actionType === "web.dom.clear") return { kind: "dom.input", inputId: WEB_AUTOMATION_INPUT_IDS.fieldCleared, inputValue: "" };
+  if (result.actionType === "web.dom.select") return { kind: "dom.change", inputId: WEB_AUTOMATION_INPUT_IDS.optionSelected };
+  if (result.actionType === "web.dom.keypress") return { kind: "dom.keydown", inputId: WEB_AUTOMATION_INPUT_IDS.keyPressed };
+  if (result.actionType === "web.dom.scroll") return { kind: "dom.scroll", inputId: WEB_AUTOMATION_INPUT_IDS.pageScrolled };
   return undefined;
 }
 

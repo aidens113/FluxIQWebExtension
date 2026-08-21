@@ -7,13 +7,20 @@ import { WEB_AUTOMATION_DOMAIN_ID, WEB_AUTOMATION_EVENTS } from "./constants";
 import { WEB_AUTOMATION_INPUT_IDS } from "./io/input-model";
 import { webAutomationManifestInputs, webAutomationManifestOutputs } from "./io/manifest-definitions";
 import { webAutomationDomain } from "./manifest";
+import {
+  createWebAutomationOutputNodeImplementationBundle,
+  createWebAutomationOutputNodeManifest,
+  WEB_AUTOMATION_IMPORTER_PACKAGE_ID,
+  WEB_AUTOMATION_IMPORTER_PACKAGE_VERSION,
+  WEB_AUTOMATION_RUNTIME_CAPABILITIES,
+  WEB_AUTOMATION_RUNTIME_PERMISSIONS
+} from "./output-nodes/native-runtime";
 import { webAutomationRecordingDomain } from "./recording/domain";
 import { WEB_AUTOMATION_STATE_NAMESPACE } from "./recording/state";
 import { WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID } from "./recording/web-state";
 import { outputTargetFromPayload, webAutomationOutputPayload } from "./web-panel/output-nodes";
+import { registerWebAutomationRuntime } from "./runtime/service";
 
-const IMPORTER_PACKAGE_ID = "@fluxiq-web-extension/web-automation";
-const IMPORTER_PACKAGE_VERSION = "0.1.0";
 const RECORDING_MAPPER_ID = "web-recording-actions";
 
 /**
@@ -54,41 +61,36 @@ export function registerFluxIQHost(fluxiq: FluxIQ): FluxIQ {
     fluxiq.programs.automationStudio.registerRecordingDomain(webAutomationRecordingDomain);
   }
 
-  const nativeRuntime = new AutomationStudioNativeNodeRuntime().register({
-    schemaVersion: "0.1",
-    sdkVersion: "0.1",
-    packageId: IMPORTER_PACKAGE_ID,
-    packageVersion: IMPORTER_PACKAGE_VERSION,
-    domainId: WEB_AUTOMATION_DOMAIN_ID,
-    nodes: [],
+  const nativeRuntime = new AutomationStudioNativeNodeRuntime({
+    permissions: WEB_AUTOMATION_RUNTIME_PERMISSIONS,
+    runtimeCapabilities: WEB_AUTOMATION_RUNTIME_CAPABILITIES
+  }).register(createWebAutomationOutputNodeManifest({
     stateVisualizers: [{
       id: WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID,
-      version: IMPORTER_PACKAGE_VERSION,
+      version: WEB_AUTOMATION_IMPORTER_PACKAGE_VERSION,
       label: "Web viewport",
       description: "Renders browser DOM state as a viewport frame with anchored interactive elements.",
       supportedNamespaces: [WEB_AUTOMATION_STATE_NAMESPACE],
       supportedKinds: ["bounds", "text", "label", "selector", "url", "visibility", "enabled"],
       supportedRendererIds: [WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID],
-      metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, packageId: IMPORTER_PACKAGE_ID }
+      metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, packageId: WEB_AUTOMATION_IMPORTER_PACKAGE_ID }
     }],
     recordingMappers: [{
       id: RECORDING_MAPPER_ID,
-      version: IMPORTER_PACKAGE_VERSION,
+      version: WEB_AUTOMATION_IMPORTER_PACKAGE_VERSION,
       description: "Maps recorded browser interactions to executable web automation actions.",
       outputIds: WEB_AUTOMATION_ACTION_TYPES
     }]
-  }, {
-    packageId: IMPORTER_PACKAGE_ID,
-    packageVersion: IMPORTER_PACKAGE_VERSION,
-    implementations: {},
+  }), createWebAutomationOutputNodeImplementationBundle({
     recordingMappers: {
       [RECORDING_MAPPER_ID]: mapWebRecordingObservation
     }
-  });
+  }));
 
   // Bind through Automation Studio directly for compatibility with the
   // framework build currently linked by this importing repository.
   fluxiq.programs.automationStudio.bindNativeNodeRuntime(nativeRuntime);
+  registerWebAutomationRuntime(fluxiq);
   return fluxiq;
 }
 
@@ -135,7 +137,12 @@ class GatewayInputHub {
 
 async function dispatchWebAction(fluxiq: FluxIQ, outputId: string, payload: JsonObject): Promise<{ ok: boolean; outputId: string; payload?: JsonObject; error?: string }> {
   const sessions = fluxiq.programs.clientGateway.snapshot().sessions.filter((session) =>
-    session.status === "connected" && session.clientType === "extension" && session.capabilities.some((capability) => capability.id === "web.actions")
+    (session.status === "connected" || session.status === "ready") &&
+    session.clientType === "extension" &&
+    session.capabilities.some((capability) =>
+      capability.id === "web.actions" &&
+      (capability.metadata?.domainId === WEB_AUTOMATION_DOMAIN_ID || capability.actionTypes?.some((actionType) => actionType.startsWith("web.")))
+    )
   );
   if (sessions.length !== 1) return { ok: false, outputId, error: "A single paired web-automation client must be selected before dispatching an output." };
   try {

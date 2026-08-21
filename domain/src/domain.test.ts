@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
 import { AutomationStudioService, validateStateSnapshot } from "fluxiq/automation-studio";
+import { validateAutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
 import { WEB_AUTOMATION_DOMAIN_ID, WEB_AUTOMATION_EVENTS } from "./constants";
+import { createWebAutomationFluxIQ } from "./host";
 import { webAutomationRecordingDomain } from "./recording/domain";
 import { createWebAutomationInitialState } from "./recording/state";
 import { createWebAutomationRecordingEvent } from "./client/gateway-mapping";
 import { WEB_AUTOMATION_INPUT_IDS, webAutomationInputIdForRecordedEvent, actionInputDefinitions, stateInputDefinitions } from "./io/input-model";
 import { createWebAutomationStateFromSnapshot, filterStateElements, webAutomationActionVisualTargetFromElement } from "./recording/web-state";
+import { webAutomationClientCapabilities } from "./actions/capabilities";
+import { WEB_AUTOMATION_ACTION_TYPES } from "./actions/types";
+import { listWebAutomationOutputNodeDefinitions, webAutomationOutputPayload, outputTargetFromPayload } from "./output-nodes";
+import { validateWebAutomationRuntime } from "./runtime";
 
 const service = new AutomationStudioService({ seedFixture: false });
 service.registerRecordingDomain(webAutomationRecordingDomain);
@@ -192,5 +198,30 @@ assert.equal(webAutomationInputIdForRecordedEvent({ kind: "dom.submit", url: "ht
 
 assert.deepEqual(actionInputDefinitions.find(([id]) => id === WEB_AUTOMATION_INPUT_IDS.elementClicked), [WEB_AUTOMATION_INPUT_IDS.elementClicked, "Element clicked", "web.dom.click"]);
 assert.equal(stateInputDefinitions.every((input) => input.role !== "action"), true);
+
+const clickPayload = webAutomationOutputPayload("web.dom.click", {
+  element: { selector: "button.save", tagName: "button", text: "Save" },
+  visualTarget: { namespace: "web", statePath: "web.elements.button.save", selector: "button.save" }
+});
+assert.equal(clickPayload.selector, "button.save");
+assert.equal((clickPayload.element as { selector?: string }).selector, "button.save");
+assert.equal((clickPayload.visualTarget as { statePath?: string }).statePath, "web.elements.button.save");
+assert.equal((outputTargetFromPayload(clickPayload)?.visualTarget as { statePath?: string } | undefined)?.statePath, "web.elements.button.save");
+
+const outputNodeDefinitions = listWebAutomationOutputNodeDefinitions();
+assert.equal(outputNodeDefinitions.length, 11);
+const clickNodeDefinition = outputNodeDefinitions.find((definition) => definition.outputAction?.fixedOutputId === "web.dom.click");
+assert.equal(clickNodeDefinition?.requiredRuntimeCapabilities?.includes("web.actions"), true);
+assert.equal(validateAutomationStudioNodeDefinition(clickNodeDefinition!).ok, true);
+assert.equal(outputNodeDefinitions.every((definition) => validateAutomationStudioNodeDefinition(definition).ok), true);
+
+const actionCapability = webAutomationClientCapabilities.find((capability) => capability.id === "web.actions");
+assert.equal(actionCapability?.metadata?.domainId, WEB_AUTOMATION_DOMAIN_ID);
+assert.deepEqual(actionCapability?.metadata?.outputIds, WEB_AUTOMATION_ACTION_TYPES);
+
+const fluxiq = createWebAutomationFluxIQ({ loadEnv: false });
+const runtimeValidation = await validateWebAutomationRuntime(fluxiq);
+assert.equal(runtimeValidation.ok, true);
+assert.equal((await fluxiq.runtime.capabilities()).some((capability) => capability.outputIds?.includes("web.dom.click")), true);
 
 console.log("Web automation domain smoke test passed.");
