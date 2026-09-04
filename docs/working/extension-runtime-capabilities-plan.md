@@ -1011,6 +1011,10 @@ Follow-up completed:
 
 - Runtime DOM actions now default to frame `0` unless an action explicitly
   targets another frame.
+- Runtime action messages now include a top-frame-only guard, and content
+  scripts in subframes ignore untargeted runtime actions.
+- Added a content-script version handshake so already-open pages get reinjected
+  when the extension runtime/content action protocol changes.
 
 Verification:
 

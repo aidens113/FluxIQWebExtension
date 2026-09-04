@@ -93,6 +93,7 @@ const FRAME_GEOMETRY_RESPONSE = "fluxiq.frameGeometryResponse";
 const MAX_SNAPSHOT_CANDIDATES = 2_000;
 const MAX_SNAPSHOT_SCAN_ELEMENTS = 50_000;
 const ACTIVE_CONTENT_INSTANCE_KEY = "__fluxiqWebAutomationActiveContentInstance";
+const CONTENT_SCRIPT_VERSION = 2;
 const MAX_OBSERVED_EVENT_ELEMENTS = 500;
 const CONTENT_INSTANCE_ID = `${Date.now()}.${Math.random().toString(36).slice(2)}`;
 const contentWindow = window as Window & { [ACTIVE_CONTENT_INSTANCE_KEY]?: string };
@@ -118,9 +119,9 @@ sendReady();
 installFrameGeometryBridge();
 
 chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
-  const typed = message as { type?: string; recording?: boolean; settings?: { captureMutations?: boolean; captureInputValues?: boolean; captureSnapshots?: boolean }; action?: BrowserActionCommand; commandId?: string; x?: number; y?: number };
+  const typed = message as { type?: string; recording?: boolean; settings?: { captureMutations?: boolean; captureInputValues?: boolean; captureSnapshots?: boolean }; action?: BrowserActionCommand; commandId?: string; x?: number; y?: number; topFrameOnly?: boolean };
   if (typed.type === "fluxiq.ping") {
-    sendResponse({ ok: true, active: isActiveContentInstance() });
+    sendResponse({ ok: true, active: isActiveContentInstance(), version: CONTENT_SCRIPT_VERSION });
     return false;
   }
   if (!isActiveContentInstance()) return false;
@@ -137,6 +138,7 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
     return true;
   }
   if (typed.type === "executeAction" && typed.action) {
+    if (typed.topFrameOnly === true && !isTopFrame()) return false;
     void executeAction(typed.action)
       .then(sendResponse)
       .catch((error: unknown) => sendResponse(actionFailure(typed.action as BrowserActionCommand, error)));

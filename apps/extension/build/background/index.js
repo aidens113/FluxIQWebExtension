@@ -1179,6 +1179,7 @@ function compactJsonObject2(value) {
 var browserExtensionCapabilities = webAutomationClientCapabilities;
 
 // src/background/tabs.ts
+var REQUIRED_CONTENT_SCRIPT_VERSION = 2;
 async function activeTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return tab ? describeTab(tab) : void 0;
@@ -1221,15 +1222,15 @@ async function sendToTab(tabId, message, frameId) {
 }
 async function ensureContentScript(tabId) {
   try {
-    await sendToTab(tabId, { type: "fluxiq.ping" });
-    return;
+    const response = await sendToTab(tabId, { type: "fluxiq.ping" }, 0);
+    if (response.ok === true && response.version === REQUIRED_CONTENT_SCRIPT_VERSION) return;
   } catch {
-    await chrome.scripting.executeScript({
-      target: { tabId, allFrames: true },
-      files: ["content/index.js"]
-    });
   }
-  await sendToTab(tabId, { type: "fluxiq.ping" });
+  await chrome.scripting.executeScript({
+    target: { tabId, allFrames: true },
+    files: ["content/index.js"]
+  });
+  await sendToTab(tabId, { type: "fluxiq.ping" }, 0);
 }
 
 // src/background/storage.ts
@@ -1384,7 +1385,11 @@ async function runBrowserActionCommand(request) {
   await waitForTabReady(tabId);
   await request.attachTabForRecording(tabId);
   const frameId = action.frameId ?? 0;
-  return withTarget(await sendToTab(tabId, { type: "executeAction", action }, frameId), tabId, frameId);
+  return withTarget(await sendToTab(tabId, {
+    type: "executeAction",
+    action,
+    topFrameOnly: action.frameId === void 0
+  }, frameId), tabId, frameId);
 }
 function browserActionFailure(action, message) {
   return actionFailure(action, message);

@@ -215,6 +215,10 @@ assert.equal(clickNodeDefinition?.requiredRuntimeCapabilities?.includes("web.act
 assert.equal(validateAutomationStudioNodeDefinition(clickNodeDefinition!).ok, true);
 assert.equal(outputNodeDefinitions.every((definition) => validateAutomationStudioNodeDefinition(definition).ok), true);
 
+assert.equal(
+  outputNodeDefinitions.every((definition) => definition.parameters.every((parameter) => parameter.allowStateBinding === true)),
+  true
+);
 const actionCapability = webAutomationClientCapabilities.find((capability) => capability.id === "web.actions");
 assert.equal(actionCapability?.metadata?.domainId, WEB_AUTOMATION_DOMAIN_ID);
 assert.deepEqual(actionCapability?.metadata?.outputIds, WEB_AUTOMATION_ACTION_TYPES);

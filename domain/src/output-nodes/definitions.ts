@@ -45,7 +45,7 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
     outputAction: { fixedOutputId: definition.actionType },
     inputs: [controlInput],
     outputs: outputPorts,
-    parameters: parametersForOutput(definition.actionType),
+    parameters: parametersForOutput(definition.actionType).map((parameter) => ({ ...parameter, allowStateBinding: true })),
     icon: iconForOutput(definition.actionType),
     tags: ["web-automation", "output"],
     metadata: {

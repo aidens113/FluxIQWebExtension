@@ -145,6 +145,7 @@
   var MAX_SNAPSHOT_CANDIDATES = 2e3;
   var MAX_SNAPSHOT_SCAN_ELEMENTS = 5e4;
   var ACTIVE_CONTENT_INSTANCE_KEY = "__fluxiqWebAutomationActiveContentInstance";
+  var CONTENT_SCRIPT_VERSION = 2;
   var MAX_OBSERVED_EVENT_ELEMENTS = 500;
   var CONTENT_INSTANCE_ID = `${Date.now()}.${Math.random().toString(36).slice(2)}`;
   var contentWindow = window;
@@ -168,7 +169,7 @@
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     const typed = message;
     if (typed.type === "fluxiq.ping") {
-      sendResponse({ ok: true, active: isActiveContentInstance() });
+      sendResponse({ ok: true, active: isActiveContentInstance(), version: CONTENT_SCRIPT_VERSION });
       return false;
     }
     if (!isActiveContentInstance()) return false;
@@ -185,6 +186,7 @@
       return true;
     }
     if (typed.type === "executeAction" && typed.action) {
+      if (typed.topFrameOnly === true && !isTopFrame()) return false;
       void executeAction(typed.action).then(sendResponse).catch((error) => sendResponse(actionFailure(typed.action, error)));
       return true;
     }

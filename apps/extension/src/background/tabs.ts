@@ -1,5 +1,7 @@
 import type { TabDescriptor } from "../shared/protocol";
 
+const REQUIRED_CONTENT_SCRIPT_VERSION = 2;
+
 export async function activeTab(): Promise<TabDescriptor | undefined> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return tab ? describeTab(tab) : undefined;
@@ -47,13 +49,14 @@ export async function sendToTab<TResponse = unknown>(tabId: number, message: unk
 
 export async function ensureContentScript(tabId: number): Promise<void> {
   try {
-    await sendToTab(tabId, { type: "fluxiq.ping" });
-    return;
+    const response = await sendToTab<{ ok?: boolean; active?: boolean; version?: number }>(tabId, { type: "fluxiq.ping" }, 0);
+    if (response.ok === true && response.version === REQUIRED_CONTENT_SCRIPT_VERSION) return;
   } catch {
-    await chrome.scripting.executeScript({
-      target: { tabId, allFrames: true },
-      files: ["content/index.js"]
-    });
+    // Reinject below.
   }
-  await sendToTab(tabId, { type: "fluxiq.ping" });
+  await chrome.scripting.executeScript({
+    target: { tabId, allFrames: true },
+    files: ["content/index.js"]
+  });
+  await sendToTab(tabId, { type: "fluxiq.ping" }, 0);
 }

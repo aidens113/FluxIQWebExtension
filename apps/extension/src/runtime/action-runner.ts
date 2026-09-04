@@ -44,7 +44,11 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
   await waitForTabReady(tabId);
   await request.attachTabForRecording(tabId);
   const frameId = action.frameId ?? 0;
-  return withTarget(await sendToTab<BrowserActionResult>(tabId, { type: "executeAction", action }, frameId), tabId, frameId);
+  return withTarget(await sendToTab<BrowserActionResult>(tabId, {
+    type: "executeAction",
+    action,
+    topFrameOnly: action.frameId === undefined
+  }, frameId), tabId, frameId);
 }
 
 export function browserActionFailure(action: BrowserActionCommand, message: string): BrowserActionResult {
