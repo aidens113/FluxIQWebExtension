@@ -47,7 +47,7 @@ export async function preflightExistingFluxIQ(
   target: ExistingTargetConfiguration,
 ): Promise<ExistingFluxIQPreflight> {
   const identity = await control.validateCurrentSession(target.credentials.username);
-  const project = await control.requireProject(target.projectId);
+  const project = await control.requireProject(target.projectId, "web-automation");
   if (project.domainId !== undefined && project.domainId !== null && project.domainId !== "web-automation") {
     throw new RunnerFailure("environment.missing", "Existing FluxIQ project is not bound to the web-automation domain");
   }

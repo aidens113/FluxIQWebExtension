@@ -5,6 +5,10 @@ import { expandMatrix, parseLabCommand } from "./commands.js";
 test("parses finite run options", () => assert.deepEqual(parseLabCommand(["run", "basic-form", "--seed", "7", "--evidence", "events"]), { command: "run", scenarioId: "basic-form", seed: 7, evidence: "events" }));
 test("parses explicit existing target and Flow selection", () => assert.deepEqual(parseLabCommand(["run", "basic-form", "--target", "existing", "--flow", "flow-1"]), { command: "run", scenarioId: "basic-form", evidence: "failure", target: "existing", flowId: "flow-1" }));
 test("parses explicit clone target and source Flow selection", () => assert.deepEqual(parseLabCommand(["run", "basic-form", "--target", "clone", "--flow", "flow-1", "--fresh-login"]), { command: "run", scenarioId: "basic-form", evidence: "failure", target: "clone", flowId: "flow-1", freshLogin: true }));
+test("parses persistent isolated run and matrix workspaces", () => {
+  assert.deepEqual(parseLabCommand(["run", "basic-form", "--target", "persistent-isolated", "--workspace", "browser-dev"]), { command: "run", scenarioId: "basic-form", evidence: "failure", target: "persistent-isolated", workspace: "browser-dev" });
+  assert.deepEqual(parseLabCommand(["matrix", "--all", "--target", "persistent-isolated", "--workspace", "browser-dev"]), { command: "matrix", all: true, repeat: 1, evidence: "failure", target: "persistent-isolated", workspace: "browser-dev" });
+});
 test("parses auth controls and fresh-login mode", () => {
   assert.deepEqual(parseLabCommand(["auth", "status"]), { command: "auth", operation: "status" });
   assert.deepEqual(parseLabCommand(["auth", "clear"]), { command: "auth", operation: "clear" });
@@ -18,10 +22,16 @@ test("parses non-secret clone cache controls", () => {
   assert.throws(() => parseLabCommand(["clone-cache", "dump"]), /Usage: lab clone-cache/);
 });
 test("rejects invalid, duplicate, and unknown target options", () => {
-  assert.throws(() => parseLabCommand(["run", "basic-form", "--target", "remote"]), /isolated, existing, or clone/);
+  assert.throws(() => parseLabCommand(["run", "basic-form", "--target", "remote"]), /isolated, persistent-isolated, existing, or clone/);
   assert.throws(() => parseLabCommand(["run", "basic-form", "--target", "isolated", "--target", "existing"]), /only be specified once/);
   assert.throws(() => parseLabCommand(["run", "basic-form", "--unknown"]), /Unknown option/);
   assert.throws(() => parseLabCommand(["run", "basic-form", "--fresh-login", "--fresh-login"]), /only be specified once/);
+  assert.throws(() => parseLabCommand(["run", "basic-form", "--target", "persistent-isolated"]), /--workspace is required/);
+  assert.throws(() => parseLabCommand(["run", "basic-form", "--target", "persistent-isolated", "--workspace", "../escape"]), /portable name/);
+  assert.throws(() => parseLabCommand(["run", "basic-form", "--target", "persistent-isolated", "--workspace", "dev", "--flow", "flow-1"]), /cannot use --flow/);
+  assert.throws(() => parseLabCommand(["run", "basic-form", "--target", "persistent-isolated", "--workspace", "dev", "--fresh-login"]), /cannot use --flow or --fresh-login/);
+  assert.throws(() => parseLabCommand(["run", "basic-form", "--target", "existing", "--workspace", "dev"]), /requires --target persistent-isolated/);
+  assert.throws(() => parseLabCommand(["run", "basic-form", "--target", "persistent-isolated", "--workspace", "dev", "--workspace", "other"]), /only be specified once/);
 });
 test("expands matrix repeats deterministically", () => {
   const command = parseLabCommand(["matrix", "--scenarios-json", '["basic-form","navigation"]', "--repeat", "2"]);

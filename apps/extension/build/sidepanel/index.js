@@ -109,6 +109,7 @@ var eventTotal = 0;
 var recordingsPage = 1;
 var recordingsTotal;
 var timerHandle;
+var settingsDraftDirty = false;
 void refresh();
 startTimerLoop();
 applyLayoutMode();
@@ -120,8 +121,19 @@ closeSettingsButton.addEventListener("click", () => {
 });
 settingsBackdrop.addEventListener("click", () => setSettingsOpen(false));
 connectButton.addEventListener("click", () => {
-  void sendCommand(RUNTIME_MESSAGES.connect, { settings: readSettingsFromForm() });
+  const settings = readSettingsFromForm();
+  void sendCommand(RUNTIME_MESSAGES.connect, { settings }).then(() => {
+    settingsDraftDirty = false;
+  });
 });
+for (const control of [gatewayUrl, coreApiUrl, autoReconnect, captureMutations, captureInputValues, captureSnapshots]) {
+  control.addEventListener("input", () => {
+    settingsDraftDirty = true;
+  });
+  control.addEventListener("change", () => {
+    settingsDraftDirty = true;
+  });
+}
 disconnectButton.addEventListener("click", () => {
   void sendCommand(RUNTIME_MESSAGES.disconnect);
 });
@@ -213,12 +225,14 @@ function renderStatus(status) {
   currentStatus = status;
   const defaults = defaultSettings();
   const settings = { ...defaults, ...status.settings };
-  gatewayUrl.value = settings.gatewayUrl || status.gatewayUrl || defaults.gatewayUrl;
-  coreApiUrl.value = settings.coreApiUrl || defaults.coreApiUrl;
-  autoReconnect.checked = settings.autoReconnect;
-  captureMutations.checked = settings.captureMutations;
-  captureInputValues.checked = settings.captureInputValues;
-  captureSnapshots.checked = settings.captureSnapshots;
+  if (!settingsDraftDirty) {
+    gatewayUrl.value = settings.gatewayUrl || status.gatewayUrl || defaults.gatewayUrl;
+    coreApiUrl.value = settings.coreApiUrl || defaults.coreApiUrl;
+    autoReconnect.checked = settings.autoReconnect;
+    captureMutations.checked = settings.captureMutations;
+    captureInputValues.checked = settings.captureInputValues;
+    captureSnapshots.checked = settings.captureSnapshots;
+  }
   clientId.textContent = status.clientId;
   sessionId.textContent = status.sessionId ?? "-";
   activeTab.textContent = status.activeTabUrl ?? (status.activeTabId === void 0 ? "-" : String(status.activeTabId));

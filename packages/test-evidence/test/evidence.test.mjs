@@ -99,6 +99,23 @@ test("deduplicates identical screenshots while retaining correlated events", asy
   assert.equal((await readdir(path.join(root, ".staging-run-1", "screenshots"))).length, 1);
 });
 
+test("preserves identical physical frames when continuous review capture disables deduplication", async (t) => {
+  const root = await temporaryRoot(t);
+  const bundle = new EvidenceBundle({ rootDirectory: root, runId: "run-1", scenarioId: "continuous-review" });
+  await bundle.initialize();
+  const bytes = Buffer.from("same verified frame");
+  const controller = new EvidenceCaptureController(bundle, { screenshots: "events", deduplicateScreenshots: false, sampleFps: 2, maxScreenshots: 10, maxBytes: 1_000 }, {
+    async capture() { return { bytes, mediaType: "image/png", redactionVerified: true }; },
+  });
+  const first = await controller.trigger({ trigger: "checkpoint", summary: "frame one", correlation: correlation("one") });
+  const second = await controller.trigger({ trigger: "checkpoint", summary: "frame two", correlation: correlation("two") });
+  assert.ok(first.screenshot.path);
+  assert.ok(second.screenshot.path);
+  assert.notEqual(first.screenshot.path, second.screenshot.path);
+  assert.equal((await readdir(path.join(root, ".staging-run-1", "screenshots"))).length, 2);
+  assert.equal(validateEvidencePolicy(toContractEvidencePolicy({ screenshots: "events", sampleFps: 2, maxScreenshots: 10, maxBytes: 1_000 })).valid, true);
+});
+
 test("rate limits ordinary frames but always attempts error evidence", async (t) => {
   const root = await temporaryRoot(t);
   const bundle = new EvidenceBundle({ rootDirectory: root, runId: "run-1", scenarioId: "delayed-ui" });

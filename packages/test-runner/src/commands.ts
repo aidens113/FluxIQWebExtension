@@ -1,8 +1,10 @@
+import { requireSafePersistentWorkspaceName, type FluxIQTargetMode } from "./target-config.js";
+
 export type EvidenceMode = "none" | "failure" | "checkpoints" | "events";
-export type TargetMode = "isolated" | "existing" | "clone";
+export type TargetMode = FluxIQTargetMode;
 export type LabCommand =
-  | { command: "run"; scenarioId: string; seed?: number; evidence: EvidenceMode; target?: TargetMode; flowId?: string; freshLogin?: true }
-  | { command: "matrix"; scenarioIds?: string[]; all: boolean; repeat: number; evidence: EvidenceMode; target?: TargetMode; flowId?: string; freshLogin?: true }
+  | { command: "run"; scenarioId: string; seed?: number; evidence: EvidenceMode; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true }
+  | { command: "matrix"; scenarioIds?: string[]; all: boolean; repeat: number; evidence: EvidenceMode; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true }
   | { command: "auth"; operation: "status" | "clear" }
   | { command: "clone-cache"; operation: "status" | "refresh" | "clear" }
   | { command: "inspect"; runId: string }
@@ -11,12 +13,12 @@ export type LabCommand =
 export function parseLabCommand(argv: string[]): LabCommand {
   const [command, ...args] = argv;
   if (command === "run") {
-    rejectUnknownOptions(args, ["--seed", "--evidence", "--target", "--flow", "--fresh-login"]);
+    rejectUnknownOptions(args, ["--seed", "--evidence", "--target", "--workspace", "--flow", "--fresh-login"]);
     const scenarioId = positional(args, 0, "scenario ID");
     return { command, scenarioId, ...optionalSeed(args), evidence: evidenceMode(args), ...targetOptions(args) };
   }
   if (command === "matrix") {
-    rejectUnknownOptions(args, ["--all", "--scenarios-json", "--repeat", "--evidence", "--target", "--flow", "--fresh-login"]);
+    rejectUnknownOptions(args, ["--all", "--scenarios-json", "--repeat", "--evidence", "--target", "--workspace", "--flow", "--fresh-login"]);
     const all = args.includes("--all");
     const json = option(args, "--scenarios-json");
     if (all === Boolean(json)) throw new Error("matrix requires exactly one of --all or --scenarios-json");
@@ -40,7 +42,7 @@ export function parseLabCommand(argv: string[]): LabCommand {
   }
   if (command === "inspect") return { command, runId: positional(args, 0, "run ID") };
   if (command === "compare") return { command, baselineRunId: positional(args, 0, "baseline run ID"), candidateRunId: positional(args, 1, "candidate run ID") };
-  throw new Error("Usage: lab run <scenario> [--target isolated|existing|clone] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] | matrix (--all|--scenarios-json JSON) [--target isolated|existing|clone] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline> <candidate>");
+  throw new Error("Usage: lab run <scenario> [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] | matrix (--all|--scenarios-json JSON) [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline> <candidate>");
 }
 
 export function expandMatrix(command: Extract<LabCommand, { command: "matrix" }>, allScenarioIds: string[]): Array<{ scenarioId: string; repeatIndex: number }> {
@@ -52,6 +54,19 @@ function option(args: string[], name: string): string | undefined { const indexe
 function integerOption(args: string[], name: string, fallback: number): number { const value = option(args, name); if (value === undefined) return fallback; const parsed = Number(value); if (!Number.isSafeInteger(parsed)) throw new Error(`${name} must be an integer`); return parsed; }
 function optionalSeed(args: string[]): { seed?: number } { const seed = option(args, "--seed"); if (seed === undefined) return {}; const parsed = Number(seed); if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > 0xffffffff) throw new Error("--seed must be a uint32"); return { seed: parsed }; }
 function evidenceMode(args: string[]): EvidenceMode { const value = option(args, "--evidence") ?? "failure"; if (!["none", "failure", "checkpoints", "events"].includes(value)) throw new Error("--evidence must be none, failure, checkpoints, or events"); return value as EvidenceMode; }
-function targetOptions(args: string[]): { target?: TargetMode; flowId?: string; freshLogin?: true } { const target = option(args, "--target"); if (target !== undefined && target !== "isolated" && target !== "existing" && target !== "clone") throw new Error("--target must be isolated, existing, or clone"); const flowId = option(args, "--flow"); if (flowId !== undefined && !flowId.trim()) throw new Error("--flow must not be empty"); const freshLogin = args.includes("--fresh-login"); if (args.filter(value => value === "--fresh-login").length > 1) throw new Error("--fresh-login may only be specified once"); return { ...(target ? { target } : {}), ...(flowId ? { flowId: flowId.trim() } : {}), ...(freshLogin ? { freshLogin: true as const } : {}) }; }
+function targetOptions(args: string[]): { target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true } {
+  const target = option(args, "--target");
+  if (target !== undefined && target !== "isolated" && target !== "persistent-isolated" && target !== "existing" && target !== "clone") throw new Error("--target must be isolated, persistent-isolated, existing, or clone");
+  const workspaceValue = option(args, "--workspace");
+  const workspace = workspaceValue === undefined ? undefined : requireSafePersistentWorkspaceName(workspaceValue, "--workspace");
+  const flowId = option(args, "--flow");
+  if (flowId !== undefined && !flowId.trim()) throw new Error("--flow must not be empty");
+  const freshLogin = args.includes("--fresh-login");
+  if (args.filter(value => value === "--fresh-login").length > 1) throw new Error("--fresh-login may only be specified once");
+  if (target && target !== "persistent-isolated" && workspace) throw new Error("--workspace requires --target persistent-isolated");
+  if (target === "persistent-isolated" && !workspace) throw new Error("--workspace is required with --target persistent-isolated");
+  if (target === "persistent-isolated" && (flowId || freshLogin)) throw new Error("persistent-isolated target cannot use --flow or --fresh-login");
+  return { ...(target ? { target } : {}), ...(workspace ? { workspace } : {}), ...(flowId ? { flowId: flowId.trim() } : {}), ...(freshLogin ? { freshLogin: true as const } : {}) };
+}
 function rejectUnknownOptions(args: string[], allowed: string[]) { for (const value of args) if (value.startsWith("--") && !allowed.includes(value)) throw new Error(`Unknown option: ${value}`); }
 function positional(args: string[], index: number, label: string): string { const values = args.filter((value, offset) => offset === 0 || !args[offset - 1]?.startsWith("--")).filter(value => !value.startsWith("--")); const value = values[index]; if (!value) throw new Error(`${label} is required`); return value; }

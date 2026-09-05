@@ -27,7 +27,7 @@ export function validateEvidencePolicy(input: unknown): ValidationResult<Evidenc
     keys(value, ["screenshots", "trace", "video", "sampleFps", "maxScreenshots", "maxBytes", "reviewRequired"], "$", issues);
     enumeration(value.screenshots, ["none", "checkpoints", "events"], "$.screenshots", issues);
     enumeration(value.trace, ["off", "failure", "always"], "$.trace", issues); enumeration(value.video, ["off", "failure", "always"], "$.video", issues);
-    finite(value.sampleFps, "$.sampleFps", issues, 0, 1); finite(value.maxScreenshots, "$.maxScreenshots", issues, 0, 10000, true); finite(value.maxBytes, "$.maxBytes", issues, 0, Number.MAX_SAFE_INTEGER, true);
+    finite(value.sampleFps, "$.sampleFps", issues, 0, 60); finite(value.maxScreenshots, "$.maxScreenshots", issues, 0, 10000, true); finite(value.maxBytes, "$.maxBytes", issues, 0, Number.MAX_SAFE_INTEGER, true);
     if (typeof value.reviewRequired !== "boolean") add(issues, "$.reviewRequired", "must be a boolean");
   }
   return result(input, issues);

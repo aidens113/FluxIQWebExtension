@@ -4,6 +4,7 @@ import type { ExtensionStatus, FluxIQSettings, RecordingEventPayload } from "../
 import { FluxIQConnection } from "./connection";
 import { describeTab } from "./tabs";
 import { clearSession, readOrCreateClientId, readQueuedEvents, readSession, readSettings, writeSession, writeSettings } from "./storage";
+import { acceptActionEvidencePort } from "./action-evidence";
 
 let connection: FluxIQConnection | undefined;
 
@@ -39,6 +40,10 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 void enableSidePanelFirst();
+
+chrome.runtime.onConnect.addListener((port) => {
+  acceptActionEvidencePort(port);
+});
 
 chrome.tabs.onActivated.addListener(({ tabId }) => {
   void chrome.tabs.get(tabId, (tab) => {
@@ -133,6 +138,15 @@ async function handleRuntimeMessage(message: unknown, sender: chrome.runtime.Mes
     const tabId = sender.tab?.id;
     await manager.handleContentReady(typed.payload as RecordingEventPayload, tabId, sender.frameId);
     return { ok: true };
+  }
+
+  if (typed.type === "fluxiq.test.setActiveTab") {
+    const tabId = typed.tabId;
+    if (typeof tabId !== "number" || !Number.isSafeInteger(tabId) || tabId < 0) {
+      throw new Error("A valid automation tab ID is required.");
+    }
+    await manager.selectAutomationTab(tabId);
+    return { ok: true, status: manager.status() };
   }
 
   if (typed.type === RUNTIME_MESSAGES.contentEvent) {

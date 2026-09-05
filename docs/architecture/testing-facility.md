@@ -9,7 +9,7 @@ topology, an authenticated production-extension path, attested evidence,
 changed-capability selection, bounded-agent workflow contracts, and real-site
 policy validation.
 
-The browser suite and the two facility target modes must not be conflated:
+The browser suite and the four facility target modes must not be conflated:
 
 1. The extension Playwright suite loads the real E2E extension build and tests
    a finite browser-local content-script/action path against a small loopback
@@ -31,6 +31,10 @@ The browser suite and the two facility target modes must not be conflated:
    isolated topology and imports a deterministically remapped copy through
    Core's public create/save/read APIs. Only the isolated copy is paired,
    executed, recorded, panel-verified, and removed.
+5. The explicit `persistent-isolated` target starts and owns local FluxIQ just
+   like ordinary isolation, but retains a named workspace's `.fluxiq` data and
+   Chromium profile between finite invocations. Ports, processes, the Core web
+   copy, and process logs remain unique to each invocation.
 
 The isolated action proof uses Core's production client-action API; isolated
 mode does not synthesize or persist a FluxIQ Flow. Existing mode never creates
@@ -90,6 +94,57 @@ run-scoped web copy. This avoids sharing Core data, ports, or a web build
 directory between runs. The runner is therefore coupled to a compatible
 sibling Core checkout and its installed web dependencies.
 
+### Persistent isolated topology
+
+Persistent isolation separates retained FluxIQ/browser state from disposable
+process state. A workspace name is a sanitized identifier, not a path, and the
+resolved workspace must remain below the configured runs root. Names use 1–64
+lowercase ASCII letters, digits, dots, underscores, or hyphens; they must start
+and end with a letter or digit and must not use a Windows device name.
+
+```text
+pnpm lab run basic-form --target persistent-isolated --workspace regression-main
+  |
+  +-- test-runs/persistent-isolated/regression-main/   retained
+  |     +-- fluxiq-root/.fluxiq/                       projects, recordings, runs
+  |     +-- browser-profile/                           Chromium and extension state
+  |     +-- .identity/credentials.json                 owner-protected test identity
+  |     +-- .sessions/<run-id>/                        removed after this invocation
+  |           +-- core-workspace/apps/web/             disposable Core web copy
+  |           +-- logs/                                copied before cleanup
+  +-- test-runs/<run-id>/                              finalized evidence bundle
+```
+
+Only one invocation may own a named workspace at a time. The runner acquires
+the workspace lock before starting Core or Chromium, rejects a concurrent live
+owner, and may reclaim only a verifiably stale lock. It releases the lock and
+removes the current `.sessions/<run-id>` directory on success, failure,
+timeout, or handled interruption. It never deletes the stable workspace as a
+cleanup shortcut. Different workspace names remain independent.
+
+Sequential commands using the same name start fresh supervised processes and
+allocate new ports, while seeing the same `.fluxiq` database, browser profile,
+projects, recordings, trusted-client state, and run history. Sanitized run
+metadata and reports contain the target mode and workspace name, never an
+absolute workspace path, credentials, cookies, controller tokens, recorded
+values, or database contents.
+
+If explicit credentials are not configured, the first Core-requiring run
+generates a random administrator password and PIN and atomically stores them in
+the workspace's private `.identity/credentials.json`. The exact schema and
+size are validated on every reuse; malformed state fails closed. The directory
+and file are restricted to the current owner (`0700`/`0600` off Windows and a
+verified current-user-only ACL on Windows). Credential values never enter CLI
+status output, manifests, process logs, or evidence. Later invocations verify
+the retained identity rather than rotating an existing Core credential.
+
+Persistent isolation has no automatic reset/delete command. First ensure no
+run owns the workspace, then manually remove the exact directory
+`test-runs/persistent-isolated/<workspace>` (or its equivalent below the
+configured `FLUXIQ_TEST_RUNS_DIR`) when a clean state is intentionally needed.
+That deletion permanently removes the workspace's FluxIQ and browser state;
+finalized evidence bundles at `test-runs/<run-id>` are separate and remain.
+
 The CLI is finite and machine-readable. `run` executes one scenario; `matrix`
 executes an explicit scenario list or the full registry with bounded repeats;
 `auth status` and `auth clear` inspect or remove a scoped session cache;
@@ -129,6 +184,8 @@ placeholders only.
 | --- | --- |
 | `FLUXIQ_TEST_TARGET=existing` | Select the external-installation path. Isolated remains the default. |
 | `FLUXIQ_TEST_TARGET=clone` | Treat the configured external installation as a read-only source and execute a remapped copy in disposable isolated Core. |
+| `FLUXIQ_TEST_TARGET=persistent-isolated` | Start owned local FluxIQ against a retained named workspace; an explicit `--target` must agree with an environment-selected target. |
+| `FLUXIQ_TEST_PERSISTENT_WORKSPACE` | Required safe workspace name for persistent isolation unless supplied by `--workspace`. It is an identifier, never a filesystem path. |
 | `FLUXIQ_TEST_BASE_URL` | Required exact HTTP(S) panel/API origin without credentials, non-root path, query, or fragment. |
 | `FLUXIQ_TEST_GATEWAY_URL` | Optional absolute client URL; `ws://` is loopback-only and remote gateways require `wss://`. Otherwise use the sanitized gateway snapshot value. |
 | `FLUXIQ_TEST_PROJECT_ID` | Required accessible project containing the Flow. |
@@ -137,6 +194,15 @@ placeholders only.
 | `FLUXIQ_TEST_PIN` | Required for `existing` client-action authorization; not used by read-only `clone` source access. |
 | `FLUXIQ_TEST_TOTP` | Optional current TOTP when the identity requires one. |
 | `FLUXIQ_TEST_RUNS_DIR` | Optional local run/evidence root; defaults to `test-runs`. |
+| `FLUXIQ_DEMO_RUN_DIR` | Optional persistent demo workspace below `FLUXIQ_TEST_RUNS_DIR`; defaults to `test-runs/web-extension-demo`. Both demo scripts reuse it. |
+| `FLUXIQ_DEMO_BASE_URL` | Optional loopback origin for the demo-owned panel; defaults to `http://127.0.0.1:3300`. The stable port permits cookie reuse. |
+| `FLUXIQ_DEMO_GATEWAY_URL` | Optional loopback URL for the demo-owned gateway; defaults to `ws://127.0.0.1:4877/client`. |
+| `FLUXIQ_CORE_ROOT` | Optional FluxIQ Core checkout; defaults to the sibling checkout. |
+| `FLUXIQ_DEMO_PROJECT_ID` | Optional existing web-automation project to reuse. Otherwise the recording script reuses a unique matching project or creates one. |
+| `FLUXIQ_DEMO_PROJECT_NAME` | Optional persistent project name; defaults to `FluxIQ Web Extension Test`. |
+| `FLUXIQ_DEMO_FLOW_ID` | Optional pre-provision lookup ID; after UI creation, `workspace.json` owns the generated persistent Flow ID. |
+| `FLUXIQ_DEMO_FLOW_NAME` | Optional stable Flow name; defaults to `Web Extension Demo Flow`. |
+| `FLUXIQ_DEMO_HEADLESS` | Optional `true`/`false`; defaults to `true`. Set `false` only for visible browser debugging. |
 
 The runner preflights authenticated project access, an exact uniquely listed
 Flow, the complete Flow document, its stable SHA-256 content hash, and an
@@ -175,6 +241,99 @@ pnpm lab run basic-form --target existing --flow <flow-id> --fresh-login
 Status and clear output includes scope/state/timestamps but never the cookie.
 Passwords, PINs, TOTPs, and session cookies are not included in run results or
 manifest metadata.
+
+### Persistent-isolated target
+
+Use the CLI flag for an explicit command:
+
+```powershell
+pnpm lab run basic-form --target persistent-isolated --workspace regression-main
+pnpm lab run basic-form --target persistent-isolated --workspace regression-main
+```
+
+Both invocations retain the same local FluxIQ and browser state, but publish
+independent evidence bundles and run with separate session directories and
+ports. Environment configuration is equivalent:
+
+```dotenv
+FLUXIQ_TEST_TARGET=persistent-isolated
+FLUXIQ_TEST_PERSISTENT_WORKSPACE=regression-main
+```
+
+Do not configure an external panel URL, project, or Flow for this mode. Those
+settings belong to `existing` and `clone`; persistent isolation bootstraps and
+owns its local Core instance. Unlike `existing`, it may safely manage that
+instance's process lifecycle. Unlike disposable `isolated` and `clone`, it
+retains local state. Unlike `demo:record`/`demo:run`, it uses the ordinary
+scenario runner and produces a new attested evidence bundle per invocation.
+
+### Reusable self-recording demo workspace
+
+Two explicit smoke scripts exercise the complete author-and-run loop against a
+self-managed persistent isolated FluxIQ installation:
+
+```powershell
+pnpm demo:record
+pnpm demo:run
+```
+
+`pnpm demo:setup-local` creates or rotates one dedicated local test identity
+inside `FLUXIQ_DEMO_RUN_DIR/fluxiq-root/.fluxiq` and writes the ignored
+`.env.local` with the loopback panel/gateway and persistent workspace
+configuration. Generated
+credentials are never printed, and the command refuses to overwrite an
+existing file unless passed `--force`.
+
+`demo:record` authenticates through the normal reusable session cache, creates
+or reuses one project bound to `web-automation`, creates the configured Flow
+only when it is absent, starts the loopback `basic-form` fixture, loads the
+current unpacked extension in persistent Chromium, pairs it with FluxIQ,
+starts extension recording, performs the form interaction, stops recording,
+and requires one new durable Core recording. `demo:run` requires that saved
+workspace, reconnects the same extension profile, executes the persisted Flow
+through FluxIQ, and requires its browser actions to submit the form.
+
+The fixture gives every node an explicit non-overlapping layout. Both commands
+open the real Nodes view and compare every rendered node rectangle before they
+continue. An existing fixture-owned workspace is migrated through public
+`move_node` graph patches when its saved graph uses an older layout; an
+unexpected partial or foreign graph fails closed instead of being rewritten.
+
+Both commands lock and reuse the exact `FLUXIQ_DEMO_RUN_DIR`. Each invocation
+starts and stops its own copied Core web process while retaining
+`fluxiq-root/.fluxiq`; temporary Core copies live under `.sessions` and are
+removed after shutdown. The directory also contains `workspace.json`, separate
+persistent extension and panel browser profiles, a workspace-local copy of the
+latest built extension, append-only process/Scenario Lab logs, finalized
+evidence bundles, and `latest-evidence.json`.
+Each test-issued UI/browser action produces exactly two physical screenshots:
+one immediately before and one immediately after. Flow actions use an
+extension-to-runner acknowledgement boundary, so execution cannot proceed
+until the before frame is durable; the after frame is captured before the
+action result returns to FluxIQ. Timed/FPS sampling and screenshot
+deduplication are disabled for these scripts. `workspace.json`
+contains only origin, username, durable IDs, names, and timestamps; credentials
+remain in ignored environment files and the authentication cookie remains in
+the facility's protected auth cache. The workspace must resolve below
+`FLUXIQ_TEST_RUNS_DIR`, and owner-only Windows ACL enforcement is applied
+before Chromium can store its profile. Concurrent commands fail closed on the
+workspace lock. Unlike normal finite lab runs, these commands deliberately do
+not allocate a new evidence/run directory or delete the FluxIQ project, Flow,
+recording, and runtime history.
+
+This is a mutating but isolated workflow. The generated demo fixture is
+reconciled through Core's public Flow and graph-patch APIs so the canonical Flow
+and the panel viewport index remain consistent. Set `FLUXIQ_DEMO_PROJECT_ID`
+when an exact project in this isolated workspace should be used; otherwise the
+script reuses one unique matching project name or creates it. A missing saved
+workspace causes `demo:run` to fail with an
+instruction to run `demo:record` first.
+
+The scripts use Chromium headlessly by default. Set
+`FLUXIQ_DEMO_HEADLESS=false` for visible debugging. The stable copied-extension
+path preserves its browser identity and local session state while being
+replaced from `apps/extension/dist/chrome` on every invocation, ensuring the
+fresh build is the one loaded by the persistent profile.
 
 Clone packages are cached across independent runs under the ignored
 `test-runs/.clone-cache` directory. Each entry is scoped to the exact source

@@ -30,9 +30,10 @@ export type ExistingNodeDefinition = {
 };
 
 export class ExistingFluxIQControlClient extends FluxIQControlClient {
-  async automationStudioCall(endpoint: string, payload: JsonRecord = {}, bounds: FluxIQHttpOptions = {}): Promise<unknown> {
+  async automationStudioCall(endpoint: string, payload: JsonRecord = {}, bounds: FluxIQHttpOptions = {}, domainId?: string): Promise<unknown> {
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(endpoint)) throw new Error("Automation Studio endpoint is malformed");
-    const envelope = record(await this.request(`/api/programs/automation-studio/${endpoint}`, payload, "environment.missing", "POST", bounds), `${endpoint} response`);
+    const suffix = domainId ? `?domainId=${encodeURIComponent(domainId)}` : "";
+    const envelope = record(await this.request(`/api/programs/automation-studio/${endpoint}${suffix}`, payload, "environment.missing", "POST", bounds), `${endpoint} response`);
     if (envelope.ok !== true) throw new RunnerFailure("environment.missing", `Automation Studio call failed: ${endpoint}`);
     return envelope.payload;
   }
@@ -52,13 +53,13 @@ export class ExistingFluxIQControlClient extends FluxIQControlClient {
     return { identityEndpointAvailable: true, username };
   }
 
-  async listProjects(): Promise<ExistingProject[]> {
-    const payload = record(await this.automationStudioCall("projects"), "projects payload");
+  async listProjects(domainId?: string): Promise<ExistingProject[]> {
+    const payload = record(await this.automationStudioCall("projects", {}, {}, domainId), "projects payload");
     return array(payload.projects, "projects").map((value, index) => project(value, `projects[${index}]`));
   }
 
-  async requireProject(projectId: string): Promise<ExistingProject> {
-    const matches = (await this.listProjects()).filter(item => item.id === projectId);
+  async requireProject(projectId: string, domainId?: string): Promise<ExistingProject> {
+    const matches = (await this.listProjects(domainId)).filter(item => item.id === projectId);
     if (matches.length !== 1) throw new RunnerFailure("environment.missing", `Expected exactly one accessible FluxIQ project with ID ${safeId(projectId)}, found ${matches.length}`);
     return matches[0]!;
   }
@@ -76,6 +77,34 @@ export class ExistingFluxIQControlClient extends FluxIQControlClient {
     if (actualFlowId !== flowId || actualProjectId !== projectId) throw new RunnerFailure("environment.missing", "FluxIQ returned a Flow outside the requested project/Flow scope");
     array(document.nodes, "flow.nodes"); array(document.edges, "flow.edges");
     return { flowId: actualFlowId, projectId: actualProjectId, name: text(document.name, "flow.name"), updatedAt: finite(document.updatedAt, "flow.updatedAt"), contentHash: hashJson(document), document };
+  }
+
+  async getFlowGraphViewport(projectId: string, flowId: string): Promise<{
+    graphRevision: number;
+    nodes: Array<{ nodeId: string; x: number; y: number }>;
+    edgeIds: string[];
+    nodeCount: number;
+    edgeCount: number;
+  }> {
+    const bounds = { minX: -9_000_000_000_000_000, minY: -9_000_000_000_000_000, maxX: 9_000_000_000_000_000, maxY: 9_000_000_000_000_000 };
+    const payload = record(await this.automationStudioCall("get-graph-viewport", { projectId, flowId, bounds, limit: 500 }), "graph viewport payload");
+    const page = record(payload.page, "graph viewport page");
+    const nodes = array(page.nodes, "graph viewport nodes").map((value, index) => {
+      const node = record(value, `graph viewport nodes[${index}]`);
+      return { nodeId: text(node.nodeId, `graph viewport nodes[${index}].nodeId`), x: finite(node.x, `graph viewport nodes[${index}].x`), y: finite(node.y, `graph viewport nodes[${index}].y`) };
+    });
+    const edgeIds = array(page.edges, "graph viewport edges").map((value, index) => text(record(value, `graph viewport edges[${index}]`).edgeId, `graph viewport edges[${index}].edgeId`));
+    return {
+      graphRevision: finite(page.graphRevision, "graph viewport revision"),
+      nodes,
+      edgeIds,
+      nodeCount: nodes.length,
+      edgeCount: edgeIds.length,
+    };
+  }
+
+  async applyFlowGraphPatch(input: { projectId: string; flowId: string; baseRevision: number; mutationId: string; operations: unknown[]; authorizationPin: string }): Promise<void> {
+    await this.automationStudioCall("apply-graph-patch", input);
   }
 
   async inspectFlowDependencies(projectId: string, flowId: string): Promise<ExistingFlowDependencyInventory> {

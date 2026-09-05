@@ -28,6 +28,8 @@ were supplied to this run.
 | 8. Real-site probes | safeguards validated; execution deferred | `phase0_contracts` (rotation 4) | Fail-closed authorization, exact HTTPS allowlists, read-only actions, rate limits, external secret references, private pre-write-redacted retention, expiry, and review gates pass 7/7 tests. No target or secret is configured and no real site was contacted. |
 | 9. Existing FluxIQ and persisted Flow execution | implemented and locally validated; live external certification pending | primary, `phase0_contracts`, `phase3_topology`, `phase4_evidence` | Existing-install attachment, reusable API authentication, strict persisted-Flow execution, extension pairing, scenario assertions, run/action/event snapshots, panel verification, containment, bounded cancellation, and evidence provenance are integrated. Unit/integration gates and an isolated full-topology regression pass; a real existing-install run awaits configured credentials/project/Flow. |
 | 10. Clone an existing Flow into an isolated installation | implemented and locally validated; live external certification pending | primary, `clone_contracts`, `clone_source`, `clone_destination`, `post_crash_hardening` | Strict clone contracts and cache, read-only source export, isolated destination import/remapping, orchestration, evidence, failure-safe cleanup, and pre-mutation destination-registry compatibility checks are complete. Full workspace gates, the synthetic clone pipeline, and a fresh live isolated regression pass; live clone certification awaits a configured external source. No Core files were changed. |
+| 11. Persistent self-recording demo | implemented and live validated in persistent isolation | primary | Both scripts own a copied Core process while retaining `test-runs/web-extension-demo/fluxiq-root/.fluxiq`, browser identities, authentication, project, Flow, recordings, and runtime history. Real headless record and No-LLM playback passes are recorded below. |
+| 12. Persistent isolated topology | implemented and live validated | primary, `phase12_target_cli`, `phase12_allocation_lock`, `phase12_manifest_docs` | Named local topology retains `.fluxiq`, browser profile, generated identity, projects, recordings, and trusted-client state while using fresh processes, ports, session workspaces, and evidence per invocation. Two sequential live runs passed and all workspace gates pass. |
 
 Phase 10 Steps 1 and 4 (`clone_contracts`, 2026-09-04): completed the
 versioned private clone-package contract, sanitized Flow-document boundary,
@@ -102,6 +104,242 @@ passes. A fresh live isolated regression, `run-mtnrj7ws-717a780f`, passed and
 against an external existing FluxIQ installation remains pending because no
 source base URL, credentials, project, or Flow were supplied. No FluxIQ Core
 files were changed.
+
+Phase 11 implementation note (primary, 2026-09-04): `pnpm demo:record` and
+`pnpm demo:run` now provide a deliberately persistent existing-install smoke
+workflow. The exact local workspace is configured by `FLUXIQ_DEMO_RUN_DIR`,
+must remain below `FLUXIQ_TEST_RUNS_DIR`, is protected with owner-only ACLs,
+and is guarded by an exclusive operation lock. The recording command creates
+or reuses one `web-automation` project, creates the deterministic browser-action
+Flow only if absent, pairs the production extension, records its own
+Playwright-driven interaction with `basic-form`, verifies one new durable Core
+recording, and stores only sanitized IDs and timestamps in `workspace.json`.
+The Flow command requires that state, reconnects the same browser profile,
+executes the persisted Flow through FluxIQ, verifies successful durable node
+attempts and the submitted page, and records the runtime run ID in the same
+file. These scripts intentionally retain the remote project, Flow, recording,
+and run history and do not create ordinary random evidence-run directories.
+Live validation depends on a running configured FluxIQ installation and test
+credentials. Focused test-runner checks pass 92/92, and `pnpm check`,
+`pnpm test`, and `pnpm build` pass across the workspace. With no `.env` or
+`.env.local` present, the recording wrapper was also verified to fail before
+filesystem allocation or external mutation with the exact missing
+`FLUXIQ_TEST_BASE_URL` configuration error.
+
+Phase 11 live validation update (primary, 2026-09-04):
+`pnpm demo:setup-local` created the dedicated local test identity and hardened
+ignored `.env.local` without disclosing its generated password or PIN. The
+repository-local FluxIQ panel was started at `http://127.0.0.1:3000`, with the
+production client gateway listening at `ws://127.0.0.1:4777/client`.
+`pnpm demo:record` then passed against the live panel, reused project
+`34cc76c0-3932-4c00-b5c7-c0a216268259` and Flow
+`flow.web-extension-demo`, persisted recording
+`client.extension-5bdf49b4-158f-49ed-8de3-cdca8c03a704.1788581072665`, and
+wrote `workspace.json` plus `recording.png` to the configured persistent
+`test-runs/web-extension-demo` directory. The live pass exposed and resolved
+three integration details: domain project enumeration must send
+`domainId=web-automation`; domain-scoped Flows must not declare the
+global-only `executionDefaults.authorizedDomainIds` grant; and project binding
+is resolved from a fresh operator Automation Studio context when recording
+starts, rather than being required in the initial pairing-ready status. The
+runner now verifies recording acceptance and stop state explicitly and can
+safely repair only the exact empty configured demo Flow left by an interrupted
+first-time provision. The focused test-runner suite passes 92/92 after these
+corrections. `pnpm demo:run` remains a separate, intentionally user-invoked
+validation of persisted Flow execution.
+
+Phase 11 final live validation update (primary, 2026-09-04): the reusable demo
+workflow now drives the real Automation Studio UI for project/Flow selection,
+No LLM runtime mode, pairing, and Run dispatch, while the production extension
+executes the deterministic DOM actions. Both scripts run headless by default
+and copy the freshly built Chrome extension to a stable workspace-local load
+path on every invocation, preserving the persistent profile identity while
+preventing a stale unpacked build. The panel uses a separate persistent browser
+profile so panel focus cannot steal the extension's automation target.
+
+Evidence policy is now strictly event-only: every test-issued state-changing
+action has one physical JPEG immediately before it and one immediately after
+it; timed sampling and deduplication are disabled. Extension-executed Flow
+actions participate through an acknowledged before/after boundary that pauses
+the action until capture completes. The successful headless `demo:record`
+bundle contained 24 action pairs / 48 physical screenshots with zero missing
+pairs. The successful headless `demo:run` bundle contained 26 action pairs / 52
+physical screenshots, including four Flow actions / eight runtime-boundary
+screenshots, also with zero missing pairs. Live playback run
+`6b7dc744-9b4a-41ab-9421-912d5ccd0ee1` succeeded without LLM intervention.
+The validation exposed and fixed stale active-tab races around evidence focus,
+top-frame reinjection being poisoned by inaccessible child frames, the global
+pairing modal, and Chromium startup blank tabs. Focused runner tests pass
+108/108. Final extension-repository `pnpm check`, `pnpm test`, and `pnpm build`
+gates all pass. The focused FluxIQ Core runtime UI regression passes 6/6; its
+workspace web type check remains blocked by pre-existing duplicate-property and
+runtime transport typing errors in unrelated live-session files.
+
+Repeat live validation (primary, 2026-09-05): after explicitly restarting the
+repository-local panel, two consecutive headless record/playback cycles passed
+against the same persistent workspace, project, Flow, browser profiles, and
+cached authentication. Recording IDs were distinct, demonstrating new durable
+Core recordings without recreating the project or Flow. Runtime runs
+`9b996b58-401f-4f23-9689-d70e2789a9c9` and
+`69ad3100-d502-4aea-9390-07cae2bcb9b6` both succeeded in No LLM mode and each
+verified all four durable web action attempts plus the submitted scenario
+state. Both recording bundles contained 24 complete action pairs / 48 physical
+screenshots. Both playback bundles contained 25 complete action pairs / 50
+physical screenshots, including four extension Flow actions / eight boundary
+screenshots. All four bundle audits reported zero incomplete pairs. The
+test-runner suite also passed 108/108 and the extension smoke test passed before
+the live cycle.
+
+Persistent demo isolation correction (primary, 2026-09-05): the reusable demo
+scripts no longer attach to the repository-root FluxIQ installation. Each
+command now locks `test-runs/web-extension-demo`, registers the web-automation
+domain and test identity in `fluxiq-root/.fluxiq`, starts a copied Core web
+workspace on stable dedicated loopback ports, and removes only the disposable
+`.sessions/<run-id>` Core copy after shutdown. The isolated `.fluxiq`, project,
+Flow, recordings, runtime history, authentication cache, extension identity,
+and browser profiles persist across invocations. The setup command now seeds
+the identity at that same isolated root. Old existing-install browser profiles
+remain preserved under their former names; the isolated lane uses versioned
+persistent profiles to prevent stale trust and UI state from crossing targets.
+
+Live migration exposed three issues and fixed them at their owning boundaries:
+extension status refreshes no longer overwrite an operator's in-progress
+settings draft; the demo setup entrypoint honors an explicit isolated root; and
+the generated Flow is reconciled through Core's public graph-patch seam so its
+canonical document and paged viewport index agree. FluxIQ Core's generic
+Runtime Debug connector now requests full Flow detail when activated and
+prefers an already loaded full Flow over a summary entity. Its focused connector
+test passes 13/13. Final real `pnpm demo:record` and `pnpm demo:run` commands
+passed in separate Core lifecycles against the same project and Flow. Playback
+run `e59ae7c8-63c0-4f49-8e7c-bd5382e4ca5c` succeeded with No LLM intervention
+and all four browser actions. The successful recording evidence has 25 complete
+before/after pairs (50 physical screenshots); playback has 28 complete pairs
+(56 screenshots), with zero failed or missing pairs. The retained `.fluxiq`
+exists, `.sessions` is empty after cleanup, and neither dedicated port remains
+listening. The post-fix extension workspace `pnpm check`, `pnpm test`, and
+`pnpm build` gates pass; the test-runner's final focused regression passes
+111/111, including direct coverage of the public viewport/patch adapter.
+
+Demo layout regression correction (primary, 2026-09-05): live browser
+measurement showed that Core preserved the fixture's distinct `0, 240, ...`
+coordinates, but the 240-pixel interval was narrower than the rendered node
+card. Adjacent cards therefore overlapped after `fitView` and could appear
+stacked. This was a testing-fixture defect, not a Core persistence or coordinate
+mapping defect. The fixture now uses a 360-pixel interval, migrates the retained
+fixture-owned graph through public `move_node` operations, and fails closed on
+unexpected graph membership. Both demo commands now open the actual Nodes view
+and assert pairwise non-overlap for all six rendered DOM rectangles. The
+focused runner suite passes 111/111. A real `demo:record` migrated the existing
+Flow to `0, 360, 720, 1080, 1440, 1800`, recorded a new durable session, and
+passed the visual assertion. A subsequent real `demo:run` passed the same
+assertion and completed No-LLM runtime run
+`bc44c1a3-2fe4-48fc-809c-79d98dcf2eed`.
+
+### Phase 12: persistent isolated topology
+
+This phase adds `persistent-isolated` as a fourth explicit target. It owns and
+starts a local FluxIQ web process just like ordinary isolation, but separates
+ephemeral execution state from a stable named workspace. The stable workspace
+is rooted below `FLUXIQ_TEST_RUNS_DIR/persistent-isolated/<workspace>/` and
+retains `fluxiq-root/.fluxiq/` plus `browser-profile/`. Each command still gets
+a unique `.sessions/<run-id>/` containing the disposable Core web copy and
+process logs, while its finalized evidence remains at the ordinary
+`FLUXIQ_TEST_RUNS_DIR/<run-id>/` location.
+
+1. Extend CLI and environment target contracts with
+   `--target persistent-isolated`, `--workspace <safe-name>`, and
+   `FLUXIQ_TEST_PERSISTENT_WORKSPACE`. Reject missing, conflicting, path-like,
+   reserved, or traversal-capable workspace names and reject existing-install
+   URL/project/Flow configuration for this target.
+2. Add a persistent allocation that creates the stable FluxIQ root, `.fluxiq`
+   storage, and browser profile idempotently while allocating a unique session
+   root, Core web copy, logs, ports, and controller token per invocation. All
+   resolved paths must remain under the configured runs root.
+3. Acquire an exclusive workspace operation lock before starting processes.
+   Reject a concurrent live owner, safely reclaim a verifiably stale lock, and
+   release it on success, failure, timeout, or signal cleanup. Never delete the
+   retained workspace as an error-recovery shortcut.
+4. Reuse the isolated Core startup, domain host, identity/bootstrap, pairing,
+   recording, runtime action, network containment, and readiness paths. Core
+   receives the stable FluxIQ root/storage paths and per-invocation ports; the
+   browser receives the stable profile. No FluxIQ Core source change is
+   required.
+5. Change final cleanup ownership so ordinary `isolated` and `clone` continue
+   deleting all run-owned destination state, while `persistent-isolated`
+   removes only its `.sessions/<run-id>` directory after copying logs. Its
+   `.fluxiq`, browser profile, projects, recordings, trusted-client state, and
+   run history survive.
+6. Record the sanitized target mode and workspace name in the run manifest and
+   human report without exposing absolute private paths, credentials, cookies,
+   tokens, recorded values, or internal database content.
+7. Add allocation, target parsing, lifecycle, concurrent-lock, stale-lock,
+   failure cleanup, manifest, and two-invocation persistence tests. The second
+   invocation must observe a sentinel or public Core state written by the
+   first while using new ports/session directories and leaving finalized
+   evidence independent.
+8. Document exact commands, layout, ownership, reset semantics, and the
+   distinction from `existing`, disposable `isolated`, `clone`, and the
+   persistent demo scripts. Do not add an automatic reset/delete command in
+   this phase; removal of a persistent workspace remains an explicit manual
+   operation.
+
+Acceptance:
+
+- two sequential invocations with the same workspace name start independent
+  supervised processes and unique execution sessions but resolve the same
+  retained `.fluxiq` and browser-profile directories;
+- stopping, failure, or interruption closes only owned processes and removes
+  only the current `.sessions/<run-id>`, never the stable workspace;
+- a second concurrent invocation of the same workspace fails before Core or
+  browser startup, while a different workspace can run independently;
+- ordinary isolated and clone cleanup behavior is unchanged;
+- target configuration, manifests, logs, and reports contain the workspace
+  name but no secret or private-state payload; and
+- focused tests plus `pnpm check`, `pnpm test`, and `pnpm build` pass, followed
+  by two live sequential runs demonstrating persistence when browser tooling is
+  available.
+
+Phase 12 execution update (primary plus assigned agents, 2026-09-04): target
+and CLI configuration, stable allocation, operation locking, cleanup
+ownership, sanitized manifest provenance, and current-state documentation are
+integrated. The runner accepts `persistent-isolated` with one strict workspace
+name; stable `.fluxiq` and browser-profile paths sit outside unique disposable
+session roots. Live owners are rejected, confirmed stale PID locks are
+reclaimed atomically, malformed locks fail closed, and Windows private paths
+receive verified owner-only ACLs. Persistent startup failures and ordinary
+cleanup remove only the current session. The integrated runner suite passes
+103/103.
+
+The first full headed Chromium run against workspace `phase12-live` passed as
+`run-mtnvh2gt-787ce5f4`. Its processes stopped, finalized evidence was retained,
+and its stable private workspace survived. The second invocation failed before
+process startup with `Credential recheck required`: ordinary isolated bootstrap
+generated a new password/PIN and attempted to replace the persisted identity.
+The workspace itself was preserved. This is now an explicit Phase 12 blocker,
+and a rotated agent owns an owner-protected, strict, atomic persistent identity
+cache so later invocations reuse the same generated test credentials. Live
+two-invocation acceptance remains in progress until that correction is
+integrated and rerun with a fresh validation workspace.
+
+Phase 12 completion update (primary and rotated `phase12_target_cli`,
+2026-09-04): generated persistent test credentials now use a strict 4 KiB
+owner-protected store at `.identity/credentials.json`. Creation is atomic,
+malformed/oversized state fails closed, the generator runs only on first use,
+and later starts verify the retained Core identity instead of attempting
+credential rotation. The facility reuses one named web-automation project and
+the persistent extension helper accepts either a new pairing challenge or an
+already trusted session.
+
+Two fresh sequential headed Chromium runs against the same workspace,
+`phase12-live-v2`, passed: `run-mtnvptuo-800f61c7` and
+`run-mtnvqwj5-169346f1`. Both finalized bundles pass `lab inspect` with 15
+artifacts. They recorded different scenario/web/gateway ports
+(`61420/61421/61422` then `61481/61482/61483`) while retaining the same
+`.fluxiq`, browser profile, private identity, project, recording history, and
+trusted extension state. After both runs the operation lock was absent and the
+`.sessions` directory contained zero execution sessions. The runner suite
+passes 107/107; full `pnpm check`, `pnpm test`, and `pnpm build` pass. No FluxIQ
+Core files were changed.
 
 Phase 9 Steps 2–3 execution note (2026-09-04): `phase3_topology` added the
 typed, mutually exclusive target configuration and `--target`/`--flow` CLI

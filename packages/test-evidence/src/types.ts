@@ -47,6 +47,8 @@ export type EvidenceEventInput = CaptureEvidenceEventInput;
 
 export type CapturePolicy = Pick<EvidencePolicy, "screenshots" | "maxScreenshots" | "maxBytes"> & Partial<Omit<EvidencePolicy, "screenshots" | "maxScreenshots" | "maxBytes">> & {
   minimumScreenshotIntervalMs?: number;
+  /** Preserve every sampled frame even when consecutive pixels are identical. */
+  deduplicateScreenshots?: boolean;
 };
 
 export type ArtifactEntry = {

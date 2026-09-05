@@ -48,6 +48,7 @@ import {
   type RuntimeCommandStatus
 } from "../shared/protocol";
 import { activeTab, allTabFrames, allTabs, ensureContentScript, sendToTab } from "./tabs";
+import { captureActionBoundary } from "./action-evidence";
 import { clearQueuedEvents, queueEvent, readQueuedEvents, writeSession } from "./storage";
 import { ExtensionRuntimeCommandRouter, browserActionFromGatewayCommand, gatewayActionResultFromBrowserResult } from "../runtime";
 
@@ -370,6 +371,14 @@ export class FluxIQConnection {
     }
   }
 
+  async selectAutomationTab(tabId: number): Promise<void> {
+    const tab = await chrome.tabs.update(tabId, { active: true });
+    if (tab.id !== tabId || unsupportedPageForUrl(tab.url)) {
+      throw new Error("The requested automation tab is unavailable or unsupported.");
+    }
+    await this.handleTabUpdated({ ...tab, active: true });
+  }
+
   handleNavigationCommitted(details: chrome.webNavigation.WebNavigationTransitionCallbackDetails): void {
     // Browser-provided transition metadata is more reliable than tabs.onUpdated,
     // which fires repeatedly for a single load (URL, title, and status changes).
@@ -569,6 +578,11 @@ export class FluxIQConnection {
     }
     if (payload.command === "execute_action") {
       this.startRuntimeAction(payload.action);
+      await captureActionBoundary("before", payload.action);
+      // The evidence observer brings the target page forward. Re-read Chrome's
+      // authoritative active tab after that asynchronous boundary so a delayed
+      // tabs.onActivated callback cannot leave runtime dispatch on a stale tab.
+      await this.refreshActiveTab();
       await this.runtimeCommandRouter().executeAction(payload.action);
     }
   }
@@ -800,6 +814,7 @@ export class FluxIQConnection {
       ...(tabId !== undefined ? { tabId } : {}),
       ...(frameId !== undefined ? { frameId } : {})
     });
+    await captureActionBoundary("after", result);
     const visualTarget = result.visualTarget ?? (result.element
       ? webAutomationActionVisualTargetFromElement(result.element as never)
       : undefined);

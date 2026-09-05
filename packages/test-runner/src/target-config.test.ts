@@ -23,6 +23,36 @@ test("isolated is the default and supports optional bootstrap credentials", () =
   });
 });
 
+test("resolves persistent isolation from CLI or environment with optional bootstrap credentials", () => {
+  assert.deepEqual(resolveTargetConfiguration({ cliTarget: "persistent-isolated", cliWorkspace: "browser-dev.1", env: {} }), {
+    mode: "persistent-isolated", workspace: "browser-dev.1",
+  });
+  assert.deepEqual(resolveTargetConfiguration({ env: {
+    FLUXIQ_TEST_TARGET: "persistent-isolated",
+    FLUXIQ_TEST_PERSISTENT_WORKSPACE: "browser_dev",
+    FLUXIQ_TEST_USERNAME: "runner",
+    FLUXIQ_TEST_PASSWORD: "secret",
+  } }), {
+    mode: "persistent-isolated", workspace: "browser_dev", credentials: { username: "runner", password: "secret" },
+  });
+});
+
+test("persistent isolation requires one safe, non-conflicting workspace name", () => {
+  assert.throws(() => resolveTargetConfiguration({ cliTarget: "persistent-isolated", env: {} }), /required for a persistent-isolated target/);
+  assert.throws(() => resolveTargetConfiguration({ cliTarget: "persistent-isolated", cliWorkspace: "one", env: { FLUXIQ_TEST_PERSISTENT_WORKSPACE: "two" } }), /conflicts/);
+  for (const workspace of ["../escape", "nested/path", "nested\\path", ".", "..", "CON", "nul.txt", "sessions", "persistent-isolated", "has space", "Uppercase", "trailing-", "a".repeat(65)]) {
+    assert.throws(() => resolveTargetConfiguration({ cliTarget: "persistent-isolated", cliWorkspace: workspace, env: {} }), /workspace|portable|reserved|64 characters/i, workspace);
+  }
+});
+
+test("persistent isolation rejects existing-install and execution-source options", () => {
+  assert.throws(() => resolveTargetConfiguration({ cliTarget: "persistent-isolated", cliWorkspace: "dev", cliFlowId: "flow-1", env: {} }), /--flow/);
+  assert.throws(() => resolveTargetConfiguration({ cliTarget: "persistent-isolated", cliWorkspace: "dev", cliFreshLogin: true, env: {} }), /--fresh-login/);
+  assert.throws(() => resolveTargetConfiguration({ cliTarget: "persistent-isolated", cliWorkspace: "dev", env: { FLUXIQ_TEST_BASE_URL: "http://127.0.0.1:3000" } }), /FLUXIQ_TEST_BASE_URL/);
+  assert.throws(() => resolveTargetConfiguration({ cliTarget: "existing", cliWorkspace: "dev", env: existingEnvironment }), /persistent-isolated/);
+  assert.throws(() => resolveTargetConfiguration({ env: { FLUXIQ_TEST_PERSISTENT_WORKSPACE: "dev" } }), /persistent-isolated/);
+});
+
 test("resolves an explicit existing installation and lets CLI flow override the environment", () => {
   assert.deepEqual(resolveTargetConfiguration({ cliTarget: "existing", cliFlowId: "flow-cli", env: existingEnvironment }), {
     mode: "existing",

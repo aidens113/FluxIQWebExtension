@@ -82,9 +82,13 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
       cloneState.clonePackageHash = sha256(canonicalClonePackageJson(cloneState.clonePackage));
       if (cloneState.clonePackage.compatibility.verdict !== "compatible") throw new RunnerFailure("environment.missing", "Source Flow dependencies are not safe to clone into isolation");
     }
-    const credentials = target.mode === "isolated" ? configuredCredentials(environment) : undefined;
+    const credentials = target.mode === "isolated" || target.mode === "persistent-isolated" ? configuredCredentials(environment) : undefined;
     const topologyTarget = target.mode === "clone" ? { mode: "isolated" as const } : target;
-    topology = await startTopology({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, runsDirectory: path.join(options.runsDirectory, ".work"), runId, seed, target: topologyTarget, ...(topologyTarget.mode === "isolated" ? { bootstrapIdentity: target.mode === "clone" || scenarioRequiresCore(scenario), ...(credentials ? { credentials } : {}) } : {}) });
+    const topologyRunsDirectory = topologyTarget.mode === "persistent-isolated"
+      ? options.runsDirectory
+      : path.join(options.runsDirectory, ".work");
+    const ownsIsolatedCore = topologyTarget.mode === "isolated" || topologyTarget.mode === "persistent-isolated";
+    topology = await startTopology({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, runsDirectory: topologyRunsDirectory, runId, seed, target: topologyTarget, ...(ownsIsolatedCore ? { bootstrapIdentity: target.mode === "clone" || scenarioRequiresCore(scenario), ...(credentials ? { credentials } : {}) } : {}) });
     let existingControl: ExistingFluxIQControlClient | undefined;
     if (target.mode === "existing") {
       existingControl = new ExistingFluxIQControlClient(target.baseUrl);
@@ -210,7 +214,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
       }
       await assertFinalState(page, scenario);
     }
-    if (topology.control && target.mode === "isolated") {
+    if (topology.control && (target.mode === "isolated" || target.mode === "persistent-isolated")) {
       await runtimeMessage(extensionPage, { type: "fluxiq.stopRecording" });
       recordingStarted = false;
       const outcome = await assertCoreRoundTrip(topology, paired?.sessionId);
@@ -291,7 +295,8 @@ async function launchBrowser(topology: RunningTopology, extensionPath: string) {
 async function extensionControlPage(context: BrowserContext): Promise<Page> { const worker = context.serviceWorkers()[0] ?? await context.waitForEvent("serviceworker", { timeout: 10_000 }); const id = new URL(worker.url()).hostname; const page = await context.newPage(); await page.goto(`chrome-extension://${id}/sidepanel/index.html`); return page; }
 async function pairExtension(page: Page, topology: RunningTopology) {
   await runtimeMessage(page, { type: "fluxiq.connect", settings: { gatewayUrl: topology.gatewayUrl, coreApiUrl: topology.fluxiqOrigin, autoReconnect: true, captureMutations: true, captureInputValues: true, captureSnapshots: true } });
-  const status = await pollStatus(page, value => value.connectionState === "pairing" && typeof value.pairingReferenceCode === "string");
+  const status = await pollStatus(page, value => (value.connectionState === "pairing" && typeof value.pairingReferenceCode === "string") || (value.connectionState === "connected" && typeof value.sessionId === "string"));
+  if (status.connectionState === "connected") return status;
   await topology.control!.approvePairing(String(status.pairingReferenceCode));
   return pollStatus(page, value => value.connectionState === "connected" && typeof value.sessionId === "string");
 }
@@ -360,8 +365,11 @@ async function createManifest(options: RunScenarioOptions, scenario: WebScenario
     : options.target?.mode === "clone" ? undefined
     : topology?.targetMode === "existing" && options.target?.mode === "existing" && existingPreflight && existingExecution
       ? { targetMode: "existing" as const, origin: topology.fluxiqOrigin, projectId: options.target.projectId, flowId: options.target.flowId, flowContentHash: existingPreflight.flow.contentHash, runtimeRunId: existingExecution.runId, ...(existingPreflight.gateway.runtimeId ? { runtimeId: existingPreflight.gateway.runtimeId } : {}), sessionIdentityVerified: existingPreflight.sessionIdentityVerified, panelVerification: panelVerification?.status ?? "limited" }
-      : topology?.targetMode === "isolated" ? { targetMode: "isolated" as const } : undefined;
-  return { schemaVersion: "0.1", runId, scenarioId: scenario.id, scenarioRevision: sha256(JSON.stringify(scenario)), seed, status: verdict, startedAt, finishedAt: new Date().toISOString(), repositories: { facility: await revision(options.repositoryRoot), core: await revision(options.fluxiqRepositoryRoot) }, compatibility: [], lockfiles: await lockfiles(options), extension: { version: manifest.version, sha256: await hashDirectory(extensionPath), path: "apps/extension/dist/e2e-chromium" }, environment: { os: os.platform(), architecture: os.arch(), browserName: "chromium", browserVersion, locale: "en-US", timezone: "UTC", viewport: { width: 1280, height: 720 } }, ports: topology ? { scenario: topology.allocation.scenarioPort, ...(topology.targetMode === "isolated" ? { web: topology.allocation.webPort, gateway: topology.allocation.gatewayPort } : {}) } : {}, processExits: topology?.processExitCodes() ?? {}, artifacts: [], redactionState: "verified", verdict, ...(fluxiqExecution ? { fluxiqExecution } : {}) };
+      : topology?.targetMode === "persistent-isolated" && options.target?.mode === "persistent-isolated"
+        ? { targetMode: "persistent-isolated" as const, workspace: options.target.workspace }
+        : topology?.targetMode === "isolated" ? { targetMode: "isolated" as const } : undefined;
+  const ownsCorePorts = topology?.targetMode === "isolated" || topology?.targetMode === "persistent-isolated";
+  return { schemaVersion: "0.1", runId, scenarioId: scenario.id, scenarioRevision: sha256(JSON.stringify(scenario)), seed, status: verdict, startedAt, finishedAt: new Date().toISOString(), repositories: { facility: await revision(options.repositoryRoot), core: await revision(options.fluxiqRepositoryRoot) }, compatibility: [], lockfiles: await lockfiles(options), extension: { version: manifest.version, sha256: await hashDirectory(extensionPath), path: "apps/extension/dist/e2e-chromium" }, environment: { os: os.platform(), architecture: os.arch(), browserName: "chromium", browserVersion, locale: "en-US", timezone: "UTC", viewport: { width: 1280, height: 720 } }, ports: topology ? { scenario: topology.allocation.scenarioPort, ...(ownsCorePorts ? { web: topology.allocation.webPort, gateway: topology.allocation.gatewayPort } : {}) } : {}, processExits: topology?.processExitCodes() ?? {}, artifacts: [], redactionState: "verified", verdict, ...(fluxiqExecution ? { fluxiqExecution } : {}) };
 }
 function cloneRemappingSummary(clonePackage: ClonePackage) { const count = (kind: ClonePackage["idMap"][number]["kind"]) => clonePackage.idMap.filter(item => item.kind === kind).length; return { projects: count("project"), flows: count("flow"), nodes: count("node"), edges: count("edge"), localReferences: count("local-reference") }; }
 function cloneExecutionMetadata(state: CloneRunState, panelVerification?: FluxIQPanelVerificationOutcome): RunManifest["fluxiqExecution"] {

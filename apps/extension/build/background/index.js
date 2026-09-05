@@ -1222,15 +1222,71 @@ async function sendToTab(tabId, message, frameId) {
 }
 async function ensureContentScript(tabId) {
   try {
-    const response = await sendToTab(tabId, { type: "fluxiq.ping" }, 0);
-    if (response.ok === true && response.version === REQUIRED_CONTENT_SCRIPT_VERSION) return;
+    const response2 = await sendToTab(tabId, { type: "fluxiq.ping" }, 0);
+    if (response2.ok === true && response2.version === REQUIRED_CONTENT_SCRIPT_VERSION) return;
   } catch {
   }
   await chrome.scripting.executeScript({
-    target: { tabId, allFrames: true },
+    // A single inaccessible child (including an about:blank frame) must not
+    // prevent recovery of the top-frame script used by default actions.
+    // Manifest-declared content scripts still cover eligible descendants.
+    target: { tabId, frameIds: [0] },
     files: ["content/index.js"]
   });
-  await sendToTab(tabId, { type: "fluxiq.ping" }, 0);
+  const response = await sendToTab(tabId, { type: "fluxiq.ping" }, 0);
+  if (response.ok !== true || response.version !== REQUIRED_CONTENT_SCRIPT_VERSION) {
+    throw new Error("FluxIQ content script did not become ready in the top frame.");
+  }
+}
+
+// src/background/action-evidence.ts
+var PORT_NAME = "fluxiq.test.action-evidence";
+var ACK_TIMEOUT_MS = 15e3;
+var evidencePort;
+var nextBoundaryId = 0;
+function acceptActionEvidencePort(port) {
+  if (port.name !== PORT_NAME) return false;
+  evidencePort = port;
+  port.onDisconnect.addListener(() => {
+    if (evidencePort === port) evidencePort = void 0;
+  });
+  return true;
+}
+async function captureActionBoundary(phase, value) {
+  const port = evidencePort;
+  if (!port) return;
+  const activePort = port;
+  const boundaryId = `${value.commandId}:${phase}:${++nextBoundaryId}`;
+  const message = {
+    boundaryId,
+    phase,
+    commandId: value.commandId,
+    actionType: value.actionType,
+    ...phase === "after" && "status" in value ? { status: value.status } : {}
+  };
+  await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => finish(new Error(`Timed out capturing ${phase} evidence for ${value.actionType}.`)), ACK_TIMEOUT_MS);
+    const onMessage = (response) => {
+      const ack = response;
+      if (ack?.boundaryId !== boundaryId) return;
+      finish(ack.ok === true ? void 0 : new Error(typeof ack.error === "string" ? ack.error : "Action evidence capture failed."));
+    };
+    const onDisconnect = () => finish(new Error("Action evidence observer disconnected."));
+    function finish(error) {
+      clearTimeout(timeout);
+      activePort.onMessage.removeListener(onMessage);
+      activePort.onDisconnect.removeListener(onDisconnect);
+      if (error) reject(error);
+      else resolve();
+    }
+    activePort.onMessage.addListener(onMessage);
+    activePort.onDisconnect.addListener(onDisconnect);
+    try {
+      activePort.postMessage(message);
+    } catch (error) {
+      finish(error instanceof Error ? error : new Error("Action evidence observer is unavailable."));
+    }
+  });
 }
 
 // src/background/storage.ts
@@ -1365,6 +1421,8 @@ async function runBrowserActionCommand(request) {
     tabRequest.initialUrl = action.url;
   } else if (action.tabId !== void 0) {
     tabRequest.requestedTabId = action.tabId;
+  } else if (request.activeTabId !== void 0) {
+    tabRequest.requestedTabId = request.activeTabId;
   }
   const tabId = await resolveAutomationTab(tabRequest);
   const unsupportedReason = action.tabId === void 0 || isNavigation ? unsupportedPageReasonForAction(action) : request.unsupportedPageReason;
@@ -1772,6 +1830,13 @@ var FluxIQConnection = class {
       await this.sendBrowserState();
     }
   }
+  async selectAutomationTab(tabId) {
+    const tab = await chrome.tabs.update(tabId, { active: true });
+    if (tab.id !== tabId || unsupportedPageForUrl(tab.url)) {
+      throw new Error("The requested automation tab is unavailable or unsupported.");
+    }
+    await this.handleTabUpdated({ ...tab, active: true });
+  }
   handleNavigationCommitted(details) {
     if (details.transitionType === "link" || details.transitionType === "form_submit" || details.transitionType === "reload") return;
     this.scheduleNavigation(details.tabId, details.url, details.timeStamp, details.transitionType === "typed");
@@ -1950,6 +2015,8 @@ var FluxIQConnection = class {
     }
     if (payload.command === "execute_action") {
       this.startRuntimeAction(payload.action);
+      await captureActionBoundary("before", payload.action);
+      await this.refreshActiveTab();
       await this.runtimeCommandRouter().executeAction(payload.action);
     }
   }
@@ -2158,6 +2225,7 @@ var FluxIQConnection = class {
       ...tabId !== void 0 ? { tabId } : {},
       ...frameId !== void 0 ? { frameId } : {}
     });
+    await captureActionBoundary("after", result);
     const visualTarget = result.visualTarget ?? (result.element ? webAutomationActionVisualTargetFromElement(result.element) : void 0);
     await this.sendClientMessage("client.action_result", gatewayActionResultFromBrowserResult(result));
     await this.sendRuntimeActionConfirmation(result, tabId, frameId);
@@ -3066,6 +3134,9 @@ chrome.runtime.onStartup.addListener(() => {
   void getConnection();
 });
 void enableSidePanelFirst();
+chrome.runtime.onConnect.addListener((port) => {
+  acceptActionEvidencePort(port);
+});
 chrome.tabs.onActivated.addListener(({ tabId }) => {
   void chrome.tabs.get(tabId, (tab) => {
     void getConnection().then((manager) => manager.handleTabUpdated(tab));
@@ -3142,6 +3213,14 @@ async function handleRuntimeMessage(message, sender) {
     const tabId = sender.tab?.id;
     await manager.handleContentReady(typed.payload, tabId, sender.frameId);
     return { ok: true };
+  }
+  if (typed.type === "fluxiq.test.setActiveTab") {
+    const tabId = typed.tabId;
+    if (typeof tabId !== "number" || !Number.isSafeInteger(tabId) || tabId < 0) {
+      throw new Error("A valid automation tab ID is required.");
+    }
+    await manager.selectAutomationTab(tabId);
+    return { ok: true, status: manager.status() };
   }
   if (typed.type === RUNTIME_MESSAGES.contentEvent) {
     const tabId = sender.tab?.id;

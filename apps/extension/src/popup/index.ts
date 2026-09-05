@@ -82,6 +82,7 @@ let eventTotal = 0;
 let recordingsPage = 1;
 let recordingsTotal: number | undefined;
 let timerHandle: ReturnType<typeof setInterval> | undefined;
+let settingsDraftDirty = false;
 
 void refresh();
 startTimerLoop();
@@ -98,8 +99,14 @@ closeSettingsButton.addEventListener("click", () => {
 settingsBackdrop.addEventListener("click", () => setSettingsOpen(false));
 
 connectButton.addEventListener("click", () => {
-  void sendCommand(RUNTIME_MESSAGES.connect, { settings: readSettingsFromForm() });
+  const settings = readSettingsFromForm();
+  void sendCommand(RUNTIME_MESSAGES.connect, { settings }).then(() => { settingsDraftDirty = false; });
 });
+
+for (const control of [gatewayUrl, coreApiUrl, autoReconnect, captureMutations, captureInputValues, captureSnapshots]) {
+  control.addEventListener("input", () => { settingsDraftDirty = true; });
+  control.addEventListener("change", () => { settingsDraftDirty = true; });
+}
 
 disconnectButton.addEventListener("click", () => {
   void sendCommand(RUNTIME_MESSAGES.disconnect);
@@ -207,12 +214,14 @@ function renderStatus(status: ExtensionStatus): void {
   currentStatus = status;
   const defaults = defaultSettings();
   const settings = { ...defaults, ...status.settings };
-  gatewayUrl.value = settings.gatewayUrl || status.gatewayUrl || defaults.gatewayUrl;
-  coreApiUrl.value = settings.coreApiUrl || defaults.coreApiUrl;
-  autoReconnect.checked = settings.autoReconnect;
-  captureMutations.checked = settings.captureMutations;
-  captureInputValues.checked = settings.captureInputValues;
-  captureSnapshots.checked = settings.captureSnapshots;
+  if (!settingsDraftDirty) {
+    gatewayUrl.value = settings.gatewayUrl || status.gatewayUrl || defaults.gatewayUrl;
+    coreApiUrl.value = settings.coreApiUrl || defaults.coreApiUrl;
+    autoReconnect.checked = settings.autoReconnect;
+    captureMutations.checked = settings.captureMutations;
+    captureInputValues.checked = settings.captureInputValues;
+    captureSnapshots.checked = settings.captureSnapshots;
+  }
   clientId.textContent = status.clientId;
   sessionId.textContent = status.sessionId ?? "-";
   activeTab.textContent = status.activeTabUrl ?? (status.activeTabId === undefined ? "-" : String(status.activeTabId));

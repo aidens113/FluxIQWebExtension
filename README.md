@@ -88,9 +88,9 @@ Studio can highlight the specific element region while keeping the raw
 ## Automated testing facility
 
 This repository includes deterministic scenario fixtures, a Playwright
-Chromium extension suite, isolated FluxIQ topology, opt-in attachment to an
-existing FluxIQ installation, attested evidence and review tooling, CI
-selection, and bounded-agent safety contracts. A verified Windows isolated
+Chromium extension suite, disposable and persistent isolated FluxIQ topologies,
+opt-in attachment to an existing FluxIQ installation, attested evidence and
+review tooling, CI selection, and bounded-agent safety contracts. A verified Windows isolated
 `basic-form` run paired the production extension, persisted its Core recording,
 and proved Core-issued navigate and type actions reached the page through the
 production client API.
@@ -115,10 +115,41 @@ required because clone mode never mutates, pairs with, or executes on the
 source installation. Run it with `pnpm lab run <scenario> --target clone`; use
 `pnpm lab clone-cache status|refresh|clear` to manage the scoped cache.
 
+Persistent-isolated mode owns a named local FluxIQ workspace while keeping
+each invocation finite. Run it with
+`pnpm lab run <scenario> --target persistent-isolated --workspace <name>` (or
+set `FLUXIQ_TEST_PERSISTENT_WORKSPACE`). It retains that workspace's
+`.fluxiq` data and Chromium profile between commands, but gives every command
+fresh ports, processes, logs, and a disposable Core web copy. When explicit
+credentials are absent, its generated test identity is retained in an
+owner-protected private store beside the workspace and reused without being
+printed or copied into evidence. There is no automatic reset command: stop all
+runs using the workspace before manually removing
+`test-runs/persistent-isolated/<name>` when a clean state is required.
+
 Run the finite CLI with `pnpm lab run`, `matrix`, `auth`, `clone-cache`, `inspect`, or
 `compare`; root safety tools are exposed as `pnpm boundary:audit`,
 `pnpm agent:orchestrator`, and `pnpm real-site:policy`. See the
 [testing facility architecture](docs/architecture/testing-facility.md) for
-existing-target fields and Core compatibility limits, commands,
+target fields and Core compatibility limits, commands,
 evidence/security boundaries, and remaining Linux, automatic-agent,
 Core-promotion, and real-site limits.
+
+For a persistent isolated end-to-end smoke workspace, configure
+`FLUXIQ_DEMO_RUN_DIR` below `FLUXIQ_TEST_RUNS_DIR` and
+run `pnpm demo:record` followed by `pnpm demo:run`. The recording command creates
+or reuses one web-automation project and Flow, pairs the current extension,
+records the deterministic basic-form interaction, and stores the resulting IDs
+in `workspace.json`. The run command restarts its owned Core and reuses the same
+directory, isolated `fluxiq-root/.fluxiq`, project, Flow, browser profiles, and
+authenticated session before executing the persisted Flow.
+Both commands are headless by default (`FLUXIQ_DEMO_HEADLESS=false` enables a
+visible debugging window) and save exactly one physical screenshot before and
+one after every test-issued action, including each extension-executed Flow
+action. The finalized bundle is referenced by `latest-evidence.json` in the
+same persistent workspace. Both scripts also open the real Nodes canvas and
+fail if the six fixture nodes do not render as distinct, non-overlapping cards.
+`pnpm demo:setup-local` creates a dedicated isolated test identity and
+owner-protected ignored `.env.local` without printing its
+generated password or PIN. It refuses to overwrite an existing file unless
+explicitly invoked with `--force`.

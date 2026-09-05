@@ -65,7 +65,7 @@ async function connectCloneSource(target: CloneTargetConfiguration, options: Clo
   });
 
   const session = await client.validateCurrentSession(target.source.credentials.username);
-  const project = await client.requireProject(target.source.projectId);
+  const project = await client.requireProject(target.source.projectId, "web-automation");
   if (project.domainId !== "web-automation") throw new RunnerFailure("environment.missing", "Clone source project is not a web-automation project");
   const summaries = (await client.listFlowSummaries(project.id)).filter(summary => summary.flowId === target.source.flowId);
   if (summaries.length !== 1) throw new RunnerFailure("environment.missing", `Expected exactly one source Flow with ID ${safeId(target.source.flowId)}, found ${summaries.length}`);

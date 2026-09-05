@@ -36,7 +36,7 @@ await build({
   logLevel: "silent"
 });
 
-process.env.FLUXIQ_WEB_AUTOMATION_ROOT = repoRoot;
+process.env.FLUXIQ_WEB_AUTOMATION_ROOT ??= repoRoot;
 process.env.NODE_PATH = [
   path.join(fluxiqRoot, "node_modules"),
   process.env.NODE_PATH

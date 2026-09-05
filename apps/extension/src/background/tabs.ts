@@ -55,8 +55,14 @@ export async function ensureContentScript(tabId: number): Promise<void> {
     // Reinject below.
   }
   await chrome.scripting.executeScript({
-    target: { tabId, allFrames: true },
+    // A single inaccessible child (including an about:blank frame) must not
+    // prevent recovery of the top-frame script used by default actions.
+    // Manifest-declared content scripts still cover eligible descendants.
+    target: { tabId, frameIds: [0] },
     files: ["content/index.js"]
   });
-  await sendToTab(tabId, { type: "fluxiq.ping" }, 0);
+  const response = await sendToTab<{ ok?: boolean; version?: number }>(tabId, { type: "fluxiq.ping" }, 0);
+  if (response.ok !== true || response.version !== REQUIRED_CONTENT_SCRIPT_VERSION) {
+    throw new Error("FluxIQ content script did not become ready in the top frame.");
+  }
 }

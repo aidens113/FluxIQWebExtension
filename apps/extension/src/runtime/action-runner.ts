@@ -24,6 +24,8 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
     tabRequest.initialUrl = action.url;
   } else if (action.tabId !== undefined) {
     tabRequest.requestedTabId = action.tabId;
+  } else if (request.activeTabId !== undefined) {
+    tabRequest.requestedTabId = request.activeTabId;
   }
   const tabId = await resolveAutomationTab(tabRequest);
   const unsupportedReason = action.tabId === undefined || isNavigation ? unsupportedPageReasonForAction(action) : request.unsupportedPageReason;

@@ -51,19 +51,63 @@ test("falls back to an authenticated projects preflight only when the session en
 });
 
 test("requires exact project and Flow identity and returns a stable content hash", async (t) => {
+  const projectQueries: Array<string | null> = [];
   const client = await mockedClient(t, url => {
-    if (endpoint(url) === "projects") return json({ ok: true, payload: { categories: [], projects: [project] } });
+    if (endpoint(url) === "projects") { projectQueries.push(url.searchParams.get("domainId")); return json({ ok: true, payload: { categories: [], projects: [project] } }); }
     if (endpoint(url) === "list-flow-summaries") return json({ ok: true, payload: { flows: [flowSummary] } });
     if (endpoint(url) === "get-flow") return json({ ok: true, payload: { flow } });
     throw new Error(`unexpected ${url.pathname}`);
   });
-  assert.equal((await client.requireProject("project.web")).domainId, "web-automation");
+  assert.equal((await client.requireProject("project.web", "web-automation")).domainId, "web-automation");
+  assert.deepEqual(projectQueries, ["web-automation"]);
   assert.equal((await client.listFlowSummaries("project.web"))[0]?.flowId, "flow.main");
   const exact = await client.getExactFlow("project.web", "flow.main");
   assert.match(exact.contentHash, /^[a-f0-9]{64}$/);
   assert.deepEqual(exact.document, flow);
   await assert.rejects(() => client.requireProject("missing"), /exactly one/);
   await assert.rejects(() => client.getExactFlow("project.web", "different"), /outside the requested/);
+});
+
+test("reads graph counts and applies a bounded graph patch through public Automation Studio endpoints", async (t) => {
+  const requests: Array<{ endpoint: string; body: Record<string, unknown> }> = [];
+  const client = await mockedClient(t, (url, init) => {
+    const body = JSON.parse(String(init.body ?? "{}")) as Record<string, unknown>;
+    requests.push({ endpoint: endpoint(url), body });
+    if (endpoint(url) === "get-graph-viewport") {
+      return json({ ok: true, payload: { page: { graphRevision: 7, nodes: [{ nodeId: "one", x: 0, y: 10 }, { nodeId: "two", x: 360, y: 10 }], edges: [{ edgeId: "edge" }], internal: "discard-me" } } });
+    }
+    if (endpoint(url) === "apply-graph-patch") return json({ ok: true, payload: { graphRevision: 8, internal: "discard-me" } });
+    throw new Error(`unexpected ${url.pathname}`);
+  });
+
+  assert.deepEqual(await client.getFlowGraphViewport("project.web", "flow.main"), {
+    graphRevision: 7,
+    nodes: [{ nodeId: "one", x: 0, y: 10 }, { nodeId: "two", x: 360, y: 10 }],
+    edgeIds: ["edge"],
+    nodeCount: 2,
+    edgeCount: 1,
+  });
+  await client.applyFlowGraphPatch({
+    projectId: "project.web",
+    flowId: "flow.main",
+    baseRevision: 7,
+    mutationId: "demo-fixture-sync",
+    operations: [{ kind: "add-node", node: { id: "one" } }],
+    authorizationPin: "test-pin",
+  });
+
+  assert.equal(requests[0]?.endpoint, "get-graph-viewport");
+  assert.deepEqual(requests[1], {
+    endpoint: "apply-graph-patch",
+    body: {
+      projectId: "project.web",
+      flowId: "flow.main",
+      baseRevision: 7,
+      mutationId: "demo-fixture-sync",
+      operations: [{ kind: "add-node", node: { id: "one" } }],
+      authorizationPin: "test-pin",
+    },
+  });
 });
 
 test("reads a sanitized dependency and node-definition inventory", async (t) => {

@@ -43,6 +43,7 @@ export type CloneExecutionExecutedMetadata = Omit<CloneExecutionImportedMetadata
 };
 export type FluxIQExecutionMetadata =
   | { targetMode: "isolated" }
+  | { targetMode: "persistent-isolated"; workspace: string }
   | {
       targetMode: "existing";
       origin: string;

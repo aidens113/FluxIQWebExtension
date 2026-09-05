@@ -53,9 +53,14 @@ export function validateRunManifest(input: unknown): ValidationResult<RunManifes
 function validateFluxIQExecution(input: unknown, issues: ValidationIssue[]): void {
   const path = "$.fluxiqExecution";
   const value = object(input, path, issues); if (!value) return;
-  enumeration(value.targetMode, ["isolated", "existing", "clone"], `${path}.targetMode`, issues);
+  enumeration(value.targetMode, ["isolated", "persistent-isolated", "existing", "clone"], `${path}.targetMode`, issues);
   if (value.targetMode === "isolated") {
     keys(value, ["targetMode"], path, issues);
+    return;
+  }
+  if (value.targetMode === "persistent-isolated") {
+    keys(value, ["targetMode", "workspace"], path, issues);
+    persistentWorkspaceName(value.workspace, `${path}.workspace`, issues);
     return;
   }
   if (value.targetMode === "existing") {
@@ -95,6 +100,20 @@ function validateFluxIQExecution(input: unknown, issues: ValidationIssue[]): voi
     boundedText(value, "destinationRuntimeRunId", path, issues);
     if (typeof value.sourceHashVerifiedAfterRun !== "boolean") add(issues, `${path}.sourceHashVerifiedAfterRun`, "must be a boolean");
     enumeration(value.panelVerification, ["verified", "limited"], `${path}.panelVerification`, issues);
+  }
+}
+
+function persistentWorkspaceName(input: unknown, path: string, issues: ValidationIssue[]): void {
+  if (typeof input !== "string" || !/^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/u.test(input)) {
+    add(issues, path, "must be a lowercase filesystem-safe workspace name of 1 to 64 characters");
+    return;
+  }
+  const dotIndex = input.indexOf(".");
+  const windowsStem = dotIndex === -1 ? input : input.slice(0, dotIndex);
+  if (/^(?:con|prn|aux|nul|clock\$|com[1-9]|lpt[1-9])$/u.test(windowsStem)) {
+    add(issues, path, "must not use a reserved Windows device name");
+  } else if (input === "persistent-isolated" || input === "sessions") {
+    add(issues, path, "must not use a facility-reserved workspace name");
   }
 }
 

@@ -36,7 +36,7 @@ export class EvidenceCaptureController {
         this.lastCaptureAt = this.nowMs();
         const digest = sha256(visual.bytes);
         const priorPath = this.hashes.get(digest);
-        if (priorPath) screenshot = { sha256: digest, duplicateOfSha256: digest };
+        if (priorPath && this.policy.deduplicateScreenshots !== false) screenshot = { sha256: digest, duplicateOfSha256: digest };
         else if (this.capturedBytes + visual.bytes.byteLength > this.policy.maxBytes) screenshot = { suppressed: "quota" };
         else {
           const extension = visual.mediaType === "image/png" ? "png" : visual.mediaType === "image/jpeg" ? "jpg" : "webp";

@@ -1,6 +1,6 @@
 import { access, cp, mkdir, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { allocateRun, type RunAllocation } from "./allocation.js";
+import { allocatePersistentRun, allocateRun, type RunAllocation } from "./allocation.js";
 import { buildFluxIQEnvironment, buildScenarioEnvironment } from "./environment.js";
 import { RunnerFailure } from "./failure.js";
 import { waitForHttp, type FluxIQCredentials } from "./http-control.js";
@@ -8,6 +8,8 @@ import { ExistingFluxIQControlClient } from "./existing-fluxiq-control.js";
 import { executable, ProcessSupervisor, processLogPath } from "./process-supervisor.js";
 import { randomBytes, randomInt } from "node:crypto";
 import type { ExistingTargetConfiguration, FluxIQTargetConfiguration } from "./target-config.js";
+import { acquireWorkspaceOperationLock, type WorkspaceOperationLock } from "./workspace-lock.js";
+import { loadOrCreatePersistentIdentity } from "./persistent-identity.js";
 
 export type TopologyOptions = {
   repositoryRoot: string;
@@ -25,7 +27,7 @@ export type TopologyOptions = {
 
 export type RunningTopology = {
   allocation: RunAllocation;
-  targetMode: "isolated" | "existing";
+  targetMode: "isolated" | "persistent-isolated" | "existing";
   scenarioOrigin: string;
   fluxiqOrigin: string;
   gatewayUrl?: string;
@@ -42,12 +44,35 @@ const defaultTopologyDependencies: TopologyDependencies = { waitForHttp };
 export async function startTopology(options: TopologyOptions, supervisor = new ProcessSupervisor(), dependencies: TopologyDependencies = defaultTopologyDependencies): Promise<RunningTopology> {
   const repositoryRoot = path.resolve(options.repositoryRoot);
   const fluxiqRepositoryRoot = path.resolve(options.fluxiqRepositoryRoot);
-  const allocation = await allocateRun(options.runsDirectory ?? path.join(repositoryRoot, "test-runs"), options.runId);
   const target = options.target ?? { mode: "isolated" };
+  const runsDirectory = options.runsDirectory ?? path.join(repositoryRoot, "test-runs");
+  let persistentWorkspaceRoot: string | undefined;
+  let allocation: RunAllocation;
+  if (target.mode === "persistent-isolated") {
+    const persistentAllocation = await allocatePersistentRun(runsDirectory, target.workspace, options.runId);
+    allocation = persistentAllocation;
+    persistentWorkspaceRoot = persistentAllocation.workspaceRoot;
+  } else {
+    allocation = await allocateRun(runsDirectory, options.runId);
+  }
   if (target.mode === "existing") return startExistingTopology(options, target, allocation, repositoryRoot, supervisor, dependencies);
+  let workspaceLock: WorkspaceOperationLock | undefined;
   try {
+    if (target.mode === "persistent-isolated") {
+      workspaceLock = await acquireWorkspaceOperationLock(persistentWorkspaceRoot!);
+    }
     const targetCredentials = target.credentials ? { username: target.credentials.username, password: target.credentials.password, ...(target.credentials.authorizationPin ? { pin: target.credentials.authorizationPin } : {}), ...(target.credentials.totp ? { totp: target.credentials.totp } : {}) } : undefined;
-    const credentials = options.credentials ?? targetCredentials ?? (options.bootstrapIdentity ? await bootstrapIdentity(allocation.fluxiqRoot) : undefined);
+    let credentials = options.credentials ?? targetCredentials;
+    if (options.bootstrapIdentity) {
+      if (target.mode === "persistent-isolated") {
+        if (!credentials) {
+          credentials = (await loadOrCreatePersistentIdentity(persistentWorkspaceRoot!, generateBootstrapCredentials)).credentials;
+        }
+        await ensureBootstrapIdentity(allocation.fluxiqRoot, credentials);
+      } else if (!credentials) {
+        credentials = await bootstrapIdentity(allocation.fluxiqRoot);
+      }
+    }
     const hostModulePath = path.join(repositoryRoot, "domain", "dist", "host", "web-panel-host.cjs");
     const scenarioEntrypoint = path.join(repositoryRoot, "apps", "scenario-lab", "dist", "server.js");
     const webPackage = path.join(fluxiqRepositoryRoot, "apps", "web", "package.json");
@@ -95,22 +120,40 @@ export async function startTopology(options: TopologyOptions, supervisor = new P
     if (credentials) {
       control = new ExistingFluxIQControlClient(fluxiqOrigin);
       await control.login(credentials);
-      projectId = await control.createProject({ name: `E2E ${allocation.runId}`, description: "Disposable automated test project", domainId: "web-automation", ...(credentials.pin ? { authorizationPin: credentials.pin } : {}) });
+      if (target.mode === "persistent-isolated") {
+        const projectName = `Persistent E2E ${target.workspace}`;
+        const matches = (await control.listProjects("web-automation")).filter(project => project.name === projectName && project.domainId === "web-automation");
+        if (matches.length > 1) throw new RunnerFailure("environment.missing", "Persistent isolated workspace has more than one matching project");
+        projectId = matches[0]?.id ?? await control.createProject({ name: projectName, description: "Persistent isolated automated test project", domainId: "web-automation", ...(credentials.pin ? { authorizationPin: credentials.pin } : {}) });
+      } else {
+        projectId = await control.createProject({ name: `E2E ${allocation.runId}`, description: "Disposable automated test project", domainId: "web-automation", ...(credentials.pin ? { authorizationPin: credentials.pin } : {}) });
+      }
       await control.selectProject(projectId);
     }
     return {
-      allocation, targetMode: "isolated", scenarioOrigin, fluxiqOrigin,
+      allocation, targetMode: target.mode === "persistent-isolated" ? "persistent-isolated" : "isolated", scenarioOrigin, fluxiqOrigin,
       gatewayUrl: `ws://127.0.0.1:${allocation.gatewayPort}/client`,
       ...(control ? { control } : {}), ...(projectId ? { projectId } : {}),
       ...(credentials?.pin ? { authorizationPin: credentials.pin } : {}),
       processExitCodes: () => supervisor.processExitCodes(),
-      close: () => supervisor.cleanup(),
+      close: closeTopology(supervisor, workspaceLock),
     };
   } catch (error) {
     await supervisor.cleanup();
     await removeAllocatedRunRoot(allocation);
+    await workspaceLock?.release().catch(() => undefined);
     throw error;
   }
+}
+
+function closeTopology(supervisor: ProcessSupervisor, workspaceLock?: WorkspaceOperationLock): () => Promise<void> {
+  let closed = false;
+  return async () => {
+    if (closed) return;
+    closed = true;
+    try { await supervisor.cleanup(); }
+    finally { await workspaceLock?.release(); }
+  };
 }
 
 async function startExistingTopology(options: TopologyOptions, target: ExistingTargetConfiguration, allocation: RunAllocation, repositoryRoot: string, supervisor: ProcessSupervisor, dependencies: TopologyDependencies): Promise<RunningTopology> {
@@ -162,18 +205,48 @@ async function removeAllocatedRunRoot(allocation: Pick<RunAllocation, "runId" | 
 }
 
 async function bootstrapIdentity(rootDir: string) {
+  const credentials = generateBootstrapCredentials();
+  await ensureBootstrapIdentity(rootDir, credentials);
+  return credentials;
+}
+
+function generateBootstrapCredentials() {
+  return {
+    username: `lab-${randomBytes(6).toString("hex")}`,
+    password: `Lab-${randomBytes(24).toString("base64url")}!9`,
+    pin: String(randomInt(100000, 1000000)),
+  };
+}
+
+async function ensureBootstrapIdentity(rootDir: string, credentials: FluxIQCredentials): Promise<void> {
   const { FluxIQ } = await import("fluxiq");
   const fluxiq = FluxIQ.create({ rootDir, loadEnv: false });
   await fluxiq.setup();
-  const password = `Lab-${randomBytes(24).toString("base64url")}!9`;
-  const pin = String(randomInt(100000, 1000000));
-  const username = `lab-${randomBytes(6).toString("hex")}`;
-  await fluxiq.programs.identityAccess.upsertUser({ id: "lab-runner-admin", username, displayName: "Lab Runner", roleId: "admin", password });
-  await fluxiq.programs.identityAccess.setPin("lab-runner-admin", pin);
-  return { username, password, pin };
+  const snapshot = await fluxiq.programs.identityAccess.snapshot();
+  const byId = snapshot.users.find(user => user.id === "lab-runner-admin");
+  const byUsername = snapshot.users.find(user => user.username.toLowerCase() === credentials.username.toLowerCase());
+  if (byId || byUsername) {
+    if (byId?.username.toLowerCase() !== credentials.username.toLowerCase() || (byUsername && byUsername.id !== "lab-runner-admin")) {
+      throw new RunnerFailure("environment.missing", "Persistent isolated workspace identity does not match its configured credentials");
+    }
+    try {
+      await fluxiq.programs.identityAccess.authenticate({ username: credentials.username, password: credentials.password, ...(credentials.totp ? { totp: credentials.totp } : {}) });
+    } catch (cause) {
+      throw new RunnerFailure("environment.missing", "Persistent isolated workspace credentials no longer authenticate", { cause });
+    }
+    return;
+  }
+  await fluxiq.programs.identityAccess.upsertUser({
+    id: "lab-runner-admin",
+    username: credentials.username,
+    displayName: "Lab Runner",
+    roleId: "admin",
+    password: credentials.password,
+    ...(credentials.pin ? { pin: credentials.pin } : {}),
+  });
 }
 
-async function prepareWebWorkspace(fluxiqRepositoryRoot: string, target: string): Promise<string> {
+export async function prepareWebWorkspace(fluxiqRepositoryRoot: string, target: string): Promise<string> {
   const source = path.join(fluxiqRepositoryRoot, "apps", "web");
   const sourceNodeModules = path.join(source, "node_modules");
   const isolatedCoreRoot = path.resolve(target, "..", "..");

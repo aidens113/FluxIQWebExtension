@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-export type FluxIQTargetMode = "isolated" | "existing" | "clone";
+export type FluxIQTargetMode = "isolated" | "persistent-isolated" | "existing" | "clone";
 
 export type FluxIQTestCredentials = {
   username: string;
@@ -12,6 +12,12 @@ export type FluxIQTestCredentials = {
 
 export type IsolatedTargetConfiguration = {
   mode: "isolated";
+  credentials?: FluxIQTestCredentials;
+};
+
+export type PersistentIsolatedTargetConfiguration = {
+  mode: "persistent-isolated";
+  workspace: string;
   credentials?: FluxIQTestCredentials;
 };
 
@@ -40,10 +46,11 @@ export type CloneTargetConfiguration = {
   freshLogin?: true;
 };
 
-export type FluxIQTargetConfiguration = IsolatedTargetConfiguration | ExistingTargetConfiguration | CloneTargetConfiguration;
+export type FluxIQTargetConfiguration = IsolatedTargetConfiguration | PersistentIsolatedTargetConfiguration | ExistingTargetConfiguration | CloneTargetConfiguration;
 
 export type ResolveTargetConfigurationInput = {
   cliTarget?: FluxIQTargetMode;
+  cliWorkspace?: string;
   cliFlowId?: string;
   cliFreshLogin?: boolean;
   env: NodeJS.ProcessEnv;
@@ -56,17 +63,28 @@ const existingKeys = ["FLUXIQ_TEST_BASE_URL", "FLUXIQ_TEST_GATEWAY_URL", "FLUXIQ
 
 export function resolveTargetConfiguration(input: ResolveTargetConfigurationInput): FluxIQTargetConfiguration {
   const envMode = optionalText(input.env.FLUXIQ_TEST_TARGET, "FLUXIQ_TEST_TARGET") as FluxIQTargetMode | undefined;
-  if (envMode !== undefined && envMode !== "isolated" && envMode !== "existing" && envMode !== "clone") throw new Error("FLUXIQ_TEST_TARGET must be isolated, existing, or clone");
+  if (envMode !== undefined && envMode !== "isolated" && envMode !== "persistent-isolated" && envMode !== "existing" && envMode !== "clone") throw new Error("FLUXIQ_TEST_TARGET must be isolated, persistent-isolated, existing, or clone");
   if (input.cliTarget && envMode && input.cliTarget !== envMode) throw new Error(`--target ${input.cliTarget} conflicts with FLUXIQ_TEST_TARGET=${envMode}`);
   const mode = input.cliTarget ?? envMode ?? "isolated";
   const configuredExistingKeys = existingKeys.filter(key => optionalText(input.env[key], key) !== undefined);
-  if (mode === "isolated") {
-    if (configuredExistingKeys.length || input.cliFlowId || input.cliFreshLogin) throw new Error(`isolated target cannot use existing-install configuration: ${[...configuredExistingKeys, ...(input.cliFlowId ? ["--flow"] : []), ...(input.cliFreshLogin ? ["--fresh-login"] : [])].join(", ")}`);
+  const envWorkspace = optionalText(input.env.FLUXIQ_TEST_PERSISTENT_WORKSPACE, "FLUXIQ_TEST_PERSISTENT_WORKSPACE");
+  if (input.cliWorkspace && envWorkspace && input.cliWorkspace.trim() !== envWorkspace) throw new Error(`--workspace ${input.cliWorkspace.trim()} conflicts with FLUXIQ_TEST_PERSISTENT_WORKSPACE=${envWorkspace}`);
+  if (mode === "isolated" || mode === "persistent-isolated") {
+    const incompatible = [...configuredExistingKeys, ...(input.cliFlowId ? ["--flow"] : []), ...(input.cliFreshLogin ? ["--fresh-login"] : [])];
+    if (incompatible.length) throw new Error(`${mode} target cannot use existing-install configuration: ${incompatible.join(", ")}`);
+    if (mode === "isolated" && (input.cliWorkspace || envWorkspace)) throw new Error("--workspace and FLUXIQ_TEST_PERSISTENT_WORKSPACE require the persistent-isolated target");
     const username = optionalText(input.env.FLUXIQ_TEST_USERNAME, "FLUXIQ_TEST_USERNAME");
     const password = optionalText(input.env.FLUXIQ_TEST_PASSWORD, "FLUXIQ_TEST_PASSWORD");
-    if (Boolean(username) !== Boolean(password)) throw new Error("isolated configured credentials require both FLUXIQ_TEST_USERNAME and FLUXIQ_TEST_PASSWORD");
-    return { mode, ...(username && password ? { credentials: credentials(input.env, username, password, false) } : {}) };
+    if (Boolean(username) !== Boolean(password)) throw new Error(`${mode} configured credentials require both FLUXIQ_TEST_USERNAME and FLUXIQ_TEST_PASSWORD`);
+    const resolvedCredentials = username && password ? { credentials: credentials(input.env, username, password, false) } : {};
+    if (mode === "persistent-isolated") {
+      const workspace = requireSafePersistentWorkspaceName(input.cliWorkspace ?? envWorkspace, input.cliWorkspace ? "--workspace" : "FLUXIQ_TEST_PERSISTENT_WORKSPACE");
+      return { mode, workspace, ...resolvedCredentials };
+    }
+    return { mode, ...resolvedCredentials };
   }
+
+  if (input.cliWorkspace || envWorkspace) throw new Error("--workspace and FLUXIQ_TEST_PERSISTENT_WORKSPACE require the persistent-isolated target");
 
   const baseUrl = httpOrigin(required(input.env.FLUXIQ_TEST_BASE_URL, "FLUXIQ_TEST_BASE_URL"), "FLUXIQ_TEST_BASE_URL");
   const gatewayValue = optionalText(input.env.FLUXIQ_TEST_GATEWAY_URL, "FLUXIQ_TEST_GATEWAY_URL");
@@ -92,6 +110,21 @@ export function resolveTargetConfiguration(input: ResolveTargetConfigurationInpu
     credentials: resolvedCredentials as FluxIQTestCredentials & { authorizationPin: string },
     ...(input.cliFreshLogin ? { freshLogin: true as const } : {}),
   };
+}
+
+const windowsDeviceNames = /^(?:con|prn|aux|nul|clock\$|com[1-9]|lpt[1-9])(?:\..*)?$/iu;
+const facilityReservedWorkspaceNames = new Set(["persistent-isolated", "sessions"]);
+
+/** Validate a portable single-segment workspace name before it reaches path resolution. */
+export function requireSafePersistentWorkspaceName(value: string | undefined, name: string): string {
+  if (value === undefined) throw new Error(`${name} is required for a persistent-isolated target`);
+  const workspace = nonEmpty(value, name);
+  if (workspace.length > 64) throw new Error(`${name} must be at most 64 characters`);
+  if (!/^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/u.test(workspace)) {
+    throw new Error(`${name} must be a lowercase portable name using only letters, numbers, dots, underscores, or hyphens, and must start and end with a letter or number`);
+  }
+  if (windowsDeviceNames.test(workspace) || facilityReservedWorkspaceNames.has(workspace)) throw new Error(`${name} uses a reserved filesystem name`);
+  return workspace;
 }
 
 export function resolveAuthScopeConfiguration(env: NodeJS.ProcessEnv): AuthScopeConfiguration {

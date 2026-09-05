@@ -32,9 +32,11 @@ test("run manifests validate and parse independently of Playwright", () => {
   const value = manifest(); assert.doesNotThrow(() => assertRunManifest(value)); assert.equal(parseRunManifestJson(JSON.stringify(value)).runId, "run-1");
 });
 
-test("run manifests accept optional sanitized isolated and existing FluxIQ execution provenance", () => {
+test("run manifests accept optional sanitized isolated, persistent-isolated, and existing FluxIQ execution provenance", () => {
   const isolated = { ...manifest(), fluxiqExecution: { targetMode: "isolated" } };
   assert.doesNotThrow(() => assertRunManifest(isolated));
+  const persistentIsolated = { ...manifest(), fluxiqExecution: { targetMode: "persistent-isolated", workspace: "regression-main" } };
+  assert.deepEqual(parseRunManifestJson(JSON.stringify(persistentIsolated)).fluxiqExecution, persistentIsolated.fluxiqExecution);
   const existing = {
     ...manifest(),
     fluxiqExecution: {
@@ -65,6 +67,9 @@ test("FluxIQ execution provenance fails closed on incomplete, unsafe, or credent
     },
   };
   const secretField = { ...manifest(), fluxiqExecution: { targetMode: "isolated", cookie: "must-not-be-recorded" } };
+  const unsafeWorkspace = { ...manifest(), fluxiqExecution: { targetMode: "persistent-isolated", workspace: "../private" } };
+  const reservedWorkspace = { ...manifest(), fluxiqExecution: { targetMode: "persistent-isolated", workspace: "con.txt" } };
+  const facilityReservedWorkspace = { ...manifest(), fluxiqExecution: { targetMode: "persistent-isolated", workspace: "sessions" } };
   const cloneSecret = {
     ...manifest(), fluxiqExecution: {
       targetMode: "clone", stage: "executed", sourceOrigin: "https://fluxiq.invalid", sourceProjectId: "project.source", sourceFlowId: "flow.source",
@@ -77,6 +82,9 @@ test("FluxIQ execution provenance fails closed on incomplete, unsafe, or credent
   assert.throws(() => assertRunManifest(missing), ContractValidationError);
   assert.throws(() => assertRunManifest(unsafeOrigin), ContractValidationError);
   assert.throws(() => assertRunManifest(secretField), ContractValidationError);
+  assert.throws(() => assertRunManifest(unsafeWorkspace), ContractValidationError);
+  assert.throws(() => assertRunManifest(reservedWorkspace), ContractValidationError);
+  assert.throws(() => assertRunManifest(facilityReservedWorkspace), ContractValidationError);
   assert.throws(() => assertRunManifest(cloneSecret), ContractValidationError);
 });
 
