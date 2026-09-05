@@ -264,7 +264,7 @@ function createWebAutomationOutputNodeDefinition(definition) {
     outputAction: { fixedOutputId: definition.actionType },
     inputs: [controlInput],
     outputs: outputPorts,
-    parameters: parametersForOutput(definition.actionType),
+    parameters: parametersForOutput(definition.actionType).map((parameter) => ({ ...parameter, allowStateBinding: true })),
     icon: iconForOutput(definition.actionType),
     tags: ["web-automation", "output"],
     metadata: {
@@ -1630,6 +1630,10 @@ var clickNodeDefinition = outputNodeDefinitions.find((definition) => definition.
 assert.equal(clickNodeDefinition?.requiredRuntimeCapabilities?.includes("web.actions"), true);
 assert.equal(validateAutomationStudioNodeDefinition(clickNodeDefinition).ok, true);
 assert.equal(outputNodeDefinitions.every((definition) => validateAutomationStudioNodeDefinition(definition).ok), true);
+assert.equal(
+  outputNodeDefinitions.every((definition) => definition.parameters.every((parameter) => parameter.allowStateBinding === true)),
+  true
+);
 var actionCapability = webAutomationClientCapabilities.find((capability) => capability.id === "web.actions");
 assert.equal(actionCapability?.metadata?.domainId, WEB_AUTOMATION_DOMAIN_ID);
 assert.deepEqual(actionCapability?.metadata?.outputIds, WEB_AUTOMATION_ACTION_TYPES);

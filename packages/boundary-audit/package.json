@@ -1,0 +1,20 @@
+{
+  "name": "@fluxiq-web-extension/boundary-audit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "fluxiq-boundary-audit": "./dist/cli.js"
+  },
+  "exports": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm build && node --test dist/**/*.test.js",
+    "audit": "pnpm build && node dist/cli.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}

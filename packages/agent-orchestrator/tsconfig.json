@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@fluxiq-web-extension/test-contracts": ["../test-contracts/dist/index.d.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

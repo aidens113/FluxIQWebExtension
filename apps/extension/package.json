@@ -6,7 +6,10 @@
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit && node scripts/build-extension.mjs",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "node scripts/smoke-test.mjs"
+    "test": "node scripts/smoke-test.mjs",
+    "test:e2e:build": "pnpm build",
+    "test:e2e": "pnpm test:e2e:build && playwright test -c e2e/playwright.config.ts",
+    "test:e2e:report": "playwright show-report e2e/test-results/report"
   },
   "dependencies": {
     "@fluxiq/client-gateway-websocket": "link:../../../!FluxIQ/packages/client-gateway-websocket",
@@ -14,6 +17,7 @@
     "fluxiq": "link:../../../!FluxIQ/packages/fluxiq"
   },
   "devDependencies": {
+    "@playwright/test": "1.51.1",
     "@types/chrome": "^0.0.287",
     "@types/node": "^22.10.0",
     "esbuild": "^0.24.2",

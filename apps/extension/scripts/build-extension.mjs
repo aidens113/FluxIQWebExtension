@@ -120,3 +120,4 @@ await rm(distDir, { recursive: true, force: true });
 await bundleExtension();
 await buildTarget("chrome", "manifest.chrome.json");
 await buildTarget("firefox", "manifest.firefox.json");
+await buildTarget("e2e-chromium", "manifest.e2e.json");

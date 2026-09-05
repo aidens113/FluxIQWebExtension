@@ -1,0 +1,21 @@
+{
+  "name": "@fluxiq-web-extension/scenario-lab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/server.js",
+    "test": "pnpm build && node --test dist/**/*.test.js",
+    "test:e2e": "pnpm --filter @fluxiq-web-extension/test-contracts build && playwright test -c e2e/playwright.config.ts"
+  },
+  "dependencies": {
+    "@fluxiq-web-extension/test-contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.51.1",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}

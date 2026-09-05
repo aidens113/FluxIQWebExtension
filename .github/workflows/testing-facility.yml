@@ -1,0 +1,262 @@
+name: Testing facility
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "23 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testing-facility-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+
+env:
+  FLUXIQ_REAL_SITE_ENABLED: "0"
+  FLUXIQ_CORE_REPOSITORY: ${{ vars.FLUXIQ_CORE_REPOSITORY }}
+  FLUXIQ_CORE_REF: ${{ vars.FLUXIQ_CORE_REF }}
+
+jobs:
+  prerequisites:
+    name: Verify CI prerequisites
+    runs-on: ubuntu-latest
+    env:
+      FLUXIQ_CORE_TOKEN: ${{ secrets.FLUXIQ_CORE_TOKEN }}
+    steps:
+      - name: Require pinned sibling Core checkout configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FLUXIQ_CORE_REPOSITORY" || { echo "::error::Repository variable FLUXIQ_CORE_REPOSITORY is required"; exit 1; }
+          test -n "$FLUXIQ_CORE_REF" || { echo "::error::Repository variable FLUXIQ_CORE_REF must pin a compatible Core revision"; exit 1; }
+          test -n "$FLUXIQ_CORE_TOKEN" || { echo "::error::Secret FLUXIQ_CORE_TOKEN is required to check out the sibling Core repository"; exit 1; }
+          test "$FLUXIQ_REAL_SITE_ENABLED" = "0" || { echo "::error::Real-site execution is forbidden in this workflow"; exit 1; }
+
+  select:
+    name: Select changed capabilities
+    if: github.event_name != 'schedule'
+    needs: prerequisites
+    runs-on: ubuntu-latest
+    outputs:
+      scenario_ids: ${{ steps.matrix.outputs.scenario_ids }}
+      run_browser_smoke: ${{ steps.matrix.outputs.run_browser_smoke }}
+      run_changed_scenarios: ${{ steps.matrix.outputs.run_changed_scenarios }}
+      run_full_matrix: ${{ steps.matrix.outputs.run_full_matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: "!FluxIQWebExtension"
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.FLUXIQ_CORE_REPOSITORY }}
+          ref: ${{ env.FLUXIQ_CORE_REF }}
+          token: ${{ secrets.FLUXIQ_CORE_TOKEN }}
+          path: "!FluxIQ"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable pinned pnpm
+        run: corepack enable
+      - name: Install locked dependencies
+        working-directory: "!FluxIQWebExtension"
+        run: pnpm install --frozen-lockfile
+      - name: Build and test selector
+        working-directory: "!FluxIQWebExtension"
+        run: pnpm --dir packages/test-matrix test
+      - name: Collect changed paths
+        working-directory: "!FluxIQWebExtension"
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${BASE_SHA:-}" && ! "$BASE_SHA" =~ ^0+$ ]] && git cat-file -e "$BASE_SHA^{commit}"; then
+            git diff --name-only "$BASE_SHA" HEAD > changed-files.txt
+          else
+            git show --pretty=format: --name-only HEAD > changed-files.txt
+          fi
+      - name: Produce matrix outputs
+        id: matrix
+        working-directory: "!FluxIQWebExtension"
+        run: node packages/test-matrix/dist/cli.js --paths-file changed-files.txt --github-output
+
+  static:
+    name: Static gate (${{ matrix.os }})
+    needs: prerequisites
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: "!FluxIQWebExtension"
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.FLUXIQ_CORE_REPOSITORY }}
+          ref: ${{ env.FLUXIQ_CORE_REF }}
+          token: ${{ secrets.FLUXIQ_CORE_TOKEN }}
+          path: "!FluxIQ"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable pinned pnpm
+        run: corepack enable
+      - name: Install locked dependencies
+        working-directory: "!FluxIQWebExtension"
+        run: pnpm install --frozen-lockfile
+      - name: Type and contract checks
+        working-directory: "!FluxIQWebExtension"
+        run: pnpm check
+      - name: Unit and component tests
+        working-directory: "!FluxIQWebExtension"
+        run: pnpm test
+      - name: Build workspace
+        working-directory: "!FluxIQWebExtension"
+        run: pnpm build
+
+  chromium-smoke:
+    name: Chromium smoke (${{ matrix.os }})
+    needs: [prerequisites, select]
+    if: always() && needs.prerequisites.result == 'success' && (github.event_name == 'schedule' || needs.select.outputs.run_browser_smoke == 'true')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            browser_install: pnpm --filter @fluxiq-web-extension/extension exec playwright install --with-deps chromium
+            extension_test: xvfb-run --auto-servernum pnpm --filter @fluxiq-web-extension/extension test:e2e
+          - os: windows-latest
+            browser_install: pnpm --filter @fluxiq-web-extension/extension exec playwright install chromium
+            extension_test: pnpm --filter @fluxiq-web-extension/extension test:e2e
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: "!FluxIQWebExtension"
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.FLUXIQ_CORE_REPOSITORY }}
+          ref: ${{ env.FLUXIQ_CORE_REF }}
+          token: ${{ secrets.FLUXIQ_CORE_TOKEN }}
+          path: "!FluxIQ"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable pinned pnpm
+        run: corepack enable
+      - name: Install locked dependencies
+        working-directory: "!FluxIQWebExtension"
+        run: pnpm install --frozen-lockfile
+      - name: Install bundled Chromium
+        working-directory: "!FluxIQWebExtension"
+        run: ${{ matrix.browser_install }}
+      - name: Run all scenario pages without extension or Core
+        working-directory: "!FluxIQWebExtension"
+        run: pnpm --filter @fluxiq-web-extension/scenario-lab test:e2e
+      - name: Run real-extension smoke specs
+        working-directory: "!FluxIQWebExtension"
+        run: ${{ matrix.extension_test }}
+      - name: Upload smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromium-smoke-${{ matrix.os }}-${{ github.run_attempt }}
+          path: |
+            ./!FluxIQWebExtension/apps/extension/e2e/test-results/
+            ./!FluxIQWebExtension/apps/scenario-lab/e2e/test-results/
+            ./!FluxIQWebExtension/test-runs/
+          if-no-files-found: error
+          retention-days: 30
+
+  changed-scenarios:
+    name: Changed capability scenarios
+    needs: [prerequisites, select, static]
+    if: needs.select.outputs.run_changed_scenarios == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: "!FluxIQWebExtension"
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.FLUXIQ_CORE_REPOSITORY }}
+          ref: ${{ env.FLUXIQ_CORE_REF }}
+          token: ${{ secrets.FLUXIQ_CORE_TOKEN }}
+          path: "!FluxIQ"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable pinned pnpm
+        run: corepack enable
+      - name: Install locked dependencies
+        working-directory: "!FluxIQWebExtension"
+        run: pnpm install --frozen-lockfile
+      - name: Require facility CLI integration
+        working-directory: "!FluxIQWebExtension"
+        shell: bash
+        run: node -e "const p=require('./package.json'); if(!p.scripts?.lab){console.error('::error::root package.json must define the Phase 5 lab CLI script'); process.exit(1)}"
+      - name: Install headed Chromium and Linux dependencies
+        working-directory: "!FluxIQWebExtension"
+        run: pnpm --filter @fluxiq-web-extension/extension exec playwright install --with-deps chromium
+      - name: Run selected deterministic scenarios
+        working-directory: "!FluxIQWebExtension"
+        env:
+          FLUXIQ_SCENARIO_IDS: ${{ needs.select.outputs.scenario_ids }}
+        run: xvfb-run --auto-servernum pnpm lab matrix --scenarios-json "$FLUXIQ_SCENARIO_IDS" --repeat 1 --evidence failure
+      - name: Upload changed-scenario evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: changed-scenarios-${{ github.run_attempt }}
+          path: "./!FluxIQWebExtension/test-runs/"
+          if-no-files-found: error
+          retention-days: 30
+
+  nightly-full-matrix:
+    name: Nightly full matrix and flake sample
+    if: github.event_name == 'schedule'
+    needs: [prerequisites, static]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: "!FluxIQWebExtension"
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.FLUXIQ_CORE_REPOSITORY }}
+          ref: ${{ env.FLUXIQ_CORE_REF }}
+          token: ${{ secrets.FLUXIQ_CORE_TOKEN }}
+          path: "!FluxIQ"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable pinned pnpm
+        run: corepack enable
+      - name: Install locked dependencies
+        working-directory: "!FluxIQWebExtension"
+        run: pnpm install --frozen-lockfile
+      - name: Require facility CLI integration
+        working-directory: "!FluxIQWebExtension"
+        shell: bash
+        run: node -e "const p=require('./package.json'); if(!p.scripts?.lab){console.error('::error::root package.json must define the Phase 5 lab CLI script'); process.exit(1)}"
+      - name: Install bundled Chromium
+        working-directory: "!FluxIQWebExtension"
+        run: pnpm --filter @fluxiq-web-extension/extension exec playwright install --with-deps chromium
+      - name: Run full deterministic corpus three times
+        working-directory: "!FluxIQWebExtension"
+        run: xvfb-run --auto-servernum pnpm lab matrix --all --repeat 3 --evidence failure
+      - name: Upload certification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-certification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: "./!FluxIQWebExtension/test-runs/"
+          if-no-files-found: error
+          retention-days: 90

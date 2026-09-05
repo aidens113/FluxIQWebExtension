@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@fluxiq-web-extension/test-contracts": ["../../packages/test-contracts/dist/index.d.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

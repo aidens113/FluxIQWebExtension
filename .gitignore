@@ -4,3 +4,16 @@ dist/
 .turbo/
 .DS_Store
 *.log
+
+# Local test-target configuration and credentials. Commit only .env.example.
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Automated testing facility outputs and disposable browser state.
+test-runs/
+.browser-profiles/
+playwright-report/
+test-results/
+.playwright/

@@ -1,0 +1,27 @@
+{
+  "name": "@fluxiq-web-extension/test-runner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm build && node --test dist/**/*.test.js"
+  },
+  "dependencies": {
+    "@fluxiq-web-extension/test-contracts": "workspace:*",
+    "@fluxiq-web-extension/test-evidence": "workspace:*",
+    "@playwright/test": "1.51.1",
+    "fluxiq": "link:../../../!FluxIQ/packages/fluxiq"
+  },
+  "bin": {
+    "fluxiq-lab": "./dist/cli.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}

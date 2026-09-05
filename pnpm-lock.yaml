@@ -27,6 +27,9 @@ importers:
         specifier: link:../../../!FluxIQ/packages/fluxiq
         version: link:../../../!FluxIQ/packages/fluxiq
     devDependencies:
+      '@playwright/test':
+        specifier: 1.51.1
+        version: 1.51.1
       '@types/chrome':
         specifier: ^0.0.287
         version: 0.0.287
@@ -36,6 +39,22 @@ importers:
       esbuild:
         specifier: ^0.24.2
         version: 0.24.2
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  apps/scenario-lab:
+    dependencies:
+      '@fluxiq-web-extension/test-contracts':
+        specifier: workspace:*
+        version: link:../../packages/test-contracts
+    devDependencies:
+      '@playwright/test':
+        specifier: 1.51.1
+        version: 1.51.1
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
@@ -55,6 +74,87 @@ importers:
       esbuild:
         specifier: ^0.24.2
         version: 0.24.2
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/agent-orchestrator:
+    dependencies:
+      '@fluxiq-web-extension/test-contracts':
+        specifier: workspace:*
+        version: link:../test-contracts
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/boundary-audit:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/real-site-policy:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/test-contracts:
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/test-evidence:
+    dependencies:
+      '@fluxiq-web-extension/test-contracts':
+        specifier: workspace:*
+        version: link:../test-contracts
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/test-matrix:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/test-runner:
+    dependencies:
+      '@fluxiq-web-extension/test-contracts':
+        specifier: workspace:*
+        version: link:../test-contracts
+      '@fluxiq-web-extension/test-evidence':
+        specifier: workspace:*
+        version: link:../test-evidence
+      '@playwright/test':
+        specifier: 1.51.1
+        version: 1.51.1
+      fluxiq:
+        specifier: link:../../../!FluxIQ/packages/fluxiq
+        version: link:../../../!FluxIQ/packages/fluxiq
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
@@ -211,6 +311,11 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@playwright/test@1.51.1':
+    resolution: {integrity: sha512-nM+kEaTSAoVlXmMPH10017vn3FSiFqr/bh4fKg9vmAdMfd9SDqRZNvPSiAHADc/itWak+qPvMPZQOPwCBW7k7Q==}
+    engines: {node: '>=18'}
+    hasBin: true
+
   '@types/chrome@0.0.287':
     resolution: {integrity: sha512-wWhBNPNXZHwycHKNYnexUcpSbrihVZu++0rdp6GEk5ZgAglenLx+RwdEouh6FrHS0XQiOxSd62yaujM1OoQlZQ==}
 
@@ -228,6 +333,21 @@ packages:
 
   esbuild@0.24.2:
     resolution: {integrity: sha512-+9egpBW8I3CD5XPe0n6BfT5fxLzxrlDzqydF3aviG+9ni1lDC/OvMHcxqEFV0+LANZG5R1bFMWfUrjVsdwxJvA==}
+    engines: {node: '>=18'}
+    hasBin: true
+
+  fsevents@2.3.2:
+    resolution: {integrity: sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==}
+    engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
+    os: [darwin]
+
+  playwright-core@1.51.1:
+    resolution: {integrity: sha512-/crRMj8+j/Nq5s8QcvegseuyeZPxpQCZb6HNk3Sos3BlZyAknRjoyJPFWkpNn8v0+P3WiwqFF8P+zQo4eqiNuw==}
+    engines: {node: '>=18'}
+    hasBin: true
+
+  playwright@1.51.1:
+    resolution: {integrity: sha512-kkx+MB2KQRkyxjYPc3a0wLZZoDczmppyGJIvQ43l+aZihkaVvmu/21kiyaHeHjiFxjxNNFnUncKmcGIyOojsaw==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -316,6 +436,10 @@ snapshots:
   '@esbuild/win32-x64@0.24.2':
     optional: true
 
+  '@playwright/test@1.51.1':
+    dependencies:
+      playwright: 1.51.1
+
   '@types/chrome@0.0.287':
     dependencies:
       '@types/filesystem': 0.0.36
@@ -360,6 +484,17 @@ snapshots:
       '@esbuild/win32-arm64': 0.24.2
       '@esbuild/win32-ia32': 0.24.2
       '@esbuild/win32-x64': 0.24.2
+
+  fsevents@2.3.2:
+    optional: true
+
+  playwright-core@1.51.1: {}
+
+  playwright@1.51.1:
+    dependencies:
+      playwright-core: 1.51.1
+    optionalDependencies:
+      fsevents: 2.3.2
 
   typescript@5.9.3: {}
 
