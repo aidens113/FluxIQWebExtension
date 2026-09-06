@@ -169,7 +169,7 @@ export class ExistingFluxIQControlClient extends FluxIQControlClient {
     };
   }
 
-  async selectExistingContext(projectId: string, clientId?: string, bounds: FluxIQHttpOptions = {}): Promise<void> { await this.selectProject(projectId, clientId, bounds); }
+  async selectExistingContext(projectId: string, clientId?: string, bounds: FluxIQHttpOptions = {}, flowId?: string): Promise<void> { await this.selectProject(projectId, clientId, bounds, flowId); }
 
   async startPersistedFlow(input: { projectId: string; flowId: string; inputs?: JsonRecord; authorizedDomainIds?: string[] } & FluxIQHttpOptions): Promise<ExistingRuntimeSession> {
     const payload = record(await this.automationStudioCall("start-runtime-session", { projectId: input.projectId, flowId: input.flowId, targetKind: "flow", targetId: input.flowId, ...(input.inputs ? { inputs: input.inputs } : {}), ...(input.authorizedDomainIds ? { authorizedDomainIds: input.authorizedDomainIds } : {}) }, input), "start runtime payload");

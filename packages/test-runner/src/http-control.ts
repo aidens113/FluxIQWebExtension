@@ -98,8 +98,8 @@ export class FluxIQControlClient {
     return this.request("/api/programs/automation-studio/get-flow", { projectId, flowId }, "recording.persistence", "POST", bounds);
   }
 
-  async selectProject(projectId: string, clientId?: string, bounds: FluxIQHttpOptions = {}): Promise<void> {
-    await this.request("/api/client-gateway/automation-studio-context", { activeProjectId: projectId, ...(clientId ? { clientId } : {}) }, "process.startup", "POST", bounds);
+  async selectProject(projectId: string, clientId?: string, bounds: FluxIQHttpOptions = {}, flowId?: string): Promise<void> {
+    await this.request("/api/client-gateway/automation-studio-context", { activeProjectId: projectId, ...(flowId ? { activeFlowId: flowId } : {}), ...(clientId ? { clientId } : {}) }, "process.startup", "POST", bounds);
   }
 
   async approvePairing(pairingCode: string): Promise<unknown> {

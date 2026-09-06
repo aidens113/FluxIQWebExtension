@@ -285,24 +285,30 @@ credentials are never printed, and the command refuses to overwrite an
 existing file unless passed `--force`.
 
 `demo:record` authenticates through the normal reusable session cache, creates
-or reuses one project bound to `web-automation`, creates the configured Flow
-only when it is absent, starts the loopback `basic-form` fixture, loads the
-current unpacked extension in persistent Chromium, pairs it with FluxIQ,
-starts extension recording, performs the form interaction, stops recording,
-and requires one new durable Core recording. `demo:run` requires that saved
-workspace, reconnects the same extension profile, executes the persisted Flow
-through FluxIQ, and requires its browser actions to submit the form.
+or reuses one project bound to `web-automation`, and creates the configured
+orchestration Flow only when it is absent. It starts the loopback `basic-form`
+fixture, loads the current unpacked extension in persistent Chromium, pairs it
+with FluxIQ, starts extension recording, performs the form interaction, stops
+recording, and requires one new durable Core recording. It then opens that
+recording in the real Automation Studio timeline and uses **Generate Subflow**
+to create or replace the Router fallback Subflow deterministically from the
+recorded actions. Replacement is allowed only for an empty or entirely unedited
+recording-derived graph.
 
-The fixture gives every node an explicit non-overlapping layout. Both commands
-open the real Nodes view and compare every rendered node rectangle before they
-continue. An existing fixture-owned workspace is migrated through public
-`move_node` graph patches when its saved graph uses an older layout; an
-unexpected partial or foreign graph fails closed instead of being rewritten.
+`demo:run` requires that saved workspace, reconnects the same extension profile,
+opens the saved Flow and Runtime Debug through the real hierarchy UI, selects
+**No LLM intervention**, clicks **Run**, and requires every generated action,
+the Router decision, the Subflow entry, and the submitted form result to
+succeed. Both commands open the real Subflow Nodes view and compare every
+rendered node rectangle before continuing. Core lays generated actions out at a
+non-overlapping interval and reconciles both the canonical graph document and
+its SQL viewport index when a generated graph is replaced.
 
 Both commands lock and reuse the exact `FLUXIQ_DEMO_RUN_DIR`. Each invocation
 starts and stops its own copied Core web process while retaining
 `fluxiq-root/.fluxiq`; temporary Core copies live under `.sessions` and are
-removed after shutdown. The directory also contains `workspace.json`, separate
+removed after shutdown. The directory also contains `workspace.json`, a protected
+`scenario-port.json` that keeps recording URLs replayable across invocations, separate
 persistent extension and panel browser profiles, a workspace-local copy of the
 latest built extension, append-only process/Scenario Lab logs, finalized
 evidence bundles, and `latest-evidence.json`.

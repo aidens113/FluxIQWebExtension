@@ -152,6 +152,7 @@ document.addEventListener("pointerdown", (event) => {
   if (!event.isTrusted) return;
   if (event.button !== 0 || event.isPrimary === false) return;
   rememberEventPathElements(event);
+  flushPendingInput();
   const eventElement = eventTargetElement(event);
   const target = eventElement ? pointerActivationTarget(eventElement) : null;
   if (!target) return;
@@ -190,6 +191,8 @@ document.addEventListener("input", (event) => {
     scheduleInputEvent(target);
     return;
   }
+  flushPendingInput();
+  if (target && shouldRecordChangeEvent(target)) return;
   emitInputEvent(target);
 }, true);
 

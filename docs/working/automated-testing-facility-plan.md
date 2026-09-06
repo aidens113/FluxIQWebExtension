@@ -235,6 +235,42 @@ passed the visual assertion. A subsequent real `demo:run` passed the same
 assertion and completed No-LLM runtime run
 `bc44c1a3-2fe4-48fc-809c-79d98dcf2eed`.
 
+Phase 11 deterministic recording-to-Subflow completion (primary, 2026-09-06):
+the recording script no longer seeds an executable graph through a control API.
+It drives the production extension to create a durable recording, opens that
+recording through the real Automation Studio hierarchy, and submits the real
+**Generate deterministic Subflow** dialog. Core maps only domain-declared action
+inputs, reuses the Flow Router's configured fallback Subflow, replaces only an
+empty or wholly unedited recording-derived graph, spaces generated nodes at 340
+pixels, and reconciles an already-materialized SQL graph index after canonical
+document replacement. The runner reloads the panel and verifies the rendered
+Subflow has four form actions plus at most one self-contained fixture navigation,
+linear edges, recording provenance, and no pairwise overlap.
+
+The paired playback script now expands/searches the real hierarchy instead of
+assuming Runtime Debug children are already virtualized, selects No LLM mode,
+and dispatches Run from the actual Runtime Debug surface. Live validation found
+that a self-contained recorded start navigation referenced the Scenario Lab's
+per-invocation port. The demo workspace now persists one protected
+`scenario-port.json`, so independent record and playback processes expose the
+fixture at the same address without keeping a server alive. The same isolated
+`fluxiq-root/.fluxiq`, project, Flow, Subflow, Router, recordings, runtime
+history, authentication cache, and browser profiles remain reusable.
+
+Final live `npm run demo:record` produced recording
+`client.extension-bbe5ab04-3eca-415f-b64c-d0c54e135ad2.1788718034927` and
+replaced the generated Subflow through the panel UI. The following
+`npm run demo:run` passed as runtime run
+`8db01689-2074-4432-9551-130d301dd1a5`; it verified the Router decision,
+Subflow entry, every recording-generated action attempt, and the submitted demo
+result. The successful playback evidence contains 37 balanced before/after
+pairs, 74 physical screenshots, no deduplicates, and no error boundary. Focused
+validation passes: test-runner 116/116, domain smoke, extension smoke, and Core
+Automation Studio service 89/89 including canonical/SQL graph replacement.
+A second independent `npm run demo:run` reused the same saved Flow and
+fixture address without recording again and passed as runtime run
+`e23d811e-208d-4287-9815-780d67ec1548`; its evidence also contains 37 balanced
+pairs and 74 physical screenshots.
 ### Phase 12: persistent isolated topology
 
 This phase adds `persistent-isolated` as a fourth explicit target. It owns and

@@ -98,7 +98,9 @@ export async function recordDemoWorkspace(config: DemoWorkspaceConfiguration): P
       return withDemoBrowser(config, panelCookie, "demo-record", async ({ extensionPage, panelPage, scenarioPage, evidence }) => {
       const state = await provisionDemoFlow(control, config, panelPage, evidence);
       const before = recordingIds(await control.listRecordings(state.projectId));
-      await connectExtension(extensionPage, panelPage, control, gatewayUrl, config.origin, state.projectId, scenarioPage.url(), evidence);
+      await connectExtension(extensionPage, panelPage, control, gatewayUrl, config.origin, state.projectId, state.flowId, scenarioPage.url(), evidence);
+      await evidence.step("scenario", "focus-recording-scenario", "Focus the settled demo tab before recording", () => scenarioPage.bringToFront());
+      await scenarioPage.waitForTimeout(750);
       let recording = false;
       try {
         await evidence.step("extension", "record-start", "Start extension recording", async () => {
@@ -106,7 +108,6 @@ export async function recordDemoWorkspace(config: DemoWorkspaceConfiguration): P
           await pollStatus(extensionPage, value => value.recordingState === "recording" && value.projectId === state.projectId, "recording acceptance");
         });
         recording = true;
-        await scenarioPage.bringToFront();
         await evidence.step("scenario", "fill-name", "Type the demo name", () => scenarioPage.getByTestId("name").fill("Ada"));
         await evidence.step("scenario", "select-plan", "Select the team plan", () => scenarioPage.getByTestId("plan").selectOption("team"));
         await evidence.step("scenario", "fill-notes", "Type the demo notes", () => scenarioPage.getByTestId("notes").fill("Recorded by the reusable FluxIQ demo workspace"));
@@ -118,7 +119,8 @@ export async function recordDemoWorkspace(config: DemoWorkspaceConfiguration): P
         });
         recording = false;
         const recordingId = await waitForNewRecording(control, state.projectId, before);
-        const next = { ...state, latestRecordingId: recordingId, updatedAt: new Date().toISOString() };
+        const generatedState = await generateDemoSubflowFromRecording(panelPage, control, config, state, recordingId, evidence);
+        const next = { ...generatedState, latestRecordingId: recordingId, updatedAt: new Date().toISOString() };
         await saveWorkspaceState(config, next);
         await assertConnectedSession(control, (await extensionStatus(extensionPage)).sessionId);
         return next;
@@ -141,7 +143,7 @@ export async function runDemoWorkspaceFlow(config: DemoWorkspaceConfiguration): 
       const state = await requireDemoFlow(control, config);
       return withDemoBrowser(config, panelCookie, "demo-playback", async ({ extensionPage, panelPage, scenarioPage, evidence }) => {
       await openDemoFlowInPanel(panelPage, config, state, evidence);
-      await connectExtension(extensionPage, panelPage, control, gatewayUrl, config.origin, state.projectId, scenarioPage.url(), evidence);
+      await connectExtension(extensionPage, panelPage, control, gatewayUrl, config.origin, state.projectId, state.flowId, scenarioPage.url(), evidence);
       // Pairing approval temporarily moves the panel to Connected Clients. Open
       // the Flow again so a fresh panel profile binds Runtime Debug to the full
       // Flow document instead of its summary-only placeholder.
@@ -162,15 +164,15 @@ export async function runDemoWorkspaceFlow(config: DemoWorkspaceConfiguration): 
           unsupportedPage: failedStatus.unsupportedPage,
         })}`);
       }
-      await scenarioPage.getByTestId("result").filter({ hasText: "Submitted" }).waitFor();
+      await waitForSubmittedDemoPage(scenarioPage);
       await assertConnectedSession(control, status.sessionId);
-      const detail = await waitForRoutedRunDetail(control, state, runId);
+      const graph = await control.getExactFlow(state.projectId, state.graphFlowId);
+      const expectedActionCount = Array.isArray(graph.document.nodes) ? graph.document.nodes.length : 0;
+      const detail = await waitForRoutedRunDetail(control, state, runId, expectedActionCount);
       const actions = detail.actionAttempts;
-      for (const definitionId of ["web.output.dom-type", "web.output.dom-select", "web.output.dom-click"]) {
-        if (!actions.some(action => action.definitionId === definitionId && action.status === "succeeded")) {
-          const diagnostic = actions.map(action => ({ definitionId: action.definitionId, status: action.status, message: action.message ?? "" }));
-          throw new RunnerFailure("runtime.behavior", `Panel-started run did not succeed for ${definitionId}: ${JSON.stringify(diagnostic)}`);
-        }
+      if (actions.length !== expectedActionCount || actions.some(action => action.definitionId !== "builtin.policy.action" || action.status !== "succeeded")) {
+        const diagnostic = actions.map(action => ({ definitionId: action.definitionId, status: action.status, message: action.message ?? "" }));
+        throw new RunnerFailure("runtime.behavior", `Panel-started run did not successfully execute every recording-generated action: ${JSON.stringify(diagnostic)}`);
       }
       const next = { ...state, latestRuntimeRunId: runId, updatedAt: new Date().toISOString() };
       await saveWorkspaceState(config, next);
@@ -428,35 +430,21 @@ async function provisionDemoFlow(control: ExistingFluxIQControlClient, config: D
   const graphFlowName = typeof graphFlow.document.name === "string" && graphFlow.document.name.trim() ? graphFlow.document.name : `${DEMO_SUBFLOW_NAME} Graph`;
   assertDemoSubflowOwnership(graphFlow.document, project.id, flow.flowId, subflow.subflowId, graphFlowId);
   const graphFixtureOwned = (graphFlow.document.metadata as Record<string, unknown> | undefined)?.createdBy === "fluxiq-web-extension-demo-workspace";
-  if (graphFixtureOwned || isEmptyDemoFlow(graphFlow.document, project.id, graphFlow.flowId, graphFlowName)) {
-    await evidence.step("panel", "subflow-fixture-seed", "Install deterministic fixture data only in the UI-created Subflow graph", () => control.saveFlow({
+  if (graphFixtureOwned && isDemoFixtureDocument(graphFlow.document, project.id, graphFlow.flowId, graphFlowName)) {
+    const metadata = { ...((graphFlow.document.metadata as Record<string, unknown> | undefined) ?? {}) };
+    delete metadata.createdBy;
+    await evidence.step("panel", "legacy-fixture-retire", "Retire the exact legacy demo fixture before UI recording generation", () => control.saveFlow({
       projectId: project.id,
       expectedUpdatedAt: graphFlow.updatedAt,
       authorizationPin: config.pin,
-      flow: createDemoFlowDocument(graphFlow.document, project.id, graphFlow.flowId, graphFlowName),
+      flow: { ...graphFlow.document, nodes: [], edges: [], dependencies: [], metadata },
     }).then(() => undefined));
   }
-  let persistedGraph = await control.getExactFlow(project.id, graphFlowId);
+  const persistedGraph = await control.getExactFlow(project.id, graphFlowId);
   assertDemoSubflowOwnership(persistedGraph.document, project.id, flow.flowId, subflow.subflowId, graphFlowId);
-  const viewport = await control.getFlowGraphViewport(project.id, graphFlowId);
-  if (isDemoFixtureDocument(persistedGraph.document, project.id, graphFlowId, graphFlowName)) {
-    const fixture = createDemoFlowDocument(persistedGraph.document, project.id, graphFlowId, graphFlowName);
-    const operations = demoGraphReconciliationOperations(fixture, graphFlowId, viewport);
-    if (operations.length) {
-    await evidence.step("panel", "subflow-fixture-index", "Index deterministic fixture data only in the Subflow viewport", () => control.applyFlowGraphPatch({
-      projectId: project.id,
-      flowId: graphFlowId,
-      baseRevision: viewport.graphRevision,
-      mutationId: `demo-fixture-${randomBytes(8).toString("hex")}`,
-      authorizationPin: config.pin,
-      operations,
-    }));
-    persistedGraph = await control.getExactFlow(project.id, graphFlowId);
-    assertDemoSubflowOwnership(persistedGraph.document, project.id, flow.flowId, subflow.subflowId, graphFlowId);
-    }
-  }
-  assertDemoFlowDocument(persistedGraph.document, project.id, graphFlowId, graphFlowName);
-  await openFlowInCurrentProject(panelPage, config.flowName, evidence);
+  if (!isEmptyDemoFlow(persistedGraph.document, project.id, graphFlowId, graphFlowName)) {
+    assertDemoRecordingDerivedFlow(persistedGraph.document);
+  }  await openFlowInCurrentProject(panelPage, config.flowName, evidence);
   let router = await control.getFlowRouter(project.id, flow.flowId);
   if (router?.fallback?.kind !== "subflow" || router.fallback.subflowId !== subflow.subflowId) {
     await configureDemoRouterFallbackInPanel(panelPage, DEMO_SUBFLOW_NAME, config.pin, evidence);
@@ -480,8 +468,6 @@ async function provisionDemoFlow(control: ExistingFluxIQControlClient, config: D
     flow = await control.getExactFlow(project.id, flow.flowId);
   }
   assertDemoParentDocument(flow.document, project.id, flow.flowId, config.flowName);
-  await openSubflowInCurrentProject(panelPage, DEMO_SUBFLOW_NAME, evidence);
-  await assertDemoFlowRenderedLayout(panelPage, evidence);
   const state: DemoWorkspaceState = {
     schemaVersion: SCHEMA_VERSION,
     origin: config.origin,
@@ -501,6 +487,52 @@ async function provisionDemoFlow(control: ExistingFluxIQControlClient, config: D
   return state;
 }
 
+async function generateDemoSubflowFromRecording(
+  page: Page,
+  control: ExistingFluxIQControlClient,
+  config: DemoWorkspaceConfiguration,
+  state: DemoWorkspaceState,
+  recordingId: string,
+  evidence: BrowserEvidenceRecorder,
+): Promise<DemoWorkspaceState> {
+  await evidence.step("panel", "recording-generation-refresh", "Refresh the panel to load the persisted recording", () => page.reload({ waitUntil: "domcontentloaded" }).then(() => undefined));
+  await page.locator(".automation-studio-sidebar-heading").getByText(state.projectName, { exact: true }).waitFor();
+  await openFlowInCurrentProject(page, state.flowName, evidence);
+  const search = page.getByRole("searchbox", { name: "Search project hierarchy" });
+  await evidence.step("panel", "recording-generation-search", "Find the newly persisted recording", () => search.fill(recordingId));
+  await evidence.step("panel", "recording-generation-open", "Open the newly persisted recording", () => hierarchyRow(page, recordingId).click());
+  const generateButton = page.getByRole("button", { name: "Generate Subflow", exact: true });
+  await generateButton.waitFor();
+  await evidence.step("panel", "recording-generation-dialog", "Open deterministic Subflow generation", () => generateButton.click());
+  const dialog = page.getByRole("dialog", { name: "Generate deterministic Subflow" });
+  await dialog.getByLabel("Destination Flow").selectOption(state.flowId);
+  await evidence.step("panel", "recording-generation-pin", "Authorize recording-derived Subflow generation", () => dialog.getByLabel("Security PIN").fill(config.pin));
+  const response = await evidence.step("panel", "recording-generation-submit", "Generate the deterministic Subflow from the recording", () => (
+    waitForPanelMutationResponse(page, "/api/programs/automation-studio/review-recording-flow-proposal", () => dialog.getByRole("button", { name: "Generate Subflow", exact: true }).click())
+  ));
+  const body = await response.json() as any;
+  if (!response.ok() || body?.ok === false) throw new RunnerFailure("runtime.behavior", body?.error ?? "Panel recording generation failed");
+  await dialog.waitFor({ state: "hidden" });
+  const parent = await control.getExactFlow(state.projectId, state.flowId);
+  assertDemoParentDocument(parent.document, state.projectId, state.flowId, state.flowName);
+  if ((parent.document.metadata as Record<string, unknown> | undefined)?.lastRecordingId !== recordingId) {
+    throw new RunnerFailure("runtime.behavior", "Generated parent Flow does not retain the source recording identity");
+  }
+  const subflow = (await control.listFlowSubflows(state.projectId, state.flowId)).find(item => item.subflowId === state.subflowId);
+  if (!subflow?.graphFlowId || subflow.graphFlowId !== state.graphFlowId) throw new RunnerFailure("runtime.behavior", "Recording generation did not retain the expected primary Subflow ownership");
+  const graph = await control.getExactFlow(state.projectId, state.graphFlowId);
+  assertDemoSubflowOwnership(graph.document, state.projectId, state.flowId, state.subflowId, state.graphFlowId);
+  assertDemoRecordingDerivedFlow(graph.document, recordingId);
+  const router = await control.getFlowRouter(state.projectId, state.flowId);
+  if (!router || router.routerId !== state.routerId || router.fallback?.subflowId !== state.subflowId) throw new RunnerFailure("runtime.behavior", "Recording generation did not retain the parent Router fallback");
+  await evidence.step("panel", "recording-generation-result-refresh", "Reload the panel to render the persisted generated graph", () => page.reload({ waitUntil: "domcontentloaded" }).then(() => undefined));
+  await page.locator(".automation-studio-sidebar-heading").getByText(state.projectName, { exact: true }).waitFor();
+  await openFlowInCurrentProject(page, state.flowName, evidence);
+  await openSubflowInCurrentProject(page, DEMO_SUBFLOW_NAME, evidence);
+  await assertDemoFlowRenderedLayout(page, evidence);
+  return state;
+}
+
 async function requireDemoFlow(control: ExistingFluxIQControlClient, config: DemoWorkspaceConfiguration): Promise<DemoWorkspaceState> {
   const state = await loadWorkspaceState(config);
   if (!state) throw new RunnerFailure("environment.missing", "Demo workspace is not provisioned; run pnpm demo:record first");
@@ -514,7 +546,8 @@ async function requireDemoFlow(control: ExistingFluxIQControlClient, config: Dem
   const graphFlow = await control.getExactFlow(state.projectId, state.graphFlowId);
   assertDemoSubflowOwnership(graphFlow.document, state.projectId, state.flowId, state.subflowId, state.graphFlowId);
   const graphFlowName = typeof graphFlow.document.name === "string" && graphFlow.document.name.trim() ? graphFlow.document.name : `${DEMO_SUBFLOW_NAME} Graph`;
-  assertDemoFlowDocument(graphFlow.document, state.projectId, state.graphFlowId, graphFlowName);
+  if (!state.latestRecordingId) throw new RunnerFailure("environment.missing", "Demo workspace does not identify the recording that generated its Subflow");
+  assertDemoRecordingDerivedFlow(graphFlow.document, state.latestRecordingId);
   const router = await control.getFlowRouter(state.projectId, state.flowId);
   if (!router || router.routerId !== state.routerId || router.fallback?.subflowId !== state.subflowId) throw new RunnerFailure("environment.missing", "Saved demo Router no longer targets its primary Subflow");
   await control.selectExistingContext(state.projectId);
@@ -571,6 +604,30 @@ export function assertDemoParentDocument(document: Record<string, unknown>, proj
   if (document.projectId !== projectId || document.flowId !== flowId || document.name !== name || !Array.isArray(document.nodes) || document.nodes.length || !Array.isArray(document.edges) || document.edges.length || metadata?.flowRepresentationVersion !== 1 || metadata?.flowRepresentationKind !== "orchestration" || metadata?.subflowGraph !== undefined || metadata?.parentFlowId !== undefined || metadata?.parentSubflowId !== undefined) {
     const state = { nodes: Array.isArray(document.nodes) ? document.nodes.length : "invalid", edges: Array.isArray(document.edges) ? document.edges.length : "invalid", representationVersion: metadata?.flowRepresentationVersion ?? null, representationKind: metadata?.flowRepresentationKind ?? null, hasOwnershipMetadata: metadata?.subflowGraph !== undefined || metadata?.parentFlowId !== undefined || metadata?.parentSubflowId !== undefined };
     throw new RunnerFailure("environment.missing", `Demo parent Flow must be an empty orchestration graph (${JSON.stringify(state)})`);
+  }
+}
+
+export function assertDemoRecordingDerivedFlow(document: Record<string, unknown>, recordingId?: string): void {
+  const nodes = Array.isArray(document.nodes) ? document.nodes as Array<Record<string, any>> : [];
+  const edges = Array.isArray(document.edges) ? document.edges as Array<Record<string, any>> : [];
+  const outputIds = nodes.map(node => node.parameterValues?.outputId).sort();
+  const requiredOutputIds = ["web.dom.click", "web.dom.select", "web.dom.type", "web.dom.type"].sort();
+  const selfContainedOutputIds = ["web.browser.navigate", ...requiredOutputIds].sort();
+  const validOutputIds = stableJson(outputIds) === stableJson(requiredOutputIds) || stableJson(outputIds) === stableJson(selfContainedOutputIds);
+  const validNodes = (nodes.length === 4 || nodes.length === 5) && nodes.every(node => node.definitionId === "builtin.policy.action"
+    && typeof node.metadata?.recordingProposalId === "string"
+    && typeof node.metadata?.actionEntryId === "string"
+    && (!recordingId || Array.isArray(node.metadata?.evidence) && node.metadata.evidence.some((item: any) => item?.artifactId === recordingId)));
+  const validEdges = edges.length === nodes.length - 1 && edges.every(edge => typeof edge.metadata?.recordingProposalId === "string");
+  const positions = new Set(nodes.map(node => String(node.position?.x) + ":" + String(node.position?.y)));
+  const navigationKinds = nodes.filter(node => node.parameterValues?.outputId === "web.browser.navigate").map(node => {
+    const url = String(node.parameterValues?.parameters?.url ?? "");
+    if (url.includes("fluxiqRecording=1")) return "recorded-demo";
+    if (url.includes("/scenarios/basic-form/")) return "setup-demo";
+    return "other";
+  });
+  if (!validNodes || !validEdges || positions.size !== nodes.length || !validOutputIds) {
+    throw new RunnerFailure("environment.missing", `Demo Subflow is not the deterministic unedited graph generated from the expected recording (${JSON.stringify({ nodeCount: nodes.length, edgeCount: edges.length, outputIds, navigationKinds, distinctPositions: positions.size, validNodes, validEdges })})`);
   }
 }
 
@@ -672,6 +729,23 @@ function normalizeDemoArray(key: string, value: unknown): unknown {
   return [...value].sort((left, right) => stableJson(left).localeCompare(stableJson(right)));
 }
 
+async function persistentScenarioPort(config: DemoWorkspaceConfiguration): Promise<number> {
+  const portPath = path.join(config.workspaceDirectory, "scenario-port.json");
+  await mkdir(config.workspaceDirectory, { recursive: true });
+  try {
+    const parsed = JSON.parse(await readFile(portPath, "utf8")) as { port?: unknown };
+    if (!Number.isInteger(parsed.port) || Number(parsed.port) < 1024 || Number(parsed.port) > 65_535) {
+      throw new RunnerFailure("environment.missing", "The persistent demo scenario port file is invalid");
+    }
+    return Number(parsed.port);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") throw error;
+  }
+  const port = await allocateLoopbackPort();
+  await writeFile(portPath, JSON.stringify({ schemaVersion: "0.1", port }, null, 2) + "\n", { encoding: "utf8", mode: 0o600 });
+  await hardenWindowsPrivatePath(portPath, "file");
+  return port;
+}
 async function withDemoBrowser<T>(
   config: DemoWorkspaceConfiguration,
   panelCookie: string,
@@ -679,7 +753,7 @@ async function withDemoBrowser<T>(
   operation: (input: { extensionPage: Page; panelPage: Page; scenarioPage: Page; evidence: BrowserEvidenceRecorder }) => Promise<T>,
 ): Promise<T> {
   const supervisor = new ProcessSupervisor();
-  const scenarioPort = await allocateLoopbackPort();
+  const scenarioPort = await persistentScenarioPort(config);
   const token = randomBytes(32).toString("base64url");
   const scenarioOrigin = "http://127.0.0.1:" + scenarioPort;
   supervisor.start({
@@ -763,10 +837,11 @@ async function connectExtension(
   gatewayUrl: string,
   origin: string,
   projectId: string,
+  flowId: string,
   scenarioUrl: string,
   evidence: BrowserEvidenceRecorder,
 ): Promise<void> {
-  await evidence.step("panel", "select-project-context", "Select the project as the active FluxIQ context", () => control.selectExistingContext(projectId));
+  await evidence.step("panel", "select-project-context", "Select the Flow as the active FluxIQ recording context", () => control.selectExistingContext(projectId, undefined, {}, flowId));
   await evidence.step("extension", "settings-open", "Open extension settings", () => page.getByRole("button", { name: "Settings" }).click());
   await evidence.step("extension", "settings-gateway", "Enter the FluxIQ gateway URL", () => page.getByLabel("Gateway URL").fill(gatewayUrl));
   await evidence.step("extension", "settings-api", "Enter the FluxIQ Core API URL", () => page.getByLabel("Core API URL").fill(origin));
@@ -794,7 +869,7 @@ async function connectExtension(
   await pollStatus(page, value => value.activeTabId === tabId, "scenario tab selection");
   // The pairing handshake establishes client trust. Project ownership is resolved
   // from the approving operator's fresh Automation Studio context at recording start.
-  await evidence.step("panel", "refresh-project-context", "Refresh the active FluxIQ project context", () => control.selectExistingContext(projectId));
+  await evidence.step("panel", "refresh-project-context", "Refresh the active FluxIQ Flow context", () => control.selectExistingContext(projectId, undefined, {}, flowId));
 }
 
 async function openAutomationStudio(page: Page, origin: string, evidence: BrowserEvidenceRecorder): Promise<void> {
@@ -822,6 +897,13 @@ async function openFlowInCurrentProject(page: Page, flowName: string, evidence: 
   await evidence.step("panel", "flow-open", "Open the demo Flow", () => hierarchyRow(page, flowName).click());
   await page.getByRole("tab", { name: /^Router(?::|$)/u }).waitFor();
   await evidence.step("panel", "flow-search-clear", "Clear the project hierarchy search", () => search.fill(""));
+  const flowTreeItem = page.getByRole("treeitem", { name: flowName, exact: true });
+  await flowTreeItem.waitFor();
+  if (await flowTreeItem.getAttribute("aria-expanded") === "false") {
+    await evidence.step("panel", "flow-expand", "Expand the demo Flow hierarchy", () => (
+      flowTreeItem.getByRole("button", { name: `Expand ${flowName}` }).click()
+    ));
+  }
 }
 
 async function createDemoSubflowInPanel(page: Page, flowName: string, pin: string, evidence: BrowserEvidenceRecorder): Promise<void> {
@@ -943,10 +1025,13 @@ async function runDemoFlowFromPanel(page: Page, state: DemoWorkspaceState, evide
   const flowTreeItem = page.getByRole("treeitem", { name: state.flowName, exact: true });
   const flowTreeItemId = await flowTreeItem.getAttribute("data-tree-item-id");
   if (!flowTreeItemId) throw new RunnerFailure("runtime.behavior", "The selected demo Flow does not have a hierarchy identity");
+  const search = page.getByRole("searchbox", { name: "Search project hierarchy" });
+  await evidence.step("panel", "runtime-search", "Search the selected Flow hierarchy for Runtime Debug", () => search.fill("Runtime Debug"));
   const runtimeRow = page.locator(`.automation-tree-item[data-tree-parent-id="${escapeCssAttribute(flowTreeItemId)}"] .tree-row-main`).filter({ hasText: /^Runtime Debug/u }).first();
   await evidence.step("panel", "runtime-open", "Open Runtime Debug for the selected demo Flow", () => runtimeRow.click());
   const runCommand = page.locator(".automation-runtime-run-command");
   await runCommand.waitFor();
+  await evidence.step("panel", "runtime-search-clear", "Clear the project hierarchy search", () => search.fill(""));
   await page.getByText("Checking Flow readiness...", { exact: true }).waitFor({ state: "hidden", timeout: 30_000 });
   await evidence.step("panel", "runtime-no-llm", "Select No LLM intervention mode", () => runCommand.getByRole("button", { name: "No LLM intervention", exact: true }).click());
   const runButton = runCommand.getByRole("button", { name: "Run", exact: true });
@@ -980,7 +1065,7 @@ async function assertDemoFlowRenderedLayout(page: Page, evidence: BrowserEvidenc
     const rect = element.getBoundingClientRect();
     return { id: element.getAttribute("data-id") ?? "unknown", left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
   }));
-  if (rectangles.length !== 6) throw new RunnerFailure("runtime.behavior", `Expected six rendered demo nodes, found ${rectangles.length}`);
+  if (rectangles.length !== 4 && rectangles.length !== 5) throw new RunnerFailure("runtime.behavior", `Expected four form-action nodes with at most one start-navigation node, found ${rectangles.length}`);
   for (let leftIndex = 0; leftIndex < rectangles.length; leftIndex += 1) {
     for (let rightIndex = leftIndex + 1; rightIndex < rectangles.length; rightIndex += 1) {
       const left = rectangles[leftIndex]!;
@@ -991,10 +1076,22 @@ async function assertDemoFlowRenderedLayout(page: Page, evidence: BrowserEvidenc
   }
 }
 
-async function waitForRoutedRunDetail(control: ExistingFluxIQControlClient, state: DemoWorkspaceState, runId: string) {
+async function waitForSubmittedDemoPage(seedPage: Page): Promise<void> {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    for (const page of seedPage.context().pages()) {
+      if (await page.getByTestId("result").filter({ hasText: "Submitted" }).isVisible().catch(() => false)) return;
+    }
+    await seedPage.waitForTimeout(100);
+  }
+  throw new RunnerFailure("runtime.behavior", "Recording-generated Flow completed without producing the submitted demo result in any extension-controlled tab");
+}
+
+
+async function waitForRoutedRunDetail(control: ExistingFluxIQControlClient, state: DemoWorkspaceState, runId: string, expectedActionCount: number) {
   const deadline = Date.now() + 10_000;
   let detail = await control.getRunDetail(state.projectId, runId);
-  while (Date.now() < deadline && (detail.routeDecisions.length < 1 || detail.subflows.length < 1 || detail.actionAttempts.length < 4)) {
+  while (Date.now() < deadline && (detail.routeDecisions.length < 1 || detail.subflows.length < 1 || detail.actionAttempts.length < expectedActionCount)) {
     await new Promise(resolve => setTimeout(resolve, 100));
     detail = await control.getRunDetail(state.projectId, runId);
   }
@@ -1021,6 +1118,26 @@ async function waitForPanelRunResponse(page: Page, dispatch: () => Promise<void>
     return await Promise.race([
       responsePromise,
       new Promise<never>((_resolve, reject) => { timeout = setTimeout(() => reject(new Error("Timed out waiting for the panel Flow run response")), 60_000); }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+    page.off("response", handler);
+  }
+}
+
+async function waitForPanelMutationResponse(page: Page, endpoint: string, dispatch: () => Promise<void>): Promise<import("@playwright/test").Response> {
+  let resolveResponse!: (response: import("@playwright/test").Response) => void;
+  const responsePromise = new Promise<import("@playwright/test").Response>(resolve => { resolveResponse = resolve; });
+  const handler = (response: import("@playwright/test").Response) => {
+    if (response.url().includes(endpoint) && response.request().method() === "POST") resolveResponse(response);
+  };
+  page.on("response", handler);
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await dispatch();
+    return await Promise.race([
+      responsePromise,
+      new Promise<never>((_resolve, reject) => { timeout = setTimeout(() => reject(new Error("Timed out waiting for panel mutation " + endpoint)), 60_000); }),
     ]);
   } finally {
     if (timeout) clearTimeout(timeout);
@@ -1105,12 +1222,17 @@ async function pollStatus(page: Page, predicate: (value: any) => boolean, phase:
 
 async function waitForNewRecording(control: ExistingFluxIQControlClient, projectId: string, baseline: Set<string>): Promise<string> {
   const deadline = Date.now() + 10_000;
+  let pendingRecordingId: string | undefined;
   while (Date.now() < deadline) {
-    const created = [...recordingIds(await control.listRecordings(projectId))].filter(id => !baseline.has(id));
-    if (created.length === 1) return created[0]!;
+    const created = recordingItems(await control.listRecordings(projectId)).filter(item => !baseline.has(item.recordingId));
     if (created.length > 1) throw new RunnerFailure("recording.persistence", "Recording operation created more than one recording");
+    if (created.length === 1) {
+      pendingRecordingId = created[0]!.recordingId;
+      if (created[0]!.status === "completed" || created[0]!.endedAt !== undefined) return pendingRecordingId;
+    }
     await new Promise(resolve => setTimeout(resolve, 100));
   }
+  if (pendingRecordingId) throw new RunnerFailure("recording.persistence", `FluxIQ persisted demo recording ${pendingRecordingId} but did not finalize it`);
   throw new RunnerFailure("recording.persistence", "FluxIQ did not persist a new demo recording");
 }
 
@@ -1136,11 +1258,21 @@ async function waitForNamedSubflow(control: ExistingFluxIQControlClient, project
   throw new RunnerFailure("environment.missing", "Panel Subflow creation did not persist the demo Subflow");
 }
 
-function recordingIds(response: any): Set<string> {
+type RecordingListItem = { recordingId: string; status?: string; endedAt?: unknown };
+
+function recordingItems(response: any): RecordingListItem[] {
   const values = response?.payload?.recordings ?? response?.payload?.items ?? response?.payload;
-  return new Set(Array.isArray(values)
-    ? values.flatMap((item: any) => typeof (item?.recordingId ?? item?.id) === "string" ? [item.recordingId ?? item.id] : [])
-    : []);
+  return Array.isArray(values)
+    ? values.flatMap((item: any) => {
+      const recordingId = item?.recordingId ?? item?.id;
+      if (typeof recordingId !== "string") return [];
+      return [{ recordingId, ...(typeof item?.status === "string" ? { status: item.status } : {}), ...(item?.endedAt !== undefined && item?.endedAt !== null ? { endedAt: item.endedAt } : {}) }];
+    })
+    : [];
+}
+
+function recordingIds(response: any): Set<string> {
+  return new Set(recordingItems(response).map(item => item.recordingId));
 }
 
 async function assertConnectedSession(control: ExistingFluxIQControlClient, sessionId: unknown): Promise<void> {

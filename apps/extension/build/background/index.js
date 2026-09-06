@@ -386,7 +386,7 @@ var WEB_AUTOMATION_INPUT_IDS = {
   pageScrolled: "web.user.page_scrolled"
 };
 function webAutomationInputIdForRecordedEvent(payload) {
-  if (payload.kind === "browser.navigation") return WEB_AUTOMATION_INPUT_IDS.navigationRequested;
+  if (payload.kind === "browser.navigation") return payload.metadata?.transition === "typed" ? WEB_AUTOMATION_INPUT_IDS.navigationRequested : void 0;
   if (payload.kind === "dom.click") return WEB_AUTOMATION_INPUT_IDS.elementClicked;
   if (payload.kind === "dom.keydown") return WEB_AUTOMATION_INPUT_IDS.keyPressed;
   if (payload.kind === "dom.wheel") return WEB_AUTOMATION_INPUT_IDS.pageScrolled;
@@ -1570,6 +1570,7 @@ var FluxIQConnection = class {
   recentExplanatoryActions = /* @__PURE__ */ new Map();
   pendingNavigations = /* @__PURE__ */ new Map();
   lastRecordedNavigation = /* @__PURE__ */ new Map();
+  recordingInitialNavigation = /* @__PURE__ */ new Map();
   backgroundEventSequence = 0;
   recentActivities = [];
   recordingLog = [];
@@ -1856,10 +1857,16 @@ var FluxIQConnection = class {
   }
   async recordNavigation(tabId, url, timestamp, explicitlyTyped) {
     if (this.recordingState !== "recording") return;
+    if (this.recordingStartedAt !== void 0 && timestamp <= this.recordingStartedAt) return;
+    const initialUrl = this.recordingInitialNavigation.get(tabId);
+    if (initialUrl === url && this.recordingStartedAt !== void 0 && Date.now() - this.recordingStartedAt < 1e4) {
+      this.recordingInitialNavigation.delete(tabId);
+      return;
+    }
     const explainedAt = this.recentExplanatoryActions.get(tabId);
     if (!explicitlyTyped && explainedAt !== void 0 && timestamp - explainedAt >= 0 && timestamp - explainedAt < 5e3) return;
     const previous = this.lastRecordedNavigation.get(tabId);
-    if (previous?.url === url && timestamp - previous.timestamp < 1e3) return;
+    if (previous?.url === url) return;
     this.lastRecordedNavigation.set(tabId, { url, timestamp });
     await this.handleRecordingEvent({
       kind: "browser.navigation",
@@ -2043,13 +2050,21 @@ var FluxIQConnection = class {
       return;
     }
     this.resetRecordingLog();
+    this.lastRecordedNavigation.clear();
+    this.recordingInitialNavigation.clear();
     this.recordingBlock = void 0;
     this.activeRecordingId = recordingId;
     this.activeRecordingProjectId = projectId !== void 0 ? projectId : this.session.projectId;
     this.eventCount = 0;
     this.recentActivities.length = 0;
+    const recordingTabs = await allTabs();
     this.recordingStartedAt = Date.now();
     this.recordingState = "recording";
+    for (const tab of recordingTabs) {
+      if (tab.tabId < 0 || !tab.url || unsupportedPageForUrl(tab.url)) continue;
+      this.lastRecordedNavigation.set(tab.tabId, { url: tab.url, timestamp: this.recordingStartedAt });
+      this.recordingInitialNavigation.set(tab.tabId, tab.url);
+    }
     this.addActivity("recording", "Recording started", this.activeTabUrl ?? "Active tab", "success");
     this.emitStatus();
     if (this.activeTabId !== void 0) await this.attachTabForRecording(this.activeTabId);
@@ -2062,16 +2077,6 @@ var FluxIQConnection = class {
       eventTimestampMs: Date.now(),
       metadata: { recordingState: "started", recordingId }
     });
-    if (this.activeTabUrl) {
-      await this.handleRecordingEvent({
-        kind: "browser.navigation",
-        sequence: this.nextBackgroundEventSequence(),
-        url: this.activeTabUrl,
-        title: "",
-        eventTimestampMs: Date.now(),
-        metadata: { reason: "recording_start" }
-      }, this.activeTabId);
-    }
     await this.captureActiveSnapshot("Initial snapshot captured");
   }
   handleRecordingProjectRequired(message) {
@@ -2441,6 +2446,10 @@ var FluxIQConnection = class {
     this.suppressedPointerClicks.clear();
   }
   async attachTabForRecording(tabId) {
+    if (this.recordingState === "recording" && !this.lastRecordedNavigation.has(tabId)) {
+      const tab = await chrome.tabs.get(tabId);
+      if (tab.url && !unsupportedPageForUrl(tab.url)) this.lastRecordedNavigation.set(tabId, { url: tab.url, timestamp: Date.now() });
+    }
     await ensureContentScript(tabId);
     await this.setContentRecordingState(tabId, this.recordingState === "recording");
   }

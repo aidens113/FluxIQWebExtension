@@ -167,7 +167,10 @@ export function mapWebRecordingObservation(observation: AutomationStudioRecordin
 
   if (eventType === WEB_AUTOMATION_EVENTS.pageNavigated) {
     const url = readString(payload.url);
-    return url ? candidate("web.browser.navigate", { url }, WEB_AUTOMATION_INPUT_IDS.navigationRequested, "Navigate") : null;
+    const metadata = { ...(readObject(payload.metadata) ?? {}), ...observation.metadata };
+    return url && readString(metadata.reason) !== "recording_start" && readString(metadata.transition) === "typed"
+      ? candidate("web.browser.navigate", { url }, WEB_AUTOMATION_INPUT_IDS.navigationRequested, "Navigate")
+      : null;
   }
   if (eventType === WEB_AUTOMATION_EVENTS.elementClicked) {
     return selector ? candidate("web.dom.click", { selector }, WEB_AUTOMATION_INPUT_IDS.elementClicked, "Click") : null;

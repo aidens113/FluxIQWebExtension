@@ -27,7 +27,7 @@ export type WebAutomationRecordedInputPayload = {
 };
 
 export function webAutomationInputIdForRecordedEvent(payload: WebAutomationRecordedInputPayload): WebAutomationInputId | undefined {
-  if (payload.kind === "browser.navigation") return WEB_AUTOMATION_INPUT_IDS.navigationRequested;
+  if (payload.kind === "browser.navigation") return payload.metadata?.transition === "typed" ? WEB_AUTOMATION_INPUT_IDS.navigationRequested : undefined;
   if (payload.kind === "dom.click") return WEB_AUTOMATION_INPUT_IDS.elementClicked;
   if (payload.kind === "dom.keydown") return WEB_AUTOMATION_INPUT_IDS.keyPressed;
   if (payload.kind === "dom.wheel") return WEB_AUTOMATION_INPUT_IDS.pageScrolled;

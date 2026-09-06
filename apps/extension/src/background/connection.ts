@@ -87,6 +87,7 @@ export class FluxIQConnection {
   private readonly recentExplanatoryActions = new Map<number, number>();
   private readonly pendingNavigations = new Map<number, { url: string; timer: ReturnType<typeof setTimeout> }>();
   private readonly lastRecordedNavigation = new Map<number, { url: string; timestamp: number }>();
+  private readonly recordingInitialNavigation = new Map<number, string>();
   private backgroundEventSequence = 0;
   private readonly recentActivities: ActivityEntry[] = [];
   private readonly recordingLog: ActivityEntry[] = [];
@@ -403,12 +404,20 @@ export class FluxIQConnection {
 
   private async recordNavigation(tabId: number, url: string, timestamp: number, explicitlyTyped: boolean): Promise<void> {
     if (this.recordingState !== "recording") return;
+    // A navigation committed before recording can still be waiting in the
+    // debounce queue when the session starts. It belongs to setup, not the recording.
+    if (this.recordingStartedAt !== undefined && timestamp <= this.recordingStartedAt) return;
+    const initialUrl = this.recordingInitialNavigation.get(tabId);
+    if (initialUrl === url && this.recordingStartedAt !== undefined && Date.now() - this.recordingStartedAt < 10_000) {
+      this.recordingInitialNavigation.delete(tabId);
+      return;
+    }
     const explainedAt = this.recentExplanatoryActions.get(tabId);
     // Let the click message arrive before classifying the URL update. A typed
     // omnibox navigation remains intentional even if it follows a click.
     if (!explicitlyTyped && explainedAt !== undefined && timestamp - explainedAt >= 0 && timestamp - explainedAt < 5_000) return;
     const previous = this.lastRecordedNavigation.get(tabId);
-    if (previous?.url === url && timestamp - previous.timestamp < 1_000) return;
+    if (previous?.url === url) return;
     this.lastRecordedNavigation.set(tabId, { url, timestamp });
     await this.handleRecordingEvent({
       kind: "browser.navigation",
@@ -611,13 +620,21 @@ export class FluxIQConnection {
       return;
     }
     this.resetRecordingLog();
+    this.lastRecordedNavigation.clear();
+    this.recordingInitialNavigation.clear();
     this.recordingBlock = undefined;
     this.activeRecordingId = recordingId;
     this.activeRecordingProjectId = projectId !== undefined ? projectId : this.session.projectId;
     this.eventCount = 0;
     this.recentActivities.length = 0;
+    const recordingTabs = await allTabs();
     this.recordingStartedAt = Date.now();
     this.recordingState = "recording";
+    for (const tab of recordingTabs) {
+      if (tab.tabId < 0 || !tab.url || unsupportedPageForUrl(tab.url)) continue;
+      this.lastRecordedNavigation.set(tab.tabId, { url: tab.url, timestamp: this.recordingStartedAt });
+      this.recordingInitialNavigation.set(tab.tabId, tab.url);
+    }
     this.addActivity("recording", "Recording started", this.activeTabUrl ?? "Active tab", "success");
     this.emitStatus();
     if (this.activeTabId !== undefined) await this.attachTabForRecording(this.activeTabId);
@@ -630,16 +647,6 @@ export class FluxIQConnection {
       eventTimestampMs: Date.now(),
       metadata: { recordingState: "started", recordingId }
     });
-    if (this.activeTabUrl) {
-      await this.handleRecordingEvent({
-        kind: "browser.navigation",
-        sequence: this.nextBackgroundEventSequence(),
-        url: this.activeTabUrl,
-        title: "",
-        eventTimestampMs: Date.now(),
-        metadata: { reason: "recording_start" }
-      }, this.activeTabId);
-    }
     await this.captureActiveSnapshot("Initial snapshot captured");
   }
 
@@ -1062,6 +1069,10 @@ export class FluxIQConnection {
   }
 
   private async attachTabForRecording(tabId: number): Promise<void> {
+    if (this.recordingState === "recording" && !this.lastRecordedNavigation.has(tabId)) {
+      const tab = await chrome.tabs.get(tabId);
+      if (tab.url && !unsupportedPageForUrl(tab.url)) this.lastRecordedNavigation.set(tabId, { url: tab.url, timestamp: Date.now() });
+    }
     await ensureContentScript(tabId);
     await this.setContentRecordingState(tabId, this.recordingState === "recording");
   }

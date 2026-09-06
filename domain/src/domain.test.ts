@@ -12,6 +12,7 @@ import { webAutomationClientCapabilities } from "./actions/capabilities";
 import { WEB_AUTOMATION_ACTION_TYPES } from "./actions/types";
 import { listWebAutomationOutputNodeDefinitions, webAutomationOutputPayload, outputTargetFromPayload } from "./output-nodes";
 import { validateWebAutomationRuntime } from "./runtime";
+import { mapWebRecordingObservation } from "./web-panel-host";
 
 const service = new AutomationStudioService({ seedFixture: false });
 service.registerRecordingDomain(webAutomationRecordingDomain);
@@ -23,6 +24,30 @@ const validation = service.validateRecordingDomainEvent({
   payload: { url: "https://example.test", title: "Example", sequence: 1 }
 });
 assert.equal(validation.ok, true);
+
+const recordingStartNavigation = mapWebRecordingObservation({
+  observationId: "observation.start",
+  recordingId: "recording.test",
+  domainId: WEB_AUTOMATION_DOMAIN_ID,
+  type: "domain_event",
+  timestamp: 1,
+  payload: { eventType: WEB_AUTOMATION_EVENTS.pageNavigated, payload: { url: "https://example.test" } },
+  metadata: { reason: "recording_start", transition: "typed" }
+});
+assert.equal(recordingStartNavigation, null);
+const deliberateNavigation = mapWebRecordingObservation({
+  observationId: "observation.navigate",
+  recordingId: "recording.test",
+  domainId: WEB_AUTOMATION_DOMAIN_ID,
+  type: "domain_event",
+  timestamp: 2,
+  payload: { eventType: WEB_AUTOMATION_EVENTS.pageNavigated, payload: { url: "https://example.test/next" } },
+  metadata: { transition: "typed" }
+});
+assert.equal(deliberateNavigation?.outputId, "web.browser.navigate");
+assert.equal(webAutomationInputIdForRecordedEvent({ kind: "browser.navigation", url: "https://example.test", title: "Example", sequence: 1, metadata: { reason: "recording_start" } }), undefined);
+assert.equal(webAutomationInputIdForRecordedEvent({ kind: "browser.navigation", url: "https://example.test/history", title: "Example", sequence: 2 }), undefined);
+assert.equal(webAutomationInputIdForRecordedEvent({ kind: "browser.navigation", url: "https://example.test/typed", title: "Example", sequence: 3, metadata: { transition: "typed" } }), WEB_AUTOMATION_INPUT_IDS.navigationRequested);
 
 const event = createWebAutomationRecordingEvent({
   kind: "dom.click",

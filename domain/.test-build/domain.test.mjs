@@ -1,7 +1,7 @@
 // src/domain.test.ts
 import assert from "node:assert/strict";
 import { AutomationStudioService, validateStateSnapshot } from "fluxiq/automation-studio";
-import { validateAutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
+import { validateAutomationStudioNodeDefinition as validateAutomationStudioNodeDefinition2 } from "fluxiq/automation-studio/nodes";
 
 // src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
@@ -132,7 +132,7 @@ var WEB_AUTOMATION_INPUT_IDS = {
   pageScrolled: "web.user.page_scrolled"
 };
 function webAutomationInputIdForRecordedEvent(payload) {
-  if (payload.kind === "browser.navigation") return WEB_AUTOMATION_INPUT_IDS.navigationRequested;
+  if (payload.kind === "browser.navigation") return payload.metadata?.transition === "typed" ? WEB_AUTOMATION_INPUT_IDS.navigationRequested : void 0;
   if (payload.kind === "dom.click") return WEB_AUTOMATION_INPUT_IDS.elementClicked;
   if (payload.kind === "dom.keydown") return WEB_AUTOMATION_INPUT_IDS.keyPressed;
   if (payload.kind === "dom.wheel") return WEB_AUTOMATION_INPUT_IDS.pageScrolled;
@@ -1443,6 +1443,1613 @@ function compactJsonObject2(value) {
 // src/actions/capabilities.ts
 var webAutomationClientCapabilities = webAutomationGatewayCapabilities;
 
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/definitions.js
+function adaptBuiltinAutomationNodeDefinition(definition) {
+  return {
+    schemaVersion: "0.1",
+    id: definition.id,
+    version: "1.0.0",
+    label: definition.label,
+    description: definition.description,
+    category: definition.class === "routine" ? "flow" : definition.class,
+    source: { kind: "builtin", implementationKey: definition.implementationKey },
+    availability: { kind: "both" },
+    capabilities: builtinCapabilities(definition),
+    ...definition.privileged ? { safety: { privileged: true } } : {},
+    inputs: definition.inputs,
+    outputs: definition.outputs,
+    parameters: definition.parameters,
+    ...definition.icon !== void 0 ? { icon: definition.icon } : {},
+    ...definition.tags !== void 0 ? { tags: definition.tags } : {},
+    legacyScope: definition.scope
+  };
+}
+function builtinCapabilities(definition) {
+  return {
+    executable: true,
+    ...definition.class === "policy" ? { stateAware: true, recoverable: true } : {},
+    ...definition.class === "timing" ? { asynchronous: true, retryable: true } : {},
+    ...definition.class === "routine" ? { composite: true } : {}
+  };
+}
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/shared/definition.js
+function defineBuiltinNode(definition) {
+  const normalized = normalizeVisualPorts(definition);
+  return {
+    ...normalized,
+    origin: "builtin",
+    implementationKey: definition.implementationKey ?? definition.id
+  };
+}
+function normalizeVisualPorts(definition) {
+  const inputs = normalizeVisualInputs(definition);
+  const outputs = normalizeVisualOutputs(definition);
+  return { ...definition, inputs, outputs };
+}
+function normalizeVisualInputs(definition) {
+  const inputs = definition.inputs.map((port) => normalizePortRole(port, "target"));
+  if (definition.id === "builtin.control.start")
+    return inputs;
+  if (inputs.some((port) => port.id === "in" || port.role === "control"))
+    return inputs;
+  return [controlInput2(), ...inputs];
+}
+function normalizeVisualOutputs(definition) {
+  if (definition.id === "builtin.control.end")
+    return definition.outputs.map((port) => normalizePortRole(port, "source"));
+  const outputs = definition.outputs.map((port) => normalizePortRole(port, "source"));
+  if (outputs.some((port) => port.role === "branch"))
+    return outputs;
+  if (!outputs.some((port) => port.id === "success" || port.role === "success"))
+    outputs.unshift(successOutput());
+  if (!outputs.some((port) => port.id === "failed" || port.role === "failure")) {
+    const insertAt = outputs.some((port) => port.id === "success") ? 1 : outputs.length;
+    outputs.splice(insertAt, 0, failedOutput());
+  }
+  return outputs;
+}
+function normalizePortRole(port, direction) {
+  if (port.role)
+    return port;
+  if (port.id === "in")
+    return { ...port, role: "control" };
+  if (port.id === "success")
+    return { ...port, role: "success" };
+  if (port.id === "failed" || port.id === "failure")
+    return { ...port, role: "failure" };
+  if (port.id === "error")
+    return { ...port, role: "error" };
+  if (direction === "source" && ["true", "false", "body", "done", "case", "default", "approved", "rejected", "timeout", "recovered"].includes(port.id))
+    return { ...port, role: "branch" };
+  if (direction === "source")
+    return { ...port, role: "data" };
+  return port;
+}
+function emptyResult(outputs = {}) {
+  return { status: "success", route: "success", outputs };
+}
+function controlInput2(label = "In") {
+  return { id: "in", label, valueType: "any", role: "control" };
+}
+function successOutput(label = "Success") {
+  return { id: "success", label, valueType: "any", role: "success" };
+}
+function failedOutput(label = "Failed") {
+  return { id: "failed", label, valueType: "any", role: "failure" };
+}
+function inputValue(context, id) {
+  return context.inputs[id] ?? context.parameters[id];
+}
+function numberValue2(value, fallback = 0) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+function booleanValue(value) {
+  if (typeof value === "boolean")
+    return value;
+  if (typeof value === "number")
+    return value !== 0;
+  if (typeof value === "string")
+    return ["true", "yes", "1", "on"].includes(value.trim().toLowerCase());
+  return Boolean(value);
+}
+function arrayValue(value) {
+  return Array.isArray(value) ? value : [];
+}
+function stringValue4(value, fallback = "") {
+  if (value === void 0 || value === null)
+    return fallback;
+  return String(value);
+}
+function objectValue2(value) {
+  if (value && typeof value === "object" && !Array.isArray(value))
+    return value;
+  return {};
+}
+function jsonValue(value) {
+  if (value === void 0)
+    return null;
+  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean")
+    return value;
+  if (Array.isArray(value))
+    return value.map(jsonValue);
+  if (typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, jsonValue(entry)]));
+  }
+  return String(value);
+}
+function getPathValue(source, path) {
+  const parts = stringValue4(path).split(".").map((part) => part.trim()).filter(Boolean);
+  let current = source;
+  for (const part of parts) {
+    if (current && typeof current === "object" && part in current)
+      current = current[part];
+    else
+      return void 0;
+  }
+  return current;
+}
+function setPathValue(source, path, value) {
+  const parts = stringValue4(path).split(".").map((part) => part.trim()).filter(Boolean);
+  if (!parts.length)
+    return source;
+  const next = { ...source };
+  let cursor = next;
+  for (const part of parts.slice(0, -1)) {
+    const existing = cursor[part];
+    const child = existing && typeof existing === "object" && !Array.isArray(existing) ? { ...existing } : {};
+    cursor[part] = child;
+    cursor = child;
+  }
+  cursor[parts[parts.length - 1]] = jsonValue(value);
+  return next;
+}
+function compareBasic(left, right, operator) {
+  switch (stringValue4(operator, "equals")) {
+    case "not-equals":
+      return left !== right;
+    case "greater-than":
+      return numberValue2(left) > numberValue2(right);
+    case "greater-than-or-equal":
+      return numberValue2(left) >= numberValue2(right);
+    case "less-than":
+      return numberValue2(left) < numberValue2(right);
+    case "less-than-or-equal":
+      return numberValue2(left) <= numberValue2(right);
+    case "contains":
+      return String(left ?? "").includes(String(right ?? ""));
+    case "starts-with":
+      return String(left ?? "").startsWith(String(right ?? ""));
+    case "ends-with":
+      return String(left ?? "").endsWith(String(right ?? ""));
+    case "exists":
+      return left !== void 0 && left !== null && left !== "";
+    case "equals":
+    default:
+      return left === right;
+  }
+}
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/control-flow/shared.js
+function routeFromCondition(context, trueRoute = "true", falseRoute = "false") {
+  return booleanValue(context.inputs.condition ?? context.parameters.condition) ? trueRoute : falseRoute;
+}
+function maxIterations(context) {
+  return Math.max(0, Math.floor(numberValue2(context.parameters.maxIterations, 25)));
+}
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/control-flow/branch.js
+var branchNode = defineBuiltinNode({
+  id: "builtin.control.branch",
+  label: "Branch",
+  description: "Choose one of two paths from a yes/no condition.",
+  class: "control-flow",
+  scope: "both",
+  inputs: [{ id: "condition", label: "Condition", valueType: "boolean", required: true }],
+  outputs: [
+    { id: "true", label: "True", valueType: "any" },
+    { id: "false", label: "False", valueType: "any" }
+  ],
+  parameters: [
+    { id: "invert", label: "Swap Yes and No paths", description: "When enabled, true goes to No and false goes to Yes.", valueType: "boolean", defaultValue: false }
+  ],
+  icon: "git-branch",
+  execute: (context) => {
+    const route = routeFromCondition(context, "true", "false");
+    const finalRoute = context.parameters.invert === true ? route === "true" ? "false" : "true" : route;
+    return { status: "success", route: String(finalRoute), outputs: {} };
+  }
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/control-flow/end.js
+var endNode = defineBuiltinNode({
+  id: "builtin.control.end",
+  label: "End",
+  description: "Terminal point for a policy or routine graph.",
+  class: "control-flow",
+  scope: "both",
+  inputs: [{ id: "in", label: "In", valueType: "any" }],
+  outputs: [],
+  parameters: [
+    {
+      id: "resultStatus",
+      label: "Final result",
+      description: "How this policy or routine should be marked when execution reaches this End node.",
+      valueType: "string",
+      defaultValue: "success",
+      options: [
+        { label: "Success", value: "success" },
+        { label: "Failed", value: "failed" },
+        { label: "Skipped", value: "skipped" }
+      ]
+    },
+    { id: "message", label: "End note", description: "Optional text saved with the final result.", valueType: "string", defaultValue: "", ui: { control: "textarea", placeholder: "Optional note for this ending" } }
+  ],
+  icon: "circle-stop",
+  execute: (context) => ({ status: context.parameters.resultStatus === "failed" ? "failed" : context.parameters.resultStatus === "skipped" ? "skipped" : "success", route: "end", outputs: { message: context.parameters.message ?? "" } })
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/control-flow/loop.js
+var loopNode = defineBuiltinNode({
+  id: "builtin.control.loop",
+  label: "Loop",
+  description: "Repeat a section while a condition is still true.",
+  class: "control-flow",
+  scope: "routine",
+  inputs: [{ id: "condition", label: "Condition", valueType: "boolean", required: true }],
+  outputs: [
+    { id: "body", label: "Repeat", valueType: "any" },
+    { id: "done", label: "Done", valueType: "any" }
+  ],
+  parameters: [
+    { id: "maxIterations", label: "Maximum repeats", description: "Safety limit for how many times this loop may run.", valueType: "number", defaultValue: 25 },
+    { id: "startIndex", label: "Starting count", description: "The first count value exposed to the loop body.", valueType: "number", defaultValue: 0 },
+    { id: "increment", label: "Count by", description: "How much the loop count changes after each repeat.", valueType: "number", defaultValue: 1 }
+  ],
+  icon: "repeat",
+  execute: (context) => ({ status: "success", route: routeFromCondition(context, "body", "done"), outputs: { maxIterations: maxIterations(context), startIndex: context.parameters.startIndex ?? 0, increment: context.parameters.increment ?? 1 } })
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/control-flow/merge.js
+var mergeNode = defineBuiltinNode({
+  id: "builtin.control.merge",
+  label: "Merge",
+  description: "Join several branches back into one path.",
+  class: "control-flow",
+  scope: "routine",
+  inputs: [{ id: "branches", label: "Branches", valueType: "any", multiple: true }],
+  outputs: [{ id: "next", label: "Next", valueType: "any" }],
+  parameters: [
+    {
+      id: "mergeMode",
+      label: "When to continue",
+      description: "Choose whether this node continues after the first branch finishes, after all branches finish, or only with successful branch results.",
+      valueType: "string",
+      defaultValue: "first",
+      options: [
+        { label: "As soon as one branch finishes", value: "first" },
+        { label: "After every branch finishes", value: "all" },
+        { label: "After successful branches only", value: "successful" }
+      ]
+    }
+  ],
+  icon: "merge",
+  execute: (context) => emptyResult({ next: context.inputs.branches ?? null, mergeMode: context.parameters.mergeMode ?? "first" })
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/control-flow/parallel.js
+var parallelNode = defineBuiltinNode({
+  id: "builtin.control.parallel",
+  label: "Parallel",
+  description: "Start multiple branches at the same time.",
+  class: "control-flow",
+  scope: "routine",
+  inputs: [{ id: "in", label: "In", valueType: "any" }],
+  outputs: [{ id: "branches", label: "Branches", valueType: "any", multiple: true }],
+  parameters: [
+    { id: "branchCount", label: "Number of branches", description: "How many parallel paths this node should create.", valueType: "number", defaultValue: 2 },
+    {
+      id: "failureMode",
+      label: "If one branch fails",
+      description: "Choose whether the routine stops immediately or waits to collect every branch result.",
+      valueType: "string",
+      defaultValue: "fail-fast",
+      options: [
+        { label: "Stop the others", value: "fail-fast" },
+        { label: "Wait for all results", value: "collect-all" }
+      ]
+    }
+  ],
+  icon: "workflow",
+  execute: (context) => emptyResult({ branches: context.inputs.in ?? null, branchCount: context.parameters.branchCount ?? 2, failureMode: context.parameters.failureMode ?? "fail-fast" })
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/control-flow/start.js
+var startNode = defineBuiltinNode({
+  id: "builtin.control.start",
+  label: "Start",
+  description: "Entry point for a policy or routine graph.",
+  class: "control-flow",
+  scope: "both",
+  inputs: [],
+  outputs: [{ id: "next", label: "Next", valueType: "any" }],
+  parameters: [
+    { id: "label", label: "Start label", description: "Friendly name shown for this run entry.", valueType: "string", defaultValue: "Start", ui: { control: "text", placeholder: "Start label" } },
+    { id: "emitTimestamp", label: "Include start time", description: "Attach the current time to the value sent from this node.", valueType: "boolean", defaultValue: true }
+  ],
+  icon: "play",
+  execute: (context) => emptyResult({ next: true, label: context.parameters.label ?? "Start", startedAt: context.parameters.emitTimestamp === false ? null : context.now?.() ?? Date.now() })
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/control-flow/switch.js
+var switchNode = defineBuiltinNode({
+  id: "builtin.control.switch",
+  label: "Switch",
+  description: "Choose a path by matching one value against a list of cases.",
+  class: "control-flow",
+  scope: "both",
+  inputs: [{ id: "value", label: "Value", valueType: "any", required: true }],
+  outputs: [
+    { id: "case", label: "Cases", valueType: "any", multiple: true },
+    { id: "default", label: "Default", valueType: "any" },
+    { id: "value", label: "Matched value", valueType: "any" }
+  ],
+  parameters: [
+    { id: "cases", label: "Case list", description: "Values to match. Each item can include a value and optional route name.", valueType: "array", defaultValue: [] },
+    { id: "caseSensitive", label: "Match capitalization exactly", description: "When disabled, text like Ready and ready are treated the same.", valueType: "boolean", defaultValue: true },
+    {
+      id: "matchMode",
+      label: "How to match",
+      description: "Equals requires an exact match. Contains matches when the input text includes the case text.",
+      valueType: "string",
+      defaultValue: "equals",
+      options: [
+        { label: "Equals", value: "equals" },
+        { label: "Contains", value: "contains" }
+      ]
+    }
+  ],
+  icon: "split",
+  execute: (context) => {
+    const cases = Array.isArray(context.parameters.cases) ? context.parameters.cases : [];
+    const value = context.parameters.caseSensitive === false ? String(context.inputs.value ?? "").toLowerCase() : context.inputs.value;
+    const match = cases.find((item) => {
+      if (!(typeof item === "object" && item !== null && "value" in item))
+        return false;
+      const candidate2 = context.parameters.caseSensitive === false ? String(item.value ?? "").toLowerCase() : item.value;
+      return context.parameters.matchMode === "contains" ? String(value ?? "").includes(String(candidate2 ?? "")) : candidate2 === value;
+    });
+    return { status: "success", route: match ? "case" : "default", outputs: { value: context.inputs.value ?? null, matched: match ?? null } };
+  }
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/control-flow/index.js
+var controlFlowNodes = [startNode, endNode, branchNode, switchNode, parallelNode, mergeNode, loopNode];
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/data/constant.js
+var constantNode = defineBuiltinNode({
+  id: "builtin.data.constant",
+  label: "Constant",
+  description: "Provide a fixed value to the graph.",
+  class: "data",
+  scope: "both",
+  inputs: [],
+  outputs: [{ id: "value", label: "Value", valueType: "any" }],
+  parameters: [
+    { id: "value", label: "Value to send", description: "The fixed value this node outputs every time it runs.", valueType: "any", defaultValue: null, ui: { control: "value" } },
+    {
+      id: "valueLabel",
+      label: "Display name",
+      description: "Friendly label shown on the node for this constant.",
+      valueType: "string",
+      defaultValue: "Constant",
+      ui: { control: "text", placeholder: "Display name" }
+    }
+  ],
+  icon: "braces",
+  execute: (context) => emptyResult({ value: context.parameters.value ?? null })
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/data/filter-list.js
+var filterListNode = defineBuiltinNode({
+  id: "builtin.data.filter-list",
+  label: "Filter List",
+  description: "Keep only list items that match a simple rule.",
+  class: "data",
+  scope: "both",
+  inputs: [{ id: "items", label: "Items", valueType: "array", required: true }],
+  outputs: [{ id: "items", label: "Items", valueType: "array" }],
+  parameters: [
+    { id: "path", label: "Field to check", description: "Optional field inside each item, such as status or user.name. Leave blank to check the whole item.", valueType: "string", defaultValue: "", ui: { control: "path", placeholder: "field.path" } },
+    {
+      id: "operator",
+      label: "Match rule",
+      description: "How each item is compared with the value below.",
+      valueType: "string",
+      defaultValue: "exists",
+      options: [
+        { label: "Field exists", value: "exists" },
+        { label: "Equals", value: "equals" },
+        { label: "Does not equal", value: "not-equals" },
+        { label: "Greater than", value: "greater-than" },
+        { label: "Less than", value: "less-than" },
+        { label: "Contains", value: "contains" }
+      ]
+    },
+    { id: "value", label: "Value to compare", description: "The value each item is checked against.", valueType: "any", defaultValue: null, ui: { control: "value" } },
+    {
+      id: "onInvalid",
+      label: "If the field is missing",
+      description: "Choose whether items with no matching field should stay in the list.",
+      valueType: "string",
+      defaultValue: "exclude",
+      options: [
+        { label: "Remove item", value: "exclude" },
+        { label: "Keep item", value: "include" }
+      ]
+    }
+  ],
+  icon: "list-filter",
+  execute: (context) => {
+    const items = arrayValue(context.inputs.items);
+    const path = context.parameters.path;
+    const filtered = items.filter((item) => {
+      const left = path ? getPathValue(item, path) : item;
+      const result = compareBasic(left, context.parameters.value, context.parameters.operator);
+      return result || left === void 0 && context.parameters.onInvalid === "include";
+    });
+    return emptyResult({ items: filtered });
+  }
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/data/shared.js
+function variableName(value) {
+  return String(value ?? "").trim();
+}
+function readVariable(variables, name) {
+  return variables?.get(name) ?? null;
+}
+function writeVariable(variables, name, value) {
+  variables?.set(name, value);
+}
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/data/get-variable.js
+var getVariableNode = defineBuiltinNode({
+  id: "builtin.data.get-variable",
+  label: "Get Variable",
+  description: "Read a named runtime variable.",
+  class: "data",
+  scope: "both",
+  inputs: [],
+  outputs: [{ id: "value", label: "Value", valueType: "any" }],
+  parameters: [
+    { id: "name", label: "Variable name", description: "The saved workflow value to read.", valueType: "string", required: true, ui: { control: "reference", referenceType: "variable", placeholder: "variableName" } },
+    { id: "defaultValue", label: "If variable is missing", description: "Value to use when the variable has not been set yet.", valueType: "any", defaultValue: null, ui: { control: "value" } },
+    { id: "required", label: "Fail when missing", description: "When enabled, a missing variable sends execution to the failed path.", valueType: "boolean", defaultValue: false }
+  ],
+  icon: "database",
+  execute: (context) => {
+    const name = variableName(context.parameters.name);
+    const value = readVariable(context.variables, name);
+    if (value === null && context.parameters.required === true)
+      return { status: "failed", route: "failed", outputs: { value: context.parameters.defaultValue ?? null } };
+    return emptyResult({ value: value ?? context.parameters.defaultValue ?? null });
+  }
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/data/map-object.js
+var mapObjectNode = defineBuiltinNode({
+  id: "builtin.data.map-object",
+  label: "Map Object",
+  description: "Create or reshape fields on an object.",
+  class: "data",
+  scope: "both",
+  inputs: [{ id: "object", label: "Object", valueType: "object", required: true }],
+  outputs: [{ id: "object", label: "Object", valueType: "object" }],
+  parameters: [
+    { id: "mapping", label: "Field changes", description: "Fields to add, pick, or rename depending on the selected mode.", valueType: "object", defaultValue: {} },
+    {
+      id: "mode",
+      label: "How to change the object",
+      description: "Choose whether to add fields, keep selected fields, or copy values into new field paths.",
+      valueType: "string",
+      defaultValue: "merge",
+      options: [
+        { label: "Add or replace fields", value: "merge" },
+        { label: "Keep only selected fields", value: "pick" },
+        { label: "Copy fields to new names", value: "rename" }
+      ]
+    }
+  ],
+  icon: "file-json",
+  execute: (context) => {
+    const source = objectValue2(context.inputs.object);
+    const mapping = objectValue2(context.parameters.mapping);
+    if (context.parameters.mode === "pick") {
+      return emptyResult({ object: Object.fromEntries(Object.entries(mapping).map(([target, path]) => [target, getPathValue(source, path)])) });
+    }
+    if (context.parameters.mode === "rename") {
+      let next = { ...source };
+      for (const [target, path] of Object.entries(mapping))
+        next = setPathValue(next, target, getPathValue(source, path));
+      return emptyResult({ object: next });
+    }
+    return emptyResult({ object: { ...source, ...mapping } });
+  }
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/data/set-variable.js
+var setVariableNode = defineBuiltinNode({
+  id: "builtin.data.set-variable",
+  label: "Set Variable",
+  description: "Write a named runtime variable.",
+  class: "data",
+  scope: "both",
+  inputs: [{ id: "value", label: "Value", valueType: "any", required: true }],
+  outputs: [{ id: "next", label: "Next", valueType: "any" }],
+  parameters: [
+    { id: "name", label: "Variable name", description: "The saved workflow value to create or update.", valueType: "string", required: true, ui: { control: "reference", referenceType: "variable", placeholder: "variableName" } },
+    {
+      id: "writeMode",
+      label: "How to save the value",
+      description: "Choose whether to replace the old value, merge object fields, or append to a list.",
+      valueType: "string",
+      defaultValue: "replace",
+      options: [
+        { label: "Replace existing value", value: "replace" },
+        { label: "Merge into object", value: "merge-object" },
+        { label: "Add to list", value: "append-list" }
+      ]
+    }
+  ],
+  icon: "save",
+  execute: (context) => {
+    const name = variableName(context.parameters.name);
+    const current = context.variables?.get(name);
+    const incoming = jsonValue(context.inputs.value);
+    let value = incoming;
+    if (context.parameters.writeMode === "merge-object")
+      value = { ...typeof current === "object" && current && !Array.isArray(current) ? current : {}, ...typeof incoming === "object" && incoming && !Array.isArray(incoming) ? incoming : {} };
+    if (context.parameters.writeMode === "append-list")
+      value = [...Array.isArray(current) ? current : [], incoming];
+    writeVariable(context.variables, name, value);
+    return emptyResult({ next: value });
+  }
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/data/index.js
+var dataNodes = [constantNode, getVariableNode, setVariableNode, mapObjectNode, filterListNode];
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/database/shared.js
+function collectionName(value) {
+  return String(value ?? "").trim();
+}
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/database/insert.js
+var databaseInsertNode = defineBuiltinNode({
+  id: "builtin.database.insert",
+  label: "Create Record",
+  description: "Ask a host database adapter to create one record.",
+  class: "database",
+  scope: "both",
+  inputs: [{ id: "record", label: "Record", valueType: "object", required: true }],
+  outputs: [{ id: "record", label: "Record", valueType: "object" }],
+  parameters: [
+    { id: "collection", label: "Data table", description: "The saved record set/table where the new record should be created.", valueType: "string", required: true, ui: { control: "reference", referenceType: "database-collection", placeholder: "Choose a data table" } },
+    { id: "upsert", label: "Update matching record instead", description: "If a matching record already exists, update it instead of creating a duplicate.", valueType: "boolean", defaultValue: false },
+    { id: "conflictKey", label: "Match on field", description: "Field used to find an existing record when update-matching is enabled.", valueType: "string", defaultValue: "", ui: { control: "field", placeholder: "uniqueField" } },
+    { id: "returnRecord", label: "Return created record", description: "Send the created or updated record to the next node.", valueType: "boolean", defaultValue: true }
+  ],
+  icon: "file-input",
+  privileged: true,
+  execute: (context) => ({
+    status: "success",
+    route: "success",
+    outputs: { record: context.inputs.record ?? {} },
+    effects: [{ type: "database.insert.requested", payload: { collection: collectionName(context.parameters.collection), record: context.inputs.record ?? {}, upsert: context.parameters.upsert === true, conflictKey: context.parameters.conflictKey ?? "", returnRecord: context.parameters.returnRecord !== false } }]
+  })
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/database/query.js
+var databaseQueryNode = defineBuiltinNode({
+  id: "builtin.database.query",
+  label: "Find Records",
+  description: "Ask a host database adapter to find records in a data table.",
+  class: "database",
+  scope: "both",
+  inputs: [],
+  outputs: [{ id: "records", label: "Records", valueType: "array" }],
+  parameters: [
+    { id: "collection", label: "Data table", description: "The saved record set/table to search.", valueType: "string", required: true, ui: { control: "reference", referenceType: "database-collection", placeholder: "Choose a data table" } },
+    { id: "where", label: "Only include records where", description: "Filter fields and values. Leave empty to include all records.", valueType: "object", defaultValue: {} },
+    { id: "limit", label: "Maximum records", description: "Largest number of records to return.", valueType: "number", defaultValue: 100 },
+    { id: "orderBy", label: "Sort by field", description: "Optional field used to sort the returned records.", valueType: "string", defaultValue: "", ui: { control: "field", placeholder: "fieldName" } },
+    {
+      id: "orderDirection",
+      label: "Sort direction",
+      description: "Choose whether lower values or higher values appear first.",
+      valueType: "string",
+      defaultValue: "asc",
+      options: [
+        { label: "Lowest first", value: "asc" },
+        { label: "Highest first", value: "desc" }
+      ]
+    }
+  ],
+  icon: "database",
+  execute: (context) => ({
+    status: "success",
+    route: "success",
+    outputs: { records: [] },
+    effects: [{ type: "database.query.requested", payload: { collection: collectionName(context.parameters.collection), where: context.parameters.where ?? {}, limit: context.parameters.limit ?? 100, orderBy: context.parameters.orderBy ?? "", orderDirection: context.parameters.orderDirection ?? "asc" } }]
+  })
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/database/update.js
+var databaseUpdateNode = defineBuiltinNode({
+  id: "builtin.database.update",
+  label: "Update Records",
+  description: "Ask a host database adapter to update matching records.",
+  class: "database",
+  scope: "both",
+  inputs: [{ id: "patch", label: "Fields to change", valueType: "object", required: true }],
+  outputs: [{ id: "result", label: "Result", valueType: "object" }],
+  parameters: [
+    { id: "collection", label: "Data table", description: "The saved record set/table containing records to update.", valueType: "string", required: true, ui: { control: "reference", referenceType: "database-collection", placeholder: "Choose a data table" } },
+    { id: "where", label: "Only update records where", description: "Filter fields and values used to choose records. Be careful leaving this empty.", valueType: "object", defaultValue: {} },
+    { id: "limit", label: "Maximum records to update", description: "Safety limit for how many records this request may change.", valueType: "number", defaultValue: 1 },
+    { id: "dryRun", label: "Preview only", description: "When enabled, request a preview without actually changing records.", valueType: "boolean", defaultValue: false },
+    { id: "returnUpdated", label: "Return updated records", description: "Send updated records to the next node.", valueType: "boolean", defaultValue: true }
+  ],
+  icon: "database",
+  privileged: true,
+  execute: (context) => ({
+    status: "success",
+    route: "success",
+    outputs: { result: {} },
+    effects: [{ type: "database.update.requested", payload: { collection: collectionName(context.parameters.collection), where: context.parameters.where ?? {}, patch: context.inputs.patch ?? {}, limit: context.parameters.limit ?? 1, dryRun: context.parameters.dryRun === true, returnUpdated: context.parameters.returnUpdated !== false } }]
+  })
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/database/index.js
+var databaseNodes = [databaseQueryNode, databaseInsertNode, databaseUpdateNode];
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/logic/shared.js
+function compareValues(left, right, operator) {
+  return compareBasic(left, right, operator);
+}
+function everyBoolean(values) {
+  return values.every(booleanValue);
+}
+function someBoolean(values) {
+  return values.some(booleanValue);
+}
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/logic/and.js
+var andNode = defineBuiltinNode({
+  id: "builtin.logic.and",
+  label: "And",
+  description: "Return true when all input conditions are true.",
+  class: "logic",
+  scope: "both",
+  inputs: [{ id: "conditions", label: "Conditions", valueType: "boolean", required: true, multiple: true }],
+  outputs: [
+    { id: "true", label: "True", valueType: "any" },
+    { id: "false", label: "False", valueType: "any" },
+    { id: "result", label: "Result", valueType: "boolean" }
+  ],
+  parameters: [
+    {
+      id: "emptyBehavior",
+      label: "If no conditions arrive",
+      description: "Fallback result when this node receives no boolean inputs.",
+      valueType: "string",
+      defaultValue: "true",
+      options: [
+        { label: "Treat as true", value: "true" },
+        { label: "Treat as false", value: "false" }
+      ]
+    }
+  ],
+  icon: "ampersand",
+  execute: (context) => {
+    const conditions = arrayValue(context.inputs.conditions);
+    const result = conditions.length ? everyBoolean(conditions) : context.parameters.emptyBehavior !== "false";
+    return { status: "success", route: result ? "true" : "false", outputs: { result } };
+  }
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/logic/compare.js
+var compareNode = defineBuiltinNode({
+  id: "builtin.logic.compare",
+  label: "Compare",
+  description: "Compare two values with a selected operator.",
+  class: "logic",
+  scope: "both",
+  inputs: [
+    { id: "left", label: "Left", valueType: "any", required: true },
+    { id: "right", label: "Right", valueType: "any", required: true }
+  ],
+  outputs: [
+    { id: "true", label: "True", valueType: "any" },
+    { id: "false", label: "False", valueType: "any" },
+    { id: "result", label: "Result", valueType: "boolean" }
+  ],
+  parameters: [
+    {
+      id: "operator",
+      label: "Operator",
+      description: "Choose how the left input should be checked against the right input or fallback value.",
+      valueType: "string",
+      defaultValue: "equals",
+      options: [
+        { value: "equals", label: "Equals" },
+        { value: "not-equals", label: "Does not equal" },
+        { value: "greater-than", label: "Greater than" },
+        { value: "greater-than-or-equal", label: "Greater than or equal" },
+        { value: "less-than", label: "Less than" },
+        { value: "less-than-or-equal", label: "Less than or equal" },
+        { value: "contains", label: "Contains" },
+        { value: "starts-with", label: "Starts with" },
+        { value: "ends-with", label: "Ends with" },
+        { value: "exists", label: "Exists" }
+      ]
+    },
+    { id: "rightDefault", label: "Fallback comparison value", description: "Used when nothing is connected to the Right input.", valueType: "any", defaultValue: null, ui: { control: "value" } },
+    { id: "caseSensitive", label: "Match capitalization exactly", description: "When disabled, text comparisons ignore capitalization.", valueType: "boolean", defaultValue: true }
+  ],
+  icon: "equal",
+  execute: (context) => {
+    const caseSensitive = context.parameters.caseSensitive !== false;
+    const left = !caseSensitive && typeof context.inputs.left === "string" ? context.inputs.left.toLowerCase() : context.inputs.left;
+    const rawRight = context.inputs.right ?? context.parameters.rightDefault;
+    const right = !caseSensitive && typeof rawRight === "string" ? rawRight.toLowerCase() : rawRight;
+    const result = compareValues(left, right, String(context.parameters.operator ?? "equals"));
+    return { status: "success", route: result ? "true" : "false", outputs: { result } };
+  }
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/logic/not.js
+var notNode = defineBuiltinNode({
+  id: "builtin.logic.not",
+  label: "Not",
+  description: "Invert a boolean condition.",
+  class: "logic",
+  scope: "both",
+  inputs: [{ id: "condition", label: "Condition", valueType: "boolean", required: true }],
+  outputs: [
+    { id: "true", label: "True", valueType: "any" },
+    { id: "false", label: "False", valueType: "any" },
+    { id: "result", label: "Result", valueType: "boolean" }
+  ],
+  parameters: [{ id: "missingValue", label: "If condition is missing", description: "Boolean value to assume before this node flips it.", valueType: "boolean", defaultValue: false }],
+  icon: "badge-x",
+  execute: (context) => {
+    const value = context.inputs.condition === void 0 ? context.parameters.missingValue : context.inputs.condition;
+    const result = !booleanValue(value);
+    return { status: "success", route: result ? "true" : "false", outputs: { result } };
+  }
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/logic/or.js
+var orNode = defineBuiltinNode({
+  id: "builtin.logic.or",
+  label: "Or",
+  description: "Return true when any input condition is true.",
+  class: "logic",
+  scope: "both",
+  inputs: [{ id: "conditions", label: "Conditions", valueType: "boolean", required: true, multiple: true }],
+  outputs: [
+    { id: "true", label: "True", valueType: "any" },
+    { id: "false", label: "False", valueType: "any" },
+    { id: "result", label: "Result", valueType: "boolean" }
+  ],
+  parameters: [
+    {
+      id: "emptyBehavior",
+      label: "If no conditions arrive",
+      description: "Fallback result when this node receives no boolean inputs.",
+      valueType: "string",
+      defaultValue: "false",
+      options: [
+        { label: "Treat as false", value: "false" },
+        { label: "Treat as true", value: "true" }
+      ]
+    }
+  ],
+  icon: "list-tree",
+  execute: (context) => {
+    const conditions = arrayValue(context.inputs.conditions);
+    const result = conditions.length ? someBoolean(conditions) : context.parameters.emptyBehavior === "true";
+    return { status: "success", route: result ? "true" : "false", outputs: { result } };
+  }
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/logic/index.js
+var logicNodes = [compareNode, andNode, orNode, notNode];
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/math/shared.js
+var optionalPrecisionOptions = [
+  { label: "Do not round", value: "none" },
+  { label: "Whole number", value: "0" },
+  { label: "1 decimal place", value: "1" },
+  { label: "2 decimal places", value: "2" },
+  { label: "3 decimal places", value: "3" },
+  { label: "4 decimal places", value: "4" },
+  { label: "6 decimal places", value: "6" }
+];
+var precisionOptions = optionalPrecisionOptions.filter((option) => option.value !== "none");
+function binaryNumbers(context) {
+  return [numberValue2(context.inputs.left), numberValue2(context.inputs.right)];
+}
+function applyPrecision(value, precision) {
+  const places = Math.floor(numberValue2(precision, -1));
+  if (places < 0)
+    return value;
+  const multiplier = 10 ** Math.min(12, places);
+  return Math.round(value * multiplier) / multiplier;
+}
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/math/add.js
+var addNode = defineBuiltinNode({
+  id: "builtin.math.add",
+  label: "Add",
+  description: "Add two numeric values.",
+  class: "math",
+  scope: "both",
+  inputs: [
+    { id: "left", label: "Left", valueType: "number", required: true },
+    { id: "right", label: "Right", valueType: "number", required: true }
+  ],
+  outputs: [{ id: "result", label: "Result", valueType: "number" }],
+  parameters: [
+    { id: "offset", label: "Add after total", description: "Extra amount added after the two inputs are combined.", valueType: "number", defaultValue: 0 },
+    { id: "precision", label: "Round result to", description: "Optional rounding applied after the calculation.", valueType: "string", defaultValue: "none", options: optionalPrecisionOptions }
+  ],
+  icon: "calculator",
+  execute: (context) => {
+    const [left, right] = binaryNumbers(context);
+    return emptyResult({ result: applyPrecision(left + right + numberValue2(context.parameters.offset), context.parameters.precision) });
+  }
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/math/clamp.js
+var clampNode = defineBuiltinNode({
+  id: "builtin.math.clamp",
+  label: "Clamp",
+  description: "Clamp a number between minimum and maximum bounds.",
+  class: "math",
+  scope: "both",
+  inputs: [{ id: "value", label: "Value", valueType: "number", required: true }],
+  outputs: [{ id: "result", label: "Result", valueType: "number" }],
+  parameters: [
+    { id: "min", label: "Lowest allowed value", description: "Numbers below this are raised to this value.", valueType: "number", defaultValue: 0 },
+    { id: "max", label: "Highest allowed value", description: "Numbers above this are lowered to this value.", valueType: "number", defaultValue: 1 }
+  ],
+  icon: "between-horizontal-start",
+  execute: (context) => {
+    const value = numberValue2(inputValue(context, "value"));
+    const min = numberValue2(context.parameters.min);
+    const max = numberValue2(context.parameters.max, 1);
+    return emptyResult({ result: Math.min(Math.max(value, Math.min(min, max)), Math.max(min, max)) });
+  }
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/math/divide.js
+var divideNode = defineBuiltinNode({
+  id: "builtin.math.divide",
+  label: "Divide",
+  description: "Divide one numeric value by another.",
+  class: "math",
+  scope: "both",
+  inputs: [
+    { id: "left", label: "Left", valueType: "number", required: true },
+    { id: "right", label: "Right", valueType: "number", required: true }
+  ],
+  outputs: [{ id: "result", label: "Result", valueType: "number" }],
+  parameters: [
+    { id: "precision", label: "Round result to", description: "Optional rounding applied after division.", valueType: "string", defaultValue: "none", options: optionalPrecisionOptions },
+    {
+      id: "divideByZero",
+      label: "If dividing by zero",
+      description: "Choose what happens when the right input is zero.",
+      valueType: "string",
+      defaultValue: "fail",
+      options: [
+        { label: "Fail this path", value: "fail" },
+        { label: "Use fallback value", value: "fallback" },
+        { label: "Return empty value", value: "null" }
+      ]
+    },
+    { id: "fallback", label: "Fallback value", description: "Number to return when dividing by zero and fallback is selected.", valueType: "number", defaultValue: 0 }
+  ],
+  icon: "calculator",
+  execute: (context) => {
+    const [left, right] = binaryNumbers(context);
+    if (right === 0) {
+      if (context.parameters.divideByZero === "fallback")
+        return emptyResult({ result: numberValue2(context.parameters.fallback) });
+      if (context.parameters.divideByZero === "null")
+        return emptyResult({ result: null });
+      return { status: "failed", route: "failed", outputs: { result: null } };
+    }
+    return emptyResult({ result: applyPrecision(left / right, context.parameters.precision) });
+  }
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/math/multiply.js
+var multiplyNode = defineBuiltinNode({
+  id: "builtin.math.multiply",
+  label: "Multiply",
+  description: "Multiply two numeric values.",
+  class: "math",
+  scope: "both",
+  inputs: [
+    { id: "left", label: "Left", valueType: "number", required: true },
+    { id: "right", label: "Right", valueType: "number", required: true }
+  ],
+  outputs: [{ id: "result", label: "Result", valueType: "number" }],
+  parameters: [{ id: "precision", label: "Round result to", description: "Optional rounding applied after multiplication.", valueType: "string", defaultValue: "none", options: optionalPrecisionOptions }],
+  icon: "calculator",
+  execute: (context) => {
+    const [left, right] = binaryNumbers(context);
+    return emptyResult({ result: applyPrecision(left * right, context.parameters.precision) });
+  }
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/math/round.js
+var roundNode = defineBuiltinNode({
+  id: "builtin.math.round",
+  label: "Round",
+  description: "Round a numeric value to a configured precision.",
+  class: "math",
+  scope: "both",
+  inputs: [{ id: "value", label: "Value", valueType: "number", required: true }],
+  outputs: [{ id: "result", label: "Result", valueType: "number" }],
+  parameters: [
+    { id: "precision", label: "Decimal places to keep", description: "How many digits should remain after the decimal point.", valueType: "string", defaultValue: "0", options: precisionOptions },
+    {
+      id: "mode",
+      label: "Rounding method",
+      description: "Choose whether to round normally, always down, or always up.",
+      valueType: "string",
+      defaultValue: "nearest",
+      options: [
+        { label: "Nearest number", value: "nearest" },
+        { label: "Always down", value: "floor" },
+        { label: "Always up", value: "ceil" }
+      ]
+    }
+  ],
+  icon: "circle-dot",
+  execute: (context) => {
+    const precision = Math.max(0, Math.floor(numberValue2(context.parameters.precision)));
+    const multiplier = 10 ** precision;
+    const value = numberValue2(inputValue(context, "value")) * multiplier;
+    const rounded = context.parameters.mode === "floor" ? Math.floor(value) : context.parameters.mode === "ceil" ? Math.ceil(value) : Math.round(value);
+    return emptyResult({ result: rounded / multiplier });
+  }
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/math/subtract.js
+var subtractNode = defineBuiltinNode({
+  id: "builtin.math.subtract",
+  label: "Subtract",
+  description: "Subtract one numeric value from another.",
+  class: "math",
+  scope: "both",
+  inputs: [
+    { id: "left", label: "Left", valueType: "number", required: true },
+    { id: "right", label: "Right", valueType: "number", required: true }
+  ],
+  outputs: [{ id: "result", label: "Result", valueType: "number" }],
+  parameters: [{ id: "precision", label: "Round result to", description: "Optional rounding applied after subtraction.", valueType: "string", defaultValue: "none", options: optionalPrecisionOptions }],
+  icon: "calculator",
+  execute: (context) => {
+    const [left, right] = binaryNumbers(context);
+    return emptyResult({ result: applyPrecision(left - right, context.parameters.precision) });
+  }
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/math/index.js
+var mathNodes = [addNode, subtractNode, multiplyNode, divideNode, clampNode, roundNode];
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/policy/shared.js
+function jsonParameter(value, fallback) {
+  if (value === void 0)
+    return fallback;
+  return value;
+}
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/policy/action.js
+var actionNode = defineBuiltinNode({
+  id: "builtin.policy.action",
+  label: "Run Output",
+  description: "Dispatch one importer-registered domain output.",
+  class: "policy",
+  scope: "policy",
+  inputs: [{ id: "ready", label: "Ready", valueType: "boolean" }],
+  outputs: [
+    { id: "success", label: "Success", valueType: "any" },
+    { id: "failed", label: "Failed", valueType: "any" }
+  ],
+  parameters: [
+    { id: "outputId", label: "Output to run", description: "Choose an importer-registered output node.", valueType: "string", required: true, ui: { control: "reference", referenceType: "action", placeholder: "Choose an output" } },
+    { id: "parameters", label: "Output payload", description: "Values passed to the selected output.", valueType: "object", defaultValue: {} },
+    { id: "confirmationInputId", label: "Confirmation input", description: "Action input stream that confirms the output occurred. Leave empty for no confirmation.", valueType: "string", defaultValue: "", ui: { control: "identifier", placeholder: "Registered action input ID" } },
+    { id: "confirmationTimeoutMs", label: "Confirmation timeout", description: "How long to wait for the confirmation input.", valueType: "number", defaultValue: 5e3 },
+    { id: "timeoutMs", label: "Give up after milliseconds", description: "Maximum time to wait before treating this action as failed.", valueType: "number", defaultValue: 5e3 },
+    { id: "requiresApproval", label: "Ask before running", description: "Require operator approval before this action executes.", valueType: "boolean", defaultValue: false },
+    {
+      id: "failureRoute",
+      label: "If the action fails",
+      description: "Usually failed. Success is available for intentionally ignoring errors.",
+      valueType: "string",
+      defaultValue: "failed",
+      options: [
+        { label: "Go to Failed", value: "failed" },
+        { label: "Continue as Success", value: "success" }
+      ]
+    }
+  ],
+  icon: "zap",
+  privileged: true,
+  execute: (context) => ({
+    status: "success",
+    route: "success",
+    outputs: { success: true },
+    effects: [{ type: "policy.output.dispatch", payload: { outputId: context.parameters.outputId ?? "", parameters: jsonParameter(context.parameters.parameters, {}), confirmationInputId: context.parameters.confirmationInputId ?? "", confirmationTimeoutMs: context.parameters.confirmationTimeoutMs ?? 5e3, timeoutMs: context.parameters.timeoutMs ?? 5e3, requiresApproval: context.parameters.requiresApproval === true, failureRoute: context.parameters.failureRoute ?? "failed" } }]
+  })
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/policy/expectation.js
+var expectationNode = defineBuiltinNode({
+  id: "builtin.policy.expectation",
+  label: "Expectation",
+  description: "Check whether expected task state is true after an action.",
+  class: "policy",
+  scope: "policy",
+  inputs: [{ id: "signals", label: "Signals", valueType: "signal", multiple: true }],
+  outputs: [
+    { id: "passed", label: "Passed", valueType: "boolean" },
+    { id: "failed", label: "Failed", valueType: "boolean" }
+  ],
+  parameters: [
+    { id: "conditions", label: "Expected conditions", description: "State checks this node should evaluate.", valueType: "array", defaultValue: [] },
+    {
+      id: "mode",
+      label: "Required matches",
+      description: "Choose whether every condition or just one condition must pass.",
+      valueType: "string",
+      defaultValue: "all",
+      options: [
+        { label: "All conditions must pass", value: "all" },
+        { label: "Any condition may pass", value: "any" }
+      ]
+    },
+    { id: "timeoutMs", label: "Wait up to milliseconds", description: "How long to wait for expected state to appear.", valueType: "number", defaultValue: 1e3 }
+  ],
+  icon: "list-checks",
+  execute: (context) => ({
+    status: "success",
+    route: "passed",
+    outputs: { passed: true, failed: false },
+    effects: [{ type: "policy.expectation.checked", payload: { conditions: jsonParameter(context.parameters.conditions, []), mode: context.parameters.mode ?? "all", timeoutMs: context.parameters.timeoutMs ?? 1e3 } }]
+  })
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/policy/recovery.js
+var recoveryNode = defineBuiltinNode({
+  id: "builtin.policy.recovery",
+  label: "Recovery",
+  description: "Choose how to recover after a failed task action.",
+  class: "policy",
+  scope: "policy",
+  inputs: [{ id: "failure", label: "Failure", valueType: "any" }],
+  outputs: [
+    { id: "recovered", label: "Recovered", valueType: "any" },
+    { id: "failed", label: "Failed", valueType: "any" }
+  ],
+  parameters: [
+    {
+      id: "strategy",
+      label: "Recovery strategy",
+      description: "What this policy should try after a failure.",
+      valueType: "string",
+      defaultValue: "retry",
+      options: [
+        { label: "Try the failed step again", value: "retry" },
+        { label: "Run a fallback action", value: "fallback-action" },
+        { label: "Stop this policy", value: "abort" }
+      ]
+    },
+    { id: "maxAttempts", label: "Maximum tries", description: "How many total attempts are allowed when retrying.", valueType: "number", defaultValue: 2 },
+    { id: "fallbackActionDefinitionId", label: "Fallback action", description: "Action to run when the fallback strategy is selected.", valueType: "string", defaultValue: "", ui: { control: "reference", referenceType: "action", placeholder: "Choose fallback action" } }
+  ],
+  icon: "shield-check",
+  execute: (context) => ({ status: "success", route: context.parameters.strategy === "abort" ? "failed" : "recovered", outputs: { recovered: context.inputs.failure ?? null, strategy: context.parameters.strategy ?? "retry", maxAttempts: context.parameters.maxAttempts ?? 2, fallbackActionDefinitionId: context.parameters.fallbackActionDefinitionId ?? "" } })
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/policy/index.js
+var policyNodes = [actionNode, expectationNode, recoveryNode];
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/random/shared.js
+function randomFloat(context) {
+  return context.random ? context.random() : Math.random();
+}
+function randomInRange(context) {
+  const min = numberValue2(context.parameters.min);
+  const max = numberValue2(context.parameters.max, 1);
+  const includeMax = context.parameters.includeMax === true;
+  const value = Math.min(min, max) + randomFloat(context) * Math.abs(max - min);
+  return includeMax ? Math.min(Math.max(min, max), value) : value;
+}
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/random/jitter.js
+var jitterNode = defineBuiltinNode({
+  id: "builtin.random.jitter",
+  label: "Jitter",
+  description: "Add bounded randomness to a numeric value.",
+  class: "random",
+  scope: "both",
+  inputs: [{ id: "value", label: "Value", valueType: "number", required: true }],
+  outputs: [{ id: "value", label: "Value", valueType: "number" }],
+  parameters: [
+    { id: "amount", label: "Maximum change", description: "Largest amount that can be randomly added or subtracted.", valueType: "number", defaultValue: 0.1 },
+    { id: "precision", label: "Round result to", description: "Optional rounding after jitter is applied.", valueType: "string", defaultValue: "none", options: optionalPrecisionOptions },
+    { id: "min", label: "Lowest allowed value", description: "Final value will not go below this number.", valueType: "number", defaultValue: -999999 },
+    { id: "max", label: "Highest allowed value", description: "Final value will not go above this number.", valueType: "number", defaultValue: 999999 }
+  ],
+  icon: "waves",
+  execute: (context) => {
+    const amount = Math.max(0, numberValue2(context.parameters.amount, 0.1));
+    const offset = (randomFloat(context) * 2 - 1) * amount;
+    const min = numberValue2(context.parameters.min, -999999);
+    const max = numberValue2(context.parameters.max, 999999);
+    const precision = Math.floor(numberValue2(context.parameters.precision, -1));
+    const raw = Math.min(Math.max(numberValue2(inputValue(context, "value")) + offset, Math.min(min, max)), Math.max(min, max));
+    if (precision >= 0) {
+      const multiplier = 10 ** Math.min(12, precision);
+      return emptyResult({ value: Math.round(raw * multiplier) / multiplier });
+    }
+    return emptyResult({ value: raw });
+  }
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/random/random-choice.js
+var randomChoiceNode = defineBuiltinNode({
+  id: "builtin.random.choice",
+  label: "Random Choice",
+  description: "Select one value from a list.",
+  class: "random",
+  scope: "both",
+  inputs: [{ id: "choices", label: "Choices", valueType: "array", required: true }],
+  outputs: [{ id: "choice", label: "Choice", valueType: "any" }],
+  parameters: [
+    { id: "fallback", label: "If list is empty", description: "Value to return when there are no choices.", valueType: "any", defaultValue: null, ui: { control: "value" } },
+    { id: "allowEmpty", label: "Allow empty choices", description: "When disabled, an empty choice list makes this node fail.", valueType: "boolean", defaultValue: true }
+  ],
+  icon: "shuffle",
+  execute: (context) => {
+    const choices = arrayValue(context.inputs.choices);
+    if (!choices.length) {
+      if (context.parameters.allowEmpty === false)
+        return { status: "failed", route: "failed", outputs: { choice: context.parameters.fallback ?? null } };
+      return emptyResult({ choice: context.parameters.fallback ?? null });
+    }
+    return emptyResult({ choice: choices[Math.floor(randomFloat(context) * choices.length)] ?? context.parameters.fallback ?? null });
+  }
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/random/random-number.js
+var randomNumberNode = defineBuiltinNode({
+  id: "builtin.random.number",
+  label: "Random Number",
+  description: "Produce a random number in a configured range.",
+  class: "random",
+  scope: "both",
+  inputs: [],
+  outputs: [{ id: "value", label: "Value", valueType: "number" }],
+  parameters: [
+    { id: "min", label: "Lowest possible number", description: "Start of the random range.", valueType: "number", defaultValue: 0 },
+    { id: "max", label: "Highest possible number", description: "End of the random range.", valueType: "number", defaultValue: 1 },
+    {
+      id: "mode",
+      label: "Number type",
+      description: "Choose whether to produce a decimal number or a whole number.",
+      valueType: "string",
+      defaultValue: "float",
+      options: [
+        { label: "Decimal number", value: "float" },
+        { label: "Whole number", value: "integer" }
+      ]
+    },
+    { id: "precision", label: "Decimal places to keep", description: "Only used for decimal numbers.", valueType: "string", defaultValue: "2", options: precisionOptions },
+    { id: "includeMax", label: "Include highest number", description: "Allow the random result to equal the highest possible number.", valueType: "boolean", defaultValue: false }
+  ],
+  icon: "dice-5",
+  execute: (context) => {
+    const value = randomInRange(context);
+    if (context.parameters.mode === "integer") {
+      const min = Math.ceil(numberValue2(context.parameters.min));
+      const max = Math.floor(numberValue2(context.parameters.max, 1));
+      const upper = context.parameters.includeMax === true ? max + 1 : max;
+      return emptyResult({ value: Math.floor(min + (context.random ? context.random() : Math.random()) * Math.max(1, upper - min)) });
+    }
+    const precision = Math.max(0, Math.min(12, Math.floor(numberValue2(context.parameters.precision, 2))));
+    const multiplier = 10 ** precision;
+    return emptyResult({ value: Math.round(value * multiplier) / multiplier });
+  }
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/random/weighted-choice.js
+var weightedChoiceNode = defineBuiltinNode({
+  id: "builtin.random.weighted-choice",
+  label: "Weighted Choice",
+  description: "Select one value from weighted options.",
+  class: "random",
+  scope: "both",
+  inputs: [{ id: "choices", label: "Weighted choices", valueType: "array", required: true }],
+  outputs: [{ id: "choice", label: "Choice", valueType: "any" }],
+  parameters: [
+    { id: "defaultWeight", label: "Default chance weight", description: "Used for choices that do not provide their own weight.", valueType: "number", defaultValue: 1 },
+    { id: "fallback", label: "If no choice can be picked", description: "Value to return when the list is empty or all weights are zero.", valueType: "any", defaultValue: null, ui: { control: "value" } },
+    { id: "normalizeWeights", label: "Balance weights automatically", description: "Treat weights as relative chances instead of requiring them to add up to a specific total.", valueType: "boolean", defaultValue: true }
+  ],
+  icon: "scale",
+  execute: (context) => {
+    const choices = arrayValue(context.inputs.choices);
+    const defaultWeight = numberValue2(context.parameters.defaultWeight, 1);
+    const total = choices.reduce((sum, choice) => sum + Math.max(0, numberValue2(choice.weight, defaultWeight)), 0);
+    if (!choices.length || total <= 0)
+      return emptyResult({ choice: context.parameters.fallback ?? null });
+    let cursor = randomFloat(context) * total;
+    for (const choice of choices) {
+      cursor -= Math.max(0, numberValue2(choice.weight, defaultWeight));
+      if (cursor <= 0)
+        return emptyResult({ choice: choice.value ?? null });
+    }
+    return emptyResult({ choice: choices[0]?.value ?? context.parameters.fallback ?? null });
+  }
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/random/index.js
+var randomNodes = [randomNumberNode, randomChoiceNode, weightedChoiceNode, jitterNode];
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/routine/approval.js
+var approvalNode = defineBuiltinNode({
+  id: "builtin.routine.approval",
+  label: "Approval",
+  description: "Pause a routine until an operator approves or rejects it.",
+  class: "routine",
+  scope: "routine",
+  inputs: [{ id: "in", label: "In", valueType: "any" }],
+  outputs: [
+    { id: "approved", label: "Approved", valueType: "any" },
+    { id: "rejected", label: "Rejected", valueType: "any" }
+  ],
+  parameters: [
+    { id: "prompt", label: "Approval message", description: "Message shown to the operator who approves or rejects this step.", valueType: "string", defaultValue: "Approve this routine step?", ui: { control: "textarea", placeholder: "Approval message" } },
+    { id: "timeoutMs", label: "Auto-decide after milliseconds", description: "Use 0 to wait indefinitely.", valueType: "number", defaultValue: 0 },
+    {
+      id: "defaultRoute",
+      label: "If nobody responds",
+      description: "Route to use when the approval times out.",
+      valueType: "string",
+      defaultValue: "rejected",
+      options: [
+        { label: "Treat as rejected", value: "rejected" },
+        { label: "Treat as approved", value: "approved" }
+      ]
+    }
+  ],
+  icon: "badge-check",
+  execute: (context) => ({ status: "waiting", route: "approved", outputs: { approved: context.inputs.in ?? null, timeoutMs: context.parameters.timeoutMs ?? 0, defaultRoute: context.parameters.defaultRoute ?? "rejected" }, effects: [{ type: "routine.approval.requested", payload: { prompt: context.parameters.prompt ?? "", timeoutMs: context.parameters.timeoutMs ?? 0, defaultRoute: context.parameters.defaultRoute ?? "rejected" } }] })
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/routine/shared.js
+function referenceId(value) {
+  return String(value ?? "").trim();
+}
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/routine/subroutine.js
+var subroutineNode = defineBuiltinNode({
+  id: "builtin.routine.subroutine",
+  label: "Subroutine",
+  description: "Run another routine as a reusable graph step.",
+  class: "routine",
+  scope: "routine",
+  inputs: [{ id: "in", label: "In", valueType: "any" }],
+  outputs: [
+    { id: "success", label: "Success", valueType: "any" },
+    { id: "failed", label: "Failed", valueType: "any" }
+  ],
+  parameters: [
+    { id: "routineId", label: "Routine to run", description: "Choose the saved routine this node should call.", valueType: "string", required: true, ui: { control: "reference", referenceType: "routine", placeholder: "Choose a routine" } },
+    { id: "inputs", label: "Values to pass in", description: "Input values made available to the called routine.", valueType: "object", defaultValue: {} },
+    {
+      id: "isolation",
+      label: "Context sharing",
+      description: "Choose whether the called routine can see the current routine's variables.",
+      valueType: "string",
+      defaultValue: "shared",
+      options: [
+        { label: "Share current variables", value: "shared" },
+        { label: "Use isolated variables", value: "isolated" }
+      ]
+    }
+  ],
+  icon: "boxes",
+  execute: (context) => ({
+    status: "success",
+    route: "success",
+    outputs: { success: context.inputs.in ?? null },
+    effects: [{ type: "routine.subroutine.requested", payload: { routineId: referenceId(context.parameters.routineId), inputs: context.parameters.inputs ?? {}, isolation: context.parameters.isolation ?? "shared" } }]
+  })
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/routine/task-policy.js
+var taskPolicyNode = defineBuiltinNode({
+  id: "builtin.routine.task-policy",
+  label: "Run Task",
+  description: "Run a saved task policy from this routine.",
+  class: "routine",
+  scope: "routine",
+  inputs: [{ id: "in", label: "In", valueType: "any" }],
+  outputs: [
+    { id: "success", label: "Success", valueType: "any" },
+    { id: "failed", label: "Failed", valueType: "any" }
+  ],
+  parameters: [
+    { id: "taskId", label: "Task to run", description: "Choose the saved task this routine step should start.", valueType: "string", required: true, ui: { control: "reference", referenceType: "task", placeholder: "Choose a task" } },
+    { id: "policyId", label: "Specific policy version", description: "Optional override. Leave blank to use the task's default policy.", valueType: "string", defaultValue: "", ui: { control: "reference", referenceType: "policy", placeholder: "Default policy" } },
+    { id: "inputs", label: "Values to pass in", description: "Input values made available to the task.", valueType: "object", defaultValue: {} },
+    { id: "waitForCompletion", label: "Wait until task finishes", description: "When enabled, the routine pauses until this task reports success or failure.", valueType: "boolean", defaultValue: true }
+  ],
+  icon: "network",
+  execute: (context) => ({
+    status: "success",
+    route: "success",
+    outputs: { success: context.inputs.in ?? null },
+    effects: [{ type: "routine.task-policy.requested", payload: { taskId: referenceId(context.parameters.taskId), policyId: referenceId(context.parameters.policyId), inputs: context.parameters.inputs ?? {}, waitForCompletion: context.parameters.waitForCompletion !== false } }]
+  })
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/routine/index.js
+var routineNodes = [taskPolicyNode, subroutineNode, approvalNode];
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/timing/shared.js
+function durationMs(value, fallback) {
+  return Math.max(0, Math.floor(numberValue2(value, fallback)));
+}
+function durationFromUnit(value, unit, fallbackMs) {
+  const amount = numberValue2(value, fallbackMs);
+  if (unit === "seconds")
+    return durationMs(amount * 1e3, fallbackMs);
+  if (unit === "minutes")
+    return durationMs(amount * 6e4, fallbackMs);
+  return durationMs(amount, fallbackMs);
+}
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/timing/debounce.js
+var debounceNode = defineBuiltinNode({
+  id: "builtin.timing.debounce",
+  label: "Debounce",
+  description: "Continue only after a signal stops changing for a short time.",
+  class: "timing",
+  scope: "both",
+  inputs: [{ id: "signal", label: "Signal", valueType: "signal", required: true }],
+  outputs: [{ id: "stable", label: "Stable", valueType: "boolean" }],
+  parameters: [
+    { id: "windowMs", label: "Stable for milliseconds", description: "How long the signal must remain unchanged.", valueType: "number", defaultValue: 250 },
+    {
+      id: "edge",
+      label: "When to continue",
+      description: "Choose whether to continue at the start, end, or both sides of the stable window.",
+      valueType: "string",
+      defaultValue: "trailing",
+      options: [
+        { label: "After it stays stable", value: "trailing" },
+        { label: "Immediately, then wait", value: "leading" },
+        { label: "Both immediate and stable", value: "both" }
+      ]
+    }
+  ],
+  icon: "activity",
+  execute: (context) => emptyResult({ stable: Boolean(context.inputs.signal), windowMs: durationMs(context.parameters.windowMs, 250), edge: context.parameters.edge ?? "trailing" })
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/timing/retry.js
+var retryNode = defineBuiltinNode({
+  id: "builtin.timing.retry",
+  label: "Retry",
+  description: "Retry a branch with bounded attempts and delay.",
+  class: "timing",
+  scope: "both",
+  inputs: [{ id: "in", label: "In", valueType: "any" }],
+  outputs: [
+    { id: "success", label: "Success", valueType: "any" },
+    { id: "failed", label: "Failed", valueType: "any" }
+  ],
+  parameters: [
+    { id: "attempts", label: "Maximum tries", description: "How many times this branch may be attempted.", valueType: "number", defaultValue: 3 },
+    { id: "delayMs", label: "Wait between tries", description: "Base delay in milliseconds before another attempt.", valueType: "number", defaultValue: 500 },
+    {
+      id: "backoff",
+      label: "Delay pattern",
+      description: "How the wait time changes after repeated failures.",
+      valueType: "string",
+      defaultValue: "fixed",
+      options: [
+        { label: "Same wait every time", value: "fixed" },
+        { label: "Increase steadily", value: "linear" },
+        { label: "Increase quickly", value: "exponential" }
+      ]
+    },
+    { id: "jitterMs", label: "Random extra wait", description: "Maximum random milliseconds added or subtracted from each delay.", valueType: "number", defaultValue: 0 }
+  ],
+  icon: "refresh-cw",
+  execute: (context) => emptyResult({ success: context.inputs.in ?? null, attempts: durationMs(context.parameters.attempts, 3), delayMs: durationMs(context.parameters.delayMs, 500), backoff: context.parameters.backoff ?? "fixed", jitterMs: durationMs(context.parameters.jitterMs, 0) })
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/timing/timeout.js
+var timeoutNode = defineBuiltinNode({
+  id: "builtin.timing.timeout",
+  label: "Timeout",
+  description: "Fail or route when a branch takes too long.",
+  class: "timing",
+  scope: "both",
+  inputs: [{ id: "in", label: "In", valueType: "any" }],
+  outputs: [
+    { id: "success", label: "Success", valueType: "any" },
+    { id: "timeout", label: "Timeout", valueType: "any" }
+  ],
+  parameters: [
+    { id: "timeoutMs", label: "Give up after milliseconds", description: "Maximum time this branch may run before taking the timeout path.", valueType: "number", defaultValue: 5e3 },
+    { id: "timeoutRoute", label: "If time runs out", description: "Usually timeout. Success is available when waiting too long is acceptable.", valueType: "string", defaultValue: "timeout", options: [{ label: "Go to Timeout", value: "timeout" }, { label: "Continue as Success", value: "success" }] },
+    { id: "cancelOnTimeout", label: "Stop branch when time runs out", description: "Ask the runtime to cancel any still-running work in this branch.", valueType: "boolean", defaultValue: true }
+  ],
+  icon: "clock-alert",
+  execute: (context) => emptyResult({ success: context.inputs.in ?? null, timeoutMs: durationMs(context.parameters.timeoutMs, 5e3), timeoutRoute: context.parameters.timeoutRoute ?? "timeout", cancelOnTimeout: context.parameters.cancelOnTimeout !== false })
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/timing/wait.js
+var waitNode = defineBuiltinNode({
+  id: "builtin.timing.wait",
+  label: "Wait",
+  description: "Pause execution for a fixed duration.",
+  class: "timing",
+  scope: "both",
+  inputs: [{ id: "in", label: "In", valueType: "any" }],
+  outputs: [{ id: "data", label: "Data", valueType: "any" }],
+  parameters: [
+    { id: "duration", label: "Wait amount", description: "How long this node should pause before continuing.", valueType: "number", defaultValue: 1e3 },
+    {
+      id: "unit",
+      label: "Time unit",
+      description: "Unit used for the wait amount.",
+      valueType: "string",
+      defaultValue: "milliseconds",
+      options: [
+        { label: "Milliseconds", value: "milliseconds" },
+        { label: "Seconds", value: "seconds" },
+        { label: "Minutes", value: "minutes" }
+      ]
+    },
+    { id: "jitterMs", label: "Random extra wait", description: "Maximum random milliseconds added or subtracted from the wait.", valueType: "number", defaultValue: 0 }
+  ],
+  icon: "timer",
+  execute: (context) => {
+    const base = durationFromUnit(context.parameters.duration, context.parameters.unit, 1e3);
+    const jitter = Math.max(0, Number(context.parameters.jitterMs ?? 0));
+    const random = context.random ? context.random() : 0.5;
+    return { status: "waiting", route: "success", outputs: { data: context.inputs.in ?? null, durationMs: Math.max(0, Math.round(base + (random * 2 - 1) * jitter)) } };
+  }
+});
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/timing/index.js
+var timingNodes = [waitNode, timeoutNode, retryNode, debounceNode];
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/registry.js
+var automationNodeClassGroups = [
+  { id: "control-flow", label: "Control Flow", description: "Graph routing, branching, joining, and lifecycle nodes." },
+  { id: "policy", label: "Policy", description: "Task policy action, expectation, and recovery nodes." },
+  { id: "routine", label: "Routine", description: "Routine orchestration nodes that call tasks or subroutines." },
+  { id: "logic", label: "Logic", description: "Boolean and comparison nodes." },
+  { id: "math", label: "Math", description: "Numeric transform nodes." },
+  { id: "random", label: "Random", description: "Random number, choice, and jitter nodes." },
+  { id: "data", label: "Data", description: "Variable, constant, object, and list transform nodes." },
+  { id: "database", label: "Database", description: "Database request nodes delegated to host adapters." },
+  { id: "timing", label: "Timing", description: "Wait, timeout, retry, and debounce nodes." },
+  { id: "runtime", label: "Runtime", description: "Future runtime/debug-specific nodes." },
+  { id: "custom", label: "Custom", description: "Host-added node definitions loaded from .fluxiq." }
+];
+var builtinAutomationNodeDefinitions = [
+  ...controlFlowNodes,
+  ...policyNodes,
+  ...routineNodes,
+  ...logicNodes,
+  ...mathNodes,
+  ...randomNodes,
+  ...dataNodes,
+  ...databaseNodes,
+  ...timingNodes
+];
+var automationNodeClasses = automationNodeClassGroups.map((group) => group.id);
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/canonical-registry.js
+var canonicalBuiltinAutomationNodeDefinitions = builtinAutomationNodeDefinitions.map(adaptBuiltinAutomationNodeDefinition);
+
+// ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/layout.js
+var automationStudioSourceNodeRoot = "packages/fluxiq/src/programs/automation-studio/nodes";
+var automationStudioBuiltinNodeRoots = automationNodeClasses.filter((nodeClass) => nodeClass !== "custom" && nodeClass !== "runtime").map((nodeClass) => `${automationStudioSourceNodeRoot}/${nodeClass}`);
+var automationStudioCustomNodeRoot = ".fluxiq/data/programs/automation-studio/nodes/custom";
+var automationStudioCustomNodeFolders = automationNodeClasses.map((nodeClass) => `${automationStudioCustomNodeRoot}/${nodeClass}`);
+
+// src/web-panel-host.ts
+function mapWebRecordingObservation(observation) {
+  const eventType = recordedEventType(observation);
+  const payload = recordedEventPayload(observation);
+  const selector = readSelector(payload.element);
+  const inputValue2 = readString(payload.inputValue);
+  const key = readString(payload.key);
+  if (eventType === WEB_AUTOMATION_EVENTS.pageNavigated) {
+    const url = readString(payload.url);
+    const metadata = { ...readObject(payload.metadata) ?? {}, ...observation.metadata };
+    return url && readString(metadata.reason) !== "recording_start" && readString(metadata.transition) === "typed" ? candidate("web.browser.navigate", { url }, WEB_AUTOMATION_INPUT_IDS.navigationRequested, "Navigate") : null;
+  }
+  if (eventType === WEB_AUTOMATION_EVENTS.elementClicked) {
+    return selector ? candidate("web.dom.click", { selector }, WEB_AUTOMATION_INPUT_IDS.elementClicked, "Click") : null;
+  }
+  if (eventType === WEB_AUTOMATION_EVENTS.elementInputChanged || eventType === WEB_AUTOMATION_EVENTS.elementChanged) {
+    if (!selector) return null;
+    if (readString(readObject(payload.element)?.tagName) === "select") {
+      return candidate("web.dom.select", { selector, value: inputValue2 ?? "" }, WEB_AUTOMATION_INPUT_IDS.optionSelected, "Select option");
+    }
+    return inputValue2 === "" ? candidate("web.dom.clear", { selector }, WEB_AUTOMATION_INPUT_IDS.fieldCleared, "Clear field") : candidate("web.dom.type", { selector, text: inputValue2 ?? "" }, WEB_AUTOMATION_INPUT_IDS.textEntered, "Enter text");
+  }
+  if (eventType === WEB_AUTOMATION_EVENTS.keyboardPressed) {
+    return key ? candidate("web.dom.keypress", compact4({ selector, key }), WEB_AUTOMATION_INPUT_IDS.keyPressed, "Press key") : null;
+  }
+  if (eventType === WEB_AUTOMATION_EVENTS.mouseWheel || eventType === WEB_AUTOMATION_EVENTS.scrollChanged) {
+    const scroll = readObject(payload.scroll);
+    const x = readNumber(scroll?.x);
+    const y = readNumber(scroll?.y);
+    return x !== void 0 || y !== void 0 ? candidate("web.dom.scroll", compact4({ x, y }), WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Scroll") : null;
+  }
+  return null;
+}
+function recordedEventType(observation) {
+  if (observation.type === "domain_event") return readString(observation.payload.eventType) ?? "";
+  if (observation.type === "observation") return readString(observation.payload.observationType) ?? "";
+  return observation.type;
+}
+function recordedEventPayload(observation) {
+  if (observation.type === "domain_event" || observation.type === "observation") {
+    return readObject(observation.payload.payload) ?? observation.payload;
+  }
+  return observation.payload;
+}
+function candidate(outputId, parameters, sourceInputId, label) {
+  return { outputId, parameters: compact4(parameters), sourceInputIds: [sourceInputId], expectedConfirmation: { inputId: sourceInputId, timeoutMs: 5e3 }, confidence: 0.9, label };
+}
+function compact4(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== void 0));
+}
+function readObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+function readSelector(value) {
+  return readString(readObject(value)?.selector);
+}
+function readString(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function readNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+
 // src/domain.test.ts
 var service = new AutomationStudioService({ seedFixture: false });
 service.registerRecordingDomain(webAutomationRecordingDomain);
@@ -1453,6 +3060,29 @@ var validation = service.validateRecordingDomainEvent({
   payload: { url: "https://example.test", title: "Example", sequence: 1 }
 });
 assert.equal(validation.ok, true);
+var recordingStartNavigation = mapWebRecordingObservation({
+  observationId: "observation.start",
+  recordingId: "recording.test",
+  domainId: WEB_AUTOMATION_DOMAIN_ID,
+  type: "domain_event",
+  timestamp: 1,
+  payload: { eventType: WEB_AUTOMATION_EVENTS.pageNavigated, payload: { url: "https://example.test" } },
+  metadata: { reason: "recording_start", transition: "typed" }
+});
+assert.equal(recordingStartNavigation, null);
+var deliberateNavigation = mapWebRecordingObservation({
+  observationId: "observation.navigate",
+  recordingId: "recording.test",
+  domainId: WEB_AUTOMATION_DOMAIN_ID,
+  type: "domain_event",
+  timestamp: 2,
+  payload: { eventType: WEB_AUTOMATION_EVENTS.pageNavigated, payload: { url: "https://example.test/next" } },
+  metadata: { transition: "typed" }
+});
+assert.equal(deliberateNavigation?.outputId, "web.browser.navigate");
+assert.equal(webAutomationInputIdForRecordedEvent({ kind: "browser.navigation", url: "https://example.test", title: "Example", sequence: 1, metadata: { reason: "recording_start" } }), void 0);
+assert.equal(webAutomationInputIdForRecordedEvent({ kind: "browser.navigation", url: "https://example.test/history", title: "Example", sequence: 2 }), void 0);
+assert.equal(webAutomationInputIdForRecordedEvent({ kind: "browser.navigation", url: "https://example.test/typed", title: "Example", sequence: 3, metadata: { transition: "typed" } }), WEB_AUTOMATION_INPUT_IDS.navigationRequested);
 var event2 = createWebAutomationRecordingEvent({
   kind: "dom.click",
   sequence: 1,
@@ -1628,8 +3258,8 @@ var outputNodeDefinitions = listWebAutomationOutputNodeDefinitions();
 assert.equal(outputNodeDefinitions.length, 11);
 var clickNodeDefinition = outputNodeDefinitions.find((definition) => definition.outputAction?.fixedOutputId === "web.dom.click");
 assert.equal(clickNodeDefinition?.requiredRuntimeCapabilities?.includes("web.actions"), true);
-assert.equal(validateAutomationStudioNodeDefinition(clickNodeDefinition).ok, true);
-assert.equal(outputNodeDefinitions.every((definition) => validateAutomationStudioNodeDefinition(definition).ok), true);
+assert.equal(validateAutomationStudioNodeDefinition2(clickNodeDefinition).ok, true);
+assert.equal(outputNodeDefinitions.every((definition) => validateAutomationStudioNodeDefinition2(definition).ok), true);
 assert.equal(
   outputNodeDefinitions.every((definition) => definition.parameters.every((parameter) => parameter.allowStateBinding === true)),
   true

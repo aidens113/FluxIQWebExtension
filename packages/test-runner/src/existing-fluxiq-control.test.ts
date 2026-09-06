@@ -171,8 +171,8 @@ test("discovers only sanitized gateway metadata and selects existing context", a
   assert.deepEqual(discovery, { enabled: true, sessionCount: 1, pairingCount: 2, trustedClientCount: 3, publicUrl: "wss://gateway.example.test/client", listening: true, runtimeId: "web.one" });
   assert.equal(JSON.stringify(discovery).includes("raw-secret"), false);
   assert.equal(JSON.stringify(discovery).includes("raw-code"), false);
-  await client.selectExistingContext("project.web", "client.one");
-  assert.deepEqual(requests.at(-1)?.body, { activeProjectId: "project.web", clientId: "client.one" });
+  await client.selectExistingContext("project.web", "client.one", {}, "flow.one");
+  assert.deepEqual(requests.at(-1)?.body, { activeProjectId: "project.web", activeFlowId: "flow.one", clientId: "client.one" });
 });
 
 test("starts and runs the exact persisted Flow with deterministic non-adaptive controls", async (t) => {
