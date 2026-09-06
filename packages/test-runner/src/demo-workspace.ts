@@ -14,7 +14,8 @@ import { executable, ProcessSupervisor, processLogPath } from "./process-supervi
 import { requireSecureGatewayUrl } from "./target-config.js";
 import { hardenWindowsPrivatePath } from "./windows-acl.js";
 
-const SCHEMA_VERSION = "0.2" as const;
+const SCHEMA_VERSION = "0.3" as const;
+const DEMO_SUBFLOW_NAME = "Primary browser automation";
 
 export type DemoWorkspaceConfiguration = {
   repositoryRoot: string;
@@ -42,12 +43,16 @@ export type DemoWorkspaceState = {
   username: string;
   projectId: string;
   flowId: string;
+  subflowId: string;
+  graphFlowId: string;
+  routerId: string;
   projectName: string;
   flowName: string;
   latestRecordingId?: string;
   latestRuntimeRunId?: string;
   updatedAt: string;
 };
+type LegacyDemoWorkspaceState = Omit<DemoWorkspaceState, "schemaVersion" | "subflowId" | "graphFlowId" | "routerId"> & { schemaVersion: "0.2" };
 
 export function resolveDemoWorkspaceConfiguration(repositoryRoot: string, env: NodeJS.ProcessEnv): DemoWorkspaceConfiguration {
   const root = path.resolve(repositoryRoot);
@@ -141,7 +146,9 @@ export async function runDemoWorkspaceFlow(config: DemoWorkspaceConfiguration): 
       // the Flow again so a fresh panel profile binds Runtime Debug to the full
       // Flow document instead of its summary-only placeholder.
       await openFlowInCurrentProject(panelPage, state.flowName, evidence);
+      await openSubflowInCurrentProject(panelPage, DEMO_SUBFLOW_NAME, evidence);
       await assertDemoFlowRenderedLayout(panelPage, evidence);
+      await openFlowInCurrentProject(panelPage, state.flowName, evidence);
       const status = await extensionStatus(extensionPage);
       const execution = await runDemoFlowFromPanel(panelPage, state, evidence);
       const runId = execution.runId;
@@ -157,7 +164,8 @@ export async function runDemoWorkspaceFlow(config: DemoWorkspaceConfiguration): 
       }
       await scenarioPage.getByTestId("result").filter({ hasText: "Submitted" }).waitFor();
       await assertConnectedSession(control, status.sessionId);
-      const actions = await waitForRunActions(control, state.projectId, runId, 4);
+      const detail = await waitForRoutedRunDetail(control, state, runId);
+      const actions = detail.actionAttempts;
       for (const definitionId of ["web.output.dom-type", "web.output.dom-select", "web.output.dom-click"]) {
         if (!actions.some(action => action.definitionId === definitionId && action.status === "succeeded")) {
           const diagnostic = actions.map(action => ({ definitionId: action.definitionId, status: action.status, message: action.message ?? "" }));
@@ -174,10 +182,13 @@ export async function runDemoWorkspaceFlow(config: DemoWorkspaceConfiguration): 
 
 async function withPersistentDemoCore<T>(config: DemoWorkspaceConfiguration, operation: () => Promise<T>): Promise<T> {
   const sessionId = `run-${new Date().toISOString().replace(/[:.]/gu, "-")}-${randomBytes(4).toString("hex")}`;
-  const sessionsDirectory = path.join(config.workspaceDirectory, ".sessions");
-  const sessionDirectory = path.join(sessionsDirectory, sessionId);
-  const coreWorkspaceDirectory = path.join(sessionDirectory, "core-workspace");
-  const webWorkspaceDirectory = path.join(coreWorkspaceDirectory, "apps", "web");
+  const sessionsDirectory = path.join(config.workspaceDirectory, process.platform === "win32" ? ".s" : ".sessions");
+  const sessionDirectoryName = process.platform === "win32" ? randomBytes(6).toString("hex") : sessionId;
+  const sessionDirectory = path.join(sessionsDirectory, sessionDirectoryName);
+  const coreWorkspaceDirectory = path.join(sessionDirectory, process.platform === "win32" ? "c" : "core-workspace");
+  const webWorkspaceDirectory = process.platform === "win32"
+    ? path.join(coreWorkspaceDirectory, "a", "w")
+    : path.join(coreWorkspaceDirectory, "apps", "web");
   const logsDirectory = path.join(config.workspaceDirectory, "logs");
   const hostModulePath = path.join(config.repositoryRoot, "domain", "dist", "host", "web-panel-host.cjs");
   const webPort = explicitPort(config.origin, "FLUXIQ_DEMO_BASE_URL");
@@ -247,13 +258,13 @@ async function withPersistentDemoCore<T>(config: DemoWorkspaceConfiguration, ope
       logPath: processLogPath(logsDirectory, `${sessionId}-core`),
     });
     await waitForHttp(config.origin, { timeoutMs: 60_000 });
-    await fetch(`${config.origin}/api/client-gateway/snapshot`).catch(() => undefined);
+    await fetch(`${config.origin}/api/client-gateway/snapshot`, { signal: AbortSignal.timeout(30_000) }).catch(() => undefined);
     await waitForTcpGateway(gatewayPort, 60_000);
     return await operation();
   } finally {
     try { await supervisor.cleanup(); }
     finally {
-      const expected = path.join(sessionsDirectory, sessionId);
+      const expected = path.join(sessionsDirectory, sessionDirectoryName);
       if (path.resolve(sessionDirectory) !== path.resolve(expected) || path.dirname(path.resolve(sessionDirectory)) !== path.resolve(sessionsDirectory)) {
         throw new Error("Refused to remove a demo session outside its workspace");
       }
@@ -358,6 +369,13 @@ async function provisionDemoFlow(control: ExistingFluxIQControlClient, config: D
     await openAutomationStudio(panelPage, config.origin, evidence);
     await evidence.step("panel", "project-create-open", "Open the Create project dialog", () => panelPage.getByRole("button", { name: "Project", exact: true }).click());
     const dialog = panelPage.getByRole("dialog", { name: "Create project" });
+    if (!await dialog.isVisible().catch(() => false)) {
+      await dialog.waitFor({ state: "visible", timeout: 5_000 }).catch(() => undefined);
+    }
+    if (!await dialog.isVisible().catch(() => false)) {
+      await evidence.step("panel", "project-create-open-retry", "Retry opening Create project after panel hydration", () => panelPage.getByRole("button", { name: "Project", exact: true }).click());
+      await dialog.waitFor({ state: "visible", timeout: 30_000 });
+    }
     await evidence.step("panel", "project-name", "Enter the demo project name", () => dialog.getByLabel("Project name").fill(config.projectName));
     await evidence.step("panel", "project-description", "Enter the demo project description", () => dialog.getByLabel("Description").fill("Persistent self-recording workspace for the FluxIQ web extension"));
     await evidence.step("panel", "project-pin", "Authorize demo project creation", () => dialog.getByLabel("Security PIN").fill(config.pin));
@@ -374,7 +392,6 @@ async function provisionDemoFlow(control: ExistingFluxIQControlClient, config: D
   const summaries = await control.listFlowSummaries(project.id);
   const requestedFlowId = saved?.flowId ?? config.flowId;
   let summary = summaries.find(item => item.flowId === requestedFlowId) ?? summaries.find(item => item.name === config.flowName);
-  const flowExists = Boolean(summary);
   if (!summary) {
     await evidence.step("panel", "flow-create-open", "Open the Add Flow dialog", () => panelPage.getByRole("button", { name: "Add Flow" }).click());
     const dialog = panelPage.getByRole("dialog");
@@ -392,34 +409,78 @@ async function provisionDemoFlow(control: ExistingFluxIQControlClient, config: D
     }
   }
   let flow = await control.getExactFlow(project.id, summary.flowId);
-  const fixtureOwned = (flow.document.metadata as Record<string, unknown> | undefined)?.createdBy === "fluxiq-web-extension-demo-workspace";
-  if (!flowExists || fixtureOwned || (saved === undefined && isEmptyDemoFlow(flow.document, project.id, flow.flowId, config.flowName))) {
-    await evidence.step("panel", "flow-fixture-seed", "Install the deterministic web action fixture in the created Flow", () => control.saveFlow({
-      projectId: project.id,
-      expectedUpdatedAt: flow.updatedAt,
-      authorizationPin: config.pin,
-      flow: createDemoFlowDocument(flow.document, project.id, flow.flowId, config.flowName),
-    }).then(() => undefined));
-    flow = await control.getExactFlow(project.id, flow.flowId);
+  const legacyParentFixture = isDemoFixtureDocument(flow.document, project.id, flow.flowId, config.flowName);
+  const parentRepresentationKind = (flow.document.metadata as Record<string, unknown> | undefined)?.flowRepresentationKind;
+  const recoverableInterruptedParent = isEmptyDemoFlow(flow.document, project.id, flow.flowId, config.flowName)
+    && (parentRepresentationKind === undefined || parentRepresentationKind === "legacy_single_graph");
+  if (!legacyParentFixture && !recoverableInterruptedParent) assertDemoParentDocument(flow.document, project.id, flow.flowId, config.flowName);
+  const subflows = await control.listFlowSubflows(project.id, flow.flowId);
+  const namedSubflows = subflows.filter(item => item.name === DEMO_SUBFLOW_NAME);
+  if (namedSubflows.length > 1) throw new RunnerFailure("environment.missing", `More than one demo Subflow named ${DEMO_SUBFLOW_NAME} exists`);
+  let subflow = namedSubflows[0];
+  if (!subflow) {
+    await createDemoSubflowInPanel(panelPage, flow.name, config.pin, evidence);
+    subflow = await waitForNamedSubflow(control, project.id, flow.flowId, DEMO_SUBFLOW_NAME);
   }
-  const viewport = await control.getFlowGraphViewport(project.id, flow.flowId);
-  if (fixtureOwned || isDemoFixtureDocument(flow.document, project.id, flow.flowId, config.flowName)) {
-    const fixture = createDemoFlowDocument(flow.document, project.id, flow.flowId, config.flowName);
-    const operations = demoGraphReconciliationOperations(fixture, flow.flowId, viewport);
-    if (operations.length) {
-    await evidence.step("panel", "flow-fixture-index", "Index the deterministic Flow fixture for the panel viewport", () => control.applyFlowGraphPatch({
+  if (!subflow.graphFlowId) throw new RunnerFailure("environment.missing", "The primary demo Subflow does not own a dedicated graph Flow");
+  const graphFlowId = subflow.graphFlowId;
+  const graphFlow = await control.getExactFlow(project.id, graphFlowId);
+  const graphFlowName = typeof graphFlow.document.name === "string" && graphFlow.document.name.trim() ? graphFlow.document.name : `${DEMO_SUBFLOW_NAME} Graph`;
+  assertDemoSubflowOwnership(graphFlow.document, project.id, flow.flowId, subflow.subflowId, graphFlowId);
+  const graphFixtureOwned = (graphFlow.document.metadata as Record<string, unknown> | undefined)?.createdBy === "fluxiq-web-extension-demo-workspace";
+  if (graphFixtureOwned || isEmptyDemoFlow(graphFlow.document, project.id, graphFlow.flowId, graphFlowName)) {
+    await evidence.step("panel", "subflow-fixture-seed", "Install deterministic fixture data only in the UI-created Subflow graph", () => control.saveFlow({
       projectId: project.id,
-      flowId: flow.flowId,
+      expectedUpdatedAt: graphFlow.updatedAt,
+      authorizationPin: config.pin,
+      flow: createDemoFlowDocument(graphFlow.document, project.id, graphFlow.flowId, graphFlowName),
+    }).then(() => undefined));
+  }
+  let persistedGraph = await control.getExactFlow(project.id, graphFlowId);
+  assertDemoSubflowOwnership(persistedGraph.document, project.id, flow.flowId, subflow.subflowId, graphFlowId);
+  const viewport = await control.getFlowGraphViewport(project.id, graphFlowId);
+  if (isDemoFixtureDocument(persistedGraph.document, project.id, graphFlowId, graphFlowName)) {
+    const fixture = createDemoFlowDocument(persistedGraph.document, project.id, graphFlowId, graphFlowName);
+    const operations = demoGraphReconciliationOperations(fixture, graphFlowId, viewport);
+    if (operations.length) {
+    await evidence.step("panel", "subflow-fixture-index", "Index deterministic fixture data only in the Subflow viewport", () => control.applyFlowGraphPatch({
+      projectId: project.id,
+      flowId: graphFlowId,
       baseRevision: viewport.graphRevision,
       mutationId: `demo-fixture-${randomBytes(8).toString("hex")}`,
       authorizationPin: config.pin,
       operations,
     }));
-    flow = await control.getExactFlow(project.id, flow.flowId);
+    persistedGraph = await control.getExactFlow(project.id, graphFlowId);
+    assertDemoSubflowOwnership(persistedGraph.document, project.id, flow.flowId, subflow.subflowId, graphFlowId);
     }
   }
-  assertDemoFlowDocument(flow.document, project.id, flow.flowId, config.flowName);
+  assertDemoFlowDocument(persistedGraph.document, project.id, graphFlowId, graphFlowName);
   await openFlowInCurrentProject(panelPage, config.flowName, evidence);
+  let router = await control.getFlowRouter(project.id, flow.flowId);
+  if (router?.fallback?.kind !== "subflow" || router.fallback.subflowId !== subflow.subflowId) {
+    await configureDemoRouterFallbackInPanel(panelPage, DEMO_SUBFLOW_NAME, config.pin, evidence);
+    router = await control.getFlowRouter(project.id, flow.flowId);
+  }
+  if (!router || router.fallback?.kind !== "subflow" || router.fallback.subflowId !== subflow.subflowId) {
+    throw new RunnerFailure("environment.missing", "The demo Router does not persist a fallback to its primary Subflow");
+  }
+  // This is deliberately last: an interrupted migration always retains either
+  // the old executable root fixture or the new verified Subflow + Router path.
+  if (legacyParentFixture || recoverableInterruptedParent) {
+    flow = await control.getExactFlow(project.id, flow.flowId);
+    if (legacyParentFixture && !isDemoFixtureDocument(flow.document, project.id, flow.flowId, config.flowName)) throw new RunnerFailure("environment.missing", "Demo parent Flow changed during hierarchy migration");
+    if (recoverableInterruptedParent && !isEmptyDemoFlow(flow.document, project.id, flow.flowId, config.flowName)) throw new RunnerFailure("environment.missing", "Interrupted demo parent Flow changed before representation repair");
+    await evidence.step("panel", "legacy-parent-graph-migration", "Retire the exact fixture-owned direct parent graph through Core's verified migration boundary", () => control.migrateLegacyFlowRepresentation({
+      projectId: project.id,
+      flowId: flow.flowId,
+      subflowId: subflow.subflowId,
+      authorizationPin: config.pin,
+    }));
+    flow = await control.getExactFlow(project.id, flow.flowId);
+  }
+  assertDemoParentDocument(flow.document, project.id, flow.flowId, config.flowName);
+  await openSubflowInCurrentProject(panelPage, DEMO_SUBFLOW_NAME, evidence);
   await assertDemoFlowRenderedLayout(panelPage, evidence);
   const state: DemoWorkspaceState = {
     schemaVersion: SCHEMA_VERSION,
@@ -427,6 +488,9 @@ async function provisionDemoFlow(control: ExistingFluxIQControlClient, config: D
     username: config.username,
     projectId: project.id,
     flowId: flow.flowId,
+    subflowId: subflow.subflowId,
+    graphFlowId,
+    routerId: router.routerId,
     projectName: project.name,
     flowName: flow.name,
     ...(saved?.latestRecordingId ? { latestRecordingId: saved.latestRecordingId } : {}),
@@ -440,10 +504,19 @@ async function provisionDemoFlow(control: ExistingFluxIQControlClient, config: D
 async function requireDemoFlow(control: ExistingFluxIQControlClient, config: DemoWorkspaceConfiguration): Promise<DemoWorkspaceState> {
   const state = await loadWorkspaceState(config);
   if (!state) throw new RunnerFailure("environment.missing", "Demo workspace is not provisioned; run pnpm demo:record first");
+  if (state.schemaVersion !== SCHEMA_VERSION) throw new RunnerFailure("environment.missing", "Demo workspace hierarchy needs migration; run pnpm demo:record first");
   const project = await control.requireProject(state.projectId, "web-automation");
   if (project.domainId !== "web-automation") throw new RunnerFailure("environment.missing", "Saved demo project is not a web-automation project");
   const flow = await control.getExactFlow(state.projectId, state.flowId);
-  assertDemoFlowDocument(flow.document, state.projectId, state.flowId, state.flowName);
+  assertDemoParentDocument(flow.document, state.projectId, state.flowId, state.flowName);
+  const subflow = (await control.listFlowSubflows(state.projectId, state.flowId)).find(item => item.subflowId === state.subflowId);
+  if (!subflow || subflow.graphFlowId !== state.graphFlowId) throw new RunnerFailure("environment.missing", "Saved demo Subflow identity no longer matches Core");
+  const graphFlow = await control.getExactFlow(state.projectId, state.graphFlowId);
+  assertDemoSubflowOwnership(graphFlow.document, state.projectId, state.flowId, state.subflowId, state.graphFlowId);
+  const graphFlowName = typeof graphFlow.document.name === "string" && graphFlow.document.name.trim() ? graphFlow.document.name : `${DEMO_SUBFLOW_NAME} Graph`;
+  assertDemoFlowDocument(graphFlow.document, state.projectId, state.graphFlowId, graphFlowName);
+  const router = await control.getFlowRouter(state.projectId, state.flowId);
+  if (!router || router.routerId !== state.routerId || router.fallback?.subflowId !== state.subflowId) throw new RunnerFailure("environment.missing", "Saved demo Router no longer targets its primary Subflow");
   await control.selectExistingContext(state.projectId);
   return state;
 }
@@ -479,7 +552,7 @@ export function createDemoFlowDocument(created: Record<string, unknown>, project
       { kind: "node", id: "web.output.dom-select", version: "1.0.0" },
       { kind: "node", id: "web.output.dom-click", version: "1.0.0" },
     ],
-    metadata: { createdBy: "fluxiq-web-extension-demo-workspace" },
+    metadata: { ...((created.metadata as Record<string, unknown> | undefined) ?? {}), createdBy: "fluxiq-web-extension-demo-workspace" },
   };
 }
 
@@ -491,6 +564,21 @@ function isEmptyDemoFlow(document: Record<string, unknown>, projectId: string, f
     && document.nodes.length === 0
     && Array.isArray(document.edges)
     && document.edges.length === 0;
+}
+
+export function assertDemoParentDocument(document: Record<string, unknown>, projectId: string, flowId: string, name: string): void {
+  const metadata = document.metadata as Record<string, unknown> | undefined;
+  if (document.projectId !== projectId || document.flowId !== flowId || document.name !== name || !Array.isArray(document.nodes) || document.nodes.length || !Array.isArray(document.edges) || document.edges.length || metadata?.flowRepresentationVersion !== 1 || metadata?.flowRepresentationKind !== "orchestration" || metadata?.subflowGraph !== undefined || metadata?.parentFlowId !== undefined || metadata?.parentSubflowId !== undefined) {
+    const state = { nodes: Array.isArray(document.nodes) ? document.nodes.length : "invalid", edges: Array.isArray(document.edges) ? document.edges.length : "invalid", representationVersion: metadata?.flowRepresentationVersion ?? null, representationKind: metadata?.flowRepresentationKind ?? null, hasOwnershipMetadata: metadata?.subflowGraph !== undefined || metadata?.parentFlowId !== undefined || metadata?.parentSubflowId !== undefined };
+    throw new RunnerFailure("environment.missing", `Demo parent Flow must be an empty orchestration graph (${JSON.stringify(state)})`);
+  }
+}
+
+export function assertDemoSubflowOwnership(document: Record<string, unknown>, projectId: string, parentFlowId: string, subflowId: string, graphFlowId: string): void {
+  const metadata = document.metadata as Record<string, unknown> | undefined;
+  if (document.projectId !== projectId || document.flowId !== graphFlowId || metadata?.subflowGraph !== true || metadata.parentFlowId !== parentFlowId || metadata.parentSubflowId !== subflowId || metadata.flowRepresentationVersion !== 1 || metadata.flowRepresentationKind !== "subflow_graph") {
+    throw new RunnerFailure("environment.missing", "Demo graph is not owned by the expected Subflow boundary");
+  }
 }
 
 export function assertDemoFlowDocument(document: Record<string, unknown>, projectId: string, flowId: string, name: string): void {
@@ -556,19 +644,27 @@ export function demoGraphReconciliationOperations(
   const edges = document.edges as Array<Record<string, any>>;
   const expectedNodeIds = new Set(nodes.map(node => String(node.id)));
   const expectedEdgeIds = new Set(edges.map(edge => String(edge.id)));
-  if (viewport.nodeCount !== expectedNodeIds.size
-    || viewport.edgeCount !== expectedEdgeIds.size
+  if (viewport.nodeCount !== viewport.nodes.length
+    || viewport.edgeCount !== viewport.edgeIds.length
+    || viewport.nodeCount > expectedNodeIds.size
+    || viewport.edgeCount > expectedEdgeIds.size
     || viewport.nodes.some(node => !expectedNodeIds.has(node.nodeId))
     || viewport.edgeIds.some(edgeId => !expectedEdgeIds.has(edgeId))) {
     throw new RunnerFailure("environment.missing", "The persistent demo graph index does not match its fixture-owned Flow document");
   }
   const current = new Map(viewport.nodes.map(node => [node.nodeId, node]));
-  return nodes.flatMap(node => {
+  const currentEdgeIds = new Set(viewport.edgeIds);
+  const missing = {
+    ...document,
+    nodes: nodes.filter(node => !current.has(String(node.id))),
+    edges: edges.filter(edge => !currentEdgeIds.has(String(edge.id))),
+  };
+  return [...demoGraphPatchOperations(missing, flowId), ...nodes.flatMap(node => {
     const saved = current.get(String(node.id));
     const x = Number(node.position?.x ?? 0);
     const y = Number(node.position?.y ?? 0);
     return saved && (saved.x !== x || saved.y !== y) ? [{ op: "move_node", nodeId: node.id, x, y }] : [];
-  });
+  })];
 }
 
 function normalizeDemoArray(key: string, value: unknown): unknown {
@@ -728,6 +824,76 @@ async function openFlowInCurrentProject(page: Page, flowName: string, evidence: 
   await evidence.step("panel", "flow-search-clear", "Clear the project hierarchy search", () => search.fill(""));
 }
 
+async function createDemoSubflowInPanel(page: Page, flowName: string, pin: string, evidence: BrowserEvidenceRecorder): Promise<void> {
+  await openFlowInCurrentProject(page, flowName, evidence);
+  const subflowsFolder = page.getByRole("treeitem", { name: "Subflows", exact: true });
+  await subflowsFolder.waitFor();
+  await evidence.step("panel", "subflow-create-open", "Open the real panel Subflow creation dialog", () => subflowsFolder.getByRole("button", { name: "Add inside Subflows" }).click());
+  const dialog = page.getByRole("dialog", { name: "Add to Subflows" });
+  await evidence.step("panel", "subflow-create-kind", "Choose an executable Subflow", () => dialog.getByRole("button", { name: /^Subflow/u }).click());
+  const form = page.getByRole("dialog", { name: "Create Subflow" });
+  await evidence.step("panel", "subflow-create-name", "Name the primary browser automation Subflow", () => form.getByLabel("Name").fill(DEMO_SUBFLOW_NAME));
+  await evidence.step("panel", "subflow-create-pin", "Authorize Subflow creation", () => form.getByLabel("Security PIN").fill(pin));
+  await evidence.step("panel", "subflow-create-submit", "Create the primary Subflow", () => form.getByRole("button", { name: "Create", exact: true }).click());
+  await hierarchyRow(page, DEMO_SUBFLOW_NAME).waitFor({ timeout: 30_000 });
+}
+
+async function openSubflowInCurrentProject(page: Page, subflowName: string, evidence: BrowserEvidenceRecorder): Promise<void> {
+  const search = page.getByRole("searchbox", { name: "Search project hierarchy" });
+  await evidence.step("panel", "subflow-search", "Search for the primary demo Subflow", () => search.fill(subflowName));
+  await evidence.step("panel", "subflow-open", "Open the primary Subflow Nodes editor", () => hierarchyRow(page, subflowName).click());
+  await ensureNodesEditorVisible(page, evidence, "subflow-nodes");
+  await evidence.step("panel", "subflow-search-clear", "Clear the project hierarchy search", () => search.fill(""));
+}
+
+async function ensureNodesEditorVisible(page: Page, evidence: BrowserEvidenceRecorder, stepPrefix: string): Promise<Locator> {
+  const canvas = page.getByLabel("Nodes whiteboard");
+  if (await canvas.isVisible().catch(() => false)) return canvas;
+  await canvas.waitFor({ timeout: 3_000 }).catch(() => undefined);
+  if (await canvas.isVisible().catch(() => false)) return canvas;
+
+  let nodesTab = page.getByRole("tab", { name: /^Nodes(?::|$)/u }).first();
+  if (!await nodesTab.count()) {
+    await evidence.step("panel", stepPrefix + "-add-tab", "Open the panel tab picker for Nodes", () => page.getByRole("button", { name: "Add tab" }).first().click());
+    const picker = page.locator(".automation-window-adder-panel:visible");
+    await evidence.step("panel", stepPrefix + "-search-tab", "Search the tab picker for Nodes", () => picker.getByRole("searchbox").fill("nodes"));
+    await evidence.step("panel", stepPrefix + "-select-tab", "Select the Nodes view", () => picker.getByRole("button", { name: /^Nodes/u }).click());
+    nodesTab = page.getByRole("tab", { name: /^Nodes(?::|$)/u }).first();
+    await nodesTab.waitFor({ timeout: 10_000 });
+  }
+  if (await nodesTab.getAttribute("aria-selected") !== "true") {
+    await evidence.step("panel", stepPrefix + "-activate-tab", "Activate the selected Subflow Nodes view", () => nodesTab.click());
+  }
+  try {
+    await canvas.waitFor({ timeout: 30_000 });
+  } catch (cause) {
+    const tabs = (await page.getByRole("tab").allTextContents()).map(value => value.replace(/\s+/gu, " ").trim()).filter(Boolean);
+    const alerts = (await page.getByRole("alert").allTextContents()).map(value => value.replace(/\s+/gu, " ").trim()).filter(Boolean);
+    throw new RunnerFailure("runtime.behavior", "FluxIQ panel did not open the selected Subflow Nodes canvas: " + JSON.stringify({ tabs, alerts }), { cause });
+  }
+  return canvas;
+}
+
+async function configureDemoRouterFallbackInPanel(page: Page, subflowName: string, pin: string, evidence: BrowserEvidenceRecorder): Promise<void> {
+  const routerTab = page.getByRole("tab", { name: /^Router(?::|$)/u }).first();
+  if (await routerTab.getAttribute("aria-selected") !== "true") await evidence.step("panel", "router-open", "Open the parent Flow Router", () => routerTab.click());
+  await page.getByRole("button", { name: "Edit fallback behavior" }).waitFor({ timeout: 30_000 });
+  await evidence.step("panel", "router-fallback-open", "Open Router fallback configuration", () => page.getByRole("button", { name: "Edit fallback behavior" }).click());
+  const dialog = page.getByRole("dialog", { name: "Fallback behavior" });
+  await evidence.step("panel", "router-fallback-kind", "Route unmatched runs to the primary Subflow", () => dialog.getByRole("radio", { name: /Continue to a subflow/u }).click());
+  await evidence.step("panel", "router-fallback-target", "Choose the primary Subflow as Router fallback", async () => {
+    const combobox = dialog.getByRole("combobox", { name: "Fallback subflow" });
+    if ((await combobox.inputValue()).trim() === subflowName) return;
+    await combobox.click();
+    await dialog.getByRole("option", { name: new RegExp("^" + escapeRegExp(subflowName)) }).click();
+  });
+  await evidence.step("panel", "router-fallback-save", "Request saving the Router fallback", () => dialog.getByRole("button", { name: "Save Fallback" }).click());
+  const auth = page.getByRole("dialog", { name: "Authorize Router Change" });
+  await evidence.step("panel", "router-fallback-pin", "Authorize the Router fallback", () => auth.getByLabel("Security PIN").fill(pin));
+  await evidence.step("panel", "router-fallback-authorize", "Persist the Router fallback", () => auth.getByRole("button", { name: "Authorize and save" }).click());
+  await auth.waitFor({ state: "hidden", timeout: 30_000 });
+}
+
 async function openDemoFlowInPanel(page: Page, config: DemoWorkspaceConfiguration, state: DemoWorkspaceState, evidence: BrowserEvidenceRecorder): Promise<void> {
   await openProjectInPanel(page, config.origin, state.projectName, evidence);
   await openFlowInCurrentProject(page, state.flowName, evidence);
@@ -779,17 +945,19 @@ async function runDemoFlowFromPanel(page: Page, state: DemoWorkspaceState, evide
   if (!flowTreeItemId) throw new RunnerFailure("runtime.behavior", "The selected demo Flow does not have a hierarchy identity");
   const runtimeRow = page.locator(`.automation-tree-item[data-tree-parent-id="${escapeCssAttribute(flowTreeItemId)}"] .tree-row-main`).filter({ hasText: /^Runtime Debug/u }).first();
   await evidence.step("panel", "runtime-open", "Open Runtime Debug for the selected demo Flow", () => runtimeRow.click());
-  await page.getByText("Run This Flow", { exact: true }).waitFor();
+  const runCommand = page.locator(".automation-runtime-run-command");
+  await runCommand.waitFor();
   await page.getByText("Checking Flow readiness...", { exact: true }).waitFor({ state: "hidden", timeout: 30_000 });
-  await evidence.step("panel", "runtime-no-llm", "Select No LLM intervention mode", () => page.getByRole("button", { name: /No LLM intervention/u }).click());
-  const ready = page.getByText("Flow is ready to run.", { exact: true });
-  await ready.waitFor({ state: "visible", timeout: 30_000 }).catch(() => undefined);
-  if (!await ready.isVisible().catch(() => false)) {
+  await evidence.step("panel", "runtime-no-llm", "Select No LLM intervention mode", () => runCommand.getByRole("button", { name: "No LLM intervention", exact: true }).click());
+  const runButton = runCommand.getByRole("button", { name: "Run", exact: true });
+  const readyDeadline = Date.now() + 30_000;
+  while (Date.now() < readyDeadline && await runButton.isDisabled()) await page.waitForTimeout(100);
+  if (await runButton.isDisabled()) {
     const issue = await page.locator(".automation-runtime-readiness").innerText().catch(() => "Flow readiness did not produce a visible result");
     throw new RunnerFailure("runtime.behavior", "FluxIQ panel reported the demo Flow is not ready: " + issue.replace(/\s+/gu, " ").trim());
   }
   const response = await evidence.step("panel", "runtime-run", "Run the deterministic Flow", async () => {
-    return waitForPanelRunResponse(page, () => page.locator(".automation-runtime-run-command").getByRole("button", { name: "Run", exact: true }).click());
+    return waitForPanelRunResponse(page, () => runButton.click());
   });
   const body = await response.json() as any;
   const runId = body?.payload?.runtimeSession?.runId;
@@ -802,25 +970,11 @@ async function runDemoFlowFromPanel(page: Page, state: DemoWorkspaceState, evide
     message: body?.payload?.runtimeSession?.trace?.message ?? "",
     actionAttemptCount: body?.payload?.runSummary?.actionAttemptCount ?? 0,
   };
-  if (status === "succeeded") await page.getByText("Last Run", { exact: true }).waitFor({ timeout: 30_000 });
   return { runId, status, diagnostic };
 }
 
 async function assertDemoFlowRenderedLayout(page: Page, evidence: BrowserEvidenceRecorder): Promise<void> {
-  let nodesTab = page.getByRole("tab", { name: /^Nodes(?::|$)/u }).first();
-  if (!await nodesTab.count()) {
-    await evidence.step("panel", "flow-layout-add-tab", "Open the panel tab picker for Nodes", () => page.getByRole("button", { name: "Add tab" }).first().click());
-    const picker = page.locator(".automation-window-adder-panel:visible");
-    await evidence.step("panel", "flow-layout-search-tab", "Search the tab picker for Nodes", () => picker.getByRole("searchbox").fill("nodes"));
-    await evidence.step("panel", "flow-layout-select-tab", "Select the Nodes view", () => picker.getByRole("button", { name: /^Nodes/u }).click());
-    nodesTab = page.getByRole("tab", { name: /^Nodes(?::|$)/u }).first();
-    await nodesTab.waitFor();
-  }
-  if (await nodesTab.getAttribute("aria-selected") !== "true") {
-    await evidence.step("panel", "flow-layout-open", "Open Nodes and verify the rendered Flow layout", () => nodesTab.click());
-  }
-  const canvas = page.getByLabel("Nodes whiteboard");
-  await canvas.waitFor();
+  await ensureNodesEditorVisible(page, evidence, "flow-layout");
   await page.locator(".react-flow__node[data-id]").first().waitFor({ timeout: 30_000 });
   const rectangles = await page.locator(".react-flow__node[data-id]").evaluateAll(elements => elements.map(element => {
     const rect = element.getBoundingClientRect();
@@ -837,14 +991,21 @@ async function assertDemoFlowRenderedLayout(page: Page, evidence: BrowserEvidenc
   }
 }
 
-async function waitForRunActions(control: ExistingFluxIQControlClient, projectId: string, runId: string, minimum: number) {
+async function waitForRoutedRunDetail(control: ExistingFluxIQControlClient, state: DemoWorkspaceState, runId: string) {
   const deadline = Date.now() + 10_000;
-  let actions = await control.listRunActions(projectId, runId);
-  while (Date.now() < deadline && actions.length < minimum) {
+  let detail = await control.getRunDetail(state.projectId, runId);
+  while (Date.now() < deadline && (detail.routeDecisions.length < 1 || detail.subflows.length < 1 || detail.actionAttempts.length < 4)) {
     await new Promise(resolve => setTimeout(resolve, 100));
-    actions = await control.listRunActions(projectId, runId);
+    detail = await control.getRunDetail(state.projectId, runId);
   }
-  return actions;
+  const decision = detail.routeDecisions.find(item => item.routerId === state.routerId && item.selectedSubflowId === state.subflowId);
+  if (!decision) throw new RunnerFailure("runtime.behavior", "Panel-started run did not persist a Router decision for the expected Subflow");
+  const entry = detail.subflows.find(item => item.subflowId === state.subflowId && item.graphFlowId === state.graphFlowId && item.routeDecisionId === decision.decisionId);
+  if (!entry) throw new RunnerFailure("runtime.behavior", "Panel-started run did not persist the expected Subflow graph entry");
+  if (detail.summary.routeDecisionCount !== detail.routeDecisions.length || detail.summary.subflowEntryCount !== detail.subflows.length || detail.summary.actionAttemptCount !== detail.actionAttempts.length) {
+    throw new RunnerFailure("runtime.behavior", "Panel-started run summary counts do not match its durable runtime detail");
+  }
+  return detail;
 }
 
 async function waitForPanelRunResponse(page: Page, dispatch: () => Promise<void>): Promise<import("@playwright/test").Response> {
@@ -964,6 +1125,17 @@ async function waitForNamedFlow(control: ExistingFluxIQControlClient, projectId:
   throw new RunnerFailure("environment.missing", "Panel Flow creation did not persist the demo Flow");
 }
 
+async function waitForNamedSubflow(control: ExistingFluxIQControlClient, projectId: string, flowId: string, subflowName: string) {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    const created = (await control.listFlowSubflows(projectId, flowId)).filter(item => item.name === subflowName);
+    if (created.length === 1) return created[0]!;
+    if (created.length > 1) throw new RunnerFailure("environment.missing", "Panel Subflow creation produced more than one matching demo Subflow");
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw new RunnerFailure("environment.missing", "Panel Subflow creation did not persist the demo Subflow");
+}
+
 function recordingIds(response: any): Set<string> {
   const values = response?.payload?.recordings ?? response?.payload?.items ?? response?.payload;
   return new Set(Array.isArray(values)
@@ -983,18 +1155,19 @@ async function assertConnectedSession(control: ExistingFluxIQControlClient, sess
   }
 }
 
-async function loadWorkspaceState(config: DemoWorkspaceConfiguration): Promise<DemoWorkspaceState | undefined> {
+async function loadWorkspaceState(config: DemoWorkspaceConfiguration): Promise<DemoWorkspaceState | LegacyDemoWorkspaceState | undefined> {
   try {
-    const value = JSON.parse(await readFile(statePath(config), "utf8")) as Partial<DemoWorkspaceState>;
-    if (value.schemaVersion !== SCHEMA_VERSION) return undefined;
+    const value = JSON.parse(await readFile(statePath(config), "utf8")) as Partial<DemoWorkspaceState> & { schemaVersion?: string };
+    if (value.schemaVersion !== SCHEMA_VERSION && value.schemaVersion !== "0.2") return undefined;
     if (
       value.origin !== config.origin
       || value.username !== config.username
       || !value.projectId
       || !value.flowId
     ) throw new Error("Demo workspace state does not match this FluxIQ origin and user");
+    if (value.schemaVersion === SCHEMA_VERSION && (!value.subflowId || !value.graphFlowId || !value.routerId)) throw new Error("Demo workspace hierarchy state is incomplete");
     if (config.projectId && value.projectId !== config.projectId) throw new Error("FLUXIQ_DEMO_PROJECT_ID conflicts with saved state");
-    return value as DemoWorkspaceState;
+    return value as DemoWorkspaceState | LegacyDemoWorkspaceState;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw error;

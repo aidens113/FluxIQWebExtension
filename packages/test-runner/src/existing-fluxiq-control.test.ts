@@ -110,6 +110,25 @@ test("reads graph counts and applies a bounded graph patch through public Automa
   });
 });
 
+test("reads the persisted parent, Subflow graph, and Router ownership boundary", async (t) => {
+  const client = await mockedClient(t, url => {
+    if (endpoint(url) === "list-flow-subflows") return json({ ok: true, payload: { subflows: [{ projectId: "project.web", flowId: "flow.main", subflowId: "subflow.primary", graphFlowId: "flow.graph", name: "Primary", status: "active", role: "primary" }] } });
+    if (endpoint(url) === "get-flow-router") return json({ ok: true, payload: { router: { routerId: "router.main", projectId: "project.web", flowId: "flow.main", rules: [], fallback: { kind: "subflow", subflowId: "subflow.primary" } } } });
+    throw new Error(`unexpected ${url.pathname}`);
+  });
+  assert.equal((await client.listFlowSubflows("project.web", "flow.main"))[0]?.graphFlowId, "flow.graph");
+  assert.deepEqual((await client.getFlowRouter("project.web", "flow.main"))?.fallback, { kind: "subflow", subflowId: "subflow.primary" });
+});
+
+test("uses only the explicit authorized Core seam for legacy representation migration", async (t) => {
+  let request: { endpoint: string; body: Record<string, unknown> } | undefined;
+  const client = await mockedClient(t, (url, init) => {
+    request = { endpoint: endpoint(url), body: JSON.parse(String(init.body ?? "{}")) as Record<string, unknown> };
+    return json({ ok: true, payload: { parentFlow: { flowId: "flow.main" }, subflow: { subflowId: "subflow.primary" }, graphFlow: { flowId: "flow.graph" } } });
+  });
+  await client.migrateLegacyFlowRepresentation({ projectId: "project.web", flowId: "flow.main", subflowId: "subflow.primary", authorizationPin: "test-pin" });
+  assert.deepEqual(request, { endpoint: "migrate-legacy-flow-representation", body: { projectId: "project.web", flowId: "flow.main", subflowId: "subflow.primary", authorizationPin: "test-pin" } });
+});
 test("reads a sanitized dependency and node-definition inventory", async (t) => {
   const client = await mockedClient(t, url => {
     if (endpoint(url) === "inspect-flow-dependencies") return json({ ok: true, payload: {
@@ -180,13 +199,17 @@ test("starts and runs the exact persisted Flow with deterministic non-adaptive c
 test("parses cancellation, run detail, action, and event DTOs without returning raw event payloads", async (t) => {
   const client = await mockedClient(t, url => {
     if (endpoint(url) === "cancel-runtime-session") return json({ ok: true, payload: { runtimeSession: { ...session, status: "cancelled" } } });
-    if (endpoint(url) === "get-flow-run-detail") return json({ ok: true, payload: { runDetail: { summary, actionAttempts: [action], metadata: { correlationId: "correlation.one" } } } });
+    if (endpoint(url) === "get-flow-run-detail") return json({ ok: true, payload: { runDetail: { summary, routeDecisions: [{ decisionId: "decision.one", routerId: "router.one", selectedSubflowId: "subflow.one", fallbackUsed: true }], subflows: [{ entryId: "entry.one", subflowId: "subflow.one", status: "succeeded", metadata: { graphFlowId: "flow.graph", routeDecisionId: "decision.one", private: "discard-me" } }], actionAttempts: [action], metadata: { correlationId: "correlation.one" } } } });
     if (endpoint(url) === "list-flow-run-actions") return json({ ok: true, payload: { actions: [action], page: {} } });
     if (endpoint(url) === "list-flow-run-events") return json({ ok: true, payload: { events: [event], page: {} } });
     throw new Error(`unexpected ${url.pathname}`);
   });
   assert.equal((await client.cancelRun("project.web", "run.one"))?.status, "cancelled");
-  assert.equal((await client.getRunDetail("project.web", "run.one")).actionAttempts[0]?.attemptId, "attempt.one");
+  const detail = await client.getRunDetail("project.web", "run.one");
+  assert.equal(detail.actionAttempts[0]?.attemptId, "attempt.one");
+  assert.deepEqual(detail.routeDecisions[0], { decisionId: "decision.one", routerId: "router.one", selectedSubflowId: "subflow.one", fallbackUsed: true });
+  assert.deepEqual(detail.subflows[0], { entryId: "entry.one", subflowId: "subflow.one", status: "succeeded", graphFlowId: "flow.graph", routeDecisionId: "decision.one" });
+  assert.equal(JSON.stringify(detail.subflows).includes("discard-me"), false);
   assert.equal((await client.listRunActions("project.web", "run.one"))[0]?.definitionId, "web.dom.type");
   const parsedEvent = (await client.listRunEvents("project.web", "run.one"))[0];
   assert.equal(parsedEvent?.eventId, "event.one");

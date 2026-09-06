@@ -8,8 +8,12 @@ export type ExistingFlowSummary = { flowId: string; name: string; description?: 
 export type ExistingFlow = { flowId: string; projectId: string; name: string; updatedAt: number; contentHash: string; document: JsonRecord };
 export type ExistingRuntimeSession = { runId: string; projectId: string | null; flowId: string; targetKind: "task" | "routine" | "flow"; targetId: string; status: RuntimeStatus };
 export type RuntimeStatus = "queued" | "running" | "waiting" | "succeeded" | "failed" | "cancelled";
-export type ExistingRunSummary = { runId: string; projectId: string; flowId: string; status: RuntimeStatus; actionAttemptCount: number; updatedAt: number; startedAt?: number; finishedAt?: number };
-export type ExistingRunDetail = { summary: ExistingRunSummary; actionAttempts: ExistingRunAction[]; rawMetadata?: JsonRecord };
+export type ExistingRunSummary = { runId: string; projectId: string; flowId: string; status: RuntimeStatus; routeDecisionCount: number; subflowEntryCount: number; actionAttemptCount: number; updatedAt: number; startedAt?: number; finishedAt?: number };
+export type ExistingRouteDecision = { decisionId: string; routerId: string; selectedRuleId?: string; selectedSubflowId?: string; fallbackUsed?: boolean };
+export type ExistingSubflowExecution = { entryId: string; subflowId: string; status: RuntimeStatus; graphFlowId?: string; routeDecisionId?: string };
+export type ExistingRunDetail = { summary: ExistingRunSummary; routeDecisions: ExistingRouteDecision[]; subflows: ExistingSubflowExecution[]; actionAttempts: ExistingRunAction[]; rawMetadata?: JsonRecord };
+export type ExistingFlowSubflow = { subflowId: string; flowId: string; projectId: string; graphFlowId?: string; name: string; status: string; role: string };
+export type ExistingFlowRouter = { routerId: string; flowId: string; projectId: string; fallback?: { kind: string; subflowId?: string }; rules: Array<{ ruleId: string; target?: { kind?: string; subflowId?: string } }> };
 export type ExistingRunAction = { attemptId: string; nodeId: string; definitionId: string; order: number; status: RuntimeStatus | "unknown"; startedAt: number; finishedAt?: number; message?: string };
 export type ExistingRunEvent = { sequence: number; eventId: string; eventKind: "run_summary" | "route_decision" | "subflow_execution" | "action_attempt" | "recovery_attempt" | "intervention"; timestampMs: number; title: string; status?: string; entityId?: string };
 export type ExistingGatewayDiscovery = { enabled: boolean; sessionCount: number; pairingCount: number; trustedClientCount: number; publicUrl: string | null; listening: boolean; runtimeId?: string };
@@ -103,6 +107,35 @@ export class ExistingFluxIQControlClient extends FluxIQControlClient {
     };
   }
 
+  async listFlowSubflows(projectId: string, flowId: string): Promise<ExistingFlowSubflow[]> {
+    const payload = record(await this.automationStudioCall("list-flow-subflows", { projectId, flowId, limit: 100, offset: 0 }), "subflows payload");
+    const page = optionalRecord(payload.page, "subflows page");
+    return array(payload.subflows ?? page?.subflows, "subflows").map((value, index) => flowSubflow(value, `subflows[${index}]`, projectId, flowId));
+  }
+
+  async getFlowRouter(projectId: string, flowId: string): Promise<ExistingFlowRouter | null> {
+    const payload = record(await this.automationStudioCall("get-flow-router", { projectId, flowId }), "router payload");
+    if (payload.router == null) return null;
+    const router = record(payload.router, "router");
+    if (text(router.projectId, "router.projectId") !== projectId || text(router.flowId, "router.flowId") !== flowId) {
+      throw new RunnerFailure("environment.missing", "FluxIQ returned a Router outside the requested project/Flow scope");
+    }
+    const fallback = optionalRecord(router.fallback, "router.fallback");
+    return {
+      routerId: text(router.routerId, "router.routerId"), projectId, flowId,
+      ...(fallback ? { fallback: { kind: text(fallback.kind, "router.fallback.kind"), ...(typeof fallback.subflowId === "string" ? { subflowId: fallback.subflowId } : {}) } } : {}),
+      rules: array(router.rules, "router.rules").map((value, index) => {
+        const rule = record(value, `router.rules[${index}]`);
+        const target = optionalRecord(rule.target, `router.rules[${index}].target`);
+        return { ruleId: text(rule.ruleId, `router.rules[${index}].ruleId`), ...(target ? { target: { ...(typeof target.kind === "string" ? { kind: target.kind } : {}), ...(typeof target.subflowId === "string" ? { subflowId: target.subflowId } : {}) } } : {}) };
+      }),
+    };
+  }
+
+  async migrateLegacyFlowRepresentation(input: { projectId: string; flowId: string; subflowId: string; authorizationPin: string }): Promise<void> {
+    await this.automationStudioCall("migrate-legacy-flow-representation", input);
+  }
+
   async applyFlowGraphPatch(input: { projectId: string; flowId: string; baseRevision: number; mutationId: string; operations: unknown[]; authorizationPin: string }): Promise<void> {
     await this.automationStudioCall("apply-graph-patch", input);
   }
@@ -167,7 +200,9 @@ export class ExistingFluxIQControlClient extends FluxIQControlClient {
     const summary = runSummary(detail.summary, "runDetail.summary");
     if (summary.projectId !== projectId || summary.runId !== runId) throw new RunnerFailure("runtime.behavior", "FluxIQ run detail did not match the requested run");
     const actions = detail.actionAttempts === undefined ? [] : array(detail.actionAttempts, "runDetail.actionAttempts").map((value, index) => runAction(value, `actionAttempts[${index}]`));
-    return { summary, actionAttempts: actions, ...(detail.metadata === undefined ? {} : { rawMetadata: record(detail.metadata, "runDetail.metadata") }) };
+    const routeDecisions = array(detail.routeDecisions ?? [], "runDetail.routeDecisions").map((value, index) => routeDecision(value, `routeDecisions[${index}]`));
+    const subflows = array(detail.subflows ?? [], "runDetail.subflows").map((value, index) => subflowExecution(value, `subflows[${index}]`));
+    return { summary, routeDecisions, subflows, actionAttempts: actions, ...(detail.metadata === undefined ? {} : { rawMetadata: record(detail.metadata, "runDetail.metadata") }) };
   }
 
   async listRunActions(projectId: string, runId: string, options: { limit?: number; cursor?: string } & FluxIQHttpOptions = {}): Promise<ExistingRunAction[]> {
@@ -185,6 +220,7 @@ export class ExistingFluxIQControlClient extends FluxIQControlClient {
 
 function project(value: unknown, at: string): ExistingProject { const item = record(value, at); const domain = item.domainId; if (domain !== undefined && domain !== null && typeof domain !== "string") invalid(`${at}.domainId`); return { id: text(item.id, `${at}.id`), name: text(item.name, `${at}.name`), description: typeof item.description === "string" ? item.description : "", ...(domain === undefined ? {} : { domainId: domain as string | null }), createdAt: finite(item.createdAt, `${at}.createdAt`), updatedAt: finite(item.updatedAt, `${at}.updatedAt`) }; }
 function flowSummary(value: unknown, at: string): ExistingFlowSummary { const item = record(value, at); const sourceMode = enumeration(item.sourceMode, ["visual", "code"] as const, `${at}.sourceMode`); return { flowId: text(item.flowId, `${at}.flowId`), name: text(item.name, `${at}.name`), ...(typeof item.description === "string" ? { description: item.description } : {}), sourceMode, nodeCount: integer(item.nodeCount, `${at}.nodeCount`), edgeCount: integer(item.edgeCount, `${at}.edgeCount`), updatedAt: finite(item.updatedAt, `${at}.updatedAt`), ...(typeof item.version === "string" ? { version: item.version } : {}) }; }
+function flowSubflow(value: unknown, at: string, projectId: string, flowId: string): ExistingFlowSubflow { const item = record(value, at); if (text(item.projectId, `${at}.projectId`) !== projectId || text(item.flowId, `${at}.flowId`) !== flowId) invalid(`${at} escaped the requested parent Flow`); return { projectId, flowId, subflowId: text(item.subflowId, `${at}.subflowId`), ...(typeof item.graphFlowId === "string" && item.graphFlowId ? { graphFlowId: item.graphFlowId } : {}), name: text(item.name, `${at}.name`), status: text(item.status, `${at}.status`), role: text(item.role, `${at}.role`) }; }
 function flowDependency(value: unknown, at: string): ExistingFlowDependency { const item = record(value, at); const snapshot = record(item.snapshot, `${at}.snapshot`); return { publicationId: text(item.publicationId, `${at}.publicationId`), projectId: text(item.projectId, `${at}.projectId`), flowId: text(item.flowId, `${at}.flowId`), version: text(item.version, `${at}.version`), status: enumeration(item.status, ["published", "deprecated"] as const, `${at}.status`), flowDigest: text(snapshot.flowDigest, `${at}.snapshot.flowDigest`), requiredRuntimeCapabilities: stringArray(snapshot.requiredRuntimeCapabilities ?? [], `${at}.snapshot.requiredRuntimeCapabilities`) }; }
 function flowDependent(value: unknown, at: string): ExistingFlowDependencyInventory["usedBy"][number] { const item = record(value, at); return { projectId: text(item.projectId, `${at}.projectId`), flowId: text(item.flowId, `${at}.flowId`), flowName: text(item.flowName, `${at}.flowName`), version: text(item.version, `${at}.version`), nodeId: text(item.nodeId, `${at}.nodeId`) }; }
 function flowUpgrade(value: unknown, at: string): ExistingFlowDependencyInventory["availableUpgrades"][number] { const item = record(value, at); return { nodeId: text(item.nodeId, `${at}.nodeId`), flowId: text(item.flowId, `${at}.flowId`), currentVersion: text(item.currentVersion, `${at}.currentVersion`), versions: stringArray(item.versions, `${at}.versions`) }; }
@@ -212,9 +248,11 @@ function nodeDefinition(value: unknown, at: string): ExistingNodeDefinition {
 }
 function nonEmptyStringArray(value: unknown, at: string): boolean { if (value === undefined) return false; return stringArray(value, at).length > 0; }
 function runtimeSession(value: unknown, at: string, projectId: string, flowId?: string): ExistingRuntimeSession { const item = record(value, at); const parsed = { runId: text(item.runId, `${at}.runId`), projectId: nullableText(item.projectId, `${at}.projectId`), flowId: text(item.flowId, `${at}.flowId`), targetKind: enumeration(item.targetKind, ["task", "routine", "flow"] as const, `${at}.targetKind`), targetId: text(item.targetId, `${at}.targetId`), status: status(item.status, `${at}.status`) }; if (parsed.projectId !== projectId || (flowId && (parsed.flowId !== flowId || parsed.targetKind !== "flow" || parsed.targetId !== flowId))) throw new RunnerFailure("runtime.behavior", "FluxIQ runtime session did not match the requested persisted Flow"); return parsed; }
-function runSummary(value: unknown, at: string): ExistingRunSummary { const item = record(value, at); return { runId: text(item.runId, `${at}.runId`), projectId: text(item.projectId, `${at}.projectId`), flowId: text(item.flowId, `${at}.flowId`), status: status(item.status, `${at}.status`), actionAttemptCount: integer(item.actionAttemptCount, `${at}.actionAttemptCount`), updatedAt: finite(item.updatedAt, `${at}.updatedAt`), ...(item.startedAt === undefined ? {} : { startedAt: finite(item.startedAt, `${at}.startedAt`) }), ...(item.finishedAt === undefined ? {} : { finishedAt: finite(item.finishedAt, `${at}.finishedAt`) }) }; }
+function runSummary(value: unknown, at: string): ExistingRunSummary { const item = record(value, at); return { runId: text(item.runId, `${at}.runId`), projectId: text(item.projectId, `${at}.projectId`), flowId: text(item.flowId, `${at}.flowId`), status: status(item.status, `${at}.status`), routeDecisionCount: integer(item.routeDecisionCount, `${at}.routeDecisionCount`), subflowEntryCount: integer(item.subflowEntryCount, `${at}.subflowEntryCount`), actionAttemptCount: integer(item.actionAttemptCount, `${at}.actionAttemptCount`), updatedAt: finite(item.updatedAt, `${at}.updatedAt`), ...(item.startedAt === undefined ? {} : { startedAt: finite(item.startedAt, `${at}.startedAt`) }), ...(item.finishedAt === undefined ? {} : { finishedAt: finite(item.finishedAt, `${at}.finishedAt`) }) }; }
 function runAction(value: unknown, at: string): ExistingRunAction { const item = record(value, at); return { attemptId: text(item.attemptId, `${at}.attemptId`), nodeId: text(item.nodeId, `${at}.nodeId`), definitionId: text(item.definitionId, `${at}.definitionId`), order: integer(item.order, `${at}.order`), status: enumeration(item.status, ["queued", "running", "waiting", "succeeded", "failed", "cancelled", "unknown"] as const, `${at}.status`), startedAt: finite(item.startedAt, `${at}.startedAt`), ...(item.finishedAt === undefined ? {} : { finishedAt: finite(item.finishedAt, `${at}.finishedAt`) }), ...(typeof item.message === "string" ? { message: item.message } : {}) }; }
 function runEvent(value: unknown, at: string): ExistingRunEvent { const item = record(value, at); return { sequence: integer(item.sequence, `${at}.sequence`), eventId: text(item.eventId, `${at}.eventId`), eventKind: enumeration(item.eventKind, ["run_summary", "route_decision", "subflow_execution", "action_attempt", "recovery_attempt", "intervention"] as const, `${at}.eventKind`), timestampMs: finite(item.timestampMs, `${at}.timestampMs`), title: text(item.title, `${at}.title`), ...(typeof item.status === "string" ? { status: item.status } : {}), ...(typeof item.entityId === "string" ? { entityId: item.entityId } : {}) }; }
+function routeDecision(value: unknown, at: string): ExistingRouteDecision { const item = record(value, at); return { decisionId: text(item.decisionId, `${at}.decisionId`), routerId: text(item.routerId, `${at}.routerId`), ...(typeof item.selectedRuleId === "string" ? { selectedRuleId: item.selectedRuleId } : {}), ...(typeof item.selectedSubflowId === "string" ? { selectedSubflowId: item.selectedSubflowId } : {}), ...(typeof item.fallbackUsed === "boolean" ? { fallbackUsed: item.fallbackUsed } : {}) }; }
+function subflowExecution(value: unknown, at: string): ExistingSubflowExecution { const item = record(value, at); const metadata = optionalRecord(item.metadata, `${at}.metadata`); return { entryId: text(item.entryId, `${at}.entryId`), subflowId: text(item.subflowId, `${at}.subflowId`), status: status(item.status, `${at}.status`), ...(typeof metadata?.graphFlowId === "string" ? { graphFlowId: metadata.graphFlowId } : {}), ...(typeof metadata?.routeDecisionId === "string" ? { routeDecisionId: metadata.routeDecisionId } : {}) }; }
 function status(value: unknown, at: string): RuntimeStatus { return enumeration(value, ["queued", "running", "waiting", "succeeded", "failed", "cancelled"] as const, at); }
 function record(value: unknown, at: string): JsonRecord { if (!value || typeof value !== "object" || Array.isArray(value)) invalid(`${at} must be an object`); return value as JsonRecord; }
 function optionalRecord(value: unknown, at: string): JsonRecord | undefined { return value === undefined || value === null ? undefined : record(value, at); }
