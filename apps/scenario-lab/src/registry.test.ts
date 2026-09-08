@@ -5,11 +5,11 @@ import { getScenarioManifest, listScenarioManifests, listScenarios } from "./reg
 import { basicFormScenario } from "./scenarios/basic-form/scenario.js";
 import { createScenarioManifest, defineScenario, scenarioIds } from "./types.js";
 
-test("all ten registered fixtures expose valid versioned WebScenario manifests", () => {
+test("all twelve registered fixtures expose valid versioned WebScenario manifests", () => {
   const definitions = listScenarios();
   const manifests = listScenarioManifests();
-  assert.equal(definitions.length, 10);
-  assert.equal(manifests.length, 10);
+  assert.equal(definitions.length, 12);
+  assert.equal(manifests.length, 12);
   assert.deepEqual(definitions.map(({ id }) => id), [...scenarioIds]);
 
   for (const definition of definitions) {
@@ -20,8 +20,13 @@ test("all ten registered fixtures expose valid versioned WebScenario manifests",
     assert.equal(definition.manifest.title, definition.title, definition.id);
     assert.equal(definition.manifest.startPath, definition.startPath, definition.id);
     assert.equal(definition.manifest.seed, definition.seed, definition.id);
-    assert.ok(definition.manifest.recordingScript.length > 0, definition.id);
-    assert.ok(definition.manifest.recordingScript.some(({ operation }) => operation !== "checkpoint"), `${definition.id} needs a semantic action step`);
+    if (definition.id === "instruction-only-form") {
+      assert.equal(definition.manifest.recordingScript.length, 0);
+      assert.ok(definition.manifest.playbackGoal);
+    } else {
+      assert.ok(definition.manifest.recordingScript.length > 0, definition.id);
+      assert.ok(definition.manifest.recordingScript.some(({ operation }) => operation !== "checkpoint"), `${definition.id} needs a semantic action step`);
+    }
     assert.equal(definition.manifest.networkPolicy, "loopback-only", definition.id);
     assert.equal(definition.manifest.evidencePolicy?.screenshots, "events", definition.id);
     assert.ok(Object.values(definition.manifest.expected).some((expectations) => Array.isArray(expectations) && expectations.length > 0), `${definition.id} needs expected behavior`);

@@ -44,3 +44,22 @@ test("exports a standalone versioned JSON schema", () => {
   assert.equal(webScenarioJsonSchema.properties.schemaVersion.const, "0.1");
   assert.ok(webScenarioJsonSchema.required.includes("recordingScript"));
 });
+
+test("allows an empty recording script only for an explicit playback goal", () => {
+  const instructionOnly = {
+    ...validScenario,
+    id: "instruction-only-form",
+    recordingScript: [],
+    playbackGoal: {
+      id: "submit",
+      description: "Complete the form from instructions.",
+      successFacts: [{ id: "submitted", subject: "result", predicate: "text", value: "Submitted" }],
+    },
+  };
+  assert.equal(validateWebScenario(instructionOnly).valid, true);
+  const missingGoal = validateWebScenario({ ...instructionOnly, playbackGoal: undefined });
+  assert.equal(missingGoal.valid, false);
+  assert.ok(!missingGoal.valid && missingGoal.issues.some(issue => issue.path === "$.recordingScript"));
+  assert.equal(webScenarioJsonSchema.properties.recordingScript.minItems, undefined);
+  assert.deepEqual(webScenarioJsonSchema.allOf[0].then.required, ["playbackGoal"]);
+});

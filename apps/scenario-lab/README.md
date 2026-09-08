@@ -28,8 +28,9 @@ Every controller and mutation request requires
 - `POST /__control/seed` with `{ "seed": 42 }`
 - `POST /api/<scenario>/<operation>` for fixture-owned mutations
 
-The deterministic pages begin at `/scenarios/basic-form/`,
-`/scenarios/dynamic-list/`, and `/scenarios/navigation/start`. Responses use a
+The deterministic pages include `/scenarios/basic-form/`,
+`/scenarios/dynamic-list/`, `/scenarios/navigation/start`, and
+`/scenarios/llm-target-drift/`. Responses use a
 same-origin CSP and reject non-loopback `Host` headers. The E2E browser fixture
 must additionally deny non-loopback browser requests so extension-originated
 traffic is covered too.
@@ -45,3 +46,23 @@ explicit run seed to every fixture state.
 
 The deterministic corpus is structurally loopback-only. Real-site probes use a
 separate operational lane and must not be added to this registry.
+
+## Controlled LLM diagnosis fixture
+
+`llm-target-drift` records one successful click against
+`data-testid="diagnosis-target"` in baseline mode. Its visible controls switch
+the persistent in-memory fixture to a missing target, a deliberately renamed
+replacement, or the restored baseline. Every transition is available through
+the authenticated fixture API as well:
+
+- `POST /api/llm-target-drift/set-mode` with `{ "mode": "missing" }` or
+  `{ "mode": "renamed" }`
+- `POST /api/llm-target-drift/restore`
+- `GET /__control/final-state?scenario=llm-target-drift`
+
+The final-state response is the exact oracle: seed marker, mode, activation and
+transition counts, last operation, recorded/rendered target IDs, target
+presence, and expected result text. Missing mode remains unchanged across page
+reloads and rejected activation mutations, so a diagnosis run and a fresh
+no-LLM run encounter the same deterministic failure. `restore` clears the
+activation count; the global reset restores the original seeded state.

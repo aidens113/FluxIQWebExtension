@@ -1,7 +1,7 @@
 // src/domain.test.ts
 import assert from "node:assert/strict";
-import { AutomationStudioService, validateStateSnapshot } from "fluxiq/automation-studio";
-import { validateAutomationStudioNodeDefinition as validateAutomationStudioNodeDefinition2 } from "fluxiq/automation-studio/nodes";
+import { AutomationStudioService, automationStudioFlowBootstrapCatalogByteBudget, buildAutomationStudioFlowBootstrapContext, estimateAutomationStudioDeepSeekInputTokens, runAutomationStudioLlmHarness, validateStateSnapshot } from "fluxiq/automation-studio";
+import { AutomationStudioNodeRegistry as AutomationStudioNodeRegistry2, validateAutomationStudioNodeDefinition as validateAutomationStudioNodeDefinition2 } from "fluxiq/automation-studio/nodes";
 
 // src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
@@ -308,6 +308,10 @@ function iconForOutput(outputId) {
   if (outputId === "web.dom.capture_snapshot") return "camera";
   return "square-dot";
 }
+
+// src/output-nodes/native-runtime.ts
+var WEB_AUTOMATION_RUNTIME_CAPABILITIES = ["web.actions"];
+var WEB_AUTOMATION_RUNTIME_PERMISSIONS = ["web-automation.action"];
 
 // src/output-nodes/targets.ts
 function outputTargetFromPayload(payload) {
@@ -3260,6 +3264,94 @@ var clickNodeDefinition = outputNodeDefinitions.find((definition) => definition.
 assert.equal(clickNodeDefinition?.requiredRuntimeCapabilities?.includes("web.actions"), true);
 assert.equal(validateAutomationStudioNodeDefinition2(clickNodeDefinition).ok, true);
 assert.equal(outputNodeDefinitions.every((definition) => validateAutomationStudioNodeDefinition2(definition).ok), true);
+var bootstrapInstruction = "Using the connected browser page, enter Ada in Name, choose Team for Plan, submit the form, and verify the result says Submitted: Ada / team.";
+var bootstrapResolution = {
+  scope: { kind: "domain", domainId: WEB_AUTOMATION_DOMAIN_ID },
+  runtimeCapabilities: WEB_AUTOMATION_RUNTIME_CAPABILITIES,
+  permissions: WEB_AUTOMATION_RUNTIME_PERMISSIONS
+};
+var bootstrapRegistry = new AutomationStudioNodeRegistry2();
+for (const definition of outputNodeDefinitions) bootstrapRegistry.register(definition);
+assert.equal(new AutomationStudioNodeRegistry2().list(bootstrapResolution).length, 39);
+assert.equal(bootstrapRegistry.list(bootstrapResolution).length, 50);
+var bootstrapCatalogBudget = automationStudioFlowBootstrapCatalogByteBudget({
+  maxInputTokens: 2e3,
+  instructionBytes: Buffer.byteLength(bootstrapInstruction, "utf8")
+});
+var bootstrapContext = buildAutomationStudioFlowBootstrapContext({
+  registry: bootstrapRegistry,
+  resolution: bootstrapResolution,
+  instructionText: bootstrapInstruction,
+  maxCatalogBytes: bootstrapCatalogBudget
+});
+assert.deepEqual(bootstrapContext.catalogSelection.missingRequiredTerms, []);
+var bootstrapWithoutHostPermissions = buildAutomationStudioFlowBootstrapContext({
+  registry: bootstrapRegistry,
+  resolution: { ...bootstrapResolution, permissions: [] },
+  instructionText: bootstrapInstruction,
+  maxCatalogBytes: bootstrapCatalogBudget
+});
+assert.deepEqual(
+  bootstrapWithoutHostPermissions.catalogSelection.missingRequiredTerms,
+  ["submit"],
+  "the live catalog projection must retain the web host's granted permissions"
+);
+assert.equal(bootstrapContext.catalogSelection.usedBytes <= bootstrapCatalogBudget, true);
+assert.equal(Buffer.byteLength(JSON.stringify(bootstrapContext), "utf8") + Buffer.byteLength(bootstrapInstruction, "utf8") + 1800 <= 2e3 * 4, true);
+var bootstrapHarnessInput = {
+  taskKind: "flow_bootstrap",
+  projectId: "project.catalog-acceptance",
+  flowId: "flow.catalog-acceptance",
+  instructions: [{
+    schemaVersion: "0.1",
+    instructionId: "instruction.catalog-acceptance",
+    title: "Build the instruction-only form automation",
+    body: bootstrapInstruction,
+    scope: { kind: "flow", projectId: "project.catalog-acceptance", flowId: "flow.catalog-acceptance" },
+    priority: 100,
+    status: "active",
+    requirement: "required",
+    tags: ["generation"],
+    createdAt: 1,
+    updatedAt: 1
+  }],
+  flowBootstrap: { registry: bootstrapRegistry, resolution: bootstrapResolution },
+  tokenLimits: { maxInputTokens: 2e3, maxOutputTokens: 512, maxTotalTokens: 3e3 },
+  maxEstimatedCostUsd: 0.25,
+  timeoutMs: 2e4
+};
+var bootstrapDryRun = await runAutomationStudioLlmHarness({ ...bootstrapHarnessInput, dryRun: true });
+assert.equal(bootstrapDryRun.request.estimatedInputTokens <= 2e3, true);
+assert.equal(bootstrapDryRun.request.estimatedInputTokens + 512 <= 3e3, true);
+assert.equal(bootstrapCatalogBudget, 5326);
+assert.equal(bootstrapContext.catalogSelection.usedBytes, 4959);
+assert.equal(bootstrapDryRun.request.estimatedInputTokens, 1753);
+var bootstrapDeepSeekBodyTokens = estimateAutomationStudioDeepSeekInputTokens(bootstrapDryRun.request);
+assert.equal(bootstrapDeepSeekBodyTokens, 1996);
+assert.equal(bootstrapDeepSeekBodyTokens <= 2e3, true);
+var selectedBootstrapActions = new Set(bootstrapContext.nodeCatalog.flatMap((entry) => entry.outputAction?.fixed ? [entry.outputAction.fixed] : []));
+for (const action of ["web.dom.type", "web.dom.select", "web.dom.click"]) assert.equal(selectedBootstrapActions.has(action), true, `bootstrap catalog omitted ${action}; selected=${[...selectedBootstrapActions].join(",")}; used=${bootstrapContext.catalogSelection.usedBytes}/${bootstrapContext.catalogSelection.byteBudget}`);
+assert.equal(["web.dom.wait_for_text", "web.dom.wait_for_selector", "web.dom.extract"].some((action) => selectedBootstrapActions.has(action)), true, "bootstrap catalog omitted a verify/assert equivalent");
+var missingSelectRegistry = new AutomationStudioNodeRegistry2(outputNodeDefinitions.filter((definition) => definition.outputAction?.fixedOutputId !== "web.dom.select"));
+var incompleteBootstrapContext = buildAutomationStudioFlowBootstrapContext({
+  registry: missingSelectRegistry,
+  resolution: bootstrapResolution,
+  instructionText: bootstrapInstruction,
+  maxCatalogBytes: bootstrapCatalogBudget
+});
+assert.equal(incompleteBootstrapContext.catalogSelection.missingRequiredTerms.includes("choose"), true);
+var incompleteProviderCalls = 0;
+var incompleteHarness = await runAutomationStudioLlmHarness({
+  ...bootstrapHarnessInput,
+  flowBootstrap: { registry: missingSelectRegistry, resolution: bootstrapResolution },
+  provider: { metadata: { provider: "test", model: "test" }, runTask: async () => {
+    incompleteProviderCalls += 1;
+    throw new Error("provider must remain unreachable");
+  } }
+});
+assert.equal(incompleteHarness.ok, false);
+assert.equal(incompleteHarness.diagnostics.some((diagnostic) => diagnostic.code === "bootstrap.catalog_essentials_missing"), true);
+assert.equal(incompleteProviderCalls, 0);
 assert.equal(
   outputNodeDefinitions.every((definition) => definition.parameters.every((parameter) => parameter.allowStateBinding === true)),
   true

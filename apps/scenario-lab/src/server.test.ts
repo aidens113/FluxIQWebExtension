@@ -21,6 +21,7 @@ test("health and control endpoints require the run token", async () => withLab(a
   assert.deepEqual(await response.json(), { status: "ready", seed: 12, scenarios: [
     "basic-form", "dynamic-list", "navigation", "long-document", "iframe-checkout",
     "ambiguous-targets", "delayed-ui", "failure-surfaces", "reconnect", "sensitive-input",
+    "llm-target-drift", "instruction-only-form",
   ] });
   const seeded = await fetch(`${lab.origin}/__control/seed`, authorized({
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seed: 88 }),
@@ -68,6 +69,31 @@ test("dynamic list identity, mutation, and reset are deterministic", async () =>
   assert.deepEqual(reset, initial);
 }));
 
+test("target drift control oracle is exact across missing, renamed, restore, and global reset", async () => withLab(async lab => {
+  const read = async () => (await jsonObject(await fetch(`${lab.origin}/__control/final-state?scenario=llm-target-drift`, authorized()))).state;
+  assert.deepEqual(await read(), {
+    seedMarker: "target-drift-seed-12", mode: "baseline", activationCount: 0, transitionCount: 0, lastOperation: "seeded",
+    oracle: { recordedTargetTestId: "diagnosis-target", renderedTargetTestId: "diagnosis-target", targetPresent: true, expectedResult: "Ready" },
+  });
+  const missingResponse = await fetch(`${lab.origin}/api/llm-target-drift/set-mode`, authorized({
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode: "missing" }),
+  }));
+  assert.equal(missingResponse.status, 200);
+  const missing = await read() as { activationCount: number; oracle: { targetPresent: boolean; expectedResult: string } };
+  assert.deepEqual(missing, {
+    seedMarker: "target-drift-seed-12", mode: "missing", activationCount: 0, transitionCount: 1, lastOperation: "missing",
+    oracle: { recordedTargetTestId: "diagnosis-target", renderedTargetTestId: null, targetPresent: false, expectedResult: "Target missing: deterministic failure armed" },
+  });
+  await fetch(`${lab.origin}/api/llm-target-drift/activate`, authorized({ method: "POST" }));
+  await fetch(`${lab.origin}/api/llm-target-drift/activate`, authorized({ method: "POST" }));
+  assert.deepEqual(await read(), missing);
+  await fetch(`${lab.origin}/api/llm-target-drift/set-mode`, authorized({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode: "renamed" }) }));
+  assert.match(JSON.stringify(await read()), /"renderedTargetTestId":"diagnosis-target-v2"/);
+  await fetch(`${lab.origin}/api/llm-target-drift/restore`, authorized({ method: "POST" }));
+  assert.match(JSON.stringify(await read()), /"mode":"baseline"/);
+  await fetch(`${lab.origin}/__control/reset`, authorized({ method: "POST" }));
+  assert.match(JSON.stringify(await read()), /"transitionCount":0/);
+}));
 test("navigation exposes full, history, reload, and redirect fixtures", async () => withLab(async lab => {
   for (const path of ["start", "second", "history", "redirected"]) {
     const response = await fetch(`${lab.origin}/scenarios/navigation/${path}`);
@@ -84,8 +110,8 @@ test("navigation exposes full, history, reload, and redirect fixtures", async ()
   assert.deepEqual(state.state.visits, ["second"]);
 }));
 
-test("all ten scenario pages are directly renderable", async () => withLab(async lab => {
-  const ids = ["basic-form", "dynamic-list", "navigation", "long-document", "iframe-checkout", "ambiguous-targets", "delayed-ui", "failure-surfaces", "reconnect", "sensitive-input"];
+test("all twelve scenario pages are directly renderable", async () => withLab(async lab => {
+  const ids = ["basic-form", "dynamic-list", "navigation", "long-document", "iframe-checkout", "ambiguous-targets", "delayed-ui", "failure-surfaces", "reconnect", "sensitive-input", "llm-target-drift", "instruction-only-form"];
   for (const id of ids) {
     const suffix = id === "navigation" ? "start" : "";
     const response = await fetch(`${lab.origin}/scenarios/${id}/${suffix}`);
@@ -101,6 +127,7 @@ test("new scenario states mutate and reset deterministically", async () => withL
     ["ambiguous-targets", "choose", { id: "primary" }], ["delayed-ui", "reveal", {}],
     ["failure-surfaces", "attempt", { kind: "detached" }], ["reconnect", "disconnect", {}],
     ["sensitive-input", "submit", { synthetic: true, password: "SYNTHETIC_PASSWORD_DO_NOT_USE" }],
+    ["llm-target-drift", "set-mode", { mode: "missing" }],
   ] as const;
   const before = await jsonObject(await fetch(`${lab.origin}/__control/final-state`, authorized()));
   for (const [id, operation, payload] of mutations) {

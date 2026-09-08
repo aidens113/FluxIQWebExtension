@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { assertDemoFlowDocument, assertDemoParentDocument, assertDemoSubflowOwnership, createDemoFlowDocument, demoGraphReconciliationOperations, resolveDemoWorkspaceConfiguration } from "./demo-workspace.js";
+import { assertDemoFlowDocument, assertDemoParentDocument, assertDemoSubflowOwnership, createDemoFlowDocument, demoGraphReconciliationOperations, requireDemoScenarioUrl, resolveDemoWorkspaceConfiguration, startPersistentScenarioLabWithRecovery } from "./demo-workspace.js";
 
 const root = path.resolve("fixture-repository");
 const required = {
@@ -42,6 +44,19 @@ test("accepts configurable loopback ports and rejects remote self-managed endpoi
   }), /must use a loopback host/);
 });
 
+test("derives only an exact credential-free loopback scenario URL", () => {
+  assert.equal(
+    requireDemoScenarioUrl("http://127.0.0.1:4173", "/scenarios/llm-target-drift/"),
+    "http://127.0.0.1:4173/scenarios/llm-target-drift/",
+  );
+  for (const [origin, scenarioPath] of [
+    ["http://localhost:4173", "/scenarios/llm-target-drift/"],
+    ["http://user:password@127.0.0.1:4173", "/scenarios/llm-target-drift/"],
+    ["http://127.0.0.1:4173", "//example.test/scenarios/llm-target-drift/"],
+    ["http://127.0.0.1:4173", "/other/"],
+    ["http://127.0.0.1:4173", "/scenarios/llm-target-drift/?secret=value"],
+  ] as const) assert.throws(() => requireDemoScenarioUrl(origin, scenarioPath), /scenario URL is invalid/u);
+});
 test("allows visible browser debugging to be enabled explicitly", () => {
   assert.equal(resolveDemoWorkspaceConfiguration(root, { ...required, FLUXIQ_DEMO_HEADLESS: "false" }).headless, false);
   assert.throws(
@@ -139,4 +154,52 @@ test("repairs missing edges after an interrupted fixture graph migration", () =>
     edgeCount: 0,
   });
   assert.deepEqual(operations.map((operation: any) => [operation.op, operation.edge?.edgeId]), edges.map(edge => ["add_edge", edge.id]));
+});
+
+test("keeps a healthy persisted Scenario Lab port and refreshes an early EACCES port exactly once", async () => {
+  const runs = await mkdtemp(path.join(os.tmpdir(), "fluxiq-demo-recovery-"));
+  const workspace = path.join(runs, "demo");
+  const config = resolveDemoWorkspaceConfiguration(root, {
+    ...required,
+    FLUXIQ_TEST_RUNS_DIR: runs,
+    FLUXIQ_DEMO_RUN_DIR: workspace,
+  });
+  await mkdir(workspace, { recursive: true });
+  await writeFile(path.join(workspace, "scenario-port.json"), JSON.stringify({ schemaVersion: "0.1", port: 56830 }) + "\n");
+  try {
+    const started: number[] = [];
+    const recovered = await startPersistentScenarioLabWithRecovery({
+      config,
+      start: port => {
+        started.push(port);
+        return started.length === 1 ? { exitCode: 1, signalCode: null } : { exitCode: null, signalCode: null };
+      },
+      waitUntilReady: async (_port, child) => {
+        if (child.exitCode !== null) throw Object.assign(new Error("bind failed"), { code: "EACCES" });
+      },
+    });
+    assert.equal(started.length, 2);
+    assert.equal(started[0], 56830);
+    assert.notEqual(recovered.port, 56830);
+    assert.equal(JSON.parse(await readFile(path.join(workspace, "scenario-port.json"), "utf8")).port, recovered.port);
+
+    const stableStarts: number[] = [];
+    const stable = await startPersistentScenarioLabWithRecovery({
+      config,
+      start: port => { stableStarts.push(port); return { exitCode: null, signalCode: null }; },
+      waitUntilReady: async () => undefined,
+    });
+    assert.deepEqual(stableStarts, [recovered.port]);
+    assert.equal(stable.port, recovered.port);
+
+    const failedStarts: number[] = [];
+    await assert.rejects(startPersistentScenarioLabWithRecovery({
+      config,
+      start: port => { failedStarts.push(port); return { exitCode: 1, signalCode: null }; },
+      waitUntilReady: async () => { throw Object.assign(new Error("bind failed"), { code: "EACCES" }); },
+    }), /bind failed/u);
+    assert.equal(failedStarts.length, 2);
+  } finally {
+    await rm(runs, { recursive: true, force: true });
+  }
 });

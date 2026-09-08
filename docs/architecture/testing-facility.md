@@ -1,5 +1,22 @@
 # Automated testing facility
 
+## Interactive development sessions
+
+Use `pnpm lab:interactive <scenario> --target persistent-isolated --workspace <name>` when developing or debugging a small UI change. The command builds prerequisites once, starts one headed browser and one isolated topology, reuses the named FluxIQ state/browser profile, loads both the scenario and authenticated panel surfaces, and then accepts newline-delimited JSON commands on standard input until `{"action":"stop"}`. After the first build, the faster relaunch is `node packages/test-runner/dist/cli.js interactive <scenario> --target persistent-isolated --workspace <name>`.
+
+Each command chooses `"surface":"scenario"`, `"surface":"panel"`, or `"surface":"extension"`. The allowlisted actions are `navigate`, `click`, `fill`, `select`, `check`, `wait`, `inspect`, and `screenshot`. Examples:
+
+```json
+{"id":"one","action":"inspect","surface":"panel"}
+{"id":"two","action":"click","surface":"scenario","selector":"[data-testid=submit]"}
+{"id":"three","action":"wait","surface":"scenario","selector":"[data-testid=success]","state":"visible"}
+{"id":"four","action":"screenshot","surface":"scenario"}
+{"id":"five","action":"fill","surface":"panel","selector":"input[type=password]","secretEnv":"FLUXIQ_TEST_PIN"}
+{"action":"stop"}
+```
+
+The session accepts no JavaScript/evaluate command, limits requests, selectors, waits, and action count, and applies the deterministic exact-origin network guard. Navigation cannot leave the selected scenario, panel, or extension origin. Literal entry into password, PIN, one-time-code, payment, or explicitly sensitive controls is denied. A protected field can instead use `secretEnv`, restricted to `FLUXIQ_TEST_PASSWORD`, `FLUXIQ_TEST_PIN`, `FLUXIQ_TEST_TOTP`, or `DEEPSEEK_API_KEY`; the environment value is resolved in process memory, may only target a sensitive control, and is never returned. Screenshots are written only beneath the run allocation and are denied whenever a sensitive control contains a value. `inspect` returns bounded structural metadata without page text or input values. Provider credentials are removed from the browser environment. The command itself makes no provider request; a request can occur only through an explicit UI action in the loaded product.
+
 ## Current status
 
 This repository contains a working, finite FluxIQ web testing facility. Its
@@ -269,10 +286,13 @@ scenario runner and produces a new attested evidence bundle per invocation.
 
 ### Reusable self-recording demo workspace
 
-Two explicit smoke scripts exercise the complete author-and-run loop against a
+Two explicit smoke scripts exercise the complete author-and-run loop, and two
+preparatory commands create the key and deterministic diagnosis Flow, against the same
 self-managed persistent isolated FluxIQ installation:
 
 ```powershell
+pnpm demo:llm:setup
+pnpm demo:llm:prepare
 pnpm demo:record
 pnpm demo:run
 ```
@@ -284,6 +304,77 @@ configuration. Generated
 credentials are never printed, and the command refuses to overwrite an
 existing file unless passed `--force`.
 
+`demo:llm:setup` loads `DEEPSEEK_API_KEY` into driver memory, then reuses the
+same workspace lock, copied-Core lifecycle, authentication cache, headless
+browser profiles, and evidence policy. It creates or reuses the exact global
+DeepSeek key through the real Secret Keys Programs UI. Before reporting
+success, it scans the reviewed textual workspace evidence, logs, metadata, and
+Core storage tree for secret leakage while excluding intentional database and
+binary storage. Output contains only status, the validated key name, and
+sanitized aggregate attestation counts/categories; the opaque key ID remains
+internal. It neither stores key metadata in `workspace.json`
+nor configures/runs adaptive execution. Core remains the durable owner of the
+encrypted key. The command is idempotent and never invokes Reveal or the
+provider. Its static launcher scrubs provider-secret environment variables
+from every prerequisite build before the parent driver loads `.env.local`.
+
+`demo:llm:prepare` is a separate provider-free preparation lane. It loads only an
+explicit allowlist of local demo configuration, so provider-key variables are
+not imported into its driver environment, and it scrubs provider secrets from
+all prerequisite build and runtime children. Through the real panel and
+extension UI it creates or reuses a dedicated **Web Extension LLM Target Drift
+Diagnosis** parent Flow, Router, and owned **Stable target deterministic
+baseline** Subflow; records one stable `llm-target-drift` target click; invokes
+**Generate Subflow** on the durable recording; and runs the result from Runtime
+Debug with **No LLM intervention**. Before that baseline run, it creates or
+reuses one exact Flow-scoped **Diagnose deterministic target drift** instruction
+through the real Instructions Library and Editor UI. It normalizes persisted
+Library filters, reactivates the facility-owned record if necessary, authorizes
+changes through the screenshot-suppressed PIN boundary, and verifies from the
+reloaded Library that exactly one matching Flow instruction is Required and
+Active. It never treats a same-title inherited instruction as the owned record.
+It verifies exact ownership, a distinct
+one-or-two-node rendered layout (optional navigation plus click), Router routing,
+durable action success, and the `Completed: 1` scenario oracle. Repeated runs
+validate and reuse the same identities. The owner-protected
+`llm-diagnosis-workspace.json` contains only schema and project/Flow/Subflow/
+graph/Router/recording IDs, rejects extra fields or credential substrings, and
+never contains names, credentials, cookies, model configuration, or LLM usage.
+This command does not create/reveal keys, arm drift, configure adaptive mode, or
+call a provider.
+
+When the preparation lane creates its owned Subflow, it carries the exact Flow
+tree item ID from the verified Flow-open operation into child discovery. It
+uses the real hierarchy controls to filter to folders and search for
+`Subflows`, then resolves only one exact folder row whose
+`data-tree-parent-id` is the captured Flow ID and which exposes one exact
+`Add inside Subflows` action. A global `Subflows` role query is invalid
+because several expanded Flows may render identically labelled folders. If the
+target filtered row is outside Core's virtual window, the driver uses the
+tree's Home/ArrowDown keyboard contract so Core's own focus controller mounts
+it; it does not infer that scrolling a nearby Router row will mount a sibling.
+Core unmounts the accessible hierarchy controls while the creation modal is
+active, so the driver retains the original filter values only in memory and
+restores them through the real UI after a successful create has closed the
+modal. A failed create makes a bounded attempt to cancel only the known
+creation dialog, confirms whether the hierarchy returned, and records only
+boolean/stage diagnostics before attempting the same bounded restoration.
+Every Flow-open helper also re-establishes a restart-safe hierarchy baseline
+through the real scoped controls: it selects `All objects` before entering the
+Flow search term, then clears the search after capturing the exact Flow tree
+identity. This intentionally leaves the type filter at `all`, so a process
+interrupted while a temporary Subflows folder filter was active cannot make the
+next persistent-workspace run hide every Flow.
+After capturing and reacquiring the exact expanded Flow, the helper changes the
+real hierarchy search to `Router`. Filter projection retains matching
+ancestors, so the driver reacquires the exact Flow ancestor by its captured ID,
+then requires one typed `aria-label="Router"` child with that parent ID. It
+activates the exact Router row and proves both its tree selection and the
+matching Flow-scoped Router tab while the filtered rows are mounted; a
+dedicated-pane fallback double-clicks the filtered ancestor Flow row. Only
+after that proof does it clear search, and it does not require Router to remain
+mounted afterward. Router discovery does not rely on ArrowDown,
+`scrollIntoViewIfNeeded`, or sibling overscan.
 `demo:record` authenticates through the normal reusable session cache, creates
 or reuses one project bound to `web-automation`, and creates the configured
 orchestration Flow only when it is absent. It starts the loopback `basic-form`
@@ -304,7 +395,7 @@ rendered node rectangle before continuing. Core lays generated actions out at a
 non-overlapping interval and reconciles both the canonical graph document and
 its SQL viewport index when a generated graph is replaced.
 
-Both commands lock and reuse the exact `FLUXIQ_DEMO_RUN_DIR`. Each invocation
+All four demo commands lock and reuse the exact `FLUXIQ_DEMO_RUN_DIR`. Each invocation
 starts and stops its own copied Core web process while retaining
 `fluxiq-root/.fluxiq`; temporary Core copies live under `.sessions` and are
 removed after shutdown. The directory also contains `workspace.json`, a protected
@@ -312,10 +403,22 @@ removed after shutdown. The directory also contains `workspace.json`, a protecte
 persistent extension and panel browser profiles, a workspace-local copy of the
 latest built extension, append-only process/Scenario Lab logs, finalized
 evidence bundles, and `latest-evidence.json`.
-Each test-issued UI/browser action produces exactly two physical screenshots:
-one immediately before and one immediately after. Flow actions use an
+The shared demo path takes the ownership-token workspace lock from
+`workspace-lock.ts`: a valid live PID blocks concurrent use, a valid absent PID
+is reclaimed, and malformed or unverifiable ownership fails closed. Scenario
+Lab normally retains its persisted loopback port. If that child exits before
+health readiness (including a Windows `EACCES` bind failure after a reboot),
+the runner atomically replaces `scenario-port.json` while holding the workspace
+lock and starts it once more. A second failure is terminal, and both child
+attempts remain owned by `ProcessSupervisor` cleanup.
+Each test-issued UI/browser action produces two evidence boundaries, one
+immediately before and one immediately after. Ordinary actions attach a
+physical screenshot to each boundary. Credential entry and its submit action
+retain both boundaries but suppress pixels with the truthful
+`sensitive-action` reason, preventing a populated key, password, or PIN field
+from appearing in a later before-action frame. Flow actions use an
 extension-to-runner acknowledgement boundary, so execution cannot proceed
-until the before frame is durable; the after frame is captured before the
+until the before evidence is durable; after evidence is captured before the
 action result returns to FluxIQ. Timed/FPS sampling and screenshot
 deduplication are disabled for these scripts. `workspace.json`
 contains only origin, username, durable IDs, names, and timestamps; credentials
@@ -421,7 +524,7 @@ A manifest contains:
   and
 - screenshot, trace, video, sampling, and review policy.
 
-The ten deterministic fixtures are:
+The eleven deterministic fixtures are:
 
 | Fixture | Primary behavior |
 | --- | --- |
@@ -435,11 +538,14 @@ The ten deterministic fixtures are:
 | `failure-surfaces` | Disabled, detached, blocked-URL, and page-closure surfaces. |
 | `reconnect` | Disconnect, queued-event, reconnect, and replay fixture state. |
 | `sensitive-input` | Synthetic password/payment-like inputs whose server state discards values. |
+| `llm-target-drift` | Seeded baseline target activation plus visibly controlled missing/renamed target drift, exact control oracle, and reset/restore for diagnosis and zero-LLM reproduction. |
 
 Direct Node tests cover manifest validation, loopback-only policy, uniqueness,
 fail-fast mismatch handling, HTTP rendering/control behavior, deterministic
-reset/reseed, parallel server isolation, and sensitive-state discard. These are
-fixture tests, not extension-to-Core E2E tests.
+reset/reseed, parallel server isolation, sensitive-state discard, and the exact
+target-drift control oracle. The target-drift browser test proves baseline success,
+persistent missing-target failure across reload, renamed-target state, and restore.
+These are fixture tests, not extension-to-Core E2E tests.
 
 ## Extension E2E build and finite browser suite
 
@@ -510,6 +616,13 @@ minimum intervals, frame/byte quotas, SHA-256 frame deduplication, and an
 exception that permits an error trigger to attempt capture despite the normal
 interval. Suppressed and duplicate frames remain represented in the event
 stream.
+A transient visual-adapter failure is recorded as `capture-unavailable` without persisting exception text; the correlated event remains durable and the tested action is not prevented from running solely because review pixels were unavailable.
+
+Each bundle owns one exclusive append journal for its full staging lifetime. Event writes are serialized, synced before acknowledgement, and the handle is closed before artifact indexing and atomic publication. Journal acquisition retries only Windows transient-lock codes (`EBUSY`, `EPERM`, and `EACCES`) on a fixed 10/25/50 ms schedule; validation, redaction, path, quota, and secret failures are never retried, and writes/syncs are not replayed because a partial append cannot be proven safe to duplicate.
+
+The deterministic LLM preparation command also maintains a separate protected `demo-llm-prepare-status.json` channel outside the evidence bundle. A fixed phase enum is advanced synchronously around browser-operation entry, Flow-open return, the connect diagnostic, extension connection, and evidence finalization. On failure it stores only schema-validated phase/index, allowlisted failure class/code, and an optional allowlisted module/line/column token; raw messages, stacks, paths, DOM text, credentials, and provider values are structurally unsupported. The launcher reads the same bounded schema and can print only those parsed fields.
+
+Callers can designate a credential-entry or credential-bearing submit boundary as `sensitive-action`. The capture controller then does not invoke its visual adapter, but still publishes the correlated before/after event and the suppression reason. Structured redaction remains mandatory because screenshot suppression does not replace textual artifact redaction.
 
 Completed output can include:
 
@@ -632,6 +745,22 @@ until separate operational authorization and an execution adapter exist.
 
 ## Commands and prerequisites
 
+### Resident interactive development session
+
+`pnpm lab:interactive <scenario> --target persistent-isolated --workspace <name>` launches the topology, headed Chromium, current E2E extension, panel, and scenario once, then accepts newline-delimited JSON commands until `stop` or interruption. It is the default development loop for isolated UI/action checks; finite scenario and live LLM certification remain checkpoint tools.
+
+Allowlisted commands cover panel/scenario/extension navigation, click, fill, select, check, bounded wait, structure-only inspect, requested screenshot, and direct `extension-action` dispatch for registered `web.dom.*` actions. There is no caller-supplied JavaScript/eval. Navigation and network traffic stay on exact facility origins. Sensitive fields accept only strict `secretEnv` names and never echo their values; screenshots fail closed while a sensitive control contains a value. Direct extension results discard messages, extracted content, and snapshots, retaining only bounded action identity and status.
+
+Interactive screenshots are retained under ignored `test-runs/interactive-sessions/<run-id>/`; disposable topology state is still cleaned on stop. Explicit local interactive targets may ignore unrelated existing-target configuration, but finite-run target conflict rules are unchanged.
+
+Example input:
+
+```json
+{"id":"type","action":"extension-action","actionType":"web.dom.type","selector":"[data-testid=name]","text":"Development check"}
+{"id":"click","action":"extension-action","actionType":"web.dom.click","selector":"[data-testid=submit]"}
+{"id":"stop","action":"stop"}
+```
+
 Install from the repository root with Node 22 and the pinned pnpm 9.15.0:
 
 ```powershell
@@ -741,3 +870,23 @@ Do not commit or hand-edit generated runtime data:
 Run artifacts may contain page evidence even when synthetic. Keep all captures,
 profiles, credentials, cookies, authorization headers, pairing tokens, and
 recorded page data out of source control and user-facing logs.
+## Live LLM Safety Envelope
+
+Live-provider testing is an explicit opt-in lane and is not part of ordinary deterministic runs or CI. The Testing Lab driver is the sole process allowed to read provider credential environment variables. A case-insensitive explicit provider-secret denylist is removed at the final managed-process boundary and from both direct Chromium launch paths, so Core, Scenario Lab, setup/build commands, the browser, and the loaded extension cannot inherit the source key. Repository-local schema 0.1 contracts describe the LLM task, a non-secret execution profile, sanitized invocation provenance, and review/replay evaluation.
+
+The default Lab allowance is 8,000 input tokens, 2,000 output tokens, 10,000 total tokens per request, two calls per run, zero retries, a 30-second timeout, a $0.25 estimated-cost ceiling that may only be lowered, and one live run at a time. Validation rejects any request total above the non-overridable 50,000-token ceiling. Retries consume the same two-call allowance.
+
+Scenario/browser traffic remains loopback-only and external side effects remain disabled. Provider control-plane traffic is separately restricted to a trusted Core-owned provider adapter; a Flow, scenario, extension, or CLI caller cannot choose an arbitrary endpoint. Raw prompts and responses are excluded from Lab artifacts. Successful invocations must record sanitized usage, while locally rejected, failed, or cancelled invocations may explicitly record usage as unavailable instead of fabricating counts. A passing evaluation requires a completed, passing zero-LLM replay and cannot attest more invocations than its declared allowance.
+
+The general Lab CLI continues to reject `--live-llm`; paid certification uses the narrower `pnpm demo:llm:diagnose` command after `demo:llm:setup` and `demo:llm:prepare`. The command drives the real panel UI in the persistent isolated workspace. It selects the stored opaque Testing Lab key summary and saves stricter first-live limits: 2,000 input tokens, 512 output tokens, 3,000 total tokens, exactly one call, zero retries, 20 seconds, and at most $0.25.
+
+The diagnosis command waits for Core's Flow readiness check and requires the
+real Runtime Debug Run control to be enabled before and after selecting
+diagnosis-only mode. If the prepared Flow has no active instruction, it records
+only bounded boolean readiness facts and exits before opening authorization,
+creating a runtime run, or contacting the provider.
+
+The setup helper navigates the real Secret Keys Program, reads only its metadata-only snapshot response, reuses one exact compatible global DeepSeek key, or drives Add Key and authorization through accessible UI labels. It never invokes Reveal. The diagnosis command never reads the provider environment variable or secret value. Password, PIN, and authorization actions are screenshot-suppressed.
+
+The certification run removes the recorded target on the loopback Scenario Lab, requires that deterministic action failure to precede exactly one `diagnosis` intervention, and validates the trusted Core budget ledger reports exactly one provider call. It rejects any patch/suggestion/proposal kind, adaptation or change-proposal ID, unexpected provider/model/prompt version, invalid or excessive usage, or nonterminal outcome. It then restores the fixture and runs the same Flow through the real UI in No LLM mode; that replay must succeed with zero interventions and zero Core-accounted provider calls. The fixed retained schema contains only run IDs/statuses, bounded invocation provenance/usage, evaluation, call counts, and aggregate leak-attestation totals. It excludes prompt/response bodies, key references, passwords, PINs, action messages, and raw metadata.
+Post-run provider-secret attestation is a separate bounded gate. A caller supplies one in-memory literal and exact approved relative paths beneath a canonical workspace. The scanner never follows reparse points or path escapes, does not inspect explicit binary formats, limits files and bytes, and fails closed when approved text is unreadable or oversized. Reports contain counts, categories, and sanitized relative paths only; they never include matching content or the literal. Live-lane composition must explicitly select run evidence, logs, manifests, workspace metadata, and cache metadata after UI provisioning and every provider-backed test.

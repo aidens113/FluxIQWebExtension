@@ -23,13 +23,15 @@ export type CaptureEvidenceEventInput = {
   summary: string;
   correlation: CaptureCorrelation;
   details?: Record<string, unknown>;
+  /** Suppress pixels while retaining a truthful correlated event boundary. */
+  screenshotSuppression?: "sensitive-action";
 };
 
 export type CaptureScreenshot = {
   path?: string;
   sha256?: string;
   duplicateOfSha256?: string;
-  suppressed?: "policy" | "rate-limit" | "quota" | "capture-unavailable";
+  suppressed?: "policy" | "rate-limit" | "quota" | "capture-unavailable" | "sensitive-action";
 };
 
 export type CapturedEvidenceEvent = CaptureEvidenceEventInput & {

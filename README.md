@@ -135,6 +135,13 @@ target fields and Core compatibility limits, commands,
 evidence/security boundaries, and remaining Linux, automatic-agent,
 Core-promotion, and real-site limits.
 
+To prepare the deterministic target-drift Flow for later LLM diagnosis work,
+run `pnpm demo:llm:prepare`. It uses the same persistent isolated workspace and
+real panel/extension UI to create or reuse a dedicated parent Flow, Router, and
+owned Subflow, record the stable `llm-target-drift` click, generate the Subflow,
+and prove baseline playback with **No LLM intervention**. It does not load or
+use a provider key, and stores only protected opaque hierarchy/recording IDs.
+
 For a persistent isolated end-to-end smoke workspace, configure
 `FLUXIQ_DEMO_RUN_DIR` below `FLUXIQ_TEST_RUNS_DIR` and
 run `pnpm demo:record` followed by `pnpm demo:run`. The recording command creates

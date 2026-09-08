@@ -113,7 +113,7 @@ export function validateWebScenario(input: unknown): ValidationResult<WebScenari
   if (Array.isArray(input.capabilities) && new Set(input.capabilities).size !== input.capabilities.length) issue(issues, "$.capabilities", "must contain unique values");
   if (!["loopback-only", "allowlisted-real-site"].includes(String(input.networkPolicy))) issue(issues, "$.networkPolicy", "has an unsupported value");
   arrayOf(input.recordingScript, "$.recordingScript", issues, validateStep);
-  if (Array.isArray(input.recordingScript) && input.recordingScript.length === 0) issue(issues, "$.recordingScript", "must contain at least one step");
+  if (Array.isArray(input.recordingScript) && input.recordingScript.length === 0 && input.playbackGoal === undefined) issue(issues, "$.recordingScript", "may be empty only when playbackGoal is defined");
   if (Array.isArray(input.recordingScript)) {
     const ids = input.recordingScript.filter(isObject).map((step) => step.id);
     if (new Set(ids).size !== ids.length) issue(issues, "$.recordingScript", "step ids must be unique");

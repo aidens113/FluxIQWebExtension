@@ -8,9 +8,10 @@ import { ClonePackageCache } from "./clone-cache.js";
 import { parseLabCommand, expandMatrix } from "./commands.js";
 import { classifyRunnerFailure } from "./failure.js";
 import { inspectRun } from "./inspect.js";
+import { runInteractiveSession } from "./interactive-session.js";
 import { runScenario } from "./run-scenario.js";
 import { loadScenarioManifests } from "./scenarios.js";
-import { loadTestEnvironment, resolveAuthScopeConfiguration, resolveCloneCacheScopeConfiguration, resolveTargetConfiguration } from "./target-config.js";
+import { loadTestEnvironment, resolveAuthScopeConfiguration, resolveCloneCacheScopeConfiguration, resolveInteractiveTargetConfiguration, resolveTargetConfiguration } from "./target-config.js";
 
 export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.env): Promise<number> {
   const repositoryRoot = path.resolve(env.FLUXIQ_WEB_EXTENSION_ROOT ?? process.cwd());
@@ -19,6 +20,12 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
     const fluxiqRepositoryRoot = path.resolve(resolvedEnvironment.FLUXIQ_CORE_ROOT ?? path.join(repositoryRoot, "..", "!FluxIQ"));
     const runsDirectory = path.resolve(resolvedEnvironment.FLUXIQ_TEST_RUNS_DIR ?? path.join(repositoryRoot, "test-runs"));
     const command = parseLabCommand(argv);
+    if (command.command === "interactive") {
+      const target = resolveInteractiveTargetConfiguration({ ...(command.target ? { cliTarget: command.target } : {}), ...(command.workspace ? { cliWorkspace: command.workspace } : {}), ...(command.freshLogin ? { cliFreshLogin: true } : {}), env: resolvedEnvironment });
+      if (target.mode === "clone") throw new Error("interactive mode does not support clone targets");
+      await runInteractiveSession({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: command.scenarioId, ...(command.seed === undefined ? {} : { seed: command.seed }), environment: resolvedEnvironment, target });
+      return 0;
+    }
     if (command.command === "auth") {
       const scope = resolveAuthScopeConfiguration(resolvedEnvironment);
       process.stdout.write(`${JSON.stringify(await executeAuthCommand(new WebPanelAuthSessionCache(runsDirectory), command.operation, scope))}\n`);
@@ -33,6 +40,7 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
     }
     if (command.command === "inspect") { process.stdout.write(`${JSON.stringify(await inspectRun(runsDirectory, command.runId))}\n`); return 0; }
     if (command.command === "compare") { process.stdout.write(`${JSON.stringify(await compareRuns(runsDirectory, command.baselineRunId, command.candidateRunId))}\n`); return 0; }
+    if ((command.command === "run" || command.command === "matrix") && command.llm?.mode === "live") throw new Error("Live LLM execution is fail-closed until the Phase 1 provider runner is enabled");
     if (command.command === "run") {
       const target = resolveTargetConfiguration({ ...(command.target ? { cliTarget: command.target } : {}), ...(command.flowId ? { cliFlowId: command.flowId } : {}), ...(command.workspace ? { cliWorkspace: command.workspace } : {}), ...(command.freshLogin ? { cliFreshLogin: true } : {}), env: resolvedEnvironment });
       const result = await runScenario({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: command.scenarioId, ...(command.seed === undefined ? {} : { seed: command.seed }), evidence: command.evidence, environment: resolvedEnvironment, target });

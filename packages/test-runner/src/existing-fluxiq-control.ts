@@ -8,10 +8,11 @@ export type ExistingFlowSummary = { flowId: string; name: string; description?: 
 export type ExistingFlow = { flowId: string; projectId: string; name: string; updatedAt: number; contentHash: string; document: JsonRecord };
 export type ExistingRuntimeSession = { runId: string; projectId: string | null; flowId: string; targetKind: "task" | "routine" | "flow"; targetId: string; status: RuntimeStatus };
 export type RuntimeStatus = "queued" | "running" | "waiting" | "succeeded" | "failed" | "cancelled";
-export type ExistingRunSummary = { runId: string; projectId: string; flowId: string; status: RuntimeStatus; routeDecisionCount: number; subflowEntryCount: number; actionAttemptCount: number; updatedAt: number; startedAt?: number; finishedAt?: number };
+export type ExistingRunSummary = { runId: string; projectId: string; flowId: string; status: RuntimeStatus; routeDecisionCount: number; subflowEntryCount: number; actionAttemptCount: number; interventionCount?: number; adaptationCount?: number; updatedAt: number; startedAt?: number; finishedAt?: number };
 export type ExistingRouteDecision = { decisionId: string; routerId: string; selectedRuleId?: string; selectedSubflowId?: string; fallbackUsed?: boolean };
 export type ExistingSubflowExecution = { entryId: string; subflowId: string; status: RuntimeStatus; graphFlowId?: string; routeDecisionId?: string };
-export type ExistingRunDetail = { summary: ExistingRunSummary; routeDecisions: ExistingRouteDecision[]; subflows: ExistingSubflowExecution[]; actionAttempts: ExistingRunAction[]; rawMetadata?: JsonRecord };
+export type ExistingRunIntervention = { interventionId: string; kind: "diagnosis" | "runtime_patch" | "router_patch" | "subflow_patch" | "expectation_patch" | "instruction_suggestion" | "change_proposal"; promptVersion?: string; provider?: string; model?: string; validationOk?: boolean; inputTokens?: number; outputTokens?: number; totalTokens?: number; estimatedCostUsd?: number };
+export type ExistingRunDetail = { summary: ExistingRunSummary; routeDecisions: ExistingRouteDecision[]; subflows: ExistingSubflowExecution[]; actionAttempts: ExistingRunAction[]; interventions?: ExistingRunIntervention[]; adaptationIds?: string[]; changeProposalIds?: string[]; providerCallCount?: number };
 export type ExistingFlowSubflow = { subflowId: string; flowId: string; projectId: string; graphFlowId?: string; name: string; status: string; role: string };
 export type ExistingFlowRouter = { routerId: string; flowId: string; projectId: string; fallback?: { kind: string; subflowId?: string }; rules: Array<{ ruleId: string; target?: { kind?: string; subflowId?: string } }> };
 export type ExistingRunAction = { attemptId: string; nodeId: string; definitionId: string; order: number; status: RuntimeStatus | "unknown"; startedAt: number; finishedAt?: number; message?: string };
@@ -202,7 +203,14 @@ export class ExistingFluxIQControlClient extends FluxIQControlClient {
     const actions = detail.actionAttempts === undefined ? [] : array(detail.actionAttempts, "runDetail.actionAttempts").map((value, index) => runAction(value, `actionAttempts[${index}]`));
     const routeDecisions = array(detail.routeDecisions ?? [], "runDetail.routeDecisions").map((value, index) => routeDecision(value, `routeDecisions[${index}]`));
     const subflows = array(detail.subflows ?? [], "runDetail.subflows").map((value, index) => subflowExecution(value, `subflows[${index}]`));
-    return { summary, routeDecisions, subflows, actionAttempts: actions, ...(detail.metadata === undefined ? {} : { rawMetadata: record(detail.metadata, "runDetail.metadata") }) };
+    const interventions = array(detail.interventions ?? [], "runDetail.interventions").map((value, index) => runIntervention(value, `interventions[${index}]`));
+    const adaptationIds = stringArray(detail.adaptationIds ?? [], "runDetail.adaptationIds");
+    const changeProposalIds = stringArray(detail.changeProposalIds ?? [], "runDetail.changeProposalIds");
+    const metadata = optionalRecord(detail.metadata, "runDetail.metadata");
+    const llmGate = optionalRecord(metadata?.llmGate, "runDetail.metadata.llmGate");
+    const costAccounting = optionalRecord(llmGate?.costAccounting, "runDetail.metadata.llmGate.costAccounting");
+    const providerCallCount = costAccounting?.calls === undefined ? undefined : integer(costAccounting.calls, "runDetail.metadata.llmGate.costAccounting.calls");
+    return { summary, routeDecisions, subflows, actionAttempts: actions, interventions, adaptationIds, changeProposalIds, ...(providerCallCount === undefined ? {} : { providerCallCount }) };
   }
 
   async listRunActions(projectId: string, runId: string, options: { limit?: number; cursor?: string } & FluxIQHttpOptions = {}): Promise<ExistingRunAction[]> {
@@ -248,7 +256,26 @@ function nodeDefinition(value: unknown, at: string): ExistingNodeDefinition {
 }
 function nonEmptyStringArray(value: unknown, at: string): boolean { if (value === undefined) return false; return stringArray(value, at).length > 0; }
 function runtimeSession(value: unknown, at: string, projectId: string, flowId?: string): ExistingRuntimeSession { const item = record(value, at); const parsed = { runId: text(item.runId, `${at}.runId`), projectId: nullableText(item.projectId, `${at}.projectId`), flowId: text(item.flowId, `${at}.flowId`), targetKind: enumeration(item.targetKind, ["task", "routine", "flow"] as const, `${at}.targetKind`), targetId: text(item.targetId, `${at}.targetId`), status: status(item.status, `${at}.status`) }; if (parsed.projectId !== projectId || (flowId && (parsed.flowId !== flowId || parsed.targetKind !== "flow" || parsed.targetId !== flowId))) throw new RunnerFailure("runtime.behavior", "FluxIQ runtime session did not match the requested persisted Flow"); return parsed; }
-function runSummary(value: unknown, at: string): ExistingRunSummary { const item = record(value, at); return { runId: text(item.runId, `${at}.runId`), projectId: text(item.projectId, `${at}.projectId`), flowId: text(item.flowId, `${at}.flowId`), status: status(item.status, `${at}.status`), routeDecisionCount: integer(item.routeDecisionCount, `${at}.routeDecisionCount`), subflowEntryCount: integer(item.subflowEntryCount, `${at}.subflowEntryCount`), actionAttemptCount: integer(item.actionAttemptCount, `${at}.actionAttemptCount`), updatedAt: finite(item.updatedAt, `${at}.updatedAt`), ...(item.startedAt === undefined ? {} : { startedAt: finite(item.startedAt, `${at}.startedAt`) }), ...(item.finishedAt === undefined ? {} : { finishedAt: finite(item.finishedAt, `${at}.finishedAt`) }) }; }
+function runSummary(value: unknown, at: string): ExistingRunSummary { const item = record(value, at); return { runId: text(item.runId, `${at}.runId`), projectId: text(item.projectId, `${at}.projectId`), flowId: text(item.flowId, `${at}.flowId`), status: status(item.status, `${at}.status`), routeDecisionCount: integer(item.routeDecisionCount, `${at}.routeDecisionCount`), subflowEntryCount: integer(item.subflowEntryCount, `${at}.subflowEntryCount`), actionAttemptCount: integer(item.actionAttemptCount, `${at}.actionAttemptCount`), interventionCount: integer(item.interventionCount ?? 0, `${at}.interventionCount`), adaptationCount: integer(item.adaptationCount ?? 0, `${at}.adaptationCount`), updatedAt: finite(item.updatedAt, `${at}.updatedAt`), ...(item.startedAt === undefined ? {} : { startedAt: finite(item.startedAt, `${at}.startedAt`) }), ...(item.finishedAt === undefined ? {} : { finishedAt: finite(item.finishedAt, `${at}.finishedAt`) }) }; }
+function runIntervention(value: unknown, at: string): ExistingRunIntervention {
+  const item = record(value, at); const validation = optionalRecord(item.validation, `${at}.validation`); const usage = optionalRecord(item.tokenUsage, `${at}.tokenUsage`);
+  const optionalUsage = (key: "inputTokens" | "outputTokens" | "totalTokens" | "estimatedCostUsd") => {
+    if (usage?.[key] === undefined) return {};
+    const value = finite(usage[key], `${at}.tokenUsage.${key}`);
+    if (value < 0) invalid(`${at}.tokenUsage.${key} must be non-negative`);
+    return { [key]: value };
+  };
+  const optionalIdentifier = (value: unknown, field: string) => {
+    if (value === undefined) return undefined;
+    const parsed = text(value, `${at}.${field}`);
+    if (parsed.length > 200 || !/^[A-Za-z0-9][A-Za-z0-9._:-]*$/u.test(parsed)) invalid(`${at}.${field} is invalid`);
+    return parsed;
+  };
+  const promptVersion = optionalIdentifier(item.promptVersion, "promptVersion");
+  const provider = optionalIdentifier(item.provider, "provider");
+  const model = optionalIdentifier(item.model, "model");
+  return { interventionId: text(item.interventionId, `${at}.interventionId`), kind: enumeration(item.kind, ["diagnosis", "runtime_patch", "router_patch", "subflow_patch", "expectation_patch", "instruction_suggestion", "change_proposal"] as const, `${at}.kind`), ...(promptVersion ? { promptVersion } : {}), ...(provider ? { provider } : {}), ...(model ? { model } : {}), ...(typeof validation?.ok === "boolean" ? { validationOk: validation.ok } : {}), ...optionalUsage("inputTokens"), ...optionalUsage("outputTokens"), ...optionalUsage("totalTokens"), ...optionalUsage("estimatedCostUsd") };
+}
 function runAction(value: unknown, at: string): ExistingRunAction { const item = record(value, at); return { attemptId: text(item.attemptId, `${at}.attemptId`), nodeId: text(item.nodeId, `${at}.nodeId`), definitionId: text(item.definitionId, `${at}.definitionId`), order: integer(item.order, `${at}.order`), status: enumeration(item.status, ["queued", "running", "waiting", "succeeded", "failed", "cancelled", "unknown"] as const, `${at}.status`), startedAt: finite(item.startedAt, `${at}.startedAt`), ...(item.finishedAt === undefined ? {} : { finishedAt: finite(item.finishedAt, `${at}.finishedAt`) }), ...(typeof item.message === "string" ? { message: item.message } : {}) }; }
 function runEvent(value: unknown, at: string): ExistingRunEvent { const item = record(value, at); return { sequence: integer(item.sequence, `${at}.sequence`), eventId: text(item.eventId, `${at}.eventId`), eventKind: enumeration(item.eventKind, ["run_summary", "route_decision", "subflow_execution", "action_attempt", "recovery_attempt", "intervention"] as const, `${at}.eventKind`), timestampMs: finite(item.timestampMs, `${at}.timestampMs`), title: text(item.title, `${at}.title`), ...(typeof item.status === "string" ? { status: item.status } : {}), ...(typeof item.entityId === "string" ? { entityId: item.entityId } : {}) }; }
 function routeDecision(value: unknown, at: string): ExistingRouteDecision { const item = record(value, at); return { decisionId: text(item.decisionId, `${at}.decisionId`), routerId: text(item.routerId, `${at}.routerId`), ...(typeof item.selectedRuleId === "string" ? { selectedRuleId: item.selectedRuleId } : {}), ...(typeof item.selectedSubflowId === "string" ? { selectedSubflowId: item.selectedSubflowId } : {}), ...(typeof item.fallbackUsed === "boolean" ? { fallbackUsed: item.fallbackUsed } : {}) }; }

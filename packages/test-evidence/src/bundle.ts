@@ -1,4 +1,5 @@
-import { rename, mkdir, open, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { rename, mkdir, open, readFile, readdir, rm, stat, writeFile, type FileHandle } from "node:fs/promises";
+import { setTimeout as delay } from "node:timers/promises";
 import path from "node:path";
 import { assertEvidenceEvent, assertEvidencePolicy, type EvidencePolicy } from "@fluxiq-web-extension/test-contracts";
 import { DEFAULT_EVIDENCE_POLICY, toContractEvidenceEvent, toContractEvidencePolicy } from "./contracts.js";
@@ -8,6 +9,24 @@ import { createTimeline, renderContactSheet, renderReport } from "./report.js";
 import type { ArtifactEntry, ArtifactIndex, CapturedEvidenceEvent, CaptureEvidenceEventInput, CapturePolicy, CaptureScreenshot, EvidenceSummary, FinalizeInput, VerifiedArtifact, VerifiedVisual } from "./types.js";
 
 const MEDIA_TYPES: Record<string, string> = { ".json": "application/json", ".ndjson": "application/x-ndjson", ".html": "text/html", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".zip": "application/zip", ".webm": "video/webm", ".log": "text/plain" };
+const TRANSIENT_JOURNAL_OPEN_CODES = new Set(["EBUSY", "EPERM", "EACCES"]);
+const JOURNAL_OPEN_DELAYS_MS = [10, 25, 50] as const;
+
+export async function openEvidenceJournalWithRetry(
+  target: string,
+  openFile: (path: string, flags: string) => Promise<FileHandle> = open,
+  wait: (milliseconds: number) => Promise<unknown> = delay,
+): Promise<FileHandle> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await openFile(target, "ax");
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException)?.code;
+      if (!code || !TRANSIENT_JOURNAL_OPEN_CODES.has(code) || attempt >= JOURNAL_OPEN_DELAYS_MS.length) throw error;
+      await wait(JOURNAL_OPEN_DELAYS_MS[attempt]!);
+    }
+  }
+}
 
 function safeRelativePath(relativePath: string): string {
   const normalized = relativePath.replaceAll("\\", "/");
@@ -48,6 +67,9 @@ export class EvidenceBundle {
   private readonly artifactMetadata = new Map<string, Pick<ArtifactEntry, "mediaType" | "redaction">>();
   private initialized = false;
   private finalized = false;
+  private eventJournal: FileHandle | undefined;
+  private appendTail: Promise<void> = Promise.resolve();
+  private finalizing = false;
 
   constructor(private readonly options: EvidenceBundleOptions) {
     safeRelativePath(options.runId);
@@ -70,10 +92,24 @@ export class EvidenceBundle {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
     await mkdir(this.stagingPath, { recursive: false });
+    try {
+      this.eventJournal = await openEvidenceJournalWithRetry(path.join(this.stagingPath, "events.ndjson"));
+    } catch (error) {
+      await rm(this.stagingPath, { recursive: true, force: true });
+      throw error;
+    }
     this.initialized = true;
   }
 
   async appendEvent(input: CaptureEvidenceEventInput & { screenshot?: CaptureScreenshot }): Promise<CapturedEvidenceEvent> {
+    this.assertWritable();
+    if (this.finalizing) throw new Error("Evidence bundle is being finalized");
+    const operation = this.appendTail.then(() => this.appendEventSerialized(input));
+    this.appendTail = operation.then(() => undefined, () => undefined);
+    return operation;
+  }
+
+  private async appendEventSerialized(input: CaptureEvidenceEventInput & { screenshot?: CaptureScreenshot }): Promise<CapturedEvidenceEvent> {
     this.assertWritable();
     const redacted = redactStructured(input, this.redaction);
     const sequence = this.events.length + 1;
@@ -83,17 +119,12 @@ export class EvidenceBundle {
     const event: CapturedEvidenceEvent = { ...redacted, schemaVersion: "0.1", sequence, timestamp, published };
     const serialized = `${JSON.stringify(published)}\n`;
     assertNoSensitiveText(serialized, this.redaction.secrets);
-    const handle = await open(path.join(this.stagingPath, "events.ndjson"), "a");
-    try {
-      await handle.writeFile(serialized, "utf8");
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
+    if (!this.eventJournal) throw new Error("Evidence event journal is unavailable");
+    await this.eventJournal.writeFile(serialized, "utf8");
+    await this.eventJournal.sync();
     this.events.push(event);
     return event;
   }
-
   registerEvidencePolicy(policy: CapturePolicy): EvidencePolicy {
     if (this.finalized) throw new Error("Evidence bundle is already finalized");
     this.evidencePolicy = toContractEvidencePolicy(policy);
@@ -134,6 +165,9 @@ export class EvidenceBundle {
 
   async finalize(input: FinalizeInput): Promise<{ path: string; summary: EvidenceSummary; index: ArtifactIndex }> {
     this.assertWritable();
+    this.finalizing = true;
+    await this.appendTail;
+    await this.closeEventJournal();
     const finishedAt = this.now().toISOString();
     const firstFailureEvent = this.events.find((event) => event.trigger === "error");
     const summary: EvidenceSummary = {
@@ -170,6 +204,9 @@ export class EvidenceBundle {
 
   async abort(): Promise<void> {
     if (this.finalized) throw new Error("Cannot abort a finalized evidence bundle");
+    this.finalizing = true;
+    await this.appendTail;
+    await this.closeEventJournal();
     if (this.initialized) await rm(this.stagingPath, { recursive: true, force: true });
     this.initialized = false;
   }
@@ -177,6 +214,11 @@ export class EvidenceBundle {
   private assertWritable(): void {
     if (!this.initialized) throw new Error("Evidence bundle is not initialized");
     if (this.finalized) throw new Error("Evidence bundle is already finalized");
+  }
+  private async closeEventJournal(): Promise<void> {
+    const handle = this.eventJournal;
+    this.eventJournal = undefined;
+    if (handle) await handle.close();
   }
 
   private async writeBytes(relativePath: string, bytes: Uint8Array, replace: boolean): Promise<void> {

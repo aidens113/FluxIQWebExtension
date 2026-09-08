@@ -13,6 +13,7 @@ import {
   DEFAULT_EVIDENCE_POLICY,
   EvidenceBundle,
   EvidenceCaptureController,
+  openEvidenceJournalWithRetry,
   RedactionFailure,
   assertNoSensitiveText,
   redactStructured,
@@ -56,10 +57,86 @@ test("fails closed for circular structured data and unverified visual captures",
     async capture() { return { bytes: Buffer.from("unsafe"), mediaType: "image/png", redactionVerified: false }; },
   });
   await assert.rejects(() => controller.trigger({ trigger: "checkpoint", summary: "capture", correlation: correlation() }), RedactionFailure);
-  assert.deepEqual(await readdir(path.join(root, ".staging-run-1")), []);
+  assert.deepEqual(await readdir(path.join(root, ".staging-run-1")), ["events.ndjson"]);
+  assert.equal(await readFile(path.join(root, ".staging-run-1", "events.ndjson"), "utf8"), "");
   await assert.rejects(() => bundle.writeVerifiedArtifact("playwright/trace.zip", { bytes: Buffer.from("contains unsafe-secret"), mediaType: "application/zip", redactionVerified: true, redaction: "verified" }), RedactionFailure);
+  await bundle.abort();
 });
 
+test("retries only recognized transient evidence-journal acquisition failures", async () => {
+  const expected = { close() {}, sync() {}, writeFile() {} };
+  const delays = [];
+  let attempts = 0;
+  const opened = await openEvidenceJournalWithRetry("events.ndjson", async (_target, flags) => {
+    assert.equal(flags, "ax");
+    attempts += 1;
+    if (attempts < 3) throw Object.assign(new Error("busy"), { code: attempts === 1 ? "EBUSY" : "EACCES" });
+    return expected;
+  }, async milliseconds => { delays.push(milliseconds); });
+  assert.equal(opened, expected);
+  assert.equal(attempts, 3);
+  assert.deepEqual(delays, [10, 25]);
+
+  const exhaustedDelays = [];
+  let exhaustedAttempts = 0;
+  await assert.rejects(() => openEvidenceJournalWithRetry("events.ndjson", async () => {
+    exhaustedAttempts += 1;
+    throw Object.assign(new Error("still busy"), { code: "EPERM" });
+  }, async milliseconds => { exhaustedDelays.push(milliseconds); }), { code: "EPERM" });
+  assert.equal(exhaustedAttempts, 4);
+  assert.deepEqual(exhaustedDelays, [10, 25, 50]);
+
+  for (const failure of [Object.assign(new Error("missing"), { code: "ENOENT" }), new RedactionFailure("do not retry")]) {
+    let rejectedAttempts = 0;
+    await assert.rejects(() => openEvidenceJournalWithRetry("events.ndjson", async () => {
+      rejectedAttempts += 1;
+      throw failure;
+    }, async () => undefined), failure);
+    assert.equal(rejectedAttempts, 1);
+  }
+});
+
+test("serializes rapid concurrent events through one owned journal", async (t) => {
+  const root = await temporaryRoot(t);
+  const bundle = new EvidenceBundle({ rootDirectory: root, runId: "run-1", scenarioId: "rapid-journal" });
+  await bundle.initialize();
+  await Promise.all(Array.from({ length: 64 }, (_, index) => bundle.appendEvent({
+    trigger: "checkpoint",
+    summary: "rapid append",
+    correlation: correlation(`rapid-${index}`),
+  })));
+  const result = await bundle.finalize({ verdict: "passed" });
+  const events = (await readFile(path.join(result.path, "events.ndjson"), "utf8")).trim().split("\n").map(JSON.parse);
+  assert.equal(events.length, 64);
+  assert.deepEqual(events.map(event => event.sequence), Array.from({ length: 64 }, (_, index) => index + 1));
+});
+
+test("retains sequential diagnostics immediately after twenty screenshots", async (t) => {
+  const root = await temporaryRoot(t);
+  const bundle = new EvidenceBundle({ rootDirectory: root, runId: "run-1", scenarioId: "diagnostic-burst" });
+  await bundle.initialize();
+  const controller = new EvidenceCaptureController(bundle, { screenshots: "events", deduplicateScreenshots: false, maxScreenshots: 20, maxBytes: 10_000 }, {
+    async capture(input) { return { bytes: Buffer.from(input.correlation.stepId), mediaType: "image/png", redactionVerified: true }; },
+  });
+  for (let index = 0; index < 20; index += 1) await controller.trigger({
+    trigger: "step.complete",
+    summary: "visual boundary",
+    correlation: correlation(`visual-${index}`),
+  });
+  for (const stepId of ["diagnostic-flow-open-complete", "diagnostic-connect-call"]) await controller.trigger({
+    trigger: "checkpoint",
+    summary: "Sanitized diagnostic checkpoint",
+    correlation: correlation(stepId),
+    details: { diagnostic: { stage: stepId, errorCode: "diagnostic.test", facts: { ready: true } } },
+    screenshotSuppression: "sensitive-action",
+  });
+  const result = await bundle.finalize({ verdict: "failed" });
+  const events = (await readFile(path.join(result.path, "events.ndjson"), "utf8")).trim().split("\n").map(JSON.parse);
+  assert.equal(events.length, 22);
+  assert.equal(events[20].scenarioStepId, "diagnostic-flow-open-complete");
+  assert.equal(events[21].scenarioStepId, "diagnostic-connect-call");
+  assert.equal(events[21].details.capture.screenshotSuppressed, "sensitive-action");
+});
 test("publishes atomically and builds a hash-consistent artifact index", async (t) => {
   const root = await temporaryRoot(t);
   let tick = 0;
@@ -97,6 +174,7 @@ test("deduplicates identical screenshots while retaining correlated events", asy
   assert.ok(first.screenshot.path);
   assert.equal(second.screenshot.duplicateOfSha256, first.screenshot.sha256);
   assert.equal((await readdir(path.join(root, ".staging-run-1", "screenshots"))).length, 1);
+  await bundle.abort();
 });
 
 test("preserves identical physical frames when continuous review capture disables deduplication", async (t) => {
@@ -114,6 +192,7 @@ test("preserves identical physical frames when continuous review capture disable
   assert.notEqual(first.screenshot.path, second.screenshot.path);
   assert.equal((await readdir(path.join(root, ".staging-run-1", "screenshots"))).length, 2);
   assert.equal(validateEvidencePolicy(toContractEvidencePolicy({ screenshots: "events", sampleFps: 2, maxScreenshots: 10, maxBytes: 1_000 })).valid, true);
+  await bundle.abort();
 });
 
 test("rate limits ordinary frames but always attempts error evidence", async (t) => {
@@ -130,8 +209,25 @@ test("rate limits ordinary frames but always attempts error evidence", async (t)
   assert.equal(limited.screenshot.suppressed, "rate-limit");
   assert.ok(failure.screenshot.path);
   assert.equal(captures, 2);
+  await bundle.abort();
 });
 
+test("retains a truthful event when the screenshot adapter is transiently unavailable", async (t) => {
+  const root = await temporaryRoot(t);
+  const bundle = new EvidenceBundle({ rootDirectory: root, runId: "run-1", scenarioId: "capture-failure" });
+  await bundle.initialize();
+  const controller = new EvidenceCaptureController(bundle, { screenshots: "events", maxScreenshots: 10, maxBytes: 1_000 }, {
+    async capture() { throw new Error("arbitrary adapter failure that must not be stored"); },
+  });
+  const event = await controller.trigger({ trigger: "step.start", summary: "before action", correlation: correlation("durable-boundary") });
+  assert.equal(event.screenshot.suppressed, "capture-unavailable");
+  assert.equal(event.published.details.capture.screenshotSuppressed, "capture-unavailable");
+  const result = await bundle.finalize({ verdict: "failed" });
+  const stored = await readFile(path.join(result.path, "events.ndjson"), "utf8");
+  assert.match(stored, /"scenarioStepId":"durable-boundary"/u);
+  assert.match(stored, /"screenshotSuppressed":"capture-unavailable"/u);
+  assert.doesNotMatch(stored, /arbitrary adapter failure/u);
+});
 test("report and timeline identify failing step, preserve correlations, and escape content", async (t) => {
   const root = await temporaryRoot(t);
   const bundle = new EvidenceBundle({ rootDirectory: root, runId: "run-1", scenarioId: "failure-surfaces" });
@@ -200,5 +296,39 @@ test("contract validation fails closed before invalid events or policies are dur
     () => bundle.appendEvent({ trigger: "checkpoint", summary: "", correlation: correlation("invalid") }),
     ContractValidationError,
   );
-  assert.deepEqual(await readdir(path.join(root, ".staging-bad-event")), []);
+  assert.deepEqual(await readdir(path.join(root, ".staging-bad-event")), ["events.ndjson"]);
+  assert.equal(await readFile(path.join(root, ".staging-bad-event", "events.ndjson"), "utf8"), "");
+  await bundle.abort();
+});
+
+test("suppresses sensitive-action pixels while retaining redacted before and after events", async (t) => {
+  const root = await temporaryRoot(t);
+  const secrets = ["deepseek-key-fixture", "password-fixture", "654321"];
+  const bundle = new EvidenceBundle({ rootDirectory: root, runId: "sensitive-run", scenarioId: "sensitive-input", redaction: { secrets } });
+  await bundle.initialize();
+  let captureAttempts = 0;
+  const controller = new EvidenceCaptureController(bundle, { screenshots: "events", maxScreenshots: 10, maxBytes: 10_000 }, {
+    async capture() { captureAttempts += 1; return { bytes: Buffer.from(secrets.join("|")), mediaType: "image/png", redactionVerified: true }; },
+  });
+  for (const [trigger, label] of [["step.start", "Before"], ["step.complete", "After"]]) {
+    const event = await controller.trigger({
+      trigger,
+      summary: `${label}: enter deepseek-key-fixture`,
+      correlation: correlation("provider-secret-entry"),
+      details: { apiKey: secrets[0], password: secrets[1], pin: secrets[2] },
+      screenshotSuppression: "sensitive-action",
+    });
+    assert.equal(event.screenshot.suppressed, "sensitive-action");
+    assert.equal(event.published.details.capture.screenshotSuppressed, "sensitive-action");
+  }
+  const result = await bundle.finalize({ verdict: "passed" });
+  assert.equal(captureAttempts, 0);
+  assert.equal(result.summary.eventCount, 2);
+  assert.equal(result.summary.screenshotCount, 0);
+  assert.equal(result.index.artifacts.some(artifact => artifact.mediaType.startsWith("image/")), false);
+  for (const artifact of result.index.artifacts) {
+    const bytes = await readFile(path.join(result.path, ...artifact.path.split("/")));
+    const rendered = bytes.toString("utf8");
+    for (const secret of secrets) assert.equal(rendered.includes(secret), false, `${artifact.path} contained sensitive text`);
+  }
 });

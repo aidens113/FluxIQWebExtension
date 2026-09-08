@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { loadTestEnvironment, parseEnvironmentFile, resolveAuthScopeConfiguration, resolveCloneCacheScopeConfiguration, resolveTargetConfiguration } from "./target-config.js";
+import { loadTestEnvironment, parseEnvironmentFile, resolveAuthScopeConfiguration, resolveCloneCacheScopeConfiguration, resolveInteractiveTargetConfiguration, resolveTargetConfiguration } from "./target-config.js";
 
 const existingEnvironment: NodeJS.ProcessEnv = {
   FLUXIQ_TEST_TARGET: "existing",
@@ -122,6 +122,17 @@ test("fails fast for mixed targets and incomplete existing configuration", () =>
   assert.equal(resolveTargetConfiguration({ cliTarget: "existing", env: { ...existingEnvironment, FLUXIQ_TEST_GATEWAY_URL: "wss:\/\/gateway.example.test\/client" } }).mode, "existing");
   assert.equal(resolveTargetConfiguration({ cliTarget: "existing", env: { ...existingEnvironment, FLUXIQ_TEST_GATEWAY_URL: "ws:\/\/[::1]:3100\/client" } }).mode, "existing");
   assert.throws(() => resolveTargetConfiguration({ cliTarget: "isolated", cliFlowId: "flow-1", env: {} }), /isolated target/);
+});
+
+test("interactive explicit local target ignores unrelated existing-target profile only", () => {
+  assert.deepEqual(resolveInteractiveTargetConfiguration({
+    cliTarget: "persistent-isolated", cliWorkspace: "interactive-smoke",
+    env: { ...existingEnvironment, FLUXIQ_TEST_TARGET: "existing", FLUXIQ_TEST_PERSISTENT_WORKSPACE: "old-workspace" },
+  }), { mode: "persistent-isolated", workspace: "interactive-smoke" });
+  assert.throws(() => resolveTargetConfiguration({
+    cliTarget: "persistent-isolated", cliWorkspace: "interactive-smoke",
+    env: { ...existingEnvironment, FLUXIQ_TEST_TARGET: "existing" },
+  }), /conflicts/);
 });
 
 test("loads .env then .env.local with process environment taking precedence", async () => {

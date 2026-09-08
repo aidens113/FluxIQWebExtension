@@ -4,6 +4,7 @@ import type { Page } from "@playwright/test";
 import { EvidenceBundle, EvidenceCaptureController, createCorrelationId } from "@fluxiq-web-extension/test-evidence";
 
 export type BrowserEvidenceSurface = "panel" | "extension" | "scenario";
+export type BrowserEvidenceDiagnosticFact = boolean | number;
 
 export class BrowserEvidenceRecorder {
   readonly runId: string;
@@ -18,6 +19,7 @@ export class BrowserEvidenceRecorder {
     scenarioId: string;
     pages: Record<BrowserEvidenceSurface, Page>;
     sampleFps?: number;
+    redactionSecrets?: readonly string[];
   }) {
     const sampleFps = input.sampleFps ?? 0;
     this.runId = `${input.scenarioId}-${new Date().toISOString().replace(/[:.]/gu, "-")}-${randomBytes(3).toString("hex")}`;
@@ -27,7 +29,7 @@ export class BrowserEvidenceRecorder {
       rootDirectory: path.join(input.workspaceDirectory, "evidence"),
       runId: this.runId,
       scenarioId: input.scenarioId,
-      redaction: { secrets: [] },
+      redaction: { secrets: [...(input.redactionSecrets ?? [])] },
     });
     this.capture = new EvidenceCaptureController(this.bundle, {
       screenshots: "events",
@@ -57,14 +59,15 @@ export class BrowserEvidenceRecorder {
     await this.bundle.initialize();
   }
 
-  async step<T>(surface: BrowserEvidenceSurface, stepId: string, summary: string, action: () => Promise<T>): Promise<T> {
-    await this.queueCapture("step.start", `Before: ${summary}`, stepId, surface);
+  async step<T>(surface: BrowserEvidenceSurface, stepId: string, summary: string, action: () => Promise<T>, options: { sensitive?: boolean } = {}): Promise<T> {
+    const screenshotSuppression = options.sensitive ? "sensitive-action" as const : undefined;
+    await this.queueCapture("step.start", `Before: ${summary}`, stepId, surface, screenshotSuppression);
     try {
       const result = await action();
-      await this.queueCapture("step.complete", `After: ${summary}`, stepId, surface);
+      await this.queueCapture("step.complete", `After: ${summary}`, stepId, surface, screenshotSuppression);
       return result;
     } catch (error) {
-      await this.queueCapture("error", `Failed: ${summary}`, stepId, surface).catch(() => undefined);
+      await this.queueCapture("error", `Failed: ${summary}`, stepId, surface, screenshotSuppression).catch(() => undefined);
       throw error;
     }
   }
@@ -85,19 +88,33 @@ export class BrowserEvidenceRecorder {
     );
   }
 
+  async diagnostic(surface: BrowserEvidenceSurface, stage: string, errorCode: string, facts: Readonly<Record<string, BrowserEvidenceDiagnosticFact>>): Promise<void> {
+    if (!/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(stage) || !/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(errorCode)) {
+      throw new Error("Evidence diagnostic identity is invalid");
+    }
+    const entries = Object.entries(facts);
+    if (entries.length > 12 || entries.some(([key, value]) => !/^[a-z][a-zA-Z0-9]{0,47}$/u.test(key)
+      || (typeof value !== "boolean" && (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0 || value > 1_000_000)))) {
+      throw new Error("Evidence diagnostic facts are invalid");
+    }
+    await this.queueCapture("checkpoint", "Sanitized diagnostic checkpoint", `diagnostic-${stage}`, surface, "sensitive-action", {
+      diagnostic: { stage, errorCode, facts: Object.fromEntries(entries) },
+    });
+  }
   async finalize(verdict: "passed" | "failed"): Promise<string> {
     await this.pending;
     const result = await this.bundle.finalize({ verdict });
     return result.path;
   }
 
-  private queueCapture(trigger: "step.start" | "step.complete" | "checkpoint" | "error" | "final", summary: string, stepId: string, surface: BrowserEvidenceSurface): Promise<void> {
+  private queueCapture(trigger: "step.start" | "step.complete" | "checkpoint" | "error" | "final", summary: string, stepId: string, surface: BrowserEvidenceSurface, screenshotSuppression?: "sensitive-action", safeDetails: Readonly<Record<string, unknown>> = {}): Promise<void> {
     const operation = this.pending.then(async () => {
       await this.capture.trigger({
         trigger,
         summary,
         correlation: { runId: this.runId, scenarioId: this.scenarioId, stepId, correlationId: createCorrelationId() },
-        details: { surface },
+        details: { surface, ...safeDetails },
+        ...(screenshotSuppression ? { screenshotSuppression } : {}),
       });
     });
     this.pending = operation.catch(() => undefined);

@@ -1,6 +1,7 @@
 export const scenarioIds = [
   "basic-form", "dynamic-list", "navigation", "long-document", "iframe-checkout",
   "ambiguous-targets", "delayed-ui", "failure-surfaces", "reconnect", "sensitive-input",
+  "llm-target-drift", "instruction-only-form",
 ] as const;
 
 export type ScenarioId = (typeof scenarioIds)[number];

@@ -66,6 +66,10 @@ export const webScenarioJsonSchema = {
   type: "object",
   additionalProperties: false,
   required: ["schemaVersion", "id", "title", "tags", "seed", "startPath", "capabilities", "networkPolicy", "recordingScript", "expected"],
+  allOf: [{
+    if: { properties: { recordingScript: { maxItems: 0 } }, required: ["recordingScript"] },
+    then: { required: ["playbackGoal"] },
+  }],
   properties: {
     schemaVersion: { const: SCENARIO_SCHEMA_VERSION },
     id: { type: "string", pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$", minLength: 1 },
@@ -75,7 +79,7 @@ export const webScenarioJsonSchema = {
     startPath: { type: "string", pattern: "^/" },
     capabilities: { type: "array", uniqueItems: true, items: { enum: scenarioCapabilities } },
     networkPolicy: { enum: ["loopback-only", "allowlisted-real-site"] },
-    recordingScript: { type: "array", minItems: 1, items: { $ref: "#/$defs/step" } },
+    recordingScript: { type: "array", items: { $ref: "#/$defs/step" } },
     playbackGoal: { $ref: "#/$defs/goal" },
     expected: {
       type: "object",

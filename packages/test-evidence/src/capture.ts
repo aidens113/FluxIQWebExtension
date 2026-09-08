@@ -24,12 +24,13 @@ export class EvidenceCaptureController {
 
   async trigger(input: CaptureEvidenceEventInput): Promise<CapturedEvidenceEvent> {
     let screenshot: CaptureScreenshot;
-    if (!shouldCapture(input.trigger, this.policy)) screenshot = { suppressed: "policy" };
+    if (input.screenshotSuppression) screenshot = { suppressed: input.screenshotSuppression };
+    else if (!shouldCapture(input.trigger, this.policy)) screenshot = { suppressed: "policy" };
     else if (!this.adapter) screenshot = { suppressed: "capture-unavailable" };
     else if (this.capturedCount >= this.policy.maxScreenshots || this.capturedBytes >= this.policy.maxBytes) screenshot = { suppressed: "quota" };
     else if (this.nowMs() - this.lastCaptureAt < (this.policy.minimumScreenshotIntervalMs ?? 0) && input.trigger !== "error") screenshot = { suppressed: "rate-limit" };
     else {
-      const visual = await this.adapter.capture(input);
+      const visual = await this.adapter.capture(input).catch(() => undefined);
       if (!visual) screenshot = { suppressed: "capture-unavailable" };
       else {
         assertVerifiedVisual(visual);

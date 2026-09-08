@@ -3,6 +3,7 @@ import { createWriteStream, type WriteStream } from "node:fs";
 import path from "node:path";
 import { redactText } from "@fluxiq-web-extension/test-evidence";
 import { RunnerFailure } from "./failure.js";
+import { withoutProviderSecrets } from "./environment.js";
 
 export type ProcessSpec = {
   name: string;
@@ -40,7 +41,7 @@ export class ProcessSupervisor {
     try {
       child = this.spawnProcess(spec.command, spec.args, {
         cwd: spec.cwd,
-        env: spec.env,
+        env: withoutProviderSecrets(spec.env),
         stdio: ["ignore", "pipe", "pipe"],
         shell: spec.shell ?? false,
         windowsHide: true,

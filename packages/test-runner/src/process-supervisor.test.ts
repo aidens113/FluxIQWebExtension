@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { ProcessSupervisor } from "./process-supervisor.js";
+import { PROVIDER_SECRET_ENVIRONMENT_VARIABLES } from "./environment.js";
 
 test("captures output and cleans up a running child exactly once", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-runner-process-"));
@@ -48,5 +49,28 @@ test("a timed-out one-shot process is terminated during cleanup", async () => {
     assert.equal(supervisor.activeProcessCount, 0);
   } finally {
     await supervisor.cleanup();
+  }
+});
+
+test("strips provider credentials at the final child-process boundary", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-runner-env-"));
+  const logPath = path.join(root, "child.log");
+  const supervisor = new ProcessSupervisor();
+  const providerEnvironment = Object.fromEntries(PROVIDER_SECRET_ENVIRONMENT_VARIABLES.map(key => [key, `fixture-${key}`]));
+  try {
+    await supervisor.run({
+      name: "environment-boundary",
+      command: process.execPath,
+      args: ["-e", `const keys=${JSON.stringify(PROVIDER_SECRET_ENVIRONMENT_VARIABLES)}; if(keys.some(key => process.env[key] !== undefined)) process.exit(9); console.log(process.env.SAFE_VALUE);`],
+      cwd: root,
+      env: { ...process.env, ...providerEnvironment, SAFE_VALUE: "retained" },
+      logPath,
+    }, 5_000);
+    const log = await readFile(logPath, "utf8");
+    assert.match(log, /retained/);
+    for (const value of Object.values(providerEnvironment)) assert.equal(log.includes(value), false);
+  } finally {
+    await supervisor.cleanup();
+    await rm(root, { recursive: true, force: true });
   }
 });

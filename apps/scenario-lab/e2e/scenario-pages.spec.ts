@@ -67,6 +67,36 @@ test("reconnect UI orders disconnect, queued, reconnect, and replay events", asy
   await expect(page.getByTestId("events").getByRole("listitem")).toHaveText(["disconnect", "queued", "reconnect", "replayed"]); expect(await state<{ connected: boolean }>(lab, "reconnect")).toMatchObject({ connected: true });
 });
 
+test("LLM target drift fixture succeeds, fails repeatably while missing, renames, and restores", async ({ page, lab, networkGuard: _guard }) => {
+  await page.goto(`${lab.origin}/scenarios/llm-target-drift/`);
+  await expect(page.getByTestId("seed-marker")).toHaveText("target-drift-seed-42");
+  await page.getByTestId("diagnosis-target").click();
+  await expect(page.getByTestId("result")).toHaveText("Completed: 1");
+  expect(await state(lab, "llm-target-drift")).toMatchObject({ mode: "baseline", activationCount: 1, oracle: { targetPresent: true, expectedResult: "Completed: 1" } });
+
+  await page.getByTestId("introduce-missing-target").click();
+  await expect(page.getByTestId("drift-mode")).toHaveText("Mode: missing");
+  await expect(page.getByTestId("diagnosis-target")).toHaveCount(0);
+  await expect(page.getByTestId("result")).toHaveText("Target missing: deterministic failure armed");
+  const firstMissing = await state(lab, "llm-target-drift");
+  await page.reload();
+  await expect(page.getByTestId("diagnosis-target")).toHaveCount(0);
+  const secondMissing = await state(lab, "llm-target-drift");
+  expect(secondMissing).toEqual(firstMissing);
+  expect(secondMissing).toMatchObject({ mode: "missing", activationCount: 0, oracle: { recordedTargetTestId: "diagnosis-target", renderedTargetTestId: null, targetPresent: false } });
+
+  await page.getByTestId("introduce-renamed-target").click();
+  await expect(page.getByTestId("drift-mode")).toHaveText("Mode: renamed");
+  await expect(page.getByTestId("diagnosis-target")).toHaveCount(0);
+  await expect(page.getByTestId("diagnosis-target-v2")).toHaveText("Replacement control");
+  await expect(page.getByTestId("result")).toHaveText("Target renamed: deterministic failure armed");
+
+  await page.getByTestId("restore-target").click();
+  await expect(page.getByTestId("drift-mode")).toHaveText("Mode: baseline");
+  await expect(page.getByTestId("diagnosis-target")).toBeVisible();
+  await expect(page.getByTestId("result")).toHaveText("Ready");
+  expect(await state(lab, "llm-target-drift")).toMatchObject({ mode: "baseline", activationCount: 0, lastOperation: "restored", oracle: { targetPresent: true, expectedResult: "Ready" } });
+});
 test("sensitive UI submits synthetic input without retaining entered secrets", async ({ page, lab, networkGuard: _guard }) => {
   const password = "SYNTHETIC_BROWSER_PASSWORD"; const payment = "4242424242424242"; await page.goto(`${lab.origin}/scenarios/sensitive-input/`);
   await page.getByTestId("password").fill(password); await page.getByTestId("payment").fill(payment); await page.getByRole("button", { name: "Submit synthetic values" }).click(); await expect(page.getByTestId("result")).toHaveText("Submitted with secrets discarded");

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { AutomationStudioService, validateStateSnapshot } from "fluxiq/automation-studio";
-import { validateAutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
+import { AutomationStudioService, automationStudioFlowBootstrapCatalogByteBudget, buildAutomationStudioFlowBootstrapContext, estimateAutomationStudioDeepSeekInputTokens, runAutomationStudioLlmHarness, validateStateSnapshot } from "fluxiq/automation-studio";
+import { AutomationStudioNodeRegistry, validateAutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
 import { WEB_AUTOMATION_DOMAIN_ID, WEB_AUTOMATION_EVENTS } from "./constants";
 import { createWebAutomationFluxIQ } from "./host";
 import { webAutomationRecordingDomain } from "./recording/domain";
@@ -11,6 +11,7 @@ import { createWebAutomationStateFromSnapshot, filterStateElements, webAutomatio
 import { webAutomationClientCapabilities } from "./actions/capabilities";
 import { WEB_AUTOMATION_ACTION_TYPES } from "./actions/types";
 import { listWebAutomationOutputNodeDefinitions, webAutomationOutputPayload, outputTargetFromPayload } from "./output-nodes";
+import { WEB_AUTOMATION_RUNTIME_CAPABILITIES, WEB_AUTOMATION_RUNTIME_PERMISSIONS } from "./output-nodes/native-runtime";
 import { validateWebAutomationRuntime } from "./runtime";
 import { mapWebRecordingObservation } from "./web-panel-host";
 
@@ -239,6 +240,88 @@ const clickNodeDefinition = outputNodeDefinitions.find((definition) => definitio
 assert.equal(clickNodeDefinition?.requiredRuntimeCapabilities?.includes("web.actions"), true);
 assert.equal(validateAutomationStudioNodeDefinition(clickNodeDefinition!).ok, true);
 assert.equal(outputNodeDefinitions.every((definition) => validateAutomationStudioNodeDefinition(definition).ok), true);
+const bootstrapInstruction = "Using the connected browser page, enter Ada in Name, choose Team for Plan, submit the form, and verify the result says Submitted: Ada / team.";
+const bootstrapResolution = {
+  scope: { kind: "domain" as const, domainId: WEB_AUTOMATION_DOMAIN_ID },
+  runtimeCapabilities: WEB_AUTOMATION_RUNTIME_CAPABILITIES,
+  permissions: WEB_AUTOMATION_RUNTIME_PERMISSIONS
+};
+const bootstrapRegistry = new AutomationStudioNodeRegistry();
+for (const definition of outputNodeDefinitions) bootstrapRegistry.register(definition);
+assert.equal(new AutomationStudioNodeRegistry().list(bootstrapResolution).length, 39);
+assert.equal(bootstrapRegistry.list(bootstrapResolution).length, 50);
+const bootstrapCatalogBudget = automationStudioFlowBootstrapCatalogByteBudget({
+  maxInputTokens: 2_000,
+  instructionBytes: Buffer.byteLength(bootstrapInstruction, "utf8")
+});
+const bootstrapContext = buildAutomationStudioFlowBootstrapContext({
+  registry: bootstrapRegistry,
+  resolution: bootstrapResolution,
+  instructionText: bootstrapInstruction,
+  maxCatalogBytes: bootstrapCatalogBudget
+});
+assert.deepEqual(bootstrapContext.catalogSelection.missingRequiredTerms, []);
+const bootstrapWithoutHostPermissions = buildAutomationStudioFlowBootstrapContext({
+  registry: bootstrapRegistry,
+  resolution: { ...bootstrapResolution, permissions: [] },
+  instructionText: bootstrapInstruction,
+  maxCatalogBytes: bootstrapCatalogBudget
+});
+assert.deepEqual(
+  bootstrapWithoutHostPermissions.catalogSelection.missingRequiredTerms,
+  ["submit"],
+  "the live catalog projection must retain the web host's granted permissions"
+);
+assert.equal(bootstrapContext.catalogSelection.usedBytes <= bootstrapCatalogBudget, true);
+assert.equal(Buffer.byteLength(JSON.stringify(bootstrapContext), "utf8") + Buffer.byteLength(bootstrapInstruction, "utf8") + 1_800 <= 2_000 * 4, true);const bootstrapHarnessInput = {
+  taskKind: "flow_bootstrap" as const,
+  projectId: "project.catalog-acceptance",
+  flowId: "flow.catalog-acceptance",
+  instructions: [{
+    schemaVersion: "0.1" as const,
+    instructionId: "instruction.catalog-acceptance",
+    title: "Build the instruction-only form automation",
+    body: bootstrapInstruction,
+    scope: { kind: "flow" as const, projectId: "project.catalog-acceptance", flowId: "flow.catalog-acceptance" },
+    priority: 100,
+    status: "active" as const,
+    requirement: "required" as const,
+    tags: ["generation"],
+    createdAt: 1,
+    updatedAt: 1
+  }],
+  flowBootstrap: { registry: bootstrapRegistry, resolution: bootstrapResolution },
+  tokenLimits: { maxInputTokens: 2_000, maxOutputTokens: 512, maxTotalTokens: 3_000 },
+  maxEstimatedCostUsd: 0.25,
+  timeoutMs: 20_000
+};
+const bootstrapDryRun = await runAutomationStudioLlmHarness({ ...bootstrapHarnessInput, dryRun: true });
+assert.equal(bootstrapDryRun.request.estimatedInputTokens <= 2_000, true);
+assert.equal(bootstrapDryRun.request.estimatedInputTokens + 512 <= 3_000, true);assert.equal(bootstrapCatalogBudget, 5_326);
+assert.equal(bootstrapContext.catalogSelection.usedBytes, 4_959);
+assert.equal(bootstrapDryRun.request.estimatedInputTokens, 1_753);const bootstrapDeepSeekBodyTokens = estimateAutomationStudioDeepSeekInputTokens(bootstrapDryRun.request);
+assert.equal(bootstrapDeepSeekBodyTokens, 1_996);
+assert.equal(bootstrapDeepSeekBodyTokens <= 2_000, true);
+const selectedBootstrapActions = new Set(bootstrapContext.nodeCatalog.flatMap((entry) => entry.outputAction?.fixed ? [entry.outputAction.fixed] : []));
+for (const action of ["web.dom.type", "web.dom.select", "web.dom.click"]) assert.equal(selectedBootstrapActions.has(action), true, `bootstrap catalog omitted ${action}; selected=${[...selectedBootstrapActions].join(",")}; used=${bootstrapContext.catalogSelection.usedBytes}/${bootstrapContext.catalogSelection.byteBudget}`);
+assert.equal(["web.dom.wait_for_text", "web.dom.wait_for_selector", "web.dom.extract"].some((action) => selectedBootstrapActions.has(action)), true, "bootstrap catalog omitted a verify/assert equivalent");
+
+const missingSelectRegistry = new AutomationStudioNodeRegistry(outputNodeDefinitions.filter((definition) => definition.outputAction?.fixedOutputId !== "web.dom.select"));
+const incompleteBootstrapContext = buildAutomationStudioFlowBootstrapContext({
+  registry: missingSelectRegistry,
+  resolution: bootstrapResolution,
+  instructionText: bootstrapInstruction,
+  maxCatalogBytes: bootstrapCatalogBudget
+});
+assert.equal(incompleteBootstrapContext.catalogSelection.missingRequiredTerms.includes("choose"), true);let incompleteProviderCalls = 0;
+const incompleteHarness = await runAutomationStudioLlmHarness({
+  ...bootstrapHarnessInput,
+  flowBootstrap: { registry: missingSelectRegistry, resolution: bootstrapResolution },
+  provider: { metadata: { provider: "test", model: "test" }, runTask: async () => { incompleteProviderCalls += 1; throw new Error("provider must remain unreachable"); } }
+});
+assert.equal(incompleteHarness.ok, false);
+assert.equal(incompleteHarness.diagnostics.some((diagnostic) => diagnostic.code === "bootstrap.catalog_essentials_missing"), true);
+assert.equal(incompleteProviderCalls, 0);
 
 assert.equal(
   outputNodeDefinitions.every((definition) => definition.parameters.every((parameter) => parameter.allowStateBinding === true)),

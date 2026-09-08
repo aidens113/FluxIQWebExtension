@@ -10,6 +10,7 @@ import { createCorrelationId, EvidenceBundle, EvidenceCaptureController, sha256 
 import type { EvidenceMode } from "./commands.js";
 import { removeRunOwnedTopologyState, startTopology, type RunningTopology } from "./coordinator.js";
 import { classifyRunnerFailure, RunnerFailure } from "./failure.js";
+import { withoutProviderSecrets } from "./environment.js";
 import { WebPanelAuthSessionCache } from "./auth-session.js";
 import { ExistingFluxIQControlClient } from "./existing-fluxiq-control.js";
 import { executeExistingPersistedFlow, preflightExistingFluxIQ, type ExistingFlowExecution, type ExistingFluxIQPreflight } from "./existing-flow-run.js";
@@ -289,7 +290,7 @@ function configuredCredentials(environment: NodeJS.ProcessEnv) { const username 
 async function requireExtension(extensionPath: string) { try { await stat(path.join(extensionPath, "manifest.json")); } catch (cause) { throw new RunnerFailure("environment.missing", `Built E2E extension is missing: ${extensionPath}`, { cause }); } }
 
 async function launchBrowser(topology: RunningTopology, extensionPath: string) {
-  const context = await chromium.launchPersistentContext(topology.allocation.browserProfileDir, { headless: false, locale: "en-US", timezoneId: "UTC", viewport: { width: 1280, height: 720 }, colorScheme: "light", args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`, "--no-first-run", "--disable-default-apps"] });
+  const context = await chromium.launchPersistentContext(topology.allocation.browserProfileDir, { headless: false, env: withoutProviderSecrets(process.env), locale: "en-US", timezoneId: "UTC", viewport: { width: 1280, height: 720 }, colorScheme: "light", args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`, "--no-first-run", "--disable-default-apps"] });
   return { context, browserVersion: context.browser()?.version() ?? "chromium" };
 }
 async function extensionControlPage(context: BrowserContext): Promise<Page> { const worker = context.serviceWorkers()[0] ?? await context.waitForEvent("serviceworker", { timeout: 10_000 }); const id = new URL(worker.url()).hostname; const page = await context.newPage(); await page.goto(`chrome-extension://${id}/sidepanel/index.html`); return page; }

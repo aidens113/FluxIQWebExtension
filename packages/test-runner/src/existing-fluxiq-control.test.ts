@@ -199,7 +199,7 @@ test("starts and runs the exact persisted Flow with deterministic non-adaptive c
 test("parses cancellation, run detail, action, and event DTOs without returning raw event payloads", async (t) => {
   const client = await mockedClient(t, url => {
     if (endpoint(url) === "cancel-runtime-session") return json({ ok: true, payload: { runtimeSession: { ...session, status: "cancelled" } } });
-    if (endpoint(url) === "get-flow-run-detail") return json({ ok: true, payload: { runDetail: { summary, routeDecisions: [{ decisionId: "decision.one", routerId: "router.one", selectedSubflowId: "subflow.one", fallbackUsed: true }], subflows: [{ entryId: "entry.one", subflowId: "subflow.one", status: "succeeded", metadata: { graphFlowId: "flow.graph", routeDecisionId: "decision.one", private: "discard-me" } }], actionAttempts: [action], metadata: { correlationId: "correlation.one" } } } });
+    if (endpoint(url) === "get-flow-run-detail") return json({ ok: true, payload: { runDetail: { summary: { ...summary, interventionCount: 1 }, routeDecisions: [{ decisionId: "decision.one", routerId: "router.one", selectedSubflowId: "subflow.one", fallbackUsed: true }], subflows: [{ entryId: "entry.one", subflowId: "subflow.one", status: "succeeded", metadata: { graphFlowId: "flow.graph", routeDecisionId: "decision.one", private: "discard-me" } }], actionAttempts: [action], interventions: [{ interventionId: "intervention.one", kind: "diagnosis", promptVersion: "automation-studio.runtime-diagnosis.v1", provider: "deepseek", model: "deepseek-chat", validation: { ok: true }, tokenUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimatedCostUsd: 0.01 }, reason: "discard-me" }], adaptationIds: [], changeProposalIds: [], metadata: { correlationId: "discard-me", llmGate: { costAccounting: { calls: 1, arbitrary: "discard-me" } } } } } });
     if (endpoint(url) === "list-flow-run-actions") return json({ ok: true, payload: { actions: [action], page: {} } });
     if (endpoint(url) === "list-flow-run-events") return json({ ok: true, payload: { events: [event], page: {} } });
     throw new Error(`unexpected ${url.pathname}`);
@@ -210,6 +210,9 @@ test("parses cancellation, run detail, action, and event DTOs without returning 
   assert.deepEqual(detail.routeDecisions[0], { decisionId: "decision.one", routerId: "router.one", selectedSubflowId: "subflow.one", fallbackUsed: true });
   assert.deepEqual(detail.subflows[0], { entryId: "entry.one", subflowId: "subflow.one", status: "succeeded", graphFlowId: "flow.graph", routeDecisionId: "decision.one" });
   assert.equal(JSON.stringify(detail.subflows).includes("discard-me"), false);
+  assert.equal(detail.providerCallCount, 1);
+  assert.deepEqual(detail.interventions?.[0], { interventionId: "intervention.one", kind: "diagnosis", promptVersion: "automation-studio.runtime-diagnosis.v1", provider: "deepseek", model: "deepseek-chat", validationOk: true, inputTokens: 10, outputTokens: 5, totalTokens: 15, estimatedCostUsd: 0.01 });
+  assert.equal(JSON.stringify(detail).includes("discard-me"), false);
   assert.equal((await client.listRunActions("project.web", "run.one"))[0]?.definitionId, "web.dom.type");
   const parsedEvent = (await client.listRunEvents("project.web", "run.one"))[0];
   assert.equal(parsedEvent?.eventId, "event.one");

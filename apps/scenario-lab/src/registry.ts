@@ -8,6 +8,8 @@ import { delayedUiScenario } from "./scenarios/delayed-ui/scenario.js";
 import { failureSurfacesScenario } from "./scenarios/failure-surfaces/scenario.js";
 import { reconnectScenario } from "./scenarios/reconnect/scenario.js";
 import { sensitiveInputScenario } from "./scenarios/sensitive-input/scenario.js";
+import { llmTargetDriftScenario } from "./scenarios/llm-target-drift/scenario.js";
+import { instructionOnlyFormScenario } from "./scenarios/instruction-only-form/scenario.js";
 import type { ScenarioDefinition, ScenarioId } from "./types.js";
 import type { WebScenario } from "@fluxiq-web-extension/test-contracts";
 
@@ -22,6 +24,8 @@ const registry = new Map<ScenarioId, ScenarioDefinition>([
   [failureSurfacesScenario.id, failureSurfacesScenario],
   [reconnectScenario.id, reconnectScenario],
   [sensitiveInputScenario.id, sensitiveInputScenario],
+  [llmTargetDriftScenario.id, llmTargetDriftScenario],
+  [instructionOnlyFormScenario.id, instructionOnlyFormScenario],
 ]);
 
 export function getScenario(id: string): ScenarioDefinition | undefined {

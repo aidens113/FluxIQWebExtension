@@ -112,6 +112,24 @@ export function resolveTargetConfiguration(input: ResolveTargetConfigurationInpu
   };
 }
 
+/** Interactive local sessions may explicitly override an unrelated existing-target
+ * profile without weakening the strict conflict checks used by finite runs. */
+export function resolveInteractiveTargetConfiguration(input: ResolveTargetConfigurationInput): FluxIQTargetConfiguration {
+  if (input.cliTarget !== "isolated" && input.cliTarget !== "persistent-isolated") return resolveTargetConfiguration(input);
+  const env = { ...input.env };
+  delete env.FLUXIQ_TEST_TARGET;
+  delete env.FLUXIQ_TEST_BASE_URL;
+  delete env.FLUXIQ_TEST_GATEWAY_URL;
+  delete env.FLUXIQ_TEST_PROJECT_ID;
+  delete env.FLUXIQ_TEST_FLOW_ID;
+  delete env.FLUXIQ_TEST_USERNAME;
+  delete env.FLUXIQ_TEST_PASSWORD;
+  delete env.FLUXIQ_TEST_PIN;
+  delete env.FLUXIQ_TEST_TOTP;
+  if (input.cliWorkspace) delete env.FLUXIQ_TEST_PERSISTENT_WORKSPACE;
+  return resolveTargetConfiguration({ ...input, env });
+}
+
 const windowsDeviceNames = /^(?:con|prn|aux|nul|clock\$|com[1-9]|lpt[1-9])(?:\..*)?$/iu;
 const facilityReservedWorkspaceNames = new Set(["persistent-isolated", "sessions"]);
 
@@ -147,6 +165,31 @@ export async function loadTestEnvironment(repositoryRoot: string, processEnviron
   return { ...fromFile, ...processEnvironment };
 }
 
+export async function loadAllowlistedTestEnvironment(repositoryRoot: string, processEnvironment: NodeJS.ProcessEnv, allowedNames: readonly string[]): Promise<NodeJS.ProcessEnv> {
+  const allowed = new Set(allowedNames);
+  const fromFile: NodeJS.ProcessEnv = {};
+  for (const name of [".env", ".env.local"]) Object.assign(fromFile, await readAllowlistedEnvironmentFile(path.join(repositoryRoot, name), allowed));
+  for (const name of allowed) if (processEnvironment[name] !== undefined) fromFile[name] = processEnvironment[name];
+  return fromFile;
+}
+
+async function readAllowlistedEnvironmentFile(filePath: string, allowed: ReadonlySet<string>): Promise<NodeJS.ProcessEnv> {
+  try {
+    const result: NodeJS.ProcessEnv = {};
+    const contents = await readFile(filePath, "utf8");
+    for (const [lineIndex, sourceLine] of contents.replace(/^\uFEFF/u, "").split(/\r?\n/u).entries()) {
+      const line = sourceLine.trim();
+      if (!line || line.startsWith("#")) continue;
+      const match = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/u.exec(line);
+      if (!match) throw new Error(`Invalid environment assignment on line ${lineIndex + 1}`);
+      if (allowed.has(match[1]!)) result[match[1]!] = parseEnvironmentValue(match[2]!, lineIndex + 1);
+    }
+    return result;
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return {};
+    throw error;
+  }
+}
 export function parseEnvironmentFile(contents: string): NodeJS.ProcessEnv {
   const result: NodeJS.ProcessEnv = {};
   for (const [lineIndex, sourceLine] of contents.replace(/^\uFEFF/u, "").split(/\r?\n/u).entries()) {
