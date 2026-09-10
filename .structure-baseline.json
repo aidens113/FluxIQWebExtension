@@ -22,7 +22,7 @@
     },
     "directory-files": {
       "packages/test-runner/src": 101,
-      "scripts": 31
+      "scripts": 32
     },
     "exported-values": {
       "packages/test-runner/src/demo-workspace.ts::values": 43,

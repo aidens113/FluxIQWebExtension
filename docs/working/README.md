@@ -16,6 +16,7 @@ Core's matching index is at `F:\!FluxIQ\docs\working\README.md`.
 
 | Document | Owner | Lines | Scope | Paired in Core |
 | --- | --- | --- | --- | --- |
+| [agent-token-efficiency-plan.md](./agent-token-efficiency-plan.md) | Senior supervisor agent | 417 | Keeping the senior supervisor agent's context small on every project: fix instruction loading, add a global layer under `~/.claude` fed from a shared brain repository, define global / family / project / task memory tiers, and enforce delegation, worker return, and handoff rules mechanically. | `agent-token-efficiency-plan.md` |
 | [agent-working-doc-protocol.md](./agent-working-doc-protocol.md) | Senior supervisor agent | 472 | How the supervisor and workers use `docs/working/` as durable memory and as the coordination substrate for multi-agent work. | `agent-working-doc-protocol.md` |
 | [automated-testing-facility-plan.md](./automated-testing-facility-plan.md) | Primary agent under the `Execute Plan With Subagents` workflow, with rotated phase subagents (`phase0_contracts`, `phase3_topology`, `phase4_evidence`, `clone_*`, `phase12_*`, `facility_router_subflow`) | 1842 ⚠ | Automated Playwright testing facility for the FluxIQ web extension in `F:\!FluxIQWebExtension`: Scenario Lab fixtures, real-extension fixture, isolated/existing/clone/persistent-isolated FluxIQ topologies, evidence bundles, matrix/CI, bounded improvement agents, persisted-Flow execution, and the persistent self-recording demo scripts. | none |
 | [llm-production-automation-plan.md](./llm-production-automation-plan.md) | root coordination agent | 1577 ⚠ | Production-capable, provider-neutral LLM automation through the real web panel, production extension, and Testing Lab (instruction-only blank-Flow creation, evidence-guided exploration, runtime failure diagnosis/adaptation, reusable sanitized evidence); generic behavior lives in Core (`F:\!FluxIQ`), browser/DOM/selector/Testing Lab concerns live in this repository. | none |
@@ -29,5 +30,5 @@ Core's matching index is at `F:\!FluxIQ\docs\working\README.md`.
 | [extension-runtime-capabilities-plan.md](./extension-runtime-capabilities-plan.md) | Extension runtime | 1165 ⚠ | Building the extension into a first-class FluxIQ runtime client that executes Automation Studio flows and domain-owned web output nodes. | `runtime-kernel-plan.md` |
 | [extension-ui-rebuild-plan.md](./extension-ui-rebuild-plan.md) | Extension UI | 254 | Replacing the card-heavy popup/side-panel UI with one coherent application shell, persistent accessible tabs, and predictable scrolling. | none |
 
-⚠ marks documents over the 800-line compaction threshold (3 of 7 here).
+⚠ marks documents over the 800-line compaction threshold (3 of 8 here).
 Compact them the next time work touches them; do not schedule a bulk rewrite.
