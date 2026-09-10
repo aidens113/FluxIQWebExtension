@@ -185,10 +185,11 @@ state, or secrets from `.fluxiq` or extension storage in logs or responses.
   registered output; an unmapped input must not become executable.
 - Keep Chrome/Edge side-panel and Firefox popup behavior aligned where the
   product contract is shared, respecting manifest and browser API differences.
-- Tests live under `tests/`, mirroring `src/`: `src/a/b.ts` is covered by
-  `tests/a/b.test.ts`. Integration tests for explicit cross-package
-  boundaries live under `tests/integration/<boundary>/`. Test support that
-  ships stays in source.
+- Tests live in a `tests/` subfolder of the directory that owns their
+  subject: `a/b.ts` is covered by `a/tests/b.test.ts`. Never loose beside
+  source; never in a separate mirrored tree. A test with several subjects
+  goes in the `tests/` folder of the nearest directory containing all of
+  them. Test support that ships stays in source.
 - Placement follows FluxIQ Core's
   [code structure](../!FluxIQ/docs/architecture/code-structure.md):
   ownership / layer / feature / kind, a shared filename prefix becomes a

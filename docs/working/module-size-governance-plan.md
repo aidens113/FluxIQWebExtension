@@ -45,16 +45,17 @@ be elegant costs less than product code failing to be navigable.
    per the open question below.
 2. Generate `.structure-baseline.json` capturing the four files above plus any
    directories over 25 files.
-3. Relocate tests to `tests/` mirroring `src/` in each package, per Core's
-   Phase 1. The extension's `apps/extension/tsconfig.json` and
-   `domain/tsconfig.json` need the same `include` treatment Core's plan
-   describes; check each build config's `rootDir` before moving anything.
+3. Move tests into a `tests/` subfolder of each directory that owns their
+   subject, per Core's Phase 1. No `tsconfig` include change is needed since
+   tests stay under `src/`; check that each package's build config excludes
+   `src/**/tests/**` so support files are not compiled.
 4. Split the four oversized files by their pathology — `connection.ts` and
    `content/index.ts` first, since they ship. Sequence per Core's plan.
 
 The methodology — ownership / layer / feature / kind placement, the
-prefix-becomes-directory rule, one exported thing per file, barrels, `tests/`
-mirroring, and the six division pathologies — is authored in Core at
+prefix-becomes-directory rule, one exported thing per file, barrels,
+per-directory `tests/` subfolders, and the six division pathologies — is
+authored in Core at
 `docs/architecture/code-structure.md` and applies here without modification.
 Core's audit also enforces directory density (25 files) and warns on classes
 over 40 methods.
