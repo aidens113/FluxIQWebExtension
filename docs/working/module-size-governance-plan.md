@@ -45,13 +45,19 @@ be elegant costs less than product code failing to be navigable.
    per the open question below.
 2. Generate `.structure-baseline.json` capturing the four files above plus any
    directories over 25 files.
-3. Take no decomposition action during the MVP cycle, for the reasons in the
-   paired document.
+3. Relocate tests to `tests/` mirroring `src/` in each package, per Core's
+   Phase 1. The extension's `apps/extension/tsconfig.json` and
+   `domain/tsconfig.json` need the same `include` treatment Core's plan
+   describes; check each build config's `rootDir` before moving anything.
+4. Split the four oversized files by their pathology — `connection.ts` and
+   `content/index.ts` first, since they ship. Sequence per Core's plan.
 
+The methodology — ownership / layer / feature / kind placement, the
+prefix-becomes-directory rule, one exported thing per file, barrels, `tests/`
+mirroring, and the six division pathologies — is authored in Core at
+`docs/architecture/code-structure.md` and applies here without modification.
 Core's audit also enforces directory density (25 files) and warns on classes
-over 40 methods, and defines the structural rules — one exported thing per
-file, a shared filename prefix becomes a directory, every directory gets a
-barrel. Those rules apply here equally; the paired document owns them.
+over 40 methods.
 
 **Blockers:** none. The shared script now exists in Core.
 

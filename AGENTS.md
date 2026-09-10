@@ -185,8 +185,15 @@ state, or secrets from `.fluxiq` or extension storage in logs or responses.
   registered output; an unmapped input must not become executable.
 - Keep Chrome/Edge side-panel and Firefox popup behavior aligned where the
   product contract is shared, respecting manifest and browser API differences.
-- Keep tests near the module whose contract they protect. Use integration
-  tests for explicit cross-package boundaries.
+- Tests live under `tests/`, mirroring `src/`: `src/a/b.ts` is covered by
+  `tests/a/b.test.ts`. Integration tests for explicit cross-package
+  boundaries live under `tests/integration/<boundary>/`. Test support that
+  ships stays in source.
+- Placement follows FluxIQ Core's
+  [code structure](../!FluxIQ/docs/architecture/code-structure.md):
+  ownership / layer / feature / kind, a shared filename prefix becomes a
+  directory, one exported thing per file, a barrel in every directory, and
+  never extract-and-drop. The same size budgets apply here.
 
 ## Generated Data
 
