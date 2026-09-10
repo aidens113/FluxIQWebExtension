@@ -194,10 +194,12 @@ state, or secrets from `.fluxiq` or extension storage in logs or responses.
   [code structure](../!FluxIQ/docs/architecture/code-structure.md):
   ownership / layer / feature / kind, a shared filename prefix becomes a
   directory, one exported thing per file, a barrel in every directory, and
-  never extract-and-drop. The same size budgets apply here. Core's
-  `structure-audit.mjs` is not yet wired into this repository's `pnpm check`
-  (tracked in `docs/working/module-size-governance-plan.md`); until it is,
-  the budgets are a review obligation, not a build failure.
+  never extract-and-drop. The same budgets and checks apply here:
+  `scripts/structure-audit.mjs` — mirrored from Core, change it there first —
+  runs first in `pnpm check` with this repository's own
+  `.structure-baseline.json` and `scripts/structure-audit/config.mjs`, which
+  additionally enforces that `domain/src` never imports `apps/extension/src`.
+  Run `pnpm structure:baseline` after removing a violation.
 
 ## Generated Data
 

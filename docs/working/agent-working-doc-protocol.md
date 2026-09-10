@@ -1,13 +1,11 @@
 # Agent Working Document Protocol
 
 Status: Active
-Status detail: Protocol adopted; triage and Current State retrofits are complete
-here; compaction of oversized documents remains, on touch.
+Status detail: Protocol adopted; triage and Current State retrofits are complete here; compaction of oversized documents remains, on touch.
 Created: 2026-09-10
 Last updated: 2026-09-10
 Owner: Senior supervisor agent
-Scope: How the supervisor and workers use `docs/working/` as durable memory
-and as the coordination substrate for multi-agent work.
+Scope: How the supervisor and workers use `docs/working/` as durable memory and as the coordination substrate for multi-agent work.
 Paired document: `F:\!FluxIQ\docs\working\agent-working-doc-protocol.md`
 Related: [AGENTS.md](../../AGENTS.md), [working document index](./README.md)
 
@@ -195,6 +193,12 @@ markdown document will silently lose each other's writes. So:
 - Each worker writes its findings to its own file at
   `docs/working/<effort-slug>/reports/<agent-label>.md`.
 - Workers never edit `Current State` or the `Work Ledger`.
+- A worker writes only its owned files and its report, using filenames unique
+  to it. Workers never share a scratch file: two did once, and one overwrote
+  the other's staged block after the splice.
+- A worker writes only its owned files and its report, using filenames unique
+  to it. Workers never share a scratch file: two did once, and one overwrote
+  the other's staged block after the splice.
 - The supervisor reads the report files, independently verifies the claims,
   merges the outcome into `Current State`, and appends the ledger entry.
 
@@ -344,6 +348,19 @@ before and after.
 - Definition of done: shared task complete; report written
 - Report to: docs/working/agent-working-doc-protocol/reports/cs-testing-facility.md
 
+### Brief: cs-runtime-capabilities
+- Repository: this repository
+- Task: shared task on `docs/working/extension-runtime-capabilities-plan.md`,
+  except that its header block already conforms and must not be touched or
+  duplicated; insert only the `## Current State` section (and its closing
+  `---`) directly after the header's `---`. Dispatched 2026-09-10 after the
+  working-docs audit rule flagged the document as Active without one.
+- Required reads: this document's Section order; the whole target
+- Owns (may edit): `docs/working/extension-runtime-capabilities-plan.md`
+- Must not touch: any other file
+- Definition of done: `## Current State` present within 20 lines after the header, under 150 lines, existing content intact; report written
+- Report to: docs/working/agent-working-doc-protocol/reports/cs-runtime-capabilities.md
+
 ---
 
 ## Work Ledger
@@ -409,6 +426,37 @@ before and after.
   passed on first check. Worker reports read for status justification.
 - Outcome: Accepted
 - Follow-up: compaction on touch.
+
+### 2026-09-10 — Worker scratch-file rule added
+
+- Agent: supervisor
+- Changed: "Worker briefs and reports" gained a bullet requiring unique,
+  worker-owned filenames and forbidding shared scratch files; mirrored in
+  both repositories. Header fields in this document are unwrapped to one
+  line each, as the header rule requires and the audit now enforces.
+- Why: Two workers sharing one scratch file overwrote each other's staged
+  block during the Current State retrofits; targets were verified
+  unaffected.
+- Validation: the bullet is present in both copies; `pnpm structure:check
+  --rule working-docs` reports zero header findings. Documentation only.
+- Outcome: Accepted
+- Follow-up: none.
+
+### 2026-09-10 — Current State added to extension-runtime-capabilities-plan
+
+- Agent: supervisor, with worker cs-runtime-capabilities on Opus 5
+- Changed: `extension-runtime-capabilities-plan.md` (+115 lines, header
+  `Status` corrected from Active to Complete); report under
+  `agent-working-doc-protocol/reports/`.
+- Why: The working-docs audit rule refused the document as Active without a
+  `Current State`. The worker then showed the triage detail was wrong: the
+  2026-09-04 commit added four lines to the 2026-08-20 section, every phase
+  is checked, and only Core-blocked deferrals remain.
+- Validation: verification script — header conforms, `Current State` at
+  line 14, `git diff` 115 additions and 0 deletions in one hunk; the audit
+  passes after `--update`.
+- Outcome: Accepted
+- Follow-up: none.
 
 ---
 

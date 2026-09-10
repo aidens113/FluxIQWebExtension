@@ -1,13 +1,128 @@
 # Extension Runtime Capabilities Plan
 
-Status: Active
-Status detail: Extension as a first-class FluxIQ runtime client; last checkpoint 2026-09-04 added settable output-node parameters.
+Status: Complete
+Status detail: Every phase is checked and a green full-workspace verification run is recorded under 2026-08-20; the 2026-09-04 commit added four lines to that section. What remains is open questions and deferrals that depend on Core exposing outputIds on ClientGatewayCapability, not in-flight work.
 Created: 2026-08-21
 Last updated: 2026-09-10
 Owner: Extension runtime
 Scope: Building the extension into a first-class FluxIQ runtime client that executes Automation Studio flows and domain-owned web output nodes.
 Paired document: `F:\!FluxIQ\docs\working\runtime-kernel-plan.md`
 Related: none
+
+---
+
+## Current State
+
+Orientation for an agent with no prior context. Everything below is drawn from
+this document's own Implementation Plan checkboxes and Progress Log entries,
+which remain the source of truth.
+
+**Goal**
+
+- Make the browser extension a first-class FluxIQ runtime client that executes
+  Automation Studio flows and domain-owned web automation output nodes, without
+  disturbing the existing recording model.
+
+**Done**
+
+- All six planned phases are checked off in the Implementation Plan: structure
+  and exports, runtime capability projection, output node definitions,
+  extension runtime router, host-owned flow execution, and state/snapshot
+  runtime.
+- Phase 1: `domain/src/runtime` and `domain/src/output-nodes` exist;
+  `domain/src/web-panel/output-nodes.ts` remains a compatibility export;
+  gateway input listening and output dispatch were split into
+  `io/gateway-input-hub.ts` and `io/gateway-output-dispatcher.ts`;
+  `registerWebAutomationDomain()` wires the runtime adapter, the optional
+  gateway transport, and the Automation Studio runtime binding.
+- Phase 2: runtime capabilities exist for actions, snapshots, state, and
+  host-owned flow replay, carrying `domainId`, `inputIds`, and `outputIds`.
+- Phase 3: Automation Studio output-node definitions are generated for every
+  canonical web output, with per-output parameters, safety metadata, and
+  `outputAction.fixedOutputId`, validated through core validation in smoke
+  tests.
+- Phase 4: `apps/extension/src/runtime` owns command routing, action running,
+  and result mapping; `ExtensionRuntimeCommandRouter` replaced the inline
+  `execute_action` and `capture_snapshot` branches in `connection.ts`;
+  `content/actions.ts` and `content/snapshots.ts` were added.
+- Phase 5: `runWebAutomationFlow(fluxiq, input)` replays a project flow through
+  Automation Studio `runRuntimeSession()`, and `web-panel-host.ts` binds the
+  same runtime path as `createWebAutomationFluxIQ()`.
+- Phase 6: the runtime adapter implements both `captureSnapshot` and
+  `readState`, backed by extension `snapshot-runner.ts` and `state-reader.ts`.
+- Post-phase fixes recorded in the Progress Log: an extension-owned automation
+  tab (`runtime/automation-tab.ts`) created or reused when a command has no
+  `tabId`; navigation that waits for tab load, a stable completed URL, and
+  content-script attachment before reporting success; runtime confirmation
+  `client.recording_event` emission carrying both `inputId` and `domainId`;
+  `output-nodes/native-runtime.ts` with the importer manifest, runtime grants,
+  and native implementations bound by the web-panel host instead of an empty
+  native runtime; client selection by the advertised `web.actions` capability,
+  accepting `connected` as well as `ready` paired sessions; target resolution
+  falling back from selector to coordinates, visual-target bounds, and recorded
+  element fingerprint; frame `0` as the default for runtime DOM actions with a
+  top-frame-only guard and a content-script version handshake; and a
+  `RuntimeCommandStatus` runtime status card in both popup and sidepanel.
+- The 2026-08-20 Final Verification entry records workspace-wide `pnpm check`,
+  `pnpm build`, and `pnpm test` passing, alongside per-package domain and
+  extension check/build/test runs.
+
+**Not done**
+
+- The core client gateway capability contract still does not expose
+  `outputIds`. The Protocol Work section's proposed `domainId`, `inputIds`,
+  `outputIds`, and `metadata` fields on `ClientGatewayCapability`, and their
+  projection in
+  `ClientGatewayRuntimeTransport.runtimeCapabilityFromGatewayCapability()`, are
+  not implemented. The Phase 1 implementation note records the standing
+  workaround: the host registers a direct runtime adapter with explicit output
+  IDs and dispatches through the existing client gateway bridge.
+- `server.read_state` and `client.state_result` do not exist. `readState`
+  intentionally uses structured snapshot capture as the documented fallback.
+- `server.run_flow` and `client.flow_result` are deliberately deferred.
+  Extension-owned `run_flow` stays out of scope until there is a concrete
+  offline or local execution requirement; flow execution remains host-owned.
+- Automation-tab behavior beyond create/reuse is still described as "later
+  settings": foreground versus background, tab reuse, closing after completion,
+  and seeding a specific start URL are unimplemented.
+- Whether core binds `RuntimeService` into Automation Studio by default is
+  unsettled; the document leaves open a host-side call to the public binder
+  versus a framework-level `bindRuntimeService()` or constructor default.
+- The Tests section lists domain, extension, and integration cases. The
+  Progress Log records smoke coverage for runtime capabilities and generated
+  output-node definitions, but does not record the integration list
+  (mock-client dispatch by `outputId`, success and failure flow runs, runtime
+  session storage assertions) as complete.
+
+**Next steps**
+
+- Resolve the four Open Questions: default `RuntimeService` binding, whether
+  the gateway protocol grows `read_state` now, generated importer node
+  definitions versus `builtin.policy.action` nodes for authoring, and whether
+  runtime client selection should prefer the recording source session.
+- Extend the client gateway capability contract so runtime capabilities carry
+  output IDs natively, retiring the direct-adapter workaround.
+- Add `read_state` and `run_flow` protocol messages only when a concrete
+  requirement appears.
+- Fill in the remaining integration coverage listed under Tests.
+
+**Blockers**
+
+- The document records no blocker halting current work; all six phases are
+  closed and the last verification run was green.
+- The standing external dependency is the linked FluxIQ core: the missing
+  `outputIds` on the gateway capability contract and the absent
+  `server.read_state` command both live in core, not in this repository.
+  Coordinate through the paired document
+  `F:\!FluxIQ\docs\working\runtime-kernel-plan.md`.
+
+**Most recent activity**
+
+- Every dated Progress Log section is 2026-08-20; the newest is "Runtime Status
+  Accuracy / Redirect Readiness". The header records a 2026-09-04 checkpoint
+  and a 2026-09-10 last-updated date, but no dated section exists for either;
+  the 2026-09-04 edit appended the top-frame-only guard and content-script
+  version handshake bullets to that same 2026-08-20 section.
 
 ---
 

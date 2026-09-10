@@ -1,0 +1,90 @@
+{
+  "comment": "Ratcheted structure budgets, per rule and per key. Entries may only be lowered, never raised. Regenerate with: pnpm structure:baseline",
+  "limits": {
+    "fileLines": 800,
+    "fileLinesWarn": 400,
+    "directoryFiles": 25,
+    "directoryFilesWarn": 15,
+    "classMethods": 40,
+    "classMethodsWarn": 25,
+    "exportedValues": 15,
+    "exportedValuesWarn": 8,
+    "exportedClasses": 1,
+    "exportedComponents": 1,
+    "prefixGroup": 3,
+    "maxPathSegments": 8,
+    "workingDocLines": 800,
+    "workingDocCurrentStateLines": 150
+  },
+  "rules": {
+    "class-methods": {
+      "apps/extension/src/background/connection.ts::FluxIQConnection": 81
+    },
+    "directory-files": {
+      "packages/test-runner/src": 101,
+      "scripts": 31
+    },
+    "exported-values": {
+      "packages/test-runner/src/demo-workspace.ts::values": 43,
+      "packages/test-runner/src/demo-llm-create-ui.ts::values": 21
+    },
+    "file-lines": {
+      "packages/test-runner/src/demo-workspace.ts": 3855,
+      "apps/extension/src/background/connection.ts": 1913,
+      "apps/extension/src/content/index.ts": 1188,
+      "packages/test-runner/src/demo-llm-create-ui.ts": 837
+    },
+    "imports": {
+      "domain/src/client/index.ts": 3,
+      "domain/src/domain.test.ts": 3,
+      "domain/src/index.ts": 2,
+      "domain/src/web-panel-host.ts": 2,
+      "apps/extension/src/runtime/action-runner.ts": 1,
+      "domain/src/actions/capabilities.ts": 1,
+      "domain/src/client/gateway-mapping.ts": 1,
+      "domain/src/host.ts": 1,
+      "domain/src/io/gateway-input-hub.ts": 1,
+      "domain/src/io/gateway-output-dispatcher.ts": 1,
+      "domain/src/io/web-automation-io.ts": 1,
+      "domain/src/output-nodes/definitions.ts": 1,
+      "domain/src/output-nodes/native-runtime.ts": 1,
+      "domain/src/recording/domain.ts": 1,
+      "domain/src/recording/events.ts": 1,
+      "domain/src/recording/state.ts": 1,
+      "domain/src/recording/web-state.ts": 1,
+      "domain/src/runtime/adapter.ts": 1,
+      "domain/src/runtime/capabilities.ts": 1,
+      "domain/src/runtime/commands.ts": 1,
+      "domain/src/runtime/flow-runner.ts": 1,
+      "domain/src/runtime/llm-evidence.ts": 1,
+      "domain/src/runtime/reusable-evidence-coordinator.ts": 1
+    },
+    "naming": {
+      "packages/test-runner/src::demo": 17,
+      "scripts::run": 12,
+      "scripts::inspect": 6,
+      "packages/test-runner/src::clone": 3,
+      "scripts::apply": 3
+    },
+    "test-placement": {
+      "packages/test-runner/src": 51,
+      "apps/extension/e2e/specs": 4,
+      "packages/test-contracts/test": 4,
+      "apps/scenario-lab/src": 3,
+      "domain/src/runtime": 3,
+      "packages/agent-orchestrator/test": 2,
+      "apps/scenario-lab/src/scenarios/instruction-only-form": 1,
+      "apps/scenario-lab/src/scenarios/llm-target-drift": 1,
+      "domain/src": 1,
+      "packages/boundary-audit/src": 1,
+      "packages/real-site-policy/src": 1,
+      "packages/test-evidence/test": 1,
+      "packages/test-matrix/src": 1
+    },
+    "working-docs": {
+      "docs/working/automated-testing-facility-plan.md": 1842,
+      "docs/working/llm-production-automation-plan.md": 1577,
+      "docs/working/extension-runtime-capabilities-plan.md": 1165
+    }
+  }
+}
