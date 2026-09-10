@@ -5,8 +5,8 @@ Status detail: Protocol defined and adopted in both repositories; backlog
 triage and compaction of oversized documents remain.
 Created: 2026-09-10
 Last updated: 2026-09-10
-Owner: Root coordination agent
-Scope: How agents and subagents in this repository use `docs/working/` as
+Owner: Senior supervisor agent
+Scope: How the senior supervisor agent and workers in this repository use `docs/working/` as
 durable memory and as the coordination substrate for multi-agent work.
 Paired document: `F:\!FluxIQ\docs\working\agent-working-doc-protocol.md`
 Related: [AGENTS.md](../../AGENTS.md), [working document index](./README.md)
@@ -57,8 +57,8 @@ header block, ledger format, and lifecycle defined in
 
 ## Why This Exists
 
-Agent context does not survive a session. Subagents share no context with each
-other or with the primary agent. A subagent's completion report is a claim,
+Agent context does not survive a session. Workers share no context with each
+other or with the supervisor. A worker's completion report is a claim,
 not a record. Working documents are therefore the only channel through which
 one agent's knowledge reaches the next, and they have to be treated as a
 durable data structure rather than as prose that accumulates.
@@ -70,7 +70,7 @@ repositories exceed 800 lines, sixteen of them in Core. Core's
 `ui-ux-upgrade-audit-plan.md` is 5,944 lines and
 `llm-assisted-deterministic-automation-expansion-plan.md` is 3,459. A document
 that cannot be read inside a task budget cannot function as memory, and a
-subagent that skips it works from assumptions instead.
+worker that skips it works from assumptions instead.
 
 **Current truth is interleaved with history.** In
 `llm-production-automation-plan.md`, one dated checkpoint section runs from
@@ -105,11 +105,11 @@ docs/working/
   README.md                              index of every working document
   <effort-slug>.md                       the working document
   <effort-slug>/
-    reports/<agent-label>.md             subagent write-back, one file per agent
+    reports/<agent-label>.md             worker write-back, one file per agent
     archive/YYYY-MM-DD-<topic>.md        compacted history
 ```
 
-The per-effort subdirectory is created only when it is needed: when subagents
+The per-effort subdirectory is created only when it is needed: when workers
 are dispatched, or at the first compaction.
 
 ### Header block
@@ -160,7 +160,7 @@ Append one entry per completed unit of work. Keep each under 15 lines.
 
 ```text
 ### YYYY-MM-DD — <short title>
-- Agent: <primary | subagent label>
+- Agent: <supervisor | worker label>
 - Changed: <files or modules>
 - Why: <one or two lines>
 - Validation: `<exact command>` -> <actual observed result>
@@ -169,7 +169,7 @@ Append one entry per completed unit of work. Keep each under 15 lines.
 ```
 
 The `Validation` line records the command that ran and what it actually
-printed. "Subagent reported success" is not a validation result and must not
+printed. "Worker reported success" is not a validation result and must not
 appear. If nothing was run, write `not validated` and say why. This mirrors
 the rule in `AGENTS.md` that completion reports are not verification by
 themselves.
@@ -188,17 +188,17 @@ agent to touch it compacts before doing anything else:
 Compaction removes redundancy, not evidence. Anything that could still explain
 a decision moves to the archive rather than being deleted.
 
-### Subagent briefs and reports
+### Worker briefs and reports
 
-Parallel subagents must never edit the same file. Two agents editing one
+Parallel workers must never edit the same file. Two agents editing one
 markdown document will silently lose each other's writes. So:
 
-- The primary agent writes a brief into the working document **before**
-  dispatch, under a `## Subagent Briefs` section.
-- Each subagent writes its findings to its own file at
+- The supervisor writes a brief into the working document **before**
+  dispatch, under a `## Worker Briefs` section.
+- Each worker writes its findings to its own file at
   `docs/working/<effort-slug>/reports/<agent-label>.md`.
-- Subagents never edit `Current State` or the `Work Ledger`.
-- The primary agent reads the report files, independently verifies the claims,
+- Workers never edit `Current State` or the `Work Ledger`.
+- The supervisor reads the report files, independently verifies the claims,
   merges the outcome into `Current State`, and appends the ledger entry.
 
 Brief format:
@@ -251,7 +251,7 @@ once already.
 
 ## Agent Operating Rules
 
-**Starting a task, as the primary agent**
+**Starting a task, as the senior supervisor agent**
 
 1. Read `AGENTS.md`.
 2. Read [docs/working/README.md](./README.md) and pick the relevant document.
@@ -259,14 +259,14 @@ once already.
 4. Read deeper sections, the ledger, or the archive only when the task demands
    it.
 
-**Starting a task, as a subagent**
+**Starting a task, as a worker**
 
 Read your brief, the files it names, and the `Current State` of the working
 document it points to. Nothing else: not the index, not the rest of that
 document, not the repository's planning documents. Reading more is how a
-subagent spends the context its actual task needs. If the brief is not enough
+worker spends the context its actual task needs. If the brief is not enough
 to do the work correctly, say so rather than reading broadly — an
-insufficient brief is the primary agent's defect to fix.
+insufficient brief is the supervisor's defect to fix.
 
 **During a task**
 
@@ -316,10 +316,24 @@ the index with their successor named, so no agent reads them as current.
   `docs/working/README.md`, `AGENTS.md`, and the mirrored trio in
   `F:\!FluxIQ`.
 - Why: Working documents were already serving as agent memory without a format
-  that made them readable, indexable, or safe for parallel subagent writes.
+  that made them readable, indexable, or safe for parallel worker writes.
 - Validation: `wc -l` and `git ls-files docs/working` across both repositories
   -> 5 tracked documents here, 23 in Core, 11 of them over 800 lines.
   Documentation-only change, so no build or test check applies.
+- Outcome: Accepted
+- Follow-up: Phase 2 triage of `Unclassified` documents.
+
+### 2026-09-10 — Role model, push policy, and AGENTS.md condensation
+
+- Agent: supervisor
+- Changed: `AGENTS.md`, new `docs/architecture/repository-layout.md`, this
+  protocol, and the Core equivalents.
+- Why: The user defined the senior supervisor / worker split, asked the
+  supervisor to push `dev` on its own after validated work, and flagged that
+  `AGENTS.md` was too large to be mandatory reading for every agent.
+- Validation: every internal link target and the Core `#repository-boundary`
+  anchor resolved by file check; `wc -l AGENTS.md` -> 277 here and 266 in
+  Core. Documentation only, so no build or test check applies.
 - Outcome: Accepted
 - Follow-up: Phase 2 triage of `Unclassified` documents.
 
@@ -334,4 +348,4 @@ the index with their successor named, so no agent reads them as current.
 - **Should the 800-line cap be enforced mechanically?** This repository
   already has a `pnpm boundary:audit` script for boundary rules; a similar
   check could flag oversized or badly headed working documents. Deferred until
-  the protocol has survived real use. Owner: root coordination agent.
+  the protocol has survived real use. Owner: senior supervisor agent.

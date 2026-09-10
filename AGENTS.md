@@ -1,12 +1,26 @@
 # Agent Instructions
 
+## Agent Roles
+
+**Senior supervisor agent** — the agent the user prompts directly. It owns
+coordination, delegation, integration, conflict resolution, verification, and
+the final result. It declares the workflow mode, maintains working documents,
+and is the only role that commits and pushes.
+
+**Worker** — any agent invoked by another agent rather than by the user. A
+worker executes one bounded brief, writes back to its own report file, and
+reports honestly on what it did and did not verify. Workers never declare a
+mode, never edit a shared document, and never commit or push.
+
+A worker's completion report is a claim, not verification. The senior
+supervisor agent confirms the result itself before treating it as done.
+
 ## Start Here
 
-What you need to read depends on who asked you. Context is a budget; do not
-spend it on documents your task will not use.
+What you need to read depends on your role. Context is a budget; do not spend
+it on documents your task will not use.
 
-**Primary agent, responding to a human prompt.** Read this file. Then, when
-the work warrants it:
+**Senior supervisor agent.** Read this file. Then, when the work warrants it:
 
 - [MVP agent instructions](MVP_AGENT_INSTRUCTIONS.md) and the
   [30-day MVP implementation plan](FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%20MVP%20Implementation%20Plan.md)
@@ -15,30 +29,32 @@ the work warrants it:
 - The [working document index](docs/working/README.md), then the
   `Current State` section of the relevant document, before touching work
   already in progress.
+- [Repository layout and commands](docs/architecture/repository-layout.md)
+  when you need the package structure, tracking policy, or exact commands.
 
-**Subagent, working from a brief.** Read your brief, the files it names, and
-the `Current State` of the working document it points to. Do not read the MVP
-planning documents, the rest of a working document, or the rest of this file
-unless your brief says to. If your brief is not enough to do the work
-correctly, say so instead of reading broadly.
+**Worker.** Read your brief, the files it names, and the `Current State` of
+the working document it points to. Do not read the MVP planning documents,
+the rest of a working document, or the rest of this file unless your brief
+says to. If your brief is not enough to do the work correctly, say so instead
+of reading broadly — an insufficient brief is the supervisor's defect to fix.
 
-**Everyone.** The boundary, secret-handling, generated-data, and validation
+**Both roles.** The boundary, secret-handling, generated-data, and validation
 rules in this file are binding whether or not you read the background
 documents.
 
-Re-read background documents only when the task changes scope or the user asks
-for their current guidance.
+Re-read background documents only when the task changes scope or the user
+asks for their current guidance.
 
 ## Working Documents Are Agent Memory
 
-Agent context does not survive a session, and subagents share no context with
-each other or with the primary agent. Documents under `docs/working/` are the
+Agent context does not survive a session, and workers share no context with
+each other or with the supervisor. Documents under `docs/working/` are the
 only channel through which one agent's knowledge reaches the next.
 
 - Record findings, decisions, and validation results as the work happens, not
   as an end-of-task summary.
-- Give subagents a written brief before dispatch; each writes back to its own
-  report file. Subagents never edit a shared document.
+- Brief every worker in writing before dispatch; each writes back to its own
+  report file. Partition briefs by file, never by topic.
 - Commit working document updates with the work that changed them.
 
 The [agent working document protocol](docs/working/agent-working-doc-protocol.md)
@@ -48,16 +64,15 @@ document, not for routine updates.
 
 ## Workflow Modes
 
-Classify each user prompt into one of the modes below and state it in your
-first user-facing response as `Mode: <mode name>`, listing several in
-execution order if more than one applies. Do not repeat the label in later
-updates for the same prompt, but announce a transition once when it happens.
-This applies to the primary agent only; subagents work from their brief and
-do not declare modes. Follow the user's intent, and let the newest instruction
-take precedence. If the intended mode is genuinely unclear, ask before
-beginning substantive work — minimal inspection to explain the ambiguity is
-allowed. These are repository workflow modes, not Codex product or
-collaboration-mode settings.
+The senior supervisor agent classifies each user prompt into one of the modes
+below and states it in the first user-facing response as `Mode: <mode name>`,
+listing several in execution order if more than one applies. Do not repeat
+the label in later updates for the same prompt, but announce a transition
+once when it happens. Workers do not declare modes. Follow the user's intent,
+and let the newest instruction take precedence. If the intended mode is
+genuinely unclear, ask before beginning substantive work; minimal inspection
+to explain the ambiguity is allowed. These are repository workflow modes, not
+Codex product or collaboration-mode settings.
 
 ### 1. Plan And Write Working Doc
 
@@ -71,17 +86,16 @@ can execute it without rediscovering the intended architecture. Do not begin
 broad implementation unless the user also asks to execute the plan; small
 investigative probes are allowed when needed for accuracy.
 
-### 2. Execute Plan With Subagents
+### 2. Execute Plan With Workers
 
 For implementing an existing plan, completing its phases, or when the user
-explicitly asks for subagents.
+asks for subagents.
 
 - Read the current working document before assigning or implementing work.
-- Divide independent phases or steps among subagents where parallel work is
-  safe, partitioning by file rather than by topic.
-- The primary agent owns coordination, integration, conflict resolution,
-  review, validation, and the final result. Subagent completion reports are
-  not verification by themselves.
+- Divide independent phases among workers where parallel work is safe,
+  partitioning by file. If two briefs need the same file, the work is serial.
+- The supervisor owns coordination, integration, conflict resolution, review,
+  validation, and the final result.
 - Update the working document as each step is assigned, completed, validated,
   blocked, or revised, and record the results of the checks you run.
 - Continue through every requested phase unless the user pauses the work or a
@@ -97,10 +111,9 @@ Reproduce or inspect current behavior before changing code whenever feasible,
 and trace bugs to their underlying cause instead of patching symptoms. Keep
 edits scoped, preserve established architecture, and add or update tests in
 proportion to risk. Validate the affected extension and domain behavior
-directly, including live browser testing when requested and when the browser
-tooling is available. Update existing authored documentation when the change
-is substantial under the documentation rules below; a new working document is
-not required for every focused edit.
+directly, including live browser testing when requested and available. Update
+existing authored documentation when the change is substantial; a new working
+document is not required for every focused edit.
 
 ### 4. Testing And Live Validation
 
@@ -111,8 +124,8 @@ extension available for interactive testing.
 - Establish the expected behavior, then choose the narrowest useful
   combination of type checks, unit tests, smoke tests, extension builds, and
   manual browser tests.
-- Inspect actual results. Do not report success from compilation alone or from
-  another agent's completion report.
+- Inspect actual results. Do not report success from compilation alone or
+  from a worker's completion report.
 - For browser behavior, test the appropriate Chrome/Edge or Firefox build when
   the environment can load an unpacked extension. Record the browser, build
   target, page, and relevant extension state.
@@ -131,150 +144,80 @@ If a prompt spans multiple modes, begin with the earliest necessary mode and
 transition explicitly as work advances. Infer the practical mode when
 confidence is high; otherwise ask.
 
-## Repository Architecture
+## Repository Boundaries
 
 This repository is the downstream FluxIQ web-automation implementation. It is
-not FluxIQ Core.
+not FluxIQ Core. `apps/extension` owns browser APIs, DOM access, recorder UI,
+and browser-side execution; `domain` owns web-automation FluxIQ contracts,
+state reducers, input/output mappings, and runtime adapters; generic gateway
+and framework behavior belongs in Core. Durable project, policy, and recording
+ownership belongs in Core, not extension-local storage. The extension may
+import domain contracts; domain code must not depend on extension UI or
+browser modules. Full structure is in
+[repository layout and commands](docs/architecture/repository-layout.md).
 
-```text
-apps/extension/
-  src/background/   WebSocket session, tab routing, recording state, storage
-  src/content/      DOM evidence, snapshots, target lookup, action execution
-  src/popup/        Firefox popup fallback
-  src/sidepanel/    Chrome/Edge recorder console
-  src/runtime/      Browser-side runtime command and action handling
-  src/shared/       Browser helpers, constants, and wire protocol types
-  scripts/          Extension build and smoke-test scripts
-domain/
-  src/actions/      Web action contracts and capabilities
-  src/client/       Gateway mappings and client capability declarations
-  src/io/           Registered FluxIQ inputs, outputs, and gateway bridges
-  src/output-nodes/ Web output node definitions and dispatch adapters
-  src/recording/    Events, reducers, observations, and web state conversion
-  src/runtime/      Domain runtime service, commands, traces, and flow runner
-  src/web-panel/    Web-panel host output-node integration
-docs/architecture/  Authored current-state architecture
-docs/working/       Investigation and implementation working documents
-scripts/            Repository-level FluxIQ panel launcher
-```
-
-The extension is a browser-side client. It captures browser presence and
-recording evidence, sends state and domain events through FluxIQ's generic
-WebSocket gateway, executes authorized browser actions, and retains only
-lightweight local settings/session state. FluxIQ Core owns pairing,
-authorization, durable projects and recordings, policy generation, Automation
-Studio, and long-running orchestration.
-
-Keep responsibilities on the correct side of these boundaries:
-
-- `apps/extension` owns browser APIs, DOM access, recorder UI, transient
-  queues, and browser-side action execution.
-- `domain` owns web-automation-specific FluxIQ contracts, manifests, state
-  reducers, input/output mappings, action interfaces, and runtime adapters.
-- Generic gateway and framework behavior belongs in FluxIQ Core, not here.
-- Durable project, policy, and recording ownership belongs in FluxIQ Core, not
-  extension-local storage.
-- The extension may import domain contracts. Domain code must not depend on
-  extension UI or browser implementation modules.
-
-Workspace packages link to FluxIQ Core packages in the sibling `F:\!FluxIQ`
-checkout. Changes to that repository are allowed when needed to complete work
-here. Before the first Core edit, alert the user that the task crosses the
-repository boundary, identify the Core area and reason, and mention any
-expected compatibility impact. Follow the Core repository's own agent
-instructions while working there. Use subagents for clearly bounded Core
-investigation, implementation, or validation work; the primary agent remains
-responsible for cross-repository coordination, integration, and final
-verification. Keep generic framework behavior in Core instead of copying it
-here, and document any cross-repository contract or rollout dependency.
-
-## Engineering Structure And Modularity
-
-- Organize code by narrow, cohesive responsibility. Extend the module that
-  owns a capability or introduce a focused module rather than placing behavior
-  in a convenient catch-all file.
-- Split modules when they mix unrelated responsibilities or become difficult
-  to understand, test, replace, or debug independently.
-- Keep public boundaries and dependency direction explicit. Prefer small,
-  composable modules with clear inputs and outputs over shared mutable state
-  or oversized coordinators.
-- Keep wire-protocol changes synchronized across shared protocol types,
-  background routing, domain gateway mappings, capabilities, tests, and
-  architecture documentation as applicable.
-- Preserve the distinction between state/passive evidence inputs and
-  executable action inputs. An action input must map deterministically to a
-  registered output; an unmapped input must not become executable.
-- Keep Chrome/Edge side-panel and Firefox popup behavior aligned where the
-  product contract is shared, while respecting manifest and browser API
-  differences.
-- Keep tests near or clearly associated with the module whose contract they
-  protect. Use integration tests for explicit cross-package boundaries.
-
-## Repository And Generated-Data Boundaries
-
-Web-automation-specific code and assets belong here. Generic, domain-neutral
-FluxIQ framework behavior belongs in FluxIQ Core.
-
-Do not hand-edit generated/runtime state. Regenerate outputs through their
-owning scripts, and preserve the repository's existing tracking policy:
-
-- `.fluxiq/` contains local FluxIQ configuration, caches, databases,
-  recordings, project artifacts, and other ignored runtime state; do not
-  commit it.
-- `apps/extension/build/` contains tracked intermediate bundles. Update them
-  by running the extension build when their sources change; do not edit them
-  by hand.
-- `apps/extension/dist/` contains ignored loadable Chrome and Firefox builds.
-- `domain/.test-build/` contains tracked generated domain-test artifacts. Let
-  the domain test/build workflow update them; do not edit them by hand.
-- `domain/.script-build/` contains the ignored esbuild bundle of the FluxIQ
-  setup CLI, regenerated by `pnpm fluxiq:setup` and `pnpm dev`. It was tracked
-  by mistake until 2026-09-10; each ~22 MB rebuild was committed again, which
-  bloated history and broke pushes. Never commit it.
+Workspace packages link to FluxIQ Core in the sibling `F:\!FluxIQ` checkout.
+Changes there are allowed when needed to complete work here. Before the first
+Core edit, alert the user that the task crosses the repository boundary,
+identify the Core area and reason, and mention any expected compatibility
+impact. Follow Core's own agent instructions while working there. Use workers
+for clearly bounded Core investigation, implementation, or validation; the
+supervisor remains responsible for cross-repository coordination, integration,
+and final verification. Keep generic framework behavior in Core instead of
+copying it here, and document any cross-repository contract dependency.
 
 Never expose pairing tokens, bearer tokens, recorded page data, local browser
 state, or secrets from `.fluxiq` or extension storage in logs or responses.
 
+## Engineering Structure And Modularity
+
+- Organize code by narrow, cohesive responsibility. Extend the module that
+  owns a capability or introduce a focused one rather than placing behavior in
+  a convenient catch-all file. Split modules that mix unrelated
+  responsibilities or become hard to test, replace, or debug independently.
+- Keep public boundaries and dependency direction explicit. Prefer small,
+  composable modules over shared mutable state or oversized coordinators.
+- Keep wire-protocol changes synchronized across shared protocol types,
+  background routing, domain gateway mappings, capabilities, tests, and
+  architecture documentation.
+- Preserve the distinction between state/passive evidence inputs and
+  executable action inputs. An action input must map deterministically to a
+  registered output; an unmapped input must not become executable.
+- Keep Chrome/Edge side-panel and Firefox popup behavior aligned where the
+  product contract is shared, respecting manifest and browser API differences.
+- Keep tests near the module whose contract they protect. Use integration
+  tests for explicit cross-package boundaries.
+
+## Generated Data
+
+Do not hand-edit generated or runtime state; regenerate it through the owning
+script. Never commit `.fluxiq/`, `apps/extension/dist/`, or
+`domain/.script-build/`. `apps/extension/build/` and `domain/.test-build/` are
+tracked — update them by running their build, not by hand. The per-path detail
+is in [repository layout and commands](docs/architecture/repository-layout.md).
+
 ## Documentation Maintenance
 
 After substantial changes, update authored documentation in the same work
-unless the user explicitly says not to. Substantial changes include recording,
-snapshot, state, or action behavior; gateway message or domain input/output
-contracts; browser permissions, manifests, supported browsers, or build
-layout; pairing, authentication, authorization, token storage, or privileged
-actions; extension UI flows or browser-runtime architecture; FluxIQ setup,
-hosting, runtime adapters, or repository folder layout; and persistence
-ownership or generated artifact behavior.
+unless the user says not to. Substantial changes include recording, snapshot,
+state, or action behavior; gateway message or domain input/output contracts;
+browser permissions, manifests, supported browsers, or build layout; pairing,
+authentication, authorization, token storage, or privileged actions; extension
+UI flows or browser-runtime architecture; FluxIQ setup, hosting, runtime
+adapters, or folder layout; and persistence ownership or generated artifact
+behavior.
 
-When the user directly asks for documentation updates, treat them as required
-work. Keep current-state design in `docs/architecture/` and task-specific
-plans in `docs/working/`. Generated material under `.fluxiq/cache/docs/` is
-reference output, not a substitute for authored documentation.
+When the user asks for documentation updates, treat them as required work.
+Keep current-state design in `docs/architecture/` and task-specific plans in
+`docs/working/`. Generated material under `.fluxiq/cache/docs/` is reference
+output, not a substitute for authored documentation.
 
 ## Validation
 
-Run the narrowest relevant checks while iterating, then workspace-level checks
-when the scope warrants them:
-
-```bash
-pnpm check
-pnpm test
-pnpm build
-```
-
-Package-specific commands for focused work:
-
-```bash
-pnpm --filter @fluxiq-web-extension/domain check
-pnpm --filter @fluxiq-web-extension/domain test
-pnpm --filter @fluxiq-web-extension/domain host:build
-pnpm --filter @fluxiq-web-extension/extension check
-pnpm --filter @fluxiq-web-extension/extension test
-pnpm --filter @fluxiq-web-extension/extension build
-```
-
-The extension build writes unpacked targets to `apps/extension/dist/chrome`
-and `apps/extension/dist/firefox`.
+Run the narrowest relevant checks while iterating, then `pnpm check`,
+`pnpm test`, and `pnpm build` when the scope warrants them. Package-level
+commands are listed in
+[repository layout and commands](docs/architecture/repository-layout.md).
 
 Compilation and smoke tests do not prove live browser behavior. For changes to
 content scripts, background/service-worker lifecycle, WebSocket reconnection,
@@ -283,10 +226,36 @@ behavior, or action execution, perform manual browser validation when feasible
 and state what was and was not exercised.
 
 Do not start the FluxIQ web panel by default. When the user explicitly asks
-you to manage it, use `pnpm dev`, which runs repository-local FluxIQ setup and
-starts the panel with this repository as `FLUXIQ_ROOT`. To prepare local
-FluxIQ state without starting the panel, use `pnpm fluxiq:setup`. Otherwise,
-tell the user which command to run manually.
+you to manage it, use `pnpm dev`; otherwise tell the user which command to run.
+
+## Committing And Pushing
+
+Only the senior supervisor agent commits or pushes. Workers never do.
+
+Push `dev` without being asked once all of the following hold:
+
+1. The work is a complete, coherent unit — not a partial refactor or an
+   experiment left mid-flight.
+2. The relevant checks were actually run and observed to pass. Compilation
+   alone, or a worker reporting success, does not qualify.
+3. Nothing known to be broken is included.
+
+When a change spans this repository and FluxIQ Core, push both `dev` branches
+in the same work unit so the two sides do not drift, and say so.
+
+Otherwise: commit locally and explain what is holding the push. Always state
+what was pushed and what was not.
+
+These actions still require explicit user approval every time:
+
+- pushing to `main`, or opening a pull request into it;
+- force-pushing anything;
+- rewriting history, including `filter-repo`, `rebase -i`, and amends to
+  already-pushed commits;
+- deleting branches or tags on the remote.
+
+Never commit secrets, `.fluxiq` contents, recorded page data, browser
+profiles, or run artifacts. Never use `--no-verify`.
 
 ## Automated Testing Facility Boundary
 
@@ -294,15 +263,15 @@ The browser testing facility is downstream web-automation infrastructure. Keep
 scenario manifests, fixture websites, Playwright/browser drivers, extension
 loading and control, DOM assertions, screenshot policy, and real-site controls
 here. `packages/test-contracts` is private and repository-local; its contracts
-must not be treated as FluxIQ Core public API.
+are not FluxIQ Core public API.
 
-Move a testing capability to FluxIQ Core only when it remains coherent after
-removing all browser, DOM, URL, selector, tab, extension, and web-automation
-concepts, and at least two real domain consumers require it. Any promotion
-must add a public Core export, independent Core tests and documentation, a
-compatibility assessment, and migration of this repository to the public seam.
-Core must never import this repository or depend on its scenarios.
+Move a testing capability to Core only when it remains coherent after removing
+all browser, DOM, URL, selector, tab, extension, and web-automation concepts,
+and at least two real domain consumers require it. Any promotion must add a
+public Core export, independent Core tests and documentation, a compatibility
+assessment, and migration of this repository to the public seam. Core must
+never import this repository or depend on its scenarios.
 
-Run artifacts and browser profiles are disposable generated data. Keep them in
-ignored run-scoped directories; never commit captures or expose credentials,
-cookies, authorization headers, pairing tokens, or recorded page data.
+Run artifacts and browser profiles are disposable. Keep them in ignored
+run-scoped directories; never commit captures or expose credentials, cookies,
+authorization headers, pairing tokens, or recorded page data.
