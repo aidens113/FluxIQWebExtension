@@ -39,14 +39,21 @@ be elegant costs less than product code failing to be navigable.
 
 **Next steps**
 
-1. Implement the ratchet here once Core's `scripts/size-audit.mjs` exists, so
-   both repositories run the same logic rather than two divergent
-   implementations. Wire it into `pnpm check`.
-2. Generate `.size-baseline.json` capturing the four files above.
+1. Adopt Core's `scripts/structure-audit.mjs`, now implemented and wired into
+   its `pnpm check`. Copy it here rather than writing a second implementation,
+   and keep the two in sync — or decide it belongs in `packages/boundary-audit`
+   per the open question below.
+2. Generate `.structure-baseline.json` capturing the four files above plus any
+   directories over 25 files.
 3. Take no decomposition action during the MVP cycle, for the reasons in the
    paired document.
 
-**Blockers:** the shared audit script does not exist yet in Core.
+Core's audit also enforces directory density (25 files) and warns on classes
+over 40 methods, and defines the structural rules — one exported thing per
+file, a shared filename prefix becomes a directory, every directory gets a
+barrel. Those rules apply here equally; the paired document owns them.
+
+**Blockers:** none. The shared script now exists in Core.
 
 ---
 
