@@ -1,5 +1,17 @@
 # Agent Instructions
 
+## Required Reading
+
+Every agent must read these documents once at the start of each task before
+planning, editing, testing, or delegating work:
+
+- [MVP agent instructions](MVP_AGENT_INSTRUCTIONS.md)
+- [30-day MVP implementation plan](FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%20MVP%20Implementation%20Plan.md)
+
+Treat both documents as task context for the duration of the task. Re-read
+them only when the task changes scope or the user asks for their current
+guidance.
+
 ## Workflow Modes
 
 For every user prompt, classify the requested work into one of the workflow
