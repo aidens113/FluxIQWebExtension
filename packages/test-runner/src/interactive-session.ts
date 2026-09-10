@@ -192,8 +192,11 @@ export async function runInteractiveSession(options: InteractiveSessionOptions):
       runId,
       seed: options.seed ?? scenario.seed,
       target: options.target,
-      prepareHost: false,
-      ...(options.target.mode === "existing" ? {} : { bootstrapIdentity: true, ...(options.target.credentials ? { credentials: { username: options.target.credentials.username, password: options.target.credentials.password, ...(options.target.credentials.authorizationPin ? { pin: options.target.credentials.authorizationPin } : {}), ...(options.target.credentials.totp ? { totp: options.target.credentials.totp } : {}) } } : {}) }),
+      ...(options.target.mode === "existing" ? {} : {
+        prepareHost: false,
+        bootstrapIdentity: true,
+        ...(options.target.credentials ? { credentials: { username: options.target.credentials.username, password: options.target.credentials.password, ...(options.target.credentials.authorizationPin ? { pin: options.target.credentials.authorizationPin } : {}), ...(options.target.credentials.totp ? { totp: options.target.credentials.totp } : {}) } } : {}),
+      }),
     });
     let control = topology.control;
     if (options.target.mode === "existing") {
@@ -240,15 +243,27 @@ export async function runInteractiveSession(options: InteractiveSessionOptions):
         const result = await executeInteractiveAction(action, { scenario: scenarioPage, panel: panelPage, extension: extensionPage }, { scenario: topology.scenarioOrigin, panel: topology.fluxiqOrigin, extension: extensionOrigin }, artifactsDirectory, sequence, environment);
         guard.assertNoViolations();
         writeLine(output, { status: "ok", ...(requestId ? { id: requestId } : {}), ...result });
-      } catch {
-        writeLine(output, { status: "failed", ...(requestId ? { id: requestId } : {}), error: "interactive action failed" });
+      } catch (error) {
+        writeLine(output, { status: "failed", ...(requestId ? { id: requestId } : {}), error: "interactive action failed", code: interactiveFailureCode(error) });
       }
     }
+    lines.close();
+    input.pause();
   } finally {
     await context?.close().catch(() => undefined);
     await topology?.close().catch(() => undefined);
     if (topology) await removeRunOwnedTopologyState(topology).catch(() => undefined);
   }
+}
+
+function interactiveFailureCode(error: unknown): "timeout" | "surface_unavailable" | "network_policy" | "sensitive_control" | "invalid_action" | "action_failed" {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (/timeout|timed out/u.test(message)) return "timeout";
+  if (/closed|crash|unavailable|destroyed/u.test(message)) return "surface_unavailable";
+  if (/network|origin|egress/u.test(message)) return "network_policy";
+  if (/sensitive|secret/u.test(message)) return "sensitive_control";
+  if (/selector|allowlisted|unsupported field|requires exactly/u.test(message)) return "invalid_action";
+  return "action_failed";
 }
 
 async function assertNotSensitive(locator: Locator): Promise<void> {

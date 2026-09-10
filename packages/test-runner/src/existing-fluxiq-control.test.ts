@@ -120,6 +120,73 @@ test("reads the persisted parent, Subflow graph, and Router ownership boundary",
   assert.deepEqual((await client.getFlowRouter("project.web", "flow.main"))?.fallback, { kind: "subflow", subflowId: "subflow.primary" });
 });
 
+test("lists, inspects, and rejects one exactly scoped Flow adaptation", async (t) => {
+  const requests: Array<{ endpoint: string; body: Record<string, unknown> }> = [];
+  const adaptation = { adaptationId: "adaptation.pending", projectId: "project.web", flowId: "flow.main", subflowId: "subflow.primary", sourceRunId: "run.failed", status: "proposed", riskLevel: "low", patch: [{ kind: "edit_action_target", value: "discard-me" }], validationResults: [{ runId: "run.failed", status: "succeeded", detail: "discard-me" }], appliedTo: [{ kind: "action_target", id: "discard-me" }], metadata: { adaptationKind: "flow_bootstrap", privateValue: "discard-me", bootstrap: { accounting: { provider: "deepseek", model: "deepseek-chat", inputTokens: 10, outputTokens: 5, totalTokens: 15, estimatedCostUsd: 0.001, raw: "discard-me" } }, phase9: { auditEvents: [{ eventType: "created", detail: { evidenceGuided: true, iterationCount: 3, traceStepCount: 3, providerCallCount: 2, decisionCount: 2, toolCallCount: 2, evidenceBytes: 1200, toolIds: ["web.capture_snapshot"], raw: "discard-me" } }] } } };
+  const client = await mockedClient(t, (url, init) => {
+    const body = JSON.parse(String(init.body ?? "{}")) as Record<string, unknown>;
+    requests.push({ endpoint: endpoint(url), body });
+    if (endpoint(url) === "list-flow-adaptations") return json({ ok: true, payload: { adaptations: [adaptation], page: { adaptations: [adaptation], total: 1, limit: 100, offset: 0 } } });
+    if (endpoint(url) === "get-flow-adaptation") return json({ ok: true, payload: { adaptation } });
+    if (endpoint(url) === "review-flow-adaptation") return json({ ok: true, payload: { adaptation: { ...adaptation, status: body.action === "revert" ? "reverted" : body.action === "approve" ? "validated" : body.action === "apply" ? "applied" : "rejected" } } });
+    throw new Error(`unexpected ${url.pathname}`);
+  });
+
+  assert.deepEqual(await client.listFlowAdaptations("project.web", "flow.main", "proposed"), [{ adaptationId: "adaptation.pending", projectId: "project.web", flowId: "flow.main", status: "proposed" }]);
+  assert.deepEqual(await client.getFlowAdaptation("project.web", "flow.main", "adaptation.pending"), { adaptationId: "adaptation.pending", projectId: "project.web", flowId: "flow.main", status: "proposed", adaptationKind: "flow_bootstrap", subflowId: "subflow.primary", sourceRunId: "run.failed", riskLevel: "low", patchKinds: ["edit_action_target"], validationSucceededCount: 1, validationFailedCount: 0, appliedMutationCount: 1, accounting: { provider: "deepseek", model: "deepseek-chat", inputTokens: 10, outputTokens: 5, totalTokens: 15, estimatedCostUsd: 0.001 }, evidenceLoop: { providerCallCount: 2, decisionCount: 2, traceStepCount: 3, iterationCount: 3, toolCallCount: 2, evidenceBytes: 1200, toolIds: ["web.capture_snapshot"] } });
+  assert.equal((await client.rejectFlowAdaptation({ projectId: "project.web", flowId: "flow.main", adaptationId: "adaptation.pending", authorizationPin: "test-pin", reason: "Testing Lab cleanup" })).status, "rejected");
+  assert.equal((await client.approveFlowAdaptation({ projectId: "project.web", flowId: "flow.main", adaptationId: "adaptation.pending", authorizationPin: "test-pin" })).status, "validated");
+  assert.equal((await client.applyFlowAdaptation({ projectId: "project.web", flowId: "flow.main", adaptationId: "adaptation.pending", authorizationPin: "test-pin" })).status, "applied");
+  assert.equal((await client.revertFlowAdaptation({ projectId: "project.web", flowId: "flow.main", adaptationId: "adaptation.pending", authorizationPin: "test-pin", reason: "Testing Lab repair" })).status, "reverted");
+  assert.deepEqual(requests.map(item => item.endpoint), ["list-flow-adaptations", "get-flow-adaptation", "review-flow-adaptation", "review-flow-adaptation", "review-flow-adaptation", "review-flow-adaptation"]);
+  assert.deepEqual(requests[2]?.body, { projectId: "project.web", flowId: "flow.main", adaptationId: "adaptation.pending", authorizationPin: "test-pin", reason: "Testing Lab cleanup", action: "reject" });
+  assert.deepEqual(requests[3]?.body, { projectId: "project.web", flowId: "flow.main", adaptationId: "adaptation.pending", authorizationPin: "test-pin", action: "approve" });
+  assert.deepEqual(requests[4]?.body, { projectId: "project.web", flowId: "flow.main", adaptationId: "adaptation.pending", authorizationPin: "test-pin", action: "apply" });
+  assert.deepEqual(requests[5]?.body, { projectId: "project.web", flowId: "flow.main", adaptationId: "adaptation.pending", authorizationPin: "test-pin", reason: "Testing Lab repair", action: "revert" });
+});
+
+test("keeps a legacy evidence audit reviewable without inferring provider calls from trace length", async (t) => {
+  const adaptation = {
+    adaptationId: "adaptation.pending",
+    projectId: "project.web",
+    flowId: "flow.main",
+    status: "proposed",
+    metadata: {
+      adaptationKind: "flow_bootstrap",
+      phase9: { auditEvents: [{ eventType: "created", detail: { evidenceGuided: true, iterationCount: 2, toolCallCount: 1, evidenceBytes: 100, toolIds: ["web.inspect_current_page"] } }] }
+    }
+  };
+  const client = await mockedClient(t, url => endpoint(url) === "get-flow-adaptation"
+    ? json({ ok: true, payload: { adaptation } })
+    : (() => { throw new Error(`unexpected ${url.pathname}`); })());
+
+  const parsed = await client.getFlowAdaptation("project.web", "flow.main", "adaptation.pending");
+  assert.deepEqual(parsed.evidenceLoop, {
+    iterationCount: 2,
+    toolCallCount: 1,
+    evidenceBytes: 100,
+    toolIds: ["web.inspect_current_page"]
+  });
+  assert.equal(parsed.evidenceLoop?.providerCallCount, undefined);
+});
+
+test("Flow adaptation controls fail closed on cross-scope and non-rejected responses", async (t) => {
+  const client = await mockedClient(t, url => {
+    if (endpoint(url) === "list-flow-adaptations") return json({ ok: true, payload: { adaptations: [{ adaptationId: "adaptation.foreign", projectId: "project.other", flowId: "flow.main", status: "proposed" }], page: { total: 1 } } });
+    if (endpoint(url) === "review-flow-adaptation") return json({ ok: true, payload: { adaptation: { adaptationId: "adaptation.pending", projectId: "project.web", flowId: "flow.main", status: "proposed", metadata: { adaptationKind: "flow_bootstrap" } } } });
+    throw new Error(`unexpected ${url.pathname}`);
+  });
+  await assert.rejects(() => client.listFlowAdaptations("project.web", "flow.main", "proposed"), /escaped the requested parent Flow/);
+  await assert.rejects(() => client.rejectFlowAdaptation({ projectId: "project.web", flowId: "flow.main", adaptationId: "adaptation.pending", authorizationPin: "test-pin", reason: "cleanup" }), /did not reject/);
+});
+
+test("Flow adaptation listing rejects a truncated bounded page", async (t) => {
+  const client = await mockedClient(t, url => endpoint(url) === "list-flow-adaptations"
+    ? json({ ok: true, payload: { adaptations: [{ adaptationId: "adaptation.pending", projectId: "project.web", flowId: "flow.main", status: "proposed" }], page: { total: 2 } } })
+    : (() => { throw new Error(`unexpected ${url.pathname}`); })());
+  await assert.rejects(() => client.listFlowAdaptations("project.web", "flow.main", "proposed"), /not a complete bounded page/);
+});
+
 test("uses only the explicit authorized Core seam for legacy representation migration", async (t) => {
   let request: { endpoint: string; body: Record<string, unknown> } | undefined;
   const client = await mockedClient(t, (url, init) => {
@@ -199,7 +266,7 @@ test("starts and runs the exact persisted Flow with deterministic non-adaptive c
 test("parses cancellation, run detail, action, and event DTOs without returning raw event payloads", async (t) => {
   const client = await mockedClient(t, url => {
     if (endpoint(url) === "cancel-runtime-session") return json({ ok: true, payload: { runtimeSession: { ...session, status: "cancelled" } } });
-    if (endpoint(url) === "get-flow-run-detail") return json({ ok: true, payload: { runDetail: { summary: { ...summary, interventionCount: 1 }, routeDecisions: [{ decisionId: "decision.one", routerId: "router.one", selectedSubflowId: "subflow.one", fallbackUsed: true }], subflows: [{ entryId: "entry.one", subflowId: "subflow.one", status: "succeeded", metadata: { graphFlowId: "flow.graph", routeDecisionId: "decision.one", private: "discard-me" } }], actionAttempts: [action], interventions: [{ interventionId: "intervention.one", kind: "diagnosis", promptVersion: "automation-studio.runtime-diagnosis.v1", provider: "deepseek", model: "deepseek-chat", validation: { ok: true }, tokenUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimatedCostUsd: 0.01 }, reason: "discard-me" }], adaptationIds: [], changeProposalIds: [], metadata: { correlationId: "discard-me", llmGate: { costAccounting: { calls: 1, arbitrary: "discard-me" } } } } } });
+    if (endpoint(url) === "get-flow-run-detail") return json({ ok: true, payload: { runDetail: { summary: { ...summary, interventionCount: 1 }, routeDecisions: [{ decisionId: "decision.one", routerId: "router.one", selectedSubflowId: "subflow.one", fallbackUsed: true }], subflows: [{ entryId: "entry.one", subflowId: "subflow.one", status: "succeeded", metadata: { graphFlowId: "flow.graph", routeDecisionId: "decision.one", private: "discard-me" } }], actionAttempts: [action], interventions: [{ interventionId: "intervention.one", kind: "diagnosis", promptVersion: "automation-studio.runtime-diagnosis.v1", provider: "deepseek", model: "deepseek-chat", validation: { ok: true }, tokenUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimatedCostUsd: 0.01 }, createdAt: 21, metadata: { requestId: "llm.request.one", private: "discard-me" }, reason: "discard-me" }], adaptationIds: [], changeProposalIds: [], metadata: { correlationId: "discard-me", runtimePatchAttempts: [{ kind: "temporary_target_override", proposalOnly: true, executed: false, preflightOk: false, issues: ["Unknown target node private-node-name"], private: "discard-me" }], llmGate: { costAccounting: { calls: 1, arbitrary: "discard-me" } } } } } });
     if (endpoint(url) === "list-flow-run-actions") return json({ ok: true, payload: { actions: [action], page: {} } });
     if (endpoint(url) === "list-flow-run-events") return json({ ok: true, payload: { events: [event], page: {} } });
     throw new Error(`unexpected ${url.pathname}`);
@@ -211,7 +278,8 @@ test("parses cancellation, run detail, action, and event DTOs without returning 
   assert.deepEqual(detail.subflows[0], { entryId: "entry.one", subflowId: "subflow.one", status: "succeeded", graphFlowId: "flow.graph", routeDecisionId: "decision.one" });
   assert.equal(JSON.stringify(detail.subflows).includes("discard-me"), false);
   assert.equal(detail.providerCallCount, 1);
-  assert.deepEqual(detail.interventions?.[0], { interventionId: "intervention.one", kind: "diagnosis", promptVersion: "automation-studio.runtime-diagnosis.v1", provider: "deepseek", model: "deepseek-chat", validationOk: true, inputTokens: 10, outputTokens: 5, totalTokens: 15, estimatedCostUsd: 0.01 });
+  assert.deepEqual(detail.interventions?.[0], { interventionId: "intervention.one", kind: "diagnosis", requestId: "llm.request.one", promptVersion: "automation-studio.runtime-diagnosis.v1", provider: "deepseek", model: "deepseek-chat", validationOk: true, inputTokens: 10, outputTokens: 5, totalTokens: 15, estimatedCostUsd: 0.01, createdAt: 21 });
+  assert.deepEqual(detail.runtimePatchAttempts, [{ kind: "temporary_target_override", proposalOnly: true, executed: false, preflightOk: false, issueCodes: ["runtime_patch.target_node_invalid"], adaptationCreated: false, changeProposalCreated: false }]);
   assert.equal(JSON.stringify(detail).includes("discard-me"), false);
   assert.equal((await client.listRunActions("project.web", "run.one"))[0]?.definitionId, "web.dom.type");
   const parsedEvent = (await client.listRunEvents("project.web", "run.one"))[0];

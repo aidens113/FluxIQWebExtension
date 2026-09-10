@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { assertDemoFlowDocument, assertDemoParentDocument, assertDemoSubflowOwnership, createDemoFlowDocument, demoGraphReconciliationOperations, requireDemoScenarioUrl, resolveDemoWorkspaceConfiguration, startPersistentScenarioLabWithRecovery } from "./demo-workspace.js";
+import { assertDemoFlowDocument, assertDemoParentDocument, assertDemoSubflowOwnership, boundExplorationRunStages, createDemoFlowDocument, demoGraphReconciliationOperations, explorationFlowName, requireDemoScenarioUrl, resolveDemoWorkspaceConfiguration, resolveExplorationFlowNameForRecovery, startPersistentScenarioLabWithRecovery } from "./demo-workspace.js";
 
 const root = path.resolve("fixture-repository");
 const required = {
@@ -11,6 +11,35 @@ const required = {
   FLUXIQ_TEST_PASSWORD: "secret",
   FLUXIQ_TEST_PIN: "123456",
 };
+
+test("non-default exploration request naming and blank crash recovery are deterministic", async () => {
+  const request = { scenarioId: "basic-form", scenarioPath: "/scenarios/basic-form/", instruction: "Submit the basic form." } as const;
+  const expected = explorationFlowName(request);
+  assert.equal(explorationFlowName(request), expected);
+  assert.notEqual(explorationFlowName({ ...request, instruction: "Submit a different basic form." }), expected);
+  assert.match(expected, /^Website Exploration basic-form [a-f0-9]{10}$/u);
+
+  const legacy = { flowId: "flow.legacy", name: "Website Exploration basic-form abcdef1234", sourceMode: "visual", nodeCount: 0, edgeCount: 0, updatedAt: 1 };
+  const blankControl = {
+    listFlowSummaries: async () => [legacy],
+    getExactFlow: async () => ({ document: { nodes: [], edges: [], metadata: { flowRepresentationKind: "orchestration" } } }),
+    listFlowSubflows: async () => [], getFlowRouter: async () => null,
+  } as any;
+  assert.equal(await resolveExplorationFlowNameForRecovery(blankControl, "project.one", request), legacy.name);
+
+  const nonblankControl = { ...blankControl, getExactFlow: async () => ({ document: { nodes: [{}], edges: [], metadata: { flowRepresentationKind: "orchestration" } } }) } as any;
+  assert.equal(await resolveExplorationFlowNameForRecovery(nonblankControl, "project.one", request), expected);
+
+  const transportFailure = new Error("control unavailable");
+  await assert.rejects(resolveExplorationFlowNameForRecovery({ ...blankControl, getExactFlow: async () => { throw transportFailure; } } as any, "project.one", request), error => error === transportFailure);
+});
+
+test("bound run launcher exposes only allowlisted stage and reason diagnostics", async () => {
+  assert.deepEqual(boundExplorationRunStages, ["pre_browser_identity", "pre_browser_topology", "browser_execution", "manifest_oracle", "final_validation"]);
+  const source = await readFile(path.resolve("scripts/run-demo-llm-exploration-request-flow.mjs"), "utf8");
+  assert.match(source, /stage, reasonCode, providerCallCount: 0/u);
+  assert.doesNotMatch(source, /error\.message|error\.stack|JSON\.stringify\(error\)/u);
+});
 
 test("resolves one reusable demo directory below the configured runs root", () => {
   const runs = path.join(root, "custom-runs");

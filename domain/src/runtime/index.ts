@@ -3,5 +3,8 @@ export * from "./capabilities";
 export * from "./commands";
 export * from "./errors";
 export * from "./flow-runner";
+export * from "./llm-evidence";
+export * from "./reusable-evidence";
+export * from "./reusable-evidence-coordinator";
 export * from "./service";
 export * from "./trace";

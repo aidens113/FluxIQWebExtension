@@ -180,11 +180,14 @@ export type DomElementDescriptor = {
   name?: string | undefined;
   href?: string | undefined;
   inputType?: string | undefined;
+  hasValue?: boolean | undefined;
+  selectedValue?: string | undefined;
   bounds?: RectDescriptor | undefined;
   documentBounds?: RectDescriptor | undefined;
   isVisibleOnViewport?: boolean | undefined;
   hasClickHandler?: boolean | undefined;
   attributes?: Record<string, string> | undefined;
+  options?: Array<{ value: string; label: string }> | undefined;
 };
 
 export type ActionVisualTarget = {

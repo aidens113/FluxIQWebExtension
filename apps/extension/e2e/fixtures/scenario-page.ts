@@ -13,6 +13,7 @@ const html = `<!doctype html>
       <h1>Extension smoke scenario</h1>
       <label for="name">Name</label>
       <input id="name" data-testid="name" autocomplete="off">
+      <label>Adapted name <textarea data-field="name" data-testid="instruction-name-adapted" autocomplete="off"></textarea></label>
       <button id="submit" data-testid="submit" type="button">Submit</button>
       <output id="result" data-testid="result">Waiting</output>
     </main>

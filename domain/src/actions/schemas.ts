@@ -42,6 +42,7 @@ const elementProperties = { selector: { type: "string", label: "CSS selector" },
 
 const selectorSchema = {
   type: "object",
+  required: ["selector"],
   properties: {
     ...elementProperties,
     timeoutMs: { type: "integer", label: "Timeout in ms" }

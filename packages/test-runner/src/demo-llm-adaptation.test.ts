@@ -12,7 +12,7 @@ function validInput(): any {
     startingGraph: {
       creationCertified: true, projectId: "project.one", flowId: "flow.one", startingExecutionDigest: "digest.created",
       ownedSubflowCount: 1, routerSubflowRouteCount: 1, nodeCount: 3, executableNodeCount: 3,
-      recordingCount: 2, recordingProvenanceAbsent: true,
+      recordingCount: 0, recordingProvenanceAbsent: true,
     },
     drift: {
       kind: "semantic-target", scenarioId: "instruction-only-form", beforeTargetFingerprint: "target.before",
@@ -20,20 +20,24 @@ function validInput(): any {
     },
     failedAction: { runId: "run.adapt.one", attemptId: "attempt.failed.one", sequence: 10, status: "failed", providerCallCountBeforeFailure: 0 },
     invocations: [{
-      requestId: "request.adapt.one", purpose: "runtime_adaptation", provider: "deepseek", model: "deepseek-chat",
-      promptSchemaVersion: "automation-studio.runtime-adaptation.v1", sequence: 20, attempt: 1, retryCount: 0, providerCallCount: 1,
+      requestId: "request.diagnosis.one", purpose: "runtime_diagnosis", provider: "deepseek", model: "deepseek-chat",
+      promptSchemaVersion: "automation-studio.runtime-diagnosis.v1", sequence: 20, attempt: 1, retryCount: 0, providerCallCount: 1,
       inputTokens: 1_400, outputTokens: 300, totalTokens: 1_700, estimatedCostUsd: 0.02, latencyMs: 600,
+    }, {
+      requestId: "request.adapt.one", purpose: "runtime_patch", provider: "deepseek", model: "deepseek-chat",
+      promptSchemaVersion: "automation-studio.runtime-patch.v1", sequence: 25, attempt: 1, retryCount: 0, providerCallCount: 1,
+      inputTokens: 1_500, outputTokens: 320, totalTokens: 1_820, estimatedCostUsd: 0.03, latencyMs: 700,
     }],
     adaptation: {
       adaptationId: "adaptation.one", requestId: "request.adapt.one", baseExecutionDigest: "digest.created", resultingExecutionDigest: "digest.adapted",
       validationOk: true, stale: false, concurrentMutationDetected: false, reviewOutcome: "approved", approvalChannel: "human-ui",
       mutationObservedBeforeApproval: false, outcome: "applied", applySequence: 30, structuralChange: false,
       externalSideEffectEscalation: false, authorizationExpansion: false, unsupportedOutputCount: 0,
-      recordingCount: 2, recordingProvenanceAbsent: true,
+      recordingCount: 0, recordingProvenanceAbsent: true,
     },
-    resumed: {
-      runId: "run.adapt.one", status: "succeeded", completionSequence: 40, executionDigest: "digest.adapted",
-      providerCallCount: 1, diagnosisCount: 0, adaptationCount: 1, resumedActionCount: 2, succeededResumedActionCount: 2,
+    postApplyValidation: {
+      runId: "run.validation.one", status: "succeeded", completionSequence: 40, executionDigest: "digest.adapted",
+      providerCallCount: 0, interventionCount: 0, diagnosisCount: 0, adaptationCount: 0, actionAttemptCount: 3, succeededActionCount: 3,
     },
     finalReplay: {
       runId: "run.replay.final", status: "succeeded", executionDigest: "digest.adapted", providerCallCount: 0,
@@ -42,10 +46,10 @@ function validInput(): any {
   };
 }
 
-test("first adaptation profile enforces one separately bounded adaptive call", () => {
+test("first adaptation profile enforces two ordered separately bounded adaptive calls", () => {
   assert.deepEqual(FIRST_LIVE_ADAPTATION_PROFILE.budget, {
-    maxInputTokens: 2_000, maxOutputTokens: 512, maxTotalTokensPerRequest: 3_000,
-    maxCallsPerRun: 1, timeoutMs: 20_000, maxRetries: 0, maxEstimatedCostUsd: 0.25,
+    maxInputTokens: 4_000, maxOutputTokens: 1_000, maxTotalTokensPerRequest: 5_000,
+    maxCallsPerRun: 2, timeoutMs: 20_000, maxRetries: 0, maxEstimatedCostUsd: 0.25,
   });
   assert.equal(FIRST_LIVE_ADAPTATION_PROFILE.task, "adapt");
   assert.equal(FIRST_LIVE_ADAPTATION_PROFILE.approvalMode, "manual");
@@ -53,13 +57,33 @@ test("first adaptation profile enforces one separately bounded adaptive call", (
   assert.equal(FIRST_LIVE_ADAPTATION_PROFILE.retainRawResponses, false);
 });
 
+test("adaptation launcher exposes normal and no-build focused commands without embedding provider secrets", async () => {
+  const root = process.cwd();
+  const [script, manifestText] = await Promise.all([
+    readFile(path.join(root, "scripts", "run-demo-llm-adaptation.mjs"), "utf8"),
+    readFile(path.join(root, "package.json"), "utf8"),
+  ]);
+  const manifest = JSON.parse(manifestText) as { scripts?: Record<string, string> };
+  assert.equal(manifest.scripts?.["demo:llm:adapt"], "node scripts/run-demo-llm-adaptation.mjs");
+  assert.equal(manifest.scripts?.["demo:llm:adapt:focused"], "node scripts/run-demo-llm-adaptation.mjs --no-build");
+  assert.equal(manifest.scripts?.["demo:llm:adapt:control"], "node scripts/control-demo-llm-adaptation.mjs");
+  assert.equal(manifest.scripts?.["demo:llm:adapt:continue"], "node scripts/control-demo-llm-adaptation.mjs continue");
+  assert.equal(manifest.scripts?.["demo:llm:adapt:revert"], "node scripts/control-demo-llm-adaptation.mjs revert");
+  const controlLauncher = await readFile(path.join(root, "scripts", "control-demo-llm-adaptation.mjs"), "utf8");
+  assert.match(controlLauncher, /process\.stdout\.write\([^;]+process\.exit\(0\)/s);
+  assert.match(controlLauncher, /process\.stderr\.write\([^;]+process\.exit\(1\)/s);
+  assert.match(script, /runDemoLlmAdaptation/u);
+  assert.match(script, /withoutProviderSecrets/u);
+  assert.doesNotMatch(script, /DEEPSEEK_API_KEY|rawPrompt|rawResponse/u);
+});
+
 test("certifies failed-action-first adaptation, resumed completion, and zero-call replay", () => {
   const result = evaluateDemoLlmAdaptation(validInput());
-  assert.equal(result.providerCallCount, 1);
+  assert.equal(result.providerCallCount, 2);
   assert.equal(result.retryCount, 0);
   assert.equal(result.reviewOutcome, "approved");
   assert.equal(result.applyOutcome, "applied");
-  assert.equal(result.resumedStatus, "succeeded");
+  assert.equal(result.postApplyValidationStatus, "succeeded");
   assert.notEqual(result.startingExecutionDigest, result.resultingExecutionDigest);
   assert.equal(result.recordingCountBefore, result.recordingCountAfter);
   assert.equal(result.recordingProvenanceAbsent, true);
@@ -67,21 +91,25 @@ test("certifies failed-action-first adaptation, resumed completion, and zero-cal
   assert.equal(result.evaluation.verdict, "passed");
 });
 
-test("rejects diagnosis-plus-patch double calls, retries, missing usage, nonfinite and over-budget accounting", () => {
-  const doubled = validInput(); doubled.invocations.push({ ...doubled.invocations[0], requestId: "request.diagnosis", purpose: "diagnosis" });
-  assert.throws(() => evaluateDemoLlmAdaptation(doubled), /exactly one/);
-  for (const [field, value] of [["purpose", "diagnosis"], ["retryCount", 1], ["attempt", 2], ["providerCallCount", 2]] as const) {
-    const input = validInput(); input.invocations[0][field] = value;
+test("requires exactly diagnosis then patch calls and rejects retries or invalid accounting", () => {
+  const tripled = validInput(); tripled.invocations.push({ ...tripled.invocations[1], requestId: "request.extra" });
+  assert.throws(() => evaluateDemoLlmAdaptation(tripled), /exactly two/);
+  for (const [index, field, value] of [[0, "purpose", "runtime_patch"], [1, "purpose", "runtime_diagnosis"], [1, "retryCount", 1], [1, "attempt", 2], [1, "providerCallCount", 2]] as const) {
+    const input = validInput(); input.invocations[index][field] = value;
     assert.throws(() => evaluateDemoLlmAdaptation(input), /fixed safety fact/);
   }
-  for (const [field, value] of [["inputTokens", 2001], ["outputTokens", 513], ["totalTokens", 3001], ["estimatedCostUsd", 0.251], ["latencyMs", Number.NaN]] as const) {
-    const input = validInput(); input.invocations[0][field] = value;
+  for (const [field, value] of [["inputTokens", 4001], ["outputTokens", 1001], ["totalTokens", 5001], ["estimatedCostUsd", 0.251], ["latencyMs", Number.NaN]] as const) {
+    const input = validInput(); input.invocations[1][field] = value;
     assert.throws(() => evaluateDemoLlmAdaptation(input), /budget|finite/);
   }
-  const mismatch = validInput(); mismatch.invocations[0].totalTokens = 1699;
+  const mismatch = validInput(); mismatch.invocations[1].totalTokens = 1699;
   assert.throws(() => evaluateDemoLlmAdaptation(mismatch), /budget/);
-  const missing = validInput(); delete missing.invocations[0].totalTokens;
+  const missing = validInput(); delete missing.invocations[1].totalTokens;
   assert.throws(() => evaluateDemoLlmAdaptation(missing), /missing or unsupported/);
+  const wrongPrompt = validInput(); wrongPrompt.invocations[1].promptSchemaVersion = "automation-studio.runtime-diagnosis.v1";
+  assert.throws(() => evaluateDemoLlmAdaptation(wrongPrompt), /fixed safety fact/);
+  const duplicateRequest = validInput(); duplicateRequest.invocations[1].requestId = duplicateRequest.invocations[0].requestId; duplicateRequest.adaptation.requestId = duplicateRequest.invocations[0].requestId;
+  assert.throws(() => evaluateDemoLlmAdaptation(duplicateRequest), /distinct request identities/);
 });
 
 test("rejects provider calls before failure and invalid failure-invocation-apply-resume ordering", () => {
@@ -89,8 +117,9 @@ test("rejects provider calls before failure and invalid failure-invocation-apply
     (input: any) => { input.failedAction.providerCallCountBeforeFailure = 1; },
     (input: any) => { input.failedAction.status = "succeeded"; },
     (input: any) => { input.invocations[0].sequence = 9; },
-    (input: any) => { input.adaptation.applySequence = 19; },
-    (input: any) => { input.resumed.completionSequence = 29; },
+    (input: any) => { input.invocations[1].sequence = 19; },
+    (input: any) => { input.adaptation.applySequence = 24; },
+    (input: any) => { input.postApplyValidation.completionSequence = 29; },
   ]) {
     const input = validInput(); mutate(input);
     assert.throws(() => evaluateDemoLlmAdaptation(input), /fixed safety fact|ordering/);
@@ -101,7 +130,7 @@ test("rejects stale, concurrent, unreviewed, preapproval, unsafe, unsupported, o
   for (const mutate of [
     (input: any) => { input.adaptation.requestId = "request.other"; },
     (input: any) => { input.adaptation.baseExecutionDigest = "digest.other"; },
-    (input: any) => { input.adaptation.resultingExecutionDigest = "digest.created"; input.resumed.executionDigest = "digest.created"; input.finalReplay.executionDigest = "digest.created"; },
+    (input: any) => { input.adaptation.resultingExecutionDigest = "digest.created"; input.postApplyValidation.executionDigest = "digest.created"; input.finalReplay.executionDigest = "digest.created"; },
     (input: any) => { input.adaptation.validationOk = false; },
     (input: any) => { input.adaptation.stale = true; },
     (input: any) => { input.adaptation.concurrentMutationDetected = true; },
@@ -119,16 +148,17 @@ test("rejects stale, concurrent, unreviewed, preapproval, unsafe, unsupported, o
   }
 });
 
-test("rejects missing semantic drift, non-creation graph, failed resume, recording change, and assisted replay", () => {
+test("rejects missing semantic drift, non-creation graph, failed post-apply validation, any recording use, and assisted replay", () => {
   for (const mutate of [
     (input: any) => { input.startingGraph.creationCertified = false; },
     (input: any) => { input.startingGraph.executableNodeCount = 2; },
     (input: any) => { input.drift.kind = "layout-only"; },
     (input: any) => { input.drift.afterTargetFingerprint = "target.before"; },
-    (input: any) => { input.resumed.runId = "run.other"; },
-    (input: any) => { input.resumed.status = "failed"; },
-    (input: any) => { input.resumed.succeededResumedActionCount = 1; },
-    (input: any) => { input.adaptation.recordingCount = 3; },
+    (input: any) => { input.postApplyValidation.runId = "run.adapt.one"; },
+    (input: any) => { input.postApplyValidation.status = "failed"; },
+    (input: any) => { input.postApplyValidation.succeededActionCount = 1; },
+    (input: any) => { input.startingGraph.recordingCount = 1; input.adaptation.recordingCount = 1; },
+    (input: any) => { input.adaptation.recordingCount = 1; },
     (input: any) => { input.adaptation.recordingProvenanceAbsent = false; },
     (input: any) => { input.finalReplay.providerCallCount = 1; },
     (input: any) => { input.finalReplay.interventionCount = 1; },
@@ -136,7 +166,7 @@ test("rejects missing semantic drift, non-creation graph, failed resume, recordi
     (input: any) => { input.finalReplay.succeededActionCount = 2; },
   ]) {
     const input = validInput(); mutate(input);
-    assert.throws(() => evaluateDemoLlmAdaptation(input), /fixed safety fact|creation-certified|semantic target|resume|recording|replay/);
+    assert.throws(() => evaluateDemoLlmAdaptation(input), /fixed safety fact|creation-certified|semantic target|validation|recording|replay/);
   }
 });
 
@@ -147,7 +177,7 @@ test("rejects raw prompt, response, key, credential, recording identity, and unk
   }
   const recordingIdentity = validInput(); recordingIdentity.adaptation.adaptationId = "recording.adaptation";
   assert.throws(() => evaluateDemoLlmAdaptation(recordingIdentity), /identifier is invalid/);
-  const extra = validInput(); extra.resumed.arbitrary = true;
+  const extra = validInput(); extra.postApplyValidation.arbitrary = true;
   assert.throws(() => evaluateDemoLlmAdaptation(extra), /missing or unsupported/);
 });
 

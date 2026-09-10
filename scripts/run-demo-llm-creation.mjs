@@ -15,9 +15,10 @@ const names = [
   "FLUXIQ_TEST_PIN", "FLUXIQ_TEST_TOTP", "FLUXIQ_DEMO_PROJECT_ID", "FLUXIQ_DEMO_PROJECT_NAME",
   "FLUXIQ_DEMO_HEADLESS",
 ];
+const skipPrerequisiteBuilds = process.argv.slice(2).includes("--no-build");
 
 try {
-  for (const args of builds) await runBuild(args);
+  if (!skipPrerequisiteBuilds) for (const args of builds) await runBuild(args);
   const [{ loadAllowlistedTestEnvironment }, { resolveDemoWorkspaceConfiguration, runDemoLlmCreation }] = await Promise.all([
     import("../packages/test-runner/dist/target-config.js"),
     import("../packages/test-runner/dist/demo-workspace.js"),

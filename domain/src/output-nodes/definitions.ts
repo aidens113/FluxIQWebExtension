@@ -21,6 +21,11 @@ export const webAutomationOutputNodeDefinitions: AutomationStudioNodeDefinition[
 
 export function createWebAutomationOutputNodeDefinition(definition: WebAutomationActionDefinition): AutomationStudioNodeDefinition {
   const safeOutput = isSafeOutput(definition.actionType);
+  const requiredParameters = new Set(
+    Array.isArray(definition.parameterSchema.required)
+      ? definition.parameterSchema.required.filter((value): value is string => typeof value === "string")
+      : []
+  );
   return {
     schemaVersion: "0.1",
     id: webAutomationOutputNodeId(definition.actionType),
@@ -45,7 +50,11 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
     outputAction: { fixedOutputId: definition.actionType },
     inputs: [controlInput],
     outputs: outputPorts,
-    parameters: parametersForOutput(definition.actionType).map((parameter) => ({ ...parameter, allowStateBinding: true })),
+    parameters: parametersForOutput(definition.actionType).map((parameter) => ({
+      ...parameter,
+      ...(requiredParameters.has(parameter.id) ? { required: true } : {}),
+      allowStateBinding: true
+    })),
     icon: iconForOutput(definition.actionType),
     tags: ["web-automation", "output"],
     metadata: {
@@ -58,6 +67,7 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
 
 function parametersForOutput(outputId: WebAutomationActionType): AutomationNodeParameter[] {
   const selectorParameters: AutomationNodeParameter[] = [
+    { id: "target", label: "Adapted Target", valueType: "object", ui: { control: "value" } },
     { id: "selector", label: "Selector", valueType: "string", ui: { control: "text", placeholder: "CSS selector" } },
     { id: "element", label: "Element", valueType: "object", ui: { control: "value" } },
     { id: "visualTarget", label: "Visual Target", valueType: "object", ui: { control: "value" } },

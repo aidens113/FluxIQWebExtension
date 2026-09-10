@@ -67,8 +67,11 @@ export async function prepareBlankLlmFlowViaUi(input: {
   page: Page;
   evidence: BrowserEvidenceRecorder;
   saved?: BlankLlmPreparationState;
+  flowName?: string;
+  ensureInstruction?: boolean;
 }): Promise<{ state: BlankLlmPreparationState; recordingIdsBefore: ReadonlySet<string>; flowTreeItemId: string }> {
   const { control, config, page, evidence, saved } = input;
+  const flowName = input.flowName ?? BLANK_LLM_FLOW_NAME;
   const projects = await control.listProjects("web-automation");
   const requestedProjectId = saved?.projectId ?? config.projectId;
   let project = requestedProjectId ? projects.find(item => item.id === requestedProjectId) : undefined;
@@ -99,7 +102,7 @@ export async function prepareBlankLlmFlowViaUi(input: {
   let summary = saved ? summaries.find(item => item.flowId === saved.flowId) : undefined;
   if (saved && !summary) throw new RunnerFailure("environment.missing", "Saved blank Flow is no longer accessible");
   if (!summary) {
-    const named = summaries.filter(item => item.name === BLANK_LLM_FLOW_NAME);
+    const named = summaries.filter(item => item.name === flowName);
     if (named.length > 1) throw new RunnerFailure("environment.missing", "More than one instruction-only blank Flow exists");
     summary = named[0];
   }
@@ -112,23 +115,26 @@ export async function prepareBlankLlmFlowViaUi(input: {
     const preset = await hierarchyDialogFieldControl(form, "Flow preset", "select");
     const location = await hierarchyDialogFieldControl(form, "Location", "select");
     const pin = await hierarchyDialogFieldControl(form, "Security PIN", "input");
-    await evidence.step("panel", "blank-flow-create-name", "Name the instruction-only blank Flow", () => name.fill(BLANK_LLM_FLOW_NAME));
+    await evidence.step("panel", "blank-flow-create-name", "Name the instruction-only blank Flow", () => name.fill(flowName));
     if (await preset.inputValue() !== "blank") await evidence.step("panel", "blank-flow-create-preset", "Choose the blank visual Flow preset", () => preset.selectOption("blank"));
     if (await location.inputValue() !== "") throw new RunnerFailure("runtime.behavior", "Blank top-level Flow creation opened outside the Flow root");
     await evidence.step("panel", "blank-flow-create-pin", "Authorize blank Flow creation", () => pin.fill(config.pin), { sensitive: true });
     await evidence.step("panel", "blank-flow-create-submit", "Create the blank Flow", () => form.getByRole("button", { name: "Create", exact: true }).click(), { sensitive: true });
-    summary = await waitForNamedFlow(control, project.id, BLANK_LLM_FLOW_NAME);
-    if (!await hierarchyRow(page, BLANK_LLM_FLOW_NAME).isVisible().catch(() => false)) {
+    summary = await waitForNamedFlow(control, project.id, flowName);
+    if (!await hierarchyRow(page, flowName).isVisible().catch(() => false)) {
       await evidence.step("panel", "blank-flow-create-refresh", "Refresh the panel after blank Flow creation", () => page.reload({ waitUntil: "domcontentloaded" }).then(() => undefined));
-      await page.locator(".automation-studio-sidebar-heading").getByText(project.name, { exact: true }).waitFor();
+      // Studio selection is intentionally transient. A reload returns to the
+      // project browser, so restore the exact project instead of waiting for an
+      // in-project sidebar that cannot render until the project is reopened.
+      await openProject(page, config.origin, project.name, evidence);
     }
   }
 
   if (!summary) throw new RunnerFailure("environment.missing", "Instruction-only blank Flow identity is unavailable");
   const state = Object.freeze({ schemaVersion: BLANK_LLM_STATE_SCHEMA_VERSION, projectId: project.id, flowId: summary.flowId });
   await assertGenuinelyBlankFlow(control, state);
-  const flowTreeItemId = await openFlow(page, BLANK_LLM_FLOW_NAME, evidence);
-  await ensureInstruction(page, flowTreeItemId, config.pin, evidence);
+  const flowTreeItemId = await openFlow(page, flowName, evidence);
+  if (input.ensureInstruction !== false) await ensureInstruction(page, flowTreeItemId, config.pin, evidence);
   await assertGenuinelyBlankFlow(control, state);
   return { state, recordingIdsBefore, flowTreeItemId };
 }
@@ -143,13 +149,17 @@ export async function assertGenuinelyBlankFlow(control: ExistingFluxIQControlCli
     || metadata?.subflowGraph !== undefined
     || metadata?.parentFlowId !== undefined
     || metadata?.parentSubflowId !== undefined) {
-    throw new RunnerFailure("environment.missing", "Instruction-only Flow is not a genuinely blank orchestration Flow");
+    throw new RunnerFailure("environment.missing", "Instruction-only Flow is not a genuinely blank orchestration Flow", { details: { reasonCode: "blank_flow.not_genuinely_blank" } });
   }
-  if ((await control.listFlowSubflows(state.projectId, state.flowId)).length !== 0) throw new RunnerFailure("environment.missing", "Instruction-only blank Flow already owns a Subflow");
+  if ((await control.listFlowSubflows(state.projectId, state.flowId)).length !== 0) throw new RunnerFailure("environment.missing", "Instruction-only blank Flow already owns a Subflow", { details: { reasonCode: "blank_flow.not_genuinely_blank" } });
   const router = await control.getFlowRouter(state.projectId, state.flowId);
   if (router?.fallback?.kind === "subflow" || router?.fallback?.subflowId || router?.rules.some(rule => rule.target?.kind === "subflow" || rule.target?.subflowId)) {
-    throw new RunnerFailure("environment.missing", "Instruction-only blank Flow already has a Router Subflow route");
+    throw new RunnerFailure("environment.missing", "Instruction-only blank Flow already has a Router Subflow route", { details: { reasonCode: "blank_flow.not_genuinely_blank" } });
   }
+}
+
+export function isGenuinelyBlankFlowMismatch(error: unknown): boolean {
+  return error instanceof RunnerFailure && error.details?.reasonCode === "blank_flow.not_genuinely_blank";
 }
 
 export function assertRecordingSetUnchanged(before: ReadonlySet<string>, afterResponse: unknown): void {

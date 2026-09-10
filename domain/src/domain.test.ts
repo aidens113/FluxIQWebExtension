@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { AutomationStudioService, automationStudioFlowBootstrapCatalogByteBudget, buildAutomationStudioFlowBootstrapContext, estimateAutomationStudioDeepSeekInputTokens, runAutomationStudioLlmHarness, validateStateSnapshot } from "fluxiq/automation-studio";
+import { AutomationStudioService, automationStudioFlowBootstrapCatalogByteBudget, buildAutomationStudioFlowBootstrapContext, buildAutomationStudioLlmEvidenceLoopDecisionSchema, estimateAutomationStudioDeepSeekInputTokens, runAutomationStudioLlmHarness, validateStateSnapshot } from "fluxiq/automation-studio";
 import { AutomationStudioNodeRegistry, validateAutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
 import { WEB_AUTOMATION_DOMAIN_ID, WEB_AUTOMATION_EVENTS } from "./constants";
 import { createWebAutomationFluxIQ } from "./host";
@@ -14,6 +14,7 @@ import { listWebAutomationOutputNodeDefinitions, webAutomationOutputPayload, out
 import { WEB_AUTOMATION_RUNTIME_CAPABILITIES, WEB_AUTOMATION_RUNTIME_PERMISSIONS } from "./output-nodes/native-runtime";
 import { validateWebAutomationRuntime } from "./runtime";
 import { mapWebRecordingObservation } from "./web-panel-host";
+import { createWebAutomationLlmEvidenceRuntime } from "./runtime/llm-evidence";
 
 const service = new AutomationStudioService({ seedFixture: false });
 service.registerRecordingDomain(webAutomationRecordingDomain);
@@ -233,6 +234,23 @@ assert.equal(clickPayload.selector, "button.save");
 assert.equal((clickPayload.element as { selector?: string }).selector, "button.save");
 assert.equal((clickPayload.visualTarget as { statePath?: string }).statePath, "web.elements.button.save");
 assert.equal((outputTargetFromPayload(clickPayload)?.visualTarget as { statePath?: string } | undefined)?.statePath, "web.elements.button.save");
+assert.equal(outputTargetFromPayload({ ...clickPayload, target: { selector: "button.save-adapted" } })?.selector, "button.save-adapted");
+assert.equal(outputTargetFromPayload({
+  selector: "button.save-stale",
+  target: { kind: "element", fingerprint: { selector: "button.save-adapted" }, source: "runtime" }
+})?.selector, "button.save-adapted");
+assert.equal(outputTargetFromPayload({
+  selector: "button.save-stale",
+  target: {
+    kind: "element",
+    fingerprint: { selector: "button.save-fallback" },
+    candidates: [
+      { candidateId: "candidate.old", selector: "button.save-old" },
+      { candidateId: "candidate.current", selector: "button.save-current" }
+    ],
+    selectedCandidate: { candidateId: "candidate.current", confidence: 0.98 }
+  }
+})?.selector, "button.save-current");
 
 const outputNodeDefinitions = listWebAutomationOutputNodeDefinitions();
 assert.equal(outputNodeDefinitions.length, 11);
@@ -251,7 +269,7 @@ for (const definition of outputNodeDefinitions) bootstrapRegistry.register(defin
 assert.equal(new AutomationStudioNodeRegistry().list(bootstrapResolution).length, 39);
 assert.equal(bootstrapRegistry.list(bootstrapResolution).length, 50);
 const bootstrapCatalogBudget = automationStudioFlowBootstrapCatalogByteBudget({
-  maxInputTokens: 2_000,
+  maxInputTokens: 3_000,
   instructionBytes: Buffer.byteLength(bootstrapInstruction, "utf8")
 });
 const bootstrapContext = buildAutomationStudioFlowBootstrapContext({
@@ -273,7 +291,7 @@ assert.deepEqual(
   "the live catalog projection must retain the web host's granted permissions"
 );
 assert.equal(bootstrapContext.catalogSelection.usedBytes <= bootstrapCatalogBudget, true);
-assert.equal(Buffer.byteLength(JSON.stringify(bootstrapContext), "utf8") + Buffer.byteLength(bootstrapInstruction, "utf8") + 1_800 <= 2_000 * 4, true);const bootstrapHarnessInput = {
+assert.equal(Buffer.byteLength(JSON.stringify(bootstrapContext), "utf8") + Buffer.byteLength(bootstrapInstruction, "utf8") + 1_800 <= 3_000 * 4, true);const bootstrapHarnessInput = {
   taskKind: "flow_bootstrap" as const,
   projectId: "project.catalog-acceptance",
   flowId: "flow.catalog-acceptance",
@@ -291,17 +309,49 @@ assert.equal(Buffer.byteLength(JSON.stringify(bootstrapContext), "utf8") + Buffe
     updatedAt: 1
   }],
   flowBootstrap: { registry: bootstrapRegistry, resolution: bootstrapResolution },
-  tokenLimits: { maxInputTokens: 2_000, maxOutputTokens: 512, maxTotalTokens: 3_000 },
+  tokenLimits: { maxInputTokens: 3_000, maxOutputTokens: 512, maxTotalTokens: 4_000 },
   maxEstimatedCostUsd: 0.25,
   timeoutMs: 20_000
 };
 const bootstrapDryRun = await runAutomationStudioLlmHarness({ ...bootstrapHarnessInput, dryRun: true });
-assert.equal(bootstrapDryRun.request.estimatedInputTokens <= 2_000, true);
-assert.equal(bootstrapDryRun.request.estimatedInputTokens + 512 <= 3_000, true);assert.equal(bootstrapCatalogBudget, 5_326);
-assert.equal(bootstrapContext.catalogSelection.usedBytes, 4_959);
-assert.equal(bootstrapDryRun.request.estimatedInputTokens, 1_753);const bootstrapDeepSeekBodyTokens = estimateAutomationStudioDeepSeekInputTokens(bootstrapDryRun.request);
-assert.equal(bootstrapDeepSeekBodyTokens, 1_996);
-assert.equal(bootstrapDeepSeekBodyTokens <= 2_000, true);
+assert.equal(bootstrapDryRun.request.estimatedInputTokens <= 3_000, true);
+assert.equal(bootstrapDryRun.request.estimatedInputTokens + 512 <= 4_000, true);
+assert.equal(bootstrapContext.catalogSelection.usedBytes <= bootstrapCatalogBudget, true);
+const bootstrapDeepSeekBodyTokens = estimateAutomationStudioDeepSeekInputTokens(bootstrapDryRun.request);
+assert.equal(bootstrapDeepSeekBodyTokens <= 3_000, true);
+const evidenceTools = createWebAutomationLlmEvidenceRuntime({ eligibleSessionIds: () => [], executeAction: async () => ({ status: "failed" }) }).tools;
+const evidenceCompletionSchema = {
+  type: "object", additionalProperties: false, required: ["summary", "plan"],
+  properties: { summary: { type: "string", minLength: 1, maxLength: 2_000 }, plan: (bootstrapContext.outputSchema.properties as Record<string, unknown>).plan }
+};
+const evidencePage = {
+  schemaVersion: "web-llm-evidence.v1", trust: "untrusted-page-evidence", location: "https://example.test/products", title: "Products",
+  elements: Array.from({ length: 40 }, (_, index) => ({ tag: "button", selector: `[data-product='${index}']`, role: "button", name: `Product ${index}`, text: "Open this bounded product result and inspect its available non-sensitive details." })),
+  truncated: false
+};
+const evidencePageBytes = Buffer.byteLength(JSON.stringify(evidencePage), "utf8");
+assert.equal(evidencePageBytes >= 6_500 && evidencePageBytes <= 7_488, true, `max-window evidence bytes ${evidencePageBytes}`);
+const evidenceDryRun = await runAutomationStudioLlmHarness({
+  ...bootstrapHarnessInput,
+  taskKind: "evidence_tool_decision",
+  flowBootstrap: { registry: bootstrapRegistry, resolution: bootstrapResolution, maxInputTokens: 5_000 },
+  evidenceLoop: {
+    iteration: 2,
+    tools: evidenceTools,
+    evidence: [{ callId: "call.inspect.1", toolId: "web.inspect_current_page", value: evidencePage }],
+    completionSchema: evidenceCompletionSchema,
+    decisionSchema: buildAutomationStudioLlmEvidenceLoopDecisionSchema(evidenceTools, evidenceCompletionSchema, true),
+    canComplete: true
+  },
+  tokenLimits: { maxInputTokens: 8_000, maxOutputTokens: 4_000, maxTotalTokens: 12_000 },
+  timeoutMs: 25_000,
+  dryRun: true
+});
+const evidenceDeepSeekBodyTokens = estimateAutomationStudioDeepSeekInputTokens(evidenceDryRun.request);
+assert.equal((evidenceDryRun.request.context.flowBootstrap?.nodeCatalog.length ?? 0) > 0, true);
+assert.deepEqual(evidenceDryRun.request.context.flowBootstrap?.catalogSelection.missingRequiredTerms, []);
+assert.equal(evidenceDeepSeekBodyTokens <= 8_000, true, `evidence DeepSeek input estimate ${evidenceDeepSeekBodyTokens}; catalog ${evidenceDryRun.request.context.flowBootstrap?.nodeCatalog.length} entries, ${evidenceDryRun.request.context.flowBootstrap?.catalogSelection.usedBytes}/${evidenceDryRun.request.context.flowBootstrap?.catalogSelection.byteBudget} bytes`);
+assert.equal(evidenceDeepSeekBodyTokens + 4_000 <= 12_000, true);
 const selectedBootstrapActions = new Set(bootstrapContext.nodeCatalog.flatMap((entry) => entry.outputAction?.fixed ? [entry.outputAction.fixed] : []));
 for (const action of ["web.dom.type", "web.dom.select", "web.dom.click"]) assert.equal(selectedBootstrapActions.has(action), true, `bootstrap catalog omitted ${action}; selected=${[...selectedBootstrapActions].join(",")}; used=${bootstrapContext.catalogSelection.usedBytes}/${bootstrapContext.catalogSelection.byteBudget}`);
 assert.equal(["web.dom.wait_for_text", "web.dom.wait_for_selector", "web.dom.extract"].some((action) => selectedBootstrapActions.has(action)), true, "bootstrap catalog omitted a verify/assert equivalent");
@@ -327,6 +377,11 @@ assert.equal(
   outputNodeDefinitions.every((definition) => definition.parameters.every((parameter) => parameter.allowStateBinding === true)),
   true
 );
+for (const outputId of ["web.dom.type", "web.dom.select", "web.dom.click", "web.dom.clear", "web.dom.wait_for_selector", "web.dom.extract"]) {
+  const definition = outputNodeDefinitions.find((candidate) => candidate.outputAction?.fixedOutputId === outputId);
+  assert.equal(definition?.parameters.find((parameter) => parameter.id === "selector")?.required, true, `${outputId} must reject targetless generated nodes`);
+  assert.equal(definition?.parameters.find((parameter) => parameter.id === "target")?.required, undefined, `${outputId} must accept an optional reviewed target override`);
+}
 const actionCapability = webAutomationClientCapabilities.find((capability) => capability.id === "web.actions");
 assert.equal(actionCapability?.metadata?.domainId, WEB_AUTOMATION_DOMAIN_ID);
 assert.deepEqual(actionCapability?.metadata?.outputIds, WEB_AUTOMATION_ACTION_TYPES);

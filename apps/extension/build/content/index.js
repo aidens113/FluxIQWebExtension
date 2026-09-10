@@ -614,13 +614,33 @@
     const href = linkHref(element);
     if (href) descriptor.href = href;
     if (element instanceof HTMLInputElement && element.type) descriptor.inputType = element.type;
+    if (isOrdinaryNonSensitiveFillControl(element)) descriptor.hasValue = element.value.length > 0;
+    if (element instanceof HTMLSelectElement) {
+      descriptor.options = [...element.options].slice(0, 20).map((option) => ({
+        value: option.value.slice(0, 200),
+        label: (option.label || option.textContent || "").replace(/\s+/gu, " ").trim().slice(0, 200)
+      }));
+      if (!isSensitiveFormControl(element) && descriptor.options.some((option) => option.value === element.value)) {
+        descriptor.selectedValue = element.value.slice(0, 200);
+      }
+    }
     const attributes = {};
-    for (const attribute of ["id", "class", "name", "type", "placeholder", "title", "alt", "href", "tabindex", "aria-label", "aria-disabled", "aria-expanded", "aria-controls", "aria-pressed", "aria-selected", "data-testid", "data-test", "data-cy", "disabled", "onclick"]) {
+    for (const attribute of ["id", "class", "name", "type", "autocomplete", "data-sensitive", "placeholder", "title", "alt", "href", "tabindex", "aria-label", "aria-disabled", "aria-expanded", "aria-controls", "aria-pressed", "aria-selected", "data-testid", "data-test", "data-cy", "disabled", "onclick"]) {
       const value2 = element.getAttribute(attribute);
       if (value2 !== null) attributes[attribute] = value2.slice(0, 500);
     }
     if (Object.keys(attributes).length) descriptor.attributes = attributes;
     return descriptor;
+  }
+  function isOrdinaryNonSensitiveFillControl(element) {
+    if (isSensitiveFormControl(element)) return false;
+    if (element instanceof HTMLTextAreaElement) return true;
+    return element instanceof HTMLInputElement && ["text", "search", "email", "tel", "url", "number"].includes(element.type.toLowerCase());
+  }
+  function isSensitiveFormControl(element) {
+    if (element instanceof HTMLInputElement && element.type.toLowerCase() === "password") return true;
+    const autocomplete = (element.getAttribute("autocomplete") ?? "").toLowerCase();
+    return autocomplete === "current-password" || autocomplete === "new-password" || autocomplete === "one-time-code" || autocomplete.startsWith("cc-") || element.getAttribute("data-sensitive") === "true";
   }
   function snapshotElements() {
     const seen = /* @__PURE__ */ new Set();
@@ -666,7 +686,7 @@
     if (!bounds) return false;
     const style = getComputedStyle(element);
     if (style.visibility === "hidden" || style.display === "none" || Number(style.opacity) === 0) return false;
-    return isEventBackedElement(element) ? hasEventElementPresentation(element) : hasElementPresentation(element);
+    return isEventBackedElement(element) ? hasEventElementPresentation(element) : isInteractableUiElement(element) ? hasMeaningfulInteractableIdentity(element) : hasElementPresentation(element);
   }
   function snapshotElementBucket(element) {
     if (isEventBackedElement(element)) return 0;

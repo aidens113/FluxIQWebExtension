@@ -1,10 +1,12 @@
 import type { FluxIQRuntimeAdapter } from "fluxiq/runtime";
 import type { FluxIQ } from "fluxiq";
 import { createWebAutomationRuntimeAdapter } from "./adapter";
+import { bindWebAutomationLlmEvidenceRuntime } from "./llm-evidence";
 
 export function registerWebAutomationRuntime(fluxiq: FluxIQ): FluxIQ {
   registerWebAutomationRuntimeAdapter(fluxiq);
   bindAutomationStudioRuntimeService(fluxiq);
+  bindWebAutomationLlmEvidenceRuntime(fluxiq);
   return fluxiq;
 }
 

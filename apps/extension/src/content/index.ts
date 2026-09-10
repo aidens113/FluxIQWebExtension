@@ -20,11 +20,14 @@ type DomElementDescriptor = {
   name?: string | undefined;
   href?: string | undefined;
   inputType?: string | undefined;
+  hasValue?: boolean | undefined;
+  selectedValue?: string | undefined;
   bounds?: RectDescriptor | undefined;
   documentBounds?: RectDescriptor | undefined;
   isVisibleOnViewport?: boolean | undefined;
   hasClickHandler?: boolean | undefined;
   attributes?: Record<string, string> | undefined;
+  options?: Array<{ value: string; label: string }> | undefined;
 };
 type DomSnapshot = {
   url: string;
@@ -616,13 +619,35 @@ function describeElement(element: Element): DomElementDescriptor {
   const href = linkHref(element);
   if (href) descriptor.href = href;
   if (element instanceof HTMLInputElement && element.type) descriptor.inputType = element.type;
+  if (isOrdinaryNonSensitiveFillControl(element)) descriptor.hasValue = element.value.length > 0;
+  if (element instanceof HTMLSelectElement) {
+    descriptor.options = [...element.options].slice(0, 20).map((option) => ({
+      value: option.value.slice(0, 200),
+      label: (option.label || option.textContent || "").replace(/\s+/gu, " ").trim().slice(0, 200),
+    }));
+    if (!isSensitiveFormControl(element) && descriptor.options.some((option) => option.value === element.value)) {
+      descriptor.selectedValue = element.value.slice(0, 200);
+    }
+  }
   const attributes: Record<string, string> = {};
-  for (const attribute of ["id", "class", "name", "type", "placeholder", "title", "alt", "href", "tabindex", "aria-label", "aria-disabled", "aria-expanded", "aria-controls", "aria-pressed", "aria-selected", "data-testid", "data-test", "data-cy", "disabled", "onclick"]) {
+  for (const attribute of ["id", "class", "name", "type", "autocomplete", "data-sensitive", "placeholder", "title", "alt", "href", "tabindex", "aria-label", "aria-disabled", "aria-expanded", "aria-controls", "aria-pressed", "aria-selected", "data-testid", "data-test", "data-cy", "disabled", "onclick"]) {
     const value = element.getAttribute(attribute);
     if (value !== null) attributes[attribute] = value.slice(0, 500);
   }
   if (Object.keys(attributes).length) descriptor.attributes = attributes;
   return descriptor;
+}
+
+function isOrdinaryNonSensitiveFillControl(element: Element): element is HTMLInputElement | HTMLTextAreaElement {
+  if (isSensitiveFormControl(element)) return false;
+  if (element instanceof HTMLTextAreaElement) return true;
+  return element instanceof HTMLInputElement && ["text", "search", "email", "tel", "url", "number"].includes(element.type.toLowerCase());
+}
+
+function isSensitiveFormControl(element: Element): boolean {
+  if (element instanceof HTMLInputElement && element.type.toLowerCase() === "password") return true;
+  const autocomplete = (element.getAttribute("autocomplete") ?? "").toLowerCase();
+  return autocomplete === "current-password" || autocomplete === "new-password" || autocomplete === "one-time-code" || autocomplete.startsWith("cc-") || element.getAttribute("data-sensitive") === "true";
 }
 
 function snapshotElements(): DomElementDescriptor[] {
@@ -680,7 +705,9 @@ function shouldIncludeSnapshotElement(element: Element): boolean {
   if (style.visibility === "hidden" || style.display === "none" || Number(style.opacity) === 0) return false;
   return isEventBackedElement(element)
     ? hasEventElementPresentation(element)
-    : hasElementPresentation(element);
+    : isInteractableUiElement(element)
+      ? hasMeaningfulInteractableIdentity(element)
+      : hasElementPresentation(element);
 }
 
 function snapshotElementBucket(element: Element): number {

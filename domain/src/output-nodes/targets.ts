@@ -3,15 +3,34 @@ import type { JsonObject } from "fluxiq/core";
 export type WebAutomationOutputTarget = JsonObject;
 
 export function outputTargetFromPayload(payload: JsonObject): WebAutomationOutputTarget | undefined {
-  const explicitVisualTarget = objectValue(payload.visualTarget);
-  const element = elementFingerprint(payload.element);
-  const selector = stringValue(payload.selector) ?? stringValue(element?.selector) ?? stringValue(explicitVisualTarget?.selector);
+  const adaptedTarget = objectValue(payload.target);
+  const adaptedFingerprint = objectValue(adaptedTarget?.fingerprint);
+  const selectedCandidate = selectedTargetCandidate(adaptedTarget);
+  const explicitVisualTarget = objectValue(adaptedTarget?.visualTarget) ?? objectValue(payload.visualTarget);
+  const element = elementFingerprint(adaptedTarget?.element)
+    ?? elementFingerprint(selectedCandidate)
+    ?? elementFingerprint(adaptedFingerprint)
+    ?? elementFingerprint(payload.element);
+  const selector = stringValue(selectedCandidate?.selector)
+    ?? stringValue(adaptedFingerprint?.selector)
+    ?? stringValue(adaptedTarget?.selector)
+    ?? stringValue(payload.selector)
+    ?? stringValue(element?.selector)
+    ?? stringValue(explicitVisualTarget?.selector);
   if (!selector && !explicitVisualTarget) return undefined;
   return compact({
     selector,
     ...(element ? { element } : {}),
     ...(explicitVisualTarget ? { visualTarget: explicitVisualTarget } : {})
   });
+}
+
+function selectedTargetCandidate(target: JsonObject | undefined): JsonObject | undefined {
+  const selectedCandidateId = stringValue(objectValue(target?.selectedCandidate)?.candidateId);
+  if (!selectedCandidateId || !Array.isArray(target?.candidates)) return undefined;
+  return target.candidates
+    .map(objectValue)
+    .find(candidate => stringValue(candidate?.candidateId) === selectedCandidateId);
 }
 
 export function elementFingerprint(value: unknown): JsonObject | undefined {

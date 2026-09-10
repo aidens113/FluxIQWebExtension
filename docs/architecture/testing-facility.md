@@ -17,6 +17,130 @@ Each command chooses `"surface":"scenario"`, `"surface":"panel"`, or `"surface":
 
 The session accepts no JavaScript/evaluate command, limits requests, selectors, waits, and action count, and applies the deterministic exact-origin network guard. Navigation cannot leave the selected scenario, panel, or extension origin. Literal entry into password, PIN, one-time-code, payment, or explicitly sensitive controls is denied. A protected field can instead use `secretEnv`, restricted to `FLUXIQ_TEST_PASSWORD`, `FLUXIQ_TEST_PIN`, `FLUXIQ_TEST_TOTP`, or `DEEPSEEK_API_KEY`; the environment value is resolved in process memory, may only target a sensitive control, and is never returned. Screenshots are written only beneath the run allocation and are denied whenever a sensitive control contains a value. `inspect` returns bounded structural metadata without page text or input values. Provider credentials are removed from the browser environment. The command itself makes no provider request; a request can occur only through an explicit UI action in the loaded product.
 
+## Instruction-driven web exploration seam
+
+`packages/test-runner/src/web-flow-exploration.ts` provides the web-specific
+orchestration boundary for instruction-to-Flow authoring. It captures the
+initial page through the production extension action bridge, asks an injected
+Core harness gateway to select a bounded subset of the observed same-origin
+links, visits those allowlisted HTTP(S) pages, and converts their extension DOM
+snapshots into an in-memory `web-flow-exploration.v1` evidence bundle. The bundle includes
+bounded element identity, accessible text, and same-origin links, while
+discarding input values, sensitive controls, selected text, credentials, URL
+queries/fragments, and unrestricted element attributes. Page evidence is
+explicitly marked untrusted and must not be written to Lab artifacts or logs.
+
+Production composition uses the same ownership boundary. The web domain binds
+`domain/src/runtime/llm-evidence.ts` through `registerWebAutomationRuntime`,
+which is called by the web-panel host. Its authoring-time surface exposes
+`web.inspect_current_page`, `web.navigate_same_origin`, and `web.reveal_safe`
+to Core's domain-neutral evidence loop. These tools use the
+existing Automation Studio client-gateway action bridge; they
+require exactly one ready, trusted, idle-recorder web extension and fail closed
+on ambiguity. This prevents evidence actions from entering recording storage.
+Navigation first inspects the current page, rejects credentials/non-HTTP(S)
+URLs, origin changes, and a destination whose sanitized location is already
+current, then captures the destination again. A same-location request returns
+the recoverable `no_progress` result without applying an effect. Interaction
+handles remain bound to the selector in the latest evidence returned for that
+session, project, and Flow. A fresh snapshot must still contain that selector
+uniquely at the same location before execution; fresh ordinal ranking cannot
+silently rebind the handle to a different element. Reveal accepts only parsed
+semantic disclosures (`aria-expanded`, `aria-controls`, or `summary`) and view
+controls (`tab`, `menuitem`, or `treeitem`); it rejects generic action,
+submit/purchase, and destructive controls. Form filling and option selection
+are deliberately absent from the authoring tool catalog. Parsed evidence
+already contains the control metadata and bounded options needed to propose
+those Flow nodes, while executing them would perform the workflow being
+authored instead of discovering structure. Those operations remain available
+as ordinary `web.dom.type` and `web.dom.select` actions in Testing Lab/manual
+runtime control and as generated Flow outputs. Every authoring interaction
+recaptures evidence and rejects an origin change. A reveal whose post-click
+parsed evidence is unchanged returns recoverable `no_progress` with
+`effectApplied: false`. Expected model-correctable policy/input rejections return only a
+`web-llm-tool-result.v1` object with `ok: false` and an allowlisted code, so
+Core can give the model another bounded decision turn without echoing the
+rejected selector, URL, or value. Disconnects, ambiguous clients,
+cancellation, malformed snapshots, and failed gateway/browser actions remain
+fatal. Tool declarations mark inspection as an observation with
+`repeatPolicy: "after_mutation"`; navigation and reveal are mutations.
+Core rejects repeated inspection until a successful state-changing tool
+creates new evidence to observe. Select evidence includes at most 20 bounded
+option label/value pairs so generation does not guess an option value. Every
+execution returns Core's explicit `llm_evidence_tool_execution` outcome:
+inspection and recoverable rejection set `effectApplied: false`, while a
+mutation sets it to `true` only after its browser action succeeds and evidence
+is recaptured. Outcomes also carry a bounded content-free `resultCode`, which
+Core may retain with the tool ID and effect flag for Testing Lab diagnosis.
+Interactive evidence assigns opaque handles (`target.1`, `target.2`, and so
+on); model-selected actions copy a handle rather than reconstructing CSS. The
+runtime resolves the handle to its last-returned selector and revalidates that
+selector against fresh sanitized evidence before sending it to the browser.
+Reveal guidance limits choices to observed controls that expose otherwise
+unavailable structure required to author the instruction. The
+`web-llm-evidence.v1` response is capped by Core's per-call allowance and a
+12 KB downstream hard ceiling (6 KB when Core provides no allowance), with at
+most 40 elements. It excludes
+input values, sensitive controls, selected text, unrestricted attributes, and
+URL queries/fragments. Ordinary non-sensitive input and textarea controls may
+expose only a `hasValue` boolean so later evidence can distinguish empty from
+completed fields without revealing entered text. A non-sensitive select may
+expose its current `selectedValue` only when that value exactly matches one of
+the same descriptor's already-sanitized bounded options.
+
+Neither production nor Testing Lab web code resolves a provider or invokes a
+model itself. Generic provider selection, secret access, budgets, grants,
+prompt/tool iteration, strict output parsing, and proposal persistence remain
+in Core's global Automation Studio LLM harness. The only accepted terminal
+result is an inert `proposed` Flow Bootstrap Adaptation; review, apply, and
+zero-LLM replay remain separate required operations.
+
+Testing Lab's live exploration launcher accepts a bounded repository-local
+scenario plus simple instruction without adding a scenario-specific runner.
+Set `FLUXIQ_LLM_SCENARIO_ID` to a registered lowercase Scenario Lab ID and
+`FLUXIQ_LLM_INSTRUCTION` to 1–4,000 safe text characters, then run
+`pnpm demo:llm:explore`. If omitted, both values retain the certified
+`instruction-only-form` defaults. The scenario ID is checked against the built
+Scenario Lab registry before Core or a browser starts, and its authoritative
+manifest `startPath` is used. This supports registered multi-route fixtures such
+as navigation without accepting a caller-supplied path or URL; the destination
+remains under the scenario server's exact loopback origin. The supplied
+instruction is passed to Core's global evidence-guided
+Flow Bootstrap harness; provider configuration, strict output parsing, and
+proposal persistence are not reimplemented downstream. The run still requires
+an idle recorder, proves the recording set unchanged, and stops at manual
+review with the existing explicit DeepSeek budget.
+
+Use `pnpm demo:llm:explore:request` first for a provider-free readiness check.
+It validates the scenario and instruction, reports the exact scenario path,
+instruction character/byte counts and digest, safety/review requirements, and
+the effective provider budget with `providerCallCount: 0`. It never echoes the
+instruction or any credential. This command does not start Core, browsers, or
+the provider.
+
+After `pnpm demo:llm:explore` creates its proposal, Testing Lab writes an
+ignored private `llm-exploration-request-binding.json` continuation record in
+the demo workspace. It contains only the registered scenario ID/start path, instruction
+digest, and exact project/Flow/Adaptation IDs—never instruction content or
+credentials. `pnpm demo:llm:explore:request:apply` reviews and applies only that
+exact pending Bootstrap Adaptation; it does not select whichever proposal is
+newest. `pnpm demo:llm:explore:request:run` then opens the same registered
+scenario, connects the extension to the bound Flow, and performs one ordinary
+panel run. It requires terminal success, zero provider calls and LLM
+interventions, an unchanged recording set, and routing through the applied
+owned Subflow graph. When the scenario manifest declares final-state facts, the
+run evaluates them through the shared Scenario Lab oracle. The original
+`demo:llm:explore:apply` and instruction-only baseline/adaptation commands keep
+their existing checkpoint semantics. Apply and run reload the current manifest
+and reject the continuation if its registered start path has changed.
+
+The inspect tool targets the extension's current active tab. A Testing Lab
+driver brings its scenario page to the front immediately before it sends the
+generation request through the authenticated API. For ordinary browser-tab use, the panel
+must provide an explicit target-tab handoff before evidence-guided generation;
+same-origin navigation deliberately cannot recover from choosing the panel tab
+as the initial target.
+
 ## Current status
 
 This repository contains a working, finite FluxIQ web testing facility. Its
@@ -745,7 +869,7 @@ until separate operational authorization and an execution adapter exist.
 
 ## Commands and prerequisites
 
-### Resident interactive development session
+### Interactive development session
 
 `pnpm lab:interactive <scenario> --target persistent-isolated --workspace <name>` launches the topology, headed Chromium, current E2E extension, panel, and scenario once, then accepts newline-delimited JSON commands until `stop` or interruption. It is the default development loop for isolated UI/action checks; finite scenario and live LLM certification remain checkpoint tools.
 
@@ -886,7 +1010,9 @@ diagnosis-only mode. If the prepared Flow has no active instruction, it records
 only bounded boolean readiness facts and exits before opening authorization,
 creating a runtime run, or contacting the provider.
 
-The setup helper navigates the real Secret Keys Program, reads only its metadata-only snapshot response, reuses one exact compatible global DeepSeek key, or drives Add Key and authorization through accessible UI labels. It never invokes Reveal. The diagnosis command never reads the provider environment variable or secret value. Password, PIN, and authorization actions are screenshot-suppressed.
+The setup helper navigates the real Secret Keys Program, reads only its metadata-only snapshot response, reuses one exact compatible global DeepSeek key, or drives Add Key and authorization through accessible UI labels. It never invokes Reveal. The diagnosis command never reads the provider environment variable or secret value. After login, normal LLM grants use the authenticated session's in-memory secret unlock and do not ask for the account password or PIN again. The panel shows a confirmation warning only when preflight total-token exposure is strictly greater than 100,000; the current 50,000-token hard ceiling keeps that path future-facing. Secret-key setup and other genuinely privileged credential actions remain screenshot-suppressed.
+
+Runtime target adaptations remain opaque in Core. When Core applies an `edit_action_target`, the web domain consumes the resulting `parameters.target` object as an override and maps its selector, element, or visual target through the existing client-gateway boundary; the generated top-level parameters remain the fallback.
 
 The certification run removes the recorded target on the loopback Scenario Lab, requires that deterministic action failure to precede exactly one `diagnosis` intervention, and validates the trusted Core budget ledger reports exactly one provider call. It rejects any patch/suggestion/proposal kind, adaptation or change-proposal ID, unexpected provider/model/prompt version, invalid or excessive usage, or nonterminal outcome. It then restores the fixture and runs the same Flow through the real UI in No LLM mode; that replay must succeed with zero interventions and zero Core-accounted provider calls. The fixed retained schema contains only run IDs/statuses, bounded invocation provenance/usage, evaluation, call counts, and aggregate leak-attestation totals. It excludes prompt/response bodies, key references, passwords, PINs, action messages, and raw metadata.
 Post-run provider-secret attestation is a separate bounded gate. A caller supplies one in-memory literal and exact approved relative paths beneath a canonical workspace. The scanner never follows reparse points or path escapes, does not inspect explicit binary formats, limits files and bytes, and fails closed when approved text is unreadable or oversized. Reports contain counts, categories, and sanitized relative paths only; they never include matching content or the literal. Live-lane composition must explicitly select run evidence, logs, manifests, workspace metadata, and cache metadata after UI provisioning and every provider-backed test.

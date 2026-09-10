@@ -319,6 +319,7 @@ var visualTargetSchema = {
 var elementProperties = { selector: { type: "string", label: "CSS selector" }, element: elementFingerprintSchema, visualTarget: visualTargetSchema };
 var selectorSchema = {
   type: "object",
+  required: ["selector"],
   properties: {
     ...elementProperties,
     timeoutMs: { type: "integer", label: "Timeout in ms" }
@@ -494,6 +495,9 @@ var webAutomationOutputNodeDefinitions = webAutomationActionDefinitions.map(
 );
 function createWebAutomationOutputNodeDefinition(definition) {
   const safeOutput = isSafeOutput(definition.actionType);
+  const requiredParameters = new Set(
+    Array.isArray(definition.parameterSchema.required) ? definition.parameterSchema.required.filter((value) => typeof value === "string") : []
+  );
   return {
     schemaVersion: "0.1",
     id: webAutomationOutputNodeId(definition.actionType),
@@ -518,7 +522,11 @@ function createWebAutomationOutputNodeDefinition(definition) {
     outputAction: { fixedOutputId: definition.actionType },
     inputs: [controlInput],
     outputs: outputPorts,
-    parameters: parametersForOutput(definition.actionType).map((parameter) => ({ ...parameter, allowStateBinding: true })),
+    parameters: parametersForOutput(definition.actionType).map((parameter) => ({
+      ...parameter,
+      ...requiredParameters.has(parameter.id) ? { required: true } : {},
+      allowStateBinding: true
+    })),
     icon: iconForOutput(definition.actionType),
     tags: ["web-automation", "output"],
     metadata: {
@@ -530,6 +538,7 @@ function createWebAutomationOutputNodeDefinition(definition) {
 }
 function parametersForOutput(outputId) {
   const selectorParameters = [
+    { id: "target", label: "Adapted Target", valueType: "object", ui: { control: "value" } },
     { id: "selector", label: "Selector", valueType: "string", ui: { control: "text", placeholder: "CSS selector" } },
     { id: "element", label: "Element", valueType: "object", ui: { control: "value" } },
     { id: "visualTarget", label: "Visual Target", valueType: "object", ui: { control: "value" } },

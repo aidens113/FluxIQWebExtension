@@ -13,6 +13,16 @@ test("executes actions through the real content-script message path", async ({ e
       return tab.id;
     }, page.url());
 
+    const snapshotResult = await sendAction(extensionSession.extensionPage, tabId, {
+      commandId: "e2e-snapshot",
+      actionType: "web.dom.capture_snapshot"
+    });
+    expect(snapshotResult).toMatchObject({ commandId: "e2e-snapshot", status: "succeeded" });
+    const snapshot = snapshotResult.snapshot as { interactiveElements?: Array<{ tagName?: string; selector?: string }> } | undefined;
+    expect(snapshot?.interactiveElements).toEqual(expect.arrayContaining([
+      expect.objectContaining({ tagName: "textarea", selector: '[data-testid="instruction-name-adapted"]' })
+    ]));
+
     const typeResult = await sendAction(extensionSession.extensionPage, tabId, {
       commandId: "e2e-type",
       actionType: "web.dom.type",

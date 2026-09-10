@@ -69,7 +69,8 @@ test("live command is real-UI, credential-boundary safe, and provider-secret fre
   const start = source.indexOf("export async function runDemoLlmDiagnosis");
   const end = source.indexOf("export async function runDemoWorkspaceFlow", start);
   const lane = source.slice(start, end);
-  for (const required of ["withWorkspaceLock", "withPersistentDemoCore", "withDemoBrowser", "configureFirstLiveDiagnosisViaUi", "connectExtension", "introduce-missing-target", "runDiagnosisFromPanel", "restoreDiagnosisScenario", "runDemoFlowFromPanel", "Account password", "Security PIN", "Authorize One Diagnosis", "Encrypted API key", "TESTING_LAB_DEEPSEEK_KEY_NAME"]) assert.equal(lane.includes(required), true);
+  for (const required of ["withWorkspaceLock", "withPersistentDemoCore", "withDemoBrowser", "configureFirstLiveDiagnosisViaUi", "connectExtension", "introduce-missing-target", "runDiagnosisFromPanel", "restoreDiagnosisScenario", "runDemoFlowFromPanel", "authenticated session", "Encrypted API key", "TESTING_LAB_DEEPSEEK_KEY_NAME"]) assert.equal(lane.includes(required), true);
+  assert.doesNotMatch(lane, /Authorize One Diagnosis|llm-runtime-password|llm-runtime-pin/u);
   assert.match(lane, /const provider = llmSection\.getByLabel\("Provider", \{ exact: true \}\)/u);
   assert.match(lane, /provider\.waitFor\(\{ state: "visible", timeout: 10_000 \}\)[\s\S]*provider\.selectOption\("deepseek"\)/u);
   assert.match(lane, /const model = llmSection\.getByLabel\("Model", \{ exact: true \}\)/u);
