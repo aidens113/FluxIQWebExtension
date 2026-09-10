@@ -1,5 +1,72 @@
 # LLM Production Automation Audit And Implementation Plan
 
+Status: Active
+Status detail: execution authorized; instruction-only creation, first live runtime adaptation, and parameterized `basic-form` creation/run are accepted; active work is repeatable generation/adaptation and reusable sanitized context
+Created: 2026-09-06
+Last updated: 2026-09-10
+Owner: root coordination agent
+Scope: Production-capable, provider-neutral LLM automation through the real web panel, production extension, and Testing Lab (instruction-only blank-Flow creation, evidence-guided exploration, runtime failure diagnosis/adaptation, reusable sanitized evidence); generic behavior lives in Core (`F:\!FluxIQ`), browser/DOM/selector/Testing Lab concerns live in this repository.
+Paired document: none
+Related: `docs/working/automated-testing-facility-plan.md`
+
+---
+
+## Current State
+
+As of 2026-09-10, sourced from this document's status line, its Phase Status list, and its 2026-09-09 checkpoints (runtime-adaptation live checkpoint, parameterized `basic-form` acceptance, and the Core/downstream reusable-context status sections).
+
+**What is true now**
+
+- Live DeepSeek requests (`deepseek-chat`, ignored `DEEPSEEK_API_KEY`) are authorized for this window; every live call is manually initiated, loopback-only, side-effect-free, excluded from CI, and bounded by the Live Safety Envelope.
+- Three lanes are accepted live and validated provider-free: instruction-only blank-Flow creation with zero-LLM replay, the first instruction-only selector-drift runtime adaptation, and parameterized `basic-form` creation/run.
+- The active phase is "Reusable Sanitized Evidence And Run-Informed Adaptation". It is under incremental implementation and is explicitly not enabled end to end; reuse stays disabled until protected persistence, harness integration, UI control, and validation land.
+- Core edits are made only by dedicated Core subagents in the sibling `F:\!FluxIQ` framework; this repository owns browser/DOM/selector concepts, the `domain` package, and the Testing Lab.
+- Fast development policy applies: focused typechecks/tests and `lab interactive` for small edits; a full live journey only after a material cross-boundary change or at a certification checkpoint; workspace-wide `pnpm check`/`pnpm test`/`pnpm build` only at major checkpoints.
+
+**Done**
+
+- Phase 1 (safety baseline/contracts) completed; Phase 2 (provider seam/diagnosis) foundations completed.
+- Phase 3 (blank Flow creation): instruction-only generation plus deterministic replay accepted on the instruction-only form fixture (six nodes, twelve successful action attempts across two replays, zero provider calls). Repeated LLM credential prompts were removed via session-scoped grants; the >100,000 aggregate-token confirmation rule is implemented in Core and UI.
+- Evidence-guided generation: Core's Automation Studio LLM harness is the single global evidence harness (`evidence_tool_decision`, bounded four-call grant, 45-second per-call deadline). Downstream binds `web.inspect_current_page`, `web.navigate_same_origin`, and `web.reveal_safe` with `web-llm-evidence.v1` sanitization under a 12 KB / 40-element hard cap; fill/select/submit are not authoring-time tools. The proposal-only live checkpoint succeeded (one tool call, one provider call, 5,847 total tokens), `demo:llm:explore:apply` applied it, the provider-free baseline ran all six actions, and the read-only readiness gate passed.
+- Phase 6 (runtime adaptation) first lane certified 2026-09-09: run `5be70f05-3849-4bb9-87b5-800aad3cb525` made exactly two DeepSeek calls (3,328 total tokens, estimated $0.00181544), proposed the evidence-backed selector `[data-testid="instruction-name-adapted"]` for the failed `type_name` node, was manually applied, and validation run `80414559-fd2b-4b8f-bb92-f4b66e0b5068` executed all six actions with zero provider calls and zero recordings.
+- Adaptation quality seams behind that certification: one bounded `failureEvidence` packet (3,000-byte ceiling) shared by diagnosis and patch; deterministic domain target validation (unique exact selector plus action-type compatibility); single-compatible-element selector resolution; the failed trace node is authoritative for `targetNodeId`; the explicit `diagnose_and_adapt` grant enables action-target proposals; the extension snapshot filter retains empty identified controls.
+- Parameterized exploration: `demo:llm:explore:request` accepts a registered Scenario Lab ID plus 1-4,000 instruction characters. `basic-form` was accepted live (one DeepSeek call, 5,764 total tokens; applied `adaptation.bootstrap.2bc9525d-de69-444e-8239-efc276a0df55`; provider-free run `ada55134-c470-4e25-a36d-d78667801743` completed all seven action attempts and passed the registered final-state oracle). Crash recovery is fail-closed at both interruption boundaries; bound runs emit only allowlisted stage/reason diagnostics.
+- Provider-free Testing Lab controls exist for every resume/repair step: `demo:llm:pending|state|revert|replay`, `demo:llm:create:focused`, `demo:llm:adapt:readiness|control|continue|revert`, and `demo:llm:explore:apply|baseline|adapt:readiness|adapt|adapt:apply|adapt:validate|adapt:revert|adapt:reject|request`.
+- Core repairs landed during this work: owned-Subflow graph resolution for adaptation apply/rollback; `getFlow` overlays revisioned graph snapshots so API/UI/runtime read the same revision; typed adaptation rows are identity-authoritative over legacy JSON; `adaptationCount` derives from unique `adaptationIds`; the Start-node route mismatch; the execution-mode button grid CSS; content-free evidence-completion failure categories. Downstream: the web output adapter now prefers canonical fingerprint selectors.
+- Reusable context, Core side (2026-09-09, all disabled by default): `automation-studio.reusable-llm-context.v1` record and project-local store with additive migration `0016`; feature-gated status/list/get/delete/clear/purge/pack service and API operations; AES-256-GCM protected-content boundary with a host-owned exact-key resolver; deterministic selection and packing (at most five items, `min(8192 bytes, 10% of maxInputTokens)`); a tested harness injection seam for opted-in evidence-guided creation and runtime adaptation.
+- Reusable context, downstream side (2026-09-09): `domain/src/runtime/reusable-evidence.ts` produces the compatibility fingerprint and the non-executable prompt projection; `domain/src/runtime/reusable-evidence-coordinator.ts` owns the feature-gated, fail-closed handoff into Core's protected put contract. Core UI groundwork centralizes the progress vocabulary while reuse controls stay hidden.
+- Web evidence payload efficiency: duplicate semantic fields dropped (1,390 bytes / 12.1% smaller on the representative fixture); persisted Flow LLM settings are kept distinct from the temporary exploration authorization profile.
+
+**Not done**
+
+- Reusable sanitized evidence is not usable in production: the downstream web-panel host has not configured key custody/content-protection provider injection, so reusable-context writes are rejected; no harness caller populates `relevantRuns`/`relevantAdaptations` or a `reusableContext` packet; retrieval/ranking prompt population downstream, creation integration (sequence step 4), adaptation integration (step 5), and UI rollout (step 6: per-Flow opt-in, candidate counts/age, Manage/Clear, provenance in review) remain.
+- The token-efficiency benchmark set (no-reuse versus reuse, failing on budget regression) and the integration/UI tests in the Focused Validation Plan are not reported as implemented or run.
+- Phase 4 (recording refinement) is deferred; Phase 5 (existing Flow editing) is pending; Phase 7 hardening lanes (cancellation, rate limit, malformed output, sensitive/prompt-injection, reconnect, dynamic DOM, iframe, long-document) are pending.
+- The scenario ladder beyond `basic-form` creation is not started: ambiguous-targets, delayed-ui, dynamic-list, iframe-checkout, failure-surfaces, sensitive-input, then navigation/reconnect/long-document. Repeatable scenario coverage for adaptation and run-informed retrieval remain.
+- Literal selectors still travel in exploration evidence because there is no provider-neutral Core seam for resolving opaque `target.N` references into domain-owned proposal parameters.
+- Generic submit execution remains deliberately blocked in the evidence loop; no trustworthy production marker distinguishes a local fixture submit from a real external side effect.
+- Runtime Debug cannot show capture-unavailable/capture-failed evidence provenance because Core does not expose those categories on the intervention DTO.
+- The creation wrapper's post-apply certification bookkeeping (Phase Status item 3) is not reported resolved later in the document.
+
+**Next steps** (from the Active Phase implementation sequence and Focused Validation Plan)
+
+1. Finish the reuse foundation in order: downstream key custody/provider injection and persistence enablement (remainder of step 2); Core retrieval population of the existing seam and deprecation of unranked `relevantRuns`/`relevantAdaptations` population (step 3); creation integration requiring at least one fresh target inspection before proposal persistence (step 4); adaptation integration that never offers rejected, reverted, stale, or nondeterministically validated changes as positive examples (step 5); UI rollout with per-Flow opt-in, preview/manage/clear, provenance in review, and accessible progress/error states before any default-on (step 6).
+2. Validate per the Focused Validation Plan: Core and downstream unit tests, then synthetic-provider integration and token-regression fixtures, then one provider-backed creation reuse checkpoint and one provider-backed adaptation-history checkpoint, each followed by deterministic zero-LLM validation. Do not rerun the entire creation journey for each cache edit.
+3. Keep the certified instruction-only and `basic-form` checkpoints isolated from reuse changes; resume them only through the exact provider-free continuation commands, never by repeating diagnosis/patch or creation requests.
+4. Scenario ladder expansion and Phase 7 hardening lanes remain beyond the active phase; the document does not sequence them against the reuse work.
+
+**Blockers**
+
+- None recorded as open. Production reuse is gated, not blocked: enablement waits on approved project key custody through Core's protection boundary plus the web evidence-to-selection callback in the downstream host. The earlier statement that the provider timeout "is the current product-path blocker" (2026-09-09 focused live exploration iteration) was overtaken by the later successful proposal-only, apply, baseline, and adaptation checkpoints.
+
+**Operating constraints to preserve**
+
+- Never expose pairing tokens, cookies, API keys, passwords, PINs, raw prompts/responses, recorded page data, or `.fluxiq` contents; raw page snapshots must never enter provider context.
+- LLM output is untrusted proposal data; manual review, revision-bound apply, and zero-LLM deterministic replay remain mandatory for every accepted result.
+- Rebuild the linked Core `dist` after Core source changes before a live attempt; rebuilding only the downstream host bundle is not evidence that changed Core source is active.
+
+---
+
 Status: execution authorized; instruction-only creation, first live runtime adaptation, and parameterized `basic-form` creation/run are accepted; active work is repeatable generation/adaptation and reusable sanitized context
 Created: 2026-09-06
 Recovered after full-file zero-fill corruption: 2026-09-07

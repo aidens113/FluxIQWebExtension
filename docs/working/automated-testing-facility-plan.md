@@ -1,5 +1,151 @@
 # Automated FluxIQ Web Testing Facility Plan
 
+Status: Active
+Status detail: The implementation is complete in this repository and the primary agent's integration results are recorded below, while live certification of the `existing` and `clone` lanes remains pending only because no external installation credentials, project, or persisted Flow were supplied to any run, and Linux CI execution plus the scheduled three-repeat baseline await CI.
+Created: 2026-09-04
+Last updated: 2026-09-10
+Owner: Primary agent under the `Execute Plan With Subagents` workflow, with rotated phase subagents (`phase0_contracts`, `phase3_topology`, `phase4_evidence`, `clone_*`, `phase12_*`, `facility_router_subflow`)
+Scope: Automated Playwright testing facility for the FluxIQ web extension in `F:\!FluxIQWebExtension`: Scenario Lab fixtures, real-extension fixture, isolated/existing/clone/persistent-isolated FluxIQ topologies, evidence bundles, matrix/CI, bounded improvement agents, persisted-Flow execution, and the persistent self-recording demo scripts.
+Paired document: none
+Related: Documentation Sources section at the end of this document (Playwright chrome-extensions, Playwright test-use-options, and Puppeteer chrome-extensions references); no FluxIQ working documents are linked from this document.
+
+---
+
+## Current State
+
+As of the most recent dated entries (2026-09-05 and 2026-09-06), the first
+facility implementation is complete in this repository. Phases 0 through 12
+are tracked in the Execution Log below; every phase is validated, implemented
+and locally validated, or deliberately deferred by a safety gate. The facility
+phases themselves record that no FluxIQ Core files were changed, but the
+2026-09-05 top-level graph compatibility escape audit did drive Core-side
+ownership changes (see **Done** below).
+
+**Done**
+
+- Phases 0-4 (contracts, Scenario Lab, real extension fixture, isolated
+  FluxIQ topology, evidence bundle) are validated; live run
+  `run-mtnla9cz-a4da1119` proved Core-issued `web.browser.navigate` and
+  `web.dom.type` reached and asserted the automation page.
+- Phase 5 (ten-scenario corpus, selector, finite run/matrix/inspect/compare
+  CLI, Windows headed lane, Linux Xvfb configuration) is implemented and
+  locally validated; the local three-repeat baseline passed 3/3.
+- Phase 6 bounded-improvement primitives (task/result/review/audit/worktree
+  plan CLI, six role policies, trusted-diff reconciliation, gates) pass 16/16;
+  dispatch remains human-triggered and the package does not invoke agents or
+  mutate worktrees.
+- Phase 7 Core extraction audit returned `defer` (one domain consumer, zero
+  Core consumers, browser/extension-specific fields).
+- Phase 8 real-site safeguards pass 7/7; no target or secret is configured and
+  no real site was contacted.
+- Phase 9 (`existing` target, `.env`/`.env.local` loading, origin/user-scoped
+  cookie cache under `test-runs/.auth`, `lab auth status|clear`,
+  `--fresh-login`, API-only `ExistingFluxIQControlClient`, 30-second bounded
+  requests with single-attempt cancellation, strict final-state predicates,
+  `BrowserContext` network containment, Windows ACL hardening, web-panel
+  verification helper, `fluxiqExecution` manifest provenance) is integrated;
+  full isolated regression `run-mtnpc74q-89d850a9` passed.
+- Phase 10 (`clone` target: strict clone-package contract, facility-wide
+  `test-runs/.clone-cache`, read-only source exporter, isolated destination
+  importer/remapper, failure-safe cleanup, cache-drift reclassification before
+  destination startup) is integrated; the synthetic source-to-destination
+  pipeline test and live isolated regression `run-mtnrj7ws-717a780f` passed.
+- Phase 11 persistent self-recording demo (`pnpm demo:setup-local`,
+  `pnpm demo:record`, `pnpm demo:run`) is live validated in persistent
+  isolation at `test-runs/web-extension-demo`. The 2026-09-06 completion
+  replaced API-seeded graphs with the real **Generate deterministic Subflow**
+  dialog; final recording
+  `client.extension-bbe5ab04-3eca-415f-b64c-d0c54e135ad2.1788718034927` and
+  runtime runs `8db01689-2074-4432-9551-130d301dd1a5` and
+  `e23d811e-208d-4287-9815-780d67ec1548` passed in No LLM mode, each with 37
+  balanced before/after pairs and 74 physical screenshots.
+- Phase 12 `persistent-isolated` target (stable named workspace under
+  `FLUXIQ_TEST_RUNS_DIR/persistent-isolated/<workspace>/`, exclusive operation
+  lock, strict `.identity/credentials.json` store) is live validated by two
+  sequential runs `run-mtnvptuo-800f61c7` and `run-mtnvqwj5-169346f1` on
+  workspace `phase12-live-v2`.
+- The 2026-09-05 top-level graph compatibility escape audit is closed. Core
+  now enforces Flow representation metadata (modern top-level Flows reject
+  public graph writes; runtime enters through the parent Router and selected
+  Subflow), a PIN-authorized legacy migration endpoint exists, edge upserts
+  re-home `flow_id`, Core derives route-decision/Subflow-entry/action-attempt
+  counts from completed detail, and Subflow navigation hydrates the exact graph
+  before opening its Nodes view. The post-fix live `npm run demo:run` passed as
+  runtime run `3e996492-70d3-4d33-b5ff-9de143783637`. Workspace schema is
+  `0.3` (parent Flow, Subflow, graph Flow, and Router identities).
+- Evidence policy is strictly event-only: one physical JPEG immediately before
+  and one immediately after every test-issued state-changing action; timed
+  sampling and deduplication are disabled.
+- Latest recorded gate results: extension workspace `pnpm check`, `pnpm test`,
+  and `pnpm build` pass; test-runner 116/116; Core package check and build
+  pass with 542/542 tests across 88 files; Core Automation Studio service
+  89/89.
+
+**Not done**
+
+- Live certification of the `existing` lane: no external installation
+  credentials, project, or persisted Flow were supplied to any run. The runner
+  path is implemented; the document classes this as a certification gap, not
+  an unimplemented runner path.
+- Live clone certification against an external existing FluxIQ installation:
+  no source base URL, credentials, project, or Flow were supplied.
+- Linux Chromium execution and the scheduled three-repeat baseline in CI: the
+  Xvfb/dependency configuration is complete but was not executable on the
+  Windows host.
+- Phase 8 real-site execution: deliberately not run; no reviewed target policy
+  was supplied.
+- Phase 7 Core promotion: deliberately deferred (`defer` verdict).
+- Phase 6 agent dispatch: primitives only; no automatic dispatch or merge.
+- Phase 9 Step 5 additive Core improvements (current-session identity
+  endpoint, registered runtime cancellation, public command correlation,
+  remote capability discovery) were identified but not implemented; on the
+  audited Core revision `/api/auth/session` is absent and cancellation is
+  declared but not registered, so the adapter proves only authenticated
+  project access and reports cancellation as `unsupported`.
+- Synthesized Flow execution is recorded as follow-up scope.
+- No automatic reset/delete command exists for a persistent workspace; removal
+  remains an explicit manual operation.
+- The separate Core web-package type check still reports pre-existing,
+  unrelated dirty-worktree TypeScript errors in Automation Studio UI runtime
+  files.
+
+**Next steps**
+
+- Supply `FLUXIQ_TEST_BASE_URL`, `FLUXIQ_TEST_USERNAME`,
+  `FLUXIQ_TEST_PASSWORD`, `FLUXIQ_TEST_PIN`, `FLUXIQ_TEST_PROJECT_ID`, and
+  `FLUXIQ_TEST_FLOW_ID` (optionally `FLUXIQ_TEST_GATEWAY_URL` and
+  `FLUXIQ_TEST_TOTP`) and run the `existing` and `clone` lanes against a real
+  external installation to close the two live-certification gaps.
+- Run the Linux Xvfb lane and the scheduled three-repeat baseline in CI.
+- Take the additive Core improvements identified in Phase 9 Step 5 through
+  the Core repository's own change process.
+- Real-site probes (Phase 8) remain gated on a reviewed target policy and a
+  stable Phase 5; Core promotion (Phase 7) remains gated on a second consumer.
+
+**Blockers**
+
+- None recorded that stop implementation. Remaining items are gated on inputs
+  that were never supplied (external credentials/project/Flow, a reviewed
+  real-site policy, a CI Linux runner) or on deliberate policy deferrals.
+- The Phase 12 `Credential recheck required` blocker recorded on 2026-09-04
+  was resolved the same day by the strict persistent identity store.
+- The Phase 9 Step 5 note records that Core edits were blocked because
+  `F:\!FluxIQ` was read-only in that execution; the 2026-09-05 sections record
+  Core changes being made, so treat that block as specific to the 2026-09-04
+  execution rather than the current state.
+
+**Where to look**
+
+- The Execution Log table (first section below) for per-phase status, owners,
+  and notes.
+- `## Implementation Validation (2026-09-04)` for the integrated gate table.
+- `## Final Implementation And Live Validation (2026-09-05)` for the
+  Router/Subflow ownership fix and the latest demo results.
+- The Phase 11 deterministic recording-to-Subflow completion entry
+  (2026-09-06) for the most recent dated checkpoint.
+
+---
+
 ## Status
 
 The first facility implementation completed on 2026-09-04 under the `Execute

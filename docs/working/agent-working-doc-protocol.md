@@ -1,8 +1,8 @@
 # Agent Working Document Protocol
 
 Status: Active
-Status detail: Protocol defined and adopted in both repositories; backlog
-triage and compaction of oversized documents remain.
+Status detail: Protocol adopted; triage and Current State retrofits are complete
+here; compaction of oversized documents remains, on touch.
 Created: 2026-09-10
 Last updated: 2026-09-10
 Owner: Senior supervisor agent
@@ -26,30 +26,27 @@ header block, ledger format, and lifecycle defined in
 **Done**
 
 - Protocol authored here and mirrored into FluxIQ Core.
-- [Working document index](./README.md) created in both repositories and
-  populated from the existing documents.
+- [Working document index](./README.md) exists in both repositories and is
+  derived from each document's header block.
 - `AGENTS.md` in both repositories links to the protocol and the index.
+- Phase 2 triage: every document here carries a conforming header with a
+  real status. Nothing is `Unclassified`.
+- Phase 3 retrofit: both `Active` documents here
+  (`llm-production-automation-plan.md`, `automated-testing-facility-plan.md`)
+  carry a `Current State` section, written by workers and verified by the
+  supervisor. Worker reports, including each document's stale or
+  contradictory statements, are under `agent-working-doc-protocol/reports/`.
 
 **Not done**
 
-- Three documents here and ten in Core carry `Unclassified` status because
-  their headers predate the controlled vocabulary. Each needs a one-time
-  triage pass to set a real status, owner, and pairing.
-- Oversized documents have not been compacted. The index flags every document
-  over 800 lines. The largest is Core's `ui-ux-upgrade-audit-plan.md` at 5,944
-  lines, which no agent can read within a normal context budget.
-- No existing document has a `Current State` section yet. Retrofit happens
-  opportunistically: the next agent to touch a document adds one.
+- Oversized documents have not been compacted. Three here exceed 800 lines;
+  compaction happens on touch, per [Compaction](#compaction).
 
 **Next steps**
 
-1. Triage `Unclassified` documents in both indexes, starting with the ones
-   that pair across repositories.
-2. Retrofit `Current State` into the two documents driving MVP Week 2:
-   `llm-production-automation-plan.md` here and
-   `adaptive-flow-training-roadmap.md` in Core.
-3. Compact documents over 800 lines as they are next touched, per
-   [Compaction](#compaction).
+1. Compact documents over 800 lines as they are next touched.
+2. When one of the retrofitted documents is next edited, resolve the stale
+   statements its worker report lists.
 
 **Blockers:** none.
 
@@ -307,6 +304,48 @@ the index with their successor named, so no agent reads them as current.
 
 ---
 
+## Worker Briefs
+
+Dispatched 2026-09-10 for Rollout Phase 3 (retrofit `Current State`). Shared
+task definition, then one brief per document.
+
+**Shared task.** Bring the target document into conformance with
+[Header block](#header-block) and [Section order](#section-order) by adding,
+not rewriting: insert a conforming header block directly after the H1
+(mapping any existing status prose onto the controlled vocabulary and
+keeping the original wording in `Status detail`), then a `## Current State`
+section under 150 lines directly after the header, sourced from the
+document's existing status prose and its most recent dated checkpoint. Do
+not reorder, delete, compact, or reword any existing content; do not touch
+the ledger or open questions; do not commit or push. Set `Last updated` to
+2026-09-10. Verify done by confirming the line count grew by exactly the
+inserted lines.
+
+**Shared report.** In the report file: the status chosen and why; owner;
+best-guess paired Core document or `none`; the five facts an agent resuming
+this work most needs; any internal contradictions found; the exact `wc -l`
+before and after.
+
+### Brief: cs-llm-production
+- Repository: this repository
+- Task: shared task on `docs/working/llm-production-automation-plan.md`
+- Required reads: this document's Header block and Section order; the whole target
+- Owns (may edit): `docs/working/llm-production-automation-plan.md`
+- Must not touch: any other file
+- Definition of done: shared task complete; report written
+- Report to: docs/working/agent-working-doc-protocol/reports/cs-llm-production.md
+
+### Brief: cs-testing-facility
+- Repository: this repository
+- Task: shared task on `docs/working/automated-testing-facility-plan.md`
+- Required reads: as above; the whole target
+- Owns (may edit): that file only
+- Must not touch: any other file
+- Definition of done: shared task complete; report written
+- Report to: docs/working/agent-working-doc-protocol/reports/cs-testing-facility.md
+
+---
+
 ## Work Ledger
 
 ### 2026-09-10 — Protocol authored and adopted in both repositories
@@ -336,6 +375,40 @@ the index with their successor named, so no agent reads them as current.
   Core. Documentation only, so no build or test check applies.
 - Outcome: Accepted
 - Follow-up: Phase 2 triage of `Unclassified` documents.
+
+### 2026-09-10 — Rollout Phase 2: triage
+
+- Agent: supervisor
+- Changed: conforming header blocks on the 3 previously `Unclassified`
+  documents: `extension-runtime-capabilities-plan.md` (Active, last
+  checkpoint 2026-09-04; paired with Core's `runtime-kernel-plan.md`),
+  `extension-ui-rebuild-plan.md` (Complete, every progress item checked),
+  `action-visual-entity-target-plan.md` (Complete, paired with Core's
+  same-named plan).
+- Why: The action-visual document had only its first checklist item ticked,
+  which read as unstarted; but `WebAutomationActionVisualTarget` is
+  referenced in 9 files under `domain/src` and `apps/extension/src`, so the
+  work shipped and the checklist is stale. Status follows the code.
+- Validation: `grep -rl` over `domain/src` and `apps/extension/src` -> 9
+  files; the insertion script printed before/after line counts for all 3.
+  Documentation only.
+- Outcome: Accepted
+- Follow-up: Phase 3 retrofits by workers; regenerate the index from headers.
+
+### 2026-09-10 — Rollout Phase 3: Current State retrofits
+
+- Agent: supervisor, with workers cs-llm-production and cs-testing-facility
+- Changed: `llm-production-automation-plan.md` (+67 lines),
+  `automated-testing-facility-plan.md` (+146 lines); two reports under
+  `agent-working-doc-protocol/reports/`; index regenerated from headers.
+- Why: Every `Active` document needs an authoritative `Current State` an
+  agent can read without reconstructing it from history.
+- Validation: each retrofit checked by script — eight header fields in
+  order, `Current State` directly after the header and under 150 lines,
+  `git diff` additions-only in a single hunk at the top of the file. Both
+  passed on first check. Worker reports read for status justification.
+- Outcome: Accepted
+- Follow-up: compaction on touch.
 
 ---
 

@@ -1,9 +1,10 @@
 # Working Document Index
 
-Every working document in this repository is listed here. This index is the
-entry point for any agent starting a task: read it, pick the relevant
-document, then read that document's `Current State` section before anything
-else.
+Every working document in this repository is listed here, grouped by the
+`Status` field of its header block. This index is derived from those headers
+and regenerated when a document is created, retired, or re-statused; edit the
+document's header, not this table. Read it first, pick the relevant document,
+then read that document's `Current State` section before anything else.
 
 Format, status vocabulary, ledger rules, worker briefs, and cross-repository
 pairing are defined in
@@ -11,25 +12,22 @@ pairing are defined in
 
 Core's matching index is at `F:\!FluxIQ\docs\working\README.md`.
 
-## Documents
+## Active
 
-| Document | Status | Owner | Lines | Scope | Paired in Core |
-| --- | --- | --- | --- | --- | --- |
-| [agent-working-doc-protocol.md](./agent-working-doc-protocol.md) | Active | Senior supervisor agent | 351 | How agents use `docs/working/` as durable memory and multi-agent coordination substrate. | `agent-working-doc-protocol.md` |
-| [module-size-governance-plan.md](./module-size-governance-plan.md) | Active | Senior supervisor agent | 113 | Applying the shared file and class size ratchet here, and this repository's four files over 800 lines. Policy owned by the Core pair. | `module-size-governance-plan.md` |
-| [llm-production-automation-plan.md](./llm-production-automation-plan.md) | Active | Senior supervisor agent | 1510 ⚠ | Provider-neutral LLM creation, live runtime adaptation, and zero-LLM deterministic replay through the real panel and production extension. | `adaptive-flow-training-roadmap.md` (unconfirmed) |
-| [automated-testing-facility-plan.md](./automated-testing-facility-plan.md) | Active | Testing facility | 1696 ⚠ | Repository-local browser testing facility: scenarios, Playwright drivers, extension loading, assertions. Core promotion and real-site execution outstanding. | none |
-| [extension-runtime-capabilities-plan.md](./extension-runtime-capabilities-plan.md) | Unclassified | unassigned | 1039 ⚠ | Building the extension into a first-class FluxIQ runtime client executing Studio flows and domain-owned web output nodes. | unknown |
-| [extension-ui-rebuild-plan.md](./extension-ui-rebuild-plan.md) | Unclassified | unassigned | 243 | Replacing the card-heavy popup/side-panel UI with one coherent application shell. | none |
-| [action-visual-entity-target-plan.md](./action-visual-entity-target-plan.md) | Unclassified | unassigned | 49 | Letting recorded and executed web actions identify the visual state entity they interacted with. | `action-visual-entity-target-plan.md` |
+| Document | Owner | Lines | Scope | Paired in Core |
+| --- | --- | --- | --- | --- |
+| [agent-working-doc-protocol.md](./agent-working-doc-protocol.md) | Senior supervisor agent | 424 | How the supervisor and workers use `docs/working/` as durable memory | `agent-working-doc-protocol.md` |
+| [automated-testing-facility-plan.md](./automated-testing-facility-plan.md) | Primary agent under the `Execute Plan With Subagents` workflow, with rotated phase subagents (`phase0_contracts`, `phase3_topology`, `phase4_evidence`, `clone_*`, `phase12_*`, `facility_router_subflow`) | 1842 ⚠ | Automated Playwright testing facility for the FluxIQ web extension in `F:\!FluxIQWebExtension`: Scenario Lab fixtures, real-extension fixture, isolated/existing/clone/persistent-isolated FluxIQ topologies, evidence bundles, matrix/CI, bounded improvement agents, persisted-Flow execution, and the persistent self-recording demo scripts. | none |
+| [extension-runtime-capabilities-plan.md](./extension-runtime-capabilities-plan.md) | Extension runtime | 1050 ⚠ | Building the extension into a first-class FluxIQ runtime client that executes Automation Studio flows and domain-owned web output nodes. | `runtime-kernel-plan.md` |
+| [llm-production-automation-plan.md](./llm-production-automation-plan.md) | root coordination agent | 1577 ⚠ | Production-capable, provider-neutral LLM automation through the real web panel, production extension, and Testing Lab (instruction-only blank-Flow creation, evidence-guided exploration, runtime failure diagnosis/adaptation, reusable sanitized evidence); generic behavior lives in Core (`F:\!FluxIQ`), browser/DOM/selector/Testing Lab concerns live in this repository. | none |
+| [module-size-governance-plan.md](./module-size-governance-plan.md) | Senior supervisor agent | 113 | Applying the shared file and class size policy to this repository, and | `module-size-governance-plan.md` |
 
-⚠ marks documents over the 800-line compaction threshold. Compact them the
-next time work touches them; do not schedule a bulk rewrite.
+## Complete
 
-## Triage backlog
+| Document | Owner | Lines | Scope | Paired in Core |
+| --- | --- | --- | --- | --- |
+| [action-visual-entity-target-plan.md](./action-visual-entity-target-plan.md) | Extension domain | 60 | Letting recorded and executed web actions identify the visual state entity they interacted with, via a domain-level WebAutomationActionVisualTarget. | `action-visual-entity-target-plan.md` |
+| [extension-ui-rebuild-plan.md](./extension-ui-rebuild-plan.md) | Extension UI | 254 | Replacing the card-heavy popup/side-panel UI with one coherent application shell, persistent accessible tabs, and predictable scrolling. | none |
 
-`Unclassified` means the document predates the protocol and its header has not
-been reviewed, not that it is inactive. Three documents here need a triage
-pass to set a real status, owner, and pairing. `action-visual-entity-target-plan.md`
-is the priority: a document of the same name exists in Core, and neither
-declares which side owns the contract.
+⚠ marks documents over the 800-line compaction threshold (3 of 7 here).
+Compact them the next time work touches them; do not schedule a bulk rewrite.

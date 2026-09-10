@@ -1,5 +1,16 @@
 # Extension Runtime Capabilities Plan
 
+Status: Active
+Status detail: Extension as a first-class FluxIQ runtime client; last checkpoint 2026-09-04 added settable output-node parameters.
+Created: 2026-08-21
+Last updated: 2026-09-10
+Owner: Extension runtime
+Scope: Building the extension into a first-class FluxIQ runtime client that executes Automation Studio flows and domain-owned web output nodes.
+Paired document: `F:\!FluxIQ\docs\working\runtime-kernel-plan.md`
+Related: none
+
+---
+
 ## Goal
 
 Build the browser extension into a first-class FluxIQ runtime client that can

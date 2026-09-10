@@ -1,5 +1,16 @@
 # Action Visual Entity Target Plan
 
+Status: Complete
+Status detail: The visual-target contract is present in 9 source files, so the work shipped, but this document's checklist was never updated beyond its first item; Core's paired plan records phases 1-6 complete 2026-08-18.
+Created: 2026-08-20
+Last updated: 2026-09-10
+Owner: Extension domain
+Scope: Letting recorded and executed web actions identify the visual state entity they interacted with, via a domain-level WebAutomationActionVisualTarget.
+Paired document: `F:\!FluxIQ\docs\working\action-visual-entity-target-plan.md`
+Related: none
+
+---
+
 ## Goal
 
 Let recorded and executed web actions explicitly identify the visual state entity

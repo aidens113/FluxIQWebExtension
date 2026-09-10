@@ -1,5 +1,16 @@
 # Extension UI Rebuild Plan
 
+Status: Complete
+Status detail: All progress items checked.
+Created: 2026-08-09
+Last updated: 2026-09-10
+Owner: Extension UI
+Scope: Replacing the card-heavy popup/side-panel UI with one coherent application shell, persistent accessible tabs, and predictable scrolling.
+Paired document: none
+Related: none
+
+---
+
 ## Goal
 
 Replace the current card-heavy, unstable popup/side-panel UI with one coherent
