@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import { copyFile, cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,6 +24,16 @@ const placeholderPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAI" +
   "QAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAA" +
   "QAAQAAQAAQAAQAAQAAQAAQAAQAASDU/HAD5WUMR2QAAAABJRU5ErkJggg==";
 
+// Every bundle the extension is assembled from, in build order. Keyed so a
+// caller outside this script can name one entry: the content-script test
+// harness (e2e/content/) bundles "content" through bundleExtensionEntry.
+const extensionEntries = {
+  background: { source: "src/background/index.ts", outfile: "background/index.js", format: "esm" },
+  content: { source: "src/content/index.ts", outfile: "content/index.js", format: "iife" },
+  popup: { source: "src/popup/index.ts", outfile: "popup/index.js", format: "esm" },
+  sidepanel: { source: "src/sidepanel/index.ts", outfile: "sidepanel/index.js", format: "esm" }
+};
+
 async function buildTarget(target, manifestName) {
   const out = path.join(distDir, target);
   await mkdir(out, { recursive: true });
@@ -36,28 +47,39 @@ async function buildTarget(target, manifestName) {
 
 async function bundleExtension() {
   await rm(buildDir, { recursive: true, force: true });
-  const shared = {
+  for (const name of Object.keys(extensionEntries)) await bundleExtensionEntry(name, buildDir);
+}
+
+/**
+ * Bundles one extension entry with the extension's own esbuild settings into
+ * `outputDir`, at the relative path the extension build uses, and returns the
+ * bundle's path. Only the log level may differ from the extension build, so a
+ * caller cannot drift from the bundle the extension ships.
+ *
+ * @param {"background" | "content" | "popup" | "sidepanel"} name
+ * @param {string} outputDir
+ * @param {{ logLevel?: import("esbuild").LogLevel }} [options]
+ * @returns {Promise<string>}
+ */
+export async function bundleExtensionEntry(name, outputDir, options = {}) {
+  if (!Object.hasOwn(extensionEntries, name)) {
+    throw new Error(`Unknown extension entry "${name}"; expected one of ${Object.keys(extensionEntries).join(", ")}.`);
+  }
+  const entry = extensionEntries[name];
+  const outfile = path.join(outputDir, entry.outfile);
+  await build({
     bundle: true,
     platform: "browser",
     target: ["chrome109", "firefox109"],
     sourcemap: true,
     legalComments: "none",
-    logLevel: "info",
-    plugins: [browserSafeWorkspacePlugin()]
-  };
-  for (const entry of [
-    { source: "src/background/index.ts", outfile: "background/index.js", format: "esm" },
-    { source: "src/content/index.ts", outfile: "content/index.js", format: "iife" },
-    { source: "src/popup/index.ts", outfile: "popup/index.js", format: "esm" },
-    { source: "src/sidepanel/index.ts", outfile: "sidepanel/index.js", format: "esm" }
-  ]) {
-    await build({
-      ...shared,
-      entryPoints: [path.join(root, entry.source)],
-      outfile: path.join(buildDir, entry.outfile),
-      format: entry.format
-    });
-  }
+    logLevel: options.logLevel ?? "info",
+    plugins: [browserSafeWorkspacePlugin()],
+    entryPoints: [path.join(root, entry.source)],
+    outfile,
+    format: entry.format
+  });
+  return outfile;
 }
 
 function browserSafeWorkspacePlugin() {
@@ -116,8 +138,24 @@ async function rewriteModuleImports(directory) {
   }
 }
 
-await rm(distDir, { recursive: true, force: true });
-await bundleExtension();
-await buildTarget("chrome", "manifest.chrome.json");
-await buildTarget("firefox", "manifest.firefox.json");
-await buildTarget("e2e-chromium", "manifest.e2e.json");
+async function buildExtension() {
+  await rm(distDir, { recursive: true, force: true });
+  await bundleExtension();
+  await buildTarget("chrome", "manifest.chrome.json");
+  await buildTarget("firefox", "manifest.firefox.json");
+  await buildTarget("e2e-chromium", "manifest.e2e.json");
+}
+
+// Build only when node runs this file. Importing it for bundleExtensionEntry
+// must not delete dist/ or rewrite build/. Paths are compared canonically
+// because Windows may spell the drive letter either way.
+function isEntryPoint() {
+  if (!process.argv[1]) return false;
+  const canonical = (file) => {
+    const resolved = realpathSync(path.resolve(file));
+    return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+  };
+  return canonical(fileURLToPath(import.meta.url)) === canonical(process.argv[1]);
+}
+
+if (isEntryPoint()) await buildExtension();

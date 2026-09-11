@@ -2,14 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { validateWebScenario } from "@fluxiq-web-extension/test-contracts";
 import { getScenarioManifest, listScenarioManifests, listScenarios } from "../registry.js";
-import { basicFormScenario } from "../scenarios/basic-form/scenario.js";
+import { basicFormScenario } from "../scenarios/basic-form/index.js";
 import { createScenarioManifest, defineScenario, scenarioIds } from "../types.js";
 
-test("all twelve registered fixtures expose valid versioned WebScenario manifests", () => {
+test("every registered fixture exposes a valid versioned WebScenario manifest", () => {
   const definitions = listScenarios();
   const manifests = listScenarioManifests();
-  assert.equal(definitions.length, 12);
-  assert.equal(manifests.length, 12);
+  assert.equal(definitions.length, 22);
+  assert.equal(manifests.length, 22);
   assert.deepEqual(definitions.map(({ id }) => id), [...scenarioIds]);
 
   for (const definition of definitions) {

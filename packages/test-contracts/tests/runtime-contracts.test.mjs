@@ -127,7 +127,7 @@ test("evidence policy enforces finite bounded quotas and rejects unknown propert
 });
 
 test("run evaluations enforce failure classification, finite metrics, unique invariants, and verdict consistency", () => {
-  const evaluation = { schemaVersion: "0.1", runId: "run-1", verdict: "failed", failureCategory: "action.targeting", invariants: [{ id: "target-found", passed: false, expected: "found", actual: "missing", evidenceSequences: [1] }], metrics: { latencyMs: 12 } };
+  const evaluation = { schemaVersion: "0.1", runId: "run-1", verdict: "failed", failureCategory: "action.targeting", invariants: [{ id: "target-found", passed: false, expected: "found", actual: "missing", evidenceSequences: [1] }], metrics: { latencyMs: 12 }, scenarioId: "basic-form", workflowId: null, variantId: null, repeatIndex: 0, lane: "flow", flowCreated: true, oracleVerdict: "failed", reportedVerdict: "failed", automationFailureReported: { category: "target_not_found" }, automationFailureExpected: null, harnessActivations: 0, durationMs: 12, actions: [], evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 }, llm: { mode: "disabled", profileId: null, calls: 0 }, harnessRecovery: null, adaptationCost: null, adaptationValidation: null, adaptationPersistence: null, adaptationReuse: null };
   assert.doesNotThrow(() => assertRunEvaluation(evaluation)); assert.equal(parseRunEvaluationJson(JSON.stringify(evaluation)).verdict, "failed");
   assert.throws(() => assertRunEvaluation({ ...evaluation, verdict: "passed", metrics: { broken: Number.NaN } }), ContractValidationError);
   assert.throws(() => assertRunEvaluation({ ...evaluation, invariants: [evaluation.invariants[0], evaluation.invariants[0]] }), ContractValidationError);

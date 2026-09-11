@@ -6,8 +6,10 @@ import os from "node:os";
 import path from "node:path";
 import { assertDemoLlmExplorationBindingScenario, createDemoLlmExplorationRequestBinding, inspectDemoLlmExplorationRequestReadiness, loadDemoLlmExplorationRequestBinding, parseDemoLlmExplorationRequestBinding, resolveDemoLlmExplorationRequest, saveDemoLlmExplorationRequestBinding, validateBoundExplorationRun } from "../demo-llm-exploration-request.js";
 
+const repositoryRoot = path.resolve(import.meta.dirname, "../../../..");
+
 test("defaults to the certified instruction-only fixture and emits content-free readiness", async () => {
-  const request = await resolveDemoLlmExplorationRequest(process.cwd(), {});
+  const request = await resolveDemoLlmExplorationRequest(repositoryRoot, {});
   assert.deepEqual(request, {
     scenarioId: "instruction-only-form",
     scenarioPath: "/scenarios/instruction-only-form/",
@@ -25,7 +27,7 @@ test("defaults to the certified instruction-only fixture and emits content-free 
 });
 
 test("accepts a bounded scenario and simple instruction without placing text in readiness output", async () => {
-  const request = await resolveDemoLlmExplorationRequest(process.cwd(), {
+  const request = await resolveDemoLlmExplorationRequest(repositoryRoot, {
     FLUXIQ_LLM_SCENARIO_ID: "delayed-ui",
     FLUXIQ_LLM_INSTRUCTION: "Open the form and create a reviewable flow.",
   });
@@ -42,16 +44,16 @@ test("accepts a bounded scenario and simple instruction without placing text in 
 });
 
 test("rejects path injection, unknown IDs, unsafe text, and mismatched paths", async () => {
-  await assert.rejects(resolveDemoLlmExplorationRequest(process.cwd(), { FLUXIQ_LLM_SCENARIO_ID: "../sensitive-input" }), /Scenario ID/u);
-  await assert.rejects(resolveDemoLlmExplorationRequest(process.cwd(), { FLUXIQ_LLM_SCENARIO_ID: "UPPER" }), /Scenario ID/u);
-  await assert.rejects(resolveDemoLlmExplorationRequest(process.cwd(), { FLUXIQ_LLM_SCENARIO_ID: "not-registered" }), /Unknown scenario/u);
-  await assert.rejects(resolveDemoLlmExplorationRequest(process.cwd(), { FLUXIQ_LLM_INSTRUCTION: "unsafe\u0000text" }), /safe text/u);
-  await assert.rejects(resolveDemoLlmExplorationRequest(process.cwd(), { FLUXIQ_LLM_INSTRUCTION: "x".repeat(4_001) }), /4,000/u);
+  await assert.rejects(resolveDemoLlmExplorationRequest(repositoryRoot, { FLUXIQ_LLM_SCENARIO_ID: "../sensitive-input" }), /Scenario ID/u);
+  await assert.rejects(resolveDemoLlmExplorationRequest(repositoryRoot, { FLUXIQ_LLM_SCENARIO_ID: "UPPER" }), /Scenario ID/u);
+  await assert.rejects(resolveDemoLlmExplorationRequest(repositoryRoot, { FLUXIQ_LLM_SCENARIO_ID: "not-registered" }), /Unknown scenario/u);
+  await assert.rejects(resolveDemoLlmExplorationRequest(repositoryRoot, { FLUXIQ_LLM_INSTRUCTION: "unsafe\u0000text" }), /safe text/u);
+  await assert.rejects(resolveDemoLlmExplorationRequest(repositoryRoot, { FLUXIQ_LLM_INSTRUCTION: "x".repeat(4_001) }), /4,000/u);
   assert.throws(() => inspectDemoLlmExplorationRequestReadiness({ scenarioId: "basic-form", scenarioPath: "/scenarios/other/", instruction: "Build a flow" }), /bounded scenario ID/u);
 });
 
 test("uses the manifest's noncanonical start path and revalidates it on continuation", async () => {
-  const request = await resolveDemoLlmExplorationRequest(process.cwd(), { FLUXIQ_LLM_SCENARIO_ID: "navigation", FLUXIQ_LLM_INSTRUCTION: "Navigate and build a flow." });
+  const request = await resolveDemoLlmExplorationRequest(repositoryRoot, { FLUXIQ_LLM_SCENARIO_ID: "navigation", FLUXIQ_LLM_INSTRUCTION: "Navigate and build a flow." });
   assert.equal(request.scenarioPath, "/scenarios/navigation/start");
   const binding = createDemoLlmExplorationRequestBinding(request, { projectId: "project.one", flowId: "flow.one", adaptationId: "adaptation.one" });
   assert.doesNotThrow(() => assertDemoLlmExplorationBindingScenario(binding, { id: "navigation", startPath: "/scenarios/navigation/start" } as never));
@@ -60,7 +62,7 @@ test("uses the manifest's noncanonical start path and revalidates it on continua
 
 test("persists only an exact secret-free proposal binding", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-exploration-binding-"));
-  const request = await resolveDemoLlmExplorationRequest(process.cwd(), { FLUXIQ_LLM_SCENARIO_ID: "basic-form", FLUXIQ_LLM_INSTRUCTION: "Complete and submit the basic form." });
+  const request = await resolveDemoLlmExplorationRequest(repositoryRoot, { FLUXIQ_LLM_SCENARIO_ID: "basic-form", FLUXIQ_LLM_INSTRUCTION: "Complete and submit the basic form." });
   const binding = createDemoLlmExplorationRequestBinding(request, { projectId: "project.one", flowId: "flow.one", adaptationId: "adaptation.one" });
   await saveDemoLlmExplorationRequestBinding(root, binding, ["private-secret"]);
   assert.deepEqual(await loadDemoLlmExplorationRequestBinding(root), binding);
@@ -72,12 +74,12 @@ test("persists only an exact secret-free proposal binding", async () => {
 });
 
 test("bound continuation commands are provider-free and separate from legacy checkpoint commands", async () => {
-  const manifest = JSON.parse(await readFile("package.json", "utf8")) as { scripts: Record<string, string> };
+  const manifest = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8")) as { scripts: Record<string, string> };
   assert.equal(manifest.scripts["demo:llm:explore:apply"], "node scripts/apply-demo-llm-exploration-proposal.mjs");
   assert.equal(manifest.scripts["demo:llm:explore:request:apply"], "node scripts/apply-demo-llm-exploration-request.mjs");
   assert.equal(manifest.scripts["demo:llm:explore:request:run"], "node scripts/run-demo-llm-exploration-request-flow.mjs");
   for (const script of ["scripts/apply-demo-llm-exploration-request.mjs", "scripts/run-demo-llm-exploration-request-flow.mjs"]) {
-    const source = await readFile(script, "utf8");
+    const source = await readFile(path.join(repositoryRoot, script), "utf8");
     assert.doesNotMatch(source, /DEEPSEEK_API_KEY|runDemoLlmExplorationCheckpoint|generate-flow-bootstrap-adaptation/u);
     assert.match(source, /providerCallCount: 0/u);
   }

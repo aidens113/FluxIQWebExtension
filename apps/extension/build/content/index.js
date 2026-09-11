@@ -108,6 +108,15 @@
     return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
   }
 
+  // src/shared/sensitive-field.ts
+  var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
+  function isSensitiveFieldSignature(signature) {
+    if (signature.inputType?.toLowerCase() === "password") return true;
+    if (signature.dataSensitive === "true") return true;
+    const tokens = (signature.autocomplete ?? "").toLowerCase().split(/\s+/u).filter(Boolean);
+    return tokens.some((token) => SENSITIVE_AUTOCOMPLETE_TOKENS.has(token) || token.startsWith("cc-"));
+  }
+
   // src/content/element-traits.ts
   function isActionableElement(element) {
     const tagName = element.tagName.toLowerCase();
@@ -147,9 +156,11 @@
     return type === "checkbox" || type === "radio" || type === "file" || type === "date" || type === "datetime-local" || type === "month" || type === "time" || type === "week" || type === "color" || type === "range";
   }
   function isSensitiveFormControl(element) {
-    if (element instanceof HTMLInputElement && element.type.toLowerCase() === "password") return true;
-    const autocomplete = (element.getAttribute("autocomplete") ?? "").toLowerCase();
-    return autocomplete === "current-password" || autocomplete === "new-password" || autocomplete === "one-time-code" || autocomplete.startsWith("cc-") || element.getAttribute("data-sensitive") === "true";
+    return isSensitiveFieldSignature({
+      inputType: element instanceof HTMLInputElement ? element.type : void 0,
+      autocomplete: element.getAttribute("autocomplete") ?? void 0,
+      dataSensitive: element.getAttribute("data-sensitive") ?? void 0
+    });
   }
   function isOrdinaryNonSensitiveFillControl(element) {
     if (isSensitiveFormControl(element)) return false;
@@ -701,67 +712,123 @@
     return payload;
   }
 
-  // src/content/actions.ts
+  // src/content/action-runtime/capture-snapshot-for-response.ts
+  async function captureSnapshotForResponse() {
+    if (!isTopFrame()) await requestFrameGeometry();
+    return captureSnapshot();
+  }
+
+  // src/content/actions/capture-snapshot.ts
+  function captureSnapshotAction(action, deps, startedAt) {
+    return deps.success(action, startedAt, "Snapshot captured.", void 0, deps.captureSnapshot());
+  }
+
+  // src/content/actions/wait-for-selector.ts
+  async function waitForSelectorAction(action, deps, startedAt) {
+    const element = await deps.waitForElement(action.selector, action.timeoutMs);
+    return deps.success(action, startedAt, "Selector found.", deps.describeElement(element), deps.captureSnapshot());
+  }
+
+  // src/content/actions/wait-for-text.ts
+  async function waitForTextAction(action, deps, startedAt) {
+    await deps.waitForText(action.text ?? action.value ?? "", action.timeoutMs);
+    return deps.success(action, startedAt, "Text found.", void 0, deps.captureSnapshot());
+  }
+
+  // src/content/actions/extract.ts
+  function extractAction(action, deps, startedAt) {
+    const element = deps.resolveTarget(action);
+    const extracted = deps.extractElement(element, action.options);
+    return deps.success(action, startedAt, "Value extracted.", deps.describeElement(element), deps.captureSnapshot(), extracted);
+  }
+
+  // src/content/actions/click.ts
+  function clickAction(action, deps, startedAt) {
+    const element = deps.resolveTarget(action);
+    deps.scrollElementIntoView(element);
+    element.click();
+    return deps.success(action, startedAt, "Element clicked.", deps.describeElement(element), deps.captureSnapshot());
+  }
+
+  // src/content/actions/type.ts
+  function typeAction(action, deps, startedAt) {
+    const element = deps.resolveTarget(action);
+    element.focus();
+    deps.setElementValue(element, action.text ?? action.value ?? "");
+    deps.dispatchInputEvents(element);
+    return deps.success(action, startedAt, "Text entered.", deps.describeElement(element), deps.captureSnapshot());
+  }
+
+  // src/content/actions/clear.ts
+  function clearAction(action, deps, startedAt) {
+    const element = deps.resolveTarget(action);
+    element.focus();
+    deps.setElementValue(element, "");
+    deps.dispatchInputEvents(element);
+    return deps.success(action, startedAt, "Field cleared.", deps.describeElement(element), deps.captureSnapshot());
+  }
+
+  // src/content/actions/select.ts
+  function selectAction(action, deps, startedAt) {
+    const element = deps.resolveTarget(action);
+    element.focus();
+    element.value = action.value ?? "";
+    deps.dispatchInputEvents(element);
+    return deps.success(action, startedAt, "Option selected.", deps.describeElement(element), deps.captureSnapshot());
+  }
+
+  // src/content/actions/scroll.ts
+  function scrollAction(action, deps, startedAt) {
+    window.scrollTo({
+      left: Number(action.options?.x ?? action.coordinates?.x ?? window.scrollX),
+      top: Number(action.options?.y ?? action.coordinates?.y ?? window.scrollY),
+      behavior: action.options?.smooth === true ? "smooth" : "instant"
+    });
+    return deps.success(action, startedAt, "Page scrolled.", void 0, deps.captureSnapshot());
+  }
+
+  // src/content/actions/keypress.ts
+  function keypressAction(action, deps, startedAt) {
+    const target = action.selector ? deps.resolveTarget(action) : document.activeElement ?? document.body;
+    const key = action.key ?? action.text ?? "";
+    target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    target.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true, cancelable: true }));
+    return deps.success(action, startedAt, "Key event dispatched.", target instanceof Element ? deps.describeElement(target) : void 0, deps.captureSnapshot());
+  }
+
+  // src/content/actions/execute.ts
   async function executeContentAction(action, deps) {
     const startedAt = Date.now();
     try {
-      if (action.actionType === "web.dom.capture_snapshot" || action.actionType === "dom.capture_snapshot") {
-        return deps.success(action, startedAt, "Snapshot captured.", void 0, deps.captureSnapshot());
+      if (action.actionType === "web.dom.capture_snapshot") {
+        return captureSnapshotAction(action, deps, startedAt);
       }
-      if (action.actionType === "web.dom.wait_for_selector" || action.actionType === "dom.wait_for_selector") {
-        const element = await deps.waitForElement(action.selector, action.timeoutMs);
-        return deps.success(action, startedAt, "Selector found.", deps.describeElement(element), deps.captureSnapshot());
+      if (action.actionType === "web.dom.wait_for_selector") {
+        return await waitForSelectorAction(action, deps, startedAt);
       }
-      if (action.actionType === "web.dom.wait_for_text" || action.actionType === "dom.wait_for_text") {
-        await deps.waitForText(action.text ?? action.value ?? "", action.timeoutMs);
-        return deps.success(action, startedAt, "Text found.", void 0, deps.captureSnapshot());
+      if (action.actionType === "web.dom.wait_for_text") {
+        return await waitForTextAction(action, deps, startedAt);
       }
-      if (action.actionType === "web.dom.extract" || action.actionType === "dom.extract") {
-        const element = deps.resolveTarget(action);
-        const extracted = deps.extractElement(element, action.options);
-        return deps.success(action, startedAt, "Value extracted.", deps.describeElement(element), deps.captureSnapshot(), extracted);
+      if (action.actionType === "web.dom.extract") {
+        return extractAction(action, deps, startedAt);
       }
-      if (action.actionType === "web.dom.click" || action.actionType === "dom.click") {
-        const element = deps.resolveTarget(action);
-        deps.scrollElementIntoView(element);
-        element.click();
-        return deps.success(action, startedAt, "Element clicked.", deps.describeElement(element), deps.captureSnapshot());
+      if (action.actionType === "web.dom.click") {
+        return clickAction(action, deps, startedAt);
       }
-      if (action.actionType === "web.dom.type" || action.actionType === "dom.type") {
-        const element = deps.resolveTarget(action);
-        element.focus();
-        deps.setElementValue(element, action.text ?? action.value ?? "");
-        deps.dispatchInputEvents(element);
-        return deps.success(action, startedAt, "Text entered.", deps.describeElement(element), deps.captureSnapshot());
+      if (action.actionType === "web.dom.type") {
+        return typeAction(action, deps, startedAt);
       }
-      if (action.actionType === "web.dom.clear" || action.actionType === "dom.clear") {
-        const element = deps.resolveTarget(action);
-        element.focus();
-        deps.setElementValue(element, "");
-        deps.dispatchInputEvents(element);
-        return deps.success(action, startedAt, "Field cleared.", deps.describeElement(element), deps.captureSnapshot());
+      if (action.actionType === "web.dom.clear") {
+        return clearAction(action, deps, startedAt);
       }
-      if (action.actionType === "web.dom.select" || action.actionType === "dom.select") {
-        const element = deps.resolveTarget(action);
-        element.focus();
-        element.value = action.value ?? "";
-        deps.dispatchInputEvents(element);
-        return deps.success(action, startedAt, "Option selected.", deps.describeElement(element), deps.captureSnapshot());
+      if (action.actionType === "web.dom.select") {
+        return selectAction(action, deps, startedAt);
       }
-      if (action.actionType === "web.dom.scroll" || action.actionType === "dom.scroll") {
-        window.scrollTo({
-          left: Number(action.options?.x ?? action.coordinates?.x ?? window.scrollX),
-          top: Number(action.options?.y ?? action.coordinates?.y ?? window.scrollY),
-          behavior: action.options?.smooth === true ? "smooth" : "instant"
-        });
-        return deps.success(action, startedAt, "Page scrolled.", void 0, deps.captureSnapshot());
+      if (action.actionType === "web.dom.scroll") {
+        return scrollAction(action, deps, startedAt);
       }
-      if (action.actionType === "web.dom.keypress" || action.actionType === "dom.keypress") {
-        const target = action.selector ? deps.resolveTarget(action) : document.activeElement ?? document.body;
-        const key = action.key ?? action.text ?? "";
-        target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
-        target.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true, cancelable: true }));
-        return deps.success(action, startedAt, "Key event dispatched.", target instanceof Element ? deps.describeElement(target) : void 0, deps.captureSnapshot());
+      if (action.actionType === "web.dom.keypress") {
+        return keypressAction(action, deps, startedAt);
       }
       throw new Error(`Unsupported action type: ${action.actionType}`);
     } catch (error) {
@@ -769,40 +836,7 @@
     }
   }
 
-  // src/content/action-runtime.ts
-  async function captureSnapshotForResponse() {
-    if (!isTopFrame()) await requestFrameGeometry();
-    return captureSnapshot();
-  }
-  async function executeAction(action) {
-    return executeContentAction(action, {
-      captureSnapshot,
-      resolveTarget,
-      describeElement,
-      waitForElement,
-      waitForText,
-      extractElement,
-      scrollElementIntoView,
-      setElementValue,
-      dispatchInputEvents,
-      success,
-      failure: actionFailure
-    });
-  }
-  function actionFailure(action, error, startedAt = Date.now()) {
-    const snapshot = captureSettings.snapshots ? captureSnapshot() : void 0;
-    return {
-      commandId: action.commandId,
-      actionType: action.actionType,
-      status: "failed",
-      message: error instanceof Error ? error.message : "Action failed.",
-      url: location.href,
-      title: document.title,
-      ...snapshot ? { snapshot } : {},
-      startedAt,
-      finishedAt: Date.now()
-    };
-  }
+  // src/content/action-runtime/resolve-target.ts
   function resolveTarget(action) {
     const misses = [];
     if (action.selector) {
@@ -846,35 +880,8 @@
   function centerPoint(rect) {
     return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
   }
-  function success(action, startedAt, message, element, snapshot, extracted) {
-    const result = {
-      commandId: action.commandId,
-      actionType: action.actionType,
-      status: "succeeded",
-      message,
-      url: location.href,
-      title: document.title,
-      startedAt,
-      finishedAt: Date.now()
-    };
-    if (element) result.element = element;
-    if (action.visualTarget) result.visualTarget = action.visualTarget;
-    if (snapshot ?? captureSettings.snapshots) result.snapshot = snapshot ?? captureSnapshot();
-    if (extracted !== void 0) result.extracted = extracted;
-    return result;
-  }
-  function scrollElementIntoView(element) {
-    element.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
-  }
-  function setElementValue(element, value) {
-    const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-    const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
-    descriptor?.set?.call(element, value);
-  }
-  function dispatchInputEvents(element) {
-    element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" }));
-    element.dispatchEvent(new Event("change", { bubbles: true }));
-  }
+
+  // src/content/action-runtime/waits.ts
   function waitForElement(selector, timeoutMs = 1e4) {
     if (!selector) return Promise.reject(new Error("Selector is required."));
     const existing = document.querySelector(selector);
@@ -910,12 +917,82 @@
       waitObserver.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
     });
   }
+
+  // src/content/action-runtime/extract.ts
   function extractElement(element, options) {
     const mode = options?.mode;
     if (mode === "html") return element.innerHTML;
     if (mode === "attribute" && typeof options?.attribute === "string") return element.getAttribute(options.attribute) ?? "";
     if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) return element.value;
     return element.textContent?.replace(/\s+/g, " ").trim() ?? "";
+  }
+
+  // src/content/action-runtime/scroll-element-into-view.ts
+  function scrollElementIntoView(element) {
+    element.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
+  }
+
+  // src/content/action-runtime/set-element-value.ts
+  function setElementValue(element, value) {
+    const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
+    descriptor?.set?.call(element, value);
+  }
+
+  // src/content/action-runtime/input-events.ts
+  function dispatchInputEvents(element) {
+    element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" }));
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  // src/content/action-runtime/results.ts
+  function actionFailure(action, error, startedAt = Date.now()) {
+    const snapshot = captureSettings.snapshots ? captureSnapshot() : void 0;
+    return {
+      commandId: action.commandId,
+      actionType: action.actionType,
+      status: "failed",
+      message: error instanceof Error ? error.message : "Action failed.",
+      url: location.href,
+      title: document.title,
+      ...snapshot ? { snapshot } : {},
+      startedAt,
+      finishedAt: Date.now()
+    };
+  }
+  function success(action, startedAt, message, element, snapshot, extracted) {
+    const result = {
+      commandId: action.commandId,
+      actionType: action.actionType,
+      status: "succeeded",
+      message,
+      url: location.href,
+      title: document.title,
+      startedAt,
+      finishedAt: Date.now()
+    };
+    if (element) result.element = element;
+    if (action.visualTarget) result.visualTarget = action.visualTarget;
+    if (snapshot ?? captureSettings.snapshots) result.snapshot = snapshot ?? captureSnapshot();
+    if (extracted !== void 0) result.extracted = extracted;
+    return result;
+  }
+
+  // src/content/action-runtime/execute-action.ts
+  async function executeAction(action) {
+    return executeContentAction(action, {
+      captureSnapshot,
+      resolveTarget,
+      describeElement,
+      waitForElement,
+      waitForText,
+      extractElement,
+      scrollElementIntoView,
+      setElementValue,
+      dispatchInputEvents,
+      success,
+      failure: actionFailure
+    });
   }
 
   // src/content/message-handler.ts
@@ -987,6 +1064,7 @@
     }, true);
     document.addEventListener("input", (event) => {
       if (!isRecording()) return;
+      if (!event.isTrusted) return;
       rememberEventPathElements(event);
       const target = event.target instanceof Element ? event.target : null;
       if (target && isTextEntryElement(target)) {
@@ -999,6 +1077,7 @@
     }, true);
     document.addEventListener("change", (event) => {
       if (!isRecording()) return;
+      if (!event.isTrusted) return;
       rememberEventPathElements(event);
       const target = event.target instanceof Element ? event.target : null;
       if (target && isTextEntryElement(target)) {

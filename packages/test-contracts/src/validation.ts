@@ -1,4 +1,5 @@
-import { scenarioCapabilities, type WebScenario } from "./scenario.js";
+import { isAutomationStudioAdaptiveFailureClass } from "./failure-category.js";
+import { SCENARIO_EXTRACT_MAX_PAGES, scenarioCapabilities, scenarioStepOperations, type WebScenario } from "./scenario.js";
 
 export type ValidationIssue = { path: string; message: string };
 export type ValidationResult<T> = { valid: true; value: T } | { valid: false; issues: ValidationIssue[] };
@@ -15,7 +16,12 @@ export class ContractValidationError extends Error {
 
 type JsonObject = Record<string, unknown>;
 type Validator = (value: unknown, path: string, issues: ValidationIssue[]) => void;
-const operations = ["click", "type", "select", "scroll", "navigate", "waitForState", "checkpoint"] as const;
+
+const KEBAB_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const TARGET_REQUIRED = ["click", "type", "select", "waitForState", "check", "upload", "extract"];
+const PATH_REQUIRED = ["navigate", "switchTab"];
+const VALUE_REQUIRED = ["type", "select", "scroll", "press", "check", "upload", "waitForDownload"];
+const STRING_VALUE = ["press", "upload", "waitForDownload"];
 
 const isObject = (value: unknown): value is JsonObject => typeof value === "object" && value !== null && !Array.isArray(value);
 const issue = (issues: ValidationIssue[], path: string, message: string) => issues.push({ path, message });
@@ -28,9 +34,18 @@ const requiredString = (value: JsonObject, key: string, path: string, issues: Va
 const optionalString = (value: JsonObject, key: string, path: string, issues: ValidationIssue[]) => {
   if (value[key] !== undefined && (typeof value[key] !== "string" || value[key].length === 0)) issue(issues, `${path}.${key}`, "must be a non-empty string when provided");
 };
+const kebabId = (value: JsonObject, path: string, issues: ValidationIssue[]) => {
+  requiredString(value, "id", path, issues);
+  if (typeof value.id === "string" && !KEBAB_ID.test(value.id)) issue(issues, `${path}.id`, "must be a kebab-case identifier");
+};
 const arrayOf = (value: unknown, path: string, issues: ValidationIssue[], validator: Validator) => {
   if (!Array.isArray(value)) return issue(issues, path, "must be an array");
   value.forEach((entry, index) => validator(entry, `${path}[${index}]`, issues));
+};
+const uniqueIds = (value: unknown, path: string, label: string, issues: ValidationIssue[]) => {
+  if (!Array.isArray(value)) return;
+  const ids = value.filter(isObject).map((entry) => entry.id);
+  if (new Set(ids).size !== ids.length) issue(issues, path, `${label} ids must be unique`);
 };
 
 const validateFact: Validator = (value, path, issues) => {
@@ -42,19 +57,42 @@ const validateFact: Validator = (value, path, issues) => {
   if (!("value" in value)) issue(issues, `${path}.value`, "is required");
 };
 
+const validateExtractShape = (value: JsonObject, path: string, issues: ValidationIssue[]) => {
+  if (!isObject(value.fields) || Object.keys(value.fields).length === 0) issue(issues, `${path}.fields`, "must be a non-empty object for extract");
+  else for (const [name, selector] of Object.entries(value.fields)) {
+    if (typeof selector !== "string" || selector.length === 0) issue(issues, `${path}.fields.${name}`, "must be a non-empty selector string");
+  }
+  if (value.pagination === undefined) return;
+  const paginationPath = `${path}.pagination`;
+  if (!isObject(value.pagination)) return issue(issues, paginationPath, "must be an object");
+  checkKeys(value.pagination, ["next", "maxPages"], paginationPath, issues);
+  requiredString(value.pagination, "next", paginationPath, issues);
+  const maxPages = value.pagination.maxPages;
+  if (!Number.isInteger(maxPages) || Number(maxPages) < 1 || Number(maxPages) > SCENARIO_EXTRACT_MAX_PAGES) {
+    issue(issues, `${paginationPath}.maxPages`, `must be an integer from 1 to ${SCENARIO_EXTRACT_MAX_PAGES}`);
+  }
+};
+
 const validateStep: Validator = (value, path, issues) => {
   if (!isObject(value)) return issue(issues, path, "must be an object");
-  checkKeys(value, ["id", "operation", "target", "value", "path", "timeoutMs"], path, issues);
+  checkKeys(value, ["id", "operation", "target", "value", "path", "timeoutMs", "fields", "pagination"], path, issues);
   requiredString(value, "id", path, issues);
-  if (!operations.includes(value.operation as never)) issue(issues, `${path}.operation`, "has an unsupported value");
+  const operation = String(value.operation);
+  if (!scenarioStepOperations.includes(value.operation as never)) issue(issues, `${path}.operation`, "has an unsupported value");
   optionalString(value, "target", path, issues);
   optionalString(value, "path", path, issues);
   if (typeof value.path === "string" && !value.path.startsWith("/")) issue(issues, `${path}.path`, "must start with /");
   if (value.value !== undefined && !["string", "number", "boolean"].includes(typeof value.value)) issue(issues, `${path}.value`, "must be a string, number, or boolean");
   if (value.timeoutMs !== undefined && (!Number.isInteger(value.timeoutMs) || Number(value.timeoutMs) < 0)) issue(issues, `${path}.timeoutMs`, "must be a non-negative integer");
-  if (["click", "type", "select", "waitForState"].includes(String(value.operation)) && value.target === undefined) issue(issues, `${path}.target`, `is required for ${String(value.operation)}`);
-  if (value.operation === "navigate" && value.path === undefined) issue(issues, `${path}.path`, "is required for navigate");
-  if (["type", "select", "scroll"].includes(String(value.operation)) && value.value === undefined) issue(issues, `${path}.value`, `is required for ${String(value.operation)}`);
+  if (TARGET_REQUIRED.includes(operation) && value.target === undefined) issue(issues, `${path}.target`, `is required for ${operation}`);
+  if (PATH_REQUIRED.includes(operation) && value.path === undefined) issue(issues, `${path}.path`, `is required for ${operation}`);
+  if (VALUE_REQUIRED.includes(operation) && value.value === undefined) issue(issues, `${path}.value`, `is required for ${operation}`);
+  if (operation === "check" && value.value !== undefined && typeof value.value !== "boolean") issue(issues, `${path}.value`, "must be a boolean for check");
+  if (STRING_VALUE.includes(operation) && value.value !== undefined && (typeof value.value !== "string" || value.value.length === 0)) {
+    issue(issues, `${path}.value`, `must be a non-empty string for ${operation}`);
+  }
+  if (operation === "extract") validateExtractShape(value, path, issues);
+  else for (const key of ["fields", "pagination"]) if (value[key] !== undefined) issue(issues, `${path}.${key}`, "is allowed only for extract");
 };
 
 const validateGoal: Validator = (value, path, issues) => {
@@ -65,9 +103,28 @@ const validateGoal: Validator = (value, path, issues) => {
   arrayOf(value.successFacts, `${path}.successFacts`, issues, validateFact);
 };
 
+const validateExtraction: Validator = (value, path, issues) => {
+  if (!isObject(value)) return issue(issues, path, "must be an object");
+  checkKeys(value, ["step", "count", "records"], path, issues);
+  requiredString(value, "step", path, issues);
+  if (value.count === undefined && value.records === undefined) issue(issues, path, "needs count or records");
+  if (value.count !== undefined && (!Number.isInteger(value.count) || Number(value.count) < 0)) issue(issues, `${path}.count`, "must be a non-negative integer");
+  if (value.records !== undefined) arrayOf(value.records, `${path}.records`, issues, (record, recordPath, target) => {
+    if (!isObject(record)) return issue(target, recordPath, "must be an object");
+    for (const [field, text] of Object.entries(record)) if (typeof text !== "string") issue(target, `${recordPath}.${field}`, "must be a string");
+  });
+};
+
+const validateFailure: Validator = (value, path, issues) => {
+  if (!isObject(value)) return issue(issues, path, "must be an object");
+  checkKeys(value, ["category", "code"], path, issues);
+  if (!isAutomationStudioAdaptiveFailureClass(value.category)) issue(issues, `${path}.category`, "is not a known failure category");
+  optionalString(value, "code", path, issues);
+};
+
 const validateExpected: Validator = (value, path, issues) => {
   if (!isObject(value)) return issue(issues, path, "must be an object");
-  checkKeys(value, ["pageFacts", "recordingEvents", "actions", "finalState", "allowedConsoleErrors"], path, issues);
+  checkKeys(value, ["pageFacts", "recordingEvents", "actions", "finalState", "allowedConsoleErrors", "extracted", "failure"], path, issues);
   if (value.pageFacts !== undefined) arrayOf(value.pageFacts, `${path}.pageFacts`, issues, validateFact);
   if (value.finalState !== undefined) arrayOf(value.finalState, `${path}.finalState`, issues, validateFact);
   if (value.recordingEvents !== undefined) arrayOf(value.recordingEvents, `${path}.recordingEvents`, issues, (event, eventPath, target) => {
@@ -85,6 +142,56 @@ const validateExpected: Validator = (value, path, issues) => {
   if (value.allowedConsoleErrors !== undefined) arrayOf(value.allowedConsoleErrors, `${path}.allowedConsoleErrors`, issues, (entry, entryPath, target) => {
     if (typeof entry !== "string") issue(target, entryPath, "must be a string");
   });
+  if (value.extracted !== undefined) arrayOf(value.extracted, `${path}.extracted`, issues, validateExtraction);
+  if (value.failure !== undefined) validateFailure(value.failure, `${path}.failure`, issues);
+};
+
+const validateVariant: Validator = (value, path, issues) => {
+  if (!isObject(value)) return issue(issues, path, "must be an object");
+  checkKeys(value, ["id", "description", "arm", "expected"], path, issues);
+  kebabId(value, path, issues);
+  requiredString(value, "description", path, issues);
+  if (!isObject(value.arm)) issue(issues, `${path}.arm`, "must be an object");
+  else {
+    checkKeys(value.arm, ["operation", "payload"], `${path}.arm`, issues);
+    requiredString(value.arm, "operation", `${path}.arm`, issues);
+  }
+  validateExpected(value.expected, `${path}.expected`, issues);
+};
+
+/** Every `extracted[].step`, in a workflow's expectations and in each of its variants, must name one of its extract steps. */
+const checkExtractionReferences = (workflow: JsonObject, path: string, issues: ValidationIssue[]) => {
+  const script = Array.isArray(workflow.recordingScript) ? workflow.recordingScript.filter(isObject) : [];
+  const extractIds = new Set(script.filter((step) => step.operation === "extract").map((step) => step.id));
+  const check = (expected: unknown, expectedPath: string) => {
+    if (!isObject(expected) || !Array.isArray(expected.extracted)) return;
+    expected.extracted.forEach((entry, index) => {
+      if (isObject(entry) && typeof entry.step === "string" && !extractIds.has(entry.step)) issue(issues, `${expectedPath}.extracted[${index}].step`, "must name an extract step in this workflow's recordingScript");
+    });
+  };
+  check(workflow.expected, `${path}.expected`);
+  if (Array.isArray(workflow.variants)) workflow.variants.forEach((variant, index) => { if (isObject(variant)) check(variant.expected, `${path}.variants[${index}].expected`); });
+};
+
+/** Script, expectations, variants, and extraction references shared by the primary workflow and each `workflows[]` entry. */
+const validateWorkflowBody = (workflow: JsonObject, path: string, issues: ValidationIssue[]) => {
+  arrayOf(workflow.recordingScript, `${path}.recordingScript`, issues, validateStep);
+  uniqueIds(workflow.recordingScript, `${path}.recordingScript`, "step", issues);
+  validateExpected(workflow.expected, `${path}.expected`, issues);
+  if (workflow.variants !== undefined) {
+    arrayOf(workflow.variants, `${path}.variants`, issues, validateVariant);
+    uniqueIds(workflow.variants, `${path}.variants`, "variant", issues);
+  }
+  checkExtractionReferences(workflow, path, issues);
+};
+
+const validateWorkflow: Validator = (value, path, issues) => {
+  if (!isObject(value)) return issue(issues, path, "must be an object");
+  checkKeys(value, ["id", "description", "recordingScript", "expected", "variants"], path, issues);
+  kebabId(value, path, issues);
+  requiredString(value, "description", path, issues);
+  if (Array.isArray(value.recordingScript) && value.recordingScript.length === 0) issue(issues, `${path}.recordingScript`, "must contain at least one step");
+  validateWorkflowBody(value, path, issues);
 };
 
 const validateEvidencePolicy: Validator = (value, path, issues) => {
@@ -99,10 +206,9 @@ const validateEvidencePolicy: Validator = (value, path, issues) => {
 export function validateWebScenario(input: unknown): ValidationResult<WebScenario> {
   const issues: ValidationIssue[] = [];
   if (!isObject(input)) return { valid: false, issues: [{ path: "$", message: "must be an object" }] };
-  checkKeys(input, ["schemaVersion", "id", "title", "tags", "seed", "startPath", "capabilities", "networkPolicy", "recordingScript", "playbackGoal", "expected", "evidencePolicy"], "$", issues);
+  checkKeys(input, ["schemaVersion", "id", "title", "tags", "seed", "startPath", "capabilities", "networkPolicy", "recordingScript", "playbackGoal", "expected", "variants", "workflows", "evidencePolicy"], "$", issues);
   if (input.schemaVersion !== "0.1") issue(issues, "$.schemaVersion", "must equal 0.1");
-  requiredString(input, "id", "$", issues);
-  if (typeof input.id === "string" && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(input.id)) issue(issues, "$.id", "must be a kebab-case identifier");
+  kebabId(input, "$", issues);
   requiredString(input, "title", "$", issues);
   arrayOf(input.tags, "$.tags", issues, (tag, path, target) => { if (typeof tag !== "string" || tag.length === 0) issue(target, path, "must be a non-empty string"); });
   if (Array.isArray(input.tags) && new Set(input.tags).size !== input.tags.length) issue(issues, "$.tags", "must contain unique values");
@@ -112,13 +218,12 @@ export function validateWebScenario(input: unknown): ValidationResult<WebScenari
   arrayOf(input.capabilities, "$.capabilities", issues, (capability, path, target) => { if (!scenarioCapabilities.includes(capability as never)) issue(target, path, "is not a supported capability"); });
   if (Array.isArray(input.capabilities) && new Set(input.capabilities).size !== input.capabilities.length) issue(issues, "$.capabilities", "must contain unique values");
   if (!["loopback-only", "allowlisted-real-site"].includes(String(input.networkPolicy))) issue(issues, "$.networkPolicy", "has an unsupported value");
-  arrayOf(input.recordingScript, "$.recordingScript", issues, validateStep);
+  validateWorkflowBody(input, "$", issues);
   if (Array.isArray(input.recordingScript) && input.recordingScript.length === 0 && input.playbackGoal === undefined) issue(issues, "$.recordingScript", "may be empty only when playbackGoal is defined");
-  if (Array.isArray(input.recordingScript)) {
-    const ids = input.recordingScript.filter(isObject).map((step) => step.id);
-    if (new Set(ids).size !== ids.length) issue(issues, "$.recordingScript", "step ids must be unique");
+  if (input.workflows !== undefined) {
+    arrayOf(input.workflows, "$.workflows", issues, validateWorkflow);
+    uniqueIds(input.workflows, "$.workflows", "workflow", issues);
   }
-  validateExpected(input.expected, "$.expected", issues);
   if (input.playbackGoal !== undefined) validateGoal(input.playbackGoal, "$.playbackGoal", issues);
   if (input.evidencePolicy !== undefined) validateEvidencePolicy(input.evidencePolicy, "$.evidencePolicy", issues);
   return issues.length === 0 ? { valid: true, value: input as WebScenario } : { valid: false, issues };

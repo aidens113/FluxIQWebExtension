@@ -147,6 +147,18 @@ test("loads .env then .env.local with process environment taking precedence", as
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("FLUXIQ_TEST_ENV_FILES=none skips .env and .env.local, and any other value is rejected", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-target-config-"));
+  try {
+    await writeFile(path.join(root, ".env.local"), "FLUXIQ_TEST_TARGET=existing\nFLUXIQ_TEST_BASE_URL=http://127.0.0.1:3000/\n", "utf8");
+    const skipped = await loadTestEnvironment(root, { FLUXIQ_TEST_ENV_FILES: "none", FLUXIQ_TEST_FLOW_ID: "from-process" });
+    assert.equal(skipped.FLUXIQ_TEST_TARGET, undefined);
+    assert.equal(skipped.FLUXIQ_TEST_BASE_URL, undefined);
+    assert.equal(skipped.FLUXIQ_TEST_FLOW_ID, "from-process");
+    await assert.rejects(loadTestEnvironment(root, { FLUXIQ_TEST_ENV_FILES: "local-only" }), /FLUXIQ_TEST_ENV_FILES must be none/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("dotenv parser rejects malformed assignments and supports quoted values", () => {
   assert.deepEqual(parseEnvironmentFile("export A=plain # comment\nB=\"two words\"\nC='literal'\n"), { A: "plain", B: "two words", C: "literal" });
   assert.throws(() => parseEnvironmentFile("not an assignment"), /line 1/);

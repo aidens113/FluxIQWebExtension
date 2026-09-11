@@ -1,7 +1,10 @@
 // Turns one element into the descriptor that travels on the wire, plus the
 // field accessors that build it. The accessors are exported because the
 // snapshot path judges elements by the same fields before deciding to describe
-// them. Sensitive values are filtered here, not by the caller.
+// them. Sensitivity is only partly handled here: `hasValue` and `selectedValue`
+// skip sensitive controls, but `value` is read from every field while
+// input-value capture is on, password fields included. Phase 1.4 of the Week 1
+// plan moves full redaction into this producer.
 
 import { xpathFor } from "./element-finder";
 import { visualDocumentBounds, visualViewportBounds } from "./visual-bounds";

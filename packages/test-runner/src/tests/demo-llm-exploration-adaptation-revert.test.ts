@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
 import { rejectExactPendingExplorationTargetAdaptation, revertExactAppliedExplorationTargetAdaptation } from "../demo-llm-exploration-adaptation-revert.js";
+
+const repositoryRoot = path.resolve(import.meta.dirname, "../../../..");
 
 function fixture() {
   const flow = {
@@ -122,13 +125,14 @@ test("reject fails closed before mutation on bad source-run or nonzero mutation 
 });
 
 test("command is provider-free and does not use prepared or saved Flow state", async () => {
-  const manifest = JSON.parse(await readFile("package.json", "utf8")) as { scripts: Record<string, string> };
+  const manifest = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8")) as { scripts: Record<string, string> };
   assert.equal(manifest.scripts["demo:llm:explore:adapt:revert"], "node scripts/revert-demo-llm-exploration-adaptation.mjs");
-  const launcher = await readFile("scripts/revert-demo-llm-exploration-adaptation.mjs", "utf8");
+  const launcher = await readFile(path.join(repositoryRoot, "scripts/revert-demo-llm-exploration-adaptation.mjs"), "utf8");
   assert.match(launcher, /withoutProviderSecrets/u);
   assert.doesNotMatch(launcher, /DEEPSEEK_API_KEY|error\.message|String\(error\)/u);
-  const workspace = await readFile("packages/test-runner/src/demo-workspace.ts", "utf8");
+  const workspace = await readFile(path.join(repositoryRoot, "packages/test-runner/src/demo-workspace/exploration-adaptation.ts"), "utf8");
   const start = workspace.indexOf("export async function runDemoLlmExplorationAdaptationRevert");
+  assert.notEqual(start, -1);
   const end = workspace.indexOf("export async function", start + 40);
   const body = workspace.slice(start, end);
   assert.match(body, /listProjects\("web-automation"\)/u);
@@ -137,13 +141,14 @@ test("command is provider-free and does not use prepared or saved Flow state", a
 });
 
 test("reject launcher is provider-free and does not use prepared or saved Flow state", async () => {
-  const manifest = JSON.parse(await readFile("package.json", "utf8")) as { scripts: Record<string, string> };
+  const manifest = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8")) as { scripts: Record<string, string> };
   assert.equal(manifest.scripts["demo:llm:explore:adapt:reject"], "node scripts/reject-demo-llm-exploration-adaptation.mjs");
-  const launcher = await readFile("scripts/reject-demo-llm-exploration-adaptation.mjs", "utf8");
+  const launcher = await readFile(path.join(repositoryRoot, "scripts/reject-demo-llm-exploration-adaptation.mjs"), "utf8");
   assert.match(launcher, /withoutProviderSecrets/u);
   assert.doesNotMatch(launcher, /DEEPSEEK_API_KEY|error\.message|String\(error\)/u);
-  const workspace = await readFile("packages/test-runner/src/demo-workspace.ts", "utf8");
+  const workspace = await readFile(path.join(repositoryRoot, "packages/test-runner/src/demo-workspace/exploration-adaptation.ts"), "utf8");
   const start = workspace.indexOf("export async function runDemoLlmExplorationAdaptationReject");
+  assert.notEqual(start, -1);
   const end = workspace.indexOf("export async function", start + 40);
   const body = workspace.slice(start, end);
   assert.match(body, /listProjects\("web-automation"\)/u);

@@ -3,6 +3,8 @@ import { createScenarioManifest, defineScenario } from "../../types.js";
 
 export type NavigationState = { visits: string[]; redirectCount: number };
 
+const navigationPageNames = ["start", "second", "history", "redirected"];
+
 export const navigationScenario = defineScenario<NavigationState>({
   id: "navigation",
   title: "Navigation",
@@ -26,7 +28,7 @@ export const navigationScenario = defineScenario<NavigationState>({
   createState: () => ({ visits: [], redirectCount: 0 }),
   mutate(state, operation, payload) {
     if (operation !== "visit" || !isRecord(payload) || typeof payload.page !== "string") return state;
-    const pageName = ["start", "second", "history", "redirected"].includes(payload.page) ? payload.page : "unknown";
+    const pageName = navigationPageNames.includes(payload.page) ? payload.page : "unknown";
     return {
       visits: [...state.visits, pageName].slice(-50),
       redirectCount: state.redirectCount + (pageName === "redirected" ? 1 : 0),
@@ -35,9 +37,13 @@ export const navigationScenario = defineScenario<NavigationState>({
   render(_state, context) {
     return navigationPage("start", context.runToken);
   },
+  route(_state, request, context) {
+    if (request.subpath === "redirect") return { status: 302, headers: { location: "/scenarios/navigation/redirected" } };
+    return navigationPageNames.includes(request.subpath) ? { status: 200, body: navigationPage(request.subpath, context.runToken) } : undefined;
+  },
 });
 
-export function navigationPage(name: string, runToken: string): string {
+function navigationPage(name: string, runToken: string): string {
   const body = `<main><h1 data-testid="navigation-page">Navigation: ${name}</h1>
     <nav><a data-testid="full-navigation" href="/scenarios/navigation/second">Second page</a>
     <a data-testid="redirect" href="/scenarios/navigation/redirect">Redirect</a>

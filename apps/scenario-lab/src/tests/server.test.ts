@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { request } from "node:http";
 import test from "node:test";
 import { startScenarioLab, type RunningScenarioLab } from "../server.js";
+import { scenarioIds } from "../types.js";
 
 const TOKEN = "fixture-run-token-1234";
 
@@ -18,11 +19,7 @@ test("health and control endpoints require the run token", async () => withLab(a
   assert.equal((await fetch(`${lab.origin}/__control/health`)).status, 401);
   const response = await fetch(`${lab.origin}/__control/health`, authorized());
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { status: "ready", seed: 12, scenarios: [
-    "basic-form", "dynamic-list", "navigation", "long-document", "iframe-checkout",
-    "ambiguous-targets", "delayed-ui", "failure-surfaces", "reconnect", "sensitive-input",
-    "llm-target-drift", "instruction-only-form",
-  ] });
+  assert.deepEqual(await response.json(), { status: "ready", seed: 12, scenarios: [...scenarioIds] });
   const seeded = await fetch(`${lab.origin}/__control/seed`, authorized({
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seed: 88 }),
   }));
@@ -110,9 +107,8 @@ test("navigation exposes full, history, reload, and redirect fixtures", async ()
   assert.deepEqual(state.state.visits, ["second"]);
 }));
 
-test("all twelve scenario pages are directly renderable", async () => withLab(async lab => {
-  const ids = ["basic-form", "dynamic-list", "navigation", "long-document", "iframe-checkout", "ambiguous-targets", "delayed-ui", "failure-surfaces", "reconnect", "sensitive-input", "llm-target-drift", "instruction-only-form"];
-  for (const id of ids) {
+test("every scenario page is directly renderable", async () => withLab(async lab => {
+  for (const id of scenarioIds) {
     const suffix = id === "navigation" ? "start" : "";
     const response = await fetch(`${lab.origin}/scenarios/${id}/${suffix}`);
     assert.equal(response.status, 200, id);

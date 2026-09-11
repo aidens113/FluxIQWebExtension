@@ -7,7 +7,7 @@ import { allocateLoopbackPort } from "../allocation.js";
 import { WebPanelAuthSessionCache } from "../auth-session.js";
 import { ExistingFluxIQControlClient } from "../existing-fluxiq-control.js";
 import { prepareWebWorkspace } from "../coordinator.js";
-import { buildFluxIQEnvironment } from "../environment.js";
+import { buildFluxIQEnvironment, webPanelHostModulePath } from "../environment.js";
 import { RunnerFailure } from "../failure.js";
 import { waitForHttp } from "../http-control.js";
 import { executable, processLogPath, ProcessSupervisor } from "../process-supervisor.js";
@@ -25,7 +25,7 @@ export async function withPersistentDemoCore<T>(config: DemoWorkspaceConfigurati
     ? path.join(coreWorkspaceDirectory, "a", "w")
     : path.join(coreWorkspaceDirectory, "apps", "web");
   const logsDirectory = path.join(config.workspaceDirectory, "logs");
-  const hostModulePath = path.join(config.repositoryRoot, "domain", "dist", "host", "web-panel-host.cjs");
+  const hostModulePath = webPanelHostModulePath(config.repositoryRoot);
   const webPort = explicitPort(config.origin, "FLUXIQ_DEMO_BASE_URL");
   const gatewayPort = explicitPort(config.gatewayUrl, "FLUXIQ_DEMO_GATEWAY_URL");
   if (webPort === gatewayPort) throw new Error("FLUXIQ_DEMO_BASE_URL and FLUXIQ_DEMO_GATEWAY_URL must use different ports");

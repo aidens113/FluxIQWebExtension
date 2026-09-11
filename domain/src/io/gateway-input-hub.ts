@@ -25,9 +25,14 @@ export class GatewayInputHub {
 
   private accept(event: ClientGatewayEvent): void {
     if (event.type !== "client.recording_event" && event.type !== "client.state_update") return;
-    const messagePayload = event.message.payload as JsonObject;
+    const messagePayload = jsonObject(event.message.payload);
+    if (!messagePayload) return;
     const metadata = jsonObject(messagePayload.metadata);
-    if (stringValue(metadata?.domainId) !== WEB_AUTOMATION_DOMAIN_ID) return;
+    // A recording event names its domain at the top level, which is where
+    // Core's gateway bridge reads it; runtime confirmations and state updates
+    // carry it in metadata. The top-level field wins, as it does in Core.
+    const domainId = stringValue(messagePayload.domainId) ?? stringValue(metadata?.domainId);
+    if (domainId !== WEB_AUTOMATION_DOMAIN_ID) return;
     const inputId = stringValue(metadata?.inputId);
     if (!inputId) return;
     const payload = event.type === "client.recording_event"

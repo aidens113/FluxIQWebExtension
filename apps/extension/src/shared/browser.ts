@@ -24,10 +24,6 @@ export function browserDescriptor(): BrowserDescriptor {
   };
 }
 
-export function isProbablySecureGateway(url: string): boolean {
-  return url.startsWith("wss://") || url.startsWith("ws://127.0.0.1") || url.startsWith("ws://localhost");
-}
-
 export function runtimeSendMessage<TResponse = unknown>(message: unknown): Promise<TResponse> {
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(message, (response) => {

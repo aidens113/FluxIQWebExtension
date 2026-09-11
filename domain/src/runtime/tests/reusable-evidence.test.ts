@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { produceWebReusableEvidence, WEB_REUSABLE_EVIDENCE_MAX_PROJECTION_BYTES } from "../index.ts";
-import type { WebLlmPageEvidence } from "../index.ts";
+import { produceWebReusableEvidence, WEB_REUSABLE_EVIDENCE_MAX_PROJECTION_BYTES } from "..";
+import type { WebLlmPageEvidence } from "..";
 
 const evidence = (overrides: Partial<WebLlmPageEvidence> = {}): WebLlmPageEvidence => ({
   schemaVersion: "web-llm-evidence.v1",

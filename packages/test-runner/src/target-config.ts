@@ -159,16 +159,31 @@ export function resolveCloneCacheScopeConfiguration(env: NodeJS.ProcessEnv): Clo
   return { origin: auth.origin, username: auth.username, projectId: required(env.FLUXIQ_TEST_PROJECT_ID, "FLUXIQ_TEST_PROJECT_ID"), flowId: required(env.FLUXIQ_TEST_FLOW_ID, "FLUXIQ_TEST_FLOW_ID") };
 }
 
+/**
+ * The repository env files a run reads, in precedence order. A process
+ * variable can override a file value but cannot remove it, so
+ * `FLUXIQ_TEST_ENV_FILES=none` skips both files for a run that must not inherit
+ * a machine's saved configuration — for example an isolated run on a machine
+ * whose `.env.local` configures an existing installation. The files themselves
+ * are never edited.
+ */
+function environmentFileNames(processEnvironment: NodeJS.ProcessEnv): readonly string[] {
+  const choice = processEnvironment.FLUXIQ_TEST_ENV_FILES;
+  if (choice === undefined) return [".env", ".env.local"];
+  if (choice === "none") return [];
+  throw new Error("FLUXIQ_TEST_ENV_FILES must be none when set");
+}
+
 export async function loadTestEnvironment(repositoryRoot: string, processEnvironment: NodeJS.ProcessEnv): Promise<NodeJS.ProcessEnv> {
   const fromFile: NodeJS.ProcessEnv = {};
-  for (const name of [".env", ".env.local"]) Object.assign(fromFile, await readEnvironmentFile(path.join(repositoryRoot, name)));
+  for (const name of environmentFileNames(processEnvironment)) Object.assign(fromFile, await readEnvironmentFile(path.join(repositoryRoot, name)));
   return { ...fromFile, ...processEnvironment };
 }
 
 export async function loadAllowlistedTestEnvironment(repositoryRoot: string, processEnvironment: NodeJS.ProcessEnv, allowedNames: readonly string[]): Promise<NodeJS.ProcessEnv> {
   const allowed = new Set(allowedNames);
   const fromFile: NodeJS.ProcessEnv = {};
-  for (const name of [".env", ".env.local"]) Object.assign(fromFile, await readAllowlistedEnvironmentFile(path.join(repositoryRoot, name), allowed));
+  for (const name of environmentFileNames(processEnvironment)) Object.assign(fromFile, await readAllowlistedEnvironmentFile(path.join(repositoryRoot, name), allowed));
   for (const name of allowed) if (processEnvironment[name] !== undefined) fromFile[name] = processEnvironment[name];
   return fromFile;
 }

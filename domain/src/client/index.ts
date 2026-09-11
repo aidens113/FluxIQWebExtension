@@ -5,7 +5,6 @@ export * from "../actions/capabilities";
 export * from "../io/input-model";
 export * from "../output-nodes";
 export * from "../runtime/capabilities";
-export * from "../runtime/commands";
 export * from "../recording/state";
 export * from "../recording/web-state";
 export * from "./capabilities";

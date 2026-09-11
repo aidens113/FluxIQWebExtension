@@ -2,6 +2,7 @@
 // workspace, and replaying the recorded Flow.
 import { RunnerFailure } from "../failure.js";
 import { deepSeekSecretFromDriverEnvironment, ensureDeepSeekKeyViaUi, type OpaqueSecretKeyReference } from "../secret-keys-ui.js";
+import { selectOptionByKeyboard } from "../trusted-input/index.js";
 import { connectExtension, extensionStatus, pollStatus, withDemoBrowser } from "./browser-session.js";
 import type { DemoWorkspaceConfiguration } from "./configuration.js";
 import { assertConnectedSession, recordingIds, waitForNewRecording, waitForRoutedRunDetail } from "./control-waits.js";
@@ -48,7 +49,7 @@ export async function recordDemoWorkspace(config: DemoWorkspaceConfiguration): P
         });
         recording = true;
         await evidence.step("scenario", "fill-name", "Type the demo name", () => scenarioPage.getByTestId("name").fill("Ada"));
-        await evidence.step("scenario", "select-plan", "Select the team plan", () => scenarioPage.getByTestId("plan").selectOption("team"));
+        await evidence.step("scenario", "select-plan", "Select the team plan", () => selectOptionByKeyboard(scenarioPage.getByTestId("plan"), "team"));
         await evidence.step("scenario", "fill-notes", "Type the demo notes", () => scenarioPage.getByTestId("notes").fill("Recorded by the reusable FluxIQ demo workspace"));
         await evidence.step("scenario", "submit-form", "Submit the demo form", () => scenarioPage.getByTestId("submit").click());
         await scenarioPage.getByTestId("result").filter({ hasText: "Submitted" }).waitFor();

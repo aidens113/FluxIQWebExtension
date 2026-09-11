@@ -88,22 +88,19 @@ var WEB_AUTOMATION_ACTION_TYPES = [
   "web.dom.extract",
   "web.dom.capture_snapshot"
 ];
-var LEGACY_BROWSER_ACTION_TO_WEB_AUTOMATION = {
-  "browser.navigate": "web.browser.navigate",
-  "dom.click": "web.dom.click",
-  "dom.type": "web.dom.type",
-  "dom.clear": "web.dom.clear",
-  "dom.select": "web.dom.select",
-  "dom.scroll": "web.dom.scroll",
-  "dom.keypress": "web.dom.keypress",
-  "dom.wait_for_selector": "web.dom.wait_for_selector",
-  "dom.wait_for_text": "web.dom.wait_for_text",
-  "dom.extract": "web.dom.extract",
-  "dom.capture_snapshot": "web.dom.capture_snapshot"
+var WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = {
+  "web.browser.navigate": "browser.navigate",
+  "web.dom.click": "dom.click",
+  "web.dom.type": "dom.type",
+  "web.dom.clear": "dom.clear",
+  "web.dom.select": "dom.select",
+  "web.dom.scroll": "dom.scroll",
+  "web.dom.keypress": "dom.keypress",
+  "web.dom.wait_for_selector": "dom.wait_for_selector",
+  "web.dom.wait_for_text": "dom.wait_for_text",
+  "web.dom.extract": "dom.extract",
+  "web.dom.capture_snapshot": "dom.capture_snapshot"
 };
-var WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = Object.fromEntries(
-  Object.entries(LEGACY_BROWSER_ACTION_TO_WEB_AUTOMATION).map(([legacy, canonical]) => [canonical, legacy])
-);
 
 // ../../domain/src/actions/schemas.ts
 var elementFingerprintSchema = {
@@ -197,6 +194,165 @@ var webAutomationActionDefinitions = [
   }
 ];
 
+// ../../domain/src/actions/safety.ts
+var WEB_AUTOMATION_ACTION_SAFETY = {
+  "web.browser.navigate": "review",
+  "web.dom.click": "review",
+  "web.dom.type": "review",
+  "web.dom.clear": "review",
+  "web.dom.select": "review",
+  "web.dom.scroll": "review",
+  "web.dom.keypress": "review",
+  "web.dom.wait_for_selector": "safe",
+  "web.dom.wait_for_text": "safe",
+  "web.dom.extract": "safe",
+  "web.dom.capture_snapshot": "safe"
+};
+
+// ../../domain/src/output-nodes/definitions.ts
+var controlInput = { id: "in", label: "In", valueType: "signal", role: "control" };
+var outputPorts = [
+  { id: "success", label: "Success", valueType: "any", role: "success" },
+  { id: "failed", label: "Failed", valueType: "any", role: "failure" }
+];
+function webAutomationOutputNodeId(outputId) {
+  return `web.output.${outputId.replace(/^web\./, "").replace(/\./g, "-")}`;
+}
+var webAutomationOutputNodeDefinitions = webAutomationActionDefinitions.map(
+  (definition) => createWebAutomationOutputNodeDefinition(definition)
+);
+function createWebAutomationOutputNodeDefinition(definition) {
+  const safeOutput = WEB_AUTOMATION_ACTION_SAFETY[definition.actionType] === "safe";
+  const requiredParameters = new Set(
+    Array.isArray(definition.parameterSchema.required) ? definition.parameterSchema.required.filter((value) => typeof value === "string") : []
+  );
+  return {
+    schemaVersion: "0.1",
+    id: webAutomationOutputNodeId(definition.actionType),
+    version: "1.0.0",
+    label: definition.label,
+    description: definition.description,
+    category: "web",
+    source: {
+      kind: "importer",
+      domainId: WEB_AUTOMATION_DOMAIN_ID,
+      packageId: "@fluxiq-web-extension/domain",
+      implementationKey: definition.actionType
+    },
+    availability: { kind: "domain", domainId: WEB_AUTOMATION_DOMAIN_ID },
+    capabilities: { executable: true, stateAware: true, recordable: true },
+    requiredRuntimeCapabilities: ["web.actions"],
+    safety: {
+      privileged: !safeOutput,
+      requiresOperatorApproval: !safeOutput,
+      requiredPermissions: ["web-automation.action"]
+    },
+    outputAction: { fixedOutputId: definition.actionType },
+    inputs: [controlInput],
+    outputs: outputPorts,
+    parameters: parametersForOutput(definition.actionType).map((parameter) => ({
+      ...parameter,
+      ...requiredParameters.has(parameter.id) ? { required: true } : {},
+      allowStateBinding: true
+    })),
+    icon: iconForOutput(definition.actionType),
+    tags: ["web-automation", "output"],
+    metadata: {
+      domainId: WEB_AUTOMATION_DOMAIN_ID,
+      outputId: definition.actionType,
+      parameterSchema: definition.parameterSchema
+    }
+  };
+}
+function parametersForOutput(outputId) {
+  const selectorParameters = [
+    { id: "target", label: "Adapted Target", valueType: "object", ui: { control: "value" } },
+    { id: "selector", label: "Selector", valueType: "string", ui: { control: "text", placeholder: "CSS selector" } },
+    { id: "element", label: "Element", valueType: "object", ui: { control: "value" } },
+    { id: "visualTarget", label: "Visual Target", valueType: "object", ui: { control: "value" } },
+    { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 1e4 }
+  ];
+  if (outputId === "web.browser.navigate") return [{ id: "url", label: "URL", valueType: "string", required: true, ui: { control: "text", placeholder: "https://example.com" } }];
+  if (outputId === "web.dom.type") return [...selectorParameters, { id: "text", label: "Text", valueType: "string", defaultValue: "", ui: { control: "textarea" } }];
+  if (outputId === "web.dom.select") return [...selectorParameters, { id: "value", label: "Value", valueType: "string", defaultValue: "", ui: { control: "text" } }];
+  if (outputId === "web.dom.keypress") return [...selectorParameters, { id: "key", label: "Key", valueType: "string", defaultValue: "", ui: { control: "text" } }];
+  if (outputId === "web.dom.scroll") return [
+    { id: "x", label: "X", valueType: "number", defaultValue: 0 },
+    { id: "y", label: "Y", valueType: "number", defaultValue: 0 },
+    { id: "smooth", label: "Smooth", valueType: "boolean", defaultValue: false }
+  ];
+  if (outputId === "web.dom.wait_for_text") return [
+    { id: "text", label: "Text", valueType: "string", required: true, ui: { control: "text" } },
+    { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 1e4 }
+  ];
+  if (outputId === "web.dom.capture_snapshot") return [];
+  return selectorParameters;
+}
+function iconForOutput(outputId) {
+  if (outputId === "web.browser.navigate") return "navigation";
+  if (outputId === "web.dom.click") return "mouse-pointer-click";
+  if (outputId === "web.dom.type") return "text-cursor-input";
+  if (outputId === "web.dom.extract") return "scan-search";
+  if (outputId === "web.dom.capture_snapshot") return "camera";
+  return "square-dot";
+}
+
+// ../../domain/src/output-nodes/targets.ts
+function elementFingerprint(value) {
+  const element = objectValue(value);
+  if (!element) return void 0;
+  return compact({
+    selector: stringValue(element.selector),
+    xpath: stringValue(element.xpath),
+    id: stringValue(element.id),
+    classNames: Array.isArray(element.classNames) ? element.classNames.filter((item) => typeof item === "string") : void 0,
+    visibleText: stringValue(element.visibleText),
+    tagName: stringValue(element.tagName),
+    text: stringValue(element.text),
+    value: stringValue(element.value),
+    role: stringValue(element.role),
+    name: stringValue(element.name),
+    href: stringValue(element.href),
+    inputType: stringValue(element.inputType),
+    attributes: objectValue(element.attributes)
+  });
+}
+function compact(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== void 0));
+}
+function objectValue(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+function stringValue(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function numberValue(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+
+// ../../domain/src/output-nodes/payloads.ts
+function webAutomationOutputPayload(outputId, payload) {
+  const element = elementFingerprint(payload.element);
+  const selector = stringValue(element?.selector);
+  const visualTarget = objectValue(payload.visualTarget);
+  const target = compact({ ...element ? { element } : {}, ...visualTarget ? { visualTarget } : {} });
+  const hasTarget = Object.keys(target).length > 0;
+  if (outputId === "web.browser.navigate") return compact({ url: stringValue(payload.url) });
+  if (outputId === "web.dom.click" || outputId === "web.dom.clear") return compact({ selector, ...hasTarget ? target : {} });
+  if (outputId === "web.dom.type") return compact({ selector, text: stringValue(payload.inputValue) ?? "", ...hasTarget ? target : {} });
+  if (outputId === "web.dom.select") return compact({ selector, value: stringValue(payload.inputValue) ?? "", ...hasTarget ? target : {} });
+  if (outputId === "web.dom.keypress") return compact({ selector, key: stringValue(payload.key) ?? "", ...hasTarget ? target : {} });
+  if (outputId === "web.dom.scroll") {
+    const scroll = objectValue(payload.scroll);
+    return compact({ x: numberValue(scroll?.x), y: numberValue(scroll?.y) });
+  }
+  if (outputId === "web.dom.wait_for_selector") return compact({ selector, ...hasTarget ? target : {} });
+  if (outputId === "web.dom.wait_for_text") return compact({ text: stringValue(payload.inputValue) ?? stringValue(payload.title) });
+  if (outputId === "web.dom.extract") return compact({ selector, ...hasTarget ? target : {} });
+  if (outputId === "web.dom.capture_snapshot") return {};
+  return {};
+}
+
 // ../../domain/src/io/input-model.ts
 var WEB_AUTOMATION_INPUT_IDS = {
   browserState: "web.browser.state",
@@ -209,16 +365,34 @@ var WEB_AUTOMATION_INPUT_IDS = {
   keyPressed: "web.user.key_pressed",
   pageScrolled: "web.user.page_scrolled"
 };
+function webAutomationEventTypeForClientKind(kind) {
+  if (kind === "content.ready") return WEB_AUTOMATION_EVENTS.clientReady;
+  if (kind === "browser.tab") return WEB_AUTOMATION_EVENTS.tabStateChanged;
+  if (kind === "browser.navigation") return WEB_AUTOMATION_EVENTS.pageNavigated;
+  if (kind === "dom.click") return WEB_AUTOMATION_EVENTS.elementClicked;
+  if (kind === "dom.input") return WEB_AUTOMATION_EVENTS.elementInputChanged;
+  if (kind === "dom.change") return WEB_AUTOMATION_EVENTS.elementChanged;
+  if (kind === "dom.submit") return WEB_AUTOMATION_EVENTS.formSubmitted;
+  if (kind === "dom.focus") return WEB_AUTOMATION_EVENTS.elementFocused;
+  if (kind === "dom.blur") return WEB_AUTOMATION_EVENTS.elementBlurred;
+  if (kind === "dom.keydown") return WEB_AUTOMATION_EVENTS.keyboardPressed;
+  if (kind === "dom.wheel") return WEB_AUTOMATION_EVENTS.mouseWheel;
+  if (kind === "dom.scroll") return WEB_AUTOMATION_EVENTS.scrollChanged;
+  if (kind === "dom.mutation") return WEB_AUTOMATION_EVENTS.domMutated;
+  if (kind === "dom.snapshot") return WEB_AUTOMATION_EVENTS.snapshotCaptured;
+  if (kind === "action.result") return WEB_AUTOMATION_EVENTS.actionExecuted;
+  return WEB_AUTOMATION_EVENTS.clientError;
+}
+function webAutomationRecordedAction(eventType, payload, metadata = {}) {
+  const inputId = recordedActionInputId(eventType, payload, metadata);
+  if (inputId === void 0) return void 0;
+  const outputId = OUTPUT_FOR_ACTION_INPUT.get(inputId);
+  if (outputId === void 0) return void 0;
+  const parameters = webAutomationOutputPayload(outputId, payload);
+  return hasExecutableParameters(outputId, parameters) ? { inputId, outputId, parameters } : void 0;
+}
 function webAutomationInputIdForRecordedEvent(payload) {
-  if (payload.kind === "browser.navigation") return payload.metadata?.transition === "typed" ? WEB_AUTOMATION_INPUT_IDS.navigationRequested : void 0;
-  if (payload.kind === "dom.click") return WEB_AUTOMATION_INPUT_IDS.elementClicked;
-  if (payload.kind === "dom.keydown") return WEB_AUTOMATION_INPUT_IDS.keyPressed;
-  if (payload.kind === "dom.wheel") return WEB_AUTOMATION_INPUT_IDS.pageScrolled;
-  if (payload.kind === "dom.input" || payload.kind === "dom.change") {
-    if (payload.element?.tagName === "select") return WEB_AUTOMATION_INPUT_IDS.optionSelected;
-    return payload.inputValue === "" ? WEB_AUTOMATION_INPUT_IDS.fieldCleared : WEB_AUTOMATION_INPUT_IDS.textEntered;
-  }
-  return void 0;
+  return webAutomationRecordedAction(webAutomationEventTypeForClientKind(payload.kind), payload, payload.metadata)?.inputId;
 }
 var stateInputDefinitions = [
   { id: WEB_AUTOMATION_INPUT_IDS.browserState, title: "Browser state", description: "Current browser, tab, and compact DOM state available for policy conditions.", role: "state" },
@@ -233,6 +407,45 @@ var actionInputDefinitions = [
   [WEB_AUTOMATION_INPUT_IDS.keyPressed, "Key pressed", "web.dom.keypress"],
   [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"]
 ];
+var OUTPUT_FOR_ACTION_INPUT = new Map(
+  actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
+);
+var RECORDING_START_REASON = "recording_start";
+function recordedActionInputId(eventType, payload, metadata) {
+  switch (eventType) {
+    case WEB_AUTOMATION_EVENTS.pageNavigated:
+      return metadata.transition === "typed" && metadata.reason !== RECORDING_START_REASON ? WEB_AUTOMATION_INPUT_IDS.navigationRequested : void 0;
+    case WEB_AUTOMATION_EVENTS.elementClicked:
+      return WEB_AUTOMATION_INPUT_IDS.elementClicked;
+    case WEB_AUTOMATION_EVENTS.keyboardPressed:
+      return WEB_AUTOMATION_INPUT_IDS.keyPressed;
+    // The recorder emits `dom.scroll` for wheel and window scrolling alike;
+    // `dom.wheel` is never emitted, so its event type maps to no input.
+    case WEB_AUTOMATION_EVENTS.scrollChanged:
+      return WEB_AUTOMATION_INPUT_IDS.pageScrolled;
+    // Checkbox and radio changes still map to text entry; Phase 1.2 adds web.dom.check.
+    case WEB_AUTOMATION_EVENTS.elementInputChanged:
+    case WEB_AUTOMATION_EVENTS.elementChanged:
+      if (objectValue2(payload.element)?.tagName === "select") return WEB_AUTOMATION_INPUT_IDS.optionSelected;
+      return payload.inputValue === "" ? WEB_AUTOMATION_INPUT_IDS.fieldCleared : WEB_AUTOMATION_INPUT_IDS.textEntered;
+    default:
+      return void 0;
+  }
+}
+function hasExecutableParameters(outputId, parameters) {
+  const schema = webAutomationActionDefinitions.find((definition) => definition.actionType === outputId)?.parameterSchema;
+  const required = Array.isArray(schema?.required) ? schema.required.filter((key) => typeof key === "string") : [];
+  if (!required.every((key) => isNonEmptyString(parameters[key]))) return false;
+  if (outputId === "web.dom.keypress") return isNonEmptyString(parameters.key);
+  if (outputId === "web.dom.scroll") return typeof parameters.x === "number" || typeof parameters.y === "number";
+  return true;
+}
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.length > 0;
+}
+function objectValue2(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
 
 // ../../domain/src/runtime/capabilities.ts
 var webAutomationRuntimeCapabilities = [
@@ -303,97 +516,6 @@ var webAutomationGatewayCapabilities = [
 
 // ../../domain/src/actions/capabilities.ts
 var webAutomationClientCapabilities = webAutomationGatewayCapabilities;
-
-// ../../domain/src/output-nodes/definitions.ts
-var controlInput = { id: "in", label: "In", valueType: "signal", role: "control" };
-var outputPorts = [
-  { id: "success", label: "Success", valueType: "any", role: "success" },
-  { id: "failed", label: "Failed", valueType: "any", role: "failure" }
-];
-function webAutomationOutputNodeId(outputId) {
-  return `web.output.${outputId.replace(/^web\./, "").replace(/\./g, "-")}`;
-}
-var webAutomationOutputNodeDefinitions = webAutomationActionDefinitions.map(
-  (definition) => createWebAutomationOutputNodeDefinition(definition)
-);
-function createWebAutomationOutputNodeDefinition(definition) {
-  const safeOutput = isSafeOutput(definition.actionType);
-  const requiredParameters = new Set(
-    Array.isArray(definition.parameterSchema.required) ? definition.parameterSchema.required.filter((value) => typeof value === "string") : []
-  );
-  return {
-    schemaVersion: "0.1",
-    id: webAutomationOutputNodeId(definition.actionType),
-    version: "1.0.0",
-    label: definition.label,
-    description: definition.description,
-    category: "web",
-    source: {
-      kind: "importer",
-      domainId: WEB_AUTOMATION_DOMAIN_ID,
-      packageId: "@fluxiq-web-extension/domain",
-      implementationKey: definition.actionType
-    },
-    availability: { kind: "domain", domainId: WEB_AUTOMATION_DOMAIN_ID },
-    capabilities: { executable: true, stateAware: true, recordable: true },
-    requiredRuntimeCapabilities: ["web.actions"],
-    safety: {
-      privileged: !safeOutput,
-      requiresOperatorApproval: !safeOutput,
-      requiredPermissions: ["web-automation.action"]
-    },
-    outputAction: { fixedOutputId: definition.actionType },
-    inputs: [controlInput],
-    outputs: outputPorts,
-    parameters: parametersForOutput(definition.actionType).map((parameter) => ({
-      ...parameter,
-      ...requiredParameters.has(parameter.id) ? { required: true } : {},
-      allowStateBinding: true
-    })),
-    icon: iconForOutput(definition.actionType),
-    tags: ["web-automation", "output"],
-    metadata: {
-      domainId: WEB_AUTOMATION_DOMAIN_ID,
-      outputId: definition.actionType,
-      parameterSchema: definition.parameterSchema
-    }
-  };
-}
-function parametersForOutput(outputId) {
-  const selectorParameters = [
-    { id: "target", label: "Adapted Target", valueType: "object", ui: { control: "value" } },
-    { id: "selector", label: "Selector", valueType: "string", ui: { control: "text", placeholder: "CSS selector" } },
-    { id: "element", label: "Element", valueType: "object", ui: { control: "value" } },
-    { id: "visualTarget", label: "Visual Target", valueType: "object", ui: { control: "value" } },
-    { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 1e4 }
-  ];
-  if (outputId === "web.browser.navigate") return [{ id: "url", label: "URL", valueType: "string", required: true, ui: { control: "text", placeholder: "https://example.com" } }];
-  if (outputId === "web.dom.type") return [...selectorParameters, { id: "text", label: "Text", valueType: "string", defaultValue: "", ui: { control: "textarea" } }];
-  if (outputId === "web.dom.select") return [...selectorParameters, { id: "value", label: "Value", valueType: "string", defaultValue: "", ui: { control: "text" } }];
-  if (outputId === "web.dom.keypress") return [...selectorParameters, { id: "key", label: "Key", valueType: "string", defaultValue: "", ui: { control: "text" } }];
-  if (outputId === "web.dom.scroll") return [
-    { id: "x", label: "X", valueType: "number", defaultValue: 0 },
-    { id: "y", label: "Y", valueType: "number", defaultValue: 0 },
-    { id: "smooth", label: "Smooth", valueType: "boolean", defaultValue: false }
-  ];
-  if (outputId === "web.dom.wait_for_text") return [
-    { id: "text", label: "Text", valueType: "string", required: true, ui: { control: "text" } },
-    { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 1e4 }
-  ];
-  if (outputId === "web.dom.capture_snapshot") return [];
-  return selectorParameters;
-}
-function isSafeOutput(outputId) {
-  return outputId === "web.dom.extract" || outputId === "web.dom.capture_snapshot" || outputId.startsWith("web.dom.wait");
-}
-function iconForOutput(outputId) {
-  if (outputId === "web.browser.navigate") return "navigation";
-  if (outputId === "web.dom.click") return "mouse-pointer-click";
-  if (outputId === "web.dom.type") return "text-cursor-input";
-  if (outputId === "web.dom.extract") return "scan-search";
-  if (outputId === "web.dom.capture_snapshot") return "camera";
-  return "square-dot";
-}
 
 // ../../domain/src/recording/state.ts
 var WEB_AUTOMATION_STATE_NAMESPACE = "web";
@@ -875,24 +997,6 @@ function compactJsonObject(value) {
 }
 
 // ../../domain/src/client/gateway-mapping.ts
-function webAutomationEventTypeForClientKind(kind) {
-  if (kind === "content.ready") return WEB_AUTOMATION_EVENTS.clientReady;
-  if (kind === "browser.tab") return WEB_AUTOMATION_EVENTS.tabStateChanged;
-  if (kind === "browser.navigation") return WEB_AUTOMATION_EVENTS.pageNavigated;
-  if (kind === "dom.click") return WEB_AUTOMATION_EVENTS.elementClicked;
-  if (kind === "dom.input") return WEB_AUTOMATION_EVENTS.elementInputChanged;
-  if (kind === "dom.change") return WEB_AUTOMATION_EVENTS.elementChanged;
-  if (kind === "dom.submit") return WEB_AUTOMATION_EVENTS.formSubmitted;
-  if (kind === "dom.focus") return WEB_AUTOMATION_EVENTS.elementFocused;
-  if (kind === "dom.blur") return WEB_AUTOMATION_EVENTS.elementBlurred;
-  if (kind === "dom.keydown") return WEB_AUTOMATION_EVENTS.keyboardPressed;
-  if (kind === "dom.wheel") return WEB_AUTOMATION_EVENTS.mouseWheel;
-  if (kind === "dom.scroll") return WEB_AUTOMATION_EVENTS.scrollChanged;
-  if (kind === "dom.mutation") return WEB_AUTOMATION_EVENTS.domMutated;
-  if (kind === "dom.snapshot") return WEB_AUTOMATION_EVENTS.snapshotCaptured;
-  if (kind === "action.result") return WEB_AUTOMATION_EVENTS.actionExecuted;
-  return WEB_AUTOMATION_EVENTS.clientError;
-}
 function createWebAutomationRecordingEvent(payload, input = {}) {
   const eventType = webAutomationEventTypeForClientKind(payload.kind);
   const target = payload.element;
@@ -939,12 +1043,15 @@ function createWebAutomationStateUpdate(input) {
   };
 }
 function webAutomationActionFromGatewayCommand(command) {
+  const normalized = normalizeWebAutomationActionType(command.actionType);
+  if (!normalized.ok) {
+    return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: normalized.message, failure: normalized.failure };
+  }
   const parameters = command.parameters ?? {};
   const target = command.target ?? {};
-  const actionType = normalizeWebAutomationActionType(command.actionType);
   return compactJsonObject2({
     commandId: command.commandId,
-    actionType,
+    actionType: normalized.actionType,
     selector: stringValue2(target.selector) ?? stringValue2(parameters.selector),
     text: stringValue2(parameters.text),
     value: stringValue2(parameters.value),
@@ -973,22 +1080,22 @@ function webAutomationActionResultPayload(result) {
   });
 }
 function normalizeWebAutomationActionType(actionType) {
-  if (actionType.startsWith("web.")) return actionType;
-  const legacy = {
-    "browser.navigate": "web.browser.navigate",
-    "dom.click": "web.dom.click",
-    "dom.type": "web.dom.type",
-    "dom.clear": "web.dom.clear",
-    "dom.select": "web.dom.select",
-    "dom.scroll": "web.dom.scroll",
-    "dom.keypress": "web.dom.keypress",
-    "dom.wait_for_selector": "web.dom.wait_for_selector",
-    "dom.wait_for_text": "web.dom.wait_for_text",
-    "dom.extract": "web.dom.extract",
-    "dom.capture_snapshot": "web.dom.capture_snapshot"
-  };
-  return legacy[actionType] ?? "web.dom.extract";
+  if (CANONICAL_ACTION_TYPES.has(actionType)) return { ok: true, actionType };
+  const canonical = LEGACY_ACTION_TYPE_ALIASES.get(actionType);
+  if (canonical !== void 0) return { ok: true, actionType: canonical };
+  const requested = typeof actionType === "string" && actionType.length > 0 ? actionType : "(missing)";
+  return { ok: false, failure: UNSUPPORTED_ACTION_TYPE_FAILURE, message: `Unsupported web automation action type: ${requested}` };
 }
+var UNSUPPORTED_ACTION_TYPE_FAILURE = Object.freeze({
+  category: "blocked_by_capability_or_policy",
+  code: "web.action.unsupported_type",
+  retryable: false,
+  stage: "dispatch"
+});
+var CANONICAL_ACTION_TYPES = new Set(WEB_AUTOMATION_ACTION_TYPES);
+var LEGACY_ACTION_TYPE_ALIASES = new Map(
+  Object.entries(WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER).map(([canonical, legacy]) => [legacy, canonical])
+);
 function stringValue2(value) {
   return typeof value === "string" ? value : void 0;
 }
@@ -1343,7 +1450,22 @@ var ExtensionRuntimeCommandRouter = class {
 
 // src/runtime/result-mapping.ts
 function browserActionFromGatewayCommand(command) {
-  return webAutomationActionFromGatewayCommand(command);
+  const mapped = webAutomationActionFromGatewayCommand(command);
+  return isWebAutomationActionRejection(mapped) ? mapped : mapped;
+}
+function isWebAutomationActionRejection(value) {
+  return "status" in value && value.status === "rejected" && "failure" in value;
+}
+function gatewayActionResultFromRejection(rejection) {
+  return {
+    commandId: rejection.commandId,
+    status: "failed",
+    completedAt: Date.now(),
+    message: rejection.message,
+    error: rejection.message,
+    failure: rejection.failure,
+    metadata: { requestedActionType: rejection.actionType }
+  };
 }
 function gatewayActionResultFromBrowserResult(result) {
   const visualTarget = result.visualTarget ?? (result.element ? webAutomationActionVisualTargetFromElement(result.element) : void 0);
@@ -1372,7 +1494,7 @@ function compactObject2(value) {
 function stringValue3(value) {
   return typeof value === "string" ? value : void 0;
 }
-function objectValue2(value) {
+function objectValue3(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 function arrayValue(value) {
@@ -1565,14 +1687,14 @@ async function fetchProjectIdFromCoreSnapshot(credentials, identity, reason) {
     body: payload ?? bodyText
   });
   if (!response.ok) return void 0;
-  const root = objectValue2(payload);
+  const root = objectValue3(payload);
   if (root?.ok !== true) return void 0;
-  const body = objectValue2(root.payload);
+  const body = objectValue3(root.payload);
   const sessions = arrayValue(body?.sessions);
-  const matchingSession = sessions.map(objectValue2).find((session) => session && stringValue3(session.sessionId) === identity.sessionId) ?? sessions.map(objectValue2).find((session) => session && stringValue3(session.clientId) === identity.clientId);
+  const matchingSession = sessions.map(objectValue3).find((session) => session && stringValue3(session.sessionId) === identity.sessionId) ?? sessions.map(objectValue3).find((session) => session && stringValue3(session.clientId) === identity.clientId);
   const sessionProjectId = stringValue3(matchingSession?.projectId);
-  const webRuntime = objectValue2(body?.webRuntime);
-  const automationStudio = objectValue2(webRuntime?.automationStudio);
+  const webRuntime = objectValue3(body?.webRuntime);
+  const automationStudio = objectValue3(webRuntime?.automationStudio);
   const activeProjectId = stringValue3(automationStudio?.activeProjectId);
   return sessionProjectId ?? activeProjectId;
 }
@@ -1594,8 +1716,8 @@ async function uploadStateAsset(credentials, projectId, sha256, bytes, mediaType
     status: response.status,
     body: payload ?? bodyText
   });
-  const responseObject = objectValue2(payload);
-  const responsePayload = objectValue2(responseObject?.payload);
+  const responseObject = objectValue3(payload);
+  const responsePayload = objectValue3(responseObject?.payload);
   const contentRef = stringValue3(responsePayload?.contentRef);
   if (!response.ok || responseObject?.ok !== true || !contentRef) {
     throw new Error(`FluxIQ state asset upload failed (${response.status}).`);
@@ -1705,8 +1827,8 @@ function isDomSnapshotPayload(value) {
   return typeof snapshot.url === "string" && typeof snapshot.title === "string" && Boolean(snapshot.viewport) && typeof snapshot.viewport?.width === "number" && typeof snapshot.viewport.height === "number" && typeof snapshot.viewport.scrollX === "number" && typeof snapshot.viewport.scrollY === "number" && Array.isArray(snapshot.interactiveElements);
 }
 function hasSnapshotFrameViewportOffset(snapshot) {
-  const frame = objectValue2(snapshot.frame);
-  const viewportOffset = objectValue2(frame?.viewportOffset);
+  const frame = objectValue3(snapshot.frame);
+  const viewportOffset = objectValue3(frame?.viewportOffset);
   return typeof viewportOffset?.x === "number" && typeof viewportOffset.y === "number" && typeof viewportOffset.width === "number" && typeof viewportOffset.height === "number";
 }
 async function captureSingleFrameSnapshot(transport, tabId, frameId) {
@@ -2199,7 +2321,16 @@ var GatewaySession = class {
     client.on("start_recording", ({ message }) => handlers.onCommand({ ...message.payload, command: "start_recording" }, message.id));
     client.on("stop_recording", ({ message }) => handlers.onCommand({ ...message.payload, command: "stop_recording" }, message.id));
     client.on("capture_snapshot", ({ message }) => handlers.onCommand({ ...message.payload, command: "capture_snapshot" }, message.id));
-    client.on("execute_action", ({ message }) => handlers.onCommand({ command: "execute_action", action: browserActionFromGatewayCommand(message.payload) }, message.id));
+    client.on("execute_action", ({ message }) => {
+      const action = browserActionFromGatewayCommand(message.payload);
+      if (isWebAutomationActionRejection(action)) {
+        void this.send("client.action_result", gatewayActionResultFromRejection(action)).catch((error) => {
+          this.deps.reportError(error instanceof Error ? error.message : "Could not report a rejected action.");
+        });
+        return;
+      }
+      handlers.onCommand({ command: "execute_action", action }, message.id);
+    });
   }
   startHeartbeat() {
     this.stopHeartbeat();
@@ -2473,7 +2604,7 @@ var RecordingEvidenceReporter = class {
       latestEvidence: recordingEvidencePayload(payload)
     });
     if (this.deps.recordingState() !== "recording") return;
-    const stateTimestampMs = numberValue3(objectValue2(state)?.timestamp) ?? payload.eventTimestampMs;
+    const stateTimestampMs = numberValue3(objectValue3(state)?.timestamp) ?? payload.eventTimestampMs;
     if (hasDomSnapshot) {
       const snapshotId = stateSnapshotIdFromPayload(payload);
       await this.deps.send("client.snapshot", compactObject2({
@@ -2619,7 +2750,7 @@ var RecordingEvidenceReporter = class {
         frameId: input.frameId
       });
       this.deps.onActivity("snapshot", "State screenshot missing", missingScreenReason, "warning");
-      const metadata = objectValue2(state.metadata);
+      const metadata = objectValue3(state.metadata);
       return {
         ...state,
         metadata: compactObject2({
@@ -2658,6 +2789,15 @@ var RecordingEvidenceReporter = class {
     this.deps.onActivity("snapshot", "Screenshot skipped", message, "warning");
   }
 };
+
+// src/shared/sensitive-field.ts
+var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
+function isSensitiveFieldSignature(signature) {
+  if (signature.inputType?.toLowerCase() === "password") return true;
+  if (signature.dataSensitive === "true") return true;
+  const tokens = (signature.autocomplete ?? "").toLowerCase().split(/\s+/u).filter(Boolean);
+  return tokens.some((token) => SENSITIVE_AUTOCOMPLETE_TOKENS.has(token) || token.startsWith("cc-"));
+}
 
 // src/background/connection/runtime-status.ts
 var RuntimeStatusTracker = class {
@@ -2723,12 +2863,24 @@ function runtimeResultTarget(result) {
 function runtimeConfirmationForActionResult(result) {
   if (result.actionType === "web.browser.navigate") return { kind: "browser.navigation", inputId: WEB_AUTOMATION_INPUT_IDS.navigationRequested };
   if (result.actionType === "web.dom.click") return { kind: "dom.click", inputId: WEB_AUTOMATION_INPUT_IDS.elementClicked };
-  if (result.actionType === "web.dom.type") return { kind: "dom.input", inputId: WEB_AUTOMATION_INPUT_IDS.textEntered };
+  if (result.actionType === "web.dom.type") return { kind: "dom.input", inputId: WEB_AUTOMATION_INPUT_IDS.textEntered, ...confirmedValue(result) };
   if (result.actionType === "web.dom.clear") return { kind: "dom.input", inputId: WEB_AUTOMATION_INPUT_IDS.fieldCleared, inputValue: "" };
-  if (result.actionType === "web.dom.select") return { kind: "dom.change", inputId: WEB_AUTOMATION_INPUT_IDS.optionSelected };
+  if (result.actionType === "web.dom.select") return { kind: "dom.change", inputId: WEB_AUTOMATION_INPUT_IDS.optionSelected, ...confirmedValue(result) };
   if (result.actionType === "web.dom.keypress") return { kind: "dom.keydown", inputId: WEB_AUTOMATION_INPUT_IDS.keyPressed };
   if (result.actionType === "web.dom.scroll") return { kind: "dom.scroll", inputId: WEB_AUTOMATION_INPUT_IDS.pageScrolled };
   return void 0;
+}
+function confirmedValue(result) {
+  const element = result.element;
+  if (!element || element.value === void 0 || isSensitiveElementDescriptor(element)) return {};
+  return { inputValue: element.value };
+}
+function isSensitiveElementDescriptor(element) {
+  return isSensitiveFieldSignature({
+    inputType: element.inputType,
+    autocomplete: element.attributes?.autocomplete,
+    dataSensitive: element.attributes?.["data-sensitive"]
+  });
 }
 function runtimeActionTarget(action) {
   return action.url ?? action.selector ?? action.text ?? action.value ?? action.key ?? action.visualTarget?.selector;
@@ -3022,7 +3174,7 @@ var FluxIQConnection = class {
   async handleRecordingEvent(payload, tabId, frameId) {
     if (this.recordingState !== "recording") return;
     if (payload.kind === "dom.click") {
-      const sourceEvent = stringValue3(objectValue2(payload.metadata)?.sourceEvent);
+      const sourceEvent = stringValue3(objectValue3(payload.metadata)?.sourceEvent);
       const signature = clickEventSignature(payload, tabId, frameId);
       if (sourceEvent === "pointerdown" && signature) {
         if (this.clicks.isSuppressed(signature)) return;

@@ -15,7 +15,7 @@ import { compactObject } from "./compact-object";
 import { captureSnapshot } from "./dom-snapshot";
 import { describeElement, readElementValue } from "./describe-element";
 import { shouldAttachStateSnapshot } from "./snapshots";
-import type { RecordingEventPayload } from "./types";
+import type { RecordingEventKind, RecordingEventPayload } from "./types";
 
 let recording = false;
 let sequence = 0;
@@ -52,7 +52,7 @@ export function sendReady(): void {
   void chrome.runtime.sendMessage({ type: CONTENT_READY, payload });
 }
 
-export function emit(kind: string, details: Partial<RecordingEventPayload>): void {
+export function emit(kind: RecordingEventKind, details: Partial<RecordingEventPayload>): void {
   if (!isActiveContentInstance()) return;
   if (!recording && kind !== "content.ready") return;
   const payload = basePayload(kind, details);
@@ -105,7 +105,7 @@ export function emitInputEvent(element: Element | null): void {
   }));
 }
 
-function basePayload(kind: string, details: Partial<RecordingEventPayload>): RecordingEventPayload {
+function basePayload(kind: RecordingEventKind, details: Partial<RecordingEventPayload>): RecordingEventPayload {
   const payload: RecordingEventPayload = {
     kind,
     sequence: ++sequence,

@@ -7,6 +7,13 @@ export type DeterministicNetworkPolicy = {
   scenarioOrigins: readonly string[];
   fluxiqOrigins: readonly string[];
   gatewayOrigins?: readonly string[];
+  /**
+   * Proves an unlisted loopback page origin belongs to the Scenario Lab, which
+   * serves cross-origin frames from a second port it picks at startup. A proven
+   * origin joins the allowlist for the rest of the run; an unproven one is a
+   * violation like any other destination.
+   */
+  verifyScenarioOrigin?: (origin: string) => Promise<boolean>;
 };
 
 export type NetworkViolation = {
@@ -33,9 +40,20 @@ export async function installDeterministicNetworkGuard(
 ): Promise<DeterministicNetworkGuard> {
   const allowed = compilePolicy(policy);
   const violations: NetworkViolation[] = [];
+  const proofs = new Map<string, Promise<boolean>>();
+  const isAllowedRequest = async (url: string): Promise<boolean> => {
+    if (isAllowedWithCompiledPolicy(url, allowed)) return true;
+    const origin = loopbackPageOrigin(url);
+    if (!origin || !policy.verifyScenarioOrigin) return false;
+    let proof = proofs.get(origin);
+    if (!proof) { proof = policy.verifyScenarioOrigin(origin).catch(() => false); proofs.set(origin, proof); }
+    if (!await proof) return false;
+    allowed.pageOrigins.add(origin);
+    return true;
+  };
   await context.route("**/*", async (route: Route) => {
     const request = route.request();
-    if (isAllowedWithCompiledPolicy(request.url(), allowed)) await route.continue();
+    if (await isAllowedRequest(request.url())) await route.continue();
     else {
       violations.push({ kind: "request", destination: sanitizedDestination(request.url()), resourceType: request.resourceType() });
       await route.abort("blockedbyclient");
@@ -67,7 +85,14 @@ export function scenarioNetworkOrigins(origin: string): string[] {
   return result;
 }
 
-type CompiledPolicy = { pageOrigins: ReadonlySet<string>; gatewayOrigins: ReadonlySet<string> };
+type CompiledPolicy = { pageOrigins: Set<string>; gatewayOrigins: ReadonlySet<string> };
+
+function loopbackPageOrigin(input: string): string | undefined {
+  try {
+    const url = new URL(input);
+    return (url.protocol === "http:" || url.protocol === "https:") && (url.hostname === "127.0.0.1" || url.hostname === "localhost") ? url.origin : undefined;
+  } catch { return undefined; }
+}
 
 function compilePolicy(policy: DeterministicNetworkPolicy): CompiledPolicy {
   return {

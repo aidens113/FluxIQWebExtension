@@ -1,7 +1,7 @@
 import { access, cp, mkdir, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { allocatePersistentRun, allocateRun, type RunAllocation } from "./allocation.js";
-import { buildFluxIQEnvironment, buildScenarioEnvironment } from "./environment.js";
+import { buildFluxIQEnvironment, buildScenarioEnvironment, webPanelHostModulePath } from "./environment.js";
 import { RunnerFailure } from "./failure.js";
 import { waitForHttp, type FluxIQCredentials } from "./http-control.js";
 import { ExistingFluxIQControlClient } from "./existing-fluxiq-control.js";
@@ -73,7 +73,7 @@ export async function startTopology(options: TopologyOptions, supervisor = new P
         credentials = await bootstrapIdentity(allocation.fluxiqRoot);
       }
     }
-    const hostModulePath = path.join(repositoryRoot, "domain", "dist", "host", "web-panel-host.cjs");
+    const hostModulePath = webPanelHostModulePath(repositoryRoot);
     const scenarioEntrypoint = path.join(repositoryRoot, "apps", "scenario-lab", "dist", "server.js");
     const webPackage = path.join(fluxiqRepositoryRoot, "apps", "web", "package.json");
     await requirePaths([scenarioEntrypoint, webPackage], options.prepareHost === false ? [hostModulePath] : []);

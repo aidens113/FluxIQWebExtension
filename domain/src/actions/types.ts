@@ -74,20 +74,17 @@ export const WEB_AUTOMATION_ACTION_TYPES: WebAutomationActionType[] = [
   "web.dom.capture_snapshot"
 ];
 
-export const LEGACY_BROWSER_ACTION_TO_WEB_AUTOMATION = {
-  "browser.navigate": "web.browser.navigate",
-  "dom.click": "web.dom.click",
-  "dom.type": "web.dom.type",
-  "dom.clear": "web.dom.clear",
-  "dom.select": "web.dom.select",
-  "dom.scroll": "web.dom.scroll",
-  "dom.keypress": "web.dom.keypress",
-  "dom.wait_for_selector": "web.dom.wait_for_selector",
-  "dom.wait_for_text": "web.dom.wait_for_text",
-  "dom.extract": "web.dom.extract",
-  "dom.capture_snapshot": "web.dom.capture_snapshot"
-} as const;
-
-export const WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = Object.fromEntries(
-  Object.entries(LEGACY_BROWSER_ACTION_TO_WEB_AUTOMATION).map(([legacy, canonical]) => [canonical, legacy])
-) as Record<WebAutomationActionType, keyof typeof LEGACY_BROWSER_ACTION_TO_WEB_AUTOMATION>;
+/** Each canonical output id mapped to the legacy dotted browser action alias it replaced. */
+export const WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = {
+  "web.browser.navigate": "browser.navigate",
+  "web.dom.click": "dom.click",
+  "web.dom.type": "dom.type",
+  "web.dom.clear": "dom.clear",
+  "web.dom.select": "dom.select",
+  "web.dom.scroll": "dom.scroll",
+  "web.dom.keypress": "dom.keypress",
+  "web.dom.wait_for_selector": "dom.wait_for_selector",
+  "web.dom.wait_for_text": "dom.wait_for_text",
+  "web.dom.extract": "dom.extract",
+  "web.dom.capture_snapshot": "dom.capture_snapshot"
+} as const satisfies Record<WebAutomationActionType, string>;

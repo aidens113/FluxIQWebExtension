@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bindWebAutomationLlmEvidenceRuntime, createWebAutomationLlmEvidenceRuntime, sanitizeWebLlmSnapshot, validateWebRuntimeTargetOverrideEvidence, WEB_LLM_INSPECT_TOOL_ID, WEB_LLM_NAVIGATE_TOOL_ID, WEB_LLM_REVEAL_TOOL_ID, type WebAutomationLlmEvidenceRuntime, type WebLlmEvidenceGateway } from "../index.ts";
+import type { JsonObject } from "fluxiq/core";
+import { bindWebAutomationLlmEvidenceRuntime, createWebAutomationLlmEvidenceRuntime, sanitizeWebLlmSnapshot, validateWebRuntimeTargetOverrideEvidence, WEB_LLM_INSPECT_TOOL_ID, WEB_LLM_NAVIGATE_TOOL_ID, WEB_LLM_REVEAL_TOOL_ID, type WebAutomationLlmEvidenceRuntime, type WebLlmEvidenceGateway } from "..";
 
 test("sanitizes extension snapshots without values, sensitive controls, or URL secrets", () => {
   const evidence = sanitizeWebLlmSnapshot({
@@ -158,7 +159,7 @@ test("binds from the production host seam and selects the sole trusted web clien
       automationStudioClientGateway: { executeAction: async (sessionId: string) => ({ status: "succeeded", payload: { snapshot: snapshot(`https://example.test/${sessionId}`) } }) },
     },
   };
-  assert.equal(bindWebAutomationLlmEvidenceRuntime(fluxiq as never), true);
+  bindWebAutomationLlmEvidenceRuntime(fluxiq as never);
   assert.deepEqual(bound?.tools.map(tool => tool.toolId), [WEB_LLM_INSPECT_TOOL_ID, WEB_LLM_NAVIGATE_TOOL_ID, WEB_LLM_REVEAL_TOOL_ID]);
   assert.deepEqual(bound?.tools.map(tool => ({ toolId: tool.toolId, effect: tool.effect, repeatPolicy: tool.repeatPolicy, initialObservation: tool.initialObservation })), [
     { toolId: WEB_LLM_INSPECT_TOOL_ID, effect: "observe", repeatPolicy: "after_mutation", initialObservation: { input: {} } },
@@ -180,7 +181,8 @@ test("binds from the production host seam and selects the sole trusted web clien
   assert.equal(result.effectApplied, false);
   assert.equal(result.resultCode, "web.inspect.succeeded");
   assert.deepEqual((result.evidence as any).location, "https://example.test/right");
-  assert.equal(bindWebAutomationLlmEvidenceRuntime({ programs: { automationStudio: {} } } as never), false);
+  // No silent fallback: a host without the binding seam is a wiring failure, so binding throws.
+  assert.throws(() => bindWebAutomationLlmEvidenceRuntime({ programs: { automationStudio: {} } } as never), TypeError);
 });
 
 test("honors Core's requested per-result evidence ceiling", () => {
@@ -371,4 +373,4 @@ test("keeps gateway action, disconnect, and malformed snapshot failures fatal", 
   await assert.rejects(malformed.executeTool({ ...base, callId: "call.malformed", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} }), /snapshot/u);
 });
 
-function snapshot(url: string): unknown { return { url, title: "Fixture", viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 }, interactiveElements: [{ tagName: "button", selector: "#go", visibleText: "Go" }] }; }
+function snapshot(url: string): JsonObject { return { url, title: "Fixture", viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 }, interactiveElements: [{ tagName: "button", selector: "#go", visibleText: "Go" }] }; }

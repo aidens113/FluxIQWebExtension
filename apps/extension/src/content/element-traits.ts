@@ -3,6 +3,8 @@
 // enough that it must never leave the page. Every predicate here answers from
 // the element alone, so nothing in this file depends on recorder state.
 
+import { isSensitiveFieldSignature } from "../shared/sensitive-field";
+
 /** True when the element is one a user can click, type into, or toggle. */
 export function isActionableElement(element: Element): boolean {
   const tagName = element.tagName.toLowerCase();
@@ -105,11 +107,13 @@ export function shouldRecordChangeEvent(element: Element): boolean {
     type === "range";
 }
 
-/** Passwords, one-time codes, card fields and anything marked `data-sensitive`. */
+/** Passwords, one-time codes, card fields and anything marked `data-sensitive`, by the shared rule. */
 export function isSensitiveFormControl(element: Element): boolean {
-  if (element instanceof HTMLInputElement && element.type.toLowerCase() === "password") return true;
-  const autocomplete = (element.getAttribute("autocomplete") ?? "").toLowerCase();
-  return autocomplete === "current-password" || autocomplete === "new-password" || autocomplete === "one-time-code" || autocomplete.startsWith("cc-") || element.getAttribute("data-sensitive") === "true";
+  return isSensitiveFieldSignature({
+    inputType: element instanceof HTMLInputElement ? element.type : undefined,
+    autocomplete: element.getAttribute("autocomplete") ?? undefined,
+    dataSensitive: element.getAttribute("data-sensitive") ?? undefined
+  });
 }
 
 /** A plain fill control whose emptiness may be reported without reporting its value. */

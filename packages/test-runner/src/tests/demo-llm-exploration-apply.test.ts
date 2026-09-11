@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
 import { findPendingEvidenceGuidedCreationForFlow, locateBoundAppliedEvidenceGuidedCreation, locateBoundPendingEvidenceGuidedCreation, locateExactPendingEvidenceGuidedCreation } from "../demo-llm-exploration-apply.js";
+
+const repositoryRoot = path.resolve(import.meta.dirname, "../../../..");
 
 function fixture(overrides: Record<string, unknown> = {}) {
   const summary = { flowId: "flow.checkpoint", name: "Website Exploration Checkpoint abc123", sourceMode: "visual", nodeCount: 0, edgeCount: 0, updatedAt: 1 };
@@ -91,9 +94,9 @@ test("bound continuations select only the persisted Flow and Adaptation identiti
 });
 
 test("package command is provider-free and delegates only to the apply checkpoint", async () => {
-  const manifest = JSON.parse(await readFile("package.json", "utf8")) as { scripts?: Record<string, string> };
+  const manifest = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8")) as { scripts?: Record<string, string> };
   assert.equal(manifest.scripts?.["demo:llm:explore:apply"], "node scripts/apply-demo-llm-exploration-proposal.mjs");
-  const launcher = await readFile("scripts/apply-demo-llm-exploration-proposal.mjs", "utf8");
+  const launcher = await readFile(path.join(repositoryRoot, "scripts/apply-demo-llm-exploration-proposal.mjs"), "utf8");
   assert.match(launcher, /runDemoLlmExplorationApplyCheckpoint/u);
   assert.doesNotMatch(launcher, /runDemoLlmExplorationCheckpoint|generate-flow-bootstrap-adaptation|runDemoFlow|replay|DEEPSEEK_API_KEY/u);
 });

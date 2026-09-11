@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
 import { locateExactAppliedEvidenceGuidedCreation, requireExplorationBaselineDriftExplanation } from "../demo-llm-exploration-adaptation-readiness.js";
+
+const repositoryRoot = path.resolve(import.meta.dirname, "../../../..");
 
 function fixture() {
   const flow = { flowId: "flow.checkpoint", name: "Website Exploration Checkpoint abc123", sourceMode: "visual", nodeCount: 0, edgeCount: 0, updatedAt: 1 };
@@ -120,11 +123,11 @@ test("baseline accepts drift only for one authoritative reverted validated targe
 });
 
 test("exposes separate provider-free baseline and exact readiness commands", async () => {
-  const manifest = JSON.parse(await readFile("package.json", "utf8")) as { scripts?: Record<string, string> };
+  const manifest = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8")) as { scripts?: Record<string, string> };
   assert.equal(manifest.scripts?.["demo:llm:explore:baseline"], "node scripts/run-demo-llm-exploration-baseline.mjs");
   assert.equal(manifest.scripts?.["demo:llm:explore:adapt:readiness"], "node scripts/inspect-demo-llm-exploration-adaptation-readiness.mjs");
-  const baseline = await readFile("scripts/run-demo-llm-exploration-baseline.mjs", "utf8");
-  const readiness = await readFile("scripts/inspect-demo-llm-exploration-adaptation-readiness.mjs", "utf8");
+  const baseline = await readFile(path.join(repositoryRoot, "scripts/run-demo-llm-exploration-baseline.mjs"), "utf8");
+  const readiness = await readFile(path.join(repositoryRoot, "scripts/inspect-demo-llm-exploration-adaptation-readiness.mjs"), "utf8");
   assert.match(baseline, /withoutProviderSecrets[\s\S]*runDemoLlmExplorationBaselineProbe/u);
   assert.match(baseline, /exploration_baseline\\\.\[a-z_\][\s\S]*reasonCode/u);
   assert.match(readiness, /withoutProviderSecrets[\s\S]*runDemoLlmExplorationAdaptationReadinessProbe/u);
@@ -132,8 +135,9 @@ test("exposes separate provider-free baseline and exact readiness commands", asy
 });
 
 test("single-run baseline is exact-scoped and rejects assisted or mutating execution", async () => {
-  const source = await readFile("packages/test-runner/src/demo-workspace.ts", "utf8");
+  const source = await readFile(path.join(repositoryRoot, "packages/test-runner/src/demo-workspace/exploration-checkpoints.ts"), "utf8");
   const start = source.indexOf("export async function runDemoLlmExplorationBaselineProbe");
+  assert.notEqual(start, -1);
   const end = source.indexOf("export async function", start + 30);
   const body = source.slice(start, end);
   assert.match(body, /locateExactAppliedEvidenceGuidedCreation/u);

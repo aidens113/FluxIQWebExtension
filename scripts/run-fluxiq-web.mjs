@@ -1,11 +1,14 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const fluxiqRoot = path.resolve(repoRoot, "..", "!FluxIQ");
-const webPanelHostModule = path.join(repoRoot, "domain", "dist", "host", "web-panel-host.cjs");
+const domainRoot = path.join(repoRoot, "domain");
+// domain/package.json declares the built host once, as "fluxiqHostModule".
+const { fluxiqHostModule } = JSON.parse(readFileSync(path.join(domainRoot, "package.json"), "utf8"));
+const webPanelHostModule = path.resolve(domainRoot, fluxiqHostModule);
 
 if (!existsSync(path.join(fluxiqRoot, "apps", "web", "package.json"))) {
   console.error(`Could not find FluxIQ web app at ${fluxiqRoot}`);

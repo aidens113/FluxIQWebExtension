@@ -1,11 +1,8 @@
-import { createHash, randomBytes } from "node:crypto";
-import { execFile } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
 import { chromium, type BrowserContext, type Page } from "@playwright/test";
-import { assertClonePackage, assertRunManifest, canonicalClonePackageJson, type ClonePackage, type RunManifest, type ScenarioStep, type WebScenario } from "@fluxiq-web-extension/test-contracts";
+import { assertClonePackage, assertRunManifest, canonicalClonePackageJson, resolveScenarioWorkflow, type ResolvedScenarioWorkflow, type RunActionTiming, type RunAutomationFailure, type WebScenario } from "@fluxiq-web-extension/test-contracts";
 import { createCorrelationId, EvidenceBundle, EvidenceCaptureController, sha256 } from "@fluxiq-web-extension/test-evidence";
 import type { EvidenceMode } from "./commands.js";
 import { removeRunOwnedTopologyState, startTopology, type RunningTopology } from "./coordinator.js";
@@ -25,34 +22,29 @@ import {
   classifyCloneDependencies,
   createDeterministicCloneIdMap,
 } from "./clone-policy.js";
-import { createRunOwnedCloneFlowId, createRunOwnedCloneProject, importClonePackageIntoIsolatedDestination, type IsolatedCloneImportResult } from "./isolated-flow-importer.js";
+import { createRunOwnedCloneFlowId, createRunOwnedCloneProject, importClonePackageIntoIsolatedDestination } from "./isolated-flow-importer.js";
+import { effectiveEvidencePolicy } from "./evidence-policy/index.js";
+import { armScenarioVariant, scenarioLabOriginProof } from "./lab-control/index.js";
+import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog } from "./run-expectations/index.js";
+import { automationFailureFromActionResult, createRunManifest, flowActionTimings, runActionStatus, type CloneRunState } from "./run-manifest/index.js";
+import { cssSelectorForTarget, parseScenarioTarget, ScenarioStepRunner } from "./scenario-steps/index.js";
 
-const execFileAsync = promisify(execFile);
-export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence: EvidenceMode; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration };
+/** `evidence` overrides the manifest's `evidencePolicy`; `workflowId` and `variantId` select what `resolveScenarioWorkflow` resolves. */
+export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration };
 export type RunScenarioResult = { runId: string; verdict: "passed" | "failed"; path: string; failureCategory?: string };
-type CloneRunState = {
-  clonePackage?: ClonePackage;
-  clonePackageHash?: string;
-  destination?: IsolatedCloneImportResult;
-  execution?: ExistingFlowExecution;
-  sourceSessionIdentityVerified: boolean;
-  sourceHashVerifiedAfterRun: boolean;
-  cleanupOutcome: "pending" | "completed" | "failed";
-};
 
 export async function runScenario(options: RunScenarioOptions): Promise<RunScenarioResult> {
   const runId = `run-${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
   const scenario = await loadScenarioManifest(options.repositoryRoot, options.scenarioId);
+  const target = options.target ?? { mode: "isolated" as const };
+  const workflow = resolveWorkflow(scenario, options, target);
   const seed = options.seed ?? scenario.seed;
   const environment = options.environment ?? process.env;
   const secrets = [environment.FLUXIQ_TEST_PASSWORD, environment.FLUXIQ_TEST_PIN, environment.FLUXIQ_TEST_TOTP].filter((value): value is string => Boolean(value));
-  const bundle = new EvidenceBundle({ rootDirectory: options.runsDirectory, runId, scenarioId: scenario.id, redaction: { secrets } });
+  const evidence = effectiveEvidencePolicy(scenario.evidencePolicy, options.evidence);
+  const bundle = new EvidenceBundle({ rootDirectory: options.runsDirectory, runId, scenarioId: scenario.id, redaction: { secrets }, evidencePolicy: evidence.capture });
   await bundle.initialize();
-  const capture = new EvidenceCaptureController(bundle, {
-    screenshots: options.evidence === "checkpoints" ? "checkpoints" : "none",
-    maxScreenshots: 100, maxBytes: 25 * 1024 * 1024,
-    trace: "off", video: "off",
-  });
+  const capture = new EvidenceCaptureController(bundle, evidence.capture);
   const startedAt = new Date().toISOString();
   let topology: RunningTopology | undefined;
   let context: BrowserContext | undefined;
@@ -67,7 +59,13 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
   let existingPreflight: ExistingFluxIQPreflight | undefined;
   let existingExecution: ExistingFlowExecution | undefined;
   let panelVerification: FluxIQPanelVerificationOutcome | undefined;
-  const target = options.target ?? { mode: "isolated" as const };
+  let stepRunner: ScenarioStepRunner | undefined;
+  let consoleErrors: ConsoleErrorWatch | undefined;
+  let recordingBaseline: Set<string> | undefined;
+  let recordedEvents: Record<string, number> | undefined;
+  const actions: RunActionTiming[] = [];
+  // null: FluxIQ reported no failure. A Flow lane cannot see a failed run's actions, so it stays unobserved until its Flow succeeds.
+  let automationFailure: RunAutomationFailure | null | undefined = target.mode === "existing" || target.mode === "clone" ? undefined : null;
   const cloneState: CloneRunState = { sourceSessionIdentityVerified: false, sourceHashVerifiedAfterRun: false, cleanupOutcome: "pending" };
   let topologyStateRemoved = false;
   const extensionPath = path.join(options.repositoryRoot, "apps", "extension", "dist", "e2e-chromium");
@@ -89,7 +87,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
       ? options.runsDirectory
       : path.join(options.runsDirectory, ".work");
     const ownsIsolatedCore = topologyTarget.mode === "isolated" || topologyTarget.mode === "persistent-isolated";
-    topology = await startTopology({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, runsDirectory: topologyRunsDirectory, runId, seed, target: topologyTarget, ...(ownsIsolatedCore ? { bootstrapIdentity: target.mode === "clone" || scenarioRequiresCore(scenario), ...(credentials ? { credentials } : {}) } : {}) });
+    topology = await startTopology({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, runsDirectory: topologyRunsDirectory, runId, seed, target: topologyTarget, ...(ownsIsolatedCore ? { bootstrapIdentity: target.mode === "clone" || scenarioRequiresCore({ ...scenario, expected: workflow.expected }), ...(credentials ? { credentials } : {}) } : {}) });
     let existingControl: ExistingFluxIQControlClient | undefined;
     if (target.mode === "existing") {
       existingControl = new ExistingFluxIQControlClient(target.baseUrl);
@@ -140,23 +138,26 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
       await bundle.writeStructured("snapshots/clone-import.json", { projectId: cloneState.destination.projectId, flowId: cloneState.destination.flowId, contentHash: cloneState.destination.contentHash, clonePackageHash: cloneState.clonePackageHash, attested: cloneState.destination.attested });
     }
     ({ context, browserVersion } = await launchBrowser(topology, extensionPath));
+    const scenarioOrigins = new Set(scenarioNetworkOrigins(topology.scenarioOrigin));
+    const isScenarioUrl = (url: string) => { try { return scenarioOrigins.has(new URL(url).origin); } catch { return false; } };
     networkGuard = await installDeterministicNetworkGuard(context, {
-      scenarioOrigins: scenarioNetworkOrigins(topology.scenarioOrigin),
+      scenarioOrigins: [...scenarioOrigins],
       fluxiqOrigins: [topology.fluxiqOrigin],
       ...(topology.gatewayUrl ? { gatewayOrigins: [topology.gatewayUrl] } : {}),
+      verifyScenarioOrigin: scenarioLabOriginProof(topology.scenarioOrigin, topology.allocation.controllerToken),
     });
-    extensionPage = await extensionControlPage(context);
+    const consoleWatch = consoleErrors = new ConsoleErrorWatch(context, isScenarioUrl);
+    const extensionControl = extensionPage = await extensionControlPage(context);
     browserVersion = await browserVersionFromCdp(context, extensionPage);
+    if (workflow.variant) await armScenarioVariant(topology.scenarioOrigin, topology.allocation.controllerToken, scenario.id, workflow.variant);
     const page = scenarioPage = await context.newPage();
     await page.goto(`${topology.scenarioOrigin}${scenario.startPath}`);
     await page.bringToFront();
+    await assertExpectedFacts(workflow.expected.pageFacts ?? [], playwrightScenarioFactProbe(page));
     const paired = topology.control ? await pairExtension(extensionPage, topology) : undefined;
     if (paired) await activateScenarioTab(extensionPage, topology.scenarioOrigin);
-    const screenshotAdapter = scenario.id === "sensitive-input" ? undefined : { capture: async () => ({ bytes: await page.screenshot({ type: "png" }), mediaType: "image/png" as const, redactionVerified: true as const }) };
-    const stepCapture = new EvidenceCaptureController(bundle, {
-      screenshots: options.evidence === "events" ? "events" : options.evidence === "checkpoints" ? "checkpoints" : "none",
-      maxScreenshots: 100, maxBytes: 25 * 1024 * 1024, trace: "off", video: "off",
-    }, screenshotAdapter);
+    const screenshotAdapter = scenario.id === "sensitive-input" ? undefined : { capture: async () => ({ bytes: await (stepRunner?.activePage() ?? page).screenshot({ type: "png" }), mediaType: "image/png" as const, redactionVerified: true as const }) };
+    const stepCapture = new EvidenceCaptureController(bundle, evidence.capture, screenshotAdapter);
     if (target.mode === "existing") {
       if (!paired || !existingControl || !existingPreflight) throw new RunnerFailure("gateway.pairing", "Existing FluxIQ extension pairing did not produce an executable session");
       await existingControl.selectExistingContext(target.projectId);
@@ -170,12 +171,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
         scenarioUrl: page.url(),
         seed,
         facilityRunId: runId,
-      }, scenario.expected.actions ?? []);
+      }, workflow.expected.actions ?? []);
+      actions.push(...flowActionTimings(existingExecution.actions));
+      automationFailure = null;
       await bundle.writeStructured("snapshots/existing-flow.json", { projectId: target.projectId, flowId: target.flowId, contentHash: existingPreflight.flow.contentHash, name: existingPreflight.flow.name, updatedAt: existingPreflight.flow.updatedAt });
       await bundle.writeStructured("snapshots/runtime-run.json", existingExecution.detail);
       await bundle.writeStructured("snapshots/runtime-actions.json", existingExecution.actions);
       await bundle.writeStructured("snapshots/runtime-events.json", existingExecution.events);
-      scenarioPage = await findScenarioPageWithExpectedState(context, page, topology.scenarioOrigin, scenario);
+      scenarioPage = await findScenarioPageWithExpectedState(context, page, topology.scenarioOrigin, scenario, workflow);
       await runtimeMessage(extensionPage, { type: "fluxiq.stopRecording" });
       recordingStarted = false;
       const outcome = await assertCoreRoundTrip(topology, paired.sessionId, recordingBaseline);
@@ -194,11 +197,13 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
         scenarioUrl: page.url(),
         seed,
         facilityRunId: runId,
-      }, scenario.expected.actions ?? []);
+      }, workflow.expected.actions ?? []);
+      actions.push(...flowActionTimings(cloneState.execution.actions));
+      automationFailure = null;
       await bundle.writeStructured("snapshots/runtime-run.json", cloneState.execution.detail);
       await bundle.writeStructured("snapshots/runtime-actions.json", cloneState.execution.actions);
       await bundle.writeStructured("snapshots/runtime-events.json", cloneState.execution.events);
-      scenarioPage = await findScenarioPageWithExpectedState(context, page, topology.scenarioOrigin, scenario);
+      scenarioPage = await findScenarioPageWithExpectedState(context, page, topology.scenarioOrigin, scenario, workflow);
       await runtimeMessage(extensionPage, { type: "fluxiq.stopRecording" });
       recordingStarted = false;
       const outcome = await assertCoreRoundTrip(topology, paired.sessionId, recordingBaseline);
@@ -206,37 +211,67 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
       if (panelVerification.status !== "verified") throw new RunnerFailure("runtime.behavior", "Isolated FluxIQ panel could not verify the exact cloned Flow run");
       await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "Cloned Flow and browser state succeeded in isolation"), details: { runtimeRunId: cloneState.execution.runId, actionCount: cloneState.execution.actions.length, eventCount: cloneState.execution.events.length, recordingCount: outcome.recordingCount, sourceHashUnchanged: true, panelVerification: panelVerification.status } });
     } else {
-      if (paired && topology.authorizationPin) await proveCoreActionRoundTrip(page, topology, paired.sessionId, scenario, capture, runId);
-      if (topology.control) { await runtimeMessage(extensionPage, { type: "fluxiq.startRecording" }); recordingStarted = true; }
-      for (const step of scenario.recordingScript) {
-        await stepCapture.trigger(event(runId, scenario.id, step.id, "step.start", `Start ${step.operation}`));
-        await executeStep(page, topology.scenarioOrigin, step);
-        await stepCapture.trigger(event(runId, scenario.id, step.id, step.operation === "checkpoint" ? "checkpoint" : "step.complete", `Complete ${step.operation}`));
+      if (paired && topology.authorizationPin) await proveCoreActionRoundTrip(page, topology, paired.sessionId, scenario.id, workflow, capture, runId, (timing, result) => { actions.push(timing); automationFailure ??= automationFailureFromActionResult(result); });
+      if (topology.control && topology.projectId) recordingBaseline = recordingIds(await topology.control.listRecordings(topology.projectId));
+      if (topology.control) {
+        // Core accepts `client.start_recording` only while the approving operator's Automation
+        // Studio context is under 10 s old (Core `resolveClientRecordingProject`, freshnessMs
+        // 10_000). The coordinator stamps that context once, at topology startup; pairing
+        // approval, tab activation and the Core action probe all run after it and can outlast
+        // the window, and Core then answers `recording.project_required`. The extension clears
+        // its pending start on that error, so its own 750 ms local fallback never fires and the
+        // recording stays idle for good -- no poll length can recover it. Restamping the context
+        // here makes acceptance depend on this call instead of on how long startup happened to take.
+        if (topology.projectId) await topology.control.selectProject(topology.projectId);
+        const startResponse = await runtimeMessage(extensionControl, { type: "fluxiq.startRecording" }); recordingStarted = true;
+        // startRecording answers before Core accepts the recording, and input before then is not recorded.
+        await pollStatus(extensionControl, value => value.recordingState === "recording").catch(async cause => {
+          const observed = await runtimeMessage(extensionControl, { type: "fluxiq.getStatus" }).then((response: any) => response.status).catch(() => undefined);
+          const diagnostic = { answered: recordingStartDiagnostic(startResponse?.status), observed: recordingStartDiagnostic(observed) };
+          await bundle.writeStructured("snapshots/recording-start.json", diagnostic);
+          throw new RunnerFailure("recording.persistence", `The extension recording did not start (${describeRecordingStartDiagnostic(diagnostic.observed)})`, { cause, details: diagnostic });
+        });
       }
-      await assertFinalState(page, scenario);
+      const runner = stepRunner = new ScenarioStepRunner({ context, page, origin: topology.scenarioOrigin, isScenarioUrl, uploadDirectory: path.join(topology.allocation.runRoot, "scenario-uploads") });
+      for (const step of workflow.recordingScript) {
+        await stepCapture.trigger(event(runId, scenario.id, step.id, "step.start", `Start ${step.operation}`));
+        const { extracted } = await runner.run(step);
+        // Only an extract step without pagination is asserted here: this lane reads the current page and never follows `next`.
+        if (extracted && !step.pagination) assertExtraction(workflow.expected.extracted, step.id, extracted);
+        await stepCapture.trigger({ ...event(runId, scenario.id, step.id, step.operation === "checkpoint" ? "checkpoint" : "step.complete", `Complete ${step.operation}`), ...(extracted ? { details: { recordCount: extracted.length } } : {}) });
+      }
+      // Read while still recording: the extension's log is what it recorded.
+      recordedEvents = await assertRecordedEvents(() => readExtensionRecordingLog(message => runtimeMessage(extensionControl, message)), workflow.expected.recordingEvents ?? []);
+      scenarioPage = runner.activePage();
+      await assertFinalState(scenarioPage, scenario, workflow);
     }
     if (topology.control && (target.mode === "isolated" || target.mode === "persistent-isolated")) {
       await runtimeMessage(extensionPage, { type: "fluxiq.stopRecording" });
       recordingStarted = false;
-      const outcome = await assertCoreRoundTrip(topology, paired?.sessionId);
+      const outcome = await assertCoreRoundTrip(topology, paired?.sessionId, recordingBaseline);
       await capture.trigger({ ...event(runId, scenario.id, undefined, "gateway.action", "Core gateway retained the paired extension session"), details: { sessionCount: outcome.sessionCount } });
-      await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "Core persisted the completed recording"), details: { recordingCount: outcome.recordingCount, projectId: topology.projectId } });
+      await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "Core persisted the completed recording"), details: { recordingCount: outcome.recordingCount, projectId: topology.projectId, recordedEvents } });
     }
+    consoleWatch.assertOnlyAllowed(workflow.expected.allowedConsoleErrors);
     networkGuard.assertNoViolations();
     await capture.trigger(event(runId, scenario.id, undefined, "final", "Scenario completed"));
     verdict = "passed";
   } catch (error) {
     failureCategory = classifyRunnerFailure(error);
     failureMessage = error instanceof Error ? error.message : String(error);
-    const failureEvent = { ...event(runId, scenario.id, undefined, "error", failureMessage), details: { failureCategory } };
-    if (options.evidence !== "none" && scenario.id !== "sensitive-input" && scenarioPage) {
-      const bytes = await scenarioPage.screenshot({ type: "png" });
+    // Recorded-event mismatches are types and counts, never page data, so they are published for diagnosis.
+    const failureEvent = { ...event(runId, scenario.id, undefined, "error", failureMessage), details: { failureCategory, ...(error instanceof RunnerFailure && error.category === "recording.contract" && error.details ? { failureDetails: error.details } : {}) } };
+    const failurePage = stepRunner?.activePage() ?? scenarioPage;
+    const bytes = evidence.failureScreenshot && scenario.id !== "sensitive-input" && failurePage && !failurePage.isClosed() ? await failurePage.screenshot({ type: "png" }).catch(() => undefined) : undefined;
+    if (bytes) {
       const digest = sha256(bytes);
       const artifactPath = `screenshots/failure-${digest.slice(0, 12)}.png`;
       await bundle.writeVerifiedVisual(artifactPath, { bytes, mediaType: "image/png", redactionVerified: true });
       await bundle.appendEvent({ ...failureEvent, screenshot: { path: artifactPath, sha256: digest } });
     } else await capture.trigger(failureEvent).catch(() => undefined);
   } finally {
+    stepRunner?.dispose();
+    consoleErrors?.dispose();
     if (recordingStarted && extensionPage) await runtimeMessage(extensionPage, { type: "fluxiq.stopRecording" }).catch(() => undefined);
     if (target.mode === "clone" && cloneState.clonePackage) {
       try {
@@ -276,10 +311,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
     if (target.mode === "clone" && !topology) cloneState.cleanupOutcome = "completed";
   }
   try {
-    const manifest = await createManifest(options, scenario, runId, seed, startedAt, verdict, browserVersion, extensionPath, topology, existingPreflight, existingExecution, panelVerification, cloneState);
+    const manifest = await createRunManifest({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, target: options.target, scenario, runId, seed, startedAt, verdict, browserVersion, extensionPath, topology, existingPreflight, existingExecution, panelVerification, cloneState, workflowId: workflow.workflowId, variantId: workflow.variant?.id, automationFailure, steps: stepRunner?.timings() ?? [], actions });
     assertRunManifest(manifest);
     await bundle.writeStructured("run.json", manifest);
-    const finalized = await bundle.finalize({ verdict, metrics: { steps: scenario.recordingScript.length } });
+    bundle.registerEvidencePolicy(evidence.capture);
+    const finalized = await bundle.finalize({ verdict, metrics: { steps: workflow.recordingScript.length } });
     return { runId, verdict, path: finalized.path, ...(failureCategory ? { failureCategory } : {}) };
   } finally {
     if (topology && !topologyStateRemoved) await removeRunOwnedTopologyState(topology).catch(() => undefined);
@@ -301,28 +337,33 @@ async function pairExtension(page: Page, topology: RunningTopology) {
   await topology.control!.approvePairing(String(status.pairingReferenceCode));
   return pollStatus(page, value => value.connectionState === "connected" && typeof value.sessionId === "string");
 }
-async function proveCoreActionRoundTrip(page: Page, topology: RunningTopology, sessionId: string, scenario: WebScenario, capture: EvidenceCaptureController, runId: string) {
-  const step = scenario.recordingScript.find(candidate => candidate.operation === "type" && candidate.target);
-  if (!step?.target) return;
-  const target = selector(step.target); const correlationId = createCorrelationId("command"); const text = "FluxIQ Core probe";
+/** Proves one Core-issued action reaches the page, using the first `type` step whose target is a CSS selector; each action is reported to `record`. */
+async function proveCoreActionRoundTrip(page: Page, topology: RunningTopology, sessionId: string, scenarioId: string, workflow: ResolvedScenarioWorkflow, capture: EvidenceCaptureController, runId: string, record: (timing: RunActionTiming, result: unknown) => void) {
+  const probe = workflow.recordingScript.filter(candidate => candidate.operation === "type" && candidate.target).map(step => ({ step, css: cssSelectorForTarget(parseScenarioTarget(step.target)) })).find(candidate => candidate.css);
+  if (!probe?.css) return;
+  const { step, css: target } = probe; const correlationId = createCorrelationId("command"); const text = "FluxIQ Core probe";
   const navigationCorrelationId = createCorrelationId("command");
   const automationPagePromise = page.context().waitForEvent("page", { timeout: 10_000 });
-  await capture.trigger({ ...event(runId, scenario.id, step.id, "runtime.dispatch", "Initialize the extension automation tab through Core"), details: { correlationId: navigationCorrelationId, actionType: "web.browser.navigate", url: page.url() } });
+  await capture.trigger({ ...event(runId, scenarioId, step.id, "runtime.dispatch", "Initialize the extension automation tab through Core"), details: { correlationId: navigationCorrelationId, actionType: "web.browser.navigate", url: page.url() } });
+  const navigationStartedAt = Date.now();
   const navigationResponse = await topology.control!.executeClientAction(sessionId, { actionType: "web.browser.navigate", parameters: { url: page.url() }, metadata: { correlationId: navigationCorrelationId } }, topology.authorizationPin!) as any;
   const navigationResult = navigationResponse?.payload?.result;
+  record(probeTiming("web.browser.navigate", navigationStartedAt, navigationResult), navigationResult);
   if (navigationResult?.status !== "succeeded") throw new RunnerFailure("action.dispatch", `Core navigation did not succeed: ${String(navigationResult?.status ?? "missing result")}: ${String(navigationResult?.message ?? navigationResult?.error ?? "no error detail")}`);
   const automationPage = await automationPagePromise;
   await automationPage.waitForLoadState("domcontentloaded");
-  await capture.trigger({ ...event(runId, scenario.id, step.id, "runtime.settle", "Core navigation initialized the extension automation tab"), details: { correlationId: navigationCorrelationId, commandId: navigationResult.commandId, status: navigationResult.status, url: automationPage.url() } });
-  await capture.trigger({ ...event(runId, scenario.id, step.id, "runtime.dispatch", "Dispatch Core action through the production gateway"), details: { correlationId, actionType: "web.dom.type", target } });
+  await capture.trigger({ ...event(runId, scenarioId, step.id, "runtime.settle", "Core navigation initialized the extension automation tab"), details: { correlationId: navigationCorrelationId, commandId: navigationResult.commandId, status: navigationResult.status, url: automationPage.url() } });
+  await capture.trigger({ ...event(runId, scenarioId, step.id, "runtime.dispatch", "Dispatch Core action through the production gateway"), details: { correlationId, actionType: "web.dom.type", target } });
+  const typeStartedAt = Date.now();
   const response = await topology.control!.executeClientAction(sessionId, { actionType: "web.dom.type", parameters: { selector: target, text }, metadata: { correlationId } }, topology.authorizationPin!) as any;
   const result = response?.payload?.result;
+  record(probeTiming("web.dom.type", typeStartedAt, result), result);
   if (result?.status !== "succeeded") {
-    await capture.trigger({ ...event(runId, scenario.id, step.id, "runtime.settle", "Core action returned a failed result"), details: { correlationId, commandId: result?.commandId, status: result?.status, message: result?.message ?? result?.error } });
+    await capture.trigger({ ...event(runId, scenarioId, step.id, "runtime.settle", "Core action returned a failed result"), details: { correlationId, commandId: result?.commandId, status: result?.status, message: result?.message ?? result?.error } });
     throw new RunnerFailure("action.dispatch", `Core action did not succeed: ${String(result?.status ?? "missing result")}: ${String(result?.message ?? result?.error ?? "no error detail")}`);
   }
   if (await automationPage.locator(target).inputValue() !== text) throw new RunnerFailure("runtime.behavior", "Core action result did not reach page state");
-  await capture.trigger({ ...event(runId, scenario.id, step.id, "runtime.settle", "Core action reached the expected page state"), details: { correlationId, commandId: result.commandId, status: result.status } });
+  await capture.trigger({ ...event(runId, scenarioId, step.id, "runtime.settle", "Core action reached the expected page state"), details: { correlationId, commandId: result.commandId, status: result.status } });
   await automationPage.close();
 }
 async function browserVersionFromCdp(context: BrowserContext, page: Page): Promise<string> { const session = await context.newCDPSession(page); try { const result = await session.send("Browser.getVersion"); return result.product || result.userAgent; } finally { await session.detach(); } }
@@ -348,39 +389,42 @@ async function assertCoreRoundTrip(topology: RunningTopology, expectedSessionId?
     if (newRecordingIds.length) return { sessionCount: sessions.length, recordingCount: ids.size, newRecordingCount: newRecordingIds.length };
     await new Promise(resolve => setTimeout(resolve, 100));
   }
-  throw new RunnerFailure("recording.persistence", recordingBaseline ? "Core did not persist a new recording for the completed existing-Flow scenario" : "Core did not persist a recording for the completed scenario");
+  throw new RunnerFailure("recording.persistence", recordingBaseline ? "Core did not persist a new recording for the completed scenario run" : "Core did not persist a recording for the completed scenario");
 }
 function recordingIds(response: any): Set<string> { const values = response?.payload?.recordings ?? response?.payload?.items ?? response?.payload; if (!Array.isArray(values)) return new Set(); return new Set(values.flatMap((item: any) => { const id = item?.recordingId ?? item?.id; return typeof id === "string" && id ? [id] : []; })); }
 async function runtimeMessage(page: Page, message: Record<string, unknown>): Promise<any> { const response = await page.evaluate((value: Record<string, unknown>) => (globalThis as any).chrome.runtime.sendMessage(value), message); if (!response?.ok) throw new RunnerFailure("extension.worker", response?.error ?? "Extension runtime message failed"); return response; }
 async function pollStatus(page: Page, predicate: (value: any) => boolean): Promise<any> { const deadline = Date.now() + 15_000; while (Date.now() < deadline) { const response = await runtimeMessage(page, { type: "fluxiq.getStatus" }); if (predicate(response.status)) return response.status; await new Promise(resolve => setTimeout(resolve, 100)); } throw new RunnerFailure("gateway.connection", "Timed out waiting for extension connection state"); }
-function selector(target?: string): string { if (!target) throw new RunnerFailure("fixture.invalid", "Scenario step target is required"); return target.startsWith("testid:") ? `[data-testid=${JSON.stringify(target.slice(7))}]` : target; }
-async function executeStep(page: Page, origin: string, step: ScenarioStep) { if (step.operation === "click") return page.locator(selector(step.target)).click(); if (step.operation === "type") return page.locator(selector(step.target)).fill(String(step.value ?? "")); if (step.operation === "select") return page.locator(selector(step.target)).selectOption(String(step.value ?? "")); if (step.operation === "scroll") return page.mouse.wheel(0, Number(step.value ?? 500)); if (step.operation === "navigate") return page.goto(`${origin}${step.path ?? "/"}`); if (step.operation === "waitForState") return page.locator(selector(step.target)).waitFor({ state: "visible", ...(step.timeoutMs === undefined ? {} : { timeout: step.timeoutMs }) }); }
-async function assertFinalState(page: Page, scenario: WebScenario) { await assertExpectedFacts(scenario.expected.finalState ?? [], playwrightScenarioFactProbe(page)); }
-async function findScenarioPageWithExpectedState(context: BrowserContext, fallback: Page, origin: string, scenario: WebScenario): Promise<Page> { for (const candidate of context.pages().filter(item => !item.isClosed() && item.url().startsWith(`${origin}/`)).reverse()) { try { await assertFinalState(candidate, scenario); return candidate; } catch {} } await assertFinalState(fallback, scenario); return fallback; }
+/** The extension's own account of a recording start. Labels and reasons only: activity details and tab URLs carry page data. */
+function recordingStartDiagnostic(status: any): Record<string, unknown> | undefined {
+  if (!status) return undefined;
+  return {
+    connectionState: status.connectionState,
+    recordingState: status.recordingState,
+    hasSessionId: typeof status.sessionId === "string",
+    hasProjectId: typeof status.projectId === "string",
+    unsupportedPageReason: status.unsupportedPage?.reason,
+    recordingBlockCode: status.recordingBlock?.code,
+    lastError: status.lastError,
+    queueSize: status.queueSize,
+    eventCount: status.eventCount,
+    activities: Array.isArray(status.recentActivities) ? status.recentActivities.map((entry: any) => `${entry?.kind}:${entry?.label}`) : undefined
+  };
+}
+function describeRecordingStartDiagnostic(diagnostic: Record<string, unknown> | undefined): string {
+  if (!diagnostic) return "the extension reported no status";
+  return `connectionState=${String(diagnostic.connectionState)} recordingState=${String(diagnostic.recordingState)} lastError=${String(diagnostic.lastError ?? "none")} unsupportedPage=${String(diagnostic.unsupportedPageReason ?? "none")} recordingBlock=${String(diagnostic.recordingBlockCode ?? "none")}`;
+}
+/** Final-state facts, then the primary workflow's playback-goal success facts. */
+async function assertFinalState(page: Page, scenario: WebScenario, workflow: ResolvedScenarioWorkflow) { const probe = playwrightScenarioFactProbe(page); await assertExpectedFacts(workflow.expected.finalState ?? [], probe); if (workflow.workflowId === undefined) await assertExpectedFacts(scenario.playbackGoal?.successFacts ?? [], probe); }
+async function findScenarioPageWithExpectedState(context: BrowserContext, fallback: Page, origin: string, scenario: WebScenario, workflow: ResolvedScenarioWorkflow): Promise<Page> { for (const candidate of context.pages().filter(item => !item.isClosed() && item.url().startsWith(`${origin}/`)).reverse()) { try { await assertFinalState(candidate, scenario, workflow); return candidate; } catch {} } await assertFinalState(fallback, scenario, workflow); return fallback; }
+function resolveWorkflow(scenario: WebScenario, options: RunScenarioOptions, target: FluxIQTargetConfiguration): ResolvedScenarioWorkflow {
+  let workflow: ResolvedScenarioWorkflow;
+  try { workflow = resolveScenarioWorkflow(scenario, { ...(options.workflowId === undefined ? {} : { workflowId: options.workflowId }), ...(options.variantId === undefined ? {} : { variantId: options.variantId }) }); }
+  catch (cause) { throw new RunnerFailure("fixture.invalid", cause instanceof Error ? cause.message : String(cause), { cause }); }
+  if (workflow.variant && target.mode !== "existing" && target.mode !== "clone") throw new RunnerFailure("fixture.invalid", "A variant is armed only before a Flow run; the recording lane always records the workflow unarmed");
+  return workflow;
+}
+function probeTiming(actionType: string, startedAt: number, result: any): RunActionTiming { return { actionType, startedAt: new Date(startedAt).toISOString(), durationMs: Math.max(0, Date.now() - startedAt), status: runActionStatus(result?.status) }; }
 function event(runId: string, scenarioId: string, stepId: string | undefined, trigger: "step.start" | "step.complete" | "gateway.action" | "runtime.dispatch" | "runtime.settle" | "checkpoint" | "error" | "final", summary: string) { return { trigger, summary, correlation: { runId, scenarioId, ...(stepId ? { stepId } : {}), correlationId: createCorrelationId() } }; }
 
-async function createManifest(options: RunScenarioOptions, scenario: WebScenario, runId: string, seed: number, startedAt: string, verdict: "passed" | "failed", browserVersion: string, extensionPath: string, topology?: RunningTopology, existingPreflight?: ExistingFluxIQPreflight, existingExecution?: ExistingFlowExecution, panelVerification?: FluxIQPanelVerificationOutcome, cloneState?: CloneRunState): Promise<RunManifest> {
-  const manifest = JSON.parse(await readFile(path.join(extensionPath, "manifest.json"), "utf8")) as { version: string };
-  const fluxiqExecution = options.target?.mode === "clone" && cloneState
-    ? cloneExecutionMetadata(cloneState, panelVerification)
-    : options.target?.mode === "clone" ? undefined
-    : topology?.targetMode === "existing" && options.target?.mode === "existing" && existingPreflight && existingExecution
-      ? { targetMode: "existing" as const, origin: topology.fluxiqOrigin, projectId: options.target.projectId, flowId: options.target.flowId, flowContentHash: existingPreflight.flow.contentHash, runtimeRunId: existingExecution.runId, ...(existingPreflight.gateway.runtimeId ? { runtimeId: existingPreflight.gateway.runtimeId } : {}), sessionIdentityVerified: existingPreflight.sessionIdentityVerified, panelVerification: panelVerification?.status ?? "limited" }
-      : topology?.targetMode === "persistent-isolated" && options.target?.mode === "persistent-isolated"
-        ? { targetMode: "persistent-isolated" as const, workspace: options.target.workspace }
-        : topology?.targetMode === "isolated" ? { targetMode: "isolated" as const } : undefined;
-  const ownsCorePorts = topology?.targetMode === "isolated" || topology?.targetMode === "persistent-isolated";
-  return { schemaVersion: "0.1", runId, scenarioId: scenario.id, scenarioRevision: sha256(JSON.stringify(scenario)), seed, status: verdict, startedAt, finishedAt: new Date().toISOString(), repositories: { facility: await revision(options.repositoryRoot), core: await revision(options.fluxiqRepositoryRoot) }, compatibility: [], lockfiles: await lockfiles(options), extension: { version: manifest.version, sha256: await hashDirectory(extensionPath), path: "apps/extension/dist/e2e-chromium" }, environment: { os: os.platform(), architecture: os.arch(), browserName: "chromium", browserVersion, locale: "en-US", timezone: "UTC", viewport: { width: 1280, height: 720 } }, ports: topology ? { scenario: topology.allocation.scenarioPort, ...(ownsCorePorts ? { web: topology.allocation.webPort, gateway: topology.allocation.gatewayPort } : {}) } : {}, processExits: topology?.processExitCodes() ?? {}, artifacts: [], redactionState: "verified", verdict, ...(fluxiqExecution ? { fluxiqExecution } : {}) };
-}
-function cloneRemappingSummary(clonePackage: ClonePackage) { const count = (kind: ClonePackage["idMap"][number]["kind"]) => clonePackage.idMap.filter(item => item.kind === kind).length; return { projects: count("project"), flows: count("flow"), nodes: count("node"), edges: count("edge"), localReferences: count("local-reference") }; }
-function cloneExecutionMetadata(state: CloneRunState, panelVerification?: FluxIQPanelVerificationOutcome): RunManifest["fluxiqExecution"] {
-  if (!state.clonePackage || !state.clonePackageHash) return undefined;
-  const common = { targetMode: "clone" as const, sourceOrigin: state.clonePackage.source.origin, sourceProjectId: state.clonePackage.source.projectId, sourceFlowId: state.clonePackage.source.flowId, sourceContentHash: state.clonePackage.source.contentHash, sourceSessionIdentityVerified: state.sourceSessionIdentityVerified, clonePackageHash: state.clonePackageHash, dependencyVerdict: state.clonePackage.compatibility.verdict, remappingSummary: cloneRemappingSummary(state.clonePackage), cleanupOutcome: state.cleanupOutcome };
-  if (state.destination && state.execution) return { ...common, stage: "executed", destinationProjectId: state.destination.projectId, destinationFlowId: state.destination.flowId, destinationContentHash: state.destination.contentHash, destinationRuntimeRunId: state.execution.runId, sourceHashVerifiedAfterRun: state.sourceHashVerifiedAfterRun, panelVerification: panelVerification?.status ?? "limited" };
-  if (state.destination) return { ...common, stage: "imported", destinationProjectId: state.destination.projectId, destinationFlowId: state.destination.flowId, destinationContentHash: state.destination.contentHash };
-  return { ...common, stage: "exported" };
-}
-async function revision(root: string) { const { stdout } = await execFileAsync("git", ["-c", `safe.directory=${path.resolve(root).replaceAll("\\", "/")}`, "rev-parse", "HEAD"], { cwd: root }); const statusResult = await execFileAsync("git", ["-c", `safe.directory=${path.resolve(root).replaceAll("\\", "/")}`, "status", "--porcelain"], { cwd: root }); return { path: path.resolve(root), commit: stdout.trim(), dirty: Boolean(statusResult.stdout.trim()) }; }
-async function lockfiles(options: RunScenarioOptions) { const values = []; for (const [root, relative] of [[options.repositoryRoot, "pnpm-lock.yaml"], [options.fluxiqRepositoryRoot, "pnpm-lock.yaml"]] as const) { try { values.push({ path: path.basename(root) + "/" + relative, sha256: sha256(await readFile(path.join(root, relative))) }); } catch {} } return values; }
-async function hashDirectory(root: string): Promise<string> { const hash = createHash("sha256"); async function walk(dir: string) { for (const entry of (await readdir(dir, { withFileTypes: true })).sort((a,b) => a.name.localeCompare(b.name))) { const target = path.join(dir, entry.name); if (entry.isDirectory()) await walk(target); else { hash.update(path.relative(root, target)); hash.update(await readFile(target)); } } } await walk(root); return hash.digest("hex"); }
 async function copyProcessLogs(bundle: EvidenceBundle, logsDir: string) { try { for (const name of await readdir(logsDir)) if (name.endsWith(".log")) await bundle.writeText(`logs/${name}`, await readFile(path.join(logsDir, name), "utf8")); } catch {} }

@@ -54,3 +54,37 @@ test("context-wide guard rejects and records sanitized page and WebSocket destin
   ]);
   assert.throws(() => guard.assertNoViolations(), DeterministicNetworkViolationError);
 });
+
+test("a loopback origin proven to be the Scenario Lab joins the allowlist; unproven origins stay violations", async () => {
+  let requestHandler!: (route: Route) => Promise<void>;
+  const context = {
+    route: async (_pattern: string, handler: typeof requestHandler) => { requestHandler = handler; },
+    routeWebSocket: async () => undefined,
+  } as unknown as BrowserContext;
+  const asked: string[] = [];
+  const guard = await installDeterministicNetworkGuard(context, {
+    ...policy,
+    verifyScenarioOrigin: async (origin) => { asked.push(origin); if (origin.endsWith(":53998")) throw new Error("proof crashed"); return origin === "http://127.0.0.1:53111"; },
+  });
+  const outcomes: string[] = [];
+  const route = (url: string) => ({
+    request: () => ({ url: () => url, resourceType: () => "document" }),
+    continue: async () => { outcomes.push(`continue ${url}`); },
+    abort: async () => { outcomes.push(`abort ${url}`); },
+  }) as unknown as Route;
+  for (const url of [
+    "http://127.0.0.1:53111/scenarios/iframe-checkout/cross-frame", "http://127.0.0.1:53111/favicon.ico",
+    "http://127.0.0.1:53999/probe", "http://127.0.0.1:53998/probe", "https://outside.invalid/",
+  ]) await requestHandler(route(url));
+  assert.deepEqual(asked, ["http://127.0.0.1:53111", "http://127.0.0.1:53999", "http://127.0.0.1:53998"]);
+  assert.deepEqual(outcomes.map(item => item.split(" ")[0]), ["continue", "continue", "abort", "abort", "abort"]);
+  assert.deepEqual(guard.violations().map(item => item.destination), ["http://127.0.0.1:53999/probe", "http://127.0.0.1:53998/probe", "https://outside.invalid/"]);
+});
+
+test("without a proof hook an unlisted loopback port is a violation", async () => {
+  let requestHandler!: (route: Route) => Promise<void>;
+  const context = { route: async (_pattern: string, handler: typeof requestHandler) => { requestHandler = handler; }, routeWebSocket: async () => undefined } as unknown as BrowserContext;
+  const guard = await installDeterministicNetworkGuard(context, policy);
+  await requestHandler({ request: () => ({ url: () => "http://127.0.0.1:53111/frame", resourceType: () => "document" }), continue: async () => undefined, abort: async () => undefined } as unknown as Route);
+  assert.deepEqual(guard.violations(), [{ kind: "request", destination: "http://127.0.0.1:53111/frame", resourceType: "document" }]);
+});

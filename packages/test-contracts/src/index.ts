@@ -1,4 +1,6 @@
 export * from "./scenario.js";
+export * from "./scenario-workflow.js";
+export * from "./failure-category.js";
 export * from "./run.js";
 export * from "./evidence.js";
 export * from "./evaluation.js";
@@ -6,6 +8,8 @@ export * from "./validation.js";
 export * from "./run-validation.js";
 export * from "./evidence-validation.js";
 export * from "./evaluation-validation.js";
+export * from "./bench-report.js";
+export * from "./bench-report-validation.js";
 export * from "./clone-package.js";
 export * from "./llm.js";
 export * from "./llm-validation.js";

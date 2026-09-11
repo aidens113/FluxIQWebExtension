@@ -3,7 +3,9 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { FIRST_LIVE_CREATION_LIMITS } from "../demo-llm-create-ui.js";
 import { FIRST_LIVE_CREATION_PROFILE, evaluateDemoLlmCreation, persistDemoLlmCreationResult } from "../demo-llm-creation.js";
+import { DEFAULT_DEMO_LLM_CREATION_PROFILE } from "../demo-llm-profile.js";
 
 function validInput(): any {
   return {
@@ -35,10 +37,21 @@ function validInput(): any {
 function clone<T>(value: T): T { return structuredClone(value); }
 
 test("first creation profile enforces the one-call strict live ceiling", () => {
+  // The alias is the production profile, at the lab contract's two-call ceiling
+  // (llm-production-automation-plan.md). The one-call live ceiling is the creation
+  // UI's FIRST_LIVE_CREATION_LIMITS, and the evaluator certifies exactly one call.
+  assert.equal(FIRST_LIVE_CREATION_PROFILE, DEFAULT_DEMO_LLM_CREATION_PROFILE);
   assert.deepEqual(FIRST_LIVE_CREATION_PROFILE.budget, {
-    maxInputTokens: 2_000, maxOutputTokens: 512, maxTotalTokensPerRequest: 3_000,
-    maxCallsPerRun: 1, timeoutMs: 20_000, maxRetries: 0, maxEstimatedCostUsd: 0.25,
+    maxInputTokens: 42_000, maxOutputTokens: 8_000, maxTotalTokensPerRequest: 50_000,
+    maxCallsPerRun: 2, timeoutMs: 60_000, maxRetries: 0, maxEstimatedCostUsd: 0.25,
   });
+  assert.deepEqual(FIRST_LIVE_CREATION_LIMITS, {
+    provider: "deepseek", model: "deepseek-chat", maxInputTokens: 4_000, maxOutputTokens: 1_000,
+    maxTotalTokens: 5_000, maxCalls: 1, timeoutSeconds: 20, maxEstimatedCostUsd: 0.25, providerRetries: 0,
+  });
+  const twoCalls = validInput();
+  twoCalls.invocations.push({ ...twoCalls.invocations[0], requestId: "request.two" });
+  assert.throws(() => evaluateDemoLlmCreation(twoCalls), /exactly one provider invocation/u);
   assert.equal(FIRST_LIVE_CREATION_PROFILE.task, "create-flow");
   assert.equal(FIRST_LIVE_CREATION_PROFILE.approvalMode, "manual");
   assert.equal(FIRST_LIVE_CREATION_PROFILE.retainRawPrompts, false);

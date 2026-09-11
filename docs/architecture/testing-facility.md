@@ -306,6 +306,17 @@ actions. `FLUXIQ_TEST_USERNAME`, `FLUXIQ_TEST_PASSWORD`, optional
 `FLUXIQ_TEST_TOTP`, and optional `FLUXIQ_TEST_PIN` may instead provide an
 explicit test identity.
 
+Core accepts `client.start_recording` only while the approving Automation Studio
+context is under ten seconds old (`resolveClientRecordingProject`, `freshnessMs`
+10_000). Selecting the project once at topology startup is therefore not enough:
+pairing approval, tab activation, and the Core action probe all run after it, and
+when they outrun the window Core answers `recording.project_required`. The
+extension cancels its pending start on that answer, so its own 750 ms local
+fallback never fires and the recorder latches idle, which no amount of polling
+recovers. The isolated lane therefore reselects the project immediately before
+starting the recording. The clone lane does not yet, and carries the same
+exposure, for a different project than the one its startup selection named.
+
 The verified Windows run `run-mtnla9cz-a4da1119` paired the extension, retained
 one connected/ready Core session, persisted a completed recording, and proved
 Core-issued navigate and type actions reached the expected automation page.
@@ -319,7 +330,10 @@ that killed long-running servers exited naturally.
 Existing mode is opt-in and fail-closed. Configuration is read from `.env`,
 then `.env.local`, then the process environment, with later values taking
 precedence. Both local environment files are ignored; `.env.example` contains
-placeholders only.
+placeholders only. A process variable can override a file value but cannot
+remove it, so `FLUXIQ_TEST_ENV_FILES=none` skips both files for one run — for
+example an isolated run on a machine whose `.env.local` configures an existing
+installation. Any other value of that variable is rejected.
 
 | Field | Existing-target meaning |
 | --- | --- |
@@ -642,13 +656,21 @@ A manifest contains:
 
 - schema version, id, title, tags, canonical seed, and start path;
 - declared web capabilities and a forced `loopback-only` network policy;
-- a nonempty semantic recording script using click, type, select, scroll,
-  navigate, wait-for-state, and checkpoint operations;
-- expected page/final facts, recording events, and runtime actions as relevant;
-  and
+- a semantic recording script using the click, type, select, scroll,
+  navigate, waitForState, checkpoint, press, check, upload, switchTab,
+  closeTab, waitForDownload, and extract step operations;
+- expected page/final facts, recording events, runtime actions, extracted
+  records, and an expected automation failure category, as relevant;
+- optional further `workflows`, each with its own script and expectations,
+  and `variants` of the primary script or of a workflow, each armed by one
+  fixture mutation, whose expected fields replace the workflow's and inherit
+  the rest (`resolveScenarioWorkflow` resolves the pair a run uses); and
 - screenshot, trace, video, sampling, and review policy.
 
-The eleven deterministic fixtures are:
+The Scenario Lab registers 22 deterministic fixtures. Each lives in
+`apps/scenario-lab/src/scenarios/<id>/` behind an `index.ts` barrel, which is
+what the registry and the page specs import. Twelve cover foundational browser
+behavior:
 
 | Fixture | Primary behavior |
 | --- | --- |
@@ -663,12 +685,44 @@ The eleven deterministic fixtures are:
 | `reconnect` | Disconnect, queued-event, reconnect, and replay fixture state. |
 | `sensitive-input` | Synthetic password/payment-like inputs whose server state discards values. |
 | `llm-target-drift` | Seeded baseline target activation plus visibly controlled missing/renamed target drift, exact control oracle, and reset/restore for diagnosis and zero-LLM reproduction. |
+| `instruction-only-form` | Name and plan form with an empty recording script and only a playback goal, plus a baseline/drifted target mode; the default scenario for instruction-only LLM exploration. |
+
+Ten serve the FluxBench Week 1 corpus. Each row names the corpus rows the
+fixture carries: the primary workflow is the manifest's own script, a named
+workflow is a `workflows[]` entry, and a variant is armed by one fixture
+mutation.
+
+| Fixture | Purpose | Corpus rows |
+| --- | --- | --- |
+| `keyboard-forms` | Form submitted by Enter in a text field or by a button, a labelled checkbox and radio group, and an ARIA combobox that opens on keydown and filters on every `input` event. | W02 primary; W03 `combobox`. |
+| `product-catalog` | Seeded 23-product catalog, 8 per page, with numbered pages and a Next control, a search that filters on submit and shows a result count, and an in-stock filter. | W04 primary, variant `text-variant`; W05 `paginated-extraction`, variant `short-catalog`; W06 `search`, variant `no-results`; W07 `in-stock-only`. |
+| `data-table` | Captioned, sortable 12-row inventory table whose cells carry no column attributes, so fields resolve by header (`column:<header>`). | W08 primary, variant `column-reorder`; W09 `sort-by-price`. |
+| `infinite-feed` | Feed that appends 10 posts each time a sentinel scrolls into view, with a loading indicator and an end-of-feed marker; 60 posts by default. | W11 primary, variant `end-early` (the feed ends at 25). |
+| `modal-flows` | Accessible modal form, a cookie-consent banner covering the primary action, an interstitial that can be armed to block the page, and a `confirm()`-guarded delete. | W12 primary; W13 `consent-then-click`, variant `banner-absent`; W14 `interstitial`, variant `armed` (expected failure `user_intervention_required`). |
+| `multi-tab` | Purchase-order list whose details open in a new tab, by a `target="_blank"` link or `window.open`, where they are extracted before the tab closes and the list confirms the review. | W15 primary, variant `popup-blocked` (expected failure `output_not_observed`). |
+| `file-transfer` | Attachment download of a seeded CSV report, and a labelled file-upload form that echoes the uploaded name. | W16 primary (download); W17 `upload`. |
+| `auth-gate` | Sign-in form with fixture-only demo credentials in front of an account page that redirects to sign-in, with an expiry notice, once the session expires. | W18 primary; W19 variant `expired` (expected failure `auth_required`). |
+| `identity-drift` | Settings form whose Save action drifts by mode: selectors only, visible text and name only, moved below the fold, or wrapped with an `aria-labelledby` name. | Variants `selector-only` W20, `text-only` W21, `moved` W22, and `wrapped-aria` W23, each expected to succeed; the primary has no row. |
+| `intermediate-state` | Claim form whose submission shows a fixed-delay "Processing" interstitial before the result; an armed mode adds a confirmation step the recording never saw. | W24 primary, variant `unannounced` (expected failure `output_not_observed`). |
 
 Direct Node tests cover manifest validation, loopback-only policy, uniqueness,
 fail-fast mismatch handling, HTTP rendering/control behavior, deterministic
 reset/reseed, parallel server isolation, sensitive-state discard, and the exact
-target-drift control oracle. The target-drift browser test proves baseline success,
-persistent missing-target failure across reload, renamed-target state, and restore.
+target-drift control oracle. Each corpus fixture adds its own
+`tests/scenario.test.ts` for manifest validity, deterministic state, every
+mutate operation and variant arm, and every route response.
+
+The page specs in `apps/scenario-lab/e2e/` drive the fixtures with plain
+Playwright in headless Chromium. `scenario-pages.spec.ts` covers eleven of the
+twelve foundational fixtures (all but `instruction-only-form`); its
+target-drift test proves baseline success, persistent missing-target failure
+across reload, renamed-target state, and restore. Each corpus fixture has its
+own `<id>.spec.ts` that runs every workflow, asserts the final state, then arms
+each variant and asserts the behavior its corpus row describes. Every spec
+takes its `test` object from `e2e/lab-fixture.ts`, which provides an in-process
+lab (`lab`, on seed 42 unless the spec sets `labSeed` with `test.use`), the
+loopback-only network guard (`networkGuard`), and
+`readFinalState(lab, scenarioId)` for the `/__control/final-state` oracle.
 These are fixture tests, not extension-to-Core E2E tests.
 
 ## Extension E2E build and finite browser suite
@@ -703,8 +757,8 @@ The implemented specs verify:
   and
 - storage isolation and cleanup across two fresh profiles.
 
-The standalone specs do not use the ten-scenario registry or the FluxIQ
-gateway. The verified isolated facility runner proves pairing, recording
+The standalone specs do not use the 22-fixture Scenario Lab registry or the
+FluxIQ gateway. The verified isolated facility runner proves pairing, recording
 persistence, and production client-action dispatch for `basic-form`; those two
 verified lanes do not prove persisted Flow execution. The separate existing
 target implements persisted-Flow execution but still awaits a live validation
@@ -904,8 +958,17 @@ $env:FLUXIQ_CORE_ROOT = "F:\!FluxIQ"
 pnpm lab run basic-form --seed 1 --evidence events
 pnpm lab matrix --all --repeat 1 --evidence failure
 pnpm lab inspect <run-id>
-pnpm lab compare <baseline-run-id> <candidate-run-id>
+pnpm lab bench --corpus smoke --repeat 2 --target isolated
+pnpm lab compare <baseline-report> <candidate-report>
+pnpm lab compare <report> --halves
 ```
+
+`compare` takes benchmark reports, not run ids: two reports, or one report's
+repeats split into halves, each metric judged `improved`, `regressed`, or
+`equivalent` within the report contract's tolerances. On a machine whose
+`.env.local` configures an existing installation, prefix an isolated command
+with `FLUXIQ_TEST_ENV_FILES=none` (in PowerShell,
+`$env:FLUXIQ_TEST_ENV_FILES = "none"`).
 
 Core-requiring isolated scenarios create a random test identity through the
 public Core API by default. To attach to an existing installation and execute

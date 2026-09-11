@@ -110,6 +110,10 @@ importers:
         version: 5.9.3
 
   packages/test-contracts:
+    dependencies:
+      '@fluxiq/contracts':
+        specifier: link:../../../!FluxIQ/packages/contracts
+        version: link:../../../!FluxIQ/packages/contracts
     devDependencies:
       typescript:
         specifier: ^5.7.0

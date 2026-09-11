@@ -1,23 +1,22 @@
 # MVP Week 1 — Web Automation Reliability Plan
 
 Status: Active
-Status detail: Audit complete and verified; executable plan written; Wave 1 (Phase 1.1 fixes, Phase 1.6a FluxBench foundation, decomposition) is next to dispatch.
+Status detail: Wave 1 nearly complete — fixtures, harness, contracts, runner, catalog, and the whole Core unit (baseline ratchet, host loading, failure taxonomy, web and runtime test health) verified; one recording-start flake under investigation and the Core build and test gates running; then integration and one push of both dev branches.
 Created: 2026-09-11
 Last updated: 2026-09-11
 Owner: Senior supervisor agent
 Scope: Week 1 of the 30-day MVP (Phases 1.1–1.6): browser action vocabulary, element identity, browser state/evidence, failure taxonomy, and FluxBench, with automated verification through the Testing Lab as the primary proof for every phase. Weeks 2–4 are out of scope except where Week 1 must leave a seam for them.
-Paired document: `F:\!FluxIQ\docs\working\mvp-week1-web-automation-reliability-plan.md` — to be created at Wave 3 dispatch, before the first Core edit; Core owns the failure-taxonomy contracts (C1, C2) and the expectation-evaluator seam (C3)
+Paired document: `F:\!FluxIQ\docs\working\mvp-week1-web-automation-reliability-plan.md` — Core owns the failure-taxonomy contracts (C1, C2, pulled ahead of Wave 2 by D11) and the expectation-evaluator seam (C3)
 Related: [30-Day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%20MVP%20Implementation%20Plan.md), [MVP agent instructions](../../MVP_AGENT_INSTRUCTIONS.md), [testing facility](../architecture/testing-facility.md), [extension client](../architecture/extension-client.md), [automated-testing-facility-plan](./automated-testing-facility-plan.md), [llm-production-automation-plan](./llm-production-automation-plan.md), audit reports under [reports/](./mvp-week1-web-automation-reliability-plan/reports/)
 
 ---
 
 ## Current State
 
-**Phase: planned, not started.** Seven read-only audits of both repositories
-ran on 2026-09-11; the supervisor verified every load-bearing claim against
-source before recording it (see [Audit Summary](#audit-summary) and the full
-reports). The plan below is executable: each phase names its steps, file
-ownership, the automated proof, and the exit commands.
+**Phase: Wave 1 in progress.** Twenty workers dispatched in batches A–C;
+briefs in [briefs/wave-1.md](./mvp-week1-web-automation-reliability-plan/briefs/wave-1.md).
+Planning is complete; its ledger is archived at
+[archive/2026-09-11-planning-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-11-planning-ledger.md).
 
 **Headline numbers from the audit** (detail in
 [reports/README.md](./mvp-week1-web-automation-reliability-plan/reports/README.md)):
@@ -29,30 +28,72 @@ default; no failure taxonomy on the browser path, 5 of 11 categories
 unproduced; the Testing Lab covers 4 of 18 FluxBench categories, has no
 metrics, and cannot run a Flow on `isolated`.
 
-**Done**
+**Done** (evidence in the ledger)
 
-- Working document, index row, audit briefs (archived), seven reports.
-- Decisions D1–D10 recorded; D9, D10, and the 28-workflow corpus were
-  confirmed by the user on 2026-09-11. Phase plan, proof method, corpus,
-  and sequencing written.
+- Domain tests run every `domain/src/**/tests/*.test.ts` (24 runtime tests
+  had never run; all pass); `DOMAIN_TEST_BUILD_LABEL` isolates parallel runs.
+- Scenario contract: `workflows`, `variants`, `extract` steps,
+  `expected.extracted`, `expected.failure`, seven step operations,
+  `resolveScenarioWorkflow`. Scenario Lab: a scenario-owned `route` hook
+  and ten registered placeholder fixtures.
+- Batch A and w1-content-aliases verified (ledger); an unknown action
+  type now reaches the wire as `ACTION_REJECTED`.
+- Domain tests are type-checked (22 errors fixed). All ten new fixtures
+  verified; capability docs written; the content-script harness (31
+  specs), evaluation and benchmark contracts, and the registry-derived
+  test-matrix catalog verified.
+- Scenario Lab consolidated (fixture barrels, one shared e2e lab fixture,
+  22-fixture docs) and extension unit tests (64) verified; the sensitivity
+  rule is one shared token-based function (`billing cc-number` leaked).
+- FluxBench: `pnpm lab bench` with `week1` and `smoke` corpora; the panel host
+  is an ES module on Core's public exports; isolated runs here use
+  `FLUXIQ_TEST_ENV_FILES=none`.
 
-**Not done**
+**Running:** none. The recording-start flake is closed: Core accepts a start only
+while the approving Automation Studio context is under 10 s old, the runner now
+restamps it immediately before the start, and the smoke bench passes (4 runs, 4
+passed, 0 skipped, exit 0), verified by the supervisor on a clear machine. The
+Core unit is finished and its suite is green: three lost writes in Flow saving
+fixed at source, the disk-bound stream case moved to the OS temp directory, and
+the Adaptation Audit case brought under its budget by seeding its fixture once.
+Core `check`, `docs:check`, `build`, `package:lint` and `test` each exit 0.
 
-- All implementation. No worker has edited source.
-- Paired Core document (created at Wave 3 dispatch, before the first Core
-  edit).
+**Findings that change later work**
+
+- The Playwright headless shell crashes on launch here; both Playwright
+  configs now use `channel: "chromium"` (network-policy spec: 3 passed).
+- Playwright `selectOption` fires untrusted events, which the recorder now
+  ignores: recorded lanes select by keyboard.
+- Password values leave the recorder unredacted (pre-existing,
+  `describe-element.ts`); Phase 1.4 fixes it at the source.
+- The recording lane asserts only unpaginated extract steps; paginated
+  extraction is proven by the Wave 2 Flow lane.
+- The structure audit reads only tracked files: stage new files first.
+- Core accepts `client.start_recording` only while the approving Automation
+  Studio context is under 10 s old. The runner now restamps it immediately
+  before the start. The `clone` lane still carries the original defect and
+  needs an existing or clone target to exercise it.
+- Fixed in Core and mirrored: `pnpm structure:baseline` only lowers or removes
+  entries, and refuses a new or grown violation.
+- `.env.local` configures the existing install (target, base and gateway URLs,
+  credentials), and a process variable cannot clear those keys; isolated runs
+  therefore set `FLUXIQ_TEST_ENV_FILES=none`, which skips both env files for
+  one run. Never edit `.env.local`.
+
+**Not done:** the commit in both repositories and one push of both `dev`
+branches; Waves 2 to 5.
 
 **Next steps**
 
-1. Dispatch Wave 1 (see [Sequencing](#sequencing)): decomposition of the two
-   content-script hot spots, Phase 1.1 fixes, Phase 1.6a harness/runner/bench
-   contracts, and the ten new fixtures.
-2. Verify, ledger, push `dev`.
-3. Dispatch Wave 2.
+1. Commit both repositories and push both `dev` branches in one work unit.
+2. Dispatch Wave 2 from
+   [briefs/wave-2.md](./mvp-week1-web-automation-reliability-plan/briefs/wave-2.md).
 
-**Blockers:** none. Per `AGENTS.md`, the user is alerted before the first
-Core edit (Wave 3: Phase 1.4 step 7 and Phase 1.5 step 2 form one Core
-work unit).
+**Core unit (D11):** the baseline ratchet (mirrored here), domain-host loading,
+the failure taxonomy and carriers, and the web and runtime test suites are all
+verified, as recorded in the paired Core document.
+
+**Blockers:** none. The user was alerted before the first Core edit.
 
 ---
 
@@ -158,6 +199,14 @@ ledger entry, not a silent edit.
   so `expectedState` is evaluated rather than counted. It lands with the
   evidence work so a scenario that starts failing has evidence explaining
   why. Confirmed by the user 2026-09-11.
+- **D11 — Changes that belong in Core are made in Core.** Directed by the
+  user 2026-09-11. The Core unit for D3 and D9 (failure enum, record,
+  parser, and carriers; C1 and C2) moves ahead of Wave 2, joined by Core's
+  domain-host loading through public exports and the structure-baseline
+  ratchet fix. Downstream stand-ins are replaced by Core exports: the
+  extension's `ACTION_REJECTED` in result `metadata`, the copied category
+  names in `packages/test-contracts`, the Wave 2 draft's local category
+  list, and the panel host's deep import of Core's `dist`.
 
 ## How Week 1 Is Proven
 
@@ -191,135 +240,41 @@ phase is proven with it. The corpus run (1.6b) closes the week.
 
 ### Phase 1.1 — Consolidate the web domain
 
-Objective: turn the audit into a capability matrix and remove the defects
-that would otherwise be re-hit by every later phase.
+Steps 1–4 landed in Wave 1; the step plan is archived at
+[archive/2026-09-11-phase-1-1-plan.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-11-phase-1-1-plan.md).
+Landed: the content script's `actions.ts` and `action-runtime.ts` split
+into directories (44 of 44 moved bodies identical); mapping fixes (scroll
+key, top-level `domainId`, unknown types rejected with `ACTION_REJECTED`,
+one input→output mapper that keeps fingerprints); recorder hygiene; one
+safety registry; dead exports removed; legacy aliases and the looser
+content types gone. Step 5 (capability matrix, `extension-client.md`) is
+with w1-capability-docs.
 
-Steps (each is one worker unless noted; ownership in parentheses):
-
-1. **Decompose the two content-script hot spots** before anything parallel
-   touches them, per the structure rule "a shared filename prefix becomes
-   a directory": `apps/extension/src/content/actions.ts` →
-   `content/actions/<verb>.ts` + barrel + `execute.ts` dispatcher;
-   `apps/extension/src/content/action-runtime.ts` →
-   `content/action-runtime/{resolve-target,waits,results,input-events,
-   extract}.ts` + barrel. Behaviour-preserving; `pnpm --filter
-   @fluxiq-web-extension/extension check` and `build` unchanged. Serial —
-   everything in Wave 2 depends on it. (owns both files and their new dirs)
-2. **Mapping fixes** (`domain/src/io/input-model.ts`,
-   `domain/src/io/gateway-input-hub.ts`, `domain/src/web-panel-host.ts`,
-   `domain/src/client/gateway-mapping.ts`): `dom.scroll` keyed correctly;
-   hub accepts top-level `domainId` like Core's bridge (both copies);
-   `normalizeWebAutomationActionType` rejects unknown types with
-   `ACTION_REJECTED`; `web-panel-host.ts` imports `GatewayInputHub` and the
-   dispatcher from `io/` instead of duplicating them; one input→output
-   mapper shared by the live path and the proposal mapper, and the proposal
-   mapper carries the element fingerprint. T1 tests for every row of the
-   19-event mapping table.
-3. **Recorder hygiene** (`apps/extension/src/content/dom-events.ts`,
-   `background/connection/runtime-status.ts`): `isTrusted` guard on `input`
-   and `change`; runtime confirmations for `type`/`select` carry the value.
-4. **Registry agreement and dead code** (`domain/src/io/manifest-definitions.ts`,
-   `domain/src/output-nodes/definitions.ts`, `domain/src/actions/types.ts`,
-   `domain/src/runtime/commands.ts`, `domain/src/client/index.ts`,
-   `apps/extension/src/runtime/state-reader.ts`,
-   `apps/extension/src/shared/constants.ts`, `browser.ts`,
-   `apps/extension/src/content/types.ts`): one safety registry (waits and
-   `capture_snapshot` are safe and unprivileged, so bench runs never prompt);
-   remove the seven dead exports and the legacy dotted alias matching in
-   the content script (aliases normalized once, in `gateway-mapping`);
-   content-script types import the shared protocol types instead of a
-   looser copy; `domain/src/runtime/llm-evidence.ts` imports Core's
-   `AutomationStudioRuntimeTargetOverrideEvidenceValidation`/`FailedAction`
-   instead of structural copies, and its duck-typed `bindLlmEvidenceRuntime`
-   shim is removed (the method is public); the full dead-export list is
-   section (e) of `reports/audit-core-runtime.md`. `web-panel-host.ts:2` imports
-   `AutomationStudioNativeNodeRuntime` from `fluxiq/automation-studio` (it
-   is publicly exported) if Node 22 `require(esm)` resolves it from the CJS
-   host; otherwise the deep import stays with a comment naming the reason.
-   Run `pnpm structure:baseline` after removals.
-5. **Capability matrix and architecture doc** (supervisor):
-   `docs/architecture/web-capabilities.md` from the `audit-actions` matrix,
-   updated at each phase close; `extension-client.md` corrected (no
-   focus/blur events, no `client.recording_entry`, sensitivity claim).
-
-Proof: T1 for steps 2–4; T2 smoke (`content/actions.spec.ts` executes each
-existing action once on `basic-form`) proves the decomposition preserved
-behaviour; `lab run basic-form --target isolated` passes.
-
-Exit checks: `pnpm check`, `pnpm test`, `pnpm build` green;
-`pnpm structure:check` zero new findings; `grep -rn '"dom\.' apps/extension/src/content/actions` empty.
+Exit checks at Wave 1 integration: T1 tests for steps 2–4;
+`content/actions.spec.ts` on `basic-form`; `lab run basic-form --target
+isolated`; `pnpm check`, `pnpm test`, `pnpm build`; structure audit with
+no new finding. The alias grep is already empty.
 
 Core: none.
 
 ### Phase 1.6a — FluxBench foundation
 
-Objective: make the Testing Lab able to prove the rest of the week and to
-measure the corpus.
+Steps 1–3 and 5–7 landed in Wave 1; the step plan is archived at
+[archive/2026-09-11-phase-1-6a-plan.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-11-phase-1-6a-plan.md).
+Landed: the T2 content-script harness (`test:content`); the runner asserting
+what manifests declare; the scenario contract's workflows, variants,
+extraction, and expected failures; the evaluation and benchmark contracts;
+`pnpm lab bench` with the `week1` and `smoke` corpora and report comparison;
+the registry-derived test-matrix catalog; ten new fixtures (22 in all). Step
+4, the provider-free Flow lane, is Wave 2 (`w2-flow-lane` in
+[briefs/wave-2.md](./mvp-week1-web-automation-reliability-plan/briefs/wave-2.md)).
 
-Steps:
+Proof so far: the Scenario Lab suite green with 22 fixtures; `test:content`
+31 passed; `FLUXIQ_TEST_ENV_FILES=none pnpm lab bench --corpus smoke --repeat
+2 --target isolated` 4/4 passed with `compare --halves` `equivalent`. Still to
+prove: `pnpm lab run basic-form --flow --target isolated` (Wave 2).
 
-1. **Content-script harness** (`apps/extension/e2e/content/harness.ts`,
-   `playwright.content.config.ts`, `package.json` script `test:content`):
-   starts the Scenario Lab in-process, opens a fixture, injects the built
-   `content/index.js` with a `chrome.runtime` stub that captures outgoing
-   messages, and exposes `runAction(command)` and `capture()` to specs.
-   First spec: `resolve-target.spec.ts` covering the four strategies on
-   `ambiguous-targets` and `long-document`.
-2. **Runner asserts what manifests declare**
-   (`packages/test-runner/src/run-scenario.ts`, `scenario-assertions.ts`):
-   `pageFacts`, `recordingEvents` (type and count), `expected.actions` on
-   every lane, `allowedConsoleErrors`, `playbackGoal.successFacts`, and
-   per-scenario `evidencePolicy`; `selector()` understands `role:` and
-   `frame:` (Playwright `getByRole`, `frameLocator`); the cross-origin
-   iframe port is allowlisted (`network-guard.ts`); failure category
-   persisted into `run.json`.
-3. **Manifest contract extension** (`packages/test-contracts/src/scenario.ts`,
-   `evaluation.ts`, `run.ts` + validation files): `variants?: [{id, arm:
-   {operation, payload}, expected}]` for drift/negative modes;
-   `expected.failure?: {category, code?}`; `metrics` schema; `RunEvaluation`
-   gains the [Metrics](#metrics) fields; `BenchReport` type.
-4. **Provider-free Flow lane on `isolated`** (`packages/test-runner/src/
-   flow-lane/{record,generate,run}.ts`, wired from `run-scenario.ts` behind
-   `--flow`): after the scripted recording, call Core's public recording→
-   proposal→approve API (`createRecordingFlowProposals`,
-   `reviewRecordingFlowProposal` per `audit-recording`), then
-   `startPersistedFlow`/`runPersistedFlow` as `existing-flow-run.ts` already
-   does, assert `expected.actions` and the final-state oracle. If a
-   variant is armed, arm it between recording and run. Fallback compiler
-   `manifest-flow-compiler.ts` only if the API path is unstable.
-5. **`bench` verb and metrics** (`packages/test-runner/src/bench/{cli,
-   corpus,evaluate,report}.ts`, `commands.ts`, `cli.ts`): `pnpm lab bench
-   --corpus week1 --repeat N [--target isolated]` runs every workflow and
-   variant, writes one `RunEvaluation` per run and `report.json`/`report.md`
-   under `test-runs/bench/<id>/`, aggregates per-workflow pass rate, flake
-   classification, and corpus metrics; `compare` reports
-   `improved`/`regressed` per metric with tolerances. Timing per action from
-   the run's action records.
-6. **Catalog parity** (`packages/test-matrix/src/selector.ts` generated from
-   the Scenario Lab registry at build, with a test that fails on drift);
-   `docs/architecture/testing-facility.md` fixture count corrected.
-7. **Ten new fixtures**, one worker each, under
-   `apps/scenario-lab/src/scenarios/<id>/` plus the seven-file edit list
-   from the `audit-testing-facility` report: `product-catalog`,
-   `data-table`, `infinite-feed`, `modal-flows`, `multi-tab`,
-   `file-transfer`, `auth-gate`, `identity-drift`, `intermediate-state`,
-   `keyboard-forms`. Each ships its `tests/scenario.test.ts`, a page spec,
-   and its manifest with variants and expected failure categories per the
-   [corpus](#fluxbench-week-1-corpus). Registry and `types.ts` edits are
-   serialized by the supervisor after the fixture workers return.
-
-Proof: `pnpm --filter @fluxiq-web-extension/scenario-lab test` green with 22
-fixtures; `pnpm --filter @fluxiq-web-extension/extension test:content`
-green; `pnpm lab run basic-form --flow --target isolated` executes the
-generated Flow provider-free and passes; `pnpm lab bench --corpus smoke
---repeat 2` produces a report whose two runs agree.
-
-Exit checks: the commands above with observed output in the ledger;
-`pnpm test` green for `test-contracts`, `test-runner`, `test-matrix`,
-`test-evidence`.
-
-Core: none expected. If the proposal API needs an additive export, it is a
-one-line Core change recorded in the paired document.
+Core: none.
 
 ### Phase 1.2 — Action vocabulary and outcome validation
 
@@ -731,63 +686,80 @@ statements above are drawn from that digest.
 
 The seven audit briefs dispatched 2026-09-11 are archived at
 [archive/2026-09-11-audit-briefs.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-11-audit-briefs.md).
-Implementation briefs are added here, one per worker, before each wave is
-dispatched.
+Implementation briefs live beside the plan, one file per wave, written
+before dispatch, because the plan sits at the 800-line threshold: Wave 1 is
+[briefs/wave-1.md](./mvp-week1-web-automation-reliability-plan/briefs/wave-1.md).
 
 ## Work Ledger
 
-### 2026-09-11 — Document created; audit workers dispatched
-- Agent: supervisor
-- Changed: this document; `docs/working/README.md` (index row);
-  `docs/working/mvp-week1-web-automation-reliability-plan/reports/` created.
-- Why: The user asked for an in-depth Week 1 working document that improves
-  on the 30-day plan, fills its gaps from both repositories, and emphasises
-  automated testing through the Testing Lab. Discovery across seven areas is
-  delegated so the supervisor reads conclusions, not files.
-- Validation: not validated — documentation only.
-- Outcome: Accepted
-- Follow-up: verify reports, write the executable phase plan.
+The three planning entries of 2026-09-11 (document created; audits
+verified; user decisions) are archived at
+[archive/2026-09-11-planning-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-11-planning-ledger.md).
 
-### 2026-09-11 — Audits verified; executable plan written
-- Agent: supervisor, with workers audit-actions, audit-recording,
-  audit-targeting, audit-evidence, audit-failures, audit-testing-facility,
-  audit-core-runtime
-- Changed: this document (rewritten: decisions, proof method, phase plan,
-  metrics, corpus, sequencing, audit summary); audit briefs moved to
-  `archive/2026-09-11-audit-briefs.md`; seven reports under `reports/`.
-- Why: The plan must be concrete enough for workers to execute without
-  rediscovering the architecture, and every claim it rests on must be
-  verified, not reported.
-- Validation: supervisor re-read the cited source for every load-bearing
-  claim — e.g. `expectation.ts:31-36` returns `passed: true`
-  unconditionally; `adapter.ts:54` flattens status; `readElementValue` has
-  no sensitivity guard and `capture-settings.ts:8` defaults `inputValues`
-  to `true`; `io-policy.ts` returns `unresolved_no_candidates` with no
-  downstream producer of `candidates`; `run-scenario.ts:358` asserts only
-  `finalState`; `selector.ts` catalog lists 10 of 12. `node
-  scripts/structure-audit.mjs` -> `passed (27 warning(s), 19 baselined)`.
-- Outcome: Accepted
-- Follow-up: fold in `audit-core-runtime`; dispatch Wave 1.
+Wave 1 entries up to the first three verified fixtures are archived at
+[archive/2026-09-11-wave-1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-11-wave-1-ledger.md).
 
-### 2026-09-11 — User decisions on Core scope and corpus
-- Agent: supervisor
-- Changed: this document — D9 and D10 added; Phase 1.4 step 7 (Core seam
-  C3) and its proof added; paired Core document moved to Wave 3 dispatch;
-  Phase 1.5 step 2 marks the minor bump accepted; corpus marked confirmed;
-  sequencing and risks updated; three open questions closed.
-- Why: The user, asked the three open questions, chose the recommended
-  option for each: take the Core minor bump this week alongside D3; build
-  the expectation-evaluator seam in Week 1 with Phase 1.4; accept the
-  28-workflow corpus as proposed.
-- Validation: `node scripts/structure-audit.mjs` after the edits —
-  observed output recorded in the commit; documentation only.
-- Outcome: Accepted
-- Follow-up: dispatch Wave 1.
+The next two Wave 1 entries (six more fixtures verified; harness,
+contracts, and catalog verified) are appended to the same archive.
+
+So are the entries for decision D11 (recorded under Decisions); the
+consolidation, extension unit tests, and sensitivity fix; the runner lane,
+Scenario Lab cleanup, and baseline mirror; and the runner-suite repair,
+including the decision that the one-call live ceiling holds; and FluxBench
+with the env-file opt-in and the Core contracts link.
+
+So is the entry recording the Core failure categories being adopted here, the
+gate run that followed, and the first sighting of the recording-start flake.
+
+### 2026-09-11 — Wave 1 gates; the recording start traced to a 10 s window
+- Agent: supervisor, with w1-recording-start-flake
+- Changed: `packages/test-runner/src/run-scenario.ts` only. Core accepts
+  `client.start_recording` only while the approving Automation Studio context is
+  under 10 s old (`resolveClientRecordingProject`, `freshnessMs` 10_000), and the
+  runner stamped that context once, at topology startup. When pairing and the Core
+  action probe outran the window, Core answered `recording.project_required`, on
+  which the extension cancels its pending start, so its own 750 ms local fallback
+  never fires and the recorder latches `idle`. That is why no longer poll could
+  have fixed it. The runner now restamps the context immediately before the start,
+  and captures the extension status when a start fails, which the lane discarded.
+- Validation: worker, a forced 12 s gap without the fix failed with
+  `recordingBlock=recording.project_required`, the same Core signature as the
+  reported run, and passed with the fix; then an 8-run serialized series,
+  `SUMMARY pass=8 fail=0 of 8`, the failure diagnostic present in 1 of 46 run
+  directories, the deliberate no-fix experiment. Supervisor: here `pnpm check` and
+  `pnpm test` -> exit 0 each, captured by redirect rather than a pipe, test-runner
+  `# pass 357 # fail 0`; in Core `pnpm check`, `pnpm docs:check`, `pnpm build` and
+  `pnpm package:lint` -> exit 0, `pnpm test` -> 827 of 828, one Adaptation Audit
+  case timing out only under parallel load (briefed as core-adaptation-test-cost).
+  A first supervisor bench crashed at exit 139 after overlapping the worker own
+  chained runs; re-run on a clear machine it passed, status passed with 4 runs, 4
+  passed and 0 skipped, exit 0, `bench-mtxju6eb-7aacdf7a`. The worker own bench
+  agreed: 4 runs, 4 passed, 0 skipped.
+- Found: the extension latching `idle` on a refused start is a product defect, not
+  a test-lane one; recorded under Open Questions against Phase 1.5.
+- Outcome: Accepted. The benchmark re-run passed on a clear machine (4 runs, 4
+  passed, 0 skipped, exit 0), and Core came green: `pnpm test` -> exit 0, fluxiq
+  828 of 828 and web 1146 of 1146, with its structure audit clean.
 
 ## Open Questions
 
+- **Credentials at replay.** A Flow built from a recording cannot recover a
+  redacted password (auth-gate W18). Proposed: the manifest declares the
+  fixture credential and the Flow lane supplies it as a declared secret,
+  never from the recording. Owner: senior supervisor agent, for the Wave 2
+  Flow-lane brief.
 - **Selector-keyed patch lane vs fingerprint-first doctrine.** Core's
   `validateTargetOverrideEvidence` takes `{selector}`. Week 1 makes the
   extension accept fingerprint-shaped targets; whether the patch lane
   becomes fingerprint-shaped is a Week 2 contract decision. Owner: senior
   supervisor agent, recorded for the Week 2 document.
+- **The extension latches idle when Core refuses a recording start.** When Core
+  answers `recording.project_required`, the extension clears its pending start,
+  so the 750 ms local-start fallback never fires and the recorder stays idle
+  until something else restarts it. No retry, and the user sees no reason. Found
+  while proving the runner flake (report `w1-recording-start-flake`), where the
+  refusal was reproduced deliberately. The runner now avoids triggering it, which
+  fixes the test lane but not the product. A real operator whose context goes
+  stale hits the same dead end. Belongs with Phase 1.5, the failure taxonomy,
+  since the right behaviour is a classified, surfaced failure rather than a
+  silent idle. Raised 2026-09-11; owner: senior supervisor agent.

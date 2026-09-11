@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
 import { evaluateExplorationAdaptationApply, evaluateExplorationAdaptationProposal, evaluateExplorationAdaptationValidation } from "../demo-llm-exploration-adaptation.js";
+
+const repositoryRoot = path.resolve(import.meta.dirname, "../../../..");
 
 function fixture() {
   const readiness = {
@@ -42,10 +45,11 @@ test("rejects reused, applied, cross-scope, and over-budget proposals", () => {
 });
 
 test("command targets exact exploration readiness and excludes creation, apply, and replay", async () => {
-  const manifest = JSON.parse(await readFile("package.json", "utf8")) as { scripts: Record<string, string> };
+  const manifest = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8")) as { scripts: Record<string, string> };
   assert.equal(manifest.scripts["demo:llm:explore:adapt"], "node scripts/run-demo-llm-exploration-adaptation.mjs");
-  const source = await readFile("packages/test-runner/src/demo-workspace.ts", "utf8");
+  const source = await readFile(path.join(repositoryRoot, "packages/test-runner/src/demo-workspace/exploration-adaptation.ts"), "utf8");
   const start = source.indexOf("export async function runDemoLlmExplorationAdaptationProposal");
+  assert.notEqual(start, -1);
   const end = source.indexOf("export async function", start + 40);
   const body = source.slice(start, end);
   assert.match(body, /inspectExactExplorationAdaptationReadiness/u);
@@ -55,7 +59,7 @@ test("command targets exact exploration readiness and excludes creation, apply, 
 });
 
 test("launcher imports provider-free environment and emits only a safe result or reason code", async () => {
-  const source = await readFile("scripts/run-demo-llm-exploration-adaptation.mjs", "utf8");
+  const source = await readFile(path.join(repositoryRoot, "scripts/run-demo-llm-exploration-adaptation.mjs"), "utf8");
   assert.match(source, /withoutProviderSecrets/u);
   assert.match(source, /exploration_adaptation_readiness/u);
   assert.match(source, /adaptation_readiness/u);
@@ -97,13 +101,14 @@ test("apply evaluation rejects extra adaptations, assisted validation, and uncha
 });
 
 test("apply launcher is secret-stripped and workspace command performs only one validation", async () => {
-  const manifest = JSON.parse(await readFile("package.json", "utf8")) as { scripts: Record<string, string> };
+  const manifest = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8")) as { scripts: Record<string, string> };
   assert.equal(manifest.scripts["demo:llm:explore:adapt:apply"], "node scripts/apply-demo-llm-exploration-adaptation.mjs");
-  const launcher = await readFile("scripts/apply-demo-llm-exploration-adaptation.mjs", "utf8");
+  const launcher = await readFile(path.join(repositoryRoot, "scripts/apply-demo-llm-exploration-adaptation.mjs"), "utf8");
   assert.match(launcher, /withoutProviderSecrets/u);
   assert.doesNotMatch(launcher, /DEEPSEEK_API_KEY|error\.message|String\(error\)/u);
-  const workspace = await readFile("packages/test-runner/src/demo-workspace.ts", "utf8");
+  const workspace = await readFile(path.join(repositoryRoot, "packages/test-runner/src/demo-workspace/exploration-adaptation.ts"), "utf8");
   const start = workspace.indexOf("export async function runDemoLlmExplorationAdaptationApply");
+  assert.notEqual(start, -1);
   const end = workspace.indexOf("export async function", start + 50);
   const body = workspace.slice(start, end);
   assert.match(body, /allowPendingAdaptationId/u);
@@ -144,13 +149,14 @@ test("validation rejects assisted runs, non-six-action runs, and adaptation-set 
 });
 
 test("validate launcher is secret-stripped and command is one provider-free exact-ID run", async () => {
-  const manifest = JSON.parse(await readFile("package.json", "utf8")) as { scripts: Record<string, string> };
+  const manifest = JSON.parse(await readFile(path.join(repositoryRoot, "package.json"), "utf8")) as { scripts: Record<string, string> };
   assert.equal(manifest.scripts["demo:llm:explore:adapt:validate"], "node scripts/validate-demo-llm-exploration-adaptation.mjs");
-  const launcher = await readFile("scripts/validate-demo-llm-exploration-adaptation.mjs", "utf8");
+  const launcher = await readFile(path.join(repositoryRoot, "scripts/validate-demo-llm-exploration-adaptation.mjs"), "utf8");
   assert.match(launcher, /withoutProviderSecrets/u);
   assert.doesNotMatch(launcher, /DEEPSEEK_API_KEY|error\.message|String\(error\)/u);
-  const workspace = await readFile("packages/test-runner/src/demo-workspace.ts", "utf8");
+  const workspace = await readFile(path.join(repositoryRoot, "packages/test-runner/src/demo-workspace/exploration-adaptation.ts"), "utf8");
   const start = workspace.indexOf("export async function runDemoLlmExplorationAdaptationValidation");
+  assert.notEqual(start, -1);
   const end = workspace.indexOf("export async function", start + 60);
   const body = workspace.slice(start, end);
   assert.match(body, /locateExactAppliedEvidenceGuidedCreation/u);

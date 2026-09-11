@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
 import { explorationAdaptationRunIsComplete, requireExactExplorationProposalIdentity, safeRuntimePatchDiagnostics } from "../demo-llm-exploration-adaptation-wait.js";
+
+const repositoryRoot = path.resolve(import.meta.dirname, "../../../..");
 
 function run(status: "running" | "failed", interventions: number, adaptationIds: string[] = []) {
   return {
@@ -54,7 +57,7 @@ test("diagnostics project only bounded categories, statuses, and allowlisted iss
 });
 
 test("proposal launcher exposes the safe proposal identity reason code", async () => {
-  const launcher = await readFile("scripts/run-demo-llm-exploration-adaptation.mjs", "utf8");
+  const launcher = await readFile(path.join(repositoryRoot, "scripts/run-demo-llm-exploration-adaptation.mjs"), "utf8");
   assert.match(launcher, /exploration_adaptation_run/u);
   assert.match(launcher, /reasonCode/u);
   assert.match(launcher, /runtimePatchDiagnostics/u);

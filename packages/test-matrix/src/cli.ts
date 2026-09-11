@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { appendFile, readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
+import { loadScenarioCatalog } from "./scenario-catalog.js";
 import { selectChangedCapabilities } from "./selector.js";
 
 type Options = { paths: string[]; githubOutput?: string };
@@ -28,7 +29,7 @@ async function parseOptions(argv: string[]): Promise<Options> {
 
 export async function main(argv = process.argv.slice(2)): Promise<void> {
   const options = await parseOptions(argv);
-  const selection = selectChangedCapabilities(options.paths);
+  const selection = selectChangedCapabilities(options.paths, await loadScenarioCatalog());
   process.stdout.write(`${JSON.stringify(selection, null, 2)}\n`);
   if (options.githubOutput) {
     const gates = new Set(selection.requiredGates);

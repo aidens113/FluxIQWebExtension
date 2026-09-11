@@ -1,9 +1,12 @@
-import type { ClientGatewayActionCommand, ClientGatewayRecordingEvent, ClientGatewaySnapshot, ClientGatewayStateUpdate } from "@fluxiq/client-gateway-websocket";
+import type { ClientGatewayActionCommand, ClientGatewayRecordingEvent, ClientGatewayStateUpdate } from "@fluxiq/client-gateway-websocket";
+import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
-import { WEB_AUTOMATION_DOMAIN_ID, WEB_AUTOMATION_EVENTS, type WebAutomationEventType } from "../constants";
+import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
+import { webAutomationEventTypeForClientKind } from "../io/input-model";
 import { webAutomationActionTargetFromElement, webAutomationActionVisualTargetFromElement, type WebAutomationElementStateInput } from "../recording/web-state";
 import {
   WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER,
+  WEB_AUTOMATION_ACTION_TYPES,
   type WebAutomationActionVisualTarget,
   type WebAutomationActionCommand,
   type WebAutomationActionResult,
@@ -27,24 +30,20 @@ export type WebAutomationRecordedPayload = {
   metadata?: JsonObject | undefined;
 };
 
-export function webAutomationEventTypeForClientKind(kind: string): WebAutomationEventType {
-  if (kind === "content.ready") return WEB_AUTOMATION_EVENTS.clientReady;
-  if (kind === "browser.tab") return WEB_AUTOMATION_EVENTS.tabStateChanged;
-  if (kind === "browser.navigation") return WEB_AUTOMATION_EVENTS.pageNavigated;
-  if (kind === "dom.click") return WEB_AUTOMATION_EVENTS.elementClicked;
-  if (kind === "dom.input") return WEB_AUTOMATION_EVENTS.elementInputChanged;
-  if (kind === "dom.change") return WEB_AUTOMATION_EVENTS.elementChanged;
-  if (kind === "dom.submit") return WEB_AUTOMATION_EVENTS.formSubmitted;
-  if (kind === "dom.focus") return WEB_AUTOMATION_EVENTS.elementFocused;
-  if (kind === "dom.blur") return WEB_AUTOMATION_EVENTS.elementBlurred;
-  if (kind === "dom.keydown") return WEB_AUTOMATION_EVENTS.keyboardPressed;
-  if (kind === "dom.wheel") return WEB_AUTOMATION_EVENTS.mouseWheel;
-  if (kind === "dom.scroll") return WEB_AUTOMATION_EVENTS.scrollChanged;
-  if (kind === "dom.mutation") return WEB_AUTOMATION_EVENTS.domMutated;
-  if (kind === "dom.snapshot") return WEB_AUTOMATION_EVENTS.snapshotCaptured;
-  if (kind === "action.result") return WEB_AUTOMATION_EVENTS.actionExecuted;
-  return WEB_AUTOMATION_EVENTS.clientError;
-}
+/** A gateway command whose action type is not a web automation action. Nothing is dispatched for it. */
+export type WebAutomationActionRejection = {
+  commandId: string;
+  status: "rejected";
+  /** The action type as requested, unaltered. */
+  actionType: string;
+  message: string;
+  /** Core's structured failure for the rejection; the extension reports it on the wire as `failure`. */
+  failure: AutomationStudioFailureRecord;
+};
+
+export type WebAutomationActionTypeNormalization =
+  | { ok: true; actionType: WebAutomationActionType }
+  | { ok: false; failure: AutomationStudioFailureRecord; message: string };
 
 export function createWebAutomationRecordingEvent(payload: WebAutomationRecordedPayload, input: { tabId?: number; frameId?: number; recordingId?: string } = {}): ClientGatewayRecordingEvent {
   const eventType = webAutomationEventTypeForClientKind(payload.kind);
@@ -95,27 +94,21 @@ export function createWebAutomationStateUpdate(input: { activeContextId?: string
   };
 }
 
-export function createWebAutomationStructuredSnapshot(input: { snapshotId?: string; timestamp?: number; state?: JsonObject; payload?: JsonObject; metadata?: JsonObject }): ClientGatewaySnapshot {
-  return {
-    ...(input.snapshotId !== undefined ? { snapshotId: input.snapshotId } : {}),
-    ...(input.timestamp !== undefined ? { timestamp: input.timestamp } : {}),
-    kind: "structured",
-    ...(input.state !== undefined ? { state: input.state } : {}),
-    ...(input.payload !== undefined ? { payload: input.payload } : {}),
-    metadata: compactJsonObject({
-      domainId: WEB_AUTOMATION_DOMAIN_ID,
-      ...(input.metadata ?? {})
-    })
-  };
-}
-
-export function webAutomationActionFromGatewayCommand(command: ClientGatewayActionCommand & { commandId: string }): WebAutomationActionCommand {
+/**
+ * Maps a gateway action command to the browser command the extension runs, or
+ * to a rejection carrying Core's failure record when its action type is
+ * unknown. An unknown type is never rewritten into some other action.
+ */
+export function webAutomationActionFromGatewayCommand(command: ClientGatewayActionCommand & { commandId: string }): WebAutomationActionCommand | WebAutomationActionRejection {
+  const normalized = normalizeWebAutomationActionType(command.actionType);
+  if (!normalized.ok) {
+    return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: normalized.message, failure: normalized.failure };
+  }
   const parameters = command.parameters ?? {};
   const target = command.target ?? {};
-  const actionType = normalizeWebAutomationActionType(command.actionType);
   return compactJsonObject({
     commandId: command.commandId,
-    actionType,
+    actionType: normalized.actionType,
     selector: stringValue(target.selector) ?? stringValue(parameters.selector),
     text: stringValue(parameters.text),
     value: stringValue(parameters.value),
@@ -126,10 +119,6 @@ export function webAutomationActionFromGatewayCommand(command: ClientGatewayActi
     visualTarget: jsonObject(target.visualTarget ?? parameters.visualTarget) as unknown as WebAutomationActionVisualTarget | undefined,
     options: parameters
   }) as unknown as WebAutomationActionCommand;
-}
-
-export function legacyBrowserActionType(actionType: WebAutomationActionType): string {
-  return WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER[actionType];
 }
 
 export function webAutomationActionResultPayload(result: WebAutomationActionResult): JsonObject {
@@ -149,23 +138,40 @@ export function webAutomationActionResultPayload(result: WebAutomationActionResu
   });
 }
 
-function normalizeWebAutomationActionType(actionType: string): WebAutomationActionType {
-  if (actionType.startsWith("web.")) return actionType as WebAutomationActionType;
-  const legacy = {
-    "browser.navigate": "web.browser.navigate",
-    "dom.click": "web.dom.click",
-    "dom.type": "web.dom.type",
-    "dom.clear": "web.dom.clear",
-    "dom.select": "web.dom.select",
-    "dom.scroll": "web.dom.scroll",
-    "dom.keypress": "web.dom.keypress",
-    "dom.wait_for_selector": "web.dom.wait_for_selector",
-    "dom.wait_for_text": "web.dom.wait_for_text",
-    "dom.extract": "web.dom.extract",
-    "dom.capture_snapshot": "web.dom.capture_snapshot"
-  } as Record<string, WebAutomationActionType>;
-  return legacy[actionType] ?? "web.dom.extract";
+/**
+ * The one place a requested action type is resolved. A canonical type passes,
+ * a legacy dotted alias ("dom.click") becomes its canonical type, and anything
+ * else is rejected with Core's failure record rather than guessed at.
+ */
+export function normalizeWebAutomationActionType(actionType: string): WebAutomationActionTypeNormalization {
+  if (CANONICAL_ACTION_TYPES.has(actionType)) return { ok: true, actionType: actionType as WebAutomationActionType };
+  const canonical = LEGACY_ACTION_TYPE_ALIASES.get(actionType);
+  if (canonical !== undefined) return { ok: true, actionType: canonical };
+  const requested = typeof actionType === "string" && actionType.length > 0 ? actionType : "(missing)";
+  return { ok: false, failure: UNSUPPORTED_ACTION_TYPE_FAILURE, message: `Unsupported web automation action type: ${requested}` };
 }
+
+/**
+ * Every rejection's failure, in Core's taxonomy: a client refusing an action
+ * type it does not implement is a capability refusal, decided before anything
+ * is dispatched, and retrying the same command unchanged can never succeed —
+ * which is why Core forbids this category from being retryable. The requested
+ * type travels in the result's `metadata`, not in the record, whose text
+ * fields are bounded.
+ */
+const UNSUPPORTED_ACTION_TYPE_FAILURE: AutomationStudioFailureRecord = Object.freeze({
+  category: "blocked_by_capability_or_policy",
+  code: "web.action.unsupported_type",
+  retryable: false,
+  stage: "dispatch"
+});
+
+const CANONICAL_ACTION_TYPES: ReadonlySet<string> = new Set(WEB_AUTOMATION_ACTION_TYPES);
+
+/** Legacy dotted names, derived from the exported canonical -> legacy map so the two cannot drift. */
+const LEGACY_ACTION_TYPE_ALIASES: ReadonlyMap<string, WebAutomationActionType> = new Map(
+  Object.entries(WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER).map(([canonical, legacy]): [string, WebAutomationActionType] => [legacy, canonical as WebAutomationActionType])
+);
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;

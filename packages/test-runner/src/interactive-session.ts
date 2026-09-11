@@ -12,6 +12,8 @@ import { installDeterministicNetworkGuard, scenarioNetworkOrigins } from "./netw
 import { fluxIQSessionCookieDescriptor } from "./panel-verification.js";
 import { loadScenarioManifest } from "./scenarios.js";
 import type { FluxIQTargetConfiguration } from "./target-config.js";
+import { selectOptionByKeyboard } from "./trusted-input/index.js";
+import { scenarioLabOriginProof } from "./lab-control/index.js";
 
 const MAX_ACTIONS = 500;
 const MAX_LINE_BYTES = 16_384;
@@ -133,7 +135,7 @@ export async function executeInteractiveAction(action: Exclude<InteractiveAction
   } else if (action.action === "select") {
     const target = page.locator(action.selector);
     await assertNotSensitive(target);
-    await target.selectOption(action.value, { timeout: MAX_WAIT_MS });
+    await selectOptionByKeyboard(target, action.value, { timeoutMs: MAX_WAIT_MS });
   } else if (action.action === "check") {
     const target = page.locator(action.selector);
     await assertNotSensitive(target);
@@ -216,6 +218,9 @@ export async function runInteractiveSession(options: InteractiveSessionOptions):
       scenarioOrigins: scenarioNetworkOrigins(topology.scenarioOrigin),
       fluxiqOrigins: [topology.fluxiqOrigin],
       ...(topology.gatewayUrl ? { gatewayOrigins: [topology.gatewayUrl] } : {}),
+      // The same second-origin proof the recording lane uses, so a fixture's
+      // cross-origin frame (iframe-checkout) is allowed here too.
+      verifyScenarioOrigin: scenarioLabOriginProof(topology.scenarioOrigin, topology.allocation.controllerToken),
     });
     if (control) await context.addCookies([fluxIQSessionCookieDescriptor(topology.fluxiqOrigin, control.sessionCookieValue())]);
     const worker = context.serviceWorkers()[0] ?? await context.waitForEvent("serviceworker", { timeout: MAX_WAIT_MS });

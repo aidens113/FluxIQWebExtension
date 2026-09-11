@@ -1,9 +1,8 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { pathToFileURL } from "node:url";
 import { getScenario, listScenarios } from "./registry.js";
-import { navigationPage } from "./scenarios/navigation/scenario.js";
-import { iframePage } from "./scenarios/iframe-checkout/scenario.js";
 import { ScenarioStateStore } from "./state-store.js";
+import type { RenderContext, ScenarioRouteResponse } from "./types.js";
 
 const LOOPBACK_HOST = "127.0.0.1";
 const CONTROL_PREFIX = "/__control";
@@ -85,13 +84,12 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
   }
 
   if (request.method !== "GET" && request.method !== "HEAD") return sendJson(response, 405, { error: "method_not_allowed" });
-  if (url.pathname === "/scenarios/navigation/redirect") {
-    response.writeHead(302, { location: "/scenarios/navigation/redirected", "cache-control": "no-store" });
-    response.end();
+  const method = request.method === "HEAD" ? "HEAD" : "GET";
+  const routed = routeScenarioSubpath(url, method, renderContext(runToken, store, alternateOrigin), store);
+  if (routed) {
+    response.writeHead(routed.status, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", ...routed.headers });
+    response.end(method === "HEAD" ? undefined : routed.body ?? "");
     return;
-  }
-  if (url.pathname === "/scenarios/iframe-checkout/cross-frame") {
-    response.setHeader("content-security-policy", "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors http://127.0.0.1:*");
   }
   const html = renderRoute(url.pathname, runToken, store, alternateOrigin);
   if (!html) return sendJson(response, 404, { error: "not_found" });
@@ -129,22 +127,30 @@ function renderRoute(pathname: string, runToken: string, store: ScenarioStateSto
     const links = listScenarios().map(scenario => `<li><a href="${scenario.startPath}">${scenario.title}</a></li>`).join("");
     return `<!doctype html><html lang="en"><meta charset="utf-8"><title>Scenario lab</title><body><main><h1>Scenario lab</h1><ul>${links}</ul></main></body></html>`;
   }
-  if (["/scenarios/navigation/start", "/scenarios/navigation/second", "/scenarios/navigation/history", "/scenarios/navigation/redirected"].includes(pathname)) {
-    const name = pathname.split("/").at(-1) ?? "start";
-    return navigationPage(name, runToken);
-  }
-  if (pathname === "/scenarios/iframe-checkout/same-frame") return iframePage("same", runToken);
-  if (pathname === "/scenarios/iframe-checkout/cross-frame") return iframePage("cross", runToken);
   const match = /^\/scenarios\/([^/]+)\/?$/.exec(pathname);
   const id = match?.[1];
   if (!id) return undefined;
   const scenario = getScenario(id);
   const snapshot = store.snapshot(id);
-  return scenario && snapshot ? scenario.render(snapshot.state, {
-    runToken,
-    seed: store.seed,
-    ...(alternateOrigin ? { alternateOrigin } : {}),
-  }) : undefined;
+  return scenario && snapshot ? scenario.render(snapshot.state, renderContext(runToken, store, alternateOrigin)) : undefined;
+}
+
+/** Delegates `/scenarios/<id>/<subpath>` to the scenario's own `route`, applying its mutation on GET. */
+function routeScenarioSubpath(url: URL, method: "GET" | "HEAD", context: RenderContext, store: ScenarioStateStore): ScenarioRouteResponse | undefined {
+  const match = /^\/scenarios\/([^/]+)\/(.+)$/.exec(url.pathname);
+  const id = match?.[1];
+  const subpath = match?.[2];
+  if (!id || !subpath) return undefined;
+  const scenario = getScenario(id);
+  const snapshot = store.snapshot(id);
+  if (!scenario?.route || !snapshot) return undefined;
+  const routed = scenario.route(snapshot.state, { subpath, query: url.searchParams, method }, context);
+  if (routed?.mutation && method === "GET") store.mutate(id, routed.mutation.operation, routed.mutation.payload);
+  return routed;
+}
+
+function renderContext(runToken: string, store: ScenarioStateStore, alternateOrigin?: string): RenderContext {
+  return { runToken, seed: store.seed, ...(alternateOrigin ? { alternateOrigin } : {}) };
 }
 
 function setSecurityHeaders(response: ServerResponse): void {

@@ -10,5 +10,7 @@ export default defineConfig({
   outputDir: "test-results/artifacts",
   timeout: 20_000,
   expect: { timeout: 3_000 },
-  use: { headless: true, locale: "en-US", timezoneId: "UTC", viewport: { width: 1280, height: 720 }, colorScheme: "light", trace: "retain-on-failure", screenshot: "only-on-failure" },
+  // Full Chromium in headless mode: the separate headless shell crashes on
+  // launch on some Windows hosts.
+  use: { headless: true, channel: "chromium", locale: "en-US", timezoneId: "UTC", viewport: { width: 1280, height: 720 }, colorScheme: "light", trace: "retain-on-failure", screenshot: "only-on-failure" },
 });

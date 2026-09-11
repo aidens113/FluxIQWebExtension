@@ -1,8 +1,12 @@
 // Where the page's own events become recorded events. Every listener is
 // registered in the capture phase so a page that stops propagation cannot hide
 // an interaction from the recorder, and each one returns immediately unless
-// recording is on. Untrusted events are ignored: a synthetic click the page
-// dispatched is not something the user did.
+// recording is on. Untrusted events are ignored on the pointer, click, input,
+// change, key and wheel paths: a synthetic click the page dispatched is not
+// something the user did, and the synthetic `input` and `change` a replayed
+// `type`, `clear` or `select` action dispatches would record that action a
+// second time -- the background worker already records it as a runtime
+// confirmation.
 //
 // Registration order is a contract in its own right -- pointerdown is recorded
 // before click so an action taken during the press is captured with the state
@@ -68,6 +72,7 @@ export function installRecordingEventListeners(): void {
 
   document.addEventListener("input", (event) => {
     if (!isRecording()) return;
+    if (!event.isTrusted) return;
     rememberEventPathElements(event);
     const target = event.target instanceof Element ? event.target : null;
     if (target && isTextEntryElement(target)) {
@@ -81,6 +86,7 @@ export function installRecordingEventListeners(): void {
 
   document.addEventListener("change", (event) => {
     if (!isRecording()) return;
+    if (!event.isTrusted) return;
     rememberEventPathElements(event);
     const target = event.target instanceof Element ? event.target : null;
     if (target && isTextEntryElement(target)) {

@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import type { RunAllocation } from "../allocation.js";
-import { PROVIDER_SECRET_ENVIRONMENT_VARIABLES, buildFluxIQEnvironment, buildScenarioEnvironment, withoutProviderSecrets } from "../environment.js";
+import { PROVIDER_SECRET_ENVIRONMENT_VARIABLES, buildFluxIQEnvironment, buildScenarioEnvironment, webPanelHostModulePath, withoutProviderSecrets } from "../environment.js";
 
 const allocation: RunAllocation = {
   runId: "run-a", runRoot: path.resolve("runs/run-a"), fluxiqRoot: path.resolve("runs/run-a/fluxiq-root"),
@@ -44,4 +45,22 @@ test("removes provider credentials case-insensitively without mutating the drive
   }
   assert.equal(scenario.SAFE_VALUE, "retained");
   assert.equal(fluxiq.SAFE_VALUE, "retained");
+});
+
+test("resolves the web panel host from the domain package's one declaration", async () => {
+  const manifest = JSON.parse(await readFile(new URL("../../../../domain/package.json", import.meta.url), "utf8")) as { fluxiqHostModule?: unknown };
+  const declared = manifest.fluxiqHostModule;
+  assert.equal(typeof declared, "string", "domain/package.json declares fluxiqHostModule");
+  // Core imports the host with import(), and FluxIQ packages are ESM-only.
+  assert.match(declared as string, /\.mjs$/, "the host is an ES module");
+
+  const repositoryRoot = path.resolve("runs/repository");
+  const hostModule = webPanelHostModulePath(repositoryRoot);
+  assert.equal(hostModule, path.resolve(repositoryRoot, "domain", declared as string));
+  assert.ok(!path.relative(path.join(repositoryRoot, "domain", "dist"), hostModule).startsWith(".."), "the built host stays in the ignored domain/dist/");
+
+  const paths = { repositoryRoot, fluxiqRepositoryRoot: path.resolve("runs/core") };
+  assert.equal(buildFluxIQEnvironment(allocation, paths, {}).FLUXIQ_HOST_MODULE, hostModule);
+  const explicit = path.resolve("runs/other-host.mjs");
+  assert.equal(buildFluxIQEnvironment(allocation, { ...paths, hostModulePath: explicit }, {}).FLUXIQ_HOST_MODULE, explicit);
 });

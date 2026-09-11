@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { RunAllocation } from "./allocation.js";
 
 /**
@@ -36,8 +38,23 @@ export function buildScenarioEnvironment(allocation: RunAllocation, seed: number
   };
 }
 
+/**
+ * The FluxIQ web panel host module of the repository at `repositoryRoot`.
+ * `domain/package.json` declares its path once, as `fluxiqHostModule`
+ * (relative to the domain package): the host build writes that file and every
+ * launcher reads the same field. The declaration is read from this checkout.
+ */
+export function webPanelHostModulePath(repositoryRoot: string): string {
+  const manifest = new URL("../../../domain/package.json", import.meta.url);
+  const { fluxiqHostModule } = JSON.parse(readFileSync(manifest, "utf8")) as { fluxiqHostModule?: unknown };
+  if (typeof fluxiqHostModule !== "string" || !fluxiqHostModule.trim()) {
+    throw new Error(`${fileURLToPath(manifest)} must declare "fluxiqHostModule", the path of the built web panel host`);
+  }
+  return path.resolve(repositoryRoot, "domain", fluxiqHostModule);
+}
+
 export function buildFluxIQEnvironment(allocation: RunAllocation, paths: TopologyPaths, base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  const hostModulePath = paths.hostModulePath ?? path.join(paths.repositoryRoot, "domain", "dist", "host", "web-panel-host.cjs");
+  const hostModulePath = paths.hostModulePath ?? webPanelHostModulePath(paths.repositoryRoot);
   return {
     ...withoutProviderSecrets(base),
     PORT: String(allocation.webPort),

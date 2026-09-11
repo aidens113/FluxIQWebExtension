@@ -1,3 +1,4 @@
+import { WEB_AUTOMATION_ACTION_SAFETY } from "../actions/safety";
 import { webAutomationActionDefinitions } from "../actions/schemas";
 import { actionInputDefinitions, stateInputDefinitions } from "./input-model";
 
@@ -13,5 +14,8 @@ export const webAutomationManifestOutputs = webAutomationActionDefinitions.map((
   description: action.description,
   schema: action.parameterSchema,
   capabilities: ["web.actions"],
-  safety: { level: action.actionType === "web.dom.extract" || action.actionType.startsWith("web.dom.wait") ? "safe" as const : "review" as const, requiresApproval: action.actionType !== "web.dom.extract" }
+  safety: {
+    level: WEB_AUTOMATION_ACTION_SAFETY[action.actionType],
+    requiresApproval: WEB_AUTOMATION_ACTION_SAFETY[action.actionType] !== "safe"
+  }
 }));

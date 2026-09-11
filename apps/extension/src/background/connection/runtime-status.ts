@@ -6,9 +6,11 @@ import { WEB_AUTOMATION_INPUT_IDS } from "@fluxiq-web-extension/domain/client";
 import type {
   BrowserActionCommand,
   BrowserActionResult,
+  DomElementDescriptor,
   RecordingEventPayload,
   RuntimeCommandStatus
 } from "../../shared/protocol";
+import { isSensitiveFieldSignature } from "../../shared/sensitive-field";
 
 export class RuntimeStatusTracker {
   private status: RuntimeCommandStatus = { state: "idle" };
@@ -78,7 +80,9 @@ export function runtimeResultTarget(result: BrowserActionResult): string | undef
 }
 
 // A succeeded runtime action is also a recorded action: this is the recording
-// event it confirms, and the registered input that event maps to.
+// event it confirms, and the registered input that event maps to. A `type` or
+// `select` confirmation carries the value the field was left holding, as the
+// recorder would have captured it from a user; a sensitive field never does.
 export function runtimeConfirmationForActionResult(result: BrowserActionResult): {
   kind: RecordingEventPayload["kind"];
   inputId: string;
@@ -88,12 +92,32 @@ export function runtimeConfirmationForActionResult(result: BrowserActionResult):
 } | undefined {
   if (result.actionType === "web.browser.navigate") return { kind: "browser.navigation", inputId: WEB_AUTOMATION_INPUT_IDS.navigationRequested };
   if (result.actionType === "web.dom.click") return { kind: "dom.click", inputId: WEB_AUTOMATION_INPUT_IDS.elementClicked };
-  if (result.actionType === "web.dom.type") return { kind: "dom.input", inputId: WEB_AUTOMATION_INPUT_IDS.textEntered };
+  if (result.actionType === "web.dom.type") return { kind: "dom.input", inputId: WEB_AUTOMATION_INPUT_IDS.textEntered, ...confirmedValue(result) };
   if (result.actionType === "web.dom.clear") return { kind: "dom.input", inputId: WEB_AUTOMATION_INPUT_IDS.fieldCleared, inputValue: "" };
-  if (result.actionType === "web.dom.select") return { kind: "dom.change", inputId: WEB_AUTOMATION_INPUT_IDS.optionSelected };
+  if (result.actionType === "web.dom.select") return { kind: "dom.change", inputId: WEB_AUTOMATION_INPUT_IDS.optionSelected, ...confirmedValue(result) };
   if (result.actionType === "web.dom.keypress") return { kind: "dom.keydown", inputId: WEB_AUTOMATION_INPUT_IDS.keyPressed };
   if (result.actionType === "web.dom.scroll") return { kind: "dom.scroll", inputId: WEB_AUTOMATION_INPUT_IDS.pageScrolled };
   return undefined;
+}
+
+// The value is read from the result's element descriptor, which the content
+// script fills from the field after the action ran and only while input-value
+// capture is on -- so a recording that withholds input values withholds this
+// one too.
+function confirmedValue(result: BrowserActionResult): { inputValue?: string } {
+  const element = result.element;
+  if (!element || element.value === undefined || isSensitiveElementDescriptor(element)) return {};
+  return { inputValue: element.value };
+}
+
+// The recorder's sensitivity rule, shared with the content script, read from
+// the wire descriptor because the worker never sees the element.
+function isSensitiveElementDescriptor(element: DomElementDescriptor): boolean {
+  return isSensitiveFieldSignature({
+    inputType: element.inputType,
+    autocomplete: element.attributes?.autocomplete,
+    dataSensitive: element.attributes?.["data-sensitive"]
+  });
 }
 
 function runtimeActionTarget(action: BrowserActionCommand): string | undefined {

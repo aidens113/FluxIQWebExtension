@@ -58,7 +58,7 @@ test("first adaptation profile enforces two ordered separately bounded adaptive 
 });
 
 test("adaptation launcher exposes normal and no-build focused commands without embedding provider secrets", async () => {
-  const root = process.cwd();
+  const root = path.resolve(import.meta.dirname, "../../../..");
   const [script, manifestText] = await Promise.all([
     readFile(path.join(root, "scripts", "run-demo-llm-adaptation.mjs"), "utf8"),
     readFile(path.join(root, "package.json"), "utf8"),

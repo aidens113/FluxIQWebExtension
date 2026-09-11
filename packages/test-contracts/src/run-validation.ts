@@ -1,4 +1,6 @@
-import type { RunManifest } from "./run.js";
+import { AUTOMATION_STUDIO_ADAPTIVE_FAILURE_CLASSES } from "./failure-category.js";
+import { runActionStatuses, type RunManifest } from "./run.js";
+import { scenarioStepOperations } from "./scenario.js";
 import { ContractValidationError, type ValidationIssue, type ValidationResult } from "./validation.js";
 import { add, array, date, enumeration, finite, keys, object, parseJson, result, safeRelativePath, sha256, text, uniqueStrings, type Check } from "./runtime-validation.js";
 
@@ -28,7 +30,7 @@ const artifact: Check = (input, path, issues) => {
 
 export function validateRunManifest(input: unknown): ValidationResult<RunManifest> {
   const issues: ValidationIssue[] = []; const value = object(input, "$", issues); if (!value) return result(input, issues);
-  keys(value, ["schemaVersion", "runId", "scenarioId", "scenarioRevision", "seed", "status", "startedAt", "finishedAt", "repositories", "compatibility", "lockfiles", "extension", "environment", "ports", "processExits", "artifacts", "redactionState", "verdict", "fluxiqExecution"], "$", issues);
+  keys(value, ["schemaVersion", "runId", "scenarioId", "scenarioRevision", "seed", "status", "startedAt", "finishedAt", "repositories", "compatibility", "lockfiles", "extension", "environment", "ports", "processExits", "artifacts", "redactionState", "verdict", "fluxiqExecution", "workflowId", "variantId", "automationFailure", "steps", "actions"], "$", issues);
   if (value.schemaVersion !== "0.1") add(issues, "$.schemaVersion", "must equal 0.1");
   for (const key of ["runId", "scenarioId", "scenarioRevision"] as const) text(value, key, "$", issues);
   finite(value.seed, "$.seed", issues, 0, 0xffffffff, true); enumeration(value.status, statuses, "$.status", issues); date(value.startedAt, "$.startedAt", issues);
@@ -46,6 +48,10 @@ export function validateRunManifest(input: unknown): ValidationResult<RunManifes
   enumeration(value.redactionState, ["pending", "verified", "failed"], "$.redactionState", issues);
   if (value.verdict !== undefined) enumeration(value.verdict, verdicts, "$.verdict", issues);
   if (value.fluxiqExecution !== undefined) validateFluxIQExecution(value.fluxiqExecution, issues);
+  for (const key of ["workflowId", "variantId"] as const) if (value[key] !== undefined) kebabId(value[key], `$.${key}`, issues);
+  if (value.automationFailure !== undefined && value.automationFailure !== null) validateAutomationFailure(value.automationFailure, issues);
+  if (value.steps !== undefined) array(value.steps, "$.steps", issues, stepTiming);
+  if (value.actions !== undefined) array(value.actions, "$.actions", issues, actionTiming);
   validateStatusConsistency(value, issues);
   return result(input, issues);
 }
@@ -101,6 +107,36 @@ function validateFluxIQExecution(input: unknown, issues: ValidationIssue[]): voi
     if (typeof value.sourceHashVerifiedAfterRun !== "boolean") add(issues, `${path}.sourceHashVerifiedAfterRun`, "must be a boolean");
     enumeration(value.panelVerification, ["verified", "limited"], `${path}.panelVerification`, issues);
   }
+}
+
+const stepTiming: Check = (input, path, issues) => {
+  const value = object(input, path, issues); if (!value) return;
+  keys(value, ["stepId", "operation", "startedAt", "durationMs", "outcome"], path, issues);
+  text(value, "stepId", path, issues);
+  enumeration(value.operation, scenarioStepOperations, `${path}.operation`, issues);
+  date(value.startedAt, `${path}.startedAt`, issues);
+  finite(value.durationMs, `${path}.durationMs`, issues, 0, Number.MAX_SAFE_INTEGER, true);
+  enumeration(value.outcome, ["succeeded", "failed"], `${path}.outcome`, issues);
+};
+const actionTiming: Check = (input, path, issues) => {
+  const value = object(input, path, issues); if (!value) return;
+  keys(value, ["actionType", "startedAt", "durationMs", "status"], path, issues);
+  boundedText(value, "actionType", path, issues);
+  date(value.startedAt, `${path}.startedAt`, issues);
+  if (value.durationMs !== undefined) finite(value.durationMs, `${path}.durationMs`, issues, 0, Number.MAX_SAFE_INTEGER, true);
+  enumeration(value.status, runActionStatuses, `${path}.status`, issues);
+};
+
+function validateAutomationFailure(input: unknown, issues: ValidationIssue[]): void {
+  const path = "$.automationFailure";
+  const value = object(input, path, issues); if (!value) return;
+  keys(value, ["category", "code"], path, issues);
+  enumeration(value.category, AUTOMATION_STUDIO_ADAPTIVE_FAILURE_CLASSES, `${path}.category`, issues);
+  if (value.code !== undefined) boundedText(value, "code", path, issues);
+}
+
+function kebabId(input: unknown, path: string, issues: ValidationIssue[]): void {
+  if (typeof input !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(input)) add(issues, path, "must be a lowercase kebab-case identifier");
 }
 
 function persistentWorkspaceName(input: unknown, path: string, issues: ValidationIssue[]): void {

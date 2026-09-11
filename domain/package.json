@@ -7,9 +7,10 @@
     ".": "./src/index.ts",
     "./client": "./src/client/index.ts"
   },
+  "fluxiqHostModule": "./dist/host/web-panel-host.mjs",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "check": "tsc -p tsconfig.json --noEmit",
+    "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
     "host:build": "node scripts/build-web-panel-host.mjs",
     "fluxiq:setup": "node scripts/setup-fluxiq.mjs",
     "test": "node scripts/test-domain.mjs"

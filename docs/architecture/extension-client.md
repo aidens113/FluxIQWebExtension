@@ -66,15 +66,21 @@ Every message is a versioned JSON envelope:
 }
 ```
 
-Current client message groups:
+Client messages this extension sends:
 
 - `client.hello`
 - `client.state_update`
-- `client.recording_entry`
+- `client.start_recording`
+- `client.stop_recording`
 - `client.recording_event`
 - `client.snapshot`
 - `client.action_result`
-- `client.error`
+
+The gateway protocol also defines `client.recording_entry` and
+`client.error`, and FluxIQ's gateway client package can send both, but this
+extension sends neither. An operator action travels as a
+`client.recording_event` (see [Recording Evidence](#recording-evidence)), and
+a gateway error is kept as local connection state.
 
 Current server message groups:
 
@@ -122,6 +128,19 @@ The extension maps those commands into browser operations and returns
 `client.action_result` with status, message, target evidence, payload evidence,
 and start/completion timestamps.
 
+The domain resolves a command's action type once, in
+`normalizeWebAutomationActionType`
+([`domain/src/client/gateway-mapping.ts`](../../domain/src/client/gateway-mapping.ts)):
+a canonical type passes, a legacy dotted alias such as `dom.click` becomes its
+canonical type, and any other type is rejected instead of being rewritten into
+another action. The extension answers that rejection itself, without
+dispatching anything to the page: a `failed` `client.action_result` whose
+`failure` is Core's structured record — `category:
+"blocked_by_capability_or_policy"`, `code: "web.action.unsupported_type"`,
+`retryable: false`, `stage: "dispatch"` — with the requested type in
+`metadata`. The current state of every capability, and whether its outcome is
+validated, is in [web capabilities](web-capabilities.md).
+
 Action commands, recorded action events, and action results may also carry a
 `visualTarget` object. This object is the editor-facing reference to the state
 entity acted on, separate from the raw `element` fingerprint:
@@ -165,17 +184,33 @@ The extension never sends a generic executable action entry. Inputs without an
 output mapping remain non-executable even when they were captured during a
 recording. Registered input adapters also subscribe to the live gateway stream
 so runtime consumers can wait for browser confirmation events after dispatch.
+One domain function, `webAutomationRecordedAction`
+([`domain/src/io/input-model.ts`](../../domain/src/io/input-model.ts)), maps a
+recorded event to its action input for both the live path and the
+recording-to-Subflow proposal mapper, and an event whose output would lack a
+required parameter stays evidence.
 
 ## Recording Evidence
 
-Content scripts emit browser evidence:
+The content script and the background worker emit browser evidence:
 
-- page/content ready;
-- tab and navigation changes;
-- click/input/change/submit/focus/blur;
+- content ready, from the content script;
+- tab and navigation changes, from the background worker;
+- click (recorded on `pointerdown` and on `click`), input, change, and submit;
 - keydown and scroll;
 - batched DOM mutation counts;
 - DOM snapshots.
+
+No focus or blur evidence is emitted. The shared protocol still declares
+`dom.focus` and `dom.blur` kinds and the domain still maps them to event
+types, but the recorder
+([`content/dom-events.ts`](../../apps/extension/src/content/dom-events.ts))
+registers no focus or blur listener. The recorder ignores untrusted pointer,
+click, input, change, key, and wheel events. A click the page dispatches is
+therefore not recorded as the user's, and a replayed `type`, `clear`, or
+`select` is recorded once, as its runtime confirmation, not a second time from
+the synthetic `input` and `change` events it dispatches. Submit and window
+scroll are recorded without a trust check.
 
 The background process maps this raw evidence into `web-automation` domain
 events such as `web.element.clicked`, `web.element.input_changed`,
@@ -183,6 +218,12 @@ events such as `web.element.clicked`, `web.element.input_changed`,
 `client.recording_event`. FluxIQ validates those events against the registered
 `RecordingDomainDefinition` before deriving normalized timelines, signal
 registries, task models, or policies.
+
+When Core refuses a start because the approving Automation Studio context has
+expired, it answers `recording.project_required`. The extension cancels its
+pending start on that answer, so the 750 ms local-start fallback never fires and
+the recorder returns to idle with no retry and no reason shown to the operator.
+Classifying and surfacing that refusal is Week 1 Phase 1.5 work.
 
 Recording sessions start with a FluxIQ `StateSnapshot` rather than an empty
 state object. DOM snapshots are converted into compact, factual state paths
@@ -197,10 +238,31 @@ label, value, href, or stable public identifiers such as `data-testid`,
 This gives FluxIQ enough factual target data for mining without bloating
 recordings with anonymous DOM structure.
 
-Primary user actions are also sent as `client.recording_entry` action entries
-so Automation Studio timelines can distinguish operator actions from passive
-state observations. Raw snapshots and state updates remain available as
-recording observations through the client gateway bridge.
+Sensitive values are not yet redacted when they are captured. The
+`captureInputValues` setting defaults to on
+([`shared/browser.ts`](../../apps/extension/src/shared/browser.ts)) and
+reaches the content script with every recording message. While it is on, an
+element descriptor carries the value of any input, textarea, select, or
+`contenteditable`, password fields included, and the recorder sends the same
+value as the event's `inputValue`. The sensitivity rule is one function,
+`isSensitiveFieldSignature` in
+[`shared/sensitive-field.ts`](../../apps/extension/src/shared/sensitive-field.ts),
+used by the content script and the background worker alike: a password input,
+`data-sensitive="true"`, or any `autocomplete` token that is
+`current-password`, `new-password`, `one-time-code`, or `cc-*` (every token is
+checked, so `billing cc-number` counts). It withholds only a `<select>`'s
+`selectedValue`, the `hasValue` flag, and the value on a `type` or `select`
+runtime confirmation. The domain marks `elements.*.value` and `forms.*` as
+sensitive state, which labels the value downstream but does not remove it.
+Redaction at capture is Week 1 Phase 1.4 work.
+
+Primary user actions are not sent as a separate message type. Each one that
+maps to a registered action input goes out as a `client.recording_event`
+whose `metadata.inputId` names that input, and FluxIQ's gateway bridge
+records an event carrying a registered input ID as that input. That is how
+Automation Studio timelines distinguish operator actions from passive state
+observations. Raw snapshots and state updates remain available as recording
+observations through the client gateway bridge.
 
 When a recorded action has an element, the background process derives
 `visualTarget` with the same state ID algorithm used by snapshot conversion.

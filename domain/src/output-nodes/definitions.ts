@@ -1,6 +1,7 @@
 import type { AutomationNodeParameter, AutomationNodePort } from "fluxiq/automation-studio/nodes";
 import type { AutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
+import { WEB_AUTOMATION_ACTION_SAFETY } from "../actions/safety";
 import { webAutomationActionDefinitions } from "../actions/schemas";
 import type { WebAutomationActionDefinition } from "../actions/schemas";
 import type { WebAutomationActionType } from "../actions/types";
@@ -20,7 +21,7 @@ export const webAutomationOutputNodeDefinitions: AutomationStudioNodeDefinition[
 );
 
 export function createWebAutomationOutputNodeDefinition(definition: WebAutomationActionDefinition): AutomationStudioNodeDefinition {
-  const safeOutput = isSafeOutput(definition.actionType);
+  const safeOutput = WEB_AUTOMATION_ACTION_SAFETY[definition.actionType] === "safe";
   const requiredParameters = new Set(
     Array.isArray(definition.parameterSchema.required)
       ? definition.parameterSchema.required.filter((value): value is string => typeof value === "string")
@@ -88,10 +89,6 @@ function parametersForOutput(outputId: WebAutomationActionType): AutomationNodeP
   ];
   if (outputId === "web.dom.capture_snapshot") return [];
   return selectorParameters;
-}
-
-function isSafeOutput(outputId: WebAutomationActionType): boolean {
-  return outputId === "web.dom.extract" || outputId === "web.dom.capture_snapshot" || outputId.startsWith("web.dom.wait");
 }
 
 function iconForOutput(outputId: WebAutomationActionType): string {

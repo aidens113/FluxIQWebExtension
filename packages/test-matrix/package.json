@@ -9,8 +9,9 @@
   "exports": "./dist/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "build:registry": "pnpm --filter @fluxiq-web-extension/scenario-lab... build",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "pnpm build && node --test dist/**/*.test.js"
+    "test": "pnpm build:registry && pnpm build && node --test dist/**/*.test.js"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

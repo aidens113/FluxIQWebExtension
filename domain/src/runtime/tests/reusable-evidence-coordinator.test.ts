@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mapCompletedWebReusableEvidenceToPutRequest, writeCompletedWebReusableEvidence, type CompletedWebReusableEvidenceInput } from "../index.ts";
+import { mapCompletedWebReusableEvidenceToPutRequest, writeCompletedWebReusableEvidence, type CompletedWebReusableEvidenceInput } from "..";
 
 function input(overrides: Partial<CompletedWebReusableEvidenceInput> = {}): CompletedWebReusableEvidenceInput {
   return {

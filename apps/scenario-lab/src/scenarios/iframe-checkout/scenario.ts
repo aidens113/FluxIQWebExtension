@@ -3,6 +3,10 @@ import { createScenarioManifest, defineScenario } from "../../types.js";
 
 type State = { sameOriginClicks: number; crossOriginClicks: number };
 
+// The cross-origin frame is served from the second loopback port, so its
+// policy must let the main origin embed it.
+const CROSS_FRAME_CSP = "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors http://127.0.0.1:*";
+
 export const iframeCheckoutScenario = defineScenario<State>({
   id: "iframe-checkout", title: "Iframe checkout", startPath: "/scenarios/iframe-checkout/",
   seed: 105,
@@ -31,9 +35,14 @@ export const iframeCheckoutScenario = defineScenario<State>({
     const alternate = context.alternateOrigin ?? "http://localhost";
     return page("Iframe checkout", `<main><h1>Iframe checkout</h1><iframe title="Same-origin checkout" data-testid="same-frame" src="/scenarios/iframe-checkout/same-frame"></iframe><iframe title="Cross-origin checkout" data-testid="cross-frame" src="${alternate}/scenarios/iframe-checkout/cross-frame"></iframe></main>`, "");
   },
+  route(_state, request, context) {
+    if (request.subpath === "same-frame") return { status: 200, body: iframePage("same", context.runToken) };
+    if (request.subpath === "cross-frame") return { status: 200, headers: { "content-security-policy": CROSS_FRAME_CSP }, body: iframePage("cross", context.runToken) };
+    return undefined;
+  },
 });
 
-export function iframePage(kind: "same" | "cross", runToken: string): string {
+function iframePage(kind: "same" | "cross", runToken: string): string {
   return page(`${kind} origin frame`, `<main><h1>${kind === "same" ? "Same" : "Cross"}-origin frame</h1><button data-testid="${kind}-frame-action">Confirm synthetic checkout</button><p data-testid="frame-result" aria-live="polite">Pending</p></main>`, `${fixtureClient(runToken, "iframe-checkout")}
 document.querySelector('button').addEventListener('click', async () => { await mutate('${kind}'); document.querySelector('[data-testid="frame-result"]').textContent = 'Confirmed'; });`);
 }

@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { assertDemoFlowDocument, assertDemoParentDocument, assertDemoSubflowOwnership, boundExplorationRunStages, createDemoFlowDocument, demoGraphReconciliationOperations, explorationFlowName, requireDemoScenarioUrl, resolveDemoWorkspaceConfiguration, resolveExplorationFlowNameForRecovery, startPersistentScenarioLabWithRecovery } from "../demo-workspace.js";
 
+const repositoryRoot = path.resolve(import.meta.dirname, "../../../..");
 const root = path.resolve("fixture-repository");
 const required = {
   FLUXIQ_TEST_USERNAME: "runner",
@@ -36,7 +37,7 @@ test("non-default exploration request naming and blank crash recovery are determ
 
 test("bound run launcher exposes only allowlisted stage and reason diagnostics", async () => {
   assert.deepEqual(boundExplorationRunStages, ["pre_browser_identity", "pre_browser_topology", "browser_execution", "manifest_oracle", "final_validation"]);
-  const source = await readFile(path.resolve("scripts/run-demo-llm-exploration-request-flow.mjs"), "utf8");
+  const source = await readFile(path.join(repositoryRoot, "scripts/run-demo-llm-exploration-request-flow.mjs"), "utf8");
   assert.match(source, /stage, reasonCode, providerCallCount: 0/u);
   assert.doesNotMatch(source, /error\.message|error\.stack|JSON\.stringify\(error\)/u);
 });

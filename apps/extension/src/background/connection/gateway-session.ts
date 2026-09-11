@@ -25,7 +25,7 @@ import {
   type JsonObject,
   type ServerCommandPayload
 } from "../../shared/protocol";
-import { browserActionFromGatewayCommand } from "../../runtime";
+import { browserActionFromGatewayCommand, gatewayActionResultFromRejection, isWebAutomationActionRejection } from "../../runtime";
 import { compactObject } from "./value-readers";
 
 type SessionReadyMessage = Extract<ClientGatewayServerMessage, { type: "server.session_ready" }>;
@@ -273,7 +273,17 @@ export class GatewaySession {
     client.on("start_recording", ({ message }) => handlers.onCommand({ ...message.payload, command: "start_recording" }, message.id));
     client.on("stop_recording", ({ message }) => handlers.onCommand({ ...message.payload, command: "stop_recording" }, message.id));
     client.on("capture_snapshot", ({ message }) => handlers.onCommand({ ...message.payload, command: "capture_snapshot" }, message.id));
-    client.on("execute_action", ({ message }) => handlers.onCommand({ command: "execute_action", action: browserActionFromGatewayCommand(message.payload) }, message.id));
+    client.on("execute_action", ({ message }) => {
+      const action = browserActionFromGatewayCommand(message.payload);
+      // An unknown action type is answered here; nothing is dispatched to the page.
+      if (isWebAutomationActionRejection(action)) {
+        void this.send("client.action_result", gatewayActionResultFromRejection(action)).catch((error: unknown) => {
+          this.deps.reportError(error instanceof Error ? error.message : "Could not report a rejected action.");
+        });
+        return;
+      }
+      handlers.onCommand({ command: "execute_action", action }, message.id);
+    });
   }
 
   private startHeartbeat(): void {

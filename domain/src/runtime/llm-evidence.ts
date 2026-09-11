@@ -1,4 +1,5 @@
 import type { FluxIQ } from "fluxiq";
+import type { AutomationStudioRuntimeTargetOverrideEvidenceValidation, AutomationStudioRuntimeTargetOverrideFailedAction } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 
@@ -49,22 +50,12 @@ export type WebLlmPageEvidence = {
   truncated: boolean;
 };
 
-export type WebRuntimeTargetOverrideEvidenceValidation =
-  | { status: "matched" }
-  | { status: "resolved"; target: { selector: string } }
-  | { status: "absent" | "ambiguous" };
-
-export type WebRuntimeTargetOverrideFailedAction = Readonly<{
-  nodeId: string;
-  definitionId: string;
-}>;
-
 /** Match a proposed selector and action semantics only against the bounded sanitized packet already supplied to the LLM. */
 export function validateWebRuntimeTargetOverrideEvidence(
   evidence: WebLlmPageEvidence,
   target: { selector: string },
-  failedAction: WebRuntimeTargetOverrideFailedAction
-): WebRuntimeTargetOverrideEvidenceValidation {
+  failedAction: AutomationStudioRuntimeTargetOverrideFailedAction
+): AutomationStudioRuntimeTargetOverrideEvidenceValidation {
   const matches = evidence.elements.filter((element) => element.selector === target.selector);
   if (matches.length > 1) return { status: "ambiguous" };
   if (matches.length === 1 && targetCompatibleWithFailedAction(matches[0]!, failedAction.definitionId)) return { status: "matched" };
@@ -131,7 +122,7 @@ export type WebAutomationLlmEvidenceRuntime = {
   tools: Array<{ toolId: string; description: string; inputSchema: JsonObject; effect?: "observe" | "mutate"; repeatPolicy?: "after_mutation"; initialObservation?: { input: JsonObject } }>;
   executeTool(input: EvidenceToolRequest): Promise<WebLlmEvidenceToolExecution>;
   captureSanitizedFailureEvidence(input: WebLlmFailureEvidenceRequest): Promise<WebLlmPageEvidence>;
-  validateTargetOverrideEvidence(evidence: JsonObject, target: { selector: string }, failedAction: WebRuntimeTargetOverrideFailedAction): WebRuntimeTargetOverrideEvidenceValidation;
+  validateTargetOverrideEvidence(evidence: JsonObject, target: { selector: string }, failedAction: AutomationStudioRuntimeTargetOverrideFailedAction): AutomationStudioRuntimeTargetOverrideEvidenceValidation;
 };
 
 export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGateway): WebAutomationLlmEvidenceRuntime {
@@ -249,16 +240,11 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
 }
 
 /** Bind web-only evidence tools into Core's domain-neutral global LLM harness. */
-export function bindWebAutomationLlmEvidenceRuntime(fluxiq: FluxIQ): boolean {
-  const automationStudio = fluxiq.programs.automationStudio as typeof fluxiq.programs.automationStudio & {
-    bindLlmEvidenceRuntime?: (runtime: WebAutomationLlmEvidenceRuntime) => unknown;
-  };
-  if (typeof automationStudio.bindLlmEvidenceRuntime !== "function") return false;
-  automationStudio.bindLlmEvidenceRuntime(createWebAutomationLlmEvidenceRuntime({
+export function bindWebAutomationLlmEvidenceRuntime(fluxiq: FluxIQ): void {
+  fluxiq.programs.automationStudio.bindLlmEvidenceRuntime(createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => eligibleWebSessionIds(fluxiq),
     executeAction: (sessionId, command) => fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, command),
   }));
-  return true;
 }
 
 export function sanitizeWebLlmSnapshot(input: unknown, options: { expectedOrigin?: string; maxEvidenceBytes?: number } = {}): WebLlmPageEvidence {
