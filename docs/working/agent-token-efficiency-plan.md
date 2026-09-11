@@ -31,8 +31,11 @@ entry.
   tests, eight promoted lessons (six global, two FluxIQ), seven templates,
   a standalone working-docs audit with 18 tests, and `install.mjs`.
 - Installed into `~/.claude`: `CLAUDE.md` (two imports), `agents/worker.md`,
-  and the four skills. `install.mjs --check` passes except for the settings
-  step.
+  the four skills, and the settings fragment (env, permissions, five hooks),
+  merged with the user's explicit permission. `install.mjs --check` passes.
+- Live-tested in this session: a subagent's `git commit` in a throwaway
+  repository was denied by the guard with the expected reason. The `worker`
+  agent type joins the roster from the next session on.
 - `AGENTS.md` in both repositories has the `Delegation` subsection; the
   protocol in both has the 40-line brief budget, the report format, and the
   12-line return contract.
@@ -45,18 +48,11 @@ entry.
 
 **Left to the user**
 
-1. Merge the settings fragment into `~/.claude/settings.json`: run
-   `node F:\!AgentBrain\install.mjs --print-settings` and paste the result,
-   or add the five hooks through `/hooks`. Claude Code's permission
-   classifier refused the agent's write there twice, which is the right
-   boundary for a file whose entries execute commands. Until the merge, no
-   hook runs and workers default to the session model unless `model` is
-   passed on dispatch.
-2. Open a new session in either repository and run `/context`: `AGENTS.md`,
+1. Open a new session in either repository and run `/context`: `AGENTS.md`,
    the global rules, and both lessons indexes should appear under memory
    files. Approve the one-time dialog for the family-index import. The
    metrics hook then starts writing `~/.claude/brain-metrics.ndjson`.
-3. Give the brain a private remote if it should survive this machine.
+2. Give the brain a private remote if it should survive this machine.
 
 **Deviations from the plan as written**
 
@@ -69,19 +65,23 @@ entry.
   is legitimate and was a false positive on this repository's protocol.
 - The git guard also denies `merge`, `cherry-pick`, `am`, `stash`, bare
   `reset`, `filter-repo`, `branch -d`, and `gh pr create` or `merge`, and it
-  keys on `agent_id`, so every subagent is guarded, not only `worker`.
+  keys on `agent_id`, so every subagent is guarded, not only `worker`. It
+  strips heredoc bodies before scanning: the live test showed a report whose
+  prose quoted `git commit` being denied.
+- Claude Code refuses a subagent `Write` to a file named `report.md`, so the
+  template is `worker-report.md` and the worker definition says never to use
+  that name.
 
 **Next steps**
 
-1. The three user steps above.
+1. The two user steps above.
 2. Phase 4 after two weeks of use: read the metrics, compare against the
    4 KB global and 20 KB project targets, and move `AGENTS.md` sections
    into path-scoped rules only if the project layer is over target.
 3. Use `/new-project` on the next repository and fix what the templates get
    wrong; both budgeted templates sit exactly at their caps.
 
-**Blockers:** none. Hooks and the Opus default are inert until the settings
-merge.
+**Blockers:** none.
 
 ---
 
@@ -245,12 +245,13 @@ briefs everywhere shrink to the task itself.
 built-in ones included, without relying on memory. Per-invocation `model`
 still overrides it.
 
-The fragment is merged into `~/.claude/settings.json` by the user, not by
-`install.mjs` and not by an agent: Claude Code's permission classifier
-refuses an agent write that adds hooks there, which is the right boundary
-for a file whose entries execute commands. `node install.mjs
---print-settings` prints the fragment with the brain path filled in, and
-`install.mjs --check` reports until the merge is done.
+The fragment is merged into `~/.claude/settings.json` by the user, or by an
+agent only with the user's explicit permission in the conversation: Claude
+Code's permission classifier otherwise refuses an agent write that adds
+hooks there, which is the right boundary for a file whose entries execute
+commands. `install.mjs` never writes it. `node install.mjs --print-settings`
+prints the fragment with the brain path filled in, and `install.mjs --check`
+reports until the merge is done.
 
 **Skills.** `/resume [document]` prints the `Active` rows of
 `docs/working/README.md`, reads the named document's `Current State`, and
@@ -459,6 +460,26 @@ for the last time.
 - Outcome: Partial
 - Follow-up: user merges the settings fragment; confirm `/context` in a new
   session.
+
+### 2026-09-10 — Settings merged; guard live-tested and fixed
+
+- Agent: supervisor, with one Opus 5 subagent as the test subject
+- Changed: `~/.claude/settings.json` (env, permissions, five hooks; with the
+  user's explicit permission); brain `hooks/worker-git-guard.mjs` (heredoc
+  bodies stripped) and its tests; `agents/worker.md` (never name a report
+  `report.md`); `templates/report.md` renamed `worker-report.md`; this
+  document's `Current State`.
+- Why: The user granted the write the classifier had refused. The live test
+  then showed two things worth fixing: the guard denied a heredoc whose
+  prose quoted `git commit`, and Claude Code refuses subagent writes to a
+  file named `report.md`.
+- Validation: subagent ran `git commit --allow-empty` in a throwaway
+  repository -> denied, reason `Blocked "git commit": workers must not
+  change git history or open pull requests...`; brain `npm test` -> 59
+  pass, 0 fail; `node install.mjs --check` -> `brain check passed`; the
+  heredoc payload piped to the guard -> silence, exit 0.
+- Outcome: Accepted
+- Follow-up: confirm `/context` in a new session; Phase 4 after real use.
 
 ---
 
