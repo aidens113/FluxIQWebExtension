@@ -6,7 +6,7 @@ Created: 2026-09-11
 Last updated: 2026-09-11
 Owner: Senior supervisor agent
 Scope: Week 1 of the 30-day MVP (Phases 1.1–1.6): browser action vocabulary, element identity, browser state/evidence, failure taxonomy, and FluxBench, with automated verification through the Testing Lab as the primary proof for every phase. Weeks 2–4 are out of scope except where Week 1 must leave a seam for them.
-Paired document: `F:\!FluxIQ\docs\working\mvp-week1-web-automation-reliability-plan.md` — to be created at Phase 1.5 dispatch, before the first Core edit; Core owns the failure-taxonomy contract
+Paired document: `F:\!FluxIQ\docs\working\mvp-week1-web-automation-reliability-plan.md` — to be created at Wave 3 dispatch, before the first Core edit; Core owns the failure-taxonomy contracts (C1, C2) and the expectation-evaluator seam (C3)
 Related: [30-Day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%20MVP%20Implementation%20Plan.md), [MVP agent instructions](../../MVP_AGENT_INSTRUCTIONS.md), [testing facility](../architecture/testing-facility.md), [extension client](../architecture/extension-client.md), [automated-testing-facility-plan](./automated-testing-facility-plan.md), [llm-production-automation-plan](./llm-production-automation-plan.md), audit reports under [reports/](./mvp-week1-web-automation-reliability-plan/reports/)
 
 ---
@@ -41,13 +41,15 @@ ownership, the automated proof, and the exit commands.
 **Done**
 
 - Working document, index row, audit briefs (archived), seven reports.
-- Decisions D1–D8 recorded. Phase plan, proof method, corpus, and
-  sequencing written.
+- Decisions D1–D10 recorded; D9, D10, and the 28-workflow corpus were
+  confirmed by the user on 2026-09-11. Phase plan, proof method, corpus,
+  and sequencing written.
 
 **Not done**
 
 - All implementation. No worker has edited source.
-- Paired Core document (created at Phase 1.5 dispatch).
+- Paired Core document (created at Wave 3 dispatch, before the first Core
+  edit).
 
 **Next steps**
 
@@ -58,7 +60,8 @@ ownership, the automated proof, and the exit commands.
 3. Dispatch Wave 2.
 
 **Blockers:** none. Per `AGENTS.md`, the user is alerted before the first
-Core edit (scheduled in Phase 1.5).
+Core edit (Wave 3: Phase 1.4 step 7 and Phase 1.5 step 2 form one Core
+work unit).
 
 ---
 
@@ -151,6 +154,19 @@ ledger entry, not a silent edit.
   records, Core generates the deterministic Subflow from the recording via
   its public API, the run executes provider-free — with a manifest→Flow
   compiler as fallback if the API path proves unstable.
+- **D9 — Week 1 takes the Core minor bump for the new comparison-status
+  members** (`target_not_found`, `target_ambiguous` on
+  `AutomationStudioTransitionComparisonStatus`), in the same Core work unit
+  as the adaptive-failure enum extension of D3, with one migration note
+  covering both. Confirmed by the user 2026-09-11. Downstream
+  comparison-status mappings added in Phase 1.5 handle the new members.
+- **D10 — The Core expectation-evaluator seam (C3) is built in Week 1,
+  with Phase 1.4.** A `bindExpectationEvaluator` option on the Automation
+  Studio service, mirroring `bindHostRuntime`, that Core calls from
+  `builtin.policy.expectation` and from `compareAutomationStudioTransition`
+  so `expectedState` is evaluated rather than counted. It lands with the
+  evidence work so a scenario that starts failing has evidence explaining
+  why. Confirmed by the user 2026-09-11.
 
 ## How Week 1 Is Proven
 
@@ -492,6 +508,18 @@ Steps:
    `StateSnapshot` gives "previous state" and "changed elements" a Core-side
    home and is the Week 2 `stateDiffs` input. Bounded by the same byte
    budget as the sanitized packet.
+7. **Core seam C3 — expectation evaluator** (Core worker, after the
+   paired document and user alert; files: `programs/automation-studio/
+   nodes/policy/expectation.ts`, `runtime/executor/contracts.ts`,
+   `runtime/executor/transition-comparison.ts`, `runtime/service.ts`
+   (`bindExpectationEvaluator`, beside `bindHostRuntime`)): an optional
+   `expectationEvaluator?(conditions, mode, timeoutMs, context)` that
+   `builtin.policy.expectation` awaits and that
+   `compareAutomationStudioTransition` uses to evaluate `expectedState`
+   against the host's current snapshot instead of counting keys; unbound
+   hosts keep today's behaviour. Downstream binds it in
+   `domain/src/runtime/expectation-evaluator.ts` over the same
+   `web.dom.assert` condition vocabulary. Tests in Core's `tests/` folders.
 
 Proof: T2 `content/evidence/*.spec.ts` — a 16-row table test on
 `modal-flows`, `infinite-feed`, `product-catalog`, `intermediate-state`
@@ -502,9 +530,12 @@ count. T3: `lab run sensitive-input --target isolated` with a new
 
 Exit checks: evidence table 16/16 present; redaction assertion green in T2
 and T3; `pnpm structure:check` shows `llm-evidence.ts` and `web-state.ts`
-under threshold.
+under threshold; a Core test proves an expectation node routes `failed`
+when a bound evaluator rejects, and a Lab scenario proves
+`web.dom.assert` conditions evaluated through the seam fail W24's
+`unannounced` variant.
 
-Core: none.
+Core: yes — seam C3 (D10), in the same Core work unit as Phase 1.5.
 
 ### Phase 1.5 — Explicit failure taxonomy
 
@@ -515,7 +546,8 @@ Steps:
 
 1. **Paired Core document and user alert** (supervisor): create
    `F:\!FluxIQ\docs\working\mvp-week1-web-automation-reliability-plan.md`
-   owning the contract; alert the user that the task crosses into Core
+   owning contracts C1–C3; done at Wave 3 dispatch, since Phase 1.4 step 7
+   is the first Core edit; alert the user that the task crosses into Core
    (`packages/contracts`, `packages/fluxiq` runtime and Automation Studio
    model), why, and the compatibility impact (additive fields, legacy
    regex fallback retained).
@@ -539,7 +571,7 @@ Steps:
    `output_not_observed`, `page_changed`, `auth_required`,
    `user_intervention_required`, and `AutomationStudioTransitionComparisonStatus`
    with `target_not_found`/`target_ambiguous` (a Core minor bump with a
-   migration note — see Open Questions); add `failure?: {category, code,
+   migration note, accepted by the user on 2026-09-11 — D9); add `failure?: {category, code,
    retryable, stage?, expected?, actual?, evidenceDigest?}` to every
    carrier. This also fixes the verified defect that a timed-out browser
    action can never classify as `timeout` (`transition-comparison.ts:64-65`
@@ -629,7 +661,8 @@ latency p95 within 25%.
 
 ## FluxBench Week 1 Corpus
 
-28 workflows over 22 fixtures (12 existing, 10 new). Each row is a manifest
+28 workflows over 22 fixtures (12 existing, 10 new), confirmed by the user
+on 2026-09-11. Each row is a manifest
 (`recordingScript`, `expected`, optional `variants`). Negative variants
 carry `expected.failure.category`.
 
@@ -677,7 +710,7 @@ parallel; serial steps are marked.
 | --- | --- | --- | --- |
 | 1 | 1–2 | 1.1 step 1 (serial, first); 1.1 steps 2–4; 1.6a steps 1–3, 5, 6; 1.6a fixtures (10) | ~16 |
 | 2 | 2–4 | 1.6a step 4 (Flow lane); 1.2 steps 1–5 (per action file); 1.3 steps 1–2 (capture side) | ~12 |
-| 3 | 4–5 | 1.3 steps 3–6; 1.4 steps 1–5; 1.5 step 1–2 (Core, after user alert) | ~8 |
+| 3 | 4–5 | paired Core document and user alert first; 1.3 steps 3–6; 1.4 steps 1–7 (step 7 Core); 1.5 steps 1–2 (Core) — C1–C3 form one Core work unit | ~9 |
 | 4 | 5–6 | 1.5 steps 3–5; corpus manifests finalised with expected categories | ~5 |
 | 5 | 6–7 | 1.6b | supervisor + 1 |
 
@@ -690,8 +723,9 @@ docs.
 - **Trusted-input emulation** may not satisfy some widgets; the corpus
   (W02, W03) decides whether `chrome.debugger` is reconsidered — post-MVP
   unless it blocks a category.
-- **Core coordination**: one scheduled Core change (1.5) plus possibly a
-  dispatch-failure re-route; both `dev` branches move together; downstream
+- **Core coordination**: one Core work unit spanning C1–C3 (Phase 1.4
+  step 7, Phase 1.5 step 2) including a minor bump; both `dev` branches
+  move together; downstream
   live checks require a rebuilt Core `dist`.
 - **Headed-only lanes** on the Windows host make the corpus ~45 min per
   three repeats; the content harness is headless and carries most of the
@@ -753,27 +787,25 @@ dispatched.
 - Outcome: Accepted
 - Follow-up: fold in `audit-core-runtime`; dispatch Wave 1.
 
+### 2026-09-11 — User decisions on Core scope and corpus
+- Agent: supervisor
+- Changed: this document — D9 and D10 added; Phase 1.4 step 7 (Core seam
+  C3) and its proof added; paired Core document moved to Wave 3 dispatch;
+  Phase 1.5 step 2 marks the minor bump accepted; corpus marked confirmed;
+  sequencing and risks updated; three open questions closed.
+- Why: The user, asked the three open questions, chose the recommended
+  option for each: take the Core minor bump this week alongside D3; build
+  the expectation-evaluator seam in Week 1 with Phase 1.4; accept the
+  28-workflow corpus as proposed.
+- Validation: `node scripts/structure-audit.mjs` after the edits —
+  observed output recorded in the commit; documentation only.
+- Outcome: Accepted
+- Follow-up: dispatch Wave 1.
+
 ## Open Questions
 
-- **Core minor bump for enum members (C2).** Adding `target_not_found`/
-  `target_ambiguous` to `AutomationStudioTransitionComparisonStatus` is a
-  deliberate break for exhaustive consumers under Core's 0.1 policy. The
-  supervisor recommends taking the bump in the same work unit as D3 (the
-  adaptive-failure enum extension is the same kind of change); the
-  alternative is carrying the outcomes in `metadata` until a scheduled Core
-  release. Owner: user, at the Phase 1.5 alert.
-- **Expectation evaluator seam (C3).** Core's `builtin.policy.expectation`
-  always passes and `expectedState` is counted, never evaluated. Week 1
-  does not depend on it (web-side `web.dom.assert` carries expectations),
-  but every other domain inherits a known-broken default, which this
-  repository's standards reject. Recommended: a `bindExpectationEvaluator`
-  option landing with the Phase 1.4 evidence work, in the paired Core
-  document. Owner: user, whether to schedule it this week or as the first
-  Week 2 item.
 - **Selector-keyed patch lane vs fingerprint-first doctrine.** Core's
   `validateTargetOverrideEvidence` takes `{selector}`. Week 1 makes the
   extension accept fingerprint-shaped targets; whether the patch lane
   becomes fingerprint-shaped is a Week 2 contract decision. Owner: senior
   supervisor agent, recorded for the Week 2 document.
-- **Corpus confirmation**: the 28 workflows above are the supervisor's
-  proposal for the plan's "20–30 real browser workflows". Owner: user.
