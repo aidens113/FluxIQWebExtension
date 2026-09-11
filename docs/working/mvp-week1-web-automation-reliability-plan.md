@@ -1,7 +1,7 @@
 # MVP Week 1 — Web Automation Reliability Plan
 
 Status: Active
-Status detail: Wave 1 nearly complete — fixtures, harness, contracts, runner, catalog, and the whole Core unit (baseline ratchet, host loading, failure taxonomy, web and runtime test health) verified; one recording-start flake under investigation and the Core build and test gates running; then integration and one push of both dev branches.
+Status detail: Wave 1 complete and pushed in one paired work unit (this repository f8885b8, Core 4867c5c). Wave 2 open: w2-foundation runs first and twelve briefs code against its contract.
 Created: 2026-09-11
 Last updated: 2026-09-11
 Owner: Senior supervisor agent
@@ -13,7 +13,7 @@ Related: [30-Day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 
 ## Current State
 
-**Phase: Wave 1 in progress.** Twenty workers dispatched in batches A–C;
+**Phase: Wave 1 complete and pushed; Wave 2 in progress.** Twenty workers dispatched in batches A–C;
 briefs in [briefs/wave-1.md](./mvp-week1-web-automation-reliability-plan/briefs/wave-1.md).
 Planning is complete; its ledger is archived at
 [archive/2026-09-11-planning-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-11-planning-ledger.md).
@@ -49,14 +49,10 @@ metrics, and cannot run a Flow on `isolated`.
   is an ES module on Core's public exports; isolated runs here use
   `FLUXIQ_TEST_ENV_FILES=none`.
 
-**Running:** none. The recording-start flake is closed: Core accepts a start only
-while the approving Automation Studio context is under 10 s old, the runner now
-restamps it immediately before the start, and the smoke bench passes (4 runs, 4
-passed, 0 skipped, exit 0), verified by the supervisor on a clear machine. The
-Core unit is finished and its suite is green: three lost writes in Flow saving
-fixed at source, the disk-bound stream case moved to the OS temp directory, and
-the Adaptation Audit case brought under its budget by seeding its fixture once.
-Core `check`, `docs:check`, `build`, `package:lint` and `test` each exit 0.
+**Running:** w2-foundation, the serial first brief of Wave 2; the twelve
+parallel briefs code against its contract and wait for it. Wave 1 shipped: the
+recording-start flake is fixed at its cause, the smoke bench passes (4 runs, 4
+passed, 0 skipped, exit 0), and the Core unit is green on every gate.
 
 **Findings that change later work**
 
@@ -80,14 +76,13 @@ Core `check`, `docs:check`, `build`, `package:lint` and `test` each exit 0.
   therefore set `FLUXIQ_TEST_ENV_FILES=none`, which skips both env files for
   one run. Never edit `.env.local`.
 
-**Not done:** the commit in both repositories and one push of both `dev`
-branches; Waves 2 to 5.
+**Not done:** Wave 2 after its foundation lands, then Waves 3 to 5.
 
 **Next steps**
 
-1. Commit both repositories and push both `dev` branches in one work unit.
-2. Dispatch Wave 2 from
+1. Verify w2-foundation, then dispatch the twelve parallel briefs from
    [briefs/wave-2.md](./mvp-week1-web-automation-reliability-plan/briefs/wave-2.md).
+2. Keep Lab runs serialized: only one may execute on this machine at a time.
 
 **Core unit (D11):** the baseline ratchet (mirrored here), domain-host loading,
 the failure taxonomy and carriers, and the web and runtime test suites are all
@@ -741,6 +736,14 @@ gate run that followed, and the first sighting of the recording-start flake.
   passed, 0 skipped, exit 0), and Core came green: `pnpm test` -> exit 0, fluxiq
   828 of 828 and web 1146 of 1146, with its structure audit clean.
 
+### 2026-09-11 — Wave 1 pushed; Wave 2 opened
+- Agent: supervisor
+- Changed: no source. Both repositories committed and pushed as one work unit,
+  then w2-foundation dispatched as the serial first brief of Wave 2.
+- Validation: `git push origin dev` -> `3a61de9..f8885b8  dev -> dev` here and
+  `e522f17..4867c5c  dev -> dev` in Core, each exit 0, both branches reporting
+  level with their remote afterwards.
+- Outcome: Accepted
 ## Open Questions
 
 - **Credentials at replay.** A Flow built from a recording cannot recover a
