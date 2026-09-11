@@ -13,7 +13,10 @@ import {
 } from "@fluxiq/client-gateway-websocket";
 import {
   webAutomationClientCapabilities,
-  type WebAutomationActionType
+  type WebAutomationActionCommand,
+  type WebAutomationActionResult,
+  type WebAutomationActionType,
+  type WebAutomationActionVisualTarget
 } from "@fluxiq-web-extension/domain/client";
 
 export {
@@ -188,21 +191,34 @@ export type DomElementDescriptor = {
   hasClickHandler?: boolean | undefined;
   attributes?: Record<string, string> | undefined;
   options?: Array<{ value: string; label: string }> | undefined;
+  /** Identity signals, matching Core's fingerprint normalizer (Phase 1.3). */
+  testId?: string | undefined;
+  accessibleName?: string | undefined;
+  label?: string | undefined;
+  implicitRole?: string | undefined;
+  context?: DomElementContext | undefined;
 };
 
-export type ActionVisualTarget = {
-  namespace: "web";
-  statePath: string;
-  selector?: string | undefined;
-  frameId?: string | undefined;
-  layerId?: string | undefined;
-  documentLayerId?: string | undefined;
-  bounds?: RectDescriptor | undefined;
-  documentBounds?: RectDescriptor | undefined;
-  anchor?: { type: "bounds"; bounds: RectDescriptor } | undefined;
-  confidence?: number | undefined;
-  metadata?: JsonObject | undefined;
+/**
+ * Where an element sits on the page, so two otherwise identical controls can be
+ * told apart (Phase 1.3). Every field is optional: a producer emits only what
+ * the element actually has.
+ */
+export type DomElementContext = {
+  formId?: string | undefined;
+  formName?: string | undefined;
+  formAction?: string | undefined;
+  fieldsetLegend?: string | undefined;
+  /** The nearest landmark role, for example `main`, `navigation`, `search`. */
+  landmark?: string | undefined;
+  /** The nearest preceding heading's text. */
+  heading?: string | undefined;
+  listPosition?: { index: number; total: number } | undefined;
+  tablePosition?: { row: number; column: number; columnHeader?: string | undefined } | undefined;
 };
+
+/** The domain's visual target, named as the extension has always called it. */
+export type ActionVisualTarget = WebAutomationActionVisualTarget;
 
 export type DomSnapshot = {
   url: string;
@@ -254,36 +270,40 @@ export type RecordingEventPayload = {
 
 export type BrowserActionType = WebAutomationActionType;
 
-export type BrowserActionCommand = {
-  commandId: string;
-  actionType: BrowserActionType;
-  tabId?: number | undefined;
-  frameId?: number | undefined;
-  selector?: string | undefined;
-  text?: string | undefined;
-  value?: string | undefined;
-  key?: string | undefined;
-  url?: string | undefined;
-  timeoutMs?: number | undefined;
-  coordinates?: { x: number; y: number } | undefined;
-  visualTarget?: ActionVisualTarget | undefined;
-  options?: JsonObject | undefined;
-};
+/**
+ * The action command and its result are the domain's own types, not copies.
+ * Before Phase 1.2 the same result was declared three times -- here, in
+ * `content/types.ts`, and in `domain/src/actions/types.ts` -- and the three
+ * could drift. The result is generic over the element descriptor and the
+ * snapshot so the extension keeps its richer shapes while every other field,
+ * including `status`, `validation`, `resolution`, and `failure`, is declared
+ * once in the domain.
+ */
+export type BrowserActionCommand = WebAutomationActionCommand;
 
-export type BrowserActionResult = {
-  commandId: string;
-  actionType: BrowserActionType;
-  status: "succeeded" | "failed" | "timed_out" | "cancelled";
-  message?: string | undefined;
-  url?: string | undefined;
-  title?: string | undefined;
-  element?: DomElementDescriptor | undefined;
-  visualTarget?: ActionVisualTarget | undefined;
-  snapshot?: DomSnapshot | undefined;
-  extracted?: JsonValue | undefined;
-  startedAt: number;
-  finishedAt: number;
-};
+export type BrowserActionResult = WebAutomationActionResult<DomElementDescriptor, DomSnapshot>;
+
+export type {
+  WebAutomationActionStatus as BrowserActionStatus,
+  WebAutomationActionValidation as BrowserActionValidation,
+  WebAutomationValidationSkipReason as BrowserActionValidationSkipReason,
+  WebAutomationTargetResolution as BrowserActionTargetResolution,
+  WebAutomationTargetStrategy as BrowserActionTargetStrategy,
+  WebAutomationAssertKind,
+  WebAutomationAssertRequest,
+  WebAutomationDialogRequest,
+  WebAutomationDownloadRequest,
+  WebAutomationExtractListPagination,
+  WebAutomationExtractListRequest,
+  WebAutomationKeyModifiers,
+  WebAutomationOptionSelector,
+  WebAutomationScrollRequest,
+  WebAutomationTabRequest,
+  WebAutomationUploadFile,
+  WebAutomationUploadRequest,
+  WebAutomationWaitCondition,
+  WebAutomationWaitRequest
+} from "@fluxiq-web-extension/domain/client";
 
 export type ServerCommandPayload =
   | { command: "start_recording"; recordingId: string; projectId?: string | null | undefined; taskId?: string | undefined }

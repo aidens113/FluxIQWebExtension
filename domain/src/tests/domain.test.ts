@@ -184,7 +184,7 @@ assert.equal(outputTargetFromPayload({
 })?.selector, "button.save-current");
 
 const outputNodeDefinitions = listWebAutomationOutputNodeDefinitions();
-assert.equal(outputNodeDefinitions.length, 11);
+assert.equal(outputNodeDefinitions.length, 18);
 const clickNodeDefinition = outputNodeDefinitions.find((definition) => definition.outputAction?.fixedOutputId === "web.dom.click");
 assert.equal(clickNodeDefinition?.requiredRuntimeCapabilities?.includes("web.actions"), true);
 assert.equal(validateAutomationStudioNodeDefinition(clickNodeDefinition!).ok, true);
@@ -198,7 +198,7 @@ const bootstrapResolution = {
 const bootstrapRegistry = new AutomationStudioNodeRegistry();
 for (const definition of outputNodeDefinitions) bootstrapRegistry.register(definition);
 assert.equal(new AutomationStudioNodeRegistry().list(bootstrapResolution).length, 39);
-assert.equal(bootstrapRegistry.list(bootstrapResolution).length, 50);
+assert.equal(bootstrapRegistry.list(bootstrapResolution).length, 57);
 const bootstrapCatalogBudget = automationStudioFlowBootstrapCatalogByteBudget({
   maxInputTokens: 3_000,
   instructionBytes: Buffer.byteLength(bootstrapInstruction, "utf8")

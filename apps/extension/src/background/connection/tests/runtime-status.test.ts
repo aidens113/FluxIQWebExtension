@@ -16,7 +16,15 @@ function field(overrides: Partial<DomElementDescriptor> = {}): DomElementDescrip
 }
 
 function actionResult(actionType: BrowserActionType, overrides: Partial<BrowserActionResult> = {}): BrowserActionResult {
-  return { commandId: "command-1", actionType, status: "succeeded", startedAt: 100, finishedAt: 150, ...overrides };
+  return {
+    commandId: "command-1",
+    actionType,
+    status: "succeeded",
+    validation: { status: "none", reason: "not-yet-validated" },
+    startedAt: 100,
+    finishedAt: 150,
+    ...overrides
+  };
 }
 
 // Keyed by the action type union, so a new action type does not compile until
@@ -32,7 +40,17 @@ const confirmations: Record<BrowserActionType, Confirmation> = {
   "web.dom.wait_for_selector": undefined,
   "web.dom.wait_for_text": undefined,
   "web.dom.extract": undefined,
-  "web.dom.capture_snapshot": undefined
+  "web.dom.capture_snapshot": undefined,
+  // Added in Week 1 (decision D6). None confirms a recorded user action yet:
+  // `w2-domain-vocabulary` gives `web.dom.check` its recording input, and this
+  // row becomes a confirmation then.
+  "web.dom.check": undefined,
+  "web.dom.assert": undefined,
+  "web.dom.extract_list": undefined,
+  "web.dom.upload": undefined,
+  "web.dom.dialog": undefined,
+  "web.browser.tab": undefined,
+  "web.browser.download": undefined
 };
 
 // The sensitivity rule the recorder defines (isSensitiveFormControl in

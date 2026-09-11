@@ -11,7 +11,11 @@ const SAFE_OUTPUTS: readonly WebAutomationActionType[] = [
   "web.dom.wait_for_selector",
   "web.dom.wait_for_text",
   "web.dom.extract",
-  "web.dom.capture_snapshot"
+  "web.dom.capture_snapshot",
+  // An assertion and a list extraction only read the page. The other five
+  // outputs added in Week 1 change the page or the browser, so they are review.
+  "web.dom.assert",
+  "web.dom.extract_list"
 ];
 
 test("the safety registry classifies every output exactly once, and only the observe and wait outputs as safe", () => {

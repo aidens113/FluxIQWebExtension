@@ -33,6 +33,23 @@ action that ran but whose post-condition did not hold is `OUTPUT_NOT_OBSERVED`
 `NAVIGATION_UNEXPECTED`; a wait or action timeout is status `timed_out` with
 `TIMEOUT`.
 
+Learned during Wave 1, on 2026-09-11, and binding for every Wave 2 worker.
+
+- Set `FLUXIQ_TEST_ENV_FILES=none` on every Lab command. `.env.local` configures
+  the existing install, and a process variable cannot clear its keys, so an
+  isolated run needs the explicit opt-out. Never edit `.env.local`.
+- Capture a command exit status by redirecting to a file and echoing `$?`, never
+  through a pipe. A pipe reports the status of the last command in it, which hid
+  a real failing test suite for part of a day.
+- Stage new files before running the structure audit. It reads only tracked
+  files, so an unstaged new file is never inspected and its violations surface
+  later, at the worst moment.
+- The baseline only lowers or removes entries and refuses growth. Do not grow a
+  baselined file, explanatory comments included; put the reasoning in the working
+  document or your report instead.
+- Only one Lab run may execute on this machine at a time. Two overlapping runs
+  crashed a build with an access violation. Serialize them.
+
 ## Wave 2 contract
 
 `w2-foundation` implements this section; every other Wave 2 brief codes against it.
@@ -106,7 +123,14 @@ in `apps/extension/e2e/content/tests/`; Definition of done also includes extensi
 
 ### Brief: w2-domain-vocabulary
 - Task: domain registration for the seven new actions and the upgraded parameters
-  w2-foundation typed: parameter schemas (`domain/src/actions/schemas.ts`), output nodes,
+  w2-foundation typed. Changed after w2-foundation ran: the seven entries in
+  `domain/src/actions/schemas.ts` already exist as minimum definitions. Listing an
+  action type without a definition makes `createWebAutomationDomainIo` throw, since
+  manifest outputs, output nodes, and registered domain outputs all derive from that
+  one table, so the list and the schemas could not land in separate work units.
+  Refine those seven definitions rather than create them, and keep the registry
+  total intact. Everything else is unchanged: parameter schemas
+  (`domain/src/actions/schemas.ts`), output nodes,
   payload mapping, and targets (`domain/src/output-nodes/{definitions,payloads,targets}.ts`;
   targets carry `testId`, `accessibleName`, `label`, matching Core's fingerprint
   normalizer), manifest outputs (`domain/src/io/manifest-definitions.ts`), client
@@ -231,6 +255,11 @@ in `apps/extension/e2e/content/tests/`; Definition of done also includes extensi
   failed with one — carry the message; and `about:`, `view-source:`, `data:` pages and the
   extension-store hosts count as recordable — the unsupported-page guard excludes them.
   Unit tests for the pure parts.
+  Also, found by w2-foundation on 2026-09-11:
+  `gatewayActionResultFromBrowserResult` drops `result.failure`, so the structured
+  failure records the content side now builds never reach the gateway. The
+  rejection path already forwards it; make the browser-result path do the same and
+  cover it with a test.
 - Owns (may edit): `action-runner.ts`, `automation-tab.ts`, `result-mapping.ts`,
   `browser-tab.ts`, `browser-download.ts`, their unit tests.
 - Report to: `reports/w2-browser-actions.md`

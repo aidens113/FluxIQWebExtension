@@ -1,6 +1,8 @@
 import type { BrowserActionCommand, BrowserActionResult } from "../shared/protocol";
 import { sendToTab } from "../background/tabs";
 import { resolveAutomationTab, waitForTabReady } from "./automation-tab";
+import { runBrowserTabAction } from "./browser-tab";
+import { runBrowserDownloadAction } from "./browser-download";
 
 export type BrowserActionRunRequest = {
   action: BrowserActionCommand;
@@ -37,11 +39,20 @@ export async function runBrowserActionCommand(request: BrowserActionRunRequest):
         commandId: action.commandId,
         actionType: action.actionType,
         status: "succeeded",
+        validation: { status: "none", reason: "not-yet-validated" },
         message: "Navigation completed.",
         url: action.url,
         startedAt,
         finishedAt: Date.now()
       }, tabId, action.frameId);
+  }
+  // Tab and download act on the browser, not on a document, so they run here
+  // rather than being sent to a content script that could not perform them.
+  if (action.actionType === "web.browser.tab") {
+    return withTarget(await runBrowserTabAction(action), tabId, action.frameId);
+  }
+  if (action.actionType === "web.browser.download") {
+    return withTarget(await runBrowserDownloadAction(action), tabId, action.frameId);
   }
   await waitForTabReady(tabId);
   await request.attachTabForRecording(tabId);
@@ -65,8 +76,11 @@ function unsupportedPageReasonForAction(action: BrowserActionCommand): string | 
   return undefined;
 }
 
+/** The actions that only observe or wait, which an unsupported page does not block. */
 function isMutatingAction(actionType: string): boolean {
   return actionType !== "web.dom.extract" &&
+    actionType !== "web.dom.extract_list" &&
+    actionType !== "web.dom.assert" &&
     actionType !== "web.dom.capture_snapshot" &&
     actionType !== "web.dom.wait_for_selector" &&
     actionType !== "web.dom.wait_for_text";
@@ -78,6 +92,7 @@ function actionFailure(action: BrowserActionCommand, message: string): BrowserAc
     commandId: action.commandId,
     actionType: action.actionType,
     status: "failed",
+    validation: { status: "none", reason: "not-yet-validated" },
     message,
     startedAt: now,
     finishedAt: now

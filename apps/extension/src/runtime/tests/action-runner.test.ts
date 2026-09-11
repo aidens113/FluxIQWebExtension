@@ -17,6 +17,7 @@ test("a failure is reported against its command, finished the moment it started"
       commandId: "c-9",
       actionType: "web.dom.click",
       status: "failed",
+      validation: { status: "none", reason: "not-yet-validated" },
       message: "Browser and extension pages cannot be automated.",
       startedAt: 9_000,
       finishedAt: 9_000

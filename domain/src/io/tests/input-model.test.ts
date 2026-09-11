@@ -154,7 +154,14 @@ assert.equal(webAutomationInputIdForRecordedEvent(recorded("dom.scroll", { scrol
 
 // Outputs with no recording input: dispatch-only, never produced from a user action.
 const recordableOutputs: string[] = actionInputDefinitions.map(([, , outputId]) => outputId);
-const dispatchOnlyOutputs = ["web.dom.wait_for_selector", "web.dom.wait_for_text", "web.dom.extract", "web.dom.capture_snapshot"];
+const dispatchOnlyOutputs = [
+  "web.dom.wait_for_selector", "web.dom.wait_for_text", "web.dom.extract", "web.dom.capture_snapshot",
+  // Added in Week 1 (decision D6). None is produced from a recorded user
+  // action yet; `w2-domain-vocabulary` gives `web.dom.check` its recording
+  // input, at which point it moves to the recordable list.
+  "web.dom.check", "web.dom.assert", "web.dom.extract_list", "web.dom.upload", "web.dom.dialog",
+  "web.browser.tab", "web.browser.download"
+];
 assert.equal(new Set(recordableOutputs).size, recordableOutputs.length, "each action input maps to its own output");
 assert.deepEqual([...recordableOutputs, ...dispatchOnlyOutputs].sort(), [...WEB_AUTOMATION_ACTION_TYPES].sort(), "every output is recordable or dispatch-only");
 for (const outputId of dispatchOnlyOutputs) {

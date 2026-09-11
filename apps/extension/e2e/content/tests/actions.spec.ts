@@ -1,9 +1,17 @@
 // Every action type the content script executes, once, on the basic-form
 // fixture: the reply the background worker receives and what changed on the
-// page. They pin today's behaviour, including what the action audit classes as
-// unreliable -- a dispatched key has no default action, and a select to a
-// value with no option still reports success -- so Phase 1.2 must change
-// these assertions when it changes that behaviour.
+// page.
+//
+// Since Phase 1.2 step 1 every reply also carries a `validation`: `passed` or
+// `failed` with what was compared, or `none` with a reason -- `evidence-only`
+// for a verb that only observes, `not-yet-validated` for one whose
+// post-condition is still to be written. A wait that runs out of time now
+// reports `timed_out` rather than `failed`.
+//
+// The remaining rows pin today's behaviour, including what the action audit
+// classes as unreliable -- a dispatched key has no default action, and a select
+// to a value with no option still reports success -- so the Wave 2 verb workers
+// must change these assertions when they change that behaviour.
 
 import type { Page } from "@playwright/test";
 import { expect, test } from "../index.js";
@@ -55,6 +63,7 @@ test("capture_snapshot: succeeds with the snapshot and changes nothing", async (
     commandId: "capture",
     actionType: "web.dom.capture_snapshot",
     status: "succeeded",
+    validation: { status: "none", reason: "evidence-only" },
     message: "Snapshot captured.",
     url: harness.url,
     title: "Basic form"
@@ -67,7 +76,12 @@ test("type: sets the field's value and dispatches untrusted input and change", a
   const harness = await openHarness("basic-form");
   const seen = await watchEvents(page, NAME, ["input", "change"]);
   const reply = await harness.runAction({ commandId: "type", actionType: "web.dom.type", selector: NAME, text: "Ada" });
-  expect(reply).toMatchObject({ status: "succeeded", message: "Text entered.", element: { selector: NAME } });
+  expect(reply).toMatchObject({
+    status: "succeeded",
+    validation: { status: "none", reason: "not-yet-validated" },
+    message: "Text entered.",
+    element: { selector: NAME }
+  });
   await expect(page.locator(NAME)).toHaveValue("Ada");
   expect(await seen()).toEqual(["input:untrusted", "change:untrusted"]);
 });
@@ -131,13 +145,23 @@ test("wait_for_selector: succeeds when a matching element appears", async ({ ope
   const harness = await openHarness("basic-form");
   const pending = harness.runAction({ commandId: "wait-selector", actionType: "web.dom.wait_for_selector", selector: '[data-testid="late"]', timeoutMs: 5_000 });
   await insertLateParagraph(page);
-  expect(await pending).toMatchObject({ status: "succeeded", message: "Selector found.", element: { selector: '[data-testid="late"]' } });
+  expect(await pending).toMatchObject({
+    status: "succeeded",
+    validation: { status: "passed", actual: "the element was found" },
+    message: "Selector found.",
+    element: { selector: '[data-testid="late"]' }
+  });
 });
 
-test("wait_for_selector: a timeout reports failed, not timed_out", async ({ openHarness }) => {
+test("wait_for_selector: a timeout reports timed_out with Core's timeout category", async ({ openHarness }) => {
   const harness = await openHarness("basic-form");
   const reply = await harness.runAction({ commandId: "wait-never", actionType: "web.dom.wait_for_selector", selector: '[data-testid="never"]', timeoutMs: 100 });
-  expect(reply).toMatchObject({ status: "failed", message: 'Timed out waiting for selector: [data-testid="never"]' });
+  expect(reply).toMatchObject({
+    status: "timed_out",
+    message: 'Timed out waiting for selector: [data-testid="never"]',
+    validation: { status: "failed", actual: "no element matched before the timeout" },
+    failure: { category: "timeout", code: "web.action.timeout", retryable: true }
+  });
 });
 
 test("wait_for_text: succeeds when the text appears", async ({ openHarness, page }) => {
@@ -152,7 +176,13 @@ test("wait_for_text: succeeds when the text appears", async ({ openHarness, page
 test("extract: text by default, one attribute, or a field's value", async ({ openHarness, page }) => {
   const harness = await openHarness("basic-form");
   expect(await harness.runAction({ commandId: "extract-text", actionType: "web.dom.extract", selector: RESULT }))
-    .toMatchObject({ status: "succeeded", message: "Value extracted.", extracted: "Not submitted", element: { selector: RESULT } });
+    .toMatchObject({
+      status: "succeeded",
+      validation: { status: "none", reason: "evidence-only" },
+      message: "Value extracted.",
+      extracted: "Not submitted",
+      element: { selector: RESULT }
+    });
   expect(await harness.runAction({ commandId: "extract-attribute", actionType: "web.dom.extract", selector: RESULT, options: { mode: "attribute", attribute: "aria-live" } }))
     .toMatchObject({ status: "succeeded", extracted: "polite" });
   await page.locator(NAME).fill("Ada");

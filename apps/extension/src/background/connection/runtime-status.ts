@@ -71,6 +71,13 @@ export function runtimeActionLabel(actionType: string): string {
   if (actionType === "web.dom.wait_for_text") return "Wait for text";
   if (actionType === "web.dom.extract") return "Extract";
   if (actionType === "web.dom.capture_snapshot") return "Capture snapshot";
+  if (actionType === "web.dom.check") return "Set checked";
+  if (actionType === "web.dom.assert") return "Assert";
+  if (actionType === "web.dom.extract_list") return "Extract list";
+  if (actionType === "web.dom.upload") return "Upload files";
+  if (actionType === "web.dom.dialog") return "Answer dialog";
+  if (actionType === "web.browser.tab") return "Browser tab";
+  if (actionType === "web.browser.download") return "Await download";
   return actionType;
 }
 

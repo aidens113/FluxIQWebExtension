@@ -14,7 +14,17 @@ var WEB_AUTOMATION_ACTION_SAFETY = {
   "web.dom.wait_for_selector": "safe",
   "web.dom.wait_for_text": "safe",
   "web.dom.extract": "safe",
-  "web.dom.capture_snapshot": "safe"
+  "web.dom.capture_snapshot": "safe",
+  // Added in Week 1 (decision D6). An assertion and a list extraction only read
+  // the page, so they are safe; check, upload, and dialog change it, and a tab
+  // or download acts on the browser, so all five need approval.
+  "web.dom.check": "review",
+  "web.dom.assert": "safe",
+  "web.dom.extract_list": "safe",
+  "web.dom.upload": "review",
+  "web.dom.dialog": "review",
+  "web.browser.tab": "review",
+  "web.browser.download": "review"
 };
 
 // src/actions/types.ts
@@ -29,7 +39,14 @@ var WEB_AUTOMATION_ACTION_TYPES = [
   "web.dom.wait_for_selector",
   "web.dom.wait_for_text",
   "web.dom.extract",
-  "web.dom.capture_snapshot"
+  "web.dom.capture_snapshot",
+  "web.dom.check",
+  "web.dom.assert",
+  "web.dom.extract_list",
+  "web.dom.upload",
+  "web.dom.dialog",
+  "web.browser.tab",
+  "web.browser.download"
 ];
 
 // src/actions/schemas.ts
@@ -121,6 +138,89 @@ var webAutomationActionDefinitions = [
     label: "Capture Snapshot",
     description: "Capture a structured DOM snapshot.",
     parameterSchema: { type: "object", properties: {} }
+  },
+  // The seven actions added in Week 1 (decision D6). Every action type must
+  // have a definition here: the manifest outputs, the output nodes, and the
+  // registered domain outputs all derive from this table, and
+  // `createWebAutomationDomainIo` throws for a listed output with no
+  // definition. These are the minimum that keeps the registry total;
+  // `w2-domain-vocabulary` owns their final parameter shapes, node parameters,
+  // payload mapping, and inputs.
+  {
+    actionType: "web.dom.check",
+    label: "Set Checked",
+    description: "Set a checkbox or radio to a state.",
+    parameterSchema: { type: "object", required: ["selector"], properties: { ...elementProperties, checked: { type: "boolean", label: "Checked" } } }
+  },
+  {
+    actionType: "web.dom.assert",
+    label: "Assert",
+    description: "Assert a condition about the page and fail when it does not hold.",
+    parameterSchema: {
+      type: "object",
+      required: ["kind"],
+      properties: {
+        ...elementProperties,
+        kind: { type: "string", label: "Condition" },
+        expected: { type: "string", label: "Expected" },
+        timeoutMs: { type: "integer", label: "Timeout in ms" }
+      }
+    }
+  },
+  {
+    actionType: "web.dom.extract_list",
+    label: "Extract List",
+    description: "Extract a field map from every item of a repeating structure, following pagination.",
+    parameterSchema: {
+      type: "object",
+      required: ["item"],
+      properties: {
+        item: { type: "string", label: "Item selector" },
+        fields: { type: "object", label: "Field map" },
+        paginate: { type: "object", label: "Pagination" },
+        maxItems: { type: "integer", label: "Maximum items" }
+      }
+    }
+  },
+  {
+    actionType: "web.dom.upload",
+    label: "Upload Files",
+    description: "Set the files of a file input.",
+    parameterSchema: { type: "object", required: ["selector"], properties: { ...elementProperties, files: { type: "array", label: "Files" } } }
+  },
+  {
+    actionType: "web.dom.dialog",
+    label: "Answer Dialog",
+    description: "Arm the answer to the next native alert, confirm, or prompt.",
+    parameterSchema: {
+      type: "object",
+      required: ["response"],
+      properties: { response: { type: "string", label: "Response" }, promptText: { type: "string", label: "Prompt text" } }
+    }
+  },
+  {
+    actionType: "web.browser.tab",
+    label: "Browser Tab",
+    description: "Open, switch to, or close a browser tab.",
+    parameterSchema: {
+      type: "object",
+      required: ["operation"],
+      properties: {
+        operation: { type: "string", label: "Operation" },
+        url: { type: "string", label: "URL" },
+        tabId: { type: "integer", label: "Tab id" },
+        urlPattern: { type: "string", label: "URL contains" }
+      }
+    }
+  },
+  {
+    actionType: "web.browser.download",
+    label: "Await Download",
+    description: "Wait for a browser download to complete.",
+    parameterSchema: {
+      type: "object",
+      properties: { filename: { type: "string", label: "File name" }, timeoutMs: { type: "integer", label: "Timeout in ms" } }
+    }
   }
 ];
 
@@ -266,7 +366,11 @@ var SAFE_OUTPUTS = [
   "web.dom.wait_for_selector",
   "web.dom.wait_for_text",
   "web.dom.extract",
-  "web.dom.capture_snapshot"
+  "web.dom.capture_snapshot",
+  // An assertion and a list extraction only read the page. The other five
+  // outputs added in Week 1 change the page or the browser, so they are review.
+  "web.dom.assert",
+  "web.dom.extract_list"
 ];
 test("the safety registry classifies every output exactly once, and only the observe and wait outputs as safe", () => {
   assert.deepEqual(Object.keys(WEB_AUTOMATION_ACTION_SAFETY).sort(), [...WEB_AUTOMATION_ACTION_TYPES].sort());

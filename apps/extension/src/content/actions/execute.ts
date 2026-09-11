@@ -1,8 +1,9 @@
 // Routes a browser action to the verb that performs it. Action types arrive
 // canonical: `domain/src/client/gateway-mapping.ts` is the one place a legacy
 // dotted alias is normalized, so only canonical types are matched here.
-// Anything else -- `web.browser.navigate`, which the background worker runs,
-// or a type that reached this frame unchecked -- falls through to the throw.
+// Anything else -- `web.browser.navigate`, `web.browser.tab`, and
+// `web.browser.download`, which the background worker runs, or a type that
+// reached this frame unchecked -- falls through to the throw.
 // Every verb runs inside one try block timed from one start, so a throw
 // becomes the caller's failure result. The two waits are awaited here rather
 // than returned: a returned promise settles after the try block exits, and its
@@ -20,6 +21,11 @@ import { clearAction } from "./clear";
 import { selectAction } from "./select";
 import { scrollAction } from "./scroll";
 import { keypressAction } from "./keypress";
+import { checkAction } from "./check";
+import { assertAction } from "./assert";
+import { extractListAction } from "./extract-list";
+import { uploadAction } from "./upload";
+import { dialogAction } from "./dialog";
 
 export async function executeContentAction(action: BrowserActionCommand, deps: ContentActionDependencies): Promise<BrowserActionResult> {
   const startedAt = Date.now();
@@ -53,6 +59,21 @@ export async function executeContentAction(action: BrowserActionCommand, deps: C
     }
     if (action.actionType === "web.dom.keypress") {
       return keypressAction(action, deps, startedAt);
+    }
+    if (action.actionType === "web.dom.check") {
+      return checkAction(action, deps, startedAt);
+    }
+    if (action.actionType === "web.dom.assert") {
+      return assertAction(action, deps, startedAt);
+    }
+    if (action.actionType === "web.dom.extract_list") {
+      return extractListAction(action, deps, startedAt);
+    }
+    if (action.actionType === "web.dom.upload") {
+      return uploadAction(action, deps, startedAt);
+    }
+    if (action.actionType === "web.dom.dialog") {
+      return dialogAction(action, deps, startedAt);
     }
     throw new Error(`Unsupported action type: ${action.actionType}`);
   } catch (error) {

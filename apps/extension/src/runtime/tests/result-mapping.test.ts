@@ -20,7 +20,15 @@ function command(actionType: string, overrides: Partial<ClientGatewayActionComma
 }
 
 function browserResult(overrides: Partial<BrowserActionResult> = {}): BrowserActionResult {
-  return { commandId: "cmd-1", actionType: "web.dom.click", status: "succeeded", startedAt: 100, finishedAt: 180, ...overrides };
+  return {
+    commandId: "cmd-1",
+    actionType: "web.dom.click",
+    status: "succeeded",
+    validation: { status: "none", reason: "not-yet-validated" },
+    startedAt: 100,
+    finishedAt: 180,
+    ...overrides
+  };
 }
 
 function statePathOf(value: unknown): unknown {

@@ -720,26 +720,57 @@
 
   // src/content/actions/capture-snapshot.ts
   function captureSnapshotAction(action, deps, startedAt) {
-    return deps.success(action, startedAt, "Snapshot captured.", void 0, deps.captureSnapshot());
+    return deps.success(action, startedAt, "Snapshot captured.", { status: "none", reason: "evidence-only" }, {
+      snapshot: deps.captureSnapshot()
+    });
   }
 
   // src/content/actions/wait-for-selector.ts
   async function waitForSelectorAction(action, deps, startedAt) {
-    const element = await deps.waitForElement(action.selector, action.timeoutMs);
-    return deps.success(action, startedAt, "Selector found.", deps.describeElement(element), deps.captureSnapshot());
+    const expected = `an element matching ${action.selector ?? "(no selector)"}`;
+    let element;
+    try {
+      element = await deps.waitForElement(action.selector, action.timeoutMs);
+    } catch (error) {
+      return deps.timedOut(action, startedAt, error instanceof Error ? error.message : "Timed out waiting for selector.", {
+        status: "failed",
+        expected,
+        actual: "no element matched before the timeout"
+      }, { snapshot: deps.captureSnapshot() });
+    }
+    return deps.success(action, startedAt, "Selector found.", { status: "passed", expected, actual: "the element was found" }, {
+      element: deps.describeElement(element),
+      snapshot: deps.captureSnapshot()
+    });
   }
 
   // src/content/actions/wait-for-text.ts
   async function waitForTextAction(action, deps, startedAt) {
-    await deps.waitForText(action.text ?? action.value ?? "", action.timeoutMs);
-    return deps.success(action, startedAt, "Text found.", void 0, deps.captureSnapshot());
+    const text = action.text ?? action.value ?? "";
+    const expected = `page text containing ${text}`;
+    try {
+      await deps.waitForText(text, action.timeoutMs);
+    } catch (error) {
+      return deps.timedOut(action, startedAt, error instanceof Error ? error.message : "Timed out waiting for text.", {
+        status: "failed",
+        expected,
+        actual: "the text did not appear before the timeout"
+      }, { snapshot: deps.captureSnapshot() });
+    }
+    return deps.success(action, startedAt, "Text found.", { status: "passed", expected, actual: "the text was found" }, {
+      snapshot: deps.captureSnapshot()
+    });
   }
 
   // src/content/actions/extract.ts
   function extractAction(action, deps, startedAt) {
     const element = deps.resolveTarget(action);
     const extracted = deps.extractElement(element, action.options);
-    return deps.success(action, startedAt, "Value extracted.", deps.describeElement(element), deps.captureSnapshot(), extracted);
+    return deps.success(action, startedAt, "Value extracted.", { status: "none", reason: "evidence-only" }, {
+      element: deps.describeElement(element),
+      snapshot: deps.captureSnapshot(),
+      extracted
+    });
   }
 
   // src/content/actions/click.ts
@@ -747,7 +778,10 @@
     const element = deps.resolveTarget(action);
     deps.scrollElementIntoView(element);
     element.click();
-    return deps.success(action, startedAt, "Element clicked.", deps.describeElement(element), deps.captureSnapshot());
+    return deps.success(action, startedAt, "Element clicked.", { status: "none", reason: "not-yet-validated" }, {
+      element: deps.describeElement(element),
+      snapshot: deps.captureSnapshot()
+    });
   }
 
   // src/content/actions/type.ts
@@ -756,7 +790,10 @@
     element.focus();
     deps.setElementValue(element, action.text ?? action.value ?? "");
     deps.dispatchInputEvents(element);
-    return deps.success(action, startedAt, "Text entered.", deps.describeElement(element), deps.captureSnapshot());
+    return deps.success(action, startedAt, "Text entered.", { status: "none", reason: "not-yet-validated" }, {
+      element: deps.describeElement(element),
+      snapshot: deps.captureSnapshot()
+    });
   }
 
   // src/content/actions/clear.ts
@@ -765,7 +802,10 @@
     element.focus();
     deps.setElementValue(element, "");
     deps.dispatchInputEvents(element);
-    return deps.success(action, startedAt, "Field cleared.", deps.describeElement(element), deps.captureSnapshot());
+    return deps.success(action, startedAt, "Field cleared.", { status: "none", reason: "not-yet-validated" }, {
+      element: deps.describeElement(element),
+      snapshot: deps.captureSnapshot()
+    });
   }
 
   // src/content/actions/select.ts
@@ -774,7 +814,10 @@
     element.focus();
     element.value = action.value ?? "";
     deps.dispatchInputEvents(element);
-    return deps.success(action, startedAt, "Option selected.", deps.describeElement(element), deps.captureSnapshot());
+    return deps.success(action, startedAt, "Option selected.", { status: "none", reason: "not-yet-validated" }, {
+      element: deps.describeElement(element),
+      snapshot: deps.captureSnapshot()
+    });
   }
 
   // src/content/actions/scroll.ts
@@ -784,7 +827,9 @@
       top: Number(action.options?.y ?? action.coordinates?.y ?? window.scrollY),
       behavior: action.options?.smooth === true ? "smooth" : "instant"
     });
-    return deps.success(action, startedAt, "Page scrolled.", void 0, deps.captureSnapshot());
+    return deps.success(action, startedAt, "Page scrolled.", { status: "none", reason: "not-yet-validated" }, {
+      snapshot: deps.captureSnapshot()
+    });
   }
 
   // src/content/actions/keypress.ts
@@ -793,7 +838,35 @@
     const key = action.key ?? action.text ?? "";
     target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
     target.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true, cancelable: true }));
-    return deps.success(action, startedAt, "Key event dispatched.", target instanceof Element ? deps.describeElement(target) : void 0, deps.captureSnapshot());
+    return deps.success(action, startedAt, "Key event dispatched.", { status: "none", reason: "not-yet-validated" }, {
+      ...target instanceof Element ? { element: deps.describeElement(target) } : {},
+      snapshot: deps.captureSnapshot()
+    });
+  }
+
+  // src/content/actions/check.ts
+  function checkAction(action, deps, startedAt) {
+    return deps.notImplemented(action, startedAt, "web.dom.check");
+  }
+
+  // src/content/actions/assert.ts
+  function assertAction(action, deps, startedAt) {
+    return deps.notImplemented(action, startedAt, "web.dom.assert");
+  }
+
+  // src/content/actions/extract-list.ts
+  function extractListAction(action, deps, startedAt) {
+    return deps.notImplemented(action, startedAt, "web.dom.extract_list");
+  }
+
+  // src/content/actions/upload.ts
+  function uploadAction(action, deps, startedAt) {
+    return deps.notImplemented(action, startedAt, "web.dom.upload");
+  }
+
+  // src/content/actions/dialog.ts
+  function dialogAction(action, deps, startedAt) {
+    return deps.notImplemented(action, startedAt, "web.dom.dialog");
   }
 
   // src/content/actions/execute.ts
@@ -829,6 +902,21 @@
       }
       if (action.actionType === "web.dom.keypress") {
         return keypressAction(action, deps, startedAt);
+      }
+      if (action.actionType === "web.dom.check") {
+        return checkAction(action, deps, startedAt);
+      }
+      if (action.actionType === "web.dom.assert") {
+        return assertAction(action, deps, startedAt);
+      }
+      if (action.actionType === "web.dom.extract_list") {
+        return extractListAction(action, deps, startedAt);
+      }
+      if (action.actionType === "web.dom.upload") {
+        return uploadAction(action, deps, startedAt);
+      }
+      if (action.actionType === "web.dom.dialog") {
+        return dialogAction(action, deps, startedAt);
       }
       throw new Error(`Unsupported action type: ${action.actionType}`);
     } catch (error) {
@@ -945,6 +1033,115 @@
     element.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
+  // src/content/action-runtime/actionability.ts
+  function checkActionability(_element) {
+    throw new Error("The actionability capability is not implemented yet.");
+  }
+
+  // src/content/action-runtime/keyboard.ts
+  var keyboard = {
+    typeText(_element, _text) {
+      throw new Error("The keyboard capability is not implemented yet.");
+    },
+    pressKey(_target, _key, _modifiers) {
+      throw new Error("The keyboard capability is not implemented yet.");
+    }
+  };
+
+  // src/content/action-runtime/checkable-state.ts
+  function setCheckedState(_element, _checked) {
+    throw new Error("The checkable-state capability is not implemented yet.");
+  }
+
+  // src/content/action-runtime/list-extraction.ts
+  function extractList(_request) {
+    throw new Error("The list-extraction capability is not implemented yet.");
+  }
+
+  // src/content/action-runtime/file-input.ts
+  function setInputFiles(_element, _files) {
+    throw new Error("The file-input capability is not implemented yet.");
+  }
+
+  // src/content/action-runtime/dialog-control.ts
+  var dialogControl = {
+    arm(_request) {
+      throw new Error("The dialog-control capability is not implemented yet.");
+    },
+    observed() {
+      throw new Error("The dialog-control capability is not implemented yet.");
+    }
+  };
+
+  // src/content/action-runtime/assertion-evaluation.ts
+  function evaluateAssertion(_request, _target) {
+    throw new Error("The assertion-evaluation capability is not implemented yet.");
+  }
+
+  // src/content/action-runtime/wait-conditions.ts
+  function waitForCondition(_request) {
+    throw new Error("The wait-conditions capability is not implemented yet.");
+  }
+
+  // src/content/action-runtime/validation-outcome.ts
+  var VALIDATION_TEXT_MAX_LENGTH = 1024;
+  function truncateValidationText(value) {
+    const collapsed = value.replace(/\s+/gu, " ").trim();
+    if (!collapsed) return "(none)";
+    return collapsed.length <= VALIDATION_TEXT_MAX_LENGTH ? collapsed : `${collapsed.slice(0, VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
+  }
+  function boundValidation(validation) {
+    if (validation.status === "none") return validation;
+    return {
+      status: validation.status,
+      expected: truncateValidationText(validation.expected),
+      actual: truncateValidationText(validation.actual)
+    };
+  }
+  function statusForValidation(validation) {
+    return validation.status === "failed" ? "failed" : "succeeded";
+  }
+  function outputNotObservedFailure(validation) {
+    if (validation.status !== "failed") return void 0;
+    return {
+      category: "output_not_observed",
+      code: "web.validation.output_not_observed",
+      retryable: true,
+      stage: "verification",
+      expected: validation.expected,
+      actual: validation.actual
+    };
+  }
+  function rejectionFailure(code, validation) {
+    return {
+      category: "blocked_by_capability_or_policy",
+      code: `web.action.${code}`,
+      retryable: false,
+      stage: "execution",
+      ...comparedText(validation)
+    };
+  }
+  function timeoutFailure(validation) {
+    return {
+      category: "timeout",
+      code: "web.action.timeout",
+      retryable: true,
+      stage: "execution",
+      ...comparedText(validation)
+    };
+  }
+  function notImplementedFailure() {
+    return {
+      category: "blocked_by_capability_or_policy",
+      code: "web.action.not_implemented",
+      retryable: false,
+      stage: "dispatch"
+    };
+  }
+  function comparedText(validation) {
+    return validation.status === "none" ? {} : { expected: validation.expected, actual: validation.actual };
+  }
+
   // src/content/action-runtime/results.ts
   function actionFailure(action, error, startedAt = Date.now()) {
     const snapshot = captureSettings.snapshots ? captureSnapshot() : void 0;
@@ -952,6 +1149,7 @@
       commandId: action.commandId,
       actionType: action.actionType,
       status: "failed",
+      validation: { status: "none", reason: "not-yet-validated" },
       message: error instanceof Error ? error.message : "Action failed.",
       url: location.href,
       title: document.title,
@@ -960,21 +1158,59 @@
       finishedAt: Date.now()
     };
   }
-  function success(action, startedAt, message, element, snapshot, extracted) {
+  function success(action, startedAt, message, validation, evidence = {}) {
+    const bounded = boundValidation(validation);
+    return buildResult(action, startedAt, {
+      status: statusForValidation(bounded),
+      validation: bounded,
+      message,
+      failure: outputNotObservedFailure(bounded)
+    }, evidence);
+  }
+  function actionRejected(action, startedAt, code, expected, actual, evidence = {}) {
+    const validation = boundValidation({ status: "failed", expected, actual });
+    return buildResult(action, startedAt, {
+      status: "failed",
+      validation,
+      message: `Action rejected: ${validation.status === "failed" ? validation.actual : actual}`,
+      failure: rejectionFailure(code, validation)
+    }, evidence);
+  }
+  function actionTimedOut(action, startedAt, message, validation, evidence = {}) {
+    const bounded = boundValidation(validation);
+    return buildResult(action, startedAt, {
+      status: "timed_out",
+      validation: bounded,
+      message,
+      failure: timeoutFailure(bounded)
+    }, evidence);
+  }
+  function actionNotImplemented(action, startedAt, what) {
+    return buildResult(action, startedAt, {
+      status: "failed",
+      validation: { status: "none", reason: "not-yet-validated" },
+      message: `${what} is not implemented yet.`,
+      failure: notImplementedFailure()
+    }, {});
+  }
+  function buildResult(action, startedAt, core, evidence) {
     const result = {
       commandId: action.commandId,
       actionType: action.actionType,
-      status: "succeeded",
-      message,
+      status: core.status,
+      validation: core.validation,
       url: location.href,
       title: document.title,
       startedAt,
       finishedAt: Date.now()
     };
-    if (element) result.element = element;
+    if (core.message !== void 0) result.message = core.message;
+    if (core.failure !== void 0) result.failure = core.failure;
+    if (evidence.element) result.element = evidence.element;
     if (action.visualTarget) result.visualTarget = action.visualTarget;
-    if (snapshot ?? captureSettings.snapshots) result.snapshot = snapshot ?? captureSnapshot();
-    if (extracted !== void 0) result.extracted = extracted;
+    if (evidence.snapshot ?? captureSettings.snapshots) result.snapshot = evidence.snapshot ?? captureSnapshot();
+    if (evidence.extracted !== void 0) result.extracted = evidence.extracted;
+    if (evidence.resolution) result.resolution = evidence.resolution;
     return result;
   }
 
@@ -990,8 +1226,19 @@
       scrollElementIntoView,
       setElementValue,
       dispatchInputEvents,
+      checkActionability,
+      keyboard,
+      setCheckedState,
+      extractList,
+      setInputFiles,
+      dialogControl,
+      evaluateAssertion,
+      waitForCondition,
       success,
-      failure: actionFailure
+      failure: actionFailure,
+      rejected: actionRejected,
+      timedOut: actionTimedOut,
+      notImplemented: actionNotImplemented
     });
   }
 

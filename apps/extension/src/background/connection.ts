@@ -508,6 +508,8 @@ export class FluxIQConnection {
         commandId: messageId,
         actionType: "web.dom.capture_snapshot",
         status: "succeeded",
+        // Capturing evidence has no post-condition of its own to check.
+        validation: { status: "none", reason: "evidence-only" },
         message: "Snapshot command dispatched.",
         startedAt: this.runtimeStatus.current().startedAt ?? Date.now(),
         finishedAt: Date.now()

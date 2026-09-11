@@ -49,10 +49,9 @@ metrics, and cannot run a Flow on `isolated`.
   is an ES module on Core's public exports; isolated runs here use
   `FLUXIQ_TEST_ENV_FILES=none`.
 
-**Running:** w2-foundation, the serial first brief of Wave 2; the twelve
-parallel briefs code against its contract and wait for it. Wave 1 shipped: the
-recording-start flake is fixed at its cause, the smoke bench passes (4 runs, 4
-passed, 0 skipped, exit 0), and the Core unit is green on every gate.
+**Running:** none. The Wave 2 foundation landed and its gates pass, so the
+thirteen parallel briefs are next. Wave 1 shipped: the recording-start flake is
+fixed at its cause, the smoke bench passes, and the Core unit is green.
 
 **Findings that change later work**
 
@@ -80,7 +79,7 @@ passed, 0 skipped, exit 0), and the Core unit is green on every gate.
 
 **Next steps**
 
-1. Verify w2-foundation, then dispatch the twelve parallel briefs from
+1. Dispatch the thirteen parallel briefs from
    [briefs/wave-2.md](./mvp-week1-web-automation-reliability-plan/briefs/wave-2.md).
 2. Keep Lab runs serialized: only one may execute on this machine at a time.
 
@@ -743,6 +742,28 @@ gate run that followed, and the first sighting of the recording-start flake.
 - Validation: `git push origin dev` -> `3a61de9..f8885b8  dev -> dev` here and
   `e522f17..4867c5c  dev -> dev` in Core, each exit 0, both branches reporting
   level with their remote afterwards.
+- Outcome: Accepted
+### 2026-09-11 — Wave 2 foundation: the contract landed
+- Agent: supervisor, with w2-foundation
+- Changed: the seven new action types and their safety classes; one result type
+  re-exported by the extension instead of three copies, with `validation` made a
+  required field; eight capabilities declared on the content dependencies, each in
+  its own module that throws until its own brief lands; five verb stubs and two
+  background stubs routed from `action-runner.ts`.
+- Validation: supervisor, `pnpm check` -> exit 0 and `pnpm test` -> exit 0, each
+  captured by redirect rather than through a pipe: extension 72 of 72, up from 64,
+  scenario-lab 118 of 118, test-runner 357 of 357, test-evidence 14 of 14,
+  agent-orchestrator 16 of 16. Worker: domain 26 of 26, `test:content` 31 passed,
+  and `FLUXIQ_TEST_ENV_FILES=none pnpm lab run basic-form --target isolated` ->
+  exit 0, verdict passed; structure audit clean.
+- Found: two supervisor defects, both corrected in the briefs. The brief forbade
+  `domain/src/actions/schemas.ts`, but listing an action type with no definition
+  makes `createWebAutomationDomainIo` throw, since manifest outputs, output nodes
+  and registered outputs all derive from that table, so the list and the schemas
+  cannot land in separate work units; w2-domain-vocabulary now refines those seven
+  definitions instead of creating them. And `gatewayActionResultFromBrowserResult`
+  drops `result.failure`, so structured records never reach the gateway, which
+  w2-browser-actions must now forward, since it owns that file.
 - Outcome: Accepted
 ## Open Questions
 
