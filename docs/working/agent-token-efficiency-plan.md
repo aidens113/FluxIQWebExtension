@@ -1,7 +1,7 @@
 # Agent Token Efficiency Plan
 
 Status: Active
-Status detail: Plan authored from the user's advisor draft; Phase 0 is partly done (baseline repaired, CLAUDE.md files pending), Phases 1 to 4 not started.
+Status detail: Phases 0 to 3 executed on 2026-09-10; merging the settings fragment into ~/.claude/settings.json is left to the user; Phase 4 (measure and trim) begins after real use.
 Created: 2026-09-10
 Last updated: 2026-09-10
 Owner: Senior supervisor agent
@@ -13,92 +13,75 @@ Related: [AGENTS.md](../../AGENTS.md), [agent working document protocol](./agent
 
 ## Current State
 
-**Origin.** The user brought a draft, written with an advisor, for cutting
-token cost by keeping the directly prompted agent light and pushing heavy
-work into isolated sub-agents that report back briefly, with a `.brain/`
-directory as the shared memory. The draft is refined here, not adopted as
-written: most of what it describes already exists in this repository and in
-Core under other names, and the parts that do not exist are better placed in
-a global layer so they carry to every future project. The user's two standing
-requirements are that the system works globally for all projects and that it
-separates global shared memory from project-specific memory.
+**Executed 2026-09-10.** Phases 0 to 3 are done; Phase 4 (measure and
+trim) starts once the hooks have run in real sessions. One step is left to
+the user: merging the settings fragment. The origin of the plan, the gaps it
+found, and its decisions are in the sections below and in the first ledger
+entry.
 
-**What already exists.** The supervisor / worker role split, role-scoped
-required reading, `docs/working/` as memory with a generated index and an
-authoritative `Current State` per document, written worker briefs with
-per-worker report files, the 800-line compaction threshold, and the ledger
-rule that a `Validation` line must quote a command and its observed output.
-All of it is in `AGENTS.md` and the protocol, and the header, `Current
-State`, size, and index rules are enforced by `pnpm structure:check`.
+**What exists now**
 
-**Gaps found.**
+- `CLAUDE.md` in both repositories imports `AGENTS.md` and the FluxIQ
+  family lessons index. Until today Claude Code loaded no repository
+  instructions in either repository, because it reads `CLAUDE.md` only.
+- The brain repository `F:\!AgentBrain` (local, four commits, no remote):
+  global rules (60 lines, budgeted), the `worker` agent (Opus 5, no `Agent`
+  tool, discovery rule and return contract in its prompt), `/resume`,
+  `/handoff`, `/lesson`, `/new-project`, five hooks with 39 recorded-payload
+  tests, eight promoted lessons (six global, two FluxIQ), seven templates,
+  a standalone working-docs audit with 18 tests, and `install.mjs`.
+- Installed into `~/.claude`: `CLAUDE.md` (two imports), `agents/worker.md`,
+  and the four skills. `install.mjs --check` passes except for the settings
+  step.
+- `AGENTS.md` in both repositories has the `Delegation` subsection; the
+  protocol in both has the 40-line brief budget, the report format, and the
+  12-line return contract.
+- The `working-docs` audit rule (Core-owned, mirrored byte for byte) fails a
+  `Current State` over 150 lines and a ledger entry without a real
+  `Validation` bullet; 11 tests, run by `pnpm structure:test` in both.
+- The eight auto-memories are unpinned; their content lives in the brain.
+- Worker reports for this work unit are under
+  `agent-token-efficiency-plan/reports/`.
 
-1. **`AGENTS.md` is not loaded by Claude Code.** Claude Code reads
-   `CLAUDE.md` only, and neither repository has one. A supervisor session
-   sees the role rules only if the model chooses to open the file. This
-   session's own context confirms it: the auto-memory loaded, `AGENTS.md`
-   did not. The fix is a one-line `CLAUDE.md` containing `@AGENTS.md`.
-2. **Standing preferences are trapped in one repository's auto-memory.**
-   Claude Code keys auto-memory by git repository, so the seven memories
-   under `~/.claude/projects/f---FluxIQWebExtension/memory/` (roles, Opus 5
-   workers, mechanical enforcement, tests placement, push policy, working
-   docs as memory, role-scoped reading) load here and nowhere else, Core
-   included. The `pinned` flag that loads them in full is undocumented.
-3. **There is no global layer.** `~/.claude/` holds a two-key
-   `settings.json` and nothing else: no `CLAUDE.md`, agents, skills, rules,
-   or hooks. The worker model preference is held by memory, not by config.
-4. **Rules that matter most are prose only.** Nothing stops a worker
-   committing, nothing checks that a worker wrote its report file, the
-   150-line `Current State` cap is not audited, and a ledger entry with no
-   real `Validation` line passes.
-5. **Every brief pays the same overhead.** Worker operating rules are
-   restated per brief because there is no worker agent definition to hold
-   them once.
-6. **`pnpm check` was failing on `dev`.** The `scripts/` directory count is
-   32 against a baseline of 31, because the baseline was generated before
-   `scripts/structure-audit.mjs` was tracked. Repaired in this work unit; see
-   the ledger.
+**Left to the user**
 
-**Decisions.**
+1. Merge the settings fragment into `~/.claude/settings.json`: run
+   `node F:\!AgentBrain\install.mjs --print-settings` and paste the result,
+   or add the five hooks through `/hooks`. Claude Code's permission
+   classifier refused the agent's write there twice, which is the right
+   boundary for a file whose entries execute commands. Until the merge, no
+   hook runs and workers default to the session model unless `model` is
+   passed on dispatch.
+2. Open a new session in either repository and run `/context`: `AGENTS.md`,
+   the global rules, and both lessons indexes should appear under memory
+   files. Approve the one-time dialog for the family-index import. The
+   metrics hook then starts writing `~/.claude/brain-metrics.ndjson`.
+3. Give the brain a private remote if it should survive this machine.
 
-- No `.brain/` directory. `docs/working/README.md` plus each document's
-  `Current State` is the draft's `projects.md`; `AGENTS.md` plus
-  `docs/architecture/` is its `areas.md`; `## Worker Briefs` plus
-  `docs/working/<effort>/reports/` is its `subagents/`. A second board would
-  split the truth.
-- The global layer is a git repository, proposed at `F:\!AgentBrain`, whose
-  `install.mjs` writes `~/.claude/CLAUDE.md`, `agents/`, `skills/`,
-  `hooks/`, and the `settings.json` fragment. Git makes it durable and
-  portable; the install script makes drift detectable.
-- Four memory tiers with a placement rule, in [Memory Tiers](#memory-tiers).
-- Delegation is a rule with criteria, not "always spawn a sub-agent";
-  dispatch has fixed overhead and a worker's claim still needs verifying.
-- Workers run through one global `worker` agent definition: Opus 5, no
-  `Agent` tool, discovery rule and return contract in its system prompt.
-- Enforcement is by hooks and the structure audit, not by more prose.
+**Deviations from the plan as written**
 
-**Phases.**
-
-| Phase | Content | Status |
-| --- | --- | --- |
-| 0 | `CLAUDE.md` in both repositories; baseline repair | Baseline done; `CLAUDE.md` pending |
-| 1 | Brain repository, global `CLAUDE.md`, worker agent, hooks, skills | Not started |
-| 2 | Delegation rule and return contract in `AGENTS.md` and the protocol; audit extension; memory promotion | Not started |
-| 3 | Templates and bootstrap for future projects | Not started |
-| 4 | Measure and trim | Not started |
+- Six lessons went global and two to the FluxIQ family, not two and five:
+  roles, working documents as memory, and the Opus default are now global
+  rules, so their lessons belong beside them.
+- `install.mjs` does not write `settings.json`; see above.
+- The hearsay pattern is `reported success` or
+  `workers? (reported|said|claimed)\b`; "worker reports" as a noun phrase
+  is legitimate and was a false positive on this repository's protocol.
+- The git guard also denies `merge`, `cherry-pick`, `am`, `stash`, bare
+  `reset`, `filter-repo`, `branch -d`, and `gh pr create` or `merge`, and it
+  keys on `agent_id`, so every subagent is guarded, not only `worker`.
 
 **Next steps**
 
-1. Phase 0: add `CLAUDE.md` to both repositories; confirm with `/context`
-   that `AGENTS.md` appears under memory files.
-2. Phase 1: create the brain repository and run its install; confirm
-   `/agents` lists `worker` and a worker's `git commit` is denied.
-3. Phase 2, Core first then mirror: delegation rule, return contract, audit
-   extension, and the memory promotion.
+1. The three user steps above.
+2. Phase 4 after two weeks of use: read the metrics, compare against the
+   4 KB global and 20 KB project targets, and move `AGENTS.md` sections
+   into path-scoped rules only if the project layer is over target.
+3. Use `/new-project` on the next repository and fix what the templates get
+   wrong; both budgeted templates sit exactly at their caps.
 
-**Blockers:** none. Two choices are the user's: the brain repository's
-location and name, and whether Opus 5 is the worker default on non-FluxIQ
-projects as well.
+**Blockers:** none. Hooks and the Opus default are inert until the settings
+merge.
 
 ---
 
@@ -214,15 +197,21 @@ global/CLAUDE.global.md      universal rules, at most 60 lines
 agents/worker.md             the worker definition
 skills/resume/SKILL.md       read index rows and one Current State, state Mode
 skills/handoff/SKILL.md      the ending-a-task checklist, then commit and push
+skills/lesson/SKILL.md       record a global or family lesson, regenerate the index
+skills/new-project/SKILL.md  lay the templates down in a repository (user-invoked only)
 hooks/*.mjs                  dependency-free node scripts, tests in hooks/tests/
 lessons/global/, lessons/<family>/   one lesson per file; INDEX.md generated
-templates/                   CLAUDE.md, AGENTS.md skeleton, protocol, working-doc skeleton, brief, report
-settings.fragment.json       env, hooks, permissions to merge into ~/.claude/settings.json
-install.mjs                  writes ~/.claude; --check fails on drift or over-budget files
+templates/                   CLAUDE.md, AGENTS.md skeleton, protocol, index, working-doc skeleton, brief, report
+tools/working-docs-audit.mjs standalone port of the working-docs audit rule, no ratchet
+settings.fragment.json       env, hooks, permissions for ~/.claude/settings.json, merged by the user
+install.mjs                  writes ~/.claude/CLAUDE.md, agents, skills; --check fails on drift or over-budget files
 ```
 
-**`~/.claude/CLAUDE.md`** is one line: `@F:/!AgentBrain/global/CLAUDE.global.md`.
-Imports from the user-level file need no approval dialog.
+**`~/.claude/CLAUDE.md`** is two import lines,
+`@F:/!AgentBrain/global/CLAUDE.global.md` and the global lessons index.
+Imports from the user-level file need no approval dialog. Each project
+`CLAUDE.md` imports `AGENTS.md` and its family's lessons index; an import
+from outside the working directory asks for a one-time approval.
 
 **`global/CLAUDE.global.md`** carries only what changes behaviour on every
 project: the two roles and their obligations; the required-reading rule by
@@ -256,6 +245,13 @@ briefs everywhere shrink to the task itself.
 built-in ones included, without relying on memory. Per-invocation `model`
 still overrides it.
 
+The fragment is merged into `~/.claude/settings.json` by the user, not by
+`install.mjs` and not by an agent: Claude Code's permission classifier
+refuses an agent write that adds hooks there, which is the right boundary
+for a file whose entries execute commands. `node install.mjs
+--print-settings` prints the fragment with the brain path filled in, and
+`install.mjs --check` reports until the merge is done.
+
 **Skills.** `/resume [document]` prints the `Active` rows of
 `docs/working/README.md`, reads the named document's `Current State`, and
 states `Mode:`. `/handoff` runs the checklist: rewrite `Current State`;
@@ -272,7 +268,7 @@ every project gets the same lifecycle.
 
 | Check | Event | Behaviour |
 | --- | --- | --- |
-| Worker git guard | `PreToolUse`, matcher `Bash\|PowerShell` | Deny `git commit`, `push`, `tag`, `reset --hard`, `rebase` when the hook input carries `agent_id`, which only subagent calls do. The main session is unaffected. |
+| Worker git guard | `PreToolUse`, matcher `Bash\|PowerShell` | Deny `git commit`, `push`, `tag`, `rebase`, `merge`, `cherry-pick`, `am`, `reset`, `stash`, `filter-repo`, `branch -d`, and `gh pr create` or `merge` when the hook input carries `agent_id`, which only subagent calls do, after splitting the command on shell separators and PowerShell braces. The main session is unaffected. |
 | Worker report guard | `SubagentStop`, `agent_type` = `worker` | Exit 2 with "write your report file and end with `Report: <path>`" unless the final message names a report path that exists. |
 | Session pointer | `SessionStart`, matchers `startup\|clear\|compact\|resume` | Print at most 15 lines: repository, branch, uncommitted files under `docs/working/`, the `Active` document names and line counts, and `Run /resume <document>`. |
 | Handoff reminder | `Stop` | If `git status` shows changes under `docs/working/`, emit a `systemMessage` saying so. Warn, never block, because a blocking `Stop` can loop. |
@@ -379,6 +375,51 @@ PowerShell is a separate tool from Bash on this machine.
 
 ---
 
+## Worker Briefs
+
+Dispatched 2026-09-10 for Phases 1 to 3. Workers run on Opus 5 through the
+`general-purpose` agent because the `worker` definition is created in this
+same work unit; the worker rules are therefore inlined in these dispatches
+for the last time.
+
+### Brief: hooks
+- Repository: brain, `F:\!AgentBrain` (new, local only)
+- Task: write the five hooks in [Mechanical Enforcement](#mechanical-enforcement) as dependency-free ES modules under `hooks/`, plus `node --test` tests under `hooks/tests/` fed from recorded stdin fixtures under `hooks/tests/fixtures/`. Confirm payload field names against https://code.claude.com/docs/en/hooks before writing. Every hook reads all of stdin as JSON; on malformed input or any thrown error it exits 0 with no output. `worker-git-guard.mjs`: on `PreToolUse` for tool `Bash` or `PowerShell`, when `agent_id` is present, split `tool_input.command` on `&&`, `||`, `;`, `|`, and newlines and deny if any segment is a git write (`commit`, `push`, `tag`, `rebase`, `merge`, `cherry-pick`, `am`, `reset`, `stash`, `filter-repo`, `branch -d`/`-D`) or `gh pr create`/`merge`; output `hookSpecificOutput` with `permissionDecision: "deny"` and a one-line reason saying the supervisor commits. `worker-report-guard.mjs`: on `SubagentStop` when `agent_type` is `worker` and `stop_hook_active` is not true, find `Report: <path>` in `last_assistant_message` and resolve it against `cwd`; if absent or the file does not exist, exit 2 with a one-line stderr instruction to write the report and end with `Report: <path>`. `session-pointer.mjs`: on `SessionStart`, print at most 15 lines to stdout: repository root, branch, uncommitted paths under `docs/working/`, the `## Active` rows of `docs/working/README.md` as `name (lines)`, and `Run /resume <document>`; print nothing when `cwd` is not inside a git repository or has no `docs/working/`. `handoff-reminder.mjs`: on `Stop` when `stop_hook_active` is not true and `git status --porcelain -- docs/working` is non-empty, print `{"systemMessage": ...}` naming the paths and `/handoff`; never block. `instruction-metrics.mjs`: on `InstructionsLoaded`, append one JSON line `{time, cwd, file_path, load_reason, bytes}` to `~/.claude/brain-metrics.ndjson`; never the content.
+- Required reads: this brief and the Mechanical Enforcement section; the Claude Code hooks reference
+- Owns (may edit): `F:\!AgentBrain\hooks\**`
+- Must not touch: anything else in the brain; either FluxIQ repository except the report file
+- Definition of done: `node --test hooks/tests/` passes from `F:\!AgentBrain` with at least one fixture per hook, including a compound `&&` command, a PowerShell tool call, a main-session call without `agent_id`, and malformed stdin; report written
+- Report to: docs/working/agent-token-efficiency-plan/reports/hooks.md
+
+### Brief: audit-ledger
+- Repository: FluxIQ Core
+- Task: extend `scripts/structure-audit/rules/working-docs.mjs` with two checks. (1) `Current State` length: count the lines from `## Current State` to the next `## ` heading; fail, ratcheted, key `<file>#current-state`, when over `ctx.LIMITS.workingDocCurrentStateLines`, which `context.mjs` already sets to 150. (2) Ledger validation: for each `### ` entry under `## Work Ledger`, require a bullet starting `- Validation:`; that bullet, including its continuation lines, must not match `/reported success|worker reported|workers? (said|claimed|reports?)/i`; emit one fail finding per file, ratcheted, key `<file>#ledger`, value = number of offending entries, limit 0, message listing the offending entry titles. Update the file's header comment. Add tests at `scripts/structure-audit/rules/tests/working-docs.test.mjs` with a fake `ctx` (shape in `context.mjs`) and in-memory fixtures covering: conforming document, over-long Current State, missing Validation bullet, forbidden phrase, document with no ledger, CRLF line endings.
+- Required reads: this brief; `scripts/structure-audit/rules/working-docs.mjs`, `scripts/structure-audit/context.mjs`, `scripts/structure-audit/baseline.mjs`, `scripts/structure-audit.mjs`; the "Work Ledger entries" subsection of `docs/working/agent-working-doc-protocol.md`
+- Owns (may edit): `scripts/structure-audit/rules/working-docs.mjs`, `scripts/structure-audit/rules/tests/**`
+- Must not touch: `context.mjs`, `.structure-baseline.json`, `package.json`, any working document, the downstream repository. Never run `--update`.
+- Definition of done: `node --test scripts/structure-audit/rules/tests/` passes; `node scripts/structure-audit.mjs --rule working-docs` runs without crashing and the report lists every new finding it produces, per file, since they fail until the supervisor baselines them; report written
+- Report to: F:\!FluxIQWebExtension\docs\working\agent-token-efficiency-plan\reports\audit-ledger.md
+
+### Brief: templates
+- Repository: brain, `F:\!AgentBrain`
+- Task: author the files a new repository starts from, under `templates/`. `CLAUDE.md`: this repository's root `CLAUDE.md` with the family import line marked `<!-- PROJECT: keep and set the family, or delete this line -->`. `AGENTS.md`: a generalized skeleton of this repository's `AGENTS.md`, at most 200 lines, keeping the generic sections (Agent Roles, Start Here, Working Documents Are Agent Memory, Workflow Modes including Delegation, Documentation Maintenance, Validation, Committing And Pushing) and replacing every project-specific fact — repository purpose, package layout, boundaries, commands, never-commit paths, live-validation specifics — with a `<!-- PROJECT: what to fill in -->` comment; Claude Code strips block HTML comments, so resolved placeholders cost nothing. `agent-working-doc-protocol.md`: this repository's protocol reduced to its normative sections (Directory layout, Header block, Section order, Work Ledger entries, Compaction, Worker briefs and reports including the report format and return contract, Cross-repository pairing phrased for any paired repository, Index, Durability, Agent Operating Rules) with a generic header block and no FluxIQ names, `Current State` narrative, ledger, or briefs. `docs-working-README.md`: an empty index in the shape of this repository's `docs/working/README.md`. `working-doc.md`: a skeleton with the header block and the four sections. `brief.md` and `report.md`: the two formats from the protocol.
+- Required reads: this brief; `F:\!FluxIQWebExtension\CLAUDE.md`; `F:\!FluxIQWebExtension\AGENTS.md`; the named sections of `F:\!FluxIQWebExtension\docs\working\agent-working-doc-protocol.md`; `F:\!FluxIQWebExtension\docs\working\README.md` for the index shape
+- Owns (may edit): `F:\!AgentBrain\templates\**`
+- Must not touch: anything else
+- Definition of done: the seven files exist; `wc -l` shows `AGENTS.md` at most 200 lines and the protocol at most 250; `grep -n` for "FluxIQ", "extension", "domain/", and "pnpm" across `templates/` finds matches only inside PROJECT placeholder comments, with the grep output in the report; report written
+- Report to: docs/working/agent-token-efficiency-plan/reports/templates.md
+
+### Brief: working-docs-tool
+- Repository: brain, `F:\!AgentBrain`
+- Task: write `tools/working-docs-audit.mjs`, a dependency-free standalone port of FluxIQ Core's `working-docs` audit rule for repositories that do not have the structure audit. Same checks: header block shape and status vocabulary, `## Current State` present within 20 lines after the header while `Active`, `Current State` at most 150 lines, ledger entries with a real `- Validation:` bullet and no hearsay phrase, document size at most 800 lines, and a `docs/working/README.md` index that must match what the tool generates. No ratchet and no baseline: every finding fails. Usage: `node working-docs-audit.mjs [--root <repo>] [--update]`; `--update` writes the index and exits 0; otherwise print one line per finding and exit 1 on any, or `working-docs: passed (<n> documents)` and exit 0. Tracked-file discovery: use `git ls-files docs/working` when the root is a git repository, else list the directory. The index shape: same as the rule's `generateIndex`, but without the FluxIQ cross-repository sentence and with a "Paired" column. Tests in `tools/tests/working-docs-audit.test.mjs` using `node:test`, running the tool as a child process against temporary directories: passing repository, each failure kind, `--update` producing an index that then passes.
+- Required reads: this brief; `F:\!FluxIQ\scripts\structure-audit\rules\working-docs.mjs` (the source to port) and `F:\!FluxIQ\scripts\structure-audit\rules\tests\working-docs.test.mjs` (fixture ideas); `F:\!AgentBrain\package.json` for the test invocation
+- Owns (may edit): `F:\!AgentBrain\tools\**`
+- Must not touch: anything else; never edit the Core rule
+- Definition of done: `node --test "tools/tests/*.test.mjs"` passes from `F:\!AgentBrain`; running the tool against `F:\!FluxIQWebExtension` with no flags prints its findings or passes, with the exact output in the report; report written
+- Report to: docs/working/agent-token-efficiency-plan/reports/working-docs-tool.md
+
+---
+
 ## Work Ledger
 
 ### 2026-09-10 — Plan authored; scripts baseline repaired
@@ -397,6 +438,27 @@ PowerShell is a separate tool from Bash on this machine.
   agent frontmatter, hook payloads, `CLAUDE_CODE_SUBAGENT_MODEL`).
 - Outcome: Accepted
 - Follow-up: Phase 0 `CLAUDE.md` files.
+
+### 2026-09-10 — Phases 0 to 3 executed
+
+- Agent: supervisor, with workers hooks, audit-ledger, templates, and
+  working-docs-tool on Opus 5
+- Changed: `CLAUDE.md` (new); `AGENTS.md` (Delegation); the protocol (brief
+  budget, report format, return contract, duplicated bullet removed);
+  `scripts/structure-audit/rules/working-docs.mjs` and `rules/tests/`
+  (mirrored from Core); `package.json` (`structure:test`); four reports
+  under `agent-token-efficiency-plan/reports/`; the brain repository (four
+  commits) and `~/.claude`; the Core pair and its mirrors.
+- Why: The user asked for the plan to be executed.
+- Validation: `pnpm structure:test` -> 11 pass, 0 fail; `pnpm check` ->
+  passed after `pnpm structure:baseline`; brain `npm test` -> 57 pass, 0
+  fail; each hook piped a recorded payload against this repository and
+  printed the expected deny, silence, exit 2, pointer, reminder, or metrics
+  line; `node install.mjs --check` -> fails only on the settings step; the
+  `~/.claude/settings.json` edit was denied by the permission classifier.
+- Outcome: Partial
+- Follow-up: user merges the settings fragment; confirm `/context` in a new
+  session.
 
 ---
 

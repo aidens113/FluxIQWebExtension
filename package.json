@@ -51,6 +51,7 @@
     "real-site:policy": "pnpm --filter @fluxiq-web-extension/real-site-policy build && node packages/real-site-policy/dist/cli.js",
     "structure:check": "node scripts/structure-audit.mjs",
     "structure:baseline": "node scripts/structure-audit.mjs --update",
+    "structure:test": "node --test \"scripts/structure-audit/rules/tests/*.test.mjs\"",
     "test": "pnpm -r test"
   },
   "devDependencies": {
