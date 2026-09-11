@@ -18,7 +18,13 @@ Edit tool, never a Bash heredoc (the Bash tool collapses `\\` to `\`, and a
 command over about 8 KB fails with a misleading quote error). The structure
 audit reads only git-tracked files; audit new files through a scratch git
 index and never run `pnpm structure:baseline`. Domain tests take
-`DOMAIN_TEST_BUILD_LABEL=<your label>`. Content-script behaviour is proven in
+`DOMAIN_TEST_BUILD_LABEL=<your label>` and extension unit tests take
+`EXTENSION_TEST_BUILD_LABEL=<your label>`; set yours, or parallel runs overwrite
+each other. The content harness builds into a directory unique to each run, so
+parallel `test:content` runs are safe. `pnpm build` is not safe: it deletes
+`dist/` and rewrites the tracked `build/` directory, so parallel runs race and
+one crashed a compiler on 2026-09-11. The supervisor runs it once at
+integration; no parallel worker runs it. Content-script behaviour is proven in
 `apps/extension/e2e/content/tests/` (`pnpm --filter
 @fluxiq-web-extension/extension test:content`); pure extension logic in the
 extension unit tests. Headless Chromium here needs `channel: "chromium"`.
@@ -119,7 +125,9 @@ Learned during Wave 1, on 2026-09-11, and binding for every Wave 2 worker.
 Every brief below: read `reports/w2-foundation.md` for the capability and stub
 signatures you implement; replace only your stub; add your T2 spec as a new file
 in `apps/extension/e2e/content/tests/`; Definition of done also includes extension
-`check`, `build`, `test`, `test:content` and a clean structure audit.
+`check`, `test` (with `EXTENSION_TEST_BUILD_LABEL=<your brief name>`),
+`test:content`, and a clean structure audit. Do not run `pnpm build`: see the
+concurrency notes.
 
 ### Brief: w2-domain-vocabulary
 - Task: domain registration for the seven new actions and the upgraded parameters
