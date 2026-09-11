@@ -9,7 +9,7 @@ const outfile = path.join(outdir, "domain.test.mjs");
 
 await mkdir(outdir, { recursive: true });
 await build({
-  entryPoints: [path.join(root, "src", "domain.test.ts")],
+  entryPoints: [path.join(root, "src", "tests", "domain.test.ts")],
   outfile,
   bundle: true,
   platform: "node",

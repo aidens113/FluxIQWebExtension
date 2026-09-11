@@ -1,4 +1,4 @@
-// src/domain.test.ts
+// src/tests/domain.test.ts
 import assert from "node:assert/strict";
 import { AutomationStudioService, automationStudioFlowBootstrapCatalogByteBudget, buildAutomationStudioFlowBootstrapContext, buildAutomationStudioLlmEvidenceLoopDecisionSchema, estimateAutomationStudioDeepSeekInputTokens, runAutomationStudioLlmHarness, validateStateSnapshot } from "fluxiq/automation-studio";
 import { AutomationStudioNodeRegistry as AutomationStudioNodeRegistry2, validateAutomationStudioNodeDefinition as validateAutomationStudioNodeDefinition2 } from "fluxiq/automation-studio/nodes";
@@ -24,9 +24,6 @@ var WEB_AUTOMATION_EVENTS = {
   actionExecuted: "web.action.executed",
   clientError: "web.client.error"
 };
-
-// src/host.ts
-import { FluxIQ } from "fluxiq";
 
 // src/actions/schemas.ts
 var elementFingerprintSchema = {
@@ -188,6 +185,9 @@ var webAutomationDomain = {
     }
   }
 };
+
+// src/host.ts
+import { FluxIQ } from "fluxiq";
 
 // src/io/web-automation-io.ts
 import {
@@ -1806,6 +1806,9 @@ function createWebAutomationFluxIQ(options = {}) {
   }));
 }
 
+// src/actions/capabilities.ts
+var webAutomationClientCapabilities = webAutomationGatewayCapabilities;
+
 // src/client/gateway-mapping.ts
 function webAutomationEventTypeForClientKind(kind) {
   if (kind === "content.ready") return WEB_AUTOMATION_EVENTS.clientReady;
@@ -1861,9 +1864,6 @@ function createWebAutomationRecordingEvent(payload, input = {}) {
 function compactJsonObject2(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
-
-// src/actions/capabilities.ts
-var webAutomationClientCapabilities = webAutomationGatewayCapabilities;
 
 // ../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/definitions.js
 function adaptBuiltinAutomationNodeDefinition(definition) {
@@ -3472,7 +3472,7 @@ function readNumber(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : void 0;
 }
 
-// src/domain.test.ts
+// src/tests/domain.test.ts
 var service = new AutomationStudioService({ seedFixture: false });
 service.registerRecordingDomain(webAutomationRecordingDomain);
 var validation = service.validateRecordingDomainEvent({

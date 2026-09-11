@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "pnpm build && node --test dist/**/*.test.js"
+    "test": "pnpm build && node --test \"dist/**/*.test.js\""
   },
   "dependencies": {
     "@fluxiq-web-extension/test-contracts": "workspace:*",
