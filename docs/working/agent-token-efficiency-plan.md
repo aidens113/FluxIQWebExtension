@@ -273,6 +273,7 @@ every project gets the same lifecycle.
 | Worker report guard | `SubagentStop`, `agent_type` = `worker` | Exit 2 with "write your report file and end with `Report: <path>`" unless the final message names a report path that exists. |
 | Session pointer | `SessionStart`, matchers `startup\|clear\|compact\|resume` | Print at most 15 lines: repository, branch, uncommitted files under `docs/working/`, the `Active` document names and line counts, and `Run /resume <document>`. |
 | Handoff reminder | `Stop` | If `git status` shows changes under `docs/working/`, emit a `systemMessage` saying so. Warn, never block, because a blocking `Stop` can loop. |
+| Clear prompt | `Stop` | When the final message carries the `/handoff` footer (`Pushed:` or `Next: /clear`), emit a `systemMessage` asking whether to clear the message history now. A hook cannot run `/clear` or open a dialog, so the user answers by typing `/clear` or carrying on. Quiet on ordinary stops. |
 | Instruction metrics | `InstructionsLoaded` | Append `{time, cwd, file, load_reason, bytes}` to `~/.claude/brain-metrics.ndjson`. This is how Phase 4 measures what the hierarchy costs. |
 | Budgets | `install.mjs --check` | Fail if `CLAUDE.global.md` > 60 lines, any agent body > 60 lines, any skill > 80 lines, the global lessons index > 40 lines, or installed copies differ from the repository. |
 | Ledger and Current State shape | `working-docs` audit rule, Core first then mirrored | Fail a ledger entry without a `- Validation:` line, or one containing "reported success" or "worker reported"; fail a `Current State` over 150 lines. Ratcheted like the other rules. |
@@ -480,6 +481,21 @@ for the last time.
   heredoc payload piped to the guard -> silence, exit 0.
 - Outcome: Accepted
 - Follow-up: confirm `/context` in a new session; Phase 4 after real use.
+
+### 2026-09-10 — Clear-prompt hook added
+
+- Agent: supervisor
+- Changed: brain `hooks/clear-prompt.mjs`, its test and fixture,
+  `settings.fragment.json`; `~/.claude/settings.json` (second `Stop`
+  hook); the Mechanical Enforcement table here.
+- Why: The user asked for a hook that asks whether to clear the message
+  history. Hooks cannot run `/clear` or open a dialog, so the question is a
+  `systemMessage` shown only after a `/handoff` footer.
+- Validation: brain `npm test` -> 65 pass, 0 fail; `node install.mjs
+  --check` -> `brain check passed`; a handoff-footer payload piped to the
+  hook -> the question as `systemMessage`; an ordinary stop -> silence.
+- Outcome: Accepted
+- Follow-up: none.
 
 ---
 
