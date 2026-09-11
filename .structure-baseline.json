@@ -23,11 +23,9 @@
       "scripts": 32
     },
     "exported-values": {
-      "packages/test-runner/src/demo-workspace.ts::values": 43,
       "packages/test-runner/src/demo-llm-create-ui.ts::values": 21
     },
     "file-lines": {
-      "packages/test-runner/src/demo-workspace.ts": 3855,
       "packages/test-runner/src/demo-llm-create-ui.ts": 837
     },
     "imports": {

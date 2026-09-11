@@ -136,6 +136,40 @@ package. They have been compacted away: each report in
 `docs/working/module-size-governance-plan/reports/` carries its task,
 evidence and findings, and the ledger below records what was accepted.
 
+### Phase 3 dispatch — 2026-09-10
+
+The two remaining oversized files here, both test infrastructure. They were
+deferred while shipped code was decomposed; nothing else is now ahead of them.
+
+### Brief: ext-demo-workspace
+- Repository: this repository
+- Task: Split `packages/test-runner/src/demo-workspace.ts` — 3,855 lines and
+  50 exported values, the largest file in either repository. It has 19
+  importers, so keep `demo-workspace.ts` as a facade re-exporting a new
+  `demo-workspace/` directory and change no importer. Group by the lane or
+  concern each exported function serves rather than by name prefix; the
+  `demo-` prefix is the filename convention here, not a grouping. Then split
+  `packages/test-runner/src/demo-llm-create-ui.ts` (837 lines) the same way if
+  it is a separate concern, or fold it in if it belongs to a lane.
+- **The hazard, which compilation will not catch.**
+  `packages/test-runner/src/tests/demo-llm-prepare.test.ts` reads
+  `demo-workspace.ts` as **text** at line 90, slices it between
+  `export async function prepareDemoLlmBlankWorkspace` and
+  `export async function prepareDemoLlmWorkspace`, and asserts that slice
+  contains ten required identifiers and does not contain six forbidden ones.
+  It reads `demo-llm-blank-workspace.ts` as text too. When
+  `prepareDemoLlmBlankWorkspace` moves into its own module, repoint that read
+  at the new module and delete the index-slicing: the whole module becomes the
+  lane, which makes the `doesNotMatch` assertions strictly stronger than the
+  slice they replace. Do not weaken any assertion to make it pass — if one
+  genuinely cannot hold against the new module, say so and leave it failing.
+- Required reads: `Current State` of `docs/working/module-size-governance-plan.md`; both dispatch shared-context blocks; `packages/test-runner/src/tests/demo-llm-prepare.test.ts`
+- Owns (may edit): `packages/test-runner/src/demo-workspace.ts`, `packages/test-runner/src/demo-workspace/**`, `packages/test-runner/src/demo-llm-create-ui.ts`, `packages/test-runner/src/demo-llm-create-ui/**`, `packages/test-runner/src/tests/demo-llm-prepare.test.ts`
+- Must not touch: every other file in `packages/test-runner/src`, every other package, `.structure-baseline.json`
+- Definition of done: no file in your scope over 800 lines; the exported-name set of both subjects identical before and after, diff quoted; `pnpm --filter @fluxiq-web-extension/test-runner test` reports the same 266 tests with the same 19 failures by name — that suite is red for pre-existing reasons, so unchanged counts and an unchanged failure list is the bar, not green; `pnpm --filter @fluxiq-web-extension/test-runner check` exit 0; report written
+- Report to: docs/working/module-size-governance-plan/reports/ext-demo-workspace.md
+- Note: this package's test script is `pnpm build && node --test "dist/**/*.test.js"`. The glob is quoted so node does the globbing and depth does not matter, but `tsc` does not clean `dist`, so run `rm -rf dist` before measuring or you will count stale compiled tests alongside new ones.
+
 ## Work Ledger
 
 ### 2026-09-10 — Plan authored
@@ -242,6 +276,33 @@ evidence and findings, and the ledger below records what was accepted.
   they would have compiled and never run, reproducing the dead-test defect
   already recorded for `domain/src/runtime/tests/`. Adding a runner is the
   prerequisite for covering the new `connection/` collaborators.
+
+### 2026-09-11 — demo-workspace.ts decomposed
+
+- Agent: supervisor, with worker `ext-demo-workspace`
+- Changed: `packages/test-runner/src/demo-workspace.ts` 3,855 lines -> a
+  5-line facade over 23 collaborators plus a barrel in
+  `packages/test-runner/src/demo-workspace/`, largest new file 339 lines;
+  four tests repointed at the new modules.
+- Why: the largest file in either repository, and the last oversized file here
+  apart from `demo-llm-create-ui.ts`.
+- Validation: the 50-name export surface is byte-identical by checker diff;
+  all 3,647 body lines moved verbatim, zero missing and zero new; `import()`
+  of the built facade resolves all 43 runtime value exports with no undefined
+  binding. `pnpm --filter @fluxiq-web-extension/test-runner test` -> 266
+  tests, 247 pass, 19 fail, identical in count and name to the baseline, from
+  a cleaned `dist`. Package `check` -> exit 0. Baseline -> 2 entries removed,
+  0 added, 0 raised.
+- Outcome: Accepted
+- Follow-up: `demo-llm-create-ui.ts` (837 lines) was deliberately not split.
+  `tests/demo-llm-create-ui.test.ts` makes roughly 33 source-text assertions
+  against it and 13 more against its **compiled** output in `dist`, spread
+  across most of the file; a facade empties both. Re-homing those guards is
+  design work, not a mechanical split, and the worker was right to stop rather
+  than manufacture failures it could not repair.
+  A wider lesson for briefs: `demo-workspace.ts` was read as source text by
+  **four** tests, and the brief named one. Before briefing any split, grep for
+  every reader of the subject by path, not just its importers.
 
 ## Open Questions
 

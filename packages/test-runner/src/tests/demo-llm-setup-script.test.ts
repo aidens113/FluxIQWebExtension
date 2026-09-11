@@ -24,7 +24,7 @@ test("exposes a persistent UI-only DeepSeek setup command with sanitized output"
 });
 
 test("persistent setup composes the existing lock, Core, auth, browser evidence, and in-memory redaction seams", async () => {
-  const source = await readFile(repositoryFile("packages/test-runner/src/demo-workspace.ts"), "utf8");
+  const source = await readFile(repositoryFile("packages/test-runner/src/demo-workspace/workspace-lanes.ts"), "utf8");
   const start = source.indexOf("export async function setupDemoWorkspaceDeepSeekKey");
   const end = source.indexOf("export async function recordDemoWorkspace", start);
   assert.ok(start >= 0 && end > start);

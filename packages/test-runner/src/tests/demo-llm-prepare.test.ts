@@ -87,10 +87,11 @@ test("demo:llm:prepare is a provider-free real-UI blank Flow lane", async () => 
   assert.match(launcher, /withoutProviderSecrets\(process\.env\)/u);
   assert.doesNotMatch(launcher, /DEEPSEEK_API_KEY|setupDemoWorkspaceDeepSeekKey|ensureDeepSeekKeyViaUi/u);
 
-  const host = await readFile(path.join(repositoryRoot, "packages/test-runner/src/demo-workspace.ts"), "utf8");
-  const start = host.indexOf("export async function prepareDemoLlmBlankWorkspace");
-  const end = host.indexOf("export async function prepareDemoLlmWorkspace", start);
-  const lane = host.slice(start, end);
+  // The lane is its own module, so the whole file is the lane: no slicing, and
+  // the doesNotMatch assertions below now hold over every line of it rather
+  // than over the span between two neighbouring declarations.
+  const lane = await readFile(path.join(repositoryRoot, "packages/test-runner/src/demo-workspace/blank-preparation.ts"), "utf8");
+  assert.match(lane, /export async function prepareDemoLlmBlankWorkspace/u);
   for (const required of ["withWorkspaceLock", "withPersistentDemoCore", "authenticatedControl", "withDemoBrowser", "prepareBlankLlmFlowViaUi", "connectExtension", "blank-recorder-status", "assertRecordingSetUnchanged", "assertGenuinelyBlankFlow", "saveBlankLlmPreparationState"]) assert.match(lane, new RegExp(required));
   assert.match(lane, /recordingState !== "idle"/u);
   assert.match(lane, /BLANK_LLM_SCENARIO_PATH/u);

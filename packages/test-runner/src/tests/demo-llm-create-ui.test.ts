@@ -39,7 +39,7 @@ test("proposal-only exploration launcher and UI driver stop before review mutati
   assert.equal(EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS, 195_000);
   assert.equal(EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokens * EVIDENCE_GUIDED_CREATION_LIMITS.maxCalls, 48_000);
   assert.equal(LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD, 100_000);
-  const workspace = await readFile(path.join(root, "packages", "test-runner", "src", "demo-workspace.ts"), "utf8");
+  const workspace = await readFile(path.join(root, "packages", "test-runner", "src", "demo-workspace", "exploration-checkpoints.ts"), "utf8");
   assert.match(workspace, /configureEvidenceGuidedCreationViaUi\(panelPage, fixture\.flowTreeItemId, flowName/u);
   assert.match(workspace, /targetPage: scenarioPage/u);
   const uiSource = await readFile(path.join(root, "packages", "test-runner", "src", "demo-llm-create-ui.ts"), "utf8");

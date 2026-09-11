@@ -65,10 +65,12 @@ test("live command is real-UI, credential-boundary safe, and provider-secret fre
   const launcher = await readFile(path.join(root, "scripts/run-demo-llm-diagnosis.mjs"), "utf8");
   assert.equal(launcher.includes("withoutProviderSecrets(process.env)"), true);
   assert.doesNotMatch(launcher, /DEEPSEEK_API_KEY|setupDemoWorkspaceDeepSeekKey|deepSeekSecretFromDriverEnvironment/u);
-  const source = await readFile(path.join(root, "packages/test-runner/src/demo-workspace.ts"), "utf8");
-  const start = source.indexOf("export async function runDemoLlmDiagnosis");
-  const end = source.indexOf("export async function runDemoWorkspaceFlow", start);
-  const lane = source.slice(start, end);
+  const laneModule = await readFile(path.join(root, "packages/test-runner/src/demo-workspace/diagnosis-lanes.ts"), "utf8");
+  const uiModule = await readFile(path.join(root, "packages/test-runner/src/demo-workspace/diagnosis-ui.ts"), "utf8");
+  // Skip diagnosis-lanes.ts's import header: its alphabetically sorted import
+  // line names restoreDiagnosisScenario before runDiagnosisFromPanel, which
+  // would invert the ordering assertion below.
+  const lane = [laneModule.slice(laneModule.indexOf("export async function runDemoLlmDiagnosis")), uiModule].join("\n");
   for (const required of ["withWorkspaceLock", "withPersistentDemoCore", "withDemoBrowser", "configureFirstLiveDiagnosisViaUi", "connectExtension", "introduce-missing-target", "runDiagnosisFromPanel", "restoreDiagnosisScenario", "runDemoFlowFromPanel", "authenticated session", "Encrypted API key", "TESTING_LAB_DEEPSEEK_KEY_NAME"]) assert.equal(lane.includes(required), true);
   assert.doesNotMatch(lane, /Authorize One Diagnosis|llm-runtime-password|llm-runtime-pin/u);
   assert.match(lane, /const provider = llmSection\.getByLabel\("Provider", \{ exact: true \}\)/u);
@@ -84,9 +86,8 @@ test("live command is real-UI, credential-boundary safe, and provider-secret fre
   assert.doesNotMatch(lane, /if \(await sectionButton\.count\(\)\)/u);
   assert.ok(lane.indexOf("introduce-missing-target") < lane.indexOf("runDiagnosisFromPanel"));
   assert.ok(lane.indexOf("runDiagnosisFromPanel") < lane.indexOf("restoreDiagnosisScenario"));
-  const runtimeStart = lane.indexOf("async function runDiagnosisFromPanel");
-  const runtimeEnd = lane.indexOf("export async function runDemoWorkspaceFlow", runtimeStart);
-  const runtime = lane.slice(runtimeStart, runtimeEnd);
+  const runtimeStart = lane.indexOf("export async function runDiagnosisFromPanel");
+  const runtime = lane.slice(runtimeStart);
   assert.match(runtime, /Checking Flow readiness[\s\S]*const runButton[\s\S]*initialRunEnabled[\s\S]*missingActiveInstruction[\s\S]*llm-runtime-not-ready/u);
   assert.ok(runtime.indexOf("initialRunEnabled") < runtime.indexOf('"llm-runtime-run-request"'));
   assert.match(runtime, /llm-runtime-mode-not-ready[\s\S]*Diagnosis-only mode did not remain ready to run/u);
