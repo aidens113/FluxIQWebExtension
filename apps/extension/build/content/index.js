@@ -1,339 +1,20 @@
 "use strict";
 (() => {
-  // src/content/element-finder.ts
-  function findClosestFingerprint(fingerprint) {
-    const bySelector = query(fingerprint.selector);
-    if (bySelector) return bySelector;
-    if (fingerprint.xpath) {
-      const result = document.evaluate(fingerprint.xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-      if (result instanceof Element) return result;
-    }
-    if (fingerprint.id) {
-      const byId = document.getElementById(fingerprint.id);
-      if (byId) return byId;
-    }
-    const tag = fingerprint.tagName || "*";
-    const testId = fingerprint.attributes?.["data-testid"];
-    if (testId) {
-      const byTestId = query(`[data-testid="${cssString(testId)}"]`);
-      if (byTestId) return byTestId;
-    }
-    if (fingerprint.name) {
-      const byName = query(`${tag}[aria-label="${cssString(fingerprint.name)}"], ${tag}[name="${cssString(fingerprint.name)}"]`);
-      if (byName) return byName;
-    }
-    if (fingerprint.classNames?.length) {
-      const byClass = query(`${tag}${fingerprint.classNames.map((className) => `.${CSS.escape(className)}`).join("")}`);
-      if (byClass) return byClass;
-    }
-    if (fingerprint.visibleText) {
-      const normalized = normalizeText(fingerprint.visibleText);
-      return [...document.querySelectorAll(tag)].find((element) => normalizeText(element.textContent ?? "") === normalized) ?? null;
-    }
-    return null;
-  }
-  function xpathFor(element) {
-    const parts = [];
-    let current = element;
-    while (current) {
-      if (current.id) {
-        parts.unshift(`*[@id=${xpathString(current.id)}]`);
-        break;
-      }
-      const siblings = current.parentElement ? [...current.parentElement.children].filter((sibling) => sibling.tagName === current.tagName) : [];
-      parts.unshift(`${current.tagName.toLowerCase()}[${Math.max(1, siblings.indexOf(current) + 1)}]`);
-      current = current.parentElement;
-    }
-    return `/${parts.join("/")}`;
-  }
-  function query(selector) {
-    if (!selector) return null;
-    try {
-      return document.querySelector(selector);
-    } catch {
-      return null;
-    }
-  }
-  function normalizeText(value) {
-    return value.replace(/\s+/g, " ").trim();
-  }
-  function cssString(value) {
-    return CSS.escape(value).replace(/"/g, '\\"');
-  }
-  function xpathString(value) {
-    return `"${value.replace(/"/g, '\\"')}"`;
-  }
-
-  // src/content/actions.ts
-  async function executeContentAction(action, deps) {
-    const startedAt = Date.now();
-    try {
-      if (action.actionType === "web.dom.capture_snapshot" || action.actionType === "dom.capture_snapshot") {
-        return deps.success(action, startedAt, "Snapshot captured.", void 0, deps.captureSnapshot());
-      }
-      if (action.actionType === "web.dom.wait_for_selector" || action.actionType === "dom.wait_for_selector") {
-        const element = await deps.waitForElement(action.selector, action.timeoutMs);
-        return deps.success(action, startedAt, "Selector found.", deps.describeElement(element), deps.captureSnapshot());
-      }
-      if (action.actionType === "web.dom.wait_for_text" || action.actionType === "dom.wait_for_text") {
-        await deps.waitForText(action.text ?? action.value ?? "", action.timeoutMs);
-        return deps.success(action, startedAt, "Text found.", void 0, deps.captureSnapshot());
-      }
-      if (action.actionType === "web.dom.extract" || action.actionType === "dom.extract") {
-        const element = deps.resolveTarget(action);
-        const extracted = deps.extractElement(element, action.options);
-        return deps.success(action, startedAt, "Value extracted.", deps.describeElement(element), deps.captureSnapshot(), extracted);
-      }
-      if (action.actionType === "web.dom.click" || action.actionType === "dom.click") {
-        const element = deps.resolveTarget(action);
-        deps.scrollElementIntoView(element);
-        element.click();
-        return deps.success(action, startedAt, "Element clicked.", deps.describeElement(element), deps.captureSnapshot());
-      }
-      if (action.actionType === "web.dom.type" || action.actionType === "dom.type") {
-        const element = deps.resolveTarget(action);
-        element.focus();
-        deps.setElementValue(element, action.text ?? action.value ?? "");
-        deps.dispatchInputEvents(element);
-        return deps.success(action, startedAt, "Text entered.", deps.describeElement(element), deps.captureSnapshot());
-      }
-      if (action.actionType === "web.dom.clear" || action.actionType === "dom.clear") {
-        const element = deps.resolveTarget(action);
-        element.focus();
-        deps.setElementValue(element, "");
-        deps.dispatchInputEvents(element);
-        return deps.success(action, startedAt, "Field cleared.", deps.describeElement(element), deps.captureSnapshot());
-      }
-      if (action.actionType === "web.dom.select" || action.actionType === "dom.select") {
-        const element = deps.resolveTarget(action);
-        element.focus();
-        element.value = action.value ?? "";
-        deps.dispatchInputEvents(element);
-        return deps.success(action, startedAt, "Option selected.", deps.describeElement(element), deps.captureSnapshot());
-      }
-      if (action.actionType === "web.dom.scroll" || action.actionType === "dom.scroll") {
-        window.scrollTo({
-          left: Number(action.options?.x ?? action.coordinates?.x ?? window.scrollX),
-          top: Number(action.options?.y ?? action.coordinates?.y ?? window.scrollY),
-          behavior: action.options?.smooth === true ? "smooth" : "instant"
-        });
-        return deps.success(action, startedAt, "Page scrolled.", void 0, deps.captureSnapshot());
-      }
-      if (action.actionType === "web.dom.keypress" || action.actionType === "dom.keypress") {
-        const target = action.selector ? deps.resolveTarget(action) : document.activeElement ?? document.body;
-        const key = action.key ?? action.text ?? "";
-        target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
-        target.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true, cancelable: true }));
-        return deps.success(action, startedAt, "Key event dispatched.", target instanceof Element ? deps.describeElement(target) : void 0, deps.captureSnapshot());
-      }
-      throw new Error(`Unsupported action type: ${action.actionType}`);
-    } catch (error) {
-      return deps.failure(action, error, startedAt);
-    }
-  }
-
-  // src/content/snapshots.ts
-  function shouldAttachStateSnapshot(kind) {
-    return kind === "dom.click" || kind === "dom.input" || kind === "dom.change" || kind === "dom.submit" || kind === "dom.keydown";
-  }
-
-  // src/content/index.ts
+  // src/content/messages.ts
   var CONTENT_EVENT = "fluxiq.contentEvent";
   var CONTENT_READY = "fluxiq.contentReady";
   var FRAME_GEOMETRY_REQUEST = "fluxiq.frameGeometryRequest";
   var FRAME_GEOMETRY_RESPONSE = "fluxiq.frameGeometryResponse";
-  var MAX_SNAPSHOT_CANDIDATES = 2e3;
-  var MAX_SNAPSHOT_SCAN_ELEMENTS = 5e4;
-  var ACTIVE_CONTENT_INSTANCE_KEY = "__fluxiqWebAutomationActiveContentInstance";
-  var CONTENT_SCRIPT_VERSION = 2;
-  var MAX_OBSERVED_EVENT_ELEMENTS = 500;
-  var CONTENT_INSTANCE_ID = `${Date.now()}.${Math.random().toString(36).slice(2)}`;
-  var contentWindow = window;
-  contentWindow[ACTIVE_CONTENT_INSTANCE_KEY] = CONTENT_INSTANCE_ID;
-  var recording = false;
-  var sequence = 0;
-  var captureMutations = true;
-  var captureInputValues = true;
-  var captureSnapshots = true;
-  var scrollTimer;
-  var mutationTimer;
-  var inputTimer;
-  var pendingInput;
-  var pendingMutation = { added: 0, removed: 0, attributes: 0, text: 0 };
-  var observedEventElements = /* @__PURE__ */ new WeakSet();
-  var observedEventElementQueue = [];
+
+  // src/content/frame-geometry.ts
   var frameViewportOffset = isTopFrame() ? { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight } : void 0;
   var frameGeometryRequestId = 0;
-  sendReady();
-  installFrameGeometryBridge();
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    const typed = message;
-    if (typed.type === "fluxiq.ping") {
-      sendResponse({ ok: true, active: isActiveContentInstance(), version: CONTENT_SCRIPT_VERSION });
-      return false;
-    }
-    if (!isActiveContentInstance()) return false;
-    if (typed.type === "recording") {
-      captureMutations = typed.settings?.captureMutations ?? captureMutations;
-      captureInputValues = typed.settings?.captureInputValues ?? captureInputValues;
-      captureSnapshots = typed.settings?.captureSnapshots ?? captureSnapshots;
-      setRecordingState(Boolean(typed.recording));
-      sendResponse({ ok: true });
-      return true;
-    }
-    if (typed.type === "captureSnapshot") {
-      void captureSnapshotForResponse().then(sendResponse);
-      return true;
-    }
-    if (typed.type === "executeAction" && typed.action) {
-      if (typed.topFrameOnly === true && !isTopFrame()) return false;
-      void executeAction(typed.action).then(sendResponse).catch((error) => sendResponse(actionFailure(typed.action, error)));
-      return true;
-    }
-    return false;
-  });
-  document.addEventListener("pointerdown", (event) => {
-    if (!recording) return;
-    if (!event.isTrusted) return;
-    if (event.button !== 0 || event.isPrimary === false) return;
-    rememberEventPathElements(event);
-    flushPendingInput();
-    const eventElement = eventTargetElement(event);
-    const target = eventElement ? pointerActivationTarget(eventElement) : null;
-    if (!target) return;
-    emit("dom.click", compactObject({
-      element: describeElement(target),
-      metadata: compactObject({
-        ...pointerMetadata(event),
-        pointerId: event.pointerId,
-        pointerType: event.pointerType,
-        sourceEvent: "pointerdown",
-        captureTiming: "before-action"
-      })
-    }));
-  }, true);
-  document.addEventListener("click", (event) => {
-    if (!recording) return;
-    if (!event.isTrusted) return;
-    rememberEventPathElements(event);
-    const eventElement = eventTargetElement(event);
-    const target = eventElement ? actionEventTarget(eventElement) : null;
-    emit("dom.click", compactObject({
-      element: target ? describeElement(target) : void 0,
-      metadata: compactObject({
-        ...pointerMetadata(event),
-        sourceEvent: "click"
-      })
-    }));
-  }, true);
-  document.addEventListener("input", (event) => {
-    if (!recording) return;
-    rememberEventPathElements(event);
-    const target = event.target instanceof Element ? event.target : null;
-    if (target && isTextEntryElement(target)) {
-      scheduleInputEvent(target);
-      return;
-    }
-    flushPendingInput();
-    if (target && shouldRecordChangeEvent(target)) return;
-    emitInputEvent(target);
-  }, true);
-  document.addEventListener("change", (event) => {
-    if (!recording) return;
-    rememberEventPathElements(event);
-    const target = event.target instanceof Element ? event.target : null;
-    if (target && isTextEntryElement(target)) {
-      flushPendingInput();
-      return;
-    }
-    if (target && !shouldRecordChangeEvent(target)) return;
-    emit("dom.change", compactObject({
-      element: target ? describeElement(target) : void 0,
-      inputValue: captureInputValues ? readElementValue(target) : void 0
-    }));
-  }, true);
-  document.addEventListener("submit", (event) => {
-    if (!recording) return;
-    rememberEventPathElements(event);
-    const target = event.target instanceof Element ? event.target : null;
-    emit("dom.submit", compactObject({ element: target ? describeElement(target) : void 0 }));
-  }, true);
-  document.addEventListener("keydown", (event) => {
-    if (!recording) return;
-    if (!event.isTrusted) return;
-    rememberEventPathElements(event);
-    emit("dom.keydown", compactObject({
-      key: event.key,
-      element: event.target instanceof Element ? describeElement(event.target) : void 0,
-      metadata: {
-        altKey: event.altKey,
-        ctrlKey: event.ctrlKey,
-        metaKey: event.metaKey,
-        shiftKey: event.shiftKey
-      }
-    }));
-  }, true);
-  document.addEventListener("wheel", (event) => {
-    if (!recording) return;
-    if (!event.isTrusted) return;
-    if (scrollTimer) clearTimeout(scrollTimer);
-    scrollTimer = setTimeout(() => {
-      emit("dom.scroll", {
-        scroll: { x: window.scrollX, y: window.scrollY },
-        metadata: {
-          sourceEvent: "wheel",
-          deltaX: event.deltaX,
-          deltaY: event.deltaY,
-          deltaZ: event.deltaZ,
-          deltaMode: event.deltaMode,
-          altKey: event.altKey,
-          ctrlKey: event.ctrlKey,
-          metaKey: event.metaKey,
-          shiftKey: event.shiftKey
-        }
-      });
-    }, 400);
-  }, true);
-  window.addEventListener("scroll", () => {
-    if (!recording) return;
-    if (scrollTimer) clearTimeout(scrollTimer);
-    scrollTimer = setTimeout(() => {
-      emit("dom.scroll", { scroll: { x: window.scrollX, y: window.scrollY } });
-    }, 400);
-  }, true);
-  var observer = new MutationObserver((mutations) => {
-    if (!captureMutations || !recording) return;
-    for (const mutation of mutations) {
-      pendingMutation.added += mutation.addedNodes.length;
-      pendingMutation.removed += mutation.removedNodes.length;
-      if (mutation.type === "attributes") pendingMutation.attributes += 1;
-      if (mutation.type === "characterData") pendingMutation.text += 1;
-    }
-    if (mutationTimer) clearTimeout(mutationTimer);
-    mutationTimer = setTimeout(() => {
-      emit("dom.mutation", { mutation: pendingMutation });
-      pendingMutation = { added: 0, removed: 0, attributes: 0, text: 0 };
-    }, 500);
-  });
-  function sendReady() {
-    if (!isActiveContentInstance()) return;
-    const payload = basePayload("content.ready", {
-      metadata: { readyState: document.readyState }
-    });
-    void chrome.runtime.sendMessage({ type: CONTENT_READY, payload });
+  function isTopFrame() {
+    return window.top === window;
   }
-  async function captureSnapshotForResponse() {
-    if (!isTopFrame()) await requestFrameGeometry();
-    return captureSnapshot();
-  }
-  function emit(kind, details) {
-    if (!isActiveContentInstance()) return;
-    if (!recording && kind !== "content.ready") return;
-    const payload = basePayload(kind, details);
-    void chrome.runtime.sendMessage({ type: CONTENT_EVENT, payload });
-  }
-  function isActiveContentInstance() {
-    return contentWindow[ACTIVE_CONTENT_INSTANCE_KEY] === CONTENT_INSTANCE_ID;
+  function currentFrameViewportOffset() {
+    if (isTopFrame()) return { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight };
+    return frameViewportOffset;
   }
   function installFrameGeometryBridge() {
     window.addEventListener("message", (event) => {
@@ -399,321 +80,204 @@
       height: Math.round(rect.height * 100) / 100
     };
   }
-  function currentFrameViewportOffset() {
-    if (isTopFrame()) return { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight };
-    return frameViewportOffset;
-  }
-  function isTopFrame() {
-    return window.top === window;
-  }
   function rectFromUnknown(value) {
     if (!value || typeof value !== "object") return void 0;
     const rect = value;
     return typeof rect.x === "number" && typeof rect.y === "number" && typeof rect.width === "number" && typeof rect.height === "number" ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : void 0;
   }
-  function setRecordingState(nextRecording) {
-    if (!nextRecording) flushPendingInput();
-    recording = nextRecording;
-    if (recording && captureMutations) {
-      observer.observe(document.documentElement, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        characterData: true
-      });
-    } else {
-      observer.disconnect();
-      if (mutationTimer) clearTimeout(mutationTimer);
-      mutationTimer = void 0;
-      pendingMutation = { added: 0, removed: 0, attributes: 0, text: 0 };
-    }
+
+  // src/content/instance.ts
+  var ACTIVE_CONTENT_INSTANCE_KEY = "__fluxiqWebAutomationActiveContentInstance";
+  var CONTENT_SCRIPT_VERSION = 2;
+  var CONTENT_INSTANCE_ID = `${Date.now()}.${Math.random().toString(36).slice(2)}`;
+  var contentWindow = window;
+  contentWindow[ACTIVE_CONTENT_INSTANCE_KEY] = CONTENT_INSTANCE_ID;
+  function isActiveContentInstance() {
+    return contentWindow[ACTIVE_CONTENT_INSTANCE_KEY] === CONTENT_INSTANCE_ID;
   }
-  function scheduleInputEvent(element) {
-    pendingInput = { element, inputValue: captureInputValues ? readElementValue(element) : void 0 };
-    if (inputTimer) clearTimeout(inputTimer);
-    inputTimer = setTimeout(() => flushPendingInput(), 350);
+
+  // src/content/capture-settings.ts
+  var captureSettings = {
+    mutations: true,
+    inputValues: true,
+    snapshots: true
+  };
+
+  // src/content/compact-object.ts
+  function compactObject(value) {
+    return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
   }
-  function flushPendingInput() {
-    if (inputTimer) clearTimeout(inputTimer);
-    inputTimer = void 0;
-    const pending = pendingInput;
-    pendingInput = void 0;
-    if (!pending) return;
-    emit("dom.input", compactObject({
-      element: describeElement(pending.element),
-      inputValue: pending.inputValue
-    }));
+
+  // src/content/element-traits.ts
+  function isActionableElement(element) {
+    const tagName = element.tagName.toLowerCase();
+    const role = element.getAttribute("role")?.toLowerCase();
+    return tagName === "a" || tagName === "button" || tagName === "input" || tagName === "textarea" || tagName === "select" || tagName === "summary" || tagName === "label" || role === "button" || role === "link" || role === "menuitem" || role === "checkbox" || role === "radio" || role === "tab" || role === "switch" || hasClickHandler(element) || element instanceof HTMLElement && element.isContentEditable;
   }
-  function emitInputEvent(element) {
-    emit("dom.input", compactObject({
-      element: element ? describeElement(element) : void 0,
-      inputValue: captureInputValues ? readElementValue(element) : void 0
-    }));
+  function isInteractableUiElement(element) {
+    return isActionableElement(element) || element instanceof HTMLElement && getComputedStyle(element).cursor === "pointer" || element.hasAttribute("tabindex") || element.hasAttribute("aria-expanded") || element.hasAttribute("aria-controls") || element.hasAttribute("aria-pressed") || element.hasAttribute("aria-selected");
   }
-  function basePayload(kind, details) {
-    const payload = {
-      kind,
-      sequence: ++sequence,
-      url: location.href,
-      title: document.title,
-      eventTimestampMs: Date.now()
-    };
-    if (details.element) payload.element = details.element;
-    if (captureSnapshots) {
-      const snapshot = details.snapshot ?? (shouldAttachStateSnapshot(kind) ? captureSnapshot() : void 0);
-      if (snapshot) payload.snapshot = snapshot;
-    }
-    if (details.inputValue !== void 0) payload.inputValue = details.inputValue;
-    if (details.key !== void 0) payload.key = details.key;
-    if (details.scroll) payload.scroll = details.scroll;
-    if (details.mutation) payload.mutation = details.mutation;
-    if (details.actionResult) payload.actionResult = details.actionResult;
-    if (details.metadata) payload.metadata = details.metadata;
-    return payload;
+  function isPrimaryControlElement(element) {
+    const tagName = element.tagName.toLowerCase();
+    const role = element.getAttribute("role")?.toLowerCase();
+    return tagName === "button" || tagName === "a" || tagName === "summary" || role === "button" || role === "link" || role === "menuitem" || role === "tab";
   }
-  async function executeAction(action) {
-    return executeContentAction(action, {
-      captureSnapshot,
-      resolveTarget,
-      describeElement,
-      waitForElement,
-      waitForText,
-      extractElement,
-      scrollElementIntoView,
-      setElementValue,
-      dispatchInputEvents,
-      success,
-      failure: actionFailure
-    });
+  function hasClickHandler(element) {
+    const htmlElement = element;
+    return element.hasAttribute("onclick") || typeof htmlElement.onclick === "function";
   }
-  function resolveTarget(action) {
-    const misses = [];
-    if (action.selector) {
-      const element = document.querySelector(action.selector);
-      if (element) return element;
-      misses.push(`selector ${action.selector}`);
-    }
-    if (action.coordinates) {
-      const element = document.elementFromPoint(action.coordinates.x, action.coordinates.y);
-      if (element) return element;
-      misses.push(`coordinates ${action.coordinates.x},${action.coordinates.y}`);
-    }
-    const visualPoint = pointFromVisualTarget(action.visualTarget);
-    if (visualPoint) {
-      const element = document.elementFromPoint(visualPoint.x, visualPoint.y);
-      if (element) return element;
-      misses.push(`visual target ${Math.round(visualPoint.x)},${Math.round(visualPoint.y)}`);
-    }
-    const fingerprint = action.options?.element;
-    if (fingerprint && typeof fingerprint === "object" && !Array.isArray(fingerprint)) {
-      const element = findClosestFingerprint(fingerprint);
-      if (element) return element;
-      misses.push("element fingerprint");
-    }
-    if (!misses.length) {
-      const active = document.activeElement;
-      if (active) return active;
-    }
-    if (misses.length) throw new Error(`No target resolved from ${misses.join(", ")}.`);
-    throw new Error("No selector, coordinates, or active element was available.");
+  function isSemanticTextElement(element) {
+    const tagName = element.tagName.toLowerCase();
+    return tagName === "p" || tagName === "li" || tagName === "td" || tagName === "th" || tagName === "dt" || tagName === "dd" || tagName === "figcaption" || tagName === "blockquote" || /^h[1-6]$/.test(tagName);
   }
-  function pointFromVisualTarget(visualTarget) {
-    const bounds = visualTarget?.bounds ?? visualTarget?.anchor?.bounds;
-    if (bounds) return centerPoint(bounds);
-    if (visualTarget?.documentBounds) {
-      const center = centerPoint(visualTarget.documentBounds);
-      return { x: center.x - window.scrollX, y: center.y - window.scrollY };
-    }
-    return void 0;
+  function hasVisualMedia(element) {
+    return element.matches("svg,img,picture,canvas,video") || Boolean(element.querySelector("svg,img,picture,canvas,video"));
   }
-  function centerPoint(rect) {
-    return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
-  }
-  function success(action, startedAt, message, element, snapshot, extracted) {
-    const result = {
-      commandId: action.commandId,
-      actionType: action.actionType,
-      status: "succeeded",
-      message,
-      url: location.href,
-      title: document.title,
-      startedAt,
-      finishedAt: Date.now()
-    };
-    if (element) result.element = element;
-    if (action.visualTarget) result.visualTarget = action.visualTarget;
-    if (snapshot ?? captureSnapshots) result.snapshot = snapshot ?? captureSnapshot();
-    if (extracted !== void 0) result.extracted = extracted;
-    return result;
-  }
-  function actionFailure(action, error, startedAt = Date.now()) {
-    const snapshot = captureSnapshots ? captureSnapshot() : void 0;
-    return {
-      commandId: action.commandId,
-      actionType: action.actionType,
-      status: "failed",
-      message: error instanceof Error ? error.message : "Action failed.",
-      url: location.href,
-      title: document.title,
-      ...snapshot ? { snapshot } : {},
-      startedAt,
-      finishedAt: Date.now()
-    };
-  }
-  function captureSnapshot() {
-    const snapshot = {
-      url: location.href,
-      title: document.title,
-      viewport: {
-        width: window.innerWidth,
-        height: window.innerHeight,
-        scrollX: window.scrollX,
-        scrollY: window.scrollY,
-        documentWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth, window.innerWidth),
-        documentHeight: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight, window.innerHeight),
-        devicePixelRatio: window.devicePixelRatio
-      },
-      frame: compactObject({
-        isTop: isTopFrame(),
-        viewportOffset: currentFrameViewportOffset()
-      }),
-      interactiveElements: snapshotElements()
-    };
-    const focused = document.activeElement instanceof Element ? describeElement(document.activeElement) : void 0;
-    if (focused) snapshot.focusedElement = focused;
-    const selectedText = window.getSelection()?.toString();
-    if (selectedText) snapshot.selectedText = selectedText.slice(0, 2e3);
-    return snapshot;
-  }
-  function describeElement(element) {
-    const bounds = visualViewportBounds(element);
-    const docBounds = visualDocumentBounds(element);
-    const descriptor = {
-      tagName: element.tagName.toLowerCase(),
-      selector: selectorFor(element),
-      isVisibleOnViewport: Boolean(bounds)
-    };
-    if (bounds) descriptor.bounds = bounds;
-    if (docBounds) descriptor.documentBounds = docBounds;
-    if (hasClickHandler(element)) descriptor.hasClickHandler = true;
-    const text = isInteractableUiElement(element) || isSemanticTextElement(element) ? visibleText(element) : directVisibleText(element);
-    if (text) {
-      descriptor.text = text;
-      descriptor.visibleText = text;
-    }
-    if (element.id) descriptor.id = element.id;
-    const classNames = [...element.classList];
-    if (classNames.length) descriptor.classNames = classNames;
-    descriptor.xpath = xpathFor(element);
-    const value = readElementValue(element);
-    if (value !== void 0 && captureInputValues) descriptor.value = value;
-    const role = element.getAttribute("role");
-    if (role) descriptor.role = role;
-    const name = accessibleName(element);
-    if (name) descriptor.name = name;
-    const href = linkHref(element);
-    if (href) descriptor.href = href;
-    if (element instanceof HTMLInputElement && element.type) descriptor.inputType = element.type;
-    if (isOrdinaryNonSensitiveFillControl(element)) descriptor.hasValue = element.value.length > 0;
-    if (element instanceof HTMLSelectElement) {
-      descriptor.options = [...element.options].slice(0, 20).map((option) => ({
-        value: option.value.slice(0, 200),
-        label: (option.label || option.textContent || "").replace(/\s+/gu, " ").trim().slice(0, 200)
-      }));
-      if (!isSensitiveFormControl(element) && descriptor.options.some((option) => option.value === element.value)) {
-        descriptor.selectedValue = element.value.slice(0, 200);
-      }
-    }
-    const attributes = {};
-    for (const attribute of ["id", "class", "name", "type", "autocomplete", "data-sensitive", "placeholder", "title", "alt", "href", "tabindex", "aria-label", "aria-disabled", "aria-expanded", "aria-controls", "aria-pressed", "aria-selected", "data-testid", "data-test", "data-cy", "disabled", "onclick"]) {
-      const value2 = element.getAttribute(attribute);
-      if (value2 !== null) attributes[attribute] = value2.slice(0, 500);
-    }
-    if (Object.keys(attributes).length) descriptor.attributes = attributes;
-    return descriptor;
-  }
-  function isOrdinaryNonSensitiveFillControl(element) {
-    if (isSensitiveFormControl(element)) return false;
+  function isTextEntryElement(element) {
     if (element instanceof HTMLTextAreaElement) return true;
-    return element instanceof HTMLInputElement && ["text", "search", "email", "tel", "url", "number"].includes(element.type.toLowerCase());
+    if (element instanceof HTMLElement && element.isContentEditable) return true;
+    if (!(element instanceof HTMLInputElement)) return false;
+    const type = element.type.toLowerCase();
+    return type === "" || type === "text" || type === "search" || type === "email" || type === "password" || type === "tel" || type === "url" || type === "number";
+  }
+  function shouldRecordChangeEvent(element) {
+    if (element instanceof HTMLSelectElement) return true;
+    if (!(element instanceof HTMLInputElement)) return true;
+    const type = element.type.toLowerCase();
+    return type === "checkbox" || type === "radio" || type === "file" || type === "date" || type === "datetime-local" || type === "month" || type === "time" || type === "week" || type === "color" || type === "range";
   }
   function isSensitiveFormControl(element) {
     if (element instanceof HTMLInputElement && element.type.toLowerCase() === "password") return true;
     const autocomplete = (element.getAttribute("autocomplete") ?? "").toLowerCase();
     return autocomplete === "current-password" || autocomplete === "new-password" || autocomplete === "one-time-code" || autocomplete.startsWith("cc-") || element.getAttribute("data-sensitive") === "true";
   }
-  function snapshotElements() {
-    const seen = /* @__PURE__ */ new Set();
-    const candidates = snapshotCandidateElements();
-    const included = [];
-    for (const element of candidates) {
-      if (seen.has(element) || !shouldIncludeSnapshotElement(element)) continue;
-      seen.add(element);
-      included.push(element);
+  function isOrdinaryNonSensitiveFillControl(element) {
+    if (isSensitiveFormControl(element)) return false;
+    if (element instanceof HTMLTextAreaElement) return true;
+    return element instanceof HTMLInputElement && ["text", "search", "email", "tel", "url", "number"].includes(element.type.toLowerCase());
+  }
+  function meaningfulText(value) {
+    return typeof value === "string" && value.trim().length > 0;
+  }
+
+  // src/content/event-elements.ts
+  var MAX_OBSERVED_EVENT_ELEMENTS = 500;
+  var observedEventElements = /* @__PURE__ */ new WeakSet();
+  var queue = [];
+  var observedEventElementQueue = queue;
+  function rememberEventPathElements(event) {
+    const target = eventTargetElement(event);
+    const activationTarget = target ? pointerActivationTarget(target) ?? target : void 0;
+    rememberObservedEventElement(activationTarget);
+    for (const entry of event.composedPath()) {
+      if (!(entry instanceof Element)) continue;
+      if (entry === document.documentElement || entry === document.body) continue;
+      if (!hasClickHandler(entry)) continue;
+      rememberObservedEventElement(entry);
     }
-    return included.sort(
-      (left, right) => snapshotElementBucket(left) - snapshotElementBucket(right) || elementPriority(right) - elementPriority(left) || documentOrder(left, right)
-    ).slice(0, MAX_SNAPSHOT_CANDIDATES).map((element) => describeElement(element));
-  }
-  function snapshotCandidateElements() {
-    const seen = /* @__PURE__ */ new Set();
-    const candidates = [];
-    const add = (element) => {
-      if (!element || seen.has(element)) return;
-      seen.add(element);
-      candidates.push(element);
-    };
-    for (const element of observedEventElementQueue) {
-      if (element.isConnected) add(element);
-    }
-    for (const element of document.querySelectorAll("a[href],button,input:not([type=hidden]),textarea,select,summary,label,[role=button],[role=link],[role=menuitem],[role=checkbox],[role=radio],[role=tab],[role=switch],[contenteditable=true]")) add(element);
-    for (const element of document.querySelectorAll("p,h1,h2,h3,h4,h5,h6,li,td,th,blockquote,dt,dd,figcaption")) add(element);
-    for (const element of document.querySelectorAll("img,svg,picture,canvas,video")) add(element);
-    let scanned = 0;
-    for (const element of document.querySelectorAll("*")) {
-      scanned += 1;
-      if (scanned > MAX_SNAPSHOT_SCAN_ELEMENTS) break;
-      if (!hasElementPresentation(element)) continue;
-      add(element);
-    }
-    return candidates;
-  }
-  function shouldIncludeSnapshotElement(element) {
-    if (element === document.documentElement || element === document.body) return false;
-    if (element.closest("script, style, noscript, template")) return false;
-    if (element.closest("[hidden], [aria-hidden='true']")) return false;
-    const bounds = visualDocumentBounds(element);
-    if (!bounds) return false;
-    const style = getComputedStyle(element);
-    if (style.visibility === "hidden" || style.display === "none" || Number(style.opacity) === 0) return false;
-    return isEventBackedElement(element) ? hasEventElementPresentation(element) : isInteractableUiElement(element) ? hasMeaningfulInteractableIdentity(element) : hasElementPresentation(element);
-  }
-  function snapshotElementBucket(element) {
-    if (isEventBackedElement(element)) return 0;
-    if (isPrimaryControlElement(element)) return 1;
-    if (isInteractableUiElement(element)) return 2;
-    if (isSemanticTextElement(element)) return 3;
-    if (meaningfulText(directVisibleText(element))) return 4;
-    if (hasVisualMedia(element)) return 5;
-    if (meaningfulText(visibleText(element))) return 6;
-    return 7;
-  }
-  function hasMeaningfulInteractableIdentity(element) {
-    return Boolean(
-      stableElementId(element) || meaningfulText(accessibleName(element)) || meaningfulText(visibleText(element)) || meaningfulText(directVisibleText(element)) || meaningfulText(readElementValue(element)) || meaningfulText(element.getAttribute("title")) || meaningfulText(element.getAttribute("alt")) || meaningfulText(element.getAttribute("placeholder")) || meaningfulText(linkHref(element))
-    );
-  }
-  function hasEventElementPresentation(element) {
-    return hasMeaningfulInteractableIdentity(element) || hasElementPresentation(element);
-  }
-  function hasElementPresentation(element) {
-    return meaningfulText(visibleText(element)) || meaningfulText(accessibleName(element)) || meaningfulText(readElementValue(element)) || hasVisualMedia(element);
-  }
-  function hasVisualMedia(element) {
-    return element.matches("svg,img,picture,canvas,video") || Boolean(element.querySelector("svg,img,picture,canvas,video"));
   }
   function isEventBackedElement(element) {
     return observedEventElements.has(element) || hasClickHandler(element);
+  }
+  function eventTargetElement(event) {
+    for (const entry of event.composedPath()) {
+      if (entry instanceof Element) return entry;
+    }
+    return event.target instanceof Element ? event.target : void 0;
+  }
+  function pointerActivationTarget(element) {
+    let current = element;
+    for (let depth = 0; current && current !== document.documentElement && depth < 12; depth += 1) {
+      if (isActionableElement(current)) return current;
+      current = current.parentElement;
+    }
+    current = element;
+    for (let depth = 0; current && current !== document.documentElement && depth < 12; depth += 1) {
+      if (current instanceof HTMLElement && getComputedStyle(current).cursor === "pointer") return current;
+      current = current.parentElement;
+    }
+    return void 0;
+  }
+  function actionEventTarget(element) {
+    return pointerActivationTarget(element) ?? element;
+  }
+  function rememberObservedEventElement(element) {
+    if (!element || observedEventElements.has(element)) return;
+    observedEventElements.add(element);
+    queue.push(element);
+    while (queue.length > MAX_OBSERVED_EVENT_ELEMENTS) queue.shift();
+  }
+
+  // src/content/element-finder.ts
+  function findClosestFingerprint(fingerprint) {
+    const bySelector = query(fingerprint.selector);
+    if (bySelector) return bySelector;
+    if (fingerprint.xpath) {
+      const result = document.evaluate(fingerprint.xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+      if (result instanceof Element) return result;
+    }
+    if (fingerprint.id) {
+      const byId = document.getElementById(fingerprint.id);
+      if (byId) return byId;
+    }
+    const tag = fingerprint.tagName || "*";
+    const testId = fingerprint.attributes?.["data-testid"];
+    if (testId) {
+      const byTestId = query(`[data-testid="${cssString(testId)}"]`);
+      if (byTestId) return byTestId;
+    }
+    if (fingerprint.name) {
+      const byName = query(`${tag}[aria-label="${cssString(fingerprint.name)}"], ${tag}[name="${cssString(fingerprint.name)}"]`);
+      if (byName) return byName;
+    }
+    if (fingerprint.classNames?.length) {
+      const byClass = query(`${tag}${fingerprint.classNames.map((className) => `.${CSS.escape(className)}`).join("")}`);
+      if (byClass) return byClass;
+    }
+    if (fingerprint.visibleText) {
+      const normalized = normalizeText(fingerprint.visibleText);
+      return [...document.querySelectorAll(tag)].find((element) => normalizeText(element.textContent ?? "") === normalized) ?? null;
+    }
+    return null;
+  }
+  function xpathFor(element) {
+    const parts = [];
+    let current = element;
+    while (current) {
+      if (current.id) {
+        parts.unshift(`*[@id=${xpathString(current.id)}]`);
+        break;
+      }
+      const siblings = current.parentElement ? [...current.parentElement.children].filter((sibling) => sibling.tagName === current.tagName) : [];
+      parts.unshift(`${current.tagName.toLowerCase()}[${Math.max(1, siblings.indexOf(current) + 1)}]`);
+      current = current.parentElement;
+    }
+    return `/${parts.join("/")}`;
+  }
+  function query(selector) {
+    if (!selector) return null;
+    try {
+      return document.querySelector(selector);
+    } catch {
+      return null;
+    }
+  }
+  function normalizeText(value) {
+    return value.replace(/\s+/g, " ").trim();
+  }
+  function cssString(value) {
+    return CSS.escape(value).replace(/"/g, '\\"');
+  }
+  function xpathString(value) {
+    return `"${value.replace(/"/g, '\\"')}"`;
+  }
+
+  // src/content/visual-bounds.ts
+  function visualViewportBounds(element) {
+    return visibleViewportBounds(element) ?? (isInteractableUiElement(element) ? renderedTextViewportBounds(element) : directTextViewportBounds(element));
+  }
+  function visualDocumentBounds(element) {
+    return documentBounds(element) ?? (isInteractableUiElement(element) ? renderedTextBounds(element) : directTextBounds(element));
   }
   function visibleViewportBounds(element) {
     const rect = element.getBoundingClientRect();
@@ -734,12 +298,6 @@
       width: Math.round(width * 100) / 100,
       height: Math.round(height * 100) / 100
     };
-  }
-  function visualViewportBounds(element) {
-    return visibleViewportBounds(element) ?? (isInteractableUiElement(element) ? renderedTextViewportBounds(element) : directTextViewportBounds(element));
-  }
-  function visualDocumentBounds(element) {
-    return documentBounds(element) ?? (isInteractableUiElement(element) ? renderedTextBounds(element) : directTextBounds(element));
   }
   function documentBounds(element) {
     const rect = element.getBoundingClientRect();
@@ -829,90 +387,54 @@
   function hasUsableRect(rect) {
     return Number.isFinite(rect.width) && Number.isFinite(rect.height) && rect.width >= 2 && rect.height >= 2;
   }
-  function elementPriority(element) {
-    let score = 0;
-    if (isInteractableUiElement(element)) score += 200;
-    if (isActionableElement(element)) score += 100;
-    if (stableElementId(element)) score += 60;
-    if (meaningfulText(accessibleName(element))) score += 45;
-    if (meaningfulText(visibleText(element))) score += 35;
-    if (meaningfulText(readElementValue(element))) score += 35;
-    if (meaningfulText(directVisibleText(element))) score += 25;
-    if (meaningfulText(linkHref(element))) score += 40;
-    const bounds = visualDocumentBounds(element);
-    if (bounds) score += Math.min(20, Math.sqrt(bounds.width * bounds.height) / 8);
-    return score;
-  }
-  function documentOrder(left, right) {
-    if (left === right) return 0;
-    return left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
-  }
-  function isActionableElement(element) {
-    const tagName = element.tagName.toLowerCase();
-    const role = element.getAttribute("role")?.toLowerCase();
-    return tagName === "a" || tagName === "button" || tagName === "input" || tagName === "textarea" || tagName === "select" || tagName === "summary" || tagName === "label" || role === "button" || role === "link" || role === "menuitem" || role === "checkbox" || role === "radio" || role === "tab" || role === "switch" || hasClickHandler(element) || element instanceof HTMLElement && element.isContentEditable;
-  }
-  function isInteractableUiElement(element) {
-    return isActionableElement(element) || element instanceof HTMLElement && getComputedStyle(element).cursor === "pointer" || element.hasAttribute("tabindex") || element.hasAttribute("aria-expanded") || element.hasAttribute("aria-controls") || element.hasAttribute("aria-pressed") || element.hasAttribute("aria-selected");
-  }
-  function isPrimaryControlElement(element) {
-    const tagName = element.tagName.toLowerCase();
-    const role = element.getAttribute("role")?.toLowerCase();
-    return tagName === "button" || tagName === "a" || tagName === "summary" || role === "button" || role === "link" || role === "menuitem" || role === "tab";
-  }
-  function hasClickHandler(element) {
-    const htmlElement = element;
-    return element.hasAttribute("onclick") || typeof htmlElement.onclick === "function";
-  }
-  function isSemanticTextElement(element) {
-    const tagName = element.tagName.toLowerCase();
-    return tagName === "p" || tagName === "li" || tagName === "td" || tagName === "th" || tagName === "dt" || tagName === "dd" || tagName === "figcaption" || tagName === "blockquote" || /^h[1-6]$/.test(tagName);
-  }
-  function rememberEventPathElements(event) {
-    const target = eventTargetElement(event);
-    const activationTarget = target ? pointerActivationTarget(target) ?? target : void 0;
-    rememberObservedEventElement(activationTarget);
-    for (const entry of event.composedPath()) {
-      if (!(entry instanceof Element)) continue;
-      if (entry === document.documentElement || entry === document.body) continue;
-      if (!hasClickHandler(entry)) continue;
-      rememberObservedEventElement(entry);
+
+  // src/content/describe-element.ts
+  function describeElement(element) {
+    const bounds = visualViewportBounds(element);
+    const docBounds = visualDocumentBounds(element);
+    const descriptor = {
+      tagName: element.tagName.toLowerCase(),
+      selector: selectorFor(element),
+      isVisibleOnViewport: Boolean(bounds)
+    };
+    if (bounds) descriptor.bounds = bounds;
+    if (docBounds) descriptor.documentBounds = docBounds;
+    if (hasClickHandler(element)) descriptor.hasClickHandler = true;
+    const text = isInteractableUiElement(element) || isSemanticTextElement(element) ? visibleText(element) : directVisibleText(element);
+    if (text) {
+      descriptor.text = text;
+      descriptor.visibleText = text;
     }
-  }
-  function rememberObservedEventElement(element) {
-    if (!element || observedEventElements.has(element)) return;
-    observedEventElements.add(element);
-    observedEventElementQueue.push(element);
-    while (observedEventElementQueue.length > MAX_OBSERVED_EVENT_ELEMENTS) observedEventElementQueue.shift();
-  }
-  function actionEventTarget(element) {
-    return pointerActivationTarget(element) ?? element;
-  }
-  function eventTargetElement(event) {
-    for (const entry of event.composedPath()) {
-      if (entry instanceof Element) return entry;
+    if (element.id) descriptor.id = element.id;
+    const classNames = [...element.classList];
+    if (classNames.length) descriptor.classNames = classNames;
+    descriptor.xpath = xpathFor(element);
+    const value = readElementValue(element);
+    if (value !== void 0 && captureSettings.inputValues) descriptor.value = value;
+    const role = element.getAttribute("role");
+    if (role) descriptor.role = role;
+    const name = accessibleName(element);
+    if (name) descriptor.name = name;
+    const href = linkHref(element);
+    if (href) descriptor.href = href;
+    if (element instanceof HTMLInputElement && element.type) descriptor.inputType = element.type;
+    if (isOrdinaryNonSensitiveFillControl(element)) descriptor.hasValue = element.value.length > 0;
+    if (element instanceof HTMLSelectElement) {
+      descriptor.options = [...element.options].slice(0, 20).map((option) => ({
+        value: option.value.slice(0, 200),
+        label: (option.label || option.textContent || "").replace(/\s+/gu, " ").trim().slice(0, 200)
+      }));
+      if (!isSensitiveFormControl(element) && descriptor.options.some((option) => option.value === element.value)) {
+        descriptor.selectedValue = element.value.slice(0, 200);
+      }
     }
-    return event.target instanceof Element ? event.target : void 0;
-  }
-  function pointerActivationTarget(element) {
-    let current = element;
-    for (let depth = 0; current && current !== document.documentElement && depth < 12; depth += 1) {
-      if (isActionableElement(current)) return current;
-      current = current.parentElement;
+    const attributes = {};
+    for (const attribute of ["id", "class", "name", "type", "autocomplete", "data-sensitive", "placeholder", "title", "alt", "href", "tabindex", "aria-label", "aria-disabled", "aria-expanded", "aria-controls", "aria-pressed", "aria-selected", "data-testid", "data-test", "data-cy", "disabled", "onclick"]) {
+      const value2 = element.getAttribute(attribute);
+      if (value2 !== null) attributes[attribute] = value2.slice(0, 500);
     }
-    current = element;
-    for (let depth = 0; current && current !== document.documentElement && depth < 12; depth += 1) {
-      if (current instanceof HTMLElement && getComputedStyle(current).cursor === "pointer") return current;
-      current = current.parentElement;
-    }
-    return void 0;
-  }
-  function linkHref(element) {
-    if (element instanceof HTMLAnchorElement && element.href) return element.href;
-    return element.getAttribute("href") ?? element.getAttribute("xlink:href") ?? void 0;
-  }
-  function stableElementId(element) {
-    return element.getAttribute("data-testid") ?? element.getAttribute("data-test") ?? element.getAttribute("data-cy") ?? element.getAttribute("id") ?? element.getAttribute("name") ?? void 0;
+    if (Object.keys(attributes).length) descriptor.attributes = attributes;
+    return descriptor;
   }
   function selectorFor(element) {
     if (element.id) return `#${CSS.escape(element.id)}`;
@@ -940,9 +462,6 @@
     const text = [...element.childNodes].filter((node) => node.nodeType === Node.TEXT_NODE).map((node) => node.textContent ?? "").join(" ").replace(/\s+/g, " ").trim();
     return text ? text.slice(0, 500) : void 0;
   }
-  function meaningfulText(value) {
-    return typeof value === "string" && value.trim().length > 0;
-  }
   function readElementValue(element) {
     if (!element) return void 0;
     if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) {
@@ -951,35 +470,398 @@
     if (element instanceof HTMLElement && element.isContentEditable) return element.innerText.slice(0, 2e3);
     return void 0;
   }
-  function isTextEntryElement(element) {
-    if (element instanceof HTMLTextAreaElement) return true;
-    if (element instanceof HTMLElement && element.isContentEditable) return true;
-    if (!(element instanceof HTMLInputElement)) return false;
-    const type = element.type.toLowerCase();
-    return type === "" || type === "text" || type === "search" || type === "email" || type === "password" || type === "tel" || type === "url" || type === "number";
-  }
-  function shouldRecordChangeEvent(element) {
-    if (element instanceof HTMLSelectElement) return true;
-    if (!(element instanceof HTMLInputElement)) return true;
-    const type = element.type.toLowerCase();
-    return type === "checkbox" || type === "radio" || type === "file" || type === "date" || type === "datetime-local" || type === "month" || type === "time" || type === "week" || type === "color" || type === "range";
-  }
   function accessibleName(element) {
     return element.getAttribute("aria-label") ?? element.getAttribute("title") ?? element.getAttribute("alt") ?? void 0;
   }
-  function pointerMetadata(event) {
-    return {
-      clientX: event.clientX,
-      clientY: event.clientY,
-      button: event.button,
-      altKey: event.altKey,
-      ctrlKey: event.ctrlKey,
-      metaKey: event.metaKey,
-      shiftKey: event.shiftKey
-    };
+  function linkHref(element) {
+    if (element instanceof HTMLAnchorElement && element.href) return element.href;
+    return element.getAttribute("href") ?? element.getAttribute("xlink:href") ?? void 0;
+  }
+  function stableElementId(element) {
+    return element.getAttribute("data-testid") ?? element.getAttribute("data-test") ?? element.getAttribute("data-cy") ?? element.getAttribute("id") ?? element.getAttribute("name") ?? void 0;
   }
   function cssString2(value) {
     return CSS.escape(value).replace(/"/g, '\\"');
+  }
+
+  // src/content/dom-snapshot.ts
+  var MAX_SNAPSHOT_CANDIDATES = 2e3;
+  var MAX_SNAPSHOT_SCAN_ELEMENTS = 5e4;
+  function captureSnapshot() {
+    const snapshot = {
+      url: location.href,
+      title: document.title,
+      viewport: {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        scrollX: window.scrollX,
+        scrollY: window.scrollY,
+        documentWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth, window.innerWidth),
+        documentHeight: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight, window.innerHeight),
+        devicePixelRatio: window.devicePixelRatio
+      },
+      frame: compactObject({
+        isTop: isTopFrame(),
+        viewportOffset: currentFrameViewportOffset()
+      }),
+      interactiveElements: snapshotElements()
+    };
+    const focused = document.activeElement instanceof Element ? describeElement(document.activeElement) : void 0;
+    if (focused) snapshot.focusedElement = focused;
+    const selectedText = window.getSelection()?.toString();
+    if (selectedText) snapshot.selectedText = selectedText.slice(0, 2e3);
+    return snapshot;
+  }
+  function snapshotElements() {
+    const seen = /* @__PURE__ */ new Set();
+    const candidates = snapshotCandidateElements();
+    const included = [];
+    for (const element of candidates) {
+      if (seen.has(element) || !shouldIncludeSnapshotElement(element)) continue;
+      seen.add(element);
+      included.push(element);
+    }
+    return included.sort(
+      (left, right) => snapshotElementBucket(left) - snapshotElementBucket(right) || elementPriority(right) - elementPriority(left) || documentOrder(left, right)
+    ).slice(0, MAX_SNAPSHOT_CANDIDATES).map((element) => describeElement(element));
+  }
+  function snapshotCandidateElements() {
+    const seen = /* @__PURE__ */ new Set();
+    const candidates = [];
+    const add = (element) => {
+      if (!element || seen.has(element)) return;
+      seen.add(element);
+      candidates.push(element);
+    };
+    for (const element of observedEventElementQueue) {
+      if (element.isConnected) add(element);
+    }
+    for (const element of document.querySelectorAll("a[href],button,input:not([type=hidden]),textarea,select,summary,label,[role=button],[role=link],[role=menuitem],[role=checkbox],[role=radio],[role=tab],[role=switch],[contenteditable=true]")) add(element);
+    for (const element of document.querySelectorAll("p,h1,h2,h3,h4,h5,h6,li,td,th,blockquote,dt,dd,figcaption")) add(element);
+    for (const element of document.querySelectorAll("img,svg,picture,canvas,video")) add(element);
+    let scanned = 0;
+    for (const element of document.querySelectorAll("*")) {
+      scanned += 1;
+      if (scanned > MAX_SNAPSHOT_SCAN_ELEMENTS) break;
+      if (!hasElementPresentation(element)) continue;
+      add(element);
+    }
+    return candidates;
+  }
+  function shouldIncludeSnapshotElement(element) {
+    if (element === document.documentElement || element === document.body) return false;
+    if (element.closest("script, style, noscript, template")) return false;
+    if (element.closest("[hidden], [aria-hidden='true']")) return false;
+    const bounds = visualDocumentBounds(element);
+    if (!bounds) return false;
+    const style = getComputedStyle(element);
+    if (style.visibility === "hidden" || style.display === "none" || Number(style.opacity) === 0) return false;
+    return isEventBackedElement(element) ? hasEventElementPresentation(element) : isInteractableUiElement(element) ? hasMeaningfulInteractableIdentity(element) : hasElementPresentation(element);
+  }
+  function snapshotElementBucket(element) {
+    if (isEventBackedElement(element)) return 0;
+    if (isPrimaryControlElement(element)) return 1;
+    if (isInteractableUiElement(element)) return 2;
+    if (isSemanticTextElement(element)) return 3;
+    if (meaningfulText(directVisibleText(element))) return 4;
+    if (hasVisualMedia(element)) return 5;
+    if (meaningfulText(visibleText(element))) return 6;
+    return 7;
+  }
+  function hasMeaningfulInteractableIdentity(element) {
+    return Boolean(
+      stableElementId(element) || meaningfulText(accessibleName(element)) || meaningfulText(visibleText(element)) || meaningfulText(directVisibleText(element)) || meaningfulText(readElementValue(element)) || meaningfulText(element.getAttribute("title")) || meaningfulText(element.getAttribute("alt")) || meaningfulText(element.getAttribute("placeholder")) || meaningfulText(linkHref(element))
+    );
+  }
+  function hasEventElementPresentation(element) {
+    return hasMeaningfulInteractableIdentity(element) || hasElementPresentation(element);
+  }
+  function hasElementPresentation(element) {
+    return meaningfulText(visibleText(element)) || meaningfulText(accessibleName(element)) || meaningfulText(readElementValue(element)) || hasVisualMedia(element);
+  }
+  function elementPriority(element) {
+    let score = 0;
+    if (isInteractableUiElement(element)) score += 200;
+    if (isActionableElement(element)) score += 100;
+    if (stableElementId(element)) score += 60;
+    if (meaningfulText(accessibleName(element))) score += 45;
+    if (meaningfulText(visibleText(element))) score += 35;
+    if (meaningfulText(readElementValue(element))) score += 35;
+    if (meaningfulText(directVisibleText(element))) score += 25;
+    if (meaningfulText(linkHref(element))) score += 40;
+    const bounds = visualDocumentBounds(element);
+    if (bounds) score += Math.min(20, Math.sqrt(bounds.width * bounds.height) / 8);
+    return score;
+  }
+  function documentOrder(left, right) {
+    if (left === right) return 0;
+    return left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+  }
+
+  // src/content/snapshots.ts
+  function shouldAttachStateSnapshot(kind) {
+    return kind === "dom.click" || kind === "dom.input" || kind === "dom.change" || kind === "dom.submit" || kind === "dom.keydown";
+  }
+
+  // src/content/recorder.ts
+  var recording = false;
+  var sequence = 0;
+  var mutationTimer;
+  var inputTimer;
+  var pendingInput;
+  var pendingMutation = { added: 0, removed: 0, attributes: 0, text: 0 };
+  var observer = new MutationObserver((mutations) => {
+    if (!captureSettings.mutations || !recording) return;
+    for (const mutation of mutations) {
+      pendingMutation.added += mutation.addedNodes.length;
+      pendingMutation.removed += mutation.removedNodes.length;
+      if (mutation.type === "attributes") pendingMutation.attributes += 1;
+      if (mutation.type === "characterData") pendingMutation.text += 1;
+    }
+    if (mutationTimer) clearTimeout(mutationTimer);
+    mutationTimer = setTimeout(() => {
+      emit("dom.mutation", { mutation: pendingMutation });
+      pendingMutation = { added: 0, removed: 0, attributes: 0, text: 0 };
+    }, 500);
+  });
+  function isRecording() {
+    return recording;
+  }
+  function sendReady() {
+    if (!isActiveContentInstance()) return;
+    const payload = basePayload("content.ready", {
+      metadata: { readyState: document.readyState }
+    });
+    void chrome.runtime.sendMessage({ type: CONTENT_READY, payload });
+  }
+  function emit(kind, details) {
+    if (!isActiveContentInstance()) return;
+    if (!recording && kind !== "content.ready") return;
+    const payload = basePayload(kind, details);
+    void chrome.runtime.sendMessage({ type: CONTENT_EVENT, payload });
+  }
+  function setRecordingState(nextRecording) {
+    if (!nextRecording) flushPendingInput();
+    recording = nextRecording;
+    if (recording && captureSettings.mutations) {
+      observer.observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        characterData: true
+      });
+    } else {
+      observer.disconnect();
+      if (mutationTimer) clearTimeout(mutationTimer);
+      mutationTimer = void 0;
+      pendingMutation = { added: 0, removed: 0, attributes: 0, text: 0 };
+    }
+  }
+  function scheduleInputEvent(element) {
+    pendingInput = { element, inputValue: captureSettings.inputValues ? readElementValue(element) : void 0 };
+    if (inputTimer) clearTimeout(inputTimer);
+    inputTimer = setTimeout(() => flushPendingInput(), 350);
+  }
+  function flushPendingInput() {
+    if (inputTimer) clearTimeout(inputTimer);
+    inputTimer = void 0;
+    const pending = pendingInput;
+    pendingInput = void 0;
+    if (!pending) return;
+    emit("dom.input", compactObject({
+      element: describeElement(pending.element),
+      inputValue: pending.inputValue
+    }));
+  }
+  function emitInputEvent(element) {
+    emit("dom.input", compactObject({
+      element: element ? describeElement(element) : void 0,
+      inputValue: captureSettings.inputValues ? readElementValue(element) : void 0
+    }));
+  }
+  function basePayload(kind, details) {
+    const payload = {
+      kind,
+      sequence: ++sequence,
+      url: location.href,
+      title: document.title,
+      eventTimestampMs: Date.now()
+    };
+    if (details.element) payload.element = details.element;
+    if (captureSettings.snapshots) {
+      const snapshot = details.snapshot ?? (shouldAttachStateSnapshot(kind) ? captureSnapshot() : void 0);
+      if (snapshot) payload.snapshot = snapshot;
+    }
+    if (details.inputValue !== void 0) payload.inputValue = details.inputValue;
+    if (details.key !== void 0) payload.key = details.key;
+    if (details.scroll) payload.scroll = details.scroll;
+    if (details.mutation) payload.mutation = details.mutation;
+    if (details.actionResult) payload.actionResult = details.actionResult;
+    if (details.metadata) payload.metadata = details.metadata;
+    return payload;
+  }
+
+  // src/content/actions.ts
+  async function executeContentAction(action, deps) {
+    const startedAt = Date.now();
+    try {
+      if (action.actionType === "web.dom.capture_snapshot" || action.actionType === "dom.capture_snapshot") {
+        return deps.success(action, startedAt, "Snapshot captured.", void 0, deps.captureSnapshot());
+      }
+      if (action.actionType === "web.dom.wait_for_selector" || action.actionType === "dom.wait_for_selector") {
+        const element = await deps.waitForElement(action.selector, action.timeoutMs);
+        return deps.success(action, startedAt, "Selector found.", deps.describeElement(element), deps.captureSnapshot());
+      }
+      if (action.actionType === "web.dom.wait_for_text" || action.actionType === "dom.wait_for_text") {
+        await deps.waitForText(action.text ?? action.value ?? "", action.timeoutMs);
+        return deps.success(action, startedAt, "Text found.", void 0, deps.captureSnapshot());
+      }
+      if (action.actionType === "web.dom.extract" || action.actionType === "dom.extract") {
+        const element = deps.resolveTarget(action);
+        const extracted = deps.extractElement(element, action.options);
+        return deps.success(action, startedAt, "Value extracted.", deps.describeElement(element), deps.captureSnapshot(), extracted);
+      }
+      if (action.actionType === "web.dom.click" || action.actionType === "dom.click") {
+        const element = deps.resolveTarget(action);
+        deps.scrollElementIntoView(element);
+        element.click();
+        return deps.success(action, startedAt, "Element clicked.", deps.describeElement(element), deps.captureSnapshot());
+      }
+      if (action.actionType === "web.dom.type" || action.actionType === "dom.type") {
+        const element = deps.resolveTarget(action);
+        element.focus();
+        deps.setElementValue(element, action.text ?? action.value ?? "");
+        deps.dispatchInputEvents(element);
+        return deps.success(action, startedAt, "Text entered.", deps.describeElement(element), deps.captureSnapshot());
+      }
+      if (action.actionType === "web.dom.clear" || action.actionType === "dom.clear") {
+        const element = deps.resolveTarget(action);
+        element.focus();
+        deps.setElementValue(element, "");
+        deps.dispatchInputEvents(element);
+        return deps.success(action, startedAt, "Field cleared.", deps.describeElement(element), deps.captureSnapshot());
+      }
+      if (action.actionType === "web.dom.select" || action.actionType === "dom.select") {
+        const element = deps.resolveTarget(action);
+        element.focus();
+        element.value = action.value ?? "";
+        deps.dispatchInputEvents(element);
+        return deps.success(action, startedAt, "Option selected.", deps.describeElement(element), deps.captureSnapshot());
+      }
+      if (action.actionType === "web.dom.scroll" || action.actionType === "dom.scroll") {
+        window.scrollTo({
+          left: Number(action.options?.x ?? action.coordinates?.x ?? window.scrollX),
+          top: Number(action.options?.y ?? action.coordinates?.y ?? window.scrollY),
+          behavior: action.options?.smooth === true ? "smooth" : "instant"
+        });
+        return deps.success(action, startedAt, "Page scrolled.", void 0, deps.captureSnapshot());
+      }
+      if (action.actionType === "web.dom.keypress" || action.actionType === "dom.keypress") {
+        const target = action.selector ? deps.resolveTarget(action) : document.activeElement ?? document.body;
+        const key = action.key ?? action.text ?? "";
+        target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+        target.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true, cancelable: true }));
+        return deps.success(action, startedAt, "Key event dispatched.", target instanceof Element ? deps.describeElement(target) : void 0, deps.captureSnapshot());
+      }
+      throw new Error(`Unsupported action type: ${action.actionType}`);
+    } catch (error) {
+      return deps.failure(action, error, startedAt);
+    }
+  }
+
+  // src/content/action-runtime.ts
+  async function captureSnapshotForResponse() {
+    if (!isTopFrame()) await requestFrameGeometry();
+    return captureSnapshot();
+  }
+  async function executeAction(action) {
+    return executeContentAction(action, {
+      captureSnapshot,
+      resolveTarget,
+      describeElement,
+      waitForElement,
+      waitForText,
+      extractElement,
+      scrollElementIntoView,
+      setElementValue,
+      dispatchInputEvents,
+      success,
+      failure: actionFailure
+    });
+  }
+  function actionFailure(action, error, startedAt = Date.now()) {
+    const snapshot = captureSettings.snapshots ? captureSnapshot() : void 0;
+    return {
+      commandId: action.commandId,
+      actionType: action.actionType,
+      status: "failed",
+      message: error instanceof Error ? error.message : "Action failed.",
+      url: location.href,
+      title: document.title,
+      ...snapshot ? { snapshot } : {},
+      startedAt,
+      finishedAt: Date.now()
+    };
+  }
+  function resolveTarget(action) {
+    const misses = [];
+    if (action.selector) {
+      const element = document.querySelector(action.selector);
+      if (element) return element;
+      misses.push(`selector ${action.selector}`);
+    }
+    if (action.coordinates) {
+      const element = document.elementFromPoint(action.coordinates.x, action.coordinates.y);
+      if (element) return element;
+      misses.push(`coordinates ${action.coordinates.x},${action.coordinates.y}`);
+    }
+    const visualPoint = pointFromVisualTarget(action.visualTarget);
+    if (visualPoint) {
+      const element = document.elementFromPoint(visualPoint.x, visualPoint.y);
+      if (element) return element;
+      misses.push(`visual target ${Math.round(visualPoint.x)},${Math.round(visualPoint.y)}`);
+    }
+    const fingerprint = action.options?.element;
+    if (fingerprint && typeof fingerprint === "object" && !Array.isArray(fingerprint)) {
+      const element = findClosestFingerprint(fingerprint);
+      if (element) return element;
+      misses.push("element fingerprint");
+    }
+    if (!misses.length) {
+      const active = document.activeElement;
+      if (active) return active;
+    }
+    if (misses.length) throw new Error(`No target resolved from ${misses.join(", ")}.`);
+    throw new Error("No selector, coordinates, or active element was available.");
+  }
+  function pointFromVisualTarget(visualTarget) {
+    const bounds = visualTarget?.bounds ?? visualTarget?.anchor?.bounds;
+    if (bounds) return centerPoint(bounds);
+    if (visualTarget?.documentBounds) {
+      const center = centerPoint(visualTarget.documentBounds);
+      return { x: center.x - window.scrollX, y: center.y - window.scrollY };
+    }
+    return void 0;
+  }
+  function centerPoint(rect) {
+    return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+  }
+  function success(action, startedAt, message, element, snapshot, extracted) {
+    const result = {
+      commandId: action.commandId,
+      actionType: action.actionType,
+      status: "succeeded",
+      message,
+      url: location.href,
+      title: document.title,
+      startedAt,
+      finishedAt: Date.now()
+    };
+    if (element) result.element = element;
+    if (action.visualTarget) result.visualTarget = action.visualTarget;
+    if (snapshot ?? captureSettings.snapshots) result.snapshot = snapshot ?? captureSnapshot();
+    if (extracted !== void 0) result.extracted = extracted;
+    return result;
   }
   function scrollElementIntoView(element) {
     element.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
@@ -1035,8 +917,166 @@
     if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) return element.value;
     return element.textContent?.replace(/\s+/g, " ").trim() ?? "";
   }
-  function compactObject(value) {
-    return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
+
+  // src/content/message-handler.ts
+  function installMessageHandler() {
+    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+      const typed = message;
+      if (typed.type === "fluxiq.ping") {
+        sendResponse({ ok: true, active: isActiveContentInstance(), version: CONTENT_SCRIPT_VERSION });
+        return false;
+      }
+      if (!isActiveContentInstance()) return false;
+      if (typed.type === "recording") {
+        captureSettings.mutations = typed.settings?.captureMutations ?? captureSettings.mutations;
+        captureSettings.inputValues = typed.settings?.captureInputValues ?? captureSettings.inputValues;
+        captureSettings.snapshots = typed.settings?.captureSnapshots ?? captureSettings.snapshots;
+        setRecordingState(Boolean(typed.recording));
+        sendResponse({ ok: true });
+        return true;
+      }
+      if (typed.type === "captureSnapshot") {
+        void captureSnapshotForResponse().then(sendResponse);
+        return true;
+      }
+      if (typed.type === "executeAction" && typed.action) {
+        if (typed.topFrameOnly === true && !isTopFrame()) return false;
+        void executeAction(typed.action).then(sendResponse).catch((error) => sendResponse(actionFailure(typed.action, error)));
+        return true;
+      }
+      return false;
+    });
   }
+
+  // src/content/dom-events.ts
+  var scrollTimer;
+  function installRecordingEventListeners() {
+    document.addEventListener("pointerdown", (event) => {
+      if (!isRecording()) return;
+      if (!event.isTrusted) return;
+      if (event.button !== 0 || event.isPrimary === false) return;
+      rememberEventPathElements(event);
+      flushPendingInput();
+      const eventElement = eventTargetElement(event);
+      const target = eventElement ? pointerActivationTarget(eventElement) : null;
+      if (!target) return;
+      emit("dom.click", compactObject({
+        element: describeElement(target),
+        metadata: compactObject({
+          ...pointerMetadata(event),
+          pointerId: event.pointerId,
+          pointerType: event.pointerType,
+          sourceEvent: "pointerdown",
+          captureTiming: "before-action"
+        })
+      }));
+    }, true);
+    document.addEventListener("click", (event) => {
+      if (!isRecording()) return;
+      if (!event.isTrusted) return;
+      rememberEventPathElements(event);
+      const eventElement = eventTargetElement(event);
+      const target = eventElement ? actionEventTarget(eventElement) : null;
+      emit("dom.click", compactObject({
+        element: target ? describeElement(target) : void 0,
+        metadata: compactObject({
+          ...pointerMetadata(event),
+          sourceEvent: "click"
+        })
+      }));
+    }, true);
+    document.addEventListener("input", (event) => {
+      if (!isRecording()) return;
+      rememberEventPathElements(event);
+      const target = event.target instanceof Element ? event.target : null;
+      if (target && isTextEntryElement(target)) {
+        scheduleInputEvent(target);
+        return;
+      }
+      flushPendingInput();
+      if (target && shouldRecordChangeEvent(target)) return;
+      emitInputEvent(target);
+    }, true);
+    document.addEventListener("change", (event) => {
+      if (!isRecording()) return;
+      rememberEventPathElements(event);
+      const target = event.target instanceof Element ? event.target : null;
+      if (target && isTextEntryElement(target)) {
+        flushPendingInput();
+        return;
+      }
+      if (target && !shouldRecordChangeEvent(target)) return;
+      emit("dom.change", compactObject({
+        element: target ? describeElement(target) : void 0,
+        inputValue: captureSettings.inputValues ? readElementValue(target) : void 0
+      }));
+    }, true);
+    document.addEventListener("submit", (event) => {
+      if (!isRecording()) return;
+      rememberEventPathElements(event);
+      const target = event.target instanceof Element ? event.target : null;
+      emit("dom.submit", compactObject({ element: target ? describeElement(target) : void 0 }));
+    }, true);
+    document.addEventListener("keydown", (event) => {
+      if (!isRecording()) return;
+      if (!event.isTrusted) return;
+      rememberEventPathElements(event);
+      emit("dom.keydown", compactObject({
+        key: event.key,
+        element: event.target instanceof Element ? describeElement(event.target) : void 0,
+        metadata: {
+          altKey: event.altKey,
+          ctrlKey: event.ctrlKey,
+          metaKey: event.metaKey,
+          shiftKey: event.shiftKey
+        }
+      }));
+    }, true);
+    document.addEventListener("wheel", (event) => {
+      if (!isRecording()) return;
+      if (!event.isTrusted) return;
+      if (scrollTimer) clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(() => {
+        emit("dom.scroll", {
+          scroll: { x: window.scrollX, y: window.scrollY },
+          metadata: {
+            sourceEvent: "wheel",
+            deltaX: event.deltaX,
+            deltaY: event.deltaY,
+            deltaZ: event.deltaZ,
+            deltaMode: event.deltaMode,
+            altKey: event.altKey,
+            ctrlKey: event.ctrlKey,
+            metaKey: event.metaKey,
+            shiftKey: event.shiftKey
+          }
+        });
+      }, 400);
+    }, true);
+    window.addEventListener("scroll", () => {
+      if (!isRecording()) return;
+      if (scrollTimer) clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(() => {
+        emit("dom.scroll", { scroll: { x: window.scrollX, y: window.scrollY } });
+      }, 400);
+    }, true);
+  }
+  function pointerMetadata(event) {
+    return {
+      clientX: event.clientX,
+      clientY: event.clientY,
+      button: event.button,
+      altKey: event.altKey,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      shiftKey: event.shiftKey
+    };
+  }
+
+  // src/content/index.ts
+  sendReady();
+  installFrameGeometryBridge();
+  installMessageHandler();
+  installRecordingEventListeners();
 })();
 //# sourceMappingURL=index.js.map

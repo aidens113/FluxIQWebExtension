@@ -52,183 +52,6 @@ function browserDescriptor() {
   };
 }
 
-// ../../../!FluxIQ/packages/contracts/src/client-gateway.ts
-var CLIENT_GATEWAY_PROTOCOL_VERSION = "0.1";
-
-// ../../../!FluxIQ/packages/client-gateway-websocket/dist/messages.js
-function createClientGatewayMessage(type, payload, options = {}) {
-  return {
-    id: options.idFactory?.() ?? `client-message.${Math.random().toString(36).slice(2)}`,
-    type,
-    protocolVersion: CLIENT_GATEWAY_PROTOCOL_VERSION,
-    timestamp: options.now?.() ?? Date.now(),
-    ...options.sessionId !== void 0 ? { sessionId: options.sessionId } : {},
-    ...options.clientId !== void 0 ? { clientId: options.clientId } : {},
-    ...options.correlationId !== void 0 ? { correlationId: options.correlationId } : {},
-    payload
-  };
-}
-function parseServerMessage(data) {
-  const text = typeof data === "string" ? data : data instanceof ArrayBuffer ? new TextDecoder().decode(data) : "";
-  if (!text)
-    return null;
-  const parsed = JSON.parse(text);
-  if (typeof parsed.type !== "string" || !parsed.type.startsWith("server."))
-    return null;
-  return parsed;
-}
-
-// ../../../!FluxIQ/packages/client-gateway-websocket/dist/transport.js
-var FluxIQClientGatewayWebSocketClient = class {
-  options;
-  handlers = /* @__PURE__ */ new Map();
-  socket = null;
-  sessionId;
-  token;
-  constructor(options) {
-    this.options = options;
-  }
-  get connected() {
-    return Boolean(this.socket && this.socket.readyState === 1);
-  }
-  get currentSessionId() {
-    return this.sessionId;
-  }
-  async connect() {
-    if (this.socket && this.socket.readyState <= 1)
-      return;
-    const WebSocketImpl = this.options.WebSocketImpl ?? globalThis.WebSocket;
-    if (!WebSocketImpl)
-      throw new Error("A WebSocket implementation is required.");
-    const socket = new WebSocketImpl(this.options.url ?? "ws://127.0.0.1:4777/client");
-    this.socket = socket;
-    await waitForOpen(socket);
-    this.attachSocketHandlers(socket);
-    this.emit({ type: "open" });
-    const storedToken = await this.options.tokenStorage?.read();
-    this.token = this.options.client.token ?? storedToken;
-    await this.send("client.hello", {
-      ...this.options.client,
-      ...this.token ? { token: this.token } : {}
-    });
-  }
-  async close(code, reason) {
-    this.socket?.close(code, reason);
-    this.socket = null;
-  }
-  on(type, handler) {
-    const set = this.handlers.get(type) ?? /* @__PURE__ */ new Set();
-    set.add(handler);
-    this.handlers.set(type, set);
-    return () => set.delete(handler);
-  }
-  async send(type, payload, options = {}) {
-    const message = {
-      id: this.options.idFactory?.() ?? `client-message.${Math.random().toString(36).slice(2)}`,
-      type,
-      protocolVersion: CLIENT_GATEWAY_PROTOCOL_VERSION,
-      timestamp: this.options.now?.() ?? Date.now(),
-      ...this.sessionId !== void 0 ? { sessionId: this.sessionId } : {},
-      ...this.options.client.clientId !== void 0 ? { clientId: this.options.client.clientId } : {},
-      ...options.correlationId !== void 0 ? { correlationId: options.correlationId } : {},
-      payload
-    };
-    const socket = this.socket;
-    if (!socket || socket.readyState !== 1)
-      throw new Error("FluxIQ client gateway WebSocket is not connected.");
-    socket.send(JSON.stringify(message));
-    return message;
-  }
-  async sendStateUpdate(state) {
-    return await this.send("client.state_update", state);
-  }
-  async sendRecordingEvent(event) {
-    return await this.send("client.recording_event", event);
-  }
-  async sendSnapshot(snapshot) {
-    return await this.send("client.snapshot", snapshot);
-  }
-  async sendActionResult(result) {
-    return await this.send("client.action_result", result);
-  }
-  async sendError(message, input = {}) {
-    return await this.send("client.error", {
-      message,
-      ...input.code !== void 0 ? { code: input.code } : {},
-      ...input.metadata !== void 0 ? { metadata: input.metadata } : {}
-    });
-  }
-  attachSocketHandlers(socket) {
-    addListener(socket, "message", (event) => {
-      const data = typeof event === "object" && event && "data" in event ? event.data : event;
-      const message = parseServerMessage(data);
-      if (message)
-        void this.handleServerMessage(message);
-    });
-    addListener(socket, "close", (event) => {
-      this.socket = null;
-      this.emit({ type: "close", event });
-    });
-    addListener(socket, "error", (event) => this.emit({ type: "error", event }));
-  }
-  async handleServerMessage(message) {
-    if (message.sessionId)
-      this.sessionId = message.sessionId;
-    this.emit({ type: "message", message });
-    if (message.type === "server.session_ready") {
-      this.sessionId = message.payload.sessionId;
-      this.token = message.payload.token;
-      await this.options.tokenStorage?.write(message.payload.token);
-      this.emit({ type: "session_ready", message });
-      return;
-    }
-    if (message.type === "server.pairing_required")
-      this.emit({ type: "pairing_required", message });
-    else if (message.type === "server.start_recording")
-      this.emit({ type: "start_recording", message });
-    else if (message.type === "server.stop_recording")
-      this.emit({ type: "stop_recording", message });
-    else if (message.type === "server.capture_snapshot")
-      this.emit({ type: "capture_snapshot", message });
-    else if (message.type === "server.execute_action")
-      this.emit({ type: "execute_action", message });
-  }
-  emit(event) {
-    for (const handler of this.handlers.get(event.type) ?? [])
-      void handler(event);
-  }
-};
-function waitForOpen(socket) {
-  return new Promise((resolve, reject) => {
-    const onOpen = () => {
-      cleanup();
-      resolve();
-    };
-    const onError = (event) => {
-      cleanup();
-      reject(event instanceof Error ? event : new Error("FluxIQ client gateway WebSocket failed to open."));
-    };
-    const cleanup = () => {
-      removeListener(socket, "open", onOpen);
-      removeListener(socket, "error", onError);
-    };
-    addListener(socket, "open", onOpen);
-    addListener(socket, "error", onError);
-  });
-}
-function addListener(socket, type, listener) {
-  if (socket.addEventListener)
-    socket.addEventListener(type, listener);
-  else
-    socket[`on${type}`] = listener;
-}
-function removeListener(socket, type, listener) {
-  if (socket.removeEventListener)
-    socket.removeEventListener(type, listener);
-  else if (socket[`on${type}`] === listener)
-    socket[`on${type}`] = null;
-}
-
 // ../../domain/src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 var WEB_AUTOMATION_SCHEMA_VERSION = "0.1";
@@ -1184,9 +1007,6 @@ function compactJsonObject2(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
 
-// src/shared/protocol.ts
-var browserExtensionCapabilities = webAutomationClientCapabilities;
-
 // src/background/tabs.ts
 var REQUIRED_CONTENT_SCRIPT_VERSION = 2;
 async function activeTab() {
@@ -1545,833 +1365,58 @@ function compactObject(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
 
-// src/background/connection.ts
-var POINTER_CLICK_SUPPRESS_DELAY_MS = 750;
-var FRAME_SNAPSHOT_TIMEOUT_MS = 150;
-var FluxIQConnection = class {
-  constructor(settings, session) {
-    this.settings = settings;
-    this.session = session;
-  }
-  client = null;
-  heartbeatTimer;
-  reconnectTimer;
-  reconnectAttempt = 0;
-  connectionState = "disconnected";
-  recordingState = "idle";
-  lastError;
-  lastMessageAt;
-  activeTabId;
-  activeTabUrl;
-  pairingReferenceCode;
-  queueSize = 0;
-  shouldStayConnected = false;
-  eventCount = 0;
-  recordingStartedAt;
-  activeRecordingId;
-  activeRecordingProjectId;
-  pendingRecordingStart;
-  recordingBlock;
-  lastScreenshotSkipAt;
-  suppressedPointerClicks = /* @__PURE__ */ new Map();
-  lastActivityAt;
-  unsupportedPage;
-  recentExplanatoryActions = /* @__PURE__ */ new Map();
-  pendingNavigations = /* @__PURE__ */ new Map();
-  lastRecordedNavigation = /* @__PURE__ */ new Map();
-  recordingInitialNavigation = /* @__PURE__ */ new Map();
-  backgroundEventSequence = 0;
-  recentActivities = [];
-  recordingLog = [];
-  listeners = /* @__PURE__ */ new Set();
-  runtimeStatus = { state: "idle" };
-  status() {
-    const status = {
-      connectionState: this.connectionState,
-      recordingState: this.recordingState,
-      gatewayUrl: this.settings.gatewayUrl,
-      settings: this.settings,
-      clientId: this.session.clientId,
-      queueSize: this.queueSize,
-      eventCount: this.eventCount,
-      recentActivities: [...this.recentActivities],
-      runtime: { ...this.runtimeStatus }
-    };
-    if (this.session.sessionId) status.sessionId = this.session.sessionId;
-    if (this.session.projectId !== void 0) status.projectId = this.session.projectId;
-    if (this.activeTabId !== void 0) status.activeTabId = this.activeTabId;
-    if (this.activeTabUrl) status.activeTabUrl = this.activeTabUrl;
-    if (this.pairingReferenceCode) status.pairingReferenceCode = this.pairingReferenceCode;
-    if (this.recordingStartedAt !== void 0) status.recordingStartedAt = this.recordingStartedAt;
-    if (this.lastActivityAt !== void 0) status.lastActivityAt = this.lastActivityAt;
-    if (this.unsupportedPage) status.unsupportedPage = this.unsupportedPage;
-    if (this.recordingBlock) status.recordingBlock = this.recordingBlock;
-    if (this.lastError) status.lastError = this.lastError;
-    if (this.lastMessageAt !== void 0) status.lastMessageAt = this.lastMessageAt;
-    return status;
-  }
-  subscribe(listener) {
-    this.listeners.add(listener);
-    listener(this.status());
-    return () => this.listeners.delete(listener);
-  }
-  updateSettings(settings) {
-    this.settings = settings;
-  }
-  recordingLogPage(page, pageSize) {
-    const normalizedPageSize = Math.min(100, Math.max(5, Math.floor(pageSize) || 25));
-    const normalizedPage = Math.max(1, Math.floor(page) || 1);
-    const start = (normalizedPage - 1) * normalizedPageSize;
-    return {
-      items: this.recordingLog.slice(start, start + normalizedPageSize),
-      page: normalizedPage,
-      pageSize: normalizedPageSize,
-      total: this.recordingLog.length
-    };
-  }
-  async listCoreRecordings(page, pageSize) {
-    const normalizedPageSize = Math.min(50, Math.max(5, Math.floor(pageSize) || 10));
-    const normalizedPage = Math.max(1, Math.floor(page) || 1);
-    const sourceUrl = recordingsApiUrl(this.settings.coreApiUrl, normalizedPage, normalizedPageSize);
-    const response = await fetch(sourceUrl, {
-      headers: compactObject2({
-        accept: "application/json",
-        ...this.session.token ? { authorization: `Bearer ${this.session.token}` } : {}
-      })
-    });
-    if (!response.ok) throw new Error(`FluxIQ recordings API returned ${response.status}.`);
-    return normalizeRecordingsResponse(await response.json(), normalizedPage, normalizedPageSize, sourceUrl);
-  }
-  async connect() {
-    this.shouldStayConnected = true;
-    this.clearReconnect();
-    this.setState("connecting");
-    await this.refreshActiveTab();
-    await this.client?.close();
-    const client = new FluxIQClientGatewayWebSocketClient({
-      url: this.settings.gatewayUrl,
-      client: this.clientHello(),
-      WebSocketImpl: WebSocket,
-      tokenStorage: {
-        read: () => this.session.token,
-        write: async (token) => {
-          this.session = compactObject2({
-            ...this.session,
-            token,
-            serverUrl: this.settings.gatewayUrl,
-            connectedAt: Date.now()
-          });
-          await writeSession(this.session);
-        },
-        clear: async () => {
-          this.session = compactObject2({
-            clientId: this.session.clientId,
-            sessionId: this.session.sessionId,
-            projectId: this.session.projectId,
-            serverUrl: this.settings.gatewayUrl,
-            connectedAt: this.session.connectedAt
-          });
-          await writeSession(this.session);
-        }
-      }
-    });
-    this.client = client;
-    this.attachClientHandlers(client);
-    try {
-      await client.connect();
-    } catch {
-      this.onError("WebSocket connection failed.");
-      if (this.shouldStayConnected && this.settings.autoReconnect) this.scheduleReconnect();
-    }
-  }
-  disconnect() {
-    this.shouldStayConnected = false;
-    this.clearReconnect();
-    this.clearPendingRecordingStart();
-    this.stopHeartbeat();
-    void this.client?.close();
-    this.client = null;
-    if (this.recordingState === "recording") this.addActivity("connection", "Disconnected during recording", "Events will queue until reconnect.", "warning");
-    this.setState("disconnected");
-  }
-  async startRecording() {
-    if (this.pendingRecordingStart) {
-      this.addActivity("recording", "Recording is starting", "Waiting for FluxIQ project acceptance.", "warning");
-      return;
-    }
-    if (this.connectionState !== "connected") {
-      this.lastError = "Connect to FluxIQ before recording.";
-      this.emitStatus();
-      return;
-    }
-    await this.refreshActiveTab();
-    if (this.unsupportedPage) {
-      this.lastError = this.unsupportedPage.reason;
-      this.addActivity("page", "Page cannot be recorded", this.unsupportedPage.reason, "warning");
-      this.emitStatus();
-      return;
-    }
-    this.resetRecordingLog();
-    this.recordingBlock = void 0;
-    const recordingId = `client.${this.session.clientId}.${Date.now()}`;
-    const startedAt = Date.now();
-    const projectId = await this.resolveRecordingProjectId("recording_start");
-    const initialState = await this.buildInitialRecordingState(startedAt);
-    await this.sendClientMessage("client.start_recording", {
-      recordingId,
-      ...projectId ? { projectId } : {},
-      startedAt,
-      domainId: WEB_AUTOMATION_DOMAIN_ID,
-      initialState,
-      environment: this.recordingEnvironment(),
-      sources: this.recordingSources(),
-      actionChannels: this.recordingActionChannels(),
-      metadata: {
-        domainId: WEB_AUTOMATION_DOMAIN_ID,
-        requestedBy: "extension-record-button",
-        projectId: projectId ?? null,
-        activeTabUrl: this.activeTabUrl ?? null
-      }
-    });
-    this.addActivity("recording", "Starting recording", projectId ? "Waiting for FluxIQ project acceptance." : "Waiting for FluxIQ project context.", "warning");
-    this.pendingRecordingStart = {
-      recordingId,
-      timer: setTimeout(() => void this.handleRecordingStartTimeout(recordingId), 750)
-    };
-    this.emitStatus();
-  }
-  async stopRecording(notifyServer = true) {
-    if (this.recordingState !== "recording") return;
-    const recordingId = this.activeRecordingId;
-    const projectId = this.activeRecordingProjectId;
-    const endedAt = Date.now();
-    const stopPayload = recordingId ? compactObject2({
-      recordingId,
-      ...projectId !== void 0 ? { projectId } : {},
-      endedAt
-    }) : void 0;
-    this.recordingState = "idle";
-    this.clearPendingPointerClicks();
-    this.activeRecordingId = void 0;
-    this.activeRecordingProjectId = void 0;
-    this.addActivity("recording", "Recording stopped", `${this.eventCount} user actions captured`, "neutral");
-    this.emitStatus();
-    void this.broadcastToContent({ type: "recording", recording: false, settings: this.settings }, false);
-    if (notifyServer && stopPayload) {
-      await this.sendClientMessage("client.stop_recording", stopPayload);
-    }
-  }
-  dismissRecordingBlock() {
-    this.recordingBlock = void 0;
-    if (this.lastError === "Open a FluxIQ project before recording.") this.lastError = void 0;
-    this.emitStatus();
-  }
-  async handleRecordingEvent(payload, tabId, frameId) {
-    if (this.recordingState !== "recording") return;
-    if (payload.kind === "dom.click") {
-      const sourceEvent = stringValue3(objectValue2(payload.metadata)?.sourceEvent);
-      const signature = clickEventSignature(payload, tabId, frameId);
-      if (sourceEvent === "pointerdown" && signature) {
-        if (this.isSuppressedClickDuplicate(signature)) return;
-        this.suppressNextClickDuplicate(signature);
-        await this.processRecordingEvent(payload, tabId, frameId);
-        return;
-      }
-      if (sourceEvent === "click" && signature && this.isSuppressedClickDuplicate(signature)) {
-        return;
-      }
-    }
-    await this.processRecordingEvent(payload, tabId, frameId);
-  }
-  async handleContentReady(payload, tabId, frameId) {
-    let readyPayload = payload;
-    if (this.recordingState === "recording" && tabId !== void 0 && !this.unsupportedPage) {
-      await this.setContentRecordingState(tabId, true, frameId).catch(() => void 0);
-      if (!payload.snapshot) {
-        const snapshot = await sendToTab(tabId, { type: "captureSnapshot" }, frameId).then((value) => isDomSnapshotPayload(value) ? value : void 0).catch(() => void 0);
-        if (snapshot) readyPayload = { ...payload, snapshot };
-      }
-    }
-    await this.handleRecordingEvent(readyPayload, tabId, frameId);
-  }
-  async processRecordingEvent(payload, tabId, frameId) {
-    if (this.recordingState !== "recording") return;
-    if (tabId !== void 0 && isNavigationExplanation(payload)) {
-      this.recentExplanatoryActions.set(tabId, payload.eventTimestampMs);
-    }
-    if (isExecutableRecordedAction(payload)) {
-      this.eventCount += 1;
-      this.addActivity(payload.kind, activityLabel(payload), activityDetail(payload));
-      await this.sendClientMessage("client.recording_event", gatewayRecordingEventFromPayload(payload, tabId, frameId, this.activeRecordingId));
-      await this.sendRecordingEvidence(payload, tabId, frameId);
-      return;
-    }
-    if (payload.kind !== "content.ready") {
-      this.addActivity(payload.kind, `Evidence: ${activityLabel(payload)}`, activityDetail(payload));
-    }
-    await this.sendRecordingEvidence(payload, tabId, frameId);
-  }
-  async handleTabUpdated(tab) {
-    const becameActive = Boolean(tab.active && tab.id !== void 0 && this.activeTabId !== tab.id);
-    if (tab.active && tab.id !== void 0) {
-      this.activeTabId = tab.id;
-      this.activeTabUrl = tab.url;
-      this.unsupportedPage = unsupportedPageForUrl(tab.url);
-      this.emitStatus();
-    }
-    if (!tab.id) return;
-    if (tab.active && this.recordingState === "recording" && !this.unsupportedPage) {
-      await this.attachTabForRecording(tab.id).catch(() => void 0);
-      if (becameActive) this.addActivity("tab", "Recording active tab", tab.url ?? `Tab ${tab.id}`);
-    }
-    if (this.connectionState === "connected") {
-      await this.sendClientMessage("client.state_update", createWebAutomationStateUpdate({
-        activeContextId: String(tab.id),
-        contexts: [compactObject2({ contextId: String(tab.id), url: tab.url, title: tab.title, status: tab.status })],
-        recording: this.recordingState === "recording",
-        state: createWebAutomationStateFromTabs(describeActiveTabLike(tab), [describeActiveTabLike(tab)], {
-          timestamp: Date.now(),
-          sourceId: this.eventSourceId(),
-          recording: this.recordingState === "recording",
-          permissions: ["activeTab", "scripting", "storage", "tabs"]
-        }),
-        metadata: { reason: "tab-updated", inputId: WEB_AUTOMATION_INPUT_IDS.browserState }
-      }));
-      await this.sendBrowserState();
-    }
-  }
-  async selectAutomationTab(tabId) {
-    const tab = await chrome.tabs.update(tabId, { active: true });
-    if (tab.id !== tabId || unsupportedPageForUrl(tab.url)) {
-      throw new Error("The requested automation tab is unavailable or unsupported.");
-    }
-    await this.handleTabUpdated({ ...tab, active: true });
-  }
-  handleNavigationCommitted(details) {
-    if (details.transitionType === "link" || details.transitionType === "form_submit" || details.transitionType === "reload") return;
-    this.scheduleNavigation(details.tabId, details.url, details.timeStamp, details.transitionType === "typed");
-  }
-  handleHistoryStateUpdated(details) {
-    this.scheduleNavigation(details.tabId, details.url, details.timeStamp, false);
-  }
-  scheduleNavigation(tabId, url, timestamp, explicitlyTyped) {
-    if (this.recordingState !== "recording" || unsupportedPageForUrl(url)) return;
-    const existing = this.pendingNavigations.get(tabId);
-    if (existing) clearTimeout(existing.timer);
-    const timer = setTimeout(() => {
-      this.pendingNavigations.delete(tabId);
-      void this.recordNavigation(tabId, url, timestamp, explicitlyTyped);
-    }, 250);
-    this.pendingNavigations.set(tabId, { url, timer });
-  }
-  async recordNavigation(tabId, url, timestamp, explicitlyTyped) {
-    if (this.recordingState !== "recording") return;
-    if (this.recordingStartedAt !== void 0 && timestamp <= this.recordingStartedAt) return;
-    const initialUrl = this.recordingInitialNavigation.get(tabId);
-    if (initialUrl === url && this.recordingStartedAt !== void 0 && Date.now() - this.recordingStartedAt < 1e4) {
-      this.recordingInitialNavigation.delete(tabId);
-      return;
-    }
-    const explainedAt = this.recentExplanatoryActions.get(tabId);
-    if (!explicitlyTyped && explainedAt !== void 0 && timestamp - explainedAt >= 0 && timestamp - explainedAt < 5e3) return;
-    const previous = this.lastRecordedNavigation.get(tabId);
-    if (previous?.url === url) return;
-    this.lastRecordedNavigation.set(tabId, { url, timestamp });
-    await this.handleRecordingEvent({
-      kind: "browser.navigation",
-      sequence: this.nextBackgroundEventSequence(),
-      url,
-      title: "",
-      eventTimestampMs: timestamp,
-      metadata: explicitlyTyped ? { transition: "typed" } : void 0
-    }, tabId);
-  }
-  async onOpen() {
-    this.reconnectAttempt = 0;
-    this.lastError = void 0;
-    this.setState(this.session.token ? "connecting" : "pairing");
-    this.startHeartbeat();
-  }
-  nextBackgroundEventSequence() {
-    this.backgroundEventSequence = (this.backgroundEventSequence + 1) % 1e3;
-    return Date.now() * 1e3 + this.backgroundEventSequence;
-  }
-  onClose() {
-    this.stopHeartbeat();
-    this.client = null;
-    if (this.shouldStayConnected && this.settings.autoReconnect) {
-      this.scheduleReconnect();
-    } else {
-      this.setState("disconnected");
-    }
-  }
-  onError(message) {
-    this.lastError = message;
-    this.setState("error");
-  }
-  clientHello() {
-    return {
-      clientId: this.session.clientId,
-      clientType: "extension",
-      name: "FluxIQ Browser Extension",
-      version: browserDescriptor().extensionVersion,
-      ...this.session.token !== void 0 ? { token: this.session.token } : {},
-      capabilities: browserExtensionCapabilities,
-      metadata: {
-        domainId: WEB_AUTOMATION_DOMAIN_ID,
-        browser: browserDescriptor(),
-        settings: {
-          captureMutations: this.settings.captureMutations,
-          captureInputValues: this.settings.captureInputValues,
-          captureSnapshots: this.settings.captureSnapshots
-        }
-      }
-    };
-  }
-  attachClientHandlers(client) {
-    client.on("open", () => void this.onOpen());
-    client.on("close", () => this.onClose());
-    client.on("error", () => this.onError("WebSocket connection failed."));
-    client.on("message", ({ message }) => void this.onMessage(message));
-    client.on("pairing_required", ({ message }) => {
-      this.pairingReferenceCode = message.payload.referenceCode;
-      this.setState("pairing");
-      this.lastError = message.payload.reason || "Approve this client in FluxIQ.";
-      this.addActivity("pairing", "Waiting for approval", this.pairingReferenceCode ? `Reference ${this.pairingReferenceCode}` : void 0, "warning");
-      this.emitStatus();
-    });
-    client.on("session_ready", ({ message }) => void this.onSessionReady(message));
-    client.on("start_recording", ({ message }) => void this.handleServerCommandPayload({ ...message.payload, command: "start_recording" }, message.id));
-    client.on("stop_recording", ({ message }) => void this.handleServerCommandPayload({ ...message.payload, command: "stop_recording" }, message.id));
-    client.on("capture_snapshot", ({ message }) => void this.handleServerCommandPayload({ ...message.payload, command: "capture_snapshot" }, message.id));
-    client.on("execute_action", ({ message }) => void this.handleServerCommandPayload({ command: "execute_action", action: browserActionFromGatewayCommand(message.payload) }, message.id));
-  }
-  async onMessage(message) {
-    this.lastMessageAt = Date.now();
-    if (message.type === "server.ping") {
-      this.lastMessageAt = Date.now();
-      this.emitStatus();
-      return;
-    }
-    if (message.type === "server.error") {
-      this.lastError = message.payload.message;
-      if (message.payload.code === "recording.project_required") {
-        this.handleRecordingProjectRequired(message.payload.message);
-        return;
-      }
-      this.setState("error");
-      return;
-    }
-    if (message.type === "server.set_active_tab") {
-      await this.handleServerCommandPayload({ ...message.payload, command: "set_active_tab" }, message.id);
-      return;
-    }
-    if (message.type === "server.disconnect") {
-      this.disconnect();
-    }
-  }
-  async onSessionReady(message) {
-    this.session = compactObject2({
-      ...this.session,
-      sessionId: message.payload.sessionId,
-      token: message.payload.token,
-      ...message.payload.projectId !== void 0 ? { projectId: message.payload.projectId } : {},
-      serverUrl: this.settings.gatewayUrl,
-      connectedAt: Date.now()
-    });
-    this.pairingReferenceCode = void 0;
-    await writeSession(this.session);
-    this.setState("connected");
-    this.addActivity("connection", "Connected to FluxIQ", "Client session ready", "success");
-    await this.sendBrowserState();
-    await this.flushQueue();
-  }
-  async handleServerCommandPayload(payload, messageId) {
-    if (payload.command === "ping") {
-      this.lastMessageAt = Date.now();
-      this.emitStatus();
-      return;
-    }
-    if (payload.command === "disconnect") {
-      this.disconnect();
-      return;
-    }
-    if (payload.command === "start_recording") {
-      await this.beginAcceptedRecording(payload.recordingId, payload.projectId);
-      return;
-    }
-    if (payload.command === "stop_recording") {
-      await this.stopRecording(false);
-      return;
-    }
-    if (payload.command === "set_active_tab") {
-      const tabId = Number(payload.tabId);
-      this.activeTabId = tabId;
-      await chrome.tabs.update(tabId, { active: true });
-      this.emitStatus();
-      return;
-    }
-    if (payload.command === "capture_snapshot") {
-      this.startRuntimeStatus({
-        commandId: messageId,
-        actionType: "web.dom.capture_snapshot",
-        label: "Capture snapshot",
-        target: this.activeTabUrl
-      });
-      await this.runtimeCommandRouter().captureSnapshot();
-      this.finishRuntimeStatus({
-        commandId: messageId,
-        actionType: "web.dom.capture_snapshot",
-        status: "succeeded",
-        message: "Snapshot command dispatched.",
-        startedAt: this.runtimeStatus.startedAt ?? Date.now(),
-        finishedAt: Date.now()
-      });
-      return;
-    }
-    if (payload.command === "execute_action") {
-      this.startRuntimeAction(payload.action);
-      await captureActionBoundary("before", payload.action);
-      await this.refreshActiveTab();
-      await this.runtimeCommandRouter().executeAction(payload.action);
-    }
-  }
-  runtimeCommandRouter() {
-    return new ExtensionRuntimeCommandRouter({
-      activeTabId: () => this.activeTabId,
-      unsupportedPageReason: () => this.unsupportedPage?.reason,
-      attachTabForRecording: (tabId) => this.attachTabForRecording(tabId),
-      captureActiveSnapshot: (label) => this.captureActiveSnapshot(label),
-      sendActionResult: (result, tabId, frameId) => this.sendActionResult(result, tabId, frameId)
-    });
-  }
-  async beginAcceptedRecording(recordingId, projectId) {
-    this.clearPendingRecordingStart();
-    if (projectId !== void 0) {
-      this.session = compactObject2({ ...this.session, projectId });
-      await writeSession(this.session);
-    }
-    if (this.recordingState === "recording") {
-      if (projectId !== void 0 && this.activeRecordingProjectId !== projectId) {
-        this.activeRecordingProjectId = projectId;
-        await this.captureActiveSnapshot("Project-linked snapshot captured");
-      }
-      return;
-    }
-    this.resetRecordingLog();
-    this.lastRecordedNavigation.clear();
-    this.recordingInitialNavigation.clear();
-    this.recordingBlock = void 0;
-    this.activeRecordingId = recordingId;
-    this.activeRecordingProjectId = projectId !== void 0 ? projectId : this.session.projectId;
-    this.eventCount = 0;
-    this.recentActivities.length = 0;
-    const recordingTabs = await allTabs();
-    this.recordingStartedAt = Date.now();
-    this.recordingState = "recording";
-    for (const tab of recordingTabs) {
-      if (tab.tabId < 0 || !tab.url || unsupportedPageForUrl(tab.url)) continue;
-      this.lastRecordedNavigation.set(tab.tabId, { url: tab.url, timestamp: this.recordingStartedAt });
-      this.recordingInitialNavigation.set(tab.tabId, tab.url);
-    }
-    this.addActivity("recording", "Recording started", this.activeTabUrl ?? "Active tab", "success");
-    this.emitStatus();
-    if (this.activeTabId !== void 0) await this.attachTabForRecording(this.activeTabId);
-    await this.sendBrowserState();
-    await this.handleRecordingEvent({
-      kind: "browser.tab",
-      sequence: this.nextBackgroundEventSequence(),
-      url: this.activeTabUrl ?? "",
-      title: "",
-      eventTimestampMs: Date.now(),
-      metadata: { recordingState: "started", recordingId }
-    });
-    await this.captureActiveSnapshot("Initial snapshot captured");
-  }
-  handleRecordingProjectRequired(message) {
-    this.clearPendingRecordingStart();
-    if (this.recordingState === "recording") {
-      this.recordingState = "idle";
-      this.clearPendingPointerClicks();
-      void this.broadcastToContent({ type: "recording", recording: false, settings: this.settings }, false);
-    }
-    this.recordingStartedAt = void 0;
-    this.activeRecordingId = void 0;
-    this.activeRecordingProjectId = void 0;
-    this.recordingBlock = {
-      code: "recording.project_required",
-      title: "Project Required",
-      message: message || "Open a FluxIQ project in the web panel before starting a recording."
-    };
-    this.lastError = "Open a FluxIQ project before recording.";
-    this.addActivity("recording", "Recording locked", "Open a FluxIQ project in the web panel.", "warning");
-    this.emitStatus();
-  }
-  clearPendingRecordingStart() {
-    if (!this.pendingRecordingStart) return;
-    clearTimeout(this.pendingRecordingStart.timer);
-    this.pendingRecordingStart = void 0;
-  }
-  async handleRecordingStartTimeout(recordingId) {
-    if (!this.pendingRecordingStart || this.pendingRecordingStart.recordingId !== recordingId) return;
-    const projectId = await this.resolveRecordingProjectId("recording_start_timeout");
-    await this.beginAcceptedRecording(recordingId, projectId ?? null);
-    if (!projectId) {
-      this.addActivity("recording", "Project context pending", "Structured state will record; screenshots attach after FluxIQ links a project.", "warning");
-      this.emitStatus();
-    }
-  }
-  async sendBrowserState() {
-    await this.sendClientMessage("client.state_update", browserStateFromTabs(await activeTab(), await allTabs(), this.recordingState));
-  }
-  async sendRecordingEvidence(payload, tabId, frameId) {
-    if (this.recordingState !== "recording") return;
-    const projectId = await this.resolveRecordingProjectId("recording_evidence");
-    if (this.recordingState !== "recording") return;
-    const snapshot = await this.captureDomSnapshotForEvidence(payload, tabId, frameId);
-    if (this.recordingState !== "recording") return;
-    const hasDomSnapshot = isDomSnapshotPayload(snapshot);
-    const state = hasDomSnapshot ? await this.createStateFromDomSnapshot(snapshot, {
-      timestamp: payload.eventTimestampMs,
-      eventKey: stateScreenshotEventKey(payload),
-      ...projectId ? { projectId } : {},
-      ...tabId === void 0 ? {} : {
-        sourceId: this.tabSourceId(tabId),
-        tabId
-      }
-    }) : compactObject2({
-      latestEvidence: recordingEvidencePayload(payload)
-    });
-    if (this.recordingState !== "recording") return;
-    const stateTimestampMs = numberValue3(objectValue2(state)?.timestamp) ?? payload.eventTimestampMs;
-    if (hasDomSnapshot) {
-      const snapshotId = stateSnapshotIdFromPayload(payload);
-      await this.sendClientMessage("client.snapshot", compactObject2({
-        snapshotId,
-        timestamp: stateTimestampMs,
-        kind: "state",
-        state,
-        metadata: compactObject2({
-          reason: "recording-evidence",
-          clientKind: payload.kind,
-          eventTimestampMs: payload.eventTimestampMs,
-          stateTimestampMs,
-          sequence: payload.sequence,
-          ...tabId === void 0 ? {} : { tabId },
-          ...frameId === void 0 ? {} : { frameId },
-          ...payload.metadata ?? {}
-        })
-      }));
-      return;
-    }
-    await this.sendClientMessage("client.state_update", createWebAutomationStateUpdate({
-      ...tabId === void 0 ? {} : { activeContextId: String(tabId) },
-      state,
-      metadata: compactObject2({
-        reason: "recording-evidence",
-        inputId: WEB_AUTOMATION_INPUT_IDS.recordingEvidence,
-        clientKind: payload.kind,
-        eventTimestampMs: payload.eventTimestampMs,
-        stateTimestampMs,
-        ...tabId === void 0 ? {} : { tabId },
-        ...frameId === void 0 ? {} : { frameId },
-        ...payload.metadata ?? {}
-      })
-    }));
-  }
-  async captureDomSnapshotForEvidence(payload, tabId, frameId) {
-    if (tabId === void 0 || this.unsupportedPage || !shouldRequireStateForEvidence(payload)) return void 0;
-    try {
-      await ensureContentScript(tabId);
-      const snapshot = await this.captureMergedTabSnapshot(tabId, isDomSnapshotPayload(payload.snapshot) ? payload.snapshot : void 0, frameId);
-      if (isDomSnapshotPayload(snapshot)) {
-        console.info("FluxIQ evidence snapshot recovered", {
-          kind: payload.kind,
-          sequence: payload.sequence,
-          tabId,
-          frameId
-        });
-        return snapshot;
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Fallback DOM snapshot failed.";
-      console.warn("FluxIQ evidence snapshot unavailable", {
-        kind: payload.kind,
-        sequence: payload.sequence,
-        tabId,
-        frameId,
-        message
-      });
-    }
+// src/background/connection/value-readers.ts
+function compactObject2(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
+}
+function stringValue3(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function objectValue2(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+function arrayValue(value) {
+  return Array.isArray(value) ? value : [];
+}
+function numberValue3(value) {
+  return typeof value === "number" ? value : void 0;
+}
+function rectValue(value) {
+  if (!value || typeof value !== "object") return void 0;
+  const rect = value;
+  return typeof rect.x === "number" && typeof rect.y === "number" && typeof rect.width === "number" && typeof rect.height === "number" ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : void 0;
+}
+function timestampValue(value) {
+  if (typeof value === "number") return value;
+  if (typeof value !== "string") return void 0;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? void 0 : parsed;
+}
+function parseJsonBody(text) {
+  if (!text) return void 0;
+  try {
+    return JSON.parse(text);
+  } catch {
     return void 0;
   }
-  async captureMergedTabSnapshot(tabId, seedSnapshot, seedFrameId) {
-    const topFallback = await this.captureSingleFrameSnapshot(tabId, 0);
-    const fallback = topFallback ?? seedSnapshot;
-    const frames = await withTimeout(allTabFrames(tabId), FRAME_SNAPSHOT_TIMEOUT_MS, []);
-    const frameSnapshots = [];
-    if (seedSnapshot && seedFrameId !== void 0) frameSnapshots.push({ frameId: seedFrameId, snapshot: seedSnapshot });
-    await withTimeout(Promise.allSettled(frames.map(async (frame) => {
-      if (seedFrameId !== void 0 && frame.frameId === seedFrameId && seedSnapshot) return;
-      const snapshot = await this.captureSingleFrameSnapshot(tabId, frame.frameId);
-      if (snapshot) frameSnapshots.push({ frameId: frame.frameId, snapshot });
-    })), FRAME_SNAPSHOT_TIMEOUT_MS, []);
-    if (!frameSnapshots.length) return fallback;
-    const topSnapshot = frameSnapshots.find((entry) => entry.frameId === 0 || entry.snapshot.frame?.isTop)?.snapshot ?? topFallback;
-    if (!topSnapshot) return void 0;
-    const mergedElements = [];
-    for (const entry of frameSnapshots) {
-      const elements = entry.snapshot === topSnapshot || entry.snapshot.frame?.isTop ? entry.snapshot.interactiveElements : translateFrameElements(entry.snapshot, topSnapshot, entry.frameId);
-      mergedElements.push(...elements);
-    }
-    return {
-      ...topSnapshot,
-      interactiveElements: mergedElements
-    };
+}
+
+// src/background/connection/activity-log.ts
+var RECENT_ACTIVITY_LIMIT = 20;
+var RECORDING_LOG_LIMIT = 500;
+var ActivityLog = class {
+  recent = [];
+  log = [];
+  lastAt;
+  lastActivityAt() {
+    return this.lastAt;
   }
-  async captureSingleFrameSnapshot(tabId, frameId) {
-    const snapshot = await withTimeout(sendToTab(tabId, { type: "captureSnapshot" }, frameId), FRAME_SNAPSHOT_TIMEOUT_MS, void 0);
-    return isDomSnapshotPayload(snapshot) ? snapshot : void 0;
+  recentEntries() {
+    return [...this.recent];
   }
-  async sendActionResult(result, tabId, frameId) {
-    this.finishRuntimeStatus({
-      ...result,
-      ...tabId !== void 0 ? { tabId } : {},
-      ...frameId !== void 0 ? { frameId } : {}
-    });
-    await captureActionBoundary("after", result);
-    const visualTarget = result.visualTarget ?? (result.element ? webAutomationActionVisualTargetFromElement(result.element) : void 0);
-    await this.sendClientMessage("client.action_result", gatewayActionResultFromBrowserResult(result));
-    await this.sendRuntimeActionConfirmation(result, tabId, frameId);
-    await this.handleRecordingEvent(compactObject2({
-      kind: "action.result",
-      sequence: this.nextBackgroundEventSequence(),
-      url: result.url ?? this.activeTabUrl ?? "",
-      title: result.title ?? "",
-      eventTimestampMs: result.finishedAt,
-      element: result.element,
-      visualTarget,
-      snapshot: result.snapshot,
-      actionResult: result
-    }), tabId, frameId);
-  }
-  async sendRuntimeActionConfirmation(result, tabId, frameId) {
-    if (result.status !== "succeeded") return;
-    const confirmation = runtimeConfirmationForActionResult(result);
-    if (!confirmation) return;
-    const event = createWebAutomationRecordingEvent({
-      kind: confirmation.kind,
-      sequence: this.nextBackgroundEventSequence(),
-      url: result.url ?? this.activeTabUrl ?? "",
-      title: result.title ?? "",
-      eventTimestampMs: result.finishedAt,
-      element: result.element,
-      visualTarget: result.visualTarget,
-      snapshot: result.snapshot,
-      inputValue: confirmation.inputValue,
-      key: confirmation.key,
-      scroll: confirmation.scroll,
-      actionResult: webAutomationActionResultPayload(result),
-      metadata: {
-        domainId: WEB_AUTOMATION_DOMAIN_ID,
-        inputId: confirmation.inputId,
-        runtimeConfirmation: true
-      }
-    }, {
-      ...tabId !== void 0 ? { tabId } : {},
-      ...frameId !== void 0 ? { frameId } : {}
-    });
-    await this.sendClientMessage("client.recording_event", event);
-  }
-  async sendClientMessage(type, payload, _tabId, _frameId) {
-    if (this.client?.connected) {
-      await this.client.send(type, payload);
-      return;
-    }
-    const message = createClientGatewayMessage(type, payload, {
-      clientId: this.session.clientId,
-      ...this.session.sessionId !== void 0 ? { sessionId: this.session.sessionId } : {}
-    });
-    this.queueSize = await queueEvent(message);
-    this.emitStatus();
-  }
-  async flushQueue() {
-    if (!this.client?.connected) return;
-    const queued = await readQueuedEvents();
-    for (const message of queued) {
-      await this.client.send(message.type, message.payload);
-    }
-    await clearQueuedEvents();
-    this.queueSize = 0;
-    this.emitStatus();
-  }
-  startHeartbeat() {
-    this.stopHeartbeat();
-    this.heartbeatTimer = setInterval(() => {
-      if (this.connectionState === "connected") void this.sendBrowserState();
-    }, HEARTBEAT_INTERVAL_MS);
-  }
-  stopHeartbeat() {
-    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
-    this.heartbeatTimer = void 0;
-  }
-  scheduleReconnect() {
-    if (this.reconnectTimer) return;
-    this.setState("reconnecting");
-    const delay = Math.min(RECONNECT_MAX_DELAY_MS, RECONNECT_BASE_DELAY_MS * 2 ** this.reconnectAttempt);
-    this.reconnectAttempt += 1;
-    this.reconnectTimer = setTimeout(() => void this.connect(), delay);
-  }
-  clearReconnect() {
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-    this.reconnectTimer = void 0;
-  }
-  async refreshActiveTab() {
-    const tab = await activeTab();
-    this.activeTabId = tab?.tabId;
-    this.activeTabUrl = tab?.url;
-    this.unsupportedPage = unsupportedPageForUrl(tab?.url);
-    this.emitStatus();
-  }
-  async broadcastToContent(message, injectMissing) {
-    const tabs = await chrome.tabs.query({});
-    await Promise.allSettled(tabs.map(async (tab) => {
-      if (tab.id === void 0 || unsupportedPageForUrl(tab.url)) return;
-      if (injectMissing) await ensureContentScript(tab.id);
-      await sendToTab(tab.id, message);
-    }));
-  }
-  setState(state) {
-    this.connectionState = state;
-    this.emitStatus();
-  }
-  emitStatus() {
-    const status = this.status();
-    for (const listener of this.listeners) listener(status);
-    void chrome.runtime.sendMessage({ type: "fluxiq.statusChanged", status }).catch(() => void 0);
-  }
-  async captureActiveSnapshot(label) {
-    const tabId = this.activeTabId;
-    if (tabId === void 0) return;
-    if (this.unsupportedPage) {
-      this.addActivity("snapshot", "Snapshot skipped", this.unsupportedPage.reason, "warning");
-      return;
-    }
-    try {
-      await this.attachTabForRecording(tabId);
-      const snapshot = await sendToTab(tabId, { type: "captureSnapshot" });
-      await this.sendClientMessage("client.snapshot", await this.gatewaySnapshotFromDomSnapshot(snapshot, tabId));
-      this.addActivity("snapshot", label, this.activeTabUrl);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Content script is unavailable.";
-      this.unsupportedPage = { url: this.activeTabUrl, reason: message };
-      this.addActivity("snapshot", "Snapshot failed", message, "warning");
-      this.emitStatus();
-    }
-  }
-  addActivity(kind, label, detail, tone = "neutral") {
+  record(kind, label, detail, tone = "neutral") {
     const timestamp = Date.now();
-    this.lastActivityAt = timestamp;
+    this.lastAt = timestamp;
     const entry = compactObject2({
       id: `${kind}.${timestamp}.${Math.random().toString(36).slice(2)}`,
       timestamp,
@@ -2380,427 +1425,219 @@ var FluxIQConnection = class {
       detail,
       tone
     });
-    this.recentActivities.unshift(entry);
-    this.recentActivities.splice(20);
-    this.recordingLog.unshift(entry);
-    this.recordingLog.splice(500);
-    this.emitStatus();
+    this.recent.unshift(entry);
+    this.recent.splice(RECENT_ACTIVITY_LIMIT);
+    this.log.unshift(entry);
+    this.log.splice(RECORDING_LOG_LIMIT);
   }
-  resetRecordingLog() {
-    this.eventCount = 0;
-    this.recentActivities.length = 0;
-    this.recordingLog.length = 0;
-    this.clearPendingPointerClicks();
-    this.lastActivityAt = void 0;
+  clearRecent() {
+    this.recent.length = 0;
   }
-  startRuntimeAction(action) {
-    this.startRuntimeStatus({
-      commandId: action.commandId,
-      actionType: action.actionType,
-      label: runtimeActionLabel(action.actionType),
-      target: runtimeActionTarget(action),
-      startedAt: Date.now()
-    });
+  reset() {
+    this.recent.length = 0;
+    this.log.length = 0;
+    this.lastAt = void 0;
   }
-  startRuntimeStatus(status) {
-    this.runtimeStatus = {
-      state: "running",
-      startedAt: Date.now(),
-      ...status
+  page(page, pageSize) {
+    const normalizedPageSize = Math.min(100, Math.max(5, Math.floor(pageSize) || 25));
+    const normalizedPage = Math.max(1, Math.floor(page) || 1);
+    const start = (normalizedPage - 1) * normalizedPageSize;
+    return {
+      items: this.log.slice(start, start + normalizedPageSize),
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      total: this.log.length
     };
-    this.lastError = void 0;
-    this.addActivity("runtime", `Runtime started: ${this.runtimeStatus.label ?? this.runtimeStatus.actionType ?? "Command"}`, this.runtimeStatus.target, "warning");
-    this.emitStatus();
-  }
-  finishRuntimeStatus(result) {
-    const failed = result.status !== "succeeded";
-    const label = runtimeActionLabel(result.actionType);
-    this.runtimeStatus = {
-      state: failed ? "failed" : "succeeded",
-      commandId: result.commandId,
-      actionType: result.actionType,
-      label,
-      target: runtimeResultTarget(result) ?? this.runtimeStatus.target,
-      ...result.tabId !== void 0 ? { tabId: result.tabId } : {},
-      ...result.frameId !== void 0 ? { frameId: result.frameId } : {},
-      startedAt: result.startedAt,
-      finishedAt: result.finishedAt,
-      ...result.message ? { message: result.message } : {},
-      ...failed && result.message ? { error: result.message } : {},
-      ...result.url ? { url: result.url } : {}
-    };
-    if (result.tabId !== void 0) this.activeTabId = result.tabId;
-    if (result.url) this.activeTabUrl = result.url;
-    if (failed) this.lastError = result.message ?? `${label} failed.`;
-    this.addActivity(
-      "runtime",
-      failed ? `Runtime failed: ${label}` : `Runtime succeeded: ${label}`,
-      result.message ?? runtimeResultTarget(result),
-      failed ? "danger" : "success"
-    );
-    this.emitStatus();
-  }
-  suppressNextClickDuplicate(signature) {
-    if (this.suppressedPointerClicks.has(signature)) return;
-    const timer = setTimeout(() => {
-      this.suppressedPointerClicks.delete(signature);
-    }, POINTER_CLICK_SUPPRESS_DELAY_MS);
-    this.suppressedPointerClicks.set(signature, timer);
-  }
-  isSuppressedClickDuplicate(signature) {
-    return this.suppressedPointerClicks.has(signature);
-  }
-  clearPendingPointerClicks() {
-    for (const timer of this.suppressedPointerClicks.values()) clearTimeout(timer);
-    this.suppressedPointerClicks.clear();
-  }
-  async attachTabForRecording(tabId) {
-    if (this.recordingState === "recording" && !this.lastRecordedNavigation.has(tabId)) {
-      const tab = await chrome.tabs.get(tabId);
-      if (tab.url && !unsupportedPageForUrl(tab.url)) this.lastRecordedNavigation.set(tabId, { url: tab.url, timestamp: Date.now() });
-    }
-    await ensureContentScript(tabId);
-    await this.setContentRecordingState(tabId, this.recordingState === "recording");
-  }
-  async setContentRecordingState(tabId, recording, frameId) {
-    await sendToTab(tabId, { type: "recording", recording, settings: this.settings }, frameId);
-  }
-  async buildInitialRecordingState(timestamp) {
-    const tabId = this.activeTabId;
-    if (tabId !== void 0 && !this.unsupportedPage) {
-      try {
-        await this.attachTabForRecording(tabId);
-        const snapshot = await sendToTab(tabId, { type: "captureSnapshot" });
-        if (isDomSnapshotPayload(snapshot)) {
-          const projectId = await this.resolveRecordingProjectId("initial_state");
-          return await this.createStateFromDomSnapshot(snapshot, {
-            timestamp,
-            ...projectId ? { projectId } : {},
-            tabId,
-            sourceId: this.tabSourceId(tabId)
-          });
-        }
-      } catch {
-      }
-    }
-    return browserStateSnapshotFromTabs(await activeTab(), await allTabs(), this.recordingState, timestamp, this.eventSourceId());
-  }
-  recordingEnvironment() {
-    return compactObject2({
-      id: `client.${this.session.clientId}.browser`,
-      label: "FluxIQ Browser Extension",
-      kind: "browser_extension",
-      domainId: WEB_AUTOMATION_DOMAIN_ID,
-      capabilities: browserExtensionCapabilities.map((capability) => capability.id),
-      metadata: compactObject2({
-        browser: browserDescriptor(),
-        activeTabUrl: this.activeTabUrl
-      })
-    });
-  }
-  recordingSources() {
-    return [
-      { id: this.eventSourceId(), label: "Browser events", kind: "event", schemaId: WEB_AUTOMATION_DOMAIN_ID, metadata: { clientId: this.session.clientId } },
-      { id: this.observationSourceId(), label: "Browser observations", kind: "observation", schemaId: WEB_AUTOMATION_DOMAIN_ID, metadata: { clientId: this.session.clientId } },
-      { id: this.stateSourceId(), label: "Browser state", kind: "state", schemaId: WEB_AUTOMATION_DOMAIN_ID, metadata: { clientId: this.session.clientId } }
-    ];
-  }
-  recordingActionChannels() {
-    return [{
-      id: `client.${this.session.clientId}.actions`,
-      label: "Browser action channel",
-      actionTypes: actionTypesFromCapabilities(browserExtensionCapabilities),
-      capabilities: browserExtensionCapabilities.map((capability) => capability.id),
-      metadata: { clientId: this.session.clientId }
-    }];
-  }
-  eventSourceId() {
-    return `client.${this.session.clientId}.events`;
-  }
-  observationSourceId() {
-    return `client.${this.session.clientId}.observations`;
-  }
-  stateSourceId() {
-    return `client.${this.session.clientId}.state`;
-  }
-  tabSourceId(tabId, frameId) {
-    return `tab:${tabId}${frameId === void 0 ? "" : `:frame:${frameId}`}`;
-  }
-  async visualSampleForState(tabId, projectId, timestamp, eventKey) {
-    const fresh = await this.captureFreshVisualSampleForState(tabId, projectId, timestamp, eventKey);
-    if (fresh) return fresh;
-    return void 0;
-  }
-  async captureFreshVisualSampleForState(tabId, projectId, timestamp, eventKey) {
-    try {
-      const capture = await this.captureScreenPngBytes(tabId);
-      const sha256 = await sha256Hex(capture.bytes);
-      const screenContentRef = await this.uploadStateAsset(projectId, sha256, capture.bytes, "image/png");
-      const capturedAt = Date.now();
-      console.info("FluxIQ fresh state screenshot stored", {
-        tabId,
-        projectId,
-        sha256,
-        coordinateSpace: capture.coordinateSpace,
-        imageSize: capture.imageSize,
-        eventKey,
-        eventTimestampMs: timestamp,
-        capturedAt,
-        deltaMs: capturedAt - timestamp
-      });
-      this.addActivity("snapshot", "Fresh viewport screenshot stored", `${sha256.slice(0, 12)} @ ${Math.max(0, capturedAt - timestamp)}ms after event`, "success");
-      return { screenContentRef, screenImageSize: capture.imageSize, capturedAt };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Fresh screenshot capture failed.";
-      console.warn("FluxIQ fresh state screenshot failed", {
-        tabId,
-        projectId,
-        eventTimestampMs: timestamp,
-        message
-      });
-      return void 0;
-    }
-  }
-  async createStateFromDomSnapshot(snapshot, input) {
-    let screenContentRef;
-    let stateSnapshot = snapshot;
-    let stateTimestamp = input.timestamp;
-    let visualSample;
-    let missingScreenReason;
-    const hasFrameViewportOffset = hasSnapshotFrameViewportOffset(snapshot);
-    const canAttachFullTabScreenshot = input.frameId === void 0 || input.frameId === 0 || hasFrameViewportOffset;
-    if (input.projectId && input.tabId !== void 0 && canAttachFullTabScreenshot) {
-      visualSample = await this.visualSampleForState(input.tabId, input.projectId, input.timestamp, input.eventKey);
-      screenContentRef = visualSample?.screenContentRef;
-      if (visualSample?.snapshot) stateSnapshot = visualSample.snapshot;
-      if (!screenContentRef) missingScreenReason = "screenshot capture or upload failed";
-    } else {
-      missingScreenReason = input.frameId !== void 0 && input.frameId !== 0 ? "frame-local state missing iframe viewport offset" : input.projectId ? "no tab id" : "no project id";
-      this.noteScreenshotSkipped(input.frameId !== void 0 && input.frameId !== 0 ? "Frame-local state cannot be safely paired with a full-tab screenshot until iframe viewport offset is available." : input.projectId ? "No active tab id available for screenshot capture." : "No project id available for screenshot upload.");
-    }
-    const options = { timestamp: stateTimestamp };
-    if (input.sourceId !== void 0) options.sourceId = input.sourceId;
-    if (input.projectId !== void 0) options.projectId = input.projectId;
-    if (screenContentRef !== void 0) options.screenContentRef = screenContentRef;
-    if (visualSample?.screenImageSize !== void 0) options.screenImageSize = visualSample.screenImageSize;
-    const state = createWebAutomationStateFromSnapshot(stateSnapshot, options);
-    if (missingScreenReason) {
-      console.warn("FluxIQ state snapshot missing screenshot", {
-        reason: missingScreenReason,
-        timestamp: input.timestamp,
-        stateTimestamp,
-        sourceId: input.sourceId,
-        projectId: input.projectId,
-        tabId: input.tabId,
-        frameId: input.frameId
-      });
-      this.addActivity("snapshot", "State screenshot missing", missingScreenReason, "warning");
-      const metadata = objectValue2(state.metadata);
-      return {
-        ...state,
-        metadata: compactObject2({
-          ...metadata ?? {},
-          missingScreenReason
-        })
-      };
-    }
-    return state;
-  }
-  async gatewaySnapshotFromDomSnapshot(snapshot, tabId) {
-    const timestamp = Date.now();
-    const projectId = await this.resolveRecordingProjectId("snapshot");
-    const state = isDomSnapshotPayload(snapshot) ? await this.createStateFromDomSnapshot(snapshot, {
-      timestamp,
-      ...projectId ? { projectId } : {},
-      ...tabId === void 0 ? {} : { tabId },
-      ...tabId === void 0 ? {} : { sourceId: this.tabSourceId(tabId) }
-    }) : void 0;
-    return compactObject2({
-      snapshotId: `dom.${timestamp}`,
-      timestamp,
-      kind: state ? "state" : "structured",
-      ...state !== void 0 ? { state } : {},
-      payload: snapshot
-    });
-  }
-  async captureAndStoreScreenContentRef(tabId, projectId) {
-    try {
-      const capture = await this.captureVisibleViewportPngBytes(tabId);
-      const sha256 = await sha256Hex(capture.bytes);
-      const screenContentRef = await this.uploadStateAsset(projectId, sha256, capture.bytes, "image/png");
-      this.addActivity("snapshot", "Screenshot stored", sha256.slice(0, 12), "success");
-      return { screenContentRef, screenImageSize: capture.imageSize, capturedAt: Date.now() };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Screenshot capture or upload failed.";
-      this.addActivity("snapshot", "Screenshot unavailable", message, "warning");
-      return void 0;
-    }
-  }
-  async captureScreenPngBytes(tabId) {
-    return await this.captureVisibleViewportPngBytes(tabId);
-  }
-  async captureVisibleViewportPngBytes(tabId) {
-    const tab = await chrome.tabs.get(tabId);
-    if (tab.windowId === void 0) throw new Error("Tab window is unavailable for screenshot capture.");
-    const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
-    const bytes = await bytesFromDataUrl(dataUrl);
-    return { bytes, imageSize: pngImageSize(bytes), coordinateSpace: "viewport" };
-  }
-  async uploadStateAsset(projectId, sha256, bytes, mediaType) {
-    const url = new URL(`/api/programs/automation-studio/state-assets/${encodeURIComponent(projectId)}/${sha256}`, this.settings.coreApiUrl || DEFAULT_CORE_API_URL);
-    const response = await fetch(url.toString(), {
-      method: "PUT",
-      headers: compactObject2({
-        "content-type": mediaType,
-        "x-content-sha256": sha256,
-        ...this.session.token ? { authorization: `Bearer ${this.session.token}` } : {}
-      }),
-      body: bytes
-    });
-    const bodyText = await response.text().catch(() => "");
-    const payload = parseJsonBody(bodyText);
-    console.info("FluxIQ screenshot upload", {
-      url: url.toString(),
-      status: response.status,
-      body: payload ?? bodyText
-    });
-    const responseObject = objectValue2(payload);
-    const responsePayload = objectValue2(responseObject?.payload);
-    const contentRef = stringValue3(responsePayload?.contentRef);
-    if (!response.ok || responseObject?.ok !== true || !contentRef) {
-      throw new Error(`FluxIQ state asset upload failed (${response.status}).`);
-    }
-    return contentRef;
-  }
-  currentRecordingProjectId() {
-    const value = this.activeRecordingProjectId ?? this.session.projectId;
-    return typeof value === "string" && value.trim() ? value : void 0;
-  }
-  async resolveRecordingProjectId(reason) {
-    const current = this.currentRecordingProjectId();
-    if (current) return current;
-    const hydrated = await this.hydrateProjectIdFromCoreSnapshot(reason);
-    return hydrated ?? this.currentRecordingProjectId();
-  }
-  async hydrateProjectIdFromCoreSnapshot(reason) {
-    if (!this.session.token) return void 0;
-    try {
-      const url = new URL("/api/client-gateway/snapshot", this.settings.coreApiUrl || DEFAULT_CORE_API_URL);
-      const response = await fetch(url.toString(), {
-        headers: compactObject2({
-          accept: "application/json",
-          authorization: `Bearer ${this.session.token}`
-        })
-      });
-      const bodyText = await response.text().catch(() => "");
-      const payload = parseJsonBody(bodyText);
-      console.info("FluxIQ project context lookup", {
-        url: url.toString(),
-        status: response.status,
-        reason,
-        body: payload ?? bodyText
-      });
-      if (!response.ok) return void 0;
-      const root = objectValue2(payload);
-      if (root?.ok !== true) return void 0;
-      const body = objectValue2(root.payload);
-      const sessions = arrayValue(body?.sessions);
-      const matchingSession = sessions.map(objectValue2).find((session) => session && stringValue3(session.sessionId) === this.session.sessionId) ?? sessions.map(objectValue2).find((session) => session && stringValue3(session.clientId) === this.session.clientId);
-      const sessionProjectId = stringValue3(matchingSession?.projectId);
-      const webRuntime = objectValue2(body?.webRuntime);
-      const automationStudio = objectValue2(webRuntime?.automationStudio);
-      const activeProjectId = stringValue3(automationStudio?.activeProjectId);
-      const projectId = sessionProjectId ?? activeProjectId;
-      if (!projectId) return void 0;
-      this.session = compactObject2({ ...this.session, projectId });
-      this.activeRecordingProjectId ??= projectId;
-      await writeSession(this.session);
-      this.addActivity("recording", "Project context linked", projectId, "success");
-      return projectId;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Project context lookup failed.";
-      this.addActivity("recording", "Project context unavailable", message, "warning");
-      return void 0;
-    }
-  }
-  noteScreenshotSkipped(message) {
-    const now = Date.now();
-    if (this.lastScreenshotSkipAt !== void 0 && now - this.lastScreenshotSkipAt < 2e3) return;
-    this.lastScreenshotSkipAt = now;
-    console.warn("FluxIQ screenshot skipped", {
-      message,
-      sessionId: this.session.sessionId,
-      clientId: this.session.clientId,
-      projectId: this.session.projectId,
-      activeRecordingProjectId: this.activeRecordingProjectId,
-      activeTabId: this.activeTabId,
-      coreApiUrl: this.settings.coreApiUrl
-    });
-    this.addActivity("snapshot", "Screenshot skipped", message, "warning");
   }
 };
-function compactObject2(value) {
-  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
+
+// src/background/connection/browser-state.ts
+function unsupportedPageForUrl(url) {
+  if (!url) return void 0;
+  if (/^(chrome|edge|brave|opera|vivaldi|about|moz-extension|chrome-extension):\/\//.test(url)) {
+    return { url, reason: "Browser and extension pages cannot be recorded." };
+  }
+  if (/^https:\/\/chrome\.google\.com\/webstore/.test(url)) {
+    return { url, reason: "Browser web store pages cannot be recorded." };
+  }
+  return void 0;
 }
-function isExecutableRecordedAction(payload) {
-  return recordedInputId(payload) !== void 0;
-}
-function shouldRequireStateForEvidence(payload) {
-  return isExecutableRecordedAction(payload) || payload.kind === "action.result" || payload.kind === "browser.navigation" || payload.kind === "dom.click" || payload.kind === "dom.input" || payload.kind === "dom.change" || payload.kind === "dom.submit" || payload.kind === "dom.keydown";
-}
-function isNavigationExplanation(payload) {
-  return payload.kind === "dom.click" || payload.kind === "dom.submit";
-}
-function stateScreenshotEventKey(payload) {
-  return `${payload.kind}:${payload.sequence}:${payload.eventTimestampMs}`;
-}
-function clickEventSignature(payload, tabId, frameId) {
-  const element = payload.element;
-  if (!element) return void 0;
-  const bounds = rectValue(element.bounds);
-  return [
-    tabId ?? "tab",
-    frameId ?? "frame",
-    element.selector,
-    bounds ? Math.round(bounds.x) : "",
-    bounds ? Math.round(bounds.y) : "",
-    bounds ? Math.round(bounds.width) : "",
-    bounds ? Math.round(bounds.height) : ""
-  ].join("|");
-}
-function recordedInputId(payload) {
-  return webAutomationInputIdForRecordedEvent({
-    kind: payload.kind,
-    url: payload.url,
-    title: payload.title,
-    sequence: payload.sequence,
-    ...payload.element ? { element: elementTarget(payload.element) } : {},
-    ...payload.visualTarget ? { visualTarget: payload.visualTarget } : {},
-    ...payload.inputValue !== void 0 ? { inputValue: payload.inputValue } : {},
-    ...payload.key !== void 0 ? { key: payload.key } : {},
-    ...payload.scroll ? { scroll: payload.scroll } : {},
-    ...payload.metadata ? { metadata: payload.metadata } : {}
+function browserStateFromTabs(active, tabs, recordingState) {
+  return createWebAutomationStateUpdate({
+    ...active?.tabId === void 0 ? {} : { activeContextId: String(active.tabId) },
+    recording: recordingState === "recording",
+    contexts: tabs.map((tab) => compactObject2({
+      contextId: String(tab.tabId),
+      url: tab.url,
+      title: tab.title,
+      faviconUrl: tab.favIconUrl,
+      active: tab.active,
+      metadata: compactObject2({
+        kind: "browser.tab",
+        windowId: tab.windowId,
+        status: tab.status
+      })
+    })),
+    state: browserStateSnapshotFromTabs(active, tabs, recordingState, Date.now()),
+    metadata: { inputId: WEB_AUTOMATION_INPUT_IDS.browserState }
   });
 }
-function recordingEvidencePayload(payload) {
-  const visualTarget = visualTargetFromPayload(payload);
+function browserStateSnapshotFromTabs(active, tabs, recordingState, timestamp, sourceId) {
+  const options = {
+    timestamp,
+    recording: recordingState === "recording",
+    permissions: ["activeTab", "scripting", "storage", "tabs"]
+  };
+  if (sourceId !== void 0) options.sourceId = sourceId;
+  return createWebAutomationStateFromTabs(active, tabs, options);
+}
+function describeActiveTabLike(tab) {
+  const result = {
+    tabId: tab.id ?? -1
+  };
+  if (tab.windowId !== void 0) result.windowId = tab.windowId;
+  if (tab.url !== void 0) result.url = tab.url;
+  if (tab.title !== void 0) result.title = tab.title;
+  if (tab.active !== void 0) result.active = tab.active;
+  if (tab.status !== void 0) result.status = tab.status;
+  return result;
+}
+function actionTypesFromCapabilities(capabilities) {
+  return [...new Set(capabilities.flatMap((capability) => capability.actionTypes ?? []))];
+}
+
+// src/background/connection/content-attachment.ts
+var ContentAttachment = class {
+  constructor(deps) {
+    this.deps = deps;
+  }
+  // A tab joining a recording late still has a URL the recording never saw.
+  // Claiming it here stops that URL arriving as a navigation the user made.
+  async attachTabForRecording(tabId) {
+    if (this.deps.isRecording() && !this.deps.hasRecordedTab(tabId)) {
+      const tab = await chrome.tabs.get(tabId);
+      if (tab.url && !unsupportedPageForUrl(tab.url)) this.deps.noteRecordedTab(tabId, tab.url, Date.now());
+    }
+    await this.deps.ensureContentScript(tabId);
+    await this.setRecordingState(tabId, this.deps.isRecording());
+  }
+  async setRecordingState(tabId, recording, frameId) {
+    await this.deps.sendToTab(tabId, { type: "recording", recording, settings: this.deps.settings() }, frameId);
+  }
+  async broadcast(message, injectMissing) {
+    const tabs = await chrome.tabs.query({});
+    await Promise.allSettled(tabs.map(async (tab) => {
+      if (tab.id === void 0 || unsupportedPageForUrl(tab.url)) return;
+      if (injectMissing) await this.deps.ensureContentScript(tab.id);
+      await this.deps.sendToTab(tab.id, message);
+    }));
+  }
+};
+
+// src/background/connection/core-api.ts
+async function fetchCoreRecordings(credentials, page, pageSize) {
+  const normalizedPageSize = Math.min(50, Math.max(5, Math.floor(pageSize) || 10));
+  const normalizedPage = Math.max(1, Math.floor(page) || 1);
+  const sourceUrl = recordingsApiUrl(credentials.coreApiUrl, normalizedPage, normalizedPageSize);
+  const response = await fetch(sourceUrl, {
+    headers: compactObject2({
+      accept: "application/json",
+      ...credentials.token ? { authorization: `Bearer ${credentials.token}` } : {}
+    })
+  });
+  if (!response.ok) throw new Error(`FluxIQ recordings API returned ${response.status}.`);
+  return normalizeRecordingsResponse(await response.json(), normalizedPage, normalizedPageSize, sourceUrl);
+}
+async function fetchProjectIdFromCoreSnapshot(credentials, identity, reason) {
+  const url = new URL("/api/client-gateway/snapshot", credentials.coreApiUrl || DEFAULT_CORE_API_URL);
+  const response = await fetch(url.toString(), {
+    headers: compactObject2({
+      accept: "application/json",
+      authorization: `Bearer ${credentials.token}`
+    })
+  });
+  const bodyText = await response.text().catch(() => "");
+  const payload = parseJsonBody(bodyText);
+  console.info("FluxIQ project context lookup", {
+    url: url.toString(),
+    status: response.status,
+    reason,
+    body: payload ?? bodyText
+  });
+  if (!response.ok) return void 0;
+  const root = objectValue2(payload);
+  if (root?.ok !== true) return void 0;
+  const body = objectValue2(root.payload);
+  const sessions = arrayValue(body?.sessions);
+  const matchingSession = sessions.map(objectValue2).find((session) => session && stringValue3(session.sessionId) === identity.sessionId) ?? sessions.map(objectValue2).find((session) => session && stringValue3(session.clientId) === identity.clientId);
+  const sessionProjectId = stringValue3(matchingSession?.projectId);
+  const webRuntime = objectValue2(body?.webRuntime);
+  const automationStudio = objectValue2(webRuntime?.automationStudio);
+  const activeProjectId = stringValue3(automationStudio?.activeProjectId);
+  return sessionProjectId ?? activeProjectId;
+}
+async function uploadStateAsset(credentials, projectId, sha256, bytes, mediaType) {
+  const url = new URL(`/api/programs/automation-studio/state-assets/${encodeURIComponent(projectId)}/${sha256}`, credentials.coreApiUrl || DEFAULT_CORE_API_URL);
+  const response = await fetch(url.toString(), {
+    method: "PUT",
+    headers: compactObject2({
+      "content-type": mediaType,
+      "x-content-sha256": sha256,
+      ...credentials.token ? { authorization: `Bearer ${credentials.token}` } : {}
+    }),
+    body: bytes
+  });
+  const bodyText = await response.text().catch(() => "");
+  const payload = parseJsonBody(bodyText);
+  console.info("FluxIQ screenshot upload", {
+    url: url.toString(),
+    status: response.status,
+    body: payload ?? bodyText
+  });
+  const responseObject = objectValue2(payload);
+  const responsePayload = objectValue2(responseObject?.payload);
+  const contentRef = stringValue3(responsePayload?.contentRef);
+  if (!response.ok || responseObject?.ok !== true || !contentRef) {
+    throw new Error(`FluxIQ state asset upload failed (${response.status}).`);
+  }
+  return contentRef;
+}
+function recordingsApiUrl(coreApiUrl, page, pageSize) {
+  const url = new URL("/api/recordings", coreApiUrl || DEFAULT_CORE_API_URL);
+  url.searchParams.set("page", String(page));
+  url.searchParams.set("pageSize", String(pageSize));
+  return url.toString();
+}
+function normalizeRecordingsResponse(value, page, pageSize, sourceUrl) {
+  const object = value && typeof value === "object" ? value : {};
+  const rawItems = Array.isArray(object.items) ? object.items : Array.isArray(object.recordings) ? object.recordings : [];
+  return {
+    items: rawItems.map(normalizeRecordingSummary).filter((item) => Boolean(item)),
+    page: numberValue3(object.page) ?? page,
+    pageSize: numberValue3(object.pageSize) ?? pageSize,
+    total: numberValue3(object.total),
+    sourceUrl
+  };
+}
+function normalizeRecordingSummary(value) {
+  if (!value || typeof value !== "object") return void 0;
+  const object = value;
+  const id = stringValue3(object.id) ?? stringValue3(object.recordingId);
+  if (!id) return void 0;
   return compactObject2({
-    kind: payload.kind,
-    url: payload.url,
-    title: payload.title,
-    sequence: payload.sequence,
-    timestamp: payload.eventTimestampMs,
-    element: payload.element,
-    visualTarget,
-    snapshot: payload.snapshot,
-    inputValue: payload.inputValue,
-    key: payload.key,
-    scroll: payload.scroll,
-    mutation: payload.mutation,
-    actionResult: payload.actionResult,
-    metadata: payload.metadata
+    id,
+    title: stringValue3(object.title) ?? stringValue3(object.name) ?? id,
+    status: stringValue3(object.status),
+    projectId: stringValue3(object.projectId),
+    taskId: stringValue3(object.taskId),
+    eventCount: numberValue3(object.eventCount),
+    startedAt: timestampValue(object.startedAt),
+    endedAt: timestampValue(object.endedAt),
+    updatedAt: timestampValue(object.updatedAt)
   });
 }
+
+// src/background/connection/frame-geometry.ts
 function translateFrameElements(frameSnapshot, topSnapshot, frameId) {
   const offset = rectValue(frameSnapshot.frame?.viewportOffset);
   if (!offset) return frameSnapshot.interactiveElements;
@@ -2859,6 +1696,47 @@ function translateFrameDocumentRectToTopDocument(documentBounds, frameSnapshot, 
 function round2(value) {
   return Math.round(value * 100) / 100;
 }
+
+// src/background/connection/dom-snapshot.ts
+var FRAME_SNAPSHOT_TIMEOUT_MS = 150;
+function isDomSnapshotPayload(value) {
+  if (!value || typeof value !== "object") return false;
+  const snapshot = value;
+  return typeof snapshot.url === "string" && typeof snapshot.title === "string" && Boolean(snapshot.viewport) && typeof snapshot.viewport?.width === "number" && typeof snapshot.viewport.height === "number" && typeof snapshot.viewport.scrollX === "number" && typeof snapshot.viewport.scrollY === "number" && Array.isArray(snapshot.interactiveElements);
+}
+function hasSnapshotFrameViewportOffset(snapshot) {
+  const frame = objectValue2(snapshot.frame);
+  const viewportOffset = objectValue2(frame?.viewportOffset);
+  return typeof viewportOffset?.x === "number" && typeof viewportOffset.y === "number" && typeof viewportOffset.width === "number" && typeof viewportOffset.height === "number";
+}
+async function captureSingleFrameSnapshot(transport, tabId, frameId) {
+  const snapshot = await withTimeout(transport.sendToTab(tabId, { type: "captureSnapshot" }, frameId), FRAME_SNAPSHOT_TIMEOUT_MS, void 0);
+  return isDomSnapshotPayload(snapshot) ? snapshot : void 0;
+}
+async function captureMergedTabSnapshot(transport, tabId, seedSnapshot, seedFrameId) {
+  const topFallback = await captureSingleFrameSnapshot(transport, tabId, 0);
+  const fallback = topFallback ?? seedSnapshot;
+  const frames = await withTimeout(transport.allTabFrames(tabId), FRAME_SNAPSHOT_TIMEOUT_MS, []);
+  const frameSnapshots = [];
+  if (seedSnapshot && seedFrameId !== void 0) frameSnapshots.push({ frameId: seedFrameId, snapshot: seedSnapshot });
+  await withTimeout(Promise.allSettled(frames.map(async (frame) => {
+    if (seedFrameId !== void 0 && frame.frameId === seedFrameId && seedSnapshot) return;
+    const snapshot = await captureSingleFrameSnapshot(transport, tabId, frame.frameId);
+    if (snapshot) frameSnapshots.push({ frameId: frame.frameId, snapshot });
+  })), FRAME_SNAPSHOT_TIMEOUT_MS, []);
+  if (!frameSnapshots.length) return fallback;
+  const topSnapshot = frameSnapshots.find((entry) => entry.frameId === 0 || entry.snapshot.frame?.isTop)?.snapshot ?? topFallback;
+  if (!topSnapshot) return void 0;
+  const mergedElements = [];
+  for (const entry of frameSnapshots) {
+    const elements = entry.snapshot === topSnapshot || entry.snapshot.frame?.isTop ? entry.snapshot.interactiveElements : translateFrameElements(entry.snapshot, topSnapshot, entry.frameId);
+    mergedElements.push(...elements);
+  }
+  return {
+    ...topSnapshot,
+    interactiveElements: mergedElements
+  };
+}
 function withTimeout(promise, timeoutMs, fallback) {
   return new Promise((resolve) => {
     const timer = setTimeout(() => resolve(fallback), timeoutMs);
@@ -2871,28 +1749,50 @@ function withTimeout(promise, timeoutMs, fallback) {
     });
   });
 }
-function stateSnapshotIdFromPayload(payload) {
-  const kind = payload.kind.replace(/[^a-z0-9_.-]+/gi, "-");
-  return `state.${kind}.${payload.sequence}.${payload.eventTimestampMs}`;
+
+// src/background/connection/event-sequence.ts
+var EventSequence = class {
+  counter = 0;
+  // Event IDs include this sequence. Date.now() alone collides when related
+  // startup events are emitted in the same millisecond.
+  next() {
+    this.counter = (this.counter + 1) % 1e3;
+    return Date.now() * 1e3 + this.counter;
+  }
+};
+
+// src/background/connection/gateway-payloads.ts
+function recordedInputId(payload) {
+  return webAutomationInputIdForRecordedEvent({
+    kind: payload.kind,
+    url: payload.url,
+    title: payload.title,
+    sequence: payload.sequence,
+    ...payload.element ? { element: elementTarget(payload.element) } : {},
+    ...payload.visualTarget ? { visualTarget: payload.visualTarget } : {},
+    ...payload.inputValue !== void 0 ? { inputValue: payload.inputValue } : {},
+    ...payload.key !== void 0 ? { key: payload.key } : {},
+    ...payload.scroll ? { scroll: payload.scroll } : {},
+    ...payload.metadata ? { metadata: payload.metadata } : {}
+  });
 }
-function browserStateFromTabs(active, tabs, recordingState) {
-  return createWebAutomationStateUpdate({
-    ...active?.tabId === void 0 ? {} : { activeContextId: String(active.tabId) },
-    recording: recordingState === "recording",
-    contexts: tabs.map((tab) => compactObject2({
-      contextId: String(tab.tabId),
-      url: tab.url,
-      title: tab.title,
-      faviconUrl: tab.favIconUrl,
-      active: tab.active,
-      metadata: compactObject2({
-        kind: "browser.tab",
-        windowId: tab.windowId,
-        status: tab.status
-      })
-    })),
-    state: browserStateSnapshotFromTabs(active, tabs, recordingState, Date.now()),
-    metadata: { inputId: WEB_AUTOMATION_INPUT_IDS.browserState }
+function recordingEvidencePayload(payload) {
+  const visualTarget = visualTargetFromPayload(payload);
+  return compactObject2({
+    kind: payload.kind,
+    url: payload.url,
+    title: payload.title,
+    sequence: payload.sequence,
+    timestamp: payload.eventTimestampMs,
+    element: payload.element,
+    visualTarget,
+    snapshot: payload.snapshot,
+    inputValue: payload.inputValue,
+    key: payload.key,
+    scroll: payload.scroll,
+    mutation: payload.mutation,
+    actionResult: payload.actionResult,
+    metadata: payload.metadata
   });
 }
 function gatewayRecordingEventFromPayload(payload, tabId, frameId, recordingId) {
@@ -2943,40 +1843,541 @@ function elementTarget(element) {
 function visualTargetFromPayload(payload) {
   return payload.visualTarget ?? (payload.element ? webAutomationActionVisualTargetFromElement(payload.element) : void 0);
 }
-function stringValue3(value) {
-  return typeof value === "string" ? value : void 0;
+
+// ../../../!FluxIQ/packages/contracts/src/client-gateway.ts
+var CLIENT_GATEWAY_PROTOCOL_VERSION = "0.1";
+
+// ../../../!FluxIQ/packages/client-gateway-websocket/dist/messages.js
+function createClientGatewayMessage(type, payload, options = {}) {
+  return {
+    id: options.idFactory?.() ?? `client-message.${Math.random().toString(36).slice(2)}`,
+    type,
+    protocolVersion: CLIENT_GATEWAY_PROTOCOL_VERSION,
+    timestamp: options.now?.() ?? Date.now(),
+    ...options.sessionId !== void 0 ? { sessionId: options.sessionId } : {},
+    ...options.clientId !== void 0 ? { clientId: options.clientId } : {},
+    ...options.correlationId !== void 0 ? { correlationId: options.correlationId } : {},
+    payload
+  };
 }
-function objectValue2(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+function parseServerMessage(data) {
+  const text = typeof data === "string" ? data : data instanceof ArrayBuffer ? new TextDecoder().decode(data) : "";
+  if (!text)
+    return null;
+  const parsed = JSON.parse(text);
+  if (typeof parsed.type !== "string" || !parsed.type.startsWith("server."))
+    return null;
+  return parsed;
 }
-function arrayValue(value) {
-  return Array.isArray(value) ? value : [];
-}
-function parseJsonBody(text) {
-  if (!text) return void 0;
-  try {
-    return JSON.parse(text);
-  } catch {
-    return void 0;
+
+// ../../../!FluxIQ/packages/client-gateway-websocket/dist/transport.js
+var FluxIQClientGatewayWebSocketClient = class {
+  options;
+  handlers = /* @__PURE__ */ new Map();
+  socket = null;
+  sessionId;
+  token;
+  constructor(options) {
+    this.options = options;
   }
-}
-function numberValue3(value) {
-  return typeof value === "number" ? value : void 0;
-}
-function rectValue(value) {
-  if (!value || typeof value !== "object") return void 0;
-  const rect = value;
-  return typeof rect.x === "number" && typeof rect.y === "number" && typeof rect.width === "number" && typeof rect.height === "number" ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : void 0;
-}
-function unsupportedPageForUrl(url) {
-  if (!url) return void 0;
-  if (/^(chrome|edge|brave|opera|vivaldi|about|moz-extension|chrome-extension):\/\//.test(url)) {
-    return { url, reason: "Browser and extension pages cannot be recorded." };
+  get connected() {
+    return Boolean(this.socket && this.socket.readyState === 1);
   }
-  if (/^https:\/\/chrome\.google\.com\/webstore/.test(url)) {
-    return { url, reason: "Browser web store pages cannot be recorded." };
+  get currentSessionId() {
+    return this.sessionId;
   }
-  return void 0;
+  async connect() {
+    if (this.socket && this.socket.readyState <= 1)
+      return;
+    const WebSocketImpl = this.options.WebSocketImpl ?? globalThis.WebSocket;
+    if (!WebSocketImpl)
+      throw new Error("A WebSocket implementation is required.");
+    const socket = new WebSocketImpl(this.options.url ?? "ws://127.0.0.1:4777/client");
+    this.socket = socket;
+    await waitForOpen(socket);
+    this.attachSocketHandlers(socket);
+    this.emit({ type: "open" });
+    const storedToken = await this.options.tokenStorage?.read();
+    this.token = this.options.client.token ?? storedToken;
+    await this.send("client.hello", {
+      ...this.options.client,
+      ...this.token ? { token: this.token } : {}
+    });
+  }
+  async close(code, reason) {
+    this.socket?.close(code, reason);
+    this.socket = null;
+  }
+  on(type, handler) {
+    const set = this.handlers.get(type) ?? /* @__PURE__ */ new Set();
+    set.add(handler);
+    this.handlers.set(type, set);
+    return () => set.delete(handler);
+  }
+  async send(type, payload, options = {}) {
+    const message = {
+      id: this.options.idFactory?.() ?? `client-message.${Math.random().toString(36).slice(2)}`,
+      type,
+      protocolVersion: CLIENT_GATEWAY_PROTOCOL_VERSION,
+      timestamp: this.options.now?.() ?? Date.now(),
+      ...this.sessionId !== void 0 ? { sessionId: this.sessionId } : {},
+      ...this.options.client.clientId !== void 0 ? { clientId: this.options.client.clientId } : {},
+      ...options.correlationId !== void 0 ? { correlationId: options.correlationId } : {},
+      payload
+    };
+    const socket = this.socket;
+    if (!socket || socket.readyState !== 1)
+      throw new Error("FluxIQ client gateway WebSocket is not connected.");
+    socket.send(JSON.stringify(message));
+    return message;
+  }
+  async sendStateUpdate(state) {
+    return await this.send("client.state_update", state);
+  }
+  async sendRecordingEvent(event) {
+    return await this.send("client.recording_event", event);
+  }
+  async sendSnapshot(snapshot) {
+    return await this.send("client.snapshot", snapshot);
+  }
+  async sendActionResult(result) {
+    return await this.send("client.action_result", result);
+  }
+  async sendError(message, input = {}) {
+    return await this.send("client.error", {
+      message,
+      ...input.code !== void 0 ? { code: input.code } : {},
+      ...input.metadata !== void 0 ? { metadata: input.metadata } : {}
+    });
+  }
+  attachSocketHandlers(socket) {
+    addListener(socket, "message", (event) => {
+      const data = typeof event === "object" && event && "data" in event ? event.data : event;
+      const message = parseServerMessage(data);
+      if (message)
+        void this.handleServerMessage(message);
+    });
+    addListener(socket, "close", (event) => {
+      this.socket = null;
+      this.emit({ type: "close", event });
+    });
+    addListener(socket, "error", (event) => this.emit({ type: "error", event }));
+  }
+  async handleServerMessage(message) {
+    if (message.sessionId)
+      this.sessionId = message.sessionId;
+    this.emit({ type: "message", message });
+    if (message.type === "server.session_ready") {
+      this.sessionId = message.payload.sessionId;
+      this.token = message.payload.token;
+      await this.options.tokenStorage?.write(message.payload.token);
+      this.emit({ type: "session_ready", message });
+      return;
+    }
+    if (message.type === "server.pairing_required")
+      this.emit({ type: "pairing_required", message });
+    else if (message.type === "server.start_recording")
+      this.emit({ type: "start_recording", message });
+    else if (message.type === "server.stop_recording")
+      this.emit({ type: "stop_recording", message });
+    else if (message.type === "server.capture_snapshot")
+      this.emit({ type: "capture_snapshot", message });
+    else if (message.type === "server.execute_action")
+      this.emit({ type: "execute_action", message });
+  }
+  emit(event) {
+    for (const handler of this.handlers.get(event.type) ?? [])
+      void handler(event);
+  }
+};
+function waitForOpen(socket) {
+  return new Promise((resolve, reject) => {
+    const onOpen = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = (event) => {
+      cleanup();
+      reject(event instanceof Error ? event : new Error("FluxIQ client gateway WebSocket failed to open."));
+    };
+    const cleanup = () => {
+      removeListener(socket, "open", onOpen);
+      removeListener(socket, "error", onError);
+    };
+    addListener(socket, "open", onOpen);
+    addListener(socket, "error", onError);
+  });
+}
+function addListener(socket, type, listener) {
+  if (socket.addEventListener)
+    socket.addEventListener(type, listener);
+  else
+    socket[`on${type}`] = listener;
+}
+function removeListener(socket, type, listener) {
+  if (socket.removeEventListener)
+    socket.removeEventListener(type, listener);
+  else if (socket[`on${type}`] === listener)
+    socket[`on${type}`] = null;
+}
+
+// src/shared/protocol.ts
+var browserExtensionCapabilities = webAutomationClientCapabilities;
+
+// src/background/connection/gateway-session.ts
+var GatewaySession = class {
+  constructor(deps) {
+    this.deps = deps;
+  }
+  client = null;
+  heartbeatTimer;
+  reconnectTimer;
+  reconnectAttempt = 0;
+  connectionState = "disconnected";
+  lastMessageAt;
+  pairingReferenceCode;
+  queueSize = 0;
+  shouldStayConnected = false;
+  state() {
+    return this.connectionState;
+  }
+  statusFields() {
+    return {
+      connectionState: this.connectionState,
+      queueSize: this.queueSize,
+      lastMessageAt: this.lastMessageAt,
+      pairingReferenceCode: this.pairingReferenceCode
+    };
+  }
+  async connect() {
+    this.shouldStayConnected = true;
+    this.clearReconnect();
+    this.setState("connecting");
+    await this.deps.beforeConnect();
+    await this.client?.close();
+    const client = new FluxIQClientGatewayWebSocketClient({
+      url: this.deps.settings().gatewayUrl,
+      client: this.clientHello(),
+      WebSocketImpl: WebSocket,
+      tokenStorage: {
+        read: () => this.deps.session().token,
+        write: async (token) => {
+          const session = this.deps.session();
+          await this.deps.persistSession(compactObject2({
+            ...session,
+            token,
+            serverUrl: this.deps.settings().gatewayUrl,
+            connectedAt: Date.now()
+          }));
+        },
+        clear: async () => {
+          const session = this.deps.session();
+          await this.deps.persistSession(compactObject2({
+            clientId: session.clientId,
+            sessionId: session.sessionId,
+            projectId: session.projectId,
+            serverUrl: this.deps.settings().gatewayUrl,
+            connectedAt: session.connectedAt
+          }));
+        }
+      }
+    });
+    this.client = client;
+    this.attachClientHandlers(client);
+    try {
+      await client.connect();
+    } catch {
+      this.fail("WebSocket connection failed.");
+      if (this.shouldStayConnected && this.deps.settings().autoReconnect) this.scheduleReconnect();
+    }
+  }
+  // Stops the session reconnecting on its own. Separate from closing the socket
+  // so a caller can tear down in its own order.
+  stopReconnecting() {
+    this.shouldStayConnected = false;
+    this.clearReconnect();
+  }
+  closeClient() {
+    this.stopHeartbeat();
+    void this.client?.close();
+    this.client = null;
+  }
+  markDisconnected() {
+    this.setState("disconnected");
+  }
+  markSessionReady() {
+    this.pairingReferenceCode = void 0;
+    this.setState("connected");
+  }
+  markFailed() {
+    this.setState("error");
+  }
+  noteMessageReceived() {
+    this.lastMessageAt = Date.now();
+  }
+  // Sends over the open socket, or persists the message to the offline queue so
+  // it survives a service-worker restart and is flushed on the next session.
+  send = async (type, payload) => {
+    if (this.client?.connected) {
+      await this.client.send(type, payload);
+      return;
+    }
+    const session = this.deps.session();
+    const message = createClientGatewayMessage(type, payload, {
+      clientId: session.clientId,
+      ...session.sessionId !== void 0 ? { sessionId: session.sessionId } : {}
+    });
+    this.queueSize = await this.deps.queue.queueEvent(message);
+    this.deps.emitStatus();
+  };
+  async flushQueue() {
+    if (!this.client?.connected) return;
+    const queued = await this.deps.queue.readQueuedEvents();
+    for (const message of queued) {
+      await this.client.send(message.type, message.payload);
+    }
+    await this.deps.queue.clearQueuedEvents();
+    this.queueSize = 0;
+    this.deps.emitStatus();
+  }
+  setState(state) {
+    this.connectionState = state;
+    this.deps.emitStatus();
+  }
+  onOpen() {
+    this.reconnectAttempt = 0;
+    this.deps.clearError();
+    this.setState(this.deps.session().token ? "connecting" : "pairing");
+    this.startHeartbeat();
+  }
+  onClose() {
+    this.stopHeartbeat();
+    this.client = null;
+    if (this.shouldStayConnected && this.deps.settings().autoReconnect) {
+      this.scheduleReconnect();
+    } else {
+      this.setState("disconnected");
+    }
+  }
+  fail(message) {
+    this.deps.reportError(message);
+    this.setState("error");
+  }
+  clientHello() {
+    const session = this.deps.session();
+    const settings = this.deps.settings();
+    return {
+      clientId: session.clientId,
+      clientType: "extension",
+      name: "FluxIQ Browser Extension",
+      version: browserDescriptor().extensionVersion,
+      ...session.token !== void 0 ? { token: session.token } : {},
+      capabilities: browserExtensionCapabilities,
+      metadata: {
+        domainId: WEB_AUTOMATION_DOMAIN_ID,
+        browser: browserDescriptor(),
+        settings: {
+          captureMutations: settings.captureMutations,
+          captureInputValues: settings.captureInputValues,
+          captureSnapshots: settings.captureSnapshots
+        }
+      }
+    };
+  }
+  attachClientHandlers(client) {
+    const handlers = this.deps.handlers;
+    client.on("open", () => this.onOpen());
+    client.on("close", () => this.onClose());
+    client.on("error", () => this.fail("WebSocket connection failed."));
+    client.on("message", ({ message }) => handlers.onServerMessage(message));
+    client.on("pairing_required", ({ message }) => {
+      this.pairingReferenceCode = message.payload.referenceCode;
+      this.setState("pairing");
+      handlers.onPairingRequired(this.pairingReferenceCode, message.payload.reason);
+    });
+    client.on("session_ready", ({ message }) => handlers.onSessionReady(message));
+    client.on("start_recording", ({ message }) => handlers.onCommand({ ...message.payload, command: "start_recording" }, message.id));
+    client.on("stop_recording", ({ message }) => handlers.onCommand({ ...message.payload, command: "stop_recording" }, message.id));
+    client.on("capture_snapshot", ({ message }) => handlers.onCommand({ ...message.payload, command: "capture_snapshot" }, message.id));
+    client.on("execute_action", ({ message }) => handlers.onCommand({ command: "execute_action", action: browserActionFromGatewayCommand(message.payload) }, message.id));
+  }
+  startHeartbeat() {
+    this.stopHeartbeat();
+    this.heartbeatTimer = setInterval(() => {
+      if (this.connectionState === "connected") this.deps.handlers.onHeartbeat();
+    }, HEARTBEAT_INTERVAL_MS);
+  }
+  stopHeartbeat() {
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    this.heartbeatTimer = void 0;
+  }
+  scheduleReconnect() {
+    if (this.reconnectTimer) return;
+    this.setState("reconnecting");
+    const delay = Math.min(RECONNECT_MAX_DELAY_MS, RECONNECT_BASE_DELAY_MS * 2 ** this.reconnectAttempt);
+    this.reconnectAttempt += 1;
+    this.reconnectTimer = setTimeout(() => void this.connect(), delay);
+  }
+  clearReconnect() {
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = void 0;
+  }
+};
+
+// src/background/connection/navigation-recorder.ts
+var NAVIGATION_DEBOUNCE_MS = 250;
+var INITIAL_NAVIGATION_GRACE_MS = 1e4;
+var EXPLANATORY_ACTION_WINDOW_MS = 5e3;
+var NavigationRecorder = class {
+  pending = /* @__PURE__ */ new Map();
+  lastRecorded = /* @__PURE__ */ new Map();
+  initialUrls = /* @__PURE__ */ new Map();
+  explanatoryActions = /* @__PURE__ */ new Map();
+  noteExplanatoryAction(tabId, timestamp) {
+    this.explanatoryActions.set(tabId, timestamp);
+  }
+  // Collapses the burst of URL, title, and status updates a single load emits
+  // into one deferred call.
+  schedule(tabId, url, record) {
+    const existing = this.pending.get(tabId);
+    if (existing) clearTimeout(existing.timer);
+    const timer = setTimeout(() => {
+      this.pending.delete(tabId);
+      record();
+    }, NAVIGATION_DEBOUNCE_MS);
+    this.pending.set(tabId, { url, timer });
+  }
+  // Decides whether a debounced navigation is recordable, and claims it when it
+  // is so a repeat of the same URL is not recorded twice.
+  shouldRecord(tabId, url, timestamp, explicitlyTyped, recordingStartedAt) {
+    if (recordingStartedAt !== void 0 && timestamp <= recordingStartedAt) return false;
+    const initialUrl = this.initialUrls.get(tabId);
+    if (initialUrl === url && recordingStartedAt !== void 0 && Date.now() - recordingStartedAt < INITIAL_NAVIGATION_GRACE_MS) {
+      this.initialUrls.delete(tabId);
+      return false;
+    }
+    const explainedAt = this.explanatoryActions.get(tabId);
+    if (!explicitlyTyped && explainedAt !== void 0 && timestamp - explainedAt >= 0 && timestamp - explainedAt < EXPLANATORY_ACTION_WINDOW_MS) return false;
+    const previous = this.lastRecorded.get(tabId);
+    if (previous?.url === url) return false;
+    this.lastRecorded.set(tabId, { url, timestamp });
+    return true;
+  }
+  hasRecordedTab(tabId) {
+    return this.lastRecorded.has(tabId);
+  }
+  noteRecordedTab(tabId, url, timestamp) {
+    this.lastRecorded.set(tabId, { url, timestamp });
+  }
+  // Every tab a recording starts with already sits on a URL. Remembering both
+  // stops that URL being recorded as a navigation the user made.
+  seedRecordingTab(tabId, url, timestamp) {
+    this.lastRecorded.set(tabId, { url, timestamp });
+    this.initialUrls.set(tabId, url);
+  }
+  clearRecordingTabs() {
+    this.lastRecorded.clear();
+    this.initialUrls.clear();
+  }
+};
+
+// src/background/connection/pointer-click-filter.ts
+var POINTER_CLICK_SUPPRESS_DELAY_MS = 750;
+var PointerClickFilter = class {
+  suppressed = /* @__PURE__ */ new Map();
+  suppressNext(signature) {
+    if (this.suppressed.has(signature)) return;
+    const timer = setTimeout(() => {
+      this.suppressed.delete(signature);
+    }, POINTER_CLICK_SUPPRESS_DELAY_MS);
+    this.suppressed.set(signature, timer);
+  }
+  isSuppressed(signature) {
+    return this.suppressed.has(signature);
+  }
+  clear() {
+    for (const timer of this.suppressed.values()) clearTimeout(timer);
+    this.suppressed.clear();
+  }
+};
+
+// src/background/connection/project-context.ts
+var ProjectContext = class {
+  constructor(deps) {
+    this.deps = deps;
+  }
+  // null is meaningful: Core accepted the recording and told us it has no
+  // project, which is different from not yet knowing.
+  activeRecordingProjectId;
+  activeRecordingProject() {
+    return this.activeRecordingProjectId;
+  }
+  setActiveRecordingProject(projectId) {
+    this.activeRecordingProjectId = projectId;
+  }
+  current() {
+    const value = this.activeRecordingProjectId ?? this.deps.session().projectId;
+    return typeof value === "string" && value.trim() ? value : void 0;
+  }
+  async resolve(reason) {
+    const current = this.current();
+    if (current) return current;
+    const hydrated = await this.hydrateFromCoreSnapshot(reason);
+    return hydrated ?? this.current();
+  }
+  async hydrateFromCoreSnapshot(reason) {
+    const session = this.deps.session();
+    const token = session.token;
+    if (!token) return void 0;
+    try {
+      const projectId = await fetchProjectIdFromCoreSnapshot(
+        { coreApiUrl: this.deps.settings().coreApiUrl, token },
+        { sessionId: session.sessionId, clientId: session.clientId },
+        reason
+      );
+      if (!projectId) return void 0;
+      this.activeRecordingProjectId ??= projectId;
+      await this.deps.adoptProjectId(projectId);
+      this.deps.onActivity("recording", "Project context linked", projectId, "success");
+      return projectId;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Project context lookup failed.";
+      this.deps.onActivity("recording", "Project context unavailable", message, "warning");
+      return void 0;
+    }
+  }
+};
+
+// src/background/connection/recorded-event.ts
+function isExecutableRecordedAction(payload) {
+  return recordedInputId(payload) !== void 0;
+}
+function shouldRequireStateForEvidence(payload) {
+  return isExecutableRecordedAction(payload) || payload.kind === "action.result" || payload.kind === "browser.navigation" || payload.kind === "dom.click" || payload.kind === "dom.input" || payload.kind === "dom.change" || payload.kind === "dom.submit" || payload.kind === "dom.keydown";
+}
+function isNavigationExplanation(payload) {
+  return payload.kind === "dom.click" || payload.kind === "dom.submit";
+}
+function stateScreenshotEventKey(payload) {
+  return `${payload.kind}:${payload.sequence}:${payload.eventTimestampMs}`;
+}
+function stateSnapshotIdFromPayload(payload) {
+  const kind = payload.kind.replace(/[^a-z0-9_.-]+/gi, "-");
+  return `state.${kind}.${payload.sequence}.${payload.eventTimestampMs}`;
+}
+function clickEventSignature(payload, tabId, frameId) {
+  const element = payload.element;
+  if (!element) return void 0;
+  const bounds = rectValue(element.bounds);
+  return [
+    tabId ?? "tab",
+    frameId ?? "frame",
+    element.selector,
+    bounds ? Math.round(bounds.x) : "",
+    bounds ? Math.round(bounds.y) : "",
+    bounds ? Math.round(bounds.width) : "",
+    bounds ? Math.round(bounds.height) : ""
+  ].join("|");
 }
 function activityLabel(payload) {
   if (payload.kind === "dom.click") return "Click";
@@ -3000,6 +2401,307 @@ function activityDetail(payload) {
   if (payload.url) return payload.url;
   return void 0;
 }
+
+// src/background/connection/recording-manifest.ts
+function eventSourceId(clientId) {
+  return `client.${clientId}.events`;
+}
+function observationSourceId(clientId) {
+  return `client.${clientId}.observations`;
+}
+function stateSourceId(clientId) {
+  return `client.${clientId}.state`;
+}
+function tabSourceId(tabId, frameId) {
+  return `tab:${tabId}${frameId === void 0 ? "" : `:frame:${frameId}`}`;
+}
+function recordingEnvironment(clientId, activeTabUrl) {
+  return compactObject2({
+    id: `client.${clientId}.browser`,
+    label: "FluxIQ Browser Extension",
+    kind: "browser_extension",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    capabilities: browserExtensionCapabilities.map((capability) => capability.id),
+    metadata: compactObject2({
+      browser: browserDescriptor(),
+      activeTabUrl
+    })
+  });
+}
+function recordingSources(clientId) {
+  return [
+    { id: eventSourceId(clientId), label: "Browser events", kind: "event", schemaId: WEB_AUTOMATION_DOMAIN_ID, metadata: { clientId } },
+    { id: observationSourceId(clientId), label: "Browser observations", kind: "observation", schemaId: WEB_AUTOMATION_DOMAIN_ID, metadata: { clientId } },
+    { id: stateSourceId(clientId), label: "Browser state", kind: "state", schemaId: WEB_AUTOMATION_DOMAIN_ID, metadata: { clientId } }
+  ];
+}
+function recordingActionChannels(clientId) {
+  return [{
+    id: `client.${clientId}.actions`,
+    label: "Browser action channel",
+    actionTypes: actionTypesFromCapabilities(browserExtensionCapabilities),
+    capabilities: browserExtensionCapabilities.map((capability) => capability.id),
+    metadata: { clientId }
+  }];
+}
+
+// src/background/connection/recording-evidence.ts
+var SCREENSHOT_SKIP_LOG_INTERVAL_MS = 2e3;
+var RecordingEvidenceReporter = class {
+  constructor(deps) {
+    this.deps = deps;
+  }
+  lastScreenshotSkipAt;
+  // Each await is a chance for the recording to have stopped underneath us, so
+  // the guard is repeated rather than checked once at the top.
+  async sendRecordingEvidence(payload, tabId, frameId) {
+    if (this.deps.recordingState() !== "recording") return;
+    const projectId = await this.deps.resolveProjectId("recording_evidence");
+    if (this.deps.recordingState() !== "recording") return;
+    const snapshot = await this.captureDomSnapshotForEvidence(payload, tabId, frameId);
+    if (this.deps.recordingState() !== "recording") return;
+    const hasDomSnapshot = isDomSnapshotPayload(snapshot);
+    const state = hasDomSnapshot ? await this.createStateFromDomSnapshot(snapshot, {
+      timestamp: payload.eventTimestampMs,
+      eventKey: stateScreenshotEventKey(payload),
+      ...projectId ? { projectId } : {},
+      ...tabId === void 0 ? {} : {
+        sourceId: tabSourceId(tabId),
+        tabId
+      }
+    }) : compactObject2({
+      latestEvidence: recordingEvidencePayload(payload)
+    });
+    if (this.deps.recordingState() !== "recording") return;
+    const stateTimestampMs = numberValue3(objectValue2(state)?.timestamp) ?? payload.eventTimestampMs;
+    if (hasDomSnapshot) {
+      const snapshotId = stateSnapshotIdFromPayload(payload);
+      await this.deps.send("client.snapshot", compactObject2({
+        snapshotId,
+        timestamp: stateTimestampMs,
+        kind: "state",
+        state,
+        metadata: compactObject2({
+          reason: "recording-evidence",
+          clientKind: payload.kind,
+          eventTimestampMs: payload.eventTimestampMs,
+          stateTimestampMs,
+          sequence: payload.sequence,
+          ...tabId === void 0 ? {} : { tabId },
+          ...frameId === void 0 ? {} : { frameId },
+          ...payload.metadata ?? {}
+        })
+      }));
+      return;
+    }
+    await this.deps.send("client.state_update", createWebAutomationStateUpdate({
+      ...tabId === void 0 ? {} : { activeContextId: String(tabId) },
+      state,
+      metadata: compactObject2({
+        reason: "recording-evidence",
+        inputId: WEB_AUTOMATION_INPUT_IDS.recordingEvidence,
+        clientKind: payload.kind,
+        eventTimestampMs: payload.eventTimestampMs,
+        stateTimestampMs,
+        ...tabId === void 0 ? {} : { tabId },
+        ...frameId === void 0 ? {} : { frameId },
+        ...payload.metadata ?? {}
+      })
+    }));
+  }
+  // The state a recording opens with. Falls back to browser tab state when the
+  // page cannot be snapshotted.
+  async buildInitialRecordingState(timestamp) {
+    const tabId = this.deps.activeTabId();
+    if (tabId !== void 0 && !this.deps.unsupportedPage()) {
+      try {
+        await this.deps.attachTabForRecording(tabId);
+        const snapshot = await this.deps.transport.sendToTab(tabId, { type: "captureSnapshot" });
+        if (isDomSnapshotPayload(snapshot)) {
+          const projectId = await this.deps.resolveProjectId("initial_state");
+          return await this.createStateFromDomSnapshot(snapshot, {
+            timestamp,
+            ...projectId ? { projectId } : {},
+            tabId,
+            sourceId: tabSourceId(tabId)
+          });
+        }
+      } catch {
+      }
+    }
+    return browserStateSnapshotFromTabs(
+      await this.deps.activeTab(),
+      await this.deps.allTabs(),
+      this.deps.recordingState(),
+      timestamp,
+      eventSourceId(this.deps.clientId())
+    );
+  }
+  async captureActiveSnapshot(label) {
+    const tabId = this.deps.activeTabId();
+    if (tabId === void 0) return;
+    const unsupported = this.deps.unsupportedPage();
+    if (unsupported) {
+      this.deps.onActivity("snapshot", "Snapshot skipped", unsupported.reason, "warning");
+      return;
+    }
+    try {
+      await this.deps.attachTabForRecording(tabId);
+      const snapshot = await this.deps.transport.sendToTab(tabId, { type: "captureSnapshot" });
+      await this.deps.send("client.snapshot", await this.gatewaySnapshotFromDomSnapshot(snapshot, tabId));
+      this.deps.onActivity("snapshot", label, this.deps.activeTabUrl());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Content script is unavailable.";
+      this.deps.setUnsupportedPage({ url: this.deps.activeTabUrl(), reason: message });
+      this.deps.onActivity("snapshot", "Snapshot failed", message, "warning");
+      this.deps.emitStatus();
+    }
+  }
+  // The content script's own snapshot can be missing or frame-local. Re-reading
+  // the tab recovers a merged one; failing that, the event goes out without.
+  async captureDomSnapshotForEvidence(payload, tabId, frameId) {
+    if (tabId === void 0 || this.deps.unsupportedPage() || !shouldRequireStateForEvidence(payload)) return void 0;
+    try {
+      await this.deps.ensureContentScript(tabId);
+      const snapshot = await captureMergedTabSnapshot(this.deps.transport, tabId, isDomSnapshotPayload(payload.snapshot) ? payload.snapshot : void 0, frameId);
+      if (isDomSnapshotPayload(snapshot)) {
+        console.info("FluxIQ evidence snapshot recovered", {
+          kind: payload.kind,
+          sequence: payload.sequence,
+          tabId,
+          frameId
+        });
+        return snapshot;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Fallback DOM snapshot failed.";
+      console.warn("FluxIQ evidence snapshot unavailable", {
+        kind: payload.kind,
+        sequence: payload.sequence,
+        tabId,
+        frameId,
+        message
+      });
+    }
+    return void 0;
+  }
+  async createStateFromDomSnapshot(snapshot, input) {
+    let screenContentRef;
+    let stateSnapshot = snapshot;
+    let stateTimestamp = input.timestamp;
+    let visualSample;
+    let missingScreenReason;
+    const hasFrameViewportOffset = hasSnapshotFrameViewportOffset(snapshot);
+    const canAttachFullTabScreenshot = input.frameId === void 0 || input.frameId === 0 || hasFrameViewportOffset;
+    if (input.projectId && input.tabId !== void 0 && canAttachFullTabScreenshot) {
+      visualSample = await this.deps.stateAssets.captureFreshVisualSample(input.tabId, input.projectId, input.timestamp, input.eventKey);
+      screenContentRef = visualSample?.screenContentRef;
+      if (visualSample?.snapshot) stateSnapshot = visualSample.snapshot;
+      if (!screenContentRef) missingScreenReason = "screenshot capture or upload failed";
+    } else {
+      missingScreenReason = input.frameId !== void 0 && input.frameId !== 0 ? "frame-local state missing iframe viewport offset" : input.projectId ? "no tab id" : "no project id";
+      this.noteScreenshotSkipped(input.frameId !== void 0 && input.frameId !== 0 ? "Frame-local state cannot be safely paired with a full-tab screenshot until iframe viewport offset is available." : input.projectId ? "No active tab id available for screenshot capture." : "No project id available for screenshot upload.");
+    }
+    const options = { timestamp: stateTimestamp };
+    if (input.sourceId !== void 0) options.sourceId = input.sourceId;
+    if (input.projectId !== void 0) options.projectId = input.projectId;
+    if (screenContentRef !== void 0) options.screenContentRef = screenContentRef;
+    if (visualSample?.screenImageSize !== void 0) options.screenImageSize = visualSample.screenImageSize;
+    const state = createWebAutomationStateFromSnapshot(stateSnapshot, options);
+    if (missingScreenReason) {
+      console.warn("FluxIQ state snapshot missing screenshot", {
+        reason: missingScreenReason,
+        timestamp: input.timestamp,
+        stateTimestamp,
+        sourceId: input.sourceId,
+        projectId: input.projectId,
+        tabId: input.tabId,
+        frameId: input.frameId
+      });
+      this.deps.onActivity("snapshot", "State screenshot missing", missingScreenReason, "warning");
+      const metadata = objectValue2(state.metadata);
+      return {
+        ...state,
+        metadata: compactObject2({
+          ...metadata ?? {},
+          missingScreenReason
+        })
+      };
+    }
+    return state;
+  }
+  async gatewaySnapshotFromDomSnapshot(snapshot, tabId) {
+    const timestamp = Date.now();
+    const projectId = await this.deps.resolveProjectId("snapshot");
+    const state = isDomSnapshotPayload(snapshot) ? await this.createStateFromDomSnapshot(snapshot, {
+      timestamp,
+      ...projectId ? { projectId } : {},
+      ...tabId === void 0 ? {} : { tabId },
+      ...tabId === void 0 ? {} : { sourceId: tabSourceId(tabId) }
+    }) : void 0;
+    return compactObject2({
+      snapshotId: `dom.${timestamp}`,
+      timestamp,
+      kind: state ? "state" : "structured",
+      ...state !== void 0 ? { state } : {},
+      payload: snapshot
+    });
+  }
+  noteScreenshotSkipped(message) {
+    const now = Date.now();
+    if (this.lastScreenshotSkipAt !== void 0 && now - this.lastScreenshotSkipAt < SCREENSHOT_SKIP_LOG_INTERVAL_MS) return;
+    this.lastScreenshotSkipAt = now;
+    console.warn("FluxIQ screenshot skipped", {
+      message,
+      ...this.deps.screenshotDiagnostics()
+    });
+    this.deps.onActivity("snapshot", "Screenshot skipped", message, "warning");
+  }
+};
+
+// src/background/connection/runtime-status.ts
+var RuntimeStatusTracker = class {
+  status = { state: "idle" };
+  current() {
+    return this.status;
+  }
+  start(status) {
+    this.status = {
+      state: "running",
+      startedAt: Date.now(),
+      ...status
+    };
+    return this.status;
+  }
+  startAction(action) {
+    return this.start({
+      commandId: action.commandId,
+      actionType: action.actionType,
+      label: runtimeActionLabel(action.actionType),
+      target: runtimeActionTarget(action),
+      startedAt: Date.now()
+    });
+  }
+  finish(result) {
+    const failed = result.status !== "succeeded";
+    const label = runtimeActionLabel(result.actionType);
+    this.status = {
+      state: failed ? "failed" : "succeeded",
+      commandId: result.commandId,
+      actionType: result.actionType,
+      label,
+      target: runtimeResultTarget(result) ?? this.status.target,
+      ...result.tabId !== void 0 ? { tabId: result.tabId } : {},
+      ...result.frameId !== void 0 ? { frameId: result.frameId } : {},
+      startedAt: result.startedAt,
+      finishedAt: result.finishedAt,
+      ...result.message ? { message: result.message } : {},
+      ...failed && result.message ? { error: result.message } : {},
+      ...result.url ? { url: result.url } : {}
+    };
+    return this.status;
+  }
+};
 function runtimeActionLabel(actionType) {
   if (actionType === "web.browser.navigate") return "Navigate";
   if (actionType === "web.dom.click") return "Click";
@@ -3013,9 +2715,6 @@ function runtimeActionLabel(actionType) {
   if (actionType === "web.dom.extract") return "Extract";
   if (actionType === "web.dom.capture_snapshot") return "Capture snapshot";
   return actionType;
-}
-function runtimeActionTarget(action) {
-  return action.url ?? action.selector ?? action.text ?? action.value ?? action.key ?? action.visualTarget?.selector;
 }
 function runtimeResultTarget(result) {
   if (result.actionType === "web.browser.navigate") return result.url ?? result.title;
@@ -3031,78 +2730,55 @@ function runtimeConfirmationForActionResult(result) {
   if (result.actionType === "web.dom.scroll") return { kind: "dom.scroll", inputId: WEB_AUTOMATION_INPUT_IDS.pageScrolled };
   return void 0;
 }
-function isDomSnapshotPayload(value) {
-  if (!value || typeof value !== "object") return false;
-  const snapshot = value;
-  return typeof snapshot.url === "string" && typeof snapshot.title === "string" && Boolean(snapshot.viewport) && typeof snapshot.viewport?.width === "number" && typeof snapshot.viewport.height === "number" && typeof snapshot.viewport.scrollX === "number" && typeof snapshot.viewport.scrollY === "number" && Array.isArray(snapshot.interactiveElements);
+function runtimeActionTarget(action) {
+  return action.url ?? action.selector ?? action.text ?? action.value ?? action.key ?? action.visualTarget?.selector;
 }
-function hasSnapshotFrameViewportOffset(snapshot) {
-  const frame = objectValue2(snapshot.frame);
-  const viewportOffset = objectValue2(frame?.viewportOffset);
-  return typeof viewportOffset?.x === "number" && typeof viewportOffset.y === "number" && typeof viewportOffset.width === "number" && typeof viewportOffset.height === "number";
-}
-function browserStateSnapshotFromTabs(active, tabs, recordingState, timestamp, sourceId) {
-  const options = {
-    timestamp,
-    recording: recordingState === "recording",
-    permissions: ["activeTab", "scripting", "storage", "tabs"]
-  };
-  if (sourceId !== void 0) options.sourceId = sourceId;
-  return createWebAutomationStateFromTabs(active, tabs, options);
-}
-function describeActiveTabLike(tab) {
-  const result = {
-    tabId: tab.id ?? -1
-  };
-  if (tab.windowId !== void 0) result.windowId = tab.windowId;
-  if (tab.url !== void 0) result.url = tab.url;
-  if (tab.title !== void 0) result.title = tab.title;
-  if (tab.active !== void 0) result.active = tab.active;
-  if (tab.status !== void 0) result.status = tab.status;
-  return result;
-}
-function actionTypesFromCapabilities(capabilities) {
-  return [...new Set(capabilities.flatMap((capability) => capability.actionTypes ?? []))];
-}
-function recordingsApiUrl(coreApiUrl, page, pageSize) {
-  const url = new URL("/api/recordings", coreApiUrl || DEFAULT_CORE_API_URL);
-  url.searchParams.set("page", String(page));
-  url.searchParams.set("pageSize", String(pageSize));
-  return url.toString();
-}
-function normalizeRecordingsResponse(value, page, pageSize, sourceUrl) {
-  const object = value && typeof value === "object" ? value : {};
-  const rawItems = Array.isArray(object.items) ? object.items : Array.isArray(object.recordings) ? object.recordings : [];
-  return {
-    items: rawItems.map(normalizeRecordingSummary).filter((item) => Boolean(item)),
-    page: numberValue3(object.page) ?? page,
-    pageSize: numberValue3(object.pageSize) ?? pageSize,
-    total: numberValue3(object.total),
-    sourceUrl
-  };
-}
-function normalizeRecordingSummary(value) {
-  if (!value || typeof value !== "object") return void 0;
-  const object = value;
-  const id = stringValue3(object.id) ?? stringValue3(object.recordingId);
-  if (!id) return void 0;
-  return compactObject2({
-    id,
-    title: stringValue3(object.title) ?? stringValue3(object.name) ?? id,
-    status: stringValue3(object.status),
-    projectId: stringValue3(object.projectId),
-    taskId: stringValue3(object.taskId),
-    eventCount: numberValue3(object.eventCount),
-    startedAt: timestampValue(object.startedAt),
-    endedAt: timestampValue(object.endedAt),
-    updatedAt: timestampValue(object.updatedAt)
-  });
-}
-function timestampValue(value) {
-  if (typeof value === "number") return value;
-  if (typeof value !== "string") return void 0;
-  const parsed = Date.parse(value);
-  return Number.isNaN(parsed) ? void 0 : parsed;
+
+// src/background/connection/state-assets.ts
+var StateAssetStore = class {
+  constructor(deps) {
+    this.deps = deps;
+  }
+  // Captures the viewport as it is now rather than reusing an earlier capture:
+  // the delta between the event and the capture is logged so a stale pairing is
+  // visible rather than silent.
+  async captureFreshVisualSample(tabId, projectId, timestamp, eventKey) {
+    try {
+      const capture = await captureVisibleViewportPngBytes(tabId);
+      const sha256 = await sha256Hex(capture.bytes);
+      const screenContentRef = await uploadStateAsset(this.deps.credentials(), projectId, sha256, capture.bytes, "image/png");
+      const capturedAt = Date.now();
+      console.info("FluxIQ fresh state screenshot stored", {
+        tabId,
+        projectId,
+        sha256,
+        coordinateSpace: capture.coordinateSpace,
+        imageSize: capture.imageSize,
+        eventKey,
+        eventTimestampMs: timestamp,
+        capturedAt,
+        deltaMs: capturedAt - timestamp
+      });
+      this.deps.onActivity("snapshot", "Fresh viewport screenshot stored", `${sha256.slice(0, 12)} @ ${Math.max(0, capturedAt - timestamp)}ms after event`, "success");
+      return { screenContentRef, screenImageSize: capture.imageSize, capturedAt };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Fresh screenshot capture failed.";
+      console.warn("FluxIQ fresh state screenshot failed", {
+        tabId,
+        projectId,
+        eventTimestampMs: timestamp,
+        message
+      });
+      return void 0;
+    }
+  }
+};
+async function captureVisibleViewportPngBytes(tabId) {
+  const tab = await chrome.tabs.get(tabId);
+  if (tab.windowId === void 0) throw new Error("Tab window is unavailable for screenshot capture.");
+  const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+  const bytes = await bytesFromDataUrl(dataUrl);
+  return { bytes, imageSize: pngImageSize(bytes), coordinateSpace: "viewport" };
 }
 async function bytesFromDataUrl(dataUrl) {
   const response = await fetch(dataUrl);
@@ -3121,6 +2797,611 @@ async function sha256Hex(bytes) {
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
+
+// src/background/connection.ts
+var RECORDING_START_ACCEPT_TIMEOUT_MS = 750;
+var FluxIQConnection = class {
+  constructor(settings, session) {
+    this.settings = settings;
+    this.session = session;
+    this.gateway = new GatewaySession({
+      settings: () => this.settings,
+      session: () => this.session,
+      persistSession: (session2) => this.persistSession(session2),
+      emitStatus: () => this.emitStatus(),
+      reportError: (message) => {
+        this.lastError = message;
+      },
+      clearError: () => {
+        this.lastError = void 0;
+      },
+      beforeConnect: () => this.refreshActiveTab(),
+      queue: { queueEvent, readQueuedEvents, clearQueuedEvents },
+      handlers: {
+        onServerMessage: (message) => void this.onMessage(message),
+        onPairingRequired: (referenceCode, reason) => {
+          this.lastError = reason || "Approve this client in FluxIQ.";
+          this.addActivity("pairing", "Waiting for approval", referenceCode ? `Reference ${referenceCode}` : void 0, "warning");
+          this.emitStatus();
+        },
+        onSessionReady: (message) => void this.onSessionReady(message),
+        onCommand: (payload, messageId) => void this.handleServerCommandPayload(payload, messageId),
+        onHeartbeat: () => void this.sendBrowserState()
+      }
+    });
+    this.projects = new ProjectContext({
+      settings: () => this.settings,
+      session: () => this.session,
+      adoptProjectId: (projectId) => this.persistSession(compactObject2({ ...this.session, projectId })),
+      onActivity: (kind, label, detail, tone) => this.addActivity(kind, label, detail, tone)
+    });
+    this.attachment = new ContentAttachment({
+      sendToTab,
+      ensureContentScript,
+      settings: () => this.settings,
+      isRecording: () => this.recordingState === "recording",
+      hasRecordedTab: (tabId) => this.navigation.hasRecordedTab(tabId),
+      noteRecordedTab: (tabId, url, timestamp) => this.navigation.noteRecordedTab(tabId, url, timestamp)
+    });
+    this.evidence = new RecordingEvidenceReporter({
+      send: this.gateway.send,
+      recordingState: () => this.recordingState,
+      resolveProjectId: (reason) => this.projects.resolve(reason),
+      onActivity: (kind, label, detail, tone) => this.addActivity(kind, label, detail, tone),
+      emitStatus: () => this.emitStatus(),
+      clientId: () => this.session.clientId,
+      activeTabId: () => this.activeTabId,
+      activeTabUrl: () => this.activeTabUrl,
+      unsupportedPage: () => this.unsupportedPage,
+      setUnsupportedPage: (state) => {
+        this.unsupportedPage = state;
+      },
+      transport: this.transport,
+      ensureContentScript,
+      attachTabForRecording: (tabId) => this.attachment.attachTabForRecording(tabId),
+      activeTab,
+      allTabs,
+      stateAssets: new StateAssetStore({
+        credentials: () => this.coreApiCredentials(),
+        onActivity: (kind, label, detail, tone) => this.addActivity(kind, label, detail, tone)
+      }),
+      screenshotDiagnostics: () => ({
+        sessionId: this.session.sessionId,
+        clientId: this.session.clientId,
+        projectId: this.session.projectId,
+        activeRecordingProjectId: this.projects.activeRecordingProject(),
+        activeTabId: this.activeTabId,
+        coreApiUrl: this.settings.coreApiUrl
+      })
+    });
+  }
+  recordingState = "idle";
+  lastError;
+  activeTabId;
+  activeTabUrl;
+  eventCount = 0;
+  recordingStartedAt;
+  activeRecordingId;
+  pendingRecordingStart;
+  recordingBlock;
+  unsupportedPage;
+  listeners = /* @__PURE__ */ new Set();
+  activityLog = new ActivityLog();
+  sequence = new EventSequence();
+  runtimeStatus = new RuntimeStatusTracker();
+  navigation = new NavigationRecorder();
+  clicks = new PointerClickFilter();
+  transport = { sendToTab, allTabFrames };
+  gateway;
+  projects;
+  attachment;
+  evidence;
+  status() {
+    const gateway = this.gateway.statusFields();
+    const status = {
+      connectionState: gateway.connectionState,
+      recordingState: this.recordingState,
+      gatewayUrl: this.settings.gatewayUrl,
+      settings: this.settings,
+      clientId: this.session.clientId,
+      queueSize: gateway.queueSize,
+      eventCount: this.eventCount,
+      recentActivities: this.activityLog.recentEntries(),
+      runtime: { ...this.runtimeStatus.current() }
+    };
+    const lastActivityAt = this.activityLog.lastActivityAt();
+    if (this.session.sessionId) status.sessionId = this.session.sessionId;
+    if (this.session.projectId !== void 0) status.projectId = this.session.projectId;
+    if (this.activeTabId !== void 0) status.activeTabId = this.activeTabId;
+    if (this.activeTabUrl) status.activeTabUrl = this.activeTabUrl;
+    if (gateway.pairingReferenceCode) status.pairingReferenceCode = gateway.pairingReferenceCode;
+    if (this.recordingStartedAt !== void 0) status.recordingStartedAt = this.recordingStartedAt;
+    if (lastActivityAt !== void 0) status.lastActivityAt = lastActivityAt;
+    if (this.unsupportedPage) status.unsupportedPage = this.unsupportedPage;
+    if (this.recordingBlock) status.recordingBlock = this.recordingBlock;
+    if (this.lastError) status.lastError = this.lastError;
+    if (gateway.lastMessageAt !== void 0) status.lastMessageAt = gateway.lastMessageAt;
+    return status;
+  }
+  subscribe(listener) {
+    this.listeners.add(listener);
+    listener(this.status());
+    return () => this.listeners.delete(listener);
+  }
+  updateSettings(settings) {
+    this.settings = settings;
+  }
+  recordingLogPage(page, pageSize) {
+    return this.activityLog.page(page, pageSize);
+  }
+  async listCoreRecordings(page, pageSize) {
+    return await fetchCoreRecordings(this.coreApiCredentials(), page, pageSize);
+  }
+  async connect() {
+    await this.gateway.connect();
+  }
+  disconnect() {
+    this.gateway.stopReconnecting();
+    this.clearPendingRecordingStart();
+    this.gateway.closeClient();
+    if (this.recordingState === "recording") this.addActivity("connection", "Disconnected during recording", "Events will queue until reconnect.", "warning");
+    this.gateway.markDisconnected();
+  }
+  async startRecording() {
+    if (this.pendingRecordingStart) {
+      this.addActivity("recording", "Recording is starting", "Waiting for FluxIQ project acceptance.", "warning");
+      return;
+    }
+    if (this.gateway.state() !== "connected") {
+      this.lastError = "Connect to FluxIQ before recording.";
+      this.emitStatus();
+      return;
+    }
+    await this.refreshActiveTab();
+    if (this.unsupportedPage) {
+      this.lastError = this.unsupportedPage.reason;
+      this.addActivity("page", "Page cannot be recorded", this.unsupportedPage.reason, "warning");
+      this.emitStatus();
+      return;
+    }
+    this.resetRecordingLog();
+    this.recordingBlock = void 0;
+    const recordingId = `client.${this.session.clientId}.${Date.now()}`;
+    const startedAt = Date.now();
+    const projectId = await this.projects.resolve("recording_start");
+    const initialState = await this.evidence.buildInitialRecordingState(startedAt);
+    await this.gateway.send("client.start_recording", {
+      recordingId,
+      ...projectId ? { projectId } : {},
+      startedAt,
+      domainId: WEB_AUTOMATION_DOMAIN_ID,
+      initialState,
+      environment: recordingEnvironment(this.session.clientId, this.activeTabUrl),
+      sources: recordingSources(this.session.clientId),
+      actionChannels: recordingActionChannels(this.session.clientId),
+      metadata: {
+        domainId: WEB_AUTOMATION_DOMAIN_ID,
+        requestedBy: "extension-record-button",
+        projectId: projectId ?? null,
+        activeTabUrl: this.activeTabUrl ?? null
+      }
+    });
+    this.addActivity("recording", "Starting recording", projectId ? "Waiting for FluxIQ project acceptance." : "Waiting for FluxIQ project context.", "warning");
+    this.pendingRecordingStart = {
+      recordingId,
+      timer: setTimeout(() => void this.handleRecordingStartTimeout(recordingId), RECORDING_START_ACCEPT_TIMEOUT_MS)
+    };
+    this.emitStatus();
+  }
+  async stopRecording(notifyServer = true) {
+    if (this.recordingState !== "recording") return;
+    const recordingId = this.activeRecordingId;
+    const projectId = this.projects.activeRecordingProject();
+    const endedAt = Date.now();
+    const stopPayload = recordingId ? compactObject2({
+      recordingId,
+      ...projectId !== void 0 ? { projectId } : {},
+      endedAt
+    }) : void 0;
+    this.recordingState = "idle";
+    this.clicks.clear();
+    this.activeRecordingId = void 0;
+    this.projects.setActiveRecordingProject(void 0);
+    this.addActivity("recording", "Recording stopped", `${this.eventCount} user actions captured`, "neutral");
+    this.emitStatus();
+    void this.attachment.broadcast({ type: "recording", recording: false, settings: this.settings }, false);
+    if (notifyServer && stopPayload) {
+      await this.gateway.send("client.stop_recording", stopPayload);
+    }
+  }
+  dismissRecordingBlock() {
+    this.recordingBlock = void 0;
+    if (this.lastError === "Open a FluxIQ project before recording.") this.lastError = void 0;
+    this.emitStatus();
+  }
+  async handleRecordingEvent(payload, tabId, frameId) {
+    if (this.recordingState !== "recording") return;
+    if (payload.kind === "dom.click") {
+      const sourceEvent = stringValue3(objectValue2(payload.metadata)?.sourceEvent);
+      const signature = clickEventSignature(payload, tabId, frameId);
+      if (sourceEvent === "pointerdown" && signature) {
+        if (this.clicks.isSuppressed(signature)) return;
+        this.clicks.suppressNext(signature);
+        await this.processRecordingEvent(payload, tabId, frameId);
+        return;
+      }
+      if (sourceEvent === "click" && signature && this.clicks.isSuppressed(signature)) {
+        return;
+      }
+    }
+    await this.processRecordingEvent(payload, tabId, frameId);
+  }
+  async handleContentReady(payload, tabId, frameId) {
+    let readyPayload = payload;
+    if (this.recordingState === "recording" && tabId !== void 0 && !this.unsupportedPage) {
+      await this.attachment.setRecordingState(tabId, true, frameId).catch(() => void 0);
+      if (!payload.snapshot) {
+        const snapshot = await sendToTab(tabId, { type: "captureSnapshot" }, frameId).then((value) => isDomSnapshotPayload(value) ? value : void 0).catch(() => void 0);
+        if (snapshot) readyPayload = { ...payload, snapshot };
+      }
+    }
+    await this.handleRecordingEvent(readyPayload, tabId, frameId);
+  }
+  async handleTabUpdated(tab) {
+    const becameActive = Boolean(tab.active && tab.id !== void 0 && this.activeTabId !== tab.id);
+    if (tab.active && tab.id !== void 0) {
+      this.activeTabId = tab.id;
+      this.activeTabUrl = tab.url;
+      this.unsupportedPage = unsupportedPageForUrl(tab.url);
+      this.emitStatus();
+    }
+    if (!tab.id) return;
+    if (tab.active && this.recordingState === "recording" && !this.unsupportedPage) {
+      await this.attachment.attachTabForRecording(tab.id).catch(() => void 0);
+      if (becameActive) this.addActivity("tab", "Recording active tab", tab.url ?? `Tab ${tab.id}`);
+    }
+    if (this.gateway.state() === "connected") {
+      await this.gateway.send("client.state_update", createWebAutomationStateUpdate({
+        activeContextId: String(tab.id),
+        contexts: [compactObject2({ contextId: String(tab.id), url: tab.url, title: tab.title, status: tab.status })],
+        recording: this.recordingState === "recording",
+        state: createWebAutomationStateFromTabs(describeActiveTabLike(tab), [describeActiveTabLike(tab)], {
+          timestamp: Date.now(),
+          sourceId: eventSourceId(this.session.clientId),
+          recording: this.recordingState === "recording",
+          permissions: ["activeTab", "scripting", "storage", "tabs"]
+        }),
+        metadata: { reason: "tab-updated", inputId: WEB_AUTOMATION_INPUT_IDS.browserState }
+      }));
+      await this.sendBrowserState();
+    }
+  }
+  async selectAutomationTab(tabId) {
+    const tab = await chrome.tabs.update(tabId, { active: true });
+    if (tab.id !== tabId || unsupportedPageForUrl(tab.url)) {
+      throw new Error("The requested automation tab is unavailable or unsupported.");
+    }
+    await this.handleTabUpdated({ ...tab, active: true });
+  }
+  handleNavigationCommitted(details) {
+    if (details.transitionType === "link" || details.transitionType === "form_submit" || details.transitionType === "reload") return;
+    this.scheduleNavigation(details.tabId, details.url, details.timeStamp, details.transitionType === "typed");
+  }
+  handleHistoryStateUpdated(details) {
+    this.scheduleNavigation(details.tabId, details.url, details.timeStamp, false);
+  }
+  scheduleNavigation(tabId, url, timestamp, explicitlyTyped) {
+    if (this.recordingState !== "recording" || unsupportedPageForUrl(url)) return;
+    this.navigation.schedule(tabId, url, () => void this.recordNavigation(tabId, url, timestamp, explicitlyTyped));
+  }
+  async recordNavigation(tabId, url, timestamp, explicitlyTyped) {
+    if (this.recordingState !== "recording") return;
+    if (!this.navigation.shouldRecord(tabId, url, timestamp, explicitlyTyped, this.recordingStartedAt)) return;
+    await this.handleRecordingEvent({
+      kind: "browser.navigation",
+      sequence: this.sequence.next(),
+      url,
+      title: "",
+      eventTimestampMs: timestamp,
+      metadata: explicitlyTyped ? { transition: "typed" } : void 0
+    }, tabId);
+  }
+  async processRecordingEvent(payload, tabId, frameId) {
+    if (this.recordingState !== "recording") return;
+    if (tabId !== void 0 && isNavigationExplanation(payload)) {
+      this.navigation.noteExplanatoryAction(tabId, payload.eventTimestampMs);
+    }
+    if (isExecutableRecordedAction(payload)) {
+      this.eventCount += 1;
+      this.addActivity(payload.kind, activityLabel(payload), activityDetail(payload));
+      await this.gateway.send("client.recording_event", gatewayRecordingEventFromPayload(payload, tabId, frameId, this.activeRecordingId));
+      await this.evidence.sendRecordingEvidence(payload, tabId, frameId);
+      return;
+    }
+    if (payload.kind !== "content.ready") {
+      this.addActivity(payload.kind, `Evidence: ${activityLabel(payload)}`, activityDetail(payload));
+    }
+    await this.evidence.sendRecordingEvidence(payload, tabId, frameId);
+  }
+  async onMessage(message) {
+    this.gateway.noteMessageReceived();
+    if (message.type === "server.ping") {
+      this.gateway.noteMessageReceived();
+      this.emitStatus();
+      return;
+    }
+    if (message.type === "server.error") {
+      this.lastError = message.payload.message;
+      if (message.payload.code === "recording.project_required") {
+        this.handleRecordingProjectRequired(message.payload.message);
+        return;
+      }
+      this.gateway.markFailed();
+      return;
+    }
+    if (message.type === "server.set_active_tab") {
+      await this.handleServerCommandPayload({ ...message.payload, command: "set_active_tab" }, message.id);
+      return;
+    }
+    if (message.type === "server.disconnect") {
+      this.disconnect();
+    }
+  }
+  async onSessionReady(message) {
+    await this.persistSession(compactObject2({
+      ...this.session,
+      sessionId: message.payload.sessionId,
+      token: message.payload.token,
+      ...message.payload.projectId !== void 0 ? { projectId: message.payload.projectId } : {},
+      serverUrl: this.settings.gatewayUrl,
+      connectedAt: Date.now()
+    }));
+    this.gateway.markSessionReady();
+    this.addActivity("connection", "Connected to FluxIQ", "Client session ready", "success");
+    await this.sendBrowserState();
+    await this.gateway.flushQueue();
+  }
+  async handleServerCommandPayload(payload, messageId) {
+    if (payload.command === "ping") {
+      this.gateway.noteMessageReceived();
+      this.emitStatus();
+      return;
+    }
+    if (payload.command === "disconnect") {
+      this.disconnect();
+      return;
+    }
+    if (payload.command === "start_recording") {
+      await this.beginAcceptedRecording(payload.recordingId, payload.projectId);
+      return;
+    }
+    if (payload.command === "stop_recording") {
+      await this.stopRecording(false);
+      return;
+    }
+    if (payload.command === "set_active_tab") {
+      const tabId = Number(payload.tabId);
+      this.activeTabId = tabId;
+      await chrome.tabs.update(tabId, { active: true });
+      this.emitStatus();
+      return;
+    }
+    if (payload.command === "capture_snapshot") {
+      this.startRuntimeStatus({
+        commandId: messageId,
+        actionType: "web.dom.capture_snapshot",
+        label: "Capture snapshot",
+        target: this.activeTabUrl
+      });
+      await this.runtimeCommandRouter().captureSnapshot();
+      this.finishRuntimeStatus({
+        commandId: messageId,
+        actionType: "web.dom.capture_snapshot",
+        status: "succeeded",
+        message: "Snapshot command dispatched.",
+        startedAt: this.runtimeStatus.current().startedAt ?? Date.now(),
+        finishedAt: Date.now()
+      });
+      return;
+    }
+    if (payload.command === "execute_action") {
+      this.applyRuntimeStart(this.runtimeStatus.startAction(payload.action));
+      await captureActionBoundary("before", payload.action);
+      await this.refreshActiveTab();
+      await this.runtimeCommandRouter().executeAction(payload.action);
+    }
+  }
+  runtimeCommandRouter() {
+    return new ExtensionRuntimeCommandRouter({
+      activeTabId: () => this.activeTabId,
+      unsupportedPageReason: () => this.unsupportedPage?.reason,
+      attachTabForRecording: (tabId) => this.attachment.attachTabForRecording(tabId),
+      captureActiveSnapshot: (label) => this.evidence.captureActiveSnapshot(label),
+      sendActionResult: (result, tabId, frameId) => this.sendActionResult(result, tabId, frameId)
+    });
+  }
+  async beginAcceptedRecording(recordingId, projectId) {
+    this.clearPendingRecordingStart();
+    if (projectId !== void 0) {
+      await this.persistSession(compactObject2({ ...this.session, projectId }));
+    }
+    if (this.recordingState === "recording") {
+      if (projectId !== void 0 && this.projects.activeRecordingProject() !== projectId) {
+        this.projects.setActiveRecordingProject(projectId);
+        await this.evidence.captureActiveSnapshot("Project-linked snapshot captured");
+      }
+      return;
+    }
+    this.resetRecordingLog();
+    this.navigation.clearRecordingTabs();
+    this.recordingBlock = void 0;
+    this.activeRecordingId = recordingId;
+    this.projects.setActiveRecordingProject(projectId !== void 0 ? projectId : this.session.projectId);
+    this.eventCount = 0;
+    this.activityLog.clearRecent();
+    const recordingTabs = await allTabs();
+    this.recordingStartedAt = Date.now();
+    this.recordingState = "recording";
+    for (const tab of recordingTabs) {
+      if (tab.tabId < 0 || !tab.url || unsupportedPageForUrl(tab.url)) continue;
+      this.navigation.seedRecordingTab(tab.tabId, tab.url, this.recordingStartedAt);
+    }
+    this.addActivity("recording", "Recording started", this.activeTabUrl ?? "Active tab", "success");
+    this.emitStatus();
+    if (this.activeTabId !== void 0) await this.attachment.attachTabForRecording(this.activeTabId);
+    await this.sendBrowserState();
+    await this.handleRecordingEvent({
+      kind: "browser.tab",
+      sequence: this.sequence.next(),
+      url: this.activeTabUrl ?? "",
+      title: "",
+      eventTimestampMs: Date.now(),
+      metadata: { recordingState: "started", recordingId }
+    });
+    await this.evidence.captureActiveSnapshot("Initial snapshot captured");
+  }
+  handleRecordingProjectRequired(message) {
+    this.clearPendingRecordingStart();
+    if (this.recordingState === "recording") {
+      this.recordingState = "idle";
+      this.clicks.clear();
+      void this.attachment.broadcast({ type: "recording", recording: false, settings: this.settings }, false);
+    }
+    this.recordingStartedAt = void 0;
+    this.activeRecordingId = void 0;
+    this.projects.setActiveRecordingProject(void 0);
+    this.recordingBlock = {
+      code: "recording.project_required",
+      title: "Project Required",
+      message: message || "Open a FluxIQ project in the web panel before starting a recording."
+    };
+    this.lastError = "Open a FluxIQ project before recording.";
+    this.addActivity("recording", "Recording locked", "Open a FluxIQ project in the web panel.", "warning");
+    this.emitStatus();
+  }
+  clearPendingRecordingStart() {
+    if (!this.pendingRecordingStart) return;
+    clearTimeout(this.pendingRecordingStart.timer);
+    this.pendingRecordingStart = void 0;
+  }
+  // FluxIQ did not accept the start in time. Recording begins locally so no user
+  // action is lost; the project link attaches later if one arrives.
+  async handleRecordingStartTimeout(recordingId) {
+    if (!this.pendingRecordingStart || this.pendingRecordingStart.recordingId !== recordingId) return;
+    const projectId = await this.projects.resolve("recording_start_timeout");
+    await this.beginAcceptedRecording(recordingId, projectId ?? null);
+    if (!projectId) {
+      this.addActivity("recording", "Project context pending", "Structured state will record; screenshots attach after FluxIQ links a project.", "warning");
+      this.emitStatus();
+    }
+  }
+  async sendBrowserState() {
+    await this.gateway.send("client.state_update", browserStateFromTabs(await activeTab(), await allTabs(), this.recordingState));
+  }
+  async sendActionResult(result, tabId, frameId) {
+    this.finishRuntimeStatus({
+      ...result,
+      ...tabId !== void 0 ? { tabId } : {},
+      ...frameId !== void 0 ? { frameId } : {}
+    });
+    await captureActionBoundary("after", result);
+    const visualTarget = result.visualTarget ?? (result.element ? webAutomationActionVisualTargetFromElement(result.element) : void 0);
+    await this.gateway.send("client.action_result", gatewayActionResultFromBrowserResult(result));
+    await this.sendRuntimeActionConfirmation(result, tabId, frameId);
+    await this.handleRecordingEvent(compactObject2({
+      kind: "action.result",
+      sequence: this.sequence.next(),
+      url: result.url ?? this.activeTabUrl ?? "",
+      title: result.title ?? "",
+      eventTimestampMs: result.finishedAt,
+      element: result.element,
+      visualTarget,
+      snapshot: result.snapshot,
+      actionResult: result
+    }), tabId, frameId);
+  }
+  // A succeeded runtime action is also something the recording must contain:
+  // it is replayed as the recorded event a user would have produced.
+  async sendRuntimeActionConfirmation(result, tabId, frameId) {
+    if (result.status !== "succeeded") return;
+    const confirmation = runtimeConfirmationForActionResult(result);
+    if (!confirmation) return;
+    const event = createWebAutomationRecordingEvent({
+      kind: confirmation.kind,
+      sequence: this.sequence.next(),
+      url: result.url ?? this.activeTabUrl ?? "",
+      title: result.title ?? "",
+      eventTimestampMs: result.finishedAt,
+      element: result.element,
+      visualTarget: result.visualTarget,
+      snapshot: result.snapshot,
+      inputValue: confirmation.inputValue,
+      key: confirmation.key,
+      scroll: confirmation.scroll,
+      actionResult: webAutomationActionResultPayload(result),
+      metadata: {
+        domainId: WEB_AUTOMATION_DOMAIN_ID,
+        inputId: confirmation.inputId,
+        runtimeConfirmation: true
+      }
+    }, {
+      ...tabId !== void 0 ? { tabId } : {},
+      ...frameId !== void 0 ? { frameId } : {}
+    });
+    await this.gateway.send("client.recording_event", event);
+  }
+  async refreshActiveTab() {
+    const tab = await activeTab();
+    this.activeTabId = tab?.tabId;
+    this.activeTabUrl = tab?.url;
+    this.unsupportedPage = unsupportedPageForUrl(tab?.url);
+    this.emitStatus();
+  }
+  async persistSession(session) {
+    this.session = session;
+    await writeSession(this.session);
+  }
+  coreApiCredentials() {
+    return { coreApiUrl: this.settings.coreApiUrl, token: this.session.token };
+  }
+  emitStatus() {
+    const status = this.status();
+    for (const listener of this.listeners) listener(status);
+    void chrome.runtime.sendMessage({ type: "fluxiq.statusChanged", status }).catch(() => void 0);
+  }
+  addActivity(kind, label, detail, tone = "neutral") {
+    this.activityLog.record(kind, label, detail, tone);
+    this.emitStatus();
+  }
+  resetRecordingLog() {
+    this.eventCount = 0;
+    this.activityLog.reset();
+    this.clicks.clear();
+  }
+  startRuntimeStatus(status) {
+    this.applyRuntimeStart(this.runtimeStatus.start(status));
+  }
+  applyRuntimeStart(next) {
+    this.lastError = void 0;
+    this.addActivity("runtime", `Runtime started: ${next.label ?? next.actionType ?? "Command"}`, next.target, "warning");
+    this.emitStatus();
+  }
+  finishRuntimeStatus(result) {
+    const failed = result.status !== "succeeded";
+    const label = runtimeActionLabel(result.actionType);
+    this.runtimeStatus.finish(result);
+    if (result.tabId !== void 0) this.activeTabId = result.tabId;
+    if (result.url) this.activeTabUrl = result.url;
+    if (failed) this.lastError = result.message ?? `${label} failed.`;
+    this.addActivity(
+      "runtime",
+      failed ? `Runtime failed: ${label}` : `Runtime succeeded: ${label}`,
+      result.message ?? runtimeResultTarget(result),
+      failed ? "danger" : "success"
+    );
+    this.emitStatus();
+  }
+};
 
 // src/background/index.ts
 var connection;

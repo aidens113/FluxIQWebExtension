@@ -12,14 +12,11 @@
     "exportedClasses": 1,
     "exportedComponents": 1,
     "prefixGroup": 3,
-    "maxPathSegments": 8,
+    "maxPathSegments": 9,
     "workingDocLines": 800,
     "workingDocCurrentStateLines": 150
   },
   "rules": {
-    "class-methods": {
-      "apps/extension/src/background/connection.ts::FluxIQConnection": 81
-    },
     "directory-files": {
       "packages/test-runner/src/tests": 51,
       "packages/test-runner/src": 50,
@@ -31,33 +28,15 @@
     },
     "file-lines": {
       "packages/test-runner/src/demo-workspace.ts": 3855,
-      "apps/extension/src/background/connection.ts": 1913,
-      "apps/extension/src/content/index.ts": 1188,
       "packages/test-runner/src/demo-llm-create-ui.ts": 837
     },
     "imports": {
-      "domain/src/client/index.ts": 3,
+      "domain/src/client/index.ts": 2,
       "domain/src/index.ts": 2,
       "domain/src/web-panel-host.ts": 2,
       "apps/extension/src/runtime/action-runner.ts": 1,
       "domain/src/actions/capabilities.ts": 1,
-      "domain/src/client/gateway-mapping.ts": 1,
-      "domain/src/host.ts": 1,
-      "domain/src/io/gateway-input-hub.ts": 1,
-      "domain/src/io/gateway-output-dispatcher.ts": 1,
-      "domain/src/io/web-automation-io.ts": 1,
-      "domain/src/output-nodes/definitions.ts": 1,
-      "domain/src/output-nodes/native-runtime.ts": 1,
-      "domain/src/recording/domain.ts": 1,
-      "domain/src/recording/events.ts": 1,
-      "domain/src/recording/state.ts": 1,
-      "domain/src/recording/web-state.ts": 1,
-      "domain/src/runtime/adapter.ts": 1,
-      "domain/src/runtime/capabilities.ts": 1,
-      "domain/src/runtime/commands.ts": 1,
-      "domain/src/runtime/flow-runner.ts": 1,
-      "domain/src/runtime/llm-evidence.ts": 1,
-      "domain/src/runtime/reusable-evidence-coordinator.ts": 1
+      "domain/src/host.ts": 1
     },
     "naming": {
       "packages/test-runner/src::demo": 17,

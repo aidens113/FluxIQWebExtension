@@ -1,70 +1,24 @@
-type JsonPrimitive = string | number | boolean | null;
-type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
-type JsonObject = { [key: string]: JsonValue };
+// What each browser action type does, expressed against capabilities the caller
+// supplies rather than against the DOM directly. `action-runtime.ts` provides
+// those capabilities; the action-type strings here are a contract with the
+// domain action registry.
 
-export type RectDescriptor = { x: number; y: number; width: number; height: number };
-export type DomElementDescriptor = {
-  tagName: string;
-  selector: string;
-  xpath?: string | undefined;
-  id?: string | undefined;
-  classNames?: string[] | undefined;
-  visibleText?: string | undefined;
-  text?: string | undefined;
-  value?: string | undefined;
-  role?: string | undefined;
-  name?: string | undefined;
-  href?: string | undefined;
-  inputType?: string | undefined;
-  hasValue?: boolean | undefined;
-  selectedValue?: string | undefined;
-  bounds?: RectDescriptor | undefined;
-  documentBounds?: RectDescriptor | undefined;
-  isVisibleOnViewport?: boolean | undefined;
-  hasClickHandler?: boolean | undefined;
-  attributes?: Record<string, string> | undefined;
-  options?: Array<{ value: string; label: string }> | undefined;
-};
-export type DomSnapshot = {
-  url: string;
-  title: string;
-  viewport: { width: number; height: number; scrollX: number; scrollY: number; documentWidth?: number | undefined; documentHeight?: number | undefined; devicePixelRatio?: number | undefined };
-  frame?: { isTop: boolean; viewportOffset?: RectDescriptor | undefined } | undefined;
-  focusedElement?: DomElementDescriptor | undefined;
-  selectedText?: string | undefined;
-  interactiveElements: DomElementDescriptor[];
-};
-export type BrowserActionCommand = {
-  commandId: string;
-  actionType: string;
-  selector?: string | undefined;
-  text?: string | undefined;
-  value?: string | undefined;
-  key?: string | undefined;
-  timeoutMs?: number | undefined;
-  coordinates?: { x: number; y: number } | undefined;
-  visualTarget?: {
-    bounds?: RectDescriptor | undefined;
-    documentBounds?: RectDescriptor | undefined;
-    anchor?: { type: "bounds"; bounds: RectDescriptor } | undefined;
-    selector?: string | undefined;
-  } | undefined;
-  options?: JsonObject | undefined;
-};
-export type BrowserActionResult = {
-  commandId: string;
-  actionType: string;
-  status: "succeeded" | "failed" | "timed_out" | "cancelled";
-  message?: string | undefined;
-  url?: string | undefined;
-  title?: string | undefined;
-  element?: DomElementDescriptor | undefined;
-  visualTarget?: BrowserActionCommand["visualTarget"] | undefined;
-  snapshot?: DomSnapshot | undefined;
-  extracted?: JsonValue | undefined;
-  startedAt: number;
-  finishedAt: number;
-};
+import type {
+  BrowserActionCommand,
+  BrowserActionResult,
+  DomElementDescriptor,
+  DomSnapshot,
+  JsonObject,
+  JsonValue
+} from "./types";
+
+export type {
+  BrowserActionCommand,
+  BrowserActionResult,
+  DomElementDescriptor,
+  DomSnapshot,
+  RectDescriptor
+} from "./types";
 
 export type ContentActionDependencies = {
   captureSnapshot(): DomSnapshot;
