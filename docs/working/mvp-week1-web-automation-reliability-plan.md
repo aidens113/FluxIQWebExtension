@@ -19,24 +19,15 @@ source before recording it (see [Audit Summary](#audit-summary) and the full
 reports). The plan below is executable: each phase names its steps, file
 ownership, the automated proof, and the exit commands.
 
-**Headline numbers from the audit**
-
-- Action vocabulary vs the plan's 24 capabilities: 1 fully supported, 10
-  partial, 3 unreliable, 10 unsupported. **Outcome validation: 0/24** —
-  `succeeded` means only "nothing threw".
-- Element identity: Core's weighted matcher is wired but never receives
-  candidates; three of its four top-weighted signals are zero for web
-  targets because of field-name mismatches; resolution is first-match with
-  no ambiguity detection.
-- Evidence: 8/16 items present, 5 partial, 3 absent; two divergent pipelines
-  from one producer; **no expected-vs-actual state comparison exists in
-  either repository**; sensitive input values are captured by default.
-- Failures: no taxonomy on the browser-action path; Core classifies by regex
-  over English messages; the failure-moment snapshot is discarded before the
-  run record; 5 of 11 categories have no producer.
-- Testing Lab: 12 fixtures cover 4 of 18 FluxBench categories; the isolated
-  lane asserts one expectation set, has no metrics, no repeat aggregation,
-  and cannot run a Flow.
+**Headline numbers from the audit** (detail in
+[reports/README.md](./mvp-week1-web-automation-reliability-plan/reports/README.md)):
+actions 1/10/3/10 of 24 (fully/partial/unreliable/unsupported), **outcome
+validation 0/24**; Core's element matcher never receives candidates and
+its top signals are zero for web targets; evidence 8/16 present with **no
+expected-vs-actual comparison anywhere** and sensitive values captured by
+default; no failure taxonomy on the browser path, 5 of 11 categories
+unproduced; the Testing Lab covers 4 of 18 FluxBench categories, has no
+metrics, and cannot run a Flow on `isolated`.
 
 **Done**
 
@@ -240,9 +231,8 @@ Steps (each is one worker unless noted; ownership in parentheses):
    looser copy; `domain/src/runtime/llm-evidence.ts` imports Core's
    `AutomationStudioRuntimeTargetOverrideEvidenceValidation`/`FailedAction`
    instead of structural copies, and its duck-typed `bindLlmEvidenceRuntime`
-   shim is removed (the method is public). Further dead exports from
-   `audit-core-runtime`: `runWebAutomationFlow`,
-   `webAutomationRuntimeTracePayload`. `web-panel-host.ts:2` imports
+   shim is removed (the method is public); the full dead-export list is
+   section (e) of `reports/audit-core-runtime.md`. `web-panel-host.ts:2` imports
    `AutomationStudioNativeNodeRuntime` from `fluxiq/automation-studio` (it
    is publicly exported) if Node 22 `require(esm)` resolves it from the CJS
    host; otherwise the deep import stays with a comment naming the reason.
@@ -551,22 +541,14 @@ Steps:
    (`packages/contracts`, `packages/fluxiq` runtime and Automation Studio
    model), why, and the compatibility impact (additive fields, legacy
    regex fallback retained).
-2. **Core seam C1 + C2** (Core worker; files: `packages/contracts/src/
-   client-gateway.ts`, `packages/fluxiq/src/io/index.ts`
-   (`OutputDispatchResult.status?`), `packages/fluxiq/src/runtime/
-   contracts.ts`, `programs/automation-studio/nodes/contracts.ts`
-   (`AutomationNodeExecutionResult.message?`/`failure?`),
-   `runtime/io-policy.ts` (propagate status, message, and the existing
-   `elementTargetResolution` diagnostics), `runtime/executor/attempt-trace.ts`
-   (carry `message`, `failure`, `targetResolution`),
-   `runtime/executor/contracts.ts` (`targetResolution?` beside `stateRefs`),
-   `runtime/executor/transition-comparison.ts` and
-   `runtime/adaptive-orchestrator.ts` (prefer the structured field; regex
-   only as legacy fallback), `model/flow-adaptation.ts` (attempt record
-   `failure?` and bounded `failureEvidence` reference),
-   `runtime/service/summaries/conversions.ts`,
-   `runtime/llm/harness/context-packet.ts` (category and retry history in
-   the packet)): extend `AutomationStudioAdaptiveFailureClass` with
+2. **Core seam C1 + C2** (Core worker; the file-by-file chain is section
+   (c) of `reports/audit-core-runtime.md`: `OutputDispatchResult.status?`,
+   `AutomationNodeExecutionResult.message?`/`failure?`, propagation in
+   `io-policy.ts` and `attempt-trace.ts`, `targetResolution?` beside
+   `stateRefs`, structured-first classification in
+   `transition-comparison.ts` and `adaptive-orchestrator.ts`, the attempt
+   record and `conversions.ts`, and the LLM context packet): extend
+   `AutomationStudioAdaptiveFailureClass` with
    `target_not_found`, `target_ambiguous`, `navigation_unexpected`,
    `output_not_observed`, `page_changed`, `auth_required`,
    `user_intervention_required`, and `AutomationStudioTransitionComparisonStatus`
