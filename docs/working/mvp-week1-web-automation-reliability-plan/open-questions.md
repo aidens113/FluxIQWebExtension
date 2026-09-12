@@ -290,3 +290,240 @@ the plan sits against its 800-line threshold.
   to notice. Narrow the type when the producers land in this wave, and add a
   producer, or the classifier is dead code with a permissive door. Found
   2026-09-11 by w3-failure-codes; owner: senior supervisor agent.
+- **Redacting at one reader did not close the secret's other exits.** Phase 1.4
+  step 1 was scoped as "stop the recorder capturing password values", and
+  w3-redaction closed that properly by redacting inside `readElementValue`, which
+  also fixed `recorder.ts` without editing it. But a value leaves the page by
+  more routes than the value reader. `dom.keydown` was reconstructing the
+  password one character per message — no single message held the secret, so a
+  substring search over any one message would have passed while the recording
+  still replayed it in order. And `content/actions/{type,clear,select}.ts` were
+  interpolating the live value into their `expected` and `actual` validation
+  strings, returning it to the gateway twice per typing result. Two further
+  gaps: the `sensitive-input` fixture's card field carries no
+  `autocomplete="cc-number"`, so the scenario that exists to prove card
+  redaction could not have caught a card leak, and `recording/reducers.ts`
+  writes `inputValue` into durable web state with no guard of its own, safe only
+  while its producer redacts.
+  The lesson for the rest of Week 1: a redaction brief must enumerate the
+  value's exits — reader, event stream, action result, evidence packet, durable
+  state — and prove each one, rather than naming the files where the value is
+  read. Assert absence across a whole recorded session, not per message.
+  Found 2026-09-12 by w3-redaction; the four gaps dispatched the same day as
+  w3-redaction-followup. Owner: senior supervisor agent.
+- **Six content specs assert behaviour Wave 3 deliberately changed, and no brief
+  owns them.** A full `test:content` run part-way through the wave was 115
+  passed / 17 failed, every failure in `click`, `keyboard`, `select`,
+  `check-assert`, `upload-dialog` or `resolve-target` — specs written in Wave 2
+  that assert the old resolution behaviour and the old failure-code spellings
+  that w3-resolver and w3-failure-producers were briefed to change. The specs
+  are correct about the old contract and wrong about the new one, so this is
+  expected mid-wave churn rather than a regression, but it means the content
+  harness cannot gate anything until it is reconciled. This is the same defect
+  as the Wave 2 entry above about `actions.spec.ts` being shared and unowned:
+  when a brief changes a contract, the specs that assert the old contract have
+  to be in that brief's Owns, or in a named reconciliation task. Fix at Wave 3
+  integration, when the tree is still, and check each spec against the new
+  contract rather than editing until green. Found 2026-09-12 by
+  w3-frame-plumbing; owner: senior supervisor agent.
+- **The domain package cannot be consumed outside a bundler, and that is why the
+  runner's vocabulary drifts.** Phase 1.5 step 5 asked the test runner to derive
+  its allowlist from the domain's code set instead of repeating it.
+  `packages/test-runner` cannot import the domain at all: `exports` maps `.` to
+  `./src/index.ts`, which Node refuses (`ERR_UNKNOWN_FILE_EXTENSION`);
+  `domain/dist/index.js` uses extensionless relative specifiers because the
+  domain compiles under `moduleResolution: Bundler`, which Node also refuses
+  (`ERR_MODULE_NOT_FOUND`); and a `NodeNext` consumer cannot even read its types.
+  Every existing consumer bundles, so this has never surfaced before.
+  This is the wave's recurring ownership defect one layer deeper: the brief's
+  Owns was drawn correctly around the runner, but the change needs the *domain*
+  to be publishable to a non-bundler consumer, which is a property of how
+  `domain/` is compiled rather than a missing barrel line. It affects any future
+  consumer outside the extension bundle.
+  Deliberately not fixed during the wave: the fix changes `domain/tsconfig.json`
+  and the package's `exports`, which would change what `check` reports for the
+  four domain workers running at the time and could fail them mid-gate. Fix at
+  Wave 3 integration on a still tree, then delete the deliberate second copy of
+  the vocabulary that now lives in
+  `packages/test-runner/src/tests/demo-llm-create-ui.test.ts` — it exists so a
+  divergence fails loudly instead of dropping evidence silently, and it is the
+  same duplication the brief set out to kill. Decide then whether the declared
+  `@fluxiq-web-extension/domain` dependency stays: today it buys nothing and
+  adds the domain to the Lab build graph.
+  Found 2026-09-12 by w3-runner-alignment; owner: senior supervisor agent.
+- **There are three failure vocabularies in this repository, and the plan names
+  two.** Phase 1.5 step 5 says the runner's allowlist "derives from" the closed
+  set in `codes.ts`. It cannot. The allowlist in `demo-llm-create-ui.ts` holds
+  evidence-loop *result* codes (`web.inspect.succeeded`,
+  `web.action.rejected.<reason>`), produced by `llm-evidence.ts`, which are not
+  failure records at all; deriving it from `WEB_AUTOMATION_FAILURE_CODES` would
+  drop both success codes and replace five reason-suffixed rejections with a
+  single `web.action.rejected` that nothing emits — that is, it would drop every
+  step. The three axes are the test-rig taxonomy (`failureCategories`, why the
+  *facility* could not produce a trustworthy run), the browser-path failure codes
+  (`codes.ts`, how the *automation* failed), and the evidence-loop result codes
+  (`llm-evidence.ts`). Correct the plan text and any brief that repeats the
+  conflation. Found 2026-09-12 by w3-runner-alignment; owner: senior supervisor
+  agent.
+- **Three different `truncated` flags are landing on one evidence path.**
+  w3-state-identity adds `elements.truncated` to recording state, w3-evidence
+  adds a snapshot-level `truncated` with pre-filter totals, and w3-llm-packet
+  adds a byte-budget `truncated` to the sanitized packet. All three are correct
+  in isolation and all three are called the same thing on the same path, so a
+  consumer cannot tell which limit it hit. Reconcile at integration: either
+  qualify each name or make them one nested structure. Found 2026-09-12 by
+  w3-state-identity; owner: senior supervisor agent.
+- **`elements.count` changed meaning, and its declaration did not.**
+  w3-state-identity made `elements.count` the pre-filter total and added
+  `elements.captured` and `elements.truncated`, but `domain/src/recording/
+  domain.ts` still declares `elements.count` as "Captured element count" and
+  does not declare the other two. That file was another worker's during the
+  wave. Nothing fails today because the `elements.*` wildcard covers validation,
+  so the panel's labels are simply wrong. Three declaration lines, to apply at
+  integration. Consider at the same time whether the wire-visible meaning change
+  is right, or whether a new `elements.total` would be kinder to consumers —
+  w3-state-identity reports it is cheap to invert. Found 2026-09-12 by
+  w3-state-identity; owner: senior supervisor agent.
+- **Settled: the per-reason rejection codes collapse, and the reason is not
+  lost.** w3-failure-producers replaced `web.action.rejected.<reason>` with the
+  set's single `web.action.rejected`, which breaks 15 `code:` assertions across
+  five content specs it does not own (`check-assert` 84/93/104, `click`
+  170/185/204, `keyboard` 203/220/237/252, `select` 153/166/182, `upload-dialog`
+  70/119). The supervisor checked whether the collapse discards information
+  before accepting it. It does not. Core's `AutomationStudioFailureRecord` has a
+  closed field set — `category`, `code`, `retryable`, `stage`, `expected`,
+  `actual`, `evidenceDigest` — and `parseAutomationStudioFailureRecord` rejects
+  anything else, so a bespoke `reason` field could never have survived the wire
+  anyway. The producer writes the reason into `actual` as
+  `` `${reason}: ${observed}` ``, and `actual` is precisely Core's "short
+  description of what was observed instead". So the reason travels; only its
+  location changed. Update the 15 assertions to the collapsed code and assert
+  the reason in `actual`; do not revert the collapse.
+  Distinct and **not** to be merged with this: `web.action.rejected.<reason>` in
+  `llm-evidence/` is an evidence-loop *tool refusal*, a different axis that
+  merely shares a prefix. Settled 2026-09-12 by the supervisor.
+- **Level 2 target scoring is blocked by Core packaging, and D1's stated premise
+  is false.** D1 says Core's matcher "is public via `fluxiq/automation-studio`,
+  has type-only imports, and bundles under the existing esbuild
+  `platform: browser` build". w3-resolver reproduced the opposite: that barrel
+  reaches `node:crypto` and `node:perf_hooks`, and bundling it for the browser
+  fails with five resolution errors. The worker deliberately did not create
+  `score.ts` rather than reimplement Core's scoring downstream, which was the
+  right call — a second scorer is exactly what D1 exists to prevent.
+  The fix is a Core `exports` subpath for `fingerprinting/`, plus an alias in
+  `apps/extension/scripts/build-extension.mjs` and a `paths` entry in
+  `apps/extension/tsconfig.json`. Prefer that over D1's documented fallback
+  (returning candidates for Core to score out of process), because the fallback
+  gives up the live-DOM signals that motivated D1. Deliberately deferred during
+  the wave: the build script is the one file every worker's `test:content`
+  depends on. Do it at integration on a still tree, and re-measure the content
+  bundle — the domain import already grew it 32%, which is unratified.
+  Note that Level 1 did land: exact-match gating, candidate enumeration and the
+  ambiguity failures are in. Found 2026-09-12 by w3-resolver; owner: senior
+  supervisor agent.
+- **Corrected: the fingerprint does reach the content script.** The supervisor
+  read `WebAutomationActionCommand`, found no `element` or `fingerprint` field,
+  and told two workers the fingerprint was being dropped at the boundary and
+  that the resolver was being built against an input that never arrives. That
+  was wrong, and the error was concluding too much from a missing named field
+  without following the untyped `options` blob. w3-resolver disproved it by
+  bundling the domain source and executing the path: `payloads.ts` puts the
+  fingerprint in the node's *parameters*, and `webAutomationActionFromGateway
+  Command` ends with `options: parameters`, so it arrives as
+  `action.options.element`, which is where the resolver already reads it.
+  What remains is real but smaller: the fingerprint travels through an untyped
+  blob that no type describes and nothing validates, so promoting it to a
+  declared optional field is a contract improvement rather than a repair, and
+  both paths must stay live until the untyped one is removed deliberately.
+  The lesson: reading a type tells you what is declared, not what is carried.
+  Corrected 2026-09-12; owner: senior supervisor agent.
+- **Integration checklist accumulating from Wave 3 reports.** Each is small,
+  unowned, and needs a still tree: the four failure builders in
+  `validation-outcome.ts` now have zero production call sites; narrowing
+  `WebAutomationRuntimeError["code"]` to the closed set is a two-line change in
+  `domain/src/runtime/errors.ts` with no import cycle; `action-runner.ts:76`
+  still sends `topFrameOnly` for `capture_snapshot`, so frame coverage cannot
+  match the state pipeline; tracked `domain/.test-build/` is stale and needs one
+  unlabelled domain test run; `docs/architecture/testing-facility.md:34` names
+  the deleted `domain/src/runtime/llm-evidence.ts`; and
+  `e2e/content/tests/resolve-target.spec.ts` and
+  `content/action-runtime/wait-conditions.ts` should have been in w3-resolver's
+  Owns. Collected 2026-09-12; owner: senior supervisor agent.
+- **Three Wave 3 briefs granted the same file with no partition inside it.**
+  `apps/extension/src/runtime/action-runner.ts` appears under Owns in
+  w3-frame-plumbing, w3-extension-gaps (granted mid-wave on request) and
+  w3-worker-codes. Nothing was lost, but only because each change happened to
+  touch different named lines and the three ran at different times. The wave's
+  own rule is that briefs are partitioned by file; where a file genuinely must be
+  shared, the brief has to name the region or the function, and the supervisor
+  has to serialize the workers rather than trust that their edits will not meet.
+  Raised 2026-09-12 by w3-worker-codes; owner: senior supervisor agent.
+- **Settled: `workerActionFailedFailure` maps to `ACTION_FAILED`, not `UNKNOWN`.**
+  The supervisor's brief told w3-worker-codes to map it to `UNKNOWN`, glossing
+  that member as "the action ran and failed for a reason no other code names".
+  That sentence is `ACTION_FAILED`'s docstring verbatim
+  (`domain/src/runtime/failure/codes.ts:50`); `UNKNOWN` is "Nothing said why the
+  action failed", and all three call sites do say why. The worker declined the
+  mapping and was right. It also showed with a mutation that `UNKNOWN` would have
+  changed the category to `ambiguous_or_unknown` and `retryable` to `false`,
+  which is a behaviour change on Core's retry path rather than a naming choice.
+  A second defect surfaced in the same work and is worth remembering: narrowing
+  the type alone would have produced records that contradict themselves, because
+  `workerBlockedFailure` hard-wrote stage `dispatch` while `ACTION_REJECTED`'s
+  row says `execution`. The builders now delegate to `webAutomationFailureRecord`
+  so the code's own table decides category, retryable and stage, which is the
+  mechanical enforcement the closed set was created for. Settled 2026-09-12.
+- **Half of the headline audit finding is now closed, and it is worth being
+  precise about which half.** The Week 1 audit said "Core's element matcher never
+  receives candidates and its top signals are zero for web targets". Those are two
+  defects, not one.
+  The *signals* half is fixed. `outputTargetFromPayload` preferred Core's
+  normalized target over the recorder's fingerprint, and Core's normalizer builds
+  that fingerprint only from the parameters' top-level keys, so the wire target
+  collapsed to a bare selector on every dispatch. w3-target-signal-order reordered
+  the chain — the adapted copy wins only when Core actually matched a candidate —
+  and measured the wire target going from **1 to 12 signals** on the executed
+  path, with both drift branches unchanged so drift recovery is preserved.
+  The *candidates* half is still open, and nothing in Wave 3 closes it. It needs
+  the content script to enumerate live-DOM candidates and return them, which is
+  Level 2 scoring, blocked on the Core packaging problem recorded above. Until then the
+  matcher still receives no candidates. Do not read the signal fix as closing the
+  exit criterion.
+  A correction to the supervisor's brief, the fourth of this wave: the degrading
+  link was `adaptedTarget.fingerprint`, not `adaptedTarget.element` — Core emits no
+  `element` on a normalized target at all. The fix was the same either way, but the
+  mechanism in the brief was wrong. Recorded 2026-09-12 by w3-target-signal-order.
+- **The domain test runner aborts the whole suite on the first throw.** Every
+  bundle is imported in one process, so a single failing assertion stops the run
+  before most files execute, and a concurrent worker sees `# tests 10` and an
+  abort rather than one red row. That happened during Wave 3: one stale assertion
+  in `client/tests/gateway-mapping.test.ts` masked the state of the entire domain
+  suite for every worker running at the time, and diagnosing it needed a
+  per-entry run in separate processes. The supervisor fixed the assertion (the
+  suite is 234/234 green again), but the runner behaviour is the real defect: a
+  test runner that hides 200 results behind the first failure is actively
+  misleading during parallel work. Make it isolate failures, or at minimum report
+  what it did not get to. Found 2026-09-12 by w3-target-signal-order; owner:
+  senior supervisor agent.
+- **The content harness fails catastrophically and misleadingly under default
+  Playwright concurrency on this machine.** w3-spec-reconciliation's first run
+  reported **66 of 66 failed**, every one a 30-second timeout inside
+  `e2e/content/harness.ts:88` with no assertion diff. That is indistinguishable
+  at a glance from a content script hanging on every single action — the exact
+  symptom of a catastrophic product regression — and it is nothing of the kind.
+  At `--workers=3` and `--workers=4` the same tree passes 179 of 179, exit 0.
+  Run the content harness with `--workers=4` here. This belongs with the two
+  environmental entries above (`tsc` access violations, Core's native SQLite
+  corrupting vitest workers): on this machine, a total and uniform failure under
+  parallel load is the machine, and the tell is that every failure is a timeout
+  with no assertion diff. A partial failure with real diffs is a real failure.
+  Found 2026-09-12 by w3-spec-reconciliation; owner: senior supervisor agent.
+- **Three assert rows are tests that cannot fail.** Three of the five reconciled
+  assert rows pass `timeoutMs: 200` to exercise the expiry path, but
+  `AssertionOutcome` carries no timing, so they assert `STATE_MISMATCH` — and
+  would assert exactly the same if the polling loop were deleted outright. The
+  wait is therefore unproven in both directions: nothing shows it waits, and
+  nothing would notice if it stopped. This is the same root gap as
+  "`web.dom.assert` cannot report `TIMEOUT` at all", reported independently by
+  w3-extension-gaps. Fixing the timing fixes both. Found 2026-09-12 by
+  w3-spec-reconciliation; owner: senior supervisor agent.

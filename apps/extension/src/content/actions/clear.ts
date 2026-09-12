@@ -9,12 +9,21 @@
 // is refused first, by the same actionability gate `web.dom.click` uses, so
 // the result says why the field was unreachable instead of only that it did
 // not end up empty.
+//
+// The read-back is where a secret could escape: a field the page refills is
+// reported as still holding something, and quoting that something would return
+// a password the clear failed to remove. An empty field is not a secret, so the
+// passing case reads as it always did; the failing one names the leftover value
+// by its length when the control is sensitive, by the one shared rule.
 
+import { isSensitiveFormControl } from "../element-traits";
 import type { BrowserActionCommand, BrowserActionResult } from "../types";
 import type { ContentActionDependencies } from "./types";
+import { describeFieldValue } from "./value-redaction";
 
 export function clearAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): BrowserActionResult {
   const element = deps.resolveTarget(action);
+  const withheld = isSensitiveFormControl(element);
   const evidence = () => ({ element: deps.describeElement(element), snapshot: deps.captureSnapshot() });
 
   const report = deps.checkActionability(element);
@@ -39,6 +48,6 @@ export function clearAction(action: BrowserActionCommand, deps: ContentActionDep
   return deps.success(action, startedAt, empty ? "Field cleared." : "The field did not stay empty.", {
     status: empty ? "passed" : "failed",
     expected: "the field is empty",
-    actual: empty ? "the field is empty" : `the field holds "${actual}"`
+    actual: empty ? "the field is empty" : `the field holds ${describeFieldValue(actual, withheld)}`
   }, evidence());
 }

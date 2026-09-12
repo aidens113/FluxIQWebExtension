@@ -1,26 +1,18 @@
 // Which form fields must never have their value recorded or sent: password
 // inputs, one-time codes, card fields, and anything marked `data-sensitive`.
-// One rule for both sides — the content script reads the signature from the
-// element, the background worker from the wire descriptor — so the two cannot
-// drift apart.
+//
+// The rule itself is not here any more. It lives in `domain/src/sensitivity/`,
+// because that is the only package every caller can reach: the structure audit
+// forbids `domain/src` importing `apps/extension/src`, so a rule kept here had
+// to be copied to be used by the recording reducer and the LLM evidence
+// packet, and the copies drifted -- one of them stopped seeing a real card
+// field. This file stays as the extension's name for that rule, so the eight
+// call sites that import it do not have to know where it moved, and so that
+// there is still exactly one import path on this side of the wire.
+//
+// The content script reads the signature from the live element
+// (`content/element-traits.ts`), the background worker from the wire
+// descriptor (`background/connection/runtime-status.ts`); both end here, and
+// here ends in the domain package.
 
-/** The three field attributes the sensitivity rule reads. */
-export type SensitiveFieldSignature = {
-  inputType?: string | undefined;
-  autocomplete?: string | undefined;
-  dataSensitive?: string | undefined;
-};
-
-const SENSITIVE_AUTOCOMPLETE_TOKENS = new Set(["current-password", "new-password", "one-time-code"]);
-
-/**
- * `autocomplete` is a space-separated token list (`section-*`, `shipping` or
- * `billing`, a contact kind, then the field name), so every token is checked:
- * `billing cc-number` is a card field.
- */
-export function isSensitiveFieldSignature(signature: SensitiveFieldSignature): boolean {
-  if (signature.inputType?.toLowerCase() === "password") return true;
-  if (signature.dataSensitive === "true") return true;
-  const tokens = (signature.autocomplete ?? "").toLowerCase().split(/\s+/u).filter(Boolean);
-  return tokens.some((token) => SENSITIVE_AUTOCOMPLETE_TOKENS.has(token) || token.startsWith("cc-"));
-}
+export { isSensitiveFieldSignature, type SensitiveFieldSignature } from "@fluxiq-web-extension/domain/client";

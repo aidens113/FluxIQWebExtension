@@ -6,7 +6,9 @@ import assert from "node:assert/strict";
 import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionType } from "../../actions/types";
 import { WEB_AUTOMATION_DOMAIN_ID, WEB_AUTOMATION_EVENTS } from "../../constants";
-import { createWebAutomationRecordingEvent, normalizeWebAutomationActionType, webAutomationActionFromGatewayCommand } from "../gateway-mapping";
+import type { WebAutomationActionResult } from "../../actions/types";
+import { outputTargetFromPayload, webAutomationOutputPayload } from "../../output-nodes";
+import { createWebAutomationRecordingEvent, normalizeWebAutomationActionType, webAutomationActionFromGatewayCommand, webAutomationActionResultPayload } from "../gateway-mapping";
 
 // The one failure record a rejected action type carries, in Core's taxonomy.
 const unsupportedTypeFailure = { category: "blocked_by_capability_or_policy", code: "web.action.unsupported_type", retryable: false, stage: "dispatch" };
@@ -106,5 +108,196 @@ assert.deepEqual(rejected, {
 assert.equal("selector" in rejected, false, "a rejected command carries nothing to execute");
 assert.equal(webAutomationActionFromGatewayCommand({ commandId: "command.legacy", actionType: "dom.hover" }).actionType, "dom.hover");
 assert.equal("status" in webAutomationActionFromGatewayCommand({ commandId: "command.legacy", actionType: "dom.hover" }), true);
+
+// -- The frame an interaction was recorded in, end to end ---------------------
+// A command addressed to a child frame has to know which frame, and the only
+// place that survives is the recorded event. `sourceId` names the tab and frame
+// as text nothing parses; `payload.browserFrameId` is the field the output
+// payload reads and the parameter lift turns back into `action.frameId`.
+
+const framedEvent = createWebAutomationRecordingEvent(
+  { kind: "dom.click", sequence: 4, url: "https://example.test", title: "Example", eventTimestampMs: 40, element: { selector: "#save", tagName: "button" } },
+  { tabId: 12, frameId: 3 }
+);
+assert.equal(framedEvent.payload?.browserFrameId, 3, "the recorded frame is on the payload, not only inside sourceId");
+assert.equal(framedEvent.sourceId, "tab:12:frame:3");
+assert.equal(
+  createWebAutomationRecordingEvent({ kind: "dom.click", sequence: 5, url: "https://example.test", title: "Example", eventTimestampMs: 50 }, { tabId: 12, frameId: 0 }).payload?.browserFrameId,
+  0,
+  "frame 0 is the top frame, not an absent frame"
+);
+assert.equal(
+  "browserFrameId" in (createWebAutomationRecordingEvent({ kind: "dom.click", sequence: 6, url: "https://example.test", title: "Example", eventTimestampMs: 60 }, { tabId: 12 }).payload ?? {}),
+  false,
+  "an event recorded with no frame claims none"
+);
+
+// The whole chain: recorded event -> replayable parameters -> action command.
+const framedParameters = webAutomationOutputPayload("web.dom.click", framedEvent.payload ?? {});
+const framedCommand = webAutomationActionFromGatewayCommand({
+  commandId: "command.framed",
+  actionType: "web.dom.click",
+  target: { selector: "#save" },
+  parameters: framedParameters
+});
+assert.equal("status" in framedCommand, false, "the framed command is not a rejection");
+assert.equal((framedCommand as { frameId?: number }).frameId, 3, "the recorded frame reaches action.frameId");
+
+// -- The recorded element's identity, end to end ------------------------------
+// The whole point of a fingerprint is that the page can recognize a control
+// again after its selector, id or class have drifted. It reaches the content
+// script two ways: inside the raw `options` bag, which is how the resolver
+// reads it today, and now on a declared `element` field the compiler checks.
+// Both must be live, and both must say the same thing.
+
+// An element descriptor as `content/describe-element.ts` produces one.
+const recordedElement = {
+  selector: "#save-settings",
+  tagName: "button",
+  id: "save-settings",
+  testId: "save-changes",
+  accessibleName: "Save changes",
+  label: "Save",
+  visibleText: "Save changes",
+  implicitRole: "button",
+  classNames: ["btn", "btn-primary"],
+  attributes: { id: "save-settings", "data-testid": "save-changes" }
+};
+
+const identityEvent = createWebAutomationRecordingEvent({
+  kind: "dom.click", sequence: 7, url: "https://example.test/settings", title: "Settings", eventTimestampMs: 70, element: recordedElement
+});
+const identityParameters = webAutomationOutputPayload("web.dom.click", identityEvent.payload ?? {});
+// `dispatchWebAutomationOutput` builds the wire target from the node's own
+// parameters, so the command below is assembled exactly as the gateway does it.
+const identityTarget = outputTargetFromPayload(identityParameters);
+const identityCommand = webAutomationActionFromGatewayCommand({
+  commandId: "command.identity",
+  actionType: "web.dom.click",
+  ...(identityTarget ? { target: identityTarget } : {}),
+  parameters: identityParameters
+}) as unknown as { element?: Record<string, unknown>; options?: { element?: unknown }; selector?: string };
+
+assert.equal(identityCommand.selector, "#save-settings", "the selector still reaches the command");
+assert.ok(identityCommand.element, "a DOM-scoped action arrives with its element descriptor");
+assert.equal(identityCommand.element?.testId, "save-changes", "the highest weighted identity signal survives dispatch");
+assert.equal(identityCommand.element?.accessibleName, "Save changes");
+assert.equal(identityCommand.element?.label, "Save");
+assert.equal(identityCommand.element?.visibleText, "Save changes");
+// `implicitRole` was dropped by `elementFingerprint` until this change. A page
+// that authors no `role` attribute has no `role` field at all, so without it a
+// replay reaches the page with no semantic signal to match on.
+assert.equal(identityCommand.element?.implicitRole, "button", "the implied role is a matching signal, not recorder trivia");
+// The declared field and the untyped path the resolver reads must not drift
+// while both exist.
+assert.deepEqual(identityCommand.element, identityCommand.options?.element, "the declared field and options.element are the same identity");
+
+// Core's `prepareElementTargetAction` runs on every policy output dispatch and
+// writes a normalized element target back as `parameters.target`. It builds
+// that fingerprint from the parameters' own top-level keys and never looks
+// inside `parameters.element`, so with no runtime candidates to match it is a
+// lossy copy: `{ selector, statePath }` against the eleven signals the recorder
+// captured. `outputTargetFromPayload` used to prefer it, collapsing the wire
+// target to a bare selector; w3-target-signal-order reordered the chain so the
+// adapted copy wins only when Core actually matched a candidate. Here it matched
+// nothing, so the recorder's richer fingerprint is kept.
+const preparedParameters = {
+  ...identityParameters,
+  target: { kind: "element", fingerprint: { selector: "#save-settings", statePath: "web.elements.save.changes" }, source: "runtime" }
+};
+const preparedTarget = outputTargetFromPayload(preparedParameters);
+const preparedElement = preparedTarget?.element as Record<string, unknown> | undefined;
+assert.equal(preparedElement?.selector, "#save-settings", "the prepared target keeps its selector");
+assert.equal(preparedElement?.testId, "save-changes", "Core matching nothing must not strip the recorder's signals from the wire target");
+const preparedCommand = webAutomationActionFromGatewayCommand({
+  commandId: "command.prepared",
+  actionType: "web.dom.click",
+  ...(preparedTarget ? { target: preparedTarget } : {}),
+  parameters: preparedParameters
+}) as unknown as { element?: Record<string, unknown>; options?: { element?: unknown } };
+assert.equal(preparedCommand.element?.testId, "save-changes", "the declared field keeps the recorded identity Core's normalization dropped");
+assert.equal(preparedCommand.element?.implicitRole, "button");
+assert.deepEqual(preparedCommand.element, preparedCommand.options?.element, "the declared field is never poorer than options.element");
+
+// When Core did match a runtime candidate the target's copy describes the
+// element the page really has, and it wins over the recorded one, which may be
+// stale. `selectedCandidate` on the adapted target is what says so.
+const adaptedParameters = {
+  ...identityParameters,
+  target: {
+    kind: "element",
+    fingerprint: recordedElement,
+    candidates: [{ candidateId: "save-changes", selector: "#settings-save", testId: "save-changes", tagName: "button" }],
+    selectedCandidate: { candidateId: "save-changes", confidence: 0.91, matchedSignals: ["testId"], failedSignals: [] }
+  }
+};
+const adaptedTarget = outputTargetFromPayload(adaptedParameters);
+const adaptedCommand = webAutomationActionFromGatewayCommand({
+  commandId: "command.adapted",
+  actionType: "web.dom.click",
+  ...(adaptedTarget ? { target: adaptedTarget } : {}),
+  parameters: adaptedParameters
+}) as unknown as { element?: Record<string, unknown> };
+assert.equal(adaptedCommand.element?.selector, "#settings-save", "the adapted target's element wins over the recorded one");
+
+// A command sent as a raw element target names the fingerprint `fingerprint`.
+const rawFingerprintCommand = webAutomationActionFromGatewayCommand({
+  commandId: "command.raw-fingerprint",
+  actionType: "web.dom.click",
+  target: { kind: "element", fingerprint: { selector: "#save", tagName: "button", testId: "save" } },
+  parameters: {}
+}) as unknown as { element?: Record<string, unknown> };
+assert.equal(rawFingerprintCommand.element?.testId, "save", "target.fingerprint is read as well as target.element");
+
+// An object with no identifying signal is not an identity, and must not be
+// dispatched as an empty one.
+const unidentifiedCommand = webAutomationActionFromGatewayCommand({
+  commandId: "command.unidentified",
+  actionType: "web.dom.click",
+  target: { selector: "#anything", element: { unrelated: true } },
+  parameters: {}
+});
+assert.equal("element" in unidentifiedCommand, false, "an empty fingerprint is absent, not an empty object");
+// An action that never had a target gains no element field either.
+assert.equal("element" in webAutomationActionFromGatewayCommand({ commandId: "command.navigate", actionType: "web.browser.navigate", parameters: { url: "https://example.test" } }), false);
+
+// -- The validation an action checked, on the wire ----------------------------
+// The content script proves every action's post-condition and says what it
+// expected and what it saw. Until now the result mapping dropped it, so the
+// domain could name a failure — OUTPUT_NOT_OBSERVED is defined as carrying
+// `expected` and `actual` — and never show the evidence behind it.
+
+const failedValidationResult: WebAutomationActionResult = {
+  commandId: "command.validated",
+  actionType: "web.dom.click",
+  status: "failed",
+  validation: { status: "failed", expected: "the settings dialog to close", actual: "the settings dialog is still open" },
+  message: "The click did not take effect.",
+  url: "https://example.test/settings",
+  startedAt: 100,
+  finishedAt: 140
+};
+assert.deepEqual(
+  webAutomationActionResultPayload(failedValidationResult).validation,
+  { status: "failed", expected: "the settings dialog to close", actual: "the settings dialog is still open" },
+  "a failed validation reaches the domain with both sides of the comparison"
+);
+assert.deepEqual(
+  webAutomationActionResultPayload({ ...failedValidationResult, status: "succeeded", validation: { status: "passed", expected: "the dialog to close", actual: "the dialog closed" } }).validation,
+  { status: "passed", expected: "the dialog to close", actual: "the dialog closed" },
+  "a passing validation is evidence too, not only a failing one"
+);
+assert.deepEqual(
+  webAutomationActionResultPayload({ ...failedValidationResult, status: "succeeded", validation: { status: "none", reason: "evidence-only" } }).validation,
+  { status: "none", reason: "evidence-only" },
+  "an action with no post-condition still says why it has none"
+);
+// A result assembled before validations existed carries none, and must not gain
+// an invented one: `gateway-payloads.ts` replays stored results through here.
+assert.equal(
+  "validation" in webAutomationActionResultPayload({ commandId: "c", actionType: "web.dom.click", status: "succeeded", startedAt: 1, finishedAt: 2 } as unknown as WebAutomationActionResult),
+  false,
+  "an absent validation stays absent"
+);
 
 console.log("Web automation gateway mapping tests passed.");

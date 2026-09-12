@@ -4,7 +4,7 @@
 // keeping a copy, so the wire shape cannot drift between the domain, the
 // background worker, and the content script.
 
-import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import type { AutomationStudioFailureRecord, ElementFingerprint } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 
 export type WebAutomationActionType =
@@ -28,6 +28,32 @@ export type WebAutomationActionType =
   | "web.browser.download";
 
 export type WebAutomationPoint = { x: number; y: number };
+
+/**
+ * Who the recorded element was, in the vocabulary Core's element matcher scores
+ * against runtime candidates (`fingerprinting/element-fingerprint.ts`).
+ *
+ * This is Core's `ElementFingerprint`, widened by the web-specific signals the
+ * domain already puts on the wire — it is not a third element-descriptor shape.
+ * `output-nodes/targets.ts` `elementFingerprint` is the one producer, and its
+ * output is exactly this: Core's signals plus `text`, `value`, `name`, `href`,
+ * `inputType` and `implicitRole`. Core's matcher ignores the extras; the page
+ * does not, so declaring only Core's half would hide fields the content script
+ * already reads (`content/element-finder.ts` matches on `name`, and
+ * `resolve-target.ts` falls back to `implicitRole` for the candidate family).
+ */
+export type WebAutomationElementFingerprint = ElementFingerprint & {
+  /** The element's own text, as the recorder trimmed it. Core weighs `visibleText`, not this. */
+  text?: string | undefined;
+  /** A non-sensitive control's value. A sensitive control never yields one. */
+  value?: string | undefined;
+  /** The authored `name` attribute, which `content/element-finder.ts` looks elements up by. */
+  name?: string | undefined;
+  href?: string | undefined;
+  inputType?: string | undefined;
+  /** The role the markup implies when no `role` attribute was authored. */
+  implicitRole?: string | undefined;
+};
 
 export type WebAutomationActionVisualTarget = {
   namespace: "web";
@@ -141,6 +167,20 @@ export type WebAutomationActionCommand = {
   timeoutMs?: number | undefined;
   coordinates?: WebAutomationPoint | undefined;
   visualTarget?: WebAutomationActionVisualTarget | undefined;
+  /**
+   * Who the target was when it was recorded, so the page can recognize it again
+   * after its selector, id or class have drifted.
+   *
+   * The same value also travels inside `options` — it is one of the raw
+   * parameters — and the resolver reads it from there today. This field is the
+   * declared half of that contract: `options` is an untyped bag that nothing
+   * checks, so a rename on either side would break resolution silently. It is
+   * also the *better* half after Core has adapted the target, because
+   * `output-nodes/targets.ts` builds the dispatched `target.element` from the
+   * candidate Core matched, while `parameters.element` is still the one that
+   * was recorded.
+   */
+  element?: WebAutomationElementFingerprint | undefined;
   /** `web.browser.navigate`: open a new tab instead of reusing the automation tab. */
   newTab?: boolean | undefined;
   /** `web.dom.select`, when the option is named by label or index rather than by `value`. */

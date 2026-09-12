@@ -13,6 +13,13 @@
 // is only true if the click really did not reach the target. The control row at
 // the end removes the obstacle and clicks the same element successfully, so the
 // gate is shown to be discriminating rather than simply refusing.
+//
+// All three refusals carry the one code the closed set names,
+// `web.action.rejected`: Core routes on the category, which is the same for
+// every refusal, and a per-reason code would be a string invented at a call
+// site. The reason is not lost, and each row asserts where it went -- the
+// record's `actual` reads `"<reason>: <what was observed>"`, so `disabled`,
+// `covered` and `hidden` are still told apart by a reader and by these rows.
 
 import type { Page } from "@playwright/test";
 import { expect, test } from "../index.js";
@@ -167,7 +174,10 @@ test.describe("on failure-surfaces", () => {
       status: "failed",
       message: "Action rejected: the element is disabled",
       validation: { status: "failed", expected: "a target that can be clicked", actual: "the element is disabled" },
-      failure: { category: "blocked_by_capability_or_policy", code: "web.action.disabled", retryable: false, stage: "execution" },
+      failure: {
+        category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false, stage: "execution",
+        expected: "a target that can be clicked", actual: "disabled: the element is disabled"
+      },
       element: { selector: DISABLED_TARGET }
     });
     // The refusal is real: not one event of the gesture was dispatched.
@@ -182,11 +192,15 @@ test.describe("on failure-surfaces", () => {
     const reply = await harness.runAction({ commandId: "click-covered", actionType: "web.dom.click", selector: DETACH_TARGET });
     expect(reply).toMatchObject({
       status: "failed",
-      failure: { category: "blocked_by_capability_or_policy", code: "web.action.covered", retryable: false, stage: "execution" },
+      failure: { category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false, stage: "execution" },
       validation: { status: "failed", expected: "a target that can be clicked" }
     });
     expect(reply.validation).toMatchObject({
       actual: expect.stringMatching(/^the point \d+,\d+ landed on div\[data-testid="overlay"\], which covers the target$/u)
+    });
+    // The reason the one code no longer spells out, named in the record itself.
+    expect(reply.failure).toMatchObject({
+      actual: expect.stringMatching(/^covered: the point \d+,\d+ landed on div\[data-testid="overlay"\], which covers the target$/u)
     });
     // Without the gate this click would have removed the button.
     await expect(page.locator(DETACH_TARGET)).toHaveCount(1);
@@ -201,7 +215,10 @@ test.describe("on failure-surfaces", () => {
       status: "failed",
       message: "Action rejected: the element's display is none",
       validation: { status: "failed", expected: "a target that can be clicked", actual: "the element's display is none" },
-      failure: { category: "blocked_by_capability_or_policy", code: "web.action.hidden", retryable: false, stage: "execution" }
+      failure: {
+        category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false, stage: "execution",
+        expected: "a target that can be clicked", actual: "hidden: the element's display is none"
+      }
     });
     expect((await harness.finalState()).state).toMatchObject({ attempts: 0 });
   });

@@ -49,11 +49,21 @@ metrics, and cannot run a Flow on `isolated`.
   is an ES module on Core's public exports; isolated runs here use
   `FLUXIQ_TEST_ENV_FILES=none`.
 
-**Running:** Wave 3. `w3-failure-codes` runs alone first, because ten parallel
-briefs quote its code set, and the Core expectation seam runs alongside it in the
-other repository, where it collides with nothing. Wave 2 is complete, integrated
-and pushed, and its follow-up landed: the run-manifest action-type join is wired
-through and tested, where it had been inert.
+**Running:** Wave 3, all ten parallel briefs, dispatched 2026-09-12. The serial
+prerequisite is finished: `w3-failure-codes` landed the closed code set, and its
+export seam — two barrel lines the brief had not granted anyone — is in, so the
+set is reachable from `@fluxiq-web-extension/domain`'s public entry. Wave 2 is
+complete, integrated and pushed, and its follow-up landed: the run-manifest
+action-type join is wired through and tested, where it had been inert.
+
+**The Core half of Week 1 is finished.** The expectation-evaluator seam (C3) was
+recovered from an interrupted worker on 2026-09-12, verified by the supervisor
+rather than taken on the worker's word, and pushed. Every Core contract this plan
+depends on now exists. The seam landed in a different shape than planned — the
+evaluator is a method on `AutomationStudioHostRuntimeBoundary`, not a separate
+service binding — so the downstream binding was folded into `w3-host-runtime`
+instead of getting a brief of its own, which would have collided on
+`host-runtime.ts`.
 
 **Findings that change later work**
 
@@ -76,21 +86,43 @@ through and tested, where it had been inert.
   credentials), and a process variable cannot clear those keys; isolated runs
   therefore set `FLUXIQ_TEST_ENV_FILES=none`, which skips both env files for
   one run. Never edit `.env.local`.
+- **A worker's crash is usually the machine, not the change.** Verifying the
+  Core seam produced a `tsc` segmentation fault here and three separate vitest
+  runs that each lost a test file to `Error: Worker exited unexpectedly`. None
+  of it was the code. In Core the root cause is a native SQLite module
+  corrupting under parallel load (`SQLITE_CORRUPT: malformed database schema`),
+  which kills the worker process outright instead of failing a test; Core
+  verifies cleanly with `--no-file-parallelism`. Downstream, running both
+  repositories' checks at once was enough to segfault `tsc`, and running the
+  downstream check alone passed. Run heavy gates one at a time.
+- **One clean baseline run does not clear a change.** Chasing the above, the
+  supervisor stashed the Core seam, saw a green parallel baseline, and briefly
+  concluded the seam caused the crashes. It did not — the baseline run was
+  lucky. Against an intermittent failure, compare like for like (here, the
+  sequential run) rather than trusting a single green.
 
-**Not done:** the ten parallel Wave 3 briefs, which wait on the code set; the
-downstream binding of the expectation seam, which has no brief yet; Waves 4
-and 5.
+**Not done:** the ten parallel Wave 3 briefs are running, none verified yet;
+Waves 4 and 5.
 
 **Next steps**
 
-1. Verify w3-failure-codes, then dispatch the ten parallel briefs from
-   [briefs/wave-3.md](./mvp-week1-web-automation-reliability-plan/briefs/wave-3.md).
-2. Brief the downstream binding once the Core seam lands.
-3. Keep Lab runs serialized: only one may execute on this machine at a time.
+1. Integrate the ten Wave 3 reports as they land, resolving conflicts where two
+   briefs touched the same contract from opposite sides — `browserFrameId`
+   (`w3-domain-contracts` and `w3-frame-plumbing`), the new evidence items
+   (`w3-evidence` and `w3-llm-packet`), and `expectedState`
+   (`w3-domain-contracts` and `w3-host-runtime`).
+2. Verify the integrated tree with `pnpm check`, `pnpm test` and `pnpm build`,
+   run one at a time, then a Lab run for the browser behaviour the unit tests
+   cannot prove.
+3. Close the two open questions this wave should settle: narrowing
+   `WebAutomationRuntimeError["code"]` to the closed set, and whether the
+   runner's allowlist and the test-rig `failureCategories` stay separate axes.
+4. Keep Lab runs serialized: only one may execute on this machine at a time.
 
-**Core unit (D11):** the baseline ratchet (mirrored here), domain-host loading,
-the failure taxonomy and carriers, and the web and runtime test suites are all
-verified, as recorded in the paired Core document.
+**Core unit (D11):** complete. The baseline ratchet (mirrored here),
+domain-host loading, the failure taxonomy and carriers, the web and runtime test
+suites, and now the expectation-evaluator seam are all verified and pushed, as
+recorded in the paired Core document. Week 1 asks nothing further of Core.
 
 **Blockers:** none. The user was alerted before the first Core edit.
 

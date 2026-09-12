@@ -11,10 +11,16 @@
 // Registration order is a contract in its own right -- pointerdown is recorded
 // before click so an action taken during the press is captured with the state
 // that preceded it.
+//
+// Sensitive controls (Phase 1.4): the `change` listener's `inputValue` comes
+// from `readElementValue`, which withholds a sensitive control's value at the
+// source, so nothing here has to remember to redact it. The keydown path is the
+// exception that does, because a key press carries the value one character at a
+// time and never goes through a value reader -- `recordableKey` handles it.
 
 import { compactObject } from "./compact-object";
 import { describeElement, readElementValue } from "./describe-element";
-import { isTextEntryElement, shouldRecordChangeEvent } from "./element-traits";
+import { isSensitiveFormControl, isTextEntryElement, shouldRecordChangeEvent } from "./element-traits";
 import {
   actionEventTarget,
   eventTargetElement,
@@ -111,9 +117,10 @@ export function installRecordingEventListeners(): void {
     if (!isRecording()) return;
     if (!event.isTrusted) return;
     rememberEventPathElements(event);
+    const keyTarget = event.target instanceof Element ? event.target : null;
     emit("dom.keydown", compactObject({
-      key: event.key,
-      element: event.target instanceof Element ? describeElement(event.target) : undefined,
+      key: recordableKey(event.key, keyTarget),
+      element: keyTarget ? describeElement(keyTarget) : undefined,
       metadata: {
         altKey: event.altKey,
         ctrlKey: event.ctrlKey,
@@ -152,6 +159,22 @@ export function installRecordingEventListeners(): void {
       emit("dom.scroll", { scroll: { x: window.scrollX, y: window.scrollY } });
     }, 400);
   }, true);
+}
+
+/**
+ * The key as it may be recorded, or `undefined` when it may not be.
+ *
+ * A printable key pressed in a sensitive control is that control's value,
+ * arriving one character at a time, so it is withheld and only the press
+ * survives -- the recording still shows that the field was typed into, which is
+ * what a replay needs, without ever carrying what was typed. A key whose name
+ * is longer than one character (`Tab`, `Enter`, `Escape`, an arrow, a modifier)
+ * carries no content and always travels, because the navigation and submission
+ * it performs are the point of recording keys at all.
+ */
+function recordableKey(key: string, target: Element | null): string | undefined {
+  if (!target || [...key].length !== 1) return key;
+  return isSensitiveFormControl(target) ? undefined : key;
 }
 
 function pointerMetadata(event: MouseEvent): JsonObject {

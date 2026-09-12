@@ -559,3 +559,45 @@ test("canonical apply digest requires exact sanitized Core bootstrap binding", (
   assert.throws(() => parseAppliedExecutionDigest({ ...body, payload: { adaptation: { metadata: { adaptationKind: "flow_bootstrap", bootstrap: { ...body.payload.adaptation.metadata.bootstrap, currentExecutionDigest: "other.digest" } } } } }, true, "base.digest"), /exact changed canonical Core execution binding/u);
   assert.throws(() => parseAppliedExecutionDigest({ ok: true, payload: { adaptation: { metadata: { adaptationKind: "flow_bootstrap", bootstrap: { baseExecutionDigest: "base.digest", currentExecutionDigest: "result.digest" } } } } }, true, "base.digest"), /malformed/u);
 });
+
+// The web-automation half of the evidence-loop vocabulary, restated from
+// `domain/src/runtime/llm-evidence.ts`: `getEvidenceTools()` offers exactly
+// these three tools, and `toolExecution` emits exactly these result codes --
+// the two successes plus one per `WebLlmToolRejectionCode`. The domain package
+// is bundler-only and cannot be imported into this tsc-and-node package (see
+// `reports/w3-runner-alignment.md`), so this restatement is the guard: a tool
+// or code added there fails here until the sanitizer's allowlist admits it.
+const DOMAIN_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe"];
+const DOMAIN_EVIDENCE_RESULT_CODES = ["web.inspect.succeeded", "web.action.succeeded", "web.action.rejected.invalid_input", "web.action.rejected.cross_origin", "web.action.rejected.no_progress", "web.action.rejected.target_unobserved", "web.action.rejected.target_unsafe", "web.action.rejected.sensitive_value"];
+
+test("the evidence-step sanitizer admits exactly the tools and result codes the domain produces", async () => {
+  const response = (body: string) => ({ status: () => 400, headers: () => ({}), text: async () => body });
+  const failure = (steps: unknown) => response(JSON.stringify({
+    ok: false,
+    error: "Flow Bootstrap generation failed (flow_bootstrap.evidence_tool_failed).",
+    payload: { diagnostic: {
+      code: "flow_bootstrap.evidence_tool_failed", stage: "provider_output_validation", retryable: false,
+      providerInvocation: "attempted", providerResponse: "received",
+      evidenceLoop: { iterationCount: 2, decisionCount: 1, toolCallCount: 1, evidenceBytes: 1450, steps },
+    } },
+  }));
+  const admitted = [
+    ...DOMAIN_EVIDENCE_TOOL_IDS.map(toolId => ({ toolId, effectApplied: true, resultCode: "web.action.succeeded" })),
+    ...DOMAIN_EVIDENCE_RESULT_CODES.map(resultCode => ({ toolId: "web.inspect_current_page", effectApplied: false, resultCode })),
+  ];
+  const kept = await readSanitizedGenerationFailure(failure(admitted));
+  assert.equal(kept.parsed, true);
+  assert.deepEqual(kept.evidenceSteps, admitted);
+  // Core's own tests name `web.click_safe`, `web.fill_safe` and `web.select_safe`; no host in this
+  // repository offers them, and a well-formed but unlisted result code is not evidence either.
+  const dropped = [
+    { toolId: "web.click_safe", effectApplied: false, resultCode: "web.action.succeeded" },
+    { toolId: "web.fill_safe", effectApplied: false, resultCode: "web.action.succeeded" },
+    { toolId: "web.select_safe", effectApplied: false, resultCode: "web.action.succeeded" },
+    { toolId: "web.inspect_current_page", effectApplied: false, resultCode: "action.recoverable" },
+    { toolId: "web.reveal_safe", effectApplied: false, resultCode: "web.action.rejected.private-reason" },
+  ];
+  const refused = await readSanitizedGenerationFailure(failure(dropped));
+  assert.equal(refused.parsed, true);
+  assert.deepEqual(refused.evidenceSteps, []);
+});

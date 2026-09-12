@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isSensitiveFieldSignature } from "../sensitivity";
 import { WEB_LLM_EVIDENCE_SCHEMA_VERSION, type WebLlmEvidenceElement, type WebLlmPageEvidence } from "./llm-evidence";
 
 export const WEB_REUSABLE_EVIDENCE_FINGERPRINT_SCHEMA_VERSION = "web-reusable-evidence-fingerprint.v1" as const;
@@ -108,7 +109,7 @@ function normalizedElements(input: readonly WebLlmEvidenceElement[], location: {
   for (const element of input) {
     const tag = boundedToken(element.tag, 40);
     const selector = boundedText(element.selector, 500);
-    if (!tag || !selector || sensitiveControl(element)) continue;
+    if (!tag || !selector || unshareableControl(element)) continue;
     const normalized = compact({
       tag: tag.toLowerCase(),
       selectorDigest: digest(selector),
@@ -195,9 +196,36 @@ function sameOriginHref(input: unknown, origin: string): boolean {
   } catch { return false; }
 }
 
-function sensitiveControl(element: WebLlmEvidenceElement): boolean {
-  const types = [element.inputType, element.controlType].filter((value): value is string => typeof value === "string").map(value => value.toLowerCase());
-  return types.some(value => value === "password" || value === "hidden" || value === "file" || value === "credit-card" || value === "one-time-code");
+/**
+ * Control types that are not secrets by the shared rule but still must not
+ * appear in a fingerprint that is cached and reused across runs. A hidden
+ * input is a per-session token rather than a control -- carrying it makes the
+ * structural digest change on every visit and puts the token's name in a
+ * stored artefact -- and a file input's identity describes the operator's
+ * filesystem, not the page.
+ *
+ * This is deliberately a separate question from sensitivity, and separately
+ * named, because collapsing the two would have widened the shared rule: making
+ * `hidden` and `file` sensitive everywhere would start withholding values the
+ * recorder is supposed to capture.
+ */
+const NON_REUSABLE_CONTROL_TYPES = new Set(["hidden", "file"]);
+
+/**
+ * Whether the fingerprint must not describe this control: a secret by the one
+ * shared rule, or one of the two types above.
+ *
+ * A packet element carries no `autocomplete` and no `data-sensitive`, so only
+ * the type half of the shared rule can be asked here. The other half is
+ * already enforced upstream by the same rule, in
+ * `llm-evidence/elements.ts`, which refuses to describe such a control at all
+ * -- so nothing reaching this function can carry one. This is the second
+ * fence, not the first.
+ */
+function unshareableControl(element: WebLlmEvidenceElement): boolean {
+  const types = [element.inputType, element.controlType].filter((value): value is string => typeof value === "string").map(value => value.trim().toLowerCase());
+  if (types.some(value => NON_REUSABLE_CONTROL_TYPES.has(value))) return true;
+  return isSensitiveFieldSignature({ inputType: element.inputType, controlType: element.controlType });
 }
 
 function boundedLimit(input: number | undefined, hardMaximum: number, label: string): number {

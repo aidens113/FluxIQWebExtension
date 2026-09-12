@@ -117,3 +117,46 @@ test("the seven Week 1 actions are all registered", () => {
     assert.ok(nodeFor(outputId));
   }
 });
+
+// -- What Core reads off a node beyond its parameters -------------------------
+
+test("every node can carry the post-conditions Core's transition comparison evaluates", () => {
+  // Core reads `node.parameterValues.expectedState` for any node
+  // (`runtime/executor/expected-transition.ts`) and hands it to the host
+  // boundary's expectation evaluator. Nothing else in this repository writes
+  // that path, so a node that does not declare the parameter can never carry a
+  // post-condition and the comparison has nothing to evaluate.
+  for (const outputId of WEB_AUTOMATION_ACTION_TYPES) {
+    const parameter = nodeFor(outputId).parameters.find((candidate) => candidate.id === "expectedState");
+    assert.ok(parameter, `${outputId} offers no expectedState parameter`);
+    assert.equal(parameter.valueType, "object", `${outputId}.expectedState carries { conditions, mode, timeoutMs }`);
+    assert.equal(parameter.required, undefined, `${outputId}.expectedState is optional: not every action has a post-condition`);
+    assert.equal(parameter.defaultValue, undefined, `${outputId}.expectedState has no default: an empty condition list would report a pass`);
+  }
+});
+
+test("element targeting is declared by exactly the actions that cannot run without an element", () => {
+  // `metadata.elementTarget` is what makes Core resolve the recorded
+  // fingerprint against runtime candidates and apply its confidence floor
+  // (`runtime/io-policy.ts`). Core fails an action outright when the flag is
+  // set and the parameters carry no fingerprint, so an action that can run
+  // without one — a delta scroll, a key press to the focused element, a URL
+  // assertion, a tab operation — must not declare it.
+  const declared = WEB_AUTOMATION_ACTION_TYPES.filter((outputId) => nodeFor(outputId).metadata?.elementTarget === true);
+  assert.deepEqual(declared.slice().sort(), [
+    "web.dom.check",
+    "web.dom.clear",
+    "web.dom.click",
+    "web.dom.extract",
+    "web.dom.select",
+    "web.dom.type",
+    "web.dom.upload",
+    "web.dom.wait_for_selector"
+  ]);
+  // The flag is derived from the action's own schema row, so the two cannot drift.
+  for (const outputId of WEB_AUTOMATION_ACTION_TYPES) {
+    const schema = webAutomationActionDefinitions.find((candidate) => candidate.actionType === outputId)?.parameterSchema;
+    const requiresSelector = Array.isArray(schema?.required) && schema.required.includes("selector");
+    assert.equal(nodeFor(outputId).metadata?.elementTarget === true, requiresSelector, `${outputId}: element targeting must follow its schema`);
+  }
+});

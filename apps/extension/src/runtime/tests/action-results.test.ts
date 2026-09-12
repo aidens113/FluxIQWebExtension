@@ -7,7 +7,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
-import { WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH } from "@fluxiq-web-extension/domain/client";
+import {
+  WEB_AUTOMATION_FAILURE_CODES,
+  WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH,
+  isWebAutomationFailureCode
+} from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand } from "../../shared/protocol";
 import {
   boundWorkerValidation,
@@ -76,26 +80,140 @@ test("validation text is collapsed, bounded, and never empty", () => {
 test("every failure this module builds survives Core's parser whole", () => {
   const records = [
     navigationUnexpectedFailure("https://example.test/dashboard", "https://example.test/login"),
-    workerTimeoutFailure("web.download.timeout", "a completed download", "none within 30000 ms"),
-    workerBlockedFailure("web.page.unsupported", { expected: "an automatable page", actual: "chrome://extensions" }),
-    workerBlockedFailure("web.download.permission_missing"),
-    workerTargetNotFoundFailure("web.tab.no_match", "tab 11 active", "no open tab matched"),
-    workerActionFailedFailure("web.tab.failed", "tab close to succeed", "No tab with id 11.")
+    workerTimeoutFailure(WEB_AUTOMATION_FAILURE_CODES.TIMEOUT, "a completed download", "none within 30000 ms"),
+    workerBlockedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, { expected: "an automatable page", actual: "chrome://extensions" }),
+    workerBlockedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED),
+    workerTargetNotFoundFailure(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, "tab 11 active", "no open tab matched"),
+    workerActionFailedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, "tab close to succeed", "No tab with id 11.")
   ];
   for (const record of records) {
     assert.deepEqual(parseAutomationStudioFailureRecord(record), record, record.code);
   }
 });
 
+test("every builder takes its code from the closed set, so no call site can invent one", () => {
+  // The `code` parameter is `WebAutomationFailureCode`, not `string`. That is
+  // what a test cannot show -- an out-of-set string is a compile error, not a
+  // failing assertion -- so what is asserted here is the consequence: whatever
+  // a call site passes is a member of the set, and the guard agrees.
+  const codes = [
+    workerTimeoutFailure(WEB_AUTOMATION_FAILURE_CODES.TIMEOUT, "a", "b").code,
+    workerBlockedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED).code,
+    workerTargetNotFoundFailure(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, "a", "b").code,
+    workerActionFailedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, "a", "b").code
+  ];
+  for (const code of codes) assert.ok(isWebAutomationFailureCode(code), code);
+  // The eight strings the three callers used to pass, none of them nameable by
+  // a consumer deriving its vocabulary from the domain.
+  for (const retired of [
+    "web.page.unsupported",
+    "web.download.permission_missing",
+    "web.download.timeout",
+    "web.tab.invalid_request",
+    "web.tab.failed",
+    "web.tab.no_id",
+    "web.tab.no_match",
+    "web.tab.no_target",
+    "web.tab.not_closed"
+  ]) {
+    assert.equal(isWebAutomationFailureCode(retired), false, retired);
+  }
+});
+
+test("a builder's record is the code's row in the table, not the call site's opinion", () => {
+  // Whole records, because the point of narrowing the parameter is that the
+  // category, the retryable flag and the stage stop being written at the call
+  // site. Two rows moved when the set decided them, and both are asserted here
+  // rather than left to be noticed downstream.
+  assert.deepEqual(workerTimeoutFailure(WEB_AUTOMATION_FAILURE_CODES.TIMEOUT, "a completed download", "none within 1000 ms"), {
+    category: "timeout",
+    code: "web.action.timeout",
+    retryable: true,
+    stage: "execution",
+    expected: "a completed download",
+    actual: "none within 1000 ms"
+  });
+  assert.deepEqual(workerBlockedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, { expected: "an automatable page", actual: "chrome://extensions" }), {
+    category: "blocked_by_capability_or_policy",
+    code: "web.action.rejected",
+    retryable: false,
+    // Moved from `dispatch`: the set binds one stage to a code, and a refusal
+    // is `execution` there. The category and retryability, which are what Core
+    // acts on, are unchanged.
+    stage: "execution",
+    expected: "an automatable page",
+    actual: "chrome://extensions"
+  });
+  assert.deepEqual(workerTargetNotFoundFailure(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, "tab 11 active", "no open tab matched"), {
+    category: "target_not_found",
+    code: "web.target.not_found",
+    retryable: true,
+    stage: "target_resolution",
+    expected: "tab 11 active",
+    actual: "no open tab matched"
+  });
+  assert.deepEqual(workerActionFailedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, "tab close to succeed", "No tab with id 11."), {
+    // `action_failed`, not `ambiguous_or_unknown`: the action ran, and the
+    // browser said why. `UNKNOWN` means nothing said why.
+    category: "action_failed",
+    code: "web.action.failed",
+    retryable: true,
+    stage: "execution",
+    expected: "tab close to succeed",
+    actual: "No tab with id 11."
+  });
+});
+
+test("a refusal with nothing to compare carries no empty text, which Core's parser refuses", () => {
+  const blocked = workerBlockedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED);
+  assert.equal(blocked.expected, undefined);
+  assert.equal(blocked.actual, undefined);
+  // Text is bounded by the domain now, not by this module: collapsed to one
+  // line, cut to Core's limit, and dropped rather than sent as "(none)".
+  const long = workerActionFailedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, "  two   words\n", "x".repeat(WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH + 500));
+  assert.equal(long.expected, "two words");
+  assert.equal(long.actual?.length, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH);
+  assert.deepEqual(parseAutomationStudioFailureRecord(long), long);
+});
+
+test("an unexpected navigation carries the closed set's code, whole", () => {
+  const record = navigationUnexpectedFailure("https://example.test/dashboard", "https://example.test/login");
+  // The whole record, not just the code: the point of building it from the set
+  // is that the category, the stage and the retryable flag come from the code
+  // rather than from whatever the call site remembered. The string this used to
+  // write by hand -- `web.navigate.unexpected_url` -- was in no set at all.
+  assert.deepEqual(record, {
+    category: "navigation_unexpected",
+    code: "web.navigation.unexpected",
+    retryable: false,
+    // `confirmation`, not `verification`: the navigation itself is what is
+    // being confirmed, not a post-condition checked after it.
+    stage: "confirmation",
+    expected: "https://example.test/dashboard",
+    actual: "https://example.test/login"
+  });
+  assert.equal(record.code, WEB_AUTOMATION_FAILURE_CODES.NAVIGATION_UNEXPECTED);
+  // A code outside the closed set has no way onto the wire from here.
+  assert.ok(isWebAutomationFailureCode(record.code));
+});
+
+test("an unexpected navigation still bounds its text, now to the domain's own limit", () => {
+  const long = "https://example.test/".concat("x".repeat(WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH));
+  const record = navigationUnexpectedFailure("  the   requested  URL\n", long);
+  assert.equal(record.expected, "the requested URL");
+  assert.equal(record.actual?.length, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH);
+  assert.deepEqual(parseAutomationStudioFailureRecord(record), record);
+});
+
 test("each category is paired with the stage and retryability Core's consistency rules demand", () => {
   // A blocked action can never be retried unchanged, and Core allows
   // target_not_found only at target resolution. Getting either wrong makes the
   // parser return null, which is why they are asserted rather than assumed.
-  const blocked = workerBlockedFailure("web.page.unsupported");
+  const blocked = workerBlockedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED);
   assert.equal(blocked.category, "blocked_by_capability_or_policy");
   assert.equal(blocked.retryable, false);
-  const notFound = workerTargetNotFoundFailure("web.tab.no_match", "tab 11", "none");
+  const notFound = workerTargetNotFoundFailure(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, "tab 11", "none");
   assert.equal(notFound.stage, "target_resolution");
   assert.equal(navigationUnexpectedFailure("a", "b").category, "navigation_unexpected");
-  assert.equal(workerTimeoutFailure("web.download.timeout", "a", "b").category, "timeout");
+  assert.equal(workerTimeoutFailure(WEB_AUTOMATION_FAILURE_CODES.TIMEOUT, "a", "b").category, "timeout");
 });

@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import { WEB_AUTOMATION_ACTION_TYPES } from "@fluxiq-web-extension/domain/client";
+import type { PageEvidence } from "../../content/evidence";
 import type { BrowserActionResult, ClientGatewayActionCommand, DomElementDescriptor } from "../../shared/protocol";
 import {
   browserActionFromGatewayCommand,
@@ -151,6 +152,45 @@ test("a structured failure reaches the gateway instead of being dropped at the b
 test("a result with no failure record sends none, rather than an empty one", () => {
   const result = gatewayActionResultFromBrowserResult(browserResult({ message: "Clicked." }));
   assert.equal("failure" in result, false);
+});
+
+test("the snapshot's page evidence and the descriptors' activity flags reach the gateway payload", () => {
+  // Phase 1.4 puts the page-level evidence on the snapshot and two activity
+  // flags on each descriptor. Neither is declared on the gateway's own shapes:
+  // the mapper hands the snapshot to the domain payload builder whole, which is
+  // what carries them, so a mapper that started copying field by field would
+  // drop the lot silently and every gate would still pass.
+  const evidence: PageEvidence = {
+    elements: { scanned: 900, candidates: 120, matched: 40, returned: 40, truncated: false, changed: 2, recentlyInteracted: 1 },
+    loading: { documentState: "complete", busy: false, busyRegions: [], indicators: [], pendingNavigation: false },
+    navigation: { url: "https://example.test/cart", origin: "https://example.test", path: "/cart", historyLength: 3, visibility: "visible" },
+    dialogs: { open: [{ selector: "#confirm", role: "dialog", modal: true, native: false }], modal: true },
+    repeating: [{
+      containerSelector: "#items",
+      signature: "li||item-#|row",
+      itemCount: 12,
+      representative: { selector: "#items > li:nth-of-type(1)", testId: "item-1" }
+    }]
+  };
+  const changedButton: DomElementDescriptor & { changed?: boolean; recentlyInteracted?: boolean } = {
+    ...button,
+    changed: true,
+    recentlyInteracted: true
+  };
+  const snapshot = {
+    url: "https://example.test/cart",
+    title: "Cart",
+    viewport: { width: 1_280, height: 720, scrollX: 0, scrollY: 0 },
+    interactiveElements: [changedButton],
+    evidence
+  } satisfies NonNullable<BrowserActionResult["snapshot"]> & { evidence: PageEvidence };
+
+  const result = gatewayActionResultFromBrowserResult(browserResult({ element: changedButton, snapshot }));
+  const payloadSnapshot = result.payload?.snapshot;
+  assert.ok(payloadSnapshot && typeof payloadSnapshot === "object" && !Array.isArray(payloadSnapshot));
+  assert.deepEqual(payloadSnapshot["evidence"], evidence, "the page evidence is carried, not summarized away");
+  assert.deepEqual(payloadSnapshot["interactiveElements"], [changedButton], "the activity flags travel with the descriptors");
+  assert.deepEqual(result.payload?.element, changedButton);
 });
 
 test("timed_out and cancelled keep their status and carry their message as the error", () => {

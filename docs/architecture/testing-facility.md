@@ -31,7 +31,7 @@ queries/fragments, and unrestricted element attributes. Page evidence is
 explicitly marked untrusted and must not be written to Lab artifacts or logs.
 
 Production composition uses the same ownership boundary. The web domain binds
-`domain/src/runtime/llm-evidence.ts` through `registerWebAutomationRuntime`,
+`domain/src/runtime/llm-evidence/` through `registerWebAutomationRuntime`,
 which is called by the web-panel host. Its authoring-time surface exposes
 `web.inspect_current_page`, `web.navigate_same_origin`, and `web.reveal_safe`
 to Core's domain-neutral evidence loop. These tools use the

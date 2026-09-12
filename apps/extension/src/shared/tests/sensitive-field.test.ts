@@ -29,3 +29,20 @@ test("ordinary fields are not sensitive", () => {
   }
   assert.equal(isSensitiveFieldSignature({ dataSensitive: "false" }), false);
 });
+
+// Every row above is unchanged from before the rule moved into the domain
+// package, and its passing is the proof that the move changed nothing the
+// extension could observe. The rows below are what the shared rule adds.
+
+test("the raw type attribute is read too, for a caller that has no derived input type", () => {
+  assert.equal(isSensitiveFieldSignature({ controlType: "password" }), true);
+  assert.equal(isSensitiveFieldSignature({ controlType: "email" }), false);
+});
+
+test("hidden and file controls stay ordinary on the extension side", () => {
+  // Reusable evidence keeps them out of its fingerprint by asking its own
+  // question. If they ever became sensitive here, an upload step would stop
+  // being able to replay the file it recorded.
+  assert.equal(isSensitiveFieldSignature({ inputType: "hidden" }), false);
+  assert.equal(isSensitiveFieldSignature({ inputType: "file" }), false);
+});

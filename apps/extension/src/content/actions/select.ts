@@ -25,15 +25,27 @@
 // chosen. `:disabled` rather than the `disabled` property, so an option inside
 // a disabled `<optgroup>` is caught too. The code reported is the same
 // `disabled` the capability would report, so a caller reads one vocabulary.
+//
+// A select marked sensitive is the case that makes this verb redact. Its value
+// space is the option list, so a failed match that named the option the request
+// asked for, the value the select still held, and every option it offers would
+// publish the secret three ways in one string -- and narrow it to a twenty-item
+// list even where no single string held it. Whether the select ended up holding
+// the chosen option is still reported; nothing about the option is quoted. The
+// sensitivity test is the one shared rule, reached through
+// `isSensitiveFormControl`.
 
+import { isSensitiveFormControl } from "../element-traits";
 import type { BrowserActionCommand, BrowserActionResult, WebAutomationOptionSelector } from "../types";
 import type { ContentActionDependencies } from "./types";
+import { describeFieldValue } from "./value-redaction";
 
 /** How many options a failed validation lists, so a select with thousands cannot build a huge string. */
 const OPTIONS_LISTED_ON_FAILURE = 20;
 
 export function selectAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): BrowserActionResult {
   const element = deps.resolveTarget(action);
+  const withheld = isSensitiveFormControl(element);
   const evidence = () => ({ element: deps.describeElement(element), snapshot: deps.captureSnapshot() });
   const request = requestedOption(action);
 
@@ -52,17 +64,17 @@ export function selectAction(action: BrowserActionCommand, deps: ContentActionDe
   if (!(element instanceof HTMLSelectElement)) {
     return deps.success(action, startedAt, "The target is not a select element.", {
       status: "failed",
-      expected: `a select element to choose ${describeRequest(request)} in`,
+      expected: `a select element to choose ${describeRequest(request, withheld)} in`,
       actual: `the target is a <${element.tagName.toLowerCase()}>`
     }, evidence());
   }
 
   const option = findOption(element, request);
   if (!option) {
-    return deps.success(action, startedAt, `No option matched ${describeRequest(request)}.`, {
+    return deps.success(action, startedAt, `No option matched ${describeRequest(request, withheld)}.`, {
       status: "failed",
-      expected: `an option matching ${describeRequest(request)} is selected`,
-      actual: `no option matched; the select still holds "${element.value}" and offers ${listOptions(element)}`
+      expected: `an option matching ${describeRequest(request, withheld)} is selected`,
+      actual: `no option matched; the select still holds ${describeFieldValue(element.value, withheld)} and offers ${listOptions(element, withheld)}`
     }, evidence());
   }
 
@@ -71,8 +83,8 @@ export function selectAction(action: BrowserActionCommand, deps: ContentActionDe
       action,
       startedAt,
       "disabled",
-      `a selectable option matching ${describeRequest(request)}`,
-      `the option "${option.value}" (${normalizeLabel(optionLabel(option))}) is disabled`,
+      `a selectable option matching ${describeRequest(request, withheld)}`,
+      `${describeOption(option, withheld)} is disabled`,
       evidence()
     );
   }
@@ -85,9 +97,27 @@ export function selectAction(action: BrowserActionCommand, deps: ContentActionDe
   const held = selected === option.value;
   return deps.success(action, startedAt, held ? "Option selected." : "The select did not keep the chosen option.", {
     status: held ? "passed" : "failed",
-    expected: `selected value "${option.value}" (${describeRequest(request)})`,
-    actual: `selected value "${selected}"`
+    expected: `selected value ${describeFieldValue(option.value, withheld)} (${describeRequest(request, withheld)})`,
+    actual: selectedValueText(selected, option.value, withheld)
   }, evidence());
+}
+
+/**
+ * What the select ended up holding. A withheld value cannot be quoted, so the
+ * mismatch that makes the read-back worth doing is stated in words instead; a
+ * match needs no words, because `expected` names the same withheld value.
+ */
+function selectedValueText(selected: string, chosen: string, withheld: boolean): string {
+  if (withheld && selected !== chosen) {
+    return `selected ${describeFieldValue(selected, true)}, which is not the option that was chosen`;
+  }
+  return `selected value ${describeFieldValue(selected, withheld)}`;
+}
+
+/** The option a rejection names. A sensitive select's option is its value, so it is named by position, not content. */
+function describeOption(option: HTMLOptionElement, withheld: boolean): string {
+  if (withheld) return `the matched option at index ${option.index}`;
+  return `the option "${option.value}" (${normalizeLabel(optionLabel(option))})`;
 }
 
 /** The option the command names: the explicit selector, or the legacy `value` field a recorded change still sends. */
@@ -108,21 +138,31 @@ function findOption(element: HTMLSelectElement, request: WebAutomationOptionSele
   return Number.isInteger(request.index) ? options[request.index] : undefined;
 }
 
-/** How the request reads in a message or a validation, with the value or label it named. */
-function describeRequest(request: WebAutomationOptionSelector): string {
-  if (request.by === "value") return `value "${request.value}"`;
-  if (request.by === "label") return `label "${request.label}"`;
+/**
+ * How the request reads in a message or a validation, with the value or label
+ * it named -- or, for a sensitive select, without it: what a request asks a
+ * sensitive select to hold is as much a secret as what it holds. An index names
+ * a position rather than content, so it travels either way.
+ */
+function describeRequest(request: WebAutomationOptionSelector, withheld: boolean): string {
+  if (request.by === "value") return `value ${describeFieldValue(request.value, withheld)}`;
+  if (request.by === "label") return `label ${describeFieldValue(request.label, withheld)}`;
   return `index ${request.index}`;
 }
 
-/** What the select does offer, so a failed match says why rather than only that it failed. */
-function listOptions(element: HTMLSelectElement): string {
+/**
+ * What the select does offer, so a failed match says why rather than only that
+ * it failed. A sensitive select's options are its value space, so listing them
+ * narrows the secret to twenty candidates: only how many there are travels.
+ */
+function listOptions(element: HTMLSelectElement, withheld: boolean): string {
   const options = [...element.options];
+  if (!options.length) return "no options";
+  if (withheld) return `${options.length} withheld option${options.length === 1 ? "" : "s"}`;
   const listed = options
     .slice(0, OPTIONS_LISTED_ON_FAILURE)
     .map((option) => `"${option.value}" (${normalizeLabel(optionLabel(option))})`)
     .join(", ");
-  if (!listed) return "no options";
   return options.length > OPTIONS_LISTED_ON_FAILURE ? `${listed}, and ${options.length - OPTIONS_LISTED_ON_FAILURE} more` : listed;
 }
 

@@ -18,6 +18,11 @@ import {
   type WebAutomationActionType,
   type WebAutomationActionVisualTarget
 } from "@fluxiq-web-extension/domain/client";
+// The page-level evidence a capture gathers is shaped by the modules that
+// produce it, in `content/evidence/`, but it travels on the wire as part of the
+// snapshot, so the snapshot shape declared here has to name it. The import is
+// type-only, so nothing in `content/` reaches the background or panel bundles.
+import type { PageEvidence } from "../content/evidence";
 
 export {
   CLIENT_GATEWAY_PROTOCOL_VERSION,
@@ -197,6 +202,15 @@ export type DomElementDescriptor = {
   label?: string | undefined;
   implicitRole?: string | undefined;
   context?: DomElementContext | undefined;
+  /**
+   * The element's fingerprint differs from the previous snapshot of this frame
+   * (Phase 1.4). Optional rather than `false` by default: the first snapshot of
+   * a frame has nothing to have changed from, and a producer that does not
+   * compute it must not be read as saying "unchanged".
+   */
+  changed?: boolean | undefined;
+  /** The element is among those most recently interacted with, by a person or by an action. */
+  recentlyInteracted?: boolean | undefined;
 };
 
 /**
@@ -231,7 +245,41 @@ export type DomSnapshot = {
   focusedElement?: DomElementDescriptor | undefined;
   selectedText?: string | undefined;
   interactiveElements: DomElementDescriptor[];
+  /**
+   * What the capture says about the page rather than about one element
+   * (Phase 1.4): the dialogs in front of it, what covers its controls, whether
+   * it is still working, how it is laid out, what repeats on it, its forms, and
+   * how it was navigated to. Optional, because a producer older than Phase 1.4
+   * carries none.
+   *
+   * Per frame, like the snapshot itself, until the background worker merges the
+   * frames (`background/connection/dom-snapshot.ts captureMergedTabSnapshot`),
+   * which folds the additive items across every frame and keeps the top frame's
+   * for the ones that describe a single document.
+   */
+  evidence?: PageEvidence | undefined;
 };
+
+// The evidence shapes are re-exported here so a consumer outside `content/` --
+// the background worker's frame merge, above all -- reads one wire seam rather
+// than reaching into the content script's modules for a type.
+export type {
+  DialogEvidence,
+  DialogEvidenceItem,
+  FormControlEvidence,
+  FormEvidence,
+  LoadingEvidence,
+  LoadingIndicator,
+  LoadingIndicatorKind,
+  NativeDialogEvidence,
+  NavigationEvidence,
+  OverlayEvidence,
+  OverlayEvidenceItem,
+  PageEvidence,
+  RegionEvidence,
+  RepeatingStructureEvidence,
+  SnapshotElementTotals
+} from "../content/evidence";
 
 export type RecordingEventKind =
   | "content.ready"

@@ -1,4 +1,26 @@
+// Recorded browser events, folded into the `web` state namespace.
+//
+// One of those values is durable and secret-bearing: `forms.<selector>` is the
+// text a user typed, and a recording is persisted, replayed and shown. The
+// extension redacts a sensitive control at the reader, so `inputValue` for a
+// password, a one-time code or a card field never reaches this file -- but that
+// is the producer's guard, on the far side of a wire, and a regression there
+// would silently repopulate secrets into state nobody re-reads. So the reducer
+// asks the same question again from the descriptor the event carries, and drops
+// the value rather than trusting the answer it was given. Presence is not a
+// secret and is unaffected: the event, its target and its element still land.
+//
+// The question is `isSensitiveElementDescriptor`, the one rule in
+// `domain/src/sensitivity/`. This file used to carry its own copy, written
+// only because the extension's copy was unreachable from here; the rule now
+// lives in this package, so the copy is gone.
+//
+// An event with no descriptor cannot be judged and is treated as ordinary: the
+// recorder always sends one for an input event, and refusing every value on a
+// missing field would empty `forms.*` on the strength of a shape change.
+
 import type { RecordingDomainEventReducer, StateSnapshot } from "fluxiq/automation-studio";
+import { isSensitiveElementDescriptor } from "../sensitivity";
 import { withWebStateValue } from "./state";
 import { createWebAutomationStateFromSnapshot, type WebAutomationDomSnapshotInput } from "./web-state";
 
@@ -15,7 +37,7 @@ export const webAutomationStateReducer: RecordingDomainEventReducer = ({ event, 
   if (typeof payload.url === "string") next = withWebStateValue(next, "page.url", payload.url, source);
   if (typeof payload.title === "string") next = withWebStateValue(next, "page.title", payload.title, source);
   if (payload.element && typeof payload.element === "object") next = withWebStateValue(next, "focus.target", payload.element, source);
-  if (typeof payload.inputValue === "string" && event.target?.selector) {
+  if (typeof payload.inputValue === "string" && event.target?.selector && !isSensitiveElementDescriptor(payload.element)) {
     next = withWebStateValue(next, `forms.${String(event.target.selector)}`, payload.inputValue, source);
   }
   if (payload.scroll && typeof payload.scroll === "object") next = withWebStateValue(next, "scroll.position", payload.scroll, source);

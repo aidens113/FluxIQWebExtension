@@ -8,6 +8,7 @@ export * from "./actions/capabilities";
 export * from "./io/web-automation-io";
 export * from "./output-nodes";
 export * from "./runtime";
+export * from "./sensitivity";
 export * from "./recording/domain";
 export * from "./recording/events";
 export * from "./recording/state";

@@ -36,9 +36,23 @@ test("an assertion failure is an oracle failure; a failure before the oracle lea
   assert.equal(unclassified.failureCategory, "unknown");
 });
 
+test("the test-rig category and the automation's own failure stay on separate axes", () => {
+  // `failureCategory` says why the facility could not produce a trustworthy run. Core's adaptive
+  // failure classes and the domain's `web.*` codes describe the automation instead, and reach the
+  // evaluation only through `automationFailureReported`; arriving here, either reads as `unknown`.
+  for (const foreign of ["target_not_found", "web.target.not_found", "ambiguous_or_unknown"]) {
+    assert.equal(evaluateRecordingRun(input({ result: { runId: "run-e", verdict: "failed", failureCategory: foreign } })).failureCategory, "unknown");
+  }
+  const both = evaluateRecordingRun(input({
+    result: { runId: "run-f", verdict: "failed", failureCategory: "runtime.behavior" },
+    manifest: manifest({ actions: [action("web.dom.click", 12, "failed")], automationFailure: { category: "target_not_found", code: "web.target.not_found" } }),
+  }));
+  assert.deepEqual([both.failureCategory, both.automationFailureReported], ["runtime.behavior", { category: "target_not_found", code: "web.target.not_found" }]);
+});
+
 test("FluxIQ's reported verdict comes from the probe's actions and automation failure", () => {
-  const categorised = evaluateRecordingRun(input({ manifest: manifest({ actions: [action("web.dom.type", 10, "failed")], automationFailure: { category: "target_not_found", code: "E_TARGET" } }) }));
-  assert.deepEqual([categorised.reportedVerdict, categorised.automationFailureReported], ["failed", { category: "target_not_found", code: "E_TARGET" }]);
+  const categorised = evaluateRecordingRun(input({ manifest: manifest({ actions: [action("web.dom.type", 10, "failed")], automationFailure: { category: "target_not_found", code: "web.target.not_found" } }) }));
+  assert.deepEqual([categorised.reportedVerdict, categorised.automationFailureReported], ["failed", { category: "target_not_found", code: "web.target.not_found" }]);
   const uncategorised = evaluateRecordingRun(input({ manifest: manifest({ actions: [action("web.dom.type", 10, "timed_out")] }) }));
   assert.deepEqual([uncategorised.reportedVerdict, uncategorised.automationFailureReported], ["failed", { category: "ambiguous_or_unknown" }]);
   const succeeded = evaluateRecordingRun(input({ manifest: manifest({ actions: [action("web.dom.type", 10)] }) }));

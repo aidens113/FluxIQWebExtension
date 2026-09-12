@@ -7,6 +7,13 @@
 // `domain/src/actions/types.ts` so there is one definition, not three. The
 // exports are type-only, so the protocol's runtime imports never reach the
 // content bundle.
+//
+// The two shapes Phase 1.4 widened -- the descriptor's `changed` and
+// `recentlyInteracted` activity flags, and the snapshot's page-level
+// `evidence` -- were briefly redeclared here as intersections of the protocol's
+// own. They are wire-visible and the background worker compiles against them
+// too, so they are declared once in `shared/protocol.ts` beside the shapes they
+// widen, and re-exported here like everything else.
 
 export type {
   BrowserActionCommand,

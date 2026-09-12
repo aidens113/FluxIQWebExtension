@@ -2,11 +2,28 @@
 // selector, a viewport point (`coordinates`), the centre of the visual
 // target's bounds, and the element fingerprint in `options.element` -- tried
 // in that order, the first hit winning, with the focused element as the
-// fallback when no strategy was supplied at all. These specs pin today's
-// behaviour on purpose, known defects included: an ambiguous target silently
-// takes the first match in document order, points resolve only inside the
-// viewport, and stale viewport bounds win over document bounds. Phase 1.3
-// changes resolution and must change these assertions with it.
+// fallback when no strategy was supplied at all. What these rows pin is the
+// strategy order and each strategy's reach: which signals a strategy reads,
+// which it does not, and the one failure that names every miss in order.
+//
+// They also still pin one behaviour that is a limitation rather than a
+// decision: a point resolves only inside the viewport, because `coordinates`
+// are viewport-relative and nothing de-scrolls them.
+//
+// Phase 1.3 replaced the rest, and three rows that pinned the old resolver were
+// deleted here rather than rewritten, because `identity-resolution.spec.ts`
+// already proves what replaced them:
+//
+// - an ambiguous selector, and an ambiguous fingerprint text, used to take the
+//   first match in document order. Both now fail TARGET_AMBIGUOUS naming what
+//   tied, which "an ambiguous selector fails TARGET_AMBIGUOUS and names what
+//   tied" and "an ambiguous fingerprint text fails TARGET_AMBIGUOUS; a unique
+//   test id still resolves" assert -- the second of those keeps the exact
+//   test-id half of the row deleted from here.
+// - stale viewport bounds used to win over document bounds, which is how a
+//   replay clicked a sticky header. "document bounds win over the viewport
+//   bounds recorded beside them" and "stale viewport bounds no longer click
+//   whatever scrolled into their place" assert the reversal.
 
 import type { Page } from "@playwright/test";
 import { expect, test } from "../index.js";
@@ -46,15 +63,6 @@ function viewportHeight(page: Page): number {
 }
 
 test.describe("on ambiguous-targets", () => {
-  test("selector: an ambiguous selector takes the first match in document order", async ({ openHarness, page }) => {
-    const harness = await openHarness("ambiguous-targets");
-    await expect(page.locator("button")).toHaveCount(2);
-    const reply = await harness.runAction({ commandId: "selector-ambiguous", actionType: "web.dom.click", selector: "button" });
-    expect(reply).toMatchObject({ status: "succeeded", element: { selector: PRIMARY } });
-    await expect(page.getByTestId("result")).toHaveText("primary");
-    expect((await harness.finalState()).state).toEqual({ selected: "primary" });
-  });
-
   test("coordinates: the element at a viewport point", async ({ openHarness, page }) => {
     const harness = await openHarness("ambiguous-targets");
     const reply = await harness.runAction({ commandId: "coordinates", actionType: "web.dom.click", coordinates: centre(await viewportRect(page, SECONDARY)) });
@@ -67,24 +75,6 @@ test.describe("on ambiguous-targets", () => {
     const bounds = await viewportRect(page, SECONDARY);
     const reply = await harness.runAction({ commandId: "visual-bounds", actionType: "web.dom.click", visualTarget: visualTarget({ bounds }) });
     expect(reply).toMatchObject({ status: "succeeded", element: { selector: SECONDARY }, visualTarget: { bounds } });
-    await expect(page.getByTestId("result")).toHaveText("secondary");
-  });
-
-  test("fingerprint: matching text takes the first match; a test id is exact", async ({ openHarness, page }) => {
-    const harness = await openHarness("ambiguous-targets");
-    const byText = await harness.runAction({
-      commandId: "fingerprint-text",
-      actionType: "web.dom.click",
-      options: { element: { tagName: "button", visibleText: "Continue" } }
-    });
-    expect(byText).toMatchObject({ status: "succeeded", element: { selector: PRIMARY } });
-    await expect(page.getByTestId("result")).toHaveText("primary");
-    const byTestId = await harness.runAction({
-      commandId: "fingerprint-testid",
-      actionType: "web.dom.click",
-      options: { element: { attributes: { "data-testid": "choice-secondary" } } }
-    });
-    expect(byTestId).toMatchObject({ status: "succeeded", element: { selector: SECONDARY } });
     await expect(page.getByTestId("result")).toHaveText("secondary");
   });
 
@@ -168,23 +158,6 @@ test.describe("on long-document", () => {
     await page.evaluate((top) => window.scrollTo(0, top), Math.round(documentBounds.y - 200));
     expect(await click()).toMatchObject({ status: "succeeded", element: { selector: BELOW_FOLD } });
     await expect(page.getByTestId("result")).toHaveText("Reached");
-  });
-
-  test("visual target: viewport bounds win over document bounds, even when stale", async ({ openHarness, page }) => {
-    const harness = await openHarness("long-document");
-    const documentBounds = await documentRect(page, BELOW_FOLD);
-    await page.evaluate((top) => window.scrollTo(0, top), Math.round(documentBounds.y - 200));
-    const recordedBounds = await viewportRect(page, BELOW_FOLD);
-    await page.evaluate(() => window.scrollTo(0, 0));
-    const reply = await harness.runAction({
-      commandId: "stale-bounds",
-      actionType: "web.dom.click",
-      visualTarget: visualTarget({ bounds: recordedBounds, documentBounds })
-    });
-    expect(reply.status).toBe("succeeded");
-    expect(reply.element?.selector).not.toBe(BELOW_FOLD);
-    await expect(page.getByTestId("result")).toHaveText("Pending");
-    expect((await harness.finalState()).state).toMatchObject({ reached: false });
   });
 
   test("fingerprint: resolves below the fold, and click scrolls the target into view", async ({ openHarness, page }) => {

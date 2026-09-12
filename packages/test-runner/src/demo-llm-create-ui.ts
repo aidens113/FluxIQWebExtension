@@ -669,9 +669,9 @@ function generationFailureCodeForStage(stage: AutomationStudioFlowBootstrapFailu
   });
   return codes[stage] ?? "generation.http-unknown";
 }
-
-const WEB_EVIDENCE_TOOL_IDS = new Set(["web.inspect_current_page", "web.navigate_same_origin", "web.click_safe", "web.fill_safe", "web.select_safe"]);
-const WEB_EVIDENCE_RESULT_CODES = new Set(["web.inspect.succeeded", "web.action.succeeded", "web.action.rejected.invalid_input", "web.action.rejected.cross_origin", "web.action.rejected.target_unobserved", "web.action.rejected.target_unsafe", "web.action.rejected.sensitive_value"]);
+// Sanitizer allowlists. The tool ids are the three `getEvidenceTools()` offers and the result codes the two success strings plus every `WebLlmToolRejectionCode`, all in `domain/src/runtime/llm-evidence.ts`; they cannot be imported (see `reports/w3-runner-alignment.md`), so a change there is a change here.
+const WEB_EVIDENCE_TOOL_IDS = new Set(["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe"]);
+const WEB_EVIDENCE_RESULT_CODES = new Set(["web.inspect.succeeded", "web.action.succeeded", ...["invalid_input", "cross_origin", "no_progress", "target_unobserved", "target_unsafe", "sensitive_value"].map(code => `web.action.rejected.${code}`)]);
 function sanitizeEvidenceSteps(steps: ReadonlyArray<{ toolId: string; effectApplied?: boolean; resultCode?: string }>): NonNullable<SanitizedGenerationFailure["evidenceSteps"]> {
   return Object.freeze(steps.flatMap(step => WEB_EVIDENCE_TOOL_IDS.has(step.toolId) && (step.resultCode === undefined || WEB_EVIDENCE_RESULT_CODES.has(step.resultCode))
     ? [Object.freeze({ toolId: step.toolId, ...(step.effectApplied === undefined ? {} : { effectApplied: step.effectApplied }), ...(step.resultCode === undefined ? {} : { resultCode: step.resultCode }) })]

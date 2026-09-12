@@ -3,9 +3,38 @@ import { compact, elementFingerprint, numberValue, objectValue, stringValue } fr
 
 /**
  * Shared output-node payload normalization. Keep the full fingerprint
- * alongside executable selectors so replay can fall back when selectors drift.
+ * alongside executable selectors so replay can fall back when selectors drift,
+ * and the recorded frame so replay reaches the document the user acted in.
  */
 export function webAutomationOutputPayload(outputId: string, payload: JsonObject): JsonObject {
+  return withRecordedFrame(outputId, payload, recordedOutputParameters(outputId, payload));
+}
+
+/**
+ * The frame the interaction was recorded in, carried onto the replayable
+ * parameters. `client/gateway-mapping.ts` puts `browserFrameId` on the recorded
+ * event and `client/gateway-action-parameters.ts` lifts it back off the
+ * dispatched command onto `action.frameId`, so this is the middle link of the
+ * one chain that lets a command reach a child frame; without it every replay
+ * runs against the top document.
+ *
+ * Only a DOM-scoped action takes a frame: a navigation, a tab operation and a
+ * download act on the tab. A dispatch-only action has no recorded parameters
+ * at all and stays empty rather than gaining a lone frame, which would turn an
+ * unexecutable event into a command carrying nothing to execute.
+ */
+function withRecordedFrame(outputId: string, payload: JsonObject, parameters: JsonObject): JsonObject {
+  const browserFrameId = frameIdValue(payload.browserFrameId);
+  if (browserFrameId === undefined || !outputId.startsWith("web.dom.")) return parameters;
+  return Object.keys(parameters).length === 0 ? parameters : { ...parameters, browserFrameId };
+}
+
+/** Frame 0 is the top document, so `0` is a frame rather than an absent one; a negative or fractional id names none. */
+function frameIdValue(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+}
+
+function recordedOutputParameters(outputId: string, payload: JsonObject): JsonObject {
   const element = elementFingerprint(payload.element);
   const selector = stringValue(element?.selector);
   const visualTarget = objectValue(payload.visualTarget);

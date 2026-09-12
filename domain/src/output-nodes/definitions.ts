@@ -12,6 +12,33 @@ const outputPorts: AutomationNodePort[] = [
   { id: "failed", label: "Failed", valueType: "any", role: "failure" }
 ];
 
+/**
+ * The post-conditions Core's transition comparison evaluates after the action.
+ *
+ * Core reads `node.parameterValues.expectedState` (`runtime/executor/
+ * expected-transition.ts`) and hands it to the host boundary's
+ * `expectationEvaluator` (`runtime/executor/transition-comparison.ts`), which
+ * the domain binds over the `web.dom.assert` condition vocabulary. Declaring
+ * the parameter here is what puts a value at that path for an authored or
+ * generated web node: nothing else in this repository writes it, so without
+ * this declaration the comparison has nothing to evaluate and Core falls back
+ * to counting keys of an object that is never present.
+ *
+ * The shape is the assert request plus the element it is about:
+ * `{ conditions: [{ kind, selector?, expected?, timeoutMs? }], mode?, timeoutMs? }`,
+ * `kind` one of `exists`, `absent`, `text`, `url`, `visible`, `enabled`
+ * (`actions/types.ts`, `WebAutomationAssertKind`), `mode` `all` or `any`.
+ * It carries no default: an empty condition list would ask the host to prove
+ * nothing and report a pass.
+ */
+const expectedStateParameter: AutomationNodeParameter = {
+  id: "expectedState",
+  label: "Expected State",
+  description: "Post-conditions checked after this action, as web.dom.assert conditions: { conditions: [{ kind, selector, expected }], mode, timeoutMs }.",
+  valueType: "object",
+  ui: { control: "value" }
+};
+
 export function webAutomationOutputNodeId(outputId: WebAutomationActionType): string {
   return `web.output.${outputId.replace(/^web\./, "").replace(/\./g, "-")}`;
 }
@@ -51,7 +78,7 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
     outputAction: { fixedOutputId: definition.actionType },
     inputs: [controlInput],
     outputs: outputPorts,
-    parameters: parametersForOutput(definition.actionType).map((parameter) => ({
+    parameters: [...parametersForOutput(definition.actionType), expectedStateParameter].map((parameter) => ({
       ...parameter,
       ...(requiredParameters.has(parameter.id) ? { required: true } : {}),
       allowStateBinding: true
@@ -61,7 +88,17 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
     metadata: {
       domainId: WEB_AUTOMATION_DOMAIN_ID,
       outputId: definition.actionType,
-      parameterSchema: definition.parameterSchema
+      parameterSchema: definition.parameterSchema,
+      // Core's element-target preparation (`runtime/io-policy.ts`) resolves the
+      // recorded fingerprint against the runtime candidates, and applies its
+      // confidence floor, only for an output that declares this. The flag is
+      // derived from the action's own schema row rather than listed by hand, so
+      // it cannot drift from it: an action that requires a selector cannot run
+      // without an element, and an action that does not — a delta scroll, a
+      // key press to the focused element, a URL assertion, a tab operation —
+      // must not declare it, because Core fails an action outright when a
+      // declared element target has no fingerprint to resolve.
+      ...(requiredParameters.has("selector") ? { elementTarget: true } : {})
     }
   };
 }

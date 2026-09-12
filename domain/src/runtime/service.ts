@@ -1,6 +1,7 @@
 import type { FluxIQRuntimeAdapter } from "fluxiq/runtime";
 import type { FluxIQ } from "fluxiq";
 import { createWebAutomationRuntimeAdapter } from "./adapter";
+import { bindWebAutomationHostRuntime } from "./host-runtime";
 import { bindWebAutomationLlmEvidenceRuntime } from "./llm-evidence";
 
 export function registerWebAutomationRuntime(fluxiq: FluxIQ): FluxIQ {
@@ -20,6 +21,10 @@ export function registerWebAutomationRuntimeAdapter(fluxiq: FluxIQ): FluxIQRunti
 
 export function bindAutomationStudioRuntimeService(fluxiq: FluxIQ): void {
   fluxiq.programs.automationStudio.bindRuntimeService(fluxiq.runtime);
+  // The host runtime rides the same binding step: it is what gives a web
+  // attempt its `stateRefs`, and it carries the expectation evaluator Core
+  // reads off the same boundary object.
+  bindWebAutomationHostRuntime(fluxiq);
 }
 
 export async function validateWebAutomationRuntime(fluxiq: FluxIQ): Promise<{ ok: boolean; issues: string[] }> {

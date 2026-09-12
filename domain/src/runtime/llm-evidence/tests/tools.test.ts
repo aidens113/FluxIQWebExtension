@@ -1,94 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
-import { bindWebAutomationLlmEvidenceRuntime, createWebAutomationLlmEvidenceRuntime, sanitizeWebLlmSnapshot, validateWebRuntimeTargetOverrideEvidence, WEB_LLM_INSPECT_TOOL_ID, WEB_LLM_NAVIGATE_TOOL_ID, WEB_LLM_REVEAL_TOOL_ID, type WebAutomationLlmEvidenceRuntime, type WebLlmEvidenceGateway } from "..";
-
-test("sanitizes extension snapshots without values, sensitive controls, or URL secrets", () => {
-  const evidence = sanitizeWebLlmSnapshot({
-    url: "https://example.test/form?token=private#secret",
-    title: "Example",
-    selectedText: "private selection",
-    interactiveElements: [
-      { tagName: "input", selector: "#name", name: "Name", inputType: "text", value: "Ada", attributes: { type: "text" } },
-      { tagName: "input", selector: "#password", name: "Password", inputType: "password", value: "private" },
-      { tagName: "a", selector: "#next", visibleText: "Next", href: "/next?ticket=private" },
-      { tagName: "a", selector: "#away", visibleText: "Away", href: "https://outside.test/" },
-    ],
-  });
-  assert.deepEqual(evidence, {
-    schemaVersion: "web-llm-evidence.v1", trust: "untrusted-page-evidence", location: "https://example.test/form", title: "Example", truncated: false,
-    elements: [
-      { target: "target.1", tag: "input", selector: "#name", name: "Name" },
-      { target: "target.2", tag: "a", selector: "#next", text: "Next", href: "https://example.test/next" },
-      { target: "target.3", tag: "a", selector: "#away", text: "Away" },
-    ],
-  });
-  assert.doesNotMatch(JSON.stringify(evidence), /Ada|private|token|ticket|selectedText/u);
-});
-
-test("retains compact semantic labels, types, select options, and result text needed for instruction-only generation", () => {
-  const evidence = sanitizeWebLlmSnapshot({
-    url: "https://example.test/scenarios/instruction-only-form/",
-    title: "Instruction-only automation",
-    interactiveElements: [
-      { tagName: "input", selector: "[data-testid=instruction-name]", name: "Name", inputType: "text", hasValue: true, value: "Ada", attributes: { autocomplete: "off" } },
-      { tagName: "select", selector: "[data-testid=instruction-plan]", name: "Plan", selectedValue: "team", value: "team", options: [{ value: "starter", label: "Starter" }, { value: "team", label: "Team" }, { value: "enterprise", label: "Enterprise" }] },
-      { tagName: "button", selector: "[data-testid=instruction-submit]", name: "Submit", text: "Submit", attributes: { type: "submit" } },
-      { tagName: "p", selector: "[data-testid=result]", text: "Not submitted", attributes: { "aria-live": "polite" } },
-    ],
-  });
-  assert.deepEqual(evidence.elements, [
-    { target: "target.1", tag: "input", selector: "[data-testid=instruction-name]", name: "Name", hasValue: true },
-    { target: "target.2", tag: "select", selector: "[data-testid=instruction-plan]", name: "Plan", selectedValue: "team", options: [{ value: "starter", label: "Starter" }, { value: "team", label: "Team" }, { value: "enterprise", label: "Enterprise" }] },
-    { target: "target.3", tag: "button", selector: "[data-testid=instruction-submit]", name: "Submit", controlType: "submit" },
-    { target: "target.4", tag: "p", selector: "[data-testid=result]", text: "Not submitted" },
-  ]);
-  assert.doesNotMatch(JSON.stringify(evidence), /Ada/u);
-});
-
-test("validates target overrides only when one exact selector has semantics compatible with the failed action", () => {
-  const evidence = sanitizeWebLlmSnapshot({
-    url: "https://example.test/form",
-    interactiveElements: [
-      { tagName: "textarea", selector: "#name", name: "Name" },
-      { tagName: "select", selector: "#plan", name: "Plan", options: [{ value: "team", label: "Team" }] },
-      { tagName: "button", selector: "#unique", name: "Unique" },
-      { tagName: "button", selector: ".duplicate", name: "First" },
-      { tagName: "button", selector: ".duplicate", name: "Second" },
-    ],
-  });
-  const typeAction = { nodeId: "name", definitionId: "web.output.dom-type" };
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { selector: "#name" }, typeAction), { status: "matched" });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { selector: "#plan" }, typeAction), { status: "resolved", target: { selector: "#name" } });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { selector: "#unique" }, typeAction), { status: "resolved", target: { selector: "#name" } });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { selector: "#missing" }, typeAction), { status: "resolved", target: { selector: "#name" } });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { selector: ".duplicate" }, { nodeId: "submit", definitionId: "web.output.dom-click" }), { status: "ambiguous" });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { selector: "#plan" }, { nodeId: "plan", definitionId: "web.output.dom-select" }), { status: "matched" });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { selector: "#unique" }, { nodeId: "submit", definitionId: "web.output.dom-click" }), { status: "matched" });
-
-  const noTypeableTarget = sanitizeWebLlmSnapshot({ url: "https://example.test/form", interactiveElements: [{ tagName: "select", selector: "#plan" }] });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(noTypeableTarget, { selector: "#missing" }, typeAction), { status: "absent" });
-  const multipleTypeableTargets = sanitizeWebLlmSnapshot({ url: "https://example.test/form", interactiveElements: [{ tagName: "input", selector: "#first" }, { tagName: "textarea", selector: "#second" }] });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(multipleTypeableTargets, { selector: "#missing" }, typeAction), { status: "ambiguous" });
-});
-
-test("exposes only bounded non-secret completion state", () => {
-  const evidence = sanitizeWebLlmSnapshot({
-    url: "https://example.test/form",
-    interactiveElements: [
-      { tagName: "textarea", selector: "#notes", hasValue: false, value: "private notes" },
-      { tagName: "input", selector: "#hidden", inputType: "hidden", hasValue: true, value: "private hidden" },
-      { tagName: "select", selector: "#plan", selectedValue: "unlisted", options: [{ value: "team", label: "Team" }] },
-      { tagName: "select", selector: "#secret", selectedValue: "team", options: [{ value: "team", label: "Team" }], attributes: { "data-sensitive": "true" } },
-    ],
-  });
-  assert.deepEqual(evidence.elements, [
-    { target: "target.1", tag: "textarea", selector: "#notes", hasValue: false },
-    { target: "target.2", tag: "input", selector: "#hidden", inputType: "hidden" },
-    { target: "target.3", tag: "select", selector: "#plan", options: [{ value: "team", label: "Team" }] },
-  ]);
-  assert.doesNotMatch(JSON.stringify(evidence), /private|unlisted/u);
-});
+import {
+  bindWebAutomationLlmEvidenceRuntime,
+  createWebAutomationLlmEvidenceRuntime,
+  sanitizeWebLlmSnapshot,
+  WEB_LLM_EVIDENCE_BYTE_BUDGETS,
+  WEB_LLM_INSPECT_TOOL_ID,
+  WEB_LLM_NAVIGATE_TOOL_ID,
+  WEB_LLM_REVEAL_TOOL_ID,
+  type WebAutomationLlmEvidenceRuntime,
+  type WebLlmEvidenceGateway
+} from "..";
 
 test("captures through the generic action bridge and keeps navigation on the inspected origin", async () => {
   const commands: Array<{ sessionId: string; actionType: string; parameters: unknown; metadata: unknown }> = [];
@@ -185,21 +108,6 @@ test("binds from the production host seam and selects the sole trusted web clien
   assert.throws(() => bindWebAutomationLlmEvidenceRuntime({ programs: { automationStudio: {} } } as never), TypeError);
 });
 
-test("honors Core's requested per-result evidence ceiling", () => {
-  const evidence = sanitizeWebLlmSnapshot({
-    url: "https://example.test/large",
-    title: "Large fixture",
-    interactiveElements: Array.from({ length: 40 }, (_, index) => ({
-      tagName: "button",
-      selector: `[data-index=\"${index}\"]`,
-      visibleText: `Item ${index} ${"x".repeat(300)}`,
-    })),
-  }, { maxEvidenceBytes: 8_000 });
-  assert.equal(new TextEncoder().encode(JSON.stringify(evidence)).byteLength <= 8_000, true);
-  assert.equal(evidence.truncated, true);
-  assert.equal(evidence.elements.length < 40, true);
-});
-
 test("captures bounded sanitized post-failure evidence without returning the raw snapshot", async () => {
   const commands: Array<{ actionType: string; parameters: unknown; metadata: any }> = [];
   const privateValue = "PRIVATE_PASSWORD_VALUE";
@@ -210,7 +118,7 @@ test("captures bounded sanitized post-failure evidence without returning the raw
       return { status: "succeeded", payload: { snapshot: {
         url: "https://example.test/form?token=private#secret",
         title: "Account form",
-        selectedText: "PRIVATE_SELECTED_TEXT",
+        selectedText: "order reference 4471",
         interactiveElements: [
           { tagName: "input", selector: "#password", inputType: "password", value: privateValue, attributes: { autocomplete: "current-password" } },
           ...Array.from({ length: 40 }, (_, index) => ({ tagName: "button", selector: `#safe-${index}`, visibleText: `Safe action ${index}` }))
@@ -232,7 +140,7 @@ test("captures bounded sanitized post-failure evidence without returning the raw
   assert.equal(evidence.location, "https://example.test/form");
   assert.equal(evidence.truncated, true);
   assert.equal(JSON.stringify(evidence).includes(privateValue), false);
-  assert.equal(JSON.stringify(evidence).includes("PRIVATE_SELECTED_TEXT"), false);
+  assert.equal(JSON.stringify(evidence).includes("token"), false);
   assert.deepEqual(commands, [{
     actionType: "web.dom.capture_snapshot",
     parameters: {},
@@ -249,22 +157,20 @@ test("captures bounded sanitized post-failure evidence without returning the raw
   }]);
 });
 
-test("deduplicates representative 50-element semantic evidence without dropping executable selectors", () => {
-  const interactiveElements = Array.from({ length: 50 }, (_, index) => ({
-    tagName: "button",
-    selector: `[data-component="global-navigation-item-${index}"][data-instance="${"x".repeat(72)}"]`,
-    name: `Open workspace section ${index}`,
-    visibleText: `Open workspace section ${index}`,
-    attributes: { type: "button" },
-  }));
-  const evidence = sanitizeWebLlmSnapshot({ url: "https://example.test/workspace", title: "Workspace", interactiveElements }, { maxEvidenceBytes: 12_000 });
-  const compactBytes = new TextEncoder().encode(JSON.stringify(evidence)).byteLength;
-  const legacyBytes = new TextEncoder().encode(JSON.stringify({ ...evidence, elements: evidence.elements.map((element) => ({ ...element, text: element.name })) })).byteLength;
-  assert.equal(evidence.elements.length, 40);
-  assert.equal(evidence.truncated, true);
-  assert.equal(compactBytes <= 10_500, true, `compact evidence used ${compactBytes} bytes`);
-  assert.equal(compactBytes < legacyBytes, true, `compact ${compactBytes} bytes versus duplicate-semantic ${legacyBytes} bytes`);
-  assert.match(JSON.stringify(evidence), /selector/u);
+test("bounds post-failure evidence to Core's gate when the host names no budget", async () => {
+  const runtime = createWebAutomationLlmEvidenceRuntime({
+    eligibleSessionIds: () => ["session.one"],
+    executeAction: async () => ({ status: "succeeded", payload: { snapshot: {
+      url: "https://example.test/form",
+      title: "Account form",
+      interactiveElements: Array.from({ length: 60 }, (_, index) => ({ tagName: "button", selector: `#safe-${index}`, visibleText: `Safe action ${index} ${"x".repeat(80)}` })),
+    } } }),
+  });
+  const failedAction = { attemptId: "attempt.failed", nodeId: "node.click", definitionId: "web.output.dom-click", status: "failed" };
+  const defaulted = await runtime.captureSanitizedFailureEvidence({ projectId: "project.one", flowId: "flow.one", runId: "run.failed", failedAction });
+  assert.equal(Buffer.byteLength(JSON.stringify(defaulted), "utf8") <= WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, true);
+  const overreached = await runtime.captureSanitizedFailureEvidence({ projectId: "project.one", flowId: "flow.one", runId: "run.failed", failedAction, maxEvidenceBytes: 11_000 });
+  assert.equal(Buffer.byteLength(JSON.stringify(overreached), "utf8") <= WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, true);
 });
 
 test("executes only observed semantic reveal interactions and never exposes form execution tools", async () => {
@@ -373,4 +279,6 @@ test("keeps gateway action, disconnect, and malformed snapshot failures fatal", 
   await assert.rejects(malformed.executeTool({ ...base, callId: "call.malformed", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} }), /snapshot/u);
 });
 
-function snapshot(url: string): JsonObject { return { url, title: "Fixture", viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 }, interactiveElements: [{ tagName: "button", selector: "#go", visibleText: "Go" }] }; }
+function snapshot(url: string): JsonObject {
+  return { url, title: "Fixture", viewport: { width: 100, height: 100, scrollX: 0, scrollY: 0 }, interactiveElements: [{ tagName: "button", selector: "#go", visibleText: "Go" }] };
+}

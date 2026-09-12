@@ -75,7 +75,20 @@ function nearestLandmark(element: Element): string | undefined {
   return undefined;
 }
 
-function landmarkRole(element: Element): string | undefined {
+/**
+ * The landmark role this element *is*, or `undefined` when it is not a
+ * landmark. Explicit `role` wins over the tag's own, landmark or not, and a
+ * `<section>` or `<form>` counts only once the page has named it, which is what
+ * the ARIA specification says and what keeps every unnamed `<section>` on a
+ * page out of the region list.
+ *
+ * Exported because `evidence/regions.ts` lists the page's landmarks and has to
+ * decide the same question. It had a byte-identical copy of this rule until
+ * Phase 1.4; the two must give the same answer, or an element's
+ * `context.landmark` names a region the region list does not contain, so there
+ * is one rule and one home for it.
+ */
+export function landmarkRole(element: Element): string | undefined {
   const explicit = element.getAttribute("role")?.trim().toLowerCase();
   // An explicit role replaces the tag's own, landmark or not.
   if (explicit) return LANDMARK_ROLES.has(explicit) ? explicit : undefined;

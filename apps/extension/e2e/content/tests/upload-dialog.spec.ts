@@ -67,7 +67,11 @@ test("upload: a target that cannot hold files is rejected, not reported as a suc
   expect(reply).toMatchObject({
     status: "failed",
     validation: { status: "failed", expected: UPLOAD_NAME, actual: "the target is a button, not a file input" },
-    failure: { category: "blocked_by_capability_or_policy", code: "web.action.upload_rejected", retryable: false }
+    // One code for every refusal; the verb's own reason rides in `actual`.
+    failure: {
+      category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false,
+      expected: UPLOAD_NAME, actual: "upload_rejected: the target is a button, not a file input"
+    }
   });
 });
 
@@ -116,6 +120,9 @@ test("dialog: a command with no dialog request is refused rather than arming not
   expect(reply).toMatchObject({
     status: "failed",
     validation: { status: "failed", expected: "a dialog response to arm", actual: "the command carried no dialog request" },
-    failure: { category: "blocked_by_capability_or_policy", code: "web.action.dialog_no_response", retryable: false }
+    failure: {
+      category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false,
+      expected: "a dialog response to arm", actual: "dialog_no_response: the command carried no dialog request"
+    }
   });
 });

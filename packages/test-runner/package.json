@@ -12,6 +12,7 @@
     "test": "pnpm build && node --test \"dist/**/*.test.js\""
   },
   "dependencies": {
+    "@fluxiq-web-extension/domain": "workspace:*",
     "@fluxiq-web-extension/test-contracts": "workspace:*",
     "@fluxiq-web-extension/test-evidence": "workspace:*",
     "@playwright/test": "1.51.1",

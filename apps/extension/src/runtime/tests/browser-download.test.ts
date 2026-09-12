@@ -1,11 +1,24 @@
-// T1 coverage of the pure parts of browser-download.ts: which download satisfies
-// a wait. Waiting itself needs chrome.downloads, which this Node runner does not
-// provide. The rules that matter are that a file left by an earlier run cannot
-// pass for this one, and that a file the browser renamed still counts.
+// T1 coverage of browser-download.ts: which download satisfies a wait, and the
+// two failures a wait can report. The rules that matter for the first are that
+// a file left by an earlier run cannot pass for this one, and that a file the
+// browser renamed still counts.
+//
+// The failures are covered because their codes were `web.download.*`, in no
+// set, so nothing downstream could name them. `chrome.downloads` is stubbed --
+// absent for the refusal, present and empty for the timeout -- which is exactly
+// the two states the module branches on.
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { downloadFilenameMatches, selectCompletedDownload, type CompletedDownload } from "../browser-download";
+import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import { WEB_AUTOMATION_FAILURE_CODES } from "@fluxiq-web-extension/domain/client";
+import type { BrowserActionCommand } from "../../shared/protocol";
+import {
+  downloadFilenameMatches,
+  runBrowserDownloadAction,
+  selectCompletedDownload,
+  type CompletedDownload
+} from "../browser-download";
 
 const since = Date.parse("2026-09-11T10:00:00.000Z");
 
@@ -69,4 +82,60 @@ test("the input list is not reordered", () => {
   const items = [older, newer];
   selectCompletedDownload(items, undefined, since);
   assert.deepEqual(items, [older, newer]);
+});
+
+/** The shortest wait the module allows: `clampTimeout` floors a request at one second. */
+const MIN_TIMEOUT_MS = 1_000;
+
+const waitAction: BrowserActionCommand = {
+  commandId: "d-1",
+  actionType: "web.browser.download",
+  download: { filename: "report.pdf", timeoutMs: MIN_TIMEOUT_MS }
+};
+
+/** Installs a `chrome` with or without `downloads`, and puts the global back however it ends. */
+async function runDownloadAction(downloads: unknown): Promise<Awaited<ReturnType<typeof runBrowserDownloadAction>>> {
+  (globalThis as { chrome?: unknown }).chrome = downloads === undefined ? {} : { downloads };
+  try {
+    return await runBrowserDownloadAction(waitAction);
+  } finally {
+    delete (globalThis as { chrome?: unknown }).chrome;
+  }
+}
+
+test("a build without the downloads permission refuses the wait, nameably", async () => {
+  const result = await runDownloadAction(undefined);
+  assert.equal(result.status, "failed");
+  // `web.download.permission_missing` before, which was in no set. The set has
+  // one code for a refusal; which refusal is what `actual` carries.
+  assert.deepEqual(result.failure, {
+    category: "blocked_by_capability_or_policy",
+    code: WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED,
+    retryable: false,
+    stage: "execution",
+    expected: "a completed download named report.pdf",
+    actual: "the downloads permission is not granted"
+  });
+  assert.deepEqual(parseAutomationStudioFailureRecord(result.failure), result.failure);
+});
+
+test("a wait that finds nothing times out, and the timeout is the set's own", async () => {
+  const result = await runDownloadAction({
+    search: () => Promise.resolve([]),
+    onChanged: { addListener: () => undefined, removeListener: () => undefined }
+  });
+  // The status is unchanged: this is a vocabulary change, not a behaviour one.
+  assert.equal(result.status, "timed_out");
+  assert.deepEqual(result.failure, {
+    category: "timeout",
+    // `web.download.timeout` before. The record is otherwise identical -- the
+    // set binds `timeout` to the same category, stage and retryability the call
+    // site used to write out.
+    code: WEB_AUTOMATION_FAILURE_CODES.TIMEOUT,
+    retryable: true,
+    stage: "execution",
+    expected: "a completed download named report.pdf",
+    actual: `no matching download completed within ${MIN_TIMEOUT_MS} ms`
+  });
+  assert.deepEqual(parseAutomationStudioFailureRecord(result.failure), result.failure);
 });

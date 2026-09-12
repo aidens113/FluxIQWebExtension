@@ -10,8 +10,10 @@ import {
   type WebAutomationActionVisualTarget,
   type WebAutomationActionCommand,
   type WebAutomationActionResult,
-  type WebAutomationActionType
+  type WebAutomationActionType,
+  type WebAutomationElementFingerprint
 } from "../actions/types";
+import { elementFingerprint } from "../output-nodes";
 import { webAutomationLiftedActionParameters } from "./gateway-action-parameters";
 
 export type WebAutomationRecordedPayload = {
@@ -64,6 +66,15 @@ export function createWebAutomationRecordingEvent(payload: WebAutomationRecorded
       url: payload.url,
       title: payload.title,
       sequence: payload.sequence,
+      // The frame the interaction happened in, under the name the parameter
+      // lift reads (`gateway-action-parameters.ts` maps `browserFrameId` onto
+      // `action.frameId`). `sourceId` above names the same frame, but only as
+      // text nothing downstream parses, and `webAutomationOutputPayload` reads
+      // this payload rather than the envelope: without the field here, a click
+      // recorded inside an iframe replays against the top document. Frame 0 is
+      // the top frame and survives `compactJsonObject`, which drops only
+      // `undefined`.
+      browserFrameId: input.frameId,
       element: payload.element,
       visualTarget,
       inputValue: payload.inputValue,
@@ -124,16 +135,83 @@ export function webAutomationActionFromGatewayCommand(command: ClientGatewayActi
     timeoutMs: numberValue(command.timeoutMs ?? parameters.timeoutMs),
     coordinates: pointValue(target.coordinates ?? parameters.coordinates),
     visualTarget: jsonObject(target.visualTarget ?? parameters.visualTarget) as unknown as WebAutomationActionVisualTarget | undefined,
+    element: commandElementFingerprint(target, parameters),
     ...webAutomationLiftedActionParameters(parameters),
     options: parameters
   }) as unknown as WebAutomationActionCommand;
 }
 
+/**
+ * The recorded element's identity, promoted from the wire onto a field the
+ * compiler knows about.
+ *
+ * `options` keeps carrying the raw `parameters.element` unchanged, so the
+ * resolver that reads it there keeps working; this field is the declared
+ * contract beside it, not a replacement for it. `elementFingerprint` is the
+ * same normalizer that put the value on the wire, imported rather than restated
+ * so the two ends cannot drift, and an input with no recognized signal
+ * normalizes to an empty object, which is not an identity and is dropped rather
+ * than dispatched as one.
+ */
+function commandElementFingerprint(target: JsonObject, parameters: JsonObject): WebAutomationElementFingerprint | undefined {
+  for (const source of elementFingerprintSources(target, parameters)) {
+    const fingerprint = elementFingerprint(source);
+    if (fingerprint && Object.keys(fingerprint).length > 0) return fingerprint as unknown as WebAutomationElementFingerprint;
+  }
+  return undefined;
+}
+
+/**
+ * Where to look for that identity, richest description first — which is not
+ * always the dispatched target.
+ *
+ * Core's `prepareElementTargetAction` runs on every policy output dispatch. It
+ * normalizes an element target out of the parameters and writes it back as
+ * `parameters.target`, and `output-nodes/targets.ts` `outputTargetFromPayload`
+ * builds the wire `target.element` from that. Which of the two is better
+ * depends on whether Core actually matched anything:
+ *
+ * - **It matched a runtime candidate** (`selectedCandidate` is set). The wire
+ *   target then describes the element the page really has, and it wins over the
+ *   recorded one, which may be stale.
+ * - **It matched nothing**, which is every dispatch today, because nothing
+ *   populates `candidates` yet. Core's normalization reads only the parameters'
+ *   own top-level keys and never looks inside `parameters.element`, so the
+ *   fingerprint it writes back is `{ selector, statePath }` and the wire target
+ *   is a lossy copy of the same recorded element. Measured on the real path: 11
+ *   identity signals before Core prepares the target, 1 after. Taking the
+ *   target first there would hand the page a selector and nothing else — worse
+ *   than the untyped `options.element` beside it, which is the whole reason a
+ *   declared field is worth having.
+ */
+function elementFingerprintSources(target: JsonObject, parameters: JsonObject): unknown[] {
+  const adaptedTarget = jsonObject(parameters.target);
+  return adaptedTarget?.selectedCandidate !== undefined
+    ? [target.element, target.fingerprint, parameters.element]
+    : [parameters.element, target.element, target.fingerprint];
+}
+
+/**
+ * The action result as the gateway carries it.
+ *
+ * `validation` is the post-condition the action checked after it ran, and it is
+ * the only place the evidence for a failure lives: `OUTPUT_NOT_OBSERVED` is
+ * defined as carrying `expected` and `actual`, and the classifier in
+ * `runtime/failure/classify.ts` reads them off the outcome's validation. Until
+ * it was carried here the domain could name a failure and never show why, so a
+ * Flow saw "the action did not take effect" with nothing behind it.
+ *
+ * The values are passed through exactly as the producer wrote them. Redaction
+ * of a sensitive control's expected and actual text belongs at that producer,
+ * in `content/actions/`, and a second rule here would be a second rule to keep
+ * in step. Nothing in this function logs a validation value.
+ */
 export function webAutomationActionResultPayload(result: WebAutomationActionResult): JsonObject {
   return compactJsonObject({
     commandId: result.commandId,
     actionType: result.actionType,
     status: result.status,
+    validation: result.validation,
     message: result.message,
     url: result.url,
     title: result.title,

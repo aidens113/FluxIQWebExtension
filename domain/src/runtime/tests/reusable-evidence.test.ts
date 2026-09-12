@@ -81,3 +81,34 @@ test("rejects credentialed and non-http locations", () => {
   assert.throws(() => produceWebReusableEvidence({ evidence: evidence({ location: "file:///private/form" }) }), /HTTP\(S\)/u);
   assert.throws(() => produceWebReusableEvidence({ evidence: evidence({ schemaVersion: "web-llm-evidence.v0" as never }) }), /current sanitized evidence schema/u);
 });
+
+// The fingerprint's exclusion rule, which is deliberately not the sensitivity
+// rule. It asks the shared `isSensitiveFieldSignature` and then adds two
+// control types of its own: a hidden input is a per-session token rather than
+// a control, and a file input's identity describes the operator's filesystem.
+// Keeping the two questions separate is the point -- folding `hidden` and
+// `file` into the shared rule would start withholding values the recorder is
+// supposed to capture, and folding the shared rule out of here would let a
+// secret-bearing control into a cached artefact.
+test("the fingerprint excludes every control it excluded before, by the shared rule plus its own two types", () => {
+  const excluded = (element: Partial<WebLlmPageEvidence["elements"][number]>): boolean => {
+    const production = produceWebReusableEvidence({
+      evidence: evidence({ elements: [{ target: "target.1", tag: "input", selector: "#field", name: "Field name", ...element } as WebLlmPageEvidence["elements"][number]] }),
+    });
+    return !production.promptProjection.facts.some(fact => fact.kind === "element");
+  };
+  // By the shared rule.
+  assert.equal(excluded({ inputType: "password" }), true);
+  assert.equal(excluded({ controlType: "password" }), true);
+  assert.equal(excluded({ inputType: "one-time-code" }), true);
+  assert.equal(excluded({ inputType: "credit-card" }), true);
+  // By this module's own question, which is about reuse rather than secrecy.
+  assert.equal(excluded({ inputType: "hidden" }), true);
+  assert.equal(excluded({ inputType: "file" }), true);
+  assert.equal(excluded({ controlType: "hidden" }), true);
+  // Case and padding are not a way past either half.
+  assert.equal(excluded({ inputType: " PASSWORD " }), true);
+  assert.equal(excluded({ inputType: "HIDDEN" }), true);
+  // And an ordinary control is still described.
+  assert.equal(excluded({ inputType: "email" }), false);
+});

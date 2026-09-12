@@ -19,12 +19,45 @@
 // `visible` change without any mutation -- a history navigation, a scroll, a
 // CSS transition -- so an observer would sleep through exactly the claims this
 // module exists to judge.
+//
+// The outcome carries its timing as well as its verdict, because without it the
+// verb cannot tell a claim that was false immediately from one that was false
+// for the whole window, and a test cannot tell a wait that ran from a wait that
+// was deleted. `validation-outcome.ts` turns the two into a status.
 
 import type { WebAutomationAssertRequest } from "../types";
 
 export type AssertionTarget = { selector?: string | undefined; element?: Element | undefined };
 
-export type AssertionOutcome = { held: boolean; expected: string; actual: string };
+/**
+ * What one attempt could say about the claim. This is the distinction the
+ * TIMEOUT / STATE_MISMATCH choice rests on, so it is decided where the page is
+ * read rather than inferred later from the wording of `actual`.
+ *
+ * - `judged` -- the claim's substance was read and the page either agrees or
+ *   disagrees. A disagreement is a definite observed state.
+ * - `pending` -- the subject of the claim was not there to judge, so the only
+ *   thing observed is that the page has not got there yet.
+ * - `malformed` -- the request names no claim any page could satisfy, so
+ *   waiting is pointless and the loop stops at once.
+ */
+type AssertionVerdict = "judged" | "pending" | "malformed";
+
+type AssertionAttempt = { held: boolean; expected: string; actual: string; verdict: AssertionVerdict };
+
+export type AssertionOutcome = {
+  held: boolean;
+  expected: string;
+  actual: string;
+  /** Whether the last attempt read the claim's substance, rather than reporting that its subject was not there yet. */
+  judged: boolean;
+  /** The claim never held and the polling window ran out. False when there was no window, and when nothing could satisfy the claim. */
+  waitExpired: boolean;
+  /** The window the claim was given, how long judging it actually took, and how many times it was judged. */
+  timeoutMs: number;
+  elapsedMs: number;
+  attempts: number;
+};
 
 /** Long enough for a page to settle after the action before it, short enough that a wrong claim fails fast. */
 const DEFAULT_ASSERT_TIMEOUT_MS = 5_000;
@@ -33,42 +66,66 @@ const POLL_INTERVAL_MS = 50;
 
 export async function evaluateAssertion(request: WebAutomationAssertRequest, target: AssertionTarget): Promise<AssertionOutcome> {
   const timeoutMs = Math.max(0, request.timeoutMs ?? DEFAULT_ASSERT_TIMEOUT_MS);
-  const deadline = Date.now() + timeoutMs;
+  const startedAt = Date.now();
+  const deadline = startedAt + timeoutMs;
   // Always judged once, so `timeoutMs: 0` is a single immediate check.
-  let outcome = evaluateOnce(request, target);
-  while (!outcome.held && Date.now() < deadline) {
+  let attempt = evaluateOnce(request, target);
+  let attempts = 1;
+  while (!attempt.held && attempt.verdict !== "malformed" && Date.now() < deadline) {
     await delay(Math.min(POLL_INTERVAL_MS, deadline - Date.now()));
-    outcome = evaluateOnce(request, target);
+    attempt = evaluateOnce(request, target);
+    attempts += 1;
   }
-  return outcome;
+  return {
+    held: attempt.held,
+    expected: attempt.expected,
+    actual: attempt.actual,
+    judged: attempt.verdict === "judged",
+    // A window only expires if there was one and it ran out. A claim given no
+    // time, and a claim nothing could satisfy, waited for nothing -- reporting
+    // either as a timeout would blame the page for the request.
+    waitExpired: !attempt.held && attempt.verdict !== "malformed" && timeoutMs > 0 && Date.now() >= deadline,
+    timeoutMs,
+    elapsedMs: Date.now() - startedAt,
+    attempts
+  };
 }
 
-function evaluateOnce(request: WebAutomationAssertRequest, target: AssertionTarget): AssertionOutcome {
+function evaluateOnce(request: WebAutomationAssertRequest, target: AssertionTarget): AssertionAttempt {
   if (request.kind === "url") return urlOutcome(request.expected);
 
   const where = target.selector ? `"${target.selector}"` : "the resolved element";
   const found = currentElement(target);
   if (request.kind === "exists") {
     if (!target.selector && !target.element) {
-      return { held: false, expected: "an element to test for existence", actual: "the action named no selector and no element" };
+      return { held: false, expected: "an element to test for existence", actual: "the action named no selector and no element", verdict: "malformed" };
     }
-    return { held: Boolean(found), expected: `an element matching ${where} exists`, actual: found ? "it exists" : `nothing matched ${where}` };
+    // Nothing matching is not a judgement about the page's state, it is the
+    // page not having got there: `exists` fails only by waiting in vain.
+    return found
+      ? { held: true, expected: `an element matching ${where} exists`, actual: "it exists", verdict: "judged" }
+      : { held: false, expected: `an element matching ${where} exists`, actual: `nothing matched ${where}`, verdict: "pending" };
   }
   if (request.kind === "absent") {
-    return { held: !found, expected: `no element matches ${where}`, actual: found ? `${where} is still present` : `nothing matched ${where}` };
+    // The one kind with no pending state, and the reason it is not the mirror
+    // of `exists`: `absent` holds when nothing matches, so its only failure is
+    // seeing the element -- a definite observation, never a wait in vain.
+    return found
+      ? { held: false, expected: `no element matches ${where}`, actual: `${where} is still present`, verdict: "judged" }
+      : { held: true, expected: `no element matches ${where}`, actual: `nothing matched ${where}`, verdict: "judged" };
   }
   if (request.kind === "text") return textOutcome(request.expected ?? "", target, found, where);
 
   if (!found) {
     const claim = request.kind === "visible" ? "visible" : "enabled";
-    return { held: false, expected: `${where} is ${claim}`, actual: `nothing matched ${where}` };
+    return { held: false, expected: `${where} is ${claim}`, actual: `nothing matched ${where}`, verdict: "pending" };
   }
   if (request.kind === "visible") {
     const visible = isVisible(found);
-    return { held: visible, expected: `${where} is visible`, actual: visible ? "it is visible" : "it is present but not visible" };
+    return { held: visible, expected: `${where} is visible`, actual: visible ? "it is visible" : "it is present but not visible", verdict: "judged" };
   }
   const enabled = isEnabled(found);
-  return { held: enabled, expected: `${where} is enabled`, actual: enabled ? "it is enabled" : "it is present but disabled" };
+  return { held: enabled, expected: `${where} is enabled`, actual: enabled ? "it is enabled" : "it is present but disabled", verdict: "judged" };
 }
 
 /** The element as it is right now: a selector is re-queried, a bare element must still be in the document. */
@@ -79,15 +136,18 @@ function currentElement(target: AssertionTarget): Element | undefined {
 }
 
 /** With no target, `text` is a claim about the whole page, which is how an authored "the page says X" reads. */
-function textOutcome(wanted: string, target: AssertionTarget, found: Element | undefined, where: string): AssertionOutcome {
+function textOutcome(wanted: string, target: AssertionTarget, found: Element | undefined, where: string): AssertionAttempt {
   const scope = target.selector || target.element ? found : document.body;
   const label = target.selector || target.element ? where : "the page";
-  if (!scope) return { held: false, expected: `${label} contains "${wanted}"`, actual: `nothing matched ${where}` };
+  // No scope is no text to read, so the claim has not been judged yet: the
+  // element the text belongs to may still arrive.
+  if (!scope) return { held: false, expected: `${label} contains "${wanted}"`, actual: `nothing matched ${where}`, verdict: "pending" };
   const text = readText(scope);
   return {
     held: text.includes(wanted),
     expected: `${label} contains "${wanted}"`,
-    actual: text ? `${label} reads "${text}"` : `${label} has no text`
+    actual: text ? `${label} reads "${text}"` : `${label} has no text`,
+    verdict: "judged"
   };
 }
 
@@ -100,7 +160,7 @@ function readText(element: Element): string {
   return value.replace(/\s+/gu, " ").trim();
 }
 
-function urlOutcome(expected: string | undefined): AssertionOutcome {
+function urlOutcome(expected: string | undefined): AssertionAttempt {
   const href = location.href;
   const wanted = expected ?? "";
   // A substring counts, so a claim can name a path without the origin the Lab assigns at run time.
@@ -108,7 +168,10 @@ function urlOutcome(expected: string | undefined): AssertionOutcome {
   return {
     held,
     expected: wanted ? `the page URL is ${wanted}` : "the assertion to name the expected URL",
-    actual: `the page URL is ${href}`
+    actual: `the page URL is ${href}`,
+    // The document's address is always readable, so a URL claim is always
+    // judged -- unless the claim named no URL, which no page can satisfy.
+    verdict: wanted ? "judged" : "malformed"
   };
 }
 

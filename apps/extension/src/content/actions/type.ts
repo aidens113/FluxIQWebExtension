@@ -15,13 +15,23 @@
 // before a single key is dispatched. That refusal is ACTION_REJECTED carrying
 // the capability's own code, which says why the field was unreachable; the
 // read-back failure it replaces could only say that the text was not there.
+//
+// The read-back is the reason this verb has to redact. Both halves of the
+// validation are built from the text, so typing into a password field returned
+// the secret to the gateway twice in one result until Wave 3. The text is now
+// quoted only when the control is not sensitive, by the one shared rule; when
+// it is, the validation still says whether the field kept what was sent, and
+// gives the length instead of the content.
 
+import { isSensitiveFormControl } from "../element-traits";
 import type { BrowserActionCommand, BrowserActionResult } from "../types";
 import type { ContentActionDependencies } from "./types";
+import { describeFieldValue } from "./value-redaction";
 
 export function typeAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): BrowserActionResult {
   const element = deps.resolveTarget(action);
   const text = action.text ?? action.value ?? "";
+  const withheld = isSensitiveFormControl(element);
   const evidence = () => ({ element: deps.describeElement(element), snapshot: deps.captureSnapshot() });
 
   const report = deps.checkActionability(element);
@@ -32,7 +42,7 @@ export function typeAction(action: BrowserActionCommand, deps: ContentActionDepe
   if (!holdsText(element)) {
     return deps.success(action, startedAt, "The target holds no typed text.", {
       status: "failed",
-      expected: `a text field or editable element holding "${text}"`,
+      expected: `a text field or editable element holding ${describeFieldValue(text, withheld)}`,
       actual: `the target is a <${element.tagName.toLowerCase()}>, which holds no typed text`
     }, evidence());
   }
@@ -43,9 +53,20 @@ export function typeAction(action: BrowserActionCommand, deps: ContentActionDepe
   const held = actual === text;
   return deps.success(action, startedAt, held ? "Text entered." : "The field did not keep the text.", {
     status: held ? "passed" : "failed",
-    expected: `the field holds "${text}"`,
-    actual: `the field holds "${actual}"`
+    expected: `the field holds ${describeFieldValue(text, withheld)}`,
+    actual: heldText(actual, text, withheld)
   }, evidence());
+}
+
+/**
+ * What the field ended up holding. A withheld value cannot be quoted, so the
+ * string says whether it is the text that was sent -- which is the whole point
+ * of the read-back -- and carries its length, never its content.
+ */
+function heldText(actual: string, sent: string, withheld: boolean): string {
+  if (!withheld) return `the field holds "${actual}"`;
+  if (actual === sent) return `the field holds the text that was sent, ${describeFieldValue(actual, true)}`;
+  return `the field holds ${describeFieldValue(actual, true)}, which is not the text that was sent`;
 }
 
 /** Typing needs somewhere for the characters to go: a text-valued control, or an editable host. */

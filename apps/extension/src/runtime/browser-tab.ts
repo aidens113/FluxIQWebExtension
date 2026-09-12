@@ -4,7 +4,16 @@
 // `chrome.tabs`. Each operation leaves the automation tab pointing where the
 // Flow now is, so the content action that follows addresses the tab this action
 // selected rather than the one before it.
+//
+// Its failures come from the domain's closed set, which was written for the
+// page path and is reused here rather than grown: a tab this module cannot find
+// is `TARGET_NOT_FOUND`, a request it will not act on is `ACTION_REJECTED`, and
+// an operation the browser ran and refused is `ACTION_FAILED`. Six codes named
+// `web.tab.*` used to say the same things and were in no set, so nothing
+// downstream could name them; what each one carried now rides in `expected` and
+// `actual`, which is what tells the four in-set collapses apart.
 
+import { WEB_AUTOMATION_FAILURE_CODES } from "@fluxiq-web-extension/domain/client";
 import type {
   BrowserActionCommand,
   BrowserActionResult,
@@ -45,7 +54,7 @@ export async function runBrowserTabAction(action: BrowserActionCommand): Promise
       status: "failed",
       message: "A tab action needs an operation of open, switch, or close.",
       validation: { status: "failed", expected, actual: "no operation" },
-      failure: workerBlockedFailure("web.tab.invalid_request", { expected, actual: "no operation" })
+      failure: workerBlockedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, { expected, actual: "no operation" })
     });
   }
   try {
@@ -59,7 +68,7 @@ export async function runBrowserTabAction(action: BrowserActionCommand): Promise
       status: "failed",
       message: detail,
       validation: { status: "failed", expected, actual: detail },
-      failure: workerActionFailedFailure("web.tab.failed", expected, detail)
+      failure: workerActionFailedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, expected, detail)
     });
   }
 }
@@ -90,7 +99,7 @@ async function openTab(action: BrowserActionCommand, startedAt: number, request:
       status: "failed",
       message: "The browser opened a tab without an id.",
       validation: { status: "failed", expected: "a new tab", actual: "a tab with no id" },
-      failure: workerActionFailedFailure("web.tab.no_id", "a new tab", "a tab with no id")
+      failure: workerActionFailedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, "a new tab", "a tab with no id")
     });
   }
   setAutomationTab(tabId);
@@ -131,7 +140,7 @@ async function switchTab(action: BrowserActionCommand, startedAt: number, reques
       status: "failed",
       message: "No open tab matched the switch request.",
       validation: { status: "failed", expected, actual },
-      failure: workerTargetNotFoundFailure("web.tab.no_match", expected, actual)
+      failure: workerTargetNotFoundFailure(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, expected, actual)
     });
   }
   await chrome.tabs.update(tabId, { active: true });
@@ -153,7 +162,7 @@ async function closeTab(action: BrowserActionCommand, startedAt: number, request
       status: "failed",
       message: "No tab was named and FluxIQ is not driving one.",
       validation: { status: "failed", expected, actual: "no tab named and none open" },
-      failure: workerBlockedFailure("web.tab.no_target", { expected, actual: "no tab named and none open" })
+      failure: workerBlockedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, { expected, actual: "no tab named and none open" })
     });
   }
   await chrome.tabs.remove(tabId);
@@ -166,7 +175,7 @@ async function closeTab(action: BrowserActionCommand, startedAt: number, request
       status: "failed",
       message: `Tab ${tabId} is still open.`,
       validation: { status: "failed", expected, actual },
-      failure: workerActionFailedFailure("web.tab.not_closed", expected, actual)
+      failure: workerActionFailedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, expected, actual)
     });
   }
   return workerActionResult(action, startedAt, {

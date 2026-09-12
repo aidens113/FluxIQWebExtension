@@ -117,6 +117,12 @@ function assemble(identity: RunEvaluationIdentity, outcome: RunOutcome): RunEval
  * FluxIQ's verdict from the actions it executed. `automationFailure` absent
  * means the lane could not observe one, and no action means FluxIQ ran
  * nothing: both leave the verdict unknown.
+ *
+ * `failure.code` is a web-automation failure code from
+ * `domain/src/runtime/failure/codes.ts` and is reported as observed. It is not
+ * checked against that closed set: the domain package cannot be imported here
+ * (see `reports/w3-runner-alignment.md`), and inventing a second copy of the
+ * set to check it against is the drift this alignment exists to remove.
  */
 function reportedOutcome(manifest: RunManifest | undefined): { verdict: RunEvaluation["reportedVerdict"]; failure: RunEvaluation["automationFailureReported"] } {
   const actions = manifest?.actions ?? [];
@@ -133,6 +139,20 @@ function runDurationMs(manifest: RunManifest | undefined): number | undefined {
   return Number.isFinite(duration) && duration >= 0 ? duration : undefined;
 }
 
+/**
+ * `RunEvaluation.failureCategory` is the test-rig taxonomy: why the facility
+ * could not produce a trustworthy run. Its only producer is
+ * `classifyRunnerFailure`, which already returns a `FailureCategory`, so a
+ * value outside the list means the runner grew a category the evaluation
+ * contract does not carry and `unknown` is the honest reading of it.
+ *
+ * This is not the axis the automation fails on, and the coercion must not be
+ * widened to admit that one. A web-automation failure code from
+ * `domain/src/runtime/failure/codes.ts` (`web.target.not_found`) and the Core
+ * `AutomationStudioAdaptiveFailureClass` it carries (`target_not_found`) both
+ * belong on `automationFailureReported`; arriving here, either is correctly
+ * read as `unknown`, because neither says anything about the facility.
+ */
 function testRigCategory(value: string | undefined): FailureCategory {
   return value !== undefined && (failureCategories as readonly string[]).includes(value) ? value as FailureCategory : "unknown";
 }

@@ -49,3 +49,39 @@ test("the dispatch-only actions have no recorded payload", () => {
     assert.deepEqual(webAutomationOutputPayload(outputId, { element: checkbox, inputValue: "on" }), {}, outputId);
   }
 });
+
+// -- The frame the interaction was recorded in --------------------------------
+// `client/gateway-mapping.ts` writes `browserFrameId` onto the recorded event
+// and `client/gateway-action-parameters.ts` lifts it back onto
+// `action.frameId`. This is the middle link: without it a click recorded in an
+// iframe replays against the top document.
+
+test("a DOM action carries the frame it was recorded in", () => {
+  const recorded = { element: { ...checkbox, checked: true }, inputValue: "on", browserFrameId: 3 };
+  assert.equal(webAutomationOutputPayload("web.dom.check", recorded).browserFrameId, 3);
+  assert.equal(webAutomationOutputPayload("web.dom.click", recorded).browserFrameId, 3);
+  assert.equal(webAutomationOutputPayload("web.dom.scroll", { scroll: { x: 0, y: 640 }, browserFrameId: 3 }).browserFrameId, 3);
+});
+
+test("frame 0 is the top document, and is carried as a frame rather than dropped", () => {
+  assert.equal(webAutomationOutputPayload("web.dom.click", { element: checkbox, browserFrameId: 0 }).browserFrameId, 0);
+});
+
+test("a frame id that is not a frame is dropped rather than replayed", () => {
+  for (const browserFrameId of [-1, 1.5, "3", null, undefined]) {
+    const parameters = webAutomationOutputPayload("web.dom.click", { element: checkbox, browserFrameId } as never);
+    assert.equal("browserFrameId" in parameters, false, JSON.stringify(browserFrameId));
+  }
+});
+
+test("a browser-scoped action acts on the tab, so it takes no frame", () => {
+  // A navigation, a tab operation and a download are run by the worker against
+  // the tab; routing one into a child frame would address the wrong thing.
+  assert.equal("browserFrameId" in webAutomationOutputPayload("web.browser.navigate", { url: "https://example.test", browserFrameId: 3 }), false);
+  assert.equal("browserFrameId" in webAutomationOutputPayload("web.browser.tab", { browserFrameId: 3 }), false);
+});
+
+test("an unexecutable event stays empty rather than becoming a command carrying only a frame", () => {
+  assert.deepEqual(webAutomationOutputPayload("web.dom.assert", { element: checkbox, browserFrameId: 3 }), {});
+  assert.deepEqual(webAutomationOutputPayload("web.dom.capture_snapshot", { browserFrameId: 3 }), {});
+});

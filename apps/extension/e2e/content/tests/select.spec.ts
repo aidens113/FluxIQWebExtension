@@ -150,12 +150,17 @@ test("a disabled select is rejected with a code, not reported as a selection nob
     status: "failed",
     message: "Action rejected: the element is disabled",
     validation: { status: "failed", expected: "a target that can be selected in", actual: "the element is disabled" },
-    failure: { category: "blocked_by_capability_or_policy", code: "web.action.disabled", retryable: false, stage: "execution" }
+    // Every refusal carries the closed set's one code, so the reason it was
+    // refused rides in the record's `actual` as "<reason>: <what was observed>".
+    failure: {
+      category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false, stage: "execution",
+      expected: "a target that can be selected in", actual: "disabled: the element is disabled"
+    }
   });
   await expect(page.locator(PLAN)).toHaveValue(INITIAL_PLAN);
 });
 
-test("a hidden select is rejected as hidden, so the code is the capability's own rather than a guess", async ({ openHarness, page }) => {
+test("a hidden select is rejected as hidden, so the reason is the capability's own rather than a guess", async ({ openHarness, page }) => {
   const harness = await openHarness("basic-form");
   await page.locator(PLAN).evaluate((element) => { (element as HTMLElement).style.display = "none"; });
   const reply = await harness.runAction({ commandId: "select-hidden", actionType: "web.dom.select", selector: PLAN, value: "team" });
@@ -163,7 +168,10 @@ test("a hidden select is rejected as hidden, so the code is the capability's own
     status: "failed",
     message: "Action rejected: the element's display is none",
     validation: { status: "failed", expected: "a target that can be selected in", actual: "the element's display is none" },
-    failure: { category: "blocked_by_capability_or_policy", code: "web.action.hidden", retryable: false }
+    failure: {
+      category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false,
+      expected: "a target that can be selected in", actual: "hidden: the element's display is none"
+    }
   });
   await expect(page.locator(PLAN)).toHaveValue(INITIAL_PLAN);
 });
@@ -179,7 +187,10 @@ test("a disabled option cannot be selected, while an enabled one in the same sel
     status: "failed",
     message: 'Action rejected: the option "team" (Team) is disabled',
     validation: { status: "failed", expected: 'a selectable option matching label "Team"', actual: 'the option "team" (Team) is disabled' },
-    failure: { category: "blocked_by_capability_or_policy", code: "web.action.disabled", retryable: false, stage: "execution" }
+    failure: {
+      category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false, stage: "execution",
+      expected: 'a selectable option matching label "Team"', actual: 'disabled: the option "team" (Team) is disabled'
+    }
   });
   await expect(page.locator(PLAN)).toHaveValue(INITIAL_PLAN);
   // The control: only the disabled option was refused, not the select itself.

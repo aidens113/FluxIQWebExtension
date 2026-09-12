@@ -200,9 +200,13 @@ test("keypress: a radio group's arrow keys are reported unsupported rather than 
   expect(reply).toMatchObject({
     status: "failed",
     validation: { status: "failed", expected: "ArrowDown performs its default action on this target" },
-    failure: { category: "blocked_by_capability_or_policy", code: "web.action.unsupported_key", retryable: false }
+    failure: { category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false }
   });
   expect(reply.validation).toMatchObject({ actual: expect.stringContaining("use web.dom.check instead") });
+  // One code for every refusal, so the reason is what the record has to carry.
+  expect(reply.failure).toMatchObject({
+    actual: "unsupported_key: moving a radio group's selection needs a trusted key event; the key was delivered but nothing changed -- use web.dom.check instead"
+  });
   // Nothing was faked: the group still holds its original selection.
   await expect(page.locator(CONTACT_EMAIL)).toBeChecked();
   expect((await harness.finalState()).state).toMatchObject({ preferences: { contactMethod: "email" } });
@@ -217,7 +221,10 @@ test("type: a disabled field is rejected with a code, and not one key reaches it
     status: "failed",
     message: "Action rejected: the element is disabled",
     validation: { status: "failed", expected: "a target that can be typed into", actual: "the element is disabled" },
-    failure: { category: "blocked_by_capability_or_policy", code: "web.action.disabled", retryable: false, stage: "execution" }
+    failure: {
+      category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false, stage: "execution",
+      expected: "a target that can be typed into", actual: "disabled: the element is disabled"
+    }
   });
   // The refusal is real, and it is a refusal rather than the `output_not_observed`
   // an ungated verb would report after typing into a field that took nothing.
@@ -234,7 +241,10 @@ test("clear: a disabled field is rejected, and keeps the value it held", async (
     status: "failed",
     message: "Action rejected: the element is disabled",
     validation: { status: "failed", expected: "a target that can be cleared", actual: "the element is disabled" },
-    failure: { category: "blocked_by_capability_or_policy", code: "web.action.disabled", retryable: false, stage: "execution" }
+    failure: {
+      category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false, stage: "execution",
+      expected: "a target that can be cleared", actual: "disabled: the element is disabled"
+    }
   });
   await expect(page.locator(NOTES)).toHaveValue("draft");
 });
@@ -249,7 +259,10 @@ test("keypress: a disabled target is rejected, so Enter cannot submit a form the
     status: "failed",
     message: "Action rejected: the element is disabled",
     validation: { status: "failed", expected: "a target that can receive the key press", actual: "the element is disabled" },
-    failure: { category: "blocked_by_capability_or_policy", code: "web.action.disabled", retryable: false, stage: "execution" }
+    failure: {
+      category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false, stage: "execution",
+      expected: "a target that can receive the key press", actual: "disabled: the element is disabled"
+    }
   });
   expect(await seen()).toEqual([]);
   await expect(page.locator(RESULT)).toHaveText("Not submitted");

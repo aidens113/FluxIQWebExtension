@@ -143,6 +143,9 @@ importers:
 
   packages/test-runner:
     dependencies:
+      '@fluxiq-web-extension/domain':
+        specifier: workspace:*
+        version: link:../../domain
       '@fluxiq-web-extension/test-contracts':
         specifier: workspace:*
         version: link:../test-contracts

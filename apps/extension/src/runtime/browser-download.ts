@@ -11,6 +11,7 @@
 // still satisfies the wait. The window is short and bounded, so a file left by
 // an earlier run cannot pass for this one.
 
+import { WEB_AUTOMATION_FAILURE_CODES } from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand, BrowserActionResult } from "../shared/protocol";
 import { workerActionResult, workerBlockedFailure, workerTimeoutFailure } from "./action-results";
 import { downloadRequestForAction } from "./command-options";
@@ -43,7 +44,9 @@ export async function runBrowserDownloadAction(action: BrowserActionCommand): Pr
       status: "failed",
       message: "This build cannot observe downloads: the downloads permission is not granted.",
       validation: { status: "failed", expected, actual },
-      failure: workerBlockedFailure("web.download.permission_missing", { expected, actual })
+      // `ACTION_REJECTED`, and the missing permission is named in `actual`: the
+      // set has one code for a refusal, not one per reason.
+      failure: workerBlockedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, { expected, actual })
     });
   }
   const timeoutMs = clampTimeout(request.timeoutMs);
@@ -54,7 +57,7 @@ export async function runBrowserDownloadAction(action: BrowserActionCommand): Pr
       status: "timed_out",
       message: `No download completed within ${timeoutMs} ms.`,
       validation: { status: "failed", expected, actual },
-      failure: workerTimeoutFailure("web.download.timeout", expected, actual)
+      failure: workerTimeoutFailure(WEB_AUTOMATION_FAILURE_CODES.TIMEOUT, expected, actual)
     });
   }
   const name = baseName(found.filename);
