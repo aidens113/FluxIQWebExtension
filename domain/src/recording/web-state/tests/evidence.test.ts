@@ -16,6 +16,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { validateStateSnapshot } from "fluxiq/automation-studio";
 import type { StateSnapshot, StateValue } from "fluxiq/automation-studio";
+import { WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS } from "../element";
 import { createWebAutomationStateFromSnapshot } from "../snapshot";
 
 /** A value a producer was supposed to have withheld. Every leak row plants one. */
@@ -126,7 +127,9 @@ test("every evidence path mirrors the evidence's own field path, under one prefi
 
 test("nothing the evidence writes lands in the element namespace, whose keys a page can claim", () => {
   const paths = Object.keys(valuesOf(stateFor(evidence)));
-  const summary = new Set(["elements.count", "elements.captured", "elements.truncated"]);
+  // Read from the reserved list rather than restated, so a summary path added
+  // without reserving its key fails here instead of being quietly allowed.
+  const summary = new Set(WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS.map((id) => `elements.${id}`));
   const strays = paths.filter((path) => path.startsWith("elements.") && !summary.has(path) && !path.startsWith("elements.button"));
   assert.deepEqual(strays, [], "an element identified as 'scanned' would otherwise overwrite a count");
 });
@@ -201,13 +204,47 @@ test("no field the evidence shape does not declare reaches state, however it arr
   assert.equal(native.promptText, undefined, "what a person typed into a prompt is not");
 });
 
-test("the element list is short of the page when the browser's cap cut, not only the projection's", () => {
+// The browser's cap is one of two that can shorten the element list, and the
+// remedy for it -- capture less of the page -- is not the remedy for the
+// other. So the summary is not enough on its own, and the named flag is what a
+// consumer acts on.
+test("the browser's cap is reported as its own limit, not folded into one flag", () => {
   const values = valuesOf(stateFor(evidence));
   assert.equal(values["elements.captured"]?.value, 1, "the projection's own filter kept everything it was given");
-  assert.equal(values["elements.truncated"]?.value, true, "but the browser had already dropped elements before sending");
-  assert.equal(values["evidence.elements.truncated"]?.value, true, "and which stage cut is still readable");
+  assert.equal(values["elements.captureTruncated"]?.value, true, "the browser had already dropped elements before sending");
+  assert.equal(values["elements.stateTruncated"]?.value, false, "and this projection's cap was nowhere near");
+  assert.equal(values["elements.truncated"]?.value, true, "so the summary says the list is short of the page");
+  assert.equal(values["evidence.elements.truncated"]?.value, true, "the funnel it came from still reports it in place");
+
   const whole = valuesOf(stateFor({ ...evidence, elements: { ...evidence.elements, truncated: false } }));
+  assert.equal(whole["elements.captureTruncated"]?.value, false);
   assert.equal(whole["elements.truncated"]?.value, false);
+});
+
+test("both caps firing at once are still two readable facts, and the summary is their union", () => {
+  const many = Array.from({ length: 1_600 }, (_, index) => ({
+    tagName: "p",
+    selector: `p.row-${index}`,
+    text: `Row ${index}`,
+    bounds: { x: 0, y: index * 20, width: 800, height: 18 }
+  }));
+  const values = valuesOf(stateFor(evidence, many));
+  assert.equal(values["elements.captureTruncated"]?.value, true, "the browser cut before sending");
+  assert.equal(values["elements.stateTruncated"]?.value, true, "and this projection cut again");
+  assert.equal(values["elements.truncated"]?.value, true);
+  assert.equal(values["elements.count"]?.value, 1_600);
+  assert.equal(values["elements.captured"]?.value, 1_500);
+});
+
+test("a collection cap is its own limit and does not colour the element summary", () => {
+  const many = Array.from({ length: 30 }, (_, index) => ({ role: "region", label: `Region ${index}`, selector: `#r${index}` }));
+  const settled = { ...evidence, elements: { ...evidence.elements, truncated: false }, regions: many };
+  const state = stateFor(settled);
+  assert.equal(collectionAt(state, "evidence.regions").truncated, true, "twenty of thirty regions survived the cap");
+  const values = valuesOf(state);
+  assert.equal(values["elements.truncated"]?.value, false, "which says nothing about the element list");
+  assert.equal(values["elements.captureTruncated"]?.value, false);
+  assert.equal(values["elements.stateTruncated"]?.value, false);
 });
 
 test("a snapshot with no evidence is projected exactly as it was before evidence existed", () => {
@@ -215,6 +252,8 @@ test("a snapshot with no evidence is projected exactly as it was before evidence
   assert.deepEqual(Object.keys(values).filter((path) => path.startsWith("evidence.")), []);
   assert.equal(values["page.url"]?.value, "https://example.test/checkout");
   assert.equal(values["elements.truncated"]?.value, false);
+  assert.equal(values["elements.captureTruncated"]?.value, false, "a producer that reports no funnel is not a producer that truncated");
+  assert.equal(values["elements.stateTruncated"]?.value, false);
 });
 
 test("evidence that arrives malformed is skipped rather than thrown or written", () => {

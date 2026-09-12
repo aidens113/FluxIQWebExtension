@@ -18,10 +18,10 @@ function isSensitiveControlType(type) {
 // src/sensitivity/descriptor.ts
 function sensitiveFieldSignatureOfDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
-  const record2 = descriptor;
-  const attributes = record2.attributes && typeof record2.attributes === "object" && !Array.isArray(record2.attributes) ? record2.attributes : {};
+  const record = descriptor;
+  const attributes = record.attributes && typeof record.attributes === "object" && !Array.isArray(record.attributes) ? record.attributes : {};
   return {
-    inputType: stringField(record2.inputType),
+    inputType: stringField(record.inputType),
     controlType: stringField(attributes.type),
     autocomplete: stringField(attributes.autocomplete),
     dataSensitive: stringField(attributes["data-sensitive"])
@@ -203,7 +203,7 @@ function finite(value) {
 
 // src/recording/web-state/element/selection.ts
 var MAX_STATE_ELEMENTS = 1500;
-var WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS = ["count", "captured", "truncated"];
+var WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS = ["count", "captured", "truncated", "captureTruncated", "stateTruncated"];
 function shouldCaptureElementState(element) {
   if (!hasElementBounds(element)) return false;
   return Boolean(
@@ -451,11 +451,13 @@ function webAutomationActionTargetFromElement(element) {
   });
 }
 
+// src/page-evidence/wire.ts
+function pageEvidenceWire(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+
 // src/recording/web-state/evidence/read.ts
 var MAX_TEXT = 200;
-function record(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
-}
 function list(value) {
   return Array.isArray(value) ? value : [];
 }
@@ -471,7 +473,7 @@ function flag(value) {
   return typeof value === "boolean" ? value : void 0;
 }
 function rect(value) {
-  const bounds = record(value);
+  const bounds = pageEvidenceWire(value);
   if (!bounds) return void 0;
   const x = finite2(bounds.x);
   const y = finite2(bounds.y);
@@ -488,10 +490,10 @@ function finite2(value) {
 
 // src/recording/web-state/evidence/input.ts
 function pageEvidenceOfSnapshot(snapshot) {
-  return record(record(snapshot)?.evidence);
+  return pageEvidenceWire(pageEvidenceWire(snapshot)?.evidence);
 }
 function pageEvidenceTruncatedElements(evidence) {
-  return record(evidence?.elements)?.truncated === true;
+  return pageEvidenceWire(evidence?.elements)?.truncated === true;
 }
 
 // src/recording/web-state/state-values.ts
@@ -596,11 +598,11 @@ function addPageEvidenceStateValues(state, evidence, timestamp, sourceId) {
   const put = (path, type, value, input = {}) => {
     next = putStateValue(next, `${EVIDENCE_PATH_PREFIX}${path}`, type, value, timestamp, sourceId, input);
   };
-  addElementTotals(put, record(evidence.elements));
-  addLoading(put, record(evidence.loading));
-  addNavigation(put, record(evidence.navigation));
-  addDialogs(put, record(evidence.dialogs));
-  addOverlays(put, record(evidence.overlays));
+  addElementTotals(put, pageEvidenceWire(evidence.elements));
+  addLoading(put, pageEvidenceWire(evidence.loading));
+  addNavigation(put, pageEvidenceWire(evidence.navigation));
+  addDialogs(put, pageEvidenceWire(evidence.dialogs));
+  addOverlays(put, pageEvidenceWire(evidence.overlays));
   addRegions(put, list(evidence.regions));
   addRepeating(put, list(evidence.repeating));
   addForms(put, list(evidence.forms));
@@ -630,7 +632,7 @@ function addLoading(put, loading) {
   putFlag(put, "loading.pendingNavigation", loading.pendingNavigation, LIVE_STATUS);
   putCollection(put, "loading.busyRegions", list(loading.busyRegions), MAX_BUSY_REGIONS, selectorItem, LIVE_COLLECTION);
   putCollection(put, "loading.indicators", list(loading.indicators), MAX_LOADING_INDICATORS, (item) => {
-    const indicator = record(item);
+    const indicator = pageEvidenceWire(item);
     return compactJsonObject({
       selector: text(indicator?.selector),
       kind: text(indicator?.kind),
@@ -655,7 +657,7 @@ function addDialogs(put, dialogs) {
   putFlag(put, "dialogs.modal", dialogs.modal, LIVE_STATUS);
   putFlag(put, "dialogs.armPending", dialogs.armPending, LIVE_STATUS);
   putCollection(put, "dialogs.open", open, MAX_DIALOGS, (item) => {
-    const dialog = record(item);
+    const dialog = pageEvidenceWire(item);
     return compactJsonObject({
       selector: text(dialog?.selector),
       role: text(dialog?.role),
@@ -665,7 +667,7 @@ function addDialogs(put, dialogs) {
       bounds: rect(dialog?.bounds)
     });
   }, LIVE_COLLECTION);
-  const native = record(dialogs.lastNative);
+  const native = pageEvidenceWire(dialogs.lastNative);
   if (native) {
     put("dialogs.lastNative", "json", compactJsonObject({
       kind: text(native.kind),
@@ -680,7 +682,7 @@ function addOverlays(put, overlays) {
   putCount(put, "overlays.tested", overlays.tested, LIVE_COUNT);
   putCount(put, "overlays.blockedCount", overlays.blockedCount, LIVE_COUNT);
   putCollection(put, "overlays.blockers", list(overlays.blockers), MAX_OVERLAY_BLOCKERS, (item) => {
-    const blocker = record(item);
+    const blocker = pageEvidenceWire(item);
     const blocked = list(blocker?.blocked);
     return compactJsonObject({
       selector: text(blocker?.selector),
@@ -695,7 +697,7 @@ function addOverlays(put, overlays) {
 }
 function addRegions(put, regions) {
   putCollection(put, "regions", regions, MAX_REGIONS, (item) => {
-    const region = record(item);
+    const region = pageEvidenceWire(item);
     return compactJsonObject({
       role: text(region?.role),
       label: text(region?.label),
@@ -706,8 +708,8 @@ function addRegions(put, regions) {
 }
 function addRepeating(put, repeating) {
   putCollection(put, "repeating", repeating, MAX_REPEATING, (item) => {
-    const structure = record(item);
-    const representative = record(structure?.representative);
+    const structure = pageEvidenceWire(item);
+    const representative = pageEvidenceWire(structure?.representative);
     return compactJsonObject({
       containerSelector: text(structure?.containerSelector),
       signature: text(structure?.signature),
@@ -723,7 +725,7 @@ function addRepeating(put, repeating) {
 }
 function addForms(put, forms) {
   putCollection(put, "forms", forms, MAX_FORMS, (item) => {
-    const form = record(item);
+    const form = pageEvidenceWire(item);
     const controls = list(form?.controls);
     return compactJsonObject({
       selector: text(form?.selector),
@@ -740,7 +742,7 @@ function addForms(put, forms) {
   }, SETTLED_COLLECTION);
 }
 function formControl(item) {
-  const control = record(item);
+  const control = pageEvidenceWire(item);
   const controlType = text(control?.controlType);
   const autocomplete = typeof control?.autocomplete === "string" ? control.autocomplete : void 0;
   const sensitive = control?.sensitive === true || isSensitiveFieldSignature({ inputType: controlType, controlType, autocomplete });
@@ -797,7 +799,10 @@ function createWebAutomationStateFromSnapshot(snapshot, input = {}) {
   const selection = filterStateElements(snapshot.interactiveElements);
   state = putStateValue(state, "elements.count", "integer", selection.total, timestamp, input.sourceId, { elementKind: "count" });
   state = putStateValue(state, "elements.captured", "integer", selection.captured, timestamp, input.sourceId, { elementKind: "count" });
-  state = putStateValue(state, "elements.truncated", "boolean", selection.truncated || pageEvidenceTruncatedElements(evidence), timestamp, input.sourceId, { elementKind: "status" });
+  const captureTruncated = pageEvidenceTruncatedElements(evidence);
+  state = putStateValue(state, "elements.captureTruncated", "boolean", captureTruncated, timestamp, input.sourceId, { elementKind: "status" });
+  state = putStateValue(state, "elements.stateTruncated", "boolean", selection.truncated, timestamp, input.sourceId, { elementKind: "status" });
+  state = putStateValue(state, "elements.truncated", "boolean", selection.truncated || captureTruncated, timestamp, input.sourceId, { elementKind: "status" });
   for (const entry of selection.elements) state = addElementStateValues(state, entry, timestamp, input.sourceId);
   return withScreenVisualFrame(state, snapshot, selection.elements, input);
 }

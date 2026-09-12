@@ -3,8 +3,15 @@
 // Three rules decide what lands and where.
 //
 // **The path mirrors the evidence.** Every path is `evidence.` followed by the
-// field's own path inside the browser's `PageEvidence`, so a reader who knows
-// that shape already knows every path. The prefix is not decoration: `elements`
+// field's own path inside `WebAutomationPageEvidence`
+// (`domain/src/page-evidence/`, which is also the producer's own declaration),
+// so a reader who knows that shape already knows every path. That is why every
+// read below goes through `record<T>` with the contract's type rather than a
+// string literal: a field renamed on either side of the wire stops compiling
+// here instead of quietly projecting nothing for ever, which is what happened
+// three times before the contract had one home.
+//
+// The prefix is not decoration: `elements`
 // is the element namespace, whose reserved keys are declared in
 // `element/selection.ts`, and writing `elements.scanned` would let a page
 // shipping `data-testid="scanned"` overwrite a count. Two paths depart from the
@@ -15,7 +22,13 @@
 // field multiplies the snapshot; the same holds here. Each collection is
 // written as `{ count, truncated, items }` -- the pre-cap total, whether the cap
 // bit, and what survived -- which is the `matched`/`returned`/`truncated`
-// convention the evidence and `elements.*` already use, not a fourth one.
+// convention the evidence and `elements.*` already use, not a fourth one. A
+// bare `truncated` is right here for the reason the rule in `input.ts` gives:
+// it sits inside the one collection whose own cap set it, beside that
+// collection's `count`, so it can only mean that cap. The two flags that would
+// otherwise have been ORed together, the browser's element cap and this
+// projection's, are named instead -- `elements.captureTruncated` and
+// `elements.stateTruncated`, written by `snapshot.ts`.
 //
 // **Bounded, always.** State is built on every recorded event and the sanitized
 // packet downstream has a byte budget, so every collection has a cap and every
@@ -26,6 +39,22 @@
 
 import type { StateSnapshot, StateValue, StateValueType } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
+import type {
+  PageEvidenceWire,
+  WebAutomationDialogEvidence,
+  WebAutomationDialogEvidenceItem,
+  WebAutomationFormControlEvidence,
+  WebAutomationFormEvidence,
+  WebAutomationLoadingEvidence,
+  WebAutomationLoadingIndicator,
+  WebAutomationNativeDialogEvidence,
+  WebAutomationNavigationEvidence,
+  WebAutomationOverlayEvidence,
+  WebAutomationOverlayEvidenceItem,
+  WebAutomationRegionEvidence,
+  WebAutomationRepeatingStructureEvidence,
+  WebAutomationSnapshotElementTotals
+} from "../../../page-evidence";
 import { isSensitiveFieldSignature } from "../../../sensitivity";
 import { compactJsonObject } from "../compact-json-object";
 import { putStateValue } from "../state-values";
@@ -59,11 +88,11 @@ export function addPageEvidenceStateValues(
   const put: PutStateValue = (path, type, value, input = {}) => {
     next = putStateValue(next, `${EVIDENCE_PATH_PREFIX}${path}`, type, value, timestamp, sourceId, input);
   };
-  addElementTotals(put, record(evidence.elements));
-  addLoading(put, record(evidence.loading));
-  addNavigation(put, record(evidence.navigation));
-  addDialogs(put, record(evidence.dialogs));
-  addOverlays(put, record(evidence.overlays));
+  addElementTotals(put, record<WebAutomationSnapshotElementTotals>(evidence.elements));
+  addLoading(put, record<WebAutomationLoadingEvidence>(evidence.loading));
+  addNavigation(put, record<WebAutomationNavigationEvidence>(evidence.navigation));
+  addDialogs(put, record<WebAutomationDialogEvidence>(evidence.dialogs));
+  addOverlays(put, record<WebAutomationOverlayEvidence>(evidence.overlays));
   addRegions(put, list(evidence.regions));
   addRepeating(put, list(evidence.repeating));
   addForms(put, list(evidence.forms));
@@ -87,7 +116,7 @@ const SETTLED_COLLECTION: EvidenceValueInput = { ...COLLECTION, volatility: "slo
 // The funnel the browser walked, before the projection's own filter narrowed it
 // again. `elements.count` and `elements.captured` are the domain end of the same
 // funnel: scanned -> candidates -> matched -> returned == count -> captured.
-function addElementTotals(put: PutStateValue, totals: Record<string, unknown> | undefined): void {
+function addElementTotals(put: PutStateValue, totals: PageEvidenceWire<WebAutomationSnapshotElementTotals> | undefined): void {
   if (!totals) return;
   putCount(put, "elements.scanned", totals.scanned, COUNT);
   putCount(put, "elements.candidates", totals.candidates, COUNT);
@@ -95,17 +124,22 @@ function addElementTotals(put: PutStateValue, totals: Record<string, unknown> | 
   putCount(put, "elements.returned", totals.returned, COUNT);
   putCount(put, "elements.changed", totals.changed, LIVE_COUNT);
   putCount(put, "elements.recentlyInteracted", totals.recentlyInteracted, LIVE_COUNT);
+  // The browser's cap, mirrored unchanged at the funnel it belongs to. The
+  // same fact is written again as `elements.captureTruncated` outside the
+  // `evidence.` prefix, because a consumer reading the element summary should
+  // not have to know the evidence shape to learn that the page was cut before
+  // it was sent.
   putFlag(put, "elements.truncated", totals.truncated, STATUS);
 }
 
-function addLoading(put: PutStateValue, loading: Record<string, unknown> | undefined): void {
+function addLoading(put: PutStateValue, loading: PageEvidenceWire<WebAutomationLoadingEvidence> | undefined): void {
   if (!loading) return;
   putText(put, "loading.documentState", loading.documentState, LIVE_STATUS);
   putFlag(put, "loading.busy", loading.busy, LIVE_STATUS);
   putFlag(put, "loading.pendingNavigation", loading.pendingNavigation, LIVE_STATUS);
   putCollection(put, "loading.busyRegions", list(loading.busyRegions), MAX_BUSY_REGIONS, selectorItem, LIVE_COLLECTION);
   putCollection(put, "loading.indicators", list(loading.indicators), MAX_LOADING_INDICATORS, (item) => {
-    const indicator = record(item);
+    const indicator = record<WebAutomationLoadingIndicator>(item);
     return compactJsonObject({
       selector: text(indicator?.selector),
       kind: text(indicator?.kind),
@@ -119,7 +153,7 @@ function addLoading(put: PutStateValue, loading: Record<string, unknown> | undef
 // first. `origin` and `path` are kept because they are the decompositions a
 // check compares -- "did we land on the expected origin" -- and neither
 // restates the whole.
-function addNavigation(put: PutStateValue, navigation: Record<string, unknown> | undefined): void {
+function addNavigation(put: PutStateValue, navigation: PageEvidenceWire<WebAutomationNavigationEvidence> | undefined): void {
   if (!navigation) return;
   putText(put, "navigation.origin", navigation.origin, { elementKind: "url", volatility: "slow" });
   putText(put, "navigation.path", navigation.path, { elementKind: "route", volatility: "slow" });
@@ -134,14 +168,14 @@ function addNavigation(put: PutStateValue, navigation: Record<string, unknown> |
 // derived value here. "Is anything standing in front of the page" is the
 // question that decides whether an action may be attempted at all, and a check
 // has to be able to compare it without reading a JSON blob.
-function addDialogs(put: PutStateValue, dialogs: Record<string, unknown> | undefined): void {
+function addDialogs(put: PutStateValue, dialogs: PageEvidenceWire<WebAutomationDialogEvidence> | undefined): void {
   if (!dialogs) return;
   const open = list(dialogs.open);
   put("dialogs.openCount", "integer", open.length, LIVE_COUNT);
   putFlag(put, "dialogs.modal", dialogs.modal, LIVE_STATUS);
   putFlag(put, "dialogs.armPending", dialogs.armPending, LIVE_STATUS);
   putCollection(put, "dialogs.open", open, MAX_DIALOGS, (item) => {
-    const dialog = record(item);
+    const dialog = record<WebAutomationDialogEvidenceItem>(item);
     return compactJsonObject({
       selector: text(dialog?.selector),
       role: text(dialog?.role),
@@ -154,7 +188,7 @@ function addDialogs(put: PutStateValue, dialogs: Record<string, unknown> | undef
   // The message a native dialog showed, and never `promptText`: what a person
   // typed into a `prompt` is a value, and the producer projects it out for that
   // reason. Naming the four fields kept holds that true whatever arrives.
-  const native = record(dialogs.lastNative);
+  const native = record<WebAutomationNativeDialogEvidence>(dialogs.lastNative);
   if (native) {
     put("dialogs.lastNative", "json", compactJsonObject({
       kind: text(native.kind),
@@ -165,12 +199,12 @@ function addDialogs(put: PutStateValue, dialogs: Record<string, unknown> | undef
   }
 }
 
-function addOverlays(put: PutStateValue, overlays: Record<string, unknown> | undefined): void {
+function addOverlays(put: PutStateValue, overlays: PageEvidenceWire<WebAutomationOverlayEvidence> | undefined): void {
   if (!overlays) return;
   putCount(put, "overlays.tested", overlays.tested, LIVE_COUNT);
   putCount(put, "overlays.blockedCount", overlays.blockedCount, LIVE_COUNT);
   putCollection(put, "overlays.blockers", list(overlays.blockers), MAX_OVERLAY_BLOCKERS, (item) => {
-    const blocker = record(item);
+    const blocker = record<WebAutomationOverlayEvidenceItem>(item);
     const blocked = list(blocker?.blocked);
     return compactJsonObject({
       selector: text(blocker?.selector),
@@ -186,7 +220,7 @@ function addOverlays(put: PutStateValue, overlays: Record<string, unknown> | und
 
 function addRegions(put: PutStateValue, regions: unknown[]): void {
   putCollection(put, "regions", regions, MAX_REGIONS, (item) => {
-    const region = record(item);
+    const region = record<WebAutomationRegionEvidence>(item);
     return compactJsonObject({
       role: text(region?.role),
       label: text(region?.label),
@@ -198,8 +232,8 @@ function addRegions(put: PutStateValue, regions: unknown[]): void {
 
 function addRepeating(put: PutStateValue, repeating: unknown[]): void {
   putCollection(put, "repeating", repeating, MAX_REPEATING, (item) => {
-    const structure = record(item);
-    const representative = record(structure?.representative);
+    const structure = record<WebAutomationRepeatingStructureEvidence>(item);
+    const representative = record<WebAutomationRepeatingStructureEvidence["representative"]>(structure?.representative);
     return compactJsonObject({
       containerSelector: text(structure?.containerSelector),
       signature: text(structure?.signature),
@@ -218,7 +252,7 @@ function addRepeating(put: PutStateValue, repeating: unknown[]): void {
 
 function addForms(put: PutStateValue, forms: unknown[]): void {
   putCollection(put, "forms", forms, MAX_FORMS, (item) => {
-    const form = record(item);
+    const form = record<WebAutomationFormEvidence>(item);
     const controls = list(form?.controls);
     return compactJsonObject({
       selector: text(form?.selector),
@@ -260,7 +294,7 @@ function addForms(put: PutStateValue, forms: unknown[]): void {
  * into state, because a persisted, replayed artefact gains nothing from it.
  */
 function formControl(item: unknown): JsonObject {
-  const control = record(item);
+  const control = record<WebAutomationFormControlEvidence>(item);
   const controlType = text(control?.controlType);
   const autocomplete = typeof control?.autocomplete === "string" ? control.autocomplete : undefined;
   const sensitive = control?.sensitive === true

@@ -224,33 +224,51 @@ function sanitizedSelectedValue(input, options) {
   return value && options.some((option) => option.value === value) ? value : void 0;
 }
 
+// src/page-evidence/wire.ts
+function pageEvidenceWire(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+
 // src/runtime/llm-evidence/page-evidence.ts
 var READY_STATES = ["loading", "interactive", "complete"];
+var ORDINARY_NAVIGATION_TYPE = "navigate";
+var MAX_REDIRECTS = 100;
+var MAX_BLOCKED_CONTROLS = 1e4;
 function webLlmPageContext(snapshot, childFrameIds) {
+  const evidence = pageEvidence(snapshot);
   const frame = evidenceFrame(snapshot.frame, childFrameIds);
-  const loading = evidenceLoading(snapshot.loading);
-  const navigation = evidenceNavigation(snapshot.navigation);
-  const dialogs = evidenceDialogs(snapshot.dialogs);
-  const blockedBy = evidenceBlocker(snapshot.blockingOverlay);
+  const loading = evidenceLoading(pageEvidenceWire(evidence?.loading));
+  const navigation = evidenceNavigation(pageEvidenceWire(evidence?.navigation));
+  const dialogs = evidenceDialogs(pageEvidenceWire(evidence?.dialogs));
+  const blockedBy = evidenceBlocker(pageEvidenceWire(evidence?.overlays));
   const selectedText = boundedText(snapshot.selectedText, WEB_LLM_EVIDENCE_BOUNDS.text);
   return {
     ...frame ? { frame } : {},
     ...loading ? { loading } : {},
     ...navigation ? { navigation } : {},
     ...dialogs ? { dialogs } : {},
-    ...trueFlag(snapshot.pendingNativeDialog) ? { pendingNativeDialog: true } : {},
     ...blockedBy ? { blockedBy } : {},
     ...selectedText ? { selectedText } : {}
   };
 }
 function evidenceElementTotal(snapshot, carried) {
-  const declared = boundedCount(snapshot.elementTotal, 1e7);
+  const declared = boundedCount(snapshot.elementTotal, 1e7) ?? boundedCount(captureElementTotals(snapshot)?.matched, 1e7);
   const received = Array.isArray(snapshot.interactiveElements) ? snapshot.interactiveElements.length : 0;
   const total = Math.max(declared ?? 0, received);
   return total > carried ? total : void 0;
 }
 function capturedTruncated(snapshot) {
-  return trueFlag(snapshot.truncated) === true;
+  if (trueFlag(snapshot.truncated) === true) return true;
+  return trueFlag(captureElementTotals(snapshot)?.truncated) === true;
+}
+function pageEvidence(snapshot) {
+  return pageEvidenceWire(snapshot.evidence);
+}
+function captureElementTotals(snapshot) {
+  return pageEvidenceWire(pageEvidence(snapshot)?.elements);
+}
+function items(input) {
+  return Array.isArray(input) ? input : [];
 }
 function evidenceFrame(input, childFrameIds) {
   const declared = isJsonRecord(input) ? input : void 0;
@@ -262,27 +280,30 @@ function evidenceFrame(input, childFrameIds) {
   };
 }
 function evidenceLoading(input) {
-  if (!isJsonRecord(input)) return void 0;
-  const rawReadyState = boundedText(input.readyState, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
-  const readyState = rawReadyState && READY_STATES.includes(rawReadyState) ? rawReadyState : void 0;
+  if (!input) return void 0;
+  const documentState = boundedText(input.documentState, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const readyState = documentState && READY_STATES.includes(documentState) ? documentState : void 0;
+  const spinner = items(input.indicators).map((indicator) => pageEvidenceWire(indicator)).some((indicator) => indicator?.kind === "spinner");
   const loading = {
     ...readyState && readyState !== "complete" ? { readyState } : {},
     ...trueFlag(input.busy) ? { busy: true } : {},
-    ...trueFlag(input.spinner) ? { spinner: true } : {},
+    ...spinner ? { spinner: true } : {},
     ...trueFlag(input.pendingNavigation) ? { pendingNavigation: true } : {}
   };
   return Object.keys(loading).length ? loading : void 0;
 }
 function evidenceNavigation(input) {
-  if (!isJsonRecord(input)) return void 0;
+  if (!input) return void 0;
+  const type = boundedText(input.type, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const redirects = boundedCount(input.redirects, MAX_REDIRECTS);
   const navigation = {
-    ...trueFlag(input.pending) ? { pending: true } : {},
-    ...locationField("from", input.from),
-    ...locationField("to", input.to)
+    ...type && type !== ORDINARY_NAVIGATION_TYPE ? { type } : {},
+    ...redirects ? { redirects } : {},
+    ...safeLocationField("referrer", input.referrer)
   };
   return Object.keys(navigation).length ? navigation : void 0;
 }
-function locationField(key, input) {
+function safeLocationField(key, input) {
   try {
     return { [key]: evidenceLocation(safeEvidenceUrl(input)) };
   } catch {
@@ -290,12 +311,13 @@ function locationField(key, input) {
   }
 }
 function evidenceDialogs(input) {
-  if (!Array.isArray(input)) return void 0;
+  if (!input) return void 0;
   const dialogs = [];
-  for (const raw of input.slice(0, WEB_LLM_EVIDENCE_BOUNDS.dialogs)) {
-    if (!isJsonRecord(raw)) continue;
+  for (const item of items(input.open).slice(0, WEB_LLM_EVIDENCE_BOUNDS.dialogs)) {
+    const raw = pageEvidenceWire(item);
+    if (!raw) continue;
     const role = boundedText(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
-    const name = boundedText(raw.name, WEB_LLM_EVIDENCE_BOUNDS.text);
+    const name = boundedText(raw.label, WEB_LLM_EVIDENCE_BOUNDS.text);
     const selector = boundedText(raw.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
     const modal = trueFlag(raw.modal);
     if (!role && !name && !selector && !modal) continue;
@@ -309,17 +331,18 @@ function evidenceDialogs(input) {
   return dialogs.length ? dialogs : void 0;
 }
 function evidenceBlocker(input) {
-  if (!isJsonRecord(input)) return void 0;
-  const selector = boundedText(input.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
+  const blocker = items(input?.blockers).map((item) => pageEvidenceWire(item)).find((item) => item !== void 0);
+  if (!blocker) return void 0;
+  const selector = boundedText(blocker.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
   if (!selector) return void 0;
-  const tag = boundedText(input.tag ?? input.tagName, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
-  const role = boundedText(input.role, WEB_LLM_EVIDENCE_BOUNDS.role);
-  const name = boundedText(input.name, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const role = boundedText(blocker.role, WEB_LLM_EVIDENCE_BOUNDS.role);
+  const name = boundedText(blocker.label, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const blocks = boundedCount(blocker.blocks, MAX_BLOCKED_CONTROLS);
   return {
     selector,
-    ...tag ? { tag } : {},
     ...role ? { role } : {},
-    ...name ? { name } : {}
+    ...name ? { name } : {},
+    ...blocks ? { blocks } : {}
   };
 }
 
@@ -347,6 +370,8 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
   const childFrameIds = [...new Set(elements.map((element) => element.frameId).filter((id) => id !== void 0))].sort((left, right) => left - right);
   const elementTotal = evidenceElementTotal(snapshot, elements.length);
   const title = boundedText(snapshot.title, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const captureTruncated = capturedTruncated(snapshot);
+  const elementsTruncated = snapshot.interactiveElements.length > WEB_LLM_EVIDENCE_BOUNDS.elements;
   const evidence = {
     schemaVersion: WEB_LLM_EVIDENCE_SCHEMA_VERSION,
     trust: "untrusted-page-evidence",
@@ -355,7 +380,9 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
     ...webLlmPageContext(snapshot, childFrameIds),
     ...elementTotal === void 0 ? {} : { elementTotal },
     elements,
-    truncated: capturedTruncated(snapshot) || snapshot.interactiveElements.length > WEB_LLM_EVIDENCE_BOUNDS.elements
+    truncated: captureTruncated || elementsTruncated,
+    ...captureTruncated ? { captureTruncated: true } : {},
+    ...elementsTruncated ? { elementsTruncated: true } : {}
   };
   trimToBudget(evidence, selectors, maxEvidenceBytes);
   return { evidence, selectors };
@@ -364,12 +391,16 @@ function budgetFor(options) {
   return options.budget === "failure" ? evidenceByteLimit(options.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure) : evidenceByteLimit(options.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration);
 }
 function trimToBudget(evidence, selectors, maxEvidenceBytes) {
+  const markBudgetTruncated = () => {
+    evidence.truncated = true;
+    evidence.budgetTruncated = true;
+  };
   const popElement = () => {
     const removed = evidence.elements.pop();
     if (removed) selectors.delete(removed.target);
-    evidence.truncated = true;
+    markBudgetTruncated();
   };
-  const droppable = ["selectedText", "title", "navigation", "loading", "elementTotal", "pendingNativeDialog", "dialogs", "blockedBy", "frame"];
+  const droppable = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame"];
   while (serializedBytes(evidence) > maxEvidenceBytes) {
     if (evidence.elements.length > 1) {
       popElement();
@@ -379,7 +410,7 @@ function trimToBudget(evidence, selectors, maxEvidenceBytes) {
     if (field !== void 0) {
       if (evidence[field] !== void 0) {
         delete evidence[field];
-        evidence.truncated = true;
+        markBudgetTruncated();
       }
       continue;
     }
@@ -469,13 +500,49 @@ test("reports truncation and the element count exactly at the budget boundary", 
   assert.equal(oneShort.truncated, true);
   assert.equal(bytes(oneShort) <= bytes(whole) - 1, true);
 });
+test("names which limit truncated the packet, one row per limit", () => {
+  const budget = sanitizeWebLlmSnapshot(largePage(12), { maxEvidenceBytes: 900 });
+  assert.equal(budget.budgetTruncated, true, "the budget forced removals: ask again with more room");
+  assert.equal(budget.captureTruncated, void 0);
+  assert.equal(budget.elementsTruncated, void 0);
+  assert.equal(budget.truncated, true);
+  const bound = sanitizeWebLlmSnapshot(largePage(WEB_LLM_EVIDENCE_BOUNDS.elements + 1), { maxEvidenceBytes: WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling });
+  assert.equal(bound.elementsTruncated, true, "more elements were offered than the packet's bound carries");
+  assert.equal(bound.elements.length, WEB_LLM_EVIDENCE_BOUNDS.elements);
+  assert.equal(bound.captureTruncated, void 0);
+  assert.equal(bound.truncated, true);
+  const capture = sanitizeWebLlmSnapshot({ ...largePage(2), truncated: true }, { maxEvidenceBytes: WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling });
+  assert.equal(capture.captureTruncated, true, "the browser cut before sending: narrowing the capture is the remedy");
+  assert.equal(capture.elementsTruncated, void 0);
+  assert.equal(capture.budgetTruncated, void 0);
+  assert.equal(capture.truncated, true);
+  const whole = sanitizeWebLlmSnapshot(largePage(2), { maxEvidenceBytes: WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling });
+  assert.equal(whole.truncated, false);
+  assert.deepEqual([whole.captureTruncated, whole.elementsTruncated, whole.budgetTruncated], [void 0, void 0, void 0], "a whole packet carries none of the three");
+});
+test("all three limits can fire at once, and each stays separately readable", () => {
+  const page = { ...largePage(WEB_LLM_EVIDENCE_BOUNDS.elements + 5), truncated: true };
+  const evidence = sanitizeWebLlmSnapshot(page, { budget: "failure" });
+  assert.equal(evidence.captureTruncated, true);
+  assert.equal(evidence.elementsTruncated, true);
+  assert.equal(evidence.budgetTruncated, true);
+  assert.equal(evidence.truncated, true);
+  assert.equal(bytes(evidence) <= WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, true, `${bytes(evidence)} bytes`);
+});
 test("gives up page facts before the last element, and refuses only when nothing is left to drop", () => {
   const page = {
     url: "https://example.test/checkout",
     title: "Checkout",
     selectedText: "order reference 4471",
-    loading: { readyState: "interactive" },
-    dialogs: [{ role: "dialog", name: "Confirm your order", modal: true }],
+    // The producer's shape: one nested `evidence` object, written field for
+    // field as `apps/extension/src/content/evidence/types.ts` declares it. The
+    // packet reads only this shape, so a fixture in the old flat shape would
+    // silently carry no loading state and no dialog and prove nothing about
+    // the order they are given up in.
+    evidence: {
+      loading: { documentState: "interactive", busy: false, busyRegions: [], indicators: [], pendingNavigation: false },
+      dialogs: { open: [{ selector: "#confirm", role: "dialog", modal: true, native: false, label: "Confirm your order" }], modal: true }
+    },
     interactiveElements: [
       { tagName: "button", selector: "#place-order", visibleText: "Place order" },
       { tagName: "button", selector: "#cancel", visibleText: "Cancel" }
@@ -488,22 +555,23 @@ test("gives up page facts before the last element, and refuses only when nothing
     title: evidence.title !== void 0,
     loading: evidence.loading !== void 0,
     dialogs: evidence.dialogs !== void 0,
-    truncated: evidence.truncated
+    truncated: evidence.truncated,
+    budget: evidence.budgetTruncated === true
   });
   const whole = rung(WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling);
-  assert.deepEqual(shape(whole), { elements: 2, selectedText: true, title: true, loading: true, dialogs: true, truncated: false });
+  assert.deepEqual(shape(whole), { elements: 2, selectedText: true, title: true, loading: true, dialogs: true, truncated: false, budget: false });
   const oneElement = rung(bytes(whole) - 1);
-  assert.deepEqual(shape(oneElement), { elements: 1, selectedText: true, title: true, loading: true, dialogs: true, truncated: true });
+  assert.deepEqual(shape(oneElement), { elements: 1, selectedText: true, title: true, loading: true, dialogs: true, truncated: true, budget: true });
   const noSelection = rung(bytes(oneElement) - 1);
-  assert.deepEqual(shape(noSelection), { elements: 1, selectedText: false, title: true, loading: true, dialogs: true, truncated: true });
+  assert.deepEqual(shape(noSelection), { elements: 1, selectedText: false, title: true, loading: true, dialogs: true, truncated: true, budget: true });
   const noTitle = rung(bytes(noSelection) - 1);
-  assert.deepEqual(shape(noTitle), { elements: 1, selectedText: false, title: false, loading: true, dialogs: true, truncated: true });
+  assert.deepEqual(shape(noTitle), { elements: 1, selectedText: false, title: false, loading: true, dialogs: true, truncated: true, budget: true });
   const noLoading = rung(bytes(noTitle) - 1);
-  assert.deepEqual(shape(noLoading), { elements: 1, selectedText: false, title: false, loading: false, dialogs: true, truncated: true });
+  assert.deepEqual(shape(noLoading), { elements: 1, selectedText: false, title: false, loading: false, dialogs: true, truncated: true, budget: true });
   const noDialogs = rung(bytes(noLoading) - 1);
-  assert.deepEqual(shape(noDialogs), { elements: 1, selectedText: false, title: false, loading: false, dialogs: false, truncated: true });
+  assert.deepEqual(shape(noDialogs), { elements: 1, selectedText: false, title: false, loading: false, dialogs: false, truncated: true, budget: true });
   const nothing = rung(bytes(noDialogs) - 1);
-  assert.deepEqual(shape(nothing), { elements: 0, selectedText: false, title: false, loading: false, dialogs: false, truncated: true });
+  assert.deepEqual(shape(nothing), { elements: 0, selectedText: false, title: false, loading: false, dialogs: false, truncated: true, budget: true });
   assert.throws(() => rung(bytes(nothing) - 1), /exceeds the evidence byte limit/u);
 });
 test("a failure packet passes Core's failure-evidence gate whole", () => {

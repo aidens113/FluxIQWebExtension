@@ -600,6 +600,45 @@ function stringValue2(value) {
   return typeof value === "string" ? value : void 0;
 }
 
+// src/sensitivity/signature.ts
+var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
+var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
+var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
+function isSensitiveFieldSignature(signature) {
+  if (isSensitiveControlType(signature.inputType) || isSensitiveControlType(signature.controlType)) return true;
+  if (signature.dataSensitive?.trim().toLowerCase() === "true") return true;
+  return (signature.autocomplete ?? "").toLowerCase().split(/\s+/u).some((token) => Boolean(token) && (SENSITIVE_AUTOCOMPLETE_TOKENS.has(token) || token.startsWith(SENSITIVE_AUTOCOMPLETE_PREFIX)));
+}
+function isSensitiveControlType(type) {
+  return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
+}
+
+// src/sensitivity/descriptor.ts
+function sensitiveFieldSignatureOfDescriptor(descriptor) {
+  if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
+  const record = descriptor;
+  const attributes = record.attributes && typeof record.attributes === "object" && !Array.isArray(record.attributes) ? record.attributes : {};
+  return {
+    inputType: stringField(record.inputType),
+    controlType: stringField(attributes.type),
+    autocomplete: stringField(attributes.autocomplete),
+    dataSensitive: stringField(attributes["data-sensitive"])
+  };
+}
+function isSensitiveElementDescriptor(descriptor) {
+  return isSensitiveFieldSignature(sensitiveFieldSignatureOfDescriptor(descriptor));
+}
+function stringField(value) {
+  return typeof value === "string" ? value : void 0;
+}
+
+// src/sensitivity/redaction.ts
+var WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT = "(withheld: the action ran on a control that holds a secret)";
+function isProducerRedactedComparison(validation) {
+  if (!validation || typeof validation !== "object" || Array.isArray(validation)) return false;
+  return validation.redacted === true;
+}
+
 // src/io/input-model.ts
 var WEB_AUTOMATION_INPUT_IDS = {
   browserState: "web.browser.state",
@@ -698,16 +737,6 @@ var webAutomationGatewayCapabilities = [
   }
 ];
 
-// src/runtime/errors.ts
-var WebAutomationRuntimeError = class extends Error {
-  code;
-  constructor(code, message) {
-    super(message);
-    this.name = "WebAutomationRuntimeError";
-    this.code = code;
-  }
-};
-
 // src/runtime/failure/codes.ts
 var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   /** The target was found but refused the action: disabled, hidden, or covered by another element. */
@@ -782,19 +811,40 @@ function boundedText(value) {
   return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
 }
 
+// src/runtime/failure/carrier.ts
+function carriedWebAutomationFailure(error, fallback = {}) {
+  const carried = property(error, "failure");
+  const code = property(carried, "code");
+  if (typeof code !== "string") return void 0;
+  const comparison = {
+    expected: text(property(carried, "expected")) ?? fallback.expected,
+    actual: text(property(carried, "actual")) ?? fallback.actual,
+    evidenceDigest: text(property(carried, "evidenceDigest")) ?? fallback.evidenceDigest
+  };
+  if (isWebAutomationFailureCode(code)) return webAutomationFailureRecord(code, comparison);
+  const unnamed = `unrecognized web automation failure code: ${code}`;
+  return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNKNOWN, {
+    ...comparison,
+    actual: comparison.actual === void 0 ? unnamed : `${comparison.actual}; ${unnamed}`
+  });
+}
+function property(value, name) {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value[name] : void 0;
+}
+function text(value) {
+  return typeof value === "string" && value.length > 0 ? value : void 0;
+}
+
 // src/runtime/failure/classify.ts
 function classifyWebAutomationFailure(error, outcome) {
   if (outcome.failure !== void 0) return outcome.failure;
+  const carried = carriedWebAutomationFailure(error, withActual(comparedText(outcome.validation), errorMessage(error)));
+  if (carried !== void 0) return carried;
   const classified = classifyOutcome(error, outcome);
   return classified === void 0 ? void 0 : webAutomationFailureRecord(classified.code, classified.comparison);
 }
 function classifyOutcome(error, outcome) {
   const compared = comparedText(outcome.validation);
-  const reportedCode = runtimeErrorCode(error);
-  if (reportedCode !== void 0) {
-    if (isWebAutomationFailureCode(reportedCode)) return { code: reportedCode, comparison: withActual(compared, errorMessage(error)) };
-    return { code: WEB_AUTOMATION_FAILURE_CODES.UNKNOWN, comparison: { ...compared, actual: `unrecognized web automation failure code: ${reportedCode}` } };
-  }
   if (outcome.status === "timed_out") return { code: WEB_AUTOMATION_FAILURE_CODES.TIMEOUT, comparison: withActual(compared, errorMessage(error)) };
   if (outcome.validation?.status === "failed") {
     const code = outcome.actionType === "web.dom.assert" ? WEB_AUTOMATION_FAILURE_CODES.STATE_MISMATCH : WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED;
@@ -816,13 +866,6 @@ function comparedText(validation) {
 }
 function withActual(compared, actual) {
   return compared.actual !== void 0 ? compared : { ...compared, actual };
-}
-function runtimeErrorCode(error) {
-  if (error instanceof WebAutomationRuntimeError) return error.code;
-  if (typeof error !== "object" || error === null) return void 0;
-  const candidate = error;
-  if (candidate.name !== "WebAutomationRuntimeError") return void 0;
-  return typeof candidate.code === "string" ? candidate.code : void 0;
 }
 function errorMessage(error) {
   if (error instanceof Error) return error.message.length > 0 ? error.message : void 0;
@@ -859,38 +902,6 @@ function evidenceByteLimit(input, fallback, ceiling = WEB_LLM_EVIDENCE_BYTE_BUDG
   if (input === void 0) return Math.min(fallback, cap);
   if (!Number.isSafeInteger(input) || Number(input) < 1 || Number(input) > 1e5) throw new Error("maxEvidenceBytes must be a positive bounded integer");
   return Math.min(Number(input), cap);
-}
-
-// src/sensitivity/signature.ts
-var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
-var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
-var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
-function isSensitiveFieldSignature(signature) {
-  if (isSensitiveControlType(signature.inputType) || isSensitiveControlType(signature.controlType)) return true;
-  if (signature.dataSensitive?.trim().toLowerCase() === "true") return true;
-  return (signature.autocomplete ?? "").toLowerCase().split(/\s+/u).some((token) => Boolean(token) && (SENSITIVE_AUTOCOMPLETE_TOKENS.has(token) || token.startsWith(SENSITIVE_AUTOCOMPLETE_PREFIX)));
-}
-function isSensitiveControlType(type) {
-  return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
-}
-
-// src/sensitivity/descriptor.ts
-function sensitiveFieldSignatureOfDescriptor(descriptor) {
-  if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
-  const record = descriptor;
-  const attributes = record.attributes && typeof record.attributes === "object" && !Array.isArray(record.attributes) ? record.attributes : {};
-  return {
-    inputType: stringField(record.inputType),
-    controlType: stringField(attributes.type),
-    autocomplete: stringField(attributes.autocomplete),
-    dataSensitive: stringField(attributes["data-sensitive"])
-  };
-}
-function isSensitiveElementDescriptor(descriptor) {
-  return isSensitiveFieldSignature(sensitiveFieldSignatureOfDescriptor(descriptor));
-}
-function stringField(value) {
-  return typeof value === "string" ? value : void 0;
 }
 
 // src/runtime/llm-evidence/location.ts
@@ -946,7 +957,7 @@ function sanitizedEvidenceElement(raw, context) {
   const role = boundedText2(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
   const name = boundedText2(raw.name, WEB_LLM_EVIDENCE_BOUNDS.text);
   const rawText = boundedText2(raw.visibleText ?? raw.text, WEB_LLM_EVIDENCE_BOUNDS.text);
-  const text = rawText === name ? void 0 : rawText;
+  const text2 = rawText === name ? void 0 : rawText;
   const rawInputType = boundedText2(raw.inputType, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
   const inputType = rawInputType === "text" ? void 0 : rawInputType;
   const rawControlType = boundedText2(attributes.type, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
@@ -957,7 +968,7 @@ function sanitizedEvidenceElement(raw, context) {
   const selectedValue = options ? sanitizedSelectedValue(raw.selectedValue, options) : void 0;
   const revealKind = semanticRevealKind(tag, role, attributes);
   const expanded = revealKind === "disclosure" ? semanticExpandedState(attributes) : void 0;
-  const placement = elementPlacement(raw.context, { name, text });
+  const placement = elementPlacement(raw.context, { name, text: text2 });
   const focused = context.focusedSelector !== void 0 && context.focusedSelector === addressed.selector ? true : void 0;
   return {
     target: context.target,
@@ -966,7 +977,7 @@ function sanitizedEvidenceElement(raw, context) {
     ...addressed.frameId === void 0 ? {} : { frameId: addressed.frameId },
     ...role ? { role } : {},
     ...name ? { name } : {},
-    ...text ? { text } : {},
+    ...text2 ? { text: text2 } : {},
     ...inputType ? { inputType } : {},
     ...controlType ? { controlType } : {},
     ...hasValue === void 0 ? {} : { hasValue },
@@ -1053,33 +1064,51 @@ function sanitizedSelectedValue(input, options) {
   return value && options.some((option) => option.value === value) ? value : void 0;
 }
 
+// src/page-evidence/wire.ts
+function pageEvidenceWire(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+
 // src/runtime/llm-evidence/page-evidence.ts
 var READY_STATES = ["loading", "interactive", "complete"];
+var ORDINARY_NAVIGATION_TYPE = "navigate";
+var MAX_REDIRECTS = 100;
+var MAX_BLOCKED_CONTROLS = 1e4;
 function webLlmPageContext(snapshot, childFrameIds) {
+  const evidence = pageEvidence(snapshot);
   const frame = evidenceFrame(snapshot.frame, childFrameIds);
-  const loading = evidenceLoading(snapshot.loading);
-  const navigation = evidenceNavigation(snapshot.navigation);
-  const dialogs = evidenceDialogs(snapshot.dialogs);
-  const blockedBy = evidenceBlocker(snapshot.blockingOverlay);
+  const loading = evidenceLoading(pageEvidenceWire(evidence?.loading));
+  const navigation = evidenceNavigation(pageEvidenceWire(evidence?.navigation));
+  const dialogs = evidenceDialogs(pageEvidenceWire(evidence?.dialogs));
+  const blockedBy = evidenceBlocker(pageEvidenceWire(evidence?.overlays));
   const selectedText = boundedText2(snapshot.selectedText, WEB_LLM_EVIDENCE_BOUNDS.text);
   return {
     ...frame ? { frame } : {},
     ...loading ? { loading } : {},
     ...navigation ? { navigation } : {},
     ...dialogs ? { dialogs } : {},
-    ...trueFlag(snapshot.pendingNativeDialog) ? { pendingNativeDialog: true } : {},
     ...blockedBy ? { blockedBy } : {},
     ...selectedText ? { selectedText } : {}
   };
 }
 function evidenceElementTotal(snapshot, carried) {
-  const declared = boundedCount(snapshot.elementTotal, 1e7);
+  const declared = boundedCount(snapshot.elementTotal, 1e7) ?? boundedCount(captureElementTotals(snapshot)?.matched, 1e7);
   const received = Array.isArray(snapshot.interactiveElements) ? snapshot.interactiveElements.length : 0;
   const total = Math.max(declared ?? 0, received);
   return total > carried ? total : void 0;
 }
 function capturedTruncated(snapshot) {
-  return trueFlag(snapshot.truncated) === true;
+  if (trueFlag(snapshot.truncated) === true) return true;
+  return trueFlag(captureElementTotals(snapshot)?.truncated) === true;
+}
+function pageEvidence(snapshot) {
+  return pageEvidenceWire(snapshot.evidence);
+}
+function captureElementTotals(snapshot) {
+  return pageEvidenceWire(pageEvidence(snapshot)?.elements);
+}
+function items(input) {
+  return Array.isArray(input) ? input : [];
 }
 function evidenceFrame(input, childFrameIds) {
   const declared = isJsonRecord(input) ? input : void 0;
@@ -1091,27 +1120,30 @@ function evidenceFrame(input, childFrameIds) {
   };
 }
 function evidenceLoading(input) {
-  if (!isJsonRecord(input)) return void 0;
-  const rawReadyState = boundedText2(input.readyState, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
-  const readyState = rawReadyState && READY_STATES.includes(rawReadyState) ? rawReadyState : void 0;
+  if (!input) return void 0;
+  const documentState = boundedText2(input.documentState, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const readyState = documentState && READY_STATES.includes(documentState) ? documentState : void 0;
+  const spinner = items(input.indicators).map((indicator) => pageEvidenceWire(indicator)).some((indicator) => indicator?.kind === "spinner");
   const loading = {
     ...readyState && readyState !== "complete" ? { readyState } : {},
     ...trueFlag(input.busy) ? { busy: true } : {},
-    ...trueFlag(input.spinner) ? { spinner: true } : {},
+    ...spinner ? { spinner: true } : {},
     ...trueFlag(input.pendingNavigation) ? { pendingNavigation: true } : {}
   };
   return Object.keys(loading).length ? loading : void 0;
 }
 function evidenceNavigation(input) {
-  if (!isJsonRecord(input)) return void 0;
+  if (!input) return void 0;
+  const type = boundedText2(input.type, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const redirects = boundedCount(input.redirects, MAX_REDIRECTS);
   const navigation = {
-    ...trueFlag(input.pending) ? { pending: true } : {},
-    ...locationField("from", input.from),
-    ...locationField("to", input.to)
+    ...type && type !== ORDINARY_NAVIGATION_TYPE ? { type } : {},
+    ...redirects ? { redirects } : {},
+    ...safeLocationField("referrer", input.referrer)
   };
   return Object.keys(navigation).length ? navigation : void 0;
 }
-function locationField(key, input) {
+function safeLocationField(key, input) {
   try {
     return { [key]: evidenceLocation(safeEvidenceUrl(input)) };
   } catch {
@@ -1119,12 +1151,13 @@ function locationField(key, input) {
   }
 }
 function evidenceDialogs(input) {
-  if (!Array.isArray(input)) return void 0;
+  if (!input) return void 0;
   const dialogs = [];
-  for (const raw of input.slice(0, WEB_LLM_EVIDENCE_BOUNDS.dialogs)) {
-    if (!isJsonRecord(raw)) continue;
+  for (const item of items(input.open).slice(0, WEB_LLM_EVIDENCE_BOUNDS.dialogs)) {
+    const raw = pageEvidenceWire(item);
+    if (!raw) continue;
     const role = boundedText2(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
-    const name = boundedText2(raw.name, WEB_LLM_EVIDENCE_BOUNDS.text);
+    const name = boundedText2(raw.label, WEB_LLM_EVIDENCE_BOUNDS.text);
     const selector = boundedText2(raw.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
     const modal = trueFlag(raw.modal);
     if (!role && !name && !selector && !modal) continue;
@@ -1138,17 +1171,18 @@ function evidenceDialogs(input) {
   return dialogs.length ? dialogs : void 0;
 }
 function evidenceBlocker(input) {
-  if (!isJsonRecord(input)) return void 0;
-  const selector = boundedText2(input.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
+  const blocker = items(input?.blockers).map((item) => pageEvidenceWire(item)).find((item) => item !== void 0);
+  if (!blocker) return void 0;
+  const selector = boundedText2(blocker.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
   if (!selector) return void 0;
-  const tag = boundedText2(input.tag ?? input.tagName, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
-  const role = boundedText2(input.role, WEB_LLM_EVIDENCE_BOUNDS.role);
-  const name = boundedText2(input.name, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const role = boundedText2(blocker.role, WEB_LLM_EVIDENCE_BOUNDS.role);
+  const name = boundedText2(blocker.label, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const blocks = boundedCount(blocker.blocks, MAX_BLOCKED_CONTROLS);
   return {
     selector,
-    ...tag ? { tag } : {},
     ...role ? { role } : {},
-    ...name ? { name } : {}
+    ...name ? { name } : {},
+    ...blocks ? { blocks } : {}
   };
 }
 
@@ -1176,6 +1210,8 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
   const childFrameIds = [...new Set(elements.map((element) => element.frameId).filter((id) => id !== void 0))].sort((left, right) => left - right);
   const elementTotal = evidenceElementTotal(snapshot, elements.length);
   const title = boundedText2(snapshot.title, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const captureTruncated = capturedTruncated(snapshot);
+  const elementsTruncated = snapshot.interactiveElements.length > WEB_LLM_EVIDENCE_BOUNDS.elements;
   const evidence = {
     schemaVersion: WEB_LLM_EVIDENCE_SCHEMA_VERSION,
     trust: "untrusted-page-evidence",
@@ -1184,7 +1220,9 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
     ...webLlmPageContext(snapshot, childFrameIds),
     ...elementTotal === void 0 ? {} : { elementTotal },
     elements,
-    truncated: capturedTruncated(snapshot) || snapshot.interactiveElements.length > WEB_LLM_EVIDENCE_BOUNDS.elements
+    truncated: captureTruncated || elementsTruncated,
+    ...captureTruncated ? { captureTruncated: true } : {},
+    ...elementsTruncated ? { elementsTruncated: true } : {}
   };
   trimToBudget(evidence, selectors, maxEvidenceBytes);
   return { evidence, selectors };
@@ -1193,12 +1231,16 @@ function budgetFor(options) {
   return options.budget === "failure" ? evidenceByteLimit(options.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure) : evidenceByteLimit(options.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration);
 }
 function trimToBudget(evidence, selectors, maxEvidenceBytes) {
+  const markBudgetTruncated = () => {
+    evidence.truncated = true;
+    evidence.budgetTruncated = true;
+  };
   const popElement = () => {
     const removed = evidence.elements.pop();
     if (removed) selectors.delete(removed.target);
-    evidence.truncated = true;
+    markBudgetTruncated();
   };
-  const droppable = ["selectedText", "title", "navigation", "loading", "elementTotal", "pendingNativeDialog", "dialogs", "blockedBy", "frame"];
+  const droppable = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame"];
   while (serializedBytes(evidence) > maxEvidenceBytes) {
     if (evidence.elements.length > 1) {
       popElement();
@@ -1208,7 +1250,7 @@ function trimToBudget(evidence, selectors, maxEvidenceBytes) {
     if (field !== void 0) {
       if (evidence[field] !== void 0) {
         delete evidence[field];
-        evidence.truncated = true;
+        markBudgetTruncated();
       }
       continue;
     }
@@ -1285,7 +1327,9 @@ async function executeWebAutomationRuntimeCommand(fluxiq, command) {
   const message = result.error ?? dispatchPayloadMessage(result.payload);
   const status = result.status ?? (result.ok ? "succeeded" : "failed");
   const diagnostics = failureDiagnostics(status, result.payload);
-  const failure = commandFailure(status, outputId, message, result.failure, diagnostics?.evidenceDigest);
+  const clientResult = jsonObject(result.payload?.result);
+  const withholdComparison = isSensitiveElementDescriptor(clientResult?.element) && !isProducerRedactedComparison(clientResult?.validation);
+  const failure = commandFailure(status, outputId, message, result.failure, diagnostics?.evidenceDigest, withholdComparison);
   const runtimeResult = {
     commandId: command.commandId ?? `web.${Date.now()}`,
     status,
@@ -1300,7 +1344,7 @@ async function executeWebAutomationRuntimeCommand(fluxiq, command) {
       ...diagnostics ? { failureDiagnostics: diagnostics.report, ...diagnostics.evidence ? { failureEvidence: diagnostics.evidence } : {} } : {}
     })
   };
-  if (result.payload !== void 0) runtimeResult.payload = result.payload;
+  if (result.payload !== void 0) runtimeResult.payload = withholdComparison ? secretSafeDispatchPayload(result.payload) : result.payload;
   const target = outputTargetFromPayload(payload);
   if (target) runtimeResult.target = target;
   return runtimeResult;
@@ -1340,8 +1384,8 @@ function rejected(command, message, code) {
     failure: webAutomationFailureRecord(code, { expected: "a dispatchable web automation command", actual: message })
   };
 }
-function commandFailure(status, actionType, message, reported, evidenceDigest) {
-  const client = clientReportedFailure(reported);
+function commandFailure(status, actionType, message, reported, evidenceDigest, withholdComparison) {
+  const client = clientReportedFailure(reported, withholdComparison);
   const outcome = {
     // `rejected` is a dispatch status Core's command vocabulary has and the
     // client's does not; a client that refused an action did not run it, which
@@ -1356,9 +1400,11 @@ function commandFailure(status, actionType, message, reported, evidenceDigest) {
   if (evidenceDigest === void 0 || failure.evidenceDigest !== void 0) return failure;
   return { ...failure, evidenceDigest };
 }
-function clientReportedFailure(reported) {
+function clientReportedFailure(reported, withholdComparison) {
   if (reported === void 0) return void 0;
-  const { expected, actual, evidenceDigest } = reported;
+  const { evidenceDigest } = reported;
+  const expected = secretSafeComparisonText(reported.expected, withholdComparison);
+  const actual = secretSafeComparisonText(reported.actual, withholdComparison);
   if (isWebAutomationFailureCode(reported.code)) return webAutomationFailureRecord(reported.code, { expected, actual, evidenceDigest });
   const unnamed = `unrecognized web automation failure code: ${reported.code}`;
   return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNKNOWN, {
@@ -1366,6 +1412,26 @@ function clientReportedFailure(reported) {
     actual: actual === void 0 ? unnamed : `${actual}; ${unnamed}`,
     evidenceDigest
   });
+}
+function secretSafeComparisonText(text2, withholdComparison) {
+  if (text2 === void 0 || !withholdComparison) return text2;
+  return WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT;
+}
+function secretSafeDispatchPayload(payload) {
+  const actionResult = jsonObject(payload.result);
+  const validation = jsonObject(actionResult?.validation);
+  if (!actionResult || !validation || validation.status === "none") return payload;
+  return {
+    ...payload,
+    result: {
+      ...actionResult,
+      validation: {
+        ...validation,
+        ...validation.expected === void 0 ? {} : { expected: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT },
+        ...validation.actual === void 0 ? {} : { actual: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT }
+      }
+    }
+  };
 }
 function failureDiagnostics(status, payload) {
   if (status === "succeeded") return void 0;

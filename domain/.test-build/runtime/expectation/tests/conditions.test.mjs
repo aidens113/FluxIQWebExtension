@@ -6,6 +6,7 @@ import test from "node:test";
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 
 // src/actions/types.ts
+var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
 var WEB_AUTOMATION_UPLOAD_MAX_FILE_BYTES = 1048576;
 var WEB_AUTOMATION_UPLOAD_MAX_TOTAL_BYTES = 4194304;
@@ -674,6 +675,29 @@ var WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS = Object.freeze({
   "web.action.failed": { category: "action_failed", retryable: true, stage: "execution" },
   "web.action.unknown": { category: "ambiguous_or_unknown", retryable: false, stage: "execution" }
 });
+function webAutomationFailureRecord(code, comparison = {}) {
+  const definition = WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[code];
+  const expected = boundedText(comparison.expected);
+  const actual = boundedText(comparison.actual);
+  const evidenceDigest = comparison.evidenceDigest !== void 0 && EVIDENCE_DIGEST_PATTERN.test(comparison.evidenceDigest) ? comparison.evidenceDigest : void 0;
+  return {
+    category: definition.category,
+    code,
+    retryable: definition.retryable,
+    stage: definition.stage,
+    ...expected === void 0 ? {} : { expected },
+    ...actual === void 0 ? {} : { actual },
+    ...evidenceDigest === void 0 ? {} : { evidenceDigest }
+  };
+}
+var EVIDENCE_DIGEST_PATTERN = /^[a-f0-9]{64}$/u;
+function boundedText(value) {
+  if (value === void 0) return void 0;
+  const collapsed = value.replace(/\s+/gu, " ").trim();
+  if (collapsed.length === 0) return void 0;
+  if (collapsed.length <= WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH) return collapsed;
+  return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
+}
 
 // src/recording/web-state/evidence/project.ts
 var COLLECTION = { elementKind: "collection", comparable: false };
@@ -903,12 +927,7 @@ function normalizeWebAutomationActionType(actionType) {
   const requested = typeof actionType === "string" && actionType.length > 0 ? actionType : "(missing)";
   return { ok: false, failure: UNSUPPORTED_ACTION_TYPE_FAILURE, message: `Unsupported web automation action type: ${requested}` };
 }
-var UNSUPPORTED_ACTION_TYPE_FAILURE = Object.freeze({
-  category: "blocked_by_capability_or_policy",
-  code: "web.action.unsupported_type",
-  retryable: false,
-  stage: "dispatch"
-});
+var UNSUPPORTED_ACTION_TYPE_FAILURE = Object.freeze(webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE));
 var CANONICAL_ACTION_TYPES = new Set(WEB_AUTOMATION_ACTION_TYPES);
 var LEGACY_ACTION_TYPE_ALIASES = new Map(
   Object.entries(WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER).map(([canonical, legacy]) => [legacy, canonical])

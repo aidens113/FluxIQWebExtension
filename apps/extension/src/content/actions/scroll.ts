@@ -5,7 +5,9 @@
 // `untilStable` to keep scrolling while the document is still growing -- a
 // lazy-loading feed -- up to `maxScrolls`, the guard that stops an infinite
 // feed scrolling forever. A command with no `scroll` request is the legacy
-// absolute move to `options.x`/`options.y`, unchanged.
+// absolute move, unchanged: to `options.x`/`options.y`, or to the command's
+// `coordinates` when the options carry none, and to where the page already is
+// for an axis neither names.
 //
 // Every mode states a post-condition instead of assuming the page obeyed: the
 // position actually reached, clamped to what the document allows so a scroll
@@ -16,10 +18,14 @@
 // meant to load had arrived, which is `output_not_observed`. A run that wants
 // a bounded amount of scrolling asks for `by`, which has no such expectation.
 //
-// The verb never rejects. `actions/execute.ts` returns its promise rather than
-// awaiting it, so a rejection would settle after that file's try block has
-// exited and escape its catch; this verb catches its own throws and reports
-// them through `deps.failure`, exactly as that catch would.
+// The verb never rejects: every throw is caught here and reported through
+// `deps.failure`. That is belt and braces, not the last line of defence --
+// `actions/execute.ts` awaits every branch, so its catch would report the same
+// rejection if this one were removed. It is kept because it costs nothing and
+// keeps the failure local: a throw from `deps.resolveTarget` or from the DOM
+// calls below is reported as this verb failing, at this verb's `startedAt`,
+// independently of how the dispatcher calls it. (Until 2026-09-11 the
+// dispatcher returned this promise unawaited, and the catch was load-bearing.)
 
 import type {
   BrowserActionCommand,

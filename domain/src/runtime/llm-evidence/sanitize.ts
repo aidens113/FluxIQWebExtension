@@ -8,6 +8,17 @@
 // to 6,000 bytes, the failure path to Core's 3,000-byte gate, and neither may
 // exceed 12,000. Over budget, the packet is trimmed rather than refused --
 // lowest-value evidence first -- and says so in `truncated`.
+//
+// Three limits can set `truncated`, and they are three different problems with
+// three different answers: the browser's capture already dropped elements
+// before the packet saw them, the packet's own element bound cut the ranked
+// tail, or the byte budget forced removals. So `truncated` is only the
+// summary -- "is this less than the page" -- and each limit is named beside it
+// as `captureTruncated`, `elementsTruncated` and `budgetTruncated`, present
+// only when they fired. A reader that just needs to know something is missing
+// reads one field; a reader deciding what to do next reads which. The rule and
+// the full set of limits on the evidence path are tabulated once, in
+// `domain/src/recording/web-state/evidence/input.ts`.
 
 import { sanitizedEvidenceElement, type WebLlmEvidenceElement } from "./elements";
 import { evidenceByteLimit, serializedBytes, WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_EVIDENCE_BYTE_BUDGETS } from "./limits";
@@ -23,7 +34,14 @@ export type WebLlmPageEvidence = WebLlmPageContext & {
   location: string;
   title?: string;
   elements: WebLlmEvidenceElement[];
+  /** Any of the three limits below fired, so the packet is less than the page. */
   truncated: boolean;
+  /** The browser's capture cut elements before the packet saw them. Narrow the capture; asking for a bigger packet will not recover them. */
+  captureTruncated?: true;
+  /** The capture offered more elements than the packet's own bound carries, so the ranked tail was left out. */
+  elementsTruncated?: true;
+  /** The byte budget forced removals. A larger budget, or a narrower page, returns them. */
+  budgetTruncated?: true;
 };
 
 /**
@@ -73,6 +91,8 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
   const childFrameIds = [...new Set(elements.map((element) => element.frameId).filter((id): id is number => id !== undefined))].sort((left, right) => left - right);
   const elementTotal = evidenceElementTotal(snapshot, elements.length);
   const title = boundedText(snapshot.title, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const captureTruncated = capturedTruncated(snapshot);
+  const elementsTruncated = snapshot.interactiveElements.length > WEB_LLM_EVIDENCE_BOUNDS.elements;
   const evidence: WebLlmPageEvidence = {
     schemaVersion: WEB_LLM_EVIDENCE_SCHEMA_VERSION,
     trust: "untrusted-page-evidence",
@@ -81,7 +101,9 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     ...webLlmPageContext(snapshot, childFrameIds),
     ...(elementTotal === undefined ? {} : { elementTotal }),
     elements,
-    truncated: capturedTruncated(snapshot) || snapshot.interactiveElements.length > WEB_LLM_EVIDENCE_BOUNDS.elements
+    truncated: captureTruncated || elementsTruncated,
+    ...(captureTruncated ? { captureTruncated: true as const } : {}),
+    ...(elementsTruncated ? { elementsTruncated: true as const } : {})
   };
   trimToBudget(evidence, selectors, maxEvidenceBytes);
   return { evidence, selectors };
@@ -94,22 +116,32 @@ function budgetFor(options: WebLlmSanitizeOptions): number {
 }
 
 /** The page facts a packet can lose and still be worth reading. Ordered least useful first where they are dropped. */
-type DroppableEvidenceField = "selectedText" | "title" | "navigation" | "loading" | "elementTotal" | "pendingNativeDialog" | "dialogs" | "blockedBy" | "frame";
+type DroppableEvidenceField = "selectedText" | "title" | "navigation" | "loading" | "elementTotal" | "dialogs" | "blockedBy" | "frame";
 
 /**
  * Trim until the packet fits, lowest value first: the ranked tail of elements
  * (the capture orders them so the tail is the least useful), then the page
  * facts a reader can live without, then the last element, and only then a
- * refusal. Every removal sets `truncated`, because a packet that silently
- * describes less than it appears to is worse than a large one.
+ * refusal. Every removal sets `truncated` and `budgetTruncated`, because a
+ * packet that silently describes less than it appears to is worse than a large
+ * one -- and because "the budget cut this" is the one of the three limits a
+ * consumer can answer by asking again with more room.
+ *
+ * The two flags are written before the size is re-measured, so the bytes they
+ * cost are inside the budget rather than pushing the packet over it after the
+ * last check. Neither is droppable: they describe the trimming.
  */
 function trimToBudget(evidence: WebLlmPageEvidence, selectors: Map<string, string>, maxEvidenceBytes: number): void {
+  const markBudgetTruncated = (): void => {
+    evidence.truncated = true;
+    evidence.budgetTruncated = true;
+  };
   const popElement = (): void => {
     const removed = evidence.elements.pop();
     if (removed) selectors.delete(removed.target);
-    evidence.truncated = true;
+    markBudgetTruncated();
   };
-  const droppable: DroppableEvidenceField[] = ["selectedText", "title", "navigation", "loading", "elementTotal", "pendingNativeDialog", "dialogs", "blockedBy", "frame"];
+  const droppable: DroppableEvidenceField[] = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame"];
   while (serializedBytes(evidence) > maxEvidenceBytes) {
     if (evidence.elements.length > 1) {
       popElement();
@@ -119,7 +151,7 @@ function trimToBudget(evidence: WebLlmPageEvidence, selectors: Map<string, strin
     if (field !== undefined) {
       if (evidence[field] !== undefined) {
         delete evidence[field];
-        evidence.truncated = true;
+        markBudgetTruncated();
       }
       continue;
     }

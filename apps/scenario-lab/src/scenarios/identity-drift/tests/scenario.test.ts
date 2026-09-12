@@ -117,7 +117,7 @@ test("only the baseline carries the recorded test id; every mode keeps the field
   }
 });
 
-test("each drifted rendering changes only what its corpus row describes", () => {
+test("each drifted rendering changes only what its variant describes", () => {
   assert.deepEqual(submitButton(renderSaveAction("baseline")), { attributes: { id: "save-settings", class: "btn btn-primary", "data-testid": "save-changes" }, text: "Save changes" });
 
   const selectorOnly = region(pageIn("selector-only"), "primary-actions", "div");
@@ -134,6 +134,14 @@ test("each drifted rendering changes only what its corpus row describes", () => 
   for (const mode of identityDriftModes.filter((candidate) => candidate !== "moved")) {
     assert.doesNotMatch(region(pageIn(mode), "footer-actions", "footer"), /type="submit"/, mode);
   }
+
+  // The one rendering that takes the selector and the text away together: what
+  // is left is the accessible name, and it has to come from the aria-label
+  // because the shortened visible label no longer carries it.
+  const reworded = region(pageIn("reworded-aria"), "primary-actions", "div");
+  assert.deepEqual(submitButton(reworded), { attributes: { class: "ui-button ui-button--accent", "aria-label": "Save changes" }, text: "Save" });
+  assert.doesNotMatch(reworded, /<button type="submit"[^>]*\sid="/);
+  assert.ok(reworded.indexOf('type="submit"') < reworded.indexOf('type="reset"'));
 
   const wrapped = region(pageIn("wrapped-aria"), "primary-actions", "div");
   assert.deepEqual(submitButton(wrapped), { attributes: { id: "save-settings", class: "btn btn-primary", "aria-labelledby": "save-settings-label" }, text: "Save changes" });

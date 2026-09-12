@@ -77,6 +77,39 @@ test("validation text is bounded to Core's limit and is never empty", () => {
   assert.deepEqual(boundValidation({ status: "none", reason: "evidence-only" }), { status: "none", reason: "evidence-only" });
 });
 
+test("the producer's redaction declaration survives the bound, in all three states an optional boolean has", () => {
+  // This row is the reason the flag ships at all, and it is written here rather
+  // than beside the verbs because this is where the flag would be lost.
+  // `boundValidation` rebuilds the validation field by field, so a field it does
+  // not name is deleted one line after a verb sets it -- and every gate stays
+  // green, because nothing else in the content bundle reads the flag. The
+  // symptom downstream is not a leak: the domain's guard fails safe on an absent
+  // declaration (`isProducerRedactedComparison`), so what is lost is the verb's
+  // own phrasing, withheld on every sensitive-control comparison. That is
+  // exactly what the flag exists to buy back, so losing it here is losing the
+  // whole change while nothing anywhere goes red.
+  assert.deepEqual(
+    boundValidation({ status: "failed", expected: "  the field holds a withheld value  ", actual: "the field holds\nnothing", redacted: true }),
+    { status: "failed", expected: "the field holds a withheld value", actual: "the field holds nothing", redacted: true },
+    "a declared redaction must reach the wire, or the domain withholds the producer's phrasing anyway"
+  );
+
+  // The other two states, and both matter. An explicit `false` is a producer
+  // saying it did *not* withhold, which must travel as itself rather than being
+  // dropped into the same absence as "never asked"; an absent flag must stay
+  // absent rather than being invented into a declaration.
+  assert.deepEqual(
+    boundValidation({ status: "passed", expected: "e", actual: "e", redacted: false }),
+    { status: "passed", expected: "e", actual: "e", redacted: false },
+    "a producer that declares it did not withhold is not the same as one that said nothing"
+  );
+  assert.equal(
+    "redacted" in boundValidation({ status: "passed", expected: "e", actual: "e" }),
+    false,
+    "an unmarked validation stays unmarked: the bound may not manufacture a declaration"
+  );
+});
+
 test("an unbounded validation still produces a record Core accepts", () => {
   // Page text is unbounded. Without the bound, Core would discard the whole
   // record and the failure would vanish rather than being truncated. The record

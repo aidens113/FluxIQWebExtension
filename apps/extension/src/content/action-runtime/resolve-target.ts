@@ -14,6 +14,18 @@
 // not the gate liked it, so a deliberately hidden or disabled target -- what an
 // assertion or an actionability refusal is about -- reaches the verb as before.
 //
+// The one answer a strategy does produce is then checked before it is acted on.
+// Level 1's queries are not equally strong -- an id is unique and a class set
+// is not -- and the weak ones used to act with no score and no floor at all: a
+// page whose Save button had been replaced by a `btn btn-primary` "Delete
+// workspace" was resolved by the class-set query and clicked, measured, while
+// Level 2 scored the same element -0.237 and refused it. `identity/veto.ts`
+// closes that: it scores the match against the recording with the same matcher
+// Level 2 uses and refuses one the page contradicts. A veto is a miss, not an
+// abort, so the strategies after it and then scoring still run -- which is how
+// a control that merely moved into another slot is recovered rather than only
+// not clicked.
+//
 // A failure carries Core's structured record rather than only a sentence:
 // TARGET_AMBIGUOUS naming the candidates that tied, TARGET_NOT_FOUND naming the
 // strategies that were attempted. The codes come from the domain's closed set,
@@ -49,6 +61,7 @@ import {
   candidateLabel,
   collectTargetCandidates,
   scoreTargetCandidates,
+  vetoExactMatch,
   type CandidateSelection,
   type TargetCandidate
 } from "../identity";
@@ -61,9 +74,11 @@ export type ResolvedTarget = {
 };
 
 /**
- * The recorded target as it arrives in `options.element`: the fingerprint
- * `element-finder.ts` looks elements up by, plus the identity signals
- * `describe-element.ts` records, which say what family a candidate must be in.
+ * The recorded target as it arrives on the command -- declared as
+ * `action.element`, and still carried raw in `options.element` beside it: the
+ * fingerprint `element-finder.ts` looks elements up by, plus the identity
+ * signals `describe-element.ts` records, which say what family a candidate
+ * must be in.
  */
 type RecordedTarget = ElementFingerprint & {
   role?: string | undefined;
@@ -129,7 +144,18 @@ export function resolveTargetWithDiagnostics(action: BrowserActionCommand): Reso
     }
     const pool = gatedPool(attempt.matches, target);
     const only = pool.length === 1 ? pool[0] : undefined;
-    if (only) return { element: only, resolution: { strategy: attempt.strategy, candidateCount: attempt.matches.length } };
+    if (only) {
+      // One answer, unweighed until now. `identity/veto.ts` scores it against
+      // the recording and refuses a match the page contradicts; a refusal
+      // demotes the strategy to a miss rather than ending the resolution, so
+      // the strategies after it and then Level 2 still get their turn -- which
+      // is how a page that moved the control into another slot is recovered
+      // instead of merely not clicked.
+      const veto = target ? vetoExactMatch(target, only) : undefined;
+      if (!veto) return { element: only, resolution: { strategy: attempt.strategy, candidateCount: attempt.matches.length } };
+      misses.push(`${attempt.description} (${veto.summary})`);
+      continue;
+    }
     // Several survived the gate. Scoring is the difference between "these two
     // tied" and "these two tied, and one of them is the recorded control".
     const decided = target ? scoreTargetCandidates(target, describePool(pool)) : undefined;
@@ -150,7 +176,7 @@ export function resolveTargetWithDiagnostics(action: BrowserActionCommand): Reso
   const decided = target ? scoreTargetCandidates(target, nearby) : undefined;
   if (decided?.outcome === "resolved") return scoredTarget(decided, nearby.length);
   if (decided?.outcome === "ambiguous") throw scoredAmbiguous(decided, misses);
-  throw notFound(`No target resolved from ${misses.join(", ")}.`, misses, nearby.length);
+  throw notFound(`No target resolved from ${misses.join(", ")}.`, misses, nearby.length, decided);
 }
 
 /** A scored win, with Core's own measurement of it. */
@@ -330,13 +356,29 @@ function scoredAmbiguous(decided: Extract<CandidateSelection, { outcome: "ambigu
  * strategies attempted still read in order; the record says the same thing in
  * Core's vocabulary and adds how many same-family controls the page did offer,
  * which is what a Flow needs to know to widen its target.
+ *
+ * When scoring ran and refused, its numbers ride along. A near-miss and a
+ * hopeless page are otherwise indistinguishable to a Flow -- both read as
+ * "nothing matched; 2 controls of the same family are on the page" -- and they
+ * call for opposite responses: a near-miss means the recorded control is
+ * probably still there under a new name and the target should be widened, while
+ * a best candidate deep in the negatives means it is gone and the step needs
+ * rewriting. `scoredAmbiguous` beside this already reports the same three
+ * fields, so a refusal now carries them whichever way it refused.
  */
-function notFound(message: string, misses: string[], nearbyCount: number): TargetResolutionError {
+function notFound(message: string, misses: string[], nearbyCount: number, decided?: CandidateSelection): TargetResolutionError {
+  const best = decided?.ranked[0];
+  const runnerUp = decided?.ranked[1];
   const failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, {
     expected: misses.length ? `an element matching ${misses.join(", ")}` : "a selector, coordinates, or a focused element",
-    actual: `nothing matched; ${nearbyCount} control(s) of the same family are on the page`
+    actual: `nothing matched; ${nearbyCount} control(s) of the same family are on the page${best ? `; best scored ${best.score.normalizedScore.toFixed(2)}` : ""}`
   });
-  return new TargetResolutionError(message, failure, { strategy: strategyOf(misses), candidateCount: nearbyCount });
+  return new TargetResolutionError(message, failure, {
+    strategy: strategyOf(misses),
+    candidateCount: nearbyCount,
+    ...(best ? { bestScore: best.score.normalizedScore, confidence: best.score.confidence } : {}),
+    ...(runnerUp ? { runnerUpScore: runnerUp.score.normalizedScore } : {})
+  });
 }
 
 /** The score each tied element got, when scoring ran at all. */
@@ -359,10 +401,41 @@ function strategyOf(misses: string[]): BrowserActionTargetStrategy {
   return "fingerprint";
 }
 
+/**
+ * The recorded element's identity: the declared field first, the untyped bag
+ * only when no declared field arrived.
+ *
+ * `action.element` is the contract. The domain fills it in
+ * `client/gateway-mapping.ts`, and that is also where the question of *which*
+ * description is the better one has already been answered: Core's
+ * `prepareElementTargetAction` rewrites the dispatched target on every dispatch
+ * from the parameters' own top-level keys, never looking inside
+ * `parameters.element`, so an adapted copy is richer than the recorded one only
+ * when Core actually matched a runtime candidate, and is a lossy re-derivation
+ * of the same element when it did not. Measured on the real path, that is 11
+ * identity signals against 1. Re-deriving that preference here would be a
+ * second order to keep in step with the first; this function takes the
+ * description the domain already chose.
+ *
+ * Both paths are wire values, so both are checked rather than trusted -- the
+ * declared field's type says what the domain sends, not what an older client or
+ * a hand-built command actually sent -- and an object with no keys is not an
+ * identity, so it falls through instead of blanking the target.
+ *
+ * The fallback is deliberate and temporary: `options.element` is the same value
+ * raw, and it stays live until every producer sends the declared field.
+ * `tests/resolve-target.test.ts` holds both halves, so one row fails if the
+ * declared field stops being read and another if the fallback disappears while
+ * a caller still sends only `options`.
+ */
 function recordedTarget(action: BrowserActionCommand): RecordedTarget | undefined {
-  const element = action.options?.element;
-  if (!element || typeof element !== "object" || Array.isArray(element)) return undefined;
-  return element as RecordedTarget;
+  return describedElement(action.element) ?? describedElement(action.options?.element);
+}
+
+/** A wire value that is an element description: an object carrying at least one signal. */
+function describedElement(value: unknown): RecordedTarget | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  return Object.keys(value).length ? value as RecordedTarget : undefined;
 }
 
 function querySelectorAll(selector: string): Element[] {

@@ -54,9 +54,14 @@
 // acts on the page, so the wait that gives the page its chance to change has
 // already happened inside `evaluateAssertion`.
 //
-// The whole body is wrapped: `execute.ts` returns this verb's promise from
-// inside its try block without awaiting it, so a rejection would escape the
-// catch that turns a throw into a failure result.
+// The whole body is wrapped, and that is belt and braces rather than the only
+// thing standing between a rejection and a failure result: `execute.ts` awaits
+// every branch, so its own catch would answer for this verb if this one were
+// not here. It is kept because it is free and it keeps the answer local -- a
+// throw from `evaluateAssertion` is reported as this verb failing, at this
+// verb's `startedAt`, without depending on how the dispatcher happens to call
+// it. (Until 2026-09-11 the dispatcher returned this promise unawaited, and
+// this catch was the only thing that stopped the rejection escaping.)
 
 import type { BrowserActionCommand, BrowserActionResult } from "../types";
 import type { AssertionOutcome, AssertionTarget } from "../action-runtime";

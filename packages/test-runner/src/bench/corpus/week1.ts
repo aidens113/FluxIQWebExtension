@@ -10,10 +10,18 @@ const variantOnly = (id: string, scenarioId: string, workflowId: string | null, 
  * `wrapped` + `aria-variant` is the fixture's single `wrapped-aria` variant,
  * and W27's surfaces are named for the table's "disabled, detached, blocked
  * URL". W19 to W23 are variants only; their rows run no unarmed workflow.
+ *
+ * Both lanes run. Fourteen of the corpus's resolved results are variants, and
+ * a variant is armed only by the Flow lane, so a recording-only bench skips a
+ * third of the corpus and leaves drift recovery, fuzzy recovery and failure
+ * classification with an empty population. Declaring both lanes is what lets
+ * `--corpus week1` cover them; whether a Flow-lane result passes is then a
+ * measurement, not an assumption.
  */
 export const week1Corpus: BenchCorpus = {
   id: "week1",
   description: "FluxBench Week 1: W01 to W28",
+  lanes: ["recording", "flow"],
   rows: [
     row("W01", "basic-form", null),
     row("W02", "keyboard-forms", null),

@@ -99,6 +99,15 @@ function childSnapshot(): DomSnapshotPayloadWithEvidence {
       },
       overlays: { tested: 2, blockedCount: 1, blockers: [{ selector: "#veil", blocks: 1, blocked: ["#confirm"] }] },
       regions: [{ role: "form", selector: "#card-form", label: "Card details" }],
+      // The child carries every item the top frame does not, so the two
+      // fixtures together exercise all eight keys of the contract. The merge is
+      // the only place a whole item can go missing, and it does so silently.
+      repeating: [{
+        containerSelector: "#saved-cards",
+        signature: "li[data-testid^='card-']",
+        itemCount: 3,
+        representative: { selector: "#saved-cards > li:nth-child(1)", testId: "card-1", text: "Visa 4242" }
+      }],
       forms: [{
         selector: "#card-form",
         controlCount: 1,
@@ -146,6 +155,8 @@ test("a child frame's selectors are qualified by the frame, exactly as its eleme
   assert.equal(evidence?.forms?.[0]?.selector, `${prefix}#card-form`);
   assert.equal(evidence?.forms?.[0]?.controls[0]?.selector, `${prefix}#card`);
   assert.equal(evidence?.forms?.[0]?.submit, `${prefix}#confirm`);
+  assert.equal(evidence?.repeating?.[0]?.containerSelector, `${prefix}#saved-cards`);
+  assert.equal(evidence?.repeating?.[0]?.representative.selector, `${prefix}#saved-cards > li:nth-child(1)`);
   assert.deepEqual(evidence?.loading.busyRegions, [`${prefix}#card-status`]);
   assert.equal(evidence?.loading.indicators[0]?.selector, `${prefix}#card-spinner`);
   // The top frame's own selectors are untouched, and the elements use the same
@@ -217,4 +228,33 @@ test("a snapshot with no evidence anywhere gains none", async () => {
   const merged = await mergeOf([{ frameId: 0, snapshot: top }]);
   assert.equal(merged.evidence, undefined);
   assert.equal(merged.interactiveElements.length, 1);
+});
+
+// The merge used to name the contract's keys by hand, so an item it forgot was
+// produced by every frame and then dropped from the page -- invisible on a
+// single-frame fixture and green everywhere. It is now written through
+// `present<PageEvidence>`, which will not compile until every key is named; the
+// compiler owns "no key is forgotten". These two rows own what a compiler
+// cannot see: that a key the frames did send arrives, and that a key they did
+// not send stays absent rather than arriving empty.
+
+test("the merged page carries every item some frame reported, and no other", async () => {
+  const reported = [...new Set(bothFrames.flatMap((frame) => Object.keys(frame.snapshot.evidence ?? {})))].sort();
+  const evidence = await mergedEvidence(bothFrames);
+  assert.equal(reported.length, 8, "the fixtures no longer exercise every key of the contract");
+  assert.deepEqual(Object.keys(evidence).sort(), reported, "the merge dropped or invented a page-evidence item");
+});
+
+test("an item no frame reported is absent from the merged page, not present and empty", async () => {
+  const child = childSnapshot();
+  delete child.evidence?.dialogs;
+  delete child.evidence?.overlays;
+  const evidence = await mergedEvidence([{ frameId: 0, snapshot: topSnapshot() }, { frameId: CHILD_FRAME_ID, snapshot: child }]);
+  assert.equal("dialogs" in evidence, false);
+  assert.equal("overlays" in evidence, false);
+  // And within an item: the child's dialog carries no `label`, and a dialog
+  // with no label must not gain one as an undefined-valued key.
+  const withDialog = await mergedEvidence(bothFrames);
+  assert.equal("label" in (withDialog.dialogs?.open[0] ?? {}), false);
+  assert.equal("armPending" in (withDialog.dialogs ?? {}), false);
 });

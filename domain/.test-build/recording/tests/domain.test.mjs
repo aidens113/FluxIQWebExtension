@@ -343,10 +343,10 @@ function isSensitiveControlType(type) {
 // src/sensitivity/descriptor.ts
 function sensitiveFieldSignatureOfDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
-  const record2 = descriptor;
-  const attributes = record2.attributes && typeof record2.attributes === "object" && !Array.isArray(record2.attributes) ? record2.attributes : {};
+  const record = descriptor;
+  const attributes = record.attributes && typeof record.attributes === "object" && !Array.isArray(record.attributes) ? record.attributes : {};
   return {
-    inputType: stringField(record2.inputType),
+    inputType: stringField(record.inputType),
     controlType: stringField(attributes.type),
     autocomplete: stringField(attributes.autocomplete),
     dataSensitive: stringField(attributes["data-sensitive"])
@@ -524,7 +524,7 @@ function finite(value) {
 
 // src/recording/web-state/element/selection.ts
 var MAX_STATE_ELEMENTS = 1500;
-var WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS = ["count", "captured", "truncated"];
+var WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS = ["count", "captured", "truncated", "captureTruncated", "stateTruncated"];
 function shouldCaptureElementState(element) {
   if (!hasElementBounds(element)) return false;
   return Boolean(
@@ -772,11 +772,13 @@ function webAutomationActionTargetFromElement(element) {
   });
 }
 
+// src/page-evidence/wire.ts
+function pageEvidenceWire(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+
 // src/recording/web-state/evidence/read.ts
 var MAX_TEXT = 200;
-function record(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
-}
 function list(value) {
   return Array.isArray(value) ? value : [];
 }
@@ -792,7 +794,7 @@ function flag(value) {
   return typeof value === "boolean" ? value : void 0;
 }
 function rect(value) {
-  const bounds = record(value);
+  const bounds = pageEvidenceWire(value);
   if (!bounds) return void 0;
   const x = finite2(bounds.x);
   const y = finite2(bounds.y);
@@ -809,10 +811,10 @@ function finite2(value) {
 
 // src/recording/web-state/evidence/input.ts
 function pageEvidenceOfSnapshot(snapshot) {
-  return record(record(snapshot)?.evidence);
+  return pageEvidenceWire(pageEvidenceWire(snapshot)?.evidence);
 }
 function pageEvidenceTruncatedElements(evidence) {
-  return record(evidence?.elements)?.truncated === true;
+  return pageEvidenceWire(evidence?.elements)?.truncated === true;
 }
 
 // src/recording/web-state/state-values.ts
@@ -917,11 +919,11 @@ function addPageEvidenceStateValues(state, evidence, timestamp, sourceId) {
   const put = (path, type, value, input = {}) => {
     next = putStateValue(next, `${EVIDENCE_PATH_PREFIX}${path}`, type, value, timestamp, sourceId, input);
   };
-  addElementTotals(put, record(evidence.elements));
-  addLoading(put, record(evidence.loading));
-  addNavigation(put, record(evidence.navigation));
-  addDialogs(put, record(evidence.dialogs));
-  addOverlays(put, record(evidence.overlays));
+  addElementTotals(put, pageEvidenceWire(evidence.elements));
+  addLoading(put, pageEvidenceWire(evidence.loading));
+  addNavigation(put, pageEvidenceWire(evidence.navigation));
+  addDialogs(put, pageEvidenceWire(evidence.dialogs));
+  addOverlays(put, pageEvidenceWire(evidence.overlays));
   addRegions(put, list(evidence.regions));
   addRepeating(put, list(evidence.repeating));
   addForms(put, list(evidence.forms));
@@ -951,7 +953,7 @@ function addLoading(put, loading) {
   putFlag(put, "loading.pendingNavigation", loading.pendingNavigation, LIVE_STATUS);
   putCollection(put, "loading.busyRegions", list(loading.busyRegions), MAX_BUSY_REGIONS, selectorItem, LIVE_COLLECTION);
   putCollection(put, "loading.indicators", list(loading.indicators), MAX_LOADING_INDICATORS, (item) => {
-    const indicator = record(item);
+    const indicator = pageEvidenceWire(item);
     return compactJsonObject({
       selector: text(indicator?.selector),
       kind: text(indicator?.kind),
@@ -976,7 +978,7 @@ function addDialogs(put, dialogs) {
   putFlag(put, "dialogs.modal", dialogs.modal, LIVE_STATUS);
   putFlag(put, "dialogs.armPending", dialogs.armPending, LIVE_STATUS);
   putCollection(put, "dialogs.open", open, MAX_DIALOGS, (item) => {
-    const dialog = record(item);
+    const dialog = pageEvidenceWire(item);
     return compactJsonObject({
       selector: text(dialog?.selector),
       role: text(dialog?.role),
@@ -986,7 +988,7 @@ function addDialogs(put, dialogs) {
       bounds: rect(dialog?.bounds)
     });
   }, LIVE_COLLECTION);
-  const native = record(dialogs.lastNative);
+  const native = pageEvidenceWire(dialogs.lastNative);
   if (native) {
     put("dialogs.lastNative", "json", compactJsonObject({
       kind: text(native.kind),
@@ -1001,7 +1003,7 @@ function addOverlays(put, overlays) {
   putCount(put, "overlays.tested", overlays.tested, LIVE_COUNT);
   putCount(put, "overlays.blockedCount", overlays.blockedCount, LIVE_COUNT);
   putCollection(put, "overlays.blockers", list(overlays.blockers), MAX_OVERLAY_BLOCKERS, (item) => {
-    const blocker = record(item);
+    const blocker = pageEvidenceWire(item);
     const blocked = list(blocker?.blocked);
     return compactJsonObject({
       selector: text(blocker?.selector),
@@ -1016,7 +1018,7 @@ function addOverlays(put, overlays) {
 }
 function addRegions(put, regions) {
   putCollection(put, "regions", regions, MAX_REGIONS, (item) => {
-    const region = record(item);
+    const region = pageEvidenceWire(item);
     return compactJsonObject({
       role: text(region?.role),
       label: text(region?.label),
@@ -1027,8 +1029,8 @@ function addRegions(put, regions) {
 }
 function addRepeating(put, repeating) {
   putCollection(put, "repeating", repeating, MAX_REPEATING, (item) => {
-    const structure = record(item);
-    const representative = record(structure?.representative);
+    const structure = pageEvidenceWire(item);
+    const representative = pageEvidenceWire(structure?.representative);
     return compactJsonObject({
       containerSelector: text(structure?.containerSelector),
       signature: text(structure?.signature),
@@ -1044,7 +1046,7 @@ function addRepeating(put, repeating) {
 }
 function addForms(put, forms) {
   putCollection(put, "forms", forms, MAX_FORMS, (item) => {
-    const form = record(item);
+    const form = pageEvidenceWire(item);
     const controls = list(form?.controls);
     return compactJsonObject({
       selector: text(form?.selector),
@@ -1061,7 +1063,7 @@ function addForms(put, forms) {
   }, SETTLED_COLLECTION);
 }
 function formControl(item) {
-  const control = record(item);
+  const control = pageEvidenceWire(item);
   const controlType = text(control?.controlType);
   const autocomplete = typeof control?.autocomplete === "string" ? control.autocomplete : void 0;
   const sensitive = control?.sensitive === true || isSensitiveFieldSignature({ inputType: controlType, controlType, autocomplete });
@@ -1118,7 +1120,10 @@ function createWebAutomationStateFromSnapshot(snapshot, input = {}) {
   const selection = filterStateElements(snapshot.interactiveElements);
   state = putStateValue(state, "elements.count", "integer", selection.total, timestamp, input.sourceId, { elementKind: "count" });
   state = putStateValue(state, "elements.captured", "integer", selection.captured, timestamp, input.sourceId, { elementKind: "count" });
-  state = putStateValue(state, "elements.truncated", "boolean", selection.truncated || pageEvidenceTruncatedElements(evidence), timestamp, input.sourceId, { elementKind: "status" });
+  const captureTruncated = pageEvidenceTruncatedElements(evidence);
+  state = putStateValue(state, "elements.captureTruncated", "boolean", captureTruncated, timestamp, input.sourceId, { elementKind: "status" });
+  state = putStateValue(state, "elements.stateTruncated", "boolean", selection.truncated, timestamp, input.sourceId, { elementKind: "status" });
+  state = putStateValue(state, "elements.truncated", "boolean", selection.truncated || captureTruncated, timestamp, input.sourceId, { elementKind: "status" });
   for (const entry of selection.elements) state = addElementStateValues(state, entry, timestamp, input.sourceId);
   return withScreenVisualFrame(state, snapshot, selection.elements, input);
 }
@@ -1291,7 +1296,14 @@ var webAutomationRecordingDomain = {
     { namespace: "web", path: "focus.target", type: "json", elementKind: "json", label: "Focused target", volatility: "rapid" },
     { namespace: "web", path: "elements.count", type: "integer", elementKind: "count", label: "Elements on the page", volatility: "normal" },
     { namespace: "web", path: "elements.captured", type: "integer", elementKind: "count", label: "Elements captured", volatility: "normal" },
-    { namespace: "web", path: "elements.truncated", type: "boolean", elementKind: "status", label: "Element capture truncated", volatility: "normal" },
+    // Three flags, because two caps can shorten the element list and each has
+    // its own remedy. `elements.truncated` is the summary a consumer asks when
+    // it only needs to know something is missing; the other two say which cap
+    // bit, and so what to do about it. The full set of limits on the evidence
+    // path is tabulated in `web-state/evidence/input.ts`.
+    { namespace: "web", path: "elements.truncated", type: "boolean", elementKind: "status", label: "Element list incomplete", volatility: "normal" },
+    { namespace: "web", path: "elements.captureTruncated", type: "boolean", elementKind: "status", label: "Browser capture dropped elements", volatility: "normal" },
+    { namespace: "web", path: "elements.stateTruncated", type: "boolean", elementKind: "status", label: "State cap dropped elements", volatility: "normal" },
     // One captured element is one JSON value, and that value is the contract.
     // `web-state.ts` writes `elements.<id>` as a single `json` blob and writes
     // nothing under it, so the per-field paths this list used to declare —
@@ -1305,6 +1317,55 @@ var webAutomationRecordingDomain = {
     // it as its own state value.
     { namespace: "web", path: "elements.*", type: "json", elementKind: "json", label: "Element", stableAcrossSessions: true, volatility: "normal", metadata: { presentation: { group: "Elements", icon: "scan-search", visualKind: "bounds", metadata: { rendererId: WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID } } } },
     { namespace: "web", path: "forms.*", type: "string", elementKind: "text", label: "Form field value", volatility: "normal", sensitive: true },
+    // The page-level evidence, written by `web-state/evidence/project.ts`: what
+    // the page *is* rather than what its elements are. Every path mirrors the
+    // producer's own field path under one `evidence.` prefix, so the shape in
+    // `apps/extension/src/content/evidence/types.ts` is the index to this list.
+    //
+    // These thirty were produced and undeclared for the whole of Phase 1.4, and
+    // the ratchet in `tests/domain.test.ts` did not say so because its fixture
+    // carried no evidence: nothing was produced under the prefix, so neither
+    // "produced but undeclared" nor "declared but unproduced" had anything to
+    // examine. The fixture now carries a full capture, which is what makes
+    // every line below load-bearing -- delete one and that test fails.
+    //
+    // A collection is one `json` value of `{ count, truncated, items }`, never
+    // a path per item, for the reason `project.ts` gives: state is rebuilt on
+    // every recorded event and consumers read the blob.
+    { namespace: "web", path: "evidence.elements.scanned", type: "integer", elementKind: "count", label: "Nodes the capture walked", volatility: "normal" },
+    { namespace: "web", path: "evidence.elements.candidates", type: "integer", elementKind: "count", label: "Capture candidates", volatility: "normal" },
+    { namespace: "web", path: "evidence.elements.matched", type: "integer", elementKind: "count", label: "Elements past the capture filter", volatility: "normal" },
+    { namespace: "web", path: "evidence.elements.returned", type: "integer", elementKind: "count", label: "Elements the capture returned", volatility: "normal" },
+    { namespace: "web", path: "evidence.elements.changed", type: "integer", elementKind: "count", label: "Elements changed since the last capture", volatility: "rapid" },
+    { namespace: "web", path: "evidence.elements.recentlyInteracted", type: "integer", elementKind: "count", label: "Elements recently interacted with", volatility: "rapid" },
+    // The browser's own cap, at the funnel it belongs to. `elements.captureTruncated` is the same fact outside this prefix.
+    { namespace: "web", path: "evidence.elements.truncated", type: "boolean", elementKind: "status", label: "Capture dropped elements", volatility: "normal" },
+    { namespace: "web", path: "evidence.loading.documentState", type: "string", elementKind: "status", label: "Document ready state", volatility: "rapid" },
+    { namespace: "web", path: "evidence.loading.busy", type: "boolean", elementKind: "status", label: "Page busy", volatility: "rapid" },
+    { namespace: "web", path: "evidence.loading.pendingNavigation", type: "boolean", elementKind: "status", label: "Navigation in flight", volatility: "rapid" },
+    { namespace: "web", path: "evidence.loading.busyRegions", type: "json", elementKind: "collection", label: "Regions marked busy", volatility: "rapid" },
+    { namespace: "web", path: "evidence.loading.indicators", type: "json", elementKind: "collection", label: "Loading indicators on screen", volatility: "rapid" },
+    // `evidence.navigation.url` is deliberately absent: `page.url` already is it.
+    { namespace: "web", path: "evidence.navigation.origin", type: "string", elementKind: "url", label: "Page origin", volatility: "slow" },
+    { namespace: "web", path: "evidence.navigation.path", type: "string", elementKind: "route", label: "Page path", volatility: "slow" },
+    { namespace: "web", path: "evidence.navigation.referrer", type: "string", elementKind: "url", label: "Referrer", volatility: "slow" },
+    { namespace: "web", path: "evidence.navigation.type", type: "string", elementKind: "status", label: "How the document was reached", volatility: "slow" },
+    { namespace: "web", path: "evidence.navigation.redirects", type: "integer", elementKind: "count", label: "Redirects on the way here", volatility: "normal" },
+    { namespace: "web", path: "evidence.navigation.historyLength", type: "integer", elementKind: "count", label: "Session history entries", volatility: "normal" },
+    { namespace: "web", path: "evidence.navigation.visibility", type: "string", elementKind: "visibility", label: "Document visibility", volatility: "rapid" },
+    // "Is anything standing in front of the page" decides whether an action may
+    // be attempted at all, so it is a comparable count rather than a blob read.
+    { namespace: "web", path: "evidence.dialogs.openCount", type: "integer", elementKind: "count", label: "Open dialogs", volatility: "rapid" },
+    { namespace: "web", path: "evidence.dialogs.modal", type: "boolean", elementKind: "status", label: "A modal dialog is open", volatility: "rapid" },
+    { namespace: "web", path: "evidence.dialogs.armPending", type: "boolean", elementKind: "status", label: "Native dialog arming unacknowledged", volatility: "rapid" },
+    { namespace: "web", path: "evidence.dialogs.open", type: "json", elementKind: "collection", label: "Open dialogs", volatility: "rapid" },
+    { namespace: "web", path: "evidence.dialogs.lastNative", type: "json", elementKind: "json", label: "Last native dialog answered", volatility: "rapid" },
+    { namespace: "web", path: "evidence.overlays.tested", type: "integer", elementKind: "count", label: "Controls hit-tested for occlusion", volatility: "rapid" },
+    { namespace: "web", path: "evidence.overlays.blockedCount", type: "integer", elementKind: "count", label: "Controls something else answers for", volatility: "rapid" },
+    { namespace: "web", path: "evidence.overlays.blockers", type: "json", elementKind: "collection", label: "Blocking overlays", volatility: "rapid" },
+    { namespace: "web", path: "evidence.regions", type: "json", elementKind: "collection", label: "Landmark regions", volatility: "slow" },
+    { namespace: "web", path: "evidence.repeating", type: "json", elementKind: "collection", label: "Repeating structures", volatility: "normal" },
+    { namespace: "web", path: "evidence.forms", type: "json", elementKind: "collection", label: "Forms on the page", volatility: "slow" },
     { namespace: "web", path: "runtime.lastActionResult", type: "json", elementKind: "json", label: "Last action result", volatility: "normal" },
     { namespace: "web", path: "runtime.lastActionVisualTarget", type: "json", elementKind: "json", label: "Last action visual target", volatility: "normal", metadata: { presentation: { group: "Runtime", icon: "scan-search", visualKind: "bounds" } } },
     { namespace: "web", path: "runtime.lastError", type: "json", elementKind: "json", label: "Last client error", volatility: "normal" },
@@ -1328,6 +1389,40 @@ function coveringPath(path) {
 function producedPaths(snapshot) {
   return Object.keys(snapshot.namespaces.web?.values ?? {});
 }
+var pageEvidence = {
+  elements: { scanned: 620, candidates: 180, matched: 44, returned: 2, truncated: true, changed: 1, recentlyInteracted: 1 },
+  loading: {
+    documentState: "interactive",
+    busy: true,
+    busyRegions: ["#basket"],
+    indicators: [{ selector: "#spinner", kind: "spinner", label: "Updating total" }],
+    pendingNavigation: false
+  },
+  navigation: {
+    url: "https://example.test/checkout",
+    origin: "https://example.test",
+    path: "/checkout",
+    referrer: "https://example.test/cart",
+    type: "navigate",
+    redirects: 0,
+    historyLength: 3,
+    visibility: "visible"
+  },
+  dialogs: {
+    open: [{ selector: "#terms", role: "dialog", modal: true, native: false, label: "Terms" }],
+    modal: true,
+    armPending: false,
+    lastNative: { kind: "confirm", message: "Leave this page?", response: "dismiss", at: 9 }
+  },
+  overlays: {
+    tested: 12,
+    blockedCount: 1,
+    blockers: [{ selector: "#consent", role: "region", label: "Cookies", blocks: 1, blocked: ["button.pay"] }]
+  },
+  regions: [{ role: "main", label: "Checkout", selector: "main" }],
+  repeating: [{ containerSelector: "ul.items", signature: "li[data-testid=item-#]", itemCount: 4, representative: { selector: "ul.items > li:nth-child(1)", testId: "item-1" } }],
+  forms: [{ selector: "form#pay", name: "pay", label: "Payment", action: "/pay", method: "post", controlCount: 1, controls: [{ selector: "#coupon", controlType: "text", name: "coupon" }], submit: "button.pay" }]
+};
 var snapshotState = createWebAutomationStateFromSnapshot({
   url: "https://example.test/checkout",
   title: "Checkout",
@@ -1337,7 +1432,12 @@ var snapshotState = createWebAutomationStateFromSnapshot({
   interactiveElements: [
     { tagName: "button", selector: "button.pay", text: "Pay", bounds: { x: 20, y: 40, width: 90, height: 36 } },
     { tagName: "input", selector: "input#coupon", attributes: { name: "coupon" }, bounds: { x: 20, y: 100, width: 200, height: 32 } }
-  ]
+  ],
+  // Reached through a cast for the same reason the projection reaches it
+  // through a narrow read: `WebAutomationDomSnapshotInput` declares only the
+  // fields that predate `web-state/evidence/`, and widening it is that
+  // directory's decision, not this test's.
+  evidence: pageEvidence
 }, { timestamp: 10, sourceId: "tab:1" });
 var tabState = createWebAutomationStateFromTabs(
   { tabId: 7, url: "https://example.test", title: "Example", active: true },

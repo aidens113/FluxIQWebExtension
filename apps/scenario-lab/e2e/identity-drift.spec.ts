@@ -51,6 +51,21 @@ const driftCases: Record<Exclude<IdentityDriftMode, "baseline">, DriftCase> = {
       expect(box?.y ?? 0).toBeGreaterThan(Math.max(recorded.y, page.viewportSize()?.height ?? 0));
     },
   },
+  "reworded-aria": {
+    // Only the accessible name is left to find it by, and a person looking for
+    // "Save changes" still finds it -- which is the point of the rendering.
+    control: (page) => page.getByRole("button", { name: "Save changes", exact: true }),
+    async assertDrift(page, save, recorded) {
+      await expect(save).toHaveText("Save");
+      await expect(save).toHaveAttribute("class", "ui-button ui-button--accent");
+      await expect(save).toHaveAttribute("aria-label", "Save changes");
+      await expect(save).not.toHaveAttribute("id");
+      await expect(save).not.toHaveAttribute("data-testid");
+      await expect(page.getByTestId("primary-actions").getByRole("button")).toHaveText(["Save", "Discard changes"]);
+      const box = await save.boundingBox();
+      expect({ x: box?.x, y: box?.y }).toEqual({ x: recorded.x, y: recorded.y });
+    },
+  },
   "wrapped-aria": {
     control: (page) => page.getByRole("button", { name: "Save changes", exact: true }),
     async assertDrift(page, save) {

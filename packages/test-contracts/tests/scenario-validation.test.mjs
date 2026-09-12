@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AUTOMATION_STUDIO_ADAPTIVE_FAILURE_CLASSES as coreFailureClasses } from "@fluxiq/contracts/automation-studio";
-import { ContractValidationError, assertWebScenario, parseWebScenarioJson, resolveScenarioWorkflow, AUTOMATION_STUDIO_ADAPTIVE_FAILURE_CLASSES, scenarioStepOperations, validateWebScenario, webScenarioJsonSchema } from "../dist/index.js";
+import { ContractValidationError, assertWebScenario, expectedActionOutcomes, parseWebScenarioJson, resolveScenarioWorkflow, runActionStatuses, scenarioPageFactSchedule, AUTOMATION_STUDIO_ADAPTIVE_FAILURE_CLASSES, scenarioStepOperations, validateWebScenario, webScenarioJsonSchema } from "../dist/index.js";
 
 const validScenario = {
   schemaVersion: "0.1",
@@ -110,6 +110,74 @@ test("resolves the primary or a named workflow, and a variant replaces only the 
   assert.equal(short.variant.arm.operation, "set-mode");
   assert.throws(() => resolveScenarioWorkflow(catalogScenario, { workflowId: "missing" }), /has no workflow missing/);
   assert.throws(() => resolveScenarioWorkflow(catalogScenario, { variantId: "short-catalog" }), /has no variant short-catalog/);
+});
+
+const UNARMED_FACT = { id: "result-count", subject: "result-count", predicate: "text", value: "23 products" };
+const ARMED_FACT = { id: "result-count", subject: "result-count", predicate: "text", value: "5 products" };
+
+/** A workflow whose rendering is described, one variant that describes its own armed rendering and one that does not. */
+const factScenario = {
+  ...catalogScenario,
+  expected: { ...catalogScenario.expected, pageFacts: [UNARMED_FACT] },
+  variants: [
+    { id: "short-catalog", description: "Five products on one page.", arm: { operation: "set-mode", payload: { mode: "short" } }, expected: { pageFacts: [ARMED_FACT] } },
+    { id: "text-variant", description: "Prices are rewritten; the rendering is not described.", arm: { operation: "set-mode", payload: { mode: "text" } }, expected: { extracted: [{ step: "products", count: 2 }] } },
+  ],
+};
+
+test("every lane checks a page fact against the rendering it was declared on", () => {
+  const selection = { variantId: "short-catalog" };
+  const flow = scenarioPageFactSchedule(factScenario, selection, "arms-after-loading");
+  const preArmed = scenarioPageFactSchedule(factScenario, selection, "arms-before-loading");
+  // The defect this pins: the Flow lane armed the variant, reloaded, and then
+  // ran the Flow without ever checking the rendering it had just armed, while
+  // the existing and clone lanes checked exactly that rendering at load. The
+  // same declared facts must now be judged against the same page state on
+  // both, whichever moment each lane arms at.
+  assert.deepEqual(flow.afterArm, preArmed.atLoad);
+  assert.deepEqual(flow.afterArm, [ARMED_FACT]);
+  assert.deepEqual(preArmed.afterArm, []);
+  // ...and the rendering the Flow lane records against is still the unarmed
+  // one, described by the workflow's own facts and never by the variant's.
+  assert.deepEqual(flow.atLoad, [UNARMED_FACT]);
+  assert.deepEqual(flow.atLoad, scenarioPageFactSchedule(factScenario).atLoad);
+  assert.deepEqual(scenarioPageFactSchedule(factScenario).afterArm, []);
+});
+
+test("a variant that declares no page facts makes no claim about its armed rendering", () => {
+  const selection = { variantId: "text-variant" };
+  const flow = scenarioPageFactSchedule(factScenario, selection, "arms-after-loading");
+  assert.deepEqual(flow.atLoad, [UNARMED_FACT]);
+  assert.deepEqual(flow.afterArm, []);
+  assert.deepEqual(scenarioPageFactSchedule(factScenario, selection, "arms-before-loading").atLoad, []);
+  // Every other expectation still inherits: page facts are the one field that
+  // describes a rendering rather than the run, so they are the one exception.
+  const resolved = resolveScenarioWorkflow(factScenario, selection);
+  assert.deepEqual(resolved.expected.extracted, [{ step: "products", count: 2 }]);
+  assert.deepEqual(resolved.expected.finalState, factScenario.expected.finalState);
+});
+
+test("the page-fact schedule follows the named workflow and rejects an unknown variant", () => {
+  assert.deepEqual(scenarioPageFactSchedule(factScenario, { workflowId: "paginated" }), { atLoad: [], afterArm: [] });
+  const short = scenarioPageFactSchedule(factScenario, { workflowId: "paginated", variantId: "short-catalog" }, "arms-after-loading");
+  assert.deepEqual(short, { atLoad: [], afterArm: [] });
+  assert.throws(() => scenarioPageFactSchedule(factScenario, { variantId: "nothing" }), /has no variant nothing/);
+});
+
+test("an expectation may only name an attempt status a run can actually record", () => {
+  assert.deepEqual([...expectedActionOutcomes], ["succeeded", "failed"]);
+  for (const outcome of expectedActionOutcomes) assert.ok(runActionStatuses.includes(outcome), `${outcome} is not a run action status`);
+  // "rejected" was in the enum and in no lane's vocabulary, so a scenario that
+  // declared it failed on its own expectation whatever the page did.
+  assert.ok(!runActionStatuses.includes("rejected"));
+  assert.ok(!expectedActionOutcomes.includes("rejected"));
+  assert.deepEqual([...webScenarioJsonSchema.$defs.action.properties.outcome.enum], [...expectedActionOutcomes]);
+  const actions = (outcome) => ({ ...validScenario, expected: { ...validScenario.expected, actions: [{ action: "web.dom.click", outcome }] } });
+  const rejected = validateWebScenario(actions("rejected"));
+  assert.equal(rejected.valid, false);
+  assert.ok(!rejected.valid && rejected.issues.some((entry) => entry.path === "$.expected.actions[0].outcome" && entry.message.includes("expected.failure")));
+  assert.equal(validateWebScenario(actions("failed")).valid, true);
+  assert.equal(validateWebScenario(actions("succeeded")).valid, true);
 });
 
 test("rejects malformed workflows, variants, extraction, and step values", () => {

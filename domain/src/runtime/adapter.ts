@@ -27,6 +27,7 @@ import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionType } from "../actions/types";
 import { dispatchWebAutomationOutput } from "../io/gateway-output-dispatcher";
 import { outputTargetFromPayload } from "../output-nodes";
+import { WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, isProducerRedactedComparison, isSensitiveElementDescriptor } from "../sensitivity";
 import { webAutomationRuntimeCapabilities } from "./capabilities";
 import {
   WEB_AUTOMATION_FAILURE_CODES,
@@ -88,7 +89,14 @@ async function executeWebAutomationRuntimeCommand(fluxiq: FluxIQ, command: FluxI
   // left every unanswered action an undifferentiated failure.
   const status = result.status ?? (result.ok ? "succeeded" : "failed");
   const diagnostics = failureDiagnostics(status, result.payload);
-  const failure = commandFailure(status, outputId as WebAutomationActionType, message, result.failure, diagnostics?.evidenceDigest);
+  // Asked once, of the result the client sent, and used at both exits a
+  // comparison takes from here: is the target a control that holds a secret,
+  // and did the producer declare it had already withheld the values? An absent
+  // declaration means withhold, so a client that predates the flag is treated
+  // exactly as it was before the flag existed.
+  const clientResult = jsonObject(result.payload?.result);
+  const withholdComparison = isSensitiveElementDescriptor(clientResult?.element) && !isProducerRedactedComparison(clientResult?.validation);
+  const failure = commandFailure(status, outputId as WebAutomationActionType, message, result.failure, diagnostics?.evidenceDigest, withholdComparison);
   const runtimeResult: FluxIQRuntimeCommandResult = {
     commandId: command.commandId ?? `web.${Date.now()}`,
     status,
@@ -103,7 +111,7 @@ async function executeWebAutomationRuntimeCommand(fluxiq: FluxIQ, command: FluxI
       ...(diagnostics ? { failureDiagnostics: diagnostics.report, ...(diagnostics.evidence ? { failureEvidence: diagnostics.evidence as unknown as JsonObject } : {}) } : {})
     })
   };
-  if (result.payload !== undefined) runtimeResult.payload = result.payload;
+  if (result.payload !== undefined) runtimeResult.payload = withholdComparison ? secretSafeDispatchPayload(result.payload) : result.payload;
   const target = outputTargetFromPayload(payload as JsonObject);
   if (target) runtimeResult.target = target;
   return runtimeResult;
@@ -166,9 +174,10 @@ function commandFailure(
   actionType: WebAutomationActionType,
   message: string | undefined,
   reported: AutomationStudioFailureRecord | undefined,
-  evidenceDigest: string | undefined
+  evidenceDigest: string | undefined,
+  withholdComparison: boolean
 ): WebAutomationFailureRecord | undefined {
-  const client = clientReportedFailure(reported);
+  const client = clientReportedFailure(reported, withholdComparison);
   const outcome: WebAutomationActionOutcome = {
     // `rejected` is a dispatch status Core's command vocabulary has and the
     // client's does not; a client that refused an action did not run it, which
@@ -205,10 +214,25 @@ function commandFailure(
  * `classifyWebAutomationFailure` already does with a runtime error's
  * unrecognized code, and the same drift deserves the same answer whichever way
  * it arrives.
+ *
+ * `expected` and `actual` are the one thing here that is *not* carried across
+ * untouched. They are a comparison of what an action asked a control for and
+ * what the control held, so on a control the sensitivity rule marks they are a
+ * description of a secret, built in the content script by a redaction this side
+ * of the wire cannot see. `withholdComparison` is the caller's answer to both
+ * halves of that: the rule's verdict on the descriptor the client sent with the
+ * same result, and whether the producer declared the strings already withheld
+ * (`redacted` on that result's validation, which is what the producer builds
+ * these two from). When it is yes, both strings are replaced with the shared
+ * marker before the record reaches an attempt trace. The category, the code,
+ * the retryable flag and the evidence digest are unaffected, so a Flow still
+ * routes on the failure it was given.
  */
-function clientReportedFailure(reported: AutomationStudioFailureRecord | undefined): WebAutomationFailureRecord | undefined {
+function clientReportedFailure(reported: AutomationStudioFailureRecord | undefined, withholdComparison: boolean): WebAutomationFailureRecord | undefined {
   if (reported === undefined) return undefined;
-  const { expected, actual, evidenceDigest } = reported;
+  const { evidenceDigest } = reported;
+  const expected = secretSafeComparisonText(reported.expected, withholdComparison);
+  const actual = secretSafeComparisonText(reported.actual, withholdComparison);
   if (isWebAutomationFailureCode(reported.code)) return webAutomationFailureRecord(reported.code, { expected, actual, evidenceDigest });
   const unnamed = `unrecognized web automation failure code: ${reported.code}`;
   return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNKNOWN, {
@@ -216,6 +240,56 @@ function clientReportedFailure(reported: AutomationStudioFailureRecord | undefin
     actual: actual === undefined ? unnamed : `${actual}; ${unnamed}`,
     evidenceDigest
   });
+}
+
+/** One side of a comparison, withheld when the action ran on a control that holds a secret and nobody withheld it first. */
+function secretSafeComparisonText(text: string | undefined, withholdComparison: boolean): string | undefined {
+  if (text === undefined || !withholdComparison) return text;
+  return WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT;
+}
+
+/**
+ * The dispatch payload with the action result's own post-condition withheld.
+ *
+ * `webAutomationActionResultPayload` already withholds it where the payload is
+ * built, but that runs in the client, and the client is on the far side of a
+ * WebSocket: this module's whole reason for re-establishing the failure record
+ * rather than trusting it is that what crossed a process boundary is validated
+ * here. The same argument covers the payload the record came with. A client one
+ * version behind, or one that is not this extension at all, gets the same
+ * answer.
+ *
+ * This runs only when the caller found no `redacted` declaration on the
+ * validation, so a producer that withheld the values itself keeps its phrasing
+ * here as it does on the record. What leaves carries **no** flag, deliberately.
+ * The flag means "the producer named a length rather than a value", not "this
+ * text is safe", and a layer that stamps its own output makes the next reader
+ * treat that stamp as a producer declaration and stand down. That is not
+ * hypothetical: the same stamp in `gateway-mapping.ts` runs inside the
+ * extension before the result crosses the wire, and it disarmed this guard for
+ * every extension result until 2026-09-12. Each layer judges the producer, not
+ * the layer above it, and withholding already-withheld text is idempotent.
+ *
+ * Only the comparison is touched. `message`, which an operator reads, is left
+ * as the client wrote it: it is free-form prose rather than a value read back
+ * off a control, so there is nothing here that could judge it without a
+ * predicate over text. The producer's own redaction is what keeps it safe.
+ */
+function secretSafeDispatchPayload(payload: JsonObject): JsonObject {
+  const actionResult = jsonObject(payload.result);
+  const validation = jsonObject(actionResult?.validation);
+  if (!actionResult || !validation || validation.status === "none") return payload;
+  return {
+    ...payload,
+    result: {
+      ...actionResult,
+      validation: {
+        ...validation,
+        ...(validation.expected === undefined ? {} : { expected: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT }),
+        ...(validation.actual === undefined ? {} : { actual: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT })
+      }
+    }
+  };
 }
 
 type FailureDiagnostics = {

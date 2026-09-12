@@ -7,8 +7,9 @@
     ".": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "check": "tsc -p tsconfig.json --noEmit",
+    "domain:dist": "node -e \"const fs=require('node:fs');if(fs.existsSync('../../domain/dist/index.d.ts'))process.exit(0);console.log('[test-runner] domain/dist is absent: building @fluxiq-web-extension/domain once so this package can resolve its ./node declarations. An existing dist is never rebuilt here.');process.exit(1)\" || pnpm --filter @fluxiq-web-extension/domain build",
+    "build": "pnpm domain:dist && tsc -p tsconfig.json",
+    "check": "pnpm domain:dist && tsc -p tsconfig.json --noEmit",
     "test": "pnpm build && node --test \"dist/**/*.test.js\""
   },
   "dependencies": {

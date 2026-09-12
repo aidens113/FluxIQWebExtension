@@ -10,15 +10,42 @@
 // top frame's deliberately, because a child frame's URL is not the page's URL
 // and there is no honest way to average two `readyState`s. See
 // `mergePageEvidence` for the item-by-item rule.
+//
+// This is the *second* producer of `PageEvidence`: the content script writes
+// one per frame, and the two functions below rewrite and recombine them, so it
+// carries the same obligation and used to carry none of it. Both built their
+// result from conditional spreads (`...(evidence.regions ? { regions } : {})`)
+// around a hand-written list of the contract's keys, and TypeScript
+// excess-checks nothing through a spread: a renamed key left the wire in
+// silence, a deleted clause dropped an item from every multi-frame page, and a
+// key *added* to the contract was produced per frame and then silently dropped
+// here -- two documents carrying less evidence than one, every gate green.
+//
+// Every object below is built by `present<T>()`, the writer the content
+// producer uses, which requires the literal to mention every key of the
+// contract type -- optional ones included, valued `undefined` when absent --
+// and drops the undefined ones afterwards. That is what makes the merge
+// exhaustive: a ninth key on `WebAutomationPageEvidence` stops both functions
+// compiling until each says what it does with it.
 
 import { createWebAutomationStateFromSnapshot } from "@fluxiq-web-extension/domain/client";
+import { present } from "../../shared/present";
 import type {
   DialogEvidence,
+  DialogEvidenceItem,
+  FormControlEvidence,
+  FormEvidence,
+  LoadingEvidence,
+  LoadingIndicator,
   NativeDialogEvidence,
   OverlayEvidence,
+  OverlayEvidenceItem,
   PageEvidence,
   RectDescriptor,
-  RecordingEventPayload
+  RecordingEventPayload,
+  RegionEvidence,
+  RepeatingStructureEvidence,
+  SnapshotElementTotals
 } from "../../shared/protocol";
 import { objectValue } from "./value-readers";
 import { translateFrameElements } from "./frame-geometry";
@@ -166,6 +193,12 @@ export function pageEvidenceOf(snapshot: DomSnapshotPayload): PageEvidence | und
  * A selector left bare would resolve against the wrong document, or against
  * nothing; a rect left bare would place a child frame's dialog at the top of
  * the page. Both are worse than saying less.
+ *
+ * Written key by key rather than as `{ ...evidence, <what changes> }`: besides
+ * the reason in the file header, a blanket spread carries a *new* field through
+ * untouched, so a contract field added tomorrow that holds a selector or a rect
+ * would be copied out of the child frame bare -- resolving against the wrong
+ * document, or drawn at the top of the page.
  */
 function frameEvidenceInTopFrameTerms(
   evidence: PageEvidence,
@@ -174,61 +207,61 @@ function frameEvidenceInTopFrameTerms(
   frameId: number
 ): PageEvidence {
   const qualify = (selector: string): string => `frame[${frameId}] >> ${selector}`;
+  // A rect that could not be placed on the top frame's page is omitted, never
+  // carried through frame-local.
   const place = (bounds: RectDescriptor | undefined): RectDescriptor | undefined =>
     frameBoundsOnTopDocument(bounds, frameSnapshot, topSnapshot, frameId);
-  return {
-    ...evidence,
-    loading: {
-      ...evidence.loading,
+  const { dialogs, overlays } = evidence;
+  return present<PageEvidence>({
+    elements: evidence.elements,
+    loading: present<LoadingEvidence>({
+      documentState: evidence.loading.documentState,
+      busy: evidence.loading.busy,
       busyRegions: evidence.loading.busyRegions.map(qualify),
-      indicators: evidence.loading.indicators.map((indicator) => ({ ...indicator, selector: qualify(indicator.selector) }))
-    },
-    ...(evidence.dialogs
-      ? {
-          dialogs: {
-            ...evidence.dialogs,
-            open: evidence.dialogs.open.map(({ bounds, ...dialog }) =>
-              ({ ...dialog, selector: qualify(dialog.selector), ...boundsOrNone(place(bounds)) }))
-          }
-        }
-      : {}),
-    ...(evidence.overlays
-      ? {
-          overlays: {
-            ...evidence.overlays,
-            blockers: evidence.overlays.blockers.map(({ bounds, ...blocker }) =>
-              ({ ...blocker, selector: qualify(blocker.selector), blocked: blocker.blocked.map(qualify), ...boundsOrNone(place(bounds)) }))
-          }
-        }
-      : {}),
-    ...(evidence.regions
-      ? { regions: evidence.regions.map(({ bounds, ...region }) => ({ ...region, selector: qualify(region.selector), ...boundsOrNone(place(bounds)) })) }
-      : {}),
-    ...(evidence.repeating
-      ? {
-          repeating: evidence.repeating.map((structure) => ({
-            ...structure,
-            containerSelector: qualify(structure.containerSelector),
-            representative: { ...structure.representative, selector: qualify(structure.representative.selector) }
-          }))
-        }
-      : {}),
-    ...(evidence.forms
-      ? {
-          forms: evidence.forms.map((form) => ({
-            ...form,
-            selector: qualify(form.selector),
-            controls: form.controls.map((control) => ({ ...control, selector: qualify(control.selector) })),
-            ...(form.submit ? { submit: qualify(form.submit) } : {})
-          }))
-        }
-      : {})
-  };
-}
-
-/** A rect that could not be placed on the top frame's page is omitted, never carried through frame-local. */
-function boundsOrNone(bounds: RectDescriptor | undefined): { bounds?: RectDescriptor } {
-  return bounds ? { bounds } : {};
+      indicators: evidence.loading.indicators.map((indicator) =>
+        present<LoadingIndicator>({ selector: qualify(indicator.selector), kind: indicator.kind, label: indicator.label })),
+      pendingNavigation: evidence.loading.pendingNavigation
+    }),
+    navigation: evidence.navigation,
+    dialogs: dialogs && present<DialogEvidence>({
+      open: dialogs.open.map((dialog) => present<DialogEvidenceItem>({
+        selector: qualify(dialog.selector), role: dialog.role, modal: dialog.modal,
+        native: dialog.native, label: dialog.label, bounds: place(dialog.bounds)
+      })),
+      modal: dialogs.modal,
+      armPending: dialogs.armPending,
+      lastNative: dialogs.lastNative
+    }),
+    overlays: overlays && present<OverlayEvidence>({
+      tested: overlays.tested,
+      blockedCount: overlays.blockedCount,
+      blockers: overlays.blockers.map((blocker) => present<OverlayEvidenceItem>({
+        selector: qualify(blocker.selector), role: blocker.role, label: blocker.label,
+        bounds: place(blocker.bounds), blocks: blocker.blocks, blocked: blocker.blocked.map(qualify)
+      }))
+    }),
+    // Key order follows `content/evidence/regions.ts`, not the contract's declaration order, so the restated JSON stays byte-identical.
+    regions: evidence.regions?.map((region) =>
+      present<RegionEvidence>({ role: region.role, selector: qualify(region.selector), label: region.label, bounds: place(region.bounds) })),
+    repeating: evidence.repeating?.map((structure) => present<RepeatingStructureEvidence>({
+      containerSelector: qualify(structure.containerSelector),
+      signature: structure.signature,
+      itemCount: structure.itemCount,
+      representative: present<RepeatingStructureEvidence["representative"]>({
+        selector: qualify(structure.representative.selector), testId: structure.representative.testId, text: structure.representative.text
+      }),
+      fields: structure.fields
+    })),
+    forms: evidence.forms?.map((form) => present<FormEvidence>({
+      selector: qualify(form.selector), name: form.name, label: form.label,
+      action: form.action, method: form.method, controlCount: form.controlCount,
+      controls: form.controls.map((control) => present<FormControlEvidence>({
+        selector: qualify(control.selector), controlType: control.controlType, name: control.name, label: control.label, required: control.required,
+        disabled: control.disabled, hasValue: control.hasValue, autocomplete: control.autocomplete, sensitive: control.sensitive
+      })),
+      submit: form.submit ? qualify(form.submit) : undefined
+    }))
+  });
 }
 
 /**
@@ -286,8 +319,11 @@ function mergePageEvidence(contributions: readonly PageEvidence[], base: PageEvi
   const forms = cappedList(contributions.flatMap((evidence) => evidence.forms ?? []), MAX_MERGED_FORMS);
   const dialogs = mergeDialogEvidence(contributions);
   const overlays = mergeOverlayEvidence(contributions);
-  return {
-    elements: {
+  // Every key of the contract, named. This is the totality the merge lives or
+  // dies by: an item left out here is produced by every frame and then dropped
+  // from the page, which is invisible on a single-frame fixture.
+  return present<PageEvidence>({
+    elements: present<SnapshotElementTotals>({
       scanned: sumOf(contributions, (evidence) => evidence.elements.scanned),
       candidates: sumOf(contributions, (evidence) => evidence.elements.candidates),
       matched: sumOf(contributions, (evidence) => evidence.elements.matched),
@@ -295,47 +331,47 @@ function mergePageEvidence(contributions: readonly PageEvidence[], base: PageEvi
       truncated: contributions.some((evidence) => evidence.elements.truncated),
       changed: sumOf(contributions, (evidence) => evidence.elements.changed),
       recentlyInteracted: sumOf(contributions, (evidence) => evidence.elements.recentlyInteracted)
-    },
-    loading: {
+    }),
+    loading: present<LoadingEvidence>({
       documentState: anchor.loading.documentState,
       busy: contributions.some((evidence) => evidence.loading.busy),
       busyRegions: contributions.flatMap((evidence) => evidence.loading.busyRegions).slice(0, MAX_MERGED_BUSY_REGIONS),
       indicators: contributions.flatMap((evidence) => evidence.loading.indicators).slice(0, MAX_MERGED_LOADING_INDICATORS),
       pendingNavigation: contributions.some((evidence) => evidence.loading.pendingNavigation)
-    },
+    }),
     navigation: anchor.navigation,
-    ...(dialogs ? { dialogs } : {}),
-    ...(overlays ? { overlays } : {}),
-    ...(regions ? { regions } : {}),
-    ...(repeating ? { repeating } : {}),
-    ...(forms ? { forms } : {})
-  };
+    dialogs,
+    overlays,
+    regions,
+    repeating,
+    forms
+  });
 }
 
 function mergeDialogEvidence(contributions: readonly PageEvidence[]): DialogEvidence | undefined {
-  const present = contributions.flatMap((evidence) => (evidence.dialogs ? [evidence.dialogs] : []));
-  if (!present.length) return undefined;
-  const native = present
+  const reported = contributions.flatMap((evidence) => (evidence.dialogs ? [evidence.dialogs] : []));
+  if (!reported.length) return undefined;
+  const native = reported
     .flatMap((dialogs) => (dialogs.lastNative ? [dialogs.lastNative] : []))
     .sort((left: NativeDialogEvidence, right: NativeDialogEvidence) => right.at - left.at)[0];
-  return {
-    open: present.flatMap((dialogs) => dialogs.open).slice(0, MAX_MERGED_DIALOGS),
-    modal: present.some((dialogs) => dialogs.modal),
-    ...(present.some((dialogs) => dialogs.armPending) ? { armPending: true as const } : {}),
-    ...(native ? { lastNative: native } : {})
-  };
+  return present<DialogEvidence>({
+    open: reported.flatMap((dialogs) => dialogs.open).slice(0, MAX_MERGED_DIALOGS),
+    modal: reported.some((dialogs) => dialogs.modal),
+    armPending: reported.some((dialogs) => dialogs.armPending) ? true : undefined,
+    lastNative: native
+  });
 }
 
 function mergeOverlayEvidence(contributions: readonly PageEvidence[]): OverlayEvidence | undefined {
-  const present = contributions.flatMap((evidence) => (evidence.overlays ? [evidence.overlays] : []));
-  if (!present.length) return undefined;
-  return {
-    tested: present.reduce((total, overlays) => total + overlays.tested, 0),
-    blockedCount: present.reduce((total, overlays) => total + overlays.blockedCount, 0),
+  const reported = contributions.flatMap((evidence) => (evidence.overlays ? [evidence.overlays] : []));
+  if (!reported.length) return undefined;
+  return present<OverlayEvidence>({
+    tested: reported.reduce((total, overlays) => total + overlays.tested, 0),
+    blockedCount: reported.reduce((total, overlays) => total + overlays.blockedCount, 0),
     // Most-blocking first, as within one frame. Array sort is stable, so frames
     // that block equally keep the order they answered in.
-    blockers: present.flatMap((overlays) => overlays.blockers).sort((left, right) => right.blocks - left.blocks).slice(0, MAX_MERGED_BLOCKERS)
-  };
+    blockers: reported.flatMap((overlays) => overlays.blockers).sort((left, right) => right.blocks - left.blocks).slice(0, MAX_MERGED_BLOCKERS)
+  });
 }
 
 function sumOf(contributions: readonly PageEvidence[], read: (evidence: PageEvidence) => number): number {

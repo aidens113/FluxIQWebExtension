@@ -34,6 +34,19 @@
 // the chosen option is still reported; nothing about the option is quoted. The
 // sensitivity test is the one shared rule, reached through
 // `isSensitiveFormControl`.
+//
+// Every validation this verb builds declares that redaction with
+// `redacted: withheld`, because the domain cannot tell an already-redacted
+// string from a leaked one and withholds the whole comparison without the
+// declaration. This verb has the most to lose from that: "no option matched;
+// the select still holds a withheld value of 4 characters and offers 12
+// withheld options" says why the selection failed while naming nothing, and
+// the marker that would replace it says only that something was withheld.
+//
+// The declaration is on the four `success()` validations. The `:disabled`
+// rejection below carries none, and cannot: `actionRejected` builds its own
+// validation from two strings and takes no such parameter. That is a live gap
+// rather than a decision made here -- see reports/v-redaction-producer.md.
 
 import { isSensitiveFormControl } from "../element-traits";
 import type { BrowserActionCommand, BrowserActionResult, WebAutomationOptionSelector } from "../types";
@@ -58,14 +71,16 @@ export function selectAction(action: BrowserActionCommand, deps: ContentActionDe
     return deps.success(action, startedAt, "No option was named.", {
       status: "failed",
       expected: "an option named by value, label, or index",
-      actual: "the command named none"
+      actual: "the command named none",
+      redacted: withheld
     }, evidence());
   }
   if (!(element instanceof HTMLSelectElement)) {
     return deps.success(action, startedAt, "The target is not a select element.", {
       status: "failed",
       expected: `a select element to choose ${describeRequest(request, withheld)} in`,
-      actual: `the target is a <${element.tagName.toLowerCase()}>`
+      actual: `the target is a <${element.tagName.toLowerCase()}>`,
+      redacted: withheld
     }, evidence());
   }
 
@@ -74,7 +89,8 @@ export function selectAction(action: BrowserActionCommand, deps: ContentActionDe
     return deps.success(action, startedAt, `No option matched ${describeRequest(request, withheld)}.`, {
       status: "failed",
       expected: `an option matching ${describeRequest(request, withheld)} is selected`,
-      actual: `no option matched; the select still holds ${describeFieldValue(element.value, withheld)} and offers ${listOptions(element, withheld)}`
+      actual: `no option matched; the select still holds ${describeFieldValue(element.value, withheld)} and offers ${listOptions(element, withheld)}`,
+      redacted: withheld
     }, evidence());
   }
 
@@ -98,7 +114,8 @@ export function selectAction(action: BrowserActionCommand, deps: ContentActionDe
   return deps.success(action, startedAt, held ? "Option selected." : "The select did not keep the chosen option.", {
     status: held ? "passed" : "failed",
     expected: `selected value ${describeFieldValue(option.value, withheld)} (${describeRequest(request, withheld)})`,
-    actual: selectedValueText(selected, option.value, withheld)
+    actual: selectedValueText(selected, option.value, withheld),
+    redacted: withheld
   }, evidence());
 }
 

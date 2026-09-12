@@ -23,5 +23,13 @@ export function renderSaveAction(mode: IdentityDriftMode): string {
     case "wrapped-aria":
       // Wrappers outside and inside the button; the name comes from aria-labelledby.
       return '<span class="action-slot"><span class="action-frame"><button type="submit" id="save-settings" class="btn btn-primary" aria-labelledby="save-settings-label"><span class="btn-content"><span id="save-settings-label" class="btn-label">Save changes</span></span></button></span></span>';
+    case "reworded-aria":
+      // The `selector-only` redesign carried through to the label: the same new
+      // class vocabulary, no id or test id because the component library emits
+      // neither, and the visible label shortened to "Save". The full name is
+      // kept in `aria-label`, which is what a shortened label needs anyway to
+      // satisfy WCAG 2.5.3 -- so the accessible name is preserved by the
+      // redesign's own accessibility rule, not by the fixture's convenience.
+      return '<button type="submit" class="ui-button ui-button--accent" aria-label="Save changes">Save</button>';
   }
 }

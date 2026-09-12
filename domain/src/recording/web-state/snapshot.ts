@@ -41,12 +41,16 @@ export function createWebAutomationStateFromSnapshot(
   // elements indistinguishable from a page of three.
   state = putStateValue(state, "elements.count", "integer", selection.total, timestamp, input.sourceId, { elementKind: "count" });
   state = putStateValue(state, "elements.captured", "integer", selection.captured, timestamp, input.sourceId, { elementKind: "count" });
-  // Set when the element list is short of the page, for either reason: the
-  // projection's own cap dropped elements worth capturing, or the browser's cap
-  // dropped them before they ever arrived. The question the path answers is
-  // "may I trust this list to be the page", and one incomplete stage is enough
-  // to answer no. Which stage cut is at `evidence.elements.*`.
-  state = putStateValue(state, "elements.truncated", "boolean", selection.truncated || pageEvidenceTruncatedElements(evidence), timestamp, input.sourceId, { elementKind: "status" });
+  // Two caps can leave the element list short of the page, and they are two
+  // facts with two remedies, so each gets its own comparable path rather than
+  // being ORed into one flag a consumer cannot act on. `elements.truncated`
+  // stays as the summary -- "may I trust this list to be the page" is still one
+  // question -- and never claims to say which cap bit. The rule and the full
+  // set of limits are in `evidence/input.ts`.
+  const captureTruncated = pageEvidenceTruncatedElements(evidence);
+  state = putStateValue(state, "elements.captureTruncated", "boolean", captureTruncated, timestamp, input.sourceId, { elementKind: "status" });
+  state = putStateValue(state, "elements.stateTruncated", "boolean", selection.truncated, timestamp, input.sourceId, { elementKind: "status" });
+  state = putStateValue(state, "elements.truncated", "boolean", selection.truncated || captureTruncated, timestamp, input.sourceId, { elementKind: "status" });
   for (const entry of selection.elements) state = addElementStateValues(state, entry, timestamp, input.sourceId);
   return withScreenVisualFrame(state, snapshot, selection.elements, input);
 }

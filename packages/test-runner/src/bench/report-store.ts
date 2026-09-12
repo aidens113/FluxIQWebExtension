@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { BenchReport, BenchTarget, RunEvaluation } from "@fluxiq-web-extension/test-contracts";
+import type { BenchReport, BenchTarget, EvaluationLane, RunEvaluation } from "@fluxiq-web-extension/test-contracts";
 
 /** A bench id as `runBench` mints it: `bench-<base-36 time>-<8 hex>`. */
 export const BENCH_ID_PATTERN = /^bench-[a-z0-9]+-[0-9a-f]{8}$/u;
@@ -13,6 +13,8 @@ export type BenchRunRecord = {
   workflowId: string | null;
   variantId: string | null;
   repeatIndex: number;
+  /** The lane the run was planned on: unarmed workflows record, variants run a Flow. */
+  lane: EvaluationLane;
   status: "evaluated" | "skipped";
   /** Evaluated runs: the runner's run id, whose bundle is `<runs directory>/<runId>`, or the attempt id when the runner threw. */
   runId?: string;
@@ -20,6 +22,12 @@ export type BenchRunRecord = {
   evaluation?: string;
   verdict?: RunEvaluation["verdict"];
   failureCategory?: string;
+  /**
+   * Evaluated runs: how many actions FluxIQ executed. `0` means FluxIQ
+   * executed nothing and the run's verdict says only what the Testing Lab and
+   * the fixture did, so a pass here is not evidence FluxIQ drove the workflow.
+   */
+  actionsExecuted?: number;
   skipReason?: string;
   /** Bundle files the bench could not read or verify. */
   problems?: string[];
@@ -32,10 +40,14 @@ export type BenchRunsFile = {
   corpusId: string;
   repeatCount: number;
   target: BenchTarget;
-  lane: "recording";
+  /** The lanes the corpus runs; each run records the one it was planned on. */
+  lanes: readonly EvaluationLane[];
   startedAt: string;
   finishedAt?: string;
+  /** Recording-lane measurement sources. */
   sources: Readonly<Record<string, string>>;
+  /** Flow-lane measurement sources; present exactly when the bench planned a Flow-lane run. */
+  flowSources?: Readonly<Record<string, string>>;
   runs: BenchRunRecord[];
 };
 

@@ -17,6 +17,7 @@ import { recentlyInteractedElements } from "./interactions";
 import { loadingEvidence } from "./loading";
 import { navigationEvidence } from "./navigation";
 import { overlayEvidence } from "./overlays";
+import { present } from "../../shared/present";
 import { regionEvidence } from "./regions";
 import { repeatingEvidence } from "./repeating";
 import type { PageEvidence } from "./types";
@@ -43,7 +44,7 @@ export function pageEvidence(entries: readonly SnapshotElementEntry[], counts: S
   const regions = regionEvidence();
   const repeating = repeatingEvidence();
   const forms = formEvidence();
-  return {
+  return present<PageEvidence>({
     elements: {
       scanned: counts.scanned,
       candidates: counts.candidates,
@@ -55,10 +56,10 @@ export function pageEvidence(entries: readonly SnapshotElementEntry[], counts: S
     },
     loading: loadingEvidence(),
     navigation: navigationEvidence(),
-    ...(dialogs ? { dialogs } : {}),
-    ...(overlays ? { overlays } : {}),
-    ...(regions ? { regions } : {}),
-    ...(repeating ? { repeating } : {}),
-    ...(forms ? { forms } : {})
-  };
+    dialogs,
+    overlays,
+    regions,
+    repeating,
+    forms
+  });
 }

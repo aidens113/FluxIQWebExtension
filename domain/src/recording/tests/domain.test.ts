@@ -33,6 +33,59 @@ function producedPaths(snapshot: StateSnapshot): string[] {
   return Object.keys(snapshot.namespaces.web?.values ?? {});
 }
 
+/**
+ * A page's evidence, in the producer's shape, with **every collection
+ * non-empty and every scalar present**.
+ *
+ * That exhaustiveness is the whole value of it. The projection omits an empty
+ * collection and an absent scalar, so a thin capture writes few paths, and
+ * both ratchet directions then pass over the evidence namespace without
+ * examining any of it: nothing is produced, so nothing can be produced and
+ * undeclared, and nothing is covered, so a declaration nothing produces is the
+ * only thing left to catch -- which is the half that then fails for every
+ * evidence path at once and gets deleted rather than fixed. Until this fixture
+ * existed the snapshot carried no `evidence` at all and roughly thirty paths
+ * were checked in neither direction.
+ *
+ * So: adding a path to `web-state/evidence/project.ts` means adding its input
+ * here, or the ratchet goes quiet about it again. The shape is
+ * `PageEvidence` in `apps/extension/src/content/evidence/types.ts`.
+ */
+const pageEvidence = {
+  elements: { scanned: 620, candidates: 180, matched: 44, returned: 2, truncated: true, changed: 1, recentlyInteracted: 1 },
+  loading: {
+    documentState: "interactive",
+    busy: true,
+    busyRegions: ["#basket"],
+    indicators: [{ selector: "#spinner", kind: "spinner", label: "Updating total" }],
+    pendingNavigation: false
+  },
+  navigation: {
+    url: "https://example.test/checkout",
+    origin: "https://example.test",
+    path: "/checkout",
+    referrer: "https://example.test/cart",
+    type: "navigate",
+    redirects: 0,
+    historyLength: 3,
+    visibility: "visible"
+  },
+  dialogs: {
+    open: [{ selector: "#terms", role: "dialog", modal: true, native: false, label: "Terms" }],
+    modal: true,
+    armPending: false,
+    lastNative: { kind: "confirm", message: "Leave this page?", response: "dismiss", at: 9 }
+  },
+  overlays: {
+    tested: 12,
+    blockedCount: 1,
+    blockers: [{ selector: "#consent", role: "region", label: "Cookies", blocks: 1, blocked: ["button.pay"] }]
+  },
+  regions: [{ role: "main", label: "Checkout", selector: "main" }],
+  repeating: [{ containerSelector: "ul.items", signature: "li[data-testid=item-#]", itemCount: 4, representative: { selector: "ul.items > li:nth-child(1)", testId: "item-1" } }],
+  forms: [{ selector: "form#pay", name: "pay", label: "Payment", action: "/pay", method: "post", controlCount: 1, controls: [{ selector: "#coupon", controlType: "text", name: "coupon" }], submit: "button.pay" }]
+};
+
 const snapshotState = createWebAutomationStateFromSnapshot({
   url: "https://example.test/checkout",
   title: "Checkout",
@@ -42,8 +95,13 @@ const snapshotState = createWebAutomationStateFromSnapshot({
   interactiveElements: [
     { tagName: "button", selector: "button.pay", text: "Pay", bounds: { x: 20, y: 40, width: 90, height: 36 } },
     { tagName: "input", selector: "input#coupon", attributes: { name: "coupon" }, bounds: { x: 20, y: 100, width: 200, height: 32 } }
-  ]
-}, { timestamp: 10, sourceId: "tab:1" });
+  ],
+  // Reached through a cast for the same reason the projection reaches it
+  // through a narrow read: `WebAutomationDomSnapshotInput` declares only the
+  // fields that predate `web-state/evidence/`, and widening it is that
+  // directory's decision, not this test's.
+  evidence: pageEvidence
+} as unknown as Parameters<typeof createWebAutomationStateFromSnapshot>[0], { timestamp: 10, sourceId: "tab:1" });
 
 const tabState = createWebAutomationStateFromTabs(
   { tabId: 7, url: "https://example.test", title: "Example", active: true },

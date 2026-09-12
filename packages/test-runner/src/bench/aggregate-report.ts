@@ -37,8 +37,47 @@ export type BenchRateDefinition = {
 
 /** A positive run expects success; a negative run carries `expected.failure` and is judged by classification. */
 const positive = (evaluation: RunEvaluation): boolean => evaluation.automationFailureExpected === null;
-/** The runner passed the run, the fixture oracle passed, and FluxIQ reported no failure, or ran nothing to report on. */
-const executed = (evaluation: RunEvaluation): boolean => evaluation.verdict === "passed" && evaluation.oracleVerdict === "passed" && evaluation.reportedVerdict !== "failed";
+/**
+ * The runner passed the run, the fixture oracle passed, and **FluxIQ executed
+ * and reported success**.
+ *
+ * `reportedVerdict === "passed"`, not `!== "failed"`. A run in which FluxIQ
+ * executed no action reports `null`, and the earlier `!== "failed"` counted
+ * that as an execution success: on the week1 corpus 16 of 23 runnable rows
+ * execute nothing through FluxIQ, so `initialExecutionSuccess` read 1.000 for
+ * a corpus two thirds of which measured only that Playwright drove a fixture
+ * and the fixture ended in the right state.
+ *
+ * Such a run is counted as a **miss**, not excluded from the population.
+ * Excluding it would shrink the denominator silently, which is the same
+ * untruth one step further from the reader; a miss moves the headline number
+ * itself. `benchExecutionCoverage` reports how many of each rate's population
+ * executed nothing, so the conditional rate over the rows that did execute is
+ * still recoverable — from stated numbers rather than from a hidden one.
+ */
+const executed = (evaluation: RunEvaluation): boolean => evaluation.verdict === "passed" && evaluation.oracleVerdict === "passed" && evaluation.reportedVerdict === "passed";
+
+/**
+ * Whether FluxIQ executed nothing in a run. `reportedVerdict` is `null`
+ * exactly when FluxIQ ran no action, so there is no execution to judge: on the
+ * recording lane because the Core round-trip probe was not applicable to the
+ * workflow, and on the Flow lane because no runnable Flow was produced.
+ *
+ * It lives here, beside the rate definitions, because it is the counting rule
+ * the rates and the report's `notExecutedRuns` must share; stating it twice is
+ * how the two would come to disagree. `execution-coverage.ts` builds the
+ * per-rate breakdown on top of it and so depends on this module, not the
+ * reverse.
+ */
+export const executedNothing = (evaluation: RunEvaluation): boolean => evaluation.reportedVerdict === null;
+
+/**
+ * How many actions FluxIQ executed in a run. `RunEvaluation.actions` is every
+ * executed action the run manifest timed, so an action that was dispatched and
+ * never finished is not counted; a run with a dispatched action still reports a
+ * verdict, so `executedNothing` and a zero count are not the same statement.
+ */
+export const actionsExecuted = (evaluation: RunEvaluation): number => evaluation.actions.length;
 
 /** The Week 1 Metrics table's rates, each with its unit and population. */
 export const BENCH_RATE_DEFINITIONS: Readonly<Record<BenchRateMetric, BenchRateDefinition>> = {
@@ -47,7 +86,7 @@ export const BENCH_RATE_DEFINITIONS: Readonly<Record<BenchRateMetric, BenchRateD
     applies: (evaluation, first) => first && evaluation.lane === "flow", hit: (evaluation) => evaluation.flowCreated === true,
   },
   initialExecutionSuccess: {
-    unit: "workflows", definition: "each positive result's first run: the runner passed, the oracle passed, and FluxIQ reported no failure",
+    unit: "workflows", definition: "each positive result's first run: the runner passed, the oracle passed, and FluxIQ executed and reported success. A run in which FluxIQ executed nothing is a miss, not an exclusion",
     applies: (evaluation, first) => first && positive(evaluation), hit: executed,
   },
   deterministicReplaySuccess: {
@@ -67,8 +106,14 @@ export const BENCH_RATE_DEFINITIONS: Readonly<Record<BenchRateMetric, BenchRateD
     applies: (evaluation) => positive(evaluation) && evaluation.oracleVerdict === "failed" && evaluation.reportedVerdict !== null, hit: (evaluation) => evaluation.reportedVerdict === "passed",
   },
   failureClassificationAccuracy: {
-    unit: "runs", definition: "negative runs (expected.failure set) whose reported category equals the expected category",
-    applies: (evaluation) => !positive(evaluation), hit: (evaluation) => evaluation.automationFailureReported?.category === evaluation.automationFailureExpected?.category,
+    // Both sides are required to be present, rather than compared through
+    // optional chaining: over this population `automationFailureExpected` is
+    // never null, but `undefined === undefined` would score a hit if the
+    // population were ever widened, and a run in which FluxIQ reported nothing
+    // must miss for the same reason `executed` requires a reported pass.
+    unit: "runs", definition: "negative runs (expected.failure set) whose reported category equals the expected category; a run that reported no failure at all is a miss",
+    applies: (evaluation) => !positive(evaluation),
+    hit: (evaluation) => evaluation.automationFailureReported !== null && evaluation.automationFailureExpected !== null && evaluation.automationFailureReported.category === evaluation.automationFailureExpected.category,
   },
   harnessActivation: {
     unit: "runs", definition: "runs that requested an LLM intervention; Week 1 requires none with the provider disabled",
@@ -122,20 +167,25 @@ function workflowResult(result: BenchResultRuns): BenchWorkflowResult {
   };
 }
 
-function rate(results: readonly BenchResultRuns[], definition: BenchRateDefinition): BenchRate {
-  let count = 0;
-  let total = 0;
-  const workflows = new Set<number>();
-  results.forEach((result, index) => {
+/**
+ * Every run in a rate's population, each with the index of the result it
+ * belongs to. `rate` counts over exactly this, and so does
+ * `benchExecutionCoverage`, so the not-executed count a report prints beside a
+ * rate is over the same runs the rate was computed from.
+ */
+export function benchRatePopulation(results: readonly BenchResultRuns[], definition: BenchRateDefinition): Array<{ evaluation: RunEvaluation; resultIndex: number }> {
+  return results.flatMap((result, resultIndex) => {
     const first = Math.min(...result.evaluations.map((evaluation) => evaluation.repeatIndex));
-    for (const evaluation of result.evaluations) {
-      if (!definition.applies(evaluation, evaluation.repeatIndex === first)) continue;
-      total += 1;
-      workflows.add(index);
-      if (definition.hit(evaluation)) count += 1;
-    }
+    return result.evaluations.flatMap((evaluation) => (definition.applies(evaluation, evaluation.repeatIndex === first) ? [{ evaluation, resultIndex }] : []));
   });
-  return { count, total, workflows: workflows.size, rate: total === 0 ? null : count / total };
+}
+
+function rate(results: readonly BenchResultRuns[], definition: BenchRateDefinition): BenchRate {
+  const population = benchRatePopulation(results, definition);
+  const count = population.filter(({ evaluation }) => definition.hit(evaluation)).length;
+  const total = population.length;
+  const workflows = new Set(population.map(({ resultIndex }) => resultIndex)).size;
+  return { count, total, workflows, rate: total === 0 ? null : count / total };
 }
 
 function corpusMetrics(results: readonly BenchResultRuns[]): BenchCorpusMetrics {
@@ -149,6 +199,11 @@ function corpusMetrics(results: readonly BenchResultRuns[]): BenchCorpusMetrics 
     sanitizedPacketBytes: benchDistribution(runs.flatMap((run) => run.evidence.sanitizedPacketBytes)),
     rawSnapshotBytes: benchDistribution(runs.flatMap((run) => run.evidence.rawSnapshotBytes)),
     truncationCount: runs.reduce((sum, run) => sum + run.evidence.truncationCount, 0),
+    // Always stated, so `report.json` never leaves a rate standing on its own.
+    // The eight benches written before these fields existed omit them, which
+    // the contract reads as unmeasured rather than as zero.
+    notExecutedRuns: runs.filter(executedNothing).length,
+    actionsExecuted: runs.reduce((sum, run) => sum + actionsExecuted(run), 0),
     harnessRecovery: null,
     adaptationCost: null,
     adaptationValidation: null,

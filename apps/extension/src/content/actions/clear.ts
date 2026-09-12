@@ -15,6 +15,13 @@
 // a password the clear failed to remove. An empty field is not a secret, so the
 // passing case reads as it always did; the failing one names the leftover value
 // by its length when the control is sensitive, by the one shared rule.
+//
+// Both validations carry `redacted: withheld`, which is how the domain learns
+// the strings are already safe. Without it, a layer that cannot tell a redacted
+// string from a leaked one replaces both with a marker on every sensitive
+// control -- so "the field holds a withheld value of 12 characters" becomes
+// nothing at all, on the exact failure an operator most needs to read: a field
+// the page refilled after the clear emptied it.
 
 import { isSensitiveFormControl } from "../element-traits";
 import type { BrowserActionCommand, BrowserActionResult } from "../types";
@@ -35,7 +42,8 @@ export function clearAction(action: BrowserActionCommand, deps: ContentActionDep
     return deps.success(action, startedAt, "The target has no value to clear.", {
       status: "failed",
       expected: "a field whose value can be emptied",
-      actual: `the target is a <${element.tagName.toLowerCase()}>, which has no value`
+      actual: `the target is a <${element.tagName.toLowerCase()}>, which has no value`,
+      redacted: withheld
     }, evidence());
   }
 
@@ -48,6 +56,7 @@ export function clearAction(action: BrowserActionCommand, deps: ContentActionDep
   return deps.success(action, startedAt, empty ? "Field cleared." : "The field did not stay empty.", {
     status: empty ? "passed" : "failed",
     expected: "the field is empty",
-    actual: empty ? "the field is empty" : `the field holds ${describeFieldValue(actual, withheld)}`
+    actual: empty ? "the field is empty" : `the field holds ${describeFieldValue(actual, withheld)}`,
+    redacted: withheld
   }, evidence());
 }

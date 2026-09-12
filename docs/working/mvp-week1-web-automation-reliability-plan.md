@@ -53,63 +53,31 @@ extension 215/215, domain 245/245, content harness **186 passed** at
 `pnpm build` each exit 0, `packages/fluxiq` **129 of 129** test files green under
 `--no-file-parallelism`.
 
-**What Level 2 target scoring actually bought, measured.** Core's matcher is now
-published for a browser through a `fluxiq/automation-studio/fingerprinting`
-subpath — D1's premise was wrong only about *where* the module was published, not
-about the module: it does have type-only imports, but the barrel beside it
-re-exports `dsl/` and `testing/`, which reach `node:crypto` and
-`node:perf_hooks`. Cost: 18,974 bytes of content bundle (8.5%), attributed by
-esbuild metafile rather than inferred from totals.
-On `ambiguous-targets`, a tie that two identical buttons used to lose now
-resolves to the recorded control at confidence 1.000 against a runner-up at
-0.382. On `identity-drift`, all four modes resolve — but through Level 1 exact
-strategies, so no score is involved; the fixture cannot reach Level 2 unless its
-text is drifted away too. **When it is, the highest-scoring button is Discard at
-−0.360, ahead of the real Save at −0.375, on a shared class prefix.** A resolver
-without a floor would have clicked Discard. That is what "deterministic
-fallback" has to mean: the floor turns a plausible wrong click into a refusal,
-and there is a passing row proving the refusal. A fifth `identity-drift`
-rendering that drifts the text while keeping an `aria-label` would exercise the
-success path; it is a Scenario Lab change nobody has been briefed for.
+**Target matching, in short.** Core's matcher is published for a browser through
+a `fluxiq/automation-studio/fingerprinting` subpath, at a cost of 18,974 bytes
+of content bundle (8.5%), attributed by esbuild metafile. Level 2 scoring could
+not succeed until **D13** changed how Core charges a *missing* identifier
+against a *contradicted* one; the drift case now resolves at 0.389 where it
+scored 0.218 against a 0.35 floor. **D14** then closed the larger exposure the
+investigation uncovered: Level 1 was resolving and clicking by class alone, with
+no score and no floor, so a page whose Save button had become
+`<button class="btn btn-primary">Delete workspace</button>` was clicked. Level 1
+now selects and the scorer vetoes. Both decisions carry their measurements, the
+alternatives rejected, and the interaction between them — D13 shrank D14's
+safety margin sixfold, and one test now guards both.
 
-**Findings that change later work**
+**Findings that change later work** are archived at
+[archive/2026-09-12-wave-1-3-findings.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-wave-1-3-findings.md).
+The operationally important ones — this machine's three false-failure shapes,
+and the rule that `.env.local` selects the existing target so every isolated
+command needs `FLUXIQ_TEST_ENV_FILES=none` — are restated where an operator will
+meet them, in
+[live-validation-plan.md](./mvp-week1-web-automation-reliability-plan/live-validation-plan.md).
 
-- The Playwright headless shell crashes on launch here; both Playwright
-  configs now use `channel: "chromium"` (network-policy spec: 3 passed).
-- Playwright `selectOption` fires untrusted events, which the recorder now
-  ignores: recorded lanes select by keyboard.
-- Password values leave the recorder unredacted (pre-existing,
-  `describe-element.ts`); Phase 1.4 fixes it at the source.
-- The recording lane asserts only unpaginated extract steps; paginated
-  extraction is proven by the Wave 2 Flow lane.
-- The structure audit reads only tracked files: stage new files first.
-- Core accepts `client.start_recording` only while the approving Automation
-  Studio context is under 10 s old. The runner now restamps it immediately
-  before the start. The `clone` lane still carries the original defect and
-  needs an existing or clone target to exercise it.
-- Fixed in Core and mirrored: `pnpm structure:baseline` only lowers or removes
-  entries, and refuses a new or grown violation.
-- `.env.local` configures the existing install (target, base and gateway URLs,
-  credentials), and a process variable cannot clear those keys; isolated runs
-  therefore set `FLUXIQ_TEST_ENV_FILES=none`, which skips both env files for
-  one run. Never edit `.env.local`.
-- **A worker's crash is usually the machine, not the change.** Verifying the
-  Core seam produced a `tsc` segmentation fault here and three separate vitest
-  runs that each lost a test file to `Error: Worker exited unexpectedly`. None
-  of it was the code. In Core the root cause is a native SQLite module
-  corrupting under parallel load (`SQLITE_CORRUPT: malformed database schema`),
-  which kills the worker process outright instead of failing a test; Core
-  verifies cleanly with `--no-file-parallelism`. Downstream, running both
-  repositories' checks at once was enough to segfault `tsc`, and running the
-  downstream check alone passed. Run heavy gates one at a time.
-- **One clean baseline run does not clear a change.** Chasing the above, the
-  supervisor stashed the Core seam, saw a green parallel baseline, and briefly
-  concluded the seam caused the crashes. It did not — the baseline run was
-  lucky. Against an intermittent failure, compare like for like (here, the
-  sequential run) rather than trusting a single green.
-
-**Not done:** the ten parallel Wave 3 briefs are running, none verified yet;
-Waves 4 and 5.
+**Not done:** live validation. Nothing in Waves 1-3 has run in a real browser.
+The plan and its safety rules are in
+[live-validation-plan.md](./mvp-week1-web-automation-reliability-plan/live-validation-plan.md);
+Waves 4 and 5 follow it.
 
 **Next steps**
 
@@ -162,89 +130,83 @@ Testing Lab run.
 Each decision resolves a question an audit raised. Reversing one is a
 ledger entry, not a silent edit.
 
-- **D1 — Level 2 target scoring runs in the page.** The content script
-  enumerates live-DOM candidates and scores them with Core's
-  `createAutomationStudioElementMatcher`, which is public via
-  `fluxiq/automation-studio`, has type-only imports, and bundles under the
-  existing esbuild `platform: "browser"` build. Live signals (computed
-  visibility, enabled, occlusion) and no per-action round trip outweigh the
-  cost of bundling one Core module. The extension returns structured
-  resolution diagnostics (strategy, candidate count, best and runner-up
-  score, confidence) in every action result. Fallback if the bundle fails a
-  browser-safety check: the content script returns candidates and Core's
-  existing `prepareElementTargetAction` scores them.
-- **D2 — Phase 1.4 improves the shared producer, and the sanitized packet
-  is the behavioural target.** New evidence lands once in
-  `describeElement`/`captureSnapshot` (`DomSnapshot`); the state pipeline
-  inherits it; `sanitizeWebLlmSnapshot` exposes it to the harness;
-  deterministic checks (Phase 1.2 assertions, Phase 1.5 failure evidence)
-  read the `DomSnapshot` directly. No third pipeline.
-- **D3 — Failure taxonomy: Core owns names and carriers; the domain
-  produces.** Extend `AutomationStudioAdaptiveFailureClass` (no third enum);
-  add a structured `failure` field to `ClientGatewayActionResult`,
-  `FluxIQRuntimeCommandResult`, and the run attempt record; the classifier
-  reads it, regex kept only as legacy fallback; the LLM packet carries it.
-  Modelled on Core's flow-bootstrap taxonomy (closed codes, one stage per
-  code, exact-field parser). Requires the paired Core document and a user
-  alert before the first Core edit.
-- **D4 — Outcome validation is per action, in the content script.** Every
-  action gains a post-condition (type: value read-back; select:
-  `selectedValue` equals request; click: target was visible, enabled, and
-  hit-tested at its centre; navigate: committed URL compared to request;
-  waits: the condition). A miss is `OUTPUT_NOT_OBSERVED` with expected and
-  actual. Authored expectations use a new `web.dom.assert` action.
-- **D5 — Trusted-input emulation, not `chrome.debugger`.** Enter on a form
-  control calls `form.requestSubmit()`; Tab moves focus along the tabbable
-  order; typing dispatches per-character `keydown`/`beforeinput`/`input`/
-  `keyup` so autocomplete widgets react. CDP-trusted input via the
-  `debugger` permission is deferred (banner, permission review) unless the
-  corpus proves emulation insufficient.
-- **D6 — Vocabulary grows only where FluxBench needs it.** Added:
-  `web.dom.check` (set checkbox/radio state), `web.dom.extract_list`
-  (repeating structures with a field map and bounded pagination),
-  `web.dom.assert` (exists/absent/text/url/visible/enabled with timeout),
-  `web.browser.tab` (open/switch/close), `web.dom.upload`
-  (`DataTransfer`), `web.dom.dialog` (page-world override of
-  `alert`/`confirm`/`prompt` installed at `document_start`), and
-  `web.browser.download` (wait on `chrome.downloads`). Scroll gains modes
-  (`by`, `toElement`, `untilStable` with `maxScrolls`). Navigate reuses the
-  automation tab by default with an explicit `newTab` option.
-- **D7 — Content-script tests run in headless Playwright against the
-  Scenario Lab**, with the built content bundle injected and
-  `chrome.runtime` stubbed — `apps/extension/e2e/content/*.spec.ts`. jsdom
-  cannot emulate `elementFromPoint`, layout, or `isTrusted`; the Lab already
-  runs headless in-process. Pure functions use `node --test` in `tests/`
-  folders per the repository rule.
-- **D8 — FluxBench is a layer on the Testing Lab, not a new framework.**
-  New fixtures for the nine uncovered categories; a `bench` verb that runs a
-  corpus N times on the `isolated` target with a provider-free Flow lane;
-  a `RunEvaluation` per run and a corpus report with the plan's metrics;
-  `compare` that can say `improved`/`regressed`. The Flow lane follows the
-  product path — Playwright drives the recording script while the extension
-  records, Core generates the deterministic Subflow from the recording via
-  its public API, the run executes provider-free — with a manifest→Flow
-  compiler as fallback if the API path proves unstable.
-- **D9 — Week 1 takes the Core minor bump for the new comparison-status
-  members** (`target_not_found`, `target_ambiguous` on
-  `AutomationStudioTransitionComparisonStatus`), in the same Core work unit
-  as the adaptive-failure enum extension of D3, with one migration note
-  covering both. Confirmed by the user 2026-09-11. Downstream
-  comparison-status mappings added in Phase 1.5 handle the new members.
-- **D10 — The Core expectation-evaluator seam (C3) is built in Week 1,
-  with Phase 1.4.** A `bindExpectationEvaluator` option on the Automation
-  Studio service, mirroring `bindHostRuntime`, that Core calls from
-  `builtin.policy.expectation` and from `compareAutomationStudioTransition`
-  so `expectedState` is evaluated rather than counted. It lands with the
-  evidence work so a scenario that starts failing has evidence explaining
-  why. Confirmed by the user 2026-09-11.
-- **D11 — Changes that belong in Core are made in Core.** Directed by the
-  user 2026-09-11. The Core unit for D3 and D9 (failure enum, record,
-  parser, and carriers; C1 and C2) moves ahead of Wave 2, joined by Core's
-  domain-host loading through public exports and the structure-baseline
-  ratchet fix. Downstream stand-ins are replaced by Core exports: the
-  extension's `ACTION_REJECTED` in result `metadata`, the copied category
-  names in `packages/test-contracts`, the Wave 2 draft's local category
-  list, and the panel host's deep import of Core's `dist`.
+Decisions **D1-D12** are settled and archived in full at
+[archive/2026-09-12-decisions-d1-d12.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-decisions-d1-d12.md).
+Two are worth knowing before reading anything else here, because later work
+falsified their premises: **D1** asserted that Core's element matcher bundles for
+a browser (it did not, until a packaging change on 2026-09-12) and that Level 2
+scoring would work (it could not, until D13); **D11** established that a change
+belonging in Core is made in Core, which is why D13 exists rather than a
+downstream approximation.
+
+- **D13 — Core charges a missing stable identifier less than a contradicted
+  one.** Accepted by the supervisor 2026-09-12 on measured evidence, and it is a
+  change to Core's published element matcher, not a downstream tweak.
+  Level 2 scoring could not succeed: reaching it requires the recorded
+  identifiers to be gone, and Core charged their *absence* nearly as heavily as
+  a *contradiction*. Proved exhaustively — of 9,720 candidate profiles that can
+  reach Level 2 against the test descriptor, none cleared the 0.35 floor; the
+  maximum was 0.233. `MISSING_STABLE_IDENTIFIER_SIMILARITY` is now −0.1 against
+  `CONTRADICTED_STABLE_IDENTIFIER_SIMILARITY` at −0.8.
+  Two alternatives were rejected **by measurement**, not preference. Lowering the
+  floor admits a genuinely different action: a lone "Save changes and exit"
+  button scores 0.088 and resolves with no runner-up and therefore no margin,
+  0.130 from the case we want, so any floor between them is fitted to a hair.
+  Normalizing over answerable weight inverts the scale — the less a candidate can
+  answer the higher it scores, and a bare `<button></button>` reaches 1.000 and
+  gets clicked.
+  Result, every figure measured before and after: the drift case rises 0.218 →
+  **0.389** and resolves; the near-miss stays **0.088** and is refused;
+  separation widens from 0.130 to 0.301. The safety cases are unchanged and
+  still refused — Discard at −0.360 against the real Save at −0.375, and the
+  nameless buttons. `ambiguous-targets` still resolves the recorded twin at
+  1.000 against 0.382, confirmed by measurement rather than by argument.
+  **The accepted cost.** Core's matcher is published, and one seam loosened: a
+  candidate matching visible text and accessible name exactly but carrying no
+  ID rises from confidence 0.428 to 0.577, crossing the `safe` (0.45) and
+  default (0.5) rungs of Core's ladder. `review`, `privileged` and `destructive`
+  still refuse it. The supervisor accepts this: such a candidate answers
+  everything it can be asked and differs only by lacking an identifier, which is
+  precisely the distinction the change exists to draw, and the tiers guarding
+  destructive work are unmoved. One profile also crosses zero, so
+  `element_target.no_match` becomes `element_target.below_confidence` — the same
+  category, a more accurate code.
+  **This change and the downstream `reworded-aria` spec row must ship together.**
+  Flipping the constant back was measured to turn that row red. Push both `dev`
+  branches in one unit.
+
+- **D14 — Level 1 selects, the scorer vetoes.** Accepted 2026-09-12. The
+  largest safety exposure found in this plan: Level 1's class-set query resolved
+  and **clicked** `<button class="btn btn-primary">Delete workspace</button>` on
+  a page whose Save button had been replaced, with no score and no floor, while
+  Level 2 refused a 0.218 near-certainty. Every safety property built this week
+  guarded only the path that was already cautious.
+  A Level 1 match is now scored and refused if the candidate contradicts the
+  recording. **The veto threshold is 0, not the 0.35 selection floor**, and the
+  two answer different questions: the floor asks "is this good enough to choose
+  among several", the veto asks "is this so wrong that acting is dangerous".
+  Zero is a statement rather than a fitted value — `normalizedScore` is agreeing
+  weight minus disagreeing weight, so below zero the page contradicts more than
+  it confirms.
+  Verified exhaustively over every profile a weak Level 1 query can land on
+  (1,488 class-reachable, 240 text-reachable): no profile whose label
+  contradicts the recording reaches 0, on either scoring scale. All four
+  `identity-drift` modes still resolve; the tightest, `selector-only` at 0.149,
+  is precisely what a veto set at the floor would have destroyed. No strategy is
+  exempt, and that was measured rather than conceded — an id exemption saves
+  nothing and would admit 339 profiles where an identifier survived onto a
+  relabelled control.
+  **An interaction with D13 to watch.** The Core weighting change moved the worst
+  impostor from −0.203 to −0.032, so headroom below the veto line is now 0.032
+  rather than 0.203 — the safety margin shrank sixfold as a side effect of a
+  change made for a different reason. It is still on the right side, and
+  `veto.test.ts` asserts the *separation* rather than any absolute value, so a
+  further weight change in either repository fails the build rather than
+  silently eroding it. Treat that test as the guard on D13, not only on D14.
+  **Two limits remain open**, both narrower than what closed and both measured:
+  a recording that captured no visible text is barely protected (0.641 and
+  0.145, both still acted on), and an impostor carrying the recorded label
+  passes by construction.
 
 - **D12 — Three Wave 2 worker judgments, ratified by the supervisor.** Each was
   raised by its worker as needing ratification, and each stands. Tripping the

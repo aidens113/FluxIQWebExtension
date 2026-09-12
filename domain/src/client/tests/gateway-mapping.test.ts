@@ -4,10 +4,10 @@
 
 import assert from "node:assert/strict";
 import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
-import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionType } from "../../actions/types";
+import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionResult, type WebAutomationActionType } from "../../actions/types";
 import { WEB_AUTOMATION_DOMAIN_ID, WEB_AUTOMATION_EVENTS } from "../../constants";
-import type { WebAutomationActionResult } from "../../actions/types";
 import { outputTargetFromPayload, webAutomationOutputPayload } from "../../output-nodes";
+import { WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT } from "../../sensitivity";
 import { createWebAutomationRecordingEvent, normalizeWebAutomationActionType, webAutomationActionFromGatewayCommand, webAutomationActionResultPayload } from "../gateway-mapping";
 
 // The one failure record a rejected action type carries, in Core's taxonomy.
@@ -298,6 +298,120 @@ assert.equal(
   "validation" in webAutomationActionResultPayload({ commandId: "c", actionType: "web.dom.click", status: "succeeded", startedAt: 1, finishedAt: 2 } as unknown as WebAutomationActionResult),
   false,
   "an absent validation stays absent"
+);
+
+// -- A sensitive control's post-condition never leaves on the wire ------------
+// The join two Wave 3 changes left untested: this function was widened to carry
+// `validation` to the domain, and the producer in `content/actions/` was taught
+// to keep a sensitive control's value out of it. The producer's redaction is in
+// another package, so it cannot be what makes this one safe, and these rows
+// hand this function exactly what a producer with its redaction removed would
+// send. The sentinel is not a secret and carries no shape of one; it stands for
+// whatever a leaking producer would have written, and every row searches the
+// whole serialized payload for it rather than one named field, which is how
+// every leak in this plan was found.
+
+const producerSentinel = "SENTINEL-VALUE-A-PRODUCER-SHOULD-HAVE-WITHHELD";
+
+// The marker's exact words, pinned once in the repository. Both exits share the
+// constant, so nothing else needs to restate it -- but a marker nobody can grep
+// for is a proof nobody can repeat, so one row spells it out.
+assert.equal(WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, "(withheld: the action ran on a control that holds a secret)");
+
+/** A result whose target the shared rule marks, carrying a comparison the producer failed to redact. */
+function leakingResult(attributes: Record<string, string>, inputType = "text"): WebAutomationActionResult {
+  return {
+    commandId: "command.sensitive",
+    actionType: "web.dom.type",
+    status: "succeeded",
+    validation: { status: "passed", expected: `the field holds "${producerSentinel}"`, actual: `the field holds "${producerSentinel}"` },
+    message: "Text entered.",
+    url: "https://example.test/checkout",
+    element: { tagName: "input", selector: "[data-testid=\"payment\"]", inputType, attributes } as never,
+    startedAt: 100,
+    finishedAt: 140
+  };
+}
+
+// Each of the three signals the one rule reads, so a copy of the rule that
+// dropped one of them would fail here rather than in `sensitivity/` alone. The
+// multi-token spelling is the one that has leaked a card number twice in this
+// plan.
+const sensitiveSignals: Array<[what: string, attributes: Record<string, string>, inputType: string]> = [
+  ["the effective control type", {}, "password"],
+  ["the type attribute", { type: "password" }, "text"],
+  ["a single-token autocomplete", { autocomplete: "cc-number" }, "text"],
+  ["a multi-token autocomplete", { autocomplete: "billing cc-number" }, "text"],
+  ["the data-sensitive marker", { "data-sensitive": "true" }, "text"]
+];
+
+for (const [what, attributes, inputType] of sensitiveSignals) {
+  const payload = webAutomationActionResultPayload(leakingResult(attributes, inputType));
+  assert.equal(
+    JSON.stringify(payload).includes(producerSentinel),
+    false,
+    `${what}: nothing the producer failed to withhold reaches the wire payload`
+  );
+  assert.deepEqual(
+    payload.validation,
+    { status: "passed", expected: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, actual: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT },
+    `${what}: the status still says whether the post-condition held, the text is withheld, and no flag is stamped -- the flag is the producer's declaration, and this layer is not the producer`
+  );
+}
+
+// A failed post-condition is the case that matters most -- it is the one that
+// becomes a failure record Core shows an operator -- and it is withheld the
+// same way, status and all.
+const failedSensitive = webAutomationActionResultPayload({
+  ...leakingResult({ autocomplete: "cc-number" }),
+  status: "failed",
+  validation: { status: "failed", expected: `the field holds "${producerSentinel}"`, actual: "the field holds something else" }
+});
+assert.equal(JSON.stringify(failedSensitive).includes(producerSentinel), false);
+assert.deepEqual(failedSensitive.validation, { status: "failed", expected: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, actual: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT });
+
+// The other direction, which is the whole reason the rule is a rule and not a
+// blanket: an ordinary control keeps a comparison an operator can act on.
+const ordinary = webAutomationActionResultPayload({
+  ...leakingResult({ autocomplete: "username" }),
+  validation: { status: "passed", expected: "the field holds \"synthetic-control-text\"", actual: "the field holds \"synthetic-control-text\"" }
+});
+assert.deepEqual(ordinary.validation, { status: "passed", expected: "the field holds \"synthetic-control-text\"", actual: "the field holds \"synthetic-control-text\"" });
+
+// A `none` validation has no comparison to withhold, and must not gain one.
+assert.deepEqual(
+  webAutomationActionResultPayload({ ...leakingResult({ autocomplete: "cc-number" }), validation: { status: "none", reason: "evidence-only" } }).validation,
+  { status: "none", reason: "evidence-only" }
+);
+
+// The guard's reach, pinned so it is visible rather than assumed: it asks the
+// descriptor the result carries, so a result with a text-bearing validation and
+// no descriptor cannot be judged here and passes through. Every producer that
+// redacts today sends one; a new verb that does not would land outside this
+// guard, and that is what this row is for.
+const undescribed = leakingResult({ autocomplete: "cc-number" });
+delete undescribed.element;
+assert.equal(
+  JSON.stringify(webAutomationActionResultPayload(undescribed)).includes(producerSentinel),
+  true,
+  "with no element descriptor the wire payload is only as safe as the producer -- the limit is real, not a claim"
+);
+
+// -- The neighbour field, and why it is safe to carry when someone does -------
+// `resolution` is the other thing this function could carry and does not.
+// Checked rather than assumed: `WebAutomationTargetResolution` is a closed
+// six-value `strategy` and four numbers, so unlike `validation` it holds no
+// page-derived text and needs no guard. This row pins that it is still dropped
+// — whoever adds it should read this and confirm the shape has not grown a
+// string in the meantime. The candidate *labels* a TARGET_AMBIGUOUS failure
+// names are page text, but they ride on the failure record, not here.
+assert.equal(
+  "resolution" in webAutomationActionResultPayload({
+    ...failedValidationResult,
+    resolution: { strategy: "scored-candidate", candidateCount: 3, bestScore: 0.51, runnerUpScore: 0.28, confidence: 0.51 }
+  }),
+  false,
+  "resolution is still dropped by the result mapping"
 );
 
 console.log("Web automation gateway mapping tests passed.");

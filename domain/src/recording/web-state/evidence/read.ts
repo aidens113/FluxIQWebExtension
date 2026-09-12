@@ -10,13 +10,23 @@
 // which is the answer the state paths are already shaped to give.
 
 import type { JsonObject } from "fluxiq/core";
+import { pageEvidenceWire, type WebAutomationEvidenceRect } from "../../../page-evidence";
+
+/**
+ * Narrowing a wire object to the contract's keys. Re-exported under the name
+ * this projection has always used, so the whole of `project.ts` reaches the
+ * wire through one import.
+ *
+ * `record<T>(value)` keeps `T`'s key set and makes every value `unknown`, so a
+ * field the producer renames stops compiling here rather than reading
+ * `undefined` for ever, and a field the page corrupts still has to pass one of
+ * the readers below. `T` is the shared contract's own type, which is the
+ * producer's own declaration -- that is the whole join.
+ */
+export { pageEvidenceWire as record, type PageEvidenceWire } from "../../../page-evidence";
 
 /** Matches `boundedText`'s bound in the producer, so a healthy string arrives whole. */
 const MAX_TEXT = 200;
-
-export function record(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
-}
 
 export function list(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
@@ -40,7 +50,7 @@ export function flag(value: unknown): boolean | undefined {
 
 /** A rect is all four numbers or it is nothing: half a rect cannot be drawn or compared. */
 export function rect(value: unknown): JsonObject | undefined {
-  const bounds = record(value);
+  const bounds = pageEvidenceWire<WebAutomationEvidenceRect>(value);
   if (!bounds) return undefined;
   const x = finite(bounds.x);
   const y = finite(bounds.y);

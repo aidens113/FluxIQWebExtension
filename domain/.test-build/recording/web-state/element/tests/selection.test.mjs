@@ -79,7 +79,7 @@ function isSemanticTextElement(element) {
 
 // src/recording/web-state/element/selection.ts
 var MAX_STATE_ELEMENTS = 1500;
-var WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS = ["count", "captured", "truncated"];
+var WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS = ["count", "captured", "truncated", "captureTruncated", "stateTruncated"];
 function shouldCaptureElementState(element) {
   if (!hasElementBounds(element)) return false;
   return Boolean(

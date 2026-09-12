@@ -108,6 +108,45 @@ test("distributions, evidence, and Week 2 fields are bounded", () => {
   assert.equal(validateBenchReport(report({ metrics: metrics({ actionLatencyMs: {}, sanitizedPacketBytes: spread(0, null, null) }) })).valid, true);
 });
 
+// 3 workflow results x 3 repeats = 9 evaluated runs; the latency distributions carry 12 + 6 + 2 = 20 samples, one per executed action.
+const covered = (overrides = {}) => report({ metrics: metrics({ notExecutedRuns: 4, actionsExecuted: 20, ...overrides }) });
+
+test("a bench report round-trips the execution-coverage counts, and states them consistently", () => {
+  assert.doesNotThrow(() => assertBenchReport(covered()));
+  const parsed = parseBenchReportJson(JSON.stringify(covered()));
+  assert.deepEqual([parsed.metrics.notExecutedRuns, parsed.metrics.actionsExecuted], [4, 20]);
+  assert.deepEqual(parsed, covered());
+  // Every run may have executed nothing; more runs than the bench evaluated may not.
+  assert.equal(validateBenchReport(covered({ notExecutedRuns: 9 })).valid, true);
+  assert.deepEqual(issuesOf(covered({ notExecutedRuns: 10 })), ["$.metrics.notExecutedRuns"]);
+  for (const [label, override] of Object.entries({
+    "fractional runs": { notExecutedRuns: 1.5 },
+    "negative runs": { notExecutedRuns: -1 },
+    "negative actions": { actionsExecuted: -1 },
+    // The action total and the latency samples count the same executed actions, so a report may not state both and disagree.
+    "actions disagreeing with the latency samples": { actionsExecuted: 19 },
+  })) rejects(covered(override), label);
+});
+
+test("a bench report written before the execution-coverage counts still loads, and its counts read as unmeasured rather than zero", () => {
+  // The shape of the eight benches on disk: metrics with neither key present.
+  const older = report();
+  assert.deepEqual(Object.keys(older.metrics), [
+    "rates", "actionLatencyMs", "runDurationMs", "sanitizedPacketBytes", "rawSnapshotBytes", "truncationCount",
+    "harnessRecovery", "adaptationCost", "adaptationValidation", "adaptationPersistence", "adaptationReuse",
+  ]);
+  const parsed = parseBenchReportJson(JSON.stringify(older));
+  assert.equal(parsed.metrics.notExecutedRuns, undefined);
+  assert.equal(parsed.metrics.actionsExecuted, undefined);
+  // Absent, not zero: a reader can tell "this bench did not measure it" from "FluxIQ executed nothing".
+  assert.equal(Object.hasOwn(parsed.metrics, "notExecutedRuns"), false);
+  assert.equal(Object.hasOwn(parsed.metrics, "actionsExecuted"), false);
+  // And such a report is still a usable baseline for a report that does state them: the counts are not compared metrics.
+  const comparison = compareBenchReports(baseline(), covered({}));
+  assert.equal(comparison.metrics.length > 0, true);
+  assert.equal(comparison.metrics.some(({ metric }) => ["notExecutedRuns", "actionsExecuted"].some((count) => metric.endsWith(count))), false);
+});
+
 test("report identity, target, repeat count, and LLM usage are validated", () => {
   for (const [label, override] of Object.entries({
     "unknown target": { target: "production" },

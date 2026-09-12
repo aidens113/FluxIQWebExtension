@@ -26,9 +26,9 @@ const bench = (reportId: string, repeatCount: number, runs: CorpusRun[]): BenchR
 
 async function writeBench(runsDirectory: string, benchId: string, repeatCount: number, runs: CorpusRun[]): Promise<BenchReport> {
   const directory = benchDirectory(runsDirectory, benchId);
-  const file: BenchRunsFile = { schemaVersion: "0.1", benchId, corpusId: "smoke", repeatCount, target: "isolated", lane: "recording", startedAt: "2026-09-11T10:00:00.000Z", sources: {}, runs: [] };
+  const file: BenchRunsFile = { schemaVersion: "0.1", benchId, corpusId: "smoke", repeatCount, target: "isolated", lanes: ["recording"], startedAt: "2026-09-11T10:00:00.000Z", sources: {}, runs: [] };
   for (const { corpusRowId, evaluation } of runs) {
-    file.runs.push({ corpusRowId, scenarioId: evaluation.scenarioId, workflowId: evaluation.workflowId, variantId: evaluation.variantId, repeatIndex: evaluation.repeatIndex, status: "evaluated", runId: evaluation.runId, evaluation: await writeRunEvaluation(directory, evaluation), verdict: evaluation.verdict });
+    file.runs.push({ corpusRowId, scenarioId: evaluation.scenarioId, workflowId: evaluation.workflowId, variantId: evaluation.variantId, repeatIndex: evaluation.repeatIndex, lane: evaluation.lane, status: "evaluated", runId: evaluation.runId, evaluation: await writeRunEvaluation(directory, evaluation), verdict: evaluation.verdict });
   }
   await writeBenchRuns(directory, file);
   const report = bench(benchId, repeatCount, runs);

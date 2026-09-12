@@ -46,8 +46,16 @@ export type ContentHarnessOptions = {
 /** The capture settings the background worker sends with a `recording` message. */
 export type HarnessRecordingSettings = { captureMutations?: boolean; captureInputValues?: boolean; captureSnapshots?: boolean };
 
-/** One message the content script sent through `chrome.runtime.sendMessage`. */
-export type SentMessage = { type?: string; payload?: unknown } & Record<string, unknown>;
+/**
+ * One message the content script sent through `chrome.runtime.sendMessage`.
+ *
+ * Deliberately closed rather than `& Record<string, unknown>`. A message does
+ * carry more than these two fields, but an index signature types every
+ * misspelling as `unknown` instead of rejecting it, so `message.payloadd` would
+ * compile and the assertion reading it would silently prove nothing. A spec
+ * that wants another field narrows to the shape it expects and says so.
+ */
+export type SentMessage = { type?: string; payload?: unknown };
 
 export type ContentHarness = {
   page: Page;

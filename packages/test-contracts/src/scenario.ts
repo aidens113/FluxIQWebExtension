@@ -69,7 +69,18 @@ export type ScenarioStep = {
 
 export type ExpectedFact = { id: string; subject: string; predicate: string; value: unknown };
 export type ExpectedEvent = { type: string; count?: number };
-export type ExpectedAction = { action: string; outcome?: "succeeded" | "failed" | "rejected" };
+/**
+ * The attempt statuses a scenario may declare. An attempt's status is Core's
+ * `RuntimeStatus`, and every lane narrows what it reads to `runActionStatuses`
+ * (`run.ts`), so only a value in that set can ever match; a scenario may
+ * declare the two a finished attempt reaches. There is deliberately no
+ * `rejected`: no lane can report it, so an expectation spelled that way fails
+ * on itself whatever the page does. A client refusal is `failed` here, with
+ * the refusal carried by `expected.failure` -- category
+ * `blocked_by_capability_or_policy`, code `web.action.rejected`.
+ */
+export const expectedActionOutcomes = ["succeeded", "failed"] as const;
+export type ExpectedAction = { action: string; outcome?: (typeof expectedActionOutcomes)[number] };
 /**
  * What an extract step must yield. `count` is the exact number of records;
  * `records` is the complete expected list, compared exactly and in order, so
@@ -80,6 +91,21 @@ export type ExpectedExtraction = { step: string; count?: number; records?: Array
 export type ExpectedFailure = { category: AutomationStudioAdaptiveFailureClass; code?: string };
 export type ScenarioGoal = { id: string; description: string; successFacts: ExpectedFact[] };
 
+/**
+ * What a run must meet. Every field here describes the run: `recordingEvents`
+ * what the extension recorded, `actions` and `failure` what FluxIQ reported,
+ * `finalState` and `extracted` what the page and the data looked like
+ * afterwards.
+ *
+ * `pageFacts` is the exception, because it describes a *rendering* rather than
+ * a run, and an armed scenario has two of them. Facts declared on a workflow
+ * describe its unarmed rendering as first loaded; facts declared on a variant
+ * describe that variant's armed rendering as first loaded after arming. They
+ * are therefore the one expectation a variant never inherits -- a fact written
+ * about the unarmed page is not a claim about the page the arming produced.
+ * `scenarioPageFactSchedule` (`scenario-workflow.ts`) says which set each lane
+ * checks and when.
+ */
 export type ScenarioExpected = {
   pageFacts?: ExpectedFact[];
   recordingEvents?: ExpectedEvent[];
@@ -100,6 +126,12 @@ export type ScenarioExpected = {
  * variant's `expected` governs the armed run: each field it sets replaces the
  * workflow's field of the same name, and omitted fields are inherited
  * (`resolveScenarioWorkflow`).
+ *
+ * `pageFacts` is the one field outside that inheritance, because it describes
+ * a rendering rather than a run. A variant's `pageFacts` are the facts of its
+ * armed rendering and nothing else; a variant that declares none makes no
+ * claim about how its armed page looks, and does not silently borrow the
+ * workflow's claim about the unarmed one.
  */
 export type ScenarioVariant = {
   id: string;
@@ -229,7 +261,7 @@ export const webScenarioJsonSchema = {
     },
     action: {
       type: "object", additionalProperties: false, required: ["action"],
-      properties: { action: { type: "string", minLength: 1 }, outcome: { enum: ["succeeded", "failed", "rejected"] } },
+      properties: { action: { type: "string", minLength: 1 }, outcome: { enum: expectedActionOutcomes } },
     },
     extraction: {
       type: "object", additionalProperties: false, required: ["step"],

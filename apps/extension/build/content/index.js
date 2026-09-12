@@ -854,16 +854,6 @@
     }
   ];
 
-  // ../../domain/src/runtime/errors.ts
-  var WebAutomationRuntimeError = class extends Error {
-    code;
-    constructor(code, message) {
-      super(message);
-      this.name = "WebAutomationRuntimeError";
-      this.code = code;
-    }
-  };
-
   // ../../domain/src/runtime/failure/codes.ts
   var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
     /** The target was found but refused the action: disabled, hidden, or covered by another element. */
@@ -938,19 +928,40 @@
     return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
   }
 
+  // ../../domain/src/runtime/failure/carrier.ts
+  function carriedWebAutomationFailure(error, fallback = {}) {
+    const carried = property(error, "failure");
+    const code = property(carried, "code");
+    if (typeof code !== "string") return void 0;
+    const comparison = {
+      expected: text(property(carried, "expected")) ?? fallback.expected,
+      actual: text(property(carried, "actual")) ?? fallback.actual,
+      evidenceDigest: text(property(carried, "evidenceDigest")) ?? fallback.evidenceDigest
+    };
+    if (isWebAutomationFailureCode(code)) return webAutomationFailureRecord(code, comparison);
+    const unnamed = `unrecognized web automation failure code: ${code}`;
+    return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNKNOWN, {
+      ...comparison,
+      actual: comparison.actual === void 0 ? unnamed : `${comparison.actual}; ${unnamed}`
+    });
+  }
+  function property(value, name) {
+    return typeof value === "object" && value !== null && !Array.isArray(value) ? value[name] : void 0;
+  }
+  function text(value) {
+    return typeof value === "string" && value.length > 0 ? value : void 0;
+  }
+
   // ../../domain/src/runtime/failure/classify.ts
   function classifyWebAutomationFailure(error, outcome) {
     if (outcome.failure !== void 0) return outcome.failure;
+    const carried = carriedWebAutomationFailure(error, withActual(comparedText(outcome.validation), errorMessage(error)));
+    if (carried !== void 0) return carried;
     const classified = classifyOutcome(error, outcome);
     return classified === void 0 ? void 0 : webAutomationFailureRecord(classified.code, classified.comparison);
   }
   function classifyOutcome(error, outcome) {
     const compared = comparedText(outcome.validation);
-    const reportedCode = runtimeErrorCode(error);
-    if (reportedCode !== void 0) {
-      if (isWebAutomationFailureCode(reportedCode)) return { code: reportedCode, comparison: withActual(compared, errorMessage(error)) };
-      return { code: WEB_AUTOMATION_FAILURE_CODES.UNKNOWN, comparison: { ...compared, actual: `unrecognized web automation failure code: ${reportedCode}` } };
-    }
     if (outcome.status === "timed_out") return { code: WEB_AUTOMATION_FAILURE_CODES.TIMEOUT, comparison: withActual(compared, errorMessage(error)) };
     if (outcome.validation?.status === "failed") {
       const code = outcome.actionType === "web.dom.assert" ? WEB_AUTOMATION_FAILURE_CODES.STATE_MISMATCH : WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED;
@@ -972,13 +983,6 @@
   }
   function withActual(compared, actual) {
     return compared.actual !== void 0 ? compared : { ...compared, actual };
-  }
-  function runtimeErrorCode(error) {
-    if (error instanceof WebAutomationRuntimeError) return error.code;
-    if (typeof error !== "object" || error === null) return void 0;
-    const candidate = error;
-    if (candidate.name !== "WebAutomationRuntimeError") return void 0;
-    return typeof candidate.code === "string" ? candidate.code : void 0;
   }
   function errorMessage(error) {
     if (error instanceof Error) return error.message.length > 0 ? error.message : void 0;
@@ -1007,12 +1011,7 @@
   var SETTLED_COLLECTION = { ...COLLECTION, volatility: "slow" };
 
   // ../../domain/src/client/gateway-mapping.ts
-  var UNSUPPORTED_ACTION_TYPE_FAILURE = Object.freeze({
-    category: "blocked_by_capability_or_policy",
-    code: "web.action.unsupported_type",
-    retryable: false,
-    stage: "dispatch"
-  });
+  var UNSUPPORTED_ACTION_TYPE_FAILURE = Object.freeze(webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE));
   var CANONICAL_ACTION_TYPES = new Set(WEB_AUTOMATION_ACTION_TYPES);
   var LEGACY_ACTION_TYPE_ALIASES = new Map(
     Object.entries(WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER).map(([canonical, legacy]) => [legacy, canonical])
@@ -1194,8 +1193,8 @@
 
   // src/content/identity/bounded-text.ts
   function boundedText2(value, maxLength) {
-    const text2 = (value ?? "").replace(/\s+/gu, " ").trim();
-    return text2 ? text2.slice(0, maxLength) : void 0;
+    const text3 = (value ?? "").replace(/\s+/gu, " ").trim();
+    return text3 ? text3.slice(0, maxLength) : void 0;
   }
 
   // src/content/identity/label.ts
@@ -1231,8 +1230,8 @@
   function collectLabelText(node, control, parts, depth) {
     if (parts.length > 40 || depth > 8) return;
     if (node.nodeType === Node.TEXT_NODE) {
-      const text2 = node.textContent;
-      if (text2?.trim()) parts.push(text2);
+      const text3 = node.textContent;
+      if (text3?.trim()) parts.push(text3);
       return;
     }
     if (!(node instanceof Element)) return;
@@ -1251,8 +1250,8 @@
     let scanned = 0;
     while (sibling && scanned < MAX_NEARBY_SIBLINGS) {
       scanned += 1;
-      const text2 = nearbyLabelText(sibling);
-      if (text2) return text2;
+      const text3 = nearbyLabelText(sibling);
+      if (text3) return text3;
       sibling = sibling.previousElementSibling;
     }
     return void 0;
@@ -1328,8 +1327,8 @@
     if (!ids.length) return void 0;
     const parts = ids.flatMap((id) => {
       const target = document.getElementById(id);
-      const text2 = target === element ? void 0 : boundedText2(target?.textContent, MAX_NAME_LENGTH);
-      return text2 ? [text2] : [];
+      const text3 = target === element ? void 0 : boundedText2(target?.textContent, MAX_NAME_LENGTH);
+      return text3 ? [text3] : [];
     });
     return boundedText2(parts.join(" "), MAX_NAME_LENGTH);
   }
@@ -1432,10 +1431,83 @@
     return element.hasAttribute("aria-label") || element.hasAttribute("aria-labelledby") || element.hasAttribute("title");
   }
 
+  // src/content/identity/reportable-text.ts
+  var LABELLED_TAGS = /* @__PURE__ */ new Set(["button", "a", "summary", "label", "option", "legend", "caption"]);
+  var LABELLED_ROLES = /* @__PURE__ */ new Set([
+    "button",
+    "link",
+    "menuitem",
+    "menuitemcheckbox",
+    "menuitemradio",
+    "tab",
+    "option",
+    "checkbox",
+    "radio",
+    "switch",
+    "treeitem"
+  ]);
+  var PHRASING_TAGS = /* @__PURE__ */ new Set([
+    "span",
+    "b",
+    "i",
+    "em",
+    "strong",
+    "small",
+    "u",
+    "s",
+    "code",
+    "kbd",
+    "samp",
+    "sub",
+    "sup",
+    "mark",
+    "abbr",
+    "time",
+    "bdi",
+    "bdo",
+    "br",
+    "wbr",
+    "q",
+    "cite",
+    "var",
+    "data",
+    "ruby",
+    "rt",
+    "rp",
+    "img",
+    "picture",
+    "source",
+    "svg"
+  ]);
+  var MAX_DESCENDANTS = 120;
+  function reportableText(element, maxLength) {
+    if (!isNamedFromContent(element)) return void 0;
+    if (!holdsOnlyPhrasing(element)) return void 0;
+    if (isSensitiveFormControl(element)) return void 0;
+    return boundedText2(element.textContent, maxLength);
+  }
+  function isNamedFromContent(element) {
+    const role = element.getAttribute("role")?.trim().toLowerCase();
+    if (role) return LABELLED_ROLES.has(role);
+    return LABELLED_TAGS.has(element.tagName.toLowerCase());
+  }
+  function holdsOnlyPhrasing(element) {
+    let scanned = 0;
+    for (const descendant of element.querySelectorAll("*")) {
+      scanned += 1;
+      if (scanned > MAX_DESCENDANTS) return false;
+      if (descendant.closest("svg")) continue;
+      if (!PHRASING_TAGS.has(descendant.tagName.toLowerCase())) return false;
+      if (isSensitiveFormControl(descendant)) return false;
+    }
+    return true;
+  }
+
   // src/content/identity/candidates.ts
   var MAX_SCANNED = 600;
   var MAX_CANDIDATES = 60;
   var MAX_SIGNAL_LENGTH = 200;
+  var MAX_LABEL_LENGTH2 = 40;
   var CANDIDATE_SELECTOR = [
     "a[href]",
     "button",
@@ -1493,8 +1565,8 @@
     const tagName = element.tagName.toLowerCase();
     const testId = candidateTestId(element);
     const identifier = testId ? `[data-testid="${testId}"]` : element.id ? `#${element.id}` : "";
-    const text2 = boundedText2(element.textContent, 40);
-    return `${tagName}${identifier}${text2 ? ` "${text2}"` : ""}`;
+    const text3 = reportableText(element, MAX_LABEL_LENGTH2);
+    return `${tagName}${identifier}${text3 ? ` "${text3}"` : ""}`;
   }
   function candidateTestId(element) {
     return element.getAttribute("data-testid") ?? element.getAttribute("data-test") ?? element.getAttribute("data-cy") ?? void 0;
@@ -1802,13 +1874,15 @@
     const similarity = textSimilarity(expected, actual);
     contribute(signalPath, similarity >= 0.35 ? similarity : -0.55, similarity >= 0.92 ? "text matched exactly" : "text compared by normalized overlap", { expected: normalizeText2(expected), actual: normalizeText2(actual) });
   }
+  var MISSING_STABLE_IDENTIFIER_SIMILARITY = -0.1;
+  var CONTRADICTED_STABLE_IDENTIFIER_SIMILARITY = -0.8;
   function compareExactSignal(signalPath, expected, actual, contribute) {
     if (!hasText(expected)) return;
     if (!hasText(actual)) {
-      contribute(signalPath, -0.55, "candidate is missing stable identifier");
+      contribute(signalPath, MISSING_STABLE_IDENTIFIER_SIMILARITY, "candidate is missing stable identifier");
       return;
     }
-    contribute(signalPath, normalizeCase(expected) === normalizeCase(actual) ? 1 : -0.8, "stable identifier comparison", { expected, actual });
+    contribute(signalPath, normalizeCase(expected) === normalizeCase(actual) ? 1 : CONTRADICTED_STABLE_IDENTIFIER_SIMILARITY, "stable identifier comparison", { expected, actual });
   }
   function compareLooseSignal(signalPath, expected, actual, contribute) {
     if (!hasText(expected)) return;
@@ -1962,6 +2036,11 @@
     }
     return { outcome: "resolved", chosen, runnerUp, ranked };
   }
+  function scoreTargetCandidate(target, candidate) {
+    const fingerprint = comparableFingerprint(target);
+    if (!hasIdentitySignal(fingerprint)) return void 0;
+    return matcher.scoreCandidate(fingerprint, candidate.fingerprint);
+  }
   function comparableFingerprint(target) {
     const testId = target.testId ?? target.attributes?.["data-testid"];
     const role = target.role?.trim() || target.implicitRole?.trim();
@@ -1985,6 +2064,21 @@
     });
   }
 
+  // src/content/identity/veto.ts
+  var TARGET_VETO_FLOOR = 0;
+  function vetoExactMatch(target, element) {
+    if (!recordedLabel(target)) return void 0;
+    const score = scoreTargetCandidate(target, { element, fingerprint: candidateFingerprint(element, 0) });
+    if (!score || score.normalizedScore >= TARGET_VETO_FLOOR) return void 0;
+    return {
+      score: score.normalizedScore,
+      summary: `refused ${candidateLabel(element)} scoring ${score.normalizedScore.toFixed(2)}`
+    };
+  }
+  function recordedLabel(target) {
+    return Boolean(target.visibleText?.trim() || target.accessibleName?.trim() || target.label?.trim());
+  }
+
   // src/content/describe-element.ts
   function describeElement(element) {
     const bounds = visualViewportBounds(element);
@@ -1997,10 +2091,10 @@
     if (bounds) descriptor.bounds = bounds;
     if (docBounds) descriptor.documentBounds = docBounds;
     if (hasClickHandler(element)) descriptor.hasClickHandler = true;
-    const text2 = isInteractableUiElement(element) || isSemanticTextElement2(element) ? visibleText(element) : directVisibleText(element);
-    if (text2) {
-      descriptor.text = text2;
-      descriptor.visibleText = text2;
+    const text3 = isInteractableUiElement(element) || isSemanticTextElement2(element) ? visibleText(element) : directVisibleText(element);
+    if (text3) {
+      descriptor.text = text3;
+      descriptor.visibleText = text3;
     }
     if (element.id) descriptor.id = element.id;
     const classNames = [...element.classList];
@@ -2063,12 +2157,12 @@
     return parts.join(" > ");
   }
   function visibleText(element) {
-    const text2 = element.textContent?.replace(/\s+/g, " ").trim();
-    return text2 ? text2.slice(0, 500) : void 0;
+    const text3 = element.textContent?.replace(/\s+/g, " ").trim();
+    return text3 ? text3.slice(0, 500) : void 0;
   }
   function directVisibleText(element) {
-    const text2 = [...element.childNodes].filter((node) => node.nodeType === Node.TEXT_NODE).map((node) => node.textContent ?? "").join(" ").replace(/\s+/g, " ").trim();
-    return text2 ? text2.slice(0, 500) : void 0;
+    const text3 = [...element.childNodes].filter((node) => node.nodeType === Node.TEXT_NODE).map((node) => node.textContent ?? "").join(" ").replace(/\s+/g, " ").trim();
+    return text3 ? text3.slice(0, 500) : void 0;
   }
   function readElementValue(element) {
     if (!element) return void 0;
@@ -2093,6 +2187,17 @@
     return CSS.escape(value).replace(/"/g, '\\"');
   }
 
+  // src/shared/present.ts
+  function present(fields) {
+    const source = fields;
+    const written = {};
+    for (const key of Object.keys(source)) {
+      const value = source[key];
+      if (value !== void 0) written[key] = value;
+    }
+    return written;
+  }
+
   // src/content/evidence/dialogs.ts
   var DIALOG_SELECTOR = "dialog[open],[role='dialog'],[role='alertdialog'],[aria-modal='true']";
   var MAX_DIALOGS = 5;
@@ -2101,12 +2206,12 @@
     const armPending = document.documentElement?.hasAttribute(DIALOG_ARM_ATTRIBUTE) === true;
     const lastNative = lastNativeDialog();
     if (!open.length && !armPending && !lastNative) return void 0;
-    return {
+    return present({
       open,
       modal: open.some((dialog) => dialog.modal),
-      ...armPending ? { armPending: true } : {},
-      ...lastNative ? { lastNative } : {}
-    };
+      armPending: armPending ? true : void 0,
+      lastNative
+    });
   }
   function openDialogs() {
     const found = [];
@@ -2120,7 +2225,7 @@
     const role = element.getAttribute("role")?.trim().toLowerCase();
     const label = accessibleNameFor(element);
     const bounds = visualViewportBounds(element);
-    return {
+    return present({
       selector: selectorFor(element),
       role: role || "dialog",
       // A native <dialog> opened with showModal() reports `::backdrop`; the
@@ -2128,9 +2233,9 @@
       // the author's own declaration plus the inert page behind it.
       modal: element.getAttribute("aria-modal") === "true" || native && isNativeModal(element),
       native,
-      ...label ? { label } : {},
-      ...bounds ? { bounds } : {}
-    };
+      label: label || void 0,
+      bounds
+    });
   }
   function isNativeModal(element) {
     try {
@@ -2173,16 +2278,16 @@
     const action = boundedText2(form.getAttribute("action"), MAX_TEXT);
     const method = boundedText2(form.getAttribute("method"), MAX_TEXT)?.toLowerCase();
     const submit = owned.find((control) => control.matches(SUBMIT_SELECTOR));
-    return {
+    return present({
       selector: selectorFor(form),
-      ...name ? { name } : {},
-      ...label ? { label } : {},
-      ...action ? { action } : {},
-      ...method ? { method } : {},
+      name: name || void 0,
+      label: label || void 0,
+      action: action || void 0,
+      method: method || void 0,
       controlCount: owned.length,
       controls: owned.slice(0, MAX_CONTROLS_PER_FORM).map(describeControl),
-      ...submit ? { submit: selectorFor(submit) } : {}
-    };
+      submit: submit ? selectorFor(submit) : void 0
+    });
   }
   function isReportableControl(element) {
     return !(element instanceof HTMLInputElement && element.type.toLowerCase() === "hidden");
@@ -2192,17 +2297,17 @@
     const name = boundedText2(element.getAttribute("name"), MAX_TEXT);
     const valuePresent = hasEnteredValue(element);
     const autocomplete = autocompleteTokens(element);
-    return {
+    return present({
       selector: selectorFor(element),
       controlType: controlType(element),
-      ...name ? { name } : {},
-      ...label ? { label } : {},
-      ...isRequired(element) ? { required: true } : {},
-      ...isDisabled(element) ? { disabled: true } : {},
-      ...valuePresent === void 0 ? {} : { hasValue: valuePresent },
-      ...autocomplete ? { autocomplete } : {},
-      ...isSensitiveFormControl(element) ? { sensitive: true } : {}
-    };
+      name: name || void 0,
+      label: label || void 0,
+      required: isRequired(element) ? true : void 0,
+      disabled: isDisabled(element) ? true : void 0,
+      hasValue: valuePresent,
+      autocomplete: autocomplete || void 0,
+      sensitive: isSensitiveFormControl(element) ? true : void 0
+    });
   }
   function autocompleteTokens(element) {
     const tokens = (element.getAttribute("autocomplete") ?? "").split(/\s+/u).filter(Boolean).slice(0, MAX_AUTOCOMPLETE_TOKENS).map((token) => token.slice(0, MAX_AUTOCOMPLETE_TOKEN_LENGTH));
@@ -2296,7 +2401,7 @@
   // src/content/evidence/loading.ts
   var MAX_INDICATORS = 8;
   var MAX_BUSY_REGIONS = 8;
-  var MAX_LABEL_LENGTH2 = 120;
+  var MAX_LABEL_LENGTH3 = 120;
   var BUSY_SELECTOR = "[aria-busy='true']";
   var PROGRESS_SELECTOR = "progress,[role='progressbar']";
   var SPINNER_SELECTOR = "[class*='spinner'],[class*='loader'],[class*='loading'],[class*='skeleton'],[id*='spinner'],[id*='loading'],[data-testid*='spinner'],[data-testid*='loading']";
@@ -2307,13 +2412,13 @@
     const busyRegions = selectors(BUSY_SELECTOR, MAX_BUSY_REGIONS);
     const indicators = loadingIndicators();
     const pendingNavigation = documentState !== "complete";
-    return {
+    return present({
       documentState,
       busy: pendingNavigation || busyRegions.length > 0 || indicators.length > 0,
       busyRegions,
       indicators,
       pendingNavigation
-    };
+    });
   }
   function loadingIndicators() {
     const found = /* @__PURE__ */ new Map();
@@ -2331,8 +2436,8 @@
     return [...found.values()].slice(0, MAX_INDICATORS);
   }
   function indicator(element, kind) {
-    const label = accessibleNameFor(element) ?? boundedText2(element.textContent, MAX_LABEL_LENGTH2);
-    return { selector: selectorFor(element), kind, ...label ? { label } : {} };
+    const label = accessibleNameFor(element) ?? boundedText2(element.textContent, MAX_LABEL_LENGTH3);
+    return present({ selector: selectorFor(element), kind, label: label || void 0 });
   }
   function selectors(selector, max) {
     const found = [];
@@ -2357,16 +2462,16 @@
     const entry = navigationTiming();
     const url = new URL(location.href);
     const referrer = boundedText2(document.referrer, MAX_URL_LENGTH);
-    return {
+    return present({
       url: location.href.slice(0, MAX_URL_LENGTH),
       origin: url.origin,
       path: url.pathname,
-      ...referrer ? { referrer } : {},
-      ...entry?.type ? { type: entry.type } : {},
-      ...entry && entry.redirectCount > 0 ? { redirects: entry.redirectCount } : {},
+      referrer: referrer || void 0,
+      type: entry?.type || void 0,
+      redirects: entry && entry.redirectCount > 0 ? entry.redirectCount : void 0,
       historyLength: history.length,
       visibility: document.visibilityState
-    };
+    });
   }
   function navigationTiming() {
     try {
@@ -2400,7 +2505,7 @@
       else blockers.set(blocker, [candidate]);
     }
     if (!blockedCount) return void 0;
-    return { tested, blockedCount, blockers: rankBlockers(blockers) };
+    return present({ tested, blockedCount, blockers: rankBlockers(blockers) });
   }
   function hitPointFor(element) {
     const rect2 = element.getBoundingClientRect();
@@ -2435,14 +2540,14 @@
     const role = element.getAttribute("role")?.trim().toLowerCase();
     const label = accessibleNameFor(element);
     const bounds = visualViewportBounds(element);
-    return {
+    return present({
       selector: selectorFor(element),
-      ...role ? { role } : {},
-      ...label ? { label } : {},
-      ...bounds ? { bounds } : {},
+      role: role || void 0,
+      label: label || void 0,
+      bounds,
       blocks: covered.length,
       blocked: covered.slice(0, MAX_BLOCKED_PER_BLOCKER).map((target) => selectorFor(target))
-    };
+    });
   }
 
   // src/content/evidence/regions.ts
@@ -2455,12 +2560,12 @@
       if (!role) continue;
       const label = accessibleNameFor(element);
       const bounds = visualDocumentBounds(element);
-      regions.push({
+      regions.push(present({
         role,
         selector: selectorFor(element),
-        ...label ? { label } : {},
-        ...bounds ? { bounds } : {}
-      });
+        label: label || void 0,
+        bounds
+      }));
       if (regions.length >= MAX_REGIONS) break;
     }
     return regions.length ? regions : void 0;
@@ -2513,19 +2618,22 @@
   function describeRun(run) {
     const first = run.items[0];
     const testId = first ? testIdFor(first) : void 0;
-    const text2 = first ? boundedText2(first.textContent, MAX_REPRESENTATIVE_TEXT) : void 0;
+    const text3 = first ? boundedText2(first.textContent, MAX_REPRESENTATIVE_TEXT) : void 0;
     const fields = first ? itemFields(first) : [];
-    return {
+    return present({
       containerSelector: selectorFor(run.container),
       signature: run.signature,
       itemCount: run.items.length,
-      representative: {
+      // The representative is an inline shape on the contract rather than a named
+      // type, so it is named by indexed access rather than restated here: a fifth
+      // spelling of an evidence shape is the thing this whole seam exists to stop.
+      representative: present({
         selector: first ? selectorFor(first) : run.signature,
-        ...testId ? { testId } : {},
-        ...text2 ? { text: text2 } : {}
-      },
-      ...fields.length ? { fields } : {}
-    };
+        testId: testId || void 0,
+        text: text3 || void 0
+      }),
+      fields: fields.length ? fields : void 0
+    });
   }
   function itemFields(item) {
     const fields = /* @__PURE__ */ new Set();
@@ -2545,7 +2653,7 @@
     const regions = regionEvidence();
     const repeating = repeatingEvidence();
     const forms = formEvidence();
-    return {
+    return present({
       elements: {
         scanned: counts.scanned,
         candidates: counts.candidates,
@@ -2557,12 +2665,12 @@
       },
       loading: loadingEvidence(),
       navigation: navigationEvidence(),
-      ...dialogs ? { dialogs } : {},
-      ...overlays ? { overlays } : {},
-      ...regions ? { regions } : {},
-      ...repeating ? { repeating } : {},
-      ...forms ? { forms } : {}
-    };
+      dialogs,
+      overlays,
+      regions,
+      repeating,
+      forms
+    });
   }
 
   // src/content/dom-snapshot.ts
@@ -2601,9 +2709,9 @@
   var SENSITIVE_CANDIDATE_SELECTOR = "input, textarea, select, [autocomplete], [data-sensitive]";
   function capturedSelectionText() {
     const selection = window.getSelection();
-    const text2 = selection?.toString();
-    if (!selection || !text2) return void 0;
-    return selectionTouchesSensitiveControl(selection) ? void 0 : text2.slice(0, MAX_SELECTED_TEXT);
+    const text3 = selection?.toString();
+    if (!selection || !text3) return void 0;
+    return selectionTouchesSensitiveControl(selection) ? void 0 : text3.slice(0, MAX_SELECTED_TEXT);
   }
   function selectionTouchesSensitiveControl(selection) {
     if (withinSensitiveControl(document.activeElement)) return true;
@@ -2875,16 +2983,16 @@
   // src/content/actions/wait-for-text.ts
   async function waitForTextAction(action, deps, startedAt) {
     const condition = action.wait?.condition ?? "present";
-    const text2 = action.text ?? action.value ?? "";
+    const text3 = action.text ?? action.value ?? "";
     const url = action.wait?.url ?? action.url;
     const outcome = await deps.waitForCondition({
       condition,
-      text: text2,
+      text: text3,
       url,
       timeoutMs: action.timeoutMs,
       stableForMs: action.wait?.stableForMs
     });
-    const phrases = phrasesFor2(condition, text2, url);
+    const phrases = phrasesFor2(condition, text3, url);
     if (!outcome.ok) {
       return deps.timedOut(action, startedAt, phrases.timedOut, { status: "failed", expected: phrases.expected, actual: outcome.actual }, {
         snapshot: deps.captureSnapshot()
@@ -2894,12 +3002,12 @@
       snapshot: deps.captureSnapshot()
     });
   }
-  function phrasesFor2(condition, text2, url) {
+  function phrasesFor2(condition, text3, url) {
     if (condition === "visible") {
-      return { expected: `visible page text containing ${text2}`, satisfied: "The text is visible.", timedOut: `Timed out waiting for visible text: ${text2}` };
+      return { expected: `visible page text containing ${text3}`, satisfied: "The text is visible.", timedOut: `Timed out waiting for visible text: ${text3}` };
     }
     if (condition === "absent") {
-      return { expected: `no page text containing ${text2}`, satisfied: "The text is gone.", timedOut: `Timed out waiting for the text to go: ${text2}` };
+      return { expected: `no page text containing ${text3}`, satisfied: "The text is gone.", timedOut: `Timed out waiting for the text to go: ${text3}` };
     }
     if (condition === "url") {
       const address = url ?? "(no url)";
@@ -2908,7 +3016,7 @@
     if (condition === "stable") {
       return { expected: "the page to stop changing", satisfied: "The page is stable.", timedOut: "Timed out waiting for the page to stop changing." };
     }
-    return { expected: `page text containing ${text2}`, satisfied: "Text found.", timedOut: `Timed out waiting for text: ${text2}` };
+    return { expected: `page text containing ${text3}`, satisfied: "Text found.", timedOut: `Timed out waiting for text: ${text3}` };
   }
 
   // src/content/actions/extract.ts
@@ -3009,7 +3117,7 @@
   // src/content/actions/type.ts
   function typeAction(action, deps, startedAt) {
     const element = deps.resolveTarget(action);
-    const text2 = action.text ?? action.value ?? "";
+    const text3 = action.text ?? action.value ?? "";
     const withheld = isSensitiveFormControl(element);
     const evidence = () => ({ element: deps.describeElement(element), snapshot: deps.captureSnapshot() });
     const report = deps.checkActionability(element);
@@ -3019,17 +3127,19 @@
     if (!holdsText(element)) {
       return deps.success(action, startedAt, "The target holds no typed text.", {
         status: "failed",
-        expected: `a text field or editable element holding ${describeFieldValue(text2, withheld)}`,
-        actual: `the target is a <${element.tagName.toLowerCase()}>, which holds no typed text`
+        expected: `a text field or editable element holding ${describeFieldValue(text3, withheld)}`,
+        actual: `the target is a <${element.tagName.toLowerCase()}>, which holds no typed text`,
+        redacted: withheld
       }, evidence());
     }
-    deps.keyboard.typeText(element, text2);
+    deps.keyboard.typeText(element, text3);
     const actual = enteredText(element);
-    const held = actual === text2;
+    const held = actual === text3;
     return deps.success(action, startedAt, held ? "Text entered." : "The field did not keep the text.", {
       status: held ? "passed" : "failed",
-      expected: `the field holds ${describeFieldValue(text2, withheld)}`,
-      actual: heldText(actual, text2, withheld)
+      expected: `the field holds ${describeFieldValue(text3, withheld)}`,
+      actual: heldText(actual, text3, withheld),
+      redacted: withheld
     }, evidence());
   }
   function heldText(actual, sent, withheld) {
@@ -3060,7 +3170,8 @@
       return deps.success(action, startedAt, "The target has no value to clear.", {
         status: "failed",
         expected: "a field whose value can be emptied",
-        actual: `the target is a <${element.tagName.toLowerCase()}>, which has no value`
+        actual: `the target is a <${element.tagName.toLowerCase()}>, which has no value`,
+        redacted: withheld
       }, evidence());
     }
     element.focus();
@@ -3071,7 +3182,8 @@
     return deps.success(action, startedAt, empty ? "Field cleared." : "The field did not stay empty.", {
       status: empty ? "passed" : "failed",
       expected: "the field is empty",
-      actual: empty ? "the field is empty" : `the field holds ${describeFieldValue(actual, withheld)}`
+      actual: empty ? "the field is empty" : `the field holds ${describeFieldValue(actual, withheld)}`,
+      redacted: withheld
     }, evidence());
   }
 
@@ -3090,14 +3202,16 @@
       return deps.success(action, startedAt, "No option was named.", {
         status: "failed",
         expected: "an option named by value, label, or index",
-        actual: "the command named none"
+        actual: "the command named none",
+        redacted: withheld
       }, evidence());
     }
     if (!(element instanceof HTMLSelectElement)) {
       return deps.success(action, startedAt, "The target is not a select element.", {
         status: "failed",
         expected: `a select element to choose ${describeRequest(request, withheld)} in`,
-        actual: `the target is a <${element.tagName.toLowerCase()}>`
+        actual: `the target is a <${element.tagName.toLowerCase()}>`,
+        redacted: withheld
       }, evidence());
     }
     const option = findOption(element, request);
@@ -3105,7 +3219,8 @@
       return deps.success(action, startedAt, `No option matched ${describeRequest(request, withheld)}.`, {
         status: "failed",
         expected: `an option matching ${describeRequest(request, withheld)} is selected`,
-        actual: `no option matched; the select still holds ${describeFieldValue(element.value, withheld)} and offers ${listOptions(element, withheld)}`
+        actual: `no option matched; the select still holds ${describeFieldValue(element.value, withheld)} and offers ${listOptions(element, withheld)}`,
+        redacted: withheld
       }, evidence());
     }
     if (option.matches(":disabled")) {
@@ -3126,7 +3241,8 @@
     return deps.success(action, startedAt, held ? "Option selected." : "The select did not keep the chosen option.", {
       status: held ? "passed" : "failed",
       expected: `selected value ${describeFieldValue(option.value, withheld)} (${describeRequest(request, withheld)})`,
-      actual: selectedValueText(selected, option.value, withheld)
+      actual: selectedValueText(selected, option.value, withheld),
+      redacted: withheld
     }, evidence());
   }
   function selectedValueText(selected, chosen, withheld) {
@@ -3460,6 +3576,17 @@
   }
 
   // src/content/actions/execute.ts
+  var UnsupportedActionTypeError = class extends Error {
+    failure;
+    constructor(actionType) {
+      super(`Unsupported action type: ${actionType}`);
+      this.name = "UnsupportedActionTypeError";
+      this.failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE, {
+        expected: "an action type this content script implements",
+        actual: `${actionType} has no verb in this build`
+      });
+    }
+  };
   async function executeContentAction(action, deps) {
     const startedAt = Date.now();
     try {
@@ -3508,7 +3635,7 @@
       if (action.actionType === "web.dom.dialog") {
         return await dialogAction(action, deps, startedAt);
       }
-      throw new Error(`Unsupported action type: ${action.actionType}`);
+      throw new UnsupportedActionTypeError(action.actionType);
     } catch (error) {
       return deps.failure(action, error, startedAt);
     }
@@ -3540,7 +3667,12 @@
       }
       const pool = gatedPool(attempt.matches, target);
       const only = pool.length === 1 ? pool[0] : void 0;
-      if (only) return { element: only, resolution: { strategy: attempt.strategy, candidateCount: attempt.matches.length } };
+      if (only) {
+        const veto = target ? vetoExactMatch(target, only) : void 0;
+        if (!veto) return { element: only, resolution: { strategy: attempt.strategy, candidateCount: attempt.matches.length } };
+        misses.push(`${attempt.description} (${veto.summary})`);
+        continue;
+      }
       const decided2 = target ? scoreTargetCandidates(target, describePool(pool)) : void 0;
       if (decided2?.outcome === "resolved") return scoredTarget(decided2, pool.length);
       throw ambiguous(attempt, pool, decided2);
@@ -3554,7 +3686,7 @@
     const decided = target ? scoreTargetCandidates(target, nearby) : void 0;
     if (decided?.outcome === "resolved") return scoredTarget(decided, nearby.length);
     if (decided?.outcome === "ambiguous") throw scoredAmbiguous(decided, misses);
-    throw notFound(`No target resolved from ${misses.join(", ")}.`, misses, nearby.length);
+    throw notFound(`No target resolved from ${misses.join(", ")}.`, misses, nearby.length, decided);
   }
   function scoredTarget(decided, candidateCount) {
     return {
@@ -3662,12 +3794,19 @@
       ...decided.ranked[1] ? { runnerUpScore: decided.ranked[1].score.normalizedScore } : {}
     });
   }
-  function notFound(message, misses, nearbyCount) {
+  function notFound(message, misses, nearbyCount, decided) {
+    const best = decided?.ranked[0];
+    const runnerUp = decided?.ranked[1];
     const failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, {
       expected: misses.length ? `an element matching ${misses.join(", ")}` : "a selector, coordinates, or a focused element",
-      actual: `nothing matched; ${nearbyCount} control(s) of the same family are on the page`
+      actual: `nothing matched; ${nearbyCount} control(s) of the same family are on the page${best ? `; best scored ${best.score.normalizedScore.toFixed(2)}` : ""}`
     });
-    return new TargetResolutionError(message, failure, { strategy: strategyOf(misses), candidateCount: nearbyCount });
+    return new TargetResolutionError(message, failure, {
+      strategy: strategyOf(misses),
+      candidateCount: nearbyCount,
+      ...best ? { bestScore: best.score.normalizedScore, confidence: best.score.confidence } : {},
+      ...runnerUp ? { runnerUpScore: runnerUp.score.normalizedScore } : {}
+    });
   }
   function scoreByElement(decided) {
     return new Map((decided?.ranked ?? []).map((entry) => [entry.element, entry.score.normalizedScore]));
@@ -3685,9 +3824,11 @@
     return "fingerprint";
   }
   function recordedTarget(action) {
-    const element = action.options?.element;
-    if (!element || typeof element !== "object" || Array.isArray(element)) return void 0;
-    return element;
+    return describedElement(action.element) ?? describedElement(action.options?.element);
+  }
+  function describedElement(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return void 0;
+    return Object.keys(value).length ? value : void 0;
   }
   function querySelectorAll(selector) {
     try {
@@ -3965,9 +4106,9 @@
       return;
     }
     range.deleteContents();
-    const text2 = document.createTextNode(data);
-    range.insertNode(text2);
-    range.setStartAfter(text2);
+    const text3 = document.createTextNode(data);
+    range.insertNode(text3);
+    range.setStartAfter(text3);
     range.collapse(true);
     selection.removeAllRanges();
     selection.addRange(range);
@@ -4035,8 +4176,8 @@
     const testId = button.dataset.testid;
     if (testId) return `[data-testid="${testId}"]`;
     if (button.id) return `#${button.id}`;
-    const text2 = button.textContent?.replace(/\s+/gu, " ").trim();
-    return text2 ? `the "${text2}" button` : "the form's default button";
+    const text3 = button.textContent?.replace(/\s+/gu, " ").trim();
+    return text3 ? `the "${text3}" button` : "the form's default button";
   }
 
   // src/content/action-runtime/keyboard/tab-order.ts
@@ -4207,11 +4348,11 @@
   }
 
   // src/content/action-runtime/keyboard/type-text.ts
-  function typeText(element, text2) {
+  function typeText(element, text3) {
     if (!isTextField(element) && !isEditableHost(element)) return;
     if (element instanceof HTMLElement) element.focus();
     deleteAllContent(element);
-    for (const character of text2) {
+    for (const character of text3) {
       if (dispatchKeyEvent(element, "keydown", character)) insertText(element, character);
       dispatchKeyEvent(element, "keyup", character);
     }
@@ -4318,13 +4459,13 @@
     return { records, pagesRead, truncated, missingFields: [...missing].sort() };
   }
   function readRecord(item, fields, missing) {
-    const record2 = {};
+    const record = {};
     for (const [name, field] of fields) {
       const value = readField(item, field);
       if (value === void 0) missing.add(name);
-      else record2[name] = value;
+      else record[name] = value;
     }
-    return record2;
+    return record;
   }
   function readField(item, field) {
     if (field.kind === "column") return readColumn(item, field.header);
@@ -4362,8 +4503,8 @@
       setTimeout(resolve, ms);
     });
   }
-  function normalizeText4(text2) {
-    return text2.replace(/\s+/gu, " ").trim();
+  function normalizeText4(text3) {
+    return text3.replace(/\s+/gu, " ").trim();
   }
 
   // src/content/action-runtime/file-input.ts
@@ -4500,11 +4641,11 @@
     const scope = target.selector || target.element ? found : document.body;
     const label = target.selector || target.element ? where : "the page";
     if (!scope) return { held: false, expected: `${label} contains "${wanted}"`, actual: `nothing matched ${where}`, verdict: "pending" };
-    const text2 = readText(scope);
+    const text3 = readText(scope);
     return {
-      held: text2.includes(wanted),
+      held: text3.includes(wanted),
       expected: `${label} contains "${wanted}"`,
-      actual: text2 ? `${label} reads "${text2}"` : `${label} has no text`,
+      actual: text3 ? `${label} reads "${text3}"` : `${label} has no text`,
       verdict: "judged"
     };
   }
@@ -4695,7 +4836,8 @@
     return {
       status: validation.status,
       expected: truncateValidationText(validation.expected),
-      actual: truncateValidationText(validation.actual)
+      actual: truncateValidationText(validation.actual),
+      ...validation.redacted === void 0 ? {} : { redacted: validation.redacted }
     };
   }
   function statusForValidation(validation) {
@@ -4716,16 +4858,16 @@
     }, resolution ? { resolution } : {});
   }
   function reportedFailure(error) {
-    const failure = property(error, "failure");
-    const code = property(failure, "code");
+    const failure = property2(error, "failure");
+    const code = property2(failure, "code");
     return isWebAutomationFailureCode(code) ? failure : void 0;
   }
   function reportedResolution(error) {
-    const resolution = property(error, "resolution");
-    if (typeof property(resolution, "strategy") !== "string") return void 0;
-    return typeof property(resolution, "candidateCount") === "number" ? resolution : void 0;
+    const resolution = property2(error, "resolution");
+    if (typeof property2(resolution, "strategy") !== "string") return void 0;
+    return typeof property2(resolution, "candidateCount") === "number" ? resolution : void 0;
   }
-  function property(value, name) {
+  function property2(value, name) {
     return typeof value === "object" && value !== null && !Array.isArray(value) ? value[name] : void 0;
   }
   function success(action, startedAt, message, validation, evidence = {}) {

@@ -11,9 +11,12 @@ import {
   type WebAutomationActionCommand,
   type WebAutomationActionResult,
   type WebAutomationActionType,
+  type WebAutomationActionValidation,
   type WebAutomationElementFingerprint
 } from "../actions/types";
 import { elementFingerprint } from "../output-nodes";
+import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "../runtime/failure";
+import { WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, isProducerRedactedComparison, isSensitiveElementDescriptor } from "../sensitivity";
 import { webAutomationLiftedActionParameters } from "./gateway-action-parameters";
 
 export type WebAutomationRecordedPayload = {
@@ -201,17 +204,22 @@ function elementFingerprintSources(target: JsonObject, parameters: JsonObject): 
  * it was carried here the domain could name a failure and never show why, so a
  * Flow saw "the action did not take effect" with nothing behind it.
  *
- * The values are passed through exactly as the producer wrote them. Redaction
- * of a sensitive control's expected and actual text belongs at that producer,
- * in `content/actions/`, and a second rule here would be a second rule to keep
- * in step. Nothing in this function logs a validation value.
+ * The values are *not* passed through unconditionally. The producer in
+ * `content/actions/` redacts them for a sensitive control and that redaction is
+ * the one that keeps the phrasing useful, but a security property may not rest
+ * on a rule in another package that nothing here can see: this function is the
+ * seam that put `validation` on the wire in the first place, so it is where the
+ * withholding has to be provable on its own. `webAutomationSecretSafeValidation`
+ * below asks the one sensitivity rule about the descriptor riding on the result
+ * and withholds both comparison strings when it says yes. Nothing in this
+ * function logs a validation value.
  */
 export function webAutomationActionResultPayload(result: WebAutomationActionResult): JsonObject {
   return compactJsonObject({
     commandId: result.commandId,
     actionType: result.actionType,
     status: result.status,
-    validation: result.validation,
+    validation: webAutomationSecretSafeValidation(result.validation, result.element),
     message: result.message,
     url: result.url,
     title: result.title,
@@ -222,6 +230,46 @@ export function webAutomationActionResultPayload(result: WebAutomationActionResu
     startedAt: result.startedAt,
     finishedAt: result.finishedAt
   });
+}
+
+/**
+ * The post-condition as it may leave the browser: unchanged for an ordinary
+ * control, kept for a sensitive one the producer declared it already withheld,
+ * and stripped of both comparison strings otherwise.
+ *
+ * The rule is `isSensitiveElementDescriptor` from `domain/src/sensitivity/`,
+ * asked of the element descriptor the result already carries -- the same
+ * question `recording/reducers.ts` and `runtime/llm-evidence/elements.ts` ask
+ * of the same shape. No text is inspected: a predicate over free text would
+ * both miss and misfire, and the descriptor is the only thing here that knows
+ * which control produced the strings.
+ *
+ * What the descriptor cannot say is whether the strings are already safe, and
+ * withholding a redaction is as lossy as withholding a leak: it costs the
+ * producer's phrasing (`the field holds a withheld value of 12 characters`) on
+ * every sensitive-control failure. `redacted` on the validation is the
+ * producer's declaration that it named a length rather than a value, and it is
+ * honoured here. It fails safe when absent -- see
+ * `isProducerRedactedComparison` -- so an older client, or a verb nobody taught
+ * the flag, is withheld exactly as before. `status`, which is what says whether
+ * the post-condition held, is kept either way, and a withheld comparison leaves
+ * carrying no flag, deliberately. The flag means "the producer named a length
+ * rather than a value", not "this text is safe". Stamping it here conflated the
+ * two: this function runs in the extension before the result crosses the wire,
+ * so its own stamp was read downstream as the producer's declaration and
+ * disarmed the adapter's guard for every extension result. Leaving it off costs
+ * nothing -- a second pass withholds already-withheld text and yields the same
+ * constant -- and keeps each layer judging the producer, not the layer above.
+ *
+ * The guard reaches exactly as far as the descriptor does: a result carrying a
+ * text-bearing validation and no `element` cannot be judged here, and passes
+ * through as the producer wrote it.
+ */
+export function webAutomationSecretSafeValidation(validation: WebAutomationActionValidation | undefined, element: unknown): WebAutomationActionValidation | undefined {
+  if (validation === undefined || validation.status === "none") return validation;
+  if (isProducerRedactedComparison(validation)) return validation;
+  if (!isSensitiveElementDescriptor(element)) return validation;
+  return { status: validation.status, expected: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, actual: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT };
 }
 
 /**
@@ -244,13 +292,16 @@ export function normalizeWebAutomationActionType(actionType: string): WebAutomat
  * which is why Core forbids this category from being retryable. The requested
  * type travels in the result's `metadata`, not in the record, whose text
  * fields are bounded.
+ *
+ * Built by `webAutomationFailureRecord` rather than written out, which is what
+ * holds the code to the closed set. Annotated with Core's
+ * `AutomationStudioFailureRecord`, whose `code` is a bare `string` because Core
+ * does not own the codes, this was the last record in the tree an invented code
+ * could be written into and still compile. The builder emits this row's four
+ * fields exactly, so nothing about the wire changed; what changed is that the
+ * compiler, rather than a comment, is now what keeps the code correct.
  */
-const UNSUPPORTED_ACTION_TYPE_FAILURE: AutomationStudioFailureRecord = Object.freeze({
-  category: "blocked_by_capability_or_policy",
-  code: "web.action.unsupported_type",
-  retryable: false,
-  stage: "dispatch"
-});
+const UNSUPPORTED_ACTION_TYPE_FAILURE = Object.freeze(webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE));
 
 const CANONICAL_ACTION_TYPES: ReadonlySet<string> = new Set(WEB_AUTOMATION_ACTION_TYPES);
 

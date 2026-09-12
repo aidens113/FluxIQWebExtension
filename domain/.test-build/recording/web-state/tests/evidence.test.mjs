@@ -3,31 +3,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { validateStateSnapshot } from "fluxiq/automation-studio";
 
-// src/constants.ts
-var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
-var WEB_AUTOMATION_SCHEMA_VERSION = "0.1";
-
-// src/recording/state.ts
-var WEB_AUTOMATION_STATE_NAMESPACE = "web";
-function createWebAutomationInitialState(timestamp = Date.now()) {
-  return {
-    timestamp,
-    namespaces: {
-      [WEB_AUTOMATION_STATE_NAMESPACE]: {
-        schemaId: WEB_AUTOMATION_DOMAIN_ID,
-        schemaVersion: WEB_AUTOMATION_SCHEMA_VERSION,
-        values: {},
-        metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID }
-      }
-    }
-  };
-}
-
-// src/recording/web-state/compact-json-object.ts
-function compactJsonObject(value) {
-  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
-}
-
 // src/recording/web-state/element/identity.ts
 var MAX_STATE_ID_LENGTH = 120;
 function meaningfulText(value) {
@@ -135,7 +110,7 @@ function finite(value) {
 
 // src/recording/web-state/element/selection.ts
 var MAX_STATE_ELEMENTS = 1500;
-var WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS = ["count", "captured", "truncated"];
+var WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS = ["count", "captured", "truncated", "captureTruncated", "stateTruncated"];
 function shouldCaptureElementState(element) {
   if (!hasElementBounds(element)) return false;
   return Boolean(
@@ -193,6 +168,31 @@ function hasStableElementIdentity(element) {
 }
 function hasElementBounds(element) {
   return stateBounds(element.documentBounds ?? element.bounds) !== void 0;
+}
+
+// src/constants.ts
+var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
+var WEB_AUTOMATION_SCHEMA_VERSION = "0.1";
+
+// src/recording/state.ts
+var WEB_AUTOMATION_STATE_NAMESPACE = "web";
+function createWebAutomationInitialState(timestamp = Date.now()) {
+  return {
+    timestamp,
+    namespaces: {
+      [WEB_AUTOMATION_STATE_NAMESPACE]: {
+        schemaId: WEB_AUTOMATION_DOMAIN_ID,
+        schemaVersion: WEB_AUTOMATION_SCHEMA_VERSION,
+        values: {},
+        metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID }
+      }
+    }
+  };
+}
+
+// src/recording/web-state/compact-json-object.ts
+function compactJsonObject(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
 
 // src/recording/web-state/visual-frame.ts
@@ -383,11 +383,13 @@ function webAutomationActionTargetFromElement(element) {
   });
 }
 
+// src/page-evidence/wire.ts
+function pageEvidenceWire(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+
 // src/recording/web-state/evidence/read.ts
 var MAX_TEXT = 200;
-function record(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
-}
 function list(value) {
   return Array.isArray(value) ? value : [];
 }
@@ -403,7 +405,7 @@ function flag(value) {
   return typeof value === "boolean" ? value : void 0;
 }
 function rect(value) {
-  const bounds = record(value);
+  const bounds = pageEvidenceWire(value);
   if (!bounds) return void 0;
   const x = finite2(bounds.x);
   const y = finite2(bounds.y);
@@ -420,10 +422,10 @@ function finite2(value) {
 
 // src/recording/web-state/evidence/input.ts
 function pageEvidenceOfSnapshot(snapshot) {
-  return record(record(snapshot)?.evidence);
+  return pageEvidenceWire(pageEvidenceWire(snapshot)?.evidence);
 }
 function pageEvidenceTruncatedElements(evidence2) {
-  return record(evidence2?.elements)?.truncated === true;
+  return pageEvidenceWire(evidence2?.elements)?.truncated === true;
 }
 
 // src/sensitivity/signature.ts
@@ -442,10 +444,10 @@ function isSensitiveControlType(type) {
 // src/sensitivity/descriptor.ts
 function sensitiveFieldSignatureOfDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
-  const record2 = descriptor;
-  const attributes = record2.attributes && typeof record2.attributes === "object" && !Array.isArray(record2.attributes) ? record2.attributes : {};
+  const record = descriptor;
+  const attributes = record.attributes && typeof record.attributes === "object" && !Array.isArray(record.attributes) ? record.attributes : {};
   return {
-    inputType: stringField(record2.inputType),
+    inputType: stringField(record.inputType),
     controlType: stringField(attributes.type),
     autocomplete: stringField(attributes.autocomplete),
     dataSensitive: stringField(attributes["data-sensitive"])
@@ -560,11 +562,11 @@ function addPageEvidenceStateValues(state, evidence2, timestamp, sourceId) {
   const put = (path, type, value, input = {}) => {
     next = putStateValue(next, `${EVIDENCE_PATH_PREFIX}${path}`, type, value, timestamp, sourceId, input);
   };
-  addElementTotals(put, record(evidence2.elements));
-  addLoading(put, record(evidence2.loading));
-  addNavigation(put, record(evidence2.navigation));
-  addDialogs(put, record(evidence2.dialogs));
-  addOverlays(put, record(evidence2.overlays));
+  addElementTotals(put, pageEvidenceWire(evidence2.elements));
+  addLoading(put, pageEvidenceWire(evidence2.loading));
+  addNavigation(put, pageEvidenceWire(evidence2.navigation));
+  addDialogs(put, pageEvidenceWire(evidence2.dialogs));
+  addOverlays(put, pageEvidenceWire(evidence2.overlays));
   addRegions(put, list(evidence2.regions));
   addRepeating(put, list(evidence2.repeating));
   addForms(put, list(evidence2.forms));
@@ -594,7 +596,7 @@ function addLoading(put, loading) {
   putFlag(put, "loading.pendingNavigation", loading.pendingNavigation, LIVE_STATUS);
   putCollection(put, "loading.busyRegions", list(loading.busyRegions), MAX_BUSY_REGIONS, selectorItem, LIVE_COLLECTION);
   putCollection(put, "loading.indicators", list(loading.indicators), MAX_LOADING_INDICATORS, (item) => {
-    const indicator = record(item);
+    const indicator = pageEvidenceWire(item);
     return compactJsonObject({
       selector: text(indicator?.selector),
       kind: text(indicator?.kind),
@@ -619,7 +621,7 @@ function addDialogs(put, dialogs) {
   putFlag(put, "dialogs.modal", dialogs.modal, LIVE_STATUS);
   putFlag(put, "dialogs.armPending", dialogs.armPending, LIVE_STATUS);
   putCollection(put, "dialogs.open", open, MAX_DIALOGS, (item) => {
-    const dialog = record(item);
+    const dialog = pageEvidenceWire(item);
     return compactJsonObject({
       selector: text(dialog?.selector),
       role: text(dialog?.role),
@@ -629,7 +631,7 @@ function addDialogs(put, dialogs) {
       bounds: rect(dialog?.bounds)
     });
   }, LIVE_COLLECTION);
-  const native = record(dialogs.lastNative);
+  const native = pageEvidenceWire(dialogs.lastNative);
   if (native) {
     put("dialogs.lastNative", "json", compactJsonObject({
       kind: text(native.kind),
@@ -644,7 +646,7 @@ function addOverlays(put, overlays) {
   putCount(put, "overlays.tested", overlays.tested, LIVE_COUNT);
   putCount(put, "overlays.blockedCount", overlays.blockedCount, LIVE_COUNT);
   putCollection(put, "overlays.blockers", list(overlays.blockers), MAX_OVERLAY_BLOCKERS, (item) => {
-    const blocker = record(item);
+    const blocker = pageEvidenceWire(item);
     const blocked = list(blocker?.blocked);
     return compactJsonObject({
       selector: text(blocker?.selector),
@@ -659,7 +661,7 @@ function addOverlays(put, overlays) {
 }
 function addRegions(put, regions) {
   putCollection(put, "regions", regions, MAX_REGIONS, (item) => {
-    const region = record(item);
+    const region = pageEvidenceWire(item);
     return compactJsonObject({
       role: text(region?.role),
       label: text(region?.label),
@@ -670,8 +672,8 @@ function addRegions(put, regions) {
 }
 function addRepeating(put, repeating) {
   putCollection(put, "repeating", repeating, MAX_REPEATING, (item) => {
-    const structure = record(item);
-    const representative = record(structure?.representative);
+    const structure = pageEvidenceWire(item);
+    const representative = pageEvidenceWire(structure?.representative);
     return compactJsonObject({
       containerSelector: text(structure?.containerSelector),
       signature: text(structure?.signature),
@@ -687,7 +689,7 @@ function addRepeating(put, repeating) {
 }
 function addForms(put, forms) {
   putCollection(put, "forms", forms, MAX_FORMS, (item) => {
-    const form = record(item);
+    const form = pageEvidenceWire(item);
     const controls = list(form?.controls);
     return compactJsonObject({
       selector: text(form?.selector),
@@ -704,7 +706,7 @@ function addForms(put, forms) {
   }, SETTLED_COLLECTION);
 }
 function formControl(item) {
-  const control = record(item);
+  const control = pageEvidenceWire(item);
   const controlType = text(control?.controlType);
   const autocomplete = typeof control?.autocomplete === "string" ? control.autocomplete : void 0;
   const sensitive = control?.sensitive === true || isSensitiveFieldSignature({ inputType: controlType, controlType, autocomplete });
@@ -761,7 +763,10 @@ function createWebAutomationStateFromSnapshot(snapshot, input = {}) {
   const selection = filterStateElements(snapshot.interactiveElements);
   state = putStateValue(state, "elements.count", "integer", selection.total, timestamp, input.sourceId, { elementKind: "count" });
   state = putStateValue(state, "elements.captured", "integer", selection.captured, timestamp, input.sourceId, { elementKind: "count" });
-  state = putStateValue(state, "elements.truncated", "boolean", selection.truncated || pageEvidenceTruncatedElements(evidence2), timestamp, input.sourceId, { elementKind: "status" });
+  const captureTruncated = pageEvidenceTruncatedElements(evidence2);
+  state = putStateValue(state, "elements.captureTruncated", "boolean", captureTruncated, timestamp, input.sourceId, { elementKind: "status" });
+  state = putStateValue(state, "elements.stateTruncated", "boolean", selection.truncated, timestamp, input.sourceId, { elementKind: "status" });
+  state = putStateValue(state, "elements.truncated", "boolean", selection.truncated || captureTruncated, timestamp, input.sourceId, { elementKind: "status" });
   for (const entry of selection.elements) state = addElementStateValues(state, entry, timestamp, input.sourceId);
   return withScreenVisualFrame(state, snapshot, selection.elements, input);
 }
@@ -865,7 +870,7 @@ test("every evidence path mirrors the evidence's own field path, under one prefi
 });
 test("nothing the evidence writes lands in the element namespace, whose keys a page can claim", () => {
   const paths = Object.keys(valuesOf(stateFor(evidence)));
-  const summary = /* @__PURE__ */ new Set(["elements.count", "elements.captured", "elements.truncated"]);
+  const summary = new Set(WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS.map((id) => `elements.${id}`));
   const strays = paths.filter((path) => path.startsWith("elements.") && !summary.has(path) && !path.startsWith("elements.button"));
   assert.deepEqual(strays, [], "an element identified as 'scanned' would otherwise overwrite a count");
 });
@@ -933,19 +938,48 @@ test("no field the evidence shape does not declare reaches state, however it arr
   assert.equal(native.message, "Leave this page?", "the dialog's own message is page-authored text and is kept");
   assert.equal(native.promptText, void 0, "what a person typed into a prompt is not");
 });
-test("the element list is short of the page when the browser's cap cut, not only the projection's", () => {
+test("the browser's cap is reported as its own limit, not folded into one flag", () => {
   const values = valuesOf(stateFor(evidence));
   assert.equal(values["elements.captured"]?.value, 1, "the projection's own filter kept everything it was given");
-  assert.equal(values["elements.truncated"]?.value, true, "but the browser had already dropped elements before sending");
-  assert.equal(values["evidence.elements.truncated"]?.value, true, "and which stage cut is still readable");
+  assert.equal(values["elements.captureTruncated"]?.value, true, "the browser had already dropped elements before sending");
+  assert.equal(values["elements.stateTruncated"]?.value, false, "and this projection's cap was nowhere near");
+  assert.equal(values["elements.truncated"]?.value, true, "so the summary says the list is short of the page");
+  assert.equal(values["evidence.elements.truncated"]?.value, true, "the funnel it came from still reports it in place");
   const whole = valuesOf(stateFor({ ...evidence, elements: { ...evidence.elements, truncated: false } }));
+  assert.equal(whole["elements.captureTruncated"]?.value, false);
   assert.equal(whole["elements.truncated"]?.value, false);
+});
+test("both caps firing at once are still two readable facts, and the summary is their union", () => {
+  const many = Array.from({ length: 1600 }, (_, index) => ({
+    tagName: "p",
+    selector: `p.row-${index}`,
+    text: `Row ${index}`,
+    bounds: { x: 0, y: index * 20, width: 800, height: 18 }
+  }));
+  const values = valuesOf(stateFor(evidence, many));
+  assert.equal(values["elements.captureTruncated"]?.value, true, "the browser cut before sending");
+  assert.equal(values["elements.stateTruncated"]?.value, true, "and this projection cut again");
+  assert.equal(values["elements.truncated"]?.value, true);
+  assert.equal(values["elements.count"]?.value, 1600);
+  assert.equal(values["elements.captured"]?.value, 1500);
+});
+test("a collection cap is its own limit and does not colour the element summary", () => {
+  const many = Array.from({ length: 30 }, (_, index) => ({ role: "region", label: `Region ${index}`, selector: `#r${index}` }));
+  const settled = { ...evidence, elements: { ...evidence.elements, truncated: false }, regions: many };
+  const state = stateFor(settled);
+  assert.equal(collectionAt(state, "evidence.regions").truncated, true, "twenty of thirty regions survived the cap");
+  const values = valuesOf(state);
+  assert.equal(values["elements.truncated"]?.value, false, "which says nothing about the element list");
+  assert.equal(values["elements.captureTruncated"]?.value, false);
+  assert.equal(values["elements.stateTruncated"]?.value, false);
 });
 test("a snapshot with no evidence is projected exactly as it was before evidence existed", () => {
   const values = valuesOf(stateFor(void 0));
   assert.deepEqual(Object.keys(values).filter((path) => path.startsWith("evidence.")), []);
   assert.equal(values["page.url"]?.value, "https://example.test/checkout");
   assert.equal(values["elements.truncated"]?.value, false);
+  assert.equal(values["elements.captureTruncated"]?.value, false, "a producer that reports no funnel is not a producer that truncated");
+  assert.equal(values["elements.stateTruncated"]?.value, false);
 });
 test("evidence that arrives malformed is skipped rather than thrown or written", () => {
   for (const malformed of [null, 42, "evidence", [], { elements: "many", loading: null, regions: "none", forms: 7 }]) {

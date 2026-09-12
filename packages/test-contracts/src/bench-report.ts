@@ -63,6 +63,31 @@ export type BenchCorpusMetrics = {
   sanitizedPacketBytes: BenchDistribution;
   rawSnapshotBytes: BenchDistribution;
   truncationCount: number;
+  /**
+   * Evaluated runs in which FluxIQ executed no action at all.
+   *
+   * Every rate above counts such a run as a **miss**, never as an exclusion,
+   * so a rate is only interpretable beside this number: a corpus whose
+   * `notExecutedRuns` approaches its evaluated runs has measured the Testing
+   * Lab driving a fixture and the fixture ending in the right state, not
+   * FluxIQ executing a workflow. It is the one figure a later reader cannot
+   * recover from anything else the report states.
+   *
+   * **Optional because it is absent, not zero, in a report written before the
+   * field existed.** Zero says FluxIQ executed nothing anywhere; absent says
+   * this bench did not measure it. Read it as `number | undefined` and say
+   * "unmeasured"; never `?? 0`, which is the same class of untruth as the
+   * predicate that counted an empty run as a success.
+   */
+  notExecutedRuns?: number;
+  /**
+   * Actions FluxIQ executed across every evaluated run — the only figure in
+   * the report that says what FluxIQ itself did. Equals the sum of
+   * `actionLatencyMs[*].samples`, which carry one sample per executed action.
+   * Absent, not zero, in a report written before the field existed; see
+   * `notExecutedRuns`.
+   */
+  actionsExecuted?: number;
   /** Week 2 measurements: `null` in Week 1, reserved so the schema is already present. */
   harnessRecovery: null;
   adaptationCost: null;

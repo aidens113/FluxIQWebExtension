@@ -5,9 +5,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
-import { WebAutomationRuntimeError } from "../../errors";
+import { type WebAutomationFailureCarrier } from "../carrier";
 import { classifyWebAutomationFailure, type WebAutomationActionOutcome } from "../classify";
-import { WEB_AUTOMATION_FAILURE_CODES, type WebAutomationFailureCode, type WebAutomationFailureRecord } from "../codes";
+import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord, type WebAutomationFailureCode, type WebAutomationFailureRecord } from "../codes";
+
+/**
+ * A producer that knows what failed, as the tree writes one: an error whose
+ * type says what went wrong, carrying the record that says it in Core's
+ * taxonomy. `resolve-target.ts` and `execute.ts` are the real instances.
+ */
+class ProducerError extends Error implements WebAutomationFailureCarrier {
+  readonly failure: WebAutomationFailureRecord;
+
+  constructor(failure: WebAutomationFailureRecord, message: string) {
+    super(message);
+    this.name = "ProducerError";
+    this.failure = failure;
+  }
+}
 
 const CODES = Object.values(WEB_AUTOMATION_FAILURE_CODES) as WebAutomationFailureCode[];
 
@@ -26,24 +41,34 @@ test("a failure the producer already reported is passed through untouched", () =
   assert.equal(record, reported, "the producer stood nearest the page; nothing here overwrites it");
 });
 
-test("a runtime error naming a code in the closed set is honoured, for every code", () => {
+test("a thrower that attached its own record is honoured, for every code in the set", () => {
   for (const code of CODES) {
-    const record = classified(new WebAutomationRuntimeError(code, "the element was covered"), { status: "failed" });
+    const record = classified(new ProducerError(webAutomationFailureRecord(code), "the element was covered"), { status: "failed" });
     assert.equal(record?.code, code, code);
+    assert.equal(record?.actual, "the element was covered", "the thrown message fills the description the producer left empty");
   }
 });
 
-test("a runtime error raised against another copy of the class is recognized structurally", () => {
-  const lookalike = { name: "WebAutomationRuntimeError", code: WEB_AUTOMATION_FAILURE_CODES.PAGE_CHANGED, message: "the document was replaced" };
-  const record = classified(lookalike, { status: "failed" });
+test("a carried record outranks everything the outcome could be read for", () => {
+  // The producer stood nearest the page. A failed validation and a timed-out
+  // status would each name a code of their own, and neither displaces the one
+  // the thrower chose. What the validation saw still fills the description.
+  const record = classified(new ProducerError(webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.PAGE_CHANGED), "the document was replaced"), {
+    status: "timed_out",
+    actionType: "web.dom.assert",
+    validation: failedValidation
+  });
   assert.equal(record?.code, WEB_AUTOMATION_FAILURE_CODES.PAGE_CHANGED);
-  assert.equal(record?.actual, "the document was replaced");
+  assert.equal(record?.expected, "the saved banner");
+  assert.equal(record?.actual, "the form is still open");
 });
 
-test("a runtime error naming a code outside the set becomes UNKNOWN, carrying the code it used", () => {
-  const record = classified(new WebAutomationRuntimeError("web.target.missing", "no idea"), { status: "failed" });
-  assert.equal(record?.code, WEB_AUTOMATION_FAILURE_CODES.UNKNOWN);
-  assert.equal(record?.actual, "unrecognized web automation failure code: web.target.missing");
+test("a thrown value carrying no record at all is classified from the outcome, not silently honoured", () => {
+  const noFailureProperty = classified(new Error("the click never landed"), { status: "failed" });
+  assert.equal(noFailureProperty?.code, WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED);
+
+  const failureWithoutCode = classified(Object.assign(new Error("the click never landed"), { failure: { actual: "nothing happened" } }), { status: "failed" });
+  assert.equal(failureWithoutCode?.code, WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, "a `failure` that names no code claimed no classification");
 });
 
 test("a timed-out action is a timeout, not the failed validation the wait left behind", () => {
@@ -69,7 +94,7 @@ test("an action that succeeded on paper but failed its post-condition is still c
   assert.equal(record?.code, WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED);
 });
 
-test("a thrown value that is not a runtime error is an action that ran and failed", () => {
+test("a thrown value that classified nothing is an action that ran and failed", () => {
   const withMessage = classified(new TypeError("target.focus is not a function"), { status: "failed" });
   assert.equal(withMessage?.code, WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED);
   assert.equal(withMessage?.actual, "target.focus is not a function");

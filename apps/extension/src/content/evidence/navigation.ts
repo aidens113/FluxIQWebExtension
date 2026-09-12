@@ -13,6 +13,7 @@
 // query string, and splitting it here is one parse rather than one per reader.
 
 import { boundedText } from "../identity";
+import { present } from "../../shared/present";
 import type { NavigationEvidence } from "./types";
 
 const MAX_URL_LENGTH = 2_000;
@@ -21,16 +22,16 @@ export function navigationEvidence(): NavigationEvidence {
   const entry = navigationTiming();
   const url = new URL(location.href);
   const referrer = boundedText(document.referrer, MAX_URL_LENGTH);
-  return {
+  return present<NavigationEvidence>({
     url: location.href.slice(0, MAX_URL_LENGTH),
     origin: url.origin,
     path: url.pathname,
-    ...(referrer ? { referrer } : {}),
-    ...(entry?.type ? { type: entry.type } : {}),
-    ...(entry && entry.redirectCount > 0 ? { redirects: entry.redirectCount } : {}),
+    referrer: referrer || undefined,
+    type: entry?.type || undefined,
+    redirects: entry && entry.redirectCount > 0 ? entry.redirectCount : undefined,
     historyLength: history.length,
     visibility: document.visibilityState
-  };
+  });
 }
 
 /**

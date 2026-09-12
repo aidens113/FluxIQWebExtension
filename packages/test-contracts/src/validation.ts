@@ -1,5 +1,5 @@
 import { isAutomationStudioAdaptiveFailureClass } from "./failure-category.js";
-import { SCENARIO_EXTRACT_MAX_PAGES, scenarioCapabilities, scenarioStepOperations, type WebScenario } from "./scenario.js";
+import { SCENARIO_EXTRACT_MAX_PAGES, expectedActionOutcomes, scenarioCapabilities, scenarioStepOperations, type WebScenario } from "./scenario.js";
 
 export type ValidationIssue = { path: string; message: string };
 export type ValidationResult<T> = { valid: true; value: T } | { valid: false; issues: ValidationIssue[] };
@@ -137,7 +137,10 @@ const validateExpected: Validator = (value, path, issues) => {
     if (!isObject(action)) return issue(target, actionPath, "must be an object");
     checkKeys(action, ["action", "outcome"], actionPath, target);
     requiredString(action, "action", actionPath, target);
-    if (action.outcome !== undefined && !["succeeded", "failed", "rejected"].includes(String(action.outcome))) issue(target, `${actionPath}.outcome`, "has an unsupported value");
+    // No lane can report a refusal as an attempt status, so "rejected" is not
+    // an outcome: declare `failed` and put the refusal in `expected.failure`
+    // as `blocked_by_capability_or_policy` / `web.action.rejected`.
+    if (action.outcome !== undefined && !(expectedActionOutcomes as readonly string[]).includes(String(action.outcome))) issue(target, `${actionPath}.outcome`, `must be one of ${expectedActionOutcomes.join(", ")}; a refused action is "failed" with expected.failure naming the refusal`);
   });
   if (value.allowedConsoleErrors !== undefined) arrayOf(value.allowedConsoleErrors, `${path}.allowedConsoleErrors`, issues, (entry, entryPath, target) => {
     if (typeof entry !== "string") issue(target, entryPath, "must be a string");

@@ -4,10 +4,11 @@ import type { RunEvaluation, WebScenario } from "@fluxiq-web-extension/test-cont
 import type { EvidenceMode } from "../commands.js";
 import type { RunScenarioOptions, RunScenarioResult } from "../run-scenario.js";
 import type { FluxIQTargetConfiguration } from "../target-config.js";
-import { aggregateBenchReport, groupBenchResults } from "./aggregate-report.js";
+import { actionsExecuted, aggregateBenchReport, groupBenchResults } from "./aggregate-report.js";
 import type { BenchCorpus } from "./corpus/index.js";
 import { describeError } from "./describe-error.js";
-import { RECORDING_LANE_SOURCES, evaluateFailedAttempt, evaluateRecordingRun, type RunEvaluationIdentity } from "./evaluate-run.js";
+import { FLOW_LANE_SOURCES, RECORDING_LANE_SOURCES, evaluateFailedAttempt, evaluateFlowRun, evaluateRecordingRun, type RunEvaluationIdentity } from "./evaluate-run.js";
+import { benchExecutionCoverage } from "./execution-coverage.js";
 import { expandCorpus, type BenchPlanEntry } from "./expand-corpus.js";
 import { readRunBundle } from "./read-run-bundle.js";
 import { renderBenchMarkdown } from "./render-markdown.js";
@@ -19,7 +20,7 @@ const MAX_REPEAT = 100;
 export type RunBenchOptions = {
   corpus: BenchCorpus;
   repeatCount: number;
-  /** The resolved target. The recording lane runs on `isolated` and `persistent-isolated`. */
+  /** The resolved target. Both lanes run on `isolated` and `persistent-isolated`. */
   target: FluxIQTargetConfiguration;
   /** The Scenario Lab registry the corpus resolves against. */
   manifests: readonly WebScenario[];
@@ -46,29 +47,45 @@ export type RunBenchOutcome = {
   runs: number;
   passed: number;
   skipped: number;
+  /**
+   * Evaluated runs in which FluxIQ executed no action. Each is a miss in every
+   * execution rate; a bench whose `notExecuted` approaches `runs` has measured
+   * the Testing Lab and the fixture, not FluxIQ.
+   */
+  notExecuted: number;
+  /** Actions FluxIQ executed across every evaluated run. */
+  actionsExecuted: number;
 };
 
 type Attempt = { entry: BenchPlanEntry; repeatIndex: number; attemptId: string; directory: string };
 
 /**
- * `lab bench`: runs every runnable corpus result `repeatCount` times on the
- * recording lane, one pass over the corpus per repeat, and writes a
- * `RunEvaluation` per run, `runs.json`, `report.json` (a `BenchReport`), and
- * `report.md` under `<runs directory>/bench/<bench id>/`. Variants and
- * unresolved rows are recorded as skipped with their reason, never as passes.
+ * `lab bench`: runs every runnable corpus result `repeatCount` times, one pass
+ * over the corpus per repeat, and writes a `RunEvaluation` per run,
+ * `runs.json`, `report.json` (a `BenchReport`), and `report.md` under
+ * `<runs directory>/bench/<bench id>/`. Results whose lane the corpus does not
+ * run, and unresolved rows, are recorded as skipped with their reason, never
+ * as passes.
+ *
+ * Each result runs on the one lane that can run it: an unarmed workflow
+ * records, and a variant builds a Flow from its recording and runs it armed,
+ * which is the only way a variant is exercised at all. Which of those a corpus
+ * runs is the corpus's own declaration (`BenchCorpus.lanes`), so `smoke` stays
+ * the recording-lane bench every historical report was measured on.
  */
 export async function runBench(options: RunBenchOptions): Promise<RunBenchOutcome> {
   const { target, repeatCount } = options;
-  if (target.mode !== "isolated" && target.mode !== "persistent-isolated") throw new Error(`bench runs the recording lane on isolated or persistent-isolated targets; a ${target.mode} target runs a pre-existing Flow, which the Flow lane (Wave 2) evaluates`);
+  if (target.mode !== "isolated" && target.mode !== "persistent-isolated") throw new Error(`bench runs the recording and Flow lanes on isolated or persistent-isolated targets; a ${target.mode} target runs a pre-existing Flow instead of one built from the run's own recording`);
   if (!Number.isSafeInteger(repeatCount) || repeatCount < 1 || repeatCount > MAX_REPEAT) throw new Error(`--repeat must be between 1 and ${MAX_REPEAT}`);
   const benchId = `bench-${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
   const directory = benchDirectory(options.runsDirectory, benchId);
   await mkdir(directory, { recursive: true });
   const plan = expandCorpus(options.corpus, options.manifests);
   const repeats = Array.from({ length: repeatCount }, (_, index) => index);
+  const flowPlanned = plan.some((entry) => entry.skipReason === undefined && entry.lane === "flow");
   const file: BenchRunsFile = {
-    schemaVersion: "0.1", benchId, corpusId: options.corpus.id, repeatCount, target: target.mode, lane: "recording",
-    startedAt: new Date().toISOString(), sources: RECORDING_LANE_SOURCES,
+    schemaVersion: "0.1", benchId, corpusId: options.corpus.id, repeatCount, target: target.mode, lanes: options.corpus.lanes,
+    startedAt: new Date().toISOString(), sources: RECORDING_LANE_SOURCES, ...(flowPlanned ? { flowSources: FLOW_LANE_SOURCES } : {}),
     runs: plan.flatMap((entry) => {
       const reason = entry.skipReason;
       return reason === undefined ? [] : repeats.map((repeatIndex): BenchRunRecord => ({ ...identityOf(entry), repeatIndex, status: "skipped", skipReason: reason }));
@@ -92,12 +109,14 @@ export async function runBench(options: RunBenchOptions): Promise<RunBenchOutcom
   const report = results.length === 0 ? undefined : aggregateBenchReport({ reportId: benchId, generatedAt: file.finishedAt, corpusId: options.corpus.id, repeatCount, target: target.mode, results });
   const reportPath = report ? await writeBenchReport(directory, report) : null;
   await writeBenchRuns(directory, file);
-  const markdown = await writeBenchMarkdown(directory, renderBenchMarkdown(file, report));
+  const coverage = benchExecutionCoverage(results);
+  const markdown = await writeBenchMarkdown(directory, renderBenchMarkdown(file, report, coverage));
   const passed = evaluated.filter(({ evaluation }) => evaluation.verdict === "passed").length;
   return {
     status: evaluated.length > 0 && passed === evaluated.length ? "passed" : "failed",
     benchId, directory, report: reportPath, markdown,
     results: results.length, runs: evaluated.length, passed, skipped: file.runs.length - evaluated.length,
+    notExecuted: coverage.notExecutedRuns, actionsExecuted: coverage.actions,
   };
 }
 
@@ -113,12 +132,16 @@ async function runOnce(options: RunBenchOptions, attempt: Attempt): Promise<{ ev
       runsDirectory: options.runsDirectory,
       scenarioId: entry.scenarioId,
       ...(entry.workflowId === null ? {} : { workflowId: entry.workflowId }),
+      // The Flow lane builds a Flow from the run's own recording and runs it
+      // with the variant armed; the recording lane cannot arm one, so a
+      // variant reaches the runner only here.
+      ...(entry.lane === "flow" ? { flow: true, ...(entry.variantId === null ? {} : { variantId: entry.variantId }) } : {}),
       ...(options.evidence ? { evidence: options.evidence } : {}),
       environment: options.environment,
       target: options.target,
     });
   } catch (error) {
-    const evaluation = evaluateFailedAttempt({ ...identity, attemptId: attempt.attemptId, error, wallClockMs: Date.now() - started });
+    const evaluation = evaluateFailedAttempt({ ...identity, lane: entry.lane, attemptId: attempt.attemptId, error, wallClockMs: Date.now() - started });
     return recordRun(attempt, evaluation, [`runner: ${describeError(error)}`]);
   }
   const wallClockMs = Date.now() - started;
@@ -126,7 +149,8 @@ async function runOnce(options: RunBenchOptions, attempt: Attempt): Promise<{ ev
   await options.inspectRun(options.runsDirectory, result.runId).catch((error: unknown) => { problems.push(`inspect: ${describeError(error)}`); });
   const bundle = await readRunBundle(result.path);
   problems.push(...bundle.problems);
-  const evaluation = evaluateRecordingRun({ ...identity, result, manifest: bundle.manifest, metrics: bundle.metrics, finalSequence: bundle.finalSequence, errorSequence: bundle.errorSequence, wallClockMs });
+  const observed = { ...identity, result, manifest: bundle.manifest, metrics: bundle.metrics, finalSequence: bundle.finalSequence, errorSequence: bundle.errorSequence, wallClockMs };
+  const evaluation = entry.lane === "flow" ? evaluateFlowRun(observed) : evaluateRecordingRun(observed);
   return recordRun(attempt, evaluation, problems);
 }
 
@@ -138,10 +162,11 @@ async function recordRun(attempt: Attempt, evaluation: RunEvaluation, problems: 
       ...identityOf(attempt.entry), repeatIndex: attempt.repeatIndex, status: "evaluated",
       runId: evaluation.runId, evaluation: evaluationPath, verdict: evaluation.verdict,
       ...(evaluation.failureCategory === undefined ? {} : { failureCategory: evaluation.failureCategory }),
+      actionsExecuted: actionsExecuted(evaluation),
       ...(problems.length ? { problems } : {}),
     },
   };
 }
 
-const identityOf = (entry: BenchPlanEntry): Pick<BenchRunRecord, "corpusRowId" | "scenarioId" | "workflowId" | "variantId"> => ({ corpusRowId: entry.corpusRowId, scenarioId: entry.scenarioId, workflowId: entry.workflowId, variantId: entry.variantId });
+const identityOf = (entry: BenchPlanEntry): Pick<BenchRunRecord, "corpusRowId" | "scenarioId" | "workflowId" | "variantId" | "lane"> => ({ corpusRowId: entry.corpusRowId, scenarioId: entry.scenarioId, workflowId: entry.workflowId, variantId: entry.variantId, lane: entry.lane });
 const resultKey = (value: Pick<BenchRunRecord, "corpusRowId" | "scenarioId" | "workflowId" | "variantId">): string => JSON.stringify([value.corpusRowId, value.scenarioId, value.workflowId, value.variantId]);

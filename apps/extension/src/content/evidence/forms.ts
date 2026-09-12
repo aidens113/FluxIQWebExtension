@@ -27,6 +27,7 @@
 import { selectorFor } from "../describe-element";
 import { hasEnteredValue, isSensitiveFormControl } from "../element-traits";
 import { accessibleNameFor, boundedText } from "../identity";
+import { present } from "../../shared/present";
 import type { FormControlEvidence, FormEvidence } from "./types";
 
 const MAX_FORMS = 8;
@@ -61,16 +62,16 @@ function describeForm(form: HTMLFormElement): FormEvidence {
   const action = boundedText(form.getAttribute("action"), MAX_TEXT);
   const method = boundedText(form.getAttribute("method"), MAX_TEXT)?.toLowerCase();
   const submit = owned.find((control) => control.matches(SUBMIT_SELECTOR));
-  return {
+  return present<FormEvidence>({
     selector: selectorFor(form),
-    ...(name ? { name } : {}),
-    ...(label ? { label } : {}),
-    ...(action ? { action } : {}),
-    ...(method ? { method } : {}),
+    name: name || undefined,
+    label: label || undefined,
+    action: action || undefined,
+    method: method || undefined,
     controlCount: owned.length,
     controls: owned.slice(0, MAX_CONTROLS_PER_FORM).map(describeControl),
-    ...(submit ? { submit: selectorFor(submit) } : {})
-  };
+    submit: submit ? selectorFor(submit) : undefined
+  });
 }
 
 /** A hidden input is state the page keeps, not a control anyone fills in. */
@@ -83,17 +84,17 @@ function describeControl(element: Element): FormControlEvidence {
   const name = boundedText(element.getAttribute("name"), MAX_TEXT);
   const valuePresent = hasEnteredValue(element);
   const autocomplete = autocompleteTokens(element);
-  return {
+  return present<FormControlEvidence>({
     selector: selectorFor(element),
     controlType: controlType(element),
-    ...(name ? { name } : {}),
-    ...(label ? { label } : {}),
-    ...(isRequired(element) ? { required: true as const } : {}),
-    ...(isDisabled(element) ? { disabled: true as const } : {}),
-    ...(valuePresent === undefined ? {} : { hasValue: valuePresent }),
-    ...(autocomplete ? { autocomplete } : {}),
-    ...(isSensitiveFormControl(element) ? { sensitive: true as const } : {})
-  };
+    name: name || undefined,
+    label: label || undefined,
+    required: isRequired(element) ? true : undefined,
+    disabled: isDisabled(element) ? true : undefined,
+    hasValue: valuePresent,
+    autocomplete: autocomplete || undefined,
+    sensitive: isSensitiveFormControl(element) ? true : undefined
+  });
 }
 
 /**

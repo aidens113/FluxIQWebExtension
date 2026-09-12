@@ -85,6 +85,8 @@ test("the element summary reports the page's total, what was kept, and whether s
   assert.equal(values["elements.count"]?.value, 4, "the page offered four elements");
   assert.equal(values["elements.captured"]?.value, 3, "three are in state");
   assert.equal(values["elements.truncated"]?.value, false);
+  assert.equal(values["elements.captureTruncated"]?.value, false);
+  assert.equal(values["elements.stateTruncated"]?.value, false);
   assert.equal(validateStateSnapshot(state).ok, true);
 });
 
@@ -104,6 +106,12 @@ test("a page past the element cap says so", () => {
   const values = state.namespaces.web?.values ?? {};
   assert.equal(values["elements.count"]?.value, 1_600);
   assert.equal(values["elements.captured"]?.value, 1_500);
+  // This projection's cap, and only it: the snapshot carried no evidence, so
+  // the browser reported no cap of its own. Naming the limit is the point --
+  // raising `MAX_STATE_ELEMENTS` fixes this one and would do nothing for a
+  // capture that had already cut.
+  assert.equal(values["elements.stateTruncated"]?.value, true);
+  assert.equal(values["elements.captureTruncated"]?.value, false);
   assert.equal(values["elements.truncated"]?.value, true);
 });
 

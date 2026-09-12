@@ -23,8 +23,10 @@
 // floor is the point below which a candidate is not the recorded control but
 // merely the least-wrong thing on the page, and the margin is what separates an
 // answer from a tie. Both are measured against the identity-drift and
-// ambiguous-targets fixtures rather than guessed; the numbers behind them are in
-// reports/w3-matcher-packaging.md.
+// ambiguous-targets fixtures rather than guessed. The margin's numbers are in
+// reports/w3-matcher-packaging.md; the floor's are in
+// reports/v-matcher-calibration.md, which supersedes them -- the original floor
+// was calibrated against scores that Level 1 resolves before this module runs.
 //
 // Nothing here invents a confidence. What the resolver reports is Core's own
 // `confidence` for the candidate it chose, so a Flow deciding whether to trust a
@@ -80,11 +82,36 @@ export type RecordedIdentity = {
 
 /**
  * The share of the compared weight that must agree before a candidate is an
- * answer. Measured: on identity-drift a control whose text, id, class and test
- * id have all drifted scores at or below 0.17, and one recognisable by
- * everything but its test id scores about 0.69. The floor sits between them, so
- * "the least-wrong button on the page" is refused and a recognisable control is
- * not.
+ * answer.
+ *
+ * **This value was unreachable until Core recalibrated one constant, and it is
+ * correct as it stands now.** `reports/v-matcher-calibration.md` measured why
+ * it was unreachable: scoring runs only when every Level 1 strategy has missed,
+ * which means the recorded id and test id are both gone -- and Core charged a
+ * *missing* stable identifier -0.55 x 26 and -0.55 x 28, about -0.209 of the
+ * scale, before a single word was compared. Of all 9,720 candidate profiles
+ * that can reach Level 2 against this fixture's recorded descriptor, none
+ * reached 0.35 and the highest was 0.233.
+ *
+ * **Lowering the floor was measured and rejected.** A floor of 0 admits the
+ * drift case wanted (0.218 as it then scored) but also admits a single
+ * unopposed "Save changes and exit" at 0.088 -- a different action, whose label
+ * merely contains the recorded one, on a page where it is the only candidate
+ * left and the margin below therefore cannot protect anything. 0.130 apart; any
+ * floor between them is fitted to a hair.
+ *
+ * **What Core changed instead** (`reports/v-core-scoring.md`): a stable
+ * identifier the candidate **does not carry** is now charged -0.1, while one
+ * that **contradicts** the recording stays at -0.8. The drift case's
+ * identifiers are absent and the near-miss's are contradicted, so the two
+ * separate by 0.301 -- 0.389 against 0.088 -- with this floor sitting inside
+ * that gap. The floor needs no movement; moving it would undo the separation.
+ *
+ * Not to be confused with `veto.ts`'s `TARGET_VETO_FLOOR`, which is 0. This one
+ * answers a selection question -- is this good enough to choose from several?
+ * -- and the veto answers a rejection question about a candidate Level 1 has
+ * already chosen. Setting the veto here would refuse `selector-only` at 0.149
+ * and `text-only`, which Level 1 resolves correctly.
  */
 export const TARGET_SCORE_FLOOR = 0.35;
 
@@ -128,6 +155,22 @@ export function scoreTargetCandidates(target: RecordedIdentity, candidates: Targ
     return { outcome: "ambiguous", ranked };
   }
   return { outcome: "resolved", chosen, runnerUp, ranked };
+}
+
+/**
+ * What Core makes of one candidate, with no floor and no margin applied.
+ *
+ * The plural function above answers a selection question and so applies both;
+ * `veto.ts` asks a rejection question about a candidate Level 1 has already
+ * chosen, where there is nothing to select between and the floor is the wrong
+ * number. `undefined` means the recorded control offers nothing that could tell
+ * it apart from its neighbours, which is the same guard the plural function
+ * applies before ranking.
+ */
+export function scoreTargetCandidate(target: RecordedIdentity, candidate: TargetCandidate): ElementFingerprintScore | undefined {
+  const fingerprint = comparableFingerprint(target);
+  if (!hasIdentitySignal(fingerprint)) return undefined;
+  return matcher.scoreCandidate(fingerprint, candidate.fingerprint);
 }
 
 /**

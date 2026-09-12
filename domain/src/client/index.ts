@@ -6,6 +6,7 @@ export * from "../io/input-model";
 export * from "../output-nodes";
 export * from "../runtime/capabilities";
 export * from "../runtime/failure";
+export * from "../page-evidence";
 export * from "../sensitivity";
 export * from "../recording/state";
 export * from "../recording/web-state";

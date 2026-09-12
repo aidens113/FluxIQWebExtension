@@ -18,9 +18,15 @@ import {
   type WebAutomationActionType,
   type WebAutomationActionVisualTarget
 } from "@fluxiq-web-extension/domain/client";
-// The page-level evidence a capture gathers is shaped by the modules that
-// produce it, in `content/evidence/`, but it travels on the wire as part of the
-// snapshot, so the snapshot shape declared here has to name it. The import is
+// The page-level evidence a capture gathers is produced in `content/evidence/`
+// but travels on the wire as part of the snapshot, so the snapshot shape
+// declared here has to name it. Its *shape* is declared in neither place: it is
+// `WebAutomationPageEvidence` in the domain package
+// (`domain/src/page-evidence/`), which is the one home both sides of the wire
+// can reach, because the structure audit forbids `domain/src` importing
+// `apps/extension/src`. `content/evidence/types.ts` is the extension's single
+// import of that contract and gives it these shorter local names; this file
+// goes through it rather than importing the domain twice. The import is
 // type-only, so nothing in `content/` reaches the background or panel bundles.
 import type { PageEvidence } from "../content/evidence";
 
@@ -256,13 +262,21 @@ export type DomSnapshot = {
    * frames (`background/connection/dom-snapshot.ts captureMergedTabSnapshot`),
    * which folds the additive items across every frame and keeps the top frame's
    * for the ones that describe a single document.
+   *
+   * `evidence.elements.truncated` is this capture's element cap and nothing
+   * else. Four caps stand between a page and a reader, and a flag that
+   * summarises more than one of them is named for the cap rather than called
+   * `truncated`; the rule and the four remedies are tabulated once, in
+   * `domain/src/recording/web-state/evidence/input.ts`.
    */
   evidence?: PageEvidence | undefined;
 };
 
 // The evidence shapes are re-exported here so a consumer outside `content/` --
 // the background worker's frame merge, above all -- reads one wire seam rather
-// than reaching into the content script's modules for a type.
+// than reaching into the content script's modules for a type. Each is an alias
+// of the domain's contract type, so a rename anywhere on this side of the wire
+// fails to compile against the producer and both domain readers at once.
 export type {
   DialogEvidence,
   DialogEvidenceItem,

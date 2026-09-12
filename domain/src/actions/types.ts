@@ -231,10 +231,28 @@ export type WebAutomationValidationSkipReason = "evidence-only" | "not-yet-valid
  * `failed` both say what was expected and what was observed, and `none` has to
  * name a reason. A `failed` validation makes the whole result `failed` with the
  * `output_not_observed` category.
+ *
+ * `redacted` is the producer's declaration that it built these two strings
+ * without quoting the control's value -- a verb naming a length rather than a
+ * secret. It is the one thing the domain cannot work out for itself: it can ask
+ * `isSensitiveElementDescriptor` whether the target holds a secret, but not
+ * whether a string it is handed has already been withheld, so without the flag
+ * both exits (`client/gateway-mapping.ts` and `runtime/adapter.ts`) must
+ * withhold every comparison on a sensitive control and the producer's useful
+ * phrasing is lost with the leak it never contained.
+ *
+ * The flag covers every comparison the result carries -- this validation's two
+ * strings, and the failure record's `expected` and `actual`, which the producer
+ * builds from the same two. It is read through `isProducerRedactedComparison`,
+ * which **fails safe when absent**: an unmarked validation is treated as
+ * unredacted and withheld, so an older client or a verb nobody taught the flag
+ * cannot leak by omission. Setting it while still quoting a value is therefore
+ * the one way to defeat the guard, which is why it is a declaration by the code
+ * that built the strings and never an inference from them.
  */
 export type WebAutomationActionValidation =
-  | { status: "passed"; expected: string; actual: string }
-  | { status: "failed"; expected: string; actual: string }
+  | { status: "passed"; expected: string; actual: string; redacted?: boolean | undefined }
+  | { status: "failed"; expected: string; actual: string; redacted?: boolean | undefined }
   | { status: "none"; reason: WebAutomationValidationSkipReason };
 
 /** How the element an action ran on was found, and how sure the resolver was (Phase 1.3). */

@@ -5,7 +5,7 @@
 // this suite's sibling `resolve-target.spec.ts` describes.
 //
 // A replayed action finds its control through whichever signal the drift left
-// standing: identity-drift renders one Save action four ways, and each mode
+// standing: identity-drift renders one Save action five ways, and each mode
 // takes a different signal away. The rows below replay the *recorded*
 // descriptor -- read off the baseline page through `web.dom.extract`, not
 // hand-written -- so what is exercised is the resolution a real replay
@@ -49,6 +49,26 @@
 // one, Discard -- so the resolver refuses. The row that proves that is as
 // important as the rows where scoring wins, and the measured scores behind the
 // floor are in reports/w3-matcher-packaging.md.
+//
+// The `reworded-aria` rendering keeps the accessible name through that same
+// drift, and scoring ranks the *right* control first. Whether the floor then
+// admits it depends on a Core constant that changed during Wave 3: a candidate
+// *missing* a stable identifier is now charged -0.1 rather than -0.55, which is
+// the calibration `reports/v-matcher-calibration.md` recommended and Core took.
+// That lifts the rendering from 0.218 to 0.389, over the 0.35 floor, so the row
+// below now proves a resolution where it used to prove a refusal. **If that Core
+// change is reverted, this row has to go back to expecting TARGET_NOT_FOUND.**
+//
+// And Level 1 is checked now, which is the last group of rows. Its strategies
+// are not equally strong -- an id is unique, a class set is not -- and the weak
+// ones used to act with no score and no floor at all. A page whose Save button
+// had been replaced by a `btn btn-primary` "Delete workspace" was resolved by
+// the class-set query and clicked, while Level 2 scored the same element well
+// below zero and refused it. The veto scores what Level 1 chose before it is
+// acted on and refuses a match the page contradicts; because a veto demotes the
+// strategy to a miss rather than ending the resolution, a control that merely
+// moved into another slot is now recovered instead of a neighbour being clicked.
+// reports/v-level1-veto.md has the measurements and the threshold's derivation.
 
 import { expect, test } from "../index.js";
 import type { ContentHarness } from "../index.js";
@@ -296,8 +316,8 @@ test.describe("scored selection: Core's matcher decides what an exact strategy c
     const recorded = await describe(harness, SAVE_BASELINE);
     await armMode(harness, "selector-only");
     // selector-only already changes the id, the class and the test id. Taking
-    // the text as well leaves nothing the recording knew this control by, which
-    // is the case the fixture's four modes each stop one step short of.
+    // the text as well leaves nothing the recording knew this control by --
+    // the one state no rendering of the fixture reaches on its own.
     await page.locator("#workspace-settings-submit").evaluate((element) => { element.textContent = "Apply changes"; });
 
     const reply = await harness.runAction({
@@ -317,6 +337,163 @@ test.describe("scored selection: Core's matcher decides what an exact strategy c
     });
     expect(reply.message).toBe("No target resolved from selector #save-settings, element fingerprint.");
     expect((await harness.finalState()).state).toMatchObject({ saveCount: 0, discardCount: 0, savedInMode: null });
+  });
+
+  test("reworded-aria: the surviving accessible name resolves the right control, and Discard is not touched", async ({ openHarness, page }) => {
+    const harness = await openHarness("identity-drift");
+    const recorded = await describe(harness, SAVE_BASELINE);
+    const displayName = await page.locator(DISPLAY_NAME).inputValue();
+    await armMode(harness, "reworded-aria");
+
+    // One redesign took every signal Level 1 looks a target up by -- id, test
+    // id, class names, exact text -- and left the accessible name standing.
+    await expect(page.locator("#save-settings")).toHaveCount(0);
+    await expect(page.locator('[data-testid="save-changes"]')).toHaveCount(0);
+    await expect(page.locator("button.btn.btn-primary")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Save changes", exact: true })).toHaveText("Save");
+
+    const reply = await harness.runAction({
+      commandId: "replay-save:reworded-aria",
+      actionType: "web.dom.click",
+      ...(recorded.selector ? { selector: recorded.selector } : {}),
+      options: recordedElement(recorded)
+    });
+
+    // Level 1 has nothing left to look the control up by, so Level 2 decides.
+    // Measured with Core's matcher as it now stands: the redesigned Save scores
+    // 0.389 against Discard's -0.360, so it clears the 0.35 floor and leads by
+    // 0.749. Both numbers move with the missing-identifier constant named in
+    // this file's header; the ranking does not.
+    expect(reply.status, reply.message).toBe("succeeded");
+    // A *successful* resolution still carries no `resolution`: `resolveTarget`
+    // hands the verbs an Element and nothing else, so the scores reach a Flow
+    // only on the failure path. That gap is w3-resolver's open item, not this
+    // row's subject, and asserting it here is what keeps it visible.
+    expect(reply.resolution).toBeUndefined();
+    expect(reply.element).toMatchObject({ tagName: "button", accessibleName: "Save changes", visibleText: "Save" });
+    await expect
+      .poll(async () => (await harness.finalState()).state)
+      .toMatchObject({ savedInMode: "reworded-aria", savedDisplayName: displayName, saveCount: 1, discardCount: 0 });
+  });
+});
+
+test.describe("the Level 1 veto: a fast answer is still checked before it is acted on", () => {
+  test("the recorded class set on a destructive control is refused, not clicked", async ({ openHarness, page }) => {
+    const harness = await openHarness("identity-drift");
+    const recorded = await describe(harness, SAVE_BASELINE);
+    expect(recorded).toMatchObject({ classNames: ["btn", "btn-primary"], visibleText: "Save changes" });
+
+    // The redesign this page has to survive: the Save action is gone and the
+    // slot now holds a destructive control wearing the same class pair. `btn
+    // btn-primary` is one of the commonest class pairs on the web, so this is
+    // not a contrived collision -- it is what a component library does.
+    await page.locator(SAVE_BASELINE).evaluate((element) => {
+      const replacement = element.ownerDocument.createElement("button");
+      replacement.type = "button";
+      replacement.className = "btn btn-primary";
+      replacement.textContent = "Delete workspace";
+      element.replaceWith(replacement);
+    });
+    await expect(page.locator("button.btn.btn-primary")).toHaveCount(1);
+    await expect(page.locator("button.btn.btn-primary")).toHaveText("Delete workspace");
+
+    const reply = await harness.runAction({
+      commandId: "veto:class-set-destructive",
+      actionType: "web.dom.click",
+      ...(recorded.selector ? { selector: recorded.selector } : {}),
+      options: recordedElement(recorded)
+    });
+
+    // Without the veto the class-set query answers, and the answer is clicked.
+    // With it, the match is scored against the recording, comes back negative
+    // -- more of the recording contradicted than confirmed -- and is demoted to
+    // a miss; scoring then finds nothing over the floor either, so the run is
+    // told the target is gone rather than being handed a different action.
+    expect(reply).toMatchObject({
+      status: "failed",
+      failure: TARGET_NOT_FOUND,
+      resolution: { strategy: "fingerprint" }
+    });
+    expect(reply.resolution?.bestScore).toBeLessThan(0);
+    // The failure explains itself: the strategy that answered, what it landed
+    // on, and what that scored. `reportable-text.ts` decides what of the
+    // element's own text may be quoted here.
+    expect(reply.message).toContain("element fingerprint (refused button");
+    expect(reply.message).toContain("Delete workspace");
+    expect((await harness.finalState()).state).toMatchObject({ saveCount: 0, discardCount: 0, savedInMode: null });
+  });
+
+  test("a vetoed strategy is a miss, not the end: the control that moved is still found", async ({ openHarness, page }) => {
+    const harness = await openHarness("identity-drift");
+
+    // A recording of a control the page names by nothing but its position. The
+    // fixture's Save carries an id and a test id, so they are taken away before
+    // it is described -- that is the only way to record the structural-path
+    // selector this row is about, and it is the descriptor a real page with no
+    // author-supplied identifiers produces.
+    await page.locator(SAVE_BASELINE).evaluate((element) => {
+      element.removeAttribute("id");
+      element.removeAttribute("data-testid");
+    });
+    const recorded = await describe(harness, "button.btn.btn-primary");
+    expect(recorded.id).toBeUndefined();
+    expect(recorded.testId).toBeUndefined();
+    expect(recorded.selector).toContain("button:nth-of-type(1)");
+
+    // Then the page reorders its two actions, which is all it takes for a
+    // positional selector to point at the wrong one. Discard is a native reset,
+    // so clicking it throws the pending edit away.
+    const displayName = await page.locator(DISPLAY_NAME).inputValue();
+    await page.locator('[data-testid="primary-actions"]').evaluate((group) => {
+      group.append(group.firstElementChild!);
+    });
+    await expect(page.locator('[data-testid="primary-actions"] button').first()).toHaveText("Discard changes");
+
+    const reply = await harness.runAction({
+      commandId: "veto:demoted-strategy-recovers",
+      actionType: "web.dom.click",
+      ...(recorded.selector ? { selector: recorded.selector } : {}),
+      options: recordedElement(recorded)
+    });
+
+    // The recorded path resolves Discard, the veto refuses it, and resolution
+    // carries on rather than stopping -- so scoring gets its turn and finds the
+    // Save that merely moved. Before the veto this row clicked Discard.
+    expect(reply.status, reply.message).toBe("succeeded");
+    expect(reply.element).toMatchObject({ tagName: "button", visibleText: "Save changes" });
+    await expect
+      .poll(async () => (await harness.finalState()).state)
+      .toMatchObject({ savedInMode: "baseline", savedDisplayName: displayName, saveCount: 1, discardCount: 0 });
+  });
+
+  test("a strong match is not second-guessed: the recorded id still resolves through the veto", async ({ openHarness, page }) => {
+    const harness = await openHarness("identity-drift");
+    const recorded = await describe(harness, SAVE_BASELINE);
+    const displayName = await page.locator(DISPLAY_NAME).inputValue();
+
+    // Nothing about this control is recognisable any more except the id the
+    // author gave it: new class vocabulary, no test id, a shortened label. No
+    // strategy is exempt from the veto, so this resolves on the score alone --
+    // Core weighs an agreeing id at 26 against a class name's 5, which is the
+    // differentiation an exemption list would have duplicated more crudely.
+    await page.locator(SAVE_BASELINE).evaluate((element) => {
+      element.removeAttribute("data-testid");
+      element.setAttribute("class", "ui-button ui-button--accent");
+      element.textContent = "Save";
+    });
+
+    const reply = await harness.runAction({
+      commandId: "veto:strong-identifier-survives",
+      actionType: "web.dom.click",
+      ...(recorded.selector ? { selector: recorded.selector } : {}),
+      options: recordedElement(recorded)
+    });
+
+    expect(reply.status, reply.message).toBe("succeeded");
+    expect(reply.element).toMatchObject({ id: "save-settings" });
+    await expect
+      .poll(async () => (await harness.finalState()).state)
+      .toMatchObject({ savedInMode: "baseline", savedDisplayName: displayName, saveCount: 1, discardCount: 0 });
   });
 });
 

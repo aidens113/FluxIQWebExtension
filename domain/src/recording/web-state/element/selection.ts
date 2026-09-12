@@ -18,8 +18,10 @@ export const MAX_STATE_ELEMENTS = 1_500;
 // The keys the snapshot's own summary occupies inside `elements.*`. They are
 // listed here because this is what hands out element keys: a page shipping
 // `data-testid="count"` would otherwise be filed at `elements.count` and
-// overwrite the element count with a JSON blob.
-export const WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS = ["count", "captured", "truncated"] as const;
+// overwrite the element count with a JSON blob. Every summary path
+// `snapshot.ts` writes has to appear here, including the two that name which
+// cap truncated the list.
+export const WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS = ["count", "captured", "truncated", "captureTruncated", "stateTruncated"] as const;
 
 // An element together with the key it is filed under in `elements.*`. The key
 // is unique across a selection and is the only one anything may use: rebuilding
@@ -39,9 +41,13 @@ export type WebAutomationStateElementSelection = {
   eligible: number;
   // How many are represented in state. Equal to `elements.length`.
   captured: number;
-  // The cap dropped elements that were worth capturing. Distinct from
-  // `captured < total`, which is the ordinary case of a page full of layout
-  // nodes that carry no evidence.
+  // This projection's own cap dropped elements that were worth capturing --
+  // the `stateTruncated` limit, written to `elements.stateTruncated`. Distinct
+  // from `captured < total`, which is the ordinary case of a page full of
+  // layout nodes that carry no evidence, and distinct from the browser's own
+  // cap, which cut before any of this ran. Legal as a bare `truncated` here
+  // because it sits beside the counts of the one cap that set it; the rule is
+  // in `../evidence/input.ts`.
   truncated: boolean;
 };
 

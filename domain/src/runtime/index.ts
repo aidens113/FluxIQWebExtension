@@ -1,6 +1,5 @@
 export * from "./adapter";
 export * from "./capabilities";
-export * from "./errors";
 export * from "./expectation";
 export * from "./failure";
 export * from "./host-runtime";

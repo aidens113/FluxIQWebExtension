@@ -16,6 +16,7 @@
 
 import { boundedText } from "../identity";
 import { selectorFor, testIdFor } from "../describe-element";
+import { present } from "../../shared/present";
 import type { RepeatingStructureEvidence } from "./types";
 
 const ITEM_SELECTOR = "li,tr,article,[data-testid],[role='listitem'],[role='row'],[role='option'],[role='article'],[role='treeitem']";
@@ -80,17 +81,20 @@ function describeRun(run: SiblingRun): RepeatingStructureEvidence {
   const testId = first ? testIdFor(first) : undefined;
   const text = first ? boundedText(first.textContent, MAX_REPRESENTATIVE_TEXT) : undefined;
   const fields = first ? itemFields(first) : [];
-  return {
+  return present<RepeatingStructureEvidence>({
     containerSelector: selectorFor(run.container),
     signature: run.signature,
     itemCount: run.items.length,
-    representative: {
+    // The representative is an inline shape on the contract rather than a named
+    // type, so it is named by indexed access rather than restated here: a fifth
+    // spelling of an evidence shape is the thing this whole seam exists to stop.
+    representative: present<RepeatingStructureEvidence["representative"]>({
       selector: first ? selectorFor(first) : run.signature,
-      ...(testId ? { testId } : {}),
-      ...(text ? { text } : {})
-    },
-    ...(fields.length ? { fields } : {})
-  };
+      testId: testId || undefined,
+      text: text || undefined
+    }),
+    fields: fields.length ? fields : undefined
+  });
 }
 
 /** The test ids inside one item, which is how a page names the fields of a row. */

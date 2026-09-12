@@ -9,6 +9,8 @@ const CORPUS_ROW_ID = /^[A-Z]+[0-9]+$/u;
 const MAX_REPEAT = 100;
 const EPSILON = 1e-9;
 const week2Keys = ["harnessRecovery", "adaptationCost", "adaptationValidation", "adaptationPersistence", "adaptationReuse"] as const;
+/** Optional: the eight benches on disk before these existed omit both, and an omission is an unmeasured count, not a zero one. */
+const coverageKeys = ["notExecutedRuns", "actionsExecuted"] as const;
 const distributionKeys = ["runDurationMs", "sanitizedPacketBytes", "rawSnapshotBytes"] as const;
 type Population = { workflows: number; repeatCount: number };
 
@@ -75,16 +77,40 @@ function checkWorkflowResult(input: unknown, path: string, repeatCount: unknown,
 function checkCorpusMetrics(input: unknown, population: Population, issues: ValidationIssue[]): boolean {
   const before = issues.length; const path = "$.metrics"; const value = object(input, path, issues);
   if (value) {
-    keys(value, ["rates", "actionLatencyMs", ...distributionKeys, "truncationCount", ...week2Keys], path, issues);
+    keys(value, ["rates", "actionLatencyMs", ...distributionKeys, "truncationCount", ...coverageKeys, ...week2Keys], path, issues);
     const rates = object(value.rates, `${path}.rates`, issues);
     if (rates) { keys(rates, benchRateMetrics, `${path}.rates`, issues); for (const metric of benchRateMetrics) checkRate(rates[metric], `${path}.rates.${metric}`, population, issues); }
     const latency = object(value.actionLatencyMs, `${path}.actionLatencyMs`, issues);
     if (latency) for (const [actionType, distribution] of Object.entries(latency)) { if (!actionType) add(issues, `${path}.actionLatencyMs`, "action types must be non-empty"); checkDistribution(distribution, `${path}.actionLatencyMs.${actionType}`, issues); }
     for (const key of distributionKeys) checkDistribution(value[key], `${path}.${key}`, issues);
     finite(value.truncationCount, `${path}.truncationCount`, issues, 0, Number.MAX_SAFE_INTEGER, true);
+    checkExecutionCoverage(value, path, population, issues);
     for (const key of week2Keys) if (value[key] !== null) add(issues, `${path}.${key}`, "must be null until Week 2 defines it");
   }
   return issues.length === before;
+}
+/**
+ * The execution-coverage counts, each optional.
+ *
+ * **Absence is accepted and means unmeasured**, so every bench report written
+ * before these fields existed still validates and still compares; it is not
+ * read as zero anywhere, because a zero would assert that FluxIQ executed
+ * nothing, which is a measurement and not the absence of one.
+ *
+ * When stated: `notExecutedRuns` is a whole number of runs no larger than the
+ * evaluated population (`workflows` results times `repeatCount` runs each),
+ * and `actionsExecuted` must equal the samples the action-latency
+ * distributions carry, since one sample is recorded per executed action and
+ * the two counts would otherwise be free to disagree in the same file.
+ */
+function checkExecutionCoverage(value: JsonObject, path: string, population: Population, issues: ValidationIssue[]): void {
+  if (value.notExecutedRuns !== undefined) finite(value.notExecutedRuns, `${path}.notExecutedRuns`, issues, 0, population.workflows * population.repeatCount, true);
+  if (value.actionsExecuted === undefined) return;
+  finite(value.actionsExecuted, `${path}.actionsExecuted`, issues, 0, Number.MAX_SAFE_INTEGER, true);
+  const latency = value.actionLatencyMs;
+  if (typeof value.actionsExecuted !== "number" || !isObject(latency)) return;
+  const samples = Object.values(latency).reduce<number>((sum, distribution) => sum + (isObject(distribution) && typeof distribution.samples === "number" ? distribution.samples : 0), 0);
+  if (samples !== value.actionsExecuted) add(issues, `${path}.actionsExecuted`, `must equal the ${samples} sample(s) its action-latency distributions carry: both count the actions FluxIQ executed`);
 }
 function checkRate(input: unknown, path: string, population: Population, issues: ValidationIssue[]): void {
   const value = object(input, path, issues); if (!value) return;

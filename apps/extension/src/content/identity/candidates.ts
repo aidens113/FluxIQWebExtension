@@ -24,6 +24,7 @@ import { accessibleNameFor } from "./accessible-name";
 import { boundedText } from "./bounded-text";
 import { implicitRole } from "./implicit-role";
 import { labelText } from "./label";
+import { reportableText } from "./reportable-text";
 
 /** One element the resolver may choose, paired with the description Core's matcher scores. */
 export type TargetCandidate = {
@@ -44,6 +45,8 @@ const MAX_SCANNED = 600;
 /** Candidates handed to the scorer. Beyond this the extra rows cannot change which one wins. */
 const MAX_CANDIDATES = 60;
 const MAX_SIGNAL_LENGTH = 200;
+/** Characters of a candidate's own label quoted in a failure message. */
+const MAX_LABEL_LENGTH = 40;
 
 /**
  * The elements a resolver may choose between: anything a person can act on,
@@ -120,12 +123,18 @@ export function candidateFingerprint(element: Element, index: number): ElementFi
  * A short, stable name for a candidate in a failure message: enough for a
  * person reading the failure to find the element on the page, bounded so a
  * list of them still fits Core's record limit.
+ *
+ * The tag and the identifier are always given -- they are what make two
+ * candidates distinguishable and neither is page content. The text is given
+ * only when it is the element's own label; `reportable-text.ts` owns that
+ * judgement and says why. This string reaches a Flow on a failure record with
+ * no element descriptor beside it, so nothing downstream can redact it.
  */
 export function candidateLabel(element: Element): string {
   const tagName = element.tagName.toLowerCase();
   const testId = candidateTestId(element);
   const identifier = testId ? `[data-testid="${testId}"]` : element.id ? `#${element.id}` : "";
-  const text = boundedText(element.textContent, 40);
+  const text = reportableText(element, MAX_LABEL_LENGTH);
   return `${tagName}${identifier}${text ? ` "${text}"` : ""}`;
 }
 

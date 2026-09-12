@@ -52,5 +52,6 @@ export const identityDriftManifest = createScenarioManifest({
     driftVariant("text-only", "W21: the Save action's visible text and accessible name become Apply changes and it loses its test id; its id, class, and position do not change."),
     driftVariant("moved", "W22: the Save action renders in the form footer, below the fold, without its test id; its text, role, id, and class do not change."),
     driftVariant("wrapped-aria", "W23: the Save action gains wrapper elements, takes its accessible name from aria-labelledby, and loses its test id."),
+    driftVariant("reworded-aria", "One redesign changes the Save action's id, class, test id, and visible text together; only its accessible name survives, in an aria-label. No week 1 corpus row covers it yet."),
   ],
 });

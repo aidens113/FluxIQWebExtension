@@ -18,6 +18,7 @@ import { selectorFor } from "../describe-element";
 import { isInteractableUiElement } from "../element-traits";
 import { accessibleNameFor } from "../identity";
 import { visualViewportBounds } from "../visual-bounds";
+import { present } from "../../shared/present";
 import type { OverlayEvidence, OverlayEvidenceItem } from "./types";
 
 const MAX_HIT_TESTED = 40;
@@ -46,7 +47,7 @@ export function overlayEvidence(candidates: readonly Element[]): OverlayEvidence
   }
 
   if (!blockedCount) return undefined;
-  return { tested, blockedCount, blockers: rankBlockers(blockers) };
+  return present<OverlayEvidence>({ tested, blockedCount, blockers: rankBlockers(blockers) });
 }
 
 /** The point an action would aim at: the centre of the candidate, clamped into the viewport. */
@@ -98,12 +99,12 @@ function describeBlocker(element: Element, covered: readonly Element[]): Overlay
   const role = element.getAttribute("role")?.trim().toLowerCase();
   const label = accessibleNameFor(element);
   const bounds = visualViewportBounds(element);
-  return {
+  return present<OverlayEvidenceItem>({
     selector: selectorFor(element),
-    ...(role ? { role } : {}),
-    ...(label ? { label } : {}),
-    ...(bounds ? { bounds } : {}),
+    role: role || undefined,
+    label: label || undefined,
+    bounds,
     blocks: covered.length,
     blocked: covered.slice(0, MAX_BLOCKED_PER_BLOCKER).map((target) => selectorFor(target))
-  };
+  });
 }

@@ -22,6 +22,15 @@
 // quoted only when the control is not sensitive, by the one shared rule; when
 // it is, the validation still says whether the field kept what was sent, and
 // gives the length instead of the content.
+//
+// Each validation also *declares* that redaction, with `redacted: withheld`.
+// The domain cannot tell an already-redacted string from a leaked one, so
+// without the declaration it withholds every comparison on a sensitive control
+// and replaces both strings with a marker -- losing "the field holds the text
+// that was sent, a withheld value of 12 characters", which is the whole reason
+// the phrasing above was written. The declaration is what buys it back, and it
+// is a statement about these two strings only: it says this verb built them
+// through `describeFieldValue`, never that the control is safe.
 
 import { isSensitiveFormControl } from "../element-traits";
 import type { BrowserActionCommand, BrowserActionResult } from "../types";
@@ -43,7 +52,8 @@ export function typeAction(action: BrowserActionCommand, deps: ContentActionDepe
     return deps.success(action, startedAt, "The target holds no typed text.", {
       status: "failed",
       expected: `a text field or editable element holding ${describeFieldValue(text, withheld)}`,
-      actual: `the target is a <${element.tagName.toLowerCase()}>, which holds no typed text`
+      actual: `the target is a <${element.tagName.toLowerCase()}>, which holds no typed text`,
+      redacted: withheld
     }, evidence());
   }
 
@@ -54,7 +64,8 @@ export function typeAction(action: BrowserActionCommand, deps: ContentActionDepe
   return deps.success(action, startedAt, held ? "Text entered." : "The field did not keep the text.", {
     status: held ? "passed" : "failed",
     expected: `the field holds ${describeFieldValue(text, withheld)}`,
-    actual: heldText(actual, text, withheld)
+    actual: heldText(actual, text, withheld),
+    redacted: withheld
   }, evidence());
 }
 

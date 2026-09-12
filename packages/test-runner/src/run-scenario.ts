@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { chromium, type BrowserContext, type Page } from "@playwright/test";
-import { assertClonePackage, assertRunManifest, canonicalClonePackageJson, resolveScenarioWorkflow, type ResolvedScenarioWorkflow, type RunActionTiming, type RunAutomationFailure, type WebScenario } from "@fluxiq-web-extension/test-contracts";
+import { assertClonePackage, assertRunManifest, canonicalClonePackageJson, resolveScenarioWorkflow, scenarioPageFactSchedule, type ResolvedScenarioWorkflow, type RunActionTiming, type RunAutomationFailure, type ScenarioArming, type WebScenario } from "@fluxiq-web-extension/test-contracts";
 import { createCorrelationId, EvidenceBundle, EvidenceCaptureController, sha256 } from "@fluxiq-web-extension/test-evidence";
 import type { EvidenceMode } from "./commands.js";
 import { removeRunOwnedTopologyState, startTopology, type RunningTopology } from "./coordinator.js";
@@ -45,6 +45,13 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
   // the variant's govern the Flow run alone. Judging the unarmed recording by
   // the armed expectation fails every negative variant before its Flow exists.
   const recordingWorkflow = options.flow && workflow.variant ? unarmedWorkflow(scenario, options) : workflow;
+  // Page facts are phase-specific -- a workflow's describe its unarmed
+  // rendering, a variant's the armed one -- and the contract owns that rule so
+  // that no lane decides it again. Both checks below read this schedule and
+  // nothing else: until it existed the Flow lane checked the unarmed page and
+  // never looked at the armed rendering it was about to run the Flow against,
+  // while the existing and clone lanes checked only the armed one.
+  const pageFacts = scenarioPageFactSchedule(scenario, workflowSelection(options), armingOf(options, workflow));
   const seed = options.seed ?? scenario.seed;
   const environment = options.environment ?? process.env;
   // Declared replay secrets resolve before the bundle so their values join the
@@ -170,9 +177,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
     // variant introduces would break the recording it is about to build a Flow from.
     if (workflow.variant && !options.flow) await armScenarioVariant(topology.scenarioOrigin, topology.allocation.controllerToken, scenario.id, workflow.variant);
     const page = scenarioPage = await context.newPage();
-    await page.goto(`${topology.scenarioOrigin}${scenario.startPath}`);
+    await openScenarioStart(page, topology.scenarioOrigin, scenario);
     await page.bringToFront();
-    await assertExpectedFacts(recordingWorkflow.expected.pageFacts ?? [], playwrightScenarioFactProbe(page));
+    await assertExpectedFacts(pageFacts.atLoad, playwrightScenarioFactProbe(page));
     const paired = topology.control ? await pairExtension(extensionPage, topology) : undefined;
     if (paired) await activateScenarioTab(extensionPage, topology.scenarioOrigin);
     const screenshotAdapter = scenario.id === "sensitive-input" ? undefined : { capture: async () => ({ bytes: await (stepRunner?.activePage() ?? page).screenshot({ type: "png" }), mediaType: "image/png" as const, redactionVerified: true as const }) };
@@ -284,10 +291,17 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
           scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, secrets: declaredSecrets,
           armVariant: async () => {
             if (workflow.variant) await armScenarioVariant(activeTopology.scenarioOrigin, activeTopology.allocation.controllerToken, scenario.id, workflow.variant);
-            // Arming and the reset before it are server-side, so the page loaded
-            // during recording still shows the unarmed DOM. Reload it, or a drift
-            // variant would be judged against a page that never drifted.
-            await page.reload();
+            // Arming and the reset before it are server-side, so the page left
+            // over from the recording still shows the unarmed DOM and must be
+            // loaded again, or a drift variant would be judged against a page
+            // that never drifted. Load the fixture's entry point rather than
+            // reloading: see `openScenarioStart`.
+            await openScenarioStart(page, activeTopology.scenarioOrigin, scenario);
+            // The armed rendering is now on screen, and it is the one the Flow
+            // will run against. Check its facts here, before the Flow runs, so
+            // "the fixture did not arm as declared" cannot arrive disguised as
+            // "the generated Flow failed".
+            await assertExpectedFacts(pageFacts.afterArm, playwrightScenarioFactProbe(page));
           },
           recordEvidence: async (evidence) => {
             actions.push(...evidence.run.actions.map(action => ({ actionType: action.actionType, startedAt: action.startedAt, ...(action.durationMs === undefined ? {} : { durationMs: action.durationMs }), status: action.status })));
@@ -482,10 +496,47 @@ function describeRecordingStartDiagnostic(diagnostic: Record<string, unknown> | 
 /** Final-state facts, then the primary workflow's playback-goal success facts. */
 async function assertFinalState(page: Page, scenario: WebScenario, workflow: ResolvedScenarioWorkflow) { const probe = playwrightScenarioFactProbe(page); await assertExpectedFacts(workflow.expected.finalState ?? [], probe); if (workflow.workflowId === undefined) await assertExpectedFacts(scenario.playbackGoal?.successFacts ?? [], probe); }
 async function findScenarioPageWithExpectedState(context: BrowserContext, fallback: Page, origin: string, scenario: WebScenario, workflow: ResolvedScenarioWorkflow): Promise<Page> { for (const candidate of context.pages().filter(item => !item.isClosed() && item.url().startsWith(`${origin}/`)).reverse()) { try { await assertFinalState(candidate, scenario, workflow); return candidate; } catch {} } await assertFinalState(fallback, scenario, workflow); return fallback; }
+/**
+ * Loads the fixture's own entry point, `scenario.startPath`. Every load of the
+ * fixture the runner performs goes through it -- the unarmed load the
+ * recording is made against, and the Flow lane's armed load -- because a Flow
+ * generated from a recording that began at `startPath` begins there too.
+ *
+ * The Flow lane's post-arm load used to be `page.reload()`, which reloads
+ * wherever the recording left the page rather than where the Flow starts. Most
+ * fixtures end their recording on the page they opened on and could not tell
+ * the difference; `auth-gate` ends on `/scenarios/auth-gate/account`, and once
+ * the `expired` variant is armed that URL answers 302 to `/?expired=1`. So the
+ * armed run began on a rendering the workflow never starts from: its page
+ * facts were judged against the wrong page, the Flow's first action typed into
+ * a `testid:username` that page does not carry, and the account GET recorded a
+ * denial in the fixture state before the Flow had done anything. No scenario
+ * wants the recording's last page here -- the Flow replays the recording from
+ * its beginning, and `multi-tab`, the only other fixture whose recording
+ * leaves this tab's URL in question, expects to be back on `startPath` anyway.
+ */
+export async function openScenarioStart(page: Pick<Page, "goto">, scenarioOrigin: string, scenario: Pick<WebScenario, "startPath">): Promise<void> {
+  await page.goto(`${scenarioOrigin}${scenario.startPath}`);
+}
+
 /** The same workflow with no variant applied: what the Flow lane records. */
 function unarmedWorkflow(scenario: WebScenario, options: RunScenarioOptions): ResolvedScenarioWorkflow {
   try { return resolveScenarioWorkflow(scenario, { ...(options.workflowId === undefined ? {} : { workflowId: options.workflowId }) }); }
   catch (cause) { throw new RunnerFailure("fixture.invalid", cause instanceof Error ? cause.message : String(cause), { cause }); }
+}
+function workflowSelection(options: RunScenarioOptions): { workflowId?: string; variantId?: string } {
+  return { ...(options.workflowId === undefined ? {} : { workflowId: options.workflowId }), ...(options.variantId === undefined ? {} : { variantId: options.variantId }) };
+}
+/**
+ * When this run arms its variant relative to the first page load, which is all
+ * the page-fact schedule needs to know about the lane. `resolveWorkflow` has
+ * already refused a variant on any other combination, so a resolved variant
+ * without `flow` is the existing or clone lane, which arms before it opens the
+ * fixture and never presents the unarmed rendering.
+ */
+function armingOf(options: RunScenarioOptions, workflow: ResolvedScenarioWorkflow): ScenarioArming {
+  if (options.flow) return "arms-after-loading";
+  return workflow.variant ? "arms-before-loading" : "unarmed";
 }
 function resolveWorkflow(scenario: WebScenario, options: RunScenarioOptions, target: FluxIQTargetConfiguration): ResolvedScenarioWorkflow {
   let workflow: ResolvedScenarioWorkflow;

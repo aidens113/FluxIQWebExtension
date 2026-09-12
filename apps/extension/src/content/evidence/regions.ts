@@ -19,6 +19,7 @@
 import { selectorFor } from "../describe-element";
 import { accessibleNameFor, landmarkRole } from "../identity";
 import { visualDocumentBounds } from "../visual-bounds";
+import { present } from "../../shared/present";
 import type { RegionEvidence } from "./types";
 
 const MAX_REGIONS = 20;
@@ -32,12 +33,12 @@ export function regionEvidence(): RegionEvidence[] | undefined {
     if (!role) continue;
     const label = accessibleNameFor(element);
     const bounds = visualDocumentBounds(element);
-    regions.push({
+    regions.push(present<RegionEvidence>({
       role,
       selector: selectorFor(element),
-      ...(label ? { label } : {}),
-      ...(bounds ? { bounds } : {})
-    });
+      label: label || undefined,
+      bounds
+    }));
     if (regions.length >= MAX_REGIONS) break;
   }
   return regions.length ? regions : undefined;

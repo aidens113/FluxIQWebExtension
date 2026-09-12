@@ -22,6 +22,7 @@ import {
 import { selectorFor } from "../describe-element";
 import { accessibleNameFor } from "../identity";
 import { visualViewportBounds } from "../visual-bounds";
+import { present } from "../../shared/present";
 import type { DialogEvidence, DialogEvidenceItem } from "./types";
 
 const DIALOG_SELECTOR = "dialog[open],[role='dialog'],[role='alertdialog'],[aria-modal='true']";
@@ -33,12 +34,12 @@ export function dialogEvidence(): DialogEvidence | undefined {
   const armPending = document.documentElement?.hasAttribute(DIALOG_ARM_ATTRIBUTE) === true;
   const lastNative = lastNativeDialog();
   if (!open.length && !armPending && !lastNative) return undefined;
-  return {
+  return present<DialogEvidence>({
     open,
     modal: open.some((dialog) => dialog.modal),
-    ...(armPending ? { armPending: true as const } : {}),
-    ...(lastNative ? { lastNative } : {})
-  };
+    armPending: armPending ? true : undefined,
+    lastNative
+  });
 }
 
 /**
@@ -59,7 +60,7 @@ function describeDialog(element: Element): DialogEvidenceItem {
   const role = element.getAttribute("role")?.trim().toLowerCase();
   const label = accessibleNameFor(element);
   const bounds = visualViewportBounds(element);
-  return {
+  return present<DialogEvidenceItem>({
     selector: selectorFor(element),
     role: role || "dialog",
     // A native <dialog> opened with showModal() reports `::backdrop`; the
@@ -67,9 +68,9 @@ function describeDialog(element: Element): DialogEvidenceItem {
     // the author's own declaration plus the inert page behind it.
     modal: element.getAttribute("aria-modal") === "true" || (native && isNativeModal(element)),
     native,
-    ...(label ? { label } : {}),
-    ...(bounds ? { bounds } : {})
-  };
+    label: label || undefined,
+    bounds
+  });
 }
 
 /**

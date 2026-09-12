@@ -3,16 +3,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
 
-// src/runtime/errors.ts
-var WebAutomationRuntimeError = class extends Error {
-  code;
-  constructor(code, message) {
-    super(message);
-    this.name = "WebAutomationRuntimeError";
-    this.code = code;
-  }
-};
-
 // src/actions/types.ts
 var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 
@@ -90,19 +80,40 @@ function boundedText(value) {
   return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
 }
 
+// src/runtime/failure/carrier.ts
+function carriedWebAutomationFailure(error, fallback = {}) {
+  const carried = property(error, "failure");
+  const code = property(carried, "code");
+  if (typeof code !== "string") return void 0;
+  const comparison = {
+    expected: text(property(carried, "expected")) ?? fallback.expected,
+    actual: text(property(carried, "actual")) ?? fallback.actual,
+    evidenceDigest: text(property(carried, "evidenceDigest")) ?? fallback.evidenceDigest
+  };
+  if (isWebAutomationFailureCode(code)) return webAutomationFailureRecord(code, comparison);
+  const unnamed = `unrecognized web automation failure code: ${code}`;
+  return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNKNOWN, {
+    ...comparison,
+    actual: comparison.actual === void 0 ? unnamed : `${comparison.actual}; ${unnamed}`
+  });
+}
+function property(value, name) {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value[name] : void 0;
+}
+function text(value) {
+  return typeof value === "string" && value.length > 0 ? value : void 0;
+}
+
 // src/runtime/failure/classify.ts
 function classifyWebAutomationFailure(error, outcome) {
   if (outcome.failure !== void 0) return outcome.failure;
+  const carried = carriedWebAutomationFailure(error, withActual(comparedText(outcome.validation), errorMessage(error)));
+  if (carried !== void 0) return carried;
   const classified2 = classifyOutcome(error, outcome);
   return classified2 === void 0 ? void 0 : webAutomationFailureRecord(classified2.code, classified2.comparison);
 }
 function classifyOutcome(error, outcome) {
   const compared = comparedText(outcome.validation);
-  const reportedCode = runtimeErrorCode(error);
-  if (reportedCode !== void 0) {
-    if (isWebAutomationFailureCode(reportedCode)) return { code: reportedCode, comparison: withActual(compared, errorMessage(error)) };
-    return { code: WEB_AUTOMATION_FAILURE_CODES.UNKNOWN, comparison: { ...compared, actual: `unrecognized web automation failure code: ${reportedCode}` } };
-  }
   if (outcome.status === "timed_out") return { code: WEB_AUTOMATION_FAILURE_CODES.TIMEOUT, comparison: withActual(compared, errorMessage(error)) };
   if (outcome.validation?.status === "failed") {
     const code = outcome.actionType === "web.dom.assert" ? WEB_AUTOMATION_FAILURE_CODES.STATE_MISMATCH : WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED;
@@ -125,13 +136,6 @@ function comparedText(validation) {
 function withActual(compared, actual) {
   return compared.actual !== void 0 ? compared : { ...compared, actual };
 }
-function runtimeErrorCode(error) {
-  if (error instanceof WebAutomationRuntimeError) return error.code;
-  if (typeof error !== "object" || error === null) return void 0;
-  const candidate = error;
-  if (candidate.name !== "WebAutomationRuntimeError") return void 0;
-  return typeof candidate.code === "string" ? candidate.code : void 0;
-}
 function errorMessage(error) {
   if (error instanceof Error) return error.message.length > 0 ? error.message : void 0;
   if (typeof error === "string") return error.length > 0 ? error : void 0;
@@ -141,6 +145,14 @@ function errorMessage(error) {
 }
 
 // src/runtime/failure/tests/classify.test.ts
+var ProducerError = class extends Error {
+  failure;
+  constructor(failure, message) {
+    super(message);
+    this.name = "ProducerError";
+    this.failure = failure;
+  }
+};
 var CODES = Object.values(WEB_AUTOMATION_FAILURE_CODES);
 var failedValidation = { status: "failed", expected: "the saved banner", actual: "the form is still open" };
 function classified(error, outcome) {
@@ -153,22 +165,28 @@ test("a failure the producer already reported is passed through untouched", () =
   const record = classified(new Error("ignored"), { status: "failed", failure: reported, validation: failedValidation });
   assert.equal(record, reported, "the producer stood nearest the page; nothing here overwrites it");
 });
-test("a runtime error naming a code in the closed set is honoured, for every code", () => {
+test("a thrower that attached its own record is honoured, for every code in the set", () => {
   for (const code of CODES) {
-    const record = classified(new WebAutomationRuntimeError(code, "the element was covered"), { status: "failed" });
+    const record = classified(new ProducerError(webAutomationFailureRecord(code), "the element was covered"), { status: "failed" });
     assert.equal(record?.code, code, code);
+    assert.equal(record?.actual, "the element was covered", "the thrown message fills the description the producer left empty");
   }
 });
-test("a runtime error raised against another copy of the class is recognized structurally", () => {
-  const lookalike = { name: "WebAutomationRuntimeError", code: WEB_AUTOMATION_FAILURE_CODES.PAGE_CHANGED, message: "the document was replaced" };
-  const record = classified(lookalike, { status: "failed" });
+test("a carried record outranks everything the outcome could be read for", () => {
+  const record = classified(new ProducerError(webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.PAGE_CHANGED), "the document was replaced"), {
+    status: "timed_out",
+    actionType: "web.dom.assert",
+    validation: failedValidation
+  });
   assert.equal(record?.code, WEB_AUTOMATION_FAILURE_CODES.PAGE_CHANGED);
-  assert.equal(record?.actual, "the document was replaced");
+  assert.equal(record?.expected, "the saved banner");
+  assert.equal(record?.actual, "the form is still open");
 });
-test("a runtime error naming a code outside the set becomes UNKNOWN, carrying the code it used", () => {
-  const record = classified(new WebAutomationRuntimeError("web.target.missing", "no idea"), { status: "failed" });
-  assert.equal(record?.code, WEB_AUTOMATION_FAILURE_CODES.UNKNOWN);
-  assert.equal(record?.actual, "unrecognized web automation failure code: web.target.missing");
+test("a thrown value carrying no record at all is classified from the outcome, not silently honoured", () => {
+  const noFailureProperty = classified(new Error("the click never landed"), { status: "failed" });
+  assert.equal(noFailureProperty?.code, WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED);
+  const failureWithoutCode = classified(Object.assign(new Error("the click never landed"), { failure: { actual: "nothing happened" } }), { status: "failed" });
+  assert.equal(failureWithoutCode?.code, WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, "a `failure` that names no code claimed no classification");
 });
 test("a timed-out action is a timeout, not the failed validation the wait left behind", () => {
   const record = classified(void 0, { status: "timed_out", validation: { status: "failed", expected: "an element matching #late", actual: "no element matched before the timeout" } });
@@ -189,7 +207,7 @@ test("an action that succeeded on paper but failed its post-condition is still c
   const record = classified(void 0, { status: "succeeded", actionType: "web.dom.type", validation: failedValidation });
   assert.equal(record?.code, WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED);
 });
-test("a thrown value that is not a runtime error is an action that ran and failed", () => {
+test("a thrown value that classified nothing is an action that ran and failed", () => {
   const withMessage = classified(new TypeError("target.focus is not a function"), { status: "failed" });
   assert.equal(withMessage?.code, WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED);
   assert.equal(withMessage?.actual, "target.focus is not a function");

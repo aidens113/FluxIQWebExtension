@@ -6,10 +6,13 @@
 // record list that quietly dropped a column looks exactly like a successful
 // extraction to everything downstream.
 //
-// The capability is awaited inside this verb rather than returned to
-// `execute.ts`, whose `try` block does not await what it returns: a promise
-// returned from there settles after the block exits, so a rejection would
-// escape its catch and leave the background worker with no reply at all.
+// The capability is awaited here and its throws are caught here, which is belt
+// and braces: `execute.ts` awaits every branch, so its catch would report a
+// rejection from this verb anyway. The local catch is kept because it costs
+// nothing and keeps this verb's failure path local -- a throw from
+// `deps.extractList` is reported as this verb failing, at this verb's
+// `startedAt`, whatever the dispatcher does. (Until 2026-09-11 the dispatcher
+// returned this promise unawaited, and the catch was load-bearing.)
 
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation } from "../types";
 import type { ContentActionDependencies } from "./types";

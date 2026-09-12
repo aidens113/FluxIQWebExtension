@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assertWebScenario, resolveScenarioWorkflow } from "@fluxiq-web-extension/test-contracts";
+import { assertWebScenario, resolveScenarioWorkflow, scenarioPageFactSchedule } from "@fluxiq-web-extension/test-contracts";
 import { startScenarioLab } from "../../../server.js";
 import { authGateDemoCredentials } from "../constants.js";
 import { authGateScenario } from "../scenario.js";
@@ -42,9 +42,40 @@ test("manifest is valid and resolves W18 (primary) and W19 (expired)", () => {
   assert.deepEqual(expired.expected.failure, { category: "auth_required" });
   assert.deepEqual(expired.expected.extracted, []);
   assert.deepEqual(expired.expected.finalState?.map(fact => fact.id), ["back-on-sign-in", "expiry-notice-visible", "expiry-notice-says-expired", "protected-content-absent"]);
-  for (const inherited of ["pageFacts", "recordingEvents", "actions", "allowedConsoleErrors"] as const) {
+  for (const inherited of ["recordingEvents", "actions", "allowedConsoleErrors"] as const) {
     assert.deepEqual(expired.expected[inherited], primary.expected[inherited], inherited);
   }
+});
+
+/**
+ * Page facts are the one expectation a variant does not inherit, because they
+ * describe a rendering rather than the run, and an armed run has two. W19 says
+ * the same three things about its armed rendering as W18 does about its
+ * unarmed one, and must say them itself.
+ *
+ * `expiry-notice-hidden` is the load-bearing one. It is true of the armed
+ * sign-in page reached at `startPath` and false of the `?expired=1` page the
+ * account route answers with -- and the account page is where W18's recording
+ * ends, so this fact is what fails if the Flow lane ever again presents the
+ * armed rendering by reloading the recording's last page instead of loading
+ * `startPath`.
+ */
+test("W19 declares its own armed page facts, and the Flow lane checks them after arming", () => {
+  const manifest = authGateScenario.manifest;
+  const signInPage = resolveScenarioWorkflow(manifest).expected.pageFacts;
+  const variant = manifest.variants?.find(candidate => candidate.id === "expired");
+  assert.deepEqual(variant?.expected.pageFacts, signInPage, "the variant states the armed rendering rather than borrowing the workflow's");
+  assert.deepEqual(
+    variant?.expected.pageFacts?.find(fact => fact.id === "expiry-notice-hidden"),
+    { id: "expiry-notice-hidden", subject: "session-expired", predicate: "visible", value: false },
+  );
+
+  // The Flow lane records unarmed, then arms and loads the fixture again.
+  assert.deepEqual(scenarioPageFactSchedule(manifest, { variantId: "expired" }, "arms-after-loading"), { atLoad: signInPage, afterArm: signInPage });
+  // The existing and clone lanes never present the unarmed rendering.
+  assert.deepEqual(scenarioPageFactSchedule(manifest, { variantId: "expired" }, "arms-before-loading"), { atLoad: signInPage, afterArm: [] });
+  // W18 arms nothing, so there is no second rendering to make a claim about.
+  assert.deepEqual(scenarioPageFactSchedule(manifest, {}, "arms-after-loading"), { atLoad: signInPage, afterArm: [] });
 });
 
 test("state is deterministic from the seed", () => {

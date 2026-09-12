@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
 
 // src/actions/types.ts
+var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
 var WEB_AUTOMATION_UPLOAD_MAX_FILE_BYTES = 1048576;
 var WEB_AUTOMATION_UPLOAD_MAX_TOTAL_BYTES = 4194304;
@@ -630,6 +631,45 @@ function isRadioElement(element) {
   return stringValue(element.inputType)?.toLowerCase() === "radio" || stringValue(element.role)?.toLowerCase() === "radio";
 }
 
+// src/sensitivity/signature.ts
+var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
+var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
+var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
+function isSensitiveFieldSignature(signature) {
+  if (isSensitiveControlType(signature.inputType) || isSensitiveControlType(signature.controlType)) return true;
+  if (signature.dataSensitive?.trim().toLowerCase() === "true") return true;
+  return (signature.autocomplete ?? "").toLowerCase().split(/\s+/u).some((token) => Boolean(token) && (SENSITIVE_AUTOCOMPLETE_TOKENS.has(token) || token.startsWith(SENSITIVE_AUTOCOMPLETE_PREFIX)));
+}
+function isSensitiveControlType(type) {
+  return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
+}
+
+// src/sensitivity/descriptor.ts
+function sensitiveFieldSignatureOfDescriptor(descriptor) {
+  if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
+  const record = descriptor;
+  const attributes = record.attributes && typeof record.attributes === "object" && !Array.isArray(record.attributes) ? record.attributes : {};
+  return {
+    inputType: stringField(record.inputType),
+    controlType: stringField(attributes.type),
+    autocomplete: stringField(attributes.autocomplete),
+    dataSensitive: stringField(attributes["data-sensitive"])
+  };
+}
+function isSensitiveElementDescriptor(descriptor) {
+  return isSensitiveFieldSignature(sensitiveFieldSignatureOfDescriptor(descriptor));
+}
+function stringField(value) {
+  return typeof value === "string" ? value : void 0;
+}
+
+// src/sensitivity/redaction.ts
+var WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT = "(withheld: the action ran on a control that holds a secret)";
+function isProducerRedactedComparison(validation) {
+  if (!validation || typeof validation !== "object" || Array.isArray(validation)) return false;
+  return validation.redacted === true;
+}
+
 // src/io/input-model.ts
 var WEB_AUTOMATION_INPUT_IDS = {
   browserState: "web.browser.state",
@@ -797,6 +837,77 @@ function webAutomationActionVisualTargetFromElement(element, input = {}) {
 var COLLECTION = { elementKind: "collection", comparable: false };
 var LIVE_COLLECTION = { ...COLLECTION, volatility: "rapid" };
 var SETTLED_COLLECTION = { ...COLLECTION, volatility: "slow" };
+
+// src/runtime/failure/codes.ts
+var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
+  /** The target was found but refused the action: disabled, hidden, or covered by another element. */
+  ACTION_REJECTED: "web.action.rejected",
+  /** No element matched the action's target with enough confidence. */
+  TARGET_NOT_FOUND: "web.target.not_found",
+  /** Several elements matched the action's target and none could be preferred. */
+  TARGET_AMBIGUOUS: "web.target.ambiguous",
+  /** The action ran and its post-condition did not hold (decision D4). */
+  OUTPUT_NOT_OBSERVED: "web.validation.output_not_observed",
+  /** An authored `web.dom.assert` condition did not hold. */
+  STATE_MISMATCH: "web.validation.state_mismatch",
+  /** The browser landed somewhere other than the requested URL, or never left where it was. */
+  NAVIGATION_UNEXPECTED: "web.navigation.unexpected",
+  /** The document was replaced between resolving the target and running the action. */
+  PAGE_CHANGED: "web.page.changed",
+  /** A wait, or an action, ran out of time. */
+  TIMEOUT: "web.action.timeout",
+  /** The host wants a sign-in before the action can continue. */
+  AUTH_REQUIRED: "web.auth.required",
+  /** A person must act first: a captcha, or a native dialog waiting for an answer. */
+  USER_INTERVENTION_REQUIRED: "web.intervention.required",
+  /** The client does not implement the requested action type at all. */
+  UNSUPPORTED_TYPE: "web.action.unsupported_type",
+  /** The verb is registered but not built yet, so a Flow that reaches one fails honestly. */
+  NOT_IMPLEMENTED: "web.action.not_implemented",
+  /** The action ran and failed for a reason no other code names. */
+  ACTION_FAILED: "web.action.failed",
+  /** Nothing said why the action failed. */
+  UNKNOWN: "web.action.unknown"
+});
+var WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS = Object.freeze({
+  "web.action.rejected": { category: "blocked_by_capability_or_policy", retryable: false, stage: "execution" },
+  "web.target.not_found": { category: "target_not_found", retryable: true, stage: "target_resolution" },
+  "web.target.ambiguous": { category: "target_ambiguous", retryable: false, stage: "target_resolution" },
+  "web.validation.output_not_observed": { category: "output_not_observed", retryable: true, stage: "verification" },
+  "web.validation.state_mismatch": { category: "unexpected_state", retryable: false, stage: "verification" },
+  "web.navigation.unexpected": { category: "navigation_unexpected", retryable: false, stage: "confirmation" },
+  "web.page.changed": { category: "page_changed", retryable: true, stage: "execution" },
+  "web.action.timeout": { category: "timeout", retryable: true, stage: "execution" },
+  "web.auth.required": { category: "auth_required", retryable: false, stage: "confirmation" },
+  "web.intervention.required": { category: "user_intervention_required", retryable: false, stage: "execution" },
+  "web.action.unsupported_type": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
+  "web.action.not_implemented": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
+  "web.action.failed": { category: "action_failed", retryable: true, stage: "execution" },
+  "web.action.unknown": { category: "ambiguous_or_unknown", retryable: false, stage: "execution" }
+});
+function webAutomationFailureRecord(code, comparison = {}) {
+  const definition = WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[code];
+  const expected = boundedText(comparison.expected);
+  const actual = boundedText(comparison.actual);
+  const evidenceDigest = comparison.evidenceDigest !== void 0 && EVIDENCE_DIGEST_PATTERN.test(comparison.evidenceDigest) ? comparison.evidenceDigest : void 0;
+  return {
+    category: definition.category,
+    code,
+    retryable: definition.retryable,
+    stage: definition.stage,
+    ...expected === void 0 ? {} : { expected },
+    ...actual === void 0 ? {} : { actual },
+    ...evidenceDigest === void 0 ? {} : { evidenceDigest }
+  };
+}
+var EVIDENCE_DIGEST_PATTERN = /^[a-f0-9]{64}$/u;
+function boundedText(value) {
+  if (value === void 0) return void 0;
+  const collapsed = value.replace(/\s+/gu, " ").trim();
+  if (collapsed.length === 0) return void 0;
+  if (collapsed.length <= WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH) return collapsed;
+  return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
+}
 
 // src/client/gateway-action-parameters.ts
 function webAutomationLiftedActionParameters(parameters) {
@@ -1061,7 +1172,7 @@ function webAutomationActionResultPayload(result) {
     commandId: result.commandId,
     actionType: result.actionType,
     status: result.status,
-    validation: result.validation,
+    validation: webAutomationSecretSafeValidation(result.validation, result.element),
     message: result.message,
     url: result.url,
     title: result.title,
@@ -1073,6 +1184,12 @@ function webAutomationActionResultPayload(result) {
     finishedAt: result.finishedAt
   });
 }
+function webAutomationSecretSafeValidation(validation, element) {
+  if (validation === void 0 || validation.status === "none") return validation;
+  if (isProducerRedactedComparison(validation)) return validation;
+  if (!isSensitiveElementDescriptor(element)) return validation;
+  return { status: validation.status, expected: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, actual: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT };
+}
 function normalizeWebAutomationActionType(actionType) {
   if (CANONICAL_ACTION_TYPES.has(actionType)) return { ok: true, actionType };
   const canonical = LEGACY_ACTION_TYPE_ALIASES.get(actionType);
@@ -1080,12 +1197,7 @@ function normalizeWebAutomationActionType(actionType) {
   const requested = typeof actionType === "string" && actionType.length > 0 ? actionType : "(missing)";
   return { ok: false, failure: UNSUPPORTED_ACTION_TYPE_FAILURE, message: `Unsupported web automation action type: ${requested}` };
 }
-var UNSUPPORTED_ACTION_TYPE_FAILURE = Object.freeze({
-  category: "blocked_by_capability_or_policy",
-  code: "web.action.unsupported_type",
-  retryable: false,
-  stage: "dispatch"
-});
+var UNSUPPORTED_ACTION_TYPE_FAILURE = Object.freeze(webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE));
 var CANONICAL_ACTION_TYPES = new Set(WEB_AUTOMATION_ACTION_TYPES);
 var LEGACY_ACTION_TYPE_ALIASES = new Map(
   Object.entries(WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER).map(([canonical, legacy]) => [legacy, canonical])
@@ -1333,5 +1445,71 @@ assert.equal(
   "validation" in webAutomationActionResultPayload({ commandId: "c", actionType: "web.dom.click", status: "succeeded", startedAt: 1, finishedAt: 2 }),
   false,
   "an absent validation stays absent"
+);
+var producerSentinel = "SENTINEL-VALUE-A-PRODUCER-SHOULD-HAVE-WITHHELD";
+assert.equal(WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, "(withheld: the action ran on a control that holds a secret)");
+function leakingResult(attributes, inputType = "text") {
+  return {
+    commandId: "command.sensitive",
+    actionType: "web.dom.type",
+    status: "succeeded",
+    validation: { status: "passed", expected: `the field holds "${producerSentinel}"`, actual: `the field holds "${producerSentinel}"` },
+    message: "Text entered.",
+    url: "https://example.test/checkout",
+    element: { tagName: "input", selector: '[data-testid="payment"]', inputType, attributes },
+    startedAt: 100,
+    finishedAt: 140
+  };
+}
+var sensitiveSignals = [
+  ["the effective control type", {}, "password"],
+  ["the type attribute", { type: "password" }, "text"],
+  ["a single-token autocomplete", { autocomplete: "cc-number" }, "text"],
+  ["a multi-token autocomplete", { autocomplete: "billing cc-number" }, "text"],
+  ["the data-sensitive marker", { "data-sensitive": "true" }, "text"]
+];
+for (const [what, attributes, inputType] of sensitiveSignals) {
+  const payload = webAutomationActionResultPayload(leakingResult(attributes, inputType));
+  assert.equal(
+    JSON.stringify(payload).includes(producerSentinel),
+    false,
+    `${what}: nothing the producer failed to withhold reaches the wire payload`
+  );
+  assert.deepEqual(
+    payload.validation,
+    { status: "passed", expected: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, actual: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT },
+    `${what}: the status still says whether the post-condition held, the text is withheld, and no flag is stamped -- the flag is the producer's declaration, and this layer is not the producer`
+  );
+}
+var failedSensitive = webAutomationActionResultPayload({
+  ...leakingResult({ autocomplete: "cc-number" }),
+  status: "failed",
+  validation: { status: "failed", expected: `the field holds "${producerSentinel}"`, actual: "the field holds something else" }
+});
+assert.equal(JSON.stringify(failedSensitive).includes(producerSentinel), false);
+assert.deepEqual(failedSensitive.validation, { status: "failed", expected: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, actual: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT });
+var ordinary = webAutomationActionResultPayload({
+  ...leakingResult({ autocomplete: "username" }),
+  validation: { status: "passed", expected: 'the field holds "synthetic-control-text"', actual: 'the field holds "synthetic-control-text"' }
+});
+assert.deepEqual(ordinary.validation, { status: "passed", expected: 'the field holds "synthetic-control-text"', actual: 'the field holds "synthetic-control-text"' });
+assert.deepEqual(
+  webAutomationActionResultPayload({ ...leakingResult({ autocomplete: "cc-number" }), validation: { status: "none", reason: "evidence-only" } }).validation,
+  { status: "none", reason: "evidence-only" }
+);
+var undescribed = leakingResult({ autocomplete: "cc-number" });
+delete undescribed.element;
+assert.equal(
+  JSON.stringify(webAutomationActionResultPayload(undescribed)).includes(producerSentinel),
+  true,
+  "with no element descriptor the wire payload is only as safe as the producer -- the limit is real, not a claim"
+);
+assert.equal(
+  "resolution" in webAutomationActionResultPayload({
+    ...failedValidationResult,
+    resolution: { strategy: "scored-candidate", candidateCount: 3, bestScore: 0.51, runnerUpScore: 0.28, confidence: 0.51 }
+  }),
+  false,
+  "resolution is still dropped by the result mapping"
 );
 console.log("Web automation gateway mapping tests passed.");

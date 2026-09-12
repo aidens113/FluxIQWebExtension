@@ -14,6 +14,7 @@
 
 import { selectorFor } from "../describe-element";
 import { accessibleNameFor, boundedText } from "../identity";
+import { present } from "../../shared/present";
 import type { LoadingEvidence, LoadingIndicator } from "./types";
 
 const MAX_INDICATORS = 8;
@@ -30,13 +31,13 @@ export function loadingEvidence(): LoadingEvidence {
   const busyRegions = selectors(BUSY_SELECTOR, MAX_BUSY_REGIONS);
   const indicators = loadingIndicators();
   const pendingNavigation = documentState !== "complete";
-  return {
+  return present<LoadingEvidence>({
     documentState,
     busy: pendingNavigation || busyRegions.length > 0 || indicators.length > 0,
     busyRegions,
     indicators,
     pendingNavigation
-  };
+  });
 }
 
 function loadingIndicators(): LoadingIndicator[] {
@@ -60,7 +61,7 @@ function loadingIndicators(): LoadingIndicator[] {
 
 function indicator(element: Element, kind: LoadingIndicator["kind"]): LoadingIndicator {
   const label = accessibleNameFor(element) ?? boundedText(element.textContent, MAX_LABEL_LENGTH);
-  return { selector: selectorFor(element), kind, ...(label ? { label } : {}) };
+  return present<LoadingIndicator>({ selector: selectorFor(element), kind, label: label || undefined });
 }
 
 function selectors(selector: string, max: number): string[] {

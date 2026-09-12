@@ -1,5 +1,5 @@
 import { expect, type Page } from "@playwright/test";
-import { resolveScenarioWorkflow, type ExpectedFact, type ScenarioStep } from "@fluxiq-web-extension/test-contracts";
+import { resolveScenarioWorkflow, scenarioPageFactSchedule, type ExpectedFact, type ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { authGateDemoCredentials, authGateScenario, type AuthGateState } from "../src/scenarios/auth-gate/index.js";
 import type { RunningScenarioLab } from "../src/server.js";
 import { armVariant, readFinalState, test } from "./lab-fixture.js";
@@ -7,6 +7,8 @@ import { armVariant, readFinalState, test } from "./lab-fixture.js";
 const manifest = authGateScenario.manifest;
 const primary = resolveScenarioWorkflow(manifest);
 const expired = resolveScenarioWorkflow(manifest, { variantId: "expired" });
+/** What the Flow lane checks once it has armed `expired` and loaded the fixture again. */
+const armedPageFacts = scenarioPageFactSchedule(manifest, { variantId: "expired" }, "arms-after-loading").afterArm;
 const expiryNotice = "Your session expired. Sign in again to continue.";
 
 const state = (lab: RunningScenarioLab) => readFinalState<AuthGateState>(lab, "auth-gate");
@@ -110,7 +112,11 @@ test("signing out ends the session, so the account page redirects again", async 
 test("W19 expired: after arming, signing in ends back at the auth gate instead of the account page", async ({ page, lab, networkGuard: _guard }) => {
   await armVariant(lab, "auth-gate", expired.variant);
   await page.goto(`${lab.origin}${manifest.startPath}`);
-  await expectFacts(page, expired.expected.pageFacts);
+  // Arm, then load `startPath`: the Flow lane's armed rendering exactly, so
+  // this checks the set that lane checks -- `afterArm` from the schedule, not
+  // the resolved workflow's merged `pageFacts`, which says nothing about which
+  // of the two renderings it describes.
+  await expectFacts(page, [...armedPageFacts]);
   await drive(page, until(expired.recordingScript, "submit-sign-in"));
   await expect(page).toHaveURL(`${lab.origin}/scenarios/auth-gate/?expired=1`);
   await expectFacts(page, expired.expected.finalState);

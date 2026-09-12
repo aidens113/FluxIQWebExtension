@@ -49,13 +49,34 @@ export function truncateValidationText(value: string): string {
   return collapsed.length <= VALIDATION_TEXT_MAX_LENGTH ? collapsed : `${collapsed.slice(0, VALIDATION_TEXT_MAX_LENGTH - 1)}…`;
 }
 
-/** The validation as it may be reported: its text bounded to what Core accepts. */
+/**
+ * The validation as it may be reported: its text bounded to what Core accepts,
+ * and the producer's redaction declaration carried across unchanged.
+ *
+ * The rebuild is field by field on purpose -- the two texts are replaced, so
+ * copying the object would be misleading -- and that is exactly why `redacted`
+ * has to be named here. A field this function does not name is deleted one line
+ * after the verb set it, with nothing anywhere going red: no other module in the
+ * content bundle reads the flag, and the domain's guard fails safe on an absent
+ * declaration, so the loss shows up only as the verb's phrasing being withheld
+ * on every sensitive-control comparison -- the one thing the flag exists to buy
+ * back. Any field added to the comparison variants of `BrowserActionValidation`
+ * from here on has the same problem and needs the same line.
+ *
+ * The declaration travels in all three of its states rather than being
+ * normalized: `true` is a producer saying it already withheld the values,
+ * `false` is one saying it did not, and absent is one that was never taught the
+ * question. The last two both mean "withhold" downstream, but they are not the
+ * same statement, and manufacturing one from the other is how a fail-safe
+ * default turns into a permissive one.
+ */
 export function boundValidation(validation: BrowserActionValidation): BrowserActionValidation {
   if (validation.status === "none") return validation;
   return {
     status: validation.status,
     expected: truncateValidationText(validation.expected),
-    actual: truncateValidationText(validation.actual)
+    actual: truncateValidationText(validation.actual),
+    ...(validation.redacted === undefined ? {} : { redacted: validation.redacted })
   };
 }
 

@@ -69,13 +69,59 @@ test("reports truncation and the element count exactly at the budget boundary", 
   assert.equal(bytes(oneShort) <= bytes(whole) - 1, true);
 });
 
+// Three limits can set `truncated` on this packet and they are three different
+// problems: the browser cut before the packet saw the page, the packet's own
+// element bound cut the ranked tail, or the byte budget forced removals. A
+// consumer that could only see the summary could not tell which of the three
+// remedies applies, so each is named and only the one that fired is present.
+test("names which limit truncated the packet, one row per limit", () => {
+  const budget = sanitizeWebLlmSnapshot(largePage(12), { maxEvidenceBytes: 900 });
+  assert.equal(budget.budgetTruncated, true, "the budget forced removals: ask again with more room");
+  assert.equal(budget.captureTruncated, undefined);
+  assert.equal(budget.elementsTruncated, undefined);
+  assert.equal(budget.truncated, true);
+
+  const bound = sanitizeWebLlmSnapshot(largePage(WEB_LLM_EVIDENCE_BOUNDS.elements + 1), { maxEvidenceBytes: WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling });
+  assert.equal(bound.elementsTruncated, true, "more elements were offered than the packet's bound carries");
+  assert.equal(bound.elements.length, WEB_LLM_EVIDENCE_BOUNDS.elements);
+  assert.equal(bound.captureTruncated, undefined);
+  assert.equal(bound.truncated, true);
+
+  const capture = sanitizeWebLlmSnapshot({ ...largePage(2), truncated: true }, { maxEvidenceBytes: WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling });
+  assert.equal(capture.captureTruncated, true, "the browser cut before sending: narrowing the capture is the remedy");
+  assert.equal(capture.elementsTruncated, undefined);
+  assert.equal(capture.budgetTruncated, undefined);
+  assert.equal(capture.truncated, true);
+
+  const whole = sanitizeWebLlmSnapshot(largePage(2), { maxEvidenceBytes: WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling });
+  assert.equal(whole.truncated, false);
+  assert.deepEqual([whole.captureTruncated, whole.elementsTruncated, whole.budgetTruncated], [undefined, undefined, undefined], "a whole packet carries none of the three");
+});
+
+test("all three limits can fire at once, and each stays separately readable", () => {
+  const page = { ...largePage(WEB_LLM_EVIDENCE_BOUNDS.elements + 5), truncated: true };
+  const evidence = sanitizeWebLlmSnapshot(page, { budget: "failure" });
+  assert.equal(evidence.captureTruncated, true);
+  assert.equal(evidence.elementsTruncated, true);
+  assert.equal(evidence.budgetTruncated, true);
+  assert.equal(evidence.truncated, true);
+  assert.equal(bytes(evidence) <= WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, true, `${bytes(evidence)} bytes`);
+});
+
 test("gives up page facts before the last element, and refuses only when nothing is left to drop", () => {
   const page = {
     url: "https://example.test/checkout",
     title: "Checkout",
     selectedText: "order reference 4471",
-    loading: { readyState: "interactive" },
-    dialogs: [{ role: "dialog", name: "Confirm your order", modal: true }],
+    // The producer's shape: one nested `evidence` object, written field for
+    // field as `apps/extension/src/content/evidence/types.ts` declares it. The
+    // packet reads only this shape, so a fixture in the old flat shape would
+    // silently carry no loading state and no dialog and prove nothing about
+    // the order they are given up in.
+    evidence: {
+      loading: { documentState: "interactive", busy: false, busyRegions: [], indicators: [], pendingNavigation: false },
+      dialogs: { open: [{ selector: "#confirm", role: "dialog", modal: true, native: false, label: "Confirm your order" }], modal: true }
+    },
     interactiveElements: [
       { tagName: "button", selector: "#place-order", visibleText: "Place order" },
       { tagName: "button", selector: "#cancel", visibleText: "Cancel" },
@@ -93,22 +139,23 @@ test("gives up page facts before the last element, and refuses only when nothing
     loading: evidence.loading !== undefined,
     dialogs: evidence.dialogs !== undefined,
     truncated: evidence.truncated,
+    budget: evidence.budgetTruncated === true,
   });
 
   const whole = rung(WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling);
-  assert.deepEqual(shape(whole), { elements: 2, selectedText: true, title: true, loading: true, dialogs: true, truncated: false });
+  assert.deepEqual(shape(whole), { elements: 2, selectedText: true, title: true, loading: true, dialogs: true, truncated: false, budget: false });
   const oneElement = rung(bytes(whole) - 1);
-  assert.deepEqual(shape(oneElement), { elements: 1, selectedText: true, title: true, loading: true, dialogs: true, truncated: true });
+  assert.deepEqual(shape(oneElement), { elements: 1, selectedText: true, title: true, loading: true, dialogs: true, truncated: true, budget: true });
   const noSelection = rung(bytes(oneElement) - 1);
-  assert.deepEqual(shape(noSelection), { elements: 1, selectedText: false, title: true, loading: true, dialogs: true, truncated: true });
+  assert.deepEqual(shape(noSelection), { elements: 1, selectedText: false, title: true, loading: true, dialogs: true, truncated: true, budget: true });
   const noTitle = rung(bytes(noSelection) - 1);
-  assert.deepEqual(shape(noTitle), { elements: 1, selectedText: false, title: false, loading: true, dialogs: true, truncated: true });
+  assert.deepEqual(shape(noTitle), { elements: 1, selectedText: false, title: false, loading: true, dialogs: true, truncated: true, budget: true });
   const noLoading = rung(bytes(noTitle) - 1);
-  assert.deepEqual(shape(noLoading), { elements: 1, selectedText: false, title: false, loading: false, dialogs: true, truncated: true });
+  assert.deepEqual(shape(noLoading), { elements: 1, selectedText: false, title: false, loading: false, dialogs: true, truncated: true, budget: true });
   const noDialogs = rung(bytes(noLoading) - 1);
-  assert.deepEqual(shape(noDialogs), { elements: 1, selectedText: false, title: false, loading: false, dialogs: false, truncated: true });
+  assert.deepEqual(shape(noDialogs), { elements: 1, selectedText: false, title: false, loading: false, dialogs: false, truncated: true, budget: true });
   const nothing = rung(bytes(noDialogs) - 1);
-  assert.deepEqual(shape(nothing), { elements: 0, selectedText: false, title: false, loading: false, dialogs: false, truncated: true });
+  assert.deepEqual(shape(nothing), { elements: 0, selectedText: false, title: false, loading: false, dialogs: false, truncated: true, budget: true });
 
   assert.throws(() => rung(bytes(nothing) - 1), /exceeds the evidence byte limit/u);
 });

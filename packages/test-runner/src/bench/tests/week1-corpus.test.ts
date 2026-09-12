@@ -12,16 +12,13 @@ const label = (entry: BenchPlanEntry): string => `${entry.corpusRowId} ${entry.s
 /**
  * Week 1 results whose variant the Scenario Lab does not define yet. When a
  * fixture adds one, this test fails until its entry is removed; a result that
- * stops resolving fails it too.
+ * stops resolving fails it too. Empty since the Wave 3 fixture work added the
+ * last six (`navigation/broken-link`, `delayed-ui/too-slow`,
+ * `ambiguous-targets/no-context`, and `failure-surfaces`'
+ * `disabled`/`detached`/`blocked-url`): every week1 result now resolves, so
+ * any entry appearing here again is a regression.
  */
-const UNRESOLVED_TODAY = [
-  "W10 navigation/primary/broken-link",
-  "W25 delayed-ui/primary/too-slow",
-  "W26 ambiguous-targets/primary/no-context",
-  "W27 failure-surfaces/primary/disabled",
-  "W27 failure-surfaces/primary/detached",
-  "W27 failure-surfaces/primary/blocked-url",
-];
+const UNRESOLVED_TODAY: string[] = [];
 /** The plan's corpus table: negative variants and the category each must be classified as. */
 const PLAN_NEGATIVE_VARIANTS: Record<string, string> = {
   "W14 modal-flows/interstitial/armed": "user_intervention_required",
@@ -69,5 +66,29 @@ test("every week1 row resolves through resolveScenarioWorkflow against the built
 
 test("every smoke result resolves and runs on the recording lane", async () => {
   const plan = expandCorpus(smokeCorpus, await loadScenarioManifests(repositoryRoot));
-  assert.deepEqual(plan.map((entry) => [label(entry), entry.resolved, entry.skipReason ?? null]), [["W01 basic-form/primary/unarmed", true, null], ["W28 iframe-checkout/primary/unarmed", true, null]]);
+  assert.deepEqual(plan.map((entry) => [label(entry), entry.resolved, entry.lane, entry.skipReason ?? null]), [["W01 basic-form/primary/unarmed", true, "recording", null], ["W28 iframe-checkout/primary/unarmed", true, "recording", null]]);
+  assert.deepEqual(smokeCorpus.lanes, ["recording"], "smoke is the corpus every historical bench was measured on: its plan must not change");
+});
+
+/**
+ * The corpus runs both lanes, so its variants are planned rather than skipped.
+ * Before this, `lab bench --corpus week1` ran the recording lane only and every
+ * variant carried `VARIANT_NEEDS_FLOW_LANE`, which left drift recovery, fuzzy
+ * recovery and failure classification with a provably empty population.
+ */
+test("week1 plans its unarmed workflows on the recording lane and every resolved variant on the Flow lane", async (t) => {
+  const plan = expandCorpus(week1Corpus, await loadScenarioManifests(repositoryRoot));
+  const runnable = plan.filter((entry) => entry.skipReason === undefined);
+  const byLane = (lane: string) => runnable.filter((entry) => entry.lane === lane);
+  t.diagnostic(`runnable: ${runnable.length} (${byLane("recording").length} recording, ${byLane("flow").length} flow); skipped: ${plan.length - runnable.length}`);
+  t.diagnostic(`flow-lane results: ${byLane("flow").map(label).join(", ")}`);
+  assert.deepEqual(week1Corpus.lanes, ["recording", "flow"]);
+  assert.equal(byLane("recording").every((entry) => entry.variantId === null), true, "the recording lane never arms a variant");
+  assert.equal(byLane("flow").every((entry) => entry.variantId !== null), true, "the Flow lane runs the corpus's variants");
+  // Every resolved result now runs; the only skips left are variants no fixture defines.
+  assert.deepEqual(plan.filter((entry) => entry.resolved && entry.skipReason !== undefined).map(label), []);
+  assert.deepEqual(plan.filter((entry) => entry.skipReason !== undefined).map(label), UNRESOLVED_TODAY);
+  const negatives = byLane("flow").filter((entry) => entry.expectedFailure !== null);
+  t.diagnostic(`flow-lane results with an expected failure: ${negatives.length} (${negatives.map((entry) => `${label(entry)}=${entry.expectedFailure?.category ?? ""}`).join(", ")})`);
+  assert.ok(negatives.length > 0, "failure classification accuracy has a population only because negative variants now run");
 });

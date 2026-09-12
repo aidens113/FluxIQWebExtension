@@ -962,10 +962,10 @@ function isSensitiveControlType(type) {
 // src/sensitivity/descriptor.ts
 function sensitiveFieldSignatureOfDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
-  const record2 = descriptor;
-  const attributes = record2.attributes && typeof record2.attributes === "object" && !Array.isArray(record2.attributes) ? record2.attributes : {};
+  const record = descriptor;
+  const attributes = record.attributes && typeof record.attributes === "object" && !Array.isArray(record.attributes) ? record.attributes : {};
   return {
-    inputType: stringField(record2.inputType),
+    inputType: stringField(record.inputType),
     controlType: stringField(attributes.type),
     autocomplete: stringField(attributes.autocomplete),
     dataSensitive: stringField(attributes["data-sensitive"])
@@ -976,6 +976,13 @@ function isSensitiveElementDescriptor(descriptor) {
 }
 function stringField(value) {
   return typeof value === "string" ? value : void 0;
+}
+
+// src/sensitivity/redaction.ts
+var WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT = "(withheld: the action ran on a control that holds a secret)";
+function isProducerRedactedComparison(validation2) {
+  if (!validation2 || typeof validation2 !== "object" || Array.isArray(validation2)) return false;
+  return validation2.redacted === true;
 }
 
 // src/recording/state.ts
@@ -1143,7 +1150,7 @@ function finite(value) {
 
 // src/recording/web-state/element/selection.ts
 var MAX_STATE_ELEMENTS = 1500;
-var WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS = ["count", "captured", "truncated"];
+var WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS = ["count", "captured", "truncated", "captureTruncated", "stateTruncated"];
 function shouldCaptureElementState(element) {
   if (!hasElementBounds(element)) return false;
   return Boolean(
@@ -1424,11 +1431,13 @@ function webAutomationActionVisualTargetFromElement(element, input = {}) {
   });
 }
 
+// src/page-evidence/wire.ts
+function pageEvidenceWire(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+
 // src/recording/web-state/evidence/read.ts
 var MAX_TEXT = 200;
-function record(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
-}
 function list(value) {
   return Array.isArray(value) ? value : [];
 }
@@ -1444,7 +1453,7 @@ function flag(value) {
   return typeof value === "boolean" ? value : void 0;
 }
 function rect(value) {
-  const bounds = record(value);
+  const bounds = pageEvidenceWire(value);
   if (!bounds) return void 0;
   const x = finite2(bounds.x);
   const y = finite2(bounds.y);
@@ -1461,10 +1470,10 @@ function finite2(value) {
 
 // src/recording/web-state/evidence/input.ts
 function pageEvidenceOfSnapshot(snapshot) {
-  return record(record(snapshot)?.evidence);
+  return pageEvidenceWire(pageEvidenceWire(snapshot)?.evidence);
 }
 function pageEvidenceTruncatedElements(evidence) {
-  return record(evidence?.elements)?.truncated === true;
+  return pageEvidenceWire(evidence?.elements)?.truncated === true;
 }
 
 // src/recording/web-state/state-values.ts
@@ -1569,11 +1578,11 @@ function addPageEvidenceStateValues(state, evidence, timestamp, sourceId) {
   const put = (path, type, value, input = {}) => {
     next = putStateValue(next, `${EVIDENCE_PATH_PREFIX}${path}`, type, value, timestamp, sourceId, input);
   };
-  addElementTotals(put, record(evidence.elements));
-  addLoading(put, record(evidence.loading));
-  addNavigation(put, record(evidence.navigation));
-  addDialogs(put, record(evidence.dialogs));
-  addOverlays(put, record(evidence.overlays));
+  addElementTotals(put, pageEvidenceWire(evidence.elements));
+  addLoading(put, pageEvidenceWire(evidence.loading));
+  addNavigation(put, pageEvidenceWire(evidence.navigation));
+  addDialogs(put, pageEvidenceWire(evidence.dialogs));
+  addOverlays(put, pageEvidenceWire(evidence.overlays));
   addRegions(put, list(evidence.regions));
   addRepeating(put, list(evidence.repeating));
   addForms(put, list(evidence.forms));
@@ -1603,7 +1612,7 @@ function addLoading(put, loading) {
   putFlag(put, "loading.pendingNavigation", loading.pendingNavigation, LIVE_STATUS);
   putCollection(put, "loading.busyRegions", list(loading.busyRegions), MAX_BUSY_REGIONS, selectorItem, LIVE_COLLECTION);
   putCollection(put, "loading.indicators", list(loading.indicators), MAX_LOADING_INDICATORS, (item) => {
-    const indicator = record(item);
+    const indicator = pageEvidenceWire(item);
     return compactJsonObject({
       selector: text(indicator?.selector),
       kind: text(indicator?.kind),
@@ -1628,7 +1637,7 @@ function addDialogs(put, dialogs) {
   putFlag(put, "dialogs.modal", dialogs.modal, LIVE_STATUS);
   putFlag(put, "dialogs.armPending", dialogs.armPending, LIVE_STATUS);
   putCollection(put, "dialogs.open", open, MAX_DIALOGS, (item) => {
-    const dialog = record(item);
+    const dialog = pageEvidenceWire(item);
     return compactJsonObject({
       selector: text(dialog?.selector),
       role: text(dialog?.role),
@@ -1638,7 +1647,7 @@ function addDialogs(put, dialogs) {
       bounds: rect(dialog?.bounds)
     });
   }, LIVE_COLLECTION);
-  const native = record(dialogs.lastNative);
+  const native = pageEvidenceWire(dialogs.lastNative);
   if (native) {
     put("dialogs.lastNative", "json", compactJsonObject({
       kind: text(native.kind),
@@ -1653,7 +1662,7 @@ function addOverlays(put, overlays) {
   putCount(put, "overlays.tested", overlays.tested, LIVE_COUNT);
   putCount(put, "overlays.blockedCount", overlays.blockedCount, LIVE_COUNT);
   putCollection(put, "overlays.blockers", list(overlays.blockers), MAX_OVERLAY_BLOCKERS, (item) => {
-    const blocker = record(item);
+    const blocker = pageEvidenceWire(item);
     const blocked = list(blocker?.blocked);
     return compactJsonObject({
       selector: text(blocker?.selector),
@@ -1668,7 +1677,7 @@ function addOverlays(put, overlays) {
 }
 function addRegions(put, regions) {
   putCollection(put, "regions", regions, MAX_REGIONS, (item) => {
-    const region = record(item);
+    const region = pageEvidenceWire(item);
     return compactJsonObject({
       role: text(region?.role),
       label: text(region?.label),
@@ -1679,8 +1688,8 @@ function addRegions(put, regions) {
 }
 function addRepeating(put, repeating) {
   putCollection(put, "repeating", repeating, MAX_REPEATING, (item) => {
-    const structure = record(item);
-    const representative = record(structure?.representative);
+    const structure = pageEvidenceWire(item);
+    const representative = pageEvidenceWire(structure?.representative);
     return compactJsonObject({
       containerSelector: text(structure?.containerSelector),
       signature: text(structure?.signature),
@@ -1696,7 +1705,7 @@ function addRepeating(put, repeating) {
 }
 function addForms(put, forms) {
   putCollection(put, "forms", forms, MAX_FORMS, (item) => {
-    const form = record(item);
+    const form = pageEvidenceWire(item);
     const controls = list(form?.controls);
     return compactJsonObject({
       selector: text(form?.selector),
@@ -1713,7 +1722,7 @@ function addForms(put, forms) {
   }, SETTLED_COLLECTION);
 }
 function formControl(item) {
-  const control = record(item);
+  const control = pageEvidenceWire(item);
   const controlType = text(control?.controlType);
   const autocomplete = typeof control?.autocomplete === "string" ? control.autocomplete : void 0;
   const sensitive = control?.sensitive === true || isSensitiveFieldSignature({ inputType: controlType, controlType, autocomplete });
@@ -1731,12 +1740,12 @@ function formControl(item) {
 function selectorItem(item) {
   return compactJsonObject({ selector: text(item) });
 }
-function putCollection(put, path, items, cap, describe, input) {
-  if (!items.length) return;
+function putCollection(put, path, items2, cap, describe, input) {
+  if (!items2.length) return;
   put(path, "json", {
-    count: items.length,
-    truncated: items.length > cap,
-    items: items.slice(0, cap).map(describe)
+    count: items2.length,
+    truncated: items2.length > cap,
+    items: items2.slice(0, cap).map(describe)
   }, input);
 }
 function putCount(put, path, value, input) {
@@ -1770,7 +1779,10 @@ function createWebAutomationStateFromSnapshot(snapshot, input = {}) {
   const selection = filterStateElements(snapshot.interactiveElements);
   state = putStateValue(state, "elements.count", "integer", selection.total, timestamp, input.sourceId, { elementKind: "count" });
   state = putStateValue(state, "elements.captured", "integer", selection.captured, timestamp, input.sourceId, { elementKind: "count" });
-  state = putStateValue(state, "elements.truncated", "boolean", selection.truncated || pageEvidenceTruncatedElements(evidence), timestamp, input.sourceId, { elementKind: "status" });
+  const captureTruncated = pageEvidenceTruncatedElements(evidence);
+  state = putStateValue(state, "elements.captureTruncated", "boolean", captureTruncated, timestamp, input.sourceId, { elementKind: "status" });
+  state = putStateValue(state, "elements.stateTruncated", "boolean", selection.truncated, timestamp, input.sourceId, { elementKind: "status" });
+  state = putStateValue(state, "elements.truncated", "boolean", selection.truncated || captureTruncated, timestamp, input.sourceId, { elementKind: "status" });
   for (const entry of selection.elements) state = addElementStateValues(state, entry, timestamp, input.sourceId);
   return withScreenVisualFrame(state, snapshot, selection.elements, input);
 }
@@ -1930,7 +1942,14 @@ var webAutomationRecordingDomain = {
     { namespace: "web", path: "focus.target", type: "json", elementKind: "json", label: "Focused target", volatility: "rapid" },
     { namespace: "web", path: "elements.count", type: "integer", elementKind: "count", label: "Elements on the page", volatility: "normal" },
     { namespace: "web", path: "elements.captured", type: "integer", elementKind: "count", label: "Elements captured", volatility: "normal" },
-    { namespace: "web", path: "elements.truncated", type: "boolean", elementKind: "status", label: "Element capture truncated", volatility: "normal" },
+    // Three flags, because two caps can shorten the element list and each has
+    // its own remedy. `elements.truncated` is the summary a consumer asks when
+    // it only needs to know something is missing; the other two say which cap
+    // bit, and so what to do about it. The full set of limits on the evidence
+    // path is tabulated in `web-state/evidence/input.ts`.
+    { namespace: "web", path: "elements.truncated", type: "boolean", elementKind: "status", label: "Element list incomplete", volatility: "normal" },
+    { namespace: "web", path: "elements.captureTruncated", type: "boolean", elementKind: "status", label: "Browser capture dropped elements", volatility: "normal" },
+    { namespace: "web", path: "elements.stateTruncated", type: "boolean", elementKind: "status", label: "State cap dropped elements", volatility: "normal" },
     // One captured element is one JSON value, and that value is the contract.
     // `web-state.ts` writes `elements.<id>` as a single `json` blob and writes
     // nothing under it, so the per-field paths this list used to declare —
@@ -1944,6 +1963,55 @@ var webAutomationRecordingDomain = {
     // it as its own state value.
     { namespace: "web", path: "elements.*", type: "json", elementKind: "json", label: "Element", stableAcrossSessions: true, volatility: "normal", metadata: { presentation: { group: "Elements", icon: "scan-search", visualKind: "bounds", metadata: { rendererId: WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID } } } },
     { namespace: "web", path: "forms.*", type: "string", elementKind: "text", label: "Form field value", volatility: "normal", sensitive: true },
+    // The page-level evidence, written by `web-state/evidence/project.ts`: what
+    // the page *is* rather than what its elements are. Every path mirrors the
+    // producer's own field path under one `evidence.` prefix, so the shape in
+    // `apps/extension/src/content/evidence/types.ts` is the index to this list.
+    //
+    // These thirty were produced and undeclared for the whole of Phase 1.4, and
+    // the ratchet in `tests/domain.test.ts` did not say so because its fixture
+    // carried no evidence: nothing was produced under the prefix, so neither
+    // "produced but undeclared" nor "declared but unproduced" had anything to
+    // examine. The fixture now carries a full capture, which is what makes
+    // every line below load-bearing -- delete one and that test fails.
+    //
+    // A collection is one `json` value of `{ count, truncated, items }`, never
+    // a path per item, for the reason `project.ts` gives: state is rebuilt on
+    // every recorded event and consumers read the blob.
+    { namespace: "web", path: "evidence.elements.scanned", type: "integer", elementKind: "count", label: "Nodes the capture walked", volatility: "normal" },
+    { namespace: "web", path: "evidence.elements.candidates", type: "integer", elementKind: "count", label: "Capture candidates", volatility: "normal" },
+    { namespace: "web", path: "evidence.elements.matched", type: "integer", elementKind: "count", label: "Elements past the capture filter", volatility: "normal" },
+    { namespace: "web", path: "evidence.elements.returned", type: "integer", elementKind: "count", label: "Elements the capture returned", volatility: "normal" },
+    { namespace: "web", path: "evidence.elements.changed", type: "integer", elementKind: "count", label: "Elements changed since the last capture", volatility: "rapid" },
+    { namespace: "web", path: "evidence.elements.recentlyInteracted", type: "integer", elementKind: "count", label: "Elements recently interacted with", volatility: "rapid" },
+    // The browser's own cap, at the funnel it belongs to. `elements.captureTruncated` is the same fact outside this prefix.
+    { namespace: "web", path: "evidence.elements.truncated", type: "boolean", elementKind: "status", label: "Capture dropped elements", volatility: "normal" },
+    { namespace: "web", path: "evidence.loading.documentState", type: "string", elementKind: "status", label: "Document ready state", volatility: "rapid" },
+    { namespace: "web", path: "evidence.loading.busy", type: "boolean", elementKind: "status", label: "Page busy", volatility: "rapid" },
+    { namespace: "web", path: "evidence.loading.pendingNavigation", type: "boolean", elementKind: "status", label: "Navigation in flight", volatility: "rapid" },
+    { namespace: "web", path: "evidence.loading.busyRegions", type: "json", elementKind: "collection", label: "Regions marked busy", volatility: "rapid" },
+    { namespace: "web", path: "evidence.loading.indicators", type: "json", elementKind: "collection", label: "Loading indicators on screen", volatility: "rapid" },
+    // `evidence.navigation.url` is deliberately absent: `page.url` already is it.
+    { namespace: "web", path: "evidence.navigation.origin", type: "string", elementKind: "url", label: "Page origin", volatility: "slow" },
+    { namespace: "web", path: "evidence.navigation.path", type: "string", elementKind: "route", label: "Page path", volatility: "slow" },
+    { namespace: "web", path: "evidence.navigation.referrer", type: "string", elementKind: "url", label: "Referrer", volatility: "slow" },
+    { namespace: "web", path: "evidence.navigation.type", type: "string", elementKind: "status", label: "How the document was reached", volatility: "slow" },
+    { namespace: "web", path: "evidence.navigation.redirects", type: "integer", elementKind: "count", label: "Redirects on the way here", volatility: "normal" },
+    { namespace: "web", path: "evidence.navigation.historyLength", type: "integer", elementKind: "count", label: "Session history entries", volatility: "normal" },
+    { namespace: "web", path: "evidence.navigation.visibility", type: "string", elementKind: "visibility", label: "Document visibility", volatility: "rapid" },
+    // "Is anything standing in front of the page" decides whether an action may
+    // be attempted at all, so it is a comparable count rather than a blob read.
+    { namespace: "web", path: "evidence.dialogs.openCount", type: "integer", elementKind: "count", label: "Open dialogs", volatility: "rapid" },
+    { namespace: "web", path: "evidence.dialogs.modal", type: "boolean", elementKind: "status", label: "A modal dialog is open", volatility: "rapid" },
+    { namespace: "web", path: "evidence.dialogs.armPending", type: "boolean", elementKind: "status", label: "Native dialog arming unacknowledged", volatility: "rapid" },
+    { namespace: "web", path: "evidence.dialogs.open", type: "json", elementKind: "collection", label: "Open dialogs", volatility: "rapid" },
+    { namespace: "web", path: "evidence.dialogs.lastNative", type: "json", elementKind: "json", label: "Last native dialog answered", volatility: "rapid" },
+    { namespace: "web", path: "evidence.overlays.tested", type: "integer", elementKind: "count", label: "Controls hit-tested for occlusion", volatility: "rapid" },
+    { namespace: "web", path: "evidence.overlays.blockedCount", type: "integer", elementKind: "count", label: "Controls something else answers for", volatility: "rapid" },
+    { namespace: "web", path: "evidence.overlays.blockers", type: "json", elementKind: "collection", label: "Blocking overlays", volatility: "rapid" },
+    { namespace: "web", path: "evidence.regions", type: "json", elementKind: "collection", label: "Landmark regions", volatility: "slow" },
+    { namespace: "web", path: "evidence.repeating", type: "json", elementKind: "collection", label: "Repeating structures", volatility: "normal" },
+    { namespace: "web", path: "evidence.forms", type: "json", elementKind: "collection", label: "Forms on the page", volatility: "slow" },
     { namespace: "web", path: "runtime.lastActionResult", type: "json", elementKind: "json", label: "Last action result", volatility: "normal" },
     { namespace: "web", path: "runtime.lastActionVisualTarget", type: "json", elementKind: "json", label: "Last action visual target", volatility: "normal", metadata: { presentation: { group: "Runtime", icon: "scan-search", visualKind: "bounds" } } },
     { namespace: "web", path: "runtime.lastError", type: "json", elementKind: "json", label: "Last client error", volatility: "normal" },
@@ -2030,16 +2098,6 @@ var webAutomationGatewayCapabilities = [
   }
 ];
 
-// src/runtime/errors.ts
-var WebAutomationRuntimeError = class extends Error {
-  code;
-  constructor(code, message) {
-    super(message);
-    this.name = "WebAutomationRuntimeError";
-    this.code = code;
-  }
-};
-
 // src/runtime/failure/codes.ts
 var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   /** The target was found but refused the action: disabled, hidden, or covered by another element. */
@@ -2114,19 +2172,40 @@ function boundedText(value) {
   return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
 }
 
+// src/runtime/failure/carrier.ts
+function carriedWebAutomationFailure(error, fallback = {}) {
+  const carried = property(error, "failure");
+  const code = property(carried, "code");
+  if (typeof code !== "string") return void 0;
+  const comparison = {
+    expected: text2(property(carried, "expected")) ?? fallback.expected,
+    actual: text2(property(carried, "actual")) ?? fallback.actual,
+    evidenceDigest: text2(property(carried, "evidenceDigest")) ?? fallback.evidenceDigest
+  };
+  if (isWebAutomationFailureCode(code)) return webAutomationFailureRecord(code, comparison);
+  const unnamed = `unrecognized web automation failure code: ${code}`;
+  return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNKNOWN, {
+    ...comparison,
+    actual: comparison.actual === void 0 ? unnamed : `${comparison.actual}; ${unnamed}`
+  });
+}
+function property(value, name) {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value[name] : void 0;
+}
+function text2(value) {
+  return typeof value === "string" && value.length > 0 ? value : void 0;
+}
+
 // src/runtime/failure/classify.ts
 function classifyWebAutomationFailure(error, outcome) {
   if (outcome.failure !== void 0) return outcome.failure;
+  const carried = carriedWebAutomationFailure(error, withActual(comparedText(outcome.validation), errorMessage(error)));
+  if (carried !== void 0) return carried;
   const classified = classifyOutcome(error, outcome);
   return classified === void 0 ? void 0 : webAutomationFailureRecord(classified.code, classified.comparison);
 }
 function classifyOutcome(error, outcome) {
   const compared = comparedText(outcome.validation);
-  const reportedCode = runtimeErrorCode(error);
-  if (reportedCode !== void 0) {
-    if (isWebAutomationFailureCode(reportedCode)) return { code: reportedCode, comparison: withActual(compared, errorMessage(error)) };
-    return { code: WEB_AUTOMATION_FAILURE_CODES.UNKNOWN, comparison: { ...compared, actual: `unrecognized web automation failure code: ${reportedCode}` } };
-  }
   if (outcome.status === "timed_out") return { code: WEB_AUTOMATION_FAILURE_CODES.TIMEOUT, comparison: withActual(compared, errorMessage(error)) };
   if (outcome.validation?.status === "failed") {
     const code = outcome.actionType === "web.dom.assert" ? WEB_AUTOMATION_FAILURE_CODES.STATE_MISMATCH : WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED;
@@ -2148,13 +2227,6 @@ function comparedText(validation2) {
 }
 function withActual(compared, actual) {
   return compared.actual !== void 0 ? compared : { ...compared, actual };
-}
-function runtimeErrorCode(error) {
-  if (error instanceof WebAutomationRuntimeError) return error.code;
-  if (typeof error !== "object" || error === null) return void 0;
-  const candidate2 = error;
-  if (candidate2.name !== "WebAutomationRuntimeError") return void 0;
-  return typeof candidate2.code === "string" ? candidate2.code : void 0;
 }
 function errorMessage(error) {
   if (error instanceof Error) return error.message.length > 0 ? error.message : void 0;
@@ -2250,7 +2322,7 @@ function sanitizedEvidenceElement(raw, context) {
   const role = boundedText2(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
   const name = boundedText2(raw.name, WEB_LLM_EVIDENCE_BOUNDS.text);
   const rawText = boundedText2(raw.visibleText ?? raw.text, WEB_LLM_EVIDENCE_BOUNDS.text);
-  const text2 = rawText === name ? void 0 : rawText;
+  const text3 = rawText === name ? void 0 : rawText;
   const rawInputType = boundedText2(raw.inputType, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
   const inputType = rawInputType === "text" ? void 0 : rawInputType;
   const rawControlType = boundedText2(attributes.type, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
@@ -2261,7 +2333,7 @@ function sanitizedEvidenceElement(raw, context) {
   const selectedValue = options ? sanitizedSelectedValue(raw.selectedValue, options) : void 0;
   const revealKind = semanticRevealKind(tag, role, attributes);
   const expanded = revealKind === "disclosure" ? semanticExpandedState(attributes) : void 0;
-  const placement = elementPlacement(raw.context, { name, text: text2 });
+  const placement = elementPlacement(raw.context, { name, text: text3 });
   const focused = context.focusedSelector !== void 0 && context.focusedSelector === addressed.selector ? true : void 0;
   return {
     target: context.target,
@@ -2270,7 +2342,7 @@ function sanitizedEvidenceElement(raw, context) {
     ...addressed.frameId === void 0 ? {} : { frameId: addressed.frameId },
     ...role ? { role } : {},
     ...name ? { name } : {},
-    ...text2 ? { text: text2 } : {},
+    ...text3 ? { text: text3 } : {},
     ...inputType ? { inputType } : {},
     ...controlType ? { controlType } : {},
     ...hasValue === void 0 ? {} : { hasValue },
@@ -2364,31 +2436,44 @@ function sanitizedSelectedValue(input, options) {
 
 // src/runtime/llm-evidence/page-evidence.ts
 var READY_STATES = ["loading", "interactive", "complete"];
+var ORDINARY_NAVIGATION_TYPE = "navigate";
+var MAX_REDIRECTS = 100;
+var MAX_BLOCKED_CONTROLS = 1e4;
 function webLlmPageContext(snapshot, childFrameIds) {
+  const evidence = pageEvidence(snapshot);
   const frame = evidenceFrame(snapshot.frame, childFrameIds);
-  const loading = evidenceLoading(snapshot.loading);
-  const navigation = evidenceNavigation(snapshot.navigation);
-  const dialogs = evidenceDialogs(snapshot.dialogs);
-  const blockedBy = evidenceBlocker(snapshot.blockingOverlay);
+  const loading = evidenceLoading(pageEvidenceWire(evidence?.loading));
+  const navigation = evidenceNavigation(pageEvidenceWire(evidence?.navigation));
+  const dialogs = evidenceDialogs(pageEvidenceWire(evidence?.dialogs));
+  const blockedBy = evidenceBlocker(pageEvidenceWire(evidence?.overlays));
   const selectedText = boundedText2(snapshot.selectedText, WEB_LLM_EVIDENCE_BOUNDS.text);
   return {
     ...frame ? { frame } : {},
     ...loading ? { loading } : {},
     ...navigation ? { navigation } : {},
     ...dialogs ? { dialogs } : {},
-    ...trueFlag(snapshot.pendingNativeDialog) ? { pendingNativeDialog: true } : {},
     ...blockedBy ? { blockedBy } : {},
     ...selectedText ? { selectedText } : {}
   };
 }
 function evidenceElementTotal(snapshot, carried) {
-  const declared = boundedCount(snapshot.elementTotal, 1e7);
+  const declared = boundedCount(snapshot.elementTotal, 1e7) ?? boundedCount(captureElementTotals(snapshot)?.matched, 1e7);
   const received = Array.isArray(snapshot.interactiveElements) ? snapshot.interactiveElements.length : 0;
   const total = Math.max(declared ?? 0, received);
   return total > carried ? total : void 0;
 }
 function capturedTruncated(snapshot) {
-  return trueFlag(snapshot.truncated) === true;
+  if (trueFlag(snapshot.truncated) === true) return true;
+  return trueFlag(captureElementTotals(snapshot)?.truncated) === true;
+}
+function pageEvidence(snapshot) {
+  return pageEvidenceWire(snapshot.evidence);
+}
+function captureElementTotals(snapshot) {
+  return pageEvidenceWire(pageEvidence(snapshot)?.elements);
+}
+function items(input) {
+  return Array.isArray(input) ? input : [];
 }
 function evidenceFrame(input, childFrameIds) {
   const declared = isJsonRecord(input) ? input : void 0;
@@ -2400,27 +2485,30 @@ function evidenceFrame(input, childFrameIds) {
   };
 }
 function evidenceLoading(input) {
-  if (!isJsonRecord(input)) return void 0;
-  const rawReadyState = boundedText2(input.readyState, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
-  const readyState = rawReadyState && READY_STATES.includes(rawReadyState) ? rawReadyState : void 0;
+  if (!input) return void 0;
+  const documentState = boundedText2(input.documentState, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const readyState = documentState && READY_STATES.includes(documentState) ? documentState : void 0;
+  const spinner = items(input.indicators).map((indicator) => pageEvidenceWire(indicator)).some((indicator) => indicator?.kind === "spinner");
   const loading = {
     ...readyState && readyState !== "complete" ? { readyState } : {},
     ...trueFlag(input.busy) ? { busy: true } : {},
-    ...trueFlag(input.spinner) ? { spinner: true } : {},
+    ...spinner ? { spinner: true } : {},
     ...trueFlag(input.pendingNavigation) ? { pendingNavigation: true } : {}
   };
   return Object.keys(loading).length ? loading : void 0;
 }
 function evidenceNavigation(input) {
-  if (!isJsonRecord(input)) return void 0;
+  if (!input) return void 0;
+  const type = boundedText2(input.type, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
+  const redirects = boundedCount(input.redirects, MAX_REDIRECTS);
   const navigation = {
-    ...trueFlag(input.pending) ? { pending: true } : {},
-    ...locationField("from", input.from),
-    ...locationField("to", input.to)
+    ...type && type !== ORDINARY_NAVIGATION_TYPE ? { type } : {},
+    ...redirects ? { redirects } : {},
+    ...safeLocationField("referrer", input.referrer)
   };
   return Object.keys(navigation).length ? navigation : void 0;
 }
-function locationField(key, input) {
+function safeLocationField(key, input) {
   try {
     return { [key]: evidenceLocation(safeEvidenceUrl(input)) };
   } catch {
@@ -2428,12 +2516,13 @@ function locationField(key, input) {
   }
 }
 function evidenceDialogs(input) {
-  if (!Array.isArray(input)) return void 0;
+  if (!input) return void 0;
   const dialogs = [];
-  for (const raw of input.slice(0, WEB_LLM_EVIDENCE_BOUNDS.dialogs)) {
-    if (!isJsonRecord(raw)) continue;
+  for (const item of items(input.open).slice(0, WEB_LLM_EVIDENCE_BOUNDS.dialogs)) {
+    const raw = pageEvidenceWire(item);
+    if (!raw) continue;
     const role = boundedText2(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
-    const name = boundedText2(raw.name, WEB_LLM_EVIDENCE_BOUNDS.text);
+    const name = boundedText2(raw.label, WEB_LLM_EVIDENCE_BOUNDS.text);
     const selector = boundedText2(raw.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
     const modal = trueFlag(raw.modal);
     if (!role && !name && !selector && !modal) continue;
@@ -2447,17 +2536,18 @@ function evidenceDialogs(input) {
   return dialogs.length ? dialogs : void 0;
 }
 function evidenceBlocker(input) {
-  if (!isJsonRecord(input)) return void 0;
-  const selector = boundedText2(input.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
+  const blocker = items(input?.blockers).map((item) => pageEvidenceWire(item)).find((item) => item !== void 0);
+  if (!blocker) return void 0;
+  const selector = boundedText2(blocker.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
   if (!selector) return void 0;
-  const tag = boundedText2(input.tag ?? input.tagName, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
-  const role = boundedText2(input.role, WEB_LLM_EVIDENCE_BOUNDS.role);
-  const name = boundedText2(input.name, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const role = boundedText2(blocker.role, WEB_LLM_EVIDENCE_BOUNDS.role);
+  const name = boundedText2(blocker.label, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const blocks = boundedCount(blocker.blocks, MAX_BLOCKED_CONTROLS);
   return {
     selector,
-    ...tag ? { tag } : {},
     ...role ? { role } : {},
-    ...name ? { name } : {}
+    ...name ? { name } : {},
+    ...blocks ? { blocks } : {}
   };
 }
 
@@ -2485,6 +2575,8 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
   const childFrameIds = [...new Set(elements.map((element) => element.frameId).filter((id) => id !== void 0))].sort((left, right) => left - right);
   const elementTotal = evidenceElementTotal(snapshot, elements.length);
   const title = boundedText2(snapshot.title, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const captureTruncated = capturedTruncated(snapshot);
+  const elementsTruncated = snapshot.interactiveElements.length > WEB_LLM_EVIDENCE_BOUNDS.elements;
   const evidence = {
     schemaVersion: WEB_LLM_EVIDENCE_SCHEMA_VERSION,
     trust: "untrusted-page-evidence",
@@ -2493,7 +2585,9 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
     ...webLlmPageContext(snapshot, childFrameIds),
     ...elementTotal === void 0 ? {} : { elementTotal },
     elements,
-    truncated: capturedTruncated(snapshot) || snapshot.interactiveElements.length > WEB_LLM_EVIDENCE_BOUNDS.elements
+    truncated: captureTruncated || elementsTruncated,
+    ...captureTruncated ? { captureTruncated: true } : {},
+    ...elementsTruncated ? { elementsTruncated: true } : {}
   };
   trimToBudget(evidence, selectors, maxEvidenceBytes);
   return { evidence, selectors };
@@ -2502,12 +2596,16 @@ function budgetFor(options) {
   return options.budget === "failure" ? evidenceByteLimit(options.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure) : evidenceByteLimit(options.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration);
 }
 function trimToBudget(evidence, selectors, maxEvidenceBytes) {
+  const markBudgetTruncated = () => {
+    evidence.truncated = true;
+    evidence.budgetTruncated = true;
+  };
   const popElement = () => {
     const removed = evidence.elements.pop();
     if (removed) selectors.delete(removed.target);
-    evidence.truncated = true;
+    markBudgetTruncated();
   };
-  const droppable = ["selectedText", "title", "navigation", "loading", "elementTotal", "pendingNativeDialog", "dialogs", "blockedBy", "frame"];
+  const droppable = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame"];
   while (serializedBytes(evidence) > maxEvidenceBytes) {
     if (evidence.elements.length > 1) {
       popElement();
@@ -2517,7 +2615,7 @@ function trimToBudget(evidence, selectors, maxEvidenceBytes) {
     if (field !== void 0) {
       if (evidence[field] !== void 0) {
         delete evidence[field];
-        evidence.truncated = true;
+        markBudgetTruncated();
       }
       continue;
     }
@@ -2837,7 +2935,9 @@ async function executeWebAutomationRuntimeCommand(fluxiq2, command) {
   const message = result.error ?? dispatchPayloadMessage(result.payload);
   const status = result.status ?? (result.ok ? "succeeded" : "failed");
   const diagnostics = failureDiagnostics(status, result.payload);
-  const failure = commandFailure(status, outputId, message, result.failure, diagnostics?.evidenceDigest);
+  const clientResult = jsonObject2(result.payload?.result);
+  const withholdComparison = isSensitiveElementDescriptor(clientResult?.element) && !isProducerRedactedComparison(clientResult?.validation);
+  const failure = commandFailure(status, outputId, message, result.failure, diagnostics?.evidenceDigest, withholdComparison);
   const runtimeResult = {
     commandId: command.commandId ?? `web.${Date.now()}`,
     status,
@@ -2852,7 +2952,7 @@ async function executeWebAutomationRuntimeCommand(fluxiq2, command) {
       ...diagnostics ? { failureDiagnostics: diagnostics.report, ...diagnostics.evidence ? { failureEvidence: diagnostics.evidence } : {} } : {}
     })
   };
-  if (result.payload !== void 0) runtimeResult.payload = result.payload;
+  if (result.payload !== void 0) runtimeResult.payload = withholdComparison ? secretSafeDispatchPayload(result.payload) : result.payload;
   const target = outputTargetFromPayload(payload);
   if (target) runtimeResult.target = target;
   return runtimeResult;
@@ -2892,8 +2992,8 @@ function rejected(command, message, code) {
     failure: webAutomationFailureRecord(code, { expected: "a dispatchable web automation command", actual: message })
   };
 }
-function commandFailure(status, actionType, message, reported, evidenceDigest) {
-  const client = clientReportedFailure(reported);
+function commandFailure(status, actionType, message, reported, evidenceDigest, withholdComparison) {
+  const client = clientReportedFailure(reported, withholdComparison);
   const outcome = {
     // `rejected` is a dispatch status Core's command vocabulary has and the
     // client's does not; a client that refused an action did not run it, which
@@ -2908,9 +3008,11 @@ function commandFailure(status, actionType, message, reported, evidenceDigest) {
   if (evidenceDigest === void 0 || failure.evidenceDigest !== void 0) return failure;
   return { ...failure, evidenceDigest };
 }
-function clientReportedFailure(reported) {
+function clientReportedFailure(reported, withholdComparison) {
   if (reported === void 0) return void 0;
-  const { expected, actual, evidenceDigest } = reported;
+  const { evidenceDigest } = reported;
+  const expected = secretSafeComparisonText(reported.expected, withholdComparison);
+  const actual = secretSafeComparisonText(reported.actual, withholdComparison);
   if (isWebAutomationFailureCode(reported.code)) return webAutomationFailureRecord(reported.code, { expected, actual, evidenceDigest });
   const unnamed = `unrecognized web automation failure code: ${reported.code}`;
   return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNKNOWN, {
@@ -2918,6 +3020,26 @@ function clientReportedFailure(reported) {
     actual: actual === void 0 ? unnamed : `${actual}; ${unnamed}`,
     evidenceDigest
   });
+}
+function secretSafeComparisonText(text3, withholdComparison) {
+  if (text3 === void 0 || !withholdComparison) return text3;
+  return WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT;
+}
+function secretSafeDispatchPayload(payload) {
+  const actionResult = jsonObject2(payload.result);
+  const validation2 = jsonObject2(actionResult?.validation);
+  if (!actionResult || !validation2 || validation2.status === "none") return payload;
+  return {
+    ...payload,
+    result: {
+      ...actionResult,
+      validation: {
+        ...validation2,
+        ...validation2.expected === void 0 ? {} : { expected: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT },
+        ...validation2.actual === void 0 ? {} : { actual: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT }
+      }
+    }
+  };
 }
 function failureDiagnostics(status, payload) {
   if (status === "succeeded") return void 0;
@@ -3314,12 +3436,7 @@ function createWebAutomationRecordingEvent(payload, input = {}) {
     })
   };
 }
-var UNSUPPORTED_ACTION_TYPE_FAILURE = Object.freeze({
-  category: "blocked_by_capability_or_policy",
-  code: "web.action.unsupported_type",
-  retryable: false,
-  stage: "dispatch"
-});
+var UNSUPPORTED_ACTION_TYPE_FAILURE = Object.freeze(webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE));
 var CANONICAL_ACTION_TYPES = new Set(WEB_AUTOMATION_ACTION_TYPES);
 var LEGACY_ACTION_TYPE_ALIASES = new Map(
   Object.entries(WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER).map(([canonical, legacy]) => [legacy, canonical])

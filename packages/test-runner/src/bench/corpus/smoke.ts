@@ -11,9 +11,15 @@ const week1Row = (id: string): BenchCorpusRow => {
  * Two fast Week 1 rows with no variants, both proven live on `isolated`:
  * basic-form (W01) and iframe-checkout (W28). Taken from `week1Corpus`, so
  * each row maps exactly as it does there.
+ *
+ * The recording lane only, deliberately. Neither row has a variant, so there
+ * is nothing here for the Flow lane to run, and smoke is the corpus every
+ * historical bench was measured on: keeping its plan identical is what keeps
+ * those reports comparable with a new one.
  */
 export const smokeCorpus: BenchCorpus = {
   id: "smoke",
   description: "Two fast Week 1 rows: basic-form (W01) and iframe-checkout (W28)",
+  lanes: ["recording"],
   rows: [week1Row("W01"), week1Row("W28")],
 };

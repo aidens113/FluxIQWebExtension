@@ -909,6 +909,11 @@ function boundedText(value) {
   return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
 }
 
+// ../../domain/src/page-evidence/wire.ts
+function pageEvidenceWire(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+
 // ../../domain/src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
 var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
@@ -925,10 +930,10 @@ function isSensitiveControlType(type) {
 // ../../domain/src/sensitivity/descriptor.ts
 function sensitiveFieldSignatureOfDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
-  const record2 = descriptor;
-  const attributes = record2.attributes && typeof record2.attributes === "object" && !Array.isArray(record2.attributes) ? record2.attributes : {};
+  const record = descriptor;
+  const attributes = record.attributes && typeof record.attributes === "object" && !Array.isArray(record.attributes) ? record.attributes : {};
   return {
-    inputType: stringField(record2.inputType),
+    inputType: stringField(record.inputType),
     controlType: stringField(attributes.type),
     autocomplete: stringField(attributes.autocomplete),
     dataSensitive: stringField(attributes["data-sensitive"])
@@ -939,6 +944,13 @@ function isSensitiveElementDescriptor(descriptor) {
 }
 function stringField(value) {
   return typeof value === "string" ? value : void 0;
+}
+
+// ../../domain/src/sensitivity/redaction.ts
+var WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT = "(withheld: the action ran on a control that holds a secret)";
+function isProducerRedactedComparison(validation) {
+  if (!validation || typeof validation !== "object" || Array.isArray(validation)) return false;
+  return validation.redacted === true;
 }
 
 // ../../domain/src/recording/state.ts
@@ -1069,7 +1081,7 @@ function finite(value) {
 
 // ../../domain/src/recording/web-state/element/selection.ts
 var MAX_STATE_ELEMENTS = 1500;
-var WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS = ["count", "captured", "truncated"];
+var WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS = ["count", "captured", "truncated", "captureTruncated", "stateTruncated"];
 function shouldCaptureElementState(element) {
   if (!hasElementBounds(element)) return false;
   return Boolean(
@@ -1352,9 +1364,6 @@ function webAutomationActionVisualTargetFromElement(element, input = {}) {
 
 // ../../domain/src/recording/web-state/evidence/read.ts
 var MAX_TEXT = 200;
-function record(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
-}
 function list(value) {
   return Array.isArray(value) ? value : [];
 }
@@ -1370,7 +1379,7 @@ function flag(value) {
   return typeof value === "boolean" ? value : void 0;
 }
 function rect(value) {
-  const bounds = record(value);
+  const bounds = pageEvidenceWire(value);
   if (!bounds) return void 0;
   const x = finite2(bounds.x);
   const y = finite2(bounds.y);
@@ -1387,10 +1396,10 @@ function finite2(value) {
 
 // ../../domain/src/recording/web-state/evidence/input.ts
 function pageEvidenceOfSnapshot(snapshot) {
-  return record(record(snapshot)?.evidence);
+  return pageEvidenceWire(pageEvidenceWire(snapshot)?.evidence);
 }
 function pageEvidenceTruncatedElements(evidence) {
-  return record(evidence?.elements)?.truncated === true;
+  return pageEvidenceWire(evidence?.elements)?.truncated === true;
 }
 
 // ../../domain/src/recording/web-state/state-values.ts
@@ -1495,11 +1504,11 @@ function addPageEvidenceStateValues(state, evidence, timestamp, sourceId) {
   const put = (path, type, value, input = {}) => {
     next = putStateValue(next, `${EVIDENCE_PATH_PREFIX}${path}`, type, value, timestamp, sourceId, input);
   };
-  addElementTotals(put, record(evidence.elements));
-  addLoading(put, record(evidence.loading));
-  addNavigation(put, record(evidence.navigation));
-  addDialogs(put, record(evidence.dialogs));
-  addOverlays(put, record(evidence.overlays));
+  addElementTotals(put, pageEvidenceWire(evidence.elements));
+  addLoading(put, pageEvidenceWire(evidence.loading));
+  addNavigation(put, pageEvidenceWire(evidence.navigation));
+  addDialogs(put, pageEvidenceWire(evidence.dialogs));
+  addOverlays(put, pageEvidenceWire(evidence.overlays));
   addRegions(put, list(evidence.regions));
   addRepeating(put, list(evidence.repeating));
   addForms(put, list(evidence.forms));
@@ -1529,7 +1538,7 @@ function addLoading(put, loading) {
   putFlag(put, "loading.pendingNavigation", loading.pendingNavigation, LIVE_STATUS);
   putCollection(put, "loading.busyRegions", list(loading.busyRegions), MAX_BUSY_REGIONS, selectorItem, LIVE_COLLECTION);
   putCollection(put, "loading.indicators", list(loading.indicators), MAX_LOADING_INDICATORS, (item) => {
-    const indicator = record(item);
+    const indicator = pageEvidenceWire(item);
     return compactJsonObject({
       selector: text(indicator?.selector),
       kind: text(indicator?.kind),
@@ -1554,7 +1563,7 @@ function addDialogs(put, dialogs) {
   putFlag(put, "dialogs.modal", dialogs.modal, LIVE_STATUS);
   putFlag(put, "dialogs.armPending", dialogs.armPending, LIVE_STATUS);
   putCollection(put, "dialogs.open", open, MAX_DIALOGS, (item) => {
-    const dialog = record(item);
+    const dialog = pageEvidenceWire(item);
     return compactJsonObject({
       selector: text(dialog?.selector),
       role: text(dialog?.role),
@@ -1564,7 +1573,7 @@ function addDialogs(put, dialogs) {
       bounds: rect(dialog?.bounds)
     });
   }, LIVE_COLLECTION);
-  const native = record(dialogs.lastNative);
+  const native = pageEvidenceWire(dialogs.lastNative);
   if (native) {
     put("dialogs.lastNative", "json", compactJsonObject({
       kind: text(native.kind),
@@ -1579,7 +1588,7 @@ function addOverlays(put, overlays) {
   putCount(put, "overlays.tested", overlays.tested, LIVE_COUNT);
   putCount(put, "overlays.blockedCount", overlays.blockedCount, LIVE_COUNT);
   putCollection(put, "overlays.blockers", list(overlays.blockers), MAX_OVERLAY_BLOCKERS, (item) => {
-    const blocker = record(item);
+    const blocker = pageEvidenceWire(item);
     const blocked = list(blocker?.blocked);
     return compactJsonObject({
       selector: text(blocker?.selector),
@@ -1594,7 +1603,7 @@ function addOverlays(put, overlays) {
 }
 function addRegions(put, regions) {
   putCollection(put, "regions", regions, MAX_REGIONS, (item) => {
-    const region = record(item);
+    const region = pageEvidenceWire(item);
     return compactJsonObject({
       role: text(region?.role),
       label: text(region?.label),
@@ -1605,8 +1614,8 @@ function addRegions(put, regions) {
 }
 function addRepeating(put, repeating) {
   putCollection(put, "repeating", repeating, MAX_REPEATING, (item) => {
-    const structure = record(item);
-    const representative = record(structure?.representative);
+    const structure = pageEvidenceWire(item);
+    const representative = pageEvidenceWire(structure?.representative);
     return compactJsonObject({
       containerSelector: text(structure?.containerSelector),
       signature: text(structure?.signature),
@@ -1622,7 +1631,7 @@ function addRepeating(put, repeating) {
 }
 function addForms(put, forms) {
   putCollection(put, "forms", forms, MAX_FORMS, (item) => {
-    const form = record(item);
+    const form = pageEvidenceWire(item);
     const controls = list(form?.controls);
     return compactJsonObject({
       selector: text(form?.selector),
@@ -1639,7 +1648,7 @@ function addForms(put, forms) {
   }, SETTLED_COLLECTION);
 }
 function formControl(item) {
-  const control = record(item);
+  const control = pageEvidenceWire(item);
   const controlType = text(control?.controlType);
   const autocomplete = typeof control?.autocomplete === "string" ? control.autocomplete : void 0;
   const sensitive = control?.sensitive === true || isSensitiveFieldSignature({ inputType: controlType, controlType, autocomplete });
@@ -1696,7 +1705,10 @@ function createWebAutomationStateFromSnapshot(snapshot, input = {}) {
   const selection = filterStateElements(snapshot.interactiveElements);
   state = putStateValue(state, "elements.count", "integer", selection.total, timestamp, input.sourceId, { elementKind: "count" });
   state = putStateValue(state, "elements.captured", "integer", selection.captured, timestamp, input.sourceId, { elementKind: "count" });
-  state = putStateValue(state, "elements.truncated", "boolean", selection.truncated || pageEvidenceTruncatedElements(evidence), timestamp, input.sourceId, { elementKind: "status" });
+  const captureTruncated = pageEvidenceTruncatedElements(evidence);
+  state = putStateValue(state, "elements.captureTruncated", "boolean", captureTruncated, timestamp, input.sourceId, { elementKind: "status" });
+  state = putStateValue(state, "elements.stateTruncated", "boolean", selection.truncated, timestamp, input.sourceId, { elementKind: "status" });
+  state = putStateValue(state, "elements.truncated", "boolean", selection.truncated || captureTruncated, timestamp, input.sourceId, { elementKind: "status" });
   for (const entry of selection.elements) state = addElementStateValues(state, entry, timestamp, input.sourceId);
   return withScreenVisualFrame(state, snapshot, selection.elements, input);
 }
@@ -1989,7 +2001,7 @@ function webAutomationActionResultPayload(result) {
     commandId: result.commandId,
     actionType: result.actionType,
     status: result.status,
-    validation: result.validation,
+    validation: webAutomationSecretSafeValidation(result.validation, result.element),
     message: result.message,
     url: result.url,
     title: result.title,
@@ -2001,6 +2013,12 @@ function webAutomationActionResultPayload(result) {
     finishedAt: result.finishedAt
   });
 }
+function webAutomationSecretSafeValidation(validation, element) {
+  if (validation === void 0 || validation.status === "none") return validation;
+  if (isProducerRedactedComparison(validation)) return validation;
+  if (!isSensitiveElementDescriptor(element)) return validation;
+  return { status: validation.status, expected: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, actual: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT };
+}
 function normalizeWebAutomationActionType(actionType) {
   if (CANONICAL_ACTION_TYPES.has(actionType)) return { ok: true, actionType };
   const canonical = LEGACY_ACTION_TYPE_ALIASES.get(actionType);
@@ -2008,12 +2026,7 @@ function normalizeWebAutomationActionType(actionType) {
   const requested = typeof actionType === "string" && actionType.length > 0 ? actionType : "(missing)";
   return { ok: false, failure: UNSUPPORTED_ACTION_TYPE_FAILURE, message: `Unsupported web automation action type: ${requested}` };
 }
-var UNSUPPORTED_ACTION_TYPE_FAILURE = Object.freeze({
-  category: "blocked_by_capability_or_policy",
-  code: "web.action.unsupported_type",
-  retryable: false,
-  stage: "dispatch"
-});
+var UNSUPPORTED_ACTION_TYPE_FAILURE = Object.freeze(webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE));
 var CANONICAL_ACTION_TYPES = new Set(WEB_AUTOMATION_ACTION_TYPES);
 var LEGACY_ACTION_TYPE_ALIASES = new Map(
   Object.entries(WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER).map(([canonical, legacy]) => [legacy, canonical])
@@ -3172,6 +3185,17 @@ function normalizeRecordingSummary(value) {
   });
 }
 
+// src/shared/present.ts
+function present(fields) {
+  const source = fields;
+  const written = {};
+  for (const key of Object.keys(source)) {
+    const value = source[key];
+    if (value !== void 0) written[key] = value;
+  }
+  return written;
+}
+
 // src/background/connection/frame-geometry.ts
 function translateFrameElements(frameSnapshot, topSnapshot, frameId) {
   const offset = rectValue(frameSnapshot.frame?.viewportOffset);
@@ -3299,45 +3323,76 @@ function pageEvidenceOf(snapshot) {
 function frameEvidenceInTopFrameTerms(evidence, frameSnapshot, topSnapshot, frameId) {
   const qualify = (selector) => `frame[${frameId}] >> ${selector}`;
   const place = (bounds) => frameBoundsOnTopDocument(bounds, frameSnapshot, topSnapshot, frameId);
-  return {
-    ...evidence,
-    loading: {
-      ...evidence.loading,
+  const { dialogs, overlays } = evidence;
+  return present({
+    elements: evidence.elements,
+    loading: present({
+      documentState: evidence.loading.documentState,
+      busy: evidence.loading.busy,
       busyRegions: evidence.loading.busyRegions.map(qualify),
-      indicators: evidence.loading.indicators.map((indicator) => ({ ...indicator, selector: qualify(indicator.selector) }))
-    },
-    ...evidence.dialogs ? {
-      dialogs: {
-        ...evidence.dialogs,
-        open: evidence.dialogs.open.map(({ bounds, ...dialog }) => ({ ...dialog, selector: qualify(dialog.selector), ...boundsOrNone(place(bounds)) }))
-      }
-    } : {},
-    ...evidence.overlays ? {
-      overlays: {
-        ...evidence.overlays,
-        blockers: evidence.overlays.blockers.map(({ bounds, ...blocker }) => ({ ...blocker, selector: qualify(blocker.selector), blocked: blocker.blocked.map(qualify), ...boundsOrNone(place(bounds)) }))
-      }
-    } : {},
-    ...evidence.regions ? { regions: evidence.regions.map(({ bounds, ...region }) => ({ ...region, selector: qualify(region.selector), ...boundsOrNone(place(bounds)) })) } : {},
-    ...evidence.repeating ? {
-      repeating: evidence.repeating.map((structure) => ({
-        ...structure,
-        containerSelector: qualify(structure.containerSelector),
-        representative: { ...structure.representative, selector: qualify(structure.representative.selector) }
+      indicators: evidence.loading.indicators.map((indicator) => present({ selector: qualify(indicator.selector), kind: indicator.kind, label: indicator.label })),
+      pendingNavigation: evidence.loading.pendingNavigation
+    }),
+    navigation: evidence.navigation,
+    dialogs: dialogs && present({
+      open: dialogs.open.map((dialog) => present({
+        selector: qualify(dialog.selector),
+        role: dialog.role,
+        modal: dialog.modal,
+        native: dialog.native,
+        label: dialog.label,
+        bounds: place(dialog.bounds)
+      })),
+      modal: dialogs.modal,
+      armPending: dialogs.armPending,
+      lastNative: dialogs.lastNative
+    }),
+    overlays: overlays && present({
+      tested: overlays.tested,
+      blockedCount: overlays.blockedCount,
+      blockers: overlays.blockers.map((blocker) => present({
+        selector: qualify(blocker.selector),
+        role: blocker.role,
+        label: blocker.label,
+        bounds: place(blocker.bounds),
+        blocks: blocker.blocks,
+        blocked: blocker.blocked.map(qualify)
       }))
-    } : {},
-    ...evidence.forms ? {
-      forms: evidence.forms.map((form) => ({
-        ...form,
-        selector: qualify(form.selector),
-        controls: form.controls.map((control) => ({ ...control, selector: qualify(control.selector) })),
-        ...form.submit ? { submit: qualify(form.submit) } : {}
-      }))
-    } : {}
-  };
-}
-function boundsOrNone(bounds) {
-  return bounds ? { bounds } : {};
+    }),
+    // Key order follows `content/evidence/regions.ts`, not the contract's declaration order, so the restated JSON stays byte-identical.
+    regions: evidence.regions?.map((region) => present({ role: region.role, selector: qualify(region.selector), label: region.label, bounds: place(region.bounds) })),
+    repeating: evidence.repeating?.map((structure) => present({
+      containerSelector: qualify(structure.containerSelector),
+      signature: structure.signature,
+      itemCount: structure.itemCount,
+      representative: present({
+        selector: qualify(structure.representative.selector),
+        testId: structure.representative.testId,
+        text: structure.representative.text
+      }),
+      fields: structure.fields
+    })),
+    forms: evidence.forms?.map((form) => present({
+      selector: qualify(form.selector),
+      name: form.name,
+      label: form.label,
+      action: form.action,
+      method: form.method,
+      controlCount: form.controlCount,
+      controls: form.controls.map((control) => present({
+        selector: qualify(control.selector),
+        controlType: control.controlType,
+        name: control.name,
+        label: control.label,
+        required: control.required,
+        disabled: control.disabled,
+        hasValue: control.hasValue,
+        autocomplete: control.autocomplete,
+        sensitive: control.sensitive
+      })),
+      submit: form.submit ? qualify(form.submit) : void 0
+    }))
+  });
 }
 function frameBoundsOnTopDocument(bounds, frameSnapshot, topSnapshot, frameId) {
   if (!bounds) return void 0;
@@ -3357,8 +3412,8 @@ function mergePageEvidence(contributions, base) {
   const forms = cappedList(contributions.flatMap((evidence) => evidence.forms ?? []), MAX_MERGED_FORMS);
   const dialogs = mergeDialogEvidence(contributions);
   const overlays = mergeOverlayEvidence(contributions);
-  return {
-    elements: {
+  return present({
+    elements: present({
       scanned: sumOf(contributions, (evidence) => evidence.elements.scanned),
       candidates: sumOf(contributions, (evidence) => evidence.elements.candidates),
       matched: sumOf(contributions, (evidence) => evidence.elements.matched),
@@ -3366,43 +3421,43 @@ function mergePageEvidence(contributions, base) {
       truncated: contributions.some((evidence) => evidence.elements.truncated),
       changed: sumOf(contributions, (evidence) => evidence.elements.changed),
       recentlyInteracted: sumOf(contributions, (evidence) => evidence.elements.recentlyInteracted)
-    },
-    loading: {
+    }),
+    loading: present({
       documentState: anchor.loading.documentState,
       busy: contributions.some((evidence) => evidence.loading.busy),
       busyRegions: contributions.flatMap((evidence) => evidence.loading.busyRegions).slice(0, MAX_MERGED_BUSY_REGIONS),
       indicators: contributions.flatMap((evidence) => evidence.loading.indicators).slice(0, MAX_MERGED_LOADING_INDICATORS),
       pendingNavigation: contributions.some((evidence) => evidence.loading.pendingNavigation)
-    },
+    }),
     navigation: anchor.navigation,
-    ...dialogs ? { dialogs } : {},
-    ...overlays ? { overlays } : {},
-    ...regions ? { regions } : {},
-    ...repeating ? { repeating } : {},
-    ...forms ? { forms } : {}
-  };
+    dialogs,
+    overlays,
+    regions,
+    repeating,
+    forms
+  });
 }
 function mergeDialogEvidence(contributions) {
-  const present = contributions.flatMap((evidence) => evidence.dialogs ? [evidence.dialogs] : []);
-  if (!present.length) return void 0;
-  const native = present.flatMap((dialogs) => dialogs.lastNative ? [dialogs.lastNative] : []).sort((left, right) => right.at - left.at)[0];
-  return {
-    open: present.flatMap((dialogs) => dialogs.open).slice(0, MAX_MERGED_DIALOGS),
-    modal: present.some((dialogs) => dialogs.modal),
-    ...present.some((dialogs) => dialogs.armPending) ? { armPending: true } : {},
-    ...native ? { lastNative: native } : {}
-  };
+  const reported = contributions.flatMap((evidence) => evidence.dialogs ? [evidence.dialogs] : []);
+  if (!reported.length) return void 0;
+  const native = reported.flatMap((dialogs) => dialogs.lastNative ? [dialogs.lastNative] : []).sort((left, right) => right.at - left.at)[0];
+  return present({
+    open: reported.flatMap((dialogs) => dialogs.open).slice(0, MAX_MERGED_DIALOGS),
+    modal: reported.some((dialogs) => dialogs.modal),
+    armPending: reported.some((dialogs) => dialogs.armPending) ? true : void 0,
+    lastNative: native
+  });
 }
 function mergeOverlayEvidence(contributions) {
-  const present = contributions.flatMap((evidence) => evidence.overlays ? [evidence.overlays] : []);
-  if (!present.length) return void 0;
-  return {
-    tested: present.reduce((total, overlays) => total + overlays.tested, 0),
-    blockedCount: present.reduce((total, overlays) => total + overlays.blockedCount, 0),
+  const reported = contributions.flatMap((evidence) => evidence.overlays ? [evidence.overlays] : []);
+  if (!reported.length) return void 0;
+  return present({
+    tested: reported.reduce((total, overlays) => total + overlays.tested, 0),
+    blockedCount: reported.reduce((total, overlays) => total + overlays.blockedCount, 0),
     // Most-blocking first, as within one frame. Array sort is stable, so frames
     // that block equally keep the order they answered in.
-    blockers: present.flatMap((overlays) => overlays.blockers).sort((left, right) => right.blocks - left.blocks).slice(0, MAX_MERGED_BLOCKERS)
-  };
+    blockers: reported.flatMap((overlays) => overlays.blockers).sort((left, right) => right.blocks - left.blocks).slice(0, MAX_MERGED_BLOCKERS)
+  });
 }
 function sumOf(contributions, read) {
   return contributions.reduce((total, evidence) => total + read(evidence), 0);
@@ -3920,12 +3975,12 @@ var NavigationRecorder = class {
   }
   // Collapses the burst of URL, title, and status updates a single load emits
   // into one deferred call.
-  schedule(tabId, url, record2) {
+  schedule(tabId, url, record) {
     const existing = this.pending.get(tabId);
     if (existing) clearTimeout(existing.timer);
     const timer = setTimeout(() => {
       this.pending.delete(tabId);
-      record2();
+      record();
     }, NAVIGATION_DEBOUNCE_MS);
     this.pending.set(tabId, { url, timer });
   }

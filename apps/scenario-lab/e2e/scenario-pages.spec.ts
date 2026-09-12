@@ -39,7 +39,7 @@ test("delayed UI reveals and executes its late action", async ({ page, lab, netw
 
 test("failure surfaces expose disabled, detached, blocked, and closure states without outbound traffic", async ({ page, lab, networkGuard: _guard }) => {
   await page.goto(`${lab.origin}/scenarios/failure-surfaces/`); await expect(page.getByTestId("disabled-target")).toBeDisabled(); await page.getByTestId("detach-target").click(); await expect(page.getByTestId("detach-target")).toHaveCount(0);
-  await page.getByTestId("blocked-url").click(); await expect(page).toHaveURL(`${lab.origin}/scenarios/failure-surfaces/`); await page.getByTestId("close-surface").click(); await expect(page.getByTestId("result")).toHaveText("Closure requested");
+  await page.getByTestId("dead-link").click(); await expect(page).toHaveURL(`${lab.origin}/scenarios/failure-surfaces/`); await page.getByTestId("close-surface").click(); await expect(page.getByTestId("result")).toHaveText("Closure requested");
 });
 
 test("reconnect UI orders disconnect, queued, reconnect, and replay events", async ({ page, lab, networkGuard: _guard }) => {
