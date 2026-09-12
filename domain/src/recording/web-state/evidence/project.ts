@@ -242,20 +242,29 @@ function addForms(put: PutStateValue, forms: unknown[]): void {
  * control is sensitive learns nothing from it worth carrying into a persisted,
  * replayed artefact.
  *
- * The rule is asked twice. The producer's `sensitive` flag is trusted when set,
- * and the shared rule in `domain/src/sensitivity/` is asked again from
- * `controlType`, so a `type="password"` control is protected here even if the
- * flag never arrives -- this is the far side of a wire from the producer's
- * guard, and `state-values.ts` takes the same second look at an element's
- * `value`. The domain cannot re-derive the `autocomplete` half of the rule
- * because the evidence does not carry the attribute, so a `cc-number` field
- * still depends on the producer's flag. That is the weaker of the two halves
- * and it is stated rather than hidden.
+ * The rule is asked twice, and the two answers are independent. The producer's
+ * `sensitive` flag is trusted when set, and the shared rule in
+ * `domain/src/sensitivity/` is asked again here from the control's own signals,
+ * so a control is protected even if the flag never arrives -- this is the far
+ * side of a wire from the producer's guard, and `state-values.ts` takes the
+ * same second look at an element's `value`. Both checks must fail before a
+ * value escapes.
+ *
+ * That second look reads `autocomplete` as well as `controlType`, which is the
+ * half of the rule that matters most: a card field is a plain `text` input
+ * marked `billing cc-number`, so `controlType` alone can never see it, and that
+ * exact token list has slipped past a copy of this rule twice in this plan. It
+ * is read straight off the wire and never through `text()`, which collapses and
+ * slices to 200 characters -- truncating the input to a security predicate is a
+ * way past it. The attribute decides and is then discarded: it is not written
+ * into state, because a persisted, replayed artefact gains nothing from it.
  */
 function formControl(item: unknown): JsonObject {
   const control = record(item);
   const controlType = text(control?.controlType);
-  const sensitive = control?.sensitive === true || isSensitiveFieldSignature({ inputType: controlType, controlType });
+  const autocomplete = typeof control?.autocomplete === "string" ? control.autocomplete : undefined;
+  const sensitive = control?.sensitive === true
+    || isSensitiveFieldSignature({ inputType: controlType, controlType, autocomplete });
   return compactJsonObject({
     selector: text(control?.selector),
     controlType,

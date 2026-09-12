@@ -385,6 +385,13 @@ var outputPorts = [
   { id: "success", label: "Success", valueType: "any", role: "success" },
   { id: "failed", label: "Failed", valueType: "any", role: "failure" }
 ];
+var expectedStateParameter = {
+  id: "expectedState",
+  label: "Expected State",
+  description: "Post-conditions checked after this action, as web.dom.assert conditions: { conditions: [{ kind, selector, expected }], mode, timeoutMs }.",
+  valueType: "object",
+  ui: { control: "value" }
+};
 function webAutomationOutputNodeId(outputId) {
   return `web.output.${outputId.replace(/^web\./, "").replace(/\./g, "-")}`;
 }
@@ -420,7 +427,7 @@ function createWebAutomationOutputNodeDefinition(definition) {
     outputAction: { fixedOutputId: definition.actionType },
     inputs: [controlInput],
     outputs: outputPorts,
-    parameters: parametersForOutput(definition.actionType).map((parameter) => ({
+    parameters: [...parametersForOutput(definition.actionType), expectedStateParameter].map((parameter) => ({
       ...parameter,
       ...requiredParameters.has(parameter.id) ? { required: true } : {},
       allowStateBinding: true
@@ -430,7 +437,17 @@ function createWebAutomationOutputNodeDefinition(definition) {
     metadata: {
       domainId: WEB_AUTOMATION_DOMAIN_ID,
       outputId: definition.actionType,
-      parameterSchema: definition.parameterSchema
+      parameterSchema: definition.parameterSchema,
+      // Core's element-target preparation (`runtime/io-policy.ts`) resolves the
+      // recorded fingerprint against the runtime candidates, and applies its
+      // confidence floor, only for an output that declares this. The flag is
+      // derived from the action's own schema row rather than listed by hand, so
+      // it cannot drift from it: an action that requires a selector cannot run
+      // without an element, and an action that does not — a delta scroll, a
+      // key press to the focused element, a URL assertion, a tab operation —
+      // must not declare it, because Core fails an action outright when a
+      // declared element target has no fingerprint to resolve.
+      ...requiredParameters.has("selector") ? { elementTarget: true } : {}
     }
   };
 }
@@ -656,8 +673,60 @@ var WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS = Object.freeze({
 // src/recording/state.ts
 var WEB_AUTOMATION_STATE_NAMESPACE = "web";
 
-// src/recording/web-state.ts
+// src/recording/web-state/compact-json-object.ts
+function compactJsonObject(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
+}
+
+// src/recording/web-state/element/identity.ts
+var MAX_STATE_ID_LENGTH = 120;
+function meaningfulText(value) {
+  return typeof value === "string" && value.trim().length >= 2;
+}
+function stableAttribute(element, name) {
+  const value = element.attributes?.[name];
+  return meaningfulText(value) ? value : void 0;
+}
+function stableElementId(element) {
+  return stableAttribute(element, "data-testid") ?? stableAttribute(element, "data-test") ?? stableAttribute(element, "data-cy") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name");
+}
+function elementStateId(element) {
+  const stable = stableElementPathId(element);
+  if (stable) return sanitizeStateId(stable);
+  const name = stableAttribute(element, "name");
+  if (name) return sanitizeStateId(`${name}.${element.selector}`);
+  return sanitizeStateId(element.selector);
+}
+function stableElementPathId(element) {
+  return stableAttribute(element, "data-testid") ?? stableAttribute(element, "data-test") ?? stableAttribute(element, "data-cy") ?? stableAttribute(element, "id");
+}
+function sanitizeStateId(value) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, MAX_STATE_ID_LENGTH) || "element";
+}
+
+// src/recording/web-state/geometry.ts
+function stateBounds(bounds) {
+  if (!bounds) return void 0;
+  const x = finite(bounds.x);
+  const y = finite(bounds.y);
+  const width = positiveFinite(bounds.width);
+  const height = positiveFinite(bounds.height);
+  return x !== void 0 && y !== void 0 && width !== void 0 && height !== void 0 ? { x, y, width, height } : void 0;
+}
+function positiveFinite(value) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : void 0;
+}
+function finite(value) {
+  return Number.isFinite(value) ? value : void 0;
+}
+
+// src/recording/web-state/visual-frame.ts
 var WEB_AUTOMATION_SCREEN_FRAME_ID = "screen";
+function safeLayerId(value, fallbackIndex) {
+  return value.replace(/[^a-z0-9.]+/gi, ".").replace(/^\.+|\.+$/g, "").slice(0, 80) || String(fallbackIndex);
+}
+
+// src/recording/web-state/action-target.ts
 function webAutomationActionTargetFromElement(element) {
   return compactJsonObject({
     type: element.role ?? element.inputType ?? element.tagName,
@@ -682,7 +751,7 @@ function webAutomationActionTargetFromElement(element) {
   });
 }
 function webAutomationActionVisualTargetFromElement(element, input = {}) {
-  const stateId = elementStateId(element);
+  const stateId = input.stateId ?? elementStateId(element);
   const statePath = `${WEB_AUTOMATION_STATE_NAMESPACE}.elements.${stateId}`;
   const bounds = stateBounds(element.bounds);
   const documentBounds = stateBounds(element.documentBounds ?? element.bounds);
@@ -714,49 +783,11 @@ function webAutomationActionVisualTargetFromElement(element, input = {}) {
     })
   });
 }
-function elementStateId(element) {
-  const stable = stableElementPathId(element);
-  if (stable) return sanitizeStateId(stable);
-  const name = stableAttribute(element, "name");
-  if (name) return sanitizeStateId(`${name}.${element.selector}`);
-  return sanitizeStateId(element.selector);
-}
-function stableElementId(element) {
-  return stableAttribute(element, "data-testid") ?? stableAttribute(element, "data-test") ?? stableAttribute(element, "data-cy") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name");
-}
-function stableElementPathId(element) {
-  return stableAttribute(element, "data-testid") ?? stableAttribute(element, "data-test") ?? stableAttribute(element, "data-cy") ?? stableAttribute(element, "id");
-}
-function sanitizeStateId(value) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, 120) || "element";
-}
-function meaningfulText(value) {
-  return typeof value === "string" && value.trim().length >= 2;
-}
-function stableAttribute(element, name) {
-  const value = element.attributes?.[name];
-  return meaningfulText(value) ? value : void 0;
-}
-function stateBounds(bounds) {
-  if (!bounds) return void 0;
-  const x = finite(bounds.x);
-  const y = finite(bounds.y);
-  const width = positiveFinite(bounds.width);
-  const height = positiveFinite(bounds.height);
-  return x !== void 0 && y !== void 0 && width !== void 0 && height !== void 0 ? { x, y, width, height } : void 0;
-}
-function finite(value) {
-  return Number.isFinite(value) ? value : void 0;
-}
-function positiveFinite(value) {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : void 0;
-}
-function safeLayerId(value, fallbackIndex) {
-  return value.replace(/[^a-z0-9.]+/gi, ".").replace(/^\.+|\.+$/g, "").slice(0, 80) || String(fallbackIndex);
-}
-function compactJsonObject(value) {
-  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
-}
+
+// src/recording/web-state/evidence/project.ts
+var COLLECTION = { elementKind: "collection", comparable: false };
+var LIVE_COLLECTION = { ...COLLECTION, volatility: "rapid" };
+var SETTLED_COLLECTION = { ...COLLECTION, volatility: "slow" };
 
 // src/client/gateway-mapping.ts
 function createWebAutomationRecordingEvent(payload, input = {}) {
@@ -775,6 +806,15 @@ function createWebAutomationRecordingEvent(payload, input = {}) {
       url: payload.url,
       title: payload.title,
       sequence: payload.sequence,
+      // The frame the interaction happened in, under the name the parameter
+      // lift reads (`gateway-action-parameters.ts` maps `browserFrameId` onto
+      // `action.frameId`). `sourceId` above names the same frame, but only as
+      // text nothing downstream parses, and `webAutomationOutputPayload` reads
+      // this payload rather than the envelope: without the field here, a click
+      // recorded inside an iframe replays against the top document. Frame 0 is
+      // the top frame and survives `compactJsonObject`, which drops only
+      // `undefined`.
+      browserFrameId: input.frameId,
       element: payload.element,
       visualTarget,
       inputValue: payload.inputValue,

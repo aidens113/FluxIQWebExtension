@@ -440,6 +440,13 @@ var outputPorts = [
   { id: "success", label: "Success", valueType: "any", role: "success" },
   { id: "failed", label: "Failed", valueType: "any", role: "failure" }
 ];
+var expectedStateParameter = {
+  id: "expectedState",
+  label: "Expected State",
+  description: "Post-conditions checked after this action, as web.dom.assert conditions: { conditions: [{ kind, selector, expected }], mode, timeoutMs }.",
+  valueType: "object",
+  ui: { control: "value" }
+};
 function webAutomationOutputNodeId(outputId) {
   return `web.output.${outputId.replace(/^web\./, "").replace(/\./g, "-")}`;
 }
@@ -475,7 +482,7 @@ function createWebAutomationOutputNodeDefinition(definition) {
     outputAction: { fixedOutputId: definition.actionType },
     inputs: [controlInput],
     outputs: outputPorts,
-    parameters: parametersForOutput(definition.actionType).map((parameter) => ({
+    parameters: [...parametersForOutput(definition.actionType), expectedStateParameter].map((parameter) => ({
       ...parameter,
       ...requiredParameters.has(parameter.id) ? { required: true } : {},
       allowStateBinding: true
@@ -485,7 +492,17 @@ function createWebAutomationOutputNodeDefinition(definition) {
     metadata: {
       domainId: WEB_AUTOMATION_DOMAIN_ID,
       outputId: definition.actionType,
-      parameterSchema: definition.parameterSchema
+      parameterSchema: definition.parameterSchema,
+      // Core's element-target preparation (`runtime/io-policy.ts`) resolves the
+      // recorded fingerprint against the runtime candidates, and applies its
+      // confidence floor, only for an output that declares this. The flag is
+      // derived from the action's own schema row rather than listed by hand, so
+      // it cannot drift from it: an action that requires a selector cannot run
+      // without an element, and an action that does not — a delta scroll, a
+      // key press to the focused element, a URL assertion, a tab operation —
+      // must not declare it, because Core fails an action outright when a
+      // declared element target has no fingerprint to resolve.
+      ...requiredParameters.has("selector") ? { elementTarget: true } : {}
     }
   };
 }
@@ -559,6 +576,7 @@ function elementFingerprint(value) {
     text: stringValue(element.text),
     value: stringValue(element.value),
     role: stringValue(element.role),
+    implicitRole: stringValue(element.implicitRole),
     name: stringValue(element.name),
     href: stringValue(element.href),
     inputType: stringValue(element.inputType),
@@ -586,6 +604,17 @@ function numberValue(value) {
 
 // ../../domain/src/output-nodes/payloads.ts
 function webAutomationOutputPayload(outputId, payload) {
+  return withRecordedFrame(outputId, payload, recordedOutputParameters(outputId, payload));
+}
+function withRecordedFrame(outputId, payload, parameters) {
+  const browserFrameId = frameIdValue(payload.browserFrameId);
+  if (browserFrameId === void 0 || !outputId.startsWith("web.dom.")) return parameters;
+  return Object.keys(parameters).length === 0 ? parameters : { ...parameters, browserFrameId };
+}
+function frameIdValue(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
+}
+function recordedOutputParameters(outputId, payload) {
   const element = elementFingerprint(payload.element);
   const selector = stringValue(element?.selector);
   const visualTarget = objectValue(payload.visualTarget);
@@ -809,6 +838,109 @@ var webAutomationGatewayCapabilities = [
 // ../../domain/src/actions/capabilities.ts
 var webAutomationClientCapabilities = webAutomationGatewayCapabilities;
 
+// ../../domain/src/runtime/failure/codes.ts
+var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
+  /** The target was found but refused the action: disabled, hidden, or covered by another element. */
+  ACTION_REJECTED: "web.action.rejected",
+  /** No element matched the action's target with enough confidence. */
+  TARGET_NOT_FOUND: "web.target.not_found",
+  /** Several elements matched the action's target and none could be preferred. */
+  TARGET_AMBIGUOUS: "web.target.ambiguous",
+  /** The action ran and its post-condition did not hold (decision D4). */
+  OUTPUT_NOT_OBSERVED: "web.validation.output_not_observed",
+  /** An authored `web.dom.assert` condition did not hold. */
+  STATE_MISMATCH: "web.validation.state_mismatch",
+  /** The browser landed somewhere other than the requested URL, or never left where it was. */
+  NAVIGATION_UNEXPECTED: "web.navigation.unexpected",
+  /** The document was replaced between resolving the target and running the action. */
+  PAGE_CHANGED: "web.page.changed",
+  /** A wait, or an action, ran out of time. */
+  TIMEOUT: "web.action.timeout",
+  /** The host wants a sign-in before the action can continue. */
+  AUTH_REQUIRED: "web.auth.required",
+  /** A person must act first: a captcha, or a native dialog waiting for an answer. */
+  USER_INTERVENTION_REQUIRED: "web.intervention.required",
+  /** The client does not implement the requested action type at all. */
+  UNSUPPORTED_TYPE: "web.action.unsupported_type",
+  /** The verb is registered but not built yet, so a Flow that reaches one fails honestly. */
+  NOT_IMPLEMENTED: "web.action.not_implemented",
+  /** The action ran and failed for a reason no other code names. */
+  ACTION_FAILED: "web.action.failed",
+  /** Nothing said why the action failed. */
+  UNKNOWN: "web.action.unknown"
+});
+var WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS = Object.freeze({
+  "web.action.rejected": { category: "blocked_by_capability_or_policy", retryable: false, stage: "execution" },
+  "web.target.not_found": { category: "target_not_found", retryable: true, stage: "target_resolution" },
+  "web.target.ambiguous": { category: "target_ambiguous", retryable: false, stage: "target_resolution" },
+  "web.validation.output_not_observed": { category: "output_not_observed", retryable: true, stage: "verification" },
+  "web.validation.state_mismatch": { category: "unexpected_state", retryable: false, stage: "verification" },
+  "web.navigation.unexpected": { category: "navigation_unexpected", retryable: false, stage: "confirmation" },
+  "web.page.changed": { category: "page_changed", retryable: true, stage: "execution" },
+  "web.action.timeout": { category: "timeout", retryable: true, stage: "execution" },
+  "web.auth.required": { category: "auth_required", retryable: false, stage: "confirmation" },
+  "web.intervention.required": { category: "user_intervention_required", retryable: false, stage: "execution" },
+  "web.action.unsupported_type": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
+  "web.action.not_implemented": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
+  "web.action.failed": { category: "action_failed", retryable: true, stage: "execution" },
+  "web.action.unknown": { category: "ambiguous_or_unknown", retryable: false, stage: "execution" }
+});
+function webAutomationFailureRecord(code, comparison = {}) {
+  const definition = WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[code];
+  const expected = boundedText(comparison.expected);
+  const actual = boundedText(comparison.actual);
+  const evidenceDigest = comparison.evidenceDigest !== void 0 && EVIDENCE_DIGEST_PATTERN.test(comparison.evidenceDigest) ? comparison.evidenceDigest : void 0;
+  return {
+    category: definition.category,
+    code,
+    retryable: definition.retryable,
+    stage: definition.stage,
+    ...expected === void 0 ? {} : { expected },
+    ...actual === void 0 ? {} : { actual },
+    ...evidenceDigest === void 0 ? {} : { evidenceDigest }
+  };
+}
+var EVIDENCE_DIGEST_PATTERN = /^[a-f0-9]{64}$/u;
+function boundedText(value) {
+  if (value === void 0) return void 0;
+  const collapsed = value.replace(/\s+/gu, " ").trim();
+  if (collapsed.length === 0) return void 0;
+  if (collapsed.length <= WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH) return collapsed;
+  return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
+}
+
+// ../../domain/src/sensitivity/signature.ts
+var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
+var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
+var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
+function isSensitiveFieldSignature(signature) {
+  if (isSensitiveControlType(signature.inputType) || isSensitiveControlType(signature.controlType)) return true;
+  if (signature.dataSensitive?.trim().toLowerCase() === "true") return true;
+  return (signature.autocomplete ?? "").toLowerCase().split(/\s+/u).some((token) => Boolean(token) && (SENSITIVE_AUTOCOMPLETE_TOKENS.has(token) || token.startsWith(SENSITIVE_AUTOCOMPLETE_PREFIX)));
+}
+function isSensitiveControlType(type) {
+  return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
+}
+
+// ../../domain/src/sensitivity/descriptor.ts
+function sensitiveFieldSignatureOfDescriptor(descriptor) {
+  if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
+  const record2 = descriptor;
+  const attributes = record2.attributes && typeof record2.attributes === "object" && !Array.isArray(record2.attributes) ? record2.attributes : {};
+  return {
+    inputType: stringField(record2.inputType),
+    controlType: stringField(attributes.type),
+    autocomplete: stringField(attributes.autocomplete),
+    dataSensitive: stringField(attributes["data-sensitive"])
+  };
+}
+function isSensitiveElementDescriptor(descriptor) {
+  return isSensitiveFieldSignature(sensitiveFieldSignatureOfDescriptor(descriptor));
+}
+function stringField(value) {
+  return typeof value === "string" ? value : void 0;
+}
+
 // ../../domain/src/recording/state.ts
 var WEB_AUTOMATION_STATE_NAMESPACE = "web";
 function createWebAutomationInitialState(timestamp = Date.now()) {
@@ -825,62 +957,342 @@ function createWebAutomationInitialState(timestamp = Date.now()) {
   };
 }
 
-// ../../domain/src/recording/web-state.ts
+// ../../domain/src/recording/web-state/compact-json-object.ts
+function compactJsonObject(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
+}
+
+// ../../domain/src/recording/web-state/element/identity.ts
+var MAX_STATE_ID_LENGTH = 120;
+function meaningfulText(value) {
+  return typeof value === "string" && value.trim().length >= 2;
+}
+function stableAttribute(element, name) {
+  const value = element.attributes?.[name];
+  return meaningfulText(value) ? value : void 0;
+}
+function stableElementId(element) {
+  return stableAttribute(element, "data-testid") ?? stableAttribute(element, "data-test") ?? stableAttribute(element, "data-cy") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name");
+}
+function elementStateId(element) {
+  const stable = stableElementPathId(element);
+  if (stable) return sanitizeStateId(stable);
+  const name = stableAttribute(element, "name");
+  if (name) return sanitizeStateId(`${name}.${element.selector}`);
+  return sanitizeStateId(element.selector);
+}
+function elementStateIdAssigner(reservedIds = []) {
+  const taken = new Set(reservedIds);
+  const occurrences = /* @__PURE__ */ new Map();
+  return (element) => {
+    const base = elementStateId(element);
+    let occurrence = (occurrences.get(base) ?? 0) + 1;
+    let candidate = occurrence === 1 ? base : `${base}.${occurrence}`;
+    while (taken.has(candidate)) {
+      occurrence += 1;
+      candidate = `${base}.${occurrence}`;
+    }
+    occurrences.set(base, occurrence);
+    taken.add(candidate);
+    return candidate;
+  };
+}
+function stableElementPathId(element) {
+  return stableAttribute(element, "data-testid") ?? stableAttribute(element, "data-test") ?? stableAttribute(element, "data-cy") ?? stableAttribute(element, "id");
+}
+function sanitizeStateId(value) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, MAX_STATE_ID_LENGTH) || "element";
+}
+
+// ../../domain/src/recording/web-state/element/kind.ts
+function isLikelyActionableElement(element) {
+  const tagName = element.tagName.toLowerCase();
+  const role = element.role?.toLowerCase();
+  const inputType = element.inputType?.toLowerCase();
+  return tagName === "button" || tagName === "a" || tagName === "select" || tagName === "textarea" || tagName === "summary" || tagName === "label" || tagName === "input" && inputType !== "hidden" || role === "button" || role === "link" || role === "menuitem" || role === "checkbox" || role === "radio" || role === "tab" || role === "switch" || element.hasClickHandler === true || element.attributes?.onclick !== void 0;
+}
+function isLikelyInteractableElement(element) {
+  return isLikelyActionableElement(element) || element.attributes?.tabindex !== void 0 || element.attributes?.["aria-expanded"] !== void 0 || element.attributes?.["aria-controls"] !== void 0 || element.attributes?.["aria-pressed"] !== void 0 || element.attributes?.["aria-selected"] !== void 0;
+}
+function isPrimaryControlElement(element) {
+  const tagName = element.tagName.toLowerCase();
+  const role = element.role?.toLowerCase();
+  return tagName === "button" || tagName === "a" || tagName === "summary" || role === "button" || role === "link" || role === "menuitem" || role === "tab";
+}
+function isSemanticTextElement(element) {
+  const tagName = element.tagName.toLowerCase();
+  return tagName === "p" || tagName === "li" || tagName === "td" || tagName === "th" || tagName === "dt" || tagName === "dd" || tagName === "figcaption" || tagName === "blockquote" || /^h[1-6]$/.test(tagName);
+}
+function isEnabled(element) {
+  return element.attributes?.disabled === void 0 && element.attributes?.["aria-disabled"] !== "true";
+}
+
+// ../../domain/src/recording/web-state/geometry.ts
+function stateBounds(bounds) {
+  if (!bounds) return void 0;
+  const x = finite(bounds.x);
+  const y = finite(bounds.y);
+  const width = positiveFinite(bounds.width);
+  const height = positiveFinite(bounds.height);
+  return x !== void 0 && y !== void 0 && width !== void 0 && height !== void 0 ? { x, y, width, height } : void 0;
+}
+function boundsAnchor(bounds) {
+  const normalized = stateBounds(bounds);
+  return normalized ? { type: "bounds", bounds: normalized } : void 0;
+}
+function screenFrameBounds(bounds, frameViewportOffset) {
+  const normalized = stateBounds(bounds);
+  if (!normalized) return void 0;
+  if (!frameViewportOffset) return normalized;
+  return stateBounds({
+    x: frameViewportOffset.x + normalized.x,
+    y: frameViewportOffset.y + normalized.y,
+    width: normalized.width,
+    height: normalized.height
+  });
+}
+function scaledScreenBounds(bounds, scaleX, scaleY) {
+  if (!bounds) return void 0;
+  return stateBounds({
+    x: bounds.x * scaleX,
+    y: bounds.y * scaleY,
+    width: bounds.width * scaleX,
+    height: bounds.height * scaleY
+  });
+}
+function positiveFinite(value) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : void 0;
+}
+function finite(value) {
+  return Number.isFinite(value) ? value : void 0;
+}
+
+// ../../domain/src/recording/web-state/element/selection.ts
 var MAX_STATE_ELEMENTS = 1500;
-var MAX_VISUAL_FRAME_ELEMENTS = 1e3;
-var WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID = "web-automation.viewport";
-var WEB_AUTOMATION_SCREEN_FRAME_ID = "screen";
-var WEB_AUTOMATION_DOCUMENT_FRAME_ID = "document";
-function createWebAutomationStateFromSnapshot(snapshot, input = {}) {
-  const timestamp = input.timestamp ?? Date.now();
-  let state = createWebAutomationInitialState(timestamp);
-  state = putStateValue(state, "page.url", "string", snapshot.url, timestamp, input.sourceId, { elementKind: "url" });
-  state = putStateValue(state, "page.title", "string", snapshot.title, timestamp, input.sourceId, { elementKind: "text" });
-  state = putStateValue(state, "viewport.bounds", "rectangle", { x: 0, y: 0, width: snapshot.viewport.width, height: snapshot.viewport.height }, timestamp, input.sourceId, { elementKind: "bounds", volatility: "normal" });
-  state = putStateValue(state, "scroll.position", "point", { x: snapshot.viewport.scrollX, y: snapshot.viewport.scrollY }, timestamp, input.sourceId, { elementKind: "position", volatility: "rapid" });
-  if (snapshot.selectedText) state = putStateValue(state, "page.selectedText", "string", snapshot.selectedText, timestamp, input.sourceId, { elementKind: "text" });
-  if (snapshot.focusedElement) {
-    const target = webAutomationActionTargetFromElement(snapshot.focusedElement);
-    state = putStateValue(state, "focus.target", "json", target, timestamp, input.sourceId, { elementKind: "json", volatility: "rapid" });
-  }
-  const elements = filterStateElements(snapshot.interactiveElements);
-  state = putStateValue(state, "elements.count", "integer", elements.length, timestamp, input.sourceId, { elementKind: "count" });
-  for (const element of elements) state = addElementStateValues(state, element, timestamp, input.sourceId);
-  return withScreenVisualFrame(state, snapshot, elements, input);
-}
-function createWebAutomationStateFromTabs(active, tabs, input = {}) {
-  const timestamp = input.timestamp ?? Date.now();
-  let state = createWebAutomationInitialState(timestamp);
-  if (active?.url) state = putStateValue(state, "page.url", "string", active.url, timestamp, input.sourceId, { elementKind: "url" });
-  if (active?.title) state = putStateValue(state, "page.title", "string", active.title, timestamp, input.sourceId, { elementKind: "text" });
-  if (active?.tabId !== void 0) state = putStateValue(state, "browser.activeTabId", "integer", active.tabId, timestamp, input.sourceId, { elementKind: "internal_id" });
-  state = putStateValue(state, "browser.tabCount", "integer", tabs.length, timestamp, input.sourceId, { elementKind: "count" });
-  state = putStateValue(state, "recording.active", "boolean", input.recording === true, timestamp, input.sourceId, { elementKind: "status" });
-  if (input.permissions?.length) state = putStateValue(state, "browser.permissions", "json", input.permissions, timestamp, input.sourceId, { elementKind: "collection", comparable: false });
-  return state;
-}
-function filterStateElements(elements, limit = MAX_STATE_ELEMENTS) {
-  const seen = /* @__PURE__ */ new Set();
-  const filtered = [];
-  const prioritized = [...elements].sort(
-    (left, right) => stateElementBucket(left) - stateElementBucket(right) || stateElementScore(right) - stateElementScore(left)
-  );
-  for (const element of prioritized) {
-    if (!shouldCaptureElementState(element)) continue;
-    const id = elementStateId(element);
-    if (seen.has(id)) continue;
-    seen.add(id);
-    filtered.push(element);
-    if (filtered.length >= limit) break;
-  }
-  return filtered;
-}
+var WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS = ["count", "captured", "truncated"];
 function shouldCaptureElementState(element) {
   if (!hasElementBounds(element)) return false;
   return Boolean(
     isLikelyInteractableElement(element) && hasMeaningfulElementIdentity(element) || meaningfulText(element.text) || meaningfulText(element.visibleText) || meaningfulText(element.name) || meaningfulText(element.value) || meaningfulText(element.href)
   );
 }
+function filterStateElements(elements, limit = MAX_STATE_ELEMENTS) {
+  const eligible = elements.map((element, documentIndex) => ({ element, documentIndex })).filter((entry) => shouldCaptureElementState(entry.element));
+  const ranked = [...eligible].sort(
+    (left, right) => stateElementBucket(left.element) - stateElementBucket(right.element) || stateElementScore(right.element) - stateElementScore(left.element)
+  );
+  const kept = ranked.slice(0, Math.max(0, limit)).map((entry, rank) => ({ ...entry, rank }));
+  kept.sort((left, right) => left.documentIndex - right.documentIndex);
+  const assignStateId = elementStateIdAssigner(WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS);
+  const named = kept.map((entry) => ({ element: entry.element, stateId: assignStateId(entry.element), rank: entry.rank }));
+  named.sort((left, right) => left.rank - right.rank);
+  return {
+    elements: named.map(({ element, stateId }) => ({ element, stateId })),
+    total: elements.length,
+    eligible: eligible.length,
+    captured: named.length,
+    truncated: eligible.length > named.length
+  };
+}
+function stateElementBucket(element) {
+  if (isPrimaryControlElement(element) && hasMeaningfulElementIdentity(element)) return 0;
+  if (isLikelyInteractableElement(element) && hasMeaningfulElementIdentity(element)) return 1;
+  if (isSemanticTextElement(element) && hasTextualElementIdentity(element)) return 2;
+  if (hasTextualElementIdentity(element)) return 3;
+  if (meaningfulText(element.href)) return 4;
+  return 5;
+}
+function stateElementScore(element) {
+  let score = 0;
+  if (isLikelyInteractableElement(element)) score += 200;
+  if (isLikelyActionableElement(element)) score += 100;
+  if (hasStableElementIdentity(element)) score += 60;
+  if (meaningfulText(element.name)) score += 45;
+  if (meaningfulText(element.value)) score += 35;
+  if (meaningfulText(element.text) || meaningfulText(element.visibleText)) score += 25;
+  const bounds = element.documentBounds ?? element.bounds;
+  if (bounds) score += Math.min(20, Math.sqrt(bounds.width * bounds.height) / 8);
+  return score;
+}
+function hasMeaningfulElementIdentity(element) {
+  return hasStableElementIdentity(element) || hasTextualElementIdentity(element) || meaningfulText(element.href);
+}
+function hasTextualElementIdentity(element) {
+  return meaningfulText(element.text) || meaningfulText(element.visibleText) || meaningfulText(element.name) || meaningfulText(element.value);
+}
+function hasStableElementIdentity(element) {
+  return Boolean(
+    stableAttribute(element, "data-testid") || stableAttribute(element, "data-test") || stableAttribute(element, "data-cy") || stableAttribute(element, "aria-label") || stableAttribute(element, "name") || stableAttribute(element, "id")
+  );
+}
+function hasElementBounds(element) {
+  return stateBounds(element.documentBounds ?? element.bounds) !== void 0;
+}
+
+// ../../domain/src/recording/web-state/visual-frame.ts
+var MAX_VISUAL_FRAME_ELEMENTS = 1e3;
+var WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID = "web-automation.viewport";
+var WEB_AUTOMATION_SCREEN_FRAME_ID = "screen";
+var WEB_AUTOMATION_DOCUMENT_FRAME_ID = "document";
+function withScreenVisualFrame(state, snapshot, elements, input = {}) {
+  const rendered = elements.slice(0, MAX_VISUAL_FRAME_ELEMENTS);
+  return {
+    ...state,
+    id: state.id ?? `web.snapshot.${state.timestamp}`,
+    presentation: {
+      ...state.presentation ?? {},
+      defaultFrameId: WEB_AUTOMATION_SCREEN_FRAME_ID,
+      visualFrames: [screenVisualFrame(snapshot, rendered, input), documentVisualFrame(snapshot, rendered)]
+    }
+  };
+}
+function safeLayerId(value, fallbackIndex) {
+  return value.replace(/[^a-z0-9.]+/gi, ".").replace(/^\.+|\.+$/g, "").slice(0, 80) || String(fallbackIndex);
+}
+function screenVisualFrame(snapshot, elements, input) {
+  const width = positiveFinite(snapshot.viewport.width) ?? 1;
+  const height = positiveFinite(snapshot.viewport.height) ?? 1;
+  const screenWidth = positiveFinite(input.screenImageSize?.width) ?? width;
+  const screenHeight = positiveFinite(input.screenImageSize?.height) ?? height;
+  const screenScaleX = screenWidth / width;
+  const screenScaleY = screenHeight / height;
+  const frameViewportOffset = stateBounds(snapshot.frame?.viewportOffset);
+  const layers = [];
+  if (input.screenContentRef) {
+    layers.push({
+      id: "screenshot",
+      kind: "image",
+      contentRef: input.screenContentRef,
+      bounds: { x: 0, y: 0, width: screenWidth, height: screenHeight },
+      metadata: compactJsonObject({
+        projectId: input.projectId,
+        url: snapshot.url,
+        frameKind: "viewport-screenshot",
+        boundsKind: "screenshot",
+        viewportWidth: width,
+        viewportHeight: height,
+        imageWidth: screenWidth,
+        imageHeight: screenHeight
+      })
+    });
+  }
+  for (const [index, { element, stateId }] of elements.entries()) {
+    const bounds = scaledScreenBounds(screenFrameBounds(element.bounds, frameViewportOffset), screenScaleX, screenScaleY);
+    if (!bounds) continue;
+    layers.push({
+      id: `element.${safeLayerId(stateId, index + 1)}`,
+      kind: "region",
+      label: elementLayerLabel(element),
+      bounds,
+      statePath: `${WEB_AUTOMATION_STATE_NAMESPACE}.elements.${stateId}`,
+      anchor: { type: "bounds", bounds },
+      metadata: compactJsonObject({
+        selector: element.selector,
+        tagName: element.tagName,
+        boundsKind: "screenshot",
+        renderKind: "screenshot-bbox",
+        isVisibleOnViewport: true
+      })
+    });
+  }
+  return {
+    id: WEB_AUTOMATION_SCREEN_FRAME_ID,
+    rendererId: WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID,
+    label: "Viewport Screenshot",
+    coordinateSpace: { width: screenWidth, height: screenHeight, unit: "px", origin: "top-left" },
+    layers,
+    presentation: { label: snapshot.title || "Browser viewport", visualKind: "bounds", icon: "globe" },
+    metadata: compactJsonObject({
+      url: snapshot.url,
+      title: snapshot.title,
+      scrollX: snapshot.viewport.scrollX,
+      scrollY: snapshot.viewport.scrollY,
+      devicePixelRatio: snapshot.viewport.devicePixelRatio,
+      frameKind: "viewport-screenshot",
+      screenCoordinateSpace: "viewport",
+      documentWidth: snapshot.viewport.documentWidth,
+      documentHeight: snapshot.viewport.documentHeight,
+      viewportWidth: width,
+      viewportHeight: height,
+      imageWidth: screenWidth,
+      imageHeight: screenHeight,
+      imageScaleX: screenScaleX,
+      imageScaleY: screenScaleY,
+      frameViewportOffset,
+      isTopFrame: snapshot.frame?.isTop
+    })
+  };
+}
+function documentVisualFrame(snapshot, elements) {
+  const width = positiveFinite(snapshot.viewport.width) ?? 1;
+  const height = positiveFinite(snapshot.viewport.height) ?? 1;
+  const rawDocumentWidth = positiveFinite(snapshot.viewport.documentWidth) ?? width;
+  const documentMapWidth = width;
+  const documentHeight = positiveFinite(snapshot.viewport.documentHeight) ?? height;
+  return {
+    id: WEB_AUTOMATION_DOCUMENT_FRAME_ID,
+    rendererId: WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID,
+    label: "Document Map",
+    coordinateSpace: { width: documentMapWidth, height: documentHeight, unit: "px", origin: "top-left" },
+    layers: [
+      {
+        id: "viewport",
+        kind: "region",
+        label: "Viewport",
+        bounds: { x: snapshot.viewport.scrollX, y: snapshot.viewport.scrollY, width, height },
+        metadata: compactJsonObject({
+          boundsKind: "document",
+          renderKind: "viewport-marker"
+        })
+      },
+      ...elements.flatMap(({ element, stateId }, index) => {
+        const bounds = stateBounds(element.documentBounds ?? element.bounds);
+        if (!bounds) return [];
+        const projectedViewportBounds = element.bounds ? stateBounds({
+          x: bounds.x - snapshot.viewport.scrollX,
+          y: bounds.y - snapshot.viewport.scrollY,
+          width: bounds.width,
+          height: bounds.height
+        }) : void 0;
+        return [{
+          id: `document.element.${safeLayerId(stateId, index + 1)}`,
+          kind: "region",
+          label: elementLayerLabel(element),
+          bounds,
+          statePath: `${WEB_AUTOMATION_STATE_NAMESPACE}.elements.${stateId}`,
+          anchor: { type: "bounds", bounds },
+          metadata: compactJsonObject({
+            selector: element.selector,
+            tagName: element.tagName,
+            boundsKind: "document",
+            renderKind: "direct-rendered",
+            isVisibleOnViewport: element.isVisibleOnViewport ?? Boolean(stateBounds(element.bounds)),
+            projectedViewportBounds
+          })
+        }];
+      })
+    ],
+    presentation: { label: "Document map", visualKind: "bounds", icon: "map" },
+    metadata: compactJsonObject({
+      url: snapshot.url,
+      title: snapshot.title,
+      scrollX: snapshot.viewport.scrollX,
+      scrollY: snapshot.viewport.scrollY,
+      viewportWidth: width,
+      viewportHeight: height,
+      frameKind: "document-map",
+      screenCoordinateSpace: "document-map",
+      documentWidth: rawDocumentWidth,
+      documentMapWidth,
+      documentHeight
+    })
+  };
+}
+function elementLayerLabel(element) {
+  return element.name ?? element.visibleText ?? element.text ?? element.value ?? element.href ?? element.tagName;
+}
+
+// ../../domain/src/recording/web-state/action-target.ts
 function webAutomationActionTargetFromElement(element) {
   return compactJsonObject({
     type: element.role ?? element.inputType ?? element.tagName,
@@ -905,7 +1317,7 @@ function webAutomationActionTargetFromElement(element) {
   });
 }
 function webAutomationActionVisualTargetFromElement(element, input = {}) {
-  const stateId = elementStateId(element);
+  const stateId = input.stateId ?? elementStateId(element);
   const statePath = `${WEB_AUTOMATION_STATE_NAMESPACE}.elements.${stateId}`;
   const bounds = stateBounds(element.bounds);
   const documentBounds = stateBounds(element.documentBounds ?? element.bounds);
@@ -937,174 +1349,51 @@ function webAutomationActionVisualTargetFromElement(element, input = {}) {
     })
   });
 }
-function addElementStateValues(state, element, timestamp, sourceId) {
-  const basePath = `elements.${elementStateId(element)}`;
-  const anchor = boundsAnchor(element.documentBounds ?? element.bounds);
-  const elementLabel = element.name ?? element.visibleText ?? element.text ?? element.value ?? element.href ?? element.selector;
-  const elementPresentation = anchor ? { group: "Elements", anchor, visualKind: "bounds" } : { group: "Elements" };
-  return putStateValue(state, basePath, "json", elementStatePayload(element), timestamp, sourceId, {
-    elementKind: "element",
-    stableAcrossSessions: Boolean(stableElementId(element)),
-    comparable: false,
-    sensitive: element.value !== void 0,
-    presentation: {
-      ...elementPresentation,
-      label: elementLabel,
-      visualKind: anchor ? "bounds" : "text",
-      metadata: compactJsonObject({
-        boundsKind: "document",
-        renderKind: "direct-rendered",
-        isVisibleOnViewport: element.isVisibleOnViewport ?? Boolean(stateBounds(element.bounds))
-      })
-    }
-  });
+
+// ../../domain/src/recording/web-state/evidence/read.ts
+var MAX_TEXT = 200;
+function record(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
-function withScreenVisualFrame(state, snapshot, elements, input = {}) {
-  const width = positiveFinite(snapshot.viewport.width) ?? 1;
-  const height = positiveFinite(snapshot.viewport.height) ?? 1;
-  const screenWidth = positiveFinite(input.screenImageSize?.width) ?? width;
-  const screenHeight = positiveFinite(input.screenImageSize?.height) ?? height;
-  const screenScaleX = screenWidth / width;
-  const screenScaleY = screenHeight / height;
-  const frameViewportOffset = stateBounds(snapshot.frame?.viewportOffset);
-  const rawDocumentWidth = positiveFinite(snapshot.viewport.documentWidth) ?? width;
-  const documentMapWidth = width;
-  const documentHeight = positiveFinite(snapshot.viewport.documentHeight) ?? height;
-  const layers = [];
-  if (input.screenContentRef) {
-    layers.push({
-      id: "screenshot",
-      kind: "image",
-      contentRef: input.screenContentRef,
-      bounds: { x: 0, y: 0, width: screenWidth, height: screenHeight },
-      metadata: compactJsonObject({
-        projectId: input.projectId,
-        url: snapshot.url,
-        frameKind: "viewport-screenshot",
-        boundsKind: "screenshot",
-        viewportWidth: width,
-        viewportHeight: height,
-        imageWidth: screenWidth,
-        imageHeight: screenHeight
-      })
-    });
-  }
-  for (const [index, element] of elements.slice(0, MAX_VISUAL_FRAME_ELEMENTS).entries()) {
-    const bounds = scaledScreenBounds(screenFrameBounds(element.bounds, frameViewportOffset), screenScaleX, screenScaleY);
-    if (!bounds) continue;
-    const statePath = `${WEB_AUTOMATION_STATE_NAMESPACE}.elements.${elementStateId(element)}`;
-    layers.push({
-      id: `element.${safeLayerId(elementStateId(element), index + 1)}`,
-      kind: "region",
-      label: element.name ?? element.visibleText ?? element.text ?? element.value ?? element.href ?? element.tagName,
-      bounds,
-      statePath,
-      anchor: { type: "bounds", bounds },
-      metadata: compactJsonObject({
-        selector: element.selector,
-        tagName: element.tagName,
-        boundsKind: "screenshot",
-        renderKind: "screenshot-bbox",
-        isVisibleOnViewport: true
-      })
-    });
-  }
-  const screenFrame = {
-    id: WEB_AUTOMATION_SCREEN_FRAME_ID,
-    rendererId: WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID,
-    label: "Viewport Screenshot",
-    coordinateSpace: { width: screenWidth, height: screenHeight, unit: "px", origin: "top-left" },
-    layers,
-    presentation: { label: snapshot.title || "Browser viewport", visualKind: "bounds", icon: "globe" },
-    metadata: compactJsonObject({
-      url: snapshot.url,
-      title: snapshot.title,
-      scrollX: snapshot.viewport.scrollX,
-      scrollY: snapshot.viewport.scrollY,
-      devicePixelRatio: snapshot.viewport.devicePixelRatio,
-      frameKind: "viewport-screenshot",
-      screenCoordinateSpace: "viewport",
-      documentWidth: snapshot.viewport.documentWidth,
-      documentHeight: snapshot.viewport.documentHeight,
-      viewportWidth: width,
-      viewportHeight: height,
-      imageWidth: screenWidth,
-      imageHeight: screenHeight,
-      imageScaleX: screenScaleX,
-      imageScaleY: screenScaleY,
-      frameViewportOffset,
-      isTopFrame: snapshot.frame?.isTop
-    })
-  };
-  const documentFrame = {
-    id: WEB_AUTOMATION_DOCUMENT_FRAME_ID,
-    rendererId: WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID,
-    label: "Document Map",
-    coordinateSpace: { width: documentMapWidth, height: documentHeight, unit: "px", origin: "top-left" },
-    layers: [
-      {
-        id: "viewport",
-        kind: "region",
-        label: "Viewport",
-        bounds: { x: snapshot.viewport.scrollX, y: snapshot.viewport.scrollY, width, height },
-        metadata: compactJsonObject({
-          boundsKind: "document",
-          renderKind: "viewport-marker"
-        })
-      },
-      ...elements.slice(0, MAX_VISUAL_FRAME_ELEMENTS).flatMap((element, index) => {
-        const bounds = stateBounds(element.documentBounds ?? element.bounds);
-        if (!bounds) return [];
-        const projectedViewportBounds = element.bounds ? stateBounds({
-          x: bounds.x - snapshot.viewport.scrollX,
-          y: bounds.y - snapshot.viewport.scrollY,
-          width: bounds.width,
-          height: bounds.height
-        }) : void 0;
-        const statePath = `${WEB_AUTOMATION_STATE_NAMESPACE}.elements.${elementStateId(element)}`;
-        return [{
-          id: `document.element.${safeLayerId(elementStateId(element), index + 1)}`,
-          kind: "region",
-          label: element.name ?? element.visibleText ?? element.text ?? element.value ?? element.href ?? element.tagName,
-          bounds,
-          statePath,
-          anchor: { type: "bounds", bounds },
-          metadata: compactJsonObject({
-            selector: element.selector,
-            tagName: element.tagName,
-            boundsKind: "document",
-            renderKind: "direct-rendered",
-            isVisibleOnViewport: element.isVisibleOnViewport ?? Boolean(stateBounds(element.bounds)),
-            projectedViewportBounds
-          })
-        }];
-      })
-    ],
-    presentation: { label: "Document map", visualKind: "bounds", icon: "map" },
-    metadata: compactJsonObject({
-      url: snapshot.url,
-      title: snapshot.title,
-      scrollX: snapshot.viewport.scrollX,
-      scrollY: snapshot.viewport.scrollY,
-      viewportWidth: width,
-      viewportHeight: height,
-      frameKind: "document-map",
-      screenCoordinateSpace: "document-map",
-      documentWidth: rawDocumentWidth,
-      documentMapWidth,
-      documentHeight
-    })
-  };
-  return {
-    ...state,
-    id: state.id ?? `web.snapshot.${state.timestamp}`,
-    presentation: {
-      ...state.presentation ?? {},
-      defaultFrameId: WEB_AUTOMATION_SCREEN_FRAME_ID,
-      visualFrames: [screenFrame, documentFrame]
-    }
-  };
+function list(value) {
+  return Array.isArray(value) ? value : [];
 }
+function text(value) {
+  if (typeof value !== "string") return void 0;
+  const collapsed = value.replace(/\s+/gu, " ").trim();
+  return collapsed ? collapsed.slice(0, MAX_TEXT) : void 0;
+}
+function count(value) {
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : void 0;
+}
+function flag(value) {
+  return typeof value === "boolean" ? value : void 0;
+}
+function rect(value) {
+  const bounds = record(value);
+  if (!bounds) return void 0;
+  const x = finite2(bounds.x);
+  const y = finite2(bounds.y);
+  const width = finite2(bounds.width);
+  const height = finite2(bounds.height);
+  return x === void 0 || y === void 0 || width === void 0 || height === void 0 ? void 0 : { x, y, width, height };
+}
+function isPresent(value) {
+  return value !== void 0;
+}
+function finite2(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+
+// ../../domain/src/recording/web-state/evidence/input.ts
+function pageEvidenceOfSnapshot(snapshot) {
+  return record(record(snapshot)?.evidence);
+}
+function pageEvidenceTruncatedElements(evidence) {
+  return record(evidence?.elements)?.truncated === true;
+}
+
+// ../../domain/src/recording/web-state/state-values.ts
 function putStateValue(snapshot, path, type, value, observedAt, sourceId, input = {}) {
   const namespace = snapshot.namespaces[WEB_AUTOMATION_STATE_NAMESPACE] ?? {
     schemaId: WEB_AUTOMATION_DOMAIN_ID,
@@ -1142,12 +1431,28 @@ function putStateValue(snapshot, path, type, value, observedAt, sourceId, input 
     }
   };
 }
-function elementStateId(element) {
-  const stable = stableElementPathId(element);
-  if (stable) return sanitizeStateId(stable);
-  const name = stableAttribute(element, "name");
-  if (name) return sanitizeStateId(`${name}.${element.selector}`);
-  return sanitizeStateId(element.selector);
+function addElementStateValues(state, { element, stateId }, timestamp, sourceId) {
+  const basePath = `elements.${stateId}`;
+  const anchor = boundsAnchor(element.documentBounds ?? element.bounds);
+  const secret = isSensitiveElementDescriptor(element);
+  const elementLabel = element.name ?? element.visibleText ?? element.text ?? (secret ? void 0 : element.value) ?? element.href ?? element.selector;
+  const elementPresentation = anchor ? { group: "Elements", anchor, visualKind: "bounds" } : { group: "Elements" };
+  return putStateValue(state, basePath, "json", elementStatePayload(element), timestamp, sourceId, {
+    elementKind: "element",
+    stableAcrossSessions: Boolean(stableElementId(element)),
+    comparable: false,
+    sensitive: element.value !== void 0 || secret,
+    presentation: {
+      ...elementPresentation,
+      label: elementLabel,
+      visualKind: anchor ? "bounds" : "text",
+      metadata: compactJsonObject({
+        boundsKind: "document",
+        renderKind: "direct-rendered",
+        isVisibleOnViewport: element.isVisibleOnViewport ?? Boolean(stateBounds(element.bounds))
+      })
+    }
+  });
 }
 function elementStatePayload(element) {
   return compactJsonObject({
@@ -1158,7 +1463,7 @@ function elementStatePayload(element) {
     classNames: element.classNames,
     visibleText: element.visibleText,
     text: element.text,
-    value: element.value,
+    value: isSensitiveElementDescriptor(element) ? void 0 : element.value,
     role: element.role,
     name: element.name,
     href: element.href,
@@ -1172,120 +1477,241 @@ function elementStatePayload(element) {
     attributes: element.attributes
   });
 }
-function stableElementId(element) {
-  return stableAttribute(element, "data-testid") ?? stableAttribute(element, "data-test") ?? stableAttribute(element, "data-cy") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name");
+
+// ../../domain/src/recording/web-state/evidence/project.ts
+var EVIDENCE_PATH_PREFIX = "evidence.";
+var MAX_DIALOGS = 5;
+var MAX_OVERLAY_BLOCKERS = 5;
+var MAX_BLOCKED_SELECTORS = 5;
+var MAX_LOADING_INDICATORS = 8;
+var MAX_BUSY_REGIONS = 8;
+var MAX_REGIONS = 20;
+var MAX_REPEATING = 8;
+var MAX_REPEATING_FIELDS = 8;
+var MAX_FORMS = 8;
+var MAX_FORM_CONTROLS = 20;
+function addPageEvidenceStateValues(state, evidence, timestamp, sourceId) {
+  let next = state;
+  const put = (path, type, value, input = {}) => {
+    next = putStateValue(next, `${EVIDENCE_PATH_PREFIX}${path}`, type, value, timestamp, sourceId, input);
+  };
+  addElementTotals(put, record(evidence.elements));
+  addLoading(put, record(evidence.loading));
+  addNavigation(put, record(evidence.navigation));
+  addDialogs(put, record(evidence.dialogs));
+  addOverlays(put, record(evidence.overlays));
+  addRegions(put, list(evidence.regions));
+  addRepeating(put, list(evidence.repeating));
+  addForms(put, list(evidence.forms));
+  return next;
 }
-function stableElementPathId(element) {
-  return stableAttribute(element, "data-testid") ?? stableAttribute(element, "data-test") ?? stableAttribute(element, "data-cy") ?? stableAttribute(element, "id");
+var COUNT = { elementKind: "count" };
+var LIVE_COUNT = { elementKind: "count", volatility: "rapid" };
+var STATUS = { elementKind: "status" };
+var LIVE_STATUS = { elementKind: "status", volatility: "rapid" };
+var COLLECTION = { elementKind: "collection", comparable: false };
+var LIVE_COLLECTION = { ...COLLECTION, volatility: "rapid" };
+var SETTLED_COLLECTION = { ...COLLECTION, volatility: "slow" };
+function addElementTotals(put, totals) {
+  if (!totals) return;
+  putCount(put, "elements.scanned", totals.scanned, COUNT);
+  putCount(put, "elements.candidates", totals.candidates, COUNT);
+  putCount(put, "elements.matched", totals.matched, COUNT);
+  putCount(put, "elements.returned", totals.returned, COUNT);
+  putCount(put, "elements.changed", totals.changed, LIVE_COUNT);
+  putCount(put, "elements.recentlyInteracted", totals.recentlyInteracted, LIVE_COUNT);
+  putFlag(put, "elements.truncated", totals.truncated, STATUS);
 }
-function sanitizeStateId(value) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, 120) || "element";
+function addLoading(put, loading) {
+  if (!loading) return;
+  putText(put, "loading.documentState", loading.documentState, LIVE_STATUS);
+  putFlag(put, "loading.busy", loading.busy, LIVE_STATUS);
+  putFlag(put, "loading.pendingNavigation", loading.pendingNavigation, LIVE_STATUS);
+  putCollection(put, "loading.busyRegions", list(loading.busyRegions), MAX_BUSY_REGIONS, selectorItem, LIVE_COLLECTION);
+  putCollection(put, "loading.indicators", list(loading.indicators), MAX_LOADING_INDICATORS, (item) => {
+    const indicator = record(item);
+    return compactJsonObject({
+      selector: text(indicator?.selector),
+      kind: text(indicator?.kind),
+      label: text(indicator?.label)
+    });
+  }, LIVE_COLLECTION);
 }
-function meaningfulText(value) {
-  return typeof value === "string" && value.trim().length >= 2;
+function addNavigation(put, navigation) {
+  if (!navigation) return;
+  putText(put, "navigation.origin", navigation.origin, { elementKind: "url", volatility: "slow" });
+  putText(put, "navigation.path", navigation.path, { elementKind: "route", volatility: "slow" });
+  putText(put, "navigation.referrer", navigation.referrer, { elementKind: "url", volatility: "slow" });
+  putText(put, "navigation.type", navigation.type, { elementKind: "status", volatility: "slow" });
+  putCount(put, "navigation.redirects", navigation.redirects, COUNT);
+  putCount(put, "navigation.historyLength", navigation.historyLength, COUNT);
+  putText(put, "navigation.visibility", navigation.visibility, { elementKind: "visibility", volatility: "rapid" });
 }
-function stableAttribute(element, name) {
-  const value = element.attributes?.[name];
-  return meaningfulText(value) ? value : void 0;
+function addDialogs(put, dialogs) {
+  if (!dialogs) return;
+  const open = list(dialogs.open);
+  put("dialogs.openCount", "integer", open.length, LIVE_COUNT);
+  putFlag(put, "dialogs.modal", dialogs.modal, LIVE_STATUS);
+  putFlag(put, "dialogs.armPending", dialogs.armPending, LIVE_STATUS);
+  putCollection(put, "dialogs.open", open, MAX_DIALOGS, (item) => {
+    const dialog = record(item);
+    return compactJsonObject({
+      selector: text(dialog?.selector),
+      role: text(dialog?.role),
+      modal: flag(dialog?.modal),
+      native: flag(dialog?.native),
+      label: text(dialog?.label),
+      bounds: rect(dialog?.bounds)
+    });
+  }, LIVE_COLLECTION);
+  const native = record(dialogs.lastNative);
+  if (native) {
+    put("dialogs.lastNative", "json", compactJsonObject({
+      kind: text(native.kind),
+      message: text(native.message),
+      response: text(native.response),
+      at: count(native.at)
+    }), { elementKind: "json", comparable: false, volatility: "rapid" });
+  }
 }
-function hasElementBounds(element) {
-  return stateBounds(element.documentBounds ?? element.bounds) !== void 0;
+function addOverlays(put, overlays) {
+  if (!overlays) return;
+  putCount(put, "overlays.tested", overlays.tested, LIVE_COUNT);
+  putCount(put, "overlays.blockedCount", overlays.blockedCount, LIVE_COUNT);
+  putCollection(put, "overlays.blockers", list(overlays.blockers), MAX_OVERLAY_BLOCKERS, (item) => {
+    const blocker = record(item);
+    const blocked = list(blocker?.blocked);
+    return compactJsonObject({
+      selector: text(blocker?.selector),
+      role: text(blocker?.role),
+      label: text(blocker?.label),
+      bounds: rect(blocker?.bounds),
+      blocks: count(blocker?.blocks),
+      blockedCount: blocked.length,
+      blocked: blocked.slice(0, MAX_BLOCKED_SELECTORS).map(text).filter(isPresent)
+    });
+  }, LIVE_COLLECTION);
 }
-function isEnabled(element) {
-  return element.attributes?.disabled === void 0 && element.attributes?.["aria-disabled"] !== "true";
+function addRegions(put, regions) {
+  putCollection(put, "regions", regions, MAX_REGIONS, (item) => {
+    const region = record(item);
+    return compactJsonObject({
+      role: text(region?.role),
+      label: text(region?.label),
+      selector: text(region?.selector),
+      bounds: rect(region?.bounds)
+    });
+  }, SETTLED_COLLECTION);
 }
-function stateElementBucket(element) {
-  if (isPrimaryControlElement(element) && hasMeaningfulElementIdentity(element)) return 0;
-  if (isLikelyInteractableElement(element) && hasMeaningfulElementIdentity(element)) return 1;
-  if (isSemanticTextElement(element) && hasTextualElementIdentity(element)) return 2;
-  if (hasTextualElementIdentity(element)) return 3;
-  if (meaningfulText(element.href)) return 4;
-  return 5;
+function addRepeating(put, repeating) {
+  putCollection(put, "repeating", repeating, MAX_REPEATING, (item) => {
+    const structure = record(item);
+    const representative = record(structure?.representative);
+    return compactJsonObject({
+      containerSelector: text(structure?.containerSelector),
+      signature: text(structure?.signature),
+      itemCount: count(structure?.itemCount),
+      representative: representative ? compactJsonObject({
+        selector: text(representative.selector),
+        testId: text(representative.testId),
+        text: text(representative.text)
+      }) : void 0,
+      fields: list(structure?.fields).slice(0, MAX_REPEATING_FIELDS).map(text).filter(isPresent)
+    });
+  }, COLLECTION);
 }
-function stateElementScore(element) {
-  let score = 0;
-  if (isLikelyInteractableElement(element)) score += 200;
-  if (isLikelyActionableElement(element)) score += 100;
-  if (hasStableElementIdentity(element)) score += 60;
-  if (meaningfulText(element.name)) score += 45;
-  if (meaningfulText(element.value)) score += 35;
-  if (meaningfulText(element.text) || meaningfulText(element.visibleText)) score += 25;
-  const bounds = element.documentBounds ?? element.bounds;
-  if (bounds) score += Math.min(20, Math.sqrt(bounds.width * bounds.height) / 8);
-  return score;
+function addForms(put, forms) {
+  putCollection(put, "forms", forms, MAX_FORMS, (item) => {
+    const form = record(item);
+    const controls = list(form?.controls);
+    return compactJsonObject({
+      selector: text(form?.selector),
+      name: text(form?.name),
+      label: text(form?.label),
+      action: text(form?.action),
+      method: text(form?.method),
+      // The producer's own pre-cap total, kept beside the controls that
+      // survived: the same count-plus-kept-list convention as everywhere else.
+      controlCount: count(form?.controlCount) ?? controls.length,
+      controls: controls.slice(0, MAX_FORM_CONTROLS).map(formControl),
+      submit: text(form?.submit)
+    });
+  }, SETTLED_COLLECTION);
 }
-function hasMeaningfulElementIdentity(element) {
-  return hasStableElementIdentity(element) || hasTextualElementIdentity(element) || meaningfulText(element.href);
-}
-function hasTextualElementIdentity(element) {
-  return meaningfulText(element.text) || meaningfulText(element.visibleText) || meaningfulText(element.name) || meaningfulText(element.value);
-}
-function hasStableElementIdentity(element) {
-  return Boolean(
-    stableAttribute(element, "data-testid") || stableAttribute(element, "data-test") || stableAttribute(element, "data-cy") || stableAttribute(element, "aria-label") || stableAttribute(element, "name") || stableAttribute(element, "id")
-  );
-}
-function isLikelyInteractableElement(element) {
-  return isLikelyActionableElement(element) || element.attributes?.tabindex !== void 0 || element.attributes?.["aria-expanded"] !== void 0 || element.attributes?.["aria-controls"] !== void 0 || element.attributes?.["aria-pressed"] !== void 0 || element.attributes?.["aria-selected"] !== void 0;
-}
-function isPrimaryControlElement(element) {
-  const tagName = element.tagName.toLowerCase();
-  const role = element.role?.toLowerCase();
-  return tagName === "button" || tagName === "a" || tagName === "summary" || role === "button" || role === "link" || role === "menuitem" || role === "tab";
-}
-function isSemanticTextElement(element) {
-  const tagName = element.tagName.toLowerCase();
-  return tagName === "p" || tagName === "li" || tagName === "td" || tagName === "th" || tagName === "dt" || tagName === "dd" || tagName === "figcaption" || tagName === "blockquote" || /^h[1-6]$/.test(tagName);
-}
-function isLikelyActionableElement(element) {
-  const tagName = element.tagName.toLowerCase();
-  const role = element.role?.toLowerCase();
-  const inputType = element.inputType?.toLowerCase();
-  return tagName === "button" || tagName === "a" || tagName === "select" || tagName === "textarea" || tagName === "summary" || tagName === "label" || tagName === "input" && inputType !== "hidden" || role === "button" || role === "link" || role === "menuitem" || role === "checkbox" || role === "radio" || role === "tab" || role === "switch" || element.hasClickHandler === true || element.attributes?.onclick !== void 0;
-}
-function boundsAnchor(bounds) {
-  const normalized = stateBounds(bounds);
-  return normalized ? { type: "bounds", bounds: normalized } : void 0;
-}
-function screenFrameBounds(bounds, frameViewportOffset) {
-  const normalized = stateBounds(bounds);
-  if (!normalized) return void 0;
-  if (!frameViewportOffset) return normalized;
-  return stateBounds({
-    x: frameViewportOffset.x + normalized.x,
-    y: frameViewportOffset.y + normalized.y,
-    width: normalized.width,
-    height: normalized.height
+function formControl(item) {
+  const control = record(item);
+  const controlType = text(control?.controlType);
+  const autocomplete = typeof control?.autocomplete === "string" ? control.autocomplete : void 0;
+  const sensitive = control?.sensitive === true || isSensitiveFieldSignature({ inputType: controlType, controlType, autocomplete });
+  return compactJsonObject({
+    selector: text(control?.selector),
+    controlType,
+    name: text(control?.name),
+    label: text(control?.label),
+    required: flag(control?.required),
+    disabled: flag(control?.disabled),
+    hasValue: sensitive ? void 0 : flag(control?.hasValue),
+    sensitive: sensitive ? true : void 0
   });
 }
-function scaledScreenBounds(bounds, scaleX, scaleY) {
-  if (!bounds) return void 0;
-  return stateBounds({
-    x: bounds.x * scaleX,
-    y: bounds.y * scaleY,
-    width: bounds.width * scaleX,
-    height: bounds.height * scaleY
-  });
+function selectorItem(item) {
+  return compactJsonObject({ selector: text(item) });
 }
-function stateBounds(bounds) {
-  if (!bounds) return void 0;
-  const x = finite(bounds.x);
-  const y = finite(bounds.y);
-  const width = positiveFinite(bounds.width);
-  const height = positiveFinite(bounds.height);
-  return x !== void 0 && y !== void 0 && width !== void 0 && height !== void 0 ? { x, y, width, height } : void 0;
+function putCollection(put, path, items, cap, describe, input) {
+  if (!items.length) return;
+  put(path, "json", {
+    count: items.length,
+    truncated: items.length > cap,
+    items: items.slice(0, cap).map(describe)
+  }, input);
 }
-function finite(value) {
-  return Number.isFinite(value) ? value : void 0;
+function putCount(put, path, value, input) {
+  const total = count(value);
+  if (total !== void 0) put(path, "integer", total, input);
 }
-function positiveFinite(value) {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : void 0;
+function putFlag(put, path, value, input) {
+  const state = flag(value);
+  if (state !== void 0) put(path, "boolean", state, input);
 }
-function safeLayerId(value, fallbackIndex) {
-  return value.replace(/[^a-z0-9.]+/gi, ".").replace(/^\.+|\.+$/g, "").slice(0, 80) || String(fallbackIndex);
+function putText(put, path, value, input) {
+  const bounded = text(value);
+  if (bounded !== void 0) put(path, "string", bounded, input);
 }
-function compactJsonObject(value) {
-  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
+
+// ../../domain/src/recording/web-state/snapshot.ts
+function createWebAutomationStateFromSnapshot(snapshot, input = {}) {
+  const timestamp = input.timestamp ?? Date.now();
+  let state = createWebAutomationInitialState(timestamp);
+  state = putStateValue(state, "page.url", "string", snapshot.url, timestamp, input.sourceId, { elementKind: "url" });
+  state = putStateValue(state, "page.title", "string", snapshot.title, timestamp, input.sourceId, { elementKind: "text" });
+  state = putStateValue(state, "viewport.bounds", "rectangle", { x: 0, y: 0, width: snapshot.viewport.width, height: snapshot.viewport.height }, timestamp, input.sourceId, { elementKind: "bounds", volatility: "normal" });
+  state = putStateValue(state, "scroll.position", "point", { x: snapshot.viewport.scrollX, y: snapshot.viewport.scrollY }, timestamp, input.sourceId, { elementKind: "position", volatility: "rapid" });
+  if (snapshot.selectedText) state = putStateValue(state, "page.selectedText", "string", snapshot.selectedText, timestamp, input.sourceId, { elementKind: "text" });
+  if (snapshot.focusedElement) {
+    const target = webAutomationActionTargetFromElement(snapshot.focusedElement);
+    state = putStateValue(state, "focus.target", "json", target, timestamp, input.sourceId, { elementKind: "json", volatility: "rapid" });
+  }
+  const evidence = pageEvidenceOfSnapshot(snapshot);
+  if (evidence) state = addPageEvidenceStateValues(state, evidence, timestamp, input.sourceId);
+  const selection = filterStateElements(snapshot.interactiveElements);
+  state = putStateValue(state, "elements.count", "integer", selection.total, timestamp, input.sourceId, { elementKind: "count" });
+  state = putStateValue(state, "elements.captured", "integer", selection.captured, timestamp, input.sourceId, { elementKind: "count" });
+  state = putStateValue(state, "elements.truncated", "boolean", selection.truncated || pageEvidenceTruncatedElements(evidence), timestamp, input.sourceId, { elementKind: "status" });
+  for (const entry of selection.elements) state = addElementStateValues(state, entry, timestamp, input.sourceId);
+  return withScreenVisualFrame(state, snapshot, selection.elements, input);
+}
+
+// ../../domain/src/recording/web-state/tab-state.ts
+function createWebAutomationStateFromTabs(active, tabs, input = {}) {
+  const timestamp = input.timestamp ?? Date.now();
+  let state = createWebAutomationInitialState(timestamp);
+  if (active?.url) state = putStateValue(state, "page.url", "string", active.url, timestamp, input.sourceId, { elementKind: "url" });
+  if (active?.title) state = putStateValue(state, "page.title", "string", active.title, timestamp, input.sourceId, { elementKind: "text" });
+  if (active?.tabId !== void 0) state = putStateValue(state, "browser.activeTabId", "integer", active.tabId, timestamp, input.sourceId, { elementKind: "internal_id" });
+  state = putStateValue(state, "browser.tabCount", "integer", tabs.length, timestamp, input.sourceId, { elementKind: "count" });
+  state = putStateValue(state, "recording.active", "boolean", input.recording === true, timestamp, input.sourceId, { elementKind: "status" });
+  if (input.permissions?.length) state = putStateValue(state, "browser.permissions", "json", input.permissions, timestamp, input.sourceId, { elementKind: "collection", comparable: false });
+  return state;
 }
 
 // ../../domain/src/client/gateway-action-parameters.ts
@@ -1486,6 +1912,15 @@ function createWebAutomationRecordingEvent(payload, input = {}) {
       url: payload.url,
       title: payload.title,
       sequence: payload.sequence,
+      // The frame the interaction happened in, under the name the parameter
+      // lift reads (`gateway-action-parameters.ts` maps `browserFrameId` onto
+      // `action.frameId`). `sourceId` above names the same frame, but only as
+      // text nothing downstream parses, and `webAutomationOutputPayload` reads
+      // this payload rather than the envelope: without the field here, a click
+      // recorded inside an iframe replays against the top document. Frame 0 is
+      // the top frame and survives `compactJsonObject`, which drops only
+      // `undefined`.
+      browserFrameId: input.frameId,
       element: payload.element,
       visualTarget,
       inputValue: payload.inputValue,
@@ -1533,15 +1968,28 @@ function webAutomationActionFromGatewayCommand(command) {
     timeoutMs: numberValue2(command.timeoutMs ?? parameters.timeoutMs),
     coordinates: pointValue(target.coordinates ?? parameters.coordinates),
     visualTarget: jsonObject2(target.visualTarget ?? parameters.visualTarget),
+    element: commandElementFingerprint(target, parameters),
     ...webAutomationLiftedActionParameters(parameters),
     options: parameters
   });
+}
+function commandElementFingerprint(target, parameters) {
+  for (const source of elementFingerprintSources(target, parameters)) {
+    const fingerprint = elementFingerprint(source);
+    if (fingerprint && Object.keys(fingerprint).length > 0) return fingerprint;
+  }
+  return void 0;
+}
+function elementFingerprintSources(target, parameters) {
+  const adaptedTarget = jsonObject2(parameters.target);
+  return adaptedTarget?.selectedCandidate !== void 0 ? [target.element, target.fingerprint, parameters.element] : [parameters.element, target.element, target.fingerprint];
 }
 function webAutomationActionResultPayload(result) {
   return compactJsonObject2({
     commandId: result.commandId,
     actionType: result.actionType,
     status: result.status,
+    validation: result.validation,
     message: result.message,
     url: result.url,
     title: result.title,
@@ -1590,6 +2038,7 @@ function compactJsonObject2(value) {
 
 // src/background/tabs.ts
 var REQUIRED_CONTENT_SCRIPT_VERSION = 2;
+var TOP_FRAME_ID = 0;
 async function activeTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return tab ? describeTab(tab) : void 0;
@@ -1630,23 +2079,32 @@ async function sendToTab(tabId, message, frameId) {
     else chrome.tabs.sendMessage(tabId, message, callback);
   });
 }
-async function ensureContentScript(tabId) {
+async function ensureContentScript(tabId, frameId = TOP_FRAME_ID) {
   try {
-    const response2 = await sendToTab(tabId, { type: "fluxiq.ping" }, 0);
+    const response2 = await sendToTab(tabId, { type: "fluxiq.ping" }, frameId);
     if (response2.ok === true && response2.version === REQUIRED_CONTENT_SCRIPT_VERSION) return;
   } catch {
   }
   await chrome.scripting.executeScript({
-    // A single inaccessible child (including an about:blank frame) must not
-    // prevent recovery of the top-frame script used by default actions.
-    // Manifest-declared content scripts still cover eligible descendants.
-    target: { tabId, frameIds: [0] },
+    target: { tabId, frameIds: [frameId] },
     files: ["content/index.js"]
   });
-  const response = await sendToTab(tabId, { type: "fluxiq.ping" }, 0);
+  const response = await sendToTab(tabId, { type: "fluxiq.ping" }, frameId);
   if (response.ok !== true || response.version !== REQUIRED_CONTENT_SCRIPT_VERSION) {
-    throw new Error("FluxIQ content script did not become ready in the top frame.");
+    throw new Error(`FluxIQ content script did not become ready in ${frameDescription(frameId)}.`);
   }
+}
+async function unreachableFrameReason(tabId, frameId) {
+  try {
+    await ensureContentScript(tabId, frameId);
+    return void 0;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message.trim() : "";
+    return detail || `${frameDescription(frameId)} did not answer.`;
+  }
+}
+function frameDescription(frameId) {
+  return frameId === TOP_FRAME_ID ? "the top frame" : `frame ${frameId}`;
 }
 
 // src/background/action-evidence.ts
@@ -1764,60 +2222,26 @@ function boundWorkerValidation(validation) {
   if (validation.status === "none") return validation;
   return {
     status: validation.status,
-    expected: boundedText(validation.expected),
-    actual: boundedText(validation.actual)
+    expected: boundedText2(validation.expected),
+    actual: boundedText2(validation.actual)
   };
 }
 function navigationUnexpectedFailure(expected, actual) {
-  return {
-    category: "navigation_unexpected",
-    code: "web.navigate.unexpected_url",
-    retryable: false,
-    stage: "verification",
-    expected: boundedText(expected),
-    actual: boundedText(actual)
-  };
+  return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.NAVIGATION_UNEXPECTED, { expected, actual });
 }
 function workerTimeoutFailure(code, expected, actual) {
-  return {
-    category: "timeout",
-    code,
-    retryable: true,
-    stage: "execution",
-    expected: boundedText(expected),
-    actual: boundedText(actual)
-  };
+  return webAutomationFailureRecord(code, { expected, actual });
 }
 function workerBlockedFailure(code, compared) {
-  return {
-    category: "blocked_by_capability_or_policy",
-    code,
-    retryable: false,
-    stage: "dispatch",
-    ...compared ? { expected: boundedText(compared.expected), actual: boundedText(compared.actual) } : {}
-  };
+  return webAutomationFailureRecord(code, compared ?? {});
 }
 function workerTargetNotFoundFailure(code, expected, actual) {
-  return {
-    category: "target_not_found",
-    code,
-    retryable: true,
-    stage: "target_resolution",
-    expected: boundedText(expected),
-    actual: boundedText(actual)
-  };
+  return webAutomationFailureRecord(code, { expected, actual });
 }
 function workerActionFailedFailure(code, expected, actual) {
-  return {
-    category: "action_failed",
-    code,
-    retryable: true,
-    stage: "execution",
-    expected: boundedText(expected),
-    actual: boundedText(actual)
-  };
+  return webAutomationFailureRecord(code, { expected, actual });
 }
-function boundedText(value) {
+function boundedText2(value) {
   const collapsed = value.replace(/\s+/gu, " ").trim();
   if (!collapsed) return "(none)";
   return collapsed.length <= WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH ? collapsed : `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
@@ -1999,7 +2423,9 @@ async function runBrowserDownloadAction(action) {
       status: "failed",
       message: "This build cannot observe downloads: the downloads permission is not granted.",
       validation: { status: "failed", expected, actual },
-      failure: workerBlockedFailure("web.download.permission_missing", { expected, actual })
+      // `ACTION_REJECTED`, and the missing permission is named in `actual`: the
+      // set has one code for a refusal, not one per reason.
+      failure: workerBlockedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, { expected, actual })
     });
   }
   const timeoutMs = clampTimeout(request.timeoutMs);
@@ -2010,7 +2436,7 @@ async function runBrowserDownloadAction(action) {
       status: "timed_out",
       message: `No download completed within ${timeoutMs} ms.`,
       validation: { status: "failed", expected, actual },
-      failure: workerTimeoutFailure("web.download.timeout", expected, actual)
+      failure: workerTimeoutFailure(WEB_AUTOMATION_FAILURE_CODES.TIMEOUT, expected, actual)
     });
   }
   const name = baseName(found.filename);
@@ -2134,7 +2560,7 @@ async function runBrowserTabAction(action) {
       status: "failed",
       message: "A tab action needs an operation of open, switch, or close.",
       validation: { status: "failed", expected, actual: "no operation" },
-      failure: workerBlockedFailure("web.tab.invalid_request", { expected, actual: "no operation" })
+      failure: workerBlockedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, { expected, actual: "no operation" })
     });
   }
   try {
@@ -2148,7 +2574,7 @@ async function runBrowserTabAction(action) {
       status: "failed",
       message: detail,
       validation: { status: "failed", expected, actual: detail },
-      failure: workerActionFailedFailure("web.tab.failed", expected, detail)
+      failure: workerActionFailedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, expected, detail)
     });
   }
 }
@@ -2169,7 +2595,7 @@ async function openTab(action, startedAt, request) {
       status: "failed",
       message: "The browser opened a tab without an id.",
       validation: { status: "failed", expected: "a new tab", actual: "a tab with no id" },
-      failure: workerActionFailedFailure("web.tab.no_id", "a new tab", "a tab with no id")
+      failure: workerActionFailedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, "a new tab", "a tab with no id")
     });
   }
   setAutomationTab(tabId);
@@ -2203,7 +2629,7 @@ async function switchTab(action, startedAt, request) {
       status: "failed",
       message: "No open tab matched the switch request.",
       validation: { status: "failed", expected, actual },
-      failure: workerTargetNotFoundFailure("web.tab.no_match", expected, actual)
+      failure: workerTargetNotFoundFailure(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, expected, actual)
     });
   }
   await chrome.tabs.update(tabId, { active: true });
@@ -2224,7 +2650,7 @@ async function closeTab(action, startedAt, request) {
       status: "failed",
       message: "No tab was named and FluxIQ is not driving one.",
       validation: { status: "failed", expected: expected2, actual: "no tab named and none open" },
-      failure: workerBlockedFailure("web.tab.no_target", { expected: expected2, actual: "no tab named and none open" })
+      failure: workerBlockedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, { expected: expected2, actual: "no tab named and none open" })
     });
   }
   await chrome.tabs.remove(tabId);
@@ -2237,7 +2663,7 @@ async function closeTab(action, startedAt, request) {
       status: "failed",
       message: `Tab ${tabId} is still open.`,
       validation: { status: "failed", expected, actual },
-      failure: workerActionFailedFailure("web.tab.not_closed", expected, actual)
+      failure: workerActionFailedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, expected, actual)
     });
   }
   return workerActionResult(action, startedAt, {
@@ -2261,6 +2687,7 @@ function unsupportedAutomationPageReason(url) {
 }
 
 // src/runtime/action-runner.ts
+var TOP_FRAME_ID2 = 0;
 async function runBrowserActionCommand(request) {
   const action = request.action;
   if (action.actionType === "web.browser.tab") {
@@ -2287,12 +2714,7 @@ async function runBrowserActionCommand(request) {
   }
   await waitForTabReady(tabId);
   await request.attachTabForRecording(tabId);
-  const targetFrameId = frameId ?? 0;
-  return withTarget(await sendToTab(tabId, {
-    type: "executeAction",
-    action,
-    topFrameOnly: frameId === void 0
-  }, targetFrameId), tabId, targetFrameId);
+  return await runActionInFrame(action, startedAt, tabId, frameId);
 }
 function browserActionFailure(action, message) {
   const expected = "the action to run";
@@ -2344,7 +2766,50 @@ function unsupportedPageFailure(action, startedAt, reason) {
     status: "failed",
     message: reason,
     validation: { status: "failed", expected, actual: reason },
-    failure: workerBlockedFailure("web.page.unsupported", { expected, actual: reason })
+    failure: workerBlockedFailure(WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, { expected, actual: reason })
+  });
+}
+async function runActionInFrame(action, startedAt, tabId, frameId) {
+  const targetFrameId = frameId ?? TOP_FRAME_ID2;
+  if (targetFrameId !== TOP_FRAME_ID2) {
+    const absent = await absentFrameReason(tabId, targetFrameId);
+    if (absent !== void 0) {
+      return withTarget(missingFrameFailure(action, startedAt, targetFrameId, absent), tabId, targetFrameId);
+    }
+    const unreachable = await unreachableFrameReason(tabId, targetFrameId);
+    if (unreachable !== void 0) {
+      return withTarget(unreachableFrameFailure(action, startedAt, targetFrameId, unreachable), tabId, targetFrameId);
+    }
+  }
+  return withTarget(await sendToTab(tabId, {
+    type: "executeAction",
+    action,
+    frameId: targetFrameId,
+    topFrameOnly: frameId === void 0
+  }, targetFrameId), tabId, targetFrameId);
+}
+async function absentFrameReason(tabId, frameId) {
+  const frames = await allTabFrames(tabId);
+  if (frames.length === 0) return void 0;
+  if (frames.some((frame) => frame.frameId === frameId)) return void 0;
+  return `the tab has ${frames.map((frame) => `frame ${frame.frameId}`).join(", ")}`;
+}
+function missingFrameFailure(action, startedAt, frameId, actual) {
+  const expected = `frame ${frameId} in the tab`;
+  return workerActionResult(action, startedAt, {
+    status: "failed",
+    message: `The action is addressed to frame ${frameId}, which this tab does not have.`,
+    validation: { status: "failed", expected, actual },
+    failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, { expected, actual })
+  });
+}
+function unreachableFrameFailure(action, startedAt, frameId, actual) {
+  const expected = `frame ${frameId} to be running the FluxIQ content script`;
+  return workerActionResult(action, startedAt, {
+    status: "failed",
+    message: `The action is addressed to frame ${frameId}, which is not running the FluxIQ content script.`,
+    validation: { status: "failed", expected, actual },
+    failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, { expected, actual })
   });
 }
 function isMutatingAction(actionType) {
@@ -2454,8 +2919,8 @@ function numberValue3(value) {
 }
 function rectValue(value) {
   if (!value || typeof value !== "object") return void 0;
-  const rect = value;
-  return typeof rect.x === "number" && typeof rect.y === "number" && typeof rect.width === "number" && typeof rect.height === "number" ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : void 0;
+  const rect2 = value;
+  return typeof rect2.x === "number" && typeof rect2.y === "number" && typeof rect2.width === "number" && typeof rect2.height === "number" ? { x: rect2.x, y: rect2.y, width: rect2.width, height: rect2.height } : void 0;
 }
 function timestampValue(value) {
   if (typeof value === "number") return value;
@@ -2463,10 +2928,10 @@ function timestampValue(value) {
   const parsed = Date.parse(value);
   return Number.isNaN(parsed) ? void 0 : parsed;
 }
-function parseJsonBody(text) {
-  if (!text) return void 0;
+function parseJsonBody(text2) {
+  if (!text2) return void 0;
   try {
-    return JSON.parse(text);
+    return JSON.parse(text2);
   } catch {
     return void 0;
   }
@@ -2734,23 +3199,23 @@ function translateFrameElements(frameSnapshot, topSnapshot, frameId) {
   });
 }
 function translateFrameRectToTopViewport(bounds, documentBounds, frameSnapshot, offset) {
-  const rect = rectValue(bounds) ?? translateFrameDocumentRectToFrameViewport(documentBounds, frameSnapshot);
-  if (!rect) return void 0;
+  const rect2 = rectValue(bounds) ?? translateFrameDocumentRectToFrameViewport(documentBounds, frameSnapshot);
+  if (!rect2) return void 0;
   return {
-    x: round2(offset.x + rect.x),
-    y: round2(offset.y + rect.y),
-    width: round2(rect.width),
-    height: round2(rect.height)
+    x: round2(offset.x + rect2.x),
+    y: round2(offset.y + rect2.y),
+    width: round2(rect2.width),
+    height: round2(rect2.height)
   };
 }
 function translateFrameDocumentRectToFrameViewport(documentBounds, frameSnapshot) {
-  const rect = rectValue(documentBounds);
-  if (!rect) return void 0;
+  const rect2 = rectValue(documentBounds);
+  if (!rect2) return void 0;
   return {
-    x: round2(rect.x - frameSnapshot.viewport.scrollX),
-    y: round2(rect.y - frameSnapshot.viewport.scrollY),
-    width: round2(rect.width),
-    height: round2(rect.height)
+    x: round2(rect2.x - frameSnapshot.viewport.scrollX),
+    y: round2(rect2.y - frameSnapshot.viewport.scrollY),
+    width: round2(rect2.width),
+    height: round2(rect2.height)
   };
 }
 function translateFrameDocumentRectToTopDocument(documentBounds, frameSnapshot, topSnapshot, offset) {
@@ -2768,6 +3233,13 @@ function round2(value) {
 }
 
 // src/background/connection/dom-snapshot.ts
+var MAX_MERGED_DIALOGS = 10;
+var MAX_MERGED_BLOCKERS = 10;
+var MAX_MERGED_BUSY_REGIONS = 16;
+var MAX_MERGED_LOADING_INDICATORS = 16;
+var MAX_MERGED_REGIONS = 40;
+var MAX_MERGED_REPEATING = 12;
+var MAX_MERGED_FORMS = 16;
 var FRAME_SNAPSHOT_TIMEOUT_MS = 150;
 function isDomSnapshotPayload(value) {
   if (!value || typeof value !== "object") return false;
@@ -2798,14 +3270,145 @@ async function captureMergedTabSnapshot(transport, tabId, seedSnapshot, seedFram
   const topSnapshot = frameSnapshots.find((entry) => entry.frameId === 0 || entry.snapshot.frame?.isTop)?.snapshot ?? topFallback;
   if (!topSnapshot) return void 0;
   const mergedElements = [];
+  let topEvidence;
+  const frameEvidence = [];
   for (const entry of frameSnapshots) {
-    const elements = entry.snapshot === topSnapshot || entry.snapshot.frame?.isTop ? entry.snapshot.interactiveElements : translateFrameElements(entry.snapshot, topSnapshot, entry.frameId);
+    const isTopEntry = entry.snapshot === topSnapshot || entry.snapshot.frame?.isTop === true;
+    const elements = isTopEntry ? entry.snapshot.interactiveElements : translateFrameElements(entry.snapshot, topSnapshot, entry.frameId);
     mergedElements.push(...elements);
+    const evidence2 = pageEvidenceOf(entry.snapshot);
+    if (!evidence2) continue;
+    if (isTopEntry) topEvidence ??= evidence2;
+    else frameEvidence.push(frameEvidenceInTopFrameTerms(evidence2, entry.snapshot, topSnapshot, entry.frameId));
   }
-  return {
+  const merged = {
     ...topSnapshot,
     interactiveElements: mergedElements
   };
+  const evidence = mergePageEvidence(
+    topEvidence ? [topEvidence, ...frameEvidence] : frameEvidence,
+    topEvidence ?? pageEvidenceOf(topSnapshot)
+  );
+  if (evidence) merged.evidence = evidence;
+  return merged;
+}
+function pageEvidenceOf(snapshot) {
+  const evidence = snapshot.evidence;
+  return objectValue3(evidence) ? evidence : void 0;
+}
+function frameEvidenceInTopFrameTerms(evidence, frameSnapshot, topSnapshot, frameId) {
+  const qualify = (selector) => `frame[${frameId}] >> ${selector}`;
+  const place = (bounds) => frameBoundsOnTopDocument(bounds, frameSnapshot, topSnapshot, frameId);
+  return {
+    ...evidence,
+    loading: {
+      ...evidence.loading,
+      busyRegions: evidence.loading.busyRegions.map(qualify),
+      indicators: evidence.loading.indicators.map((indicator) => ({ ...indicator, selector: qualify(indicator.selector) }))
+    },
+    ...evidence.dialogs ? {
+      dialogs: {
+        ...evidence.dialogs,
+        open: evidence.dialogs.open.map(({ bounds, ...dialog }) => ({ ...dialog, selector: qualify(dialog.selector), ...boundsOrNone(place(bounds)) }))
+      }
+    } : {},
+    ...evidence.overlays ? {
+      overlays: {
+        ...evidence.overlays,
+        blockers: evidence.overlays.blockers.map(({ bounds, ...blocker }) => ({ ...blocker, selector: qualify(blocker.selector), blocked: blocker.blocked.map(qualify), ...boundsOrNone(place(bounds)) }))
+      }
+    } : {},
+    ...evidence.regions ? { regions: evidence.regions.map(({ bounds, ...region }) => ({ ...region, selector: qualify(region.selector), ...boundsOrNone(place(bounds)) })) } : {},
+    ...evidence.repeating ? {
+      repeating: evidence.repeating.map((structure) => ({
+        ...structure,
+        containerSelector: qualify(structure.containerSelector),
+        representative: { ...structure.representative, selector: qualify(structure.representative.selector) }
+      }))
+    } : {},
+    ...evidence.forms ? {
+      forms: evidence.forms.map((form) => ({
+        ...form,
+        selector: qualify(form.selector),
+        controls: form.controls.map((control) => ({ ...control, selector: qualify(control.selector) })),
+        ...form.submit ? { submit: qualify(form.submit) } : {}
+      }))
+    } : {}
+  };
+}
+function boundsOrNone(bounds) {
+  return bounds ? { bounds } : {};
+}
+function frameBoundsOnTopDocument(bounds, frameSnapshot, topSnapshot, frameId) {
+  if (!bounds) return void 0;
+  const [placed] = translateFrameElements(
+    { ...frameSnapshot, interactiveElements: [{ tagName: "div", selector: "", documentBounds: bounds }] },
+    topSnapshot,
+    frameId
+  );
+  return placed?.documentBounds;
+}
+function mergePageEvidence(contributions, base) {
+  if (!contributions.length) return base;
+  const anchor = base ?? contributions[0];
+  if (!anchor) return void 0;
+  const regions = cappedList(contributions.flatMap((evidence) => evidence.regions ?? []), MAX_MERGED_REGIONS);
+  const repeating = cappedList(contributions.flatMap((evidence) => evidence.repeating ?? []), MAX_MERGED_REPEATING);
+  const forms = cappedList(contributions.flatMap((evidence) => evidence.forms ?? []), MAX_MERGED_FORMS);
+  const dialogs = mergeDialogEvidence(contributions);
+  const overlays = mergeOverlayEvidence(contributions);
+  return {
+    elements: {
+      scanned: sumOf(contributions, (evidence) => evidence.elements.scanned),
+      candidates: sumOf(contributions, (evidence) => evidence.elements.candidates),
+      matched: sumOf(contributions, (evidence) => evidence.elements.matched),
+      returned: sumOf(contributions, (evidence) => evidence.elements.returned),
+      truncated: contributions.some((evidence) => evidence.elements.truncated),
+      changed: sumOf(contributions, (evidence) => evidence.elements.changed),
+      recentlyInteracted: sumOf(contributions, (evidence) => evidence.elements.recentlyInteracted)
+    },
+    loading: {
+      documentState: anchor.loading.documentState,
+      busy: contributions.some((evidence) => evidence.loading.busy),
+      busyRegions: contributions.flatMap((evidence) => evidence.loading.busyRegions).slice(0, MAX_MERGED_BUSY_REGIONS),
+      indicators: contributions.flatMap((evidence) => evidence.loading.indicators).slice(0, MAX_MERGED_LOADING_INDICATORS),
+      pendingNavigation: contributions.some((evidence) => evidence.loading.pendingNavigation)
+    },
+    navigation: anchor.navigation,
+    ...dialogs ? { dialogs } : {},
+    ...overlays ? { overlays } : {},
+    ...regions ? { regions } : {},
+    ...repeating ? { repeating } : {},
+    ...forms ? { forms } : {}
+  };
+}
+function mergeDialogEvidence(contributions) {
+  const present = contributions.flatMap((evidence) => evidence.dialogs ? [evidence.dialogs] : []);
+  if (!present.length) return void 0;
+  const native = present.flatMap((dialogs) => dialogs.lastNative ? [dialogs.lastNative] : []).sort((left, right) => right.at - left.at)[0];
+  return {
+    open: present.flatMap((dialogs) => dialogs.open).slice(0, MAX_MERGED_DIALOGS),
+    modal: present.some((dialogs) => dialogs.modal),
+    ...present.some((dialogs) => dialogs.armPending) ? { armPending: true } : {},
+    ...native ? { lastNative: native } : {}
+  };
+}
+function mergeOverlayEvidence(contributions) {
+  const present = contributions.flatMap((evidence) => evidence.overlays ? [evidence.overlays] : []);
+  if (!present.length) return void 0;
+  return {
+    tested: present.reduce((total, overlays) => total + overlays.tested, 0),
+    blockedCount: present.reduce((total, overlays) => total + overlays.blockedCount, 0),
+    // Most-blocking first, as within one frame. Array sort is stable, so frames
+    // that block equally keep the order they answered in.
+    blockers: present.flatMap((overlays) => overlays.blockers).sort((left, right) => right.blocks - left.blocks).slice(0, MAX_MERGED_BLOCKERS)
+  };
+}
+function sumOf(contributions, read) {
+  return contributions.reduce((total, evidence) => total + read(evidence), 0);
+}
+function cappedList(items, cap) {
+  return items.length ? items.slice(0, cap) : void 0;
 }
 function withTimeout(promise, timeoutMs, fallback) {
   return new Promise((resolve) => {
@@ -2931,10 +3534,10 @@ function createClientGatewayMessage(type, payload, options = {}) {
   };
 }
 function parseServerMessage(data) {
-  const text = typeof data === "string" ? data : data instanceof ArrayBuffer ? new TextDecoder().decode(data) : "";
-  if (!text)
+  const text2 = typeof data === "string" ? data : data instanceof ArrayBuffer ? new TextDecoder().decode(data) : "";
+  if (!text2)
     return null;
-  const parsed = JSON.parse(text);
+  const parsed = JSON.parse(text2);
   if (typeof parsed.type !== "string" || !parsed.type.startsWith("server."))
     return null;
   return parsed;
@@ -3317,12 +3920,12 @@ var NavigationRecorder = class {
   }
   // Collapses the burst of URL, title, and status updates a single load emits
   // into one deferred call.
-  schedule(tabId, url, record) {
+  schedule(tabId, url, record2) {
     const existing = this.pending.get(tabId);
     if (existing) clearTimeout(existing.timer);
     const timer = setTimeout(() => {
       this.pending.delete(tabId);
-      record();
+      record2();
     }, NAVIGATION_DEBOUNCE_MS);
     this.pending.set(tabId, { url, timer });
   }
@@ -3531,13 +4134,34 @@ var RecordingEvidenceReporter = class {
     this.deps = deps;
   }
   lastScreenshotSkipAt;
+  /**
+   * The merged tab snapshot for a recorded event, for a caller that has to put
+   * it on the event before sending it.
+   *
+   * `connection.ts` sends `client.recording_event` first and the evidence that
+   * belongs with it a line later. Both want the same tab-wide snapshot -- the
+   * event should describe the page, not the one frame the interaction happened
+   * in, and the state projected beside it should describe the same instant --
+   * so the merge runs here, once, and the result is handed to
+   * `sendRecordingEvidence` rather than recomputed there. See
+   * `CapturedEventSnapshot` for what a second merge would cost.
+   */
+  async captureEventSnapshot(payload, tabId, frameId) {
+    if (this.deps.recordingState() !== "recording") return { snapshot: void 0 };
+    return { snapshot: await this.captureDomSnapshotForEvidence(payload, tabId, frameId) };
+  }
   // Each await is a chance for the recording to have stopped underneath us, so
   // the guard is repeated rather than checked once at the top.
-  async sendRecordingEvidence(payload, tabId, frameId) {
+  //
+  // `captured` is the merged snapshot a caller already took for the recording
+  // event. When it is given the tab is not read again -- including when it
+  // holds no snapshot, because that is a capture that was tried and came back
+  // empty, not one that has yet to happen.
+  async sendRecordingEvidence(payload, tabId, frameId, captured) {
     if (this.deps.recordingState() !== "recording") return;
     const projectId = await this.deps.resolveProjectId("recording_evidence");
     if (this.deps.recordingState() !== "recording") return;
-    const snapshot = await this.captureDomSnapshotForEvidence(payload, tabId, frameId);
+    const snapshot = captured ? captured.snapshot : await this.captureDomSnapshotForEvidence(payload, tabId, frameId);
     if (this.deps.recordingState() !== "recording") return;
     const hasDomSnapshot = isDomSnapshotPayload(snapshot);
     const state = hasDomSnapshot ? await this.createStateFromDomSnapshot(snapshot, {
@@ -3738,15 +4362,6 @@ var RecordingEvidenceReporter = class {
   }
 };
 
-// src/shared/sensitive-field.ts
-var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
-function isSensitiveFieldSignature(signature) {
-  if (signature.inputType?.toLowerCase() === "password") return true;
-  if (signature.dataSensitive === "true") return true;
-  const tokens = (signature.autocomplete ?? "").toLowerCase().split(/\s+/u).filter(Boolean);
-  return tokens.some((token) => SENSITIVE_AUTOCOMPLETE_TOKENS.has(token) || token.startsWith("cc-"));
-}
-
 // src/background/connection/runtime-status.ts
 var RuntimeStatusTracker = class {
   status = { state: "idle" };
@@ -3827,10 +4442,10 @@ function runtimeConfirmationForActionResult(result) {
 }
 function confirmedValue(result) {
   const element = result.element;
-  if (!element || element.value === void 0 || isSensitiveElementDescriptor(element)) return {};
+  if (!element || element.value === void 0 || isSensitiveElementDescriptor2(element)) return {};
   return { inputValue: element.value };
 }
-function isSensitiveElementDescriptor(element) {
+function isSensitiveElementDescriptor2(element) {
   return isSensitiveFieldSignature({
     inputType: element.inputType,
     autocomplete: element.attributes?.autocomplete,
@@ -4221,8 +4836,10 @@ var FluxIQConnection = class {
     if (isExecutableRecordedAction(payload)) {
       this.eventCount += 1;
       this.addActivity(payload.kind, activityLabel(payload), activityDetail(payload));
-      await this.gateway.send("client.recording_event", gatewayRecordingEventFromPayload(payload, tabId, frameId, this.activeRecordingId));
-      await this.evidence.sendRecordingEvidence(payload, tabId, frameId);
+      const captured = await this.evidence.captureEventSnapshot(payload, tabId, frameId);
+      const recorded = captured.snapshot === void 0 ? payload : { ...payload, snapshot: captured.snapshot };
+      await this.gateway.send("client.recording_event", gatewayRecordingEventFromPayload(recorded, tabId, frameId, this.activeRecordingId));
+      await this.evidence.sendRecordingEvidence(payload, tabId, frameId, captured);
       return;
     }
     if (payload.kind !== "content.ready") {

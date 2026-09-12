@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
-import { WEB_AUTOMATION_ACTION_TYPES } from "@fluxiq-web-extension/domain/client";
+import { WEB_AUTOMATION_ACTION_TYPES, WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "@fluxiq-web-extension/domain/client";
 import type { PageEvidence } from "../../content/evidence";
 import type { BrowserActionResult, ClientGatewayActionCommand, DomElementDescriptor } from "../../shared/protocol";
 import {
@@ -136,17 +136,39 @@ test("a structured failure reaches the gateway instead of being dropped at the b
   // The content script and the worker both build Core failure records. Until
   // Phase 1.2 step 4 this mapper copied everything but `failure`, so every
   // record was assembled and then thrown away one call short of the wire.
-  const failure = {
-    category: "output_not_observed" as const,
-    code: "web.validation.output_not_observed",
-    retryable: true,
-    stage: "verification" as const,
+  //
+  // The fixture comes from the builder, as every record on this path now must:
+  // it was written out by hand here, and its `code` widened to `string`, which
+  // is the shape the closed set exists to refuse. Building it the way a
+  // producer does also keeps the category, the retryable flag and the stage
+  // from drifting away from the code's own row while this row goes on passing.
+  const failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED, {
     expected: "the field to read back \"shoes\"",
     actual: "the field is empty"
-  };
+  });
   const result = gatewayActionResultFromBrowserResult(browserResult({ status: "failed", message: "Value not observed.", failure }));
   assert.deepEqual(result.failure, failure);
   assert.deepEqual(parseAutomationStudioFailureRecord(result.failure), failure, "what reaches the wire survives Core's parser");
+});
+
+test("a result carrying a record written out by hand does not compile", () => {
+  // The protocol's end of the closed set. `BrowserActionResult` is the domain's
+  // result bound to this extension's element and snapshot shapes, so its
+  // `failure` is the domain's narrowed record and not Core's permissive one --
+  // Core types `code` as a bare `string` because it does not own the codes, and
+  // that string is what let a record written out at a call site carry anything
+  // at all. The row above used to be such a record, and it compiled.
+  //
+  // `@ts-expect-error` is the assertion: if this ever compiles, the seam has
+  // been widened back and `check` says so here. The runtime half is unchanged
+  // and still needed -- `content/action-runtime/results.ts` guards a record
+  // read off a thrown value, which no compiler can vouch for.
+  const result = browserResult({
+    status: "failed",
+    // @ts-expect-error - "web.assert.state_mismatch" is not one of the closed set's codes
+    failure: { category: "unexpected_state", code: "web.assert.state_mismatch", retryable: false, stage: "verification" }
+  });
+  assert.equal(result.failure?.code, "web.assert.state_mismatch", "the value is still built; it is the type that refuses it");
 });
 
 test("a result with no failure record sends none, rather than an empty one", () => {

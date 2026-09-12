@@ -349,6 +349,13 @@ var outputPorts = [
   { id: "success", label: "Success", valueType: "any", role: "success" },
   { id: "failed", label: "Failed", valueType: "any", role: "failure" }
 ];
+var expectedStateParameter = {
+  id: "expectedState",
+  label: "Expected State",
+  description: "Post-conditions checked after this action, as web.dom.assert conditions: { conditions: [{ kind, selector, expected }], mode, timeoutMs }.",
+  valueType: "object",
+  ui: { control: "value" }
+};
 function webAutomationOutputNodeId(outputId) {
   return `web.output.${outputId.replace(/^web\./, "").replace(/\./g, "-")}`;
 }
@@ -384,7 +391,7 @@ function createWebAutomationOutputNodeDefinition(definition) {
     outputAction: { fixedOutputId: definition.actionType },
     inputs: [controlInput],
     outputs: outputPorts,
-    parameters: parametersForOutput(definition.actionType).map((parameter) => ({
+    parameters: [...parametersForOutput(definition.actionType), expectedStateParameter].map((parameter) => ({
       ...parameter,
       ...requiredParameters.has(parameter.id) ? { required: true } : {},
       allowStateBinding: true
@@ -394,7 +401,17 @@ function createWebAutomationOutputNodeDefinition(definition) {
     metadata: {
       domainId: WEB_AUTOMATION_DOMAIN_ID,
       outputId: definition.actionType,
-      parameterSchema: definition.parameterSchema
+      parameterSchema: definition.parameterSchema,
+      // Core's element-target preparation (`runtime/io-policy.ts`) resolves the
+      // recorded fingerprint against the runtime candidates, and applies its
+      // confidence floor, only for an output that declares this. The flag is
+      // derived from the action's own schema row rather than listed by hand, so
+      // it cannot drift from it: an action that requires a selector cannot run
+      // without an element, and an action that does not — a delta scroll, a
+      // key press to the focused element, a URL assertion, a tab operation —
+      // must not declare it, because Core fails an action outright when a
+      // declared element target has no fingerprint to resolve.
+      ...requiredParameters.has("selector") ? { elementTarget: true } : {}
     }
   };
 }
@@ -545,5 +562,32 @@ test("the seven Week 1 actions are all registered", () => {
   for (const outputId of WEEK_ONE_ACTIONS) {
     assert.equal(WEB_AUTOMATION_ACTION_TYPES.includes(outputId), true, `${outputId} is not a registered action type`);
     assert.ok(nodeFor(outputId));
+  }
+});
+test("every node can carry the post-conditions Core's transition comparison evaluates", () => {
+  for (const outputId of WEB_AUTOMATION_ACTION_TYPES) {
+    const parameter = nodeFor(outputId).parameters.find((candidate) => candidate.id === "expectedState");
+    assert.ok(parameter, `${outputId} offers no expectedState parameter`);
+    assert.equal(parameter.valueType, "object", `${outputId}.expectedState carries { conditions, mode, timeoutMs }`);
+    assert.equal(parameter.required, void 0, `${outputId}.expectedState is optional: not every action has a post-condition`);
+    assert.equal(parameter.defaultValue, void 0, `${outputId}.expectedState has no default: an empty condition list would report a pass`);
+  }
+});
+test("element targeting is declared by exactly the actions that cannot run without an element", () => {
+  const declared = WEB_AUTOMATION_ACTION_TYPES.filter((outputId) => nodeFor(outputId).metadata?.elementTarget === true);
+  assert.deepEqual(declared.slice().sort(), [
+    "web.dom.check",
+    "web.dom.clear",
+    "web.dom.click",
+    "web.dom.extract",
+    "web.dom.select",
+    "web.dom.type",
+    "web.dom.upload",
+    "web.dom.wait_for_selector"
+  ]);
+  for (const outputId of WEB_AUTOMATION_ACTION_TYPES) {
+    const schema = webAutomationActionDefinitions.find((candidate) => candidate.actionType === outputId)?.parameterSchema;
+    const requiresSelector = Array.isArray(schema?.required) && schema.required.includes("selector");
+    assert.equal(nodeFor(outputId).metadata?.elementTarget === true, requiresSelector, `${outputId}: element targeting must follow its schema`);
   }
 });

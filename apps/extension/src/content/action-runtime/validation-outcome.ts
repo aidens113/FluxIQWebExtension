@@ -19,6 +19,16 @@
 // that binding or contradict it, and a contradiction is dropped whole by Core's
 // parser -- losing the failure instead of reporting it.
 //
+// Deletion, not the type system, is what keeps them gone, and that is worth
+// knowing before anyone reinstates one as a convenience. `webAutomationFailureRecord`
+// narrows its `code` *parameter*, but the record type a builder returns --
+// Core's `AutomationStudioFailureRecord`, reached here through
+// `BrowserActionResult["failure"]` -- types `code` as a bare `string`, because
+// Core owns the categories and every producer owns its own codes. So a record
+// written out as a literal still compiles with any string at all; only the
+// builders' absence stops one being written. `tests/validation-outcome.test.ts`
+// pins the exported surface for exactly that reason.
+//
 // The text bound stays here because `results.ts` bounds a *validation*, which
 // an operator reads, and the domain bounds only the *record*.
 

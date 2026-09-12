@@ -56,6 +56,24 @@ export const WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
 /** One of the closed set's codes, as it appears in a failure record. */
 export type WebAutomationFailureCode = (typeof WEB_AUTOMATION_FAILURE_CODES)[keyof typeof WEB_AUTOMATION_FAILURE_CODES];
 
+/**
+ * Core's failure record with `code` narrowed to the closed set: the record the
+ * browser path produces, as opposed to the record Core accepts.
+ *
+ * Core declares `code` as a bare `string` on purpose -- it owns the categories
+ * and the producer owns the vocabulary of codes -- so the set has to be
+ * re-established on this side or it is not enforced anywhere. Without this
+ * type, `webAutomationFailureRecord` checked its argument against the set and
+ * then returned a record whose `code` was `string` again, throwing the check
+ * away one line after making it, and a record written by hand at a call site
+ * compiled with any string at all. That is how out-of-set codes kept reaching
+ * the wire while every gate passed.
+ *
+ * It stays assignable to `AutomationStudioFailureRecord`, so nothing that only
+ * needs Core's shape has to know this type exists.
+ */
+export type WebAutomationFailureRecord = Omit<AutomationStudioFailureRecord, "code"> & { code: WebAutomationFailureCode };
+
 /** What a code always means: its Core category, whether retrying it unchanged can work, and where it was decided. */
 export type WebAutomationFailureCodeDefinition = {
   readonly category: AutomationStudioAdaptiveFailureClass;
@@ -124,7 +142,7 @@ export function isWebAutomationFailureCode(value: unknown): value is WebAutomati
  * dropped for the same reason -- losing one optional field beats losing the
  * failure.
  */
-export function webAutomationFailureRecord(code: WebAutomationFailureCode, comparison: WebAutomationFailureComparison = {}): AutomationStudioFailureRecord {
+export function webAutomationFailureRecord(code: WebAutomationFailureCode, comparison: WebAutomationFailureComparison = {}): WebAutomationFailureRecord {
   const definition = WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[code];
   const expected = boundedText(comparison.expected);
   const actual = boundedText(comparison.actual);

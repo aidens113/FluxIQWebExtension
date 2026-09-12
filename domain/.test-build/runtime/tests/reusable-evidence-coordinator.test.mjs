@@ -2,6 +2,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+// src/runtime/adapter.ts
+import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES as AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES2 } from "fluxiq/automation-studio";
+
 // src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 
@@ -348,6 +351,13 @@ var outputPorts = [
   { id: "success", label: "Success", valueType: "any", role: "success" },
   { id: "failed", label: "Failed", valueType: "any", role: "failure" }
 ];
+var expectedStateParameter = {
+  id: "expectedState",
+  label: "Expected State",
+  description: "Post-conditions checked after this action, as web.dom.assert conditions: { conditions: [{ kind, selector, expected }], mode, timeoutMs }.",
+  valueType: "object",
+  ui: { control: "value" }
+};
 function webAutomationOutputNodeId(outputId) {
   return `web.output.${outputId.replace(/^web\./, "").replace(/\./g, "-")}`;
 }
@@ -383,7 +393,7 @@ function createWebAutomationOutputNodeDefinition(definition) {
     outputAction: { fixedOutputId: definition.actionType },
     inputs: [controlInput],
     outputs: outputPorts,
-    parameters: parametersForOutput(definition.actionType).map((parameter) => ({
+    parameters: [...parametersForOutput(definition.actionType), expectedStateParameter].map((parameter) => ({
       ...parameter,
       ...requiredParameters.has(parameter.id) ? { required: true } : {},
       allowStateBinding: true
@@ -393,7 +403,17 @@ function createWebAutomationOutputNodeDefinition(definition) {
     metadata: {
       domainId: WEB_AUTOMATION_DOMAIN_ID,
       outputId: definition.actionType,
-      parameterSchema: definition.parameterSchema
+      parameterSchema: definition.parameterSchema,
+      // Core's element-target preparation (`runtime/io-policy.ts`) resolves the
+      // recorded fingerprint against the runtime candidates, and applies its
+      // confidence floor, only for an output that declares this. The flag is
+      // derived from the action's own schema row rather than listed by hand, so
+      // it cannot drift from it: an action that requires a selector cannot run
+      // without an element, and an action that does not — a delta scroll, a
+      // key press to the focused element, a URL assertion, a tab operation —
+      // must not declare it, because Core fails an action outright when a
+      // declared element target has no fingerprint to resolve.
+      ...requiredParameters.has("selector") ? { elementTarget: true } : {}
     }
   };
 }
@@ -598,8 +618,82 @@ var WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS = Object.freeze({
   "web.action.unknown": { category: "ambiguous_or_unknown", retryable: false, stage: "execution" }
 });
 
-// src/runtime/llm-evidence.ts
+// src/runtime/llm-evidence/limits.ts
+import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES } from "fluxiq/automation-studio";
+var WEB_LLM_EVIDENCE_BYTE_BUDGETS = Object.freeze({
+  ceiling: 12e3,
+  exploration: 6e3,
+  failure: AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES
+});
+var WEB_LLM_EVIDENCE_BOUNDS = Object.freeze({
+  elements: 40,
+  url: 2e3,
+  text: 300,
+  selector: 500,
+  tag: 40,
+  role: 80,
+  attribute: 200,
+  options: 20,
+  placement: 80,
+  dialogs: 3
+});
+
+// src/sensitivity/signature.ts
+var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
+var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
+var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
+function isSensitiveFieldSignature(signature) {
+  if (isSensitiveControlType(signature.inputType) || isSensitiveControlType(signature.controlType)) return true;
+  if (signature.dataSensitive?.trim().toLowerCase() === "true") return true;
+  return (signature.autocomplete ?? "").toLowerCase().split(/\s+/u).some((token) => Boolean(token) && (SENSITIVE_AUTOCOMPLETE_TOKENS.has(token) || token.startsWith(SENSITIVE_AUTOCOMPLETE_PREFIX)));
+}
+function isSensitiveControlType(type) {
+  return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
+}
+
+// src/runtime/llm-evidence/sanitize.ts
 var WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v1";
+
+// src/runtime/llm-evidence/tool-rejection.ts
+var WEB_LLM_TOOL_REJECTION_CODES = [
+  "invalid_input",
+  "cross_origin",
+  "no_progress",
+  "target_unobserved",
+  "target_unsafe",
+  "sensitive_value"
+];
+
+// src/runtime/llm-evidence/vocabulary.ts
+var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe"];
+var WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
+var WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
+var WEB_LLM_REVEAL_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[2];
+var WEB_LLM_INSPECT_RESULT_CODE = "web.inspect.succeeded";
+var WEB_LLM_ACTION_RESULT_CODE = "web.action.succeeded";
+var REJECTION_RESULT_CODE_PREFIX = "web.action.rejected.";
+function webLlmToolRejectionResultCode(code) {
+  return `${REJECTION_RESULT_CODE_PREFIX}${code}`;
+}
+var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
+  WEB_LLM_INSPECT_RESULT_CODE,
+  WEB_LLM_ACTION_RESULT_CODE,
+  ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
+]);
+
+// src/runtime/expectation/conditions.ts
+var ASSERT_KINDS = Object.freeze({
+  exists: true,
+  absent: true,
+  text: true,
+  url: true,
+  visible: true,
+  enabled: true
+});
+
+// src/runtime/host-runtime.ts
+var WEB_AUTOMATION_NODE_IDS = new Set(WEB_AUTOMATION_ACTION_TYPES.map(webAutomationOutputNodeId));
+var HOST_RUNTIME_CAPABILITIES = Object.freeze(["state-snapshot", "state-diff", "expectation-evaluation"]);
 
 // src/runtime/reusable-evidence.ts
 import { createHash } from "node:crypto";
@@ -654,17 +748,17 @@ function normalizedElements(input2, location) {
   const unique = /* @__PURE__ */ new Map();
   for (const element of input2) {
     const tag = boundedToken(element.tag, 40);
-    const selector = boundedText(element.selector, 500);
-    if (!tag || !selector || sensitiveControl(element)) continue;
+    const selector = boundedText2(element.selector, 500);
+    if (!tag || !selector || unshareableControl(element)) continue;
     const normalized = compact2({
       tag: tag.toLowerCase(),
       selectorDigest: digest(selector),
       role: boundedToken(element.role, 80)?.toLowerCase(),
-      name: boundedText(element.name, 160),
+      name: boundedText2(element.name, 160),
       inputType: boundedToken(element.inputType, 40)?.toLowerCase(),
       controlType: boundedToken(element.controlType, 40)?.toLowerCase(),
       optionCount: Array.isArray(element.options) ? Math.min(element.options.length, 20) : void 0,
-      sameOriginLink: sameOriginHref(element.href, location.origin) ? true : void 0
+      sameOriginLink: sameOriginHref2(element.href, location.origin) ? true : void 0
     });
     unique.set(canonicalJson(normalized), normalized);
   }
@@ -707,7 +801,7 @@ function boundedProjection(fingerprint, candidates, options) {
     const withDigest = { ...base, digest: digest(base) };
     const byteCount = stableByteCount(withDigest);
     const result = { ...withDigest, byteCount };
-    if (serializedBytes(result) <= maxBytes) return result;
+    if (serializedBytes2(result) <= maxBytes) return result;
     if (!facts.length) throw new Error("Web reusable-evidence projection envelope exceeds the byte limit");
     facts.pop();
     truncated = true;
@@ -716,7 +810,7 @@ function boundedProjection(fingerprint, candidates, options) {
 function stableByteCount(input2) {
   let value = 0;
   for (let index = 0; index < 8; index += 1) {
-    const next = serializedBytes({ ...input2, byteCount: value });
+    const next = serializedBytes2({ ...input2, byteCount: value });
     if (next === value) return value;
     value = next;
   }
@@ -727,7 +821,7 @@ function safeLocation(input2) {
   if (url.protocol !== "http:" && url.protocol !== "https:" || url.username || url.password) throw new Error("Reusable web evidence requires an HTTP(S) location without credentials");
   return { origin: url.origin, path: url.pathname };
 }
-function sameOriginHref(input2, origin) {
+function sameOriginHref2(input2, origin) {
   if (typeof input2 !== "string" || !input2) return false;
   try {
     const url = new URL(input2, origin);
@@ -736,9 +830,11 @@ function sameOriginHref(input2, origin) {
     return false;
   }
 }
-function sensitiveControl(element) {
-  const types = [element.inputType, element.controlType].filter((value) => typeof value === "string").map((value) => value.toLowerCase());
-  return types.some((value) => value === "password" || value === "hidden" || value === "file" || value === "credit-card" || value === "one-time-code");
+var NON_REUSABLE_CONTROL_TYPES = /* @__PURE__ */ new Set(["hidden", "file"]);
+function unshareableControl(element) {
+  const types = [element.inputType, element.controlType].filter((value) => typeof value === "string").map((value) => value.trim().toLowerCase());
+  if (types.some((value) => NON_REUSABLE_CONTROL_TYPES.has(value))) return true;
+  return isSensitiveFieldSignature({ inputType: element.inputType, controlType: element.controlType });
 }
 function boundedLimit(input2, hardMaximum, label) {
   if (input2 === void 0) return hardMaximum;
@@ -749,15 +845,15 @@ function enforceSourceItemLimit(actual, maximum, label) {
   if (actual > maximum) throw new Error(`Reusable web evidence ${label} count exceeds ${maximum}`);
 }
 function boundedTag(input2, label) {
-  const value = boundedText(input2, 160);
+  const value = boundedText2(input2, 160);
   if (!value || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,159}$/u.test(value)) throw new Error(`${label} is malformed`);
   return value;
 }
 function boundedToken(input2, maximum) {
-  const value = boundedText(input2, maximum);
+  const value = boundedText2(input2, maximum);
   return value && /^[A-Za-z0-9_.:-]+$/u.test(value) ? value : void 0;
 }
-function boundedText(input2, maximum) {
+function boundedText2(input2, maximum) {
   if (typeof input2 !== "string") return void 0;
   const value = input2.replace(/\s+/gu, " ").trim();
   return value ? value.slice(0, maximum) : void 0;
@@ -771,7 +867,7 @@ function compareCanonical(left, right) {
 function digest(input2) {
   return createHash("sha256").update(canonicalJson(input2)).digest("hex");
 }
-function serializedBytes(input2) {
+function serializedBytes2(input2) {
   return Buffer.byteLength(JSON.stringify(input2), "utf8");
 }
 function canonicalJson(input2) {

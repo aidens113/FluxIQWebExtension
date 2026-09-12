@@ -44,6 +44,12 @@ const CONTROL_TEXT = "synthetic-control-text";
 
 const PASSWORD = '[data-testid="password"]';
 const CARD = '[data-testid="payment"]';
+// The multi-token form. `autocomplete="billing cc-number"` is how the attribute
+// is ordinarily written, and it is the exact spelling that leaked a card number
+// twice in this plan -- once through a duplicated rule, once through a copy that
+// compared the whole attribute instead of splitting it into tokens. The
+// single-token CARD field above cannot catch either regression.
+const BILLING_CARD = '[data-testid="billing"]';
 const EMAIL = 'input[name="username"]';
 
 const LOUD = { captureMutations: false, captureInputValues: true, captureSnapshots: true };
@@ -213,4 +219,21 @@ test("a field that is not sensitive keeps validation strings that quote what was
     status: "succeeded",
     validation: { status: "passed", expected: `the field holds "${CONTROL_TEXT}"`, actual: `the field holds "${CONTROL_TEXT}"` }
   });
+});
+
+test("a multi-token autocomplete is sensitive by the shared rule, so no path carries its value", async ({ openHarness, page }) => {
+  const harness = await openHarness("sensitive-input");
+  // Read the value off the page rather than restating it, so the fixture stays
+  // the single source of the secret.
+  const prefilled = await page.locator(BILLING_CARD).inputValue();
+  expect(prefilled.length, "the billing card field has no value to redact").toBeGreaterThan(0);
+
+  const snapshot = await harness.capture();
+  const billing = snapshot.interactiveElements.find((element) => element.selector === BILLING_CARD);
+  expect(billing, "the billing card field is missing from the snapshot").toBeTruthy();
+  // Presence is reportable; the value is not. A whole-string comparison against
+  // "cc-number" would leave both of these failing.
+  expect(billing?.value).toBeUndefined();
+  expect(billing?.hasValue).toBe(true);
+  expect(JSON.stringify(snapshot)).not.toContain(prefilled);
 });

@@ -5,6 +5,7 @@ import test from "node:test";
 import { EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS, EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS, EVIDENCE_GUIDED_CREATION_LIMITS, FIRST_LIVE_CREATION_LIMITS, LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD, buildApproveApplyCreationViaUi, classifyExplorationUiTerminal, creationSettingsFields, inspectAppliedCreation, parseAppliedExecutionDigest, parseEvidenceGuidedCreationProposal, proposeEvidenceGuidedCreationViaUi, readProviderFreeGenerationReadiness, readSanitizedGenerationFailure, readSanitizedSettingsSaveFailure, rejectStalePendingCreationAdaptation } from "../demo-llm-create-ui.js";
 import { TESTING_LAB_DEEPSEEK_KEY_NAME } from "../secret-keys-ui.js";
 import { AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS } from "fluxiq/automation-studio";
+import { WEB_LLM_ACTION_RESULT_CODE, WEB_LLM_EVIDENCE_RESULT_CODES, WEB_LLM_EVIDENCE_TOOL_IDS, WEB_LLM_INSPECT_TOOL_ID } from "@fluxiq-web-extension/domain/node";
 
 const root = path.resolve(import.meta.dirname, "..", "..", "..", "..");
 
@@ -560,15 +561,14 @@ test("canonical apply digest requires exact sanitized Core bootstrap binding", (
   assert.throws(() => parseAppliedExecutionDigest({ ok: true, payload: { adaptation: { metadata: { adaptationKind: "flow_bootstrap", bootstrap: { baseExecutionDigest: "base.digest", currentExecutionDigest: "result.digest" } } } } }, true, "base.digest"), /malformed/u);
 });
 
-// The web-automation half of the evidence-loop vocabulary, restated from
-// `domain/src/runtime/llm-evidence.ts`: `getEvidenceTools()` offers exactly
-// these three tools, and `toolExecution` emits exactly these result codes --
-// the two successes plus one per `WebLlmToolRejectionCode`. The domain package
-// is bundler-only and cannot be imported into this tsc-and-node package (see
-// `reports/w3-runner-alignment.md`), so this restatement is the guard: a tool
-// or code added there fails here until the sanitizer's allowlist admits it.
-const DOMAIN_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe"];
-const DOMAIN_EVIDENCE_RESULT_CODES = ["web.inspect.succeeded", "web.action.succeeded", "web.action.rejected.invalid_input", "web.action.rejected.cross_origin", "web.action.rejected.no_progress", "web.action.rejected.target_unobserved", "web.action.rejected.target_unsafe", "web.action.rejected.sensitive_value"];
+// The web-automation half of the evidence-loop vocabulary comes from the
+// domain itself now. `@fluxiq-web-extension/domain/node` is the built package
+// entry: `domain/scripts/rewrite-dist-specifiers.mjs` gives its emitted
+// specifiers the explicit extensions that plain Node ESM and this package's
+// `nodenext` typecheck both require, which is what the restatement that used
+// to stand here was standing in for (`reports/w3-runner-alignment.md`).
+// Importing it at all is the first assertion: if the package stops being
+// consumable outside a bundler, this file fails to load.
 
 test("the evidence-step sanitizer admits exactly the tools and result codes the domain produces", async () => {
   const response = (body: string) => ({ status: () => 400, headers: () => ({}), text: async () => body });
@@ -582,8 +582,8 @@ test("the evidence-step sanitizer admits exactly the tools and result codes the 
     } },
   }));
   const admitted = [
-    ...DOMAIN_EVIDENCE_TOOL_IDS.map(toolId => ({ toolId, effectApplied: true, resultCode: "web.action.succeeded" })),
-    ...DOMAIN_EVIDENCE_RESULT_CODES.map(resultCode => ({ toolId: "web.inspect_current_page", effectApplied: false, resultCode })),
+    ...WEB_LLM_EVIDENCE_TOOL_IDS.map(toolId => ({ toolId, effectApplied: true, resultCode: WEB_LLM_ACTION_RESULT_CODE })),
+    ...WEB_LLM_EVIDENCE_RESULT_CODES.map(resultCode => ({ toolId: WEB_LLM_INSPECT_TOOL_ID, effectApplied: false, resultCode })),
   ];
   const kept = await readSanitizedGenerationFailure(failure(admitted));
   assert.equal(kept.parsed, true);
@@ -600,4 +600,16 @@ test("the evidence-step sanitizer admits exactly the tools and result codes the 
   const refused = await readSanitizedGenerationFailure(failure(dropped));
   assert.equal(refused.parsed, true);
   assert.deepEqual(refused.evidenceSteps, []);
+});
+
+// The test above proves the sanitizer agrees with the domain today; this one
+// proves it cannot stop agreeing. A hand-kept copy that happens to be correct
+// would pass the first test and fail this one, which is the whole point: the
+// two copies that stood here drifted precisely because nothing forbade them.
+test("the sanitizer's allowlist is derived from the domain package, not restated beside it", async () => {
+  const source = await readFile(path.join(root, "packages", "test-runner", "src", "demo-llm-create-ui.ts"), "utf8");
+  assert.match(source, /import \{[^}]*WEB_LLM_EVIDENCE_RESULT_CODES[^}]*WEB_LLM_EVIDENCE_TOOL_IDS[^}]*\} from "@fluxiq-web-extension\/domain\/node";/u);
+  // Every "..." and '...' literal in the module. A backticked mention inside a comment is prose, not a restatement.
+  const quoted = new Set([...source.matchAll(/"([^"\n]*)"|'([^'\n]*)'/gu)].map(match => match[1] ?? match[2]));
+  assert.deepEqual([...WEB_LLM_EVIDENCE_TOOL_IDS, ...WEB_LLM_EVIDENCE_RESULT_CODES].filter(value => quoted.has(value)), []);
 });

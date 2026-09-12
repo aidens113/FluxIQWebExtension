@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { Locator, Page, Request, Response } from "@playwright/test";
 import type { BrowserEvidenceRecorder } from "./browser-evidence.js";
 import { AUTOMATION_STUDIO_ENDPOINTS, AUTOMATION_STUDIO_FLOW_BOOTSTRAP_GENERATION_READINESS, AUTOMATION_STUDIO_FLOW_BOOTSTRAP_PHASE_FAILURE_CODES, parseAutomationStudioFlowBootstrapFailureDiagnostic, parseAutomationStudioFlowBootstrapGenerationReadiness, type AutomationStudioFlowBootstrapFailureStage, type AutomationStudioFlowBootstrapPhaseFailureCode } from "fluxiq/automation-studio";
+import { WEB_LLM_EVIDENCE_RESULT_CODES, WEB_LLM_EVIDENCE_TOOL_IDS } from "@fluxiq-web-extension/domain/node";
 import { RunnerFailure } from "./failure.js";
 import { ExistingFluxIQControlClient } from "./existing-fluxiq-control.js";
 import { TESTING_LAB_DEEPSEEK_KEY_NAME } from "./secret-keys-ui.js";
@@ -669,11 +670,10 @@ function generationFailureCodeForStage(stage: AutomationStudioFlowBootstrapFailu
   });
   return codes[stage] ?? "generation.http-unknown";
 }
-// Sanitizer allowlists. The tool ids are the three `getEvidenceTools()` offers and the result codes the two success strings plus every `WebLlmToolRejectionCode`, all in `domain/src/runtime/llm-evidence.ts`; they cannot be imported (see `reports/w3-runner-alignment.md`), so a change there is a change here.
-const WEB_EVIDENCE_TOOL_IDS = new Set(["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe"]);
-const WEB_EVIDENCE_RESULT_CODES = new Set(["web.inspect.succeeded", "web.action.succeeded", ...["invalid_input", "cross_origin", "no_progress", "target_unobserved", "target_unsafe", "sensitive_value"].map(code => `web.action.rejected.${code}`)]);
+// Sanitizer allowlists, read from the domain instead of restated: `WEB_LLM_EVIDENCE_TOOL_IDS` is what `getEvidenceTools()` offers and `WEB_LLM_EVIDENCE_RESULT_CODES` the two successes plus one per rejection reason, both exported from `domain/src/runtime/llm-evidence/vocabulary.ts`. A tool or code added there is admitted here with no edit; while these were hand-kept they had already lost `web.reveal_safe` and `web.action.rejected.no_progress`, silently dropping every step from those paths.
+const WEB_EVIDENCE = Object.freeze({ toolIds: new Set<string>(WEB_LLM_EVIDENCE_TOOL_IDS), resultCodes: new Set<string>(WEB_LLM_EVIDENCE_RESULT_CODES) });
 function sanitizeEvidenceSteps(steps: ReadonlyArray<{ toolId: string; effectApplied?: boolean; resultCode?: string }>): NonNullable<SanitizedGenerationFailure["evidenceSteps"]> {
-  return Object.freeze(steps.flatMap(step => WEB_EVIDENCE_TOOL_IDS.has(step.toolId) && (step.resultCode === undefined || WEB_EVIDENCE_RESULT_CODES.has(step.resultCode))
+  return Object.freeze(steps.flatMap(step => WEB_EVIDENCE.toolIds.has(step.toolId) && (step.resultCode === undefined || WEB_EVIDENCE.resultCodes.has(step.resultCode))
     ? [Object.freeze({ toolId: step.toolId, ...(step.effectApplied === undefined ? {} : { effectApplied: step.effectApplied }), ...(step.resultCode === undefined ? {} : { resultCode: step.resultCode }) })]
     : []));
 }

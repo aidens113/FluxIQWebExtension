@@ -151,6 +151,16 @@ test("an evidence digest is kept only in the shape Core accepts", () => {
   assert.equal("evidenceDigest" in dropped, false, "one lost optional field beats a record Core discards whole");
   assert.deepEqual(parseAutomationStudioFailureRecord(dropped), dropped);
 });
+test("a record written out by hand with a code outside the set does not compile", () => {
+  const handBuilt = {
+    category: "unexpected_state",
+    // @ts-expect-error - "web.assert.state_mismatch" is not one of the closed set's codes
+    code: "web.assert.state_mismatch",
+    retryable: false,
+    stage: "verification"
+  };
+  assert.equal(isWebAutomationFailureCode(handBuilt.code), false, "the runtime guard agrees with the compiler");
+});
 test("the guard admits every code and nothing else", () => {
   for (const code of CODES) assert.equal(isWebAutomationFailureCode(code), true, code);
   for (const outside of ["web.action.rejected ", "WEB.ACTION.REJECTED", "web.target.missing", "", "toString", void 0, null, 7]) {

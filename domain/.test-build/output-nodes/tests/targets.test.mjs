@@ -8,7 +8,7 @@ function outputTargetFromPayload(payload) {
   const adaptedFingerprint = objectValue(adaptedTarget?.fingerprint);
   const selectedCandidate = selectedTargetCandidate(adaptedTarget);
   const explicitVisualTarget = objectValue(adaptedTarget?.visualTarget) ?? objectValue(payload.visualTarget);
-  const element = elementFingerprint(adaptedTarget?.element) ?? elementFingerprint(selectedCandidate) ?? elementFingerprint(adaptedFingerprint) ?? elementFingerprint(payload.element);
+  const element = firstElementFingerprint(elementFingerprintSources(payload, adaptedTarget, adaptedFingerprint, selectedCandidate));
   const selector = stringValue(selectedCandidate?.selector) ?? stringValue(adaptedFingerprint?.selector) ?? stringValue(adaptedTarget?.selector) ?? stringValue(payload.selector) ?? stringValue(element?.selector) ?? stringValue(explicitVisualTarget?.selector);
   if (!selector && !explicitVisualTarget) return void 0;
   return compact({
@@ -16,6 +16,17 @@ function outputTargetFromPayload(payload) {
     ...element ? { element } : {},
     ...explicitVisualTarget ? { visualTarget: explicitVisualTarget } : {}
   });
+}
+function elementFingerprintSources(payload, adaptedTarget, adaptedFingerprint, selectedCandidate) {
+  const adapted = [adaptedTarget?.element, selectedCandidate, adaptedFingerprint];
+  return adaptedTarget?.selectedCandidate !== void 0 ? [...adapted, payload.element] : [payload.element, ...adapted];
+}
+function firstElementFingerprint(sources) {
+  for (const source of sources) {
+    const fingerprint = elementFingerprint(source);
+    if (fingerprint && Object.keys(fingerprint).length > 0) return fingerprint;
+  }
+  return void 0;
 }
 function selectedTargetCandidate(target) {
   const selectedCandidateId = stringValue(objectValue(target?.selectedCandidate)?.candidateId);
@@ -36,6 +47,7 @@ function elementFingerprint(value) {
     text: stringValue(element.text),
     value: stringValue(element.value),
     role: stringValue(element.role),
+    implicitRole: stringValue(element.implicitRole),
     name: stringValue(element.name),
     href: stringValue(element.href),
     inputType: stringValue(element.inputType),
@@ -96,4 +108,99 @@ test("the signals survive into the dispatched target", () => {
   });
   assert.equal((target?.element).testId, "save-button");
   assert.equal((target?.element).accessibleName, "Save changes");
+});
+var recordedElement = {
+  selector: "#save-settings",
+  xpath: "/html/body/main/form/button",
+  tagName: "button",
+  id: "save-settings",
+  text: "Save changes",
+  testId: "save-changes",
+  accessibleName: "Save changes",
+  label: "Save",
+  visibleText: "Save changes",
+  implicitRole: "button",
+  classNames: ["btn", "btn-primary"],
+  attributes: { id: "save-settings", "data-testid": "save-changes" }
+};
+var signalCount = (target) => Object.keys(target?.element ?? {}).length;
+test("Core passed the target through untouched: the recorded identity is the dispatched one", () => {
+  const target = outputTargetFromPayload({ selector: "#save-settings", element: recordedElement });
+  assert.equal(signalCount(target), 12);
+  assert.equal((target?.element).testId, "save-changes");
+});
+test("Core matched nothing: the recorded identity beats its own lossy re-derivation", () => {
+  const target = outputTargetFromPayload({
+    selector: "#save-settings",
+    element: recordedElement,
+    target: { kind: "element", fingerprint: { selector: "#save-settings", statePath: "web.elements.save.changes" }, source: "runtime" }
+  });
+  assert.equal(signalCount(target), 12, "all twelve recorded signals reach the wire, not just the selector");
+  assert.equal((target?.element).testId, "save-changes");
+  assert.equal((target?.element).accessibleName, "Save changes");
+  assert.equal((target?.element).implicitRole, "button");
+  assert.equal(target?.selector, "#save-settings");
+});
+test("Core matched a candidate: the drift-corrected candidate beats the recorded identity", () => {
+  const target = outputTargetFromPayload({
+    selector: "#save-settings",
+    element: recordedElement,
+    target: {
+      kind: "element",
+      fingerprint: { selector: "#save-settings" },
+      candidates: [
+        { candidateId: "candidate.stale", selector: "#save-settings-old", tagName: "button" },
+        { candidateId: "candidate.current", selector: "#settings-save-v2", tagName: "button", testId: "save-changes", accessibleName: "Save changes" }
+      ],
+      selectedCandidate: { candidateId: "candidate.current", confidence: 0.91, matchedSignals: ["testId"], failedSignals: ["selector"] }
+    }
+  });
+  assert.equal((target?.element).selector, "#settings-save-v2", "the element the page really has, not the one that was recorded");
+  assert.equal(target?.selector, "#settings-save-v2");
+  assert.ok(signalCount(target) < 12);
+});
+test("Core matched but adapted only the fingerprint: the adaptation is still not discarded", () => {
+  const target = outputTargetFromPayload({
+    selector: "#save-settings",
+    element: recordedElement,
+    target: {
+      kind: "element",
+      fingerprint: { selector: "#settings-save-v2", tagName: "button", testId: "save-changes-v2" },
+      selectedCandidate: { candidateId: "candidate.current", confidence: 0.88, matchedSignals: ["testId"], failedSignals: [] }
+    }
+  });
+  assert.equal((target?.element).testId, "save-changes-v2");
+  assert.equal((target?.element).selector, "#settings-save-v2");
+});
+test("an adapted target's own element wins when Core matched, and loses when it did not", () => {
+  const adaptedElement = { selector: "#settings-save-v2", tagName: "button", testId: "save-changes-v2" };
+  const matched = outputTargetFromPayload({
+    selector: "#save-settings",
+    element: recordedElement,
+    target: { element: adaptedElement, selectedCandidate: { candidateId: "candidate.current", confidence: 0.9 } }
+  });
+  assert.equal((matched?.element).testId, "save-changes-v2");
+  const unmatched = outputTargetFromPayload({
+    selector: "#save-settings",
+    element: recordedElement,
+    target: { element: adaptedElement }
+  });
+  assert.equal((unmatched?.element).testId, "save-changes", "an unmatched pass-through is a re-derivation, not an adaptation");
+});
+test("a source with no recognized signal does not shadow one that has them", () => {
+  const target = outputTargetFromPayload({
+    selector: "#save-settings",
+    element: { nothingRecognized: true },
+    target: { kind: "element", fingerprint: { selector: "#save-settings", tagName: "button" }, source: "runtime" }
+  });
+  assert.deepEqual(target?.element, { selector: "#save-settings", tagName: "button" });
+});
+test("the element ordering does not decide the selector or the emptiness guard", () => {
+  assert.equal(outputTargetFromPayload({
+    selector: "#recorded",
+    element: recordedElement,
+    target: { kind: "element", fingerprint: { selector: "#adapted" }, source: "runtime" }
+  })?.selector, "#adapted");
+  assert.equal(outputTargetFromPayload({ element: recordedElement })?.selector, "#save-settings", "an element-only payload still resolves its selector from the element");
+  assert.equal(outputTargetFromPayload({ element: { tagName: "button", text: "Save" } }), void 0, "no selector and no visual target is still no target");
 });

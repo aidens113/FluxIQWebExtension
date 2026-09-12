@@ -17,6 +17,7 @@ function elementFingerprint(value) {
     text: stringValue(element.text),
     value: stringValue(element.value),
     role: stringValue(element.role),
+    implicitRole: stringValue(element.implicitRole),
     name: stringValue(element.name),
     href: stringValue(element.href),
     inputType: stringValue(element.inputType),
@@ -44,6 +45,17 @@ function numberValue(value) {
 
 // src/output-nodes/payloads.ts
 function webAutomationOutputPayload(outputId, payload) {
+  return withRecordedFrame(outputId, payload, recordedOutputParameters(outputId, payload));
+}
+function withRecordedFrame(outputId, payload, parameters) {
+  const browserFrameId = frameIdValue(payload.browserFrameId);
+  if (browserFrameId === void 0 || !outputId.startsWith("web.dom.")) return parameters;
+  return Object.keys(parameters).length === 0 ? parameters : { ...parameters, browserFrameId };
+}
+function frameIdValue(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
+}
+function recordedOutputParameters(outputId, payload) {
   const element = elementFingerprint(payload.element);
   const selector = stringValue(element?.selector);
   const visualTarget = objectValue(payload.visualTarget);
@@ -112,4 +124,27 @@ test("the dispatch-only actions have no recorded payload", () => {
   for (const outputId of ["web.dom.assert", "web.dom.extract_list", "web.dom.upload", "web.dom.dialog", "web.browser.tab", "web.browser.download"]) {
     assert.deepEqual(webAutomationOutputPayload(outputId, { element: checkbox, inputValue: "on" }), {}, outputId);
   }
+});
+test("a DOM action carries the frame it was recorded in", () => {
+  const recorded = { element: { ...checkbox, checked: true }, inputValue: "on", browserFrameId: 3 };
+  assert.equal(webAutomationOutputPayload("web.dom.check", recorded).browserFrameId, 3);
+  assert.equal(webAutomationOutputPayload("web.dom.click", recorded).browserFrameId, 3);
+  assert.equal(webAutomationOutputPayload("web.dom.scroll", { scroll: { x: 0, y: 640 }, browserFrameId: 3 }).browserFrameId, 3);
+});
+test("frame 0 is the top document, and is carried as a frame rather than dropped", () => {
+  assert.equal(webAutomationOutputPayload("web.dom.click", { element: checkbox, browserFrameId: 0 }).browserFrameId, 0);
+});
+test("a frame id that is not a frame is dropped rather than replayed", () => {
+  for (const browserFrameId of [-1, 1.5, "3", null, void 0]) {
+    const parameters = webAutomationOutputPayload("web.dom.click", { element: checkbox, browserFrameId });
+    assert.equal("browserFrameId" in parameters, false, JSON.stringify(browserFrameId));
+  }
+});
+test("a browser-scoped action acts on the tab, so it takes no frame", () => {
+  assert.equal("browserFrameId" in webAutomationOutputPayload("web.browser.navigate", { url: "https://example.test", browserFrameId: 3 }), false);
+  assert.equal("browserFrameId" in webAutomationOutputPayload("web.browser.tab", { browserFrameId: 3 }), false);
+});
+test("an unexecutable event stays empty rather than becoming a command carrying only a frame", () => {
+  assert.deepEqual(webAutomationOutputPayload("web.dom.assert", { element: checkbox, browserFrameId: 3 }), {});
+  assert.deepEqual(webAutomationOutputPayload("web.dom.capture_snapshot", { browserFrameId: 3 }), {});
 });

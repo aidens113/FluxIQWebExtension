@@ -131,6 +131,17 @@ export type FormControlEvidence = {
   disabled?: true | undefined;
   /** Whether the control holds a value. Sensitive controls report this too; their value never travels. */
   hasValue?: boolean | undefined;
+  /**
+   * The control's `autocomplete` tokens, so a consumer can ask the shared
+   * sensitivity rule itself rather than trusting `sensitive` below.
+   *
+   * This is a signal, not a value: it is page markup naming what the field is
+   * for, and it is the half of the rule that has leaked a card number twice in
+   * this plan. Carrying it makes the two ends of the wire independent -- both
+   * checks must fail before a value escapes, rather than the consumer inheriting
+   * whatever the producer happened to conclude.
+   */
+  autocomplete?: string | undefined;
   /** True when the shared sensitivity rule marks the control, so no reader should ask for its value. */
   sensitive?: true | undefined;
 };

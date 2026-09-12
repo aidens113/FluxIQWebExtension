@@ -527,3 +527,63 @@ the plan sits against its 800-line threshold.
   "`web.dom.assert` cannot report `TIMEOUT` at all", reported independently by
   w3-extension-gaps. Fixing the timing fixes both. Found 2026-09-12 by
   w3-spec-reconciliation; owner: senior supervisor agent.
+- **Resolved: the page evidence is live, and the wire-ordering change is not
+  needed.** w3-evidence-seams reported the new evidence as "correct, live and
+  dormant", and named two possible fixes: carry `evidence` through the domain
+  state projection, or make `client.recording_event` carry the merged snapshot
+  instead of the frame-local one. The supervisor briefed both. Only the first was
+  necessary, and the second would have changed what goes on the wire for every
+  recorded event to no purpose.
+  The live chain, traced by reading each link rather than inferring it:
+  `connection.ts:422` calls `sendRecordingEvidence`, which calls
+  `captureDomSnapshotForEvidence` → `captureMergedTabSnapshot` (the cross-frame
+  merge) → `createStateFromDomSnapshot` → `createWebAutomationStateFromSnapshot`
+  (which now carries evidence) → `client.snapshot`. The evidence never needed to
+  ride on `client.recording_event` at all; it travels on `client.snapshot`
+  beside it. `connection.ts` is deliberately unchanged.
+  This is the fifth premise the supervisor handed a worker that turned out to be
+  wrong, and the first where the error would have caused a risky change rather
+  than a wasted one. The recurring mistake is the same each time: reading one
+  file and inferring the path instead of following it. Resolved 2026-09-12.
+- **The evidence pipeline now has a joinery test, which is the class of test
+  that was missing.** `apps/extension/src/background/tests/recording-evidence-
+  pipeline.test.ts` runs producer → cross-frame merge → domain projection in one
+  process. Its header states the lesson plainly: each of the three was tested on
+  its own and the chain between them was not, "which is how the evidence came to
+  be produced, merged, and then silently dropped". It also plants a value the
+  producer should have withheld, so the projection is checked for defence in
+  depth rather than trusting its upstream. Prefer this shape wherever a Week 1
+  contract crosses two modules. Added 2026-09-12 by w3-evidence-consumption.
+- **Corrected: narrowing the builders did not close the failure-code set.** The
+  supervisor reported after w3-worker-codes that an out-of-set code could no
+  longer reach the wire because the `code` parameter was typed. That was
+  overstated. A narrowed *builder* rejects an out-of-set string with `TS2345`,
+  but a hand-written record literal still compiles, because `code` on the
+  protocol's failure record in `apps/extension/src/shared/protocol.ts` is a bare
+  `string`. What actually shut the door in those files was deleting the offending
+  builders — not the compiler — so it reopens the moment anyone writes a record
+  by hand. Found 2026-09-12 by w3-assert-timing, which proved it by reintroducing
+  a record and observing `check` exit 0. Being fixed at the protocol type.
+  The general lesson, and the third instance of it this wave: a type narrowed at
+  one call site is not an invariant. The invariant lives wherever the value is
+  *declared*, and three workers reached that same seam from three directions
+  before anyone looked at it.
+- **`connection.ts` is close to its hard limits.** 745 of 800 lines, and
+  `FluxIQConnection` carries 39 of its 40 permitted methods. The next change
+  there will fail the structure audit rather than merely warn. Split it before
+  Wave 4 rather than during whatever task first trips it. Found 2026-09-12 by
+  w3-evidence-finish; owner: senior supervisor agent.
+- **A merged multi-frame recording event is bigger, deliberately.** Now that the
+  recording event carries the tab-merged snapshot, a multi-frame page sends the
+  whole tab: measured +4.3 KB at two frames and +12 KB at six, and exactly zero
+  change on a single-frame page. Accepted for now — the alternative was a second
+  full merge per event, which costs a `captureSnapshot` round trip per frame on a
+  DOM sweep that Phase 1.4 made seven passes heavier. w3-evidence-finish reports
+  the lever to narrow it is one line in `connection.ts` if the byte cost turns
+  out to matter more than the completeness. Revisit with real page measurements,
+  not synthetic ones. Recorded 2026-09-12.
+- **Operational: `pnpm --filter ... test:content -- --workers=4` runs nothing.**
+  pnpm forwards the literal `--`, and Playwright reports "No tests found", which
+  reads as a broken harness rather than a bad command line. Run it directly:
+  `pnpm exec playwright test -c e2e/playwright.content.config.ts --workers=4`
+  from `apps/extension`. Found 2026-09-12 by w3-evidence-finish.

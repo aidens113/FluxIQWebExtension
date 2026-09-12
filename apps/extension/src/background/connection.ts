@@ -418,8 +418,15 @@ export class FluxIQConnection {
     if (isExecutableRecordedAction(payload)) {
       this.eventCount += 1;
       this.addActivity(payload.kind, activityLabel(payload), activityDetail(payload));
-      await this.gateway.send("client.recording_event", gatewayRecordingEventFromPayload(payload, tabId, frameId, this.activeRecordingId));
-      await this.evidence.sendRecordingEvidence(payload, tabId, frameId);
+      // The content script sees only its own frame, so the snapshot it attaches
+      // describes one document however many the page has. The event goes out
+      // with the merged tab snapshot the state beside it is projected from --
+      // one page, one instant -- and that merge runs once, here, rather than a
+      // second time inside the reporter. A single-frame page is unaffected.
+      const captured = await this.evidence.captureEventSnapshot(payload, tabId, frameId);
+      const recorded = captured.snapshot === undefined ? payload : { ...payload, snapshot: captured.snapshot };
+      await this.gateway.send("client.recording_event", gatewayRecordingEventFromPayload(recorded, tabId, frameId, this.activeRecordingId));
+      await this.evidence.sendRecordingEvidence(payload, tabId, frameId, captured);
       return;
     }
     if (payload.kind !== "content.ready") {

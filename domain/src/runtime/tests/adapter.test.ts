@@ -119,8 +119,9 @@ test("a reported error stays the error and becomes the message", async () => {
 test("the client's structured failure record reaches the runtime result", async () => {
   const failure: AutomationStudioFailureRecord = {
     category: "output_not_observed",
-    code: "web.action.output_not_observed",
-    retryable: true
+    code: "web.validation.output_not_observed",
+    retryable: true,
+    stage: "verification"
   };
   const result = await runCommand({
     commandId: "client.command.six",
@@ -130,6 +131,47 @@ test("the client's structured failure record reaches the runtime result", async 
   });
   assert.deepEqual(result.failure, failure, "Core classifies from the record before it matches the message");
   assert.equal(result.message, "Expected the value to be team, but it stayed starter.");
+});
+
+test("a client record naming a code this domain does not own becomes UNKNOWN, carrying the code it used", async () => {
+  // `result.failure` crossed the WebSocket, so its `code` is a bare string
+  // until the adapter checks it -- Core's contract is to validate what crossed
+  // a process boundary, and this is that boundary. `web.action.output_not_observed`
+  // is what the client emitted before Wave 3 closed the set and is nobody's
+  // code now; until this check it reached Core's attempt trace unaltered, where
+  // nothing downstream can act on a code no allowlist names. This is the same
+  // answer `classifyWebAutomationFailure` gives a runtime error whose code is
+  // outside the set, because it is the same drift arriving another way.
+  const failure: AutomationStudioFailureRecord = { category: "output_not_observed", code: "web.action.output_not_observed", retryable: true, actual: "the field is empty" };
+  const result = await runCommand({ commandId: "client.command.six.b", status: "failed", message: "Value not observed.", failure });
+  assert.equal(result.failure?.code, "web.action.unknown");
+  assert.equal(result.failure?.category, "ambiguous_or_unknown");
+  assert.equal(result.failure?.actual, "the field is empty; unrecognized web automation failure code: web.action.output_not_observed", "what the client saw is kept beside the code nobody names");
+  assert.deepEqual(parseAutomationStudioFailureRecord(result.failure), result.failure);
+});
+
+test("a client record whose category contradicts its code is rebuilt from the code's own row", async () => {
+  // A client one version behind, or one assembling records by hand, can pair a
+  // named code with a category that its row forbids. Core's parser drops an
+  // inconsistent record whole rather than repairing it, so trusting the sender
+  // field by field risks losing the failure entirely. The code is the only part
+  // this domain owns, so the code decides; what only the client could see rides
+  // across untouched.
+  const failure: AutomationStudioFailureRecord = {
+    category: "action_failed",
+    code: "web.target.not_found",
+    retryable: false,
+    stage: "execution",
+    expected: "an element matching #pay",
+    actual: "nothing matched"
+  };
+  const result = await runCommand({ commandId: "client.command.six.c", status: "failed", message: "Nothing matched #pay.", failure });
+  assert.equal(result.failure?.category, "target_not_found", "the code decides the category, not the sender");
+  assert.equal(result.failure?.retryable, true, "an element may appear once the page settles, whatever the sender said");
+  assert.equal(result.failure?.stage, "target_resolution");
+  assert.equal(result.failure?.expected, "an element matching #pay");
+  assert.equal(result.failure?.actual, "nothing matched");
+  assert.deepEqual(parseAutomationStudioFailureRecord(result.failure), result.failure);
 });
 
 test("an output this domain does not own is still rejected before anything is dispatched", async () => {

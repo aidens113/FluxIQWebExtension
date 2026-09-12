@@ -36,10 +36,19 @@
 // when it was captured; after any scroll they point at whatever has since moved
 // into that spot, which is how a click lands on a sticky header.
 //
-// What is *not* here: scored candidate selection. See reports/w3-resolver.md --
-// Core's element matcher cannot be bundled into a content script today, so a
-// control whose recorded selector, id, test id and text have all drifted at
-// once is still unresolvable.
+// Scored selection is here now. Core's element matcher ships to the browser
+// from `fluxiq/automation-studio/fingerprinting`, and the resolver hands it the
+// candidates whenever an exact answer is not one: a strategy that matched
+// several elements the gate could not narrow, or every strategy missing. It
+// resolves the winner only when the winner clears the floor and beats the
+// runner-up by a margin.
+//
+// What scoring does *not* do is guess. On the identity-drift fixture a control
+// whose text, id, class and test id have all changed at once scores below the
+// floor against its own page -- the highest-scoring button there is the wrong
+// one, Discard -- so the resolver refuses. The row that proves that is as
+// important as the rows where scoring wins, and the measured scores behind the
+// floor are in reports/w3-matcher-packaging.md.
 
 import { expect, test } from "../index.js";
 import type { ContentHarness } from "../index.js";
@@ -231,6 +240,83 @@ test.describe("ambiguous-targets: a tie is reported, not guessed", () => {
     expect(reply.status).toBe("failed");
     expect(reply.message).toContain("Action rejected");
     expect(reply.element).toMatchObject({ selector: PRIMARY });
+  });
+});
+
+test.describe("scored selection: Core's matcher decides what an exact strategy could not", () => {
+  for (const target of [
+    { name: "secondary", selector: SECONDARY, result: "secondary" },
+    { name: "primary", selector: PRIMARY, result: "primary" }
+  ]) {
+    test(`the recorded ${target.name} control wins the tie its selector could not break`, async ({ openHarness, page }) => {
+      const harness = await openHarness("ambiguous-targets");
+      const recorded = await describe(harness, target.selector);
+
+      // `button` matches both Continue buttons and the gate prefers neither:
+      // both are visible, enabled and of the recorded tag. Before scoring this
+      // was TARGET_AMBIGUOUS; now the recorded test id decides it.
+      const reply = await harness.runAction({
+        commandId: `scored-tie:${target.name}`,
+        actionType: "web.dom.click",
+        selector: "button",
+        options: recordedElement(recorded)
+      });
+
+      expect(reply).toMatchObject({ status: "succeeded", element: { selector: target.selector } });
+      await expect(page.getByTestId("result")).toHaveText(target.result);
+      expect((await harness.finalState()).state).toEqual({ selected: target.result });
+    });
+  }
+
+  test("a descriptor that cannot tell the twins apart leaves them tied, and the failure carries their scores", async ({ openHarness, page }) => {
+    const harness = await openHarness("ambiguous-targets");
+
+    // Both buttons answer every signal this descriptor carries, so both score
+    // at the top of the scale. A tie at 1.00 is still a tie.
+    const reply = await harness.runAction({
+      commandId: "scored-tie-unbroken",
+      actionType: "web.dom.click",
+      selector: "button",
+      options: { element: { tagName: "button", visibleText: "Continue" } }
+    });
+
+    expect(reply).toMatchObject({
+      status: "failed",
+      failure: { ...TARGET_AMBIGUOUS, expected: "one element matching selector button" },
+      resolution: { strategy: "selector", candidateCount: 2 }
+    });
+    expect(reply.message).toContain('button[data-testid="choice-primary"] "Continue" (1.00)');
+    expect(reply.message).toContain('button[data-testid="choice-secondary"] "Continue" (1.00)');
+    await expect(page.getByTestId("result")).toHaveText("None");
+    expect((await harness.finalState()).state).toEqual({ selected: null });
+  });
+
+  test("a control whose every recorded signal has drifted is refused, not approximated", async ({ openHarness, page }) => {
+    const harness = await openHarness("identity-drift");
+    const recorded = await describe(harness, SAVE_BASELINE);
+    await armMode(harness, "selector-only");
+    // selector-only already changes the id, the class and the test id. Taking
+    // the text as well leaves nothing the recording knew this control by, which
+    // is the case the fixture's four modes each stop one step short of.
+    await page.locator("#workspace-settings-submit").evaluate((element) => { element.textContent = "Apply changes"; });
+
+    const reply = await harness.runAction({
+      commandId: "scored-below-floor",
+      actionType: "web.dom.click",
+      ...(recorded.selector ? { selector: recorded.selector } : {}),
+      options: recordedElement(recorded)
+    });
+
+    // Two buttons were weighed and neither cleared the floor. The higher-scoring
+    // of the two is Discard, on a shared class prefix, which is exactly the
+    // answer a resolver without a floor would have clicked.
+    expect(reply).toMatchObject({
+      status: "failed",
+      failure: TARGET_NOT_FOUND,
+      resolution: { strategy: "fingerprint", candidateCount: 2 }
+    });
+    expect(reply.message).toBe("No target resolved from selector #save-settings, element fingerprint.");
+    expect((await harness.finalState()).state).toMatchObject({ saveCount: 0, discardCount: 0, savedInMode: null });
   });
 });
 

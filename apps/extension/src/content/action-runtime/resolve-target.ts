@@ -24,19 +24,34 @@
 // contract is the element alone, so nothing puts `resolution` on a successful
 // result yet.
 //
-// Level 2 -- enumerating same-family candidates and scoring them with Core's
-// element matcher, so a control whose id, class and test id all drifted is
-// still recovered by its name, role and position -- is not here. Core's matcher
-// is only published from `fluxiq/automation-studio`, whose barrel reaches
-// `node:crypto` and `node:perf_hooks`, so bundling it into a content script
-// fails outright; see reports/w3-resolver.md. The candidate pool it needs is
-// built and is already used to name the elements an ambiguous target tied
-// between.
+// Level 2 is scoring, and it runs at the two points where an exact answer is
+// not one: when a strategy matched several elements and the gate could not
+// narrow them to one, and when every strategy missed. Both hand the candidates
+// to Core's element matcher through `identity/score.ts` -- the same matcher
+// Core would score them with itself, published for a browser since Wave 3 as
+// `fluxiq/automation-studio/fingerprinting`. A candidate wins by clearing the
+// floor and beating the runner-up by a margin; otherwise the tie is reported
+// rather than broken by document order. The confidence on a scored resolution
+// is Core's measurement of the candidate that won, never a constant, and it is
+// absent from an exact resolution because nothing was measured there.
+//
+// Scoring cannot rescue every drift, and it is not meant to. A control whose
+// text, id, class and test id have *all* changed scores below the floor against
+// its own page, because at that point nothing distinguishes it from the next
+// button along; the resolver refuses rather than clicking the least-wrong thing.
+// The measured numbers are in reports/w3-matcher-packaging.md.
 
 import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "@fluxiq-web-extension/domain/client";
 import { findClosestFingerprint, type ElementFingerprint } from "../element-finder";
-import { candidateLabel, collectTargetCandidates } from "../identity";
+import {
+  candidateFingerprint,
+  candidateLabel,
+  collectTargetCandidates,
+  scoreTargetCandidates,
+  type CandidateSelection,
+  type TargetCandidate
+} from "../identity";
 import type { BrowserActionCommand, BrowserActionTargetResolution, BrowserActionTargetStrategy, RectDescriptor } from "../types";
 
 /** The element an action will act on, with the measurement that chose it. */
@@ -55,6 +70,7 @@ type RecordedTarget = ElementFingerprint & {
   implicitRole?: string | undefined;
   testId?: string | undefined;
   accessibleName?: string | undefined;
+  label?: string | undefined;
 };
 
 /** One exact strategy's result: what it was asked for, and everything it matched. */
@@ -114,15 +130,57 @@ export function resolveTargetWithDiagnostics(action: BrowserActionCommand): Reso
     const pool = gatedPool(attempt.matches, target);
     const only = pool.length === 1 ? pool[0] : undefined;
     if (only) return { element: only, resolution: { strategy: attempt.strategy, candidateCount: attempt.matches.length } };
-    throw ambiguous(attempt, pool);
+    // Several survived the gate. Scoring is the difference between "these two
+    // tied" and "these two tied, and one of them is the recorded control".
+    const decided = target ? scoreTargetCandidates(target, describePool(pool)) : undefined;
+    if (decided?.outcome === "resolved") return scoredTarget(decided, pool.length);
+    throw ambiguous(attempt, pool, decided);
   }
 
   if (!misses.length) {
     const active = document.activeElement;
     if (active) return { element: active, resolution: { strategy: "active-element", candidateCount: 1 } };
-    throw notFound("No selector, coordinates, or active element was available.", [], target);
+    throw notFound("No selector, coordinates, or active element was available.", [], 0);
   }
-  throw notFound(`No target resolved from ${misses.join(", ")}.`, misses, target);
+
+  // Nothing answered exactly. The page may still hold the control under a new
+  // name, so the same-family candidates are enumerated once and scored: the
+  // enumeration is what a not-found failure reports either way.
+  const nearby = target ? collectTargetCandidates(candidateFamily(target)) : [];
+  const decided = target ? scoreTargetCandidates(target, nearby) : undefined;
+  if (decided?.outcome === "resolved") return scoredTarget(decided, nearby.length);
+  if (decided?.outcome === "ambiguous") throw scoredAmbiguous(decided, misses);
+  throw notFound(`No target resolved from ${misses.join(", ")}.`, misses, nearby.length);
+}
+
+/** A scored win, with Core's own measurement of it. */
+function scoredTarget(decided: Extract<CandidateSelection, { outcome: "resolved" }>, candidateCount: number): ResolvedTarget {
+  return {
+    element: decided.chosen.element,
+    resolution: {
+      strategy: "scored-candidate",
+      candidateCount,
+      bestScore: decided.chosen.score.normalizedScore,
+      ...(decided.runnerUp ? { runnerUpScore: decided.runnerUp.score.normalizedScore } : {}),
+      confidence: decided.chosen.score.confidence
+    }
+  };
+}
+
+/** The elements a strategy tied between, described the way the matcher reads a candidate. */
+function describePool(pool: Element[]): TargetCandidate[] {
+  return pool.map((element, index) => ({ element, fingerprint: candidateFingerprint(element, index) }));
+}
+
+/**
+ * The family a recorded target's neighbours must share, taking the implied role
+ * when the markup declares none. The descriptor writes an empty string for an
+ * absent role rather than leaving the field out, so the fallback has to be `||`
+ * and not `??`.
+ */
+function candidateFamily(target: RecordedTarget): { tagName?: string | undefined; role?: string | undefined } {
+  const role = target.role?.trim() || target.implicitRole?.trim();
+  return { ...(target.tagName ? { tagName: target.tagName } : {}), ...(role ? { role } : {}) };
 }
 
 /**
@@ -226,10 +284,14 @@ function isEnabledForResolution(element: Element): boolean {
 /**
  * Several elements answered to the same target and none could be preferred.
  * The candidates are named, bounded, so the Flow can be told which of them it
- * meant; the code and category ride in the record, not in the sentence.
+ * meant; the code and category ride in the record, not in the sentence. Where
+ * scoring was attempted and failed to separate them, each name carries the
+ * score it got, because "they tied at 1.00" and "the best of them reached 0.12"
+ * are different problems with different fixes.
  */
-function ambiguous(attempt: StrategyAttempt, pool: Element[]): TargetResolutionError {
-  const named = pool.slice(0, MAX_NAMED_CANDIDATES).map(candidateLabel).join(", ");
+function ambiguous(attempt: StrategyAttempt, pool: Element[], decided: CandidateSelection | undefined): TargetResolutionError {
+  const scores = scoreByElement(decided);
+  const named = pool.slice(0, MAX_NAMED_CANDIDATES).map((element) => namedCandidate(element, scores)).join(", ");
   const more = pool.length > MAX_NAMED_CANDIDATES ? `, and ${pool.length - MAX_NAMED_CANDIDATES} more` : "";
   const failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS, {
     expected: `one element matching ${attempt.description}`,
@@ -240,21 +302,51 @@ function ambiguous(attempt: StrategyAttempt, pool: Element[]): TargetResolutionE
 }
 
 /**
+ * No strategy answered, and scoring found several candidates that could each be
+ * the recorded control. That is a different failure from "nothing matched": the
+ * page does hold plausible controls, and the Flow can pick one, so the top of
+ * the ranking is named with its score and the strategy is the scored one.
+ */
+function scoredAmbiguous(decided: Extract<CandidateSelection, { outcome: "ambiguous" }>, misses: string[]): TargetResolutionError {
+  const top = decided.ranked.slice(0, MAX_NAMED_CANDIDATES);
+  const named = top.map((entry) => `${candidateLabel(entry.element)} (${entry.score.normalizedScore.toFixed(2)})`).join(", ");
+  const more = decided.ranked.length > MAX_NAMED_CANDIDATES ? `, and ${decided.ranked.length - MAX_NAMED_CANDIDATES} more` : "";
+  const failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_AMBIGUOUS, {
+    expected: misses.length ? `one element matching ${misses.join(", ")}` : "one recorded control",
+    actual: `no exact match; ${decided.ranked.length} scored candidate(s) tied: ${named}${more}`
+  });
+  const message = `Target ambiguous: no exact match, and the top scored candidates tied: ${named}${more}.`;
+  const best = decided.ranked[0];
+  return new TargetResolutionError(message, failure, {
+    strategy: "scored-candidate",
+    candidateCount: decided.ranked.length,
+    ...(best ? { bestScore: best.score.normalizedScore, confidence: best.score.confidence } : {}),
+    ...(decided.ranked[1] ? { runnerUpScore: decided.ranked[1].score.normalizedScore } : {})
+  });
+}
+
+/**
  * Nothing answered. The message is the one this module shipped with, so the
  * strategies attempted still read in order; the record says the same thing in
  * Core's vocabulary and adds how many same-family controls the page did offer,
  * which is what a Flow needs to know to widen its target.
  */
-function notFound(message: string, misses: string[], target: RecordedTarget | undefined): TargetResolutionError {
-  const nearby = collectTargetCandidates({
-    ...(target?.tagName ? { tagName: target.tagName } : {}),
-    ...(target?.role ?? target?.implicitRole ? { role: target?.role ?? target?.implicitRole } : {})
-  });
+function notFound(message: string, misses: string[], nearbyCount: number): TargetResolutionError {
   const failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, {
     expected: misses.length ? `an element matching ${misses.join(", ")}` : "a selector, coordinates, or a focused element",
-    actual: `nothing matched; ${nearby.length} control(s) of the same family are on the page`
+    actual: `nothing matched; ${nearbyCount} control(s) of the same family are on the page`
   });
-  return new TargetResolutionError(message, failure, { strategy: strategyOf(misses), candidateCount: nearby.length });
+  return new TargetResolutionError(message, failure, { strategy: strategyOf(misses), candidateCount: nearbyCount });
+}
+
+/** The score each tied element got, when scoring ran at all. */
+function scoreByElement(decided: CandidateSelection | undefined): Map<Element, number> {
+  return new Map((decided?.ranked ?? []).map((entry) => [entry.element, entry.score.normalizedScore]));
+}
+
+function namedCandidate(element: Element, scores: Map<Element, number>): string {
+  const score = scores.get(element);
+  return score === undefined ? candidateLabel(element) : `${candidateLabel(element)} (${score.toFixed(2)})`;
 }
 
 /** The strategy a not-found failure is attributed to: the last one attempted, or the focus fallback. */

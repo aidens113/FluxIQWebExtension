@@ -15,7 +15,6 @@
 // from the command status alone. Everything else lands on a code, so a failure
 // can never reach the wire structureless.
 
-import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import type { WebAutomationActionStatus, WebAutomationActionType, WebAutomationActionValidation } from "../../actions/types";
 import { WebAutomationRuntimeError } from "../errors";
 import {
@@ -23,7 +22,8 @@ import {
   isWebAutomationFailureCode,
   webAutomationFailureRecord,
   type WebAutomationFailureCode,
-  type WebAutomationFailureComparison
+  type WebAutomationFailureComparison,
+  type WebAutomationFailureRecord
 } from "./codes";
 
 /**
@@ -42,8 +42,15 @@ export type WebAutomationActionOutcome = {
   actionType?: WebAutomationActionType | undefined;
   /** The post-condition the action checked, when it checked one. */
   validation?: WebAutomationActionValidation | undefined;
-  /** A failure the producer already classified. A present one is reported unchanged. */
-  failure?: AutomationStudioFailureRecord | undefined;
+  /**
+   * A failure the producer already classified. A present one is reported
+   * unchanged, so it must already carry one of the closed set's codes: the
+   * classifier hands it straight back and would otherwise be the hole through
+   * which an unnamed code reached the wire. A record arriving from outside this
+   * build -- one read off a thrown value, say -- is not trusted until
+   * `isWebAutomationFailureCode` has been run on its code.
+   */
+  failure?: WebAutomationFailureRecord | undefined;
   /** What the action said about itself, used only when nothing structured is available. */
   message?: string | undefined;
 };
@@ -62,7 +69,7 @@ export type WebAutomationActionOutcome = {
  * `webAutomationFailureRecord` directly. This is the path for a caller holding
  * an outcome and an error and no opinion about either.
  */
-export function classifyWebAutomationFailure(error: unknown, outcome: WebAutomationActionOutcome): AutomationStudioFailureRecord | undefined {
+export function classifyWebAutomationFailure(error: unknown, outcome: WebAutomationActionOutcome): WebAutomationFailureRecord | undefined {
   if (outcome.failure !== undefined) return outcome.failure;
   const classified = classifyOutcome(error, outcome);
   return classified === undefined ? undefined : webAutomationFailureRecord(classified.code, classified.comparison);

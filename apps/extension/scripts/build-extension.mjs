@@ -8,6 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(root, "..", "..");
 const fluxiqRoot = path.resolve(repoRoot, "..", "!FluxIQ");
 const fluxiqClientGatewayContracts = path.join(fluxiqRoot, "packages", "fluxiq", "src", "client-gateway", "contracts.ts");
+const fluxiqFingerprinting = path.join(fluxiqRoot, "packages", "fluxiq", "src", "programs", "automation-studio", "fingerprinting", "index.ts");
 const webAutomationDomainClient = path.join(repoRoot, "domain", "src", "client", "index.ts");
 const buildDir = path.join(root, "build");
 const distDir = path.join(root, "dist");
@@ -90,6 +91,24 @@ export async function bundleExtensionEntry(name, outputDir, options = {}) {
   return outfile;
 }
 
+/**
+ * Resolves the workspace specifiers a browser bundle may use to the source file
+ * behind each, so no bundle depends on a sibling package's compiled output.
+ *
+ * `fluxiq/client-gateway` is aliased because it has to be: its published entry
+ * is the gateway service, which reaches Node built-ins, and only the contracts
+ * module inside it is browser-safe.
+ *
+ * `fluxiq/automation-studio/fingerprinting` is different, and the difference is
+ * worth stating. That subpath is browser-safe as published -- its compiled graph
+ * is three files with no imports at all, proven by a Core test -- so esbuild
+ * would resolve it through the package `exports` map with no help from here. It
+ * is aliased anyway so the bundle never reads Core's `dist/`, which Core's own
+ * build deletes and rewrites: a Core build running beside a content-harness run
+ * would otherwise fail the bundle or feed it half a directory. TypeScript still
+ * resolves the same specifier through the `exports` map, so the published
+ * subpath is exercised by `pnpm check` rather than taken on trust.
+ */
 function browserSafeWorkspacePlugin() {
   return {
     name: "browser-safe-workspace-imports",
@@ -99,6 +118,9 @@ function browserSafeWorkspacePlugin() {
       }));
       buildContext.onResolve({ filter: /^fluxiq\/client-gateway$/ }, () => ({
         path: fluxiqClientGatewayContracts
+      }));
+      buildContext.onResolve({ filter: /^fluxiq\/automation-studio\/fingerprinting$/ }, () => ({
+        path: fluxiqFingerprinting
       }));
     }
   };

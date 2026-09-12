@@ -10,13 +10,14 @@
 // run whose gateway pairing failed has no automation failure, and a run whose
 // automation reported `web.target.not_found` is a healthy facility run.
 //
-// The runner cannot derive anything from the domain's closed code set today.
-// `@fluxiq-web-extension/domain` is a bundler-only package: its `exports` map
-// points at TypeScript source, and both that source and its emitted `dist`
-// carry extensionless relative specifiers, so this `NodeNext`, tsc-and-node
-// package can consume it neither at runtime nor for types. The dependency is
-// declared, and the remedy is recorded in
-// `docs/working/mvp-week1-web-automation-reliability-plan/reports/w3-runner-alignment.md`.
+// The runner can now import the domain, through its `./node` export: the
+// domain's build rewrites the extensionless relative specifiers that made its
+// `dist` unusable to this `NodeNext`, tsc-and-node package. The evidence
+// allowlist in `demo-llm-create-ui.ts` derives from the domain because of it.
+// What still does not derive from the domain is the type below, and that is
+// deliberate rather than blocked: `FailureCategory` is the test-rig taxonomy,
+// answering why the *facility* could not produce a trustworthy run, which is a
+// different question from how the *automation* failed. Keep them apart.
 
 import type { FailureCategory } from "@fluxiq-web-extension/test-contracts";
 

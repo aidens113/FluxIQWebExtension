@@ -35,6 +35,27 @@ import { compactObject, numberValue, objectValue } from "./value-readers";
 // How long a screenshot-skipped warning suppresses the next identical one.
 const SCREENSHOT_SKIP_LOG_INTERVAL_MS = 2_000;
 
+/**
+ * The cross-frame merged snapshot for one recorded event, captured once.
+ *
+ * The merge is the expensive part of this file: one `captureSnapshot` round
+ * trip per frame -- one on an ordinary page, six on a six-frame one -- and each
+ * of those is a full content-script DOM sweep. Recording fires on every click,
+ * input, change, submit and keydown, so anything that runs the merge twice per
+ * event doubles that cost.
+ *
+ * `connection.ts` needs the merged snapshot for the recording event itself and
+ * this reporter needs it for the state projection, so the capture is run once
+ * and the result passed between them in this wrapper. The wrapper is what
+ * carries the meaning, not the snapshot inside it: holding one says the capture
+ * has already been attempted, which a bare `undefined` snapshot cannot say --
+ * and "the tab could not be read" must not be retried as "nobody has read the
+ * tab yet".
+ */
+export type CapturedEventSnapshot = {
+  readonly snapshot: RecordingEventPayload["snapshot"] | undefined;
+};
+
 export type RecordingEvidenceDeps = {
   readonly send: GatewayMessageSender;
   readonly recordingState: () => RecordingState;
@@ -61,13 +82,40 @@ export class RecordingEvidenceReporter {
 
   constructor(private readonly deps: RecordingEvidenceDeps) {}
 
+  /**
+   * The merged tab snapshot for a recorded event, for a caller that has to put
+   * it on the event before sending it.
+   *
+   * `connection.ts` sends `client.recording_event` first and the evidence that
+   * belongs with it a line later. Both want the same tab-wide snapshot -- the
+   * event should describe the page, not the one frame the interaction happened
+   * in, and the state projected beside it should describe the same instant --
+   * so the merge runs here, once, and the result is handed to
+   * `sendRecordingEvidence` rather than recomputed there. See
+   * `CapturedEventSnapshot` for what a second merge would cost.
+   */
+  async captureEventSnapshot(payload: RecordingEventPayload, tabId?: number, frameId?: number): Promise<CapturedEventSnapshot> {
+    if (this.deps.recordingState() !== "recording") return { snapshot: undefined };
+    return { snapshot: await this.captureDomSnapshotForEvidence(payload, tabId, frameId) };
+  }
+
   // Each await is a chance for the recording to have stopped underneath us, so
   // the guard is repeated rather than checked once at the top.
-  async sendRecordingEvidence(payload: RecordingEventPayload, tabId?: number, frameId?: number): Promise<void> {
+  //
+  // `captured` is the merged snapshot a caller already took for the recording
+  // event. When it is given the tab is not read again -- including when it
+  // holds no snapshot, because that is a capture that was tried and came back
+  // empty, not one that has yet to happen.
+  async sendRecordingEvidence(
+    payload: RecordingEventPayload,
+    tabId?: number,
+    frameId?: number,
+    captured?: CapturedEventSnapshot
+  ): Promise<void> {
     if (this.deps.recordingState() !== "recording") return;
     const projectId = await this.deps.resolveProjectId("recording_evidence");
     if (this.deps.recordingState() !== "recording") return;
-    const snapshot = await this.captureDomSnapshotForEvidence(payload, tabId, frameId);
+    const snapshot = captured ? captured.snapshot : await this.captureDomSnapshotForEvidence(payload, tabId, frameId);
     if (this.deps.recordingState() !== "recording") return;
     const hasDomSnapshot = isDomSnapshotPayload(snapshot);
     const state = hasDomSnapshot

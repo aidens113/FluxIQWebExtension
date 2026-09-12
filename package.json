@@ -8,7 +8,7 @@
     "agent:orchestrator": "pnpm --filter @fluxiq-web-extension/agent-orchestrator build && node packages/agent-orchestrator/dist/cli.js",
     "boundary:audit": "pnpm --filter @fluxiq-web-extension/boundary-audit build && node packages/boundary-audit/dist/cli.js --repository .",
     "build": "pnpm -r build",
-    "check": "pnpm structure:test && node scripts/structure-audit.mjs && pnpm -r check",
+    "check": "pnpm structure:test && node scripts/structure-audit.mjs && pnpm --filter @fluxiq-web-extension/domain build && pnpm -r check",
     "dev": "node scripts/run-fluxiq-web.mjs",
     "demo:record": "pnpm --filter @fluxiq-web-extension/scenario-lab build && pnpm --filter @fluxiq-web-extension/extension test:e2e:build && pnpm --filter @fluxiq-web-extension/test-runner... build && node scripts/record-demo-workspace.mjs",
     "demo:llm:setup": "node scripts/setup-demo-llm-key.mjs",

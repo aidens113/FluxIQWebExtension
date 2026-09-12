@@ -19,7 +19,8 @@ import {
   WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS,
   isWebAutomationFailureCode,
   webAutomationFailureRecord,
-  type WebAutomationFailureCode
+  type WebAutomationFailureCode,
+  type WebAutomationFailureRecord
 } from "../codes";
 
 // [vocabulary name, wire code, category, retryable, stage]
@@ -96,6 +97,31 @@ test("an evidence digest is kept only in the shape Core accepts", () => {
   const dropped = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED, { evidenceDigest: "NOT-A-DIGEST" });
   assert.equal("evidenceDigest" in dropped, false, "one lost optional field beats a record Core discards whole");
   assert.deepEqual(parseAutomationStudioFailureRecord(dropped), dropped);
+});
+
+test("a record written out by hand with a code outside the set does not compile", () => {
+  // The invariant, pinned. `webAutomationFailureRecord` checked its argument
+  // against the set and then returned Core's record, whose `code` is a bare
+  // `string` -- so the check was discarded one line after it was made, and a
+  // record written out at a call site compiled with any string at all. Four
+  // workers reported out-of-set codes reaching the wire while every gate
+  // passed; `WebAutomationFailureRecord` is what closes that, and this row is
+  // what keeps it closed.
+  //
+  // `@ts-expect-error` is the assertion: if this literal ever compiles again,
+  // the narrowing has been widened and `check` fails here, rather than a Flow
+  // meeting a code nothing downstream can act on. The runtime guard is
+  // asserted beside it because the two answer different questions -- the
+  // compiler speaks for values written in this build, and
+  // `isWebAutomationFailureCode` for a record that crossed a process boundary.
+  const handBuilt: WebAutomationFailureRecord = {
+    category: "unexpected_state",
+    // @ts-expect-error - "web.assert.state_mismatch" is not one of the closed set's codes
+    code: "web.assert.state_mismatch",
+    retryable: false,
+    stage: "verification"
+  };
+  assert.equal(isWebAutomationFailureCode(handBuilt.code), false, "the runtime guard agrees with the compiler");
 });
 
 test("the guard admits every code and nothing else", () => {

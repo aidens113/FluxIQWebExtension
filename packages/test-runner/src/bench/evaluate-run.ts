@@ -120,9 +120,10 @@ function assemble(identity: RunEvaluationIdentity, outcome: RunOutcome): RunEval
  *
  * `failure.code` is a web-automation failure code from
  * `domain/src/runtime/failure/codes.ts` and is reported as observed. It is not
- * checked against that closed set: the domain package cannot be imported here
- * (see `reports/w3-runner-alignment.md`), and inventing a second copy of the
- * set to check it against is the drift this alignment exists to remove.
+ * checked against that closed set. The domain is importable here now, so this
+ * is a choice rather than a limitation: a bench run reports what the automation
+ * said it was, and narrowing an observed code to a known set at this point would
+ * hide exactly the drift a bench exists to measure.
  */
 function reportedOutcome(manifest: RunManifest | undefined): { verdict: RunEvaluation["reportedVerdict"]; failure: RunEvaluation["automationFailureReported"] } {
   const actions = manifest?.actions ?? [];

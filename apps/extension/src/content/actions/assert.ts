@@ -24,21 +24,43 @@
 // the record cannot contradict one of Core's consistency rules and be dropped
 // whole by its parser -- which loses the failure instead of reporting it.
 //
-// `deps.success` builds the result, so the validation text is bounded and
-// non-empty exactly as every other verb's is -- Core drops an unbounded record
-// whole -- and only the failure record is then replaced, using the bounded
-// values the builder produced rather than the raw page text.
+// This verb builds no failure record of its own. `deps.success` is
+// `action-runtime/results.ts`, which already maps a failed `web.dom.assert`
+// post-condition to STATE_MISMATCH -- `unobservedOutputCode` -- so the record
+// this file used to write on top of it was a second statement of the same rule.
+// It also bounds the validation text, which Core requires and page text does
+// not respect.
+//
+// The duplicate was not merely redundant; it was lossy. `results.ts` runs one
+// hook after the code is chosen: `authGateFailure` replaces the record with
+// AUTH_REQUIRED when the action's selector matches nothing and the document is
+// a sign-in gate. Overwriting the builder's record discarded that, and the two
+// codes tell an operator to do opposite things -- AUTH_REQUIRED says sign in
+// again, STATE_MISMATCH says the page is not in the state the Flow claimed. The
+// edge is narrow (a `url` claim carrying a stale selector on a page that has
+// become a gate, since a selector matching nothing now routes to `timedOut`),
+// but it is the case where naming the right one matters most: reported as a
+// state mismatch, an expired session sends a person looking at the page.
+//
+// So both branches return the builder's result untouched, and the only choice
+// left here is which builder to call.
+//
+// One thing the removed record said is worth keeping said: the kind of claim
+// does not appear in the code. It used to -- `web.assert.${kind}`, six strings
+// in no set at all -- and it is not lost, because `expected` names the claim in
+// words ("the page contains ...", "#pay is enabled") and the command carries
+// `assert.kind`. Neither is retryability a judgement this verb makes: the set
+// fixes STATE_MISMATCH as not retryable, which is right here because nothing
+// acts on the page, so the wait that gives the page its chance to change has
+// already happened inside `evaluateAssertion`.
 //
 // The whole body is wrapped: `execute.ts` returns this verb's promise from
 // inside its try block without awaiting it, so a rejection would escape the
 // catch that turns a throw into a failure result.
 
-import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "@fluxiq-web-extension/domain/client";
-import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation } from "../types";
+import type { BrowserActionCommand, BrowserActionResult } from "../types";
 import type { AssertionOutcome, AssertionTarget } from "../action-runtime";
 import type { ContentActionDependencies } from "./types";
-
-type FailureRecord = NonNullable<BrowserActionResult["failure"]>;
 
 export async function assertAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {
   try {
@@ -60,9 +82,13 @@ export async function assertAction(action: BrowserActionCommand, deps: ContentAc
       // never flattened to `failed`, carrying TIMEOUT from the same closed set.
       return deps.timedOut(action, startedAt, `Assertion did not hold within ${outcome.timeoutMs} ms: ${request.kind}.`, validation, evidence);
     }
+    // `deps.success` is `results.ts`'s builder: a failed validation makes the
+    // result `failed` and carries STATE_MISMATCH, because the post-condition of
+    // `web.dom.assert` is the Flow's claim about the page rather than the verb's
+    // own effect. The record is returned as it was built -- see the header for
+    // why replacing it here lost an AUTH_REQUIRED the builder had already found.
     const message = outcome.held ? `Assertion held: ${request.kind}.` : `Assertion did not hold: ${request.kind}.`;
-    const result = deps.success(action, startedAt, message, validation, evidence);
-    return outcome.held ? result : { ...result, failure: stateMismatchFailure(result.validation) };
+    return deps.success(action, startedAt, message, validation, evidence);
   } catch (error) {
     return deps.failure(action, error, startedAt);
   }
@@ -113,29 +139,4 @@ function assertionTarget(action: BrowserActionCommand, deps: ContentActionDepend
  */
 function assertionTimedOut(outcome: AssertionOutcome): boolean {
   return !outcome.held && outcome.waitExpired && !outcome.judged;
-}
-
-/**
- * The claim did not hold: STATE_MISMATCH, which the set fixes at
- * `unexpected_state`, stage `verification`, and not retryable.
- *
- * Not retryable is a change from the code this replaced, and it is the set's
- * judgement rather than this verb's: retrying the same assertion against the
- * same page produces the same answer, because nothing here acts on the page, so
- * a retry can only succeed if something else changes it. The wait that gives
- * the page its chance to change has already happened -- `evaluateAssertion`
- * polls until the claim holds or its timeout passes -- so by the time a failure
- * is built, waiting longer is what has already been tried.
- *
- * The kind of claim no longer appears in the code, which used to be
- * `web.assert.${kind}` and so invented six codes outside the set. It is not
- * lost: `expected` names the claim in words ("the page contains ...",
- * "#pay is enabled"), which is where a reader looks for it, and the action's own
- * `assert.kind` travels on the command.
- */
-function stateMismatchFailure(validation: BrowserActionValidation): FailureRecord {
-  return webAutomationFailureRecord(
-    WEB_AUTOMATION_FAILURE_CODES.STATE_MISMATCH,
-    validation.status === "none" ? {} : { expected: validation.expected, actual: validation.actual }
-  );
 }

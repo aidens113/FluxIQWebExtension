@@ -5,11 +5,15 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./client": "./src/client/index.ts"
+    "./client": "./src/client/index.ts",
+    "./node": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
   "fluxiqHostModule": "./dist/host/web-panel-host.mjs",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.json && node scripts/rewrite-dist-specifiers.mjs",
     "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
     "host:build": "node scripts/build-web-panel-host.mjs",
     "fluxiq:setup": "node scripts/setup-fluxiq.mjs",

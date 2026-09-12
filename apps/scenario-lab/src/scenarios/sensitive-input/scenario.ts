@@ -27,6 +27,12 @@ export const sensitiveInputScenario = defineScenario<State>({
     if (operation !== "submit" || !isRecord(payload) || payload.synthetic !== true) return state;
     return { submitted: true, username: SYNTHETIC_USER, passwordStored: false, paymentStored: false };
   },
+  // A second card field carries the multi-token `autocomplete="billing cc-number"`.
+  // That is the ordinary way the attribute is written, and it is the exact form
+  // that has leaked a card number twice in this plan: once through a duplicated
+  // sensitivity rule where one copy was fixed and the other was not, and once
+  // through a copy that compared the whole attribute instead of its tokens. A
+  // single-token fixture cannot catch either, which is why both fields exist.
   // The card field carries `autocomplete="cc-number"` because that is what a
   // real card field carries and it is what the extension's shared sensitivity
   // rule reads. Without it the rule cannot see the field, and this scenario --
@@ -35,7 +41,7 @@ export const sensitiveInputScenario = defineScenario<State>({
   // the opposite. `inputmode="numeric"` is not a substitute: an ordinary
   // quantity field carries it too, so matching on it would redact real data.
   render(state, context) {
-    return page("Sensitive input", `<main><h1>Synthetic sensitive input</h1><form data-testid="sensitive-form"><label>Email <input name="username" value="${state.username}" autocomplete="off"></label><label>Password <input name="password" data-testid="password" type="password" value="SYNTHETIC_PASSWORD_DO_NOT_USE"></label><label>Test card <input name="payment" data-testid="payment" autocomplete="cc-number" inputmode="numeric" value="4111111111111111"></label><button>Submit synthetic values</button></form><p data-testid="result" aria-live="polite">Not submitted</p></main>`, `${fixtureClient(context.runToken, "sensitive-input")}
+    return page("Sensitive input", `<main><h1>Synthetic sensitive input</h1><form data-testid="sensitive-form"><label>Email <input name="username" value="${state.username}" autocomplete="off"></label><label>Password <input name="password" data-testid="password" type="password" value="SYNTHETIC_PASSWORD_DO_NOT_USE"></label><label>Test card <input name="payment" data-testid="payment" autocomplete="cc-number" inputmode="numeric" value="4111111111111111"></label><label>Billing card <input name="billing" data-testid="billing" autocomplete="billing cc-number" inputmode="numeric" value="4222222222222220"></label><button>Submit synthetic values</button></form><p data-testid="result" aria-live="polite">Not submitted</p></main>`, `${fixtureClient(context.runToken, "sensitive-input")}
 document.querySelector('form').addEventListener('submit', async event => { event.preventDefault(); await mutate('submit', { synthetic: true }); document.querySelector('[data-testid="result"]').textContent = 'Submitted with secrets discarded'; });`);
   },
 });

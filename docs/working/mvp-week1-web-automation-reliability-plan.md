@@ -1,9 +1,9 @@
 # MVP Week 1 — Web Automation Reliability Plan
 
 Status: Active
-Status detail: Wave 1 complete and pushed in one paired work unit (this repository f8885b8, Core 4867c5c). Wave 2 open: w2-foundation runs first and twelve briefs code against its contract.
+Status detail: Waves 1, 2 and 3 complete, verified and pushed, with Core's share complete alongside. Phases 1.3, 1.4 and 1.5 have landed; what remains for Week 1 is Phase 1.6 (FluxBench measurement) and live browser validation, neither of which has been exercised.
 Created: 2026-09-11
-Last updated: 2026-09-11
+Last updated: 2026-09-12
 Owner: Senior supervisor agent
 Scope: Week 1 of the 30-day MVP (Phases 1.1–1.6): browser action vocabulary, element identity, browser state/evidence, failure taxonomy, and FluxBench, with automated verification through the Testing Lab as the primary proof for every phase. Weeks 2–4 are out of scope except where Week 1 must leave a seam for them.
 Paired document: `F:\!FluxIQ\docs\working\mvp-week1-web-automation-reliability-plan.md` — Core owns the failure-taxonomy contracts (C1, C2, pulled ahead of Wave 2 by D11) and the expectation-evaluator seam (C3)
@@ -13,12 +13,15 @@ Related: [30-Day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 
 ## Current State
 
-**Phase: Wave 1 complete and pushed; Wave 2 in progress.** Twenty workers dispatched in batches A–C;
-briefs in [briefs/wave-1.md](./mvp-week1-web-automation-reliability-plan/briefs/wave-1.md).
-Planning is complete; its ledger is archived at
+**Phase: Waves 1–3 complete and pushed; Phase 1.6 and live validation remain.**
+Briefs are under [briefs/](./mvp-week1-web-automation-reliability-plan/briefs/);
+planning's ledger is archived at
 [archive/2026-09-11-planning-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-11-planning-ledger.md).
 
-**Headline numbers from the audit** (detail in
+**Headline numbers from the opening audit**, kept as the baseline the work is
+measured against rather than as current state — see the Wave 3 section below for
+what has since moved, and note that of the element-matcher finding only the
+*signals* half is closed (detail in
 [reports/README.md](./mvp-week1-web-automation-reliability-plan/reports/README.md)):
 actions 1/10/3/10 of 24 (fully/partial/unreliable/unsupported), **outcome
 validation 0/24**; Core's element matcher never receives candidates and
@@ -28,42 +31,46 @@ default; no failure taxonomy on the browser path, 5 of 11 categories
 unproduced; the Testing Lab covers 4 of 18 FluxBench categories, has no
 metrics, and cannot run a Flow on `isolated`.
 
-**Done** (evidence in the ledger)
+**Waves 1 and 2 are settled.** Their outcomes — the domain test runner and its
+parallel-run isolation, the scenario contract and Scenario Lab consolidation, the
+type-checked domain tests, the content-script harness, the browser action
+vocabulary, and FluxBench's `pnpm lab bench` with its `week1` and `smoke` corpora
+— are recorded in
+[archive/2026-09-12-waves-1-2-outcomes.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-waves-1-2-outcomes.md)
+and their ledgers alongside it.
 
-- Domain tests run every `domain/src/**/tests/*.test.ts` (24 runtime tests
-  had never run; all pass); `DOMAIN_TEST_BUILD_LABEL` isolates parallel runs.
-- Scenario contract: `workflows`, `variants`, `extract` steps,
-  `expected.extracted`, `expected.failure`, seven step operations,
-  `resolveScenarioWorkflow`. Scenario Lab: a scenario-owned `route` hook
-  and ten registered placeholder fixtures.
-- Batch A and w1-content-aliases verified (ledger); an unknown action
-  type now reaches the wire as `ACTION_REJECTED`.
-- Domain tests are type-checked (22 errors fixed). All ten new fixtures
-  verified; capability docs written; the content-script harness (31
-  specs), evaluation and benchmark contracts, and the registry-derived
-  test-matrix catalog verified.
-- Scenario Lab consolidated (fixture barrels, one shared e2e lab fixture,
-  22-fixture docs) and extension unit tests (64) verified; the sensitivity
-  rule is one shared token-based function (`billing cc-number` leaked).
-- FluxBench: `pnpm lab bench` with `week1` and `smoke` corpora; the panel host
-  is an ES module on Core's public exports; isolated runs here use
-  `FLUXIQ_TEST_ENV_FILES=none`.
+**Wave 3 is complete, integrated, verified and pushed.** Seventeen workers ran
+across Phases 1.3, 1.4 and 1.5; every report is under
+[reports/](./mvp-week1-web-automation-reliability-plan/reports/). Seven of the
+seventeen were dispatched mid-wave to close gaps earlier workers found outside
+their own briefs, which is the wave's main lesson: the briefs were partitioned by
+file and the defects lived across them.
 
-**Running:** Wave 3, all ten parallel briefs, dispatched 2026-09-12. The serial
-prerequisite is finished: `w3-failure-codes` landed the closed code set, and its
-export seam — two barrel lines the brief had not granted anyone — is in, so the
-set is reachable from `@fluxiq-web-extension/domain`'s public entry. Wave 2 is
-complete, integrated and pushed, and its follow-up landed: the run-manifest
-action-type join is wired through and tested, where it had been inert.
+**Gates, run one at a time on a still tree (2026-09-12).** This repository: root
+`pnpm check` exit 0 with the structure audit clean, root `pnpm test` exit 0,
+extension 215/215, domain 245/245, content harness **186 passed** at
+`--workers=4`. Core: `pnpm check`, `pnpm docs:check`, `pnpm package:lint` and
+`pnpm build` each exit 0, `packages/fluxiq` **129 of 129** test files green under
+`--no-file-parallelism`.
 
-**The Core half of Week 1 is finished.** The expectation-evaluator seam (C3) was
-recovered from an interrupted worker on 2026-09-12, verified by the supervisor
-rather than taken on the worker's word, and pushed. Every Core contract this plan
-depends on now exists. The seam landed in a different shape than planned — the
-evaluator is a method on `AutomationStudioHostRuntimeBoundary`, not a separate
-service binding — so the downstream binding was folded into `w3-host-runtime`
-instead of getting a brief of its own, which would have collided on
-`host-runtime.ts`.
+**What Level 2 target scoring actually bought, measured.** Core's matcher is now
+published for a browser through a `fluxiq/automation-studio/fingerprinting`
+subpath — D1's premise was wrong only about *where* the module was published, not
+about the module: it does have type-only imports, but the barrel beside it
+re-exports `dsl/` and `testing/`, which reach `node:crypto` and
+`node:perf_hooks`. Cost: 18,974 bytes of content bundle (8.5%), attributed by
+esbuild metafile rather than inferred from totals.
+On `ambiguous-targets`, a tie that two identical buttons used to lose now
+resolves to the recorded control at confidence 1.000 against a runner-up at
+0.382. On `identity-drift`, all four modes resolve — but through Level 1 exact
+strategies, so no score is involved; the fixture cannot reach Level 2 unless its
+text is drifted away too. **When it is, the highest-scoring button is Discard at
+−0.360, ahead of the real Save at −0.375, on a shared class prefix.** A resolver
+without a floor would have clicked Discard. That is what "deterministic
+fallback" has to mean: the floor turns a plausible wrong click into a refusal,
+and there is a passing row proving the refusal. A fifth `identity-drift`
+rendering that drifts the text while keeping an `aria-label` would exercise the
+success path; it is a Scenario Lab change nobody has been briefed for.
 
 **Findings that change later work**
 

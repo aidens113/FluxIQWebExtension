@@ -31,9 +31,11 @@ import { webAutomationRuntimeCapabilities } from "./capabilities";
 import {
   WEB_AUTOMATION_FAILURE_CODES,
   classifyWebAutomationFailure,
+  isWebAutomationFailureCode,
   webAutomationFailureRecord,
   type WebAutomationActionOutcome,
-  type WebAutomationFailureCode
+  type WebAutomationFailureCode,
+  type WebAutomationFailureRecord
 } from "./failure";
 import { sanitizeWebLlmSnapshot, type WebLlmPageEvidence } from "./llm-evidence";
 
@@ -154,10 +156,10 @@ function rejected(command: FluxIQRuntimeCommand, message: string, code: WebAutom
 }
 
 /**
- * The record for a command that did not succeed. A record the client already
- * sent is kept as it is -- it was built where the page could be seen -- and
- * gains only the digest of the evidence captured with it. Everything else is
- * classified from the status and the message.
+ * The record for a command that did not succeed. A record the client sent wins
+ * whenever this domain can name what it says -- it was built where the page
+ * could be seen -- and gains only the digest of the evidence captured with it.
+ * Everything else is classified from the status and the message.
  */
 function commandFailure(
   status: FluxIQRuntimeCommandStatus,
@@ -165,7 +167,8 @@ function commandFailure(
   message: string | undefined,
   reported: AutomationStudioFailureRecord | undefined,
   evidenceDigest: string | undefined
-): AutomationStudioFailureRecord | undefined {
+): WebAutomationFailureRecord | undefined {
+  const client = clientReportedFailure(reported);
   const outcome: WebAutomationActionOutcome = {
     // `rejected` is a dispatch status Core's command vocabulary has and the
     // client's does not; a client that refused an action did not run it, which
@@ -173,12 +176,46 @@ function commandFailure(
     status: status === "rejected" ? "failed" : status,
     actionType,
     ...(message === undefined ? {} : { message }),
-    ...(reported === undefined ? {} : { failure: reported })
+    ...(client === undefined ? {} : { failure: client })
   };
   const failure = classifyWebAutomationFailure(undefined, outcome);
   if (failure === undefined) return undefined;
   if (evidenceDigest === undefined || failure.evidenceDigest !== undefined) return failure;
   return { ...failure, evidenceDigest };
+}
+
+/**
+ * The client's own record, re-established on the closed set.
+ *
+ * This is the boundary the record crosses: it arrived over the WebSocket from
+ * the browser, so its `code` is a bare string until something checks it, and
+ * Core's own contract is to validate what crossed a process boundary. Nothing
+ * did, which is how a code no part of this domain names could ride into an
+ * attempt trace, where nothing downstream can act on it.
+ *
+ * A named code is rebuilt through `webAutomationFailureRecord` rather than
+ * trusted field by field, so the category, the retryable flag and the stage are
+ * the code's own rather than the sender's: a client one version behind cannot
+ * pair a code with a category that contradicts it and have Core's parser drop
+ * the failure whole. What only the sender could know -- what it expected, what
+ * it saw, which evidence packet it captured -- is carried across untouched.
+ *
+ * A code this domain does not name is not a classification, whatever the sender
+ * believed, so it becomes UNKNOWN carrying the code it used. That is what
+ * `classifyWebAutomationFailure` already does with a runtime error's
+ * unrecognized code, and the same drift deserves the same answer whichever way
+ * it arrives.
+ */
+function clientReportedFailure(reported: AutomationStudioFailureRecord | undefined): WebAutomationFailureRecord | undefined {
+  if (reported === undefined) return undefined;
+  const { expected, actual, evidenceDigest } = reported;
+  if (isWebAutomationFailureCode(reported.code)) return webAutomationFailureRecord(reported.code, { expected, actual, evidenceDigest });
+  const unnamed = `unrecognized web automation failure code: ${reported.code}`;
+  return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNKNOWN, {
+    expected,
+    actual: actual === undefined ? unnamed : `${actual}; ${unnamed}`,
+    evidenceDigest
+  });
 }
 
 type FailureDiagnostics = {

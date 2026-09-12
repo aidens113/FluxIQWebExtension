@@ -348,6 +348,13 @@ var outputPorts = [
   { id: "success", label: "Success", valueType: "any", role: "success" },
   { id: "failed", label: "Failed", valueType: "any", role: "failure" }
 ];
+var expectedStateParameter = {
+  id: "expectedState",
+  label: "Expected State",
+  description: "Post-conditions checked after this action, as web.dom.assert conditions: { conditions: [{ kind, selector, expected }], mode, timeoutMs }.",
+  valueType: "object",
+  ui: { control: "value" }
+};
 function webAutomationOutputNodeId(outputId) {
   return `web.output.${outputId.replace(/^web\./, "").replace(/\./g, "-")}`;
 }
@@ -383,7 +390,7 @@ function createWebAutomationOutputNodeDefinition(definition) {
     outputAction: { fixedOutputId: definition.actionType },
     inputs: [controlInput],
     outputs: outputPorts,
-    parameters: parametersForOutput(definition.actionType).map((parameter) => ({
+    parameters: [...parametersForOutput(definition.actionType), expectedStateParameter].map((parameter) => ({
       ...parameter,
       ...requiredParameters.has(parameter.id) ? { required: true } : {},
       allowStateBinding: true
@@ -393,7 +400,17 @@ function createWebAutomationOutputNodeDefinition(definition) {
     metadata: {
       domainId: WEB_AUTOMATION_DOMAIN_ID,
       outputId: definition.actionType,
-      parameterSchema: definition.parameterSchema
+      parameterSchema: definition.parameterSchema,
+      // Core's element-target preparation (`runtime/io-policy.ts`) resolves the
+      // recorded fingerprint against the runtime candidates, and applies its
+      // confidence floor, only for an output that declares this. The flag is
+      // derived from the action's own schema row rather than listed by hand, so
+      // it cannot drift from it: an action that requires a selector cannot run
+      // without an element, and an action that does not — a delta scroll, a
+      // key press to the focused element, a URL assertion, a tab operation —
+      // must not declare it, because Core fails an action outright when a
+      // declared element target has no fingerprint to resolve.
+      ...requiredParameters.has("selector") ? { elementTarget: true } : {}
     }
   };
 }
@@ -497,8 +514,20 @@ var webAutomationManifestOutputs = webAutomationActionDefinitions.map((action) =
   safety: {
     level: WEB_AUTOMATION_ACTION_SAFETY[action.actionType],
     requiresApproval: WEB_AUTOMATION_ACTION_SAFETY[action.actionType] !== "safe"
-  }
+  },
+  // This is the registration Core's element-target preparation actually reads.
+  // `runtime/io-policy.ts` takes both `metadata.elementTarget` and
+  // `safety.level` off `io.getOutput(domainId, outputId).definition` — the
+  // `DomainOutputDefinition` registered here through `defineOutput` — and not
+  // off the authoring node definition, whose only runtime-read field is
+  // `metadata.timeoutMs`. Without the flag `resolveElementTarget` never runs
+  // and `elementTargetMinimumConfidence` never applies, so a drifted target is
+  // dispatched at whatever confidence it happens to have.
+  ...requiresElementTarget(action.parameterSchema) ? { metadata: { elementTarget: true } } : {}
 }));
+function requiresElementTarget(parameterSchema) {
+  return Array.isArray(parameterSchema.required) && parameterSchema.required.includes("selector");
+}
 
 // src/tests/safety.test.ts
 var SAFE_OUTPUTS = [

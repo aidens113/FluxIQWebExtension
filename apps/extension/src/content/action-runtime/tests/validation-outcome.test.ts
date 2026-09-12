@@ -39,9 +39,25 @@ test("the module exports no failure builder, which is what keeps the closed set 
   // The surface is pinned rather than described, because the risk is additive:
   // a builder reintroduced here would be the only place in the content bundle
   // that writes a `code` outside the domain's table, and it would pass every
-  // other gate. Records are built by `webAutomationFailureRecord`, whose
-  // parameter is the closed `WebAutomationFailureCode`, so an invented string
-  // cannot compile at the sites that remain.
+  // other gate -- including the type checker.
+  //
+  // That last part is the reason this row is not redundant with the compiler,
+  // and it was measured rather than assumed. `webAutomationFailureRecord`
+  // narrows its `code` parameter, so a *call* naming an out-of-set string is
+  // `TS2345`. A record written out as a literal is not: the type it lands in is
+  // Core's `AutomationStudioFailureRecord`, whose `code` is a bare `string`
+  // because Core owns the categories and each producer owns its own codes. A
+  // hand-built `{ category, code: "web.assert.state_mismatch", retryable,
+  // stage }` compiles at exit 0 today. Narrowing `BrowserActionResult`'s
+  // `failure` would turn that into `TS2322`, and it needs the domain builder's
+  // *return* type narrowed in the same change or every honest producer breaks;
+  // when that lands, this row can go.
+  //
+  // A value that did not come from source is a different question, and it is
+  // already answered elsewhere: `results.ts`'s `reportedFailure` runs
+  // `isWebAutomationFailureCode` over the record a thrown error carries before
+  // trusting it. Nothing else reaches the extension carrying a failure record
+  // -- the gateway sends commands, and results only travel outward.
   assert.deepEqual(Object.keys(validationOutcome).sort(), [
     "VALIDATION_TEXT_MAX_LENGTH",
     "boundValidation",

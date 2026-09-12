@@ -4,24 +4,24 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseAutomationStudioFailureRecord, type AutomationStudioFailureRecord } from "fluxiq/automation-studio";
+import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import { WebAutomationRuntimeError } from "../../errors";
 import { classifyWebAutomationFailure, type WebAutomationActionOutcome } from "../classify";
-import { WEB_AUTOMATION_FAILURE_CODES, type WebAutomationFailureCode } from "../codes";
+import { WEB_AUTOMATION_FAILURE_CODES, type WebAutomationFailureCode, type WebAutomationFailureRecord } from "../codes";
 
 const CODES = Object.values(WEB_AUTOMATION_FAILURE_CODES) as WebAutomationFailureCode[];
 
 const failedValidation = { status: "failed", expected: "the saved banner", actual: "the form is still open" } as const;
 
 /** Classify, assert the result survives Core's parser, and hand it back. */
-function classified(error: unknown, outcome: WebAutomationActionOutcome): AutomationStudioFailureRecord | undefined {
+function classified(error: unknown, outcome: WebAutomationActionOutcome): WebAutomationFailureRecord | undefined {
   const record = classifyWebAutomationFailure(error, outcome);
   if (record !== undefined) assert.deepEqual(parseAutomationStudioFailureRecord(record), record, `Core's parser accepts ${record.code}`);
   return record;
 }
 
 test("a failure the producer already reported is passed through untouched", () => {
-  const reported: AutomationStudioFailureRecord = { category: "target_not_found", code: "web.target.not_found", retryable: true, stage: "target_resolution" };
+  const reported: WebAutomationFailureRecord = { category: "target_not_found", code: "web.target.not_found", retryable: true, stage: "target_resolution" };
   const record = classified(new Error("ignored"), { status: "failed", failure: reported, validation: failedValidation });
   assert.equal(record, reported, "the producer stood nearest the page; nothing here overwrites it");
 });

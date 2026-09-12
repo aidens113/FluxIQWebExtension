@@ -68,6 +68,31 @@ var WEB_AUTOMATION_EVENTS = {
   clientError: "web.client.error"
 };
 
+// src/actions/safety.ts
+var WEB_AUTOMATION_ACTION_SAFETY = {
+  "web.browser.navigate": "review",
+  "web.dom.click": "review",
+  "web.dom.type": "review",
+  "web.dom.clear": "review",
+  "web.dom.select": "review",
+  "web.dom.scroll": "review",
+  "web.dom.keypress": "review",
+  "web.dom.wait_for_selector": "safe",
+  "web.dom.wait_for_text": "safe",
+  "web.dom.extract": "safe",
+  "web.dom.capture_snapshot": "safe",
+  // Added in Week 1 (decision D6). An assertion and a list extraction only read
+  // the page, so they are safe; check, upload, and dialog change it, and a tab
+  // or download acts on the browser, so all five need approval.
+  "web.dom.check": "review",
+  "web.dom.assert": "safe",
+  "web.dom.extract_list": "safe",
+  "web.dom.upload": "review",
+  "web.dom.dialog": "review",
+  "web.browser.tab": "review",
+  "web.browser.download": "review"
+};
+
 // src/actions/schemas.ts
 var elementFingerprintSchema = {
   type: "object",
@@ -357,37 +382,19 @@ var webAutomationActionDefinitions = [
   }
 ];
 
-// src/actions/safety.ts
-var WEB_AUTOMATION_ACTION_SAFETY = {
-  "web.browser.navigate": "review",
-  "web.dom.click": "review",
-  "web.dom.type": "review",
-  "web.dom.clear": "review",
-  "web.dom.select": "review",
-  "web.dom.scroll": "review",
-  "web.dom.keypress": "review",
-  "web.dom.wait_for_selector": "safe",
-  "web.dom.wait_for_text": "safe",
-  "web.dom.extract": "safe",
-  "web.dom.capture_snapshot": "safe",
-  // Added in Week 1 (decision D6). An assertion and a list extraction only read
-  // the page, so they are safe; check, upload, and dialog change it, and a tab
-  // or download acts on the browser, so all five need approval.
-  "web.dom.check": "review",
-  "web.dom.assert": "safe",
-  "web.dom.extract_list": "safe",
-  "web.dom.upload": "review",
-  "web.dom.dialog": "review",
-  "web.browser.tab": "review",
-  "web.browser.download": "review"
-};
-
 // src/output-nodes/definitions.ts
 var controlInput = { id: "in", label: "In", valueType: "signal", role: "control" };
 var outputPorts = [
   { id: "success", label: "Success", valueType: "any", role: "success" },
   { id: "failed", label: "Failed", valueType: "any", role: "failure" }
 ];
+var expectedStateParameter = {
+  id: "expectedState",
+  label: "Expected State",
+  description: "Post-conditions checked after this action, as web.dom.assert conditions: { conditions: [{ kind, selector, expected }], mode, timeoutMs }.",
+  valueType: "object",
+  ui: { control: "value" }
+};
 function webAutomationOutputNodeId(outputId) {
   return `web.output.${outputId.replace(/^web\./, "").replace(/\./g, "-")}`;
 }
@@ -423,7 +430,7 @@ function createWebAutomationOutputNodeDefinition(definition) {
     outputAction: { fixedOutputId: definition.actionType },
     inputs: [controlInput],
     outputs: outputPorts,
-    parameters: parametersForOutput(definition.actionType).map((parameter) => ({
+    parameters: [...parametersForOutput(definition.actionType), expectedStateParameter].map((parameter) => ({
       ...parameter,
       ...requiredParameters.has(parameter.id) ? { required: true } : {},
       allowStateBinding: true
@@ -433,7 +440,17 @@ function createWebAutomationOutputNodeDefinition(definition) {
     metadata: {
       domainId: WEB_AUTOMATION_DOMAIN_ID,
       outputId: definition.actionType,
-      parameterSchema: definition.parameterSchema
+      parameterSchema: definition.parameterSchema,
+      // Core's element-target preparation (`runtime/io-policy.ts`) resolves the
+      // recorded fingerprint against the runtime candidates, and applies its
+      // confidence floor, only for an output that declares this. The flag is
+      // derived from the action's own schema row rather than listed by hand, so
+      // it cannot drift from it: an action that requires a selector cannot run
+      // without an element, and an action that does not — a delta scroll, a
+      // key press to the focused element, a URL assertion, a tab operation —
+      // must not declare it, because Core fails an action outright when a
+      // declared element target has no fingerprint to resolve.
+      ...requiredParameters.has("selector") ? { elementTarget: true } : {}
     }
   };
 }
@@ -492,6 +509,127 @@ function iconForOutput(outputId) {
   return "square-dot";
 }
 
+// src/output-nodes/targets.ts
+function outputTargetFromPayload(payload) {
+  const adaptedTarget2 = objectValue(payload.target);
+  const adaptedFingerprint = objectValue(adaptedTarget2?.fingerprint);
+  const selectedCandidate = selectedTargetCandidate(adaptedTarget2);
+  const explicitVisualTarget = objectValue(adaptedTarget2?.visualTarget) ?? objectValue(payload.visualTarget);
+  const element = firstElementFingerprint(elementFingerprintSources(payload, adaptedTarget2, adaptedFingerprint, selectedCandidate));
+  const selector = stringValue(selectedCandidate?.selector) ?? stringValue(adaptedFingerprint?.selector) ?? stringValue(adaptedTarget2?.selector) ?? stringValue(payload.selector) ?? stringValue(element?.selector) ?? stringValue(explicitVisualTarget?.selector);
+  if (!selector && !explicitVisualTarget) return void 0;
+  return compact({
+    selector,
+    ...element ? { element } : {},
+    ...explicitVisualTarget ? { visualTarget: explicitVisualTarget } : {}
+  });
+}
+function elementFingerprintSources(payload, adaptedTarget2, adaptedFingerprint, selectedCandidate) {
+  const adapted = [adaptedTarget2?.element, selectedCandidate, adaptedFingerprint];
+  return adaptedTarget2?.selectedCandidate !== void 0 ? [...adapted, payload.element] : [payload.element, ...adapted];
+}
+function firstElementFingerprint(sources) {
+  for (const source of sources) {
+    const fingerprint = elementFingerprint(source);
+    if (fingerprint && Object.keys(fingerprint).length > 0) return fingerprint;
+  }
+  return void 0;
+}
+function selectedTargetCandidate(target) {
+  const selectedCandidateId = stringValue(objectValue(target?.selectedCandidate)?.candidateId);
+  if (!selectedCandidateId || !Array.isArray(target?.candidates)) return void 0;
+  return target.candidates.map(objectValue).find((candidate) => stringValue(candidate?.candidateId) === selectedCandidateId);
+}
+function elementFingerprint(value) {
+  const element = objectValue(value);
+  if (!element) return void 0;
+  const attributes = objectValue(element.attributes);
+  return compact({
+    selector: stringValue(element.selector),
+    xpath: stringValue(element.xpath),
+    id: stringValue(element.id),
+    classNames: Array.isArray(element.classNames) ? element.classNames.filter((item) => typeof item === "string") : void 0,
+    visibleText: stringValue(element.visibleText),
+    tagName: stringValue(element.tagName),
+    text: stringValue(element.text),
+    value: stringValue(element.value),
+    role: stringValue(element.role),
+    implicitRole: stringValue(element.implicitRole),
+    name: stringValue(element.name),
+    href: stringValue(element.href),
+    inputType: stringValue(element.inputType),
+    testId: elementTestId(element, attributes),
+    accessibleName: stringValue(element.accessibleName) ?? stringValue(attributes?.["aria-label"]),
+    label: stringValue(element.label),
+    attributes
+  });
+}
+function elementTestId(element, attributes) {
+  return stringValue(element.testId) ?? stringValue(attributes?.["data-testid"]) ?? stringValue(attributes?.["data-test"]) ?? stringValue(attributes?.["data-cy"]);
+}
+function compact(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== void 0));
+}
+function objectValue(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+function stringValue(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function numberValue(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+
+// src/output-nodes/payloads.ts
+function webAutomationOutputPayload(outputId, payload) {
+  return withRecordedFrame(outputId, payload, recordedOutputParameters(outputId, payload));
+}
+function withRecordedFrame(outputId, payload, parameters) {
+  const browserFrameId = frameIdValue(payload.browserFrameId);
+  if (browserFrameId === void 0 || !outputId.startsWith("web.dom.")) return parameters;
+  return Object.keys(parameters).length === 0 ? parameters : { ...parameters, browserFrameId };
+}
+function frameIdValue(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
+}
+function recordedOutputParameters(outputId, payload) {
+  const element = elementFingerprint(payload.element);
+  const selector = stringValue(element?.selector);
+  const visualTarget = objectValue(payload.visualTarget);
+  const target = compact({ ...element ? { element } : {}, ...visualTarget ? { visualTarget } : {} });
+  const hasTarget = Object.keys(target).length > 0;
+  if (outputId === "web.browser.navigate") return compact({ url: stringValue(payload.url) });
+  if (outputId === "web.dom.click" || outputId === "web.dom.clear") return compact({ selector, ...hasTarget ? target : {} });
+  if (outputId === "web.dom.type") return compact({ selector, text: stringValue(payload.inputValue) ?? "", ...hasTarget ? target : {} });
+  if (outputId === "web.dom.select") return compact({ selector, value: stringValue(payload.inputValue) ?? "", ...hasTarget ? target : {} });
+  if (outputId === "web.dom.keypress") return compact({ selector, key: stringValue(payload.key) ?? "", ...hasTarget ? target : {} });
+  if (outputId === "web.dom.scroll") {
+    const scroll = objectValue(payload.scroll);
+    return compact({ x: numberValue(scroll?.x), y: numberValue(scroll?.y) });
+  }
+  if (outputId === "web.dom.check") {
+    const checked = recordedCheckedState(payload);
+    return compact({ selector, checked, ...hasTarget ? target : {} });
+  }
+  if (outputId === "web.dom.wait_for_selector") return compact({ selector, ...hasTarget ? target : {} });
+  if (outputId === "web.dom.wait_for_text") return compact({ text: stringValue(payload.inputValue) ?? stringValue(payload.title) });
+  if (outputId === "web.dom.extract") return compact({ selector, ...hasTarget ? target : {} });
+  if (outputId === "web.dom.capture_snapshot") return {};
+  return {};
+}
+function recordedCheckedState(payload) {
+  const element = objectValue(payload.element);
+  if (!element) return void 0;
+  if (typeof element.checked === "boolean") return element.checked;
+  const ariaChecked = stringValue(objectValue(element.attributes)?.["aria-checked"]);
+  if (ariaChecked === "true") return true;
+  if (ariaChecked === "false") return false;
+  return isRadioElement(element) ? true : void 0;
+}
+function isRadioElement(element) {
+  return stringValue(element.inputType)?.toLowerCase() === "radio" || stringValue(element.role)?.toLowerCase() === "radio";
+}
+
 // src/io/input-model.ts
 var WEB_AUTOMATION_INPUT_IDS = {
   browserState: "web.browser.state",
@@ -544,8 +682,60 @@ var OUTPUT_FOR_ACTION_INPUT = new Map(
 // src/recording/state.ts
 var WEB_AUTOMATION_STATE_NAMESPACE = "web";
 
-// src/recording/web-state.ts
+// src/recording/web-state/compact-json-object.ts
+function compactJsonObject(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
+}
+
+// src/recording/web-state/element/identity.ts
+var MAX_STATE_ID_LENGTH = 120;
+function meaningfulText(value) {
+  return typeof value === "string" && value.trim().length >= 2;
+}
+function stableAttribute(element, name) {
+  const value = element.attributes?.[name];
+  return meaningfulText(value) ? value : void 0;
+}
+function stableElementId(element) {
+  return stableAttribute(element, "data-testid") ?? stableAttribute(element, "data-test") ?? stableAttribute(element, "data-cy") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name");
+}
+function elementStateId(element) {
+  const stable = stableElementPathId(element);
+  if (stable) return sanitizeStateId(stable);
+  const name = stableAttribute(element, "name");
+  if (name) return sanitizeStateId(`${name}.${element.selector}`);
+  return sanitizeStateId(element.selector);
+}
+function stableElementPathId(element) {
+  return stableAttribute(element, "data-testid") ?? stableAttribute(element, "data-test") ?? stableAttribute(element, "data-cy") ?? stableAttribute(element, "id");
+}
+function sanitizeStateId(value) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, MAX_STATE_ID_LENGTH) || "element";
+}
+
+// src/recording/web-state/geometry.ts
+function stateBounds(bounds) {
+  if (!bounds) return void 0;
+  const x = finite(bounds.x);
+  const y = finite(bounds.y);
+  const width = positiveFinite(bounds.width);
+  const height = positiveFinite(bounds.height);
+  return x !== void 0 && y !== void 0 && width !== void 0 && height !== void 0 ? { x, y, width, height } : void 0;
+}
+function positiveFinite(value) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : void 0;
+}
+function finite(value) {
+  return Number.isFinite(value) ? value : void 0;
+}
+
+// src/recording/web-state/visual-frame.ts
 var WEB_AUTOMATION_SCREEN_FRAME_ID = "screen";
+function safeLayerId(value, fallbackIndex) {
+  return value.replace(/[^a-z0-9.]+/gi, ".").replace(/^\.+|\.+$/g, "").slice(0, 80) || String(fallbackIndex);
+}
+
+// src/recording/web-state/action-target.ts
 function webAutomationActionTargetFromElement(element) {
   return compactJsonObject({
     type: element.role ?? element.inputType ?? element.tagName,
@@ -570,7 +760,7 @@ function webAutomationActionTargetFromElement(element) {
   });
 }
 function webAutomationActionVisualTargetFromElement(element, input = {}) {
-  const stateId = elementStateId(element);
+  const stateId = input.stateId ?? elementStateId(element);
   const statePath = `${WEB_AUTOMATION_STATE_NAMESPACE}.elements.${stateId}`;
   const bounds = stateBounds(element.bounds);
   const documentBounds = stateBounds(element.documentBounds ?? element.bounds);
@@ -602,49 +792,11 @@ function webAutomationActionVisualTargetFromElement(element, input = {}) {
     })
   });
 }
-function elementStateId(element) {
-  const stable = stableElementPathId(element);
-  if (stable) return sanitizeStateId(stable);
-  const name = stableAttribute(element, "name");
-  if (name) return sanitizeStateId(`${name}.${element.selector}`);
-  return sanitizeStateId(element.selector);
-}
-function stableElementId(element) {
-  return stableAttribute(element, "data-testid") ?? stableAttribute(element, "data-test") ?? stableAttribute(element, "data-cy") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name");
-}
-function stableElementPathId(element) {
-  return stableAttribute(element, "data-testid") ?? stableAttribute(element, "data-test") ?? stableAttribute(element, "data-cy") ?? stableAttribute(element, "id");
-}
-function sanitizeStateId(value) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, 120) || "element";
-}
-function meaningfulText(value) {
-  return typeof value === "string" && value.trim().length >= 2;
-}
-function stableAttribute(element, name) {
-  const value = element.attributes?.[name];
-  return meaningfulText(value) ? value : void 0;
-}
-function stateBounds(bounds) {
-  if (!bounds) return void 0;
-  const x = finite(bounds.x);
-  const y = finite(bounds.y);
-  const width = positiveFinite(bounds.width);
-  const height = positiveFinite(bounds.height);
-  return x !== void 0 && y !== void 0 && width !== void 0 && height !== void 0 ? { x, y, width, height } : void 0;
-}
-function finite(value) {
-  return Number.isFinite(value) ? value : void 0;
-}
-function positiveFinite(value) {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : void 0;
-}
-function safeLayerId(value, fallbackIndex) {
-  return value.replace(/[^a-z0-9.]+/gi, ".").replace(/^\.+|\.+$/g, "").slice(0, 80) || String(fallbackIndex);
-}
-function compactJsonObject(value) {
-  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
-}
+
+// src/recording/web-state/evidence/project.ts
+var COLLECTION = { elementKind: "collection", comparable: false };
+var LIVE_COLLECTION = { ...COLLECTION, volatility: "rapid" };
+var SETTLED_COLLECTION = { ...COLLECTION, volatility: "slow" };
 
 // src/client/gateway-action-parameters.ts
 function webAutomationLiftedActionParameters(parameters) {
@@ -844,6 +996,15 @@ function createWebAutomationRecordingEvent(payload, input = {}) {
       url: payload.url,
       title: payload.title,
       sequence: payload.sequence,
+      // The frame the interaction happened in, under the name the parameter
+      // lift reads (`gateway-action-parameters.ts` maps `browserFrameId` onto
+      // `action.frameId`). `sourceId` above names the same frame, but only as
+      // text nothing downstream parses, and `webAutomationOutputPayload` reads
+      // this payload rather than the envelope: without the field here, a click
+      // recorded inside an iframe replays against the top document. Frame 0 is
+      // the top frame and survives `compactJsonObject`, which drops only
+      // `undefined`.
+      browserFrameId: input.frameId,
       element: payload.element,
       visualTarget,
       inputValue: payload.inputValue,
@@ -879,8 +1040,37 @@ function webAutomationActionFromGatewayCommand(command) {
     timeoutMs: numberValue2(command.timeoutMs ?? parameters.timeoutMs),
     coordinates: pointValue(target.coordinates ?? parameters.coordinates),
     visualTarget: jsonObject2(target.visualTarget ?? parameters.visualTarget),
+    element: commandElementFingerprint(target, parameters),
     ...webAutomationLiftedActionParameters(parameters),
     options: parameters
+  });
+}
+function commandElementFingerprint(target, parameters) {
+  for (const source of elementFingerprintSources2(target, parameters)) {
+    const fingerprint = elementFingerprint(source);
+    if (fingerprint && Object.keys(fingerprint).length > 0) return fingerprint;
+  }
+  return void 0;
+}
+function elementFingerprintSources2(target, parameters) {
+  const adaptedTarget2 = jsonObject2(parameters.target);
+  return adaptedTarget2?.selectedCandidate !== void 0 ? [target.element, target.fingerprint, parameters.element] : [parameters.element, target.element, target.fingerprint];
+}
+function webAutomationActionResultPayload(result) {
+  return compactJsonObject2({
+    commandId: result.commandId,
+    actionType: result.actionType,
+    status: result.status,
+    validation: result.validation,
+    message: result.message,
+    url: result.url,
+    title: result.title,
+    element: result.element,
+    visualTarget: result.visualTarget,
+    snapshot: result.snapshot,
+    extracted: result.extracted,
+    startedAt: result.startedAt,
+    finishedAt: result.finishedAt
   });
 }
 function normalizeWebAutomationActionType(actionType) {
@@ -1004,4 +1194,144 @@ assert.deepEqual(rejected, {
 assert.equal("selector" in rejected, false, "a rejected command carries nothing to execute");
 assert.equal(webAutomationActionFromGatewayCommand({ commandId: "command.legacy", actionType: "dom.hover" }).actionType, "dom.hover");
 assert.equal("status" in webAutomationActionFromGatewayCommand({ commandId: "command.legacy", actionType: "dom.hover" }), true);
+var framedEvent = createWebAutomationRecordingEvent(
+  { kind: "dom.click", sequence: 4, url: "https://example.test", title: "Example", eventTimestampMs: 40, element: { selector: "#save", tagName: "button" } },
+  { tabId: 12, frameId: 3 }
+);
+assert.equal(framedEvent.payload?.browserFrameId, 3, "the recorded frame is on the payload, not only inside sourceId");
+assert.equal(framedEvent.sourceId, "tab:12:frame:3");
+assert.equal(
+  createWebAutomationRecordingEvent({ kind: "dom.click", sequence: 5, url: "https://example.test", title: "Example", eventTimestampMs: 50 }, { tabId: 12, frameId: 0 }).payload?.browserFrameId,
+  0,
+  "frame 0 is the top frame, not an absent frame"
+);
+assert.equal(
+  "browserFrameId" in (createWebAutomationRecordingEvent({ kind: "dom.click", sequence: 6, url: "https://example.test", title: "Example", eventTimestampMs: 60 }, { tabId: 12 }).payload ?? {}),
+  false,
+  "an event recorded with no frame claims none"
+);
+var framedParameters = webAutomationOutputPayload("web.dom.click", framedEvent.payload ?? {});
+var framedCommand = webAutomationActionFromGatewayCommand({
+  commandId: "command.framed",
+  actionType: "web.dom.click",
+  target: { selector: "#save" },
+  parameters: framedParameters
+});
+assert.equal("status" in framedCommand, false, "the framed command is not a rejection");
+assert.equal(framedCommand.frameId, 3, "the recorded frame reaches action.frameId");
+var recordedElement = {
+  selector: "#save-settings",
+  tagName: "button",
+  id: "save-settings",
+  testId: "save-changes",
+  accessibleName: "Save changes",
+  label: "Save",
+  visibleText: "Save changes",
+  implicitRole: "button",
+  classNames: ["btn", "btn-primary"],
+  attributes: { id: "save-settings", "data-testid": "save-changes" }
+};
+var identityEvent = createWebAutomationRecordingEvent({
+  kind: "dom.click",
+  sequence: 7,
+  url: "https://example.test/settings",
+  title: "Settings",
+  eventTimestampMs: 70,
+  element: recordedElement
+});
+var identityParameters = webAutomationOutputPayload("web.dom.click", identityEvent.payload ?? {});
+var identityTarget = outputTargetFromPayload(identityParameters);
+var identityCommand = webAutomationActionFromGatewayCommand({
+  commandId: "command.identity",
+  actionType: "web.dom.click",
+  ...identityTarget ? { target: identityTarget } : {},
+  parameters: identityParameters
+});
+assert.equal(identityCommand.selector, "#save-settings", "the selector still reaches the command");
+assert.ok(identityCommand.element, "a DOM-scoped action arrives with its element descriptor");
+assert.equal(identityCommand.element?.testId, "save-changes", "the highest weighted identity signal survives dispatch");
+assert.equal(identityCommand.element?.accessibleName, "Save changes");
+assert.equal(identityCommand.element?.label, "Save");
+assert.equal(identityCommand.element?.visibleText, "Save changes");
+assert.equal(identityCommand.element?.implicitRole, "button", "the implied role is a matching signal, not recorder trivia");
+assert.deepEqual(identityCommand.element, identityCommand.options?.element, "the declared field and options.element are the same identity");
+var preparedParameters = {
+  ...identityParameters,
+  target: { kind: "element", fingerprint: { selector: "#save-settings", statePath: "web.elements.save.changes" }, source: "runtime" }
+};
+var preparedTarget = outputTargetFromPayload(preparedParameters);
+var preparedElement = preparedTarget?.element;
+assert.equal(preparedElement?.selector, "#save-settings", "the prepared target keeps its selector");
+assert.equal(preparedElement?.testId, "save-changes", "Core matching nothing must not strip the recorder's signals from the wire target");
+var preparedCommand = webAutomationActionFromGatewayCommand({
+  commandId: "command.prepared",
+  actionType: "web.dom.click",
+  ...preparedTarget ? { target: preparedTarget } : {},
+  parameters: preparedParameters
+});
+assert.equal(preparedCommand.element?.testId, "save-changes", "the declared field keeps the recorded identity Core's normalization dropped");
+assert.equal(preparedCommand.element?.implicitRole, "button");
+assert.deepEqual(preparedCommand.element, preparedCommand.options?.element, "the declared field is never poorer than options.element");
+var adaptedParameters = {
+  ...identityParameters,
+  target: {
+    kind: "element",
+    fingerprint: recordedElement,
+    candidates: [{ candidateId: "save-changes", selector: "#settings-save", testId: "save-changes", tagName: "button" }],
+    selectedCandidate: { candidateId: "save-changes", confidence: 0.91, matchedSignals: ["testId"], failedSignals: [] }
+  }
+};
+var adaptedTarget = outputTargetFromPayload(adaptedParameters);
+var adaptedCommand = webAutomationActionFromGatewayCommand({
+  commandId: "command.adapted",
+  actionType: "web.dom.click",
+  ...adaptedTarget ? { target: adaptedTarget } : {},
+  parameters: adaptedParameters
+});
+assert.equal(adaptedCommand.element?.selector, "#settings-save", "the adapted target's element wins over the recorded one");
+var rawFingerprintCommand = webAutomationActionFromGatewayCommand({
+  commandId: "command.raw-fingerprint",
+  actionType: "web.dom.click",
+  target: { kind: "element", fingerprint: { selector: "#save", tagName: "button", testId: "save" } },
+  parameters: {}
+});
+assert.equal(rawFingerprintCommand.element?.testId, "save", "target.fingerprint is read as well as target.element");
+var unidentifiedCommand = webAutomationActionFromGatewayCommand({
+  commandId: "command.unidentified",
+  actionType: "web.dom.click",
+  target: { selector: "#anything", element: { unrelated: true } },
+  parameters: {}
+});
+assert.equal("element" in unidentifiedCommand, false, "an empty fingerprint is absent, not an empty object");
+assert.equal("element" in webAutomationActionFromGatewayCommand({ commandId: "command.navigate", actionType: "web.browser.navigate", parameters: { url: "https://example.test" } }), false);
+var failedValidationResult = {
+  commandId: "command.validated",
+  actionType: "web.dom.click",
+  status: "failed",
+  validation: { status: "failed", expected: "the settings dialog to close", actual: "the settings dialog is still open" },
+  message: "The click did not take effect.",
+  url: "https://example.test/settings",
+  startedAt: 100,
+  finishedAt: 140
+};
+assert.deepEqual(
+  webAutomationActionResultPayload(failedValidationResult).validation,
+  { status: "failed", expected: "the settings dialog to close", actual: "the settings dialog is still open" },
+  "a failed validation reaches the domain with both sides of the comparison"
+);
+assert.deepEqual(
+  webAutomationActionResultPayload({ ...failedValidationResult, status: "succeeded", validation: { status: "passed", expected: "the dialog to close", actual: "the dialog closed" } }).validation,
+  { status: "passed", expected: "the dialog to close", actual: "the dialog closed" },
+  "a passing validation is evidence too, not only a failing one"
+);
+assert.deepEqual(
+  webAutomationActionResultPayload({ ...failedValidationResult, status: "succeeded", validation: { status: "none", reason: "evidence-only" } }).validation,
+  { status: "none", reason: "evidence-only" },
+  "an action with no post-condition still says why it has none"
+);
+assert.equal(
+  "validation" in webAutomationActionResultPayload({ commandId: "c", actionType: "web.dom.click", status: "succeeded", startedAt: 1, finishedAt: 2 }),
+  false,
+  "an absent validation stays absent"
+);
 console.log("Web automation gateway mapping tests passed.");

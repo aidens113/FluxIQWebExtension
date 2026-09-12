@@ -4,8 +4,14 @@
 // keeping a copy, so the wire shape cannot drift between the domain, the
 // background worker, and the content script.
 
-import type { AutomationStudioFailureRecord, ElementFingerprint } from "fluxiq/automation-studio";
+import type { ElementFingerprint } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
+// The result's `failure` is Core's record with `code` narrowed to the closed
+// set the browser path may produce. The two modules name each other -- the code
+// set reads this module's text bound -- but only that direction is a value
+// import; this one is type-only and erased, so nothing is loaded at runtime and
+// no cycle exists in the bundle.
+import type { WebAutomationFailureRecord } from "../runtime/failure";
 
 export type WebAutomationActionType =
   | "web.browser.navigate"
@@ -255,8 +261,12 @@ export type WebAutomationTargetResolution = {
  * the extension binds its own richer `DomElementDescriptor` and `DomSnapshot`
  * without redeclaring any other field.
  *
- * `failure` is Core's structured failure record, imported from Core rather than
- * restated here; there is no downstream category list.
+ * `failure` is Core's structured failure record with one field narrowed: the
+ * category vocabulary is Core's, imported rather than restated, while `code` is
+ * the closed set in `runtime/failure`. Core types `code` as a bare `string`
+ * because it does not own the codes; this is where the producer's own
+ * vocabulary is pinned, so a record with an invented code cannot be put on a
+ * result at all -- by the content script, the worker, the domain, or a test.
  */
 export type WebAutomationActionResult<TElement = JsonObject, TSnapshot = JsonObject> = {
   commandId: string;
@@ -271,7 +281,7 @@ export type WebAutomationActionResult<TElement = JsonObject, TSnapshot = JsonObj
   snapshot?: TSnapshot | undefined;
   extracted?: JsonValue | undefined;
   resolution?: WebAutomationTargetResolution | undefined;
-  failure?: AutomationStudioFailureRecord | undefined;
+  failure?: WebAutomationFailureRecord | undefined;
   startedAt: number;
   finishedAt: number;
 };

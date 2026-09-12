@@ -1,19 +1,35 @@
-// The failure record the assert verb builds when an authored claim does not
-// hold.
+// What the assert verb does with the failure record `action-runtime/results.ts`
+// built for it.
 //
-// `e2e/content/tests/check-assert.spec.ts` is the live proof that the verb
-// reaches the right verdict on a real page. What it cannot state on its own is
-// that the record comes out of the domain's closed set rather than being
-// assembled here, which is the property that stops a code being invented per
-// assertion kind -- `web.assert.exists`, `web.assert.text` and four more, none
-// of them in any set, which is what this file used to emit.
+// The verb builds no record itself. Until Wave 3 it wrote a STATE_MISMATCH over
+// whatever the builder had produced, which restated a rule `results.ts` already
+// applies (`unobservedOutputCode`: a failed `web.dom.assert` post-condition is
+// STATE_MISMATCH, every other verb's is OUTPUT_NOT_OBSERVED) and discarded the
+// one record that disagrees with it -- the AUTH_REQUIRED that `authGateFailure`
+// substitutes when the selector matches nothing on a sign-in gate.
+//
+// So the property under test moved. It was "the record this verb writes comes
+// from the closed set"; it is now "this verb writes no record", which is the
+// stronger statement and the one that stops the loss coming back. The rows
+// below pin it from both sides: whatever record the builder produced arrives at
+// the caller identical, and a record the verb could not have chosen for itself
+// -- AUTH_REQUIRED, a code no assert path would ever pick -- survives the verb
+// untouched. Reinstating the override fails both.
+//
+// The stub's `success` and `timedOut` therefore have to build a record, where
+// before they built none, and they build it the way `results.ts` does: from the
+// domain's closed set, through `webAutomationFailureRecord`, with the code
+// chosen by the same rule. That the stub agrees with `results.ts` is asserted
+// only by reading it -- what the harness proves against a real page and the
+// real builder is `e2e/content/tests/check-assert.spec.ts`, which asserts the
+// whole record for five kinds.
 //
 // It also covers the other half of the verdict, added once `AssertionOutcome`
 // began carrying its timing: whether a failed claim is STATE_MISMATCH or
 // TIMEOUT. A false claim is polled to its deadline whatever the reason, so the
 // window running out cannot be the test on its own -- what separates them is
-// whether the page was ever read. The three rows below pin both answers and the
-// case where no window was given at all.
+// whether the page was ever read. The rows below pin both answers and the case
+// where no window was given at all.
 //
 // The verb takes every page capability as an injected dependency, so it runs in
 // Node with no DOM: only the ones the assert path touches are supplied, and the
@@ -23,10 +39,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
-import { WEB_AUTOMATION_FAILURE_CODES, isWebAutomationFailureCode } from "@fluxiq-web-extension/domain/client";
+import { WEB_AUTOMATION_FAILURE_CODES, isWebAutomationFailureCode, webAutomationFailureRecord } from "@fluxiq-web-extension/domain/client";
 import { assertAction } from "../assert";
 import type { ContentActionDependencies } from "../types";
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation } from "../../types";
+
+type FailureRecord = NonNullable<BrowserActionResult["failure"]>;
 
 const action: BrowserActionCommand = {
   commandId: "cmd-assert",
@@ -39,6 +57,25 @@ const action: BrowserActionCommand = {
 type StubWait = { judged?: boolean; waitExpired?: boolean };
 
 /**
+ * The record `results.ts` would attach to a failed result, reproduced here
+ * because the real builder reads `location`, `document` and the capture
+ * settings and so cannot run in Node.
+ *
+ * A `timed_out` result carries TIMEOUT; a failed post-condition carries the
+ * code `unobservedOutputCode` picks, which for `web.dom.assert` is
+ * STATE_MISMATCH. `authGateFailure` -- the hook whose record the verb used to
+ * discard -- is not modelled: a row that wants it hands the record in directly,
+ * which is the honest way to state "the builder decided this, not the verb".
+ */
+function builtFailure(status: BrowserActionResult["status"], validation: BrowserActionValidation): FailureRecord | undefined {
+  if (validation.status !== "failed") return undefined;
+  const comparison = { expected: validation.expected, actual: validation.actual };
+  return status === "timed_out"
+    ? webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TIMEOUT, comparison)
+    : webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.STATE_MISMATCH, comparison);
+}
+
+/**
  * The verb's dependencies, reduced to the assert path: the evaluation, the
  * snapshot the evidence carries, and the two result builders. Everything else
  * is a getter that throws, so a change that starts reaching for the page fails
@@ -46,25 +83,30 @@ type StubWait = { judged?: boolean; waitExpired?: boolean };
  *
  * `success` and `timedOut` produce different statuses and nothing else does, so
  * a row asserting `timed_out` is asserting which builder the verb chose. In the
- * product both are `action-runtime/results.ts`, which reads the code off the
- * domain's closed set; the record itself is proven on a real page by
- * `e2e/content/tests/check-assert.spec.ts`.
+ * product both are `action-runtime/results.ts`. `override` replaces the record
+ * either builder would have produced, which is how a row states that the
+ * builder -- not the verb -- decided the code.
  */
-function dependencies(held: boolean, expected: string, actual: string, wait: StubWait = {}): ContentActionDependencies {
+function dependencies(held: boolean, expected: string, actual: string, wait: StubWait = {}, override?: FailureRecord): ContentActionDependencies {
   const build = (status: BrowserActionResult["status"]) => (
     command: BrowserActionCommand,
     startedAt: number,
     message: string,
     validation: BrowserActionValidation
-  ): BrowserActionResult => ({
-    commandId: command.commandId,
-    actionType: command.actionType,
-    status: status === "succeeded" && validation.status === "failed" ? "failed" : status,
-    validation,
-    message,
-    startedAt,
-    finishedAt: startedAt + 1
-  });
+  ): BrowserActionResult => {
+    const resolved = status === "succeeded" && validation.status === "failed" ? "failed" : status;
+    const failure = override ?? builtFailure(resolved, validation);
+    return {
+      commandId: command.commandId,
+      actionType: command.actionType,
+      status: resolved,
+      validation,
+      message,
+      ...(failure ? { failure } : {}),
+      startedAt,
+      finishedAt: startedAt + 1
+    };
+  };
   const unreachable = (name: string) => () => {
     throw new Error(`the assert path must not touch ${name}`);
   };
@@ -123,6 +165,29 @@ test("a claim that does not hold carries STATE_MISMATCH from the closed set, who
   assert.deepEqual(parseAutomationStudioFailureRecord(result.failure), result.failure);
 });
 
+test("the verb returns the record the builder made, whatever it is, and never one of its own", async () => {
+  // The row that stands in for the override's deletion. AUTH_REQUIRED is a code
+  // no assert path could reach on its own -- `results.ts` substitutes it in
+  // `authGateFailure` when the selector matches nothing and the document is a
+  // sign-in gate -- so a result carrying it out the other side proves the verb
+  // added nothing. With the override restored this reads STATE_MISMATCH, and an
+  // operator told to check the page is sent looking for a state problem when
+  // their session has expired.
+  const gate = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.AUTH_REQUIRED, {
+    expected: 'an element matching "#status"',
+    actual: 'nothing matched "#status"; the document is a sign-in gate, so the session has probably expired'
+  });
+  const result = await assertAction(
+    { ...action, assert: { kind: "url", expected: "https://example.test/order" } },
+    dependencies(false, "the address https://example.test/order", "https://example.test/sign-in", {}, gate),
+    100
+  );
+  assert.equal(result.status, "failed");
+  assert.deepEqual(result.failure, gate, "the builder's record reached the caller unchanged");
+  assert.equal(result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.AUTH_REQUIRED);
+  assert.deepEqual(parseAutomationStudioFailureRecord(result.failure), result.failure);
+});
+
 test("the code no longer varies with the kind of claim, which is where six out-of-set codes came from", async () => {
   const kinds = ["exists", "absent", "text", "url", "visible", "enabled"] as const;
   for (const kind of kinds) {
@@ -148,9 +213,10 @@ test("a claim whose subject never appeared runs out of time rather than mismatch
   // carried timing, and it made TIMEOUT unreachable from this verb entirely.
   assert.equal(result.status, "timed_out");
   assert.equal(result.message, "Assertion did not hold within 200 ms: exists.");
-  // The verb attaches no record of its own on this path, so the builder's
-  // TIMEOUT stands rather than being overwritten with a state mismatch.
-  assert.equal(result.failure, undefined);
+  // The builder's TIMEOUT stands: the timeout branch never had an override, and
+  // now neither branch does.
+  assert.equal(result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.TIMEOUT);
+  assert.deepEqual(parseAutomationStudioFailureRecord(result.failure), result.failure);
   assert.deepEqual(result.validation, {
     status: "failed",
     expected: 'an element matching "#status" exists',
