@@ -96,6 +96,18 @@ test("an expected action is matched through the node id, not the shared definiti
   );
   assert.equal(viaSubflow.status, "succeeded");
 });
+test("the execution carries the action-type map so the run manifest can label attempts", async () => {
+  // The join is only as good as what reaches the manifest: flowActionTimings
+  // takes this map, and without it every attempt is labelled
+  // builtin.policy.action, which is how the fix stayed inert. The map is read
+  // only when an expectation already made that call worth making, so a run
+  // without expectations pays nothing and keeps the definition-id fallback.
+  const withExpectations = await executeExistingPersistedFlow(client(), target, "facility.map", {}, [{ action: "web.dom.type", outcome: "succeeded" }]);
+  assert.equal(withExpectations.actionTypes.get("node.one"), "web.dom.type");
+
+  const withoutExpectations = await executeExistingPersistedFlow(client(), target, "facility.no-map", {});
+  assert.equal(withoutExpectations.actionTypes.size, 0);
+});
 
 test("preserves a bounded Flow failure and attempts cancellation exactly once", async () => {
   const original = new RunnerFailure("runtime.behavior", "FluxIQ request run-runtime-session timed out after 10ms", { details: { bounded: "timeout", timeoutMs: 10 } });

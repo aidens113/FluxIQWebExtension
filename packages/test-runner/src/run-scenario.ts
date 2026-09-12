@@ -191,7 +191,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
         seed,
         facilityRunId: runId,
       }, workflow.expected.actions ?? []);
-      actions.push(...flowActionTimings(existingExecution.actions));
+      actions.push(...flowActionTimings(existingExecution.actions, existingExecution.actionTypes));
       automationFailure = null;
       await bundle.writeStructured("snapshots/existing-flow.json", { projectId: target.projectId, flowId: target.flowId, contentHash: existingPreflight.flow.contentHash, name: existingPreflight.flow.name, updatedAt: existingPreflight.flow.updatedAt });
       await bundle.writeStructured("snapshots/runtime-run.json", existingExecution.detail);
@@ -217,7 +217,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
         seed,
         facilityRunId: runId,
       }, workflow.expected.actions ?? []);
-      actions.push(...flowActionTimings(cloneState.execution.actions));
+      actions.push(...flowActionTimings(cloneState.execution.actions, cloneState.execution.actionTypes));
       automationFailure = null;
       await bundle.writeStructured("snapshots/runtime-run.json", cloneState.execution.detail);
       await bundle.writeStructured("snapshots/runtime-actions.json", cloneState.execution.actions);

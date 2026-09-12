@@ -219,13 +219,23 @@ the plan sits against its 800-line threshold.
   exported but unused. Held during Wave 2 integration only because three workers
   were type-checking against that type at the time; do it on a still tree. Found
   2026-09-11 by w2-waits; owner: senior supervisor agent.
-- **The node-join bug survives in the run manifest.** `flowActionTimings` in
+- **Settled: the node join in the run manifest.** `flowActionTimings` in
   `packages/test-runner/src/run-manifest/action-timings.ts` still reads
   `definitionId`, while `run.json` records `builtin.policy.action` for every
   recorded action, so its action types are wrong for the same reason
-  `existing-flow-run.ts` was. The fix is the same join through `nodeId` to the
-  graph Flow `parameterValues.outputId`. Unowned by any brief. Found 2026-09-11 by
-  w2i-unowned-defects; owner: senior supervisor agent.
+  `existing-flow-run.ts` was. Fixed 2026-09-11 with the same join through `nodeId`
+  to the graph Flow `parameterValues.outputId`. Two lessons came with it. The
+  reader cannot move into `action-timings.ts`, because that would close a
+  run-manifest to flow-lane import cycle the audit forbids, so the map is passed
+  in by the caller exactly as the Flow lane already does. And the fix landed
+  inert: the brief owned the file but not its call site, so nothing passed the
+  map and `run.json` still recorded `builtin.policy.action`. The supervisor wired
+  it through `ExistingFlowExecution` and both call sites in `run-scenario.ts`,
+  reusing the map that is already read when expectations exist, so a run without
+  expectations makes no extra Automation Studio call and keeps the old fallback.
+  A test now asserts the returned map, because an untested wiring is how this
+  stayed inert. That was the fifth defective brief of the week, all the same
+  shape: ownership drawn around a file rather than around the change.
 
 - **Eight URL classes are no longer recordable.** Pointing the background
   page-scheme check at the shared rule refuses eight classes of URL that the

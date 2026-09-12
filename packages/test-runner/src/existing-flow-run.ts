@@ -30,6 +30,8 @@ export type ExistingFlowExecution = {
   detail: ExistingRunDetail;
   actions: ExistingRunAction[];
   events: ExistingRunEvent[];
+  /** Attempt node id to the output its Flow node dispatches; empty when no expectation made it worth reading. */
+  actionTypes: ReadonlyMap<string, string>;
 };
 export type ExistingFlowExecutionBounds = FluxIQHttpOptions & { cancelTimeoutMs?: number };
 export type ExistingFlowCancellationReport = {
@@ -93,13 +95,14 @@ export async function executeExistingPersistedFlow(
     if (!actions.length) throw new RunnerFailure("action.dispatch", "Persisted FluxIQ Flow produced no durable action attempts");
     const failed = actions.find(action => action.status !== "succeeded");
     if (failed) throw new RunnerFailure("action.dispatch", `Persisted FluxIQ Flow action ${safeId(failed.attemptId)} finished with status ${failed.status}`);
+    let actionTypes: ReadonlyMap<string, string> = new Map();
     if (expectedActions.length) {
       // Core records every recorded action as one `builtin.policy.action` node
       // and drops the node's inputs, so `definitionId` reads the same for all
       // of them and could only match an expectation by accident. The attempt's
       // `nodeId` is the surviving link, and the Flow's own nodes carry the
       // output each dispatches -- the join the Flow lane makes.
-      const actionTypes = await readFlowActionTypes(control, target, httpBounds);
+      actionTypes = await readFlowActionTypes(control, target, httpBounds);
       for (const expected of expectedActions) {
         const expectedStatus = expected.outcome ?? "succeeded";
         const matched = actions.some(action => actionTypeOf(action, actionTypes) === expected.action && action.status === expectedStatus);
@@ -109,7 +112,7 @@ export async function executeExistingPersistedFlow(
         }
       }
     }
-    return { runId, status: "succeeded", detail, actions, events };
+    return { runId, status: "succeeded", detail, actions, events, actionTypes };
   } catch (error) {
     if (!isBoundedHttpFailure(error)) throw error;
     const failure = error instanceof RunnerFailure && error.details?.bounded === "timeout" ? "timeout" : "abort";

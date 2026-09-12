@@ -370,7 +370,12 @@ Steps:
    ancestor summary (landmark, heading, list/table position); attribute
    allowlist extended (`aria-labelledby`, `aria-describedby`, `for`, `value`
    presence). Added on fingerprint and candidate sides together (Core
-   penalizes declared-but-missing signals).
+   penalizes declared-but-missing signals). **Steps 1 and 2 done 2026-09-11** by
+   w2-identity-capture, verified at Wave 3 planning: the descriptor derives
+   `testId`, `accessibleName`, `label`, `implicitRole`, `context`, `href` and
+   `inputType`; the identity modules exist; and the attribute allowlist already
+   carries `aria-labelledby`, `aria-describedby` and `for`. Wave 3 starts at step
+   3, the resolver, which does not exist yet.
 3. **Level 1 + Level 2 resolver** (`content/action-runtime/resolve-target.ts`,
    new `content/identity/{candidates,score}.ts`): exact strategies gate on
    visibility/enabled/tag agreement and count matches; on zero or multiple
@@ -524,7 +529,12 @@ Steps:
    matches text in `route`/`message`, and neither is ever set), which
    today sends the recovery ladder to the wrong candidate kind. Every
    addition is optional; a host that sets none keeps today's behaviour.
-   Tests in Core's `tests/` folders; Core `pnpm check`/`test`/`build`.
+   Tests in Core's `tests/` folders; Core `pnpm check`/`test`/`build`. **Done 2026-09-11**: pulled into Wave
+   1 by D11, and verified by reading Core at Wave 3 planning. All seven failure
+   classes and both target comparison statuses exist, and
+   `classifyTransitionComparisonStatus` is structured-first, reading the failure
+   record and keeping the text match only as a documented fallback, so the
+   timeout-classification defect is fixed.
 3. **Downstream producers** (`content/action-runtime/results.ts`,
    `content/action-runtime/resolve-target.ts`, `apps/extension/src/runtime/
    action-runner.ts`, `domain/src/runtime/adapter.ts`, new
@@ -546,7 +556,7 @@ Steps:
    and target diagnostics ride with it; diagnosis-time re-capture becomes a
    supplement.
 5. **Test-runner alignment** (`packages/test-runner/src/demo-llm-create-ui.ts`
-   allowlist, `failure.ts` dead list, `evaluation.ts` categories): allowlist
+   allowlist, `failure.ts` dead list, `bench/evaluate-run.ts` categories; there is no `evaluation.ts`, corrected 2026-09-11): allowlist
    generated from domain codes; `runnerFailureCategories` removed.
 
 Proof: T2 `content/failures.spec.ts` on `failure-surfaces`, `auth-gate`,
@@ -728,35 +738,8 @@ So is the entry recording the paired Wave 1 push and the opening of Wave 2.
 So is the Wave 2 foundation entry, which recorded the contract the other thirteen
 briefs were written against.
 
-### 2026-09-11 — Wave 2: the action vocabulary, and its integration
-- Agent: supervisor, with thirteen wave workers and five integration workers
-- Changed: the seven new action types now exist end to end, from the domain
-  vocabulary through the command to the page; every verb implemented against the
-  foundation contract; richer element identity capture; and a provider-free Flow
-  lane. At integration: every dispatcher branch awaited, the Wave 2 parameters
-  lifted onto the command, actionability wired into select and the keyboard verbs,
-  one page-scheme rule replacing two that disagreed, the node join corrected in
-  the existing-flow lane, `e2e/**` brought under type-checking, two dead
-  dependency members removed, and the capability matrix rewritten.
-- Validation: supervisor, on the final tree, every exit status captured by
-  redirect rather than through a pipe. `pnpm build`, `pnpm check`, `pnpm test` and
-  extension `test:content` -> exit 0 each, with extension 122, content harness
-  123, test-runner 389, scenario-lab 118, domain 73, test-contracts 53 and 60
-  across the smaller packages, no failures anywhere.
-  `FLUXIQ_TEST_ENV_FILES=none pnpm lab bench --corpus smoke --repeat 2 --target
-  isolated` -> exit 0, status passed, 4 runs, 4 passed, 0 skipped.
-  `node scripts/structure-audit.mjs` after staging -> passed, 0 violations, with
-  the 84 previously untracked files finally visible to it.
-- Found: four defects in briefs the supervisor wrote. A schema table that cannot
-  be partitioned from its action-type list; a harness spec file every verb brief
-  must edit and none owned; an instruction contradicting the plan it came from;
-  and a blanket must-not-touch that made one task unsatisfiable. Separately, five
-  worker reports about files their authors did not own proved stale on inspection
-  and needed no change at all. In a wave where many agents edit one tree, such a
-  report is a snapshot, not a fact, and the supervisor settles it by reading. The
-  capability matrix was worse than reported: all 24 rows were wrong, not the 5
-  the reports flagged, and none reads Unsupported or Unreliable now.
-- Outcome: Accepted. Open items are recorded in `open-questions.md`.
+So is the Wave 2 entry itself, recording the vocabulary and its integration.
+
 ## Open Questions
 
 Open questions live in

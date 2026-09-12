@@ -307,3 +307,33 @@ outcomes are folded into the plan's `Current State`.
   drops `result.failure`, so structured records never reach the gateway, which
   w2-browser-actions must now forward, since it owns that file.
 - Outcome: Accepted
+
+### 2026-09-11 — Wave 2: the action vocabulary, and its integration
+- Agent: supervisor, with thirteen wave workers and five integration workers
+- Changed: the seven new action types now exist end to end, from the domain
+  vocabulary through the command to the page; every verb implemented against the
+  foundation contract; richer element identity capture; and a provider-free Flow
+  lane. At integration: every dispatcher branch awaited, the Wave 2 parameters
+  lifted onto the command, actionability wired into select and the keyboard verbs,
+  one page-scheme rule replacing two that disagreed, the node join corrected in
+  the existing-flow lane, `e2e/**` brought under type-checking, two dead
+  dependency members removed, and the capability matrix rewritten.
+- Validation: supervisor, on the final tree, every exit status captured by
+  redirect rather than through a pipe. `pnpm build`, `pnpm check`, `pnpm test` and
+  extension `test:content` -> exit 0 each, with extension 122, content harness
+  123, test-runner 389, scenario-lab 118, domain 73, test-contracts 53 and 60
+  across the smaller packages, no failures anywhere.
+  `FLUXIQ_TEST_ENV_FILES=none pnpm lab bench --corpus smoke --repeat 2 --target
+  isolated` -> exit 0, status passed, 4 runs, 4 passed, 0 skipped.
+  `node scripts/structure-audit.mjs` after staging -> passed, 0 violations, with
+  the 84 previously untracked files finally visible to it.
+- Found: four defects in briefs the supervisor wrote. A schema table that cannot
+  be partitioned from its action-type list; a harness spec file every verb brief
+  must edit and none owned; an instruction contradicting the plan it came from;
+  and a blanket must-not-touch that made one task unsatisfiable. Separately, five
+  worker reports about files their authors did not own proved stale on inspection
+  and needed no change at all. In a wave where many agents edit one tree, such a
+  report is a snapshot, not a fact, and the supervisor settles it by reading. The
+  capability matrix was worse than reported: all 24 rows were wrong, not the 5
+  the reports flagged, and none reads Unsupported or Unreliable now.
+- Outcome: Accepted. Open items are recorded in `open-questions.md`.
