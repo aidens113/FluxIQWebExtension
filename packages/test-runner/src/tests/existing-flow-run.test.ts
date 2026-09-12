@@ -11,7 +11,11 @@ const target: ExistingTargetConfiguration = {
 const project = { id: "project.web", name: "Web", description: "", domainId: "web-automation", createdAt: 1, updatedAt: 2 };
 const flow = { flowId: "flow.main", projectId: "project.web", name: "Main", updatedAt: 2, contentHash: "a".repeat(64), document: {} };
 const summary = { runId: "run.one", projectId: "project.web", flowId: "flow.main", status: "succeeded" as const, actionAttemptCount: 1, updatedAt: 4 };
-const action = { attemptId: "attempt.one", nodeId: "node.one", definitionId: "web.dom.type", order: 0, status: "succeeded" as const, startedAt: 2, finishedAt: 3 };
+// Core's real shape: every recorded action shares the `builtin.policy.action`
+// node definition and the attempt drops the node's inputs, so the node's
+// `parameterValues.outputId` is the only place the action it ran survives.
+const action = { attemptId: "attempt.one", nodeId: "node.one", definitionId: "builtin.policy.action", order: 0, status: "succeeded" as const, startedAt: 2, finishedAt: 3 };
+const flowNodes = [{ id: "node.one", definitionId: "builtin.policy.action", parameterValues: { outputId: "web.dom.type" } }];
 
 function client(overrides: Record<string, unknown> = {}) {
   return {
@@ -19,6 +23,11 @@ function client(overrides: Record<string, unknown> = {}) {
     requireProject: async () => project,
     listFlowSummaries: async () => [{ flowId: "flow.main" }],
     getExactFlow: async () => flow,
+    automationStudioCall: async (endpoint: string) => {
+      if (endpoint === "get-flow") return { flow: { nodes: flowNodes } };
+      if (endpoint === "list-flow-subflows") return { subflows: [] };
+      throw new Error(`unexpected Automation Studio endpoint ${endpoint}`);
+    },
     gatewayDiscovery: async () => ({ enabled: true, listening: true, publicUrl: "wss://panel.example.test/client", sessionCount: 0, pairingCount: 0, trustedClientCount: 0 }),
     selectExistingContext: async () => undefined,
     startPersistedFlow: async () => ({ runId: "run.one", projectId: "project.web", flowId: "flow.main", targetKind: "flow", targetId: "flow.main", status: "queued" }),
@@ -48,6 +57,44 @@ test("runs the stored Flow deterministically and requires successful durable act
   await assert.rejects(() => executeExistingPersistedFlow(client({ listRunActions: async () => [] }), target, "facility.two"), /no durable action/);
   await assert.rejects(() => executeExistingPersistedFlow(client({ runPersistedFlow: async () => ({ session: { runId: "run.one", projectId: "project.web", flowId: "flow.main", targetKind: "flow", targetId: "flow.main", status: "failed" } }) }), target, "facility.three"), /status failed/);
   await assert.rejects(() => executeExistingPersistedFlow(client(), target, "facility.four", {}, [{ action: "web.dom.click", outcome: "succeeded" }]), /did not produce expected/);
+});
+
+test("an expected action is matched through the node id, not the shared definition id", async () => {
+  // The attempt reports `builtin.policy.action`, so comparing `definitionId` to
+  // `web.dom.type` could never match; the join through the Flow's nodes does.
+  const value = await executeExistingPersistedFlow(client(), target, "facility.join", {}, [{ action: "web.dom.type", outcome: "succeeded" }]);
+  assert.equal(value.actions[0]?.definitionId, "builtin.policy.action");
+
+  // The mirror image: comparing `definitionId` would have matched this, and it
+  // must not -- the node dispatches web.dom.type, not the policy definition.
+  await assert.rejects(
+    () => executeExistingPersistedFlow(client(), target, "facility.join-negative", {}, [{ action: "builtin.policy.action", outcome: "succeeded" }]),
+    (error: unknown) => error instanceof RunnerFailure && /did not produce expected/.test(error.message) && /web\.dom\.type:succeeded/.test(error.message),
+  );
+
+  // A node the Flow does not declare keeps the definition id as its fallback.
+  const native = { ...action, nodeId: "node.native", definitionId: "web.dom.wait" };
+  const fallback = await executeExistingPersistedFlow(
+    client({ listRunActions: async () => [native], getRunDetail: async () => ({ summary, actionAttempts: [native] }) }),
+    target, "facility.fallback", {}, [{ action: "web.dom.wait", outcome: "succeeded" }],
+  );
+  assert.equal(fallback.status, "succeeded");
+
+  // An action the Flow ran under a subflow's graph Flow is still identified.
+  const subflowNode = { id: "node.sub", definitionId: "builtin.policy.action", parameterValues: { outputId: "web.dom.click" } };
+  const subflowAttempt = { ...action, nodeId: "node.sub", definitionId: "builtin.policy.action" };
+  const viaSubflow = await executeExistingPersistedFlow(
+    client({
+      listRunActions: async () => [subflowAttempt],
+      getRunDetail: async () => ({ summary, actionAttempts: [subflowAttempt] }),
+      automationStudioCall: async (endpoint: string, payload: { flowId?: string }) => {
+        if (endpoint === "list-flow-subflows") return { subflows: [{ graphFlowId: "flow.graph" }] };
+        return { flow: { nodes: payload.flowId === "flow.graph" ? [subflowNode] : [] } };
+      },
+    }),
+    target, "facility.subflow", {}, [{ action: "web.dom.click", outcome: "succeeded" }],
+  );
+  assert.equal(viaSubflow.status, "succeeded");
 });
 
 test("preserves a bounded Flow failure and attempts cancellation exactly once", async () => {

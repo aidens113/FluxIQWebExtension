@@ -12,6 +12,7 @@ export const WEB_AUTOMATION_INPUT_IDS = {
   textEntered: "web.user.text_entered",
   fieldCleared: "web.user.field_cleared",
   optionSelected: "web.user.option_selected",
+  checkboxToggled: "web.user.checkbox_toggled",
   keyPressed: "web.user.key_pressed",
   pageScrolled: "web.user.page_scrolled"
 } as const;
@@ -92,6 +93,7 @@ export const actionInputDefinitions = [
   [WEB_AUTOMATION_INPUT_IDS.textEntered, "Text entered", "web.dom.type"],
   [WEB_AUTOMATION_INPUT_IDS.fieldCleared, "Field cleared", "web.dom.clear"],
   [WEB_AUTOMATION_INPUT_IDS.optionSelected, "Option selected", "web.dom.select"],
+  [WEB_AUTOMATION_INPUT_IDS.checkboxToggled, "Checkbox toggled", "web.dom.check"],
   [WEB_AUTOMATION_INPUT_IDS.keyPressed, "Key pressed", "web.dom.keypress"],
   [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"]
 ] as const;
@@ -112,19 +114,50 @@ function recordedActionInputId(eventType: string, payload: JsonObject, metadata:
     case WEB_AUTOMATION_EVENTS.elementClicked:
       return WEB_AUTOMATION_INPUT_IDS.elementClicked;
     case WEB_AUTOMATION_EVENTS.keyboardPressed:
-      return WEB_AUTOMATION_INPUT_IDS.keyPressed;
+      return isSelectValueChangeKeyPress(payload) ? undefined : WEB_AUTOMATION_INPUT_IDS.keyPressed;
     // The recorder emits `dom.scroll` for wheel and window scrolling alike;
     // `dom.wheel` is never emitted, so its event type maps to no input.
     case WEB_AUTOMATION_EVENTS.scrollChanged:
       return WEB_AUTOMATION_INPUT_IDS.pageScrolled;
-    // Checkbox and radio changes still map to text entry; Phase 1.2 adds web.dom.check.
     case WEB_AUTOMATION_EVENTS.elementInputChanged:
-    case WEB_AUTOMATION_EVENTS.elementChanged:
-      if (objectValue(payload.element)?.tagName === "select") return WEB_AUTOMATION_INPUT_IDS.optionSelected;
+    case WEB_AUTOMATION_EVENTS.elementChanged: {
+      const element = objectValue(payload.element);
+      if (stringValue(element?.tagName)?.toLowerCase() === "select") return WEB_AUTOMATION_INPUT_IDS.optionSelected;
+      // A checkbox or radio is set, not typed into: its recorded value is the
+      // control's `value` attribute ("on"), so replaying it as text entry
+      // would type "on" into a control that has no text.
+      if (isCheckableElement(element)) return WEB_AUTOMATION_INPUT_IDS.checkboxToggled;
       return payload.inputValue === "" ? WEB_AUTOMATION_INPUT_IDS.fieldCleared : WEB_AUTOMATION_INPUT_IDS.textEntered;
+    }
     default:
       return undefined;
   }
+}
+
+function isCheckableElement(element: JsonObject | undefined): boolean {
+  const inputType = stringValue(element?.inputType)?.toLowerCase();
+  if (inputType === "checkbox" || inputType === "radio") return true;
+  const role = stringValue(element?.role)?.toLowerCase();
+  return role === "checkbox" || role === "radio" || role === "switch";
+}
+
+/**
+ * The keys whose only effect on a closed `<select>` is to change its value,
+ * which the recorder already reports as a `change` event of its own.
+ * Recording the keystroke as well would replay a key press the user's
+ * selection has already accounted for — found by `w1-runner-asserts`, where
+ * a keyboard selection on `basic-form` recorded one `web.keyboard.pressed`.
+ * Any single character is typeahead; Enter, Escape and Tab do something the
+ * value change does not, so they stay key presses.
+ */
+const SELECT_VALUE_CHANGE_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"]);
+
+function isSelectValueChangeKeyPress(payload: JsonObject): boolean {
+  const element = objectValue(payload.element);
+  if (stringValue(element?.tagName)?.toLowerCase() !== "select") return false;
+  const key = stringValue(payload.key);
+  if (key === undefined) return false;
+  return SELECT_VALUE_CHANGE_KEYS.has(key) || [...key].length === 1;
 }
 
 /**
@@ -138,6 +171,10 @@ function hasExecutableParameters(outputId: WebAutomationActionType, parameters: 
   if (!required.every((key) => isNonEmptyString(parameters[key]))) return false;
   if (outputId === "web.dom.keypress") return isNonEmptyString(parameters.key);
   if (outputId === "web.dom.scroll") return typeof parameters.x === "number" || typeof parameters.y === "number";
+  // A check whose state is unknown would have to guess between checking and
+  // unchecking. Until the recorder reports the state (`payloads.ts`,
+  // `recordedCheckedState`), the toggle stays evidence.
+  if (outputId === "web.dom.check") return typeof parameters.checked === "boolean";
   return true;
 }
 
@@ -147,4 +184,8 @@ function isNonEmptyString(value: unknown): boolean {
 
 function objectValue(value: unknown): JsonObject | undefined {
   return value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : undefined;
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
 }

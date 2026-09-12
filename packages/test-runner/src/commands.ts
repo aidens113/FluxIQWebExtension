@@ -8,7 +8,7 @@ export type BenchTargetMode = Extract<TargetMode, "isolated" | "persistent-isola
 // `evidence` is absent unless `--evidence` is given, so a scenario manifest's `evidencePolicy` drives capture.
 // A compare report is a bench id under `<runs>/bench/`, or a path to its `report.json` or bench directory.
 export type LabCommand =
-  | { command: "run"; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile }
+  | { command: "run"; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flowLane?: true; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile }
   | { command: "matrix"; scenarioIds?: string[]; all: boolean; repeat: number; evidence?: EvidenceMode; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile }
   | { command: "bench"; corpusId: string; repeat: number; evidence?: EvidenceMode; target?: BenchTargetMode; workspace?: string }
   | { command: "auth"; operation: "status" | "clear" }
@@ -32,10 +32,15 @@ export function parseLabCommand(argv: string[]): LabCommand {
     return { command, scenarioId, ...optionalSeed(args), ...(target.target ? { target: target.target } : {}), ...(target.workspace ? { workspace: target.workspace } : {}), ...(target.freshLogin ? { freshLogin: true } : {}) };
   }
   if (command === "run") {
-    rejectUnknownOptions(args, ["--seed", "--evidence", "--workflow", "--target", "--workspace", "--flow", "--fresh-login", ...llmOptionNames]);
-    const scenarioId = positional(args, 0, "scenario ID");
-    const llm = llmOptions(args);
-    return { command, scenarioId, ...optionalSeed(args), ...optionalEvidence(args), ...optionalWorkflow(args), ...targetOptions(args), ...(llm ? { llm } : {}) };
+    rejectUnknownOptions(args, ["--seed", "--evidence", "--workflow", "--variant", "--target", "--workspace", "--flow", "--fresh-login", ...llmOptionNames]);
+    const { flowLane, rest } = flowLaneOption(args);
+    const scenarioId = positional(rest, 0, "scenario ID");
+    const llm = llmOptions(rest);
+    const target = targetOptions(rest);
+    if (flowLane && (target.target === "existing" || target.target === "clone")) throw new Error("--flow builds a Flow from the run's own recording; existing and clone targets run a pre-existing Flow");
+    const variant = optionalVariant(rest);
+    if (variant.variantId && !flowLane) throw new Error("--variant requires --flow: a variant is armed only before a Flow run");
+    return { command, scenarioId, ...optionalSeed(rest), ...optionalEvidence(rest), ...optionalWorkflow(rest), ...variant, ...target, ...(flowLane ? { flowLane: true as const } : {}), ...(llm ? { llm } : {}) };
   }
   if (command === "matrix") {
     rejectUnknownOptions(args, ["--all", "--scenarios-json", "--repeat", "--evidence", "--target", "--workspace", "--flow", "--fresh-login", ...llmOptionNames]);
@@ -148,6 +153,24 @@ function llmOptions(args: string[]): LlmExecutionProfile | undefined {
 function option(args: string[], name: string): string | undefined { const indexes = args.flatMap((value, index) => value === name ? [index] : []); if (indexes.length > 1) throw new Error(`${name} may only be specified once`); const index = indexes[0]; return index === undefined ? undefined : args[index + 1] ?? (() => { throw new Error(`${name} requires a value`); })(); }
 function integerOption(args: string[], name: string, fallback: number): number { const value = option(args, name); if (value === undefined) return fallback; const parsed = Number(value); if (!Number.isSafeInteger(parsed)) throw new Error(`${name} must be an integer`); return parsed; }
 function optionalSeed(args: string[]): { seed?: number } { const seed = option(args, "--seed"); if (seed === undefined) return {}; const parsed = Number(seed); if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > 0xffffffff) throw new Error("--seed must be a uint32"); return { seed: parsed }; }
+/**
+ * `--flow` carries a value on the existing and clone targets, where it names
+ * the persisted Flow to run, and carries none on the Flow lane, where the
+ * Flow is built from the run's own recording. The two are told apart by what
+ * follows: a Flow id never begins with `--`, so a `--flow` at the end of the
+ * arguments or followed by another option is the lane flag. The lane flag is
+ * removed from the arguments the value-taking options then read.
+ */
+function flowLaneOption(args: string[]): { flowLane: boolean; rest: string[] } {
+  const index = args.indexOf("--flow");
+  if (index === -1) return { flowLane: false, rest: args };
+  if (args.filter(value => value === "--flow").length > 1) throw new Error("--flow may only be specified once");
+  const next = args[index + 1];
+  if (next !== undefined && !next.startsWith("--")) return { flowLane: false, rest: args };
+  return { flowLane: true, rest: [...args.slice(0, index), ...args.slice(index + 1)] };
+}
+/** The variant of the resolved workflow the Flow lane arms before its run. */
+function optionalVariant(args: string[]): { variantId?: string } { const value = option(args, "--variant"); if (value === undefined) return {}; if (!KEBAB_ID.test(value)) throw new Error("--variant must be a lowercase kebab-case variant ID"); return { variantId: value }; }
 /** A `workflows[]` entry of the scenario; without the flag the manifest's primary workflow runs. */
 function optionalWorkflow(args: string[]): { workflowId?: string } { const value = option(args, "--workflow"); if (value === undefined) return {}; if (!KEBAB_ID.test(value)) throw new Error("--workflow must be a lowercase kebab-case workflow ID"); return { workflowId: value }; }
 /** Absent unless `--evidence` is given, so the scenario manifest's `evidencePolicy` drives capture. */

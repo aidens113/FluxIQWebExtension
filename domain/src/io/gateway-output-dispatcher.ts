@@ -20,11 +20,21 @@ export async function dispatchWebAutomationOutput(
       parameters: request.payload
     };
     const result = await fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, command);
+    const succeeded = result.status === "succeeded";
+    const message = stringValue(result.message);
     return {
-      ok: result.status === "succeeded",
+      // `ok` stays the success flag; `status` is the command's own outcome, so
+      // Core sees `timed_out` or `cancelled` rather than a bare failure.
+      ok: succeeded,
       outputId: request.outputId,
+      status: result.status,
       payload: compact({ status: result.status, message: result.message, result: result.payload }),
-      ...(result.error ? { error: result.error } : {})
+      // Core's IO path builds the node message from `error` alone
+      // (`failedDispatchResult`), so a command that failed with only a message
+      // — the usual shape of a client-side timeout or cancellation — would
+      // otherwise arrive with no reason. A success never gains an error.
+      ...(result.error ? { error: result.error } : !succeeded && message ? { error: message } : {}),
+      ...(result.failure ? { failure: result.failure } : {})
     };
   } catch (error) {
     return { ok: false, outputId: request.outputId, error: error instanceof Error ? error.message : "Web automation output dispatch failed." };

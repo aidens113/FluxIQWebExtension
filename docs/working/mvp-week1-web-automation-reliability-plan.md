@@ -49,9 +49,9 @@ metrics, and cannot run a Flow on `isolated`.
   is an ES module on Core's public exports; isolated runs here use
   `FLUXIQ_TEST_ENV_FILES=none`.
 
-**Running:** none. The Wave 2 foundation landed and its gates pass, so the
-thirteen parallel briefs are next. Wave 1 shipped: the recording-start flake is
-fixed at its cause, the smoke bench passes, and the Core unit is green.
+**Running:** none. Wave 2 is complete and integrated. Thirteen wave workers and
+five integration workers landed, each verified against the tree rather than taken
+at its word, and every gate on the final tree passes.
 
 **Findings that change later work**
 
@@ -75,13 +75,16 @@ fixed at its cause, the smoke bench passes, and the Core unit is green.
   therefore set `FLUXIQ_TEST_ENV_FILES=none`, which skips both env files for
   one run. Never edit `.env.local`.
 
-**Not done:** Wave 2 after its foundation lands, then Waves 3 to 5.
+**Not done:** the node join in the run-manifest timings file, held back so the
+gates and benchmark describe exactly what shipped; then Waves 3 to 5.
 
 **Next steps**
 
-1. Dispatch the thirteen parallel briefs from
-   [briefs/wave-2.md](./mvp-week1-web-automation-reliability-plan/briefs/wave-2.md).
-2. Keep Lab runs serialized: only one may execute on this machine at a time.
+1. Fix the run-manifest node join, with its own verification.
+2. Write the Wave 3 briefs: Phase 1.3 steps 3 to 6, Phase 1.4, and Phase 1.5.
+   Phase 1.4 step 7 and Phase 1.5 step 2 are Core work and need the paired Core
+   document and a fresh alert to the user before the first Core edit.
+3. Keep Lab runs serialized: only one may execute on this machine at a time.
 
 **Core unit (D11):** the baseline ratchet (mirrored here), domain-host loading,
 the failure taxonomy and carriers, and the web and runtime test suites are all
@@ -201,6 +204,18 @@ ledger entry, not a silent edit.
   extension's `ACTION_REJECTED` in result `metadata`, the copied category
   names in `packages/test-contracts`, the Wave 2 draft's local category
   list, and the panel host's deep import of Core's `dist`.
+
+- **D12 — Three Wave 2 worker judgments, ratified by the supervisor.** Each was
+  raised by its worker as needing ratification, and each stands. Tripping the
+  scroll cap while the document is still growing is a failed validation reporting
+  `output_not_observed`, not a success, because the contract defines that category
+  as an action that ran whose post-condition did not hold. The parameter readers
+  live in a sibling module rather than inline, because inlining would have pushed
+  `gateway-mapping.ts` past the size threshold, and the alternatives were a new
+  audit warning or deleting the explanatory comments. A disabled `<option>` is
+  refused inside the select verb rather than through the actionability capability,
+  because an option in a closed select has no box and the capability would
+  mis-report it as hidden.
 
 ## How Week 1 Is Proven
 
@@ -705,85 +720,46 @@ with the env-file opt-in and the Core contracts link.
 So is the entry recording the Core failure categories being adopted here, the
 gate run that followed, and the first sighting of the recording-start flake.
 
-### 2026-09-11 — Wave 1 gates; the recording start traced to a 10 s window
-- Agent: supervisor, with w1-recording-start-flake
-- Changed: `packages/test-runner/src/run-scenario.ts` only. Core accepts
-  `client.start_recording` only while the approving Automation Studio context is
-  under 10 s old (`resolveClientRecordingProject`, `freshnessMs` 10_000), and the
-  runner stamped that context once, at topology startup. When pairing and the Core
-  action probe outran the window, Core answered `recording.project_required`, on
-  which the extension cancels its pending start, so its own 750 ms local fallback
-  never fires and the recorder latches `idle`. That is why no longer poll could
-  have fixed it. The runner now restamps the context immediately before the start,
-  and captures the extension status when a start fails, which the lane discarded.
-- Validation: worker, a forced 12 s gap without the fix failed with
-  `recordingBlock=recording.project_required`, the same Core signature as the
-  reported run, and passed with the fix; then an 8-run serialized series,
-  `SUMMARY pass=8 fail=0 of 8`, the failure diagnostic present in 1 of 46 run
-  directories, the deliberate no-fix experiment. Supervisor: here `pnpm check` and
-  `pnpm test` -> exit 0 each, captured by redirect rather than a pipe, test-runner
-  `# pass 357 # fail 0`; in Core `pnpm check`, `pnpm docs:check`, `pnpm build` and
-  `pnpm package:lint` -> exit 0, `pnpm test` -> 827 of 828, one Adaptation Audit
-  case timing out only under parallel load (briefed as core-adaptation-test-cost).
-  A first supervisor bench crashed at exit 139 after overlapping the worker own
-  chained runs; re-run on a clear machine it passed, status passed with 4 runs, 4
-  passed and 0 skipped, exit 0, `bench-mtxju6eb-7aacdf7a`. The worker own bench
-  agreed: 4 runs, 4 passed, 0 skipped.
-- Found: the extension latching `idle` on a refused start is a product defect, not
-  a test-lane one; recorded under Open Questions against Phase 1.5.
-- Outcome: Accepted. The benchmark re-run passed on a clear machine (4 runs, 4
-  passed, 0 skipped, exit 0), and Core came green: `pnpm test` -> exit 0, fluxiq
-  828 of 828 and web 1146 of 1146, with its structure audit clean.
+So is the entry for the Wave 1 gate run that traced the recording start to a
+10 s context window and fixed it in the runner.
 
-### 2026-09-11 — Wave 1 pushed; Wave 2 opened
-- Agent: supervisor
-- Changed: no source. Both repositories committed and pushed as one work unit,
-  then w2-foundation dispatched as the serial first brief of Wave 2.
-- Validation: `git push origin dev` -> `3a61de9..f8885b8  dev -> dev` here and
-  `e522f17..4867c5c  dev -> dev` in Core, each exit 0, both branches reporting
-  level with their remote afterwards.
-- Outcome: Accepted
-### 2026-09-11 — Wave 2 foundation: the contract landed
-- Agent: supervisor, with w2-foundation
-- Changed: the seven new action types and their safety classes; one result type
-  re-exported by the extension instead of three copies, with `validation` made a
-  required field; eight capabilities declared on the content dependencies, each in
-  its own module that throws until its own brief lands; five verb stubs and two
-  background stubs routed from `action-runner.ts`.
-- Validation: supervisor, `pnpm check` -> exit 0 and `pnpm test` -> exit 0, each
-  captured by redirect rather than through a pipe: extension 72 of 72, up from 64,
-  scenario-lab 118 of 118, test-runner 357 of 357, test-evidence 14 of 14,
-  agent-orchestrator 16 of 16. Worker: domain 26 of 26, `test:content` 31 passed,
-  and `FLUXIQ_TEST_ENV_FILES=none pnpm lab run basic-form --target isolated` ->
-  exit 0, verdict passed; structure audit clean.
-- Found: two supervisor defects, both corrected in the briefs. The brief forbade
-  `domain/src/actions/schemas.ts`, but listing an action type with no definition
-  makes `createWebAutomationDomainIo` throw, since manifest outputs, output nodes
-  and registered outputs all derive from that table, so the list and the schemas
-  cannot land in separate work units; w2-domain-vocabulary now refines those seven
-  definitions instead of creating them. And `gatewayActionResultFromBrowserResult`
-  drops `result.failure`, so structured records never reach the gateway, which
-  w2-browser-actions must now forward, since it owns that file.
-- Outcome: Accepted
+So is the entry recording the paired Wave 1 push and the opening of Wave 2.
+
+So is the Wave 2 foundation entry, which recorded the contract the other thirteen
+briefs were written against.
+
+### 2026-09-11 — Wave 2: the action vocabulary, and its integration
+- Agent: supervisor, with thirteen wave workers and five integration workers
+- Changed: the seven new action types now exist end to end, from the domain
+  vocabulary through the command to the page; every verb implemented against the
+  foundation contract; richer element identity capture; and a provider-free Flow
+  lane. At integration: every dispatcher branch awaited, the Wave 2 parameters
+  lifted onto the command, actionability wired into select and the keyboard verbs,
+  one page-scheme rule replacing two that disagreed, the node join corrected in
+  the existing-flow lane, `e2e/**` brought under type-checking, two dead
+  dependency members removed, and the capability matrix rewritten.
+- Validation: supervisor, on the final tree, every exit status captured by
+  redirect rather than through a pipe. `pnpm build`, `pnpm check`, `pnpm test` and
+  extension `test:content` -> exit 0 each, with extension 122, content harness
+  123, test-runner 389, scenario-lab 118, domain 73, test-contracts 53 and 60
+  across the smaller packages, no failures anywhere.
+  `FLUXIQ_TEST_ENV_FILES=none pnpm lab bench --corpus smoke --repeat 2 --target
+  isolated` -> exit 0, status passed, 4 runs, 4 passed, 0 skipped.
+  `node scripts/structure-audit.mjs` after staging -> passed, 0 violations, with
+  the 84 previously untracked files finally visible to it.
+- Found: four defects in briefs the supervisor wrote. A schema table that cannot
+  be partitioned from its action-type list; a harness spec file every verb brief
+  must edit and none owned; an instruction contradicting the plan it came from;
+  and a blanket must-not-touch that made one task unsatisfiable. Separately, five
+  worker reports about files their authors did not own proved stale on inspection
+  and needed no change at all. In a wave where many agents edit one tree, such a
+  report is a snapshot, not a fact, and the supervisor settles it by reading. The
+  capability matrix was worse than reported: all 24 rows were wrong, not the 5
+  the reports flagged, and none reads Unsupported or Unreliable now.
+- Outcome: Accepted. Open items are recorded in `open-questions.md`.
 ## Open Questions
 
-- **Credentials at replay.** A Flow built from a recording cannot recover a
-  redacted password (auth-gate W18). Proposed: the manifest declares the
-  fixture credential and the Flow lane supplies it as a declared secret,
-  never from the recording. Owner: senior supervisor agent, for the Wave 2
-  Flow-lane brief.
-- **Selector-keyed patch lane vs fingerprint-first doctrine.** Core's
-  `validateTargetOverrideEvidence` takes `{selector}`. Week 1 makes the
-  extension accept fingerprint-shaped targets; whether the patch lane
-  becomes fingerprint-shaped is a Week 2 contract decision. Owner: senior
-  supervisor agent, recorded for the Week 2 document.
-- **The extension latches idle when Core refuses a recording start.** When Core
-  answers `recording.project_required`, the extension clears its pending start,
-  so the 750 ms local-start fallback never fires and the recorder stays idle
-  until something else restarts it. No retry, and the user sees no reason. Found
-  while proving the runner flake (report `w1-recording-start-flake`), where the
-  refusal was reproduced deliberately. The runner now avoids triggering it, which
-  fixes the test lane but not the product. A real operator whose context goes
-  stale hits the same dead end. Belongs with Phase 1.5, the failure taxonomy,
-  since the right behaviour is a classified, surfaced failure rather than a
-  silent idle. Raised 2026-09-11; owner: senior supervisor agent.
+Open questions live in
+[open-questions.md](./mvp-week1-web-automation-reliability-plan/open-questions.md),
+moved there on 2026-09-11 so a growing list does not push this document past its
+800-line threshold.

@@ -194,6 +194,14 @@ const validateWorkflow: Validator = (value, path, issues) => {
   validateWorkflowBody(value, path, issues);
 };
 
+/** A replay secret declaration: a kebab-case id and the recording step whose recorded value it replaces. */
+const validateSecret: Validator = (value, path, issues) => {
+  if (!isObject(value)) return issue(issues, path, "must be an object");
+  checkKeys(value, ["id", "step"], path, issues);
+  kebabId(value, path, issues);
+  requiredString(value, "step", path, issues);
+};
+
 const validateEvidencePolicy: Validator = (value, path, issues) => {
   if (!isObject(value)) return issue(issues, path, "must be an object");
   checkKeys(value, ["screenshots", "trace", "video", "sampleFps", "reviewRequired"], path, issues);
@@ -206,7 +214,7 @@ const validateEvidencePolicy: Validator = (value, path, issues) => {
 export function validateWebScenario(input: unknown): ValidationResult<WebScenario> {
   const issues: ValidationIssue[] = [];
   if (!isObject(input)) return { valid: false, issues: [{ path: "$", message: "must be an object" }] };
-  checkKeys(input, ["schemaVersion", "id", "title", "tags", "seed", "startPath", "capabilities", "networkPolicy", "recordingScript", "playbackGoal", "expected", "variants", "workflows", "evidencePolicy"], "$", issues);
+  checkKeys(input, ["schemaVersion", "id", "title", "tags", "seed", "startPath", "capabilities", "networkPolicy", "recordingScript", "playbackGoal", "expected", "variants", "workflows", "secrets", "evidencePolicy"], "$", issues);
   if (input.schemaVersion !== "0.1") issue(issues, "$.schemaVersion", "must equal 0.1");
   kebabId(input, "$", issues);
   requiredString(input, "title", "$", issues);
@@ -223,6 +231,10 @@ export function validateWebScenario(input: unknown): ValidationResult<WebScenari
   if (input.workflows !== undefined) {
     arrayOf(input.workflows, "$.workflows", issues, validateWorkflow);
     uniqueIds(input.workflows, "$.workflows", "workflow", issues);
+  }
+  if (input.secrets !== undefined) {
+    arrayOf(input.secrets, "$.secrets", issues, validateSecret);
+    uniqueIds(input.secrets, "$.secrets", "secret", issues);
   }
   if (input.playbackGoal !== undefined) validateGoal(input.playbackGoal, "$.playbackGoal", issues);
   if (input.evidencePolicy !== undefined) validateEvidencePolicy(input.evidencePolicy, "$.evidencePolicy", issues);

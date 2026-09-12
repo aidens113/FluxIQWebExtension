@@ -130,3 +130,37 @@ test("an explicit visual target wins over one derived from the element, and extr
   assert.deepEqual(result.payload?.visualTarget, visualTarget);
   assert.deepEqual(result.payload?.extracted, { rows: [{ name: "Lamp", price: "12.00" }] });
 });
+
+test("a structured failure reaches the gateway instead of being dropped at the boundary", () => {
+  // The content script and the worker both build Core failure records. Until
+  // Phase 1.2 step 4 this mapper copied everything but `failure`, so every
+  // record was assembled and then thrown away one call short of the wire.
+  const failure = {
+    category: "output_not_observed" as const,
+    code: "web.validation.output_not_observed",
+    retryable: true,
+    stage: "verification" as const,
+    expected: "the field to read back \"shoes\"",
+    actual: "the field is empty"
+  };
+  const result = gatewayActionResultFromBrowserResult(browserResult({ status: "failed", message: "Value not observed.", failure }));
+  assert.deepEqual(result.failure, failure);
+  assert.deepEqual(parseAutomationStudioFailureRecord(result.failure), failure, "what reaches the wire survives Core's parser");
+});
+
+test("a result with no failure record sends none, rather than an empty one", () => {
+  const result = gatewayActionResultFromBrowserResult(browserResult({ message: "Clicked." }));
+  assert.equal("failure" in result, false);
+});
+
+test("timed_out and cancelled keep their status and carry their message as the error", () => {
+  // RuntimeStatusTracker shows every non-succeeded result as failed with an
+  // error; these two used to reach the gateway with no `error` at all, so the
+  // panel and the wire disagreed about the same result (found by
+  // w1-extension-unit-tests).
+  for (const status of ["timed_out", "cancelled", "unknown"] as const) {
+    const result = gatewayActionResultFromBrowserResult(browserResult({ status, message: "The wait ran out of time." }));
+    assert.equal(result.status, status, status);
+    assert.equal(result.error, "The wait ran out of time.", status);
+  }
+});

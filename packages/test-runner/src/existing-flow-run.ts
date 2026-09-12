@@ -11,6 +11,7 @@ import type {
   ExistingRunDetail,
   ExistingRunEvent,
 } from "./existing-fluxiq-control.js";
+import { readFlowActionTypes } from "./flow-lane/index.js";
 import { requireSecureGatewayUrl, type ExistingTargetConfiguration } from "./target-config.js";
 
 export type PersistedFlowSelection = Pick<ExistingTargetConfiguration, "projectId" | "flowId">;
@@ -92,10 +93,21 @@ export async function executeExistingPersistedFlow(
     if (!actions.length) throw new RunnerFailure("action.dispatch", "Persisted FluxIQ Flow produced no durable action attempts");
     const failed = actions.find(action => action.status !== "succeeded");
     if (failed) throw new RunnerFailure("action.dispatch", `Persisted FluxIQ Flow action ${safeId(failed.attemptId)} finished with status ${failed.status}`);
-    for (const expected of expectedActions) {
-      const expectedStatus = expected.outcome ?? "succeeded";
-      const matched = actions.some(action => action.definitionId === expected.action && action.status === expectedStatus);
-      if (!matched) throw new RunnerFailure("action.dispatch", `Persisted FluxIQ Flow did not produce expected ${safeId(expected.action)} action outcome ${expectedStatus}`);
+    if (expectedActions.length) {
+      // Core records every recorded action as one `builtin.policy.action` node
+      // and drops the node's inputs, so `definitionId` reads the same for all
+      // of them and could only match an expectation by accident. The attempt's
+      // `nodeId` is the surviving link, and the Flow's own nodes carry the
+      // output each dispatches -- the join the Flow lane makes.
+      const actionTypes = await readFlowActionTypes(control, target, httpBounds);
+      for (const expected of expectedActions) {
+        const expectedStatus = expected.outcome ?? "succeeded";
+        const matched = actions.some(action => actionTypeOf(action, actionTypes) === expected.action && action.status === expectedStatus);
+        if (!matched) {
+          const observed = actions.map(action => `${safeId(actionTypeOf(action, actionTypes))}:${action.status}`).join(", ") || "no attempts";
+          throw new RunnerFailure("action.dispatch", `Persisted FluxIQ Flow did not produce expected ${safeId(expected.action)} action outcome ${expectedStatus}; it produced ${observed}`);
+        }
+      }
     }
     return { runId, status: "succeeded", detail, actions, events };
   } catch (error) {
@@ -108,6 +120,15 @@ export async function executeExistingPersistedFlow(
 }
 
 function safeId(value: string): string { return /^[A-Za-z0-9._:-]+$/.test(value) ? value : "[invalid-id]"; }
+
+/**
+ * What an attempt actually ran: the output its Flow node dispatches, falling
+ * back to the definition id for a node the Flow does not declare -- a native
+ * node whose definition id is its action.
+ */
+function actionTypeOf(action: ExistingRunAction, actionTypes: ReadonlyMap<string, string>): string {
+  return actionTypes.get(action.nodeId) ?? action.definitionId;
+}
 async function attemptCancellation(control: ExistingFluxIQControlClient, projectId: string, runId: string, timeoutMs = 5_000): Promise<ExistingFlowCancellationReport["cancellation"]> {
   try {
     const cancelled = await control.cancelRun(projectId, runId, "Test facility timeout or interruption", { timeoutMs });

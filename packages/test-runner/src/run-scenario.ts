@@ -25,22 +25,33 @@ import {
 import { createRunOwnedCloneFlowId, createRunOwnedCloneProject, importClonePackageIntoIsolatedDestination } from "./isolated-flow-importer.js";
 import { effectiveEvidencePolicy } from "./evidence-policy/index.js";
 import { armScenarioVariant, scenarioLabOriginProof } from "./lab-control/index.js";
+import { declaredSecretValues, recordingLaneObservation, resolveDeclaredSecrets, runFlowLane, type DeclaredSecret, type RunLaneObservation } from "./flow-lane/index.js";
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog } from "./run-expectations/index.js";
 import { automationFailureFromActionResult, createRunManifest, flowActionTimings, runActionStatus, type CloneRunState } from "./run-manifest/index.js";
 import { cssSelectorForTarget, parseScenarioTarget, ScenarioStepRunner } from "./scenario-steps/index.js";
 
 /** `evidence` overrides the manifest's `evidencePolicy`; `workflowId` and `variantId` select what `resolveScenarioWorkflow` resolves. */
-export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration };
-export type RunScenarioResult = { runId: string; verdict: "passed" | "failed"; path: string; failureCategory?: string };
+export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flow?: boolean; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration };
+/** `observation` carries the `RunEvaluation` fields only the lane that ran can know; absent on the existing and clone targets, which run a pre-existing Flow. */
+export type RunScenarioResult = { runId: string; verdict: "passed" | "failed"; path: string; failureCategory?: string; observation?: RunLaneObservation };
 
 export async function runScenario(options: RunScenarioOptions): Promise<RunScenarioResult> {
   const runId = `run-${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
   const scenario = await loadScenarioManifest(options.repositoryRoot, options.scenarioId);
   const target = options.target ?? { mode: "isolated" as const };
   const workflow = resolveWorkflow(scenario, options, target);
+  // A variant never changes the recording: on the Flow lane the script runs
+  // unarmed, so the recording lane checks the workflow's own expectations while
+  // the variant's govern the Flow run alone. Judging the unarmed recording by
+  // the armed expectation fails every negative variant before its Flow exists.
+  const recordingWorkflow = options.flow && workflow.variant ? unarmedWorkflow(scenario, options) : workflow;
   const seed = options.seed ?? scenario.seed;
   const environment = options.environment ?? process.env;
-  const secrets = [environment.FLUXIQ_TEST_PASSWORD, environment.FLUXIQ_TEST_PIN, environment.FLUXIQ_TEST_TOTP].filter((value): value is string => Boolean(value));
+  // Declared replay secrets resolve before the bundle so their values join the
+  // redaction list; only the Flow lane supplies them, so a recording-lane run
+  // of the same scenario does not require them to be configured.
+  const declaredSecrets: DeclaredSecret[] = options.flow ? resolveDeclaredSecrets(scenario, environment) : [];
+  const secrets = [environment.FLUXIQ_TEST_PASSWORD, environment.FLUXIQ_TEST_PIN, environment.FLUXIQ_TEST_TOTP, ...declaredSecretValues(declaredSecrets)].filter((value): value is string => Boolean(value));
   const evidence = effectiveEvidencePolicy(scenario.evidencePolicy, options.evidence);
   const bundle = new EvidenceBundle({ rootDirectory: options.runsDirectory, runId, scenarioId: scenario.id, redaction: { secrets }, evidencePolicy: evidence.capture });
   await bundle.initialize();
@@ -63,6 +74,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
   let consoleErrors: ConsoleErrorWatch | undefined;
   let recordingBaseline: Set<string> | undefined;
   let recordedEvents: Record<string, number> | undefined;
+  let flowObservation: RunLaneObservation | undefined;
+  // The fixture oracle's own verdict, published rather than inferred: a failure
+  // category cannot tell "the fixture disagreed" from "the rig broke first".
+  let oracleVerdict: "passed" | "failed" | null = null;
   const actions: RunActionTiming[] = [];
   // null: FluxIQ reported no failure. A Flow lane cannot see a failed run's actions, so it stays unobserved until its Flow succeeds.
   let automationFailure: RunAutomationFailure | null | undefined = target.mode === "existing" || target.mode === "clone" ? undefined : null;
@@ -87,7 +102,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
       ? options.runsDirectory
       : path.join(options.runsDirectory, ".work");
     const ownsIsolatedCore = topologyTarget.mode === "isolated" || topologyTarget.mode === "persistent-isolated";
-    topology = await startTopology({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, runsDirectory: topologyRunsDirectory, runId, seed, target: topologyTarget, ...(ownsIsolatedCore ? { bootstrapIdentity: target.mode === "clone" || scenarioRequiresCore({ ...scenario, expected: workflow.expected }), ...(credentials ? { credentials } : {}) } : {}) });
+    topology = await startTopology({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, runsDirectory: topologyRunsDirectory, runId, seed, target: topologyTarget, ...(ownsIsolatedCore ? { bootstrapIdentity: target.mode === "clone" || scenarioRequiresCore({ ...scenario, expected: recordingWorkflow.expected }), ...(credentials ? { credentials } : {}) } : {}) });
     let existingControl: ExistingFluxIQControlClient | undefined;
     if (target.mode === "existing") {
       existingControl = new ExistingFluxIQControlClient(target.baseUrl);
@@ -149,11 +164,15 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
     const consoleWatch = consoleErrors = new ConsoleErrorWatch(context, isScenarioUrl);
     const extensionControl = extensionPage = await extensionControlPage(context);
     browserVersion = await browserVersionFromCdp(context, extensionPage);
-    if (workflow.variant) await armScenarioVariant(topology.scenarioOrigin, topology.allocation.controllerToken, scenario.id, workflow.variant);
+    // The existing and clone lanes replay a pre-existing Flow, so their variant
+    // is armed before the page opens. The Flow lane must not arm here: it
+    // records the workflow unarmed and arms after its reset, or the drift the
+    // variant introduces would break the recording it is about to build a Flow from.
+    if (workflow.variant && !options.flow) await armScenarioVariant(topology.scenarioOrigin, topology.allocation.controllerToken, scenario.id, workflow.variant);
     const page = scenarioPage = await context.newPage();
     await page.goto(`${topology.scenarioOrigin}${scenario.startPath}`);
     await page.bringToFront();
-    await assertExpectedFacts(workflow.expected.pageFacts ?? [], playwrightScenarioFactProbe(page));
+    await assertExpectedFacts(recordingWorkflow.expected.pageFacts ?? [], playwrightScenarioFactProbe(page));
     const paired = topology.control ? await pairExtension(extensionPage, topology) : undefined;
     if (paired) await activateScenarioTab(extensionPage, topology.scenarioOrigin);
     const screenshotAdapter = scenario.id === "sensitive-input" ? undefined : { capture: async () => ({ bytes: await (stepRunner?.activePage() ?? page).screenshot({ type: "png" }), mediaType: "image/png" as const, redactionVerified: true as const }) };
@@ -233,17 +252,18 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
         });
       }
       const runner = stepRunner = new ScenarioStepRunner({ context, page, origin: topology.scenarioOrigin, isScenarioUrl, uploadDirectory: path.join(topology.allocation.runRoot, "scenario-uploads") });
-      for (const step of workflow.recordingScript) {
+      for (const step of recordingWorkflow.recordingScript) {
         await stepCapture.trigger(event(runId, scenario.id, step.id, "step.start", `Start ${step.operation}`));
         const { extracted } = await runner.run(step);
         // Only an extract step without pagination is asserted here: this lane reads the current page and never follows `next`.
-        if (extracted && !step.pagination) assertExtraction(workflow.expected.extracted, step.id, extracted);
+        if (extracted && !step.pagination) assertExtraction(recordingWorkflow.expected.extracted, step.id, extracted);
         await stepCapture.trigger({ ...event(runId, scenario.id, step.id, step.operation === "checkpoint" ? "checkpoint" : "step.complete", `Complete ${step.operation}`), ...(extracted ? { details: { recordCount: extracted.length } } : {}) });
       }
       // Read while still recording: the extension's log is what it recorded.
-      recordedEvents = await assertRecordedEvents(() => readExtensionRecordingLog(message => runtimeMessage(extensionControl, message)), workflow.expected.recordingEvents ?? []);
+      recordedEvents = await assertRecordedEvents(() => readExtensionRecordingLog(message => runtimeMessage(extensionControl, message)), recordingWorkflow.expected.recordingEvents ?? []);
       scenarioPage = runner.activePage();
-      await assertFinalState(scenarioPage, scenario, workflow);
+      try { await assertFinalState(scenarioPage, scenario, recordingWorkflow); oracleVerdict = "passed"; }
+      catch (error) { oracleVerdict = "failed"; throw error; }
     }
     if (topology.control && (target.mode === "isolated" || target.mode === "persistent-isolated")) {
       await runtimeMessage(extensionPage, { type: "fluxiq.stopRecording" });
@@ -251,6 +271,44 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
       const outcome = await assertCoreRoundTrip(topology, paired?.sessionId, recordingBaseline);
       await capture.trigger({ ...event(runId, scenario.id, undefined, "gateway.action", "Core gateway retained the paired extension session"), details: { sessionCount: outcome.sessionCount } });
       await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "Core persisted the completed recording"), details: { recordingCount: outcome.recordingCount, projectId: topology.projectId, recordedEvents } });
+      if (options.flow) {
+        const control = topology.control;
+        const activeTopology = topology;
+        const recordingId = outcome.newRecordingIds[0];
+        if (!topology.projectId || !topology.authorizationPin) throw new RunnerFailure("environment.missing", "The Flow lane needs an authenticated isolated Core with an authorization PIN");
+        if (outcome.newRecordingIds.length !== 1 || !recordingId) throw new RunnerFailure("recording.persistence", `The Flow lane builds a Flow from exactly the recording this run produced, and observed ${outcome.newRecordingIds.length} new recordings`);
+        await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.dispatch", "Build a Flow from the run's own recording and run it"), details: { variantId: workflow.variant?.id ?? null, declaredSecrets: declaredSecrets.map(secret => secret.id) } });
+        const lane = await runFlowLane({
+          control, projectId: topology.projectId, authorizationPin: topology.authorizationPin, recordingId,
+          scenario, workflow, facilityRunId: runId,
+          scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, secrets: declaredSecrets,
+          armVariant: async () => {
+            if (workflow.variant) await armScenarioVariant(activeTopology.scenarioOrigin, activeTopology.allocation.controllerToken, scenario.id, workflow.variant);
+            // Arming and the reset before it are server-side, so the page loaded
+            // during recording still shows the unarmed DOM. Reload it, or a drift
+            // variant would be judged against a page that never drifted.
+            await page.reload();
+          },
+          recordEvidence: async (evidence) => {
+            actions.push(...evidence.run.actions.map(action => ({ actionType: action.actionType, startedAt: action.startedAt, ...(action.durationMs === undefined ? {} : { durationMs: action.durationMs }), status: action.status })));
+            await bundle.writeStructured("snapshots/flow-lane.json", {
+              proposalId: evidence.proposal.proposalId, mapperId: evidence.proposal.mapperId, candidateCount: evidence.proposal.candidateCount,
+              flowId: evidence.flowId, runtimeRunId: evidence.run.runId, status: evidence.run.status,
+              harnessActivations: evidence.run.harnessActivations, failure: evidence.run.failure, extractionCount: evidence.run.extracted.length,
+              actions: evidence.run.actions.map(action => ({ actionType: action.actionType, status: action.status, ...(action.failure ? { failure: action.failure } : {}) })),
+            });
+          },
+          checkFinalState: async () => {
+            try { scenarioPage = await findScenarioPageWithExpectedState(context!, page, activeTopology.scenarioOrigin, scenario, workflow); return true; }
+            catch { return false; }
+          },
+        });
+        flowObservation = lane.observation;
+        oracleVerdict = lane.observation.oracleVerdict;
+        automationFailure = lane.observation.automationFailureReported;
+        if (lane.observation.oracleVerdict === "failed") throw new RunnerFailure("runtime.behavior", "The generated Flow ran, but the fixture's expected final state did not hold afterwards");
+        await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The generated Flow ran and met the workflow's expectations"), details: { runtimeRunId: lane.run.runId, actionCount: lane.run.actions.length, harnessActivations: lane.run.harnessActivations } });
+      }
     }
     consoleWatch.assertOnlyAllowed(workflow.expected.allowedConsoleErrors);
     networkGuard.assertNoViolations();
@@ -316,7 +374,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
     await bundle.writeStructured("run.json", manifest);
     bundle.registerEvidencePolicy(evidence.capture);
     const finalized = await bundle.finalize({ verdict, metrics: { steps: workflow.recordingScript.length } });
-    return { runId, verdict, path: finalized.path, ...(failureCategory ? { failureCategory } : {}) };
+    const observation = flowObservation ?? (target.mode === "isolated" || target.mode === "persistent-isolated"
+      ? recordingLaneObservation({
+          oracleVerdict, ...probeOutcome(actions, automationFailure),
+          automationFailureExpected: workflow.expected.failure ?? null,
+          actions: actions.flatMap(action => action.durationMs === undefined ? [] : [{ actionType: action.actionType, durationMs: action.durationMs }]),
+        })
+      : undefined);
+    return { runId, verdict, path: finalized.path, ...(observation ? { observation } : {}), ...(failureCategory ? { failureCategory } : {}) };
   } finally {
     if (topology && !topologyStateRemoved) await removeRunOwnedTopologyState(topology).catch(() => undefined);
   }
@@ -386,7 +451,7 @@ async function assertCoreRoundTrip(topology: RunningTopology, expectedSessionId?
     const response = await topology.control!.listRecordings(topology.projectId!) as any;
     const ids = recordingIds(response);
     const newRecordingIds = recordingBaseline ? [...ids].filter(id => !recordingBaseline.has(id)) : [...ids];
-    if (newRecordingIds.length) return { sessionCount: sessions.length, recordingCount: ids.size, newRecordingCount: newRecordingIds.length };
+    if (newRecordingIds.length) return { sessionCount: sessions.length, recordingCount: ids.size, newRecordingCount: newRecordingIds.length, newRecordingIds };
     await new Promise(resolve => setTimeout(resolve, 100));
   }
   throw new RunnerFailure("recording.persistence", recordingBaseline ? "Core did not persist a new recording for the completed scenario run" : "Core did not persist a recording for the completed scenario");
@@ -417,14 +482,30 @@ function describeRecordingStartDiagnostic(diagnostic: Record<string, unknown> | 
 /** Final-state facts, then the primary workflow's playback-goal success facts. */
 async function assertFinalState(page: Page, scenario: WebScenario, workflow: ResolvedScenarioWorkflow) { const probe = playwrightScenarioFactProbe(page); await assertExpectedFacts(workflow.expected.finalState ?? [], probe); if (workflow.workflowId === undefined) await assertExpectedFacts(scenario.playbackGoal?.successFacts ?? [], probe); }
 async function findScenarioPageWithExpectedState(context: BrowserContext, fallback: Page, origin: string, scenario: WebScenario, workflow: ResolvedScenarioWorkflow): Promise<Page> { for (const candidate of context.pages().filter(item => !item.isClosed() && item.url().startsWith(`${origin}/`)).reverse()) { try { await assertFinalState(candidate, scenario, workflow); return candidate; } catch {} } await assertFinalState(fallback, scenario, workflow); return fallback; }
+/** The same workflow with no variant applied: what the Flow lane records. */
+function unarmedWorkflow(scenario: WebScenario, options: RunScenarioOptions): ResolvedScenarioWorkflow {
+  try { return resolveScenarioWorkflow(scenario, { ...(options.workflowId === undefined ? {} : { workflowId: options.workflowId }) }); }
+  catch (cause) { throw new RunnerFailure("fixture.invalid", cause instanceof Error ? cause.message : String(cause), { cause }); }
+}
 function resolveWorkflow(scenario: WebScenario, options: RunScenarioOptions, target: FluxIQTargetConfiguration): ResolvedScenarioWorkflow {
   let workflow: ResolvedScenarioWorkflow;
   try { workflow = resolveScenarioWorkflow(scenario, { ...(options.workflowId === undefined ? {} : { workflowId: options.workflowId }), ...(options.variantId === undefined ? {} : { variantId: options.variantId }) }); }
   catch (cause) { throw new RunnerFailure("fixture.invalid", cause instanceof Error ? cause.message : String(cause), { cause }); }
-  if (workflow.variant && target.mode !== "existing" && target.mode !== "clone") throw new RunnerFailure("fixture.invalid", "A variant is armed only before a Flow run; the recording lane always records the workflow unarmed");
+  if (workflow.variant && !options.flow && target.mode !== "existing" && target.mode !== "clone") throw new RunnerFailure("fixture.invalid", "A variant is armed only before a Flow run; the recording lane always records the workflow unarmed");
   return workflow;
 }
 function probeTiming(actionType: string, startedAt: number, result: any): RunActionTiming { return { actionType, startedAt: new Date(startedAt).toISOString(), durationMs: Math.max(0, Date.now() - startedAt), status: runActionStatus(result?.status) }; }
+/**
+ * What FluxIQ reported, from the actions it executed. No action, or a lane
+ * that could not observe the failure, leaves the verdict unknown rather than
+ * passing: a run that reported nothing has not reported success.
+ */
+function probeOutcome(actions: readonly RunActionTiming[], automationFailure: RunAutomationFailure | null | undefined): Pick<RunLaneObservation, "reportedVerdict" | "automationFailureReported"> {
+  if (!actions.length || automationFailure === undefined) return { reportedVerdict: null, automationFailureReported: null };
+  if (automationFailure) return { reportedVerdict: "failed", automationFailureReported: { category: automationFailure.category, ...(automationFailure.code === undefined ? {} : { code: automationFailure.code }) } };
+  if (actions.every(action => action.status === "succeeded")) return { reportedVerdict: "passed", automationFailureReported: null };
+  return { reportedVerdict: "failed", automationFailureReported: { category: "ambiguous_or_unknown" } };
+}
 function event(runId: string, scenarioId: string, stepId: string | undefined, trigger: "step.start" | "step.complete" | "gateway.action" | "runtime.dispatch" | "runtime.settle" | "checkpoint" | "error" | "final", summary: string) { return { trigger, summary, correlation: { runId, scenarioId, ...(stepId ? { stepId } : {}), correlationId: createCorrelationId() } }; }
 
 async function copyProcessLogs(bundle: EvidenceBundle, logsDir: string) { try { for (const name of await readdir(logsDir)) if (name.endsWith(".log")) await bundle.writeText(`logs/${name}`, await readFile(path.join(logsDir, name), "utf8")); } catch {} }

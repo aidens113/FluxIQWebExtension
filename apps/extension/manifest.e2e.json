@@ -15,6 +15,7 @@
   },
   "permissions": [
     "activeTab",
+    "downloads",
     "scripting",
     "storage",
     "tabs",
@@ -26,6 +27,18 @@
     "http://localhost/*"
   ],
   "content_scripts": [
+    {
+      "matches": [
+        "http://127.0.0.1/*",
+        "http://localhost/*"
+      ],
+      "js": [
+        "page-world/index.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN"
+    },
     {
       "matches": [
         "http://127.0.0.1/*",

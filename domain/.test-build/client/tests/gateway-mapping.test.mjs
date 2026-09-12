@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
 
 // src/actions/types.ts
+var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
+var WEB_AUTOMATION_UPLOAD_MAX_FILE_BYTES = 1048576;
+var WEB_AUTOMATION_UPLOAD_MAX_TOTAL_BYTES = 4194304;
 var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.navigate",
   "web.dom.click",
@@ -79,7 +82,10 @@ var elementFingerprintSchema = {
     role: { type: "string", label: "ARIA role" },
     name: { type: "string", label: "Accessible name" },
     href: { type: "string", label: "Link URL" },
-    attributes: { type: "object", label: "Attributes" }
+    attributes: { type: "object", label: "Attributes" },
+    testId: { type: "string", label: "Test id" },
+    accessibleName: { type: "string", label: "Accessible name" },
+    label: { type: "string", label: "Label" }
   }
 };
 var visualTargetSchema = {
@@ -108,12 +114,145 @@ var selectorSchema = {
     timeoutMs: { type: "integer", label: "Timeout in ms" }
   }
 };
+var waitSchema = {
+  type: "object",
+  label: "Wait condition",
+  properties: {
+    condition: { type: "string", label: "Condition", enum: ["present", "visible", "enabled", "absent", "url", "stable"] },
+    url: { type: "string", label: "URL" },
+    stableForMs: { type: "integer", label: "Stable for, in ms" }
+  }
+};
+var keyModifiersSchema = {
+  type: "object",
+  label: "Modifier keys",
+  properties: {
+    alt: { type: "boolean", label: "Alt" },
+    ctrl: { type: "boolean", label: "Control" },
+    meta: { type: "boolean", label: "Meta" },
+    shift: { type: "boolean", label: "Shift" }
+  }
+};
+var optionSelectorSchema = {
+  type: "object",
+  label: "Option",
+  required: ["by"],
+  properties: {
+    by: { type: "string", label: "Match by", enum: ["value", "label", "index"] },
+    value: { type: "string", label: "Option value" },
+    label: { type: "string", label: "Option label" },
+    index: { type: "integer", label: "Option index" }
+  }
+};
+var scrollRequestSchema = {
+  type: "object",
+  label: "Scroll",
+  required: ["mode"],
+  properties: {
+    mode: { type: "string", label: "Mode", enum: ["by", "toElement", "untilStable"] },
+    x: { type: "number", label: "X delta" },
+    y: { type: "number", label: "Y delta" },
+    maxScrolls: { type: "integer", label: "Maximum scrolls" }
+  }
+};
+var waitForSelectorSchema = {
+  type: "object",
+  required: ["selector"],
+  properties: {
+    ...elementProperties,
+    timeoutMs: { type: "integer", label: "Timeout in ms" },
+    wait: waitSchema
+  }
+};
+var assertSchema = {
+  type: "object",
+  label: "Assertion",
+  required: ["kind"],
+  properties: {
+    kind: { type: "string", label: "Condition", enum: ["exists", "absent", "text", "url", "visible", "enabled"] },
+    expected: { type: "string", label: "Expected" },
+    timeoutMs: { type: "integer", label: "Timeout in ms" }
+  }
+};
+var extractListSchema = {
+  type: "object",
+  label: "List extraction",
+  required: ["item", "fields"],
+  properties: {
+    item: { type: "string", label: "Item selector" },
+    fields: { type: "object", label: "Field map" },
+    paginate: {
+      type: "object",
+      label: "Pagination",
+      required: ["next", "maxPages"],
+      properties: {
+        next: { type: "string", label: "Next control" },
+        maxPages: { type: "integer", label: "Maximum pages", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES }
+      }
+    },
+    maxItems: { type: "integer", label: "Maximum items", minimum: 1 }
+  }
+};
+var uploadSchema = {
+  type: "object",
+  label: "Files",
+  required: ["files"],
+  properties: {
+    files: {
+      type: "array",
+      label: "Files",
+      minItems: 1,
+      items: {
+        type: "object",
+        required: ["name", "mimeType", "contentBase64"],
+        properties: {
+          name: { type: "string", label: "File name" },
+          mimeType: { type: "string", label: "MIME type" },
+          contentBase64: { type: "string", label: "Base64 content" }
+        }
+      }
+    }
+  }
+};
+var dialogSchema = {
+  type: "object",
+  label: "Dialog",
+  required: ["response"],
+  properties: {
+    response: { type: "string", label: "Response", enum: ["accept", "dismiss"] },
+    promptText: { type: "string", label: "Prompt text" }
+  }
+};
+var tabSchema = {
+  type: "object",
+  label: "Tab",
+  required: ["operation"],
+  properties: {
+    operation: { type: "string", label: "Operation", enum: ["open", "switch", "close"] },
+    url: { type: "string", label: "URL" },
+    active: { type: "boolean", label: "Activate" },
+    tabId: { type: "integer", label: "Tab id" },
+    urlPattern: { type: "string", label: "URL contains" }
+  }
+};
+var downloadSchema = {
+  type: "object",
+  label: "Download",
+  properties: {
+    filename: { type: "string", label: "File name" },
+    timeoutMs: { type: "integer", label: "Timeout in ms" }
+  }
+};
 var webAutomationActionDefinitions = [
   {
     actionType: "web.browser.navigate",
     label: "Navigate",
     description: "Navigate a browser tab to a URL.",
-    parameterSchema: { type: "object", required: ["url"], properties: { url: { type: "string", label: "URL" } } }
+    parameterSchema: {
+      type: "object",
+      required: ["url"],
+      properties: { url: { type: "string", label: "URL" }, newTab: { type: "boolean", label: "Open in a new tab" } }
+    }
   },
   { actionType: "web.dom.click", label: "Click", description: "Click a DOM element.", parameterSchema: selectorSchema },
   {
@@ -126,27 +265,39 @@ var webAutomationActionDefinitions = [
   {
     actionType: "web.dom.select",
     label: "Select Option",
-    description: "Set a select element value.",
-    parameterSchema: { type: "object", required: ["selector"], properties: { ...elementProperties, value: { type: "string" } } }
+    description: "Choose an option of a select element by value, label, or index.",
+    parameterSchema: {
+      type: "object",
+      required: ["selector"],
+      properties: { ...elementProperties, value: { type: "string" }, option: optionSelectorSchema, timeoutMs: { type: "integer", label: "Timeout in ms" } }
+    }
   },
   {
     actionType: "web.dom.scroll",
     label: "Scroll",
-    description: "Scroll the page or targeted context.",
-    parameterSchema: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, smooth: { type: "boolean" } } }
+    description: "Scroll by a delta, to an element, or until the page stops growing.",
+    parameterSchema: {
+      type: "object",
+      properties: { ...elementProperties, x: { type: "number" }, y: { type: "number" }, smooth: { type: "boolean" }, scroll: scrollRequestSchema }
+    }
   },
   {
     actionType: "web.dom.keypress",
     label: "Key Press",
-    description: "Dispatch a keyboard event.",
-    parameterSchema: { type: "object", properties: { ...elementProperties, key: { type: "string" }, text: { type: "string" } } }
+    description: "Dispatch a keyboard event, with modifier keys.",
+    parameterSchema: { type: "object", properties: { ...elementProperties, key: { type: "string" }, text: { type: "string" }, modifiers: keyModifiersSchema } }
   },
-  { actionType: "web.dom.wait_for_selector", label: "Wait For Selector", description: "Wait until an element exists.", parameterSchema: selectorSchema },
+  {
+    actionType: "web.dom.wait_for_selector",
+    label: "Wait For Selector",
+    description: "Wait until an element is present, visible, enabled, or absent.",
+    parameterSchema: waitForSelectorSchema
+  },
   {
     actionType: "web.dom.wait_for_text",
     label: "Wait For Text",
-    description: "Wait until page text appears.",
-    parameterSchema: { type: "object", required: ["text"], properties: { text: { type: "string" }, timeoutMs: { type: "integer" } } }
+    description: "Wait until page text appears or the page settles.",
+    parameterSchema: { type: "object", required: ["text"], properties: { text: { type: "string" }, timeoutMs: { type: "integer" }, wait: waitSchema } }
   },
   { actionType: "web.dom.extract", label: "Extract", description: "Extract text, value, or attributes from an element.", parameterSchema: selectorSchema },
   {
@@ -155,88 +306,54 @@ var webAutomationActionDefinitions = [
     description: "Capture a structured DOM snapshot.",
     parameterSchema: { type: "object", properties: {} }
   },
-  // The seven actions added in Week 1 (decision D6). Every action type must
-  // have a definition here: the manifest outputs, the output nodes, and the
-  // registered domain outputs all derive from this table, and
-  // `createWebAutomationDomainIo` throws for a listed output with no
-  // definition. These are the minimum that keeps the registry total;
-  // `w2-domain-vocabulary` owns their final parameter shapes, node parameters,
-  // payload mapping, and inputs.
+  // The seven actions added in Week 1 (decision D6). Each parameter is named
+  // and shaped as the field of `WebAutomationActionCommand` it becomes, so a
+  // Flow's parameters reach the verb that runs them without being reshaped.
   {
     actionType: "web.dom.check",
     label: "Set Checked",
-    description: "Set a checkbox or radio to a state.",
-    parameterSchema: { type: "object", required: ["selector"], properties: { ...elementProperties, checked: { type: "boolean", label: "Checked" } } }
+    description: "Set a checkbox or radio to a checked state.",
+    parameterSchema: {
+      type: "object",
+      required: ["selector"],
+      properties: { ...elementProperties, checked: { type: "boolean", label: "Checked" }, timeoutMs: { type: "integer", label: "Timeout in ms" } }
+    }
   },
   {
     actionType: "web.dom.assert",
     label: "Assert",
-    description: "Assert a condition about the page and fail when it does not hold.",
-    parameterSchema: {
-      type: "object",
-      required: ["kind"],
-      properties: {
-        ...elementProperties,
-        kind: { type: "string", label: "Condition" },
-        expected: { type: "string", label: "Expected" },
-        timeoutMs: { type: "integer", label: "Timeout in ms" }
-      }
-    }
+    description: "Verify a condition about the page and fail when it does not hold.",
+    parameterSchema: { type: "object", required: ["assert"], properties: { ...elementProperties, assert: assertSchema } }
   },
   {
     actionType: "web.dom.extract_list",
     label: "Extract List",
     description: "Extract a field map from every item of a repeating structure, following pagination.",
-    parameterSchema: {
-      type: "object",
-      required: ["item"],
-      properties: {
-        item: { type: "string", label: "Item selector" },
-        fields: { type: "object", label: "Field map" },
-        paginate: { type: "object", label: "Pagination" },
-        maxItems: { type: "integer", label: "Maximum items" }
-      }
-    }
+    parameterSchema: { type: "object", required: ["extractList"], properties: { extractList: extractListSchema } }
   },
   {
     actionType: "web.dom.upload",
     label: "Upload Files",
     description: "Set the files of a file input.",
-    parameterSchema: { type: "object", required: ["selector"], properties: { ...elementProperties, files: { type: "array", label: "Files" } } }
+    parameterSchema: { type: "object", required: ["selector", "upload"], properties: { ...elementProperties, upload: uploadSchema } }
   },
   {
     actionType: "web.dom.dialog",
     label: "Answer Dialog",
     description: "Arm the answer to the next native alert, confirm, or prompt.",
-    parameterSchema: {
-      type: "object",
-      required: ["response"],
-      properties: { response: { type: "string", label: "Response" }, promptText: { type: "string", label: "Prompt text" } }
-    }
+    parameterSchema: { type: "object", required: ["dialog"], properties: { dialog: dialogSchema } }
   },
   {
     actionType: "web.browser.tab",
     label: "Browser Tab",
     description: "Open, switch to, or close a browser tab.",
-    parameterSchema: {
-      type: "object",
-      required: ["operation"],
-      properties: {
-        operation: { type: "string", label: "Operation" },
-        url: { type: "string", label: "URL" },
-        tabId: { type: "integer", label: "Tab id" },
-        urlPattern: { type: "string", label: "URL contains" }
-      }
-    }
+    parameterSchema: { type: "object", required: ["tab"], properties: { tab: tabSchema } }
   },
   {
     actionType: "web.browser.download",
     label: "Await Download",
     description: "Wait for a browser download to complete.",
-    parameterSchema: {
-      type: "object",
-      properties: { filename: { type: "string", label: "File name" }, timeoutMs: { type: "integer", label: "Timeout in ms" } }
-    }
+    parameterSchema: { type: "object", properties: { download: downloadSchema } }
   }
 ];
 
@@ -328,20 +445,35 @@ function parametersForOutput(outputId) {
     { id: "visualTarget", label: "Visual Target", valueType: "object", ui: { control: "value" } },
     { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 1e4 }
   ];
-  if (outputId === "web.browser.navigate") return [{ id: "url", label: "URL", valueType: "string", required: true, ui: { control: "text", placeholder: "https://example.com" } }];
+  const structured = (id, label) => ({ id, label, valueType: "object", ui: { control: "value" } });
+  if (outputId === "web.browser.navigate") return [
+    { id: "url", label: "URL", valueType: "string", required: true, ui: { control: "text", placeholder: "https://example.com" } },
+    { id: "newTab", label: "New Tab", valueType: "boolean", defaultValue: false }
+  ];
   if (outputId === "web.dom.type") return [...selectorParameters, { id: "text", label: "Text", valueType: "string", defaultValue: "", ui: { control: "textarea" } }];
-  if (outputId === "web.dom.select") return [...selectorParameters, { id: "value", label: "Value", valueType: "string", defaultValue: "", ui: { control: "text" } }];
-  if (outputId === "web.dom.keypress") return [...selectorParameters, { id: "key", label: "Key", valueType: "string", defaultValue: "", ui: { control: "text" } }];
+  if (outputId === "web.dom.select") return [...selectorParameters, { id: "value", label: "Value", valueType: "string", defaultValue: "", ui: { control: "text" } }, structured("option", "Option")];
+  if (outputId === "web.dom.keypress") return [...selectorParameters, { id: "key", label: "Key", valueType: "string", defaultValue: "", ui: { control: "text" } }, structured("modifiers", "Modifiers")];
   if (outputId === "web.dom.scroll") return [
+    ...selectorParameters,
     { id: "x", label: "X", valueType: "number", defaultValue: 0 },
     { id: "y", label: "Y", valueType: "number", defaultValue: 0 },
-    { id: "smooth", label: "Smooth", valueType: "boolean", defaultValue: false }
+    { id: "smooth", label: "Smooth", valueType: "boolean", defaultValue: false },
+    structured("scroll", "Scroll Mode")
   ];
+  if (outputId === "web.dom.wait_for_selector") return [...selectorParameters, structured("wait", "Condition")];
   if (outputId === "web.dom.wait_for_text") return [
     { id: "text", label: "Text", valueType: "string", required: true, ui: { control: "text" } },
-    { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 1e4 }
+    { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 1e4 },
+    structured("wait", "Condition")
   ];
   if (outputId === "web.dom.capture_snapshot") return [];
+  if (outputId === "web.dom.check") return [...selectorParameters, { id: "checked", label: "Checked", valueType: "boolean", defaultValue: true }];
+  if (outputId === "web.dom.assert") return [...selectorParameters, structured("assert", "Assertion")];
+  if (outputId === "web.dom.extract_list") return [structured("extractList", "List")];
+  if (outputId === "web.dom.upload") return [...selectorParameters, structured("upload", "Files")];
+  if (outputId === "web.dom.dialog") return [structured("dialog", "Dialog")];
+  if (outputId === "web.browser.tab") return [structured("tab", "Tab")];
+  if (outputId === "web.browser.download") return [structured("download", "Download")];
   return selectorParameters;
 }
 function iconForOutput(outputId) {
@@ -350,6 +482,13 @@ function iconForOutput(outputId) {
   if (outputId === "web.dom.type") return "text-cursor-input";
   if (outputId === "web.dom.extract") return "scan-search";
   if (outputId === "web.dom.capture_snapshot") return "camera";
+  if (outputId === "web.dom.check") return "square-check";
+  if (outputId === "web.dom.assert") return "circle-check";
+  if (outputId === "web.dom.extract_list") return "table";
+  if (outputId === "web.dom.upload") return "upload";
+  if (outputId === "web.dom.dialog") return "message-square";
+  if (outputId === "web.browser.tab") return "app-window";
+  if (outputId === "web.browser.download") return "download";
   return "square-dot";
 }
 
@@ -362,6 +501,7 @@ var WEB_AUTOMATION_INPUT_IDS = {
   textEntered: "web.user.text_entered",
   fieldCleared: "web.user.field_cleared",
   optionSelected: "web.user.option_selected",
+  checkboxToggled: "web.user.checkbox_toggled",
   keyPressed: "web.user.key_pressed",
   pageScrolled: "web.user.page_scrolled"
 };
@@ -393,6 +533,7 @@ var actionInputDefinitions = [
   [WEB_AUTOMATION_INPUT_IDS.textEntered, "Text entered", "web.dom.type"],
   [WEB_AUTOMATION_INPUT_IDS.fieldCleared, "Field cleared", "web.dom.clear"],
   [WEB_AUTOMATION_INPUT_IDS.optionSelected, "Option selected", "web.dom.select"],
+  [WEB_AUTOMATION_INPUT_IDS.checkboxToggled, "Checkbox toggled", "web.dom.check"],
   [WEB_AUTOMATION_INPUT_IDS.keyPressed, "Key pressed", "web.dom.keypress"],
   [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"]
 ];
@@ -505,6 +646,187 @@ function compactJsonObject(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
 
+// src/client/gateway-action-parameters.ts
+function webAutomationLiftedActionParameters(parameters) {
+  return {
+    // Which tab and frame the action runs in, as opposed to the tab a
+    // `web.browser.tab` operation acts on, which travels inside `tab`.
+    tabId: nonNegativeInteger(parameters.browserTabId ?? parameters.tabId),
+    frameId: nonNegativeInteger(parameters.browserFrameId ?? parameters.frameId),
+    newTab: booleanValue(parameters.newTab),
+    option: optionSelectorValue(parameters.option),
+    scroll: scrollRequestValue(parameters.scroll),
+    wait: waitRequestValue(parameters.wait),
+    modifiers: keyModifiersValue(parameters.modifiers),
+    checked: booleanValue(parameters.checked),
+    assert: assertRequestValue(parameters.assert),
+    extractList: extractListRequestValue(parameters.extractList),
+    upload: uploadRequestValue(parameters.upload),
+    dialog: dialogRequestValue(parameters.dialog),
+    tab: tabRequestValue(parameters.tab),
+    download: downloadRequestValue(parameters.download)
+  };
+}
+function optionSelectorValue(value) {
+  const request = jsonObject(value);
+  if (!request) return void 0;
+  if (request.by === "value") {
+    const optionValue = stringValue2(request.value);
+    return optionValue === void 0 ? void 0 : { by: "value", value: optionValue };
+  }
+  if (request.by === "label") {
+    const label = stringValue2(request.label);
+    return label === void 0 ? void 0 : { by: "label", label };
+  }
+  const index = nonNegativeInteger(request.index);
+  return request.by === "index" && index !== void 0 ? { by: "index", index } : void 0;
+}
+function scrollRequestValue(value) {
+  const request = jsonObject(value);
+  const mode = memberOf(request?.mode, ["by", "toElement", "untilStable"]);
+  if (!request || mode === void 0) return void 0;
+  if (mode === "toElement") return { mode };
+  const y = finiteNumber(request.y);
+  if (mode === "by") {
+    const x = finiteNumber(request.x);
+    return { mode, ...x !== void 0 ? { x } : {}, ...y !== void 0 ? { y } : {} };
+  }
+  const maxScrolls = positiveInteger(request.maxScrolls);
+  return maxScrolls === void 0 ? void 0 : { mode, maxScrolls, ...y !== void 0 ? { y } : {} };
+}
+function waitRequestValue(value) {
+  const request = jsonObject(value);
+  const condition = memberOf(request?.condition, WAIT_CONDITIONS);
+  if (!request || condition === void 0) return void 0;
+  const url = nonEmptyString(request.url);
+  const stableForMs = positiveInteger(request.stableForMs);
+  return { condition, ...url !== void 0 ? { url } : {}, ...stableForMs !== void 0 ? { stableForMs } : {} };
+}
+function keyModifiersValue(value) {
+  const request = jsonObject(value);
+  if (!request) return void 0;
+  const modifiers = {
+    ...typeof request.alt === "boolean" ? { alt: request.alt } : {},
+    ...typeof request.ctrl === "boolean" ? { ctrl: request.ctrl } : {},
+    ...typeof request.meta === "boolean" ? { meta: request.meta } : {},
+    ...typeof request.shift === "boolean" ? { shift: request.shift } : {}
+  };
+  return Object.keys(modifiers).length > 0 ? modifiers : void 0;
+}
+function assertRequestValue(value) {
+  const request = jsonObject(value);
+  const kind = memberOf(request?.kind, ASSERT_KINDS);
+  if (!request || kind === void 0) return void 0;
+  const expected = stringValue2(request.expected);
+  const timeoutMs = positiveInteger(request.timeoutMs);
+  return { kind, ...expected !== void 0 ? { expected } : {}, ...timeoutMs !== void 0 ? { timeoutMs } : {} };
+}
+function extractListRequestValue(value) {
+  const request = jsonObject(value);
+  const item = nonEmptyString(request?.item);
+  const fields = fieldMapValue(request?.fields);
+  if (!request || item === void 0 || fields === void 0) return void 0;
+  const paginate = request.paginate === void 0 ? void 0 : paginationValue(request.paginate);
+  if (request.paginate !== void 0 && paginate === void 0) return void 0;
+  const maxItems = positiveInteger(request.maxItems);
+  return { item, fields, ...paginate !== void 0 ? { paginate } : {}, ...maxItems !== void 0 ? { maxItems } : {} };
+}
+function fieldMapValue(value) {
+  const fields = jsonObject(value);
+  if (!fields) return void 0;
+  const entries = Object.entries(fields);
+  const named = entries.filter(([name, selector]) => name.length > 0 && nonEmptyString(selector) !== void 0);
+  return named.length > 0 && named.length === entries.length ? Object.fromEntries(named) : void 0;
+}
+function paginationValue(value) {
+  const paginate = jsonObject(value);
+  const next = nonEmptyString(paginate?.next);
+  const maxPages = positiveInteger(paginate?.maxPages);
+  if (next === void 0 || maxPages === void 0) return void 0;
+  return { next, maxPages: Math.min(maxPages, WEB_AUTOMATION_EXTRACT_MAX_PAGES) };
+}
+function uploadRequestValue(value) {
+  const request = jsonObject(value);
+  const supplied = Array.isArray(request?.files) ? request.files : void 0;
+  if (supplied === void 0 || supplied.length === 0) return void 0;
+  const files = [];
+  let totalBytes = 0;
+  for (const entry of supplied) {
+    const file = jsonObject(entry);
+    const name = nonEmptyString(file?.name);
+    const mimeType = nonEmptyString(file?.mimeType);
+    const contentBase64 = typeof file?.contentBase64 === "string" ? file.contentBase64 : void 0;
+    if (name === void 0 || mimeType === void 0 || contentBase64 === void 0) return void 0;
+    const bytes = base64ByteLength(contentBase64);
+    if (bytes === void 0 || bytes > WEB_AUTOMATION_UPLOAD_MAX_FILE_BYTES) return void 0;
+    totalBytes += bytes;
+    if (totalBytes > WEB_AUTOMATION_UPLOAD_MAX_TOTAL_BYTES) return void 0;
+    files.push({ name, mimeType, contentBase64 });
+  }
+  return { files };
+}
+function base64ByteLength(content) {
+  if (content.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(content)) return void 0;
+  const padding = content.endsWith("==") ? 2 : content.endsWith("=") ? 1 : 0;
+  return content.length / 4 * 3 - padding;
+}
+function dialogRequestValue(value) {
+  const request = jsonObject(value);
+  const response = memberOf(request?.response, ["accept", "dismiss"]);
+  if (!request || response === void 0) return void 0;
+  const promptText = response === "accept" ? stringValue2(request.promptText) : void 0;
+  return { response, ...promptText !== void 0 ? { promptText } : {} };
+}
+function tabRequestValue(value) {
+  const request = jsonObject(value);
+  const operation = memberOf(request?.operation, ["open", "switch", "close"]);
+  if (!request || operation === void 0) return void 0;
+  const tabId = nonNegativeInteger(request.tabId);
+  if (operation === "open") {
+    const url = nonEmptyString(request.url);
+    const active = booleanValue(request.active);
+    return { operation, ...url !== void 0 ? { url } : {}, ...active !== void 0 ? { active } : {} };
+  }
+  if (operation === "switch") {
+    const urlPattern = nonEmptyString(request.urlPattern);
+    return { operation, ...tabId !== void 0 ? { tabId } : {}, ...urlPattern !== void 0 ? { urlPattern } : {} };
+  }
+  return { operation, ...tabId !== void 0 ? { tabId } : {} };
+}
+function downloadRequestValue(value) {
+  const request = jsonObject(value);
+  if (!request) return void 0;
+  const filename = nonEmptyString(request.filename);
+  const timeoutMs = positiveInteger(request.timeoutMs);
+  return { ...filename !== void 0 ? { filename } : {}, ...timeoutMs !== void 0 ? { timeoutMs } : {} };
+}
+var WAIT_CONDITIONS = ["present", "visible", "enabled", "absent", "url", "stable"];
+var ASSERT_KINDS = ["exists", "absent", "text", "url", "visible", "enabled"];
+function booleanValue(value) {
+  return typeof value === "boolean" ? value : void 0;
+}
+function finiteNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+function nonNegativeInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
+}
+function positiveInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : void 0;
+}
+function stringValue2(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function nonEmptyString(value) {
+  return typeof value === "string" && value.length > 0 ? value : void 0;
+}
+function memberOf(value, members) {
+  return typeof value === "string" && members.includes(value) ? value : void 0;
+}
+function jsonObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+
 // src/client/gateway-mapping.ts
 function createWebAutomationRecordingEvent(payload, input = {}) {
   const eventType = webAutomationEventTypeForClientKind(payload.kind);
@@ -549,14 +871,15 @@ function webAutomationActionFromGatewayCommand(command) {
   return compactJsonObject2({
     commandId: command.commandId,
     actionType: normalized.actionType,
-    selector: stringValue2(target.selector) ?? stringValue2(parameters.selector),
-    text: stringValue2(parameters.text),
-    value: stringValue2(parameters.value),
-    key: stringValue2(parameters.key),
-    url: stringValue2(parameters.url),
+    selector: stringValue3(target.selector) ?? stringValue3(parameters.selector),
+    text: stringValue3(parameters.text),
+    value: stringValue3(parameters.value),
+    key: stringValue3(parameters.key),
+    url: stringValue3(parameters.url),
     timeoutMs: numberValue2(command.timeoutMs ?? parameters.timeoutMs),
     coordinates: pointValue(target.coordinates ?? parameters.coordinates),
-    visualTarget: jsonObject(target.visualTarget ?? parameters.visualTarget),
+    visualTarget: jsonObject2(target.visualTarget ?? parameters.visualTarget),
+    ...webAutomationLiftedActionParameters(parameters),
     options: parameters
   });
 }
@@ -577,7 +900,7 @@ var CANONICAL_ACTION_TYPES = new Set(WEB_AUTOMATION_ACTION_TYPES);
 var LEGACY_ACTION_TYPE_ALIASES = new Map(
   Object.entries(WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER).map(([canonical, legacy]) => [legacy, canonical])
 );
-function stringValue2(value) {
+function stringValue3(value) {
   return typeof value === "string" ? value : void 0;
 }
 function numberValue2(value) {
@@ -588,7 +911,7 @@ function pointValue(value) {
   const point = value;
   return typeof point.x === "number" && typeof point.y === "number" ? { x: point.x, y: point.y } : void 0;
 }
-function jsonObject(value) {
+function jsonObject2(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 function compactJsonObject2(value) {

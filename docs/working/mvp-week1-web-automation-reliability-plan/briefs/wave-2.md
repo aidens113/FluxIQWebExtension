@@ -157,9 +157,13 @@ concurrency notes.
 ### Brief: w2-domain-status
 - Task: Phase 1.2 step 5. `domain/src/runtime/adapter.ts` stops flattening `timed_out` and
   `cancelled` to `failed` (the `ACTION_REJECTED` path stays);
-  `domain/src/io/gateway-output-dispatcher.ts` and
-  `domain/src/output-nodes/native-runtime.ts` promote the message from the payload when
-  there is no `error`. T1 tests for each status and the message fallback.
+  `domain/src/io/gateway-output-dispatcher.ts` promotes the message from the payload
+  when there is no `error`. Corrected 2026-09-11 after the brief was executed: this
+  originally also named `domain/src/output-nodes/native-runtime.ts`, which cannot
+  promote a message, because Core runs a node implementation before dispatching its
+  effects and that context carries no dispatch result. The plan itself says so, in
+  Phase 1.2 step 5: no node-implementation change is needed for routing. The brief
+  contradicted its own plan. T1 tests for each status and the message fallback.
 - Owns (may edit): those three files and new tests beside them.
 - Must not touch: other domain files, `apps/`.
 - Definition of done: domain `check` and `test` (label `w2-domain-status`).

@@ -8,10 +8,14 @@
 // post-condition is still to be written. A wait that runs out of time now
 // reports `timed_out` rather than `failed`.
 //
-// The remaining rows pin today's behaviour, including what the action audit
-// classes as unreliable -- a dispatched key has no default action, and a select
-// to a value with no option still reports success -- so the Wave 2 verb workers
-// must change these assertions when they change that behaviour.
+// The rows below pin the behaviour Wave 2 established, not the audit baseline
+// it replaced: type enters text one character at a time and validates that the
+// field kept it, an untrusted Enter performs the default action a trusted one
+// would so the form submits, and a select asked for an option it does not have
+// changes nothing and reports `output_not_observed`. Each verb's own spec --
+// keyboard.spec.ts, select.spec.ts, waits.spec.ts and the rest -- covers it in
+// depth; this file keeps one row per action type, so a verb that breaks
+// outright is caught here.
 
 import type { Page } from "@playwright/test";
 import { expect, test } from "../index.js";
@@ -72,18 +76,19 @@ test("capture_snapshot: succeeds with the snapshot and changes nothing", async (
   await expect(page.locator(RESULT)).toHaveText("Not submitted");
 });
 
-test("type: sets the field's value and dispatches untrusted input and change", async ({ openHarness, page }) => {
+test("type: enters the text per character and validates that the field kept it", async ({ openHarness, page }) => {
   const harness = await openHarness("basic-form");
   const seen = await watchEvents(page, NAME, ["input", "change"]);
   const reply = await harness.runAction({ commandId: "type", actionType: "web.dom.type", selector: NAME, text: "Ada" });
   expect(reply).toMatchObject({
     status: "succeeded",
-    validation: { status: "none", reason: "not-yet-validated" },
+    validation: { status: "passed", expected: 'the field holds "Ada"', actual: 'the field holds "Ada"' },
     message: "Text entered.",
     element: { selector: NAME }
   });
   await expect(page.locator(NAME)).toHaveValue("Ada");
-  expect(await seen()).toEqual(["input:untrusted", "change:untrusted"]);
+  // One input per character since w2-keyboard-input, so a widget that filters per keystroke sees each one.
+  expect(await seen()).toEqual(["input:untrusted", "input:untrusted", "input:untrusted", "change:untrusted"]);
 });
 
 test("clear: empties the field", async ({ openHarness, page }) => {
@@ -101,11 +106,16 @@ test("select: chooses the option and reports it on the element", async ({ openHa
   await expect(page.locator(PLAN)).toHaveValue("team");
 });
 
-test("select: a value with no option still reports success and leaves nothing selected", async ({ openHarness, page }) => {
+test("select: a value with no option changes nothing and reports output_not_observed", async ({ openHarness, page }) => {
   const harness = await openHarness("basic-form");
   const reply = await harness.runAction({ commandId: "select-missing", actionType: "web.dom.select", selector: PLAN, value: "platinum" });
-  expect(reply).toMatchObject({ status: "succeeded", message: "Option selected." });
-  await expect(page.locator(PLAN)).toHaveValue("");
+  expect(reply).toMatchObject({
+    status: "failed",
+    message: 'No option matched value "platinum".',
+    failure: { category: "output_not_observed" }
+  });
+  // The select keeps the option it started on, rather than being blanked.
+  await expect(page.locator(PLAN)).toHaveValue("starter");
 });
 
 test("click: submits the filled form, which the fixture records", async ({ openHarness, page }) => {
@@ -127,18 +137,21 @@ test("scroll: moves the window to the requested offset", async ({ openHarness, p
   expect(await page.evaluate(() => window.scrollY)).toBe(60);
 });
 
-test("keypress: dispatches an untrusted key with no default action, so Enter does not submit", async ({ openHarness, page }) => {
+test("keypress: an untrusted Enter performs the default action a trusted one would, so the form submits", async ({ openHarness, page }) => {
   const harness = await openHarness("basic-form");
   await page.locator(NAME).fill("Ada");
   const seen = await watchEvents(page, NAME, ["keydown", "keyup"]);
   const reply = await harness.runAction({ commandId: "keypress", actionType: "web.dom.keypress", selector: NAME, key: "Enter" });
-  expect(reply).toMatchObject({ status: "succeeded", message: "Key event dispatched.", element: { selector: NAME } });
+  expect(reply).toMatchObject({
+    status: "succeeded",
+    validation: { status: "passed", expected: 'Enter submits the form [data-testid="basic-form"]' },
+    message: "Key pressed.",
+    element: { selector: NAME }
+  });
+  // The events are still untrusted; w2-keyboard-input emulates the default action the browser withholds.
   expect(await seen()).toEqual(["keydown:Enter:untrusted", "keyup:Enter:untrusted"]);
-  await expect(page.locator(RESULT)).toHaveText("Not submitted");
-  expect((await harness.finalState()).state).toMatchObject({ submitted: false });
-  // The control: a real Enter in the same field does submit the form.
-  await page.locator(NAME).press("Enter");
   await expect(page.locator(RESULT)).toHaveText("Submitted");
+  expect((await harness.finalState()).state).toMatchObject({ submitted: true });
 });
 
 test("wait_for_selector: succeeds when a matching element appears", async ({ openHarness, page }) => {

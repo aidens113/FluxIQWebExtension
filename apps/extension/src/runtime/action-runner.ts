@@ -1,8 +1,23 @@
 import type { BrowserActionCommand, BrowserActionResult } from "../shared/protocol";
 import { sendToTab } from "../background/tabs";
-import { resolveAutomationTab, waitForTabReady } from "./automation-tab";
-import { runBrowserTabAction } from "./browser-tab";
+import {
+  navigationUnexpectedFailure,
+  workerActionFailedFailure,
+  workerActionResult,
+  workerBlockedFailure
+} from "./action-results";
+import {
+  currentAutomationTabId,
+  readTabUrl,
+  resolveAutomationTab,
+  setAutomationTab,
+  waitForTabReady
+} from "./automation-tab";
 import { runBrowserDownloadAction } from "./browser-download";
+import { runBrowserTabAction } from "./browser-tab";
+import { frameIdForAction, opensNewTab, tabIdForAction } from "./command-options";
+import { compareNavigatedUrl } from "./navigation-outcome";
+import { unsupportedAutomationPageReason } from "./unsupported-page";
 
 export type BrowserActionRunRequest = {
   action: BrowserActionCommand;
@@ -19,61 +34,131 @@ export type BrowserActionRunResult = {
 
 export async function runBrowserActionCommand(request: BrowserActionRunRequest): Promise<BrowserActionRunResult> {
   const action = request.action;
-  const isNavigation = action.actionType === "web.browser.navigate" && Boolean(action.url);
-  const tabRequest: Parameters<typeof resolveAutomationTab>[0] = { active: true };
-  if (isNavigation && action.url) {
-    tabRequest.forceNew = true;
-    tabRequest.initialUrl = action.url;
-  } else if (action.tabId !== undefined) {
-    tabRequest.requestedTabId = action.tabId;
-  } else if (request.activeTabId !== undefined) {
-    tabRequest.requestedTabId = request.activeTabId;
-  }
-  const tabId = await resolveAutomationTab(tabRequest);
-  const unsupportedReason = action.tabId === undefined || isNavigation ? unsupportedPageReasonForAction(action) : request.unsupportedPageReason;
-  if (unsupportedReason && isMutatingAction(action.actionType)) return withTarget(actionFailure(action, unsupportedReason), tabId, action.frameId);
-  if (isNavigation && action.url) {
-    const startedAt = Date.now();
-    await request.attachTabForRecording(tabId);
-    return withTarget({
-        commandId: action.commandId,
-        actionType: action.actionType,
-        status: "succeeded",
-        validation: { status: "none", reason: "not-yet-validated" },
-        message: "Navigation completed.",
-        url: action.url,
-        startedAt,
-        finishedAt: Date.now()
-      }, tabId, action.frameId);
-  }
-  // Tab and download act on the browser, not on a document, so they run here
-  // rather than being sent to a content script that could not perform them.
+
+  // Tab and download act on the browser, not on a document. They run before any
+  // tab is resolved -- so opening a tab does not first create an automation tab
+  // to open it from -- and the page guard, which is about the document an
+  // action needs, does not apply to them.
   if (action.actionType === "web.browser.tab") {
-    return withTarget(await runBrowserTabAction(action), tabId, action.frameId);
+    const result = await runBrowserTabAction(action);
+    const selected = currentAutomationTabId();
+    if (result.status === "succeeded" && selected !== undefined) await request.attachTabForRecording(selected);
+    return withTarget(result, selected, undefined);
   }
   if (action.actionType === "web.browser.download") {
-    return withTarget(await runBrowserDownloadAction(action), tabId, action.frameId);
+    return withTarget(await runBrowserDownloadAction(action), currentAutomationTabId(), undefined);
   }
+
+  const startedAt = Date.now();
+  const isNavigation = action.actionType === "web.browser.navigate" && Boolean(action.url);
+  const tabId = await resolveAutomationTab(tabRequestFor(action, request, isNavigation));
+  const frameId = frameIdForAction(action);
+
+  const unsupportedReason = await unsupportedPageReasonFor(action, request, tabId, isNavigation);
+  if (unsupportedReason !== undefined && isMutatingAction(action.actionType)) {
+    return withTarget(unsupportedPageFailure(action, startedAt, unsupportedReason), tabId, frameId);
+  }
+
+  if (isNavigation && action.url) {
+    setAutomationTab(tabId);
+    await request.attachTabForRecording(tabId);
+    // resolveAutomationTab has already waited for the tab to settle, so the URL
+    // read here is where the browser actually committed the navigation.
+    return withTarget(navigationResult(action, startedAt, action.url, await readTabUrl(tabId)), tabId, frameId);
+  }
+
   await waitForTabReady(tabId);
   await request.attachTabForRecording(tabId);
-  const frameId = action.frameId ?? 0;
+  const targetFrameId = frameId ?? 0;
   return withTarget(await sendToTab<BrowserActionResult>(tabId, {
     type: "executeAction",
     action,
-    topFrameOnly: action.frameId === undefined
-  }, frameId), tabId, frameId);
+    topFrameOnly: frameId === undefined
+  }, targetFrameId), tabId, targetFrameId);
 }
 
+/** The failed result for an action that threw before or while it ran. */
 export function browserActionFailure(action: BrowserActionCommand, message: string): BrowserActionResult {
-  return actionFailure(action, message);
+  const expected = "the action to run";
+  return workerActionResult(action, Date.now(), {
+    status: "failed",
+    message,
+    validation: { status: "failed", expected, actual: message },
+    failure: workerActionFailedFailure("web.action.failed", expected, message)
+  });
 }
 
-function unsupportedPageReasonForAction(action: BrowserActionCommand): string | undefined {
-  const url = action.actionType === "web.browser.navigate" ? action.url : undefined;
-  if (!url) return undefined;
-  if (/^(chrome|edge|brave|opera|vivaldi|about|moz-extension|chrome-extension):\/\//.test(url)) return "Browser and extension pages cannot be automated.";
-  if (/^https:\/\/chrome\.google\.com\/webstore/.test(url)) return "Browser web store pages cannot be automated.";
-  return undefined;
+/**
+ * Which tab the action runs in. A navigation reuses the automation tab unless
+ * it asked for a new one or named a tab of its own; before Phase 1.2 step 4 it
+ * always opened a new tab, abandoning the page the Flow had reached.
+ */
+function tabRequestFor(
+  action: BrowserActionCommand,
+  request: BrowserActionRunRequest,
+  isNavigation: boolean
+): Parameters<typeof resolveAutomationTab>[0] {
+  const tabRequest: Parameters<typeof resolveAutomationTab>[0] = { active: true };
+  const namedTabId = tabIdForAction(action);
+  if (isNavigation && action.url) {
+    tabRequest.initialUrl = action.url;
+    if (opensNewTab(action)) tabRequest.forceNew = true;
+    else if (namedTabId !== undefined) tabRequest.requestedTabId = namedTabId;
+    return tabRequest;
+  }
+  if (namedTabId !== undefined) tabRequest.requestedTabId = namedTabId;
+  else if (request.activeTabId !== undefined) tabRequest.requestedTabId = request.activeTabId;
+  return tabRequest;
+}
+
+/**
+ * A navigation is judged by where it is going; every other action by the page
+ * it would run on, read from the tab itself rather than from the connection's
+ * last observation, so a stale or missing observation cannot let an action
+ * through to a page that can never answer it.
+ */
+async function unsupportedPageReasonFor(
+  action: BrowserActionCommand,
+  request: BrowserActionRunRequest,
+  tabId: number,
+  isNavigation: boolean
+): Promise<string | undefined> {
+  if (isNavigation) return unsupportedAutomationPageReason(action.url);
+  return unsupportedAutomationPageReason(await readTabUrl(tabId)) ?? request.unsupportedPageReason;
+}
+
+function navigationResult(
+  action: BrowserActionCommand,
+  startedAt: number,
+  requested: string,
+  landed: string | undefined
+): BrowserActionResult {
+  const comparison = compareNavigatedUrl(requested, landed);
+  if (comparison.matched) {
+    return workerActionResult(action, startedAt, {
+      status: "succeeded",
+      message: "Navigation completed.",
+      validation: { status: "passed", expected: comparison.expected, actual: comparison.actual },
+      ...(landed !== undefined ? { url: landed } : {})
+    });
+  }
+  return workerActionResult(action, startedAt, {
+    status: "failed",
+    message: `Navigation landed on ${comparison.actual}, not ${comparison.expected}.`,
+    validation: { status: "failed", expected: comparison.expected, actual: comparison.actual },
+    failure: navigationUnexpectedFailure(comparison.expected, comparison.actual),
+    ...(landed !== undefined ? { url: landed } : {})
+  });
+}
+
+function unsupportedPageFailure(action: BrowserActionCommand, startedAt: number, reason: string): BrowserActionResult {
+  const expected = "a page the extension can automate";
+  return workerActionResult(action, startedAt, {
+    status: "failed",
+    message: reason,
+    validation: { status: "failed", expected, actual: reason },
+    failure: workerBlockedFailure("web.page.unsupported", { expected, actual: reason })
+  });
 }
 
 /** The actions that only observe or wait, which an unsupported page does not block. */
@@ -84,19 +169,6 @@ function isMutatingAction(actionType: string): boolean {
     actionType !== "web.dom.capture_snapshot" &&
     actionType !== "web.dom.wait_for_selector" &&
     actionType !== "web.dom.wait_for_text";
-}
-
-function actionFailure(action: BrowserActionCommand, message: string): BrowserActionResult {
-  const now = Date.now();
-  return {
-    commandId: action.commandId,
-    actionType: action.actionType,
-    status: "failed",
-    validation: { status: "none", reason: "not-yet-validated" },
-    message,
-    startedAt: now,
-    finishedAt: now
-  };
 }
 
 function withTarget(result: BrowserActionResult, tabId?: number, frameId?: number): BrowserActionRunResult {

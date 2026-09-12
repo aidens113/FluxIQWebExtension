@@ -42,6 +42,18 @@ export function createWebAutomationOutputNodeImplementationBundle(
   };
 }
 
+/**
+ * The node implementation runs *before* its output is dispatched: Core executes
+ * it, then dispatches the effects it returned and merges the dispatcher's
+ * status, message, and failure record over this result
+ * (`runtime/executor/node-execution.ts`, `dispatchAutomationStudioEffects`).
+ * It therefore cannot report the command's outcome, and must not pretend to —
+ * status fidelity is carried by `io/gateway-output-dispatcher.ts`, which gives
+ * Core the command's own `status`, `failure`, and promoted message, and by
+ * `runtime/adapter.ts` on the runtime path. What this file owes Core is one
+ * dispatch effect naming its own output, which `tests/native-runtime.test.ts`
+ * pins.
+ */
 function createOutputNodeImplementation(outputId: WebAutomationActionType): AutomationStudioNativeNodeImplementation {
   return (context): AutomationNodeExecutionResult => {
     const parameters = compactJsonObject(context.parameters);

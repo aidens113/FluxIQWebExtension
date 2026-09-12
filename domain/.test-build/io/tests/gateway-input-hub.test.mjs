@@ -23,6 +23,7 @@ var WEB_AUTOMATION_EVENTS = {
 };
 
 // src/actions/types.ts
+var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
 var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.navigate",
   "web.dom.click",
@@ -78,7 +79,10 @@ var elementFingerprintSchema = {
     role: { type: "string", label: "ARIA role" },
     name: { type: "string", label: "Accessible name" },
     href: { type: "string", label: "Link URL" },
-    attributes: { type: "object", label: "Attributes" }
+    attributes: { type: "object", label: "Attributes" },
+    testId: { type: "string", label: "Test id" },
+    accessibleName: { type: "string", label: "Accessible name" },
+    label: { type: "string", label: "Label" }
   }
 };
 var visualTargetSchema = {
@@ -107,12 +111,145 @@ var selectorSchema = {
     timeoutMs: { type: "integer", label: "Timeout in ms" }
   }
 };
+var waitSchema = {
+  type: "object",
+  label: "Wait condition",
+  properties: {
+    condition: { type: "string", label: "Condition", enum: ["present", "visible", "enabled", "absent", "url", "stable"] },
+    url: { type: "string", label: "URL" },
+    stableForMs: { type: "integer", label: "Stable for, in ms" }
+  }
+};
+var keyModifiersSchema = {
+  type: "object",
+  label: "Modifier keys",
+  properties: {
+    alt: { type: "boolean", label: "Alt" },
+    ctrl: { type: "boolean", label: "Control" },
+    meta: { type: "boolean", label: "Meta" },
+    shift: { type: "boolean", label: "Shift" }
+  }
+};
+var optionSelectorSchema = {
+  type: "object",
+  label: "Option",
+  required: ["by"],
+  properties: {
+    by: { type: "string", label: "Match by", enum: ["value", "label", "index"] },
+    value: { type: "string", label: "Option value" },
+    label: { type: "string", label: "Option label" },
+    index: { type: "integer", label: "Option index" }
+  }
+};
+var scrollRequestSchema = {
+  type: "object",
+  label: "Scroll",
+  required: ["mode"],
+  properties: {
+    mode: { type: "string", label: "Mode", enum: ["by", "toElement", "untilStable"] },
+    x: { type: "number", label: "X delta" },
+    y: { type: "number", label: "Y delta" },
+    maxScrolls: { type: "integer", label: "Maximum scrolls" }
+  }
+};
+var waitForSelectorSchema = {
+  type: "object",
+  required: ["selector"],
+  properties: {
+    ...elementProperties,
+    timeoutMs: { type: "integer", label: "Timeout in ms" },
+    wait: waitSchema
+  }
+};
+var assertSchema = {
+  type: "object",
+  label: "Assertion",
+  required: ["kind"],
+  properties: {
+    kind: { type: "string", label: "Condition", enum: ["exists", "absent", "text", "url", "visible", "enabled"] },
+    expected: { type: "string", label: "Expected" },
+    timeoutMs: { type: "integer", label: "Timeout in ms" }
+  }
+};
+var extractListSchema = {
+  type: "object",
+  label: "List extraction",
+  required: ["item", "fields"],
+  properties: {
+    item: { type: "string", label: "Item selector" },
+    fields: { type: "object", label: "Field map" },
+    paginate: {
+      type: "object",
+      label: "Pagination",
+      required: ["next", "maxPages"],
+      properties: {
+        next: { type: "string", label: "Next control" },
+        maxPages: { type: "integer", label: "Maximum pages", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES }
+      }
+    },
+    maxItems: { type: "integer", label: "Maximum items", minimum: 1 }
+  }
+};
+var uploadSchema = {
+  type: "object",
+  label: "Files",
+  required: ["files"],
+  properties: {
+    files: {
+      type: "array",
+      label: "Files",
+      minItems: 1,
+      items: {
+        type: "object",
+        required: ["name", "mimeType", "contentBase64"],
+        properties: {
+          name: { type: "string", label: "File name" },
+          mimeType: { type: "string", label: "MIME type" },
+          contentBase64: { type: "string", label: "Base64 content" }
+        }
+      }
+    }
+  }
+};
+var dialogSchema = {
+  type: "object",
+  label: "Dialog",
+  required: ["response"],
+  properties: {
+    response: { type: "string", label: "Response", enum: ["accept", "dismiss"] },
+    promptText: { type: "string", label: "Prompt text" }
+  }
+};
+var tabSchema = {
+  type: "object",
+  label: "Tab",
+  required: ["operation"],
+  properties: {
+    operation: { type: "string", label: "Operation", enum: ["open", "switch", "close"] },
+    url: { type: "string", label: "URL" },
+    active: { type: "boolean", label: "Activate" },
+    tabId: { type: "integer", label: "Tab id" },
+    urlPattern: { type: "string", label: "URL contains" }
+  }
+};
+var downloadSchema = {
+  type: "object",
+  label: "Download",
+  properties: {
+    filename: { type: "string", label: "File name" },
+    timeoutMs: { type: "integer", label: "Timeout in ms" }
+  }
+};
 var webAutomationActionDefinitions = [
   {
     actionType: "web.browser.navigate",
     label: "Navigate",
     description: "Navigate a browser tab to a URL.",
-    parameterSchema: { type: "object", required: ["url"], properties: { url: { type: "string", label: "URL" } } }
+    parameterSchema: {
+      type: "object",
+      required: ["url"],
+      properties: { url: { type: "string", label: "URL" }, newTab: { type: "boolean", label: "Open in a new tab" } }
+    }
   },
   { actionType: "web.dom.click", label: "Click", description: "Click a DOM element.", parameterSchema: selectorSchema },
   {
@@ -125,27 +262,39 @@ var webAutomationActionDefinitions = [
   {
     actionType: "web.dom.select",
     label: "Select Option",
-    description: "Set a select element value.",
-    parameterSchema: { type: "object", required: ["selector"], properties: { ...elementProperties, value: { type: "string" } } }
+    description: "Choose an option of a select element by value, label, or index.",
+    parameterSchema: {
+      type: "object",
+      required: ["selector"],
+      properties: { ...elementProperties, value: { type: "string" }, option: optionSelectorSchema, timeoutMs: { type: "integer", label: "Timeout in ms" } }
+    }
   },
   {
     actionType: "web.dom.scroll",
     label: "Scroll",
-    description: "Scroll the page or targeted context.",
-    parameterSchema: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, smooth: { type: "boolean" } } }
+    description: "Scroll by a delta, to an element, or until the page stops growing.",
+    parameterSchema: {
+      type: "object",
+      properties: { ...elementProperties, x: { type: "number" }, y: { type: "number" }, smooth: { type: "boolean" }, scroll: scrollRequestSchema }
+    }
   },
   {
     actionType: "web.dom.keypress",
     label: "Key Press",
-    description: "Dispatch a keyboard event.",
-    parameterSchema: { type: "object", properties: { ...elementProperties, key: { type: "string" }, text: { type: "string" } } }
+    description: "Dispatch a keyboard event, with modifier keys.",
+    parameterSchema: { type: "object", properties: { ...elementProperties, key: { type: "string" }, text: { type: "string" }, modifiers: keyModifiersSchema } }
   },
-  { actionType: "web.dom.wait_for_selector", label: "Wait For Selector", description: "Wait until an element exists.", parameterSchema: selectorSchema },
+  {
+    actionType: "web.dom.wait_for_selector",
+    label: "Wait For Selector",
+    description: "Wait until an element is present, visible, enabled, or absent.",
+    parameterSchema: waitForSelectorSchema
+  },
   {
     actionType: "web.dom.wait_for_text",
     label: "Wait For Text",
-    description: "Wait until page text appears.",
-    parameterSchema: { type: "object", required: ["text"], properties: { text: { type: "string" }, timeoutMs: { type: "integer" } } }
+    description: "Wait until page text appears or the page settles.",
+    parameterSchema: { type: "object", required: ["text"], properties: { text: { type: "string" }, timeoutMs: { type: "integer" }, wait: waitSchema } }
   },
   { actionType: "web.dom.extract", label: "Extract", description: "Extract text, value, or attributes from an element.", parameterSchema: selectorSchema },
   {
@@ -154,88 +303,54 @@ var webAutomationActionDefinitions = [
     description: "Capture a structured DOM snapshot.",
     parameterSchema: { type: "object", properties: {} }
   },
-  // The seven actions added in Week 1 (decision D6). Every action type must
-  // have a definition here: the manifest outputs, the output nodes, and the
-  // registered domain outputs all derive from this table, and
-  // `createWebAutomationDomainIo` throws for a listed output with no
-  // definition. These are the minimum that keeps the registry total;
-  // `w2-domain-vocabulary` owns their final parameter shapes, node parameters,
-  // payload mapping, and inputs.
+  // The seven actions added in Week 1 (decision D6). Each parameter is named
+  // and shaped as the field of `WebAutomationActionCommand` it becomes, so a
+  // Flow's parameters reach the verb that runs them without being reshaped.
   {
     actionType: "web.dom.check",
     label: "Set Checked",
-    description: "Set a checkbox or radio to a state.",
-    parameterSchema: { type: "object", required: ["selector"], properties: { ...elementProperties, checked: { type: "boolean", label: "Checked" } } }
+    description: "Set a checkbox or radio to a checked state.",
+    parameterSchema: {
+      type: "object",
+      required: ["selector"],
+      properties: { ...elementProperties, checked: { type: "boolean", label: "Checked" }, timeoutMs: { type: "integer", label: "Timeout in ms" } }
+    }
   },
   {
     actionType: "web.dom.assert",
     label: "Assert",
-    description: "Assert a condition about the page and fail when it does not hold.",
-    parameterSchema: {
-      type: "object",
-      required: ["kind"],
-      properties: {
-        ...elementProperties,
-        kind: { type: "string", label: "Condition" },
-        expected: { type: "string", label: "Expected" },
-        timeoutMs: { type: "integer", label: "Timeout in ms" }
-      }
-    }
+    description: "Verify a condition about the page and fail when it does not hold.",
+    parameterSchema: { type: "object", required: ["assert"], properties: { ...elementProperties, assert: assertSchema } }
   },
   {
     actionType: "web.dom.extract_list",
     label: "Extract List",
     description: "Extract a field map from every item of a repeating structure, following pagination.",
-    parameterSchema: {
-      type: "object",
-      required: ["item"],
-      properties: {
-        item: { type: "string", label: "Item selector" },
-        fields: { type: "object", label: "Field map" },
-        paginate: { type: "object", label: "Pagination" },
-        maxItems: { type: "integer", label: "Maximum items" }
-      }
-    }
+    parameterSchema: { type: "object", required: ["extractList"], properties: { extractList: extractListSchema } }
   },
   {
     actionType: "web.dom.upload",
     label: "Upload Files",
     description: "Set the files of a file input.",
-    parameterSchema: { type: "object", required: ["selector"], properties: { ...elementProperties, files: { type: "array", label: "Files" } } }
+    parameterSchema: { type: "object", required: ["selector", "upload"], properties: { ...elementProperties, upload: uploadSchema } }
   },
   {
     actionType: "web.dom.dialog",
     label: "Answer Dialog",
     description: "Arm the answer to the next native alert, confirm, or prompt.",
-    parameterSchema: {
-      type: "object",
-      required: ["response"],
-      properties: { response: { type: "string", label: "Response" }, promptText: { type: "string", label: "Prompt text" } }
-    }
+    parameterSchema: { type: "object", required: ["dialog"], properties: { dialog: dialogSchema } }
   },
   {
     actionType: "web.browser.tab",
     label: "Browser Tab",
     description: "Open, switch to, or close a browser tab.",
-    parameterSchema: {
-      type: "object",
-      required: ["operation"],
-      properties: {
-        operation: { type: "string", label: "Operation" },
-        url: { type: "string", label: "URL" },
-        tabId: { type: "integer", label: "Tab id" },
-        urlPattern: { type: "string", label: "URL contains" }
-      }
-    }
+    parameterSchema: { type: "object", required: ["tab"], properties: { tab: tabSchema } }
   },
   {
     actionType: "web.browser.download",
     label: "Await Download",
     description: "Wait for a browser download to complete.",
-    parameterSchema: {
-      type: "object",
-      properties: { filename: { type: "string", label: "File name" }, timeoutMs: { type: "integer", label: "Timeout in ms" } }
-    }
+    parameterSchema: { type: "object", properties: { download: downloadSchema } }
   }
 ];
 
@@ -327,20 +442,35 @@ function parametersForOutput(outputId) {
     { id: "visualTarget", label: "Visual Target", valueType: "object", ui: { control: "value" } },
     { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 1e4 }
   ];
-  if (outputId === "web.browser.navigate") return [{ id: "url", label: "URL", valueType: "string", required: true, ui: { control: "text", placeholder: "https://example.com" } }];
+  const structured = (id, label) => ({ id, label, valueType: "object", ui: { control: "value" } });
+  if (outputId === "web.browser.navigate") return [
+    { id: "url", label: "URL", valueType: "string", required: true, ui: { control: "text", placeholder: "https://example.com" } },
+    { id: "newTab", label: "New Tab", valueType: "boolean", defaultValue: false }
+  ];
   if (outputId === "web.dom.type") return [...selectorParameters, { id: "text", label: "Text", valueType: "string", defaultValue: "", ui: { control: "textarea" } }];
-  if (outputId === "web.dom.select") return [...selectorParameters, { id: "value", label: "Value", valueType: "string", defaultValue: "", ui: { control: "text" } }];
-  if (outputId === "web.dom.keypress") return [...selectorParameters, { id: "key", label: "Key", valueType: "string", defaultValue: "", ui: { control: "text" } }];
+  if (outputId === "web.dom.select") return [...selectorParameters, { id: "value", label: "Value", valueType: "string", defaultValue: "", ui: { control: "text" } }, structured("option", "Option")];
+  if (outputId === "web.dom.keypress") return [...selectorParameters, { id: "key", label: "Key", valueType: "string", defaultValue: "", ui: { control: "text" } }, structured("modifiers", "Modifiers")];
   if (outputId === "web.dom.scroll") return [
+    ...selectorParameters,
     { id: "x", label: "X", valueType: "number", defaultValue: 0 },
     { id: "y", label: "Y", valueType: "number", defaultValue: 0 },
-    { id: "smooth", label: "Smooth", valueType: "boolean", defaultValue: false }
+    { id: "smooth", label: "Smooth", valueType: "boolean", defaultValue: false },
+    structured("scroll", "Scroll Mode")
   ];
+  if (outputId === "web.dom.wait_for_selector") return [...selectorParameters, structured("wait", "Condition")];
   if (outputId === "web.dom.wait_for_text") return [
     { id: "text", label: "Text", valueType: "string", required: true, ui: { control: "text" } },
-    { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 1e4 }
+    { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 1e4 },
+    structured("wait", "Condition")
   ];
   if (outputId === "web.dom.capture_snapshot") return [];
+  if (outputId === "web.dom.check") return [...selectorParameters, { id: "checked", label: "Checked", valueType: "boolean", defaultValue: true }];
+  if (outputId === "web.dom.assert") return [...selectorParameters, structured("assert", "Assertion")];
+  if (outputId === "web.dom.extract_list") return [structured("extractList", "List")];
+  if (outputId === "web.dom.upload") return [...selectorParameters, structured("upload", "Files")];
+  if (outputId === "web.dom.dialog") return [structured("dialog", "Dialog")];
+  if (outputId === "web.browser.tab") return [structured("tab", "Tab")];
+  if (outputId === "web.browser.download") return [structured("download", "Download")];
   return selectorParameters;
 }
 function iconForOutput(outputId) {
@@ -349,6 +479,13 @@ function iconForOutput(outputId) {
   if (outputId === "web.dom.type") return "text-cursor-input";
   if (outputId === "web.dom.extract") return "scan-search";
   if (outputId === "web.dom.capture_snapshot") return "camera";
+  if (outputId === "web.dom.check") return "square-check";
+  if (outputId === "web.dom.assert") return "circle-check";
+  if (outputId === "web.dom.extract_list") return "table";
+  if (outputId === "web.dom.upload") return "upload";
+  if (outputId === "web.dom.dialog") return "message-square";
+  if (outputId === "web.browser.tab") return "app-window";
+  if (outputId === "web.browser.download") return "download";
   return "square-dot";
 }
 
@@ -361,6 +498,7 @@ var WEB_AUTOMATION_INPUT_IDS = {
   textEntered: "web.user.text_entered",
   fieldCleared: "web.user.field_cleared",
   optionSelected: "web.user.option_selected",
+  checkboxToggled: "web.user.checkbox_toggled",
   keyPressed: "web.user.key_pressed",
   pageScrolled: "web.user.page_scrolled"
 };
@@ -392,6 +530,7 @@ var actionInputDefinitions = [
   [WEB_AUTOMATION_INPUT_IDS.textEntered, "Text entered", "web.dom.type"],
   [WEB_AUTOMATION_INPUT_IDS.fieldCleared, "Field cleared", "web.dom.clear"],
   [WEB_AUTOMATION_INPUT_IDS.optionSelected, "Option selected", "web.dom.select"],
+  [WEB_AUTOMATION_INPUT_IDS.checkboxToggled, "Checkbox toggled", "web.dom.check"],
   [WEB_AUTOMATION_INPUT_IDS.keyPressed, "Key pressed", "web.dom.keypress"],
   [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"]
 ];

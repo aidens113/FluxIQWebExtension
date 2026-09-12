@@ -60,7 +60,15 @@ export function gatewayActionResultFromBrowserResult(result: BrowserActionResult
       ...webAutomationActionResultPayload(result as never),
       visualTarget: visualTarget as unknown as JsonObject
     }) as JsonObject,
-    error: result.status === "failed" ? result.message : undefined
+    // Every status that is not a success carries its message as the error.
+    // `timed_out` and `cancelled` used to reach the gateway with none, while
+    // the panel showed the same result as failed with one (found by
+    // w1-extension-unit-tests); the status itself is passed through untouched.
+    error: result.status === "succeeded" ? undefined : result.message,
+    // Core's structured failure record, built by the content script or by a
+    // worker-side action. Without this the record was assembled and then
+    // dropped at the boundary, so the gateway saw only a message string.
+    failure: result.failure
   }) as ClientGatewayActionResult;
 }
 

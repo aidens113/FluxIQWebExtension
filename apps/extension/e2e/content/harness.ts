@@ -4,12 +4,21 @@
 // as the background worker does -- `executeAction`, `captureSnapshot`,
 // `recording` -- and reads back every message the content script sent.
 //
+// The page-world bundle (src/page-world/) is injected too, before the content
+// script, as the manifests' `world: "MAIN"` entry does -- otherwise the
+// native-dialog override would be missing and `web.dom.dialog` would correctly
+// refuse to arm.
+//
 // Fidelity: the bundle runs at document start in every frame, as the
 // manifest's `run_at: document_start, all_frames: true` does, but in the
 // page's main world rather than an isolated one, and with no background
 // worker, tab, or frame routing. Messages go to and come from the top frame
 // only. A spec proves the content script's own behaviour against a live DOM;
-// it proves nothing about delivery between extension contexts.
+// it proves nothing about delivery between extension contexts. One consequence
+// of the single world: the page-world script is injected before the
+// `chrome.runtime` stub, because it refuses to install where it can see an
+// extension runtime -- which is how it detects having landed in an isolated
+// world on a browser too old for `world: "MAIN"`.
 //
 // The wire names below are written out rather than imported from
 // src/content/messages.ts on purpose: a harness that shared the constants
@@ -22,7 +31,7 @@ import { getScenario } from "../../../scenario-lab/src/registry.js";
 import { startScenarioLab, type RunningScenarioLab } from "../../../scenario-lab/src/server.js";
 import type { ScenarioSnapshot } from "../../../scenario-lab/src/types.js";
 import type { BrowserActionCommand, BrowserActionResult, DomSnapshot, RecordingEventPayload } from "../../src/shared/protocol.js";
-import { CONTENT_HARNESS_BUNDLE_ENV } from "./bundle-env.js";
+import { CONTENT_HARNESS_BUNDLE_ENV, CONTENT_HARNESS_PAGE_WORLD_BUNDLE_ENV } from "./bundle-env.js";
 import { installRuntimeStub, type HarnessDelivery } from "./runtime-stub.js";
 
 /** The page global the runtime stub installs; `deliver` and `sent` live on it. */
@@ -64,6 +73,7 @@ export type ContentHarness = {
 };
 
 let bundleSource: Promise<string> | undefined;
+let pageWorldBundle: Promise<string> | undefined;
 const pagesWithContentScript = new WeakSet<Page>();
 
 /** Starts a Scenario Lab, opens `scenarioId` in `page` with the content script loaded, and waits for it to announce itself. */
@@ -71,6 +81,7 @@ export async function openContentHarness(page: Page, options: ContentHarnessOpti
   const scenario = getScenario(options.scenarioId);
   if (!scenario) throw new Error(`Scenario "${options.scenarioId}" is not registered in the Scenario Lab.`);
   const source = await contentBundleSource();
+  const pageWorld = await pageWorldBundleSource();
   const lab = await startScenarioLab({ runToken: randomBytes(24).toString("base64url"), seed: options.seed ?? scenario.seed });
   const url = new URL(scenario.startPath, lab.origin).href;
 
@@ -95,6 +106,9 @@ export async function openContentHarness(page: Page, options: ContentHarnessOpti
 
   try {
     if (!pagesWithContentScript.has(page)) {
+      // The page world first, and before the runtime stub: the override
+      // refuses to install where it can see an extension runtime.
+      await page.addInitScript({ content: pageWorldInitScript(pageWorld) });
       await page.addInitScript({ content: initScript(source) });
       pagesWithContentScript.add(page);
     }
@@ -146,7 +160,21 @@ function contentBundleSource(): Promise<string> {
   return bundleSource;
 }
 
+function pageWorldBundleSource(): Promise<string> {
+  const bundlePath = process.env[CONTENT_HARNESS_PAGE_WORLD_BUNDLE_ENV];
+  if (!bundlePath) {
+    return Promise.reject(new Error(`${CONTENT_HARNESS_PAGE_WORLD_BUNDLE_ENV} is not set. e2e/content/global-setup.ts builds the page-world bundle; run the specs with "pnpm test:content".`));
+  }
+  pageWorldBundle ??= readFile(bundlePath, "utf8");
+  return pageWorldBundle;
+}
+
 /** The runtime stub first, then the bundle, in one script so their order is fixed. */
 function initScript(bundle: string): string {
   return `(${installRuntimeStub.toString()})(${JSON.stringify(HARNESS_GLOBAL)});\n${bundle}\n//# sourceURL=fluxiq-content-harness.js\n`;
+}
+
+/** The page-world bundle alone, as the manifests' `world: "MAIN"` entry injects it. */
+function pageWorldInitScript(bundle: string): string {
+  return `${bundle}\n//# sourceURL=fluxiq-page-world-harness.js\n`;
 }

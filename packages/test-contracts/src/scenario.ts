@@ -122,6 +122,16 @@ export type ScenarioWorkflow = {
   variants?: ScenarioVariant[];
 };
 
+/**
+ * A value the fixture requires at replay that must never be taken from the
+ * recording. `step` names the recording-script step whose recorded value is
+ * the secret, and `id` names the secret the lane supplies instead: the Flow
+ * lane resolves it from `FLUXIQ_TEST_SECRET_<ID>` (the id upper-cased, with
+ * hyphens as underscores) and hands it to the Flow run, so a recorded
+ * password is never what replays.
+ */
+export type ScenarioSecret = { id: string; step: string };
+
 export type ScenarioEvidencePolicy = {
   screenshots: "none" | "checkpoints" | "events";
   trace: "off" | "failure" | "always";
@@ -144,6 +154,8 @@ export type WebScenario = {
   expected: ScenarioExpected;
   variants?: ScenarioVariant[];
   workflows?: ScenarioWorkflow[];
+  /** Values the Flow lane supplies at replay instead of replaying the recorded one. */
+  secrets?: ScenarioSecret[];
   evidencePolicy?: Partial<ScenarioEvidencePolicy>;
 };
 
@@ -176,6 +188,7 @@ export const webScenarioJsonSchema = {
     expected: { $ref: "#/$defs/expected" },
     variants: { type: "array", items: { $ref: "#/$defs/variant" } },
     workflows: { type: "array", items: { $ref: "#/$defs/workflow" } },
+    secrets: { type: "array", items: { $ref: "#/$defs/secret" } },
     evidencePolicy: { $ref: "#/$defs/evidencePolicy" },
   },
   $defs: {
@@ -229,6 +242,10 @@ export const webScenarioJsonSchema = {
     failure: {
       type: "object", additionalProperties: false, required: ["category"],
       properties: { category: { enum: AUTOMATION_STUDIO_ADAPTIVE_FAILURE_CLASSES }, code: { type: "string", minLength: 1 } },
+    },
+    secret: {
+      type: "object", additionalProperties: false, required: ["id", "step"],
+      properties: { id: kebabId, step: { type: "string", minLength: 1 } },
     },
     variant: {
       type: "object", additionalProperties: false, required: ["id", "description", "arm", "expected"],

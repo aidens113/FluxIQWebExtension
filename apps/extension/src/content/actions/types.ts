@@ -38,8 +38,6 @@ export type ContentActionDependencies = {
   captureSnapshot(): DomSnapshot;
   resolveTarget(action: BrowserActionCommand): Element;
   describeElement(element: Element): DomElementDescriptor;
-  waitForElement(selector: string | undefined, timeoutMs?: number): Promise<Element>;
-  waitForText(text: string, timeoutMs?: number): Promise<void>;
   extractElement(element: Element, options?: JsonObject): JsonValue;
   scrollElementIntoView(element: Element): void;
   setElementValue(element: HTMLInputElement | HTMLTextAreaElement, value: string): void;

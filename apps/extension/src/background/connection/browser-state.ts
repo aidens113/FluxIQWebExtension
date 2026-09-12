@@ -14,17 +14,34 @@ import type {
   TabDescriptor,
   UnsupportedPageState
 } from "../../shared/protocol";
+import {
+  UNSUPPORTED_BROWSER_PAGE_REASON,
+  UNSUPPORTED_STORE_PAGE_REASON,
+  unsupportedAutomationPageReason
+} from "../../runtime";
 import { compactObject } from "./value-readers";
 
+// Recording and automation ask one question -- which pages the extension cannot
+// drive -- so `runtime/unsupported-page.ts` owns the list and this maps its
+// answer onto what recording reports. Keeping a second pattern here is what let
+// the two drift: this one required "://", so `about:blank`, `view-source:` and
+// `data:` URLs slipped past it, and it matched neither the current Chrome store
+// host nor the Edge and Firefox galleries.
+//
+// Two things the recording path needs that the shared rule does not carry: the
+// wording names *recording*, because that is the operation the panel is warning
+// about, and the state it renders carries the URL beside the reason.
+const RECORDING_REASONS: Readonly<Record<string, string>> = {
+  [UNSUPPORTED_BROWSER_PAGE_REASON]: "Browser and extension pages cannot be recorded.",
+  [UNSUPPORTED_STORE_PAGE_REASON]: "Browser web store pages cannot be recorded."
+};
+
 export function unsupportedPageForUrl(url: string | undefined): UnsupportedPageState | undefined {
-  if (!url) return undefined;
-  if (/^(chrome|edge|brave|opera|vivaldi|about|moz-extension|chrome-extension):\/\//.test(url)) {
-    return { url, reason: "Browser and extension pages cannot be recorded." };
-  }
-  if (/^https:\/\/chrome\.google\.com\/webstore/.test(url)) {
-    return { url, reason: "Browser web store pages cannot be recorded." };
-  }
-  return undefined;
+  const reason = unsupportedAutomationPageReason(url);
+  // A reason implies a non-empty URL -- the shared rule refuses an absent one --
+  // but only the check narrows it for the compiler.
+  if (reason === undefined || url === undefined) return undefined;
+  return { url, reason: RECORDING_REASONS[reason] ?? reason };
 }
 
 export function browserStateFromTabs(active: TabDescriptor | undefined, tabs: TabDescriptor[], recordingState: RecordingState): ClientGatewayStateUpdate {

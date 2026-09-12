@@ -120,6 +120,27 @@ test("bench runs a named corpus a number of times on the recording lane's target
   assert.throws(() => parseLabCommand(["bench", "smoke"]), /options only/);
 });
 
+test("--flow with no value selects the Flow lane; with a value it still names a persisted Flow", () => {
+  assert.deepEqual(parseLabCommand(["run", "basic-form", "--flow"]), { command: "run", scenarioId: "basic-form", flowLane: true });
+  assert.deepEqual(parseLabCommand(["run", "basic-form", "--flow", "--target", "isolated"]), { command: "run", scenarioId: "basic-form", target: "isolated", flowLane: true });
+  assert.deepEqual(parseLabCommand(["run", "basic-form", "--target", "existing", "--flow", "flow-1"]), { command: "run", scenarioId: "basic-form", target: "existing", flowId: "flow-1" });
+  assert.equal("flowLane" in parseLabCommand(["run", "basic-form"]), false);
+  assert.throws(() => parseLabCommand(["run", "basic-form", "--flow", "--flow"]), /only be specified once/);
+});
+
+test("the Flow lane refuses targets that run a pre-existing Flow", () => {
+  assert.throws(() => parseLabCommand(["run", "basic-form", "--flow", "--target", "existing"]), /pre-existing Flow/);
+  assert.throws(() => parseLabCommand(["run", "basic-form", "--flow", "--target", "clone"]), /pre-existing Flow/);
+});
+
+test("--variant arms one variant and requires the Flow lane", () => {
+  assert.deepEqual(parseLabCommand(["run", "identity-drift", "--flow", "--variant", "selector-only"]), { command: "run", scenarioId: "identity-drift", variantId: "selector-only", flowLane: true });
+  assert.deepEqual(parseLabCommand(["run", "product-catalog", "--flow", "--workflow", "paginated-extraction", "--variant", "short-catalog"]), { command: "run", scenarioId: "product-catalog", workflowId: "paginated-extraction", variantId: "short-catalog", flowLane: true });
+  assert.throws(() => parseLabCommand(["run", "identity-drift", "--variant", "selector-only"]), /--variant requires --flow/);
+  assert.throws(() => parseLabCommand(["run", "identity-drift", "--flow", "--variant", "Selector Only"]), /kebab-case/);
+  assert.throws(() => parseLabCommand(["matrix", "--all", "--variant", "selector-only"]), /Unknown option/);
+});
+
 test("compare takes two bench reports, or one report with --halves", () => {
   assert.deepEqual(parseLabCommand(["compare", "bench-a", "bench-b"]), { command: "compare", baselineReport: "bench-a", candidateReport: "bench-b" });
   assert.deepEqual(parseLabCommand(["compare", "bench-a", "--halves"]), { command: "compare", halvesReport: "bench-a" });

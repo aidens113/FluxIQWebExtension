@@ -25,8 +25,43 @@ test("browser, extension and web store pages cannot be recorded", () => {
   assert.deepEqual(unsupportedPageForUrl(store), { url: store, reason: "Browser web store pages cannot be recorded." });
 });
 
+test("a scheme with no authority cannot be recorded either", () => {
+  // These reached the recorder while this rule kept its own pattern, which
+  // required "://". They are refused now because one shared list answers both
+  // the recording and the automation question.
+  for (const url of [
+    "about:blank",
+    "view-source:https://example.test/",
+    "data:text/html,<p>hello</p>",
+    "devtools://devtools/bundled/inspector.html",
+    "javascript:void(0)"
+  ]) {
+    assert.deepEqual(unsupportedPageForUrl(url), { url, reason: "Browser and extension pages cannot be recorded." }, url);
+  }
+});
+
+test("every current extension gallery host cannot be recorded, not just the old web store", () => {
+  for (const url of [
+    "https://chromewebstore.google.com/detail/abc",
+    "https://microsoftedge.microsoft.com/addons/detail/abc",
+    "https://addons.mozilla.org/en-US/firefox/addon/fluxiq/"
+  ]) {
+    assert.deepEqual(unsupportedPageForUrl(url), { url, reason: "Browser web store pages cannot be recorded." }, url);
+  }
+});
+
 test("ordinary pages, and a missing URL, can be recorded", () => {
-  for (const url of [undefined, "", "https://example.test/", "http://127.0.0.1:4800/scenarios/basic-form"]) {
+  // The last two anchor at the start of the URL: a page that merely mentions a
+  // privileged scheme describes where it might go, not what it is.
+  for (const url of [
+    undefined,
+    "",
+    "   ",
+    "https://example.test/",
+    "http://127.0.0.1:4800/scenarios/basic-form",
+    "https://example.test/?next=about:blank",
+    "https://example.test/chrome://settings"
+  ]) {
     assert.equal(unsupportedPageForUrl(url), undefined, String(url));
   }
 });

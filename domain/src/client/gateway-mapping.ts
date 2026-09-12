@@ -12,6 +12,7 @@ import {
   type WebAutomationActionResult,
   type WebAutomationActionType
 } from "../actions/types";
+import { webAutomationLiftedActionParameters } from "./gateway-action-parameters";
 
 export type WebAutomationRecordedPayload = {
   kind: string;
@@ -98,6 +99,12 @@ export function createWebAutomationStateUpdate(input: { activeContextId?: string
  * Maps a gateway action command to the browser command the extension runs, or
  * to a rejection carrying Core's failure record when its action type is
  * unknown. An unknown type is never rewritten into some other action.
+ *
+ * The flat fields below come from the command's target and envelope. Every
+ * structured parameter is read by `gateway-action-parameters.ts` onto the
+ * command field the verb running the action reads, and a value it refuses is
+ * left absent rather than coerced. The raw parameters still travel in
+ * `options`, so nothing a Flow sent is lost on the way to the page.
  */
 export function webAutomationActionFromGatewayCommand(command: ClientGatewayActionCommand & { commandId: string }): WebAutomationActionCommand | WebAutomationActionRejection {
   const normalized = normalizeWebAutomationActionType(command.actionType);
@@ -117,6 +124,7 @@ export function webAutomationActionFromGatewayCommand(command: ClientGatewayActi
     timeoutMs: numberValue(command.timeoutMs ?? parameters.timeoutMs),
     coordinates: pointValue(target.coordinates ?? parameters.coordinates),
     visualTarget: jsonObject(target.visualTarget ?? parameters.visualTarget) as unknown as WebAutomationActionVisualTarget | undefined,
+    ...webAutomationLiftedActionParameters(parameters),
     options: parameters
   }) as unknown as WebAutomationActionCommand;
 }
@@ -194,3 +202,4 @@ function jsonObject(value: unknown): JsonObject | undefined {
 function compactJsonObject(value: Record<string, unknown>): JsonObject {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as JsonObject;
 }
+

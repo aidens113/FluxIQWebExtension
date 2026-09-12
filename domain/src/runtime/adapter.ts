@@ -49,13 +49,19 @@ async function executeWebAutomationRuntimeCommand(fluxiq: FluxIQ, command: FluxI
   };
   if (command.metadata) request.metadata = command.metadata;
   const result = await dispatchWebAutomationOutput(fluxiq, request);
+  const message = result.error ?? dispatchPayloadMessage(result.payload);
   const runtimeResult: FluxIQRuntimeCommandResult = {
     commandId: command.commandId ?? `web.${Date.now()}`,
-    status: result.ok ? "succeeded" : "failed",
+    // The command's own status, never a success flag. `timed_out` and
+    // `cancelled` reach Core as themselves so `failureForCommandStatus`
+    // (Core `io-policy.ts`) can classify them; flattening them to `failed`
+    // left every unanswered action an undifferentiated failure.
+    status: result.status ?? (result.ok ? "succeeded" : "failed"),
     startedAt,
     completedAt: Date.now(),
     ...(result.error ? { error: result.error } : {}),
-    ...(result.error ? { message: result.error } : {}),
+    ...(message ? { message } : {}),
+    ...(result.failure ? { failure: result.failure } : {}),
     metadata: compact({ outputId, ...(result.metadata ?? {}) })
   };
   if (result.payload !== undefined) runtimeResult.payload = result.payload;
@@ -102,6 +108,19 @@ function rejected(command: FluxIQRuntimeCommand, message: string): FluxIQRuntime
     message,
     error: message
   };
+}
+
+/**
+ * The message a command reported without an error: a succeeded action's
+ * post-condition, or a status the client described in words only.
+ * `dispatchWebAutomationOutput` carries it in the dispatch payload, and Core
+ * builds the node result's message from `result.message ?? result.error`
+ * (`createRuntimePolicyEffectDispatcher`), so an unpromoted message leaves the
+ * attempt trace with no reason at all.
+ */
+function dispatchPayloadMessage(payload: JsonObject | undefined): string | undefined {
+  const message = payload?.message;
+  return typeof message === "string" && message.length > 0 ? message : undefined;
 }
 
 function compact(value: Record<string, unknown>): JsonObject {

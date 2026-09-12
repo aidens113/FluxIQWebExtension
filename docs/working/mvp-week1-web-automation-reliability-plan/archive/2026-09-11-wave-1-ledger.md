@@ -245,3 +245,65 @@ outcomes are folded into the plan's `Current State`.
   alone with no other Lab run active, so concurrency does not explain it.
   w1-recording-start-flake owns it, and the push waits for it.
 - Outcome: Accepted apart from the flake.
+
+### 2026-09-11 — Wave 1 gates; the recording start traced to a 10 s window
+- Agent: supervisor, with w1-recording-start-flake
+- Changed: `packages/test-runner/src/run-scenario.ts` only. Core accepts
+  `client.start_recording` only while the approving Automation Studio context is
+  under 10 s old (`resolveClientRecordingProject`, `freshnessMs` 10_000), and the
+  runner stamped that context once, at topology startup. When pairing and the Core
+  action probe outran the window, Core answered `recording.project_required`, on
+  which the extension cancels its pending start, so its own 750 ms local fallback
+  never fires and the recorder latches `idle`. That is why no longer poll could
+  have fixed it. The runner now restamps the context immediately before the start,
+  and captures the extension status when a start fails, which the lane discarded.
+- Validation: worker, a forced 12 s gap without the fix failed with
+  `recordingBlock=recording.project_required`, the same Core signature as the
+  reported run, and passed with the fix; then an 8-run serialized series,
+  `SUMMARY pass=8 fail=0 of 8`, the failure diagnostic present in 1 of 46 run
+  directories, the deliberate no-fix experiment. Supervisor: here `pnpm check` and
+  `pnpm test` -> exit 0 each, captured by redirect rather than a pipe, test-runner
+  `# pass 357 # fail 0`; in Core `pnpm check`, `pnpm docs:check`, `pnpm build` and
+  `pnpm package:lint` -> exit 0, `pnpm test` -> 827 of 828, one Adaptation Audit
+  case timing out only under parallel load (briefed as core-adaptation-test-cost).
+  A first supervisor bench crashed at exit 139 after overlapping the worker own
+  chained runs; re-run on a clear machine it passed, status passed with 4 runs, 4
+  passed and 0 skipped, exit 0, `bench-mtxju6eb-7aacdf7a`. The worker own bench
+  agreed: 4 runs, 4 passed, 0 skipped.
+- Found: the extension latching `idle` on a refused start is a product defect, not
+  a test-lane one; recorded under Open Questions against Phase 1.5.
+- Outcome: Accepted. The benchmark re-run passed on a clear machine (4 runs, 4
+  passed, 0 skipped, exit 0), and Core came green: `pnpm test` -> exit 0, fluxiq
+  828 of 828 and web 1146 of 1146, with its structure audit clean.
+
+### 2026-09-11 — Wave 1 pushed; Wave 2 opened
+- Agent: supervisor
+- Changed: no source. Both repositories committed and pushed as one work unit,
+  then w2-foundation dispatched as the serial first brief of Wave 2.
+- Validation: `git push origin dev` -> `3a61de9..f8885b8  dev -> dev` here and
+  `e522f17..4867c5c  dev -> dev` in Core, each exit 0, both branches reporting
+  level with their remote afterwards.
+- Outcome: Accepted
+
+### 2026-09-11 — Wave 2 foundation: the contract landed
+- Agent: supervisor, with w2-foundation
+- Changed: the seven new action types and their safety classes; one result type
+  re-exported by the extension instead of three copies, with `validation` made a
+  required field; eight capabilities declared on the content dependencies, each in
+  its own module that throws until its own brief lands; five verb stubs and two
+  background stubs routed from `action-runner.ts`.
+- Validation: supervisor, `pnpm check` -> exit 0 and `pnpm test` -> exit 0, each
+  captured by redirect rather than through a pipe: extension 72 of 72, up from 64,
+  scenario-lab 118 of 118, test-runner 357 of 357, test-evidence 14 of 14,
+  agent-orchestrator 16 of 16. Worker: domain 26 of 26, `test:content` 31 passed,
+  and `FLUXIQ_TEST_ENV_FILES=none pnpm lab run basic-form --target isolated` ->
+  exit 0, verdict passed; structure audit clean.
+- Found: two supervisor defects, both corrected in the briefs. The brief forbade
+  `domain/src/actions/schemas.ts`, but listing an action type with no definition
+  makes `createWebAutomationDomainIo` throw, since manifest outputs, output nodes
+  and registered outputs all derive from that table, so the list and the schemas
+  cannot land in separate work units; w2-domain-vocabulary now refines those seven
+  definitions instead of creating them. And `gatewayActionResultFromBrowserResult`
+  drops `result.failure`, so structured records never reach the gateway, which
+  w2-browser-actions must now forward, since it owns that file.
+- Outcome: Accepted

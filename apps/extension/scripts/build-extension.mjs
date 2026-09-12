@@ -26,10 +26,18 @@ const placeholderPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAI" +
 
 // Every bundle the extension is assembled from, in build order. Keyed so a
 // caller outside this script can name one entry: the content-script test
-// harness (e2e/content/) bundles "content" through bundleExtensionEntry.
+// harness (e2e/content/) bundles "content" and "page-world" through
+// bundleExtensionEntry.
+//
+// "page-world" is the one bundle that runs in the page's own JavaScript world
+// (`world: "MAIN"` in each manifest) rather than an isolated one, so that the
+// native-dialog override is installed before any page script can capture
+// `alert`, `confirm`, or `prompt`. It is a separate entry precisely because it
+// must not carry the content script's code into the page.
 const extensionEntries = {
   background: { source: "src/background/index.ts", outfile: "background/index.js", format: "esm" },
   content: { source: "src/content/index.ts", outfile: "content/index.js", format: "iife" },
+  "page-world": { source: "src/page-world/index.ts", outfile: "page-world/index.js", format: "iife" },
   popup: { source: "src/popup/index.ts", outfile: "popup/index.js", format: "esm" },
   sidepanel: { source: "src/sidepanel/index.ts", outfile: "sidepanel/index.js", format: "esm" }
 };
@@ -56,7 +64,7 @@ async function bundleExtension() {
  * bundle's path. Only the log level may differ from the extension build, so a
  * caller cannot drift from the bundle the extension ships.
  *
- * @param {"background" | "content" | "popup" | "sidepanel"} name
+ * @param {"background" | "content" | "page-world" | "popup" | "sidepanel"} name
  * @param {string} outputDir
  * @param {{ logLevel?: import("esbuild").LogLevel }} [options]
  * @returns {Promise<string>}

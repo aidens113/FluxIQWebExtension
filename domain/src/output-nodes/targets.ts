@@ -33,9 +33,19 @@ function selectedTargetCandidate(target: JsonObject | undefined): JsonObject | u
     .find(candidate => stringValue(candidate?.candidateId) === selectedCandidateId);
 }
 
+/**
+ * The element identity a target carries. `testId`, `accessibleName` and
+ * `label` are Core's element-fingerprint signals by name
+ * (`fingerprinting/element-fingerprint.ts`), and among its highest weighted:
+ * a target without them can only be matched on its selector and text. Each is
+ * read from the descriptor's own field first, then from the attributes the
+ * recorder captured, so a recording made before the producer emitted the field
+ * still resolves one.
+ */
 export function elementFingerprint(value: unknown): JsonObject | undefined {
   const element = objectValue(value);
   if (!element) return undefined;
+  const attributes = objectValue(element.attributes);
   return compact({
     selector: stringValue(element.selector),
     xpath: stringValue(element.xpath),
@@ -49,8 +59,19 @@ export function elementFingerprint(value: unknown): JsonObject | undefined {
     name: stringValue(element.name),
     href: stringValue(element.href),
     inputType: stringValue(element.inputType),
-    attributes: objectValue(element.attributes)
+    testId: elementTestId(element, attributes),
+    accessibleName: stringValue(element.accessibleName) ?? stringValue(attributes?.["aria-label"]),
+    label: stringValue(element.label),
+    attributes
   });
+}
+
+/** The author-supplied identifier, in the order `describe-element.ts` prefers it for a selector. */
+function elementTestId(element: JsonObject, attributes: JsonObject | undefined): string | undefined {
+  return stringValue(element.testId)
+    ?? stringValue(attributes?.["data-testid"])
+    ?? stringValue(attributes?.["data-test"])
+    ?? stringValue(attributes?.["data-cy"]);
 }
 
 export function compact(value: Record<string, unknown>): JsonObject {

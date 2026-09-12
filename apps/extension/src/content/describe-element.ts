@@ -1,21 +1,29 @@
 // Turns one element into the descriptor that travels on the wire, plus the
 // field accessors that build it. The accessors are exported because the
 // snapshot path judges elements by the same fields before deciding to describe
-// them. Sensitivity is only partly handled here: `hasValue` and `selectedValue`
-// skip sensitive controls, but `value` is read from every field while
-// input-value capture is on, password fields included. Phase 1.4 of the Week 1
-// plan moves full redaction into this producer.
+// them.
+//
+// The identity signals Core's fingerprint normalizer scores -- `testId`,
+// `accessibleName`, `label`, `implicitRole` and `context` -- are derived in
+// `identity/`, one rule per module, and only assembled here (Phase 1.3).
+//
+// Sensitivity is only partly handled here: `selectedValue` skips sensitive
+// controls and `hasValue` reports presence without ever reporting a value, but
+// `value` is read from every field while input-value capture is on, password
+// fields included. Phase 1.4 of the Week 1 plan moves full redaction into this
+// producer.
 
 import { xpathFor } from "./element-finder";
 import { visualDocumentBounds, visualViewportBounds } from "./visual-bounds";
 import { captureSettings } from "./capture-settings";
 import {
   hasClickHandler,
+  hasEnteredValue,
   isInteractableUiElement,
-  isOrdinaryNonSensitiveFillControl,
   isSemanticTextElement,
   isSensitiveFormControl
 } from "./element-traits";
+import { accessibleNameFor, authoredNameAttribute, elementContext, implicitRole, labelText } from "./identity";
 import type { DomElementDescriptor } from "./types";
 
 export function describeElement(element: Element): DomElementDescriptor {
@@ -44,12 +52,23 @@ export function describeElement(element: Element): DomElementDescriptor {
   if (value !== undefined && captureSettings.inputValues) descriptor.value = value;
   const role = element.getAttribute("role");
   if (role) descriptor.role = role;
-  const name = accessibleName(element);
+  const name = authoredNameAttribute(element);
   if (name) descriptor.name = name;
   const href = linkHref(element);
   if (href) descriptor.href = href;
   if (element instanceof HTMLInputElement && element.type) descriptor.inputType = element.type;
-  if (isOrdinaryNonSensitiveFillControl(element)) descriptor.hasValue = element.value.length > 0;
+  const valuePresent = hasEnteredValue(element);
+  if (valuePresent !== undefined) descriptor.hasValue = valuePresent;
+  const testId = testIdFor(element);
+  if (testId) descriptor.testId = testId;
+  const computedName = accessibleNameFor(element);
+  if (computedName) descriptor.accessibleName = computedName;
+  const label = labelText(element);
+  if (label) descriptor.label = label;
+  const markupRole = implicitRole(element);
+  if (markupRole) descriptor.implicitRole = markupRole;
+  const context = elementContext(element);
+  if (context) descriptor.context = context;
   if (element instanceof HTMLSelectElement) {
     descriptor.options = [...element.options].slice(0, 20).map((option) => ({
       value: option.value.slice(0, 200),
@@ -60,7 +79,9 @@ export function describeElement(element: Element): DomElementDescriptor {
     }
   }
   const attributes: Record<string, string> = {};
-  for (const attribute of ["id", "class", "name", "type", "autocomplete", "data-sensitive", "placeholder", "title", "alt", "href", "tabindex", "aria-label", "aria-disabled", "aria-expanded", "aria-controls", "aria-pressed", "aria-selected", "data-testid", "data-test", "data-cy", "disabled", "onclick"]) {
+  // `value` is deliberately absent: value *presence* travels as `hasValue`, so
+  // an allowlisted attribute can never carry a sensitive field's content.
+  for (const attribute of ["id", "class", "name", "type", "autocomplete", "data-sensitive", "placeholder", "title", "alt", "href", "tabindex", "aria-label", "aria-labelledby", "aria-describedby", "for", "aria-disabled", "aria-expanded", "aria-controls", "aria-pressed", "aria-selected", "data-testid", "data-test", "data-cy", "disabled", "onclick"]) {
     const value = element.getAttribute(attribute);
     if (value !== null) attributes[attribute] = value.slice(0, 500);
   }
@@ -114,8 +135,20 @@ export function readElementValue(element: Element | null): string | undefined {
   return undefined;
 }
 
-export function accessibleName(element: Element): string | undefined {
-  return element.getAttribute("aria-label") ?? element.getAttribute("title") ?? element.getAttribute("alt") ?? undefined;
+/**
+ * The name the author wrote on the element, which is what the snapshot judges
+ * an element's identity by. The computed accessible name -- labels, placeholder
+ * and content included -- is `accessibleNameFor` in `identity/`, and reaches
+ * the wire as the descriptor's `accessibleName`.
+ */
+export { authoredNameAttribute as accessibleName } from "./identity";
+
+/** The author's test id, in the order the common tools write one. */
+export function testIdFor(element: Element): string | undefined {
+  return element.getAttribute("data-testid") ??
+    element.getAttribute("data-test") ??
+    element.getAttribute("data-cy") ??
+    undefined;
 }
 
 export function linkHref(element: Element): string | undefined {
@@ -125,9 +158,7 @@ export function linkHref(element: Element): string | undefined {
 
 /** An author-supplied identifier that survives a re-render, if the page offers one. */
 export function stableElementId(element: Element): string | undefined {
-  return element.getAttribute("data-testid") ??
-    element.getAttribute("data-test") ??
-    element.getAttribute("data-cy") ??
+  return testIdFor(element) ??
     element.getAttribute("id") ??
     element.getAttribute("name") ??
     undefined;

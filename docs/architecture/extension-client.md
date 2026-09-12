@@ -28,7 +28,15 @@ The extension:
 - presents a side-panel-first recorder console in Chrome and Edge;
 - tracks local recording timer, event count, queued messages, and recent
   activity summaries;
-- warns when the active page cannot be recorded by content scripts;
+- warns when the active page cannot be recorded by content scripts. One rule,
+  `unsupportedAutomationPageReason`
+  ([`runtime/unsupported-page.ts`](../../apps/extension/src/runtime/unsupported-page.ts)),
+  now answers that question for recording and for automation alike; the
+  recording path only restates its reason in the panel's wording
+  (`background/connection/browser-state.ts`). The recording side previously
+  kept a second pattern that required `://`, so eight URL classes it let
+  through are now refused: `about:`, `view-source:`, `data:`, `devtools:`, and
+  `javascript:` pages, and the Chrome, Edge, and Firefox extension galleries;
 - reports browser, tab, and DOM state as FluxIQ `StateSnapshot` values;
 - captures compact recording evidence from pages;
 - executes browser actions requested by FluxIQ;
@@ -99,7 +107,10 @@ Current server message groups:
 
 ## Action Surface
 
-The first browser action set is deliberately small:
+The browser action set is `WEB_AUTOMATION_ACTION_TYPES`
+([`domain/src/actions/types.ts`](../../domain/src/actions/types.ts)), which is
+the one list every schema, output node, manifest output, and registered output
+derives from:
 
 - `web.browser.navigate`
 - `web.dom.click`
@@ -112,6 +123,16 @@ The first browser action set is deliberately small:
 - `web.dom.wait_for_text`
 - `web.dom.extract`
 - `web.dom.capture_snapshot`
+- `web.dom.check`
+- `web.dom.assert`
+- `web.dom.extract_list`
+- `web.dom.upload`
+- `web.dom.dialog`
+- `web.browser.tab`
+- `web.browser.download`
+
+`web.browser.navigate`, `web.browser.tab`, and `web.browser.download` run in
+the background worker; every other action runs in the tab's content script.
 
 Server action commands use the current gateway shape:
 

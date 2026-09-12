@@ -116,11 +116,26 @@ export function isSensitiveFormControl(element: Element): boolean {
   });
 }
 
-/** A plain fill control whose emptiness may be reported without reporting its value. */
-export function isOrdinaryNonSensitiveFillControl(element: Element): element is HTMLInputElement | HTMLTextAreaElement {
-  if (isSensitiveFormControl(element)) return false;
-  if (element instanceof HTMLTextAreaElement) return true;
-  return element instanceof HTMLInputElement && ["text", "search", "email", "tel", "url", "number"].includes(element.type.toLowerCase());
+/** Input types whose `value` is not something a user entered, so its presence says nothing. */
+const VALUELESS_INPUT_TYPES = new Set(["hidden", "button", "submit", "reset", "image", "checkbox", "radio"]);
+
+/**
+ * Whether a value-bearing control currently holds a value, or `undefined` when
+ * the element has no value to speak of.
+ *
+ * Presence only: the value itself is never returned, which is what makes this
+ * safe for a sensitive field, whose content must never leave the page. There is
+ * no sensitivity test here on purpose -- a boolean carries nothing to redact,
+ * and `isSensitiveFieldSignature` in `shared/sensitive-field.ts` stays the one
+ * rule that decides which values may be read.
+ */
+export function hasEnteredValue(element: Element): boolean | undefined {
+  if (element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) return element.value.length > 0;
+  if (element instanceof HTMLInputElement) {
+    return VALUELESS_INPUT_TYPES.has(element.type.toLowerCase()) ? undefined : element.value.length > 0;
+  }
+  if (element instanceof HTMLElement && element.isContentEditable) return (element.textContent ?? "").trim().length > 0;
+  return undefined;
 }
 
 /** Whether a text-ish value is worth recording at all. Used wherever an element's identity is judged. */

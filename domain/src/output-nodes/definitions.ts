@@ -74,20 +74,38 @@ function parametersForOutput(outputId: WebAutomationActionType): AutomationNodeP
     { id: "visualTarget", label: "Visual Target", valueType: "object", ui: { control: "value" } },
     { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 10_000 }
   ];
-  if (outputId === "web.browser.navigate") return [{ id: "url", label: "URL", valueType: "string", required: true, ui: { control: "text", placeholder: "https://example.com" } }];
+  // A structured parameter is an `object` whose shape is the matching field of
+  // `WebAutomationActionCommand`, declared in `actions/schemas.ts`. The flat
+  // scalars beside it stay authorable, and a recorded action fills them.
+  const structured = (id: string, label: string): AutomationNodeParameter => ({ id, label, valueType: "object", ui: { control: "value" } });
+  if (outputId === "web.browser.navigate") return [
+    { id: "url", label: "URL", valueType: "string", required: true, ui: { control: "text", placeholder: "https://example.com" } },
+    { id: "newTab", label: "New Tab", valueType: "boolean", defaultValue: false }
+  ];
   if (outputId === "web.dom.type") return [...selectorParameters, { id: "text", label: "Text", valueType: "string", defaultValue: "", ui: { control: "textarea" } }];
-  if (outputId === "web.dom.select") return [...selectorParameters, { id: "value", label: "Value", valueType: "string", defaultValue: "", ui: { control: "text" } }];
-  if (outputId === "web.dom.keypress") return [...selectorParameters, { id: "key", label: "Key", valueType: "string", defaultValue: "", ui: { control: "text" } }];
+  if (outputId === "web.dom.select") return [...selectorParameters, { id: "value", label: "Value", valueType: "string", defaultValue: "", ui: { control: "text" } }, structured("option", "Option")];
+  if (outputId === "web.dom.keypress") return [...selectorParameters, { id: "key", label: "Key", valueType: "string", defaultValue: "", ui: { control: "text" } }, structured("modifiers", "Modifiers")];
   if (outputId === "web.dom.scroll") return [
+    ...selectorParameters,
     { id: "x", label: "X", valueType: "number", defaultValue: 0 },
     { id: "y", label: "Y", valueType: "number", defaultValue: 0 },
-    { id: "smooth", label: "Smooth", valueType: "boolean", defaultValue: false }
+    { id: "smooth", label: "Smooth", valueType: "boolean", defaultValue: false },
+    structured("scroll", "Scroll Mode")
   ];
+  if (outputId === "web.dom.wait_for_selector") return [...selectorParameters, structured("wait", "Condition")];
   if (outputId === "web.dom.wait_for_text") return [
     { id: "text", label: "Text", valueType: "string", required: true, ui: { control: "text" } },
-    { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 10_000 }
+    { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 10_000 },
+    structured("wait", "Condition")
   ];
   if (outputId === "web.dom.capture_snapshot") return [];
+  if (outputId === "web.dom.check") return [...selectorParameters, { id: "checked", label: "Checked", valueType: "boolean", defaultValue: true }];
+  if (outputId === "web.dom.assert") return [...selectorParameters, structured("assert", "Assertion")];
+  if (outputId === "web.dom.extract_list") return [structured("extractList", "List")];
+  if (outputId === "web.dom.upload") return [...selectorParameters, structured("upload", "Files")];
+  if (outputId === "web.dom.dialog") return [structured("dialog", "Dialog")];
+  if (outputId === "web.browser.tab") return [structured("tab", "Tab")];
+  if (outputId === "web.browser.download") return [structured("download", "Download")];
   return selectorParameters;
 }
 
@@ -97,5 +115,12 @@ function iconForOutput(outputId: WebAutomationActionType): string {
   if (outputId === "web.dom.type") return "text-cursor-input";
   if (outputId === "web.dom.extract") return "scan-search";
   if (outputId === "web.dom.capture_snapshot") return "camera";
+  if (outputId === "web.dom.check") return "square-check";
+  if (outputId === "web.dom.assert") return "circle-check";
+  if (outputId === "web.dom.extract_list") return "table";
+  if (outputId === "web.dom.upload") return "upload";
+  if (outputId === "web.dom.dialog") return "message-square";
+  if (outputId === "web.browser.tab") return "app-window";
+  if (outputId === "web.browser.download") return "download";
   return "square-dot";
 }
