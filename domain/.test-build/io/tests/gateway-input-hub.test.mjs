@@ -605,6 +605,54 @@ var webAutomationGatewayCapabilities = [
   }
 ];
 
+// src/runtime/failure/codes.ts
+var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
+  /** The target was found but refused the action: disabled, hidden, or covered by another element. */
+  ACTION_REJECTED: "web.action.rejected",
+  /** No element matched the action's target with enough confidence. */
+  TARGET_NOT_FOUND: "web.target.not_found",
+  /** Several elements matched the action's target and none could be preferred. */
+  TARGET_AMBIGUOUS: "web.target.ambiguous",
+  /** The action ran and its post-condition did not hold (decision D4). */
+  OUTPUT_NOT_OBSERVED: "web.validation.output_not_observed",
+  /** An authored `web.dom.assert` condition did not hold. */
+  STATE_MISMATCH: "web.validation.state_mismatch",
+  /** The browser landed somewhere other than the requested URL, or never left where it was. */
+  NAVIGATION_UNEXPECTED: "web.navigation.unexpected",
+  /** The document was replaced between resolving the target and running the action. */
+  PAGE_CHANGED: "web.page.changed",
+  /** A wait, or an action, ran out of time. */
+  TIMEOUT: "web.action.timeout",
+  /** The host wants a sign-in before the action can continue. */
+  AUTH_REQUIRED: "web.auth.required",
+  /** A person must act first: a captcha, or a native dialog waiting for an answer. */
+  USER_INTERVENTION_REQUIRED: "web.intervention.required",
+  /** The client does not implement the requested action type at all. */
+  UNSUPPORTED_TYPE: "web.action.unsupported_type",
+  /** The verb is registered but not built yet, so a Flow that reaches one fails honestly. */
+  NOT_IMPLEMENTED: "web.action.not_implemented",
+  /** The action ran and failed for a reason no other code names. */
+  ACTION_FAILED: "web.action.failed",
+  /** Nothing said why the action failed. */
+  UNKNOWN: "web.action.unknown"
+});
+var WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS = Object.freeze({
+  "web.action.rejected": { category: "blocked_by_capability_or_policy", retryable: false, stage: "execution" },
+  "web.target.not_found": { category: "target_not_found", retryable: true, stage: "target_resolution" },
+  "web.target.ambiguous": { category: "target_ambiguous", retryable: false, stage: "target_resolution" },
+  "web.validation.output_not_observed": { category: "output_not_observed", retryable: true, stage: "verification" },
+  "web.validation.state_mismatch": { category: "unexpected_state", retryable: false, stage: "verification" },
+  "web.navigation.unexpected": { category: "navigation_unexpected", retryable: false, stage: "confirmation" },
+  "web.page.changed": { category: "page_changed", retryable: true, stage: "execution" },
+  "web.action.timeout": { category: "timeout", retryable: true, stage: "execution" },
+  "web.auth.required": { category: "auth_required", retryable: false, stage: "confirmation" },
+  "web.intervention.required": { category: "user_intervention_required", retryable: false, stage: "execution" },
+  "web.action.unsupported_type": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
+  "web.action.not_implemented": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
+  "web.action.failed": { category: "action_failed", retryable: true, stage: "execution" },
+  "web.action.unknown": { category: "ambiguous_or_unknown", retryable: false, stage: "execution" }
+});
+
 // src/recording/state.ts
 var WEB_AUTOMATION_STATE_NAMESPACE = "web";
 

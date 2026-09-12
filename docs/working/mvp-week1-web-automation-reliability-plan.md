@@ -49,9 +49,11 @@ metrics, and cannot run a Flow on `isolated`.
   is an ES module on Core's public exports; isolated runs here use
   `FLUXIQ_TEST_ENV_FILES=none`.
 
-**Running:** none. Wave 2 is complete and integrated. Thirteen wave workers and
-five integration workers landed, each verified against the tree rather than taken
-at its word, and every gate on the final tree passes.
+**Running:** Wave 3. `w3-failure-codes` runs alone first, because ten parallel
+briefs quote its code set, and the Core expectation seam runs alongside it in the
+other repository, where it collides with nothing. Wave 2 is complete, integrated
+and pushed, and its follow-up landed: the run-manifest action-type join is wired
+through and tested, where it had been inert.
 
 **Findings that change later work**
 
@@ -75,15 +77,15 @@ at its word, and every gate on the final tree passes.
   therefore set `FLUXIQ_TEST_ENV_FILES=none`, which skips both env files for
   one run. Never edit `.env.local`.
 
-**Not done:** the node join in the run-manifest timings file, held back so the
-gates and benchmark describe exactly what shipped; then Waves 3 to 5.
+**Not done:** the ten parallel Wave 3 briefs, which wait on the code set; the
+downstream binding of the expectation seam, which has no brief yet; Waves 4
+and 5.
 
 **Next steps**
 
-1. Fix the run-manifest node join, with its own verification.
-2. Write the Wave 3 briefs: Phase 1.3 steps 3 to 6, Phase 1.4, and Phase 1.5.
-   Phase 1.4 step 7 and Phase 1.5 step 2 are Core work and need the paired Core
-   document and a fresh alert to the user before the first Core edit.
+1. Verify w3-failure-codes, then dispatch the ten parallel briefs from
+   [briefs/wave-3.md](./mvp-week1-web-automation-reliability-plan/briefs/wave-3.md).
+2. Brief the downstream binding once the Core seam lands.
 3. Keep Lab runs serialized: only one may execute on this machine at a time.
 
 **Core unit (D11):** the baseline ratchet (mirrored here), domain-host loading,

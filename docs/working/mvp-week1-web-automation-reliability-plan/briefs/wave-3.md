@@ -226,9 +226,33 @@ touch domain code, and a clean structure audit.
   state refs. Create `domain/src/runtime/host-runtime.ts` and bind it beside
   `bindRuntimeService`, sourcing snapshots through `web.dom.capture_snapshot`.
   Bound it by the same byte budget as the sanitized packet.
-- Owns (may edit): new `domain/src/runtime/host-runtime.ts`, its tests, and the
-  one binding line beside `bindRuntimeService`.
-- Must not touch: `llm-evidence.ts`, `adapter.ts`, `failure/`, `apps/`.
+- Second task, added after the Core seam landed: bind the downstream half of the
+  expectation evaluator. Core did **not** add a separate `bindExpectationEvaluator`
+  on the service as the plan first said. It added an optional
+  `expectationEvaluator(conditions, mode, timeoutMs, context)` method **on
+  `AutomationStudioHostRuntimeBoundary` itself**, so the same boundary object you
+  create carries it and no second binding call exists. Read the signature from
+  Core at `packages/fluxiq/src/programs/automation-studio/runtime/host-runtime.ts`
+  and the types from `nodes/contracts.ts`
+  (`AutomationNodeExpectationEvaluation`, `AutomationNodeExpectationEvaluationContext`).
+  Implement the evaluation over the `web.dom.assert` condition vocabulary —
+  `WebAutomationAssertRequest`, kinds `exists`/`absent`/`text`/`url`/`visible`/
+  `enabled` in `domain/src/actions/types.ts` — in its own module
+  `domain/src/runtime/expectation/`, and have `host-runtime.ts` wire it. Return
+  `checkedConditionCount` so Core stops counting expected-state keys, and on a
+  rejection return a `failure` built from the `w3-failure-codes` set:
+  `STATE_MISMATCH` for a condition that does not hold, `TIMEOUT` when the wait
+  expires. `context.source` is `"policy_node"` or `"transition_comparison"`;
+  both are evaluated the same way.
+- Owns (may edit): new `domain/src/runtime/host-runtime.ts`, new
+  `domain/src/runtime/expectation/`, their tests, the runtime barrel line for
+  each, and the one binding line beside `bindRuntimeService` in
+  `domain/src/runtime/service.ts`.
+- Must not touch: `llm-evidence.ts`, `adapter.ts`, `failure/`, `apps/`. Import
+  the codes from `domain/src/runtime/failure`; do not edit it.
+- Definition of done: as above, plus a test proving a rejected condition routes
+  `failed` with the right code, that `checkedConditionCount` is reported, and
+  that an unevaluatable condition does not throw into Core.
 - Report to: `reports/w3-host-runtime.md`
 
 ### Brief: w3-failure-producers
@@ -258,9 +282,19 @@ touch domain code, and a clean structure audit.
   `failureCategories` from `@fluxiq-web-extension/test-contracts` to `unknown`.
   Verified at planning: there is no `evaluation.ts`. The plan named a file that
   does not exist, and the plan text has been corrected too.
+  Second correction, after w3-failure-codes landed: `packages/test-runner` has no
+  dependency on the domain package at all, so it cannot import the code set as
+  the brief first assumed. Add `@fluxiq-web-extension/domain` as a
+  `workspace:*` dependency of `packages/test-runner/package.json` and import the
+  set from its runtime barrel. Do not conflate it with `failureCategories` in
+  `@fluxiq-web-extension/test-contracts`: that is the test-rig evaluation
+  taxonomy, a different axis that its own comment labels as such, and the
+  allowlist here is the domain code set. If you conclude the two should be
+  reconciled, report that rather than merging them.
 - Owns (may edit): `packages/test-runner/src/demo-llm-create-ui.ts`,
   `packages/test-runner/src/failure.ts`,
-  `packages/test-runner/src/bench/evaluate-run.ts`, and tests beside them.
+  `packages/test-runner/src/bench/evaluate-run.ts`,
+  `packages/test-runner/package.json`, and tests beside them.
 - Must not touch: `run-scenario.ts`, the flow-lane modules, `run-manifest/`.
 - Definition of done: test-runner `check` and `test`; a test proving the
   allowlist derives from the domain set rather than repeating it.

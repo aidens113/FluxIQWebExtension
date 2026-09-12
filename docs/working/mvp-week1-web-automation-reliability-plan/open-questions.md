@@ -264,3 +264,29 @@ the plan sits against its 800-line threshold.
   Belongs with Phase 1.5, the failure taxonomy, where a refusal should be a
   classified failure rather than an empty command. Found 2026-09-11 by
   w2i-gateway-params; owner: senior supervisor agent.
+- **The downstream half of the expectation seam has no brief.** The plan says
+  Core exposes an optional expectation evaluator and the downstream binds it in
+  `domain/src/runtime/expectation-evaluator.ts` over the `web.dom.assert`
+  condition vocabulary. The Core half is briefed and running; the downstream
+  binding appears in no Wave 3 brief. It could not have been briefed yet, since a
+  seam cannot be bound before it exists, but it is the kind of half-finished
+  crossing that goes missing between two repositories. Brief it as soon as the
+  Core seam lands, or the evaluator ships with nothing calling it, which is
+  exactly how the run-manifest join stayed inert. Raised 2026-09-11 at Wave 3
+  dispatch; owner: senior supervisor agent.
+  **Resolved 2026-09-12.** The Core seam landed shaped differently than the plan
+  assumed — the evaluator is a method on `AutomationStudioHostRuntimeBoundary`,
+  not a separate service binding — so the downstream half belongs on the same
+  boundary object `w3-host-runtime` already creates. Briefing it separately would
+  have collided on `host-runtime.ts`. It was folded into `w3-host-runtime`
+  instead, with the evaluation logic in its own `domain/src/runtime/expectation/`
+  module.
+- **The runtime error type has no producer, and its code is not a closed type.**
+  `WebAutomationRuntimeError` is referenced by the new classifier but nothing in
+  the tree throws one, so the classifier has no real input yet. Worse, its `code`
+  is typed as a plain `string` rather than the closed code set, so a code outside
+  the set classifies as `UNKNOWN` at runtime instead of failing to compile. That
+  is the difference between a standard the build enforces and one a reviewer has
+  to notice. Narrow the type when the producers land in this wave, and add a
+  producer, or the classifier is dead code with a permissive door. Found
+  2026-09-11 by w3-failure-codes; owner: senior supervisor agent.
