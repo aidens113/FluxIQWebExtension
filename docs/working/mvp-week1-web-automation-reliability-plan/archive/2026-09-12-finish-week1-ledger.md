@@ -956,3 +956,30 @@ event id on its landing (`4d88d65`), both committed.
   their rows, restored by hash.
 - Outcome: Accepted
 
+
+## Part fourteen, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: the bench evidence-size
+reader (`82454db`) and the no-candidates union (`12de09e`), both committed.
+
+### 2026-09-13 — g-bench-evidence-size and g-target-resolution-union land
+
+- Agent: workers `g-bench-evidence-size` and `g-target-resolution-union`; verified
+  by supervisor.
+- Changed: `bench/evaluate-run.ts` and `run-evaluation/observed-run-evaluation.ts`
+  (a Flow-lane row's `sanitizedPacketBytes` and `truncationCount` from
+  `flow-lane.json` `evidencePackets`; none for the recording lane;
+  `rawSnapshotBytes` empty, not Week 1); `flow-lane/persisted-flow-run.ts` (Core's
+  status-keyed resolution union kept, no-candidates included).
+- Decisions: a single `lab run --flow` still records empty evidence, so a lone
+  run and its bench row disagree; briefed as `g-single-run-evidence` after
+  `g-run-scenario-followups`. The union copies Core's source type because Core's
+  `dist` predates `0e6d3ac`; it becomes an import after the Core build
+  (integration).
+- Validation: supervisor read the evidence-size diff (sizes and flags only).
+  Test-runner built into a private `dist-sup7` beside `dist`, `node --test` ->
+  `# tests 496`, `# pass 496`, `# fail 0`, 33 evidence rows, with
+  `g-run-scenario-followups`' in-flight edits in the tree. Workers: four and three
+  mutations each failed their rows, restored byte-identical.
+- Outcome: Accepted
+

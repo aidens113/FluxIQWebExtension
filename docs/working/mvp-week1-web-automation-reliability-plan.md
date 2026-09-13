@@ -752,25 +752,20 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   writes.
 - Outcome: Revised
 
-### 2026-09-13 — g-bench-evidence-size and g-target-resolution-union land
+### 2026-09-13 — g-run-scenario-followups: a second discard read and a bounded scan
 
-- Agent: workers `g-bench-evidence-size` and `g-target-resolution-union`; verified
-  by supervisor.
-- Changed: `bench/evaluate-run.ts` and `run-evaluation/observed-run-evaluation.ts`
-  (a Flow-lane row's `sanitizedPacketBytes` and `truncationCount` from
-  `flow-lane.json` `evidencePackets`; none for the recording lane;
-  `rawSnapshotBytes` empty, not Week 1); `flow-lane/persisted-flow-run.ts` (Core's
-  status-keyed resolution union kept, no-candidates included).
-- Decisions: a single `lab run --flow` still records empty evidence, so a lone
-  run and its bench row disagree; briefed as `g-single-run-evidence` after
-  `g-run-scenario-followups`. The union copies Core's source type because Core's
-  `dist` predates `0e6d3ac`; it becomes an import after the Core build
-  (integration).
-- Validation: supervisor read the evidence-size diff (sizes and flags only).
-  Test-runner built into a private `dist-sup7` beside `dist`, `node --test` ->
-  `# tests 496`, `# pass 496`, `# fail 0`, 33 evidence rows, with
-  `g-run-scenario-followups`' in-flight edits in the tree. Workers: four and three
-  mutations each failed their rows, restored byte-identical.
+- Agent: worker `g-run-scenario-followups`; verified by supervisor.
+- Changed: `run-scenario.ts` (a second audit read after the browser closes and
+  before Core stops); `flow-lane/recording-discards.ts` (union by audit entry id);
+  `redaction-attestation/` (a `persistent-isolated` workspace scans only files
+  written since run start); `declared-secrets.ts` (dead wrapper removed); tests.
+- Decisions: a discarded action found by either read replaces the run's failure
+  category, the old one kept as `supersededFailureCategory`, since it is the root
+  cause; the redaction attestation keeps the earlier category, a separate finding.
+- Validation: supervisor read the diff; test-runner in a private `dist-sup8`,
+  `node --test` -> `# tests 496`, `# pass 496`, `# fail 0`, 29 discard, scope and
+  wiring rows. Worker: seven mutations each caught, restored byte-identical.
+- Not verified: the second read on the 24-run campaign; the bounded scan live.
 - Outcome: Accepted
 
 ## Open Questions
