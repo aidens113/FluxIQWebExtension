@@ -1779,3 +1779,71 @@ design constraints.
 - Domain `check` and `test` under a private label; the structure audit.
 
 **Report:** `reports/w25-wait-mapper.md`.
+
+---
+
+# Fourteenth dispatch — Lab Stage 2
+
+Written while the Stage 1 fixes are still in flight. All rules above still hold.
+
+## l-stage2 — the Stage 1 fixes, measured under load (Lab owner)
+
+Dispatched once every Stage 1 fix above is committed and Core is built. The
+dispatch names this repository's commit `<R>` and Core's `<C>`.
+
+**Owns:** no tracked file in either repository.
+- `F:\fxlab\!FluxIQ`, moved to `<C>`; a repository worktree beside it at `<R>`; a
+  second repository worktree for the load instance.
+- Run artifacts under `F:\fxlab-runs\stage2\`, and memory samples in your scratch
+  directory.
+- The "no `pnpm lab`" rule is lifted for the runs below only, each with
+  `FLUXIQ_TEST_ENV_FILES=none`.
+
+**Read:**
+- `reports/l-stage1.md`, for the pin proof and run layout;
+- `reports/i-recording-loss.md` "Lab proof";
+- `reports/f-flow-start-page.md` Notes;
+- `reports/i-late-target-wait.md`, option 2's Lab proof;
+- `reports/w19-c2.md` and `reports/w19-e4.md`, "Not verified".
+
+**Task.**
+1. **Pin Core** as Stage 1 did, rebuild its packages at `<C>`, and prove the pin
+   before any run.
+2. **Under load.** Run a second instance, looping `basic-form --flow` in its own
+   worktree, for the whole of A and B.
+   - **A:** step 4b, `basic-form --flow --target isolated` ×24. Every run must show:
+     - `exit=0` and `candidateCount` 4;
+     - one `runtime.settle` entry count across all runs (recount the no-loss
+       figure at `<R>`);
+     - the action-count check holding;
+     - zero discard audit entries for the run's session;
+     - `extensionConnectionAfterStop` not `error`.
+   - **B**, ×3 each:
+     - W18 `auth-gate --flow`, with its declared secret: the Flow starts on
+       `/scenarios/auth-gate/`, the username type is present, and the run passes;
+     - W19 `auth-gate --flow --variant expired`: the click attempt `failed`,
+       `auth_required` / `web.auth.required`, `comparisonStatus` `blocked`, and no
+       extract attempt;
+     - W25 `delayed-ui --flow`, and `--variant too-slow`, as option 2's proof says.
+3. **Alone, with no load**, ×3 each unless noted:
+   - W10 `broken-link` and W27 `blocked-url`: `navigation_unexpected` /
+     `web.navigation.unexpected`, with the click `failed`;
+   - `sensitive-input`: the leak attestation passes, and no declared value appears
+     in any bundle file;
+   - W24 `intermediate-state --flow`, unarmed;
+   - the smoke comparison against gate 5.0, once.
+4. **Then** the week1 bench once (`--repeat 1`, headed, as `v-bench-honesty`
+   requires), with its report.
+
+**Report** (`reports/l-stage2.md`):
+- the pin proof;
+- for every run, its exit, its bundle path, and both commits and `dirty` flags
+  from `run.json`;
+- the per-run step 4b figures;
+- each observation named above, quoted from `flow-lane.json`, `evaluation.json`
+  or `events.ndjson`;
+- the bench report's headline rates per lane;
+- the lowest free memory.
+
+Quote, do not summarise. Label every single observation, and rerun a uniform or
+impossible failure once, alone, before reporting it.
