@@ -151,6 +151,18 @@ const enteredTextProposal = mapWebRecordingObservation(recordedObservation("obse
 assert.equal(enteredTextProposal?.outputId, "web.dom.type");
 assert.equal("expectedState" in (enteredTextProposal ?? {}), false, "D1: only a click claims a landing");
 
+// W25 (option 2 of `i-late-target-wait`): a DOM addition recorded before a click
+// proposes waiting for the click's target, from the mutation's own call. Both
+// entries are shaped as Core hands them to the mapper: the mutation batch as an
+// `input.event` observation, the live click as an `action` entry.
+const lateClickWire = createWebAutomationRecordingEvent({ kind: "dom.click", sequence: 8, url: "https://example.test/scenarios/delayed-ui/", title: "Delayed UI", eventTimestampMs: 1_300, element: { selector: "#late-action", tagName: "button", text: "Late action" } });
+const lateClickEntry = { observationId: "observation.late-click", recordingId: "recording.test", domainId: WEB_AUTOMATION_DOMAIN_ID, type: "action", timestamp: 1_300, payload: { type: "action", actionType: "web.dom.click", outputId: "web.dom.click", confirmationInputId: WEB_AUTOMATION_INPUT_IDS.elementClicked, confirmationTimeoutMs: 5_000, parameters: webAutomationOutputPayload("web.dom.click", lateClickWire.payload ?? {}), origin: "operator", startedAt: 1_300, completedAt: 1_300 }, metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputId: WEB_AUTOMATION_INPUT_IDS.elementClicked, inputRole: "action", envelopeId: "envelope.late-click", policyEligible: true } };
+const mutationObservation = (added: number) => ({ observationId: `observation.mutation.${added}`, recordingId: "recording.test", domainId: WEB_AUTOMATION_DOMAIN_ID, type: "observation", timestamp: 1_200, payload: { type: "observation", observationType: "input.event", payload: { latestEvidence: { kind: "dom.mutation", url: "https://example.test/scenarios/delayed-ui/", title: "Delayed UI", sequence: 7, timestamp: 1_200, mutation: { added, removed: 0, attributes: 0, text: 0 } } } }, metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputId: WEB_AUTOMATION_INPUT_IDS.recordingEvidence, inputRole: "event", envelopeId: `envelope.mutation.${added}`, policyEligible: false } });
+assert.deepEqual(mapWebRecordingObservation(mutationObservation(1), { following: [lateClickEntry] }), { outputId: "web.dom.wait_for_selector", parameters: { selector: "#late-action", wait: { condition: "present" } }, confidence: 0.9, label: "Wait for element" }, "W25: a mutation that added nodes proposes waiting for the next click's target");
+assert.equal(mapWebRecordingObservation(mutationObservation(0), { following: [lateClickEntry] }), null, "W25: a batch that added nothing proposes nothing");
+assert.equal(mapWebRecordingObservation(mutationObservation(1)), null, "W25: a mutation mapped with no following entries proposes nothing");
+assert.equal(mapWebRecordingObservation(lateClickEntry, { following: [] }), null, "W25: a click's action entry still maps to null, so Core's fallback click survives");
+
 // A recorded scroll proposes a scroll node; the never-emitted wheel event type proposes nothing.
 const scrollObservation = (eventType: string) => mapWebRecordingObservation({
   observationId: `observation.${eventType}`,

@@ -179,8 +179,9 @@ function hasExecutableParameters(outputId: WebAutomationActionType, parameters: 
   if (outputId === "web.dom.keypress") return isNonEmptyString(parameters.key);
   if (outputId === "web.dom.scroll") return typeof parameters.x === "number" || typeof parameters.y === "number";
   // A check whose state is unknown would have to guess between checking and
-  // unchecking. Until the recorder reports the state (`payloads.ts`,
-  // `recordedCheckedState`), the toggle stays evidence.
+  // unchecking. The recorder reports a checkbox's `checked`, which
+  // `recordedCheckedState` (`payloads.ts`) reads; a sensitive control withholds
+  // it, so that toggle stays evidence.
   if (outputId === "web.dom.check") return typeof parameters.checked === "boolean";
   return true;
 }

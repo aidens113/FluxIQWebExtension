@@ -17,6 +17,7 @@ import {
   WEB_AUTOMATION_RUNTIME_PERMISSIONS
 } from "./output-nodes/native-runtime";
 import { webAutomationRecordingDomain } from "./recording/domain";
+import { webAutomationLateTargetWait } from "./recording/proposals";
 import { WEB_AUTOMATION_STATE_NAMESPACE } from "./recording/state";
 import { WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID } from "./recording/web-state";
 import { webAutomationOutputPayload } from "./web-panel/output-nodes";
@@ -117,11 +118,15 @@ const CANDIDATE_LABELS: Partial<Record<string, string>> = {
  * explained navigation among the entries Core shows the mapper after it
  * (`context.following`). The context is optional so a caller holding one
  * observation can still map it; without it a click claims nothing.
+ *
+ * A recorded DOM addition that no action maps from proposes a wait for the
+ * next click's target, from the mutation's own call (`recording/proposals`). A
+ * click's `action` entry still maps to `null`, so Core's fallback click stands.
  */
 export function mapWebRecordingObservation(observation: AutomationStudioRecordingMapperObservation, context?: Pick<AutomationStudioRecordingMapperContext, "following">): AutomationStudioRecordingMapperCandidate | null {
   const step = recordedStep(observation);
   const action = webAutomationRecordedAction(step.eventType, step.payload, step.metadata);
-  if (!action) return null;
+  if (!action) return webAutomationLateTargetWait(step, (context?.following ?? []).map(recordedStep)) ?? null;
   const expectedState = action.outputId === "web.dom.click" ? webAutomationClickLandingExpectation(step, (context?.following ?? []).map(recordedStep)) : undefined;
   return candidate(action.outputId, action.parameters, action.inputId, CANDIDATE_LABELS[action.outputId] ?? action.outputId, expectedState);
 }
