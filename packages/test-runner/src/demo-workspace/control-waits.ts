@@ -2,7 +2,19 @@
 // recording, a named Flow or Subflow, a routed run, and a connected session.
 import { type ExistingFlowSummary, ExistingFluxIQControlClient } from "../existing-fluxiq-control.js";
 import { RunnerFailure } from "../failure.js";
+import { awaitFinalizedRecording, type FinalizedRecordingControl, type FinalizedRecordingWait } from "../flow-lane/index.js";
 import type { DemoWorkspaceState } from "./workspace-state.js";
+
+/**
+ * How long the demo waits, from the extension reporting idle, for Core to list
+ * the new recording and stamp its `endedAt`. Under load Core stores a demo
+ * recording's entries one append at a time, 0.5 to 1 s each, and was still
+ * storing entries made before Stop 20 s after Stop (`i-demo-recording-finalize`).
+ * The Flow lane's 30 s is not shown to cover that; 90 s is. A finalized
+ * recording returns as soon as Core says so, so the bound costs only a failure.
+ */
+const DEMO_RECORDING_FINALIZE_TIMEOUT_MS = 90_000;
+const DEMO_RECORDING_POLL_INTERVAL_MS = 200;
 
 export function isTerminalRuntimeStatus(status: string): boolean {
   return status === "succeeded" || status === "failed" || status === "cancelled";
@@ -25,20 +37,58 @@ export async function waitForRoutedRunDetail(control: ExistingFluxIQControlClien
   return detail;
 }
 
-export async function waitForNewRecording(control: ExistingFluxIQControlClient, projectId: string, baseline: Set<string>): Promise<string> {
-  const deadline = Date.now() + 10_000;
-  let pendingRecordingId: string | undefined;
-  while (Date.now() < deadline) {
-    const created = recordingItems(await control.listRecordings(projectId)).filter(item => !baseline.has(item.recordingId));
-    if (created.length > 1) throw new RunnerFailure("recording.persistence", "Recording operation created more than one recording");
-    if (created.length === 1) {
-      pendingRecordingId = created[0]!.recordingId;
-      if (created[0]!.status === "completed" || created[0]!.endedAt !== undefined) return pendingRecordingId;
+/**
+ * Returns the one recording absent from `baseline`, once Core has finalized it.
+ * A recording Core is still writing is never handed on: whatever reads it next
+ * would see a short timeline. `wait` injects the bound and clock for tests.
+ */
+export async function waitForNewRecording(control: FinalizedRecordingControl, projectId: string, baseline: Set<string>, wait: FinalizedRecordingWait = {}): Promise<string> {
+  const now = wait.now ?? (() => Date.now());
+  const sleep = wait.sleep ?? ((ms: number) => new Promise<void>(resolve => { setTimeout(resolve, ms); }));
+  const timeoutMs = wait.timeoutMs ?? DEMO_RECORDING_FINALIZE_TIMEOUT_MS;
+  const intervalMs = wait.intervalMs ?? DEMO_RECORDING_POLL_INTERVAL_MS;
+  const startedAt = now();
+  const deadline = startedAt + timeoutMs;
+  let created = await newRecordingIds(control, projectId, baseline);
+  while (created.length === 0) {
+    if (now() >= deadline) {
+      throw new RunnerFailure("recording.persistence", `FluxIQ did not persist a new demo recording within ${timeoutMs} ms (DEMO_RECORDING_FINALIZE_TIMEOUT_MS)`, { details: { timeoutMs, waitedMs: now() - startedAt } });
     }
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await sleep(intervalMs);
+    created = await newRecordingIds(control, projectId, baseline);
   }
-  if (pendingRecordingId) throw new RunnerFailure("recording.persistence", `FluxIQ persisted demo recording ${pendingRecordingId} but did not finalize it`);
-  throw new RunnerFailure("recording.persistence", "FluxIQ did not persist a new demo recording");
+  const [recordingId] = created;
+  if (created.length > 1 || recordingId === undefined) throw new RunnerFailure("recording.persistence", "Recording operation created more than one recording");
+  try {
+    // At least one interval, so a recording found at the deadline still gets its confirming read.
+    await awaitFinalizedRecording(control, { projectId, recordingId }, {}, { now, sleep, intervalMs, timeoutMs: Math.max(deadline - now(), intervalMs) });
+  } catch (error) {
+    if (!(error instanceof RunnerFailure) || error.category !== "recording.persistence") throw error;
+    throw unfinalizedRecordingFailure(recordingId, error, timeoutMs, now() - startedAt);
+  }
+  const after = await newRecordingIds(control, projectId, baseline);
+  if (after.length !== 1 || after[0] !== recordingId) {
+    throw new RunnerFailure("recording.persistence", `Demo recording ${recordingId} finalized, but Core then listed ${after.length} new recordings instead of exactly that one`);
+  }
+  return recordingId;
+}
+
+/** Core's cheap summary list; the full form hydrates every entry on each poll, adding the load being waited out. */
+async function newRecordingIds(control: FinalizedRecordingControl, projectId: string, baseline: Set<string>): Promise<string[]> {
+  const listed = await control.automationStudioCall("list-recordings", { projectId, summaries: true });
+  return recordingItems({ payload: listed }).map(item => item.recordingId).filter(id => !baseline.has(id));
+}
+
+/** Ids, counts and times only: the recording's page data never reaches the message. */
+function unfinalizedRecordingFailure(recordingId: string, cause: RunnerFailure, timeoutMs: number, waitedMs: number): RunnerFailure {
+  const details = cause.details ?? {};
+  const entryCount = typeof details.entryCount === "number" ? details.entryCount : "unknown";
+  const state = details.recordingSeen === false ? "Core stopped listing it" : details.endedAt === null ? "Core was still writing it" : "its timeline kept growing after endedAt";
+  return new RunnerFailure(
+    "recording.persistence",
+    `FluxIQ persisted demo recording ${recordingId} but did not finalize it within ${timeoutMs} ms (DEMO_RECORDING_FINALIZE_TIMEOUT_MS): ${state}; last observed entry count ${entryCount}`,
+    { cause, details: { ...details, recordingId, bound: "DEMO_RECORDING_FINALIZE_TIMEOUT_MS", timeoutMs, waitedMs } },
+  );
 }
 
 export async function waitForNamedFlow(control: ExistingFluxIQControlClient, projectId: string, flowName: string): Promise<ExistingFlowSummary> {
@@ -63,15 +113,15 @@ export async function waitForNamedSubflow(control: ExistingFluxIQControlClient, 
   throw new RunnerFailure("environment.missing", "Panel Subflow creation did not persist the demo Subflow");
 }
 
-export type RecordingListItem = { recordingId: string; status?: string; endedAt?: unknown };
+/** Identity only: whether a recording is finished is `awaitFinalizedRecording`'s question, read from Core's `endedAt`. */
+export type RecordingListItem = { recordingId: string };
 
 export function recordingItems(response: any): RecordingListItem[] {
   const values = response?.payload?.recordings ?? response?.payload?.items ?? response?.payload;
   return Array.isArray(values)
     ? values.flatMap((item: any) => {
       const recordingId = item?.recordingId ?? item?.id;
-      if (typeof recordingId !== "string") return [];
-      return [{ recordingId, ...(typeof item?.status === "string" ? { status: item.status } : {}), ...(item?.endedAt !== undefined && item?.endedAt !== null ? { endedAt: item.endedAt } : {}) }];
+      return typeof recordingId === "string" ? [{ recordingId }] : [];
     })
     : [];
 }
