@@ -21,6 +21,15 @@ export type PersistedFlowAction = {
   durationMs?: number;
   failure: AutomationStudioFailureRecord | null;
   extracted?: Array<Record<string, string>>;
+  /**
+   * Core's comparison of what the attempt did against the transition its node
+   * expected, by Core's name for it (`matched`, `blocked`, ...; Core
+   * `runtime/executor/contracts.ts`, `AutomationStudioTransitionComparisonStatus`).
+   * The run detail carries it on the attempt itself (Core
+   * `service/summaries/conversions.ts`, and `storage/project/runtime-stream-store.ts`
+   * for a stored run). Absent when Core compared nothing.
+   */
+  comparisonStatus?: string;
   /** How Core resolved the attempt's element target before dispatching it; absent when the node dispatched none. */
   targetResolution?: PersistedTargetResolution;
   /** The sanitized evidence packets Core captured around the attempt, measured; absent when it captured none. */
@@ -179,6 +188,7 @@ function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<s
   const nodeId = typeof attempt.nodeId === "string" ? attempt.nodeId : "";
   const targetResolution = targetResolutionOf(attempt);
   const evidencePackets = evidencePacketsOf(attempt);
+  const comparisonStatus = comparisonStatusOf(attempt);
   return {
     actionType: actionTypes.get(nodeId) ?? (typeof attempt.definitionId === "string" ? attempt.definitionId : "unknown"),
     status: runActionStatus(attempt.status),
@@ -187,9 +197,25 @@ function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<s
     // Core's own record, parsed by Core's parser. A record Core would reject is treated as absent.
     failure: parseAutomationStudioFailureRecord(attempt.failure) ?? null,
     ...(extracted ? { extracted } : {}),
+    ...(comparisonStatus ? { comparisonStatus } : {}),
     ...(targetResolution ? { targetResolution } : {}),
     ...(evidencePackets.length ? { evidencePackets } : {}),
   };
+}
+
+/** The shape of Core's comparison status names: lowercase words joined by underscores. */
+const COMPARISON_STATUS_NAME = /^[a-z]+(?:_[a-z]+)*$/u;
+
+/**
+ * Core's `comparisonStatus`, kept only when it has the shape of one of Core's
+ * names, at most 64 characters. The run detail types it as any string (Core
+ * `model/flow-adaptation.ts`) and Core's union is not a public export, so the
+ * shape is what keeps a value that is not a name, which could carry page text,
+ * out of the bundle.
+ */
+function comparisonStatusOf(attempt: Record<string, unknown>): string | undefined {
+  const status = attempt.comparisonStatus;
+  return typeof status === "string" && status.length <= 64 && COMPARISON_STATUS_NAME.test(status) ? status : undefined;
 }
 
 /**

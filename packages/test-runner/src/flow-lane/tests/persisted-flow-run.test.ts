@@ -82,6 +82,28 @@ test("a run with no durable action, or a detail for another run, is refused", as
 });
 
 /**
+ * Lab Stage 2, W19: the click failed as `auth_required` 3 of 3, but no bundle
+ * file held Core's `comparisonStatus`, so no run could quote `blocked`. Core's
+ * run detail carries it on the attempt itself.
+ */
+test("each attempt carries Core's transition comparison status when Core reports one, and only in the shape of Core's names", async () => {
+  const run = { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" };
+  const { client } = control({}, {
+    summary: { runId: "run.one", status: "failed" },
+    actionAttempts: [attempt({ comparisonStatus: "matched" }), attempt({ attemptId: "attempt.two", nodeId: "node.two", order: 1, status: "failed", comparisonStatus: "blocked" })],
+  });
+  assert.deepEqual((await executeRecordedFlowRun(client, run)).actions.map(action => action.comparisonStatus), ["matched", "blocked"]);
+
+  const { client: plain } = control();
+  assert.equal(Object.hasOwn((await executeRecordedFlowRun(plain, run)).actions[0] ?? {}, "comparisonStatus"), false, "absent when Core compared nothing");
+  for (const comparisonStatus of ["", "Blocked", "blocked by Demo Customer", "missing-expected-state", "a".repeat(65), 7, { status: "blocked" }]) {
+    const { client: unnamed } = control({}, { actionAttempts: [attempt({ comparisonStatus })] });
+    const read = await executeRecordedFlowRun(unnamed, run);
+    assert.equal(Object.hasOwn(read.actions[0] ?? {}, "comparisonStatus"), false, JSON.stringify(comparisonStatus));
+  }
+});
+
+/**
  * `L-replay` Defect 4: Core records how it resolved each target, the Core store
  * is deleted when the run ends, and the bundle kept none of it. Core's run
  * detail carries the record at `metadata.targetResolution`.

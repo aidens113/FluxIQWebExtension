@@ -366,3 +366,32 @@ test("the lane reports the time just before it dispatches the Flow run, and a la
   await assert.rejects(() => runLane(short, [], { recordingEvents: basicFormEvents, flowDispatchStarting: at => { neverDispatched.push(at); } }));
   assert.deepEqual(neverDispatched, [], "a proposal refused before approval dispatches nothing, so nothing is reported");
 });
+
+/** Lab Stage 2, W18 and W09: a recording's `extract` step is the runner's own check, so Core proposed no extract node to yield records. */
+test("a Flow with no extract node is not judged on the workflow's extraction, and its evidence says the expectation did not apply", async () => {
+  const expected: ResolvedScenarioWorkflow["expected"] = { extracted: [{ step: "read-account", count: 1 }] };
+  const evidence: FlowLaneEvidence[] = [];
+  const { outcome } = await runLane(fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500 }), evidence, { expected });
+  assert.equal(outcome.extraction, "not_applicable");
+  assert.equal(evidence[0]?.extraction, "not_applicable");
+  assert.equal(flowLaneSnapshot(evidence[0]!).extractionExpectation, "not_applicable");
+
+  const extracting = fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500, graphNodes: [{ id: "node.extract", parameterValues: { outputId: "web.dom.extract" } }] });
+  const judged: FlowLaneEvidence[] = [];
+  await assert.rejects(() => runLane(extracting, judged, { expected }), /produced 0 extraction result\(s\), expected 1/);
+  assert.equal(judged[0]?.extraction, "judged", "published before the expectation is judged");
+  assert.equal(flowLaneSnapshot(judged[0]!).extractionExpectation, "judged");
+
+  const undeclared: FlowLaneEvidence[] = [];
+  await runLane(fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500 }), undeclared);
+  assert.equal(undeclared[0]?.extraction, "not_expected");
+});
+
+/** Lab Stage 2, W19: Core's comparison status for the click reaches `snapshots/flow-lane.json`, so a run can quote `blocked`. */
+test("each action's transition comparison status reaches the flow-lane snapshot", async () => {
+  const authRequired = { category: "auth_required", code: "web.auth.required", retryable: false };
+  const fake = fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500, runStatus: "failed", attempt: { status: "failed", failure: authRequired, comparisonStatus: "blocked" } });
+  const evidence: FlowLaneEvidence[] = [];
+  await runLane(fake, evidence, { expected: { failure: { category: "auth_required" } } });
+  assert.deepEqual(flowLaneSnapshot(evidence[0]!).actions, [{ actionType: "web.dom.click", status: "failed", failure: authRequired, comparisonStatus: "blocked" }]);
+});

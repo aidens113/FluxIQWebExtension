@@ -105,6 +105,13 @@ test("Core's discard audit is read a second time, after the Flow lane and the br
     "an action either read finds discarded fails the run as recording.persistence; an audit the second read cannot get fails only a run that had passed",
   );
   assert.ok(source.includes("flowDispatchStarting: at => { discardWindowUntil = at; },"), "the second read's window closes when the Flow lane reports it is dispatching the Flow, whose runtime confirmations Core audits against the finalized recording");
+  // Lab Stage 2, W19 run 1: one failed snapshot fetch failed a run whose Flow had met its expectations.
+  assert.match(
+    source,
+    /do \{\s*snapshotFetches \+= 1;\s*secondRead = readRecordingDiscards\(await topology\.control\.gatewaySnapshot\(\)\.catch\(\(\) => undefined\), \{ \.\.\.firstDiscardRead\.scope, until: discardWindowUntil \}, earlier\);\s*\} while \(secondRead\.window\.excluded === null && snapshotFetches < 2\);/u,
+    "a snapshot the second read could not fetch or read is fetched once more, and no more, before the read fails closed",
+  );
+  assert.ok(source.includes("discardsAfterFirstRead: secondRead.discards.length - earlier.length, snapshotFetches }"), "the number of fetches is published beside the read");
 });
 
 test("the evaluation reaches the caller, so lab run reports it without a bench", async () => {

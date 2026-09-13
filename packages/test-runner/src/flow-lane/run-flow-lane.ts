@@ -1,7 +1,7 @@
 import type { ExpectedEvent, ResolvedScenarioWorkflow, WebScenario } from "@fluxiq-web-extension/test-contracts";
 import type { FluxIQHttpOptions } from "../http-control.js";
 import { declaredSecretBindingInputs, declaredSecretFlowInputs, flowSecretRequests, type DeclaredSecret } from "./declared-secrets.js";
-import { assertFlowActions, assertFlowExtraction, assertFlowFailure } from "./expectations.js";
+import { assertFlowActions, assertFlowExtraction, assertFlowFailure, flowExtractionExpectation, type FlowExtractionExpectation } from "./expectations.js";
 import { awaitFinalizedRecording, type FinalizedRecording, type FinalizedRecordingWait } from "./finalized-recording.js";
 import { flowActionTypes, readFlowNodes } from "./flow-action-types.js";
 import { flowLaneObservation, type RunLaneObservation } from "./lane-observation.js";
@@ -63,8 +63,10 @@ export type FlowLaneInput = {
  * What the lane observed, handed to the runner before the expectations are
  * judged. `observation` is the run's `RunLaneObservation` as it stands then,
  * so a run whose expectations fail is still published as the Flow run it was.
+ * `extraction` says whether the workflow's extraction expectation applied to
+ * this Flow, and so whether it is judged.
  */
-export type FlowLaneEvidence = { recording: FinalizedRecording; proposal: RecordingFlowProposal; flowId: string; run: PersistedFlowRunOutcome; observation: RunLaneObservation };
+export type FlowLaneEvidence = { recording: FinalizedRecording; proposal: RecordingFlowProposal; flowId: string; run: PersistedFlowRunOutcome; observation: RunLaneObservation; extraction: FlowExtractionExpectation };
 
 export type FlowLaneOutcome = {
   recording: FinalizedRecording;
@@ -72,6 +74,7 @@ export type FlowLaneOutcome = {
   flowId: string;
   run: PersistedFlowRunOutcome;
   observation: RunLaneObservation;
+  extraction: FlowExtractionExpectation;
 };
 
 /**
@@ -130,6 +133,8 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
     inputs: { ...declaredSecretFlowInputs(input.secrets), ...secretInputs, scenarioId: input.scenario.id, facilityRunId: input.facilityRunId },
   }, bounds);
   const expected = input.workflow.expected;
+  // A Flow with no extract node cannot yield the records a recording's `extract` step checked, so that expectation is not judged here.
+  const extraction = flowExtractionExpectation(expected.extracted, actionTypes);
   // The oracle and the publish both come before the asserts. An assert throws
   // on any mismatch, and a run that failed one used to leave the runner with no
   // Flow observation at all, so the category Core reported never reached the
@@ -142,11 +147,11 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
     run,
     automationFailureExpected: expected.failure ?? null,
   });
-  await input.recordEvidence({ recording, proposal, flowId: approved.flowId, run, observation });
+  await input.recordEvidence({ recording, proposal, flowId: approved.flowId, run, observation, extraction });
   assertFlowFailure(expected.failure, run.failure);
   assertFlowActions(expected.actions, run.actions);
-  assertFlowExtraction(expected.extracted, run.extracted);
-  return { recording, proposal, flowId: approved.flowId, run, observation };
+  assertFlowExtraction(expected.extracted, run.extracted, actionTypes);
+  return { recording, proposal, flowId: approved.flowId, run, observation, extraction };
 }
 
 /**
@@ -163,18 +168,21 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
  * run ends and this file is then the only record of how a target was found.
  * For the same reason each action carries the size and truncation flag of the
  * sanitized evidence packets Core captured around it -- measurements, never the
- * packets.
+ * packets. `extractionExpectation` says whether the workflow's extraction was
+ * judged against this Flow, and each action carries Core's transition
+ * comparison status when Core reported one.
  */
 export function flowLaneSnapshot(evidence: FlowLaneEvidence) {
   return {
     recording: { recordingId: evidence.recording.recordingId, entryCount: evidence.recording.entryCount, secondWait: { entriesAppendedAfterFirstPoll: evidence.recording.entriesAppendedWhileWaiting, waitMs: evidence.recording.waitedMs, polls: evidence.recording.polls } },
     proposalId: evidence.proposal.proposalId, mapperId: evidence.proposal.mapperId, candidateCount: evidence.proposal.candidateCount, proposalIssues: [...evidence.proposal.issues],
     flowId: evidence.flowId, runtimeRunId: evidence.run.runId, status: evidence.run.status,
-    harnessActivations: evidence.run.harnessActivations, failure: evidence.run.failure, extractionCount: evidence.run.extracted.length,
+    harnessActivations: evidence.run.harnessActivations, failure: evidence.run.failure, extractionCount: evidence.run.extracted.length, extractionExpectation: evidence.extraction,
     actions: evidence.run.actions.map((action) => ({
       actionType: action.actionType,
       status: action.status,
       ...(action.failure ? { failure: action.failure } : {}),
+      ...(action.comparisonStatus ? { comparisonStatus: action.comparisonStatus } : {}),
       ...(action.targetResolution ? { targetResolution: action.targetResolution } : {}),
       ...(action.evidencePackets ? { evidencePackets: action.evidencePackets } : {}),
     })),

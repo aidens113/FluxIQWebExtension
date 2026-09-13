@@ -42,13 +42,38 @@ export function assertFlowFailure(expected: ExpectedFailure | undefined, failure
   }
 }
 
+/** The domain outputs whose attempts yield extracted records (`domain/src/actions/types.ts`). */
+const EXTRACT_OUTPUT_IDS: ReadonlySet<string> = new Set(["web.dom.extract", "web.dom.extract_list"]);
+
+/**
+ * Whether the Flow lane judges a workflow's `expected.extracted`, published in
+ * the lane's evidence so a run shows which it was:
+ * - `judged`: extraction is expected, and the generated Flow has an extract node;
+ * - `not_applicable`: extraction is expected, and the Flow has no extract node
+ *   that could yield any. A recording's `extract` step is the runner's own
+ *   check, not a user action, so nothing is recorded for it and Core proposes
+ *   no extract node; Lab Stage 2's W18 and W09 Flow-lane runs could only fail
+ *   with `0 extraction result(s)`. The recording lane still judges it;
+ * - `not_expected`: the workflow declares no extraction.
+ */
+export type FlowExtractionExpectation = "judged" | "not_applicable" | "not_expected";
+
+/** Which `FlowExtractionExpectation` a workflow's `expected.extracted` is, against the approved Flow's node output ids (`flowActionTypes`). */
+export function flowExtractionExpectation(expected: readonly ExpectedExtraction[] | undefined, actionTypes: ReadonlyMap<string, string>): FlowExtractionExpectation {
+  if (!expected?.length) return "not_expected";
+  return [...actionTypes.values()].some((outputId) => EXTRACT_OUTPUT_IDS.has(outputId)) ? "judged" : "not_applicable";
+}
+
 /**
  * `expected.extracted` against what the Flow's extract attempts yielded, in
- * attempt order. The recording lane asserts only unpaginated extraction
- * because it reads the current page and never follows `next`; a Flow does
- * follow it, so paginated extraction is proven here and nowhere else.
+ * attempt order, judged only when `flowExtractionExpectation` is `judged`. The
+ * recording lane asserts only unpaginated extraction because it reads the
+ * current page and never follows `next`; a Flow does follow it, so paginated
+ * extraction is proven here and nowhere else, and only by a Flow with an
+ * extract node.
  */
-export function assertFlowExtraction(expected: readonly ExpectedExtraction[] | undefined, extracted: readonly Array<Record<string, string>>[]): void {
+export function assertFlowExtraction(expected: readonly ExpectedExtraction[] | undefined, extracted: readonly Array<Record<string, string>>[], actionTypes: ReadonlyMap<string, string>): void {
+  if (flowExtractionExpectation(expected, actionTypes) !== "judged") return;
   const entries = expected ?? [];
   if (!entries.length) return;
   if (entries.length !== extracted.length) {

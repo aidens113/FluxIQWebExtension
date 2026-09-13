@@ -413,8 +413,15 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
     // cannot get fails only a run that had passed.
     if (firstDiscardRead && topology?.control) {
       const earlier = firstDiscardRead.discards;
-      const secondRead = readRecordingDiscards(await topology.control.gatewaySnapshot().catch(() => undefined), { ...firstDiscardRead.scope, until: discardWindowUntil }, earlier);
-      await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "Core's discard audit was read again before the topology closed"), details: { recordingDiscards: secondRead.discards, recordingDiscardWindow: secondRead.window, discardsAfterFirstRead: secondRead.discards.length - earlier.length } }).catch(() => undefined);
+      // A snapshot this read could not fetch, or that held no audit log to read (`excluded: null`), is fetched once more before
+      // the read fails closed: in Lab Stage 2 one failed fetch failed a W19 run whose Flow had met its expectations.
+      let secondRead: ReturnType<typeof readRecordingDiscards>;
+      let snapshotFetches = 0;
+      do {
+        snapshotFetches += 1;
+        secondRead = readRecordingDiscards(await topology.control.gatewaySnapshot().catch(() => undefined), { ...firstDiscardRead.scope, until: discardWindowUntil }, earlier);
+      } while (secondRead.window.excluded === null && snapshotFetches < 2);
+      await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "Core's discard audit was read again before the topology closed"), details: { recordingDiscards: secondRead.discards, recordingDiscardWindow: secondRead.window, discardsAfterFirstRead: secondRead.discards.length - earlier.length, snapshotFetches } }).catch(() => undefined);
       const failure = secondRead.failure;
       if (failure && (failure.category === "recording.persistence" ? failureCategory !== "recording.persistence" : verdict === "passed")) {
         const superseded = failureCategory;
