@@ -36,11 +36,11 @@ flight. No exit criterion yet carries a quoted Lab observation. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
-settled ledger entries are in parts one to twenty-nine of
+settled ledger entries are in parts one to thirty of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13, while workers run.**
-- **This repository:** `6c22e22`, 82 commits ahead of `origin/dev`, not pushed.
+- **This repository:** `e3df022`, 86 commits ahead of `origin/dev`, not pushed.
 - **Core:** `240c73e`, 10 commits ahead of `origin/dev`, `fluxiq` **0.4.0**, built at
   `187f40d`; the tenth is a plan-only commit. The nine code commits:
   - `5d495eb`, trace withholding;
@@ -93,12 +93,13 @@ settled ledger entries are in parts one to twenty-nine of
   row stays in the corpus.
 
 **In flight:**
-- **Twenty-third dispatch, from Stage 2's second attempt:** `i-secret-in-workspace`
-  (Lab owner), `i-bench-triage`, `i-w25-live-wait` and `g-flow-lane-expectations`.
+- **Twenty-third dispatch:** `i-bench-triage` and `i-w25-live-wait`. **Twenty-fourth,
+  closing the auth-gate leak:** `f-authgate-fixture`, `g-attestation-sqlite`,
+  `f-runner-secret-input`, and in Core `g-core-input-withholding` and `g-core-attempt-withholding`.
 
 **Queued, in dependency order**
-1. **After the twenty-third dispatch:** the fixes it names, then W18, W19 and W25
-   again in the Lab.
+1. **After both dispatches:** a Core build, then W18, W19 and W25 again in the Lab,
+   with the auth-gate leak check expected to read 0.
 2. **Integration:**
    - Core `package:lint` and `pnpm build` on the 0.4.0 tree (the bump and its
      migration note landed in `5845f5d`);
@@ -718,6 +719,59 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   - the single failures: W26 `Timed out waiting for client gateway`, W16
     `fetch failed`, and the startup timeouts;
   - W19 `expired` against a Core that no longer leaks.
+- Outcome: Revised
+
+### 2026-09-13 — i-secret-in-workspace: the auth-gate secret reaches Core by three routes, none of them typing
+
+- Agent: worker `l-stage2`, as the Lab owner; decisions by supervisor.
+- Changed: no tracked file.
+  - One `auth-gate --flow` run and one recording-lane run, under
+    `F:\fxlab-runs\secret\`. Each kept its Core workspace through a temporary
+    runner edit, was reported, then deleted.
+  - The edit was reverted, and the worktree was proven clean.
+  - `reports/i-secret-in-workspace.md`.
+- Found (a single run per lane):
+  - **The fixture renders the demo password as page text**
+    (`apps/scenario-lab/src/scenarios/auth-gate/pages.ts:21-26`). State
+    snapshots capture it as `visibleText`, `text` and labels: 6 objects per
+    lane, plus the attempts' result snapshots.
+  - **The runner sends the secret twice as Flow run inputs**
+    (`run-flow-lane.ts:133`). Core persists them in the session metadata and in
+    `runDetailEnvelope`'s event chunks.
+  - **Core saves each command attempt whole.** The password step's resolved value
+    sits at `command.parameters.text`, and trace withholding never covered
+    attempts.
+  - Nothing came from typing: the recorder withholds a password field's value.
+  - The attestation undercounts. It skips SQLite, and both runs' databases held
+    the value in 4 rows it never reported.
+- Decisions: the twenty-fourth dispatch takes fixes 1-5.
+  - `f-authgate-fixture`: the fixture stops rendering the password.
+  - `g-attestation-sqlite`: the attestation scans SQLite.
+  - `f-runner-secret-input`: the runner drops its duplicate input, after
+    `g-flow-lane-expectations`.
+  - In Core, `g-core-input-withholding` withholds persisted run inputs, and
+    `g-core-attempt-withholding` withholds resolved values in saved attempts.
+    The user was told the Core areas, the reason and the compatibility effect
+    before dispatch.
+  - Fix 6, a sensitive-display rule in the domain, goes to the Phase 1.6b
+    ranking.
+- Validation:
+  - Supervisor read:
+    - `run-flow-lane.ts:120-134`, where the run's `inputs` spread both
+      `declaredSecretFlowInputs(input.secrets)` and `secretInputs`;
+    - Core `programs/automation-studio/runtime/service.ts:2824-2835`
+      (`metadata: { ..., inputs: input.inputs ?? {} }`, written by
+      `writeRuntimeSession`);
+    - `storage/project/runtime-stream-store.ts` `runDetailEnvelope`
+      (`inputs: detail.inputs`);
+    - `runtime/storage.ts:51-52`, where `saveCommandAttempt` writes the whole
+      attempt.
+  - Worker: 13 and 6 flagged files, as in Stage 2. The revert rebuilt at exit 0,
+    and `git status --short` printed nothing. After deletion, `.work entries
+    after: 0`, and the value count was 0 in 57 run files.
+  - The fixture's page text was never printed.
+- Not verified: the browser profile; the exact Core call writing each recording
+  state file; any fix.
 - Outcome: Revised
 
 ## Open Questions

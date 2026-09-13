@@ -2014,3 +2014,49 @@ the stored-payload correction (`17c5bae`) and the discard window evidence
     and 2 naming none, with `discardsAfterFirstRead` 0.
 - Outcome: Accepted
 
+
+## Part thirty, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: the Flow-lane
+expectation corrections (`e3df022`), committed.
+
+### 2026-09-13 — g-flow-lane-expectations: the Flow lane judges only what a recording can produce, and shows the comparison status
+
+- Agent: worker `g-flow-lane-expectations`; verified by supervisor.
+- Changed:
+  - `flow-lane/expectations.ts` and `run-flow-lane.ts`: a Flow with no extract
+    node is not judged on the workflow's extraction, and `flow-lane.json` records
+    `extractionExpectation: "not_applicable"`. The recording lane still judges
+    unpaginated extraction.
+  - `flow-lane/persisted-flow-run.ts` and `run-flow-lane.ts`: each attempt carries
+    Core's transition comparison status, when Core reports one, and it reaches
+    the `flow-lane.json` snapshot.
+  - `run-scenario.ts`: the second discard read retries once when a read yields no
+    audit log, and publishes `snapshotFetches`.
+  - Their tests, and `runner-wiring.test.ts`.
+  - The two edits beyond the brief's file list publish evidence that would
+    otherwise reach no bundle file. They are accepted.
+- Found: paginated extraction (`product-catalog`, `pagination: followNext`) is
+  now judged by neither lane. Before this change, its Flow row could only fail
+  with `0 extraction result(s)`.
+- Decisions: paginated extraction has no Lab producer in Week 1. A recording
+  never yields an extract node, and authoring one is Week 2 Flow work. The
+  content harness keeps the verb's own coverage.
+- Validation: supervisor, from `packages/test-runner`:
+  - `pnpm check` -> exit 0;
+  - `tsc --outDir dist-sup23` -> exit 0;
+  - `node --test "dist-sup23/**/*.test.js"` -> `# tests 521`, `# pass 521`,
+    `# fail 0`, including `ok 75 - a Flow with no extract node is not judged on
+    the workflow's extraction, and the expectation is named as not applying`,
+    `ok 99 - each attempt carries Core's transition comparison status when Core
+    reports one, ...` and `ok 142 - each action's transition comparison status
+    reaches the flow-lane snapshot`;
+  - the structure audit passed.
+  - Worker: three mutations, each failing its rows and restored byte-identical:
+    the extraction guard, the comparison status, and the retry.
+- Not verified:
+  - the Lab: W18 and W09 `not_applicable`, W19 `comparisonStatus: "blocked"`,
+    and `snapshotFetches`;
+  - the retry against the real transient fault.
+- Outcome: Accepted
+

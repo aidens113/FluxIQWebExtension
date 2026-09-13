@@ -2401,3 +2401,159 @@ Sent to the `l-stage2` worker, resumed.
 - The structure audit.
 
 **Report:** `reports/g-flow-lane-expectations.md`.
+
+---
+
+# Twenty-fourth dispatch — closing the auth-gate secret leak
+
+From `reports/i-secret-in-workspace.md`, confirmed by the supervisor in code. The
+auth-gate declared secret reaches Core's workspace by three routes, none of them
+typing:
+- **the fixture** renders it as page text (`auth-gate/pages.ts:21-26`);
+- **the runner** sends it twice as Flow run inputs (`run-flow-lane.ts:133`), which
+  Core persists in the session metadata (`runtime/service.ts:2832`) and in
+  `runDetailEnvelope` (`storage/project/runtime-stream-store.ts:509-520`);
+- **Core** saves each command attempt whole, resolved parameters included
+  (`packages/fluxiq/src/runtime/storage.ts:51-52`).
+
+The redaction attestation also skips SQLite, where 4 more rows held it.
+
+Decided:
+- Fixes 1-5 of the report's design are taken.
+- Fix 6, a sensitive-display rule in the domain, goes to the Phase 1.6b ranking.
+  A page that labels a secret-bearing display element is not a Week 1 case.
+- Fixes 3 and 4 cross into Core. The user was told the areas, the reason and the
+  compatibility effect before dispatch.
+
+## f-authgate-fixture — the sign-in page stops showing its password (scenario-lab)
+
+**Owns:** `apps/scenario-lab/src/scenarios/auth-gate/pages.ts` and that scenario's
+tests.
+
+**Read:** `reports/i-secret-in-workspace.md` fix 1.
+
+**Task.** Stop rendering the demo password as page text. Drop its `<dd>`, or show
+a fixed placeholder. Keep whatever the recording script and oracle still need.
+
+**Tests.**
+- A scenario test that the rendered sign-in HTML does not contain the password
+  constant, with a mutation that restores the `<dd>`.
+- Scenario-lab `check` and `test`.
+- The structure audit.
+
+**Report:** `reports/f-authgate-fixture.md`.
+
+## g-attestation-sqlite — the leak check scans the databases it skipped (test-runner)
+
+**Owns:** `packages/test-runner/src/secret-leak-attestation.ts`,
+`redaction-attestation/run-redaction-scopes.ts`, and their tests.
+
+**Read:** `reports/i-secret-in-workspace.md` fix 5.
+
+**Task.**
+1. A workspace scope scans a SQLite database and its `-wal` and `-shm` files for
+   each literal, as UTF-8 and as UTF-16LE, instead of counting them as skipped
+   binary.
+2. A file that cannot be scanned is reported as an `unscanned-store` finding, not
+   only as a count.
+3. Never print, hash or partially quote a literal.
+
+**Tests.**
+- A row planting a literal inside a real SQLite file or a byte-level fixture,
+  asserting a finding, with a mutation that restores the binary skip.
+- Test-runner `check`, and `test` in a private `--outDir` at `dist`'s depth.
+- The structure audit.
+
+**Report:** `reports/g-attestation-sqlite.md`.
+
+## f-runner-secret-input — the Flow run gets each secret once (test-runner)
+
+Dispatched once `g-flow-lane-expectations` is committed, since both edit
+`run-flow-lane.ts`.
+
+**Owns:** `packages/test-runner/src/flow-lane/run-flow-lane.ts`, the run's
+`inputs` only; `flow-lane/declared-secrets.ts` and its test.
+
+**Read:** `reports/i-secret-in-workspace.md` fix 2.
+
+**Task.** Send only the binding inputs keyed `web.secret.*`. Remove
+`declaredSecretFlowInputs` from the run's inputs, and remove the function too if
+nothing else calls it.
+
+**Tests.**
+- A wiring row asserting that the inputs passed to `executeRecordedFlowRun` hold
+  no secret-id key, with a mutation that re-adds the spread.
+- Test-runner `check`, and `test` in a private `--outDir`.
+- The structure audit.
+
+**Report:** `reports/f-runner-secret-input.md`.
+
+## g-core-input-withholding — Core persists run inputs withheld (Core)
+
+**Owns** (in `F:\!FluxIQ\packages\fluxiq\src\programs\automation-studio\`):
+- `runtime/service.ts`, the run session's persisted `metadata.inputs` only;
+- `storage/project/runtime-stream-store.ts`, `runDetailEnvelope` only;
+- their tests;
+- `F:\!FluxIQ\docs\architecture\package-boundaries.md`, a paragraph in the
+  unreleased `0.4.0` Migration Notes entry.
+
+Follow `F:\!FluxIQ\AGENTS.md`. `service.ts` must not grow past its baseline.
+
+**Read:** `reports/i-secret-in-workspace.md` fix 3; Core
+`runtime/executor/trace-withholding.ts`, for `AUTOMATION_STUDIO_WITHHELD_VALUE`
+and the reasoning at `:29-34`.
+
+**Task.**
+1. Persist a run's supplied inputs with every value replaced by the withheld
+   marker, keeping the keys, in both places. The unwithheld inputs stay in memory
+   for the run only.
+2. Say which readers of `metadata.inputs` or run-detail `inputs` exist in Core,
+   `apps/web` included, and what each now sees.
+
+**Tests.**
+- A service row: a run with inputs persists the marker in the session record and
+  every runtime event chunk, never the value.
+- A stream-store row for `runDetailEnvelope`.
+- Each with a mutation that restores `inputs: input.inputs`.
+- `npx vitest run <files> --no-file-parallelism`; Core `pnpm check`;
+  `pnpm docs:check`, plus `pnpm docs:reference` if a cited line moves.
+- No Core `pnpm build`.
+
+**Report:** `reports/g-core-input-withholding.md`, with the compatibility effect.
+
+## g-core-attempt-withholding — Core's saved command attempts withhold resolved values (Core)
+
+**Owns** (in `F:\!FluxIQ\packages\fluxiq\src\`):
+- `runtime/service.ts` (the framework runtime, not automation-studio's), its
+  command-attempt persistence only;
+- `runtime/storage.ts` if needed;
+- `programs/automation-studio/runtime/executor/node-execution.ts` and
+  `executor/trace-withholding.ts`, only for carrying the withholding to dispatch;
+- their tests.
+
+Follow `F:\!FluxIQ\AGENTS.md`. Put the Migration Notes paragraph in your report,
+not in `package-boundaries.md`, which `g-core-input-withholding` owns.
+
+**Read:** `reports/i-secret-in-workspace.md` fix 4; Core
+`executor/trace-withholding.ts:29-34,83-96`.
+
+**Task.**
+1. Carry the executor's record of what state resolution supplied into the
+   dispatched command, as a generic dispatch-context field. The framework must
+   not learn `web.secret.`.
+2. The framework runtime replaces those values in the saved attempt's
+   `command.parameters`, and in any prose in `result.message`, with the withheld
+   marker before it persists the attempt. An authored parameter persists
+   unchanged.
+
+**Tests.**
+- A runtime row: a command whose parameter came from a `$state` binding saves the
+  marker at `command.parameters.text`, while an authored one is kept.
+- An executor row proving the withholding reaches dispatch.
+- Mutations: skip the rewrite, then drop the context.
+- `npx vitest run <files> --no-file-parallelism`; Core `pnpm check`;
+  `pnpm docs:check`.
+- No Core `pnpm build`.
+
+**Report:** `reports/g-core-attempt-withholding.md`, with the compatibility
+effect.
