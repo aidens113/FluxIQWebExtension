@@ -2131,3 +2131,56 @@ Then run test-runner `check`, `test` in a private `--outDir` at `dist`'s depth,
 and the structure audit.
 
 **Report:** `reports/g-discard-window.md`.
+
+---
+
+# Twentieth dispatch — from `w19-d1b`
+
+Decided on `reports/w19-d1b.md`'s open questions:
+1. The read-depth defect is fixed now, by `g-mapper-stored-payload` below.
+2. An action-entry click's claim on its own page's path stays: it passes on
+   replay, so it can never fail a run. Restoring the exclusion needs a Core or
+   extension field, which is Week 2.
+3. Core's fallback label stays.
+4. The domain mirrors Core's fallback for a linked click, guarded by the drift
+   row. Core accepting a mapper's `expectedState` for its own fallback is
+   Week 2.
+5. An `AutomationStudioService` without `dataDir` writes into the working
+   directory. This goes to the Phase 1.6b ranking; the supervisor removed the
+   probe's `recordings/` and `indexes/`.
+
+## g-mapper-stored-payload — the mapper reads a stored domain event where Core puts it (domain)
+
+Dispatched once `w19-d1b` is committed, since both edit `web-panel-host.ts`.
+
+**Owns:**
+- `domain/src/web-panel-host.ts`, `recordedEventPayload` and `storedStep` only;
+- a new test file in `domain/src/tests/`, which you name, since `domain.test.ts`
+  is at its 400-line advisory limit;
+- the existing rows that build a domain event one level shallower than Core
+  stores it, in `runtime/expectation/tests/click-landing.test.ts`,
+  `recording/proposals/tests/late-target-wait.test.ts` and
+  `tests/domain.test.ts`.
+
+**Read:** `reports/w19-d1b.md`, open question 1 and its probes; Core
+`model/recording-domain.ts:186-203`.
+
+**Task.**
+1. Read a Core-stored domain event's own payload from inside its
+   `{ target?, payload }` wrapper, and fold `storedStep` back into the one
+   reader.
+2. Rebuild every row that feeds the mapper a domain event in the shape Core
+   stores. Prefer running a recording through Core, as `w19-d1b`'s Core row does.
+3. For each of these, say what changes, with a Core-shaped row:
+   - a click sent as a domain event (D1);
+   - W25's URL check on the evidence between an addition and its click;
+   - a recorded navigation's `web.browser.navigate` proposal.
+4. From the week1 manifests, list which rows record events that reach the mapper
+   as domain events rather than action entries, and what each gains or loses.
+
+**Tests.**
+- Pin each changed behaviour with a Core-shaped row. The mutation proof is
+  restoring the shallow read.
+- Run domain `check` and `test` under a private label, and the structure audit.
+
+**Report:** `reports/g-mapper-stored-payload.md`.

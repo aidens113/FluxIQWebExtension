@@ -40,7 +40,7 @@ settled ledger entries are in parts one to twenty-five of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13, while workers run.**
-- **This repository:** `6db2ff8`, 67 commits ahead of `origin/dev`, not pushed.
+- **This repository:** `32b4324`, 71 commits ahead of `origin/dev`, not pushed.
 - **Core:** `5845f5d`, 9 commits ahead of `origin/dev`, `fluxiq` **0.4.0**, with its
   packages built at `187f40d`. The nine commits:
   - `5d495eb`, trace withholding;
@@ -80,8 +80,8 @@ settled ledger entries are in parts one to twenty-five of
   - E2, a URL claim on a sign-in gate reports `auth_required`;
   - E3, an assert is resent once to a navigating tab;
   - E4, a click landing on a refused page fails as `navigation_unexpected`;
-  - D1, the domain builds a click's landing claim, which does not yet reach a
-    live click.
+  - D1, the domain builds a click's landing claim, and a live click's action
+    entry now carries it (`32b4324`).
 
 **Ruled out of Week 1, reasons in the ledger:**
 - Firefox; CS1b, a late recording event sent to the client as an error frame;
@@ -92,16 +92,17 @@ settled ledger entries are in parts one to twenty-five of
   row stays in the corpus.
 
 **In flight:**
-- **`w19-d1b`:** a linked click's action entry carries the landing claim, so
-  W19's claim reaches a live click.
+- **`g-mapper-stored-payload`:** the mapper reads a Core-stored domain event's
+  payload where Core puts it (twentieth dispatch).
+- **`g-w19-docs`:** the architecture pages for E1-E3, D1 and D1b.
 - **`l-stage2`:** blocked at `7263534`, since every run failed the runner's own
   discard check. One instrumented diagnostic run is in progress.
 - **`g-discard-window`:** the check counts only discards inside the recording's
   window (nineteenth dispatch); Stage 2 is redispatched at its commit.
 
 **Queued, in dependency order**
-1. **After `w19-d1b`:** `g-w19-docs`, and W19 `expired` ×3 in Stage 2's
-   worktrees at that commit.
+1. **After `g-discard-window`:** Lab Stage 2 redispatched at the fix commit,
+   W19 `expired` included.
 2. **Integration:**
    - Core `package:lint` and `pnpm build` on the 0.4.0 tree (the bump and its
      migration note landed in `5845f5d`);
@@ -741,6 +742,41 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   - the week1 bench;
   - W19 `expired`.
 - Outcome: Revised
+
+### 2026-09-13 — w19-d1b: a live click's action entry carries its landing claim
+
+- Agent: worker `w19-d1b`; verified by supervisor.
+- Changed: `web-panel-host.ts`'s mapper and `runtime/expectation/click-landing.ts`,
+  with rows in both tests.
+  - A click Core recorded as an `action` entry now gets a candidate when a landing
+    in `following` names the entry's stored `metadata.eventId`. The candidate is
+    what Core's fallback proposes for it, plus the landing claim: output,
+    parameters, source input, confirmation, confidence 0.95, and label
+    "Web Dom Click".
+  - Every other `action` entry still maps to `null`, and an entry the fallback
+    refuses (`policyEligible: false`) is left to it.
+  - Only this new path reads a stored domain event one level deeper, where Core
+    puts its payload.
+- Found:
+  - The mapper's shared reader takes a stored domain event's payload one level too
+    shallow. On a real recording, D1's domain-event path claims nothing, W25's
+    between-evidence URL check misses navigations, and a navigation proposal
+    likely reads no `url`. The existing rows pass only because they build the
+    shallower shape. `g-mapper-stored-payload` fixes it.
+  - An action entry carries no page URL, so its claim cannot be refused for
+    landing on its own path. That is accepted, since such a claim passes on
+    replay.
+  - The probe wrote `recordings/` and `indexes/` into the repository root. The
+    supervisor inspected the five files, an empty probe recording with no page
+    data, and removed them.
+- Validation: supervisor read the diff.
+  - `DOMAIN_TEST_BUILD_LABEL=sup19 ... domain check` -> exit 0.
+  - `... test` -> `# tests 375`, `# pass 375`, `# fail 0`, with rows 176-184 ok.
+  - The structure audit passed; `domain.test.ts` is 400 lines.
+  - Worker: nine mutations each failed a named row, restored byte-identical.
+- Not verified: a live proposal; the Lab, where W19 `expired` must fail as
+  `auth_required` with the click attempt `failed`.
+- Outcome: Accepted
 
 ## Open Questions
 
