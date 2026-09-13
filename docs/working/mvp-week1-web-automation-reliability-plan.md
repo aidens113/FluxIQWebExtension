@@ -36,11 +36,11 @@ flight. No exit criterion yet carries a quoted Lab observation. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
-settled ledger entries are in parts one to twenty-two of
+settled ledger entries are in parts one to twenty-three of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13, while workers run.**
-- **This repository:** `53cf5f3`, 56 commits ahead of `origin/dev`, not pushed.
+- **This repository:** `9cc1bfb`, 61 commits ahead of `origin/dev`, not pushed.
 - **Core:** `73a81e9`, 7 commits ahead of `origin/dev`, `fluxiq` 0.3.0. Its
   packages were last built at `c0e0ce9`. The seven commits:
   - `5d495eb`, trace withholding;
@@ -63,7 +63,9 @@ settled ledger entries are in parts one to twenty-two of
   stale comments, casts and the `test:content` script.
 - **Matching and recording:** resolver corroboration (CS1d, W26); recorder signals
   (B5); `invalid_parameter` (B3); a recording begins locally only after its start
-  was sent; a page change is recorded before the action after it.
+  was sent, and starts once however Core's acknowledgement arrives; a page change
+  is recorded before the action after it; a run whose recording Core holds short
+  fails on both lanes.
 - **W18:** the secret leg; every Flow run starts on the start page.
 - **The bench:** runs both lanes, with W29 and evidence sizes; three negative
   variants whose click must fail; delayed-ui pins both clicks; W24's unreachable
@@ -88,10 +90,6 @@ settled ledger entries are in parts one to twenty-two of
 - **`g-core-action-entry-identity` (Core):** a recorded entry keeps the event id
   and source it came from, so a live click can be linked to its landing.
 - **`w25-wait-mapper`:** a wait before a click whose target a page change produced.
-- **`f-recording-start-guard`:** no double start when Core's acknowledgement races
-  the local fallback or crosses a Stop, and a bounded project lookup.
-- **`g-recording-completeness`:** a short recording fails the run on both lanes;
-  finishing two leftover files.
 
 **Queued, in dependency order**
 1. **After the Core identity change:** Core `pnpm build`; the persisted-flow-run
