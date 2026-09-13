@@ -123,10 +123,15 @@ test("ambiguous-targets: identical controls share every name signal", async ({ o
   expect(primary.testId).toBe("choice-primary");
   expect(secondary.testId).toBe("choice-secondary");
   expect(primary.xpath).not.toBe(secondary.xpath);
-  // Both sit in a named `region`, and the context records the landmark's role
-  // only, so the context alone does not tell these two apart: resolution has to
-  // fall back to the test id, the selector or the xpath.
-  expect(primary.context).toEqual(secondary.context);
+  // Both sit in a `region` the page named, and the context records that name
+  // beside the role (B5), so it is the one context signal that tells these two
+  // apart. Nothing scores it yet -- Core's matcher weighs no context signal --
+  // so resolution still falls back to the test id, the selector or the xpath.
+  expect(primary.context?.landmarkName).toBe("Primary");
+  expect(secondary.context?.landmarkName).toBe("Secondary");
+  const { landmarkName: _primaryName, ...primaryRest } = primary.context ?? {};
+  const { landmarkName: _secondaryName, ...secondaryRest } = secondary.context ?? {};
+  expect(primaryRest).toEqual(secondaryRest);
 });
 
 test("ambiguous-targets: a wrapping <label> names both duplicate fields", async ({ openHarness }) => {
