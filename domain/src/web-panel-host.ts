@@ -120,13 +120,17 @@ const CANDIDATE_LABELS: Partial<Record<string, string>> = {
  * observation can still map it; without it a click claims nothing.
  *
  * A recorded DOM addition that no action maps from proposes a wait for the
- * next click's target, from the mutation's own call (`recording/proposals`). A
- * click's `action` entry still maps to `null`, so Core's fallback click stands.
+ * next click's target, from the mutation's own call (`recording/proposals`).
+ *
+ * A click recorded through its action input arrives as Core's `action` entry.
+ * When a landing in `following` names the event id Core stored on it, it gives
+ * the candidate Core's fallback would propose for that entry, plus the claim.
+ * Every other `action` entry maps to `null`, so Core's fallback stands for it.
  */
 export function mapWebRecordingObservation(observation: AutomationStudioRecordingMapperObservation, context?: Pick<AutomationStudioRecordingMapperContext, "following">): AutomationStudioRecordingMapperCandidate | null {
   const step = recordedStep(observation);
   const action = webAutomationRecordedAction(step.eventType, step.payload, step.metadata);
-  if (!action) return webAutomationLateTargetWait(step, (context?.following ?? []).map(recordedStep)) ?? null;
+  if (!action) return linkedClickEntry(observation, context?.following ?? []) ?? webAutomationLateTargetWait(step, (context?.following ?? []).map(recordedStep)) ?? null;
   const expectedState = action.outputId === "web.dom.click" ? webAutomationClickLandingExpectation(step, (context?.following ?? []).map(recordedStep)) : undefined;
   return candidate(action.outputId, action.parameters, action.inputId, CANDIDATE_LABELS[action.outputId] ?? action.outputId, expectedState);
 }
@@ -154,6 +158,53 @@ function recordedEventPayload(observation: AutomationStudioRecordingMapperObserv
 
 function candidate(outputId: string, parameters: JsonObject, sourceInputId: string, label: string, expectedState?: JsonObject): AutomationStudioRecordingMapperCandidate {
   return { outputId, parameters: compact(parameters), sourceInputIds: [sourceInputId], expectedConfirmation: { inputId: sourceInputId, timeoutMs: 5_000 }, ...(expectedState === undefined ? {} : { expectedState }), confidence: 0.9, label };
+}
+
+/** The label Core's fallback gives a `web.dom.click` action entry, `readableTokenValue` of its output id. The Core proposal rows in `tests/domain.test.ts` hold the two equal. */
+const FALLBACK_CLICK_LABEL = "Web Dom Click";
+
+/**
+ * A click's `action` entry whose landing names the event id Core stored on it,
+ * as the candidate Core's fallback (`recordingActionEntryCandidate`) proposes for
+ * that entry, read off the same fields: output, parameters, source input,
+ * confirmation, confidence and label, with the landing claim added. Any other
+ * `action` entry gives `undefined`, and so does one the fallback refuses
+ * (`policyEligible: false`), so Core's fallback decides for it.
+ */
+function linkedClickEntry(observation: AutomationStudioRecordingMapperObservation, following: readonly AutomationStudioRecordingMapperObservation[]): AutomationStudioRecordingMapperCandidate | undefined {
+  if (observation.type !== "action" || observation.metadata.policyEligible === false) return undefined;
+  const entry = observation.payload;
+  const outputId = nonBlankString(entry.outputId) ?? nonBlankString(entry.actionType);
+  if (outputId !== "web.dom.click") return undefined;
+  const expectedState = webAutomationClickLandingExpectation(recordedStep(observation), following.map(storedStep));
+  if (expectedState === undefined) return undefined;
+  const sourceInputId = nonBlankString(observation.metadata.inputId) ?? nonBlankString(entry.confirmationInputId);
+  const confirmationInputId = readString(entry.confirmationInputId);
+  const timeoutMs = entry.confirmationTimeoutMs;
+  return {
+    outputId,
+    parameters: (readObject(entry.parameters) ?? {}) as JsonObject,
+    ...(sourceInputId === undefined ? {} : { sourceInputIds: [sourceInputId] }),
+    ...(confirmationInputId ? { expectedConfirmation: { inputId: confirmationInputId, timeoutMs: typeof timeoutMs === "number" ? timeoutMs : 5_000 } } : {}),
+    expectedState,
+    confidence: 0.95,
+    label: FALLBACK_CLICK_LABEL
+  };
+}
+
+/**
+ * An entry after an `action` entry, read as Core hands it over. Core records a
+ * domain event's own payload inside its `{ target?, payload }`, one level below
+ * where `recordedStep` looks, so a landing's URL is read from there.
+ */
+function storedStep(observation: AutomationStudioRecordingMapperObservation): ReturnType<typeof recordedStep> {
+  if (observation.type !== "domain_event") return recordedStep(observation);
+  const payload = (readObject(readObject(observation.payload.payload)?.payload) ?? {}) as JsonObject;
+  return { eventType: recordedEventType(observation), timestamp: observation.timestamp, payload, metadata: { ...(readObject(payload.metadata) ?? {}), ...observation.metadata } as JsonObject };
+}
+
+function nonBlankString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function compact(value: Record<string, unknown>): JsonObject {

@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
-import { AutomationStudioService, automationStudioFlowBootstrapCatalogByteBudget, buildAutomationStudioFlowBootstrapContext, buildAutomationStudioLlmEvidenceLoopDecisionSchema, estimateAutomationStudioDeepSeekInputTokens, runAutomationStudioLlmHarness } from "fluxiq/automation-studio";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { AutomationStudioIoRecorder, AutomationStudioNativeNodeRuntime, AutomationStudioService, automationStudioFlowBootstrapCatalogByteBudget, buildAutomationStudioFlowBootstrapContext, buildAutomationStudioLlmEvidenceLoopDecisionSchema, estimateAutomationStudioDeepSeekInputTokens, runAutomationStudioLlmHarness } from "fluxiq/automation-studio";
 import { AutomationStudioNodeRegistry, validateAutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
 import type { JsonObject } from "fluxiq/core";
+import { IoRegistry } from "fluxiq/io";
 import { WEB_AUTOMATION_DOMAIN_ID, WEB_AUTOMATION_EVENTS } from "..";
 import { createWebAutomationFluxIQ } from "..";
 import { webAutomationRecordingDomain } from "../recording/domain";
 import { createWebAutomationRecordingEvent } from "../client";
 import { WEB_AUTOMATION_INPUT_IDS, webAutomationInputIdForRecordedEvent, actionInputDefinitions } from "../io/input-model";
+import { webAutomationManifestInputs, webAutomationManifestOutputs } from "../io/manifest-definitions";
 import { webAutomationClientCapabilities } from "../actions/capabilities";
 import { WEB_AUTOMATION_ACTION_TYPES } from "../actions/types";
 import { listWebAutomationOutputNodeDefinitions, webAutomationOutputPayload, outputTargetFromPayload } from "../output-nodes";
@@ -162,6 +167,42 @@ assert.deepEqual(mapWebRecordingObservation(mutationObservation(1), { following:
 assert.equal(mapWebRecordingObservation(mutationObservation(0), { following: [lateClickEntry] }), null, "W25: a batch that added nothing proposes nothing");
 assert.equal(mapWebRecordingObservation(mutationObservation(1)), null, "W25: a mutation mapped with no following entries proposes nothing");
 assert.equal(mapWebRecordingObservation(lateClickEntry, { following: [] }), null, "W25: a click's action entry still maps to null, so Core's fallback click survives");
+
+// W19 (D1b): a click recorded through its action input reaches the mapper as Core's `action` entry, and its landing as Core's `domain_event`, which keeps
+// the event's own payload under `{ payload }`. A landing naming the event id Core stored on the entry gives Core's fallback candidate for it, plus the claim.
+const coreClickEntry = (wire: typeof signInClick, metadata: JsonObject = {}) => ({ ...lateClickEntry, observationId: `entry.${wire.eventId}`, payload: { ...lateClickEntry.payload, parameters: webAutomationOutputPayload("web.dom.click", wire.payload ?? {}) }, metadata: { ...lateClickEntry.metadata, envelopeId: `envelope.${wire.eventId}`, eventId: wire.eventId ?? "", sourceId: "tab:7:frame:0", ...metadata } });
+const coreLanding = (wire: typeof signInLanding) => ({ observationId: wire.eventId ?? "", recordingId: "recording.test", domainId: WEB_AUTOMATION_DOMAIN_ID, type: "domain_event", timestamp: wire.timestamp ?? 0, payload: { type: "domain_event", eventType: wire.eventType, correlationId: wire.eventId ?? "", payload: { payload: wire.payload ?? {} } }, metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, clientGatewayMessageId: "message.landing", clientId: "client.test", ...(wire.metadata ?? {}) } });
+const signInEntry = coreClickEntry(signInClick);
+const accountClaim = { conditions: [{ assert: { kind: "url", expected: "/scenarios/auth-gate/account" } }], mode: "all", timeoutMs: 5_000 };
+assert.deepEqual(mapWebRecordingObservation(signInEntry, { following: [coreLanding(signInLanding)] }), { outputId: "web.dom.click", parameters: signInEntry.payload.parameters, sourceInputIds: [WEB_AUTOMATION_INPUT_IDS.elementClicked], expectedConfirmation: { inputId: WEB_AUTOMATION_INPUT_IDS.elementClicked, timeoutMs: 5_000 }, expectedState: accountClaim, confidence: 0.95, label: "Web Dom Click" }, "D1b: a linked click's action entry gives Core's fallback candidate plus the claim");
+assert.equal(mapWebRecordingObservation(signInEntry, { following: [] }), null, "D1b: an unlinked click's action entry maps to null, so Core's fallback stands");
+assert.equal(mapWebRecordingObservation(coreClickEntry(signInClick, { eventId: lateClickWire.eventId ?? "" }), { following: [coreLanding(signInLanding)] }), null, "D1b: a landing naming another click's event id links nothing");
+assert.equal(mapWebRecordingObservation(coreClickEntry(signInClick, { policyEligible: false }), { following: [coreLanding(signInLanding)] }), null, "D1b: an entry Core's fallback refuses is not proposed either");
+assert.equal(mapWebRecordingObservation({ ...signInEntry, payload: { ...signInEntry.payload, actionType: "web.dom.type", outputId: "web.dom.type" } }, { following: [coreLanding(signInLanding)] }), null, "D1b: only a click's action entry claims its landing");
+// ...and recorded through Core: its IO recorder writes each click's action entry and the bridge's domain-event call the landing. A mapper proposing nothing leaves Core's fallback.
+const proposalDataDir = await mkdtemp(path.join(os.tmpdir(), "web-d1b-proposals-"));
+const proposalIo = new IoRegistry();
+proposalIo.registerInput(WEB_AUTOMATION_DOMAIN_ID, { definition: webAutomationManifestInputs.find((input) => input.id === WEB_AUTOMATION_INPUT_IDS.elementClicked)!, mode: "stream", subscribe: () => () => undefined, outputBinding: { outputId: "web.dom.click", toPayload: (event) => webAutomationOutputPayload("web.dom.click", event.payload as JsonObject) } });
+proposalIo.registerOutput(WEB_AUTOMATION_DOMAIN_ID, { definition: webAutomationManifestOutputs.find((output) => output.id === "web.dom.click")!, mode: "request", dispatch: (request) => ({ ok: true, domainId: WEB_AUTOMATION_DOMAIN_ID, outputId: request.outputId, payload: {} }) });
+const proposalMappers = { web: mapWebRecordingObservation, none: () => null };
+const proposalRuntime = new AutomationStudioNativeNodeRuntime().register({ schemaVersion: "0.1", sdkVersion: "0.1", packageId: "web.d1b", packageVersion: "1.0.0", domainId: WEB_AUTOMATION_DOMAIN_ID, nodes: [], recordingMappers: Object.keys(proposalMappers).map((id) => ({ id, version: "1.0.0", description: id, outputIds: ["web.dom.click"] })) }, { packageId: "web.d1b", packageVersion: "1.0.0", implementations: {}, recordingMappers: proposalMappers });
+const proposalService = new AutomationStudioService({ dataDir: proposalDataDir }).bindIoRuntime(proposalIo, WEB_AUTOMATION_DOMAIN_ID).bindNativeNodeRuntime(proposalRuntime);
+try {
+  proposalService.registerRecordingDomain(webAutomationRecordingDomain);
+  const { id: projectId } = await proposalService.createProject({ name: "D1b", domainId: WEB_AUTOMATION_DOMAIN_ID });
+  const { recordingId } = await proposalService.createRecording({ projectId, recordingId: "recording.d1b", domainId: WEB_AUTOMATION_DOMAIN_ID, initialState: { timestamp: 1, namespaces: {} } });
+  const recorder = new AutomationStudioIoRecorder({ automationStudio: proposalService, io: proposalIo, domainId: WEB_AUTOMATION_DOMAIN_ID, projectId });
+  const recordClick = (wire: typeof signInClick, sequence: number) => recorder.recordInput(recordingId, WEB_AUTOMATION_INPUT_IDS.elementClicked, { id: `envelope.${sequence}`, ioId: WEB_AUTOMATION_INPUT_IDS.elementClicked, sequence, timestampMs: wire.timestamp ?? 0, payload: wire.payload ?? {}, metadata: { sourceId: "tab:7:frame:0", clientGatewayMessageId: `message.${sequence}`, ...(wire.metadata ?? {}), inputId: WEB_AUTOMATION_INPUT_IDS.elementClicked, eventId: wire.eventId ?? "" } });
+  await recordClick(signInClick, 1);
+  await proposalService.appendRecordingDomainEvent({ projectId, recordingId, domainId: WEB_AUTOMATION_DOMAIN_ID, eventType: signInLanding.eventType, eventId: signInLanding.eventId ?? "", timestamp: signInLanding.timestamp ?? 0, sourceId: "tab:7", payload: signInLanding.payload ?? {}, metadata: { clientGatewayMessageId: "message.2", clientId: "client.test", ...(signInLanding.metadata ?? {}) } });
+  await recordClick(createWebAutomationRecordingEvent({ kind: "dom.click", sequence: 5, url: "https://example.test/scenarios/auth-gate/account", title: "Account", eventTimestampMs: 1_400, element: { selector: "#sign-out", tagName: "button", text: "Sign out" } }), 3);
+  const { proposals } = await proposalService.createRecordingFlowProposals({ projectId, recordingId });
+  const candidatesOf = (mapperId: string) => (proposals.find((proposal) => proposal.mapper.id === mapperId)?.candidates ?? []).map(({ candidateId: _candidateId, ...candidate }) => candidate);
+  assert.deepEqual(candidatesOf("web"), [{ ...candidatesOf("none")[0], expectedState: accountClaim }, candidatesOf("none")[1]], "D1b: through Core, a linked click gives Core's fallback candidate plus the claim, and an unlinked one Core's fallback");
+} finally {
+  await proposalService.close();
+  await rm(proposalDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 25 });
+}
 
 // A recorded scroll proposes a scroll node; the never-emitted wheel event type proposes nothing.
 const scrollObservation = (eventType: string) => mapWebRecordingObservation({

@@ -121,3 +121,24 @@ test("a landing with no event id and no tab to compare claims nothing", () => {
   const inTab = click(3, 900, { sourceId: "tab:7:frame:0" });
   assert.equal(webAutomationClickLandingExpectation(inTab.step, [navigation(ACCOUNT, { transition: "explained", explainedBy: 4, sourceId: "tab:7" })]), undefined, "another sequence names another click");
 });
+
+/** A click recorded through its action input, as Core's `action` entry: no page URL, no sequence, and the event id it was sent under kept on its metadata. */
+function storedClick(eventId?: string, payload: JsonObject = {}): Step {
+  const entry = { type: "action", actionType: "web.dom.click", outputId: "web.dom.click", parameters: { selector: "#continue" }, ...payload };
+  return { eventType: "action", timestamp: 1_789_000_000_000, payload: entry, metadata: { sourceId: "tab:7:frame:0", ...(eventId === undefined ? {} : { eventId }) } };
+}
+
+test("a click's action entry claims the landing that names its stored event id", () => {
+  const signIn = click(3, 900);
+  assert.deepEqual(webAutomationClickLandingExpectation(storedClick(signIn.eventId), [landing(ACCOUNT, signIn.eventId)]), urlClaim("/scenarios/auth-gate/account"));
+  assert.deepEqual(webAutomationClickLandingExpectation(storedClick(signIn.eventId), [landing(`${SIGN_IN}?error=1`, signIn.eventId)]), urlClaim("/scenarios/auth-gate/sign-in"), "the entry names no page, so a landing on the click page's own path is still claimed");
+  assert.equal(webAutomationClickLandingExpectation(storedClick(signIn.eventId), [landing("https://example.test/", signIn.eventId)]), undefined, "a landing on / still claims nothing");
+});
+
+test("a click's action entry is named by its stored event id alone", () => {
+  const signIn = click(3, 900);
+  assert.equal(webAutomationClickLandingExpectation(storedClick(click(3, 901).eventId), [landing(ACCOUNT, signIn.eventId)]), undefined, "a landing naming another click's id");
+  assert.equal(webAutomationClickLandingExpectation(storedClick(), [landing(ACCOUNT, signIn.eventId)]), undefined, "an entry with no stored id");
+  assert.equal(webAutomationClickLandingExpectation(storedClick(" "), [landing(ACCOUNT, " ")]), undefined, "a blank id names nothing");
+  assert.equal(webAutomationClickLandingExpectation(storedClick(signIn.eventId, { sequence: 3 }), [navigation(ACCOUNT, { transition: "explained", explainedBy: 3, sourceId: "tab:7" })]), undefined, "a landing with no event id names no entry by sequence and tab");
+});

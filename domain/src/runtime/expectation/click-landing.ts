@@ -9,6 +9,11 @@
 // click that lands anywhere else then fails, rather than passing because it did
 // not throw.
 //
+// A click recorded through its action input reaches the mapper as Core's `action`
+// entry instead. Core keeps the event id the click was sent under on that entry's
+// metadata (`eventId`), and nothing of the page it was on, so such a click is named
+// by that stored id alone.
+//
 // The claim is a path and nothing else: no query, hash, selector, element text
 // or typed value. The URL check is a substring test, so a path still holds when a
 // run serves the same pages from another origin.
@@ -24,6 +29,9 @@ const LANDING_WAIT_MS = 5_000;
 
 const EXPLAINED_TRANSITION = "explained";
 
+/** The entry type Core gives a click recorded through its action input. */
+const ACTION_ENTRY = "action";
+
 /**
  * The URL claim for a recorded click, or `undefined` when it has none to make.
  *
@@ -36,14 +44,20 @@ const EXPLAINED_TRANSITION = "explained";
  * sequence equals its `explainedBy`; the sequence alone is not unique, because
  * the content script restarts it in every document.
  *
+ * A click's `action` entry is named only by the event id Core stored on it
+ * (`metadata.eventId`): the sequence rule needs a recorded click event, which the
+ * entry is not. The entry carries no page URL, so its claim cannot be refused
+ * for landing on the click page's own path.
+ *
  * Nothing is claimed when no landing names the click, or when the landing's path
  * is the click page's own path or `/`, since such a claim would prove nothing,
  * or when either URL cannot be read as a path.
  */
 export function webAutomationClickLandingExpectation(click: RecordedStep, following: readonly RecordedStep[]): JsonObject | undefined {
+  const storedEntry = click.eventType === ACTION_ENTRY;
   const clickPath = urlPath(click.payload.url);
-  if (clickPath === undefined) return undefined;
-  const clickEventId = recordedClickEventId(click);
+  if (clickPath === undefined && !storedEntry) return undefined;
+  const clickEventId = storedEntry ? storedEventId(click) : recordedClickEventId(click);
   let landing: RecordedStep | undefined;
   for (const [index, step] of following.entries()) {
     if (isExplainedLanding(step) && namesClick(step, click, clickEventId, following.slice(0, index))) landing = step;
@@ -76,6 +90,16 @@ function recordedClickEventId(click: RecordedStep): string | undefined {
   const sequence = click.payload.sequence;
   if (typeof sequence !== "number") return undefined;
   return createWebAutomationRecordingEvent({ kind: "dom.click", sequence, url: "", title: "", eventTimestampMs: click.timestamp }).eventId;
+}
+
+/**
+ * The event id Core stored on a click's `action` entry, verbatim, or `undefined`
+ * when it holds no non-blank one. It cannot be rebuilt: the entry keeps neither
+ * the click's sequence nor its timestamp, since Core stamps it when appended.
+ */
+function storedEventId(click: RecordedStep): string | undefined {
+  const eventId = click.metadata.eventId;
+  return typeof eventId === "string" && eventId.trim() ? eventId : undefined;
 }
 
 /**
