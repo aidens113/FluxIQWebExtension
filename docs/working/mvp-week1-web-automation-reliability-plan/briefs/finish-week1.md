@@ -1838,6 +1838,14 @@ dispatch names this repository's commit `<R>` and Core's `<C>`.
    - the smoke comparison against gate 5.0, once.
 4. **Then** the week1 bench once (`--repeat 1`, headed, as `v-bench-honesty`
    requires), with its report.
+   - Added once `w25-wait-mapper` reported: its wait matches by CSS selector
+     only. From the bench's Flow-lane rows, confirm that these rows keep their
+     verdicts and gain no `web.dom.wait_for_selector` action:
+     - the identity-drift variants (W20-W23, W29);
+     - `ambiguous-targets` (W26);
+     - `modal-flows`' interstitial rows, unarmed and armed;
+     - `iframe-checkout`.
+   - Quote each row's actions.
 
 **Report** (`reports/l-stage2.md`):
 - the pin proof;
@@ -1932,8 +1940,11 @@ new rows only.
 
 **Task.**
 - Take an `action` observation whose output is `web.dom.click`, with a linked
-  explained landing in `following`. Match by the entry's stored `eventId`, or by
-  the tab of its `sourceId` when the landing has no event id.
+  explained landing in `following`. Match by the entry's stored `eventId` only.
+  Amended once `g-core-action-entry-identity` reported: a landing's own
+  `sourceId` is a top-level entry field that mappers are not shown, so a
+  tab-based match cannot work for an action entry. Every current landing
+  carries `explainedByEventId`.
 - Return one candidate carrying the claim. It must propose what Core's fallback
   proposes for that entry: the same output, parameters, source input and
   confirmation. Name any field the mapper cannot see.
@@ -1957,3 +1968,33 @@ left two items open:
 It now also owns the four pinning strings in `runner-wiring.test.ts` and that one
 label, to finish its own change. Evidence: the mutation proof on the runner, and
 a whole-suite rerun with 0 failures.
+
+---
+
+# Sixteenth dispatch — after Core is built at `187f40d`
+
+## g-target-union-import — the Flow lane imports Core's target-resolution type (test-runner)
+
+Queued in `g-integration-small-fixes` until Core was built. Core is now built at
+`187f40d`.
+
+**Owns:** `packages/test-runner/src/flow-lane/persisted-flow-run.ts` and its test.
+
+**Read:** `reports/g-target-resolution-union.md`; the local copy of the union; the
+Core type it mirrors.
+
+**Task.**
+- Replace the local copy of Core's target-resolution union in
+  `persisted-flow-run.ts` with an import of Core's own exported type, through
+  Core's public export path, never a deep `dist` import.
+- If Core does not export that type publicly, stop and say so. Do not deep-import.
+- No behaviour change.
+
+**Tests.**
+- The existing rows still pass.
+- The type check should fail if Core's union gains a status the lane does not
+  handle. If that check is not possible, say why.
+- Test-runner `check`, and `test` in a private `--outDir` at `dist`'s depth; the
+  structure audit.
+
+**Report:** `reports/g-target-union-import.md`.

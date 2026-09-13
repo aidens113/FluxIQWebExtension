@@ -36,7 +36,7 @@ flight. No exit criterion yet carries a quoted Lab observation. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
-settled ledger entries are in parts one to twenty-three of
+settled ledger entries are in parts one to twenty-four of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13, while workers run.**
@@ -679,74 +679,67 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 - Not verified: the claim in a live proposal; the Lab.
 - Outcome: Revised
 
-### 2026-09-13 — f-recording-start-guard: a recording starts once, whichever way Core's acknowledgement arrives
+### 2026-09-13 — g-core-action-entry-identity: a recorded click's Core entry keeps its event id
 
-- Agent: worker `f-recording-start-guard`; verified by supervisor.
-- Changed: `connection/active-recording.ts` and its test.
-  - Every way into a recording goes through one start, marked before its first
-    await. A second start waits for it, then only links its project.
-  - An acknowledgement naming a recording this client is not starting, not
-    running, or has already stopped is ignored, with an activity warning.
-  - A start's project lookup is bounded at
-    `RECORDING_START_PROJECT_LOOKUP_BOUND_MS = 1_500`. At the bound the start goes
-    on without a project, and the local fallback does not wait on the lookup a
-    second time.
-- Found:
-  - Before the fix, the new rows gave `# pass 8 # fail 5`; the double start failed
-    at `:412` with `one start event 2 !== 1`.
-  - The 1,500 ms bound is the worker's choice, not a measured figure.
-  - Three older gaps stay open: a second Record press, a refusal, and a Stop
-    arriving while a start is under way. They are for the Phase 1.6b ranking
-    unless Stage 2 shows them.
-- Validation: supervisor read the diff. With `EXTENSION_TEST_BUILD_LABEL=sup15`:
-  - extension `check` -> exit 0;
-  - `test` -> `# tests 405`, `# pass 405`, `# fail 0`, with rows 28-34 ok, from
-    `an acknowledgement inside the window starts the recording once, and the
-    window never fires` to `a stalled project lookup holds a start for its bound,
-    then the local fallback begins without a project`, including `an
-    acknowledgement that crosses the client's own Stop does not restart the
-    recording`.
-  - Worker: seven mutations each failed a row, and every restore was identical.
-- Not verified: Core's acknowledgement live; a real stalled `fetch`; the Lab,
-  which must show one "started" `browser.tab` event per recording and a linked
-  project.
+- Agent: worker `g-core-action-entry-identity` (Core); verified by supervisor.
+  Core's ledger has the paired entry.
+- Changed (Core):
+  - `bridge.ts`, one line, still 796: the event's own `eventId` reaches the
+    recorded input's envelope metadata.
+  - `io-bridge.ts`: action and observation entries copy that `eventId` and the
+    `sourceId`, non-blank strings only.
+  - Their tests, and the client-gateway architecture page.
+- Found: a landing's `sourceId` is a top-level field mappers are not shown, so
+  `w19-d1b` now matches by event id only (brief amended). A `sourceId` in the
+  extension's metadata is client-declared and is now stored.
+- Validation: supervisor, Core `packages/fluxiq`:
+  - io-bridge and bridge tests -> `Tests 33 passed (33)`;
+  - Core `pnpm check` -> exit 0;
+  - `pnpm docs:check` -> exit 0.
+  - Worker: seven mutations each failed named rows.
+- Not verified: Core `pnpm build`; the Lab, where a W19 click's action entry must
+  carry `metadata.eventId` equal to its landing's `explainedByEventId`.
 - Outcome: Accepted
 
-### 2026-09-13 — g-recording-completeness: a run whose recording Core holds short fails, on both lanes
+### 2026-09-13 — w25-wait-mapper: a wait before a click whose target a page change produced
 
-- Agent: worker `g-recording-completeness`, resumed once to finish two leftover
-  files; verified by supervisor.
+- Agent: worker `w25-wait-mapper`; verified by supervisor.
 - Changed:
-  - New `run-expectations/recording-completeness.ts` and its test. The runner
-    reads the extension's `status.eventCount` before Stop, and Core's action count
-    from each recording's full session (`get-recording`). A Core count below the
-    extension's fails as `recording.persistence`, naming both counts, and an
-    unreadable count fails closed.
-  - `flow-lane/recording-discards.ts` also counts a discard naming no recording
-    when this run's paired session sent it.
-  - `runtime.settle` reports `recordedActions` and `entriesAppendedAfterFirstPoll`,
-    and `flow-lane.json`'s `recording` labels the lane's own wait `secondWait`.
-  - `runner-wiring.test.ts` pins the new discard-read text, and
-    `scenario-assertions.test.ts`' messages match the start-page change.
-  - The supervisor updated step 4b's pass conditions in `live-validation-plan.md`
-    to the new fields.
-- Found: a paired-session discard naming a recording Core never created stays
-  open (report, open question 3).
-- Validation: supervisor read the new module and the runner and discard diffs.
-  - A search found no code reading the old field names.
-  - From `packages/test-runner`, `pnpm check` -> exit 0, and
-    `tsc --outDir dist-sup16` -> exit 0.
-  - `node --test "dist-sup16/**/*.test.js"` -> `# tests 509`, `# pass 509`,
-    `# fail 0`, including `ok 196 - a short count fails as recording.persistence,
-    naming the two counts and nothing recorded` and `ok 104 - a discard that
-    names no recording is counted when the run's paired session sent it, and
-    another session's is not`.
-  - The structure audit passed.
-  - Worker: the T1 and T2 mutations failed 3 and 2 tests. A runner mutation
-    dropping the discard scope failed the two wiring rows. Both were restored
-    byte-identical.
-- Not verified: the Lab. A clean `basic-form` run must show equal
-  `recordedActions`, and smoke W01's empty recording must now fail.
+  - New `domain/src/recording/proposals/late-target-wait.ts`, with its barrel and
+    test. `web-panel-host.ts`'s mapper returns its candidate for an observation
+    that maps to no action. There are new rows in `tests/domain.test.ts`, and the
+    checkbox comment in `io/input-model.ts` is updated.
+  - The rule starts from an `input.event` observation whose `latestEvidence` is a
+    `dom.mutation` that added nodes, and the first executable entry in `following`
+    decides. It proposes
+    `web.dom.wait_for_selector { selector, wait: { condition: "present" } }`, with
+    no timeout, source input or confirmation, when that entry is a
+    `web.dom.click` with a CSS selector, in the top frame, with no other document
+    named in between.
+  - A click's own `action` entry still maps to `null`, so Core's fallback click
+    stands.
+  - `delayed-ui`'s expectations are unchanged, since `flow-lane/expectations.ts`
+    only requires a matching attempt to exist.
+- Found:
+  - An `action` entry carries no URL. "Same document" is therefore inferred from
+    the top frame and the absence of any other URL in between, and a child-frame
+    mutation can still add an extra wait.
+  - The wait matches by CSS selector only, so a drifted selector that the
+    fingerprint would still resolve could time out. Stage 2's bench now checks the
+    drift, W26, modal and iframe rows for an added wait.
+- Validation: supervisor read the module and the mapper diff.
+  - `DOMAIN_TEST_BUILD_LABEL=sup17 ... domain check` -> exit 0.
+  - `... test` -> `# tests 373`, `# pass 373`, `# fail 0`, with `ok 96 - a
+    mutation that added nodes, then a click in the same document, proposes
+    waiting for the click's selector` and `ok 97 - the wait carries no timeout,
+    source input or confirmation`.
+  - The structure audit's only finding was the working-docs index, stale from
+    the uncommitted ledger.
+  - Worker: six mutations each failed a named row, restored hash-identical: no
+    builder call, `added >= 0`, no selector guard, no click-URL check, no
+    between-evidence check, and no frame check.
+- Not verified: the Lab. `delayed-ui --flow` must show click, wait, click 3 of 3;
+  `too-slow` must fail as `timeout`; and the rows above must stay unchanged.
 - Outcome: Accepted
 
 ## Open Questions
