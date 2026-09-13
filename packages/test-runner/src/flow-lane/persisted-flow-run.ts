@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { parseAutomationStudioFailureRecord, type AutomationStudioFailureRecord, type RunActionTiming } from "@fluxiq-web-extension/test-contracts";
+import type { AutomationNodeTargetResolution } from "fluxiq/automation-studio/nodes";
 import { RunnerFailure } from "../failure.js";
 import type { FluxIQHttpOptions } from "../http-control.js";
 import { runActionStatus } from "../run-manifest/index.js";
@@ -49,32 +50,44 @@ const EVIDENCE_PACKET_POINTS = ["beforeAction", "afterAction"] as const;
 
 /**
  * Core's own record of how it resolved an action's element target before
- * dispatch: `AutomationNodeTargetResolution` (Core `nodes/contracts.ts`), which
- * `nodeAttemptFromResult` puts on the attempt and the run detail carries at
- * `metadata.targetResolution` (Core `service/summaries/conversions.ts`). The
- * run bundle kept none of it, and Core's store is deleted when the run ends,
- * so a finished run could not say how any target was resolved.
+ * dispatch: `AutomationNodeTargetResolution`, imported from Core's public
+ * `fluxiq/automation-studio/nodes` export. `nodeAttemptFromResult` puts it on
+ * the attempt and the run detail carries it at `metadata.targetResolution`
+ * (Core `service/summaries/conversions.ts`). The run bundle kept none of it,
+ * and Core's store is deleted when the run ends, so a finished run could not
+ * say how any target was resolved.
  *
- * Kept by variant, as Core's union defines each, and only the fields that
- * cannot carry page content: the closed `status` and its numbers. A
- * no-candidates record keeps only its count, because Core applied no
- * confidence floor to it and records none. A scored record keeps its floor,
- * and its confidence and normalized score when Core wrote them. `candidateId`
- * is left behind because Core takes it from a candidate's own `id` or `testId`
- * attribute, and the two signal lists because they name the fingerprint's
- * paths; neither is a value, but neither is needed to read the resolution, and
- * a bundle has no redaction rule for them.
+ * Each variant of Core's union, narrowed to the fields that cannot carry page
+ * content: the closed `status` and its numbers. A no-candidates record keeps
+ * only its count, because Core applied no confidence floor to it and records
+ * none. A scored record keeps its floor, and its confidence and normalized
+ * score when Core wrote them. `candidateId` is left behind because Core takes
+ * it from a candidate's own `id` or `testId` attribute, and the two signal
+ * lists because they name the fingerprint's paths; neither is a value, but
+ * neither is needed to read the resolution, and a bundle has no redaction rule
+ * for them.
  *
  * This is Core's resolution, not the browser's. The browser's
  * `WebAutomationTargetResolution` reaches Core inside the dispatched result,
  * which Core stores on the attempt's `outputs`; the run detail drops `outputs`,
  * so no endpoint this lane reads can return it.
  */
-export type PersistedTargetResolution =
-  | { status: "unresolved_no_candidates"; candidateCount: 0 }
-  | { status: (typeof SCORED_TARGET_RESOLUTION_STATUSES)[number]; candidateCount: number; minimumConfidence: number; confidence?: number; normalizedScore?: number };
+export type PersistedTargetResolution = PersistedFieldsOf<AutomationNodeTargetResolution>;
 
-const SCORED_TARGET_RESOLUTION_STATUSES = ["matched", "no_match", "below_confidence"] as const;
+/** The fields that may travel. A field Core adds to its union stays behind until it is named here. */
+type PersistedTargetResolutionField = "status" | "candidateCount" | "minimumConfidence" | "confidence" | "normalizedScore";
+
+/** Narrows each variant separately, so a variant keeps only the fields it defines. */
+type PersistedFieldsOf<Variant> = Variant extends unknown ? Pick<Variant, Extract<keyof Variant, PersistedTargetResolutionField>> : never;
+
+type ScoredTargetResolutionStatus = Exclude<AutomationNodeTargetResolution["status"], "unresolved_no_candidates">;
+
+/**
+ * Every status Core scores a candidate under, keyed by Core's own statuses, so
+ * the type check fails when Core's union gains a status this reader does not
+ * handle, or loses one it does.
+ */
+const SCORED_TARGET_RESOLUTION_STATUSES: { readonly [Status in ScoredTargetResolutionStatus]: true } = { matched: true, no_match: true, below_confidence: true };
 
 export type PersistedFlowRunOutcome = {
   runId: string;
@@ -211,9 +224,8 @@ function targetResolutionOf(attempt: Record<string, unknown>): PersistedTargetRe
   const record = optionalRecord(optionalRecord(attempt.metadata)?.targetResolution);
   if (!record) return undefined;
   if (record.status === "unresolved_no_candidates") return record.candidateCount === 0 ? { status: "unresolved_no_candidates", candidateCount: 0 } : undefined;
-  const status = SCORED_TARGET_RESOLUTION_STATUSES.find((candidate) => candidate === record.status);
-  const { candidateCount, minimumConfidence, confidence, normalizedScore } = record;
-  if (!status || !isFiniteNumber(candidateCount) || !isFiniteNumber(minimumConfidence)) return undefined;
+  const { status, candidateCount, minimumConfidence, confidence, normalizedScore } = record;
+  if (!isScoredStatus(status) || !isFiniteNumber(candidateCount) || !isFiniteNumber(minimumConfidence)) return undefined;
   return {
     status,
     candidateCount,
@@ -221,6 +233,10 @@ function targetResolutionOf(attempt: Record<string, unknown>): PersistedTargetRe
     ...(isFiniteNumber(confidence) ? { confidence } : {}),
     ...(isFiniteNumber(normalizedScore) ? { normalizedScore } : {}),
   };
+}
+
+function isScoredStatus(value: unknown): value is ScoredTargetResolutionStatus {
+  return typeof value === "string" && Object.hasOwn(SCORED_TARGET_RESOLUTION_STATUSES, value);
 }
 
 function isFiniteNumber(value: unknown): value is number {
