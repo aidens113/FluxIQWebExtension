@@ -17,7 +17,7 @@ import { isDomSnapshotPayload } from "./dom-snapshot";
 import type { EventSequence } from "./event-sequence";
 import { gatewayRecordingEventFromPayload } from "./gateway-payloads";
 import type { GatewayMessageSender } from "./gateway-session";
-import type { NavigationRecorder } from "./navigation-recorder";
+import type { NavigationOrigin, NavigationRecorder } from "./navigation-recorder";
 import type { PointerClickFilter } from "./pointer-click-filter";
 import {
   activityDetail,
@@ -44,6 +44,27 @@ export type RecordedEventIntakeDeps = {
   // one still takes the public intake path rather than short-cutting to itself.
   readonly recordEvent: (payload: RecordingEventPayload, tabId?: number, frameId?: number) => Promise<void>;
 };
+
+// The transition a click's landing is recorded under. It maps to no input, so
+// it is never executable (`domain/src/io/input-model.ts`).
+const EXPLAINED_TRANSITION = "explained";
+
+function isExplainedNavigation(payload: RecordingEventPayload): boolean {
+  return payload.kind === "browser.navigation" && payload.metadata?.transition === EXPLAINED_TRANSITION;
+}
+
+// Where a click landed, as origin and path. A query string or fragment is where
+// a session token, an invitation code or a one-time link rides, and neither
+// says which page was reached; the domain's evidence location draws the same
+// line (`domain/src/runtime/llm-evidence/location.ts`).
+function landingLocation(url: string): string | undefined {
+  try {
+    const parsed = new URL(url);
+    return parsed.origin === "null" ? undefined : `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return undefined;
+  }
+}
 
 export class RecordedEventIntake {
   constructor(private readonly deps: RecordedEventIntakeDeps) {}
@@ -83,38 +104,60 @@ export class RecordedEventIntake {
   noteNavigationCommitted(details: chrome.webNavigation.WebNavigationTransitionCallbackDetails): void {
     // Browser-provided transition metadata is more reliable than tabs.onUpdated,
     // which fires repeatedly for a single load (URL, title, and status changes).
-    if (details.transitionType === "link" || details.transitionType === "form_submit" || details.transitionType === "reload") return;
-    this.scheduleNavigation(details.tabId, details.url, details.timeStamp, details.transitionType === "typed");
+    // Only the top frame's document is the tab's page, and a reload revisits a
+    // page rather than reaching one.
+    if (details.frameId !== 0 || details.transitionType === "reload") return;
+    const origin: NavigationOrigin = details.transitionType === "link" || details.transitionType === "form_submit"
+      ? "page"
+      : details.transitionType === "typed" ? "typed" : "other";
+    this.scheduleNavigation(details.tabId, details.url, details.timeStamp, origin);
   }
 
   noteHistoryStateUpdated(details: chrome.webNavigation.WebNavigationFramedCallbackDetails): void {
-    this.scheduleNavigation(details.tabId, details.url, details.timeStamp, false);
+    this.scheduleNavigation(details.tabId, details.url, details.timeStamp, "other");
   }
 
-  private scheduleNavigation(tabId: number, url: string, timestamp: number, explicitlyTyped: boolean): void {
+  private scheduleNavigation(tabId: number, url: string, timestamp: number, origin: NavigationOrigin): void {
     if (this.deps.recording.state() !== "recording" || unsupportedPageForUrl(url)) return;
-    this.deps.navigation.schedule(tabId, url, () => void this.recordNavigation(tabId, url, timestamp, explicitlyTyped));
+    this.deps.navigation.schedule(tabId, url, () => void this.recordNavigation(tabId, url, timestamp, origin));
   }
 
-  private async recordNavigation(tabId: number, url: string, timestamp: number, explicitlyTyped: boolean): Promise<void> {
+  private async recordNavigation(tabId: number, url: string, timestamp: number, origin: NavigationOrigin): Promise<void> {
     if (this.deps.recording.state() !== "recording") return;
-    if (!this.deps.navigation.shouldRecord(tabId, url, timestamp, explicitlyTyped, this.deps.recording.startedAt())) return;
+    const verdict = this.deps.navigation.shouldRecord(tabId, url, timestamp, origin, this.deps.recording.startedAt());
+    if (verdict.kind === "drop") return;
+    if (verdict.kind === "explained") {
+      const location = landingLocation(url);
+      if (location === undefined) return;
+      await this.deps.recordEvent({
+        kind: "browser.navigation",
+        sequence: this.deps.sequence.next(),
+        url: location,
+        title: "",
+        eventTimestampMs: timestamp,
+        metadata: { transition: EXPLAINED_TRANSITION, explainedBy: verdict.explainedBy }
+      }, tabId);
+      return;
+    }
     await this.deps.recordEvent({
       kind: "browser.navigation",
       sequence: this.deps.sequence.next(),
       url,
       title: "",
       eventTimestampMs: timestamp,
-      metadata: explicitlyTyped ? { transition: "typed" } : undefined
+      metadata: origin === "typed" ? { transition: "typed" } : undefined
     }, tabId);
   }
 
   private async processEvent(payload: RecordingEventPayload, tabId?: number, frameId?: number): Promise<void> {
     if (this.deps.recording.state() !== "recording") return;
+    const executable = isExecutableRecordedAction(payload);
     if (tabId !== undefined && isNavigationExplanation(payload)) {
-      this.deps.navigation.noteExplanatoryAction(tabId, payload.eventTimestampMs);
+      this.deps.navigation.noteExplanatoryAction(tabId, payload.eventTimestampMs, payload.kind === "dom.submit"
+        ? { kind: "submit" }
+        : { kind: "click", sequence: executable ? payload.sequence : undefined });
     }
-    if (isExecutableRecordedAction(payload)) {
+    if (executable) {
       this.deps.recording.noteEvent();
       this.deps.onActivity(payload.kind, activityLabel(payload), activityDetail(payload));
       // The content script sees only its own frame, so the snapshot it attaches
@@ -130,6 +173,12 @@ export class RecordedEventIntake {
     }
     if (payload.kind !== "content.ready") {
       this.deps.onActivity(payload.kind, `Evidence: ${activityLabel(payload)}`, activityDetail(payload));
+    }
+    // A click's landing is not executable, but Core's recording mapper reads it
+    // from the timeline beside the click it names, so it crosses as a recording
+    // event as well as evidence. It carries no input id, so nothing runs it.
+    if (isExplainedNavigation(payload)) {
+      await this.deps.send("client.recording_event", gatewayRecordingEventFromPayload(payload, tabId, frameId, this.deps.recording.recordingId()));
     }
     await this.deps.evidence.sendRecordingEvidence(payload, tabId, frameId);
   }

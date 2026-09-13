@@ -32,6 +32,7 @@ test("a recorded event maps to the registered input it executes as, or to none",
     ["a typed navigation", recorded("browser.navigation", { metadata: { transition: "typed" } }), WEB_AUTOMATION_INPUT_IDS.navigationRequested],
     ["the navigation that starts a recording", recorded("browser.navigation", { metadata: { transition: "typed", reason: "recording_start" } }), undefined],
     ["a link navigation", recorded("browser.navigation", { metadata: { transition: "link" } }), undefined],
+    ["a click's landing", recorded("browser.navigation", { metadata: { transition: "explained", explainedBy: 3 } }), undefined],
     ["a click with no element", recorded("dom.click"), undefined],
     ["a focus change", recorded("dom.focus", { element: searchField }), undefined],
     ["a wheel event", recorded("dom.wheel", { scroll: { x: 0, y: 400 } }), undefined]
@@ -62,6 +63,20 @@ test("a passive event carries no input id and keeps the recorder's metadata", ()
   assert.equal("recordingId" in event, false);
   assert.equal(event.metadata?.reason, "tab-key");
   assert.equal(event.metadata?.inputId, undefined);
+});
+
+test("a click's landing crosses as a navigation that names the click and carries no input id", () => {
+  const landing = recorded("browser.navigation", { url: "https://example.test/account", title: "", metadata: { transition: "explained", explainedBy: 3 } });
+  const event = gatewayRecordingEventFromPayload(landing, 7, undefined, "rec-1");
+  assert.equal(event.eventType, WEB_AUTOMATION_EVENTS.pageNavigated);
+  assert.equal(event.recordingId, "rec-1");
+  assert.equal(event.sourceId, "tab:7");
+  assert.equal(event.metadata?.clientKind, "browser.navigation");
+  assert.equal(event.metadata?.transition, "explained");
+  assert.equal(event.metadata?.explainedBy, 3);
+  assert.equal("inputId" in (event.metadata ?? {}), false, "nothing can execute it");
+  assert.equal(event.metadata?.visualTarget, undefined);
+  assert.equal(event.payload?.url, "https://example.test/account");
 });
 
 test("an event from no tab has no source id, and no element means no visual target", () => {

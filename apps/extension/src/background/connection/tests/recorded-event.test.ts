@@ -32,6 +32,7 @@ test("an event is executable only when it maps to a runnable output", () => {
     ["a page scroll", recorded("dom.scroll", { scroll: { x: 0, y: 400 } }), true],
     ["a typed navigation", recorded("browser.navigation", { metadata: { transition: "typed" } }), true],
     ["a link navigation", recorded("browser.navigation", { metadata: { transition: "link" } }), false],
+    ["a click's landing, which names the click", recorded("browser.navigation", { metadata: { transition: "explained", explainedBy: 3 } }), false],
     ["a form submit", recorded("dom.submit", { element: button }), false],
     ["a focus change", recorded("dom.focus", { element: searchField }), false],
     ["a DOM mutation", recorded("dom.mutation", { mutation: { added: 2, removed: 0, attributes: 1, text: 0 } }), false]
