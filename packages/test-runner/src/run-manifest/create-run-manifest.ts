@@ -11,6 +11,7 @@ import type { ExistingFlowExecution, ExistingFluxIQPreflight } from "../existing
 import type { IsolatedCloneImportResult } from "../isolated-flow-importer.js";
 import type { FluxIQPanelVerificationOutcome } from "../panel-verification.js";
 import type { FluxIQTargetConfiguration } from "../target-config.js";
+import { runRedactionState, type RunRedactionAttestation } from "../redaction-attestation/index.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -46,6 +47,8 @@ export type RunManifestInput = {
   automationFailure: RunAutomationFailure | null | undefined;
   steps: RunStepTiming[];
   actions: RunActionTiming[];
+  /** What the run's redaction attestation observed; absent when none ran. Only a passed one records `verified`. */
+  redaction?: RunRedactionAttestation | undefined;
 };
 
 /** Builds the run's `run.json`: provenance, environment, execution metadata, and run detail. */
@@ -77,7 +80,7 @@ export async function createRunManifest(input: RunManifestInput): Promise<RunMan
     ports: topology ? { scenario: topology.allocation.scenarioPort, ...(ownsCorePorts ? { web: topology.allocation.webPort, gateway: topology.allocation.gatewayPort } : {}) } : {},
     processExits: topology?.processExitCodes() ?? {},
     artifacts: [],
-    redactionState: "verified",
+    redactionState: runRedactionState(input.redaction),
     verdict: input.verdict,
     ...(fluxiqExecution ? { fluxiqExecution } : {}),
     ...(input.workflowId ? { workflowId: input.workflowId } : {}),
