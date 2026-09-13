@@ -3627,6 +3627,8 @@ var SNAPSHOT_OUTPUT_ID = "web.dom.capture_snapshot";
 var HOST_RUNTIME_SOURCE = "web-automation-host-runtime";
 var MAX_DIFF_SELECTORS = 10;
 var WEB_AUTOMATION_NODE_IDS = new Set(WEB_AUTOMATION_ACTION_TYPES.map(webAutomationOutputNodeId));
+var WEB_AUTOMATION_OUTPUT_IDS = new Set(WEB_AUTOMATION_ACTION_TYPES);
+var POLICY_ACTION_DEFINITION_ID = "builtin.policy.action";
 var HOST_RUNTIME_CAPABILITIES = Object.freeze(["state-snapshot", "state-diff", "expectation-evaluation"]);
 function createWebAutomationHostRuntime(gateway) {
   const evaluate = createWebAutomationExpectationEvaluator(gateway.dispatch);
@@ -3634,7 +3636,7 @@ function createWebAutomationHostRuntime(gateway) {
   return {
     capabilities: HOST_RUNTIME_CAPABILITIES,
     async captureStateSnapshot(input) {
-      if (!WEB_AUTOMATION_NODE_IDS.has(input.node.definitionId)) {
+      if (!actsOnPage(input.node)) {
         throw new Error(`Node ${input.node.definitionId} does not act on a page, so no web state was captured.`);
       }
       const result = await gateway.dispatch({
@@ -3655,6 +3657,9 @@ function createWebAutomationHostRuntime(gateway) {
       return { stateSnapshotId, stateRef: `${stateSnapshotId}@${input.attemptId}:${input.point}`, capturedAt: Date.now(), summary };
     },
     inspectStateDiff(input) {
+      if (input.before?.summary === void 0 || input.after?.summary === void 0) {
+        throw new Error("A web state diff needs a snapshot on both sides, so none was computed.");
+      }
       return webAutomationStateDiff(input.before?.summary, input.after?.summary, input.before?.stateRef, input.after?.stateRef);
     },
     expectationEvaluator: (conditions, mode, timeoutMs, context) => evaluate(conditions, mode, timeoutMs, context)
@@ -3691,6 +3696,11 @@ function webAutomationStateDiff(before, after, beforeStateRef, afterStateRef) {
 function actionSnapshot(payload) {
   const action = payload?.result;
   return isRecord(action) ? action.snapshot : void 0;
+}
+function actsOnPage(node) {
+  if (WEB_AUTOMATION_NODE_IDS.has(node.definitionId)) return true;
+  const outputId = node.parameterValues?.outputId;
+  return node.definitionId === POLICY_ACTION_DEFINITION_ID && typeof outputId === "string" && WEB_AUTOMATION_OUTPUT_IDS.has(outputId);
 }
 function evidenceSelectors(summary) {
   const elements = summary?.elements;

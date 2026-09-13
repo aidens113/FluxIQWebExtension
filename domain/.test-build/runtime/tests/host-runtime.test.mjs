@@ -1367,6 +1367,8 @@ var SNAPSHOT_OUTPUT_ID = "web.dom.capture_snapshot";
 var HOST_RUNTIME_SOURCE = "web-automation-host-runtime";
 var MAX_DIFF_SELECTORS = 10;
 var WEB_AUTOMATION_NODE_IDS = new Set(WEB_AUTOMATION_ACTION_TYPES.map(webAutomationOutputNodeId));
+var WEB_AUTOMATION_OUTPUT_IDS = new Set(WEB_AUTOMATION_ACTION_TYPES);
+var POLICY_ACTION_DEFINITION_ID = "builtin.policy.action";
 var HOST_RUNTIME_CAPABILITIES = Object.freeze(["state-snapshot", "state-diff", "expectation-evaluation"]);
 function createWebAutomationHostRuntime(gateway2) {
   const evaluate = createWebAutomationExpectationEvaluator(gateway2.dispatch);
@@ -1374,7 +1376,7 @@ function createWebAutomationHostRuntime(gateway2) {
   return {
     capabilities: HOST_RUNTIME_CAPABILITIES,
     async captureStateSnapshot(input) {
-      if (!WEB_AUTOMATION_NODE_IDS.has(input.node.definitionId)) {
+      if (!actsOnPage(input.node)) {
         throw new Error(`Node ${input.node.definitionId} does not act on a page, so no web state was captured.`);
       }
       const result = await gateway2.dispatch({
@@ -1395,6 +1397,9 @@ function createWebAutomationHostRuntime(gateway2) {
       return { stateSnapshotId, stateRef: `${stateSnapshotId}@${input.attemptId}:${input.point}`, capturedAt: Date.now(), summary };
     },
     inspectStateDiff(input) {
+      if (input.before?.summary === void 0 || input.after?.summary === void 0) {
+        throw new Error("A web state diff needs a snapshot on both sides, so none was computed.");
+      }
       return webAutomationStateDiff(input.before?.summary, input.after?.summary, input.before?.stateRef, input.after?.stateRef);
     },
     expectationEvaluator: (conditions, mode, timeoutMs, context) => evaluate(conditions, mode, timeoutMs, context)
@@ -1427,6 +1432,11 @@ function actionSnapshot(payload) {
   const action = payload?.result;
   return isRecord(action) ? action.snapshot : void 0;
 }
+function actsOnPage(node) {
+  if (WEB_AUTOMATION_NODE_IDS.has(node.definitionId)) return true;
+  const outputId = node.parameterValues?.outputId;
+  return node.definitionId === POLICY_ACTION_DEFINITION_ID && typeof outputId === "string" && WEB_AUTOMATION_OUTPUT_IDS.has(outputId);
+}
 function evidenceSelectors(summary) {
   const elements = summary?.elements;
   if (!Array.isArray(elements)) return [];
@@ -1442,6 +1452,7 @@ function isRecord(value) {
 
 // src/runtime/tests/host-runtime.test.ts
 var CLICK_NODE_ID = webAutomationOutputNodeId("web.dom.click");
+var POLICY_ACTION_ID = "builtin.policy.action";
 function pageSnapshot(url, selectors, extra = {}) {
   return {
     url,
@@ -1463,8 +1474,8 @@ function gateway(answers) {
     }
   };
 }
-function captureInput(definitionId, point = "before_action") {
-  return { node: { id: "node.1", definitionId, parameterValues: {} }, attemptId: "node.1.attempt.1", inputs: {}, point };
+function captureInput(definitionId, point = "before_action", parameterValues = {}) {
+  return { node: { id: "node.1", definitionId, parameterValues }, attemptId: "node.1.attempt.1", inputs: {}, point };
 }
 test("a web attempt gets a bounded, sanitized state ref sourced from web.dom.capture_snapshot", async () => {
   const snapshot = pageSnapshot("https://shop.test/cart?token=leaked-token", ["#pay"]);
@@ -1482,6 +1493,54 @@ test("a web attempt gets a bounded, sanitized state ref sourced from web.dom.cap
   assert.equal(ref.summary?.schemaVersion, "web-llm-evidence.v1");
   assert.equal(ref.summary?.location, "https://shop.test/cart");
   assert.doesNotMatch(JSON.stringify(ref.summary), /leaked-token|4111111111111111/u);
+});
+test("a recorded action, Core's policy node naming web.dom.click, gets a state ref from web.dom.capture_snapshot", async () => {
+  const payload = { status: "succeeded", result: { snapshot: pageSnapshot("https://shop.test/cart", ["#pay"]) } };
+  const { gateway: seam, calls } = gateway([{ ok: true, status: "succeeded", payload }]);
+  const boundary = createWebAutomationHostRuntime(seam);
+  const ref = await boundary.captureStateSnapshot(captureInput(POLICY_ACTION_ID, "before_action", { outputId: "web.dom.click", selector: "#pay" }));
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.outputId, "web.dom.capture_snapshot");
+  assert.equal(ref.stateRef, "web.state.1@node.1.attempt.1:before_action");
+  assert.equal(ref.summary?.schemaVersion, "web-llm-evidence.v1");
+  assert.equal(typeof ref.summary?.truncated, "boolean");
+});
+test("a policy node naming no web output, or a web output on another node, is declined without a gateway round trip", async () => {
+  const payload = { status: "succeeded", result: { snapshot: pageSnapshot("https://shop.test/cart", ["#pay"]) } };
+  const { gateway: seam, calls } = gateway(Array.from({ length: 6 }, () => ({ ok: true, status: "succeeded", payload })));
+  const boundary = createWebAutomationHostRuntime(seam);
+  const declined = [
+    captureInput(POLICY_ACTION_ID, "before_action", { outputId: "email.send" }),
+    // The web output node's id is not an output id.
+    captureInput(POLICY_ACTION_ID, "before_action", { outputId: CLICK_NODE_ID }),
+    captureInput(POLICY_ACTION_ID, "before_action", { outputId: 7 }),
+    captureInput(POLICY_ACTION_ID),
+    { ...captureInput(POLICY_ACTION_ID), node: { id: "node.1", definitionId: POLICY_ACTION_ID } },
+    captureInput("builtin.code.run", "before_action", { outputId: "web.dom.click" })
+  ];
+  for (const input of declined) {
+    await assert.rejects(async () => boundary.captureStateSnapshot(input), /does not act on a page/u);
+  }
+  assert.equal(calls.length, 0);
+});
+test("a diff with a side missing is declined, so no diff claims every element appeared or left", async () => {
+  const boundary = createWebAutomationHostRuntime(gateway([]).gateway);
+  const summary = { schemaVersion: "web-llm-evidence.v1", location: "https://shop.test/cart", elements: [{ selector: "#pay" }] };
+  const before = { stateSnapshotId: "web.state.1", stateRef: "web.state.1@a:before_action", capturedAt: 1, summary };
+  const after = { stateSnapshotId: "web.state.2", stateRef: "web.state.2@a:after_action", capturedAt: 2, summary };
+  const diff = async (sides) => boundary.inspectStateDiff({ ...sides, node: { id: "node.1", definitionId: POLICY_ACTION_ID }, attemptId: "a" });
+  const oneSided = [
+    { before },
+    { after },
+    // A ref that came back without a summary is a missing snapshot too.
+    { before, after: { stateSnapshotId: after.stateSnapshotId, stateRef: after.stateRef, capturedAt: after.capturedAt } }
+  ];
+  for (const sides of oneSided) {
+    await assert.rejects(() => diff(sides), /snapshot on both sides/u);
+  }
+  const both = await diff({ before, after });
+  assert.equal(both.schemaVersion, WEB_STATE_DIFF_SCHEMA_VERSION);
+  assert.equal(both.removedElementCount, 0);
 });
 test("each capture gets its own id, so a retry does not reuse the previous attempt's ref", async () => {
   const payload = { status: "succeeded", result: { snapshot: pageSnapshot("https://shop.test/cart", ["#pay"]) } };
@@ -1527,9 +1586,9 @@ test("the diff reports the move, the counts, and the selectors, and stays inside
     removedSelectors: ["#pay"]
   });
 });
-test("the diff survives a missing side and never lists more than the bound", () => {
+test("the diff never lists more than the bound, and its counts stay exact", () => {
   const many = { elements: Array.from({ length: 30 }, (_, index) => ({ selector: `#item-${index}` })) };
-  const grown = webAutomationStateDiff(void 0, many);
+  const grown = webAutomationStateDiff({ elements: [] }, many);
   assert.equal(grown.addedElementCount, 30);
   assert.equal(grown.addedSelectors.length, 10);
   assert.equal(grown.locationChanged, false);
