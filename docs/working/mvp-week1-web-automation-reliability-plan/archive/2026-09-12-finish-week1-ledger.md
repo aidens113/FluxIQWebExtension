@@ -3137,3 +3137,100 @@ Moved verbatim to keep headroom under the plan limit: Core's withholding (6621d6
     detect drift in `recording-evidence.ts`;
   - W25 in the Lab.
 - Outcome: Accepted
+
+## Part forty-one, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: the Lab rerun's first four runs and the W25 timeout investigation, both committed in cfa1bfb, whose follow-ups are dispatched.
+
+### 2026-09-13 — l-stage2c: the fixes hold live for W18, W19 and W25; W15, W17's file name, W28 and W25 `too-slow`'s code do not; the bench was cut short
+
+- Agent: worker `l-stage2c` (Lab), with a duplicate copy that ran after the
+  supervisor's restart; verification by supervisor.
+- Pins: this repository `69f40c1` and Core `6621d66`, both `dirty=false` in every
+  `run.json`. Runs are under `F:\fxlab-runs\stage2c\`.
+- Found in runs 1-4. Each row is a single observation. Two runs crashed in the
+  faulty-RAM shape, and each passed when rerun alone.
+  - **W18 `auth-gate`, both lanes: passed 3 of 3 on each lane.**
+    - The leak attestation reported `findingCount` 0, with no `unscanned-store`.
+    - A search of each kept Core workspace, SQLite cells included, found the
+      declared value 0 times. Stage 2 had found it in 13 JSON objects and 4 SQLite
+      rows.
+    - The password node's `web.dom.type` succeeded, and its saved attempt holds the
+      withheld marker.
+  - **W19 `expired`, Flow lane: passed 3 of 3,** with `auth_required`. The recording
+    lane refuses `--variant` by design (`commands.ts:42`), so that half of the brief
+    could not run.
+  - **W25 `delayed-ui`.**
+    - Unarmed: passed 3 of 3, with 3 candidates (click, wait, click).
+    - `too-slow`: failed 3 of 3 on the right category, `timeout`. But the code was
+      Core's `output_dispatch.timed_out`, not the expected `web.action.timeout`.
+  - **W15 `multi-tab`, unarmed and `popup-blocked`: 0 of 6.**
+    - The Flow's first node is a tab close that names no tab. It timed out at Core's
+      deadline.
+    - Rerun once, alone, the extension rejected it: `web.action.rejected`, "no tab
+      named and none open".
+  - **W17 upload: passed 3 of 3,** upload then click.
+    - The file's content appears in Core's workspace 0 times.
+    - Its name appears twice per run, in the upload attempt's
+      `result.payload.result.validation.expected` and `.actual`.
+  - **W28 frames: 2 of 3.** Run 2 recorded a second scroll, ran it, then stopped with
+    no failure record.
+- Interruption:
+  - **Two copies ran.** The supervisor's session restarted at 08:02, and the
+    pre-restart session's copy of this worker kept running beside the resumed one.
+    They wrote two Run 4 sections; the second is marked withdrawn.
+  - **The bench was cut short.** At 08:22 the user killed every session. That
+    stopped run 5, the week1 bench, after 5 of its 67 rows. Run 5 is not reported,
+    and it runs again on the fixed tree.
+- Decisions:
+  - **W25 `too-slow`'s code** goes to `i-w25-timeout-code`, then to
+    `g-core-dispatch-deadline`.
+  - **W15 and W28** go to `i-w15-w28-flow-order`.
+  - **W17's file name** goes to `f-upload-validation-names`. A chosen file's name is
+    the user's data.
+- Validation: the supervisor read every bundle's `evaluation.json` and `run.json`
+  with `sup-bundle-check.mjs`, which prints ids, verdicts and failure codes only.
+  All 28 agree with the report:
+  - W18: 6 `passed`;
+  - W19: 3 `passed`, with `auth_required/web.auth.required`;
+  - W25: 3 `passed`;
+  - `too-slow`: 3 `failed`, with `timeout/output_dispatch.timed_out`;
+  - W15: 6 `failed`, with `timeout/output_dispatch.timed_out`, plus the rerun with
+    `blocked_by_capability_or_policy/web.action.rejected`;
+  - W17: 3 `passed`;
+  - W28: 2 `passed`, and 1 `failed` with `ambiguous_or_unknown`.
+- Not verified:
+  - candidate counts and action lists, which were read only from the report;
+  - the kept-workspace searches and the SQLite probe;
+  - run 5.
+- Outcome: Revised
+
+### 2026-09-13 — i-w25-timeout-code: Core gives up on a command at the moment the extension is told to stop waiting, so Core always reports first
+
+- Agent: worker `i-w25-timeout-code` (read-only); decision by supervisor.
+- Found:
+  - **The default timeout.** A proposed wait has no timeout of its own, so its node
+    takes the 5,000 ms default (`nodes/policy/action.ts:20,40`). Core uses that one
+    value three ways:
+    - its runtime deadline (`runtime/service.ts:361-371`);
+    - its client-gateway deadline (`client-gateway/service/commands.ts:65-70`);
+    - the timeout it sends the extension (`client-gateway-transport.ts:172`).
+  - **The extension's clock starts later,** after the tab settles for at least
+    1,000 ms (`automation-tab.ts:137`). In the three `too-slow` runs the wait ended
+    at 5,005, 5,011 and 5,004 ms, with Core's code.
+  - **The fix changes one verdict:** W25 `too-slow`. In other rows it would change
+    a code, not a verdict.
+  - **Stale comments:** `delayed-ui/scenario.ts:16-19`, `late-target-wait.ts:15` and
+    `action-runner.ts:197-198`.
+- Decisions: the thirty-first dispatch.
+  - Both Core deadlines wait the timeout plus a named margin.
+  - The client still receives the timeout.
+  - `output_dispatch.timed_out` keeps meaning a client that never answered.
+  - The user was told this crosses into Core.
+- Validation: the supervisor's bundle check, recorded in the entry above, shows the
+  three `too-slow` runs reporting `timeout/output_dispatch.timed_out`. The worker's
+  timings (`node -e` over `run.json`) were not rerun by the supervisor.
+- Not verified:
+  - when the extension's own answer arrived;
+  - how large the margin needs to be under load.
+- Outcome: Revised

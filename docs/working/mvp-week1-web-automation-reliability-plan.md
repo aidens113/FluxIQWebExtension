@@ -36,7 +36,7 @@ has its full proof. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
-settled ledger entries are in parts one to forty of
+settled ledger entries are in parts one to forty-one of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13.**
@@ -87,11 +87,13 @@ settled ledger entries are in parts one to forty of
 - W24 `unannounced` (a recorded-payload contract change) and W13 `banner-absent`
   (P7, a new Core node outcome); both rows stay in the corpus.
 
-**In flight** (the thirty-first to thirty-third dispatches, after the 08:22 restart):
-- `g-core-dispatch-deadline` (Core): the dispatch deadlines outlast the client's own
-  timeout.
-- `f-upload-validation-names`: the upload post-condition quotes no file name.
-- Read-only: `i-w15-w28-flow-order`, `i-w05-short-catalog` and `i-arch-pages-audit`.
+**In flight** (the thirty-second to thirty-fourth dispatches, after the 08:22 restart):
+- `g-web-timeout-forwarding` (Core, then domain): Core's dispatch deadline is the
+  timeout plus a 3,000 ms margin, and the web adapter forwards the timeout. It
+  replaces the blocked `g-core-dispatch-deadline`.
+- Read-only: `i-w15-w28-flow-order` and `i-arch-pages-audit`.
+- Settled: the upload check quotes no file name. W05 `short-catalog` is ruled out
+  once the Lab shows its failure.
 
 **Queued, in dependency order**
 1. **Fixes from those investigations,** each committed as its gates pass.
@@ -638,98 +640,74 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 `2026-09-12-*` Wave 3 and live-validation files, and
 `2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-13 — l-stage2c: the fixes hold live for W18, W19 and W25; W15, W17's file name, W28 and W25 `too-slow`'s code do not; the bench was cut short
+### 2026-09-13 — i-w05-short-catalog: W05 `short-catalog` is a real product gap, ruled out of Week 1 once the Lab shows its failure
 
-- Agent: worker `l-stage2c` (Lab), with a duplicate copy that ran after the
-  supervisor's restart; verification by supervisor.
-- Pins: this repository `69f40c1` and Core `6621d66`, both `dirty=false` in every
-  `run.json`. Runs are under `F:\fxlab-runs\stage2c\`.
-- Found in runs 1-4. Each row is a single observation. Two runs crashed in the
-  faulty-RAM shape, and each passed when rerun alone.
-  - **W18 `auth-gate`, both lanes: passed 3 of 3 on each lane.**
-    - The leak attestation reported `findingCount` 0, with no `unscanned-store`.
-    - A search of each kept Core workspace, SQLite cells included, found the
-      declared value 0 times. Stage 2 had found it in 13 JSON objects and 4 SQLite
-      rows.
-    - The password node's `web.dom.type` succeeded, and its saved attempt holds the
-      withheld marker.
-  - **W19 `expired`, Flow lane: passed 3 of 3,** with `auth_required`. The recording
-    lane refuses `--variant` by design (`commands.ts:42`), so that half of the brief
-    could not run.
-  - **W25 `delayed-ui`.**
-    - Unarmed: passed 3 of 3, with 3 candidates (click, wait, click).
-    - `too-slow`: failed 3 of 3 on the right category, `timeout`. But the code was
-      Core's `output_dispatch.timed_out`, not the expected `web.action.timeout`.
-  - **W15 `multi-tab`, unarmed and `popup-blocked`: 0 of 6.**
-    - The Flow's first node is a tab close that names no tab. It timed out at Core's
-      deadline.
-    - Rerun once, alone, the extension rejected it: `web.action.rejected`, "no tab
-      named and none open".
-  - **W17 upload: passed 3 of 3,** upload then click.
-    - The file's content appears in Core's workspace 0 times.
-    - Its name appears twice per run, in the upload attempt's
-      `result.payload.result.validation.expected` and `.actual`.
-  - **W28 frames: 2 of 3.** Run 2 recorded a second scroll, ran it, then stopped with
-    no failure record.
-- Interruption:
-  - **Two copies ran.** The supervisor's session restarted at 08:02, and the
-    pre-restart session's copy of this worker kept running beside the resumed one.
-    They wrote two Run 4 sections; the second is marked withdrawn.
-  - **The bench was cut short.** At 08:22 the user killed every session. That
-    stopped run 5, the week1 bench, after 5 of its 67 rows. Run 5 is not reported,
-    and it runs again on the fixed tree.
-- Decisions:
-  - **W25 `too-slow`'s code** goes to `i-w25-timeout-code`, then to
-    `g-core-dispatch-deadline`.
-  - **W15 and W28** go to `i-w15-w28-flow-order`.
-  - **W17's file name** goes to `f-upload-validation-names`. A chosen file's name is
-    the user's data.
-- Validation: the supervisor read every bundle's `evaluation.json` and `run.json`
-  with `sup-bundle-check.mjs`, which prints ids, verdicts and failure codes only.
-  All 28 agree with the report:
-  - W18: 6 `passed`;
-  - W19: 3 `passed`, with `auth_required/web.auth.required`;
-  - W25: 3 `passed`;
-  - `too-slow`: 3 `failed`, with `timeout/output_dispatch.timed_out`;
-  - W15: 6 `failed`, with `timeout/output_dispatch.timed_out`, plus the rerun with
-    `blocked_by_capability_or_policy/web.action.rejected`;
-  - W17: 3 `passed`;
-  - W28: 2 `passed`, and 1 `failed` with `ambiguous_or_unknown`.
-- Not verified:
-  - candidate counts and action lists, which were read only from the report;
-  - the kept-workspace searches and the SQLite probe;
-  - run 5.
+- Agent: worker `i-w05-short-catalog` (read-only); decision by supervisor.
+- Changed: `reports/i-w05-short-catalog.md` only.
+- Found, from code. These are predictions until the Lab observes them:
+  - **What the Flow does.** A Flow built from W05's recording is two Next clicks,
+    with a wait before the second.
+    - `short-catalog` shows five products and no Next, so the first click fails
+      `target_not_found`.
+    - The final state still holds.
+    - The run therefore fails only because the variant expects success.
+  - **What Core lacks.** Core already has loop and branch nodes. It lacks a web
+    output that answers whether Next is present, and a recording mapper that builds
+    the loop.
+  - **The Week 2 entry point.** `web.dom.extract_list` with `paginate` already pages
+    until Next is absent, but nothing produces it from a recording.
+- Decision: option (d).
+  - **No code change.** `product-catalog/manifest.ts:66-75` and `week1.ts:34` stay
+    as they are.
+  - **Ruled out once observed.** When the Lab recheck records the failing node and
+    category, W05 `short-catalog` joins "Ruled out of Week 1", beside W13
+    `banner-absent` and W24 `unannounced`. The row stays in the corpus and keeps
+    failing visibly.
+  - **Rejected:** declaring the failure as expected (a), and moving the variant to
+    the recording lane (c). Both would hide the gap.
+- Validation: the supervisor read the report's option analysis. No code ran; the
+  prediction rests on reading, and `reports/l-stage2c.md` holds no W05 observation.
+- Not verified: the live failing node and category, and whether a wait comes before
+  the first click.
 - Outcome: Revised
 
-### 2026-09-13 — i-w25-timeout-code: Core gives up on a command at the moment the extension is told to stop waiting, so Core always reports first
+### 2026-09-13 — f-upload-validation-names: the upload's check and its refusals quote no file name
 
-- Agent: worker `i-w25-timeout-code` (read-only); decision by supervisor.
-- Found:
-  - **The default timeout.** A proposed wait has no timeout of its own, so its node
-    takes the 5,000 ms default (`nodes/policy/action.ts:20,40`). Core uses that one
-    value three ways:
-    - its runtime deadline (`runtime/service.ts:361-371`);
-    - its client-gateway deadline (`client-gateway/service/commands.ts:65-70`);
-    - the timeout it sends the extension (`client-gateway-transport.ts:172`).
-  - **The extension's clock starts later,** after the tab settles for at least
-    1,000 ms (`automation-tab.ts:137`). In the three `too-slow` runs the wait ended
-    at 5,005, 5,011 and 5,004 ms, with Core's code.
-  - **The fix changes one verdict:** W25 `too-slow`. In other rows it would change
-    a code, not a verdict.
-  - **Stale comments:** `delayed-ui/scenario.ts:16-19`, `late-target-wait.ts:15` and
-    `action-runner.ts:197-198`.
-- Decisions: the thirty-first dispatch.
-  - Both Core deadlines wait the timeout plus a named margin.
-  - The client still receives the timeout.
-  - `output_dispatch.timed_out` keeps meaning a client that never answered.
-  - The user was told this crosses into Core.
-- Validation: the supervisor's bundle check, recorded in the entry above, shows the
-  three `too-slow` runs reporting `timeout/output_dispatch.timed_out`. The worker's
-  timings (`node -e` over `run.json`) were not rerun by the supervisor.
+- Agent: worker `f-upload-validation-names` (Partial). The refusal reasons and the
+  verification are by the supervisor.
+- Changed, in `apps/extension/`:
+  - **`src/content/actions/upload.ts`:** the post-condition's `expected` and `actual`
+    give only the count of files and whether their names match, for example
+    `1 file, named as requested`.
+    - The check still passes only when the input holds exactly the requested names,
+      in order.
+    - Otherwise it still fails `output_not_observed`.
+  - **New `src/content/actions/tests/upload.test.ts`.**
+  - **`src/content/action-runtime/file-input.ts`,** by the supervisor: a refusal
+    names a file by its position ("file 1"), never by its name, and the header says
+    why.
+  - **`e2e/content/tests/upload-dialog.spec.ts`:**
+    - the two upload rows assert that no name appears;
+    - a new row, by the supervisor: a refusal names a file by position.
+- Found: nothing reads the upload validation's text as names. The worker checked the
+  domain's classifier and adapter, Core, the runner and the bench.
+- Validation:
+  - **Supervisor, `sup60`:**
+    - `EXTENSION_TEST_BUILD_LABEL=sup60 pnpm test` printed "# tests 468", "# pass
+      468", "# fail 0";
+    - `upload-dialog.spec.ts` gave "7 passed";
+    - extension `pnpm check` exit=2, on a type error in the supervisor's new row
+      (`validation?.actual` on a union).
+  - **Supervisor, `sup61`,** after that row was rewritten as a `toMatchObject`:
+    extension `pnpm check` exit=0, and `upload-dialog.spec.ts` "7 passed".
+  - **Supervisor mutation, content harness:** quoting the name in the base64 refusal
+    failed the new row ("1 failed"). Restored byte-identical, "1 passed".
+  - **Worker mutations:** putting the names back failed all six new unit rows, and
+    making every upload pass failed the three mismatch rows.
 - Not verified:
-  - when the extension's own answer arrived;
-  - how large the margin needs to be under load.
-- Outcome: Revised
+  - a Lab W17 run showing the name 0 times in Core's saved attempt;
+  - `pnpm build`, since the tracked `build/` still holds the old content script.
+- Outcome: Accepted
 
 ## Open Questions
 

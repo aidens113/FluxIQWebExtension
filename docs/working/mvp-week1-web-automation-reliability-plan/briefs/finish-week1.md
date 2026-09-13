@@ -3689,6 +3689,80 @@ the pages cite. Run no build or Lab command.
 
 **Report:** `reports/i-arch-pages-audit.md`.
 
+---
+
+# Thirty-fourth dispatch — from `g-core-dispatch-deadline` (blocked)
+
+`g-core-dispatch-deadline` changed nothing, and was right not to. A web Flow action
+never takes Core's gateway transport:
+- **It goes through the domain's own adapter,** `web-automation.gateway`
+  (`domain/src/runtime/service.ts:7-19`).
+- **The 5,000 ms that fired** is the runtime's adapter deadline
+  (`runtime/service.ts:361-371`).
+- **The adapter sends the extension no timeout** (`domain/src/runtime/adapter.ts:76-84`,
+  `domain/src/io/gateway-output-dispatcher.ts:14-22`). So the extension waits its own
+  default, which is 10,000 ms for a wait (`waits.ts:17`).
+
+Decided by the supervisor on 2026-09-13:
+- **Core's runtime deadline is the dispatch timeout plus one named margin,** for
+  every target. There is no per-adapter flag. An in-process adapter's work is
+  bounded by the timeout anyway, so the margin only delays a hung target's failure.
+- **The web adapter sends the extension the command's timeout.** The extension then
+  gives up at the node's timeout and reports its own `web.action.timeout`.
+- **The client-gateway timer** waits the timeout plus the same margin when a timeout
+  is sent.
+- **The margin is 3,000 ms,** in one named constant. It is justified by the measured
+  settle (1,007-1,250 ms) plus transport.
+- **`output_dispatch.timed_out` keeps its meaning:** a target that never answered.
+
+## g-web-timeout-forwarding — the extension's own timeout reaches the run (Core, then domain)
+
+**Owns:**
+- **In `F:\!FluxIQ\packages\fluxiq\src\`:**
+  - `runtime/service.ts`, the dispatch deadline;
+  - `client-gateway/service/commands.ts`, the gateway timer;
+  - `runtime/contracts.ts`, only if `OutputDispatchRequest` needs an optional timeout
+    field;
+  - a focused module for the margin constant, if one is needed;
+  - their tests.
+- **Core docs:** `F:\!FluxIQ\docs\architecture\package-boundaries.md` (a line in the
+  unreleased 0.4.0 entry), and the runtime page that states the deadline.
+- **In `F:\!FluxIQWebExtension`:**
+  - `domain/src/runtime/adapter.ts` and `domain/src/io/gateway-output-dispatcher.ts`,
+    and their tests;
+  - comments only at `apps/scenario-lab/src/scenarios/delayed-ui/scenario.ts:16-19`,
+    `domain/src/recording/proposals/late-target-wait.ts:15` and
+    `apps/extension/src/runtime/action-runner.ts:197-198`.
+
+Follow `F:\!FluxIQ\AGENTS.md`. Do Core first, then the domain.
+
+**Read:** `reports/g-core-dispatch-deadline.md` in full, and `reports/i-w25-timeout-code.md`.
+
+**Task.**
+1. **Build the decided design.**
+2. **Check that nothing which passes today can newly fail.** List every web verb whose
+   extension-side default timeout exceeds the node's timeout. For each, say whether
+   Core's 5,000 ms deadline already bounded it before this change.
+3. **Correct the three comments** against the final design.
+
+**Tests.**
+- **Core:** a target that answers with its own failure within the margin is reported
+  with that failure, and a silent target still gets `output_dispatch.timed_out`.
+  Each has a mutation that restores the old deadline.
+- **Domain:** the adapter forwards the command's timeout, with a mutation that drops
+  it.
+- **End to end, if one fits:** a wait whose page never shows its target reports
+  `web.action.timeout`, not `output_dispatch.timed_out`.
+- **Gates:**
+  - `npx vitest run <files> --no-file-parallelism`;
+  - Core `pnpm check`, `pnpm docs:reference` if a cited line moves, and
+    `pnpm docs:check`;
+  - domain `check`, and `test` under a private label;
+  - the structure audit;
+  - no Core `pnpm build`.
+
+**Report:** `reports/g-web-timeout-forwarding.md`, with the compatibility effect.
+
 ## Amendment to `f-capability-confirmations` — a tab confirmation carries its tab (extension)
 
 Dispatched once `f-tab-recording` has reported.

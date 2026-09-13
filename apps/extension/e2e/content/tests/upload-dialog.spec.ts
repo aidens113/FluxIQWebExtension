@@ -32,8 +32,10 @@ test("upload: puts the file on the input and validates the names it ended up hol
   expect(reply).toMatchObject({
     status: "succeeded",
     message: "Files uploaded.",
-    validation: { status: "passed", expected: UPLOAD_NAME, actual: UPLOAD_NAME }
+    validation: { status: "passed", expected: "1 file, named as requested", actual: "1 file, named as requested" }
   });
+  // A chosen file's name is the user's data: the post-condition compares names but quotes none.
+  expect(JSON.stringify({ message: reply.message, validation: reply.validation })).not.toContain(UPLOAD_NAME);
   // The result describes the element it acted on. How that descriptor spells
   // the selector is describe-element.ts's business -- it prefers an id, so this
   // input comes back as "#upload-file" -- and pinning the spelling here would
@@ -66,13 +68,26 @@ test("upload: a target that cannot hold files is rejected, not reported as a suc
   });
   expect(reply).toMatchObject({
     status: "failed",
-    validation: { status: "failed", expected: UPLOAD_NAME, actual: "the target is a button, not a file input" },
+    validation: { status: "failed", expected: "1 file, named as requested", actual: "the target is a button, not a file input" },
     // One code for every refusal; the verb's own reason rides in `actual`.
     failure: {
       category: "blocked_by_capability_or_policy", code: "web.action.rejected", retryable: false,
-      expected: UPLOAD_NAME, actual: "upload_rejected: the target is a button, not a file input"
+      expected: "1 file, named as requested", actual: "upload_rejected: the target is a button, not a file input"
     }
   });
+  expect(JSON.stringify({ message: reply.message, validation: reply.validation, failure: reply.failure })).not.toContain(UPLOAD_NAME);
+});
+
+test("upload: a refusal names a file by its position, never by its name", async ({ openHarness }) => {
+  // Sent straight to the page, as the domain's schema would refuse this content
+  // before dispatch; the page-side backstop must not quote the name either.
+  const harness = await openHarness("file-transfer");
+  const reply = await harness.runAction({
+    commandId: "upload-bad-content", actionType: "web.dom.upload", selector: UPLOAD_INPUT,
+    upload: { files: [{ ...UPLOAD_FILE, contentBase64: "%%%not-base64%%%" }] }
+  });
+  expect(reply).toMatchObject({ status: "failed", validation: { actual: "the content of file 1 is not valid base64" } });
+  expect(JSON.stringify({ message: reply.message, validation: reply.validation, failure: reply.failure })).not.toContain(UPLOAD_NAME);
 });
 
 test("dialog: an armed dismiss answers the native confirm, and the arming is consumed by it", async ({ openHarness, page }) => {

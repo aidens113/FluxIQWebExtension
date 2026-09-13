@@ -8,7 +8,10 @@
 // was asked for instead of comparing the request with itself.
 //
 // File contents arrive as base64 in the command and are never logged, never put
-// on the result, and never read back: only names and sizes leave this module.
+// on the result, and never read back. The names read back off the element leave
+// this module only as `fileNames`, for the verb's own comparison. A refusal names
+// a file by its position in the request, never by its name, because a chosen
+// file's name is the user's data and a refusal's reason reaches the result.
 
 import type { WebAutomationUploadFile } from "../types";
 
@@ -37,11 +40,11 @@ export function setInputFiles(element: Element, files: readonly WebAutomationUpl
 
   const transfer = new DataTransfer();
   let totalBytes = 0;
-  for (const file of files) {
+  for (const [index, file] of files.entries()) {
     const content = decodeBase64(file.contentBase64);
-    if (!content) return { ok: false, reason: `the content of ${file.name} is not valid base64` };
+    if (!content) return { ok: false, reason: `the content of file ${index + 1} is not valid base64` };
     if (content.byteLength > UPLOAD_MAX_FILE_BYTES) {
-      return { ok: false, reason: `${file.name} is ${content.byteLength} bytes, over the ${UPLOAD_MAX_FILE_BYTES}-byte file limit` };
+      return { ok: false, reason: `file ${index + 1} is ${content.byteLength} bytes, over the ${UPLOAD_MAX_FILE_BYTES}-byte file limit` };
     }
     totalBytes += content.byteLength;
     if (totalBytes > UPLOAD_MAX_TOTAL_BYTES) {
