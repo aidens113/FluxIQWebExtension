@@ -712,6 +712,56 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   the timeline order of the explained event after its click; every Lab row.
 - Outcome: Revised
 
+### 2026-09-13 — W10 and W27 take E4; three negative variants declare a failed click
+
+- Agent: worker `i-w19-expectation` (follow-up, read-only); decisions by
+  supervisor.
+- Changed: `reports/i-w19-expectation.md` "Follow-up: W10 and W27"; sixth-dispatch
+  briefs.
+- Found: both fixtures serve a real error: W10 `broken-link` redirects to a 404
+  and W27's guard answers 403. A landing marker reaches W10 but never W27, whose
+  recorded click navigated nowhere. A "no navigation" claim fails W15's new tab,
+  late navigations and single-page-app routes, costs about 1 s on some 30 clicks
+  per pass, and still passes W27, whose blocked path contains the recorded one.
+  **C1 already breaks three rows:** W19 `expired`, W10 `broken-link` and W27
+  `blocked-url` declare their click `succeeded`, so once the click correctly
+  fails, the Flow lane records the category and then throws on the actions check
+  (`run-flow-lane.ts:129-130`).
+- Decisions:
+  - **E4 is taken:** a replayed click whose own tab lands on a page served with
+    HTTP 400 or above fails as `navigation_unexpected`. It needs no wire change
+    and makes no claim on other clicks. It costs about 300 ms on each click that
+    commits nothing, roughly 9 s per pass. It is serial after `w19-e3`, which is
+    committed.
+  - The landing marker is Week 2, for wrong landings served with 200. The "no
+    navigation" claim is rejected. E2 lands alone. D1 is unchanged.
+  - The three variants declare the click `failed`, as W27's `disabled` and
+    `detached` already do (`g-negative-click-outcomes`).
+- Validation: worker, read-only, nothing run: no probe reaches the background
+  navigation path without a browser. Supervisor read the follow-up whole.
+- Not verified: that Chromium reports the 404 and 403 statuses to the extension;
+  that W27's click result reaches the background before its page unloads; how
+  the bench scores a matched category followed by a thrown actions check.
+- Outcome: Accepted
+
+### 2026-09-13 — g-negative-click-outcomes: three negative variants expect a failed click
+
+- Agent: worker `g-negative-click-outcomes`; verified by supervisor. Core's target
+  gate is committed as `0e6d3ac`, with Core's completed briefs archived.
+- Changed: `auth-gate/manifest.ts` (`expired`: typing `succeeded`, sign-in click
+  `failed`, restated because a variant's `actions` replace the workflow's),
+  `navigation/scenario.ts` (`broken-link`), `failure-surfaces/manifest.ts`
+  (`blocked-url`), and each scenario's test.
+- Decisions: the existing and clone lanes reject any non-succeeded attempt
+  (`existing-flow-run.ts:96-97`), as they already did for `disabled` and
+  `detached`; the week1 negatives run on the isolated Flow lane, so that is not
+  Week 1.
+- Validation: supervisor read the diff; `pnpm --filter
+  @fluxiq-web-extension/scenario-lab check` -> exit 0; `... test` -> `# tests 202`,
+  `# pass 202`, `# fail 0`. Worker: each click flipped back to `succeeded` failed
+  its own scenario test, restored by hash.
+- Outcome: Accepted
+
 ## Open Questions
 
 Open questions live in [open-questions.md](./mvp-week1-web-automation-reliability-plan/open-questions.md).

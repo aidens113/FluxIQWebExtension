@@ -890,6 +890,15 @@ verified`: the auth-gate recording holds exactly one explained
 
 **Report:** `reports/w19-e1.md`.
 
+**Added after the first attempt landed in `d124b04`.** `explainedBy` is the
+content script's per-document sequence, which is not unique within a recording,
+so a mapper could link a landing to the wrong click. Also carry the explaining
+click's own unique recorded event id beside the sequence, as `explainedByEventId`
+(or the id field the recorded payload already carries; name it), so the domain
+mapper links a landing to exactly one click without guessing the nearest earlier
+one. Same Owns; the same proof shape: a unit row, a mutation, extension `check`
+and `test`.
+
 ## w19-e3 — an assert that meets a navigating tab is sent once more
 
 **Owns:** `apps/extension/src/runtime/action-runner.ts` and
@@ -978,6 +987,204 @@ stayed unchanged. Remove it, re-point that row at the single read, and keep ever
 assertion the row made. D4 is **not** Week 1 and is not yours: B1 already fails a
 proposal short of the recording's pinned executable events, and Core's
 `actionCount` counts entries that are not recorded actions.
+
+## g-bench-evidence-size — the bench's evidence-size fields, from the Flow lane's packets
+
+Dispatched once this brief is written; it shares no file with a running worker.
+
+**Owns:** `packages/test-runner/src/bench/evaluate-run.ts` and
+`bench/tests/evaluate-run.test.ts`;
+`packages/test-runner/src/run-evaluation/observed-run-evaluation.ts` and its test.
+**Not** `bench/render-markdown.ts`, `bench/corpus/week1.ts` or
+`bench/tests/week1-corpus.test.ts`, which `g-w29-row` owns.
+
+**Read:** `reports/g-bench-coverage.md` item 3 finding;
+`reports/g-flow-lane-followups.md` Outcome (`evidencePackets`);
+`reports/i-lab-campaign.md` design item 3.
+
+**Task.** Fill the bench report's evidence fields (`sanitizedPacketBytes` and
+`truncationCount`) from each Flow-lane run bundle's `snapshots/flow-lane.json`
+`evidencePackets`, one entry per measured packet. A recording-lane run
+contributes none; say so where the fields are assembled. `rawSnapshotBytes`
+stays empty, because no producer exists and it is not Week 1. If the report's
+text for that lives in `render-markdown.ts`, write the exact sentence into your
+report for the supervisor instead of editing that file.
+
+**Tests.** A Flow-lane bundle with two packets, one truncated, yields both sizes
+and a truncation count of 1; a recording-lane bundle adds nothing; a mutation
+that drops the read; test-runner `check` and `test`, built into a private
+`--outDir` at `dist`'s depth. Under `Not verified`: a week1 bench `report.md`
+Evidence size row is non-empty for Flow-lane rows.
+
+**Report:** `reports/g-bench-evidence-size.md`.
+
+## g-integration-small-fixes — the queued comment, cast and script corrections
+
+Dispatched only at integration, when no worker edits these files.
+
+**Owns:** `docs/architecture/failure-taxonomy.md`, the paragraph that miscounts
+producers only; `domain/src/recording/tests/domain.test.ts` (about `:99-104`),
+`domain/src/recording/web-state/evidence/tests/project.test.ts` (about `:47`),
+`apps/extension/src/content/evidence/tests/forms.test.ts` (about `:151`);
+`apps/extension/src/background/connection/recording-evidence.ts` and the two
+tests whose comments still name `connection.ts`; `apps/extension/package.json`,
+the `test:content` script only;
+`apps/extension/src/content/action-runtime/validation-outcome.ts`, the comment at
+about `:17-20` only; `apps/extension/e2e/content/tests/identity-fixtures.ts`, its
+header's spec count; `domain/src/output-nodes/targets.ts` (about `:42-53`) and
+`domain/src/client/gateway-mapping.ts` (about `:201-209`), the comments saying
+Core ignores `parameters.element`, which Core's target gate changed. Once W19's domain mapper has landed, also
+`domain/src/io/input-model.ts`, the checkbox comment at about `:181-184` only.
+
+**Read:** the "Found" or "Notes" lines naming each item in
+`reports/g-domain-mapping.md`, `g-recorder-signals.md`, `g-snapshot-evidence.md`,
+`f-connection-split.md`, `g-small-fixes.md` and `g-identity-wire-chain.md`.
+
+**Task.** Correct each comment to what the code now does; remove each cast the
+widened `evidence` type made unnecessary; fix the `test:content` script so
+`pnpm --filter @fluxiq-web-extension/extension test:content -- <spec>` runs that
+spec. No behaviour change anywhere else.
+
+**Tests.** Domain and extension `check` and `test`; the fixed script run on one
+spec, quoting its count; the content harness `--list`; the structure audit.
+
+**Report:** `reports/g-integration-small-fixes.md`.
+
+---
+
+# Sixth dispatch — W19, W10 and W27, from the follow-up
+
+Decided on `reports/i-w19-expectation.md` "Follow-up: W10 and W27": **E4** is
+taken (a replayed click whose own tab lands on a page served with HTTP 400 or
+above fails as `navigation_unexpected`); the landing marker is Week 2; the "no
+navigation" claim is rejected; E2 lands alone; D1 is unchanged and is briefed
+after C2. All rules above still hold.
+
+## g-negative-click-outcomes — three negative variants whose click must fail
+
+**Owns:** `apps/scenario-lab/src/scenarios/auth-gate/manifest.ts`, the
+`navigation` scenario's manifest (name the file), and
+`apps/scenario-lab/src/scenarios/failure-surfaces/manifest.ts`, with each
+scenario's `tests/`; any Scenario Lab e2e spec that pins those variants' click
+outcome (name it, run it).
+
+**Read:** the follow-up's "Something C1 hits now".
+
+**Task.** In auth-gate `expired`, navigation `broken-link` and failure-surfaces
+`blocked-url`, declare the click's expected outcome `failed`, as `disabled` and
+`detached` already do. Nothing else changes.
+
+**Tests.** Each scenario's test asserts that variant's click outcome, with a
+mutation; scenario-lab `check` and `test`.
+
+**Report:** `reports/g-negative-click-outcomes.md`.
+
+## w19-e2 — a failed URL claim on a sign-in gate reports `auth_required`
+
+**Owns:** `apps/extension/src/content/action-runtime/results.ts`;
+`apps/extension/e2e/content/tests/failures.spec.ts`.
+
+**Read:** `reports/i-w19-expectation.md` section 2 and design E2.
+
+**Task.** Design E2: `authGateFailure` gains a URL-claim branch, so a failed
+`web.dom.assert` URL claim on a page the sign-in-gate detector recognises reports
+`AUTH_REQUIRED` (`web.auth.required`). The record never quotes a page value or
+the demo password. A URL claim on any other page is unchanged.
+
+**Tests.** The design's harness row in "on auth-gate", with its mutation (drop the
+branch and the row reads `state_mismatch`); the non-gate control at
+`check-assert.spec.ts:296-313`, run but not edited; extension `check` and `test`.
+
+**Report:** `reports/w19-e2.md`.
+
+## w19-e4 — a replayed click that lands on an error page fails as `navigation_unexpected`
+
+**Owns:** new `apps/extension/src/runtime/click-landing.ts` and
+`runtime/tests/click-landing.test.ts`; `apps/extension/src/runtime/action-runner.ts`
+(the one call) and `runtime/tests/action-runner.test.ts`.
+
+**Read:** the follow-up's E4 section, its blast radius and proof.
+
+**Task.** After a replayed `web.dom.click`, watch for a top-frame commit on the
+click's own tab within a bounded window. When that document was served with HTTP
+400 or above, the click fails with `NAVIGATION_UNEXPECTED`
+(`web.navigation.unexpected`), naming the status and the path without query,
+never page content. A new tab, a subframe, and a click that commits nothing are
+untouched. First confirm the extension's current permissions expose the status
+for a redirect to a 404 and for a 403; if a new permission is needed, stop and
+report. Measure the wait a click that commits nothing now pays.
+
+**Tests.** Unit rows (a 302 then 404, a 403, a 200, a new tab, a subframe, no
+commit) with a mutation; extension `check` and `test`. Under `Not verified`: W10
+`broken-link` and W27 `blocked-url` report `navigation_unexpected` 3 of 3.
+
+**Report:** `reports/w19-e4.md`.
+
+## g-target-resolution-union — the Flow lane keeps Core's no-candidates record
+
+Dispatched once Core's target gate is committed.
+
+**Owns:** `packages/test-runner/src/flow-lane/persisted-flow-run.ts` and
+`flow-lane/tests/persisted-flow-run.test.ts`.
+
+**Read:** `reports/g-core-target-gate.md`, the union and its Flow-lane note.
+
+**Task.** Core's `targetResolution` is now a union keyed on `status`, and
+`unresolved_no_candidates` carries no `minimumConfidence`, so `targetResolutionOf`
+drops that record. Read each variant as Core defines it, field by field, never
+copying the record whole; an unknown status is still dropped.
+
+**Tests.** A no-candidates record survives into `PersistedFlowAction`; a matched
+one keeps `confidence` and `normalizedScore`; an unknown status is dropped; a
+mutation; test-runner `check` and `test`, built into a private `--outDir` at
+`dist`'s depth.
+
+**Report:** `reports/g-target-resolution-union.md`.
+
+## w19-c2 — the recording candidate's expected state, and the entries that follow it (Core)
+
+Dispatched once Core's target gate and `w19-c1` are committed, since all three
+touch `runtime/service.ts` or its documentation.
+
+**Owns** (in `F:\!FluxIQ\packages\fluxiq\src\programs\automation-studio\`):
+`nodes/importer-sdk.ts`; `runtime/recording-flow-proposal.ts`;
+`runtime/service.ts`, which must not grow; one new module beside
+`service/recordings/timeline.ts` for the candidate and node construction, and a
+new test file for it (name both); the Core architecture page for the importer
+SDK. The "never edit Core" rule is lifted for these; follow
+`F:\!FluxIQ\AGENTS.md`.
+
+**Read:** `reports/i-w19-expectation.md` section 3 and design C2.
+
+**Task.** Design C2: an additive `expectedState` on
+`AutomationStudioRecordingMapperCandidate` and `RecordingFlowActionCandidate`; a
+mapper context `following` holding the next mapper-visible entries, bounded
+(for example 32); `validateRecordingCandidate` lifts a plain-object
+`expectedState` with `structuredClone` and drops anything else;
+`appendRecordingProposalToFlow` writes it into `parameterValues`. `service.ts`
+sits on its 6919-line baseline, so the construction moves out rather than growing.
+
+**Tests.** Design C2's rows, in the new test file, with the mutation that deletes
+the lift; `npx vitest run <file> --no-file-parallelism`; Core `pnpm check`,
+`pnpm docs:check`, and `pnpm docs:reference` if an export changes. No Core
+`pnpm build`.
+
+**Report:** `reports/w19-c2.md`.
+
+**Added after `w19-c1`.** Owns also `nodes/policy/expectation.ts` and
+`runtime/executor/transition-comparison.ts`, for one change: `w19-c1` copied
+Core's unexported `expected_state_missing` failure record into
+`transition-comparison.ts`. Export it once from `expectation.ts`, import it in
+`transition-comparison.ts`, and delete the copy, so the two cannot drift. The
+executor tests must stay green. Nothing in Core honours a node's `failureRoute`
+even for a failed dispatch; that is a Week 2 Core item, and not yours.
+
+**Added at dispatch.** Core's target gate (`0e6d3ac`) and C1 (`6f172b9`) are
+committed. Owns also `F:\!FluxIQ\docs\architecture\automation-studio.md`: land
+the replacement text `reports/w19-c1.md` gives for its transition-comparison
+section (about `:417-427`) and the two sentences for about `:379-397`, adjusted
+to the lines as they now stand, beside your own importer-SDK documentation. Run
+Core `pnpm docs:check` after.
 
 ## i-w19-expectation, follow-up — W10 `broken-link` and W27 `blocked-url` (read-only)
 

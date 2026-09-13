@@ -799,3 +799,72 @@ content family.
 - Not verified: Lab W18 3 of 3 with no `web.action.failed` on the landing assert.
 - Outcome: Accepted
 
+
+## Part nine, archived 2026-09-13
+
+Moved verbatim when the plan reached 773 lines: the W29 row and mixed-lane
+labels (`c29018f`), committed.
+
+### 2026-09-13 — g-w29-row: W29 is in the week1 bench, and mixed-lane figures say so
+
+- Agent: worker `g-w29-row`; verified by supervisor.
+- Changed: `packages/test-runner/src/bench/corpus/week1.ts` (`variantOnly("W29",
+  "identity-drift", null, ["save-and-exit"])`, expecting `target_not_found`),
+  `bench/tests/week1-corpus.test.ts` (29 rows, 67 runnable), `bench/render-markdown.ts`
+  (`## Distributions, all lanes`, and `all lanes` on each distribution row and
+  the truncation count), and a new `bench/tests/render-markdown.test.ts`.
+- Decisions: `compare-reports.ts:48`'s `run-duration-p95` also mixes lanes, and
+  is printed nowhere in `report.md`; it compares two week1 benches that mix the
+  same way, so it stays for Week 1. The plan's corpus table already carries W29.
+- Validation: supervisor built the test-runner into a private `dist-sup6` beside
+  `dist`: `# runnable: 67 (23 recording; 44 flow, 23 unarmed and 21 variants)`,
+  `# tests 475`, `# pass 474`, `# fail 1`. The one failure is
+  `flow-lane/tests/declared-secrets.test.js`, which failed to load on
+  `TS2724: no exported member named 'readFlowSecretRequests'`: that export is the
+  dead wrapper `g-run-scenario-followups` is removing, with its test, in files it
+  had uncommitted. The commit's guard refused any `flow-lane/` file. Worker:
+  dropping the W29 row fails three corpus tests (`+ 66 - 67`), removing the label
+  fails the render test, both restored by hash.
+- Not verified: W29 on the Flow lane refusing as `target_not_found`, which needs
+  the Lab.
+- Outcome: Accepted
+
+
+## Part ten, archived 2026-09-13
+
+Moved verbatim before committing the negative-click-outcome entry: the recorder
+link (`d124b04`) with Core C1 (`6f172b9`) and the Core target gate, all
+committed.
+
+### 2026-09-13 — w19-e1 lands the click's landing; Core C1 and the target gate are verified
+
+- Agent: workers `w19-e1`, `w19-c1` and `g-core-target-gate`; verified by
+  supervisor. The W29-row entry (`c29018f`) is archived verbatim to part nine of
+  the ledger archive. The Core entries are in Core's paired document.
+- Changed: `d124b04`, `apps/extension/src/background/connection/navigation-recorder.ts`
+  and `recorded-event-intake.ts`: a top-frame `link` or `form_submit` commit
+  inside an executable click's window is recorded as a non-executable
+  `browser.navigation` with `transition: "explained"`, `explainedBy` naming the
+  click's sequence, and a URL of origin and path only; subframe commits and
+  reloads are dropped; a new recording forgets the last one's clicks. Core
+  `6f172b9`: a rejected expected state fails its attempt (C1). Core, committed
+  next: the honest element-target trace, the recorded element's identity, and
+  refused late domain events.
+- Decisions: dropping every subframe commit, not only links and submits, is
+  accepted, since an iframe loading on the landing page would otherwise replace
+  the landing in the per-tab debounce. `explainedBy` is a per-document counter
+  and not unique within a recording, so `w19-e1` is resumed to carry the click's
+  unique event id beside it before the domain mapper (D1) is briefed.
+- Validation: supervisor read the E1 diff. `EXTENSION_TEST_BUILD_LABEL=sup-e1
+  ... extension check` -> exit 0; `... test` -> `# tests 370`, `# pass 370`,
+  `# fail 0`, the recorded-event-intake row that failed while `w19-e1` was
+  mid-edit included. Core executor `vitest` over `node-execution`,
+  `transition-comparison` and `trace-withholding` -> `Tests 28 passed (28)`.
+  Core target gate `vitest` over its four files -> `Tests 142 passed (142)`;
+  Core `pnpm check` -> exit 0; `pnpm docs:check` -> exit 0. Workers: E1 restoring
+  the old early return -> 3 failed; C1 transform removed -> 4 failed; target gate
+  six mutations, each failing only its row; all restored byte-identical.
+- Not verified: the auth-gate recording's explained landing, live; W18 and W19 on
+  the Flow lane; a generated click node carrying the recorded identity.
+- Outcome: Accepted
+
