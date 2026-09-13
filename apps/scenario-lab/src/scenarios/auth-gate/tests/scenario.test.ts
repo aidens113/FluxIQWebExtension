@@ -3,7 +3,7 @@ import test from "node:test";
 import { assertWebScenario, resolveScenarioWorkflow, scenarioPageFactSchedule } from "@fluxiq-web-extension/test-contracts";
 import { escapeHtml } from "../../../html.js";
 import { startScenarioLab } from "../../../server.js";
-import { authGateDemoCredentials } from "../constants.js";
+import { authGateDemoCredentials, authGatePasswordPlaceholder } from "../constants.js";
 import { authGateScenario } from "../scenario.js";
 import type { AuthGateState } from "../state.js";
 
@@ -219,6 +219,7 @@ test("no rendering of the fixture contains the password constant", () => {
     "account": route(signedIn(), "account")?.body ?? "",
   };
   assert.equal(renderings["account"]?.includes('data-testid="account-summary"'), true, "the account rendering is the protected page");
+  assert.equal(authGatePasswordPlaceholder.includes(credentials.password), false, "the placeholder the page shows is not the password");
   for (const [name, html] of Object.entries(renderings)) {
     for (const form of [credentials.password, escapeHtml(credentials.password)]) assert.equal(html.includes(form), false, name);
   }
@@ -230,7 +231,7 @@ test("the sign-in page states the demo username, withholds the password, marks t
     'type="password" autocomplete="current-password"',
     'autocomplete="username"',
     'data-testid="demo-username">demo.user<',
-    'data-testid="demo-password">Withheld: a run supplies it as the declared secret auth-gate-password.<',
+    `data-testid="demo-password">${escapeHtml(authGatePasswordPlaceholder)}<`,
     '<p role="alert" data-testid="session-expired" hidden>Your session expired. Sign in again to continue.</p>',
     "get('expired') === '1'",
     'location.assign("/scenarios/auth-gate/account")',

@@ -1,6 +1,6 @@
 import { escapeHtml, fixtureClient, page } from "../../html.js";
 import type { RenderContext } from "../../types.js";
-import { authGateDemoCredentials, authGatePaths, authGateProtectedAccount } from "./constants.js";
+import { authGateDemoCredentials, authGatePasswordPlaceholder, authGatePaths, authGateProtectedAccount } from "./constants.js";
 import type { AuthGateState } from "./state.js";
 
 /**
@@ -11,8 +11,9 @@ import type { AuthGateState } from "./state.js";
  * The demo password is never page text. It is the scenario's declared replay
  * secret, and every state snapshot captures an element's visible text, so a
  * page that showed it would put the secret into Core's workspace however well
- * the recorder withholds typed values. Its row keeps a fixed placeholder, so
- * the page's structure is unchanged; the runner already holds the constant.
+ * the recorder withholds typed values. Its row shows `authGatePasswordPlaceholder`
+ * instead, so the page's structure is unchanged; the runner already holds the
+ * constant.
  */
 export function renderSignInPage(state: AuthGateState, context: RenderContext): string {
   const body = `<main>
@@ -29,7 +30,7 @@ export function renderSignInPage(state: AuthGateState, context: RenderContext): 
       <p>This is a test fixture. These fixture-only demo credentials work nowhere else; never enter a real password here.</p>
       <dl>
         <dt>Username</dt><dd data-testid="demo-username">${escapeHtml(authGateDemoCredentials.username)}</dd>
-        <dt>Password</dt><dd data-testid="demo-password">Withheld: a run supplies it as the declared secret auth-gate-password.</dd>
+        <dt>Password</dt><dd data-testid="demo-password">${escapeHtml(authGatePasswordPlaceholder)}</dd>
       </dl>
     </aside>
     <footer><code data-testid="seed-marker">${escapeHtml(state.seedMarker)}</code></footer>

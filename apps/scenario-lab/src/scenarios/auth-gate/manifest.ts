@@ -26,8 +26,9 @@ const SIGN_IN_PAGE_FACTS: ExpectedFact[] = [
 ];
 
 /**
- * Corpus rows W18 and W19. Primary (W18): sign in with the stated demo
- * credentials, reach the protected account page, and read it. `expired`
+ * Corpus rows W18 and W19. Primary (W18): sign in with the demo credentials,
+ * of which the page states only the username, reach the protected account
+ * page, and read it. `expired`
  * (W19): the session expires before the protected page loads, so the
  * account request lands back on the sign-in page and the run must report
  * auth_required instead of reading anything.
@@ -94,9 +95,10 @@ export const authGateManifest = createScenarioManifest({
    * the recording. The resolved value also joins the run's evidence redaction
    * list.
    *
-   * The variable must carry the credential this fixture accepts, which the
-   * sign-in page states in plain sight: it is a loopback fixture constant, not
-   * a real credential, and it opens nothing. Unset, a Flow run of this
+   * The variable must carry the credential this fixture accepts,
+   * `authGateDemoCredentials.password`, which the sign-in page never shows
+   * (its row reads `authGatePasswordPlaceholder`): it is a loopback fixture
+   * constant, not a real credential, and it opens nothing. Unset, a Flow run of this
    * scenario fails closed with `environment.missing` rather than falling back
    * to whatever the recording captured -- the fallback is the whole reason the
    * declaration exists. Only the Flow lane resolves declared secrets, so a

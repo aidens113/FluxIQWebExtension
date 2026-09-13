@@ -134,11 +134,13 @@ test.describe("on auth-gate", () => {
     });
     expect(reply.failure?.actual).toContain("sign-in gate");
 
-    // Recognising the gate reads the page's structure, never a credential.
-    const demoPassword = await page.locator('[data-testid="demo-password"]').innerText();
-    expect(demoPassword.length).toBeGreaterThan(0);
-    expect(JSON.stringify(reply.failure)).not.toContain(demoPassword);
-    expect(JSON.stringify(reply.validation)).not.toContain(demoPassword);
+    // Recognising the gate reads the page's structure, never its text. The
+    // fixture's password row holds a placeholder, since the page never shows
+    // the declared secret; the record must not quote that row either.
+    const passwordRow = await page.locator('[data-testid="demo-password"]').innerText();
+    expect(passwordRow.length).toBeGreaterThan(0);
+    expect(JSON.stringify(reply.failure)).not.toContain(passwordRow);
+    expect(JSON.stringify(reply.validation)).not.toContain(passwordRow);
   });
 
   test("a URL claim that fails on a sign-in gate is AUTH_REQUIRED, and the record never quotes the page's address", async ({ openHarness, page }) => {
@@ -165,12 +167,13 @@ test.describe("on auth-gate", () => {
     expect(reply.failure?.actual).toContain("sign-in gate");
 
     // The claim is the Flow's; the address and every field are the page's. On
-    // a real gate the address carries a return path or a token.
-    const demoPassword = await page.locator('[data-testid="demo-password"]').innerText();
-    expect(demoPassword.length).toBeGreaterThan(0);
-    expect(JSON.stringify(reply.failure)).not.toContain(demoPassword);
+    // a real gate the address carries a return path or a token. The password
+    // row holds the fixture's placeholder, never the secret.
+    const passwordRow = await page.locator('[data-testid="demo-password"]').innerText();
+    expect(passwordRow.length).toBeGreaterThan(0);
+    expect(JSON.stringify(reply.failure)).not.toContain(passwordRow);
     expect(JSON.stringify(reply.failure)).not.toContain(harness.url);
-    expect(JSON.stringify(reply.validation)).not.toContain(demoPassword);
+    expect(JSON.stringify(reply.validation)).not.toContain(passwordRow);
   });
 
   test("the control: a URL claim that names no URL is malformed on the gate page too, not AUTH_REQUIRED", async ({ openHarness }) => {

@@ -40,7 +40,7 @@ settled ledger entries are in parts one to thirty-four of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13, while workers run.**
-- **This repository:** `dd9b9f9`, 89 commits ahead of `origin/dev`, not pushed.
+- **This repository:** `9efd8c2`, 90 commits ahead of `origin/dev`, not pushed.
 - **Core:** `240c73e`, 10 commits ahead of `origin/dev`, `fluxiq` **0.4.0**, built at
   `187f40d`; the tenth is a plan-only commit. The nine code commits:
   - `5d495eb`, trace withholding;
@@ -52,8 +52,7 @@ settled ledger entries are in parts one to thirty-four of
   - `73a81e9`, a client's recording start is ordered and acknowledged;
   - `187f40d`, a recorded entry keeps its source event id and source;
   - `5845f5d`, `fluxiq` 0.4.0, with a migration note for every change above.
-- **Gates:** the supervisor reran per-package gates for every commit. Root gates,
-  the content harness and Core's full suite have not run since this session began.
+- **Gates:** per-package gates rerun for every commit; root gates and Core's full suite not yet run.
 
 **Settled this session** (ledger and archive):
 - **Core:** trace withholding; the late-message discard; W19 C1 and C2; the shared
@@ -93,9 +92,8 @@ settled ledger entries are in parts one to thirty-four of
   (P7, a new Core node outcome); both rows stay in the corpus.
 
 **In flight:**
-- **The auth-gate leak:** `g-attestation-sqlite`, to be committed with its follow-up
-  `g-attestation-sqlite-reader`; `f-authgate-followups`; in Core,
-  `g-core-attempt-withholding`, redispatched to own the whole chain.
+- **The auth-gate leak:** `g-attestation-sqlite` with its follow-up
+  `g-attestation-sqlite-reader`; in Core, `g-core-attempt-withholding` (whole chain).
 - **From the bench triage:** `g-runner-harness-fixes` (H1-H3, H5) and
   `g-expected-action-guard`. P1-P3 are committed.
 - **Recording gaps P4-P6:** `f-domain-capability-gaps`, `f-tab-recording`,
@@ -712,12 +710,12 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 - Validation:
   - **Supervisor,** extension `pnpm check` exit=0, and
     `EXTENSION_TEST_BUILD_LABEL=sup35 pnpm test` exit=0 with "# tests 413", "# pass
-    413", "# fail 0". The run started as the P1/P2 worker reported.
+    413", "# fail 0". That run began as the P1/P2 worker finished.
   - **Supervisor,** content harness
     `pnpm exec playwright test -c e2e/playwright.content.config.ts --workers=2 keyboard.spec.ts recorder-trust.spec.ts`:
     exit=0, "19 passed".
-  - Both diffs were frozen as patches and committed from them. The P3 diff was
-    byte-identical to the one saved when it reported.
+  - Both diffs were frozen as patches and committed from them. The P3 diff
+    compared byte-identical (`cmp`) to its first saved copy.
   - **Worker mutations:**
     - P1/P2: removing the key flush reproduced W02's and W03's orders; five
       mutations each failed their rows.
@@ -729,6 +727,36 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   - the content harness does not drive the background filter;
   - one residual drop: a press that never produces a click, then a keyboard click
     on the same selector, size and position in that tab and frame.
+- Outcome: Accepted
+
+### 2026-09-13 — f-authgate-followups: the password placeholder is one constant, and no comment says the page shows the password
+
+- Agents: worker `f-authgate-followups` (scenario-lab); the content-harness rows by
+  supervisor.
+- Changed:
+  - `apps/scenario-lab/src/scenarios/auth-gate/constants.ts` exports
+    `authGatePasswordPlaceholder`.
+    - `pages.ts` and `tests/scenario.test.ts` use it.
+    - A new row fails if the placeholder ever contains the password.
+  - `constants.ts:9` and `manifest.ts:28-30,97-98` no longer say the page shows the
+    password.
+  - The two auth-gate rows in `apps/extension/e2e/content/tests/failures.spec.ts`,
+    by the supervisor: the variable is now the page's password row, commented as a
+    placeholder. The rows still assert that the failure record quotes no page text.
+- Decision: those rows do not import the constant.
+  - No extension e2e spec imports scenario-lab source.
+  - The page no longer shows the password, so the rows cannot meet it.
+  - The guard that can is scenario-lab's own row: no rendering contains the
+    password constant.
+- Validation:
+  - **Supervisor,** scenario-lab built into `dist-sup37`:
+    - `check` exit=0; private build exit=0;
+    - `node --test` printed "# tests 204", "# pass 204", "# fail 0";
+    - the diff compared byte-identical to the copy saved when the worker finished.
+  - **Supervisor,** content harness `failures.spec.ts -g "on auth-gate"`: exit=0,
+    "4 passed".
+  - **Worker mutation:** pointing the placeholder at the password failed 2 rows.
+- Not verified: no Lab run, and no run of the scenario-lab e2e spec.
 - Outcome: Accepted
 
 ## Open Questions
