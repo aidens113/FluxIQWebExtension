@@ -1,7 +1,7 @@
 # MVP Week 1 — Web Automation Reliability Plan
 
 Status: Active
-Status detail: The Lab rerun proved the fixes for W18, W19, W25 and W17 live, and found four more problems (W15's tab close, W17's file name, W28's scroll, W25 too-slow's code), whose fixes and investigations are in flight; no exit criterion is proven yet. Session objective, set by the user: completely finish Week 1, with everything tested.
+Status detail: The Lab rerun proved the fixes for W18, W19, W25 and W17 live, and found four more problems (W15's and W28's wrong start, W17's file name, W25 too-slow's code), whose fixes are committed in both repositories and await root gates and the Lab recheck; no exit criterion is proven yet. Session objective, set by the user: completely finish Week 1, with everything tested.
 Created: 2026-09-11
 Last updated: 2026-09-13
 Owner: Senior supervisor agent
@@ -36,17 +36,17 @@ has its full proof. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
-settled ledger entries are in parts one to forty-four of
+settled ledger entries are in parts one to forty-five of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13.**
-- **This repository:** `f41072e`, 106 commits ahead of `origin/dev`, not pushed.
-- **Core:** `604d0d3`, 13 commits ahead of `origin/dev`, `fluxiq` **0.4.0**; its
-  packages are built at `6621d66`, the last code commit. Its eleven code commits are
-  listed in Core's plan. The newest two are `949fbb4`, which stores a client's
-  recording messages in arrival order, and `6621d66`, which withholds run inputs and
-  resolved values at rest.
-- **Gates:** per-package gates reran for every commit. On Core `6621d66` the full
+- **This repository:** `b5c5db2`, 107 commits ahead of `origin/dev`, not pushed.
+- **Core:** `20bb3b4` and its plan commit, 16 commits ahead of `origin/dev`, `fluxiq`
+  **0.4.0**, built at `20bb3b4`. Its thirteen code commits are listed in Core's plan.
+  The newest two are `b54df69`, which waits a command's timeout plus a 3,000 ms
+  answer margin, and `20bb3b4`, which begins a Flow with no Start node at its
+  graph's root.
+- **Gates:** per-package gates reran for every commit. On Core `20bb3b4` the full
   sequential suite, `pnpm build` and `pnpm package:lint` passed. Root gates here
   have not run.
 
@@ -87,23 +87,25 @@ settled ledger entries are in parts one to forty-four of
 - W24 `unannounced` (a recorded-payload contract change) and W13 `banner-absent`
   (P7, a new Core node outcome); both rows stay in the corpus.
 
-**In flight** (the thirty-sixth dispatch):
-- `g-core-start-node` (Core): a Flow without a declared start begins at its graph's
-  root, not at the first node by id (W15, W28).
-- Committed: `g-runner-start-guard`, so a wrong start or an early stop fails by name.
-- Held for them: Core's half of `g-web-timeout-forwarding` (verified), then Core's
-  gate, commits and build.
+**In flight:**
+- **Read-only, for Phase 1.6b:** `i-leftover-sizing` sizes the known leftovers.
+- **Reported:** `i-week2-entry-points`. Typing instructions, AI exploration of a site
+  and a reviewed Flow build exist today. Changing a Flow while it runs does not: the
+  shipped app gives that path no AI provider without an explicit grant
+  (`_shared/runtime.ts:74-83`, supervisor-read), and its retry reruns from the start.
+- **Committed:** Core `b54df69` and `20bb3b4`, gated and built; here,
+  `g-runner-start-guard`.
 
 **Queued, in dependency order**
-1. **Fixes from those investigations,** each committed as its gates pass.
-2. **Integration:**
+1. **Integration:**
    - root `pnpm check`, `pnpm test`, `pnpm build` and the content harness, one at
      a time;
    - regenerate `domain/.test-build`;
    - push both `dev` branches together.
-3. **Lab recheck:** W15, W17, W25 `too-slow` and W28, ×3 each. Then the week1 bench
-   `--repeat 1`, which is `l-stage2c` run 5 again.
-4. **Lab Stage 3:** run
+2. **Lab recheck, `l-stage2d`:** W15 unarmed and `popup-blocked`, W28, W25
+   `too-slow`, W17 and W05 `short-catalog`, ×3 each. Then the week1 bench
+   `--repeat 1`.
+3. **Lab Stage 3:** run
    `FLUXIQ_TEST_ENV_FILES=none pnpm lab bench --corpus week1 --repeat 3 --target isolated`
    twice, then `demo:record` and `demo:run` provider-free.
 5. **Phase 1.6b:**
@@ -639,104 +641,63 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 `2026-09-12-*` Wave 3 and live-validation files, and
 `2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-13 — g-web-timeout-forwarding: the extension is sent the node's timeout, and Core waits that timeout plus a 3,000 ms margin
+### 2026-09-13 — g-core-start-node: a Flow with no declared start begins at its graph's root, and a compiled plan follows the same rule (Core)
 
-- Agent: worker `g-web-timeout-forwarding`; one comment and the verification by
-  supervisor.
-- Changed:
-  - **Core** (`F:\!FluxIQ`), uncommitted until `g-core-start-node` lands:
-    - new `client-gateway/service/command-answer-margin.ts`:
-      `COMMAND_ANSWER_MARGIN_MS = 3_000`;
-    - `runtime/service.ts`: every adapter and transport target's deadline is the
-      timeout plus the margin;
-    - `client-gateway/service/commands.ts`: the gateway timer adds the margin when a
-      timeout is sent. Without one, it still waits 30,000 ms;
-    - tests; `runtime-kernel.md`, the 0.4.0 entry, and both framework references.
-  - **This repository:**
-    - `domain/src/runtime/adapter.ts` forwards `command.timeoutMs` when it is a
-      positive finite number;
-    - `domain/src/io/gateway-output-dispatcher.ts` sends it as the gateway command's
-      timeout;
-    - tests;
-    - comments in `late-target-wait.ts`, `delayed-ui/scenario.ts` and
-      `action-runner.ts`, and, by the supervisor, in `content/actions/execute.ts`.
-- Found:
-  - **No passing action can newly fail.** Four verbs have an extension default above
-    5,000 ms: `wait_for_selector`, `wait_for_text`, a tab switch by path, and
-    `download`. On the Flow lane, Core's 5,000 ms deadline already bounded all four.
-  - **A shorter parameter timeout is overridden.** `gateway-mapping.ts:175` prefers
-    the node's timeout to an output's own `parameters.timeoutMs`. No proposal writes
-    one; this is recorded for the Phase 1.6b ranking.
-- Validation:
-  - **Supervisor, `sup62`:**
-    - in Core, `npx vitest run src/runtime/tests/service.test.ts src/client-gateway/tests/service.test.ts --no-file-parallelism`
-      exit=0, "Test Files 2 passed (2)";
-    - domain `pnpm check` exit=0;
-    - `DOMAIN_TEST_BUILD_LABEL=sup62 pnpm test` printed "# tests 401", "# pass 401",
-      "# fail 0".
-  - **Worker mutations,** each restored with a matching hash:
-    - the runtime deadline back to the timeout failed 4 of 14;
-    - the gateway timer back to the timeout failed 2 of 13;
-    - the adapter not forwarding failed 1 of 20;
-    - the dispatcher dropping it failed 2 of 28.
-  - **Worker:** Core `pnpm check`, `pnpm docs:reference` and `pnpm docs:check` exit=0.
-- Not verified:
-  - Core `pnpm check` by the supervisor, which runs together with
-    `g-core-start-node`'s;
-  - the two sides together, which needs a Core build;
-  - W25 `too-slow` in the Lab.
-- Outcome: Accepted
-
-### 2026-09-13 — g-runner-start-guard: a Flow-lane run that did not start at the recording's first action, or stopped with actions never tried, fails by name
-
-- Agent: worker `g-runner-start-guard`, blocked once on ownership and then widened;
-  decisions and verification by supervisor.
-- Changed, in `packages/test-runner/src/flow-lane/`:
-  - **`recording-flow-proposal.ts`:** the proposal keeps its candidates' ids, in
-    Core's order.
-  - **`flow-action-types.ts`:** each Flow node keeps its
-    `metadata.recordingCandidateId`, carried in the lane's one read of the Flow.
-  - **`run-flow-lane.ts` and `persisted-flow-run.ts`:**
-    - an action node with no candidate link fails `recording.contract`, before
-      anything is sent;
-    - `startCandidateIndex` is published in `flow-lane.json`. It is the recorded
-      position the first attempt landed on. Only a position leaves the run reader,
-      never a node id;
-    - a run that did not start at index 0 fails `action.dispatch`: "The Flow started
-      at recorded action N of M, not at the recording's first action". This happens
-      after the run's evidence is written and before the other checks;
-    - a run that Core failed while every attempt succeeded, leaving actions never
-      tried, fails `action.dispatch` with both counts. `stoppedWithoutFailedAttempt`
-      is published.
-  - Tests.
+- Agent: worker `g-core-start-node`; the compiler version bump, the Migration Notes
+  merge and the verification by supervisor.
+- Changed, in Core under `packages/fluxiq/src/programs/automation-studio/runtime/`:
+  - **new `executor/start-node.ts`:** `chooseAutomationStudioStartNode` returns the one
+    Start node, or else the one node no edge from another node enters. An unwired End
+    node counts only when nothing else does. Several Start nodes, several roots or no
+    root refuse before any node runs, naming the case;
+  - `executor/graph-run.ts` uses it and fails with its message. `findStartNode` is
+    removed from `graph-navigation.ts`, and `executor/index.ts` exports the rule;
+  - **`compiled-plan.ts`:** `startNodeId` uses the same rule. By the supervisor,
+    `AUTOMATION_STUDIO_COMPILED_PLAN_COMPILER_VERSION` is `compiled-plan.v2`;
+  - tests: `executor/tests/start-node.test.ts` (13, new), four compiled-plan rows in
+    `runtime/tests/executor.test.ts`, a service row in
+    `recordings/tests/proposal-candidates.test.ts`, and the supervisor's version pins
+    in `storage/project/tests/compiled-plan-store.test.ts`;
+  - `automation-studio.md` "Where a run begins"; the 0.4.0 Migration Notes paragraph,
+    merged by the supervisor; both framework references.
 - Decisions:
-  - The start is judged against the recording's order, not Core's start rule, so the
-    check holds whatever rule Core uses.
-  - The Flow is not read a second time, and node ids are not parsed.
+  - **No Start node is written at approval.** It would add an attempt before candidate
+    1 and fail `g-runner-start-guard` on every run. A chain generated into an empty
+    Subflow already has one root, its first candidate.
+  - **The compiler version is bumped.** `compileFlowRevision` reuses a stored `ready`
+    artifact for the same revision and compiler version. Without the bump, a plan
+    compiled before the fix keeps its old start.
+  - **An unwired End node is no start while another root exists.** Without this rule,
+    `service-adaptation-subflow.test.ts` saves an action and an End node with no edge,
+    and would refuse.
+- Found, for the Phase 1.6b ranking (`i-leftover-sizing` sizes both):
+  - a recording appended beside existing nodes gives a second root, so its run now
+    refuses instead of starting at the smallest id;
+  - among several edges on one route, the smallest edge id still wins.
 - Validation:
-  - **Supervisor, test-runner gate `sup63`:**
-    - `check` exit=0; private `tsc` exit=0;
-    - `node --test` printed "# tests 562", "# pass 562", "# fail 0";
-    - the structure audit passed.
-  - **Supervisor, the candidate link the guard depends on:**
-    - **Core `604d0d3` writes it.** `recordings/proposal-candidates.ts:111` sets
-      `recordingCandidateId: candidate.candidateId`, and `graph-store.ts`'s
-      `nodeFromRow` maps `metadata: objectJson(row.metadata_json)`.
-    - **Live Core data holds it.** `count-candidate-link.mjs` over `l-stage2c`'s
-      kept workspaces found 85 occurrences, in 19 of 542 files.
-  - **Worker mutations,** all restored byte-identical:
-    - disabling the start check made W15's shape fail as "unexpected
-      target_not_found" again;
-    - sorting the candidate ids put `entry.13` before `entry.4`, which failed the
-      order row;
-    - breaking the early-stop guard, two ways, failed its rows.
-- Not verified:
-  - **No Lab run.** W15 should fail "started at recorded action N of 5" before
-    Core's start-node fix, and every row should show `startCandidateIndex` 0 after
-    it.
-  - **Core's `get-flow` response carrying node metadata,** which was read from code
-    only.
-  - Root gates.
+  - **Supervisor mutations, `sup-start-node-mutations.mjs`,** over the start-node,
+    executor, proposal-candidates and service-adaptation-subflow tests:
+    - unmutated, "Tests 38 passed (38)";
+    - the root rule back to first-by-id, "Tests 11 failed | 27 passed (38)";
+    - a refusal falling back to the first listed node, "Tests 4 failed | 34 passed (38)";
+    - an unwired End counted as a root, "Tests 3 failed | 35 passed (38)";
+    - each file "restored identical=true".
+  - **Supervisor, the version pin:** compiled-plan-store "Tests 4 passed (4)"; with the
+    version back to v1, "Tests 2 failed | 2 passed (4)"; "restored identical=true".
+  - **Supervisor, Core gate `sup64`,** over this change and `g-web-timeout-forwarding`:
+    - `pnpm docs:reference` and `pnpm docs:check` exit=0, "Deterministic framework
+      reference is current.";
+    - `pnpm check` exit=0, "structure-audit: passed (123 warning(s), 256 baselined)";
+    - `packages/fluxiq` `npx vitest run --no-file-parallelism`: "Test Files 137
+      passed (137)", "Tests 955 passed (955)";
+    - `@fluxiq/web` "Test Files 228 passed (228)"; contracts and
+      client-gateway-websocket 1 file each.
+  - **Committed in Core:** `b54df69`, the timeout margin, then `20bb3b4`, this change.
+  - **Supervisor, Core build on `20bb3b4`:** `pnpm build` exit=0, "Compiled
+    successfully", on its first run; `pnpm package:lint` exit=0, with attw's
+    esm-only profile "node16 (from ESM): 🟢" and "bundler: 🟢" for each package.
+- Not verified: the Lab (`l-stage2d`); a stored artifact recompiling in a live host;
+  the web panel showing a refusal message.
 - Outcome: Accepted
 
 ## Open Questions

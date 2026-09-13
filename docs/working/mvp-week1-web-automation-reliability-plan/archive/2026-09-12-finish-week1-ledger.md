@@ -3431,3 +3431,107 @@ Moved verbatim to keep headroom under the plan limit: the architecture pages pas
   - plan-history wording older than the audit, which was left in place;
   - the Flow lane's new early-stop check, which `g-runner-start-guard` adds.
 - Outcome: Accepted
+
+## Part forty-five, archived 2026-09-13
+
+The timeout forwarding and runner start guard entries, archived when Core's start-node fix and timeout margin were committed.
+
+### 2026-09-13 — g-web-timeout-forwarding: the extension is sent the node's timeout, and Core waits that timeout plus a 3,000 ms margin
+
+- Agent: worker `g-web-timeout-forwarding`; one comment and the verification by
+  supervisor.
+- Changed:
+  - **Core** (`F:\!FluxIQ`), uncommitted until `g-core-start-node` lands:
+    - new `client-gateway/service/command-answer-margin.ts`:
+      `COMMAND_ANSWER_MARGIN_MS = 3_000`;
+    - `runtime/service.ts`: every adapter and transport target's deadline is the
+      timeout plus the margin;
+    - `client-gateway/service/commands.ts`: the gateway timer adds the margin when a
+      timeout is sent. Without one, it still waits 30,000 ms;
+    - tests; `runtime-kernel.md`, the 0.4.0 entry, and both framework references.
+  - **This repository:**
+    - `domain/src/runtime/adapter.ts` forwards `command.timeoutMs` when it is a
+      positive finite number;
+    - `domain/src/io/gateway-output-dispatcher.ts` sends it as the gateway command's
+      timeout;
+    - tests;
+    - comments in `late-target-wait.ts`, `delayed-ui/scenario.ts` and
+      `action-runner.ts`, and, by the supervisor, in `content/actions/execute.ts`.
+- Found:
+  - **No passing action can newly fail.** Four verbs have an extension default above
+    5,000 ms: `wait_for_selector`, `wait_for_text`, a tab switch by path, and
+    `download`. On the Flow lane, Core's 5,000 ms deadline already bounded all four.
+  - **A shorter parameter timeout is overridden.** `gateway-mapping.ts:175` prefers
+    the node's timeout to an output's own `parameters.timeoutMs`. No proposal writes
+    one; this is recorded for the Phase 1.6b ranking.
+- Validation:
+  - **Supervisor, `sup62`:**
+    - in Core, `npx vitest run src/runtime/tests/service.test.ts src/client-gateway/tests/service.test.ts --no-file-parallelism`
+      exit=0, "Test Files 2 passed (2)";
+    - domain `pnpm check` exit=0;
+    - `DOMAIN_TEST_BUILD_LABEL=sup62 pnpm test` printed "# tests 401", "# pass 401",
+      "# fail 0".
+  - **Worker mutations,** each restored with a matching hash:
+    - the runtime deadline back to the timeout failed 4 of 14;
+    - the gateway timer back to the timeout failed 2 of 13;
+    - the adapter not forwarding failed 1 of 20;
+    - the dispatcher dropping it failed 2 of 28.
+  - **Worker:** Core `pnpm check`, `pnpm docs:reference` and `pnpm docs:check` exit=0.
+- Not verified:
+  - Core `pnpm check` by the supervisor, which runs together with
+    `g-core-start-node`'s;
+  - the two sides together, which needs a Core build;
+  - W25 `too-slow` in the Lab.
+- Outcome: Accepted
+
+### 2026-09-13 — g-runner-start-guard: a Flow-lane run that did not start at the recording's first action, or stopped with actions never tried, fails by name
+
+- Agent: worker `g-runner-start-guard`, blocked once on ownership and then widened;
+  decisions and verification by supervisor.
+- Changed, in `packages/test-runner/src/flow-lane/`:
+  - **`recording-flow-proposal.ts`:** the proposal keeps its candidates' ids, in
+    Core's order.
+  - **`flow-action-types.ts`:** each Flow node keeps its
+    `metadata.recordingCandidateId`, carried in the lane's one read of the Flow.
+  - **`run-flow-lane.ts` and `persisted-flow-run.ts`:**
+    - an action node with no candidate link fails `recording.contract`, before
+      anything is sent;
+    - `startCandidateIndex` is published in `flow-lane.json`. It is the recorded
+      position the first attempt landed on. Only a position leaves the run reader,
+      never a node id;
+    - a run that did not start at index 0 fails `action.dispatch`: "The Flow started
+      at recorded action N of M, not at the recording's first action". This happens
+      after the run's evidence is written and before the other checks;
+    - a run that Core failed while every attempt succeeded, leaving actions never
+      tried, fails `action.dispatch` with both counts. `stoppedWithoutFailedAttempt`
+      is published.
+  - Tests.
+- Decisions:
+  - The start is judged against the recording's order, not Core's start rule, so the
+    check holds whatever rule Core uses.
+  - The Flow is not read a second time, and node ids are not parsed.
+- Validation:
+  - **Supervisor, test-runner gate `sup63`:**
+    - `check` exit=0; private `tsc` exit=0;
+    - `node --test` printed "# tests 562", "# pass 562", "# fail 0";
+    - the structure audit passed.
+  - **Supervisor, the candidate link the guard depends on:**
+    - **Core `604d0d3` writes it.** `recordings/proposal-candidates.ts:111` sets
+      `recordingCandidateId: candidate.candidateId`, and `graph-store.ts`'s
+      `nodeFromRow` maps `metadata: objectJson(row.metadata_json)`.
+    - **Live Core data holds it.** `count-candidate-link.mjs` over `l-stage2c`'s
+      kept workspaces found 85 occurrences, in 19 of 542 files.
+  - **Worker mutations,** all restored byte-identical:
+    - disabling the start check made W15's shape fail as "unexpected
+      target_not_found" again;
+    - sorting the candidate ids put `entry.13` before `entry.4`, which failed the
+      order row;
+    - breaking the early-stop guard, two ways, failed its rows.
+- Not verified:
+  - **No Lab run.** W15 should fail "started at recorded action N of 5" before
+    Core's start-node fix, and every row should show `startCandidateIndex` 0 after
+    it.
+  - **Core's `get-flow` response carrying node metadata,** which was read from code
+    only.
+  - Root gates.
+- Outcome: Accepted

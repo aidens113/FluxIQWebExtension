@@ -4042,3 +4042,66 @@ Dispatched once `g-manifest-extract-entries` has reported, because scenario-lab'
 - the structure audit.
 
 **Report:** `reports/f-authgate-followups.md`.
+
+## i-leftover-sizing — confirm and size the known leftovers for the blocker ranking (read-only)
+
+Dispatched while Core's gate runs. No tests, builds or Lab runs.
+
+**Owns:** `reports/i-leftover-sizing.md`. Nothing tracked.
+
+**Items**, each with where it was found:
+1. `domain/src/client/gateway-mapping.ts:175`: a node's timeout overrides an output's
+   own `parameters.timeoutMs` (ledger, `g-web-timeout-forwarding`).
+2. The leak check misses a literal split across freed SQLite pages or WAL frames
+   (`reports/g-attestation-sqlite-reader.md`, open question 1).
+3. A runtime confirmation's `url` holds the full URL
+   (`reports/f-capability-confirmations.md`, open question 1).
+4. Plan history left on architecture pages (`reports/d-capability-docs.md` item 5,
+   `reports/d-capabilities-layout-taxonomy-pages.md` item 5).
+5. Core: a recording appended beside existing nodes gives a second root, so the run
+   refuses (`reports/g-core-start-node.md`, open question 3).
+6. Core: among several edges on one route, the smallest edge id wins (the same
+   report, open question 5).
+7. Core's five "Open for Core" items: `F:\!FluxIQ\docs\working\mvp-week1-web-automation-reliability-plan.md`,
+   Current State.
+
+**Task.** For each item:
+- confirm it still holds at HEAD, with file and line, or say it no longer does;
+- say whom it hits: a Week 1 exit criterion, a Lab row, an extension user, or a
+  Core host;
+- give the smallest fix: its repository, files and tests;
+- propose a rank (Week 1 blocker, Week 2 entry, or later), with one sentence of
+  reason, and say whether a Lab observation is needed to decide it.
+
+Read excerpts around the cited lines, not whole trees. Quote no recorded page data
+or secret values.
+
+**Report:** `reports/i-leftover-sizing.md`: one table of every item, then a short
+section for each.
+
+## i-week2-entry-points — where each Week 2 phase starts in today's code (read-only)
+
+Dispatched while Core's gate runs. No tests, builds or Lab runs.
+
+**Owns:** `reports/i-week2-entry-points.md`. Nothing tracked.
+
+**Read:**
+- the 30-day MVP plan, from "Week 2 Objective" through "Week 2 Exit Criteria";
+- Core's `docs/architecture/automation-studio.md`, "LLM-Assisted Deterministic
+  Automation";
+- the Current State of `docs/working/llm-production-automation-plan.md`.
+
+**Task.**
+1. For each of Phases 2.1-2.9 and each Week 2 exit criterion, name:
+   - the module in either repository that owns it today, with file and line;
+   - what already exists, and what is missing;
+   - which Week 1 result it depends on.
+2. Answer one question for the user in plain words: what exists today, and what
+   is missing, for a user to type instructions, run, and have the agent explore
+   a site, build a Flow, and change that Flow while it runs. Cite the code for
+   each piece.
+
+Search narrowly and read excerpts. Do not read the Week 1 plan beyond its Current
+State.
+
+**Report:** `reports/i-week2-entry-points.md`, at most 250 lines.
