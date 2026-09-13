@@ -196,3 +196,163 @@ and its work committed.
   Supervisor read the Outcome, Part 3 and the fix design.
 - Outcome: Accepted
 
+
+## Part two, archived 2026-09-13
+
+Moved verbatim when the plan reached 855 lines.
+
+### 2026-09-12 — i-resolver-safety: why the resolver acts wrongly, and D14 amended
+
+- Agent: worker `i-resolver-safety` (read-only); decisions by supervisor.
+- Changed: `reports/i-resolver-safety.md` only; fourth-dispatch briefs.
+- Found, each reproduced in the real resolver or Core's compiled gate:
+  - (c) `reworded-aria` at 0.173 is settled at HEAD: `1b6f5df`'s
+    `gateway-payloads.ts` projection dropped `accessibleName` and
+    `implicitRole`, which `ab736a1` restored; the old projection reproduces
+    0.197/0.173 exactly, and HEAD's resolves at 0.389.
+  - (b) Core's element-target floor is a wiring defect, not calibration: no
+    candidates are supplied, the mapper builds the target from top-level keys and
+    promotes typed text to `visibleText`, the floor is never sent, and
+    confidence is never checked. Wired as it stands, it would refuse the correct
+    `reworded-aria` control at every tier.
+  - (a) the wrong action cannot be separated by any floor or margin: Core's text
+    comparison scores "Save" and "Save changes and exit" the same, 0.359 on an
+    authored recording and 0.633/0.640 on an identifier-less one.
+- Decisions:
+  - **D14 amended.** Its numbers stand, but its scope was too broad: the veto
+    margin was tested against one fully labelled recording, rule 2 accepts any
+    partial label match, and limit 2 covers any label that reaches Core's 0.35
+    similarity, not only the recorded one. A match that no distinguishing signal
+    agrees with exactly is now refused (design A, `g-resolver-corroboration`).
+    The known cost is a label shortened with nothing exact left: that row
+    refuses instead of recovering. Refusing beats clicking the wrong control,
+    and the cost is measured before landing.
+  - CS2c: for web, Week 1's floor is the browser's `TARGET_SCORE_FLOOR`. Core's
+    floor stays inert, with its trace made truthful and its fingerprint correct
+    (B.1, B.2, `g-core-target-gate`, after `g-core-late-event`). B.3, a
+    tier-aware floor applied in the browser, is Week 2.
+  - Core similarity metadata (design A's optional Core row) is not Week 1: the
+    predicate reads Core's contributions as they are.
+  - CS2b becomes a Lab confirmation; C's permanent row is
+    `g-identity-wire-chain`.
+- Validation: worker, extension 313/313 and domain 349/349; scratch Chromium
+  probes of the real `resolveTarget` -> 8, 8 and 11 passed, identical across
+  runs; Core gate probes exit 0. Supervisor read design sets A-C against the
+  running briefs' Owns: no shared file except Core `service.ts`, which is why
+  `g-core-target-gate` waits.
+- Not verified: no Lab run; R7-R9 observed once; A's cost unmeasured.
+- Outcome: Accepted
+
+### 2026-09-12 — g-recorder-signals stopped on a brief defect; fourth dispatch
+
+- Agent: supervisor.
+- Changed: `briefs/finish-week1.md` (`g-recorder-signals` amended; fourth
+  dispatch); `reports/g-recorder-signals.md` (the worker's Blocked report).
+- Why: `g-recorder-signals` stopped without editing, correctly. Its Owns omitted
+  `domain/src/actions/types.ts`, which `output-nodes/targets.ts` checks both
+  field lists against with `satisfies`, and `shared/tests/present.test.ts`,
+  whose `present<DomElementContext>` literals a new context key breaks. Both
+  fields would otherwise have reached the wire and been dropped one layer later,
+  as `x-identity-wire` found. The worker was resumed with both files and a new
+  `identity-signals.spec.ts`. Decision on its question: a sensitive checkbox or
+  radio withholds `checked`, recorded and on the gateway, since its checked
+  state is its contents. Dispatched from `i-resolver-safety`:
+  `g-resolver-corroboration`, `g-identity-drift-mode`, `g-identity-wire-chain`;
+  `g-core-target-gate` waits for `g-core-late-event`.
+- Validation: supervisor checked each named blocker against the brief's Owns and
+  the running briefs: neither file is owned by any running worker. The worker's
+  compile probes failed on setup (a C:/F: path split), so both blockers rest on
+  reading `targets.ts:158,206`, `actions/types.ts:50-96` and
+  `present.test.ts:271-331`, not a compile.
+- Outcome: Revised
+
+### 2026-09-13 — g-snapshot-evidence: the top frame's evidence survives the merge (LR7, LR8)
+
+- Agent: worker `g-snapshot-evidence`; verified by supervisor.
+- Changed: `background/connection/dom-snapshot.ts` and its test;
+  `domain/src/recording/web-state/types.ts` (`evidence` declared in the
+  contract's type); `web-state/evidence/input.ts` (the local restatement
+  deleted, `pageEvidenceOfSnapshot` takes the typed snapshot). Also
+  `live-validation-plan.md` step 4b, corrected by the supervisor from
+  `i-flow-lane-errors` (a): Flow lane, 12 of 24, exactly 4 candidates per run.
+- Why: LR7, the fallback merge path dropped the top frame's elements, totals
+  and additive evidence; LR8, the contract was not joined at its own key. LR7
+  departs from the inventory's smallest change, which the worker tried and which
+  still dropped the elements: the top frame is now merged as a frame entry after
+  the seed.
+- Validation: supervisor `EXTENSION_TEST_BUILD_LABEL=sup-snap ... extension test`
+  -> `# tests 315`, `# pass 315`; `DOMAIN_TEST_BUILD_LABEL=sup-snap ... domain
+  test` -> `# pass 349`, `# fail 0`; `node scripts/structure-audit.mjs` ->
+  `passed (34 warning(s), 17 baselined)`. Grep for `pageEvidenceOfSnapshot` and
+  the two deleted types across `apps`, `packages` and `domain` -> the only source
+  caller is `web-state/snapshot.ts:34`, already typed. Worker: the two new tests
+  failed before the fix (313/315); renaming `evidence` -> TS2339 at `input.ts`
+  and twice in `dom-snapshot.ts`, restored by SHA-256.
+- Found: stale comments and casts outside its files at
+  `domain/src/recording/tests/domain.test.ts:99-104`,
+  `web-state/evidence/tests/project.test.ts:47` and
+  `content/evidence/tests/forms.test.ts:151`; queued for a later small-fixes
+  batch. `shared/protocol.ts:328` still declares `evidence` separately, inside
+  `g-recorder-signals`' files.
+- Not verified: the LR7 fallback is likely unreachable on demand in Chromium, so
+  unit tests are its only proof; the content harness; test-runner and
+  scenario-lab against the widened domain type.
+- Outcome: Accepted
+
+### 2026-09-13 — g-small-fixes: C1, A3, A4, LR9 and C3
+
+- Agent: worker `g-small-fixes`; verified by supervisor.
+- Changed: `validation-outcome.ts` and its test (comments); `domain/scripts/test-domain.mjs`
+  (every load failure reported, exit 1); `e2e/playwright.content.config.ts`
+  (`workers: 4`); `test-contracts/src/scenario-workflow.ts` (comment); the
+  `intermediate-state` and `multi-tab` scenario tests (asserting
+  `scenarioPageFactSchedule`); `docs/architecture/testing-facility.md`
+  (`expected.actions`).
+- Validation: supervisor read the diff of the runner, config and both tests;
+  `pnpm --filter @fluxiq-web-extension/scenario-lab test` -> `# tests 197`,
+  `# pass 197`; `DOMAIN_TEST_BUILD_LABEL=sup-sf ... domain test` through the
+  edited runner -> `# pass 349`, `# fail 0`; content harness `--list` ->
+  `Total: 202 tests in 22 files`. Worker: A3 scratch entry -> the edited runner
+  names both broken entries and still runs the next, exit 1; LR9 inheritance
+  restored -> both re-pointed tests fail with real diffs.
+- Found: `validation-outcome.ts:17-20` may overstate what Core's parser drops;
+  the `test:content --` forwarding trap in `apps/extension/package.json:10` is
+  still open. Both queued for the later small-fixes batch.
+- Outcome: Accepted
+
+### 2026-09-13 — l-stage0: the Lab runs from a worktree
+
+- Agent: worker `l-stage0`; verified by supervisor from the run's own files.
+- Changed: no tracked file. Worktree `F:\fxlab-147fdb4`, kept for Stage 1; run
+  `F:\fxlab-runs\stage0\run-mtzgp21f-57ba88e6`.
+- Validation: supervisor grep of that run's `run.json` -> facility `"commit":
+  "147fdb458015bd8a63c5f4e9099d3d8774353d63"`, `"dirty": false`; Core
+  `"commit": "5d495eb06bea8ba024463394b98a4f77b61de08a"`, `"dirty": true`;
+  `"verdict": "passed"`. `evaluation.json` -> `"lane": "recording"`,
+  `"oracleVerdict": "passed"`, `"reportedVerdict": "passed"`,
+  `"automationFailureReported": null`. Worker: `exit=0 seconds=101.4182841`;
+  lowest free memory 12.26 GB; highest Chrome plus Node working set 3.49 GB. A
+  single run.
+- Found: the Lab's Core guard watches built output only, so it printed
+  `"state":"quiet"` while `g-core-late-event` was editing Core's source.
+  **Rule for proof runs: Core source edits stop too, not only Core builds.**
+  The passing run also records `processExits` of 1 for both children and
+  `sanitizedPacketBytes: []` (`g-bench-coverage` owns the size producer).
+- Outcome: Accepted
+
+### 2026-09-13 — g-identity-drift-mode stopped on a brief defect
+
+- Agent: supervisor.
+- Changed: `briefs/finish-week1.md` (amended); worker resumed.
+- Why: a new variant breaks `apps/scenario-lab/e2e/identity-drift.spec.ts` at
+  `:19`, `:131-133` and `:135-165`, a tracked spec outside the brief's Owns that
+  neither scenario-lab `check` nor `test` runs, so the change would have passed
+  every named gate and broken it. Resumed with that spec, `state.ts` and
+  `save-action.ts`, and the spec's own Playwright gate. Its W29 corpus row needs
+  `week1-corpus.test.ts:43` (28 rows) and `PLAN_NEGATIVE_VARIANTS` changed with
+  it, inside `g-bench-coverage`'s files, so the supervisor lands it after.
+- Validation: worker `git grep -n -i "save-and-exit\|saveAndExit\|and exit" HEAD
+  -- apps/scenario-lab packages/test-runner/src/bench` -> exit 1, not settled
+  at HEAD; the three spec lines were cited from source, not a failing run.
+- Outcome: Revised
+

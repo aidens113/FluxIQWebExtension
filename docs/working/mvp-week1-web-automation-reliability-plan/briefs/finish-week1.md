@@ -390,6 +390,12 @@ the Lab Flow-lane command that must now get past pairing.
 
 **Report:** `reports/g-scenario-secrets.md`.
 
+**Amended after a Partial** (a brief defect: `sensitive-input` has no
+`manifest.ts`; its manifest is inline). Owns also
+`apps/scenario-lab/src/scenarios/sensitive-input/scenario.ts` and its `tests/`.
+Apply the verified patch the report gives, including the password step's target
+moving to `testid:password`.
+
 ---
 
 # Third dispatch, from `i-lab-campaign`
@@ -425,6 +431,19 @@ mutation reverting `laneForResult`. Item 3: two packets yield their sizes, with
 a mutation. Test-runner `check` and `test`.
 
 **Report:** `reports/g-bench-coverage.md`.
+
+**Amended after the first attempt stopped Blocked** (a brief defect: two lanes
+for one row collide in grouping and in the report contract, so owning only the
+bench planner would crash every week1 bench after its last run). Now item 1
+only. Owns also `packages/test-contracts/src/bench-report.ts` and its report
+validation, `bench/aggregate-report.ts` and `bench/render-markdown.ts`, and the
+tests of each. Decision: every rate in the report is per lane, never combined,
+because the recording lane executes no workflow and a combined rate counts each
+unarmed row twice. Every unarmed row runs on both lanes (W24-W28 included), and
+a bench with no Flow-lane row still validates. Item 3 moves to the Flow-lane
+follow-up: the sanitized packet size is read from Core's run detail
+`stateRefs` summary in `flow-lane/`; raw snapshot bytes are not Week 1, and the
+report says so rather than printing an empty list.
 
 ## g-redaction-attestation — criterion 2's Lab-side leak check
 
@@ -561,6 +580,17 @@ its variant expecting `failure.category: "target_not_found"`. Write the exact
 state tells the wrong action from Save; scenario-lab `check` and `test`.
 
 **Report:** `reports/g-identity-drift-mode.md`.
+
+**Amended after the first attempt stopped Blocked** (a brief defect: a new
+variant breaks a tracked spec no named gate runs). Owns also
+`apps/scenario-lab/e2e/identity-drift.spec.ts`, and `state.ts` and
+`save-action.ts` under `identity-drift/` by name. That spec's type at `:19`, its
+coverage test at `:131-133` and its per-variant loop at `:135-165` must admit a
+variant that expects `target_not_found` and no save. Its gate, run as well:
+`pnpm exec playwright test -c e2e/playwright.config.ts identity-drift.spec.ts`
+from `apps/scenario-lab`. The W29 corpus row, `week1-corpus.test.ts`'s row
+count and `PLAN_NEGATIVE_VARIANTS` stay the supervisor's, after
+`g-bench-coverage` lands.
 
 ## g-identity-wire-chain — `reworded-aria`'s wire fix as a permanent row (C)
 

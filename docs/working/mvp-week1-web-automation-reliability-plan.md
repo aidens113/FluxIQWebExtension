@@ -646,88 +646,53 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 `2026-09-12-*` Wave 3 and live-validation files, and
 `2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-12 — Finish-Week-1 session: nine entries archived
+### 2026-09-13 — Finish-Week-1 session: fifteen settled entries archived
 
 - Agent: supervisor.
-- Changed: nine ledger entries moved verbatim to
-  `archive/2026-09-12-finish-week1-ledger.md`: the first dispatch,
+- Changed: fifteen ledger entries moved verbatim to
+  `archive/2026-09-12-finish-week1-ledger.md`. Part one: the first dispatch,
   `f-test-runner-ratchet`, `f-evidence-producers`, `f-adapter-guard`,
   `c-remaining`, `i-flow-lane-errors`, `f-w18-secret-leg`,
-  `f-connection-split` and `i-lab-campaign`.
-- Why: this document reached 913 lines against the 800 limit. Each moved entry
-  is settled and committed: `b43a46a` (adapter guard, inventory), `957c831`
-  (W18), `147fdb4` (connection split); Core `5d495eb` (trace withholding) is
-  committed locally. Their decisions stand: Firefox, CS1b, B4, B7, C5, C7 and
-  PB10b are not Week 1; CS1b′ is; the bench plans W01-W18 on the Flow lane too;
-  Lab Stage 1 waits for Core to go quiet.
-- Validation: `sed -n` guards -> line 649 was the first-dispatch heading, line
-  841 the `i-resolver-safety` heading, line 648 blank; `wc -l` on this document
-  after the move -> 740.
+  `f-connection-split`, `i-lab-campaign`. Part two: `i-resolver-safety`, which
+  amends D14; the `g-recorder-signals` and `g-identity-drift-mode` brief
+  defects; `g-snapshot-evidence`; `g-small-fixes`; `l-stage0`.
+- Why: this document passed its 800-line limit twice, at 913 and 855 lines.
+  Every moved entry is settled, and its work is committed locally in
+  `b43a46a`, `957c831`, `147fdb4`, `f255c2f`, `4c53354` and `81d7186`, with
+  Core `5d495eb`. Decisions that stand: Firefox, CS1b, B4, B7, C5, C7, PB10b
+  and raw snapshot bytes are not Week 1; CS1b′ is; under the amended D14 a
+  match that no distinguishing signal agrees with exactly is refused; the Core
+  element-target floor stays inert for web, and B.3 is Week 2; the bench plans
+  every unarmed row on both lanes and reports each rate per lane; Lab proof
+  runs need Core source edits stopped, not only Core builds.
+- Validation: `sed -n` guards -> part two began at the `i-resolver-safety`
+  heading and ended before `g-bench-coverage`, and the old summary ended at its
+  Outcome line; `wc -l` on this document after the move -> 705.
 - Outcome: Accepted
 
-### 2026-09-12 — i-resolver-safety: why the resolver acts wrongly, and D14 amended
-
-- Agent: worker `i-resolver-safety` (read-only); decisions by supervisor.
-- Changed: `reports/i-resolver-safety.md` only; fourth-dispatch briefs.
-- Found, each reproduced in the real resolver or Core's compiled gate:
-  - (c) `reworded-aria` at 0.173 is settled at HEAD: `1b6f5df`'s
-    `gateway-payloads.ts` projection dropped `accessibleName` and
-    `implicitRole`, which `ab736a1` restored; the old projection reproduces
-    0.197/0.173 exactly, and HEAD's resolves at 0.389.
-  - (b) Core's element-target floor is a wiring defect, not calibration: no
-    candidates are supplied, the mapper builds the target from top-level keys and
-    promotes typed text to `visibleText`, the floor is never sent, and
-    confidence is never checked. Wired as it stands, it would refuse the correct
-    `reworded-aria` control at every tier.
-  - (a) the wrong action cannot be separated by any floor or margin: Core's text
-    comparison scores "Save" and "Save changes and exit" the same, 0.359 on an
-    authored recording and 0.633/0.640 on an identifier-less one.
-- Decisions:
-  - **D14 amended.** Its numbers stand, but its scope was too broad: the veto
-    margin was tested against one fully labelled recording, rule 2 accepts any
-    partial label match, and limit 2 covers any label that reaches Core's 0.35
-    similarity, not only the recorded one. A match that no distinguishing signal
-    agrees with exactly is now refused (design A, `g-resolver-corroboration`).
-    The known cost is a label shortened with nothing exact left: that row
-    refuses instead of recovering. Refusing beats clicking the wrong control,
-    and the cost is measured before landing.
-  - CS2c: for web, Week 1's floor is the browser's `TARGET_SCORE_FLOOR`. Core's
-    floor stays inert, with its trace made truthful and its fingerprint correct
-    (B.1, B.2, `g-core-target-gate`, after `g-core-late-event`). B.3, a
-    tier-aware floor applied in the browser, is Week 2.
-  - Core similarity metadata (design A's optional Core row) is not Week 1: the
-    predicate reads Core's contributions as they are.
-  - CS2b becomes a Lab confirmation; C's permanent row is
-    `g-identity-wire-chain`.
-- Validation: worker, extension 313/313 and domain 349/349; scratch Chromium
-  probes of the real `resolveTarget` -> 8, 8 and 11 passed, identical across
-  runs; Core gate probes exit 0. Supervisor read design sets A-C against the
-  running briefs' Owns: no shared file except Core `service.ts`, which is why
-  `g-core-target-gate` waits.
-- Not verified: no Lab run; R7-R9 observed once; A's cost unmeasured.
-- Outcome: Accepted
-
-### 2026-09-12 — g-recorder-signals stopped on a brief defect; fourth dispatch
+### 2026-09-13 — g-bench-coverage stopped on a brief defect; lanes decided
 
 - Agent: supervisor.
-- Changed: `briefs/finish-week1.md` (`g-recorder-signals` amended; fourth
-  dispatch); `reports/g-recorder-signals.md` (the worker's Blocked report).
-- Why: `g-recorder-signals` stopped without editing, correctly. Its Owns omitted
-  `domain/src/actions/types.ts`, which `output-nodes/targets.ts` checks both
-  field lists against with `satisfies`, and `shared/tests/present.test.ts`,
-  whose `present<DomElementContext>` literals a new context key breaks. Both
-  fields would otherwise have reached the wire and been dropped one layer later,
-  as `x-identity-wire` found. The worker was resumed with both files and a new
-  `identity-signals.spec.ts`. Decision on its question: a sensitive checkbox or
-  radio withholds `checked`, recorded and on the gateway, since its checked
-  state is its contents. Dispatched from `i-resolver-safety`:
-  `g-resolver-corroboration`, `g-identity-drift-mode`, `g-identity-wire-chain`;
-  `g-core-target-gate` waits for `g-core-late-event`.
-- Validation: supervisor checked each named blocker against the brief's Owns and
-  the running briefs: neither file is owned by any running worker. The worker's
-  compile probes failed on setup (a C:/F: path split), so both blockers rest on
-  reading `targets.ts:158,206`, `actions/types.ts:50-96` and
-  `present.test.ts:271-331`, not a compile.
+- Changed: `briefs/finish-week1.md` (amended to item 1); worker resumed.
+- Why: planning an unarmed row on both lanes yields two results with the same
+  scenario, workflow and variant, and nothing records the lane, so
+  `groupBenchResults` throws on its run count, or the report contract's
+  duplicate check rejects it. Owning only the planner would have crashed every
+  week1 bench after its last run and written no report. Resumed owning the
+  report contract, its validation, `aggregate-report.ts` and
+  `render-markdown.ts`.
+- Decisions: every bench rate is per lane, never combined, because the recording
+  lane executes no workflow and a combined rate counts each unarmed row twice;
+  every unarmed row runs on both lanes, W24-W28 included. Sanitized packet size
+  moves to the Flow-lane follow-up, read from Core's run detail `stateRefs`
+  summary in `flow-lane/`. Raw snapshot bytes are not Week 1: no exit criterion
+  names them, and they would need a new extension producer. Brief nit: design
+  item 3 named `long-document`, which is in no corpus.
+- Validation: worker test-runner `test` -> `tests 446 pass 446 fail 0`,
+  `runnable: 43 (23 recording, 20 flow)`; scratch proof over `dist` -> both lanes
+  in one group `THREW "has 2 runs, not the bench's 1"`, grouped apart `THREW
+  "$.workflows[1]: repeats another result's scenario, workflow, and variant"`, a
+  Flow-lane result alone valid.
 - Outcome: Revised
 - Validation: supervisor read the grouped-by-file list and every Open row;
   the second dispatch's Owns lists share no file with each other or with a
