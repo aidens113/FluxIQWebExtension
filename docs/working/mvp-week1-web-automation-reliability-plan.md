@@ -740,6 +740,39 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   click 3 of 3, and W24 unarmed must pass.
 - Outcome: Accepted
 
+### 2026-09-13 — f-recording-start-guard: a recording starts once, whichever way Core's acknowledgement arrives
+
+- Agent: worker `f-recording-start-guard`; verified by supervisor.
+- Changed: `connection/active-recording.ts` and its test.
+  - Every way into a recording goes through one start, marked before its first
+    await. A second start waits for it, then only links its project.
+  - An acknowledgement naming a recording this client is not starting, not
+    running, or has already stopped is ignored, with an activity warning.
+  - A start's project lookup is bounded at
+    `RECORDING_START_PROJECT_LOOKUP_BOUND_MS = 1_500`. At the bound the start goes
+    on without a project, and the local fallback does not wait on the lookup a
+    second time.
+- Found:
+  - Before the fix, the new rows gave `# pass 8 # fail 5`; the double start failed
+    at `:412` with `one start event 2 !== 1`.
+  - The 1,500 ms bound is the worker's choice, not a measured figure.
+  - Three older gaps stay open: a second Record press, a refusal, and a Stop
+    arriving while a start is under way. They are for the Phase 1.6b ranking
+    unless Stage 2 shows them.
+- Validation: supervisor read the diff. With `EXTENSION_TEST_BUILD_LABEL=sup15`:
+  - extension `check` -> exit 0;
+  - `test` -> `# tests 405`, `# pass 405`, `# fail 0`, with rows 28-34 ok, from
+    `an acknowledgement inside the window starts the recording once, and the
+    window never fires` to `a stalled project lookup holds a start for its bound,
+    then the local fallback begins without a project`, including `an
+    acknowledgement that crosses the client's own Stop does not restart the
+    recording`.
+  - Worker: seven mutations each failed a row, and every restore was identical.
+- Not verified: Core's acknowledgement live; a real stalled `fetch`; the Lab,
+  which must show one "started" `browser.tab` event per recording and a linked
+  project.
+- Outcome: Accepted
+
 ## Open Questions
 
 Open questions live in [open-questions.md](./mvp-week1-web-automation-reliability-plan/open-questions.md).
