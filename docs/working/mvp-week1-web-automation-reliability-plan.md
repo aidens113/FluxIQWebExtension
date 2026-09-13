@@ -616,6 +616,7 @@ carry `expected.failure.category`.
 | W26 | ambiguous-targets | two identical buttons, choose by context | targeting | `no-context` (TARGET_AMBIGUOUS) |
 | W27 | failure-surfaces | disabled, detached, blocked URL | failure taxonomy | each surface by category: `blocked_by_capability_or_policy` (`web.action.rejected`) / `target_not_found` / `navigation_unexpected` |
 | W28 | iframe-checkout | click inside same- and cross-origin frames | frame targeting | — |
+| W29 | identity-drift | Save's slot holds a lone, identifier-less "Save changes and exit" (R7, added 2026-09-13) | refusing a match no signal agrees with exactly | `save-and-exit` (`target_not_found`) |
 
 `llm-target-drift`, `instruction-only-form`, `reconnect`, `sensitive-input`,
 and `long-document` remain in the Lab for their existing lanes;
@@ -670,47 +671,78 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   Outcome line; `wc -l` on this document after the move -> 705.
 - Outcome: Accepted
 
-### 2026-09-13 — g-flow-lane-observation and g-identity-drift-mode land; W26 is CS1d
+### 2026-09-13 — i-w19-expectation: Option A needs a Core verdict change, and W10/W27 need their own answer
 
-- Agent: workers `g-flow-lane-observation` and `g-identity-drift-mode`; verified
-  and decided by supervisor. Five more committed entries (Core late-event,
-  fixture secrets, bench lanes, W19 and B3, redaction attestation) are archived
-  verbatim to parts three and four of `archive/2026-09-12-finish-week1-ledger.md`.
-- Changed: `a4564c5`, in `packages/test-runner/src/`: `run-flow-lane.ts` (oracle
-  and observation published before the asserts; `flowLaneSnapshot`),
-  `lane-observation.ts` (`selectLaneObservation`: a Flow-lane run that never
-  published is a Flow run with `flowCreated: false`, never a recording-lane run),
-  `recording-flow-proposal.ts` (`assertProposalCoversRecording`, B1),
-  `persisted-flow-run.ts` (each action keeps Core's `targetResolution`),
-  `run-scenario.ts`, and tests. `082c2c0`: identity-drift's `save-and-exit` mode,
-  R7's lone identifier-less button, expecting `target_not_found`.
+- Agent: worker `i-w19-expectation` (read-only); decisions by supervisor.
+- Changed: `reports/i-w19-expectation.md` only; fifth-dispatch briefs.
+- Found:
+  - **Core ignores an expectation's verdict.** A probe of Core's own executor,
+    run from a scratch config outside the tree, gave a click whose expected
+    state the host rejected as `auth_required` -> `"runStatus": "succeeded"`,
+    the attempt `"failure": null`, the comparison only `"blocked"`, and the next
+    node dispatched. `node-execution.test.ts:114-137` pins that behaviour, so
+    PB10b's "one lift line" understated Core.
+  - The navigation cannot ride on the click's own event, which is sent before
+    the navigation commits.
+  - No URL claim reports `AUTH_REQUIRED` today; `results.ts` needs a branch.
+  - W10 `broken-link` and W27 `blocked-url` expect `navigation_unexpected`, which
+    no click path produces. W27's recorded click navigates nowhere, so Option A
+    alone never reaches it, and W27 is one of criterion 4's named five.
+  - Core `service.ts` (6919) and `service.test.ts` (4789) sit on their line
+    baselines, so the Core lift must move code out, not add to it.
 - Decisions:
-  - **CS1f, partly deferred.** `flow-lane.json` now carries Core's own
-    `targetResolution` record, which for web is Core's inert gate. The browser
-    resolver's `confidence` and `bestScore` are on no record Core serves
-    (`conversions.ts` drops attempt outputs). Criterion 3's pass conditions are
-    outcomes (drift rows recover, W26 refuses, W29 refuses), so serving those
-    numbers is a Core change made only if a criterion 3 row fails live and needs
-    them for diagnosis.
-  - **W26 is CS1d.** `week1.ts:51` is `ambiguous-targets` `no-context`: the
-    identical twins resolved by position, which `g-resolver-corroboration`
-    fixes. It needs no Core landmark or context signal in Week 1, whatever
-    `g-recorder-signals` found about W26 needing one.
-  - Dispatched on the committed base: `g-redaction-wiring` (the attestation's
-    call site, `not_applicable`, and D3's discard audit) and
-    `g-flow-lane-followups` (D4, one Flow read, the packet size).
-- Validation: supervisor, `a4564c5`: test-runner built into a private `dist-sup2`
-  beside `dist`, `node --test` -> `# tests 471`, `# pass 471`, `# fail 0`; read
-  the `run-scenario.ts`, `run-flow-lane.ts`, `lane-observation.ts` and
-  `recording-flow-proposal.ts` diff. `082c2c0`: `scenario-lab check` -> exit 0;
-  `scenario-lab test` -> `# tests 202`, `# pass 202`; `pnpm exec playwright test
-  -c e2e/playwright.config.ts identity-drift.spec.ts` -> `9 passed`. Workers: five
-  mutations for the Flow lane (D1, D2, CS1f, B1 count, B1 wiring); two for the
-  mode (a removed case, a mode that records a save), each restored by SHA-256.
-- Not verified: D2's Lab invariant (`flow-lane.json` present implies `lane
-  "flow"`, `flowCreated true`); B1 false failures on real recordings; W29's
-  refusal, which needs `g-resolver-corroboration`; the W29 corpus row, which
-  waits for `g-bench-coverage`.
+  - **The link design (E1):** the navigation is its own non-executable event
+    naming the click, not a held click. Holding clicks would reopen the path
+    where 12 of 24 runs lost an action.
+  - **C1 is a Core behaviour change**, and the user is alerted: a rejected
+    expected state fails the attempt, and routing honours `failureRoute` as for
+    any failed attempt. It affects every host binding `expectationEvaluator`;
+    nothing downstream writes `expectedState` yet.
+  - Dispatched: `w19-c1`, `w19-e1`, `w19-e3`. Held: C2 until
+    `g-core-target-gate` releases `service.ts`; E2 and D1 until the follow-up on
+    W10 and W27, sent to the same worker.
+- Validation: worker probe, from `F:\!FluxIQ\packages\fluxiq`, `npx vitest run
+  --config <scratchpad>/w19probe/vitest.probe.config.mjs` -> exit 0, `Tests 2
+  passed (2)`, quoting the rows above; with the proposed transform the run is
+  `"failed"`, `"dispatched": ["web.dom.click"]`, and `"failure"` carries
+  `"category":"auth_required"`. Core executor tests `transition-comparison` and
+  `node-execution` -> `Tests 15 passed (15)`. Supervisor read sections 3 and 4,
+  the fix design and the open questions before deciding.
+- Not verified: whether Chrome reports `location.assign` as `link` on frame 0;
+  the timeline order of the explained event after its click; every Lab row.
+- Outcome: Revised
+
+### 2026-09-13 — g-flow-lane-followups: one Flow read and measured evidence packets; D4 is not Week 1
+
+- Agent: worker `g-flow-lane-followups`; verified and decided by supervisor. The
+  bench-lanes (`8325107`) and redaction-wiring (`3c396b0`) entries are archived
+  verbatim to part six of `archive/2026-09-12-finish-week1-ledger.md`.
+- Changed: `packages/test-runner/src/flow-lane/flow-action-types.ts`
+  (`readFlowNodes`, and a pure `flowActionTypes`), `declared-secrets.ts` (a pure
+  `flowSecretRequests`), `run-flow-lane.ts` (one read feeds both),
+  `persisted-flow-run.ts` (`evidencePackets`: each packet's UTF-8 byte size and
+  `truncated` flag, read from the run detail's `stateRefs.beforeAction` and
+  `afterAction` summaries), and their tests.
+- Decisions:
+  - **D4 is not Week 1.** Core's `actionCount` comes only from the paged
+    `list-recordings` and counts entries that are not recorded actions, so a
+    comparison could hide one lost action. The extension's tally exists only
+    inside `run-scenario.ts`. B1 already fails a proposal short of the
+    recording's pinned executable events, which covers every pinned row,
+    including step 4b's `basic-form`.
+  - `readFlowSecretRequests` survives with no production caller, kept only so a
+    test row stayed unchanged. Its removal is added to `g-run-scenario-followups`.
+  - Item 3 of `g-bench-coverage`, the bench's evidence-size consumer, can now be
+    built on `evidencePackets`, and joins the integration pass.
+- Validation: supervisor read the source diff: packets are measured by
+  `serializedBytes` and never copied. Test-runner built into a private
+  `dist-sup5` beside `dist`, `node --test` -> `# tests 483`, `# pass 483`,
+  `# fail 0`. Worker: four mutations each failed their target rows, restored by
+  hash; its earlier failing runs were all in `g-redaction-wiring`'s in-progress
+  files, and its final run passed.
+- Not verified: Core serving `stateRefs` summaries in a live run detail, which is
+  read from source only; a Lab `flow-lane.json` showing `evidencePackets` as
+  sizes and flags; W18 still pairing after the single read.
 - Outcome: Accepted
 
 ## Open Questions

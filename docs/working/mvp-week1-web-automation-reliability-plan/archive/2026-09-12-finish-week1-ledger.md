@@ -514,3 +514,174 @@ committed, and their decisions are carried in the briefs that act on them.
   see it (auth-gate's password).
 - Outcome: Accepted
 
+
+## Part five, archived 2026-09-13
+
+Moved verbatim when the plan reached 801 lines: the Flow-lane observation and
+identity-drift landings (with W26 settled as CS1d), and B3 with B5. All are
+committed.
+
+### 2026-09-13 — g-flow-lane-observation and g-identity-drift-mode land; W26 is CS1d
+
+- Agent: workers `g-flow-lane-observation` and `g-identity-drift-mode`; verified
+  and decided by supervisor. Five more committed entries (Core late-event,
+  fixture secrets, bench lanes, W19 and B3, redaction attestation) are archived
+  verbatim to parts three and four of `archive/2026-09-12-finish-week1-ledger.md`.
+- Changed: `a4564c5`, in `packages/test-runner/src/`: `run-flow-lane.ts` (oracle
+  and observation published before the asserts; `flowLaneSnapshot`),
+  `lane-observation.ts` (`selectLaneObservation`: a Flow-lane run that never
+  published is a Flow run with `flowCreated: false`, never a recording-lane run),
+  `recording-flow-proposal.ts` (`assertProposalCoversRecording`, B1),
+  `persisted-flow-run.ts` (each action keeps Core's `targetResolution`),
+  `run-scenario.ts`, and tests. `082c2c0`: identity-drift's `save-and-exit` mode,
+  R7's lone identifier-less button, expecting `target_not_found`.
+- Decisions:
+  - **CS1f, partly deferred.** `flow-lane.json` now carries Core's own
+    `targetResolution` record, which for web is Core's inert gate. The browser
+    resolver's `confidence` and `bestScore` are on no record Core serves
+    (`conversions.ts` drops attempt outputs). Criterion 3's pass conditions are
+    outcomes (drift rows recover, W26 refuses, W29 refuses), so serving those
+    numbers is a Core change made only if a criterion 3 row fails live and needs
+    them for diagnosis.
+  - **W26 is CS1d.** `week1.ts:51` is `ambiguous-targets` `no-context`: the
+    identical twins resolved by position, which `g-resolver-corroboration`
+    fixes. It needs no Core landmark or context signal in Week 1, whatever
+    `g-recorder-signals` found about W26 needing one.
+  - Dispatched on the committed base: `g-redaction-wiring` (the attestation's
+    call site, `not_applicable`, and D3's discard audit) and
+    `g-flow-lane-followups` (D4, one Flow read, the packet size).
+- Validation: supervisor, `a4564c5`: test-runner built into a private `dist-sup2`
+  beside `dist`, `node --test` -> `# tests 471`, `# pass 471`, `# fail 0`; read
+  the `run-scenario.ts`, `run-flow-lane.ts`, `lane-observation.ts` and
+  `recording-flow-proposal.ts` diff. `082c2c0`: `scenario-lab check` -> exit 0;
+  `scenario-lab test` -> `# tests 202`, `# pass 202`; `pnpm exec playwright test
+  -c e2e/playwright.config.ts identity-drift.spec.ts` -> `9 passed`. Workers: five
+  mutations for the Flow lane (D1, D2, CS1f, B1 count, B1 wiring); two for the
+  mode (a removed case, a mode that records a save), each restored by SHA-256.
+- Not verified: D2's Lab invariant (`flow-lane.json` present implies `lane
+  "flow"`, `flowCreated true`); B1 false failures on real recordings; W29's
+  refusal, which needs `g-resolver-corroboration`; the W29 corpus row, which
+  waits for `g-bench-coverage`.
+- Outcome: Accepted
+
+### 2026-09-13 — B3 and B5 land: an unreadable required field is refused, and two recorder signals reach the domain
+
+- Agent: workers `g-domain-mapping` (resumed for B3) and `g-recorder-signals`
+  (resumed with its amended Owns); verified by supervisor.
+- Changed: B3, `domain/src/client/gateway-action-parameters.ts` (the reader
+  reports refused fields), `gateway-mapping.ts` (a required field refused ->
+  rejected before dispatch), `runtime/failure/codes.ts`
+  (`web.action.invalid_parameter`, `graph_validation_or_unknown_node`, not
+  retryable, `dispatch`), their tests, `docs/architecture/failure-taxonomy.md`.
+  B5, `shared/protocol.ts`, `content/describe-element.ts` (`checked` for a
+  checkbox or radio, none for a sensitive one), `content/identity/context.ts`
+  (`landmarkName`), `background/connection/gateway-payloads.ts` (`checked`
+  withheld for a secret control), `domain/src/actions/types.ts`,
+  `output-nodes/targets.ts`, their tests, and a new
+  `e2e/content/tests/identity-signals.spec.ts`.
+- Decisions: the landmark name follows the ARIA order `accessible-name.ts`
+  already uses (`aria-labelledby`, `aria-label`, `title`), not the brief's
+  order, and a reference to a form control or editable region contributes
+  nothing, so the name cannot carry what a person typed. A recorded checkbox
+  toggle now maps to an executable `web.dom.check`, so Lab counts of executable
+  steps on checkbox pages may move; B1 counts `web.element.changed` already.
+- Validation: supervisor read both diffs; `pnpm --filter
+  @fluxiq-web-extension/domain check` -> exit 0; `DOMAIN_TEST_BUILD_LABEL=sup-b3
+  ... domain test` -> `# tests 352`, `# pass 352`; extension `check` -> exit 0;
+  `EXTENSION_TEST_BUILD_LABEL=sup-b5 ... extension test` -> `# tests 323`,
+  `# pass 323`; content harness `identity-signals identity-resolution
+  --workers=2` -> `18 passed`. Workers: a probe of Core's real failure-record
+  parser accepted the new record before any edit (its `retryable: true` twin
+  returned `null`); B3 mutations (refusal off, pinned row removed) and B5
+  mutations (`checked` blanked, `landmarkName` dropped, the sensitive gate
+  removed at the wire and at capture, the key deleted) each failed, restored by
+  SHA-256.
+- Found, queued for the integration pass: the stale checkbox comment at
+  `domain/src/io/input-model.ts:181-184`; a `failure-taxonomy.md` paragraph that
+  already miscounted producers; `gateway-mapping.ts` at 413 lines, past the
+  400-line advisory.
+- Not verified: the extension and test-runner against the new code outside
+  domain tests (grep finds no other pin of the code set); tracked
+  `domain/.test-build/`, regenerated at integration; any Lab run.
+- Outcome: Accepted
+
+
+## Part six, archived 2026-09-13
+
+Moved verbatim when the plan reached 789 lines: the bench lane change
+(`8325107`) and the redaction wiring with D3 (`3c396b0`). Both are committed,
+and their open follow-ups are briefed as `g-w29-row` and
+`g-run-scenario-followups`.
+
+### 2026-09-13 — g-bench-coverage: every unarmed week1 row runs on both lanes
+
+- Agent: worker `g-bench-coverage` (resumed for item 1); verified by supervisor.
+  The Flow-lane observation and B3/B5 entries are archived verbatim to part five
+  of `archive/2026-09-12-finish-week1-ledger.md`.
+- Changed: `8325107`. `packages/test-contracts/src/bench-report.ts` and
+  `bench-report-validation.ts` (a result carries its `lane`, which grouping, the
+  duplicate check and `runs.json` ordering include; rates in
+  `metrics.ratesByLane`, never combined); `bench/expand-corpus.ts`
+  (`lanesForResult`), `run-bench.ts`, `aggregate-report.ts`,
+  `render-markdown.ts` (a Lane column), `corpus/bench-corpus.ts`,
+  `corpus/week1.ts`, and their tests, including three renamed id literals in
+  `bench/tests/compare-reports.test.ts`, which no brief owned.
+- Decisions: the `compare-reports.test.ts` edit is accepted. The latency and
+  duration distributions still mix both lanes. That is acceptable for Week 1,
+  because two week1 benches mix them identically and so still compare for
+  repeatability, but `report.md` must label them "all lanes"
+  (`g-w29-row`). Splitting them per lane is Week 2. W29's row lands through
+  `g-w29-row` with the count test's 66 raised to 67.
+- Validation: supervisor, with `g-redaction-wiring`'s in-flight contract change
+  also in the tree: `pnpm --filter @fluxiq-web-extension/test-contracts check`
+  -> exit 0, `test` -> `# tests 63`, `# pass 63`; test-runner built into a
+  private `dist-sup3` beside `dist`, `node --test` -> `# runnable: 66 (23
+  recording; 43 flow, 23 unarmed and 20 variants)`, `# tests 483`, `# pass 483`,
+  `# fail 0`. The commit names its files and a guard refused to stage the three
+  test-contracts files that belong to `g-redaction-wiring`. Worker: reverting the
+  lane planner drops the count to 43 of 66; removing the lane from grouping
+  brings back `has 2 runs, not the bench's 1`; removing it from the duplicate
+  check makes a dual-lane report invalid; each restored by hash.
+- Not verified: no Lab bench, and no live `lab compare` against a pre-lane report
+  on disk.
+- Outcome: Accepted
+
+### 2026-09-13 — g-redaction-wiring: every Lab run attests redaction, and D3 reads Core's discards
+
+- Agent: worker `g-redaction-wiring`; verified by supervisor.
+- Changed: `packages/test-runner/src/run-scenario.ts` (the attestation after Core
+  stops and its logs reach the bundle, before the clone cleanup, the manifest and
+  finalization; D3's audit read after the Core round trip); new
+  `flow-lane/recording-discards.ts` (`readRecordingDiscards`) and its test;
+  `redaction-attestation/run-redaction-state.ts` (`not_applicable`);
+  `run-evaluation/tests/runner-wiring.test.ts`; test-contracts `src/run.ts`,
+  `src/run-validation.ts` and `tests/run-manifest.test.mjs` (the new contract
+  value). Outside its brief, each needed for the change to work: one export line
+  in `flow-lane/index.ts`, and two test assertions that expected the old
+  `pending`.
+- Decisions:
+  - The three edits outside the brief are accepted.
+  - A snapshot with no audit log fails the run as `gateway.connection`: failing
+    closed is right.
+  - An `existing` target whose scenario declares secrets records `pending`,
+    because a remote FluxIQ cannot be scanned.
+  - Two follow-ups are briefed as `g-run-scenario-followups`: D3 reads the audit
+    once, so a message discarded after that read is missed; and a
+    `persistent-isolated` workspace grows until the scan reaches its limits. The
+    Week 1 proofs run on `isolated`, so neither blocks them.
+- Validation: supervisor read the `run-scenario.ts` and `flow-lane/index.ts`
+  diffs. The literals are never added to the bundle's redaction list, which
+  would scrub the very leak the bundle scan looks for. `pnpm --filter
+  @fluxiq-web-extension/test-contracts test` -> `# tests 63`, `# pass 63`;
+  test-runner built into a private `dist-sup4` beside `dist`, `node --test` ->
+  `# tests 483`, `# pass 483`, `# fail 0`, 15 redaction and discard rows. The
+  commit guard required the barrel's diff to be exactly its one export line.
+  Worker: four mutations (the contract enum, the attestation's position before
+  cleanup, the recording filter and fail rule, the `not_applicable` mapping) each
+  failed its test, restored byte-identical.
+- Not verified: `pnpm lab run sensitive-input --target isolated` passing with
+  `findingCount: 0`, files scanned in both scopes and `redactionState:
+  "verified"`; the 24-run campaign's `action_discarded` count and connection
+  state after Stop; the `existing`, `clone` and `persistent-isolated` targets.
+- Outcome: Accepted
+

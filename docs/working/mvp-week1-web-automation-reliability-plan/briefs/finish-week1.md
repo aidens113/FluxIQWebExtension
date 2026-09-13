@@ -823,6 +823,176 @@ declared value from `run.json`, `evaluation.json`, `events.ndjson` and
 `snapshots/`, and the oracle verdict; the lowest free memory. Quote, do not
 summarise; label every single observation.
 
+---
+
+# Fifth dispatch — W19 by Option A, from `i-w19-expectation`
+
+"Design E1/E2/E3/D1/C1/C2/C3" are rows of `reports/i-w19-expectation.md` "Fix
+design, partitioned by file". All rules above still hold. Decided:
+- **The link design:** the navigation a click caused is recorded as its own
+  non-executable event naming the click; clicks are never held back.
+- **A rejected expected state fails the attempt,** and the run then routes it
+  exactly as any failed attempt, honouring the node's `failureRoute`.
+- **Core architecture pages are not edited by these workers:**
+  `g-core-target-gate` has them open. Put the exact paragraph each page needs
+  into your report.
+- **Held:** C2 until `g-core-target-gate` releases `runtime/service.ts`; E2 and
+  D1 until the W10 and W27 follow-up below is answered.
+
+## w19-c1 — a rejected expected state fails the attempt (Core)
+
+**Owns** (in `F:\!FluxIQ\packages\fluxiq\src\programs\automation-studio\`):
+`runtime/executor/transition-comparison.ts`, `runtime/executor/tests/node-execution.test.ts`,
+`runtime/executor/tests/transition-comparison.test.ts`. The "never edit Core" rule
+is lifted for these files only; follow `F:\!FluxIQ\AGENTS.md`.
+
+**Read:** `reports/i-w19-expectation.md` section 3 and design C1; its probe in
+that worker's scratchpad `w19probe/`.
+
+**Task.** Design C1. When the host's evaluator rejects the expected state, the
+attempt becomes `status: "failed"`, `route: "failed"`, with a `message`, and
+`failure` set to the evaluator's record or, when there is none, Core's
+`expected_state_missing` record; `transitionComparison` stays. Routing after
+that is a failed attempt's, so a node's `failureRoute` is honoured as for any
+other failure. Non-succeeded attempts and `builtin.policy.expectation` are
+untouched (the gate at `:102`).
+
+**Tests.** Rewrite `node-execution.test.ts:114-137` to the new behaviour. Add
+rows: the host's record lands on `attempt.failure`, the run fails, the next node
+is not dispatched; a rejection without a record gives `expected_state_missing`;
+an accepted state changes nothing; `failureRoute: "success"` is honoured. Mutation:
+remove the transform. `npx vitest run <file> --no-file-parallelism` per file;
+Core `pnpm check` and `pnpm docs:check`. No Core `pnpm build`, no root `pnpm test`.
+State the compatibility effect in the report.
+
+**Report:** `reports/w19-c1.md`.
+
+## w19-e1 — the recorder links a click to the navigation it caused
+
+**Owns:** `apps/extension/src/background/connection/navigation-recorder.ts` and
+`recorded-event-intake.ts`; in `connection/tests/`: `navigation-recorder.test.ts`
+(new), `recorded-event-intake.test.ts`, `recorded-event.test.ts`,
+`gateway-payloads.test.ts`.
+
+**Read:** `reports/i-w19-expectation.md` section 1 and design E1.
+
+**Task.** Design E1, the link design. A top-frame, same-tab, cross-document
+commit inside the explaining click's window is sent as a non-executable
+`client.recording_event`, with `transition: "explained"`, `explainedBy` naming
+the click's sequence, and a URL without query or hash. A subframe commit, a
+reload and an unexplained link stay dropped. It is never executable and never
+carries an input id. When and how the click itself is sent does not change.
+
+**Tests.** Design E1's unit rows and its mutation, restoring the early return at
+`recorded-event-intake.ts:86`; extension `check` and `test`. Under `Not
+verified`: the auth-gate recording holds exactly one explained
+`web.page.navigated` whose `explainedBy` is the click's sequence, with no query.
+
+**Report:** `reports/w19-e1.md`.
+
+## w19-e3 — an assert that meets a navigating tab is sent once more
+
+**Owns:** `apps/extension/src/runtime/action-runner.ts` and
+`src/runtime/tests/action-runner.test.ts`.
+
+**Read:** `reports/i-w19-expectation.md` section 4 "Replay race" and design E3.
+
+**Task.** Design E3. In `runActionInFrame`, a `web.dom.assert` whose send
+rejects with a closed port or no receiver waits for `waitForTabReady` and is sent
+exactly once more. No other verb is re-sent. Add no `imports` baseline entry.
+
+**Tests.** Design E3's stub rows (a failed first send and an answered second
+give one result from two sends; a click failing the same way is sent once), with
+a mutation; extension `check` and `test`. Under `Not verified`: W18 3 of 3.
+
+**Report:** `reports/w19-e3.md`.
+
+## g-w29-row — the save-and-exit negative row in the bench, and honest distribution labels
+
+Dispatched once `g-bench-coverage` is committed.
+
+**Owns:** `packages/test-runner/src/bench/corpus/week1.ts`,
+`packages/test-runner/src/bench/tests/week1-corpus.test.ts`,
+`packages/test-runner/src/bench/render-markdown.ts` and its test, if it has one
+(name it in the report).
+
+**Read:** `reports/g-identity-drift-mode.md` "Corpus row, not applied";
+`reports/g-bench-coverage.md` Outcome.
+
+**Task.**
+1. Add `variantOnly("W29", "identity-drift", null, ["save-and-exit"])` after W28,
+   with every companion change `g-identity-drift-mode` lists: the row count
+   (28 to 29), a `PLAN_NEGATIVE_VARIANTS` entry expecting `target_not_found`,
+   the "W01 to W28" wording at `week1.ts:7` and `:23`, and the explicit
+   runnable count in the plan test at `week1-corpus.test.ts:81-90` (66 to 67,
+   Flow-lane variants 20 to 21).
+2. Rates are per lane; the latency and duration distributions still mix both
+   lanes, which is decided acceptable for Week 1. Label those distributions "all
+   lanes" wherever `report.md` prints them, so nobody reads them as Flow-lane
+   latency.
+
+**Tests.** Test-runner `check` and `test`, built into a private `--outDir` at
+`dist`'s depth: the count test at 67 and a mutation dropping the W29 row; a
+render row showing the label. Before `g-resolver-corroboration` lands the bench
+would score W29 as a miss; that is expected, not a defect.
+
+**Report:** `reports/g-w29-row.md`.
+
+## g-run-scenario-followups — a second discard read, and a bounded workspace scan
+
+Dispatched once `g-redaction-wiring` is committed.
+
+**Owns:** `packages/test-runner/src/run-scenario.ts`;
+`packages/test-runner/src/flow-lane/recording-discards.ts` and its test;
+`packages/test-runner/src/redaction-attestation/run-redaction-scopes.ts` and
+`attest-run-redaction.ts`, with their tests;
+`packages/test-runner/src/run-evaluation/tests/runner-wiring.test.ts`.
+
+**Read:** `reports/g-redaction-wiring.md`, its Outcome and the open points.
+
+**Task.**
+1. **A second discard read.** D3 reads Core's gateway audit log once, straight
+   after the recording finalizes, so a message Core discards after that read is
+   never seen. Read it again after the Flow lane finishes and before the topology
+   closes. Union both reads by audit entry, never double-counting, and fail
+   `recording.persistence` on any `action_discarded` for this run's recordings
+   either read finds.
+2. **A bounded workspace scan.** A `persistent-isolated` workspace grows across
+   runs, so the attestation's workspace scan would eventually reach its limits
+   and fail every run. Bound that scope to what this run wrote, for example files
+   modified since the run started or the run's own recording ids, and say which
+   and why. It must still fail closed on anything this run wrote that cannot be
+   read. The `isolated` target is unchanged.
+
+**Tests.** Unit rows with a mutation for each item; a `runner-wiring.test.ts` row
+pinning the second read after the Flow lane and before close; test-runner `check`
+and `test`, built into a private `--outDir` at `dist`'s depth.
+
+**Report:** `reports/g-run-scenario-followups.md`.
+
+**Added after `g-flow-lane-followups`.** Owns also
+`packages/test-runner/src/flow-lane/declared-secrets.ts` and
+`flow-lane/tests/declared-secrets.test.ts`. 3. `readFlowSecretRequests` has had
+no production caller since the Flow is read once; it was kept only so a test row
+stayed unchanged. Remove it, re-point that row at the single read, and keep every
+assertion the row made. D4 is **not** Week 1 and is not yours: B1 already fails a
+proposal short of the recording's pinned executable events, and Core's
+`actionCount` counts entries that are not recorded actions.
+
+## i-w19-expectation, follow-up — W10 `broken-link` and W27 `blocked-url` (read-only)
+
+Both expect `navigation_unexpected` from a recorded click, which nothing
+produces. Design each, with its blast radius on every week1 row:
+(a) a landing marker on the URL claim D1 emits, so a failed landing that is not a
+sign-in gate reports `NAVIGATION_UNEXPECTED`: the change to
+`WebAutomationAssertRequest` and every file it touches; (b) for W27
+`blocked-url`, whose recorded click navigates nowhere, what a "no navigation"
+claim on clicks whose recording saw no commit would cost across the corpus, and
+whether anything narrower yields `navigation_unexpected` there; (c) whether E2's
+auth-gate branch belongs in the same `results.ts` change. Recommend one, with
+the proof each needs. Append the answer to `reports/i-w19-expectation.md` as
+"Follow-up: W10 and W27".
+
 ## g-core-late-event — CS1b′, a late recording event kills the connection (Core)
 
 **Owns:** `F:\!FluxIQ\packages\fluxiq\src\programs\automation-studio\client-gateway\bridge.ts`
