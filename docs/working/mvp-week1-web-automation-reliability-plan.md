@@ -40,10 +40,10 @@ settled ledger entries are in parts one to fifty of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13.**
-- **This repository:** `4fe671e` and this record, not pushed; root gates run next.
-- **Core:** `e5c9828`, 2 commits ahead of `origin/dev`, not pushed; `fluxiq` **0.4.0**, built at `e5c9828`.
+- **This repository:** pushed at wrap-up, with every fix recorded in the ledger.
+- **Core:** `0a2dc53`, pushed with this repository; `fluxiq` **0.4.0**, built at `e5c9828`.
 - **Gates:** Core `e5c9828`'s full sequential suite passed, with build and package lint. Here every
-  package gate over the fixes passed; root gates last passed on `f840b75`.
+  package gate over the fixes passed; root gates passed on `4fe671e` (harness 233 of 233).
 
 **Settled this session** (ledger and archive):
 - **Core:** trace withholding; the late-message discard; W19 C1 and C2; the shared
@@ -91,15 +91,15 @@ settled ledger entries are in parts one to fifty of
   real-page capture cost and candidate caps.
 
 **In flight:**
-- **Lab:** `l-probe-late-rows`, W13-W29 once at the old pins.
-- **Read-only:** `i-stage3-load-failures`, W10's `recording.persistence` and W13's
-  `gateway.connection` in the stopped benches (ledger "l-stage3a and l-stage3b").
+- **Nothing running.** The session wrapped up on 2026-09-13. `f-lab-wait-bounds` and
+  `l-probe-late-rows` were stopped; partial edits from the first are uncommitted.
 
 **Queued, in dependency order**
-1. **Root gates here,** then both `dev` branches pushed together.
-2. **Lab Stage 4** (briefs): `l-final-proofs` alone, then `l-final-bench-a` and
-   `l-final-bench-b`.
-3. **Phase 1.6b:** compare A with B, fill `i-ranking-draft`, write the ranking entry.
+1. **`f-lab-wait-bounds`:** check the stopped worker's partial edits, then redispatch
+   it (brief ready), gate it, commit it and push.
+2. **Lab Stage 4** (briefs): `l-final-proofs` alone at the pushed pins, then the bench
+   pair, together only at a pin carrying `f-lab-wait-bounds`.
+3. **Phase 1.6b:** `bench-compare.mjs`, fill `i-ranking-draft`, write the ranking entry.
 
 **Exit criteria as they stand**
 
@@ -739,6 +739,32 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
     - `dryRunLlm` restored failed 1 of 17.
   - **Extension:** `pnpm check` exit=0, and `evidence.spec.ts` "30 passed (7.9s)".
 - Not verified: the Lab. `l-final-proofs` and the final bench pair run at the new pins.
+- Outcome: Accepted
+
+### 2026-09-13 — i-stage3-load-failures, and the session wrapped up with both branches pushed
+
+- Agent: worker `i-stage3-load-failures`, read-only; wrap-up by supervisor on the user's
+  instruction.
+- Found:
+  - **W10 is load.** All five failures hit the Flow lane's 30 s finalize wait. A passing
+    W10 took up to 25.8 s, and a stored entry took p50 634 ms alone against
+    1,001-1,420 ms with two benches.
+  - **W13 leans load, but it is unproven.** It timed out in the 15 s status wait with
+    no extension status recorded.
+  - **W16's inconclusive run came from the bench's stop,** not the product.
+  - **Two benches together ran about 20% faster.** Briefed as `f-lab-wait-bounds`;
+    Stage 4 amended.
+- At wrap-up:
+  - **Stopped:** `f-lab-wait-bounds` and `l-probe-late-rows`. Any partial
+    `f-lab-wait-bounds` edits in the working tree are uncommitted and unverified.
+  - **Pushed:** both `dev` branches.
+- Validation: supervisor:
+  - root gate `sup71` on `4fe671e`: `pnpm check`, `pnpm test` and `pnpm build`
+    exit=0;
+  - the content harness first "231 passed" with 2 `infinite-feed` teardown timeouts,
+    which passed alone, "3 passed (4.8s)"; the full rerun gave "233 passed (47.8s)";
+  - `finalized-recording.ts:71` reads `const DEFAULT_TIMEOUT_MS = 30_000;`.
+- Not verified: W13's cause; the Lab at the new pins.
 - Outcome: Accepted
 
 ## Open Questions

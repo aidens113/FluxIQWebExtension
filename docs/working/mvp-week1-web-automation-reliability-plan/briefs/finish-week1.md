@@ -4918,6 +4918,38 @@ No runs and no edits.
 
 **Report:** `reports/i-stage3-load-failures.md`.
 
+## f-lab-wait-bounds — the Flow lane's finalize wait fits Core under load, and a pairing timeout says where it stopped (test-runner)
+
+From `i-stage3-load-failures`. All five W10 failures hit the runner's 30 s wait for
+Core to finalize the recording. A passing W10 took up to 25.8 s, and a stored entry
+took p50 634 ms alone against 1,001-1,420 ms with two benches. W13 timed out waiting
+for a pairing code, with nothing recording where it stalled.
+
+**Owns:**
+- `packages/test-runner/src/flow-lane/finalized-recording.ts` and its test;
+- in `packages/test-runner/src/run-scenario.ts`, only the error-event details near
+  `:377`;
+- the pairing-code wait's file and its test.
+
+**Read:** `reports/i-stage3-load-failures.md`.
+
+**Task.**
+1. Raise the finalize wait's `DEFAULT_TIMEOUT_MS` from 30,000 to 90,000 ms, and state
+   the measured latency that justifies it in the constant's comment.
+2. A `recording.persistence` failure from that wait publishes the wait's details
+   (bound, waited ms, last entry count, `endedAt` seen) on its error event, as
+   `recording.contract` already does. Ids, counts and times only.
+3. The pairing-code wait's timeout records the extension's last reported status and
+   the pairing step reached. Leave its 15 s bound unchanged.
+
+**Tests.**
+- Rows for each task.
+- A mutation for the details publication, and one for the pairing status, each restored
+  byte-identical.
+- The test-runner gates with a private build directory, and the structure audit.
+
+**Report:** `reports/f-lab-wait-bounds.md`.
+
 # Lab Stage 4 — the final campaign at the fix pins
 
 **Pins:** named by the supervisor at dispatch, after the fixes' gates, the Core build, and
@@ -4928,8 +4960,10 @@ both `dev` branches pushed.
 2. `l-final-bench-a` and `l-final-bench-b` start together only once it reports without a
    blocker.
 
-Measured under load, concurrent Lab instances do not raise throughput on this machine,
-and a failed proof would waste both benches.
+A failed proof would waste both benches. `i-stage3-load-failures` measured about 20% more
+throughput with two benches running together than with one, but W10's finalize wait
+timed out only under that load. So the benches run together only at a pin that carries
+`f-lab-wait-bounds`, and one after the other otherwise.
 
 **Every Stage 4 worker:**
 - sets up its worktree as `reports/l-stage2d.md` "Setup" did, uses the pinned Core read-only
