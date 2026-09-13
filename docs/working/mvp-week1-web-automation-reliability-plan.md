@@ -40,14 +40,15 @@ settled ledger entries are in parts one to thirty-nine of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13.**
-- **This repository:** `d0d81c3`, 100 commits ahead of `origin/dev`, not pushed.
+- **This repository:** `69f40c1`, 101 commits ahead of `origin/dev`, not pushed.
 - **Core:** `6621d66`, 12 commits ahead of `origin/dev`, `fluxiq` **0.4.0**; its
   packages are built at `6621d66`. Its eleven code commits are listed in Core's
   plan. The newest two are `949fbb4`, which stores a client's recording messages in
   arrival order, and `6621d66`, which withholds run inputs and resolved values at
   rest.
-- **Gates:** per-package gates reran for every commit, and Core's full sequential
-  suite passed on `6621d66`. Root gates here have not run.
+- **Gates:** per-package gates reran for every commit. On Core `6621d66` the full
+  sequential suite, `pnpm build` and `pnpm package:lint` passed. Root gates here
+  have not run.
 
 **Settled this session** (ledger and archive):
 - **Core:** trace withholding; the late-message discard; W19 C1 and C2; the shared
@@ -94,8 +95,6 @@ The W25 Core-order row passes against Core as built.
 1. **Lab rerun `l-stage2c`** (twenty-seventh dispatch), pinned to this repository's
    HEAD and Core `6621d66`: W18, W19, W25, W15, W17 and W28, then the week1 bench.
 2. **Integration:**
-   - Core `package:lint` and `pnpm build` on the 0.4.0 tree (the bump and its
-     migration note landed in `5845f5d`);
    - root `pnpm check`, `pnpm test`, `pnpm build` and the content harness, one at
      a time;
    - regenerate `domain/.test-build`;
