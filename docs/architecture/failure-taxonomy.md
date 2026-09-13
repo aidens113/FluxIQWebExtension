@@ -119,22 +119,43 @@ compiler-checked at the throw.
   `ACTION_REJECTED` for a target the actionability gate refused, `TIMEOUT`
   for a wait or action that ran out of time, `NOT_IMPLEMENTED` for a
   registered verb that is not built, `AUTH_REQUIRED` where the page itself
-  explains the failure better than the verb — a target that matched nothing on
-  a document that is a sign-in gate — and `UNKNOWN` as the last resort.
+  explains the failure better than the verb, and `UNKNOWN` as the last resort.
+  `authGateFailure` decides `AUTH_REQUIRED` over the record every result
+  carries, and needs both halves. The document must be a sign-in gate, meaning
+  a rendered password control inside a form. And either the target the action
+  named matches nothing, or a `web.dom.assert` URL claim that names a URL did
+  not hold. The second shape is how a replayed click's recorded landing fails
+  when an expired session leaves the browser on the gate. That record's
+  `expected` is the Flow's claim and its `actual` is fixed words, never the
+  address the page is at, which on a real sign-in page carries a return path
+  or a token. A URL claim that names no URL is a malformed Flow and stays
+  `STATE_MISMATCH`, as does a failed URL claim on a page with no gate.
+  `content/actions/page-identity.ts` never replaces `AUTH_REQUIRED` with
+  `PAGE_CHANGED`. A page that has a password form for another reason, such as
+  sign-up or a password change, counts as a gate too.
 - **Dispatch** (`domain/src/client/gateway-mapping.ts`, answered by
   `background/connection/gateway-session.ts`), decided before anything reaches
-  the page: `UNSUPPORTED_TYPE` for an action type the client does not know, and
-  `INVALID_PARAMETER` for a field the action's schema requires that arrived in
-  a shape the parameter reader (`client/gateway-action-parameters.ts`) refused.
-  A refused optional field is only left unapplied. `INVALID_PARAMETER` names
-  the action and the fields, never what was sent in them, and its category is
-  `graph_validation_or_unknown_node` because the node is authored wrong: Core
-  answers that with a structural edit, not a retry or a policy change.
+  the page and checked in this order:
+  `UNSUPPORTED_TYPE` for an action type the client does not know;
+  `USER_INTERVENTION_REQUIRED` for a command still asking for a value the run
+  never supplied, whose record names the paths it wanted and never a value;
+  and `INVALID_PARAMETER` for a field the action's schema requires that arrived
+  in a shape the parameter reader (`client/gateway-action-parameters.ts`)
+  refused. A refused optional field is only left unapplied. `INVALID_PARAMETER`
+  names the action and the fields, never what was sent in them, and its
+  category is `graph_validation_or_unknown_node` because the node is authored
+  wrong: Core answers that with a structural edit, not a retry or a policy
+  change. Each refusal goes back as a `failed` `client.action_result` carrying
+  its record (`runtime/result-mapping.ts`).
 - **The worker-side verbs**: `runtime/browser-tab.ts`
   (`TARGET_NOT_FOUND`, `ACTION_REJECTED`, `ACTION_FAILED`),
   `runtime/browser-download.ts` (`ACTION_REJECTED`, `TIMEOUT`),
   `runtime/action-runner.ts` (`ACTION_REJECTED` for an unsupported page,
-  `TARGET_NOT_FOUND` for a tab that is gone), `runtime/click-landing.ts`
+  `TARGET_NOT_FOUND` for a tab that is gone), `runtime/command-router.ts`
+  (`ACTION_FAILED`, through `browserActionFailure`, for an action whose send to
+  the page threw; a `web.dom.assert` whose first send met a navigating page is
+  sent once more before that, so only its second refusal is reported),
+  `runtime/click-landing.ts`
   (`NAVIGATION_UNEXPECTED` for a replayed click whose own tab landed on a page
   the server answered with 400 or above), and `runtime/action-results.ts`
   (`NAVIGATION_UNEXPECTED`, the record every worker-side navigation check
@@ -143,7 +164,8 @@ compiler-checked at the throw.
   `STATE_MISMATCH` and `TIMEOUT`, except where the client reported a code from
   the same set — it stood nearest the page and keeps its own record.
 
-Two rows of the table have producers the list above does not name.
+Two rows of the table have producers the list above names only in part, or not
+at all.
 `USER_INTERVENTION_REQUIRED` has three: `content/action-runtime/results.ts`
 (`blockedByModal`), for a target refused as covered or inert while a page's
 modal dialog stands over it, which is the condition the code was named for;

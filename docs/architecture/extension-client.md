@@ -165,6 +165,41 @@ validated, is in [web capabilities](web-capabilities.md); the closed set that
 how a command's target becomes an element is in
 [element identity](element-identity.md).
 
+An in-page action goes to its frame's content script as one `executeAction`
+message, built once in `runActionInFrame`
+([`runtime/action-runner.ts`](../../apps/extension/src/runtime/action-runner.ts))
+and sent by `sendAction`. It is sent once, with one exception, a
+`web.dom.assert` whose send Chrome refuses as a navigating page would: no
+receiving end, or a message port or channel that closed before a response.
+That assert waits for the tab to settle (`waitForTabReady`) and is sent to the
+same frame exactly once more. A navigation that a click started late can take
+the old document away under the assert after it. The assert only reads, so a
+second send cannot act twice. Every other verb is sent once, because a click or
+a type may already have acted before the channel closed. A refusal that is not
+retried, the assert's second one included, is thrown, and
+`runtime/command-router.ts` answers it as a `failed` result with
+`web.action.failed`. The result does not say whether a second send happened.
+
+Every in-page result passes one hook that can name its failure from the page
+rather than from the verb. `authGateFailure`
+([`content/action-runtime/results.ts`](../../apps/extension/src/content/action-runtime/results.ts))
+reports `auth_required` (`web.auth.required`) when both of these hold:
+- the document is a sign-in gate, meaning a rendered password control inside a
+  form;
+- the action's target matched nothing, or a `web.dom.assert` URL claim that
+  names a URL did not hold.
+
+The URL case is how a replayed click fails when an expired session leaves it on
+the gate instead of the page it recorded landing on. The domain's expectation
+evaluator sends that claim as a `web.dom.assert`. It keeps the record the
+client reported, not a state mismatch of its own
+([`domain/src/runtime/expectation/evaluate.ts`](../../domain/src/runtime/expectation/evaluate.ts)).
+The record's `expected` is the Flow's claim and its `actual` is fixed words;
+neither holds the address the page is at. A URL claim that names no URL is a
+malformed Flow and still fails as `web.validation.state_mismatch`, as does a
+failed URL claim on a page with no gate. Every producer is listed in
+[the failure taxonomy](failure-taxonomy.md#who-produces-what).
+
 Action commands, recorded action events, and action results may also carry a
 `visualTarget` object. This object is the editor-facing reference to the state
 entity acted on, separate from the raw `element` fingerprint:
@@ -243,6 +278,43 @@ events such as `web.element.clicked`, `web.element.input_changed`,
 `RecordingDomainDefinition` before deriving normalized timelines, signal
 registries, task models, or policies.
 
+The background worker decides which committed navigations become events
+([`background/connection/navigation-recorder.ts`](../../apps/extension/src/background/connection/navigation-recorder.ts),
+fed by `recorded-event-intake.ts`). The general rules are these:
+- Only the top frame's commits count, and a reload is never recorded.
+- Commits are debounced per tab for 250 ms, so a fast client redirect records
+  only where the page settled.
+- A navigation committed before the recording started belongs to setup and is
+  dropped, as is a return to the tab's starting URL within the first 10 s.
+- A typed navigation is recorded unless it repeats the tab's last recorded URL.
+- Any other navigation, a history-state update included, is dropped when a
+  click or submit in the same tab preceded it within 5 s.
+
+A navigation the page made itself is different. That is a Chrome transition of
+`link` or `form_submit`, script navigation such as `location.assign` included.
+It is recorded only as the **landing** of the executable click that caused it,
+in the same tab and within 5 s after that click. A form submit extends the
+window and keeps the click it follows, provided that click was inside the
+submit's own window; a submit never names a click of its own. A click nothing
+can replay names nothing, and a new recording forgets the previous one's
+clicks. The landing is sent as a non-executable `client.recording_event`,
+`web.page.navigated`, carrying:
+- `metadata.transition: "explained"`;
+- `metadata.explainedByEventId`, the gateway event id the click was itself sent
+  under (`web.<sequence>.<timestamp>`). It is read off the event the domain's
+  builder, `createWebAutomationRecordingEvent`, makes for that click, and it
+  names exactly one click in the recording;
+- `metadata.explainedBy`, the click's `sequence`. The content script restarts
+  that counter in every document, so two clicks in one recording can share it;
+- a URL cut to origin and path. The query and fragment, where a session token
+  or a one-time code would ride, are dropped, and a URL with no origin is not
+  recorded.
+
+The landing carries no input id. The domain maps it to no input, so it never
+executes, and it is not counted as a recorded action. It is also sent as
+evidence. Core stores it as a domain event on the recording's timeline, where
+the recording mapper finds it beside the click it names (see below).
+
 A `client.start_recording` waits 750 ms for FluxIQ to answer; on silence the
 recorder starts locally so no user action is lost. A refusal is an answer, so
 it cancels that window — and it is classified rather than treated as a
@@ -313,6 +385,65 @@ records an event carrying a registered input ID as that input. That is how
 Automation Studio timelines distinguish operator actions from passive state
 observations. Raw snapshots and state updates remain available as recording
 observations through the client gateway bridge.
+
+A recorded click proposes the page it landed on as its expected state. When
+Core turns a recording into a proposal, it shows the web recording mapper
+([`domain/src/web-panel-host.ts`](../../domain/src/web-panel-host.ts), with
+the builder in
+[`domain/src/runtime/expectation/click-landing.ts`](../../domain/src/runtime/expectation/click-landing.ts))
+each timeline entry together with up to 32 entries after it (`following`). The
+mapper looks there for explained landings that name the click, and takes the
+**last** one, since a client redirect can commit twice. The claim it adds is
+exactly:
+
+```json
+{ "conditions": [{ "assert": { "kind": "url", "expected": "/the/landing/path" } }], "mode": "all", "timeoutMs": 5000 }
+```
+
+It holds a path only, never an origin, query, fragment, selector, text or
+value. The URL assert judges it as a substring of the page's address, so it
+still holds when a run serves the same pages from another origin. How a
+landing names its click depends on how the click was recorded:
+
+- **As Core's `action` entry.** This is how a live click is recorded, because
+  the extension sends a click with its action input id. Core's IO recorder
+  keeps the recording event's own id on that entry as `metadata.eventId`. A
+  landing names the entry only when its `explainedByEventId` equals that stored
+  id, verbatim and non-blank. The entry holds neither the click's sequence nor
+  its page URL, so it is never named by sequence. For a linked entry, the
+  mapper returns the candidate Core's own fallback
+  (`recordingActionEntryCandidate`) would propose, with the claim added. The
+  output, parameters, source input, confirmation, confidence `0.95` and label
+  `Web Dom Click` are all the fallback's.
+- **As a click domain event** (`web.element.clicked`). A landing names the
+  click when its `explainedByEventId` equals the id the domain's builder
+  rebuilds from the click's `payload.sequence` and timestamp. A landing with no
+  event id names the nearest preceding click in the same tab whose sequence
+  equals `explainedBy`. That rule reads each side's tab from
+  `metadata.sourceId`. Core keeps a domain-event entry's `sourceId` as a
+  top-level field, which a recording mapper is not shown, and every landing this
+  extension sends carries the event id, so the rule serves only a client that
+  puts `sourceId` in both events' metadata. The claim is added to the mapper's
+  own click candidate,
+  and none is made when the landing's path is the click page's own path.
+
+Every click that no landing names keeps the candidate it had without this
+feature:
+- an `action` entry that no landing names maps to `null`, and so does one
+  that is not a click or that Core marks `policyEligible: false`, so Core's
+  own fallback candidate stands for each;
+- a click domain event that no landing names gets the mapper's click candidate
+  with no expected state.
+
+No claim is made for a landing on `/`, or for one whose URL has no readable
+path. The landing itself proposes nothing.
+
+When a proposal is appended to a Flow, the claim becomes the recorded node's
+`parameterValues.expectedState`. After that node's action succeeds, Core asks
+the host to evaluate it. The domain's expectation evaluator then sends it to
+the page as a `web.dom.assert`. So a replayed click that lands anywhere else
+fails, instead of passing because nothing threw. [Action Surface](#action-surface)
+describes how that failure is named on a sign-in gate.
 
 When a recorded action has an element, the background process derives
 `visualTarget` with the same state ID algorithm used by snapshot conversion.
