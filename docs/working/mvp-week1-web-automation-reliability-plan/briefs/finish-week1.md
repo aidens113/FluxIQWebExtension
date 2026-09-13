@@ -2190,8 +2190,11 @@ Dispatched once `w19-d1b` is committed, since both edit `web-panel-host.ts`.
 # Twenty-first dispatch — Lab Stage 2 again, written ahead of the fix commits
 
 **Amendment to `l-stage2`, for its redispatch.** Sent to the same Lab worker once
-`g-discard-window` and `g-mapper-stored-payload` are both committed. The message
-names `<R2>`, the first commit holding both.
+three changes are all committed: `g-discard-window`, `g-discard-window-evidence`
+and `g-mapper-stored-payload`. The message names `<R2>`, the first commit holding
+all three. For every run, quote each discard read's published window bounds and
+excluded counts, so a pass shows the probe and Flow-lane confirmations excluded
+by the window rather than merely absent.
 - **Pin.** `<R2>` for this repository, and Core `5845f5d`. That adds only the
   0.4.0 version and migration note to the `187f40d` Stage 2 used. Move both
   repository worktrees to `<R2>`, rebuild, and prove the pin again before any
@@ -2204,3 +2207,36 @@ names `<R2>`, the first commit holding both.
   labels, recording ids and timestamps. Never skip or patch the check again.
 - **Report.** Append to `reports/l-stage2.md` under a new heading, "Second
   attempt". Keep the first attempt and the blocker diagnosis above it unchanged.
+
+## g-discard-window-evidence — a run shows what the discard window excluded (test-runner)
+
+Dispatched once `g-discard-window` is committed, while `g-mapper-stored-payload`
+still runs. Stage 2 waits for both anyway, so this adds no delay.
+
+**Owns:** `packages/test-runner/src/flow-lane/recording-discards.ts` and its test;
+`src/run-scenario.ts`, only the two `runtime.settle` events that carry
+`recordingDiscards`; `run-evaluation/tests/runner-wiring.test.ts`, only pins that
+the change moves.
+
+**Read:** `reports/g-discard-window.md`, open question 1 and the failure text
+note.
+
+**Task.**
+1. **Publish the window in both discard reads' `runtime.settle` details:**
+   - its `from`, and its `until` when set;
+   - a count of the entries it excluded, grouped by audit type, and by whether
+     each names this run's recording, no recording, or another one.
+   Never include an entry's message, label, input id or anything else a page
+   could supply.
+2. **Make the failure text match what the check now judges:**
+   - a lost action inside this run's recording window;
+   - naming "no recording id" when that is so;
+   - saying "after finalization" only when `sinceFinalizedMs` says so.
+
+**Tests.**
+- Rows for the published counts and bounds, and for each failure wording, each
+  with a mutation proof.
+- Test-runner `check`, and `test` in a private `--outDir` at `dist`'s depth.
+- The structure audit.
+
+**Report:** `reports/g-discard-window-evidence.md`.

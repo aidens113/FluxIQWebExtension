@@ -36,13 +36,13 @@ flight. No exit criterion yet carries a quoted Lab observation. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
-settled ledger entries are in parts one to twenty-six of
+settled ledger entries are in parts one to twenty-seven of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13, while workers run.**
-- **This repository:** `d775b5e`, 76 commits ahead of `origin/dev`, not pushed.
-- **Core:** `5845f5d`, 9 commits ahead of `origin/dev`, `fluxiq` **0.4.0**, with its
-  packages built at `187f40d`. The nine commits:
+- **This repository:** `9c198d2`, 78 commits ahead of `origin/dev`, not pushed.
+- **Core:** `240c73e`, 10 commits ahead of `origin/dev`, `fluxiq` **0.4.0**, built at
+  `187f40d`; the tenth is a plan-only commit. The nine code commits:
   - `5d495eb`, trace withholding;
   - `267a2ca`, the late-message discard;
   - `6f172b9`, a rejected expected state fails the attempt;
@@ -60,8 +60,8 @@ settled ledger entries are in parts one to twenty-six of
   expectation record; the ordered, acknowledged client start; a recorded entry's
   event identity.
 - **Evidence integrity:** the adapter guard; the second evidence producer;
-  snapshot evidence (LR7, LR8); redaction attestation in every Lab run; discard
-  audits; single-run evidence sizes, through one reader.
+  snapshot evidence (LR7, LR8); redaction attestation in every Lab run; windowed
+  discard audits; single-run evidence sizes, through one reader.
 - **Structure and hygiene:** the `connection.ts` split; the test-runner ratchet;
   stale comments, casts and the `test:content` script; the Flow lane imports
   Core's target-resolution type.
@@ -97,12 +97,12 @@ settled ledger entries are in parts one to twenty-six of
   payload where Core puts it (twentieth dispatch).
 - **`l-stage2`:** blocked at `7263534`, since every run failed the runner's own
   discard check; an instrumented run confirmed the cause. Its worktrees are kept.
-- **`g-discard-window`:** the check counts only discards inside the recording's
-  window (nineteenth dispatch); Stage 2 is redispatched at its commit.
+- **`g-discard-window-evidence`:** each discard read publishes its window and
+  what it excluded, and the failure text matches the window.
 
 **Queued, in dependency order**
-1. **After `g-discard-window` and `g-mapper-stored-payload`:** Lab Stage 2
-   redispatched at a commit holding both fixes, W19 `expired` included.
+1. **After `g-discard-window-evidence` and `g-mapper-stored-payload`:** Lab
+   Stage 2 redispatched at a commit holding both, W19 `expired` included.
 2. **Integration:**
    - Core `package:lint` and `pnpm build` on the 0.4.0 tree (the bump and its
      migration note landed in `5845f5d`);
@@ -714,39 +714,42 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   - W19 `expired`.
 - Outcome: Revised
 
-### 2026-09-13 — g-w19-docs: the architecture pages describe W19's changes
+### 2026-09-13 — g-discard-window: a discard counts only inside the recording's window
 
-- Agent: worker `g-w19-docs`; verified by supervisor, who corrected one
-  sentence.
+- Agent: worker `g-discard-window`; verified by supervisor.
 - Changed:
-  - `docs/architecture/extension-client.md`. Action Surface gains the assert sent
-    once more to a navigating tab (E3) and `auth_required` for a failed URL claim
-    on a sign-in gate (E2). Recording Evidence gains the navigation recording
-    rules, the explained landing (E1), and both ways a click's landing claim is
-    built (D1, D1b).
-  - `docs/architecture/failure-taxonomy.md`, the whole "Who Produces What"
-    section, which is wider than the brief's producer paragraphs.
-    `AUTH_REQUIRED` gains its two shapes, the Dispatch refusals are listed, and
-    `ACTION_FAILED` from `runtime/command-router.ts` is named.
+  - `flow-lane/recording-discards.ts`: `RecordingDiscardScope` gains `from` and an
+    optional `until`. An audit entry Core stamped outside them is not read,
+    whether it names a recording or only the session. An entry with no readable
+    timestamp is read.
+  - `run-scenario.ts` takes `from` just before asking the extension to start
+    recording, after the Core action probe, and passes `until` to the second read.
+  - `flow-lane/run-flow-lane.ts` reports the time just before it dispatches the
+    Flow.
+  - Their tests, and `runner-wiring.test.ts`.
 - Found:
-  - The domain-event click path the page describes claims nothing on a real
-    recording until `g-mapper-stored-payload` lands. The action-entry path is
-    true at HEAD.
-  - The worker wrote that Core's bridge puts `sourceId` on neither entry. That
-    is wrong for an action entry since Core `187f40d`. The supervisor rewrote it:
-    a domain-event entry keeps `sourceId` as a top-level field, which mappers
-    are not shown.
-- Validation: supervisor read the full diff and spot-checked the claims beyond
-  the brief at HEAD.
-  - `gateway-mapping.ts` builds `UNSUPPORTED_TYPE` (`:342`),
-    `USER_INTERVENTION_REQUIRED` (`:351`) and `INVALID_PARAMETER` (`:369`), in
-    that file order. The check order the page states is the worker's reading.
-  - `command-router.ts:33` answers a thrown send with `browserActionFailure`.
-  - `runtime/result-mapping.ts` exists.
-  - Supervisor: `node scripts/structure-audit.mjs` -> exit 0 before commit.
-  - Worker: every linked file and both anchors exist, and every cited file:line
-    was opened at HEAD. This repository has no `pnpm docs:check`.
-- Not verified: rendered Markdown; the Lab.
+  - The failure text still says "after their recording was finalized", and the
+    bundle cannot show the window or what it excluded. Both go to
+    `g-discard-window-evidence` before Stage 2 runs again.
+  - The worker added three wiring pins beyond the strings its brief named: the
+    `from` placement, the scope construction and the `until` source. They are
+    accepted.
+- Validation: supervisor read the diff. From `packages/test-runner`:
+  - `pnpm check` -> exit 0;
+  - `tsc --outDir dist-sup20` -> exit 0;
+  - `node --test "dist-sup20/**/*.test.js"` -> `# tests 514`, `# pass 514`,
+    `# fail 0`, including:
+    - `ok 110 - a discard Core audited inside the window counts, from the moment
+      the extension was asked to start recording`;
+    - `ok 111 - once the Flow lane began dispatching, a discard naming the
+      recording is ignored, and a late one Core audited before that counts`;
+    - `ok 112 - an entry with no readable timestamp counts, so the window fails
+      closed`;
+  - the structure audit passed.
+  - Worker: the rows use the diagnosis run's six real discards and one genuine
+    late loss. Three mutated builds failed 6, 3 and 3 rows, and were restored
+    byte-identical.
+- Not verified: the Lab.
 - Outcome: Accepted
 
 ## Open Questions

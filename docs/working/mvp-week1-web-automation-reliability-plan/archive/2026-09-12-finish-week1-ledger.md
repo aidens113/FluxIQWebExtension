@@ -1777,3 +1777,44 @@ committed.
   `auth_required` with the click attempt `failed`.
 - Outcome: Accepted
 
+
+## Part twenty-seven, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: the W19 architecture
+pages (`d775b5e`), committed.
+
+### 2026-09-13 — g-w19-docs: the architecture pages describe W19's changes
+
+- Agent: worker `g-w19-docs`; verified by supervisor, who corrected one
+  sentence.
+- Changed:
+  - `docs/architecture/extension-client.md`. Action Surface gains the assert sent
+    once more to a navigating tab (E3) and `auth_required` for a failed URL claim
+    on a sign-in gate (E2). Recording Evidence gains the navigation recording
+    rules, the explained landing (E1), and both ways a click's landing claim is
+    built (D1, D1b).
+  - `docs/architecture/failure-taxonomy.md`, the whole "Who Produces What"
+    section, which is wider than the brief's producer paragraphs.
+    `AUTH_REQUIRED` gains its two shapes, the Dispatch refusals are listed, and
+    `ACTION_FAILED` from `runtime/command-router.ts` is named.
+- Found:
+  - The domain-event click path the page describes claims nothing on a real
+    recording until `g-mapper-stored-payload` lands. The action-entry path is
+    true at HEAD.
+  - The worker wrote that Core's bridge puts `sourceId` on neither entry. That
+    is wrong for an action entry since Core `187f40d`. The supervisor rewrote it:
+    a domain-event entry keeps `sourceId` as a top-level field, which mappers
+    are not shown.
+- Validation: supervisor read the full diff and spot-checked the claims beyond
+  the brief at HEAD.
+  - `gateway-mapping.ts` builds `UNSUPPORTED_TYPE` (`:342`),
+    `USER_INTERVENTION_REQUIRED` (`:351`) and `INVALID_PARAMETER` (`:369`), in
+    that file order. The check order the page states is the worker's reading.
+  - `command-router.ts:33` answers a thrown send with `browserActionFailure`.
+  - `runtime/result-mapping.ts` exists.
+  - Supervisor: `node scripts/structure-audit.mjs` -> exit 0 before commit.
+  - Worker: every linked file and both anchors exist, and every cited file:line
+    was opened at HEAD. This repository has no `pnpm docs:check`.
+- Not verified: rendered Markdown; the Lab.
+- Outcome: Accepted
+
