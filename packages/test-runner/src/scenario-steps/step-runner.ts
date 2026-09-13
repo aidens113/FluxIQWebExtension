@@ -7,6 +7,7 @@ import { extractRecords, type ExtractedRecord } from "./extract-records.js";
 import { locateTarget } from "./locate-target.js";
 import { parseScenarioTarget } from "./parse-target.js";
 import { ScenarioTabs } from "./scenario-tabs.js";
+import { runScriptedNavigation } from "./scripted-navigation.js";
 
 export type ScenarioStepRunnerOptions = {
   context: BrowserContext;
@@ -19,25 +20,11 @@ export type ScenarioStepRunnerOptions = {
   /** Run-owned directory for `upload` files. */
   uploadDirectory: string;
   now?: () => number;
-  /** Test seam for the recording settle barrier; production uses a timer. */
-  sleep?: (ms: number) => Promise<void>;
 };
 
 export type ScenarioStepResult = { extracted?: ExtractedRecord[] };
 
 const DEFAULT_WAIT_MS = 15_000;
-// The recorder keeps a click/submit able to explain navigation for 5 s, and a
-// commit at the end of that window may remain in its debounce queue for 250 ms.
-// A following scripted navigation must cross both bounds or an `other`
-// transition can still be attributed to the previous trusted input and drop.
-const NAVIGATION_DEBOUNCE_MS = 250;
-const NAVIGATION_EXPLANATION_MS = 5_000;
-const SCRIPTED_NAVIGATION_SETTLE_MS = NAVIGATION_EXPLANATION_MS + NAVIGATION_DEBOUNCE_MS;
-
-// These trusted operations can emit the click or submit events the extension
-// treats as navigation explainers. Other trusted input does not open that
-// window, so it must not impose a five-second delay on a later navigation.
-const NAVIGATION_EXPLAINING_OPERATIONS: ReadonlySet<ScenarioStep["operation"]> = new Set(["click", "press", "check"]);
 
 /**
  * Performs recording-script steps with Playwright on the active scenario tab,
@@ -48,12 +35,9 @@ export class ScenarioStepRunner {
   private readonly downloads: DownloadWatch;
   private readonly recorded: RunStepTiming[] = [];
   private readonly now: () => number;
-  private readonly sleep: (ms: number) => Promise<void>;
-  private lastNavigationExplainingInputCompletedAt: number | undefined;
 
   constructor(private readonly options: ScenarioStepRunnerOptions) {
     this.now = options.now ?? Date.now;
-    this.sleep = options.sleep ?? (ms => new Promise(resolve => setTimeout(resolve, ms)));
     this.tabs = new ScenarioTabs(options.context, options.page, options.isScenarioUrl, this.now);
     this.downloads = new DownloadWatch(options.context, this.now);
   }
@@ -73,7 +57,6 @@ export class ScenarioStepRunner {
       const result = await this.perform(step, startedAt);
       const completedAt = this.now();
       this.record(step, startedAt, "succeeded", completedAt);
-      if (NAVIGATION_EXPLAINING_OPERATIONS.has(step.operation)) this.lastNavigationExplainingInputCompletedAt = completedAt;
       return result;
     } catch (error) {
       this.record(step, startedAt, "failed");
@@ -100,8 +83,7 @@ export class ScenarioStepRunner {
       case "select": await selectOptionByKeyboard(target(), String(step.value ?? ""), timeoutMs); return {};
       case "scroll": await page.mouse.wheel(0, Number(step.value ?? 500)); return {};
       case "navigate": {
-        await this.settleNavigationAfterTrustedInput(startedAt);
-        await page.goto(`${this.options.origin}${step.path ?? "/"}`, timeout);
+        await runScriptedNavigation(this.options.context, page, `${this.options.origin}${step.path ?? "/"}`, step.timeoutMs === undefined ? {} : { timeoutMs: step.timeoutMs });
         return {};
       }
       case "waitForState": await target().waitFor({ state: "visible", ...timeout }); return {};
@@ -128,12 +110,6 @@ export class ScenarioStepRunner {
     }
   }
 
-  /** Wait only what remains of the recorder's combined explanation/debounce bound. */
-  private async settleNavigationAfterTrustedInput(at: number): Promise<void> {
-    if (this.lastNavigationExplainingInputCompletedAt === undefined) return;
-    const remaining = this.lastNavigationExplainingInputCompletedAt + SCRIPTED_NAVIGATION_SETTLE_MS - at;
-    if (remaining > 0) await this.sleep(remaining);
-  }
 }
 
 function requiredText(step: ScenarioStep, value: unknown): string {

@@ -41,7 +41,7 @@ function fakePage(url: string, log: string[]) {
     frameLocator: (selector: string) => ({ locator: (inner: string) => locator(`${selector} >> ${inner}`) }),
     mouse: { wheel: async (x: number, y: number) => { log.push(`wheel ${x},${y}`); } },
     keyboard: { press: async (key: string) => { log.push(`keyboard ${key}`); } },
-    goto: async (address: string) => { log.push(`goto ${address}`); },
+    waitForURL: async (address: string) => { log.push(`wait-url ${address}`); },
     waitForLoadState: async () => undefined,
     bringToFront: async () => { log.push(`front ${url}`); },
     close: async () => { log.push(`close ${url}`); },
@@ -54,20 +54,34 @@ function harness() {
   const first = fakePage(`${origin}/scenarios/basic-form/`, log);
   const pages: Page[] = [first];
   const context = new EventEmitter();
-  Object.assign(context, { pages: () => pages });
+  Object.assign(context, {
+    pages: () => pages,
+    newCDPSession: async () => {
+      const cdp = new EventEmitter();
+      Object.assign(cdp, {
+        send: async (method: string, parameters?: { url?: string; transitionType?: string }) => {
+          if (method !== "Page.navigate") { log.push(`cdp ${method}`); return {}; }
+          log.push(`cdp ${method} ${parameters?.transitionType} ${parameters?.url}`);
+          cdp.emit("Page.lifecycleEvent", { frameId: "frame", loaderId: "loader", name: "load" });
+          return { frameId: "frame", loaderId: "loader" };
+        },
+        detach: async () => { log.push("cdp detach"); },
+      });
+      return cdp;
+    },
+  });
   let clock = 1_000;
   return {
     log, first, pages, context: context as unknown as BrowserContext,
     now: () => (clock += 5),
-    sleep: async (ms: number) => { clock += ms; },
   };
 }
 
 test("performs every operation on the active tab as trusted Playwright input and times each step", async () => {
   const uploads = await mkdtemp(path.join(os.tmpdir(), "fluxiq-steps-"));
   try {
-    const { log, first, pages, context, now, sleep } = harness();
-    const runner = new ScenarioStepRunner({ context, page: first, origin, isScenarioUrl: (url) => url.startsWith(`${origin}/`), uploadDirectory: uploads, now, sleep });
+    const { log, first, pages, context, now } = harness();
+    const runner = new ScenarioStepRunner({ context, page: first, origin, isScenarioUrl: (url) => url.startsWith(`${origin}/`), uploadDirectory: uploads, now });
     const steps: ScenarioStep[] = [
       { id: "name", operation: "type", target: "testid:name", value: "Ada" },
       { id: "plan", operation: "select", target: "testid:plan", value: "team" },
@@ -92,65 +106,20 @@ test("performs every operation on the active tab as trusted Playwright input and
       'upload [data-testid="file"] notes.txt',
       'click iframe[title="Checkout"] >> [data-testid="pay"]',
       'wait [data-testid="result"] visible',
-      `goto ${origin}/scenarios/basic-form/`,
+      "cdp Page.enable",
+      "cdp Page.setLifecycleEventsEnabled",
+      `cdp Page.navigate typed ${origin}/scenarios/basic-form/`,
+      "cdp detach",
     ]);
     assert.equal(await readFile(path.join(uploads, "notes.txt"), "utf8"), "FluxIQ deterministic upload\nfile: notes.txt\n");
     const timings = runner.timings();
-    assert.deepEqual(timings.map((timing) => [timing.stepId, timing.operation, timing.outcome, timing.durationMs]), steps.map((step) => [step.id, step.operation, "succeeded", step.operation === "navigate" ? 5_230 : 5]));
+    assert.deepEqual(timings.map((timing) => [timing.stepId, timing.operation, timing.outcome, timing.durationMs]), steps.map((step) => [step.id, step.operation, "succeeded", 5]));
     assert.equal(timings[0]!.startedAt, new Date(1_005).toISOString());
     assert.equal(pages.length, 1);
     runner.dispose();
   } finally {
     await rm(uploads, { recursive: true, force: true });
   }
-});
-
-function navigationSettleHarness() {
-  const log: string[] = [];
-  const first = fakePage(`${origin}/scenarios/navigation/start`, log);
-  const context = new EventEmitter();
-  Object.assign(context, { pages: () => [first] });
-  let clock = 1_000;
-  const sleeps: number[] = [];
-  const runner = new ScenarioStepRunner({
-    context: context as unknown as BrowserContext,
-    page: first,
-    origin,
-    isScenarioUrl: () => true,
-    uploadDirectory: os.tmpdir(),
-    now: () => clock,
-    sleep: async (ms) => { sleeps.push(ms); clock += ms; },
-  });
-  return { runner, log, sleeps, setClock: (value: number) => { clock = value; } };
-}
-
-test("a scripted navigation waits out both the click explanation and pending-navigation debounce windows", async () => {
-  const { runner, log, sleeps, setClock } = navigationSettleHarness();
-  await runner.run({ id: "open", operation: "click", target: "testid:full-navigation" });
-  setClock(1_100);
-  await runner.run({ id: "history", operation: "navigate", path: "/scenarios/navigation/history" });
-  assert.deepEqual(sleeps, [5_150], "5,250 ms combined bound minus the 100 ms already elapsed");
-  assert.deepEqual(log.slice(-2), ['click [data-testid="full-navigation"]', `goto ${origin}/scenarios/navigation/history`]);
-  assert.equal(runner.timings()[1]?.durationMs, 5_150, "the settle barrier belongs to the navigate step's timing");
-  runner.dispose();
-});
-
-test("a scripted navigation does not wait when the prior explaining input is already settled", async () => {
-  const { runner, sleeps, setClock } = navigationSettleHarness();
-  await runner.run({ id: "open", operation: "click", target: "testid:full-navigation" });
-  setClock(6_250);
-  await runner.run({ id: "history", operation: "navigate", path: "/scenarios/navigation/history" });
-  assert.deepEqual(sleeps, []);
-  assert.equal(runner.timings()[1]?.durationMs, 0);
-  runner.dispose();
-});
-
-test("a scripted navigation with no prior navigation-explaining input does not wait", async () => {
-  const { runner, sleeps } = navigationSettleHarness();
-  await runner.run({ id: "history", operation: "navigate", path: "/scenarios/navigation/history" });
-  assert.deepEqual(sleeps, []);
-  assert.equal(runner.timings()[0]?.durationMs, 0);
-  runner.dispose();
 });
 
 test("switchTab, closeTab, waitForDownload, and extract act on and read the active tab", async () => {

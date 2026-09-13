@@ -6,4 +6,5 @@ export * from "./extract-records.js";
 export * from "./locate-target.js";
 export * from "./parse-target.js";
 export * from "./scenario-tabs.js";
+export * from "./scripted-navigation.js";
 export * from "./step-runner.js";

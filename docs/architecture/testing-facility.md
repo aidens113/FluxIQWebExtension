@@ -666,7 +666,11 @@ A manifest contains:
   navigate, waitForState, checkpoint, press, check, upload, switchTab,
   closeTab, waitForDownload, and extract step operations, where an `extract`
   step with `pagination` clicks its `next` control as trusted input to reach up
-  to `maxPages` pages (at most 50), and the extension records those clicks;
+  to `maxPages` pages (at most 50), and the extension records those clicks.
+  A scripted `navigate` uses Chromium's page-scoped protocol with transition
+  type `typed`, then waits for the matching frame/loader lifecycle event under
+  one bounded deadline; the Lab fails closed when that protocol is unavailable
+  rather than falling back to a nondeterministic programmatic transition;
 - expected page/final facts, recording events, runtime actions, extracted
   records, and an expected automation failure category, as relevant;
 - optional further `workflows`, each with its own script and expectations,

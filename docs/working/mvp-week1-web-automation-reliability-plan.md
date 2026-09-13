@@ -29,10 +29,11 @@ document. Read it literally:
   every fix before its ledger entry, and single observations labelled as such,
   because this machine has faulty RAM.
 
-**Phase, as of 2026-09-13: readying the pushed pins for Stage 4.** The rerun
-(`l-stage2c`) proved the earlier fixes live for W18, W19, W25 and W17. It also found
-W15, W17's file name, W28 and W25 `too-slow` still failing. No exit criterion yet
-has its full proof. Reports named in
+**Phase, as of 2026-09-13: repairing the last Stage 4 recording race.** W02's targeted
+loaded recheck passed 3/3 and exercised post-timeout recovery polling each time. W10
+primary passed 3/3, but `broken-link` retained two candidates only 1/3 times, proving
+elapsed time cannot make Playwright navigation standalone. No exit criterion yet has
+its full proof. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
@@ -106,17 +107,17 @@ settled ledger entries are in parts one to fifty of
 - The first final-bench pair was stopped cleanly after both reproduced W02's
   false no-action result; B also exposed W10 primary's one-candidate recording
   race. Both had zero leak and recording-persistence findings before stop.
-- Both fixes are supervisor-tested: package check and 617 tests pass; mutations
-  fail 2/16 and 2/6 rows, then restore to 22/22. Root gates pass; push remains.
-- Both benches reproduced W02 `keyboard-forms` Flow repeat 0 failing as
-  `action.dispatch` with no durable action attempt. `i-final-w02` is assigned
-  read-only to classify that miss while the benches continue.
+- Both initial fixes are supervisor-tested: package check and 617 tests pass; mutations
+  fail 2/16 and 2/6 rows, then restore to 22/22. Root gates pass. Downstream
+  `15974e7` and Core `19468b7` are pushed.
+- `l-final-recheck-w02` passed 3/3 with nine durable attempts per run; every dispatch-to-settle interval exceeded 30 seconds. W10 had zero leaks and six correct
+  functional verdicts, but consecutive one-candidate variants reject the settle
+  barrier. Chromium `typed` navigation passed independent review, mutations, 626 package tests, and root check/test/build; live W10 proof remains.
 
 **Queued, in dependency order**
-1. Push a new downstream pin paired with the unchanged Core pin.
-2. Recheck W02 and W10 live, then restart both complete repeat-three benches
-   concurrently at the new pushed pins.
-3. **Phase 1.6b:** run the tracked comparison, complete `i-ranking-draft`, and
+1. Commit the explicit-transition candidate, recheck W10 live, push the accepted
+   pin, then restart both complete repeat-three benches concurrently.
+2. **Phase 1.6b:** run the tracked comparison, complete `i-ranking-draft`, and
    write the six observed exit-criterion figures into the ledger.
 
 **Exit criteria as they stand**

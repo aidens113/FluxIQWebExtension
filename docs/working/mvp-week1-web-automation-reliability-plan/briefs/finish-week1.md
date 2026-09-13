@@ -5074,3 +5074,100 @@ barrier makes its row fail, then exact restoration. No Lab, Core/extension
 source, other shared docs, commits, or pushes.
 
 **Report:** `reports/f-final-scripted-navigation-settle.md`.
+
+## Lab Stage 4b — targeted loaded recheck before restarting full benches
+
+**Pins:** downstream `15974e749feed931b7de3c73ec6611c801557e32` and
+Core `19468b72c4472fd5cc58940737702d5e4d72c985`.
+
+**Shared:** use the final-bench worktrees, exact clean pins, isolated instances,
+process-safe reports, and the Stage 4 memory guard. Start both workers together.
+No auth-gate value is needed. Stop on a leak above zero.
+
+### l-final-recheck-w02
+
+- Owns `F:\fxlab\fxlab-7263534-load`, `F:\fxlab-runs\final\recheck-w02`,
+  and `reports/l-final-recheck-w02.md`.
+- Run W02 `keyboard-forms` primary Flow lane three times.
+- Require 3/3 exits and verdicts passed, a created Flow, durable attempts,
+  start candidate zero, and zero harness activations. Record whether the
+  initial run request crossed 30 seconds and recovery polling was exercised.
+
+### l-final-recheck-w10
+
+- Owns `F:\fxlab\fxlab-16ff729-b`, `F:\fxlab-runs\final\recheck-w10`,
+  and `reports/l-final-recheck-w10.md`.
+- Run W10 `navigation` primary Flow lane three times, then `broken-link` three
+  times.
+- Require two proposal candidates on all six recordings. Primary requires
+  click plus navigation attempts and both verdicts passed. Variant requires
+  the expected first-click `navigation_unexpected` failure and passing test
+  verdict. Require start candidate zero and harness zero throughout.
+
+Workers write exact bounded results and cleanup state; no source/shared-doc
+edits, commits, pushes, or raw logs/page data.
+
+## f-final-scripted-navigation-transition — make scripted navigation deterministic
+
+Stage 4b proved that the settle barrier is insufficient: W10 primary recorded
+two candidates 3/3, but `broken-link` recorded only one in two consecutive
+loaded runs even though all functional verdicts were correct. Chromium may
+still classify Playwright `page.goto` as an `other` transition after any wait;
+the recorder intentionally records standalone navigation only when the browser
+reports `typed`.
+
+**Owns:**
+- `packages/test-runner/src/scenario-steps/scripted-navigation.ts`;
+- `packages/test-runner/src/scenario-steps/tests/scripted-navigation.test.ts`;
+- `packages/test-runner/src/scenario-steps/step-runner.ts`;
+- `packages/test-runner/src/scenario-steps/tests/step-runner.test.ts`;
+- `packages/test-runner/src/scenario-steps/index.ts` only if an export is needed;
+- `reports/f-final-scripted-navigation-transition.md`.
+
+**Read:** Week 1 Current State; `reports/l-final-recheck-w10.md`; owned files;
+the recorder intake's transition mapping; Playwright's local CDP typings for
+`Page.navigate` only.
+
+**Task.**
+1. Execute a scripted `navigate` through Chromium CDP `Page.navigate` with
+   `transitionType: "typed"`, waiting for the resulting document load without
+   introducing a missed-event race.
+2. Make unsupported CDP behavior an explicit, categorized fixture/runner
+   failure rather than silently falling back to nondeterministic `page.goto`.
+3. Remove the settle barrier and its five-second cost; explicit browser
+   transition metadata is the synchronization contract.
+4. Add focused tests for the exact CDP request, load ordering, session cleanup,
+   and failure cleanup/category. Preserve honest step timing.
+
+**Validation:** test-runner check and focused private tests. Do not run the Lab,
+edit extension/Core source or shared docs, commit, or push.
+
+**Report:** `reports/f-final-scripted-navigation-transition.md`, including
+commands and what was not verified.
+
+### Supervisor amendment after `i-final-scripted-navigation-review`
+
+The first implementation is not accepted. In the same owned files/report:
+
+1. Bound CDP command completion with the scenario/default navigation timeout;
+   a hung send must fail and still attempt detach.
+2. Prove a navigation caused a new load. Do not let an already-current target
+   URL satisfy the waiter before the CDP command.
+3. Prevent early command or protocol rejection from leaving a live Playwright
+   waiter; no ignored timeout may survive the adapter call.
+4. Treat only a non-empty protocol `errorText` as rejection, and add the missing
+   primary-failure plus detach-failure precedence row.
+
+Add deterministic regressions for each race, rerun check/focused tests, and
+record a mutation that makes at least one new race guard fail. Still no Lab,
+shared-document edits, extension/Core source, commit, or push.
+
+### Second review amendment
+
+The loader correlation is accepted, but the adapter's bound must cover its
+whole lifecycle. Bound `newCDPSession(page)` as well as navigation setup/send/
+load, and arrange cleanup if acquisition resolves only after its deadline.
+Also bound `session.detach()` so cleanup itself cannot hang the run; preserve
+an earlier primary failure over cleanup timeout/failure. Add deterministic
+pending-acquisition, late-acquisition cleanup, and pending-detach tests. Repeat
+the focused suite/check and update the same report before returning.
