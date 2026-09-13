@@ -2945,3 +2945,57 @@ Moved verbatim to keep headroom under the plan limit: the domain capability mapp
   - the `hasValue: false` rule rests on `g-runner-upload-input`'s uncommitted
     change, so these pages are committed with it.
 - Outcome: Accepted
+
+## Part thirty-nine, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: the runner's upload input, committed in d0d81c3.
+
+### 2026-09-13 — g-runner-upload-input: the Flow lane supplies the file a recorded upload asks for, and a cancelled file choice stays evidence
+
+- Agent: worker `g-runner-upload-input`; verification by supervisor.
+- Changed:
+  - **New `packages/test-runner/src/flow-lane/declared-uploads.ts`.** For each node
+    that asks for files, it checks the node's `web.upload.<key>` path against the
+    domain's key for that node's recorded control. It then supplies
+    `{ files: [{ name, mimeType, contentBase64 }] }`, with the same bytes the
+    recording lane uploads. The run fails before it starts if a path does not
+    match, or if the script's upload steps do not name exactly one file.
+  - **`flow-lane/run-flow-lane.ts`:** those inputs go beside the secret inputs.
+  - **`apps/scenario-lab/src/scenarios/file-transfer/manifest.ts`:** W17 pins
+    `web.dom.upload`, then `web.dom.click`.
+  - **`packages/test-contracts/src/recordable-actions.ts`:** `upload` yields
+    `web.dom.upload`, and `switchTab` and `closeTab` yield `web.browser.tab`.
+  - **`domain/src/io/input-model.ts`:** a file input recorded with
+    `hasValue: false` stays evidence, for `change` and `input` alike.
+  - Tests.
+- Found:
+  - **Core holds `[withheld]` for a supplied upload,** in its saved run inputs,
+    trace and command attempts. That was read from Core `6621d66`'s code, so a Lab
+    run gets it only after a Core build.
+  - **The Lab's leak attestation does not look for upload content.**
+- Decisions:
+  - **The supplied file declares `application/octet-stream`.** The fixture reads
+    only name and size.
+  - **Several upload files fail closed** until a second scenario needs them.
+  - **The Lab rerun searches Core's workspace for the upload content directly**
+    (`l-stage2c`, run 4).
+- Validation:
+  - **Supervisor, gate script `sup53`,** one command at a time, on the diff frozen
+    when the worker finished:
+    - shared scenario-lab build exit=0;
+    - `packages/test-contracts` `pnpm test` exit=0, "# tests 66", "# pass 66",
+      "# fail 0";
+    - scenario-lab `check` exit=0, and its private build printed "# tests 204",
+      "# pass 204";
+    - domain `check` exit=0. `DOMAIN_TEST_BUILD_LABEL=sup53 pnpm test` printed
+      "# tests 399", "# pass 398", "# fail 1"; the one failure is the uncommitted
+      W25 row, which needs a Core build;
+    - test-runner `check` exit=0, private `tsc` exit=0, "# tests 555",
+      "# pass 555", "# fail 0".
+  - **Worker mutations:** nine, each failing as quoted, then restored and confirmed
+    by `sha256sum -c`.
+- Not verified:
+  - no Lab W17 run;
+  - Core resolving the upload input over HTTP;
+  - Chrome sending `hasValue: false` for a cancelled choice.
+- Outcome: Accepted

@@ -1,7 +1,7 @@
 # MVP Week 1 — Web Automation Reliability Plan
 
 Status: Active
-Status detail: Lab Stage 1 ran against a pinned Core; its recording loss and its W18 and W25 failures are explained and their fixes are in flight, and no exit criterion yet has a quoted Lab observation. Session objective, set by the user: completely finish Week 1, with everything tested.
+Status detail: Every fix from Lab Stages 1 and 2 and the week1 bench triage is committed in both repositories; the Lab rerun that proves them is next, and no exit criterion yet has a quoted Lab observation. Session objective, set by the user: completely finish Week 1, with everything tested.
 Created: 2026-09-11
 Last updated: 2026-09-13
 Owner: Senior supervisor agent
@@ -29,24 +29,25 @@ document. Read it literally:
   every fix before its ledger entry, and single observations labelled as such,
   because this machine has faulty RAM.
 
-**Phase, as of 2026-09-13: building the fixes Lab Stage 1 exposed.** Stage 1 ran
-against a pinned Core and found that recording entries go missing under load, and
-that W18, W24 and W25 fail. Both findings are explained and their fixes are in
-flight. No exit criterion yet carries a quoted Lab observation. Reports named in
+**Phase, as of 2026-09-13: proving the fixes in the Lab.** Lab Stages 1 and 2
+found recording loss, the auth-gate leak and W25's storage order, and the week1
+bench triage found the rest. Every fix is committed in both repositories; only P7
+is ruled out. No exit criterion yet carries a quoted Lab observation. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
-settled ledger entries are in parts one to thirty-eight of
+settled ledger entries are in parts one to thirty-nine of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
-**True on 2026-09-13, while workers run.**
-- **This repository:** `857513e`, 98 commits ahead of `origin/dev`, not pushed.
-- **Core:** `6621d66`, 12 commits ahead of `origin/dev`, `fluxiq` **0.4.0**, built at
-  `187f40d` until the next build. Its eleven code commits are listed in Core's plan.
-  The newest two are `949fbb4`, which stores a client's recording messages in
+**True on 2026-09-13.**
+- **This repository:** `d0d81c3`, 100 commits ahead of `origin/dev`, not pushed.
+- **Core:** `6621d66`, 12 commits ahead of `origin/dev`, `fluxiq` **0.4.0**; its
+  packages are built at `6621d66`. Its eleven code commits are listed in Core's
+  plan. The newest two are `949fbb4`, which stores a client's recording messages in
   arrival order, and `6621d66`, which withholds run inputs and resolved values at
   rest.
-- **Gates:** per-package gates rerun for every commit; root gates and Core's full suite not yet run.
+- **Gates:** per-package gates reran for every commit, and Core's full sequential
+  suite passed on `6621d66`. Root gates here have not run.
 
 **Settled this session** (ledger and archive):
 - **Core:** trace withholding; the late-message discard; W19 C1 and C2; the shared
@@ -85,18 +86,13 @@ settled ledger entries are in parts one to thirty-eight of
 - W24 `unannounced` (a recorded-payload contract change) and W13 `banner-absent`
   (P7, a new Core node outcome); both rows stay in the corpus.
 
-**In flight:**
-- **The auth-gate leak:** the leak check and its demo limits are committed; in Core,
-  `g-core-withholding-execution`, then Core's withholding is committed.
-- **From the bench triage:** P1-P3, H1-H7, the expectation check and the lane
-  consistency fix are committed.
-- **Recording gaps P4-P6:** the domain and extension work is committed; the pages
-  are written and wait on `g-runner-upload-input`, which is running.
-- **W25's storage order:** the bridge fix and its race follow-ups are done; Core's gate, commit and build, then `f-w25-core-order-row`.
+**In flight:** nothing. Every fix from the bench triage, the auth-gate leak, the
+recording gaps P4-P6 and W25's storage order is committed in both repositories.
+The W25 Core-order row passes against Core as built.
 
 **Queued, in dependency order**
-1. **After the three dispatches:** a Core build, then W18, W19, W25 and the rows the
-   fixes touch again in the Lab, with the auth-gate leak check reading 0.
+1. **Lab rerun `l-stage2c`** (twenty-seventh dispatch), pinned to this repository's
+   HEAD and Core `6621d66`: W18, W19, W25, W15, W17 and W28, then the week1 bench.
 2. **Integration:**
    - Core `package:lint` and `pnpm build` on the 0.4.0 tree (the bump and its
      migration note landed in `5845f5d`);
@@ -640,56 +636,6 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 `2026-09-12-*` Wave 3 and live-validation files, and
 `2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-13 — g-runner-upload-input: the Flow lane supplies the file a recorded upload asks for, and a cancelled file choice stays evidence
-
-- Agent: worker `g-runner-upload-input`; verification by supervisor.
-- Changed:
-  - **New `packages/test-runner/src/flow-lane/declared-uploads.ts`.** For each node
-    that asks for files, it checks the node's `web.upload.<key>` path against the
-    domain's key for that node's recorded control. It then supplies
-    `{ files: [{ name, mimeType, contentBase64 }] }`, with the same bytes the
-    recording lane uploads. The run fails before it starts if a path does not
-    match, or if the script's upload steps do not name exactly one file.
-  - **`flow-lane/run-flow-lane.ts`:** those inputs go beside the secret inputs.
-  - **`apps/scenario-lab/src/scenarios/file-transfer/manifest.ts`:** W17 pins
-    `web.dom.upload`, then `web.dom.click`.
-  - **`packages/test-contracts/src/recordable-actions.ts`:** `upload` yields
-    `web.dom.upload`, and `switchTab` and `closeTab` yield `web.browser.tab`.
-  - **`domain/src/io/input-model.ts`:** a file input recorded with
-    `hasValue: false` stays evidence, for `change` and `input` alike.
-  - Tests.
-- Found:
-  - **Core holds `[withheld]` for a supplied upload,** in its saved run inputs,
-    trace and command attempts. That was read from Core `6621d66`'s code, so a Lab
-    run gets it only after a Core build.
-  - **The Lab's leak attestation does not look for upload content.**
-- Decisions:
-  - **The supplied file declares `application/octet-stream`.** The fixture reads
-    only name and size.
-  - **Several upload files fail closed** until a second scenario needs them.
-  - **The Lab rerun searches Core's workspace for the upload content directly**
-    (`l-stage2c`, run 4).
-- Validation:
-  - **Supervisor, gate script `sup53`,** one command at a time, on the diff frozen
-    when the worker finished:
-    - shared scenario-lab build exit=0;
-    - `packages/test-contracts` `pnpm test` exit=0, "# tests 66", "# pass 66",
-      "# fail 0";
-    - scenario-lab `check` exit=0, and its private build printed "# tests 204",
-      "# pass 204";
-    - domain `check` exit=0. `DOMAIN_TEST_BUILD_LABEL=sup53 pnpm test` printed
-      "# tests 399", "# pass 398", "# fail 1"; the one failure is the uncommitted
-      W25 row, which needs a Core build;
-    - test-runner `check` exit=0, private `tsc` exit=0, "# tests 555",
-      "# pass 555", "# fail 0".
-  - **Worker mutations:** nine, each failing as quoted, then restored and confirmed
-    by `sha256sum -c`.
-- Not verified:
-  - no Lab W17 run;
-  - Core resolving the upload input over HTTP;
-  - Chrome sending `hasValue: false` for a cancelled choice.
-- Outcome: Accepted
-
 ### 2026-09-13 — Core withholding: run inputs and resolved values are withheld at rest, and what a run executes is unchanged (Core `6621d66`)
 
 - Agents: workers `g-core-input-withholding`, `g-core-attempt-withholding` and
@@ -790,6 +736,38 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   - W25 live;
   - `stateLink` on a real recording;
   - a Stop overlapping a start, live.
+- Outcome: Accepted
+
+### 2026-09-13 — f-w25-core-order-row: the live W25 messages through Core's gateway propose click, wait, click against the fixed Core, and did not before
+
+- Agent: worker `f-w25-core-order-row`; verification by supervisor.
+- Changed: new `domain/src/tests/core-gateway-recording-order.test.ts`.
+  - It sends the eight live `delayed-ui` messages through Core's real client
+    gateway and Automation Studio bridge. All are started without awaiting, as
+    Core's WebSocket host receives them.
+  - It asserts:
+    - 8 entries;
+    - the "Compacted 3" issue;
+    - the `web` candidates click `begin-delay`, `web.dom.wait_for_selector`
+      `late-action`, click `late-action`.
+- Validation:
+  - **Before the fix, against Core built at `187f40d`:**
+    - worker: five runs of the row alone, each failing with 2 candidates;
+    - supervisor gates `sup47` and `sup53`: "# tests 399", "# pass 398",
+      "# fail 1". The one failure was this row.
+  - **After the fix,** supervisor gate `sup55`, against Core `6621d66`'s
+    `packages/fluxiq/dist`, rebuilt at 07:18. `DOMAIN_TEST_BUILD_LABEL=sup55 pnpm
+    test` gave exit=0, "# tests 399", "# pass 399", "# fail 0", and "ok 380 - W25:
+    the live delayed-ui messages through Core's client gateway, received as its
+    WebSocket host receives them, propose click, wait, click". This is a single
+    observation.
+  - **The failure before and the pass after** stand in for the brief's mutation,
+    which was to remove the chain and rebuild Core.
+- Not verified:
+  - the issues assertion requires exactly the one "Compacted 3" message;
+  - the row copies the extension's evidence message shape by hand, so it does not
+    detect drift in `recording-evidence.ts`;
+  - W25 in the Lab.
 - Outcome: Accepted
 
 ## Open Questions
