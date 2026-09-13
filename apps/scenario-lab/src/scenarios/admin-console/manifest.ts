@@ -140,7 +140,7 @@ export const adminConsoleManifest = createScenarioManifest({
       ],
       expected: {
         pageFacts: CONSOLE_START_FACTS,
-        actions: [{ action: "web.dom.extract", outcome: "succeeded" }],
+        // No `web.dom.extract`: the extract step is the runner's own check, so no recording yields that action. The recording lane judges `extracted`.
         extracted: [{ step: "read-customer-book", count: adminRecords.length, records: rowRecords(adminRecords) }],
         finalState: [{ id: "book-count-unchanged", subject: "list-summary", predicate: "text", value: `${adminRecords.length} records` }],
         allowedConsoleErrors: [],

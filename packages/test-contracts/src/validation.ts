@@ -1,4 +1,5 @@
 import { isAutomationStudioAdaptiveFailureClass } from "./failure-category.js";
+import { recordableActionTypes } from "./recordable-actions.js";
 import { SCENARIO_EXTRACT_MAX_PAGES, expectedActionOutcomes, scenarioCapabilities, scenarioStepOperations, type WebScenario } from "./scenario.js";
 
 export type ValidationIssue = { path: string; message: string };
@@ -176,7 +177,32 @@ const checkExtractionReferences = (workflow: JsonObject, path: string, issues: V
   if (Array.isArray(workflow.variants)) workflow.variants.forEach((variant, index) => { if (isObject(variant)) check(variant.expected, `${path}.variants[${index}].expected`); });
 };
 
-/** Script, expectations, variants, and extraction references shared by the primary workflow and each `workflows[]` entry. */
+/**
+ * Every `actions[].action`, in a workflow's expectations and in each of its
+ * variants, must be a type some step of the workflow's recording script can
+ * yield (`recordableActionTypes`). A variant never changes the recording, so its
+ * entries are judged against the same script. Any other entry is unmeetable: W11
+ * and W15 each pinned a `web.dom.extract` that no recording holds, and the Flow
+ * lane failed those rows as if FluxIQ had dropped an action. A script with no
+ * steps is a playback goal, whose actions no recording yields, so it is not
+ * judged here.
+ */
+const checkExpectedActionSources = (workflow: JsonObject, path: string, issues: ValidationIssue[]) => {
+  const script = Array.isArray(workflow.recordingScript) ? workflow.recordingScript.filter(isObject) : [];
+  if (script.length === 0) return;
+  const recordable = recordableActionTypes(script);
+  const check = (expected: unknown, expectedPath: string) => {
+    if (!isObject(expected) || !Array.isArray(expected.actions)) return;
+    expected.actions.forEach((entry, index) => {
+      if (!isObject(entry) || typeof entry.action !== "string" || entry.action.length === 0 || recordable.has(entry.action)) return;
+      issue(issues, `${expectedPath}.actions[${index}].action`, `names ${entry.action}, which no step of this workflow's recordingScript records; the expectation can never be met, so it is a scenario defect, not a product failure`);
+    });
+  };
+  check(workflow.expected, `${path}.expected`);
+  if (Array.isArray(workflow.variants)) workflow.variants.forEach((variant, index) => { if (isObject(variant)) check(variant.expected, `${path}.variants[${index}].expected`); });
+};
+
+/** Script, expectations, variants, extraction references and action sources shared by the primary workflow and each `workflows[]` entry. */
 const validateWorkflowBody = (workflow: JsonObject, path: string, issues: ValidationIssue[]) => {
   arrayOf(workflow.recordingScript, `${path}.recordingScript`, issues, validateStep);
   uniqueIds(workflow.recordingScript, `${path}.recordingScript`, "step", issues);
@@ -186,6 +212,7 @@ const validateWorkflowBody = (workflow: JsonObject, path: string, issues: Valida
     uniqueIds(workflow.variants, `${path}.variants`, "variant", issues);
   }
   checkExtractionReferences(workflow, path, issues);
+  checkExpectedActionSources(workflow, path, issues);
 };
 
 const validateWorkflow: Validator = (value, path, issues) => {

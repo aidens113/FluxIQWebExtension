@@ -20,8 +20,11 @@ export type NetworkPolicy = "loopback-only" | "allowlisted-real-site";
 
 /**
  * Operations a recording script may perform. The recording lane drives each
- * through Playwright while the extension records; `extract` is an authored
- * data-extraction step that performs no page interaction of its own.
+ * through Playwright while the extension records. `extract` is the runner's own
+ * data-extraction check, never recorded as an extract action. Without
+ * `pagination` it only reads the page. With it, the step clicks `next` as
+ * trusted input to reach each further page, and the extension records those
+ * clicks (`recordableActionTypes`).
  */
 export const scenarioStepOperations = [
   "click",
@@ -80,6 +83,18 @@ export type ExpectedEvent = { type: string; count?: number };
  * `blocked_by_capability_or_policy`, code `web.action.rejected`.
  */
 export const expectedActionOutcomes = ["succeeded", "failed"] as const;
+/**
+ * One action a run must show. `action` must be a type some step of the
+ * workflow's recording script records (`recordableActionTypes`); the validator
+ * rejects any other as a scenario defect, because no run could meet it.
+ *
+ * With `outcome`, an attempt of that type must have reached that status. With
+ * no `outcome`, the Flow lane judges the entry on the attempt's presence alone,
+ * whatever its status (`flow-lane/expectations.ts`). A negative variant pins its
+ * action that way and names the failure in `expected.failure`. The existing and
+ * clone lanes still read a missing outcome as `succeeded`
+ * (`existing-flow-run.ts`).
+ */
 export type ExpectedAction = { action: string; outcome?: (typeof expectedActionOutcomes)[number] };
 /**
  * What an extract step must yield. `count` is the exact number of records;

@@ -229,6 +229,9 @@ test("deep links serve the same shell and record the one route a request did pro
 });
 
 test("the extraction workflow expects the whole book, written as the page writes each row", () => {
+  // The extract step is the runner's own check, so no recording yields a web.dom.extract action for the Flow lane to judge.
+  assert.equal(resolveScenarioWorkflow(manifest, { workflowId: "extract-customer-list" }).expected.actions, undefined);
+  assert.equal(resolveScenarioWorkflow(manifest, { workflowId: "extract-customer-list", variantId: "short-book" }).expected.actions, undefined);
   const whole = resolveScenarioWorkflow(manifest, { workflowId: "extract-customer-list" }).expected.extracted?.[0];
   assert.equal(whole?.count, FULL_BOOK_SIZE);
   assert.equal(whole?.records?.length, FULL_BOOK_SIZE);

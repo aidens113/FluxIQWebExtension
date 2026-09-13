@@ -60,8 +60,9 @@ const EXTRACT_OUTPUT_IDS: ReadonlySet<string> = new Set(["web.dom.extract", "web
  * - `judged`: extraction is expected, and the generated Flow has an extract node;
  * - `not_applicable`: extraction is expected, and the Flow has no extract node
  *   that could yield any. A recording's `extract` step is the runner's own
- *   check, not a user action, so nothing is recorded for it and Core proposes
- *   no extract node; Lab Stage 2's W18 and W09 Flow-lane runs could only fail
+ *   check, not a user action, so no extract action is recorded for it and Core
+ *   proposes no extract node. A paginated step's clicks on `next` are recorded,
+ *   but only as clicks. Lab Stage 2's W18 and W09 Flow-lane runs could only fail
  *   with `0 extraction result(s)`. The recording lane still judges it;
  * - `not_expected`: the workflow declares no extraction.
  */
@@ -75,11 +76,14 @@ export function flowExtractionExpectation(expected: readonly ExpectedExtraction[
 
 /**
  * `expected.extracted` against what the Flow's extract attempts yielded, in
- * attempt order, judged only when `flowExtractionExpectation` is `judged`. The
- * recording lane asserts only unpaginated extraction because it reads the
- * current page and never follows `next`; a Flow does follow it, so paginated
- * extraction is proven here and nowhere else, and only by a Flow with an
- * extract node.
+ * attempt order, judged only when `flowExtractionExpectation` is `judged`.
+ *
+ * The recording lane asserts every extract step's records, paginated ones
+ * included. Its reader clicks `next` as trusted input and reads each page
+ * (`scenario-steps/extract-records.ts`), so the recording holds those clicks,
+ * and a Flow built from it replays them as clicks, not as an extract node.
+ * Only a Flow that holds an extract node is judged here, one attempt per
+ * expected entry, so each page it read is compared rather than assumed.
  */
 export function assertFlowExtraction(expected: readonly ExpectedExtraction[] | undefined, extracted: readonly Array<Record<string, string>>[], actionTypes: ReadonlyMap<string, string>): void {
   if (flowExtractionExpectation(expected, actionTypes) !== "judged") return;

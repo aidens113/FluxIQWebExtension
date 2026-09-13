@@ -2941,6 +2941,10 @@ run directories. Nothing tracked.
 **Setup.** Move both worktrees to the named pins, then:
 - build Core in its worktree;
 - install only if the lockfile changed;
+- rebuild this repository's shared builds in the Lab worktree before any run:
+  `domain/dist`, `packages/test-contracts/dist` and `apps/scenario-lab/dist`.
+  A stale `apps/scenario-lab/dist` failed 8 test-runner tests once the scenario
+  validator gained a rule. Name each build's exit code in the report;
 - run everything with `FLUXIQ_TEST_ENV_FILES=none`.
 
 **Runs.** Each row is a single observation unless it repeats.
@@ -3177,6 +3181,14 @@ Dispatched once two workers have reported:
    - No file content reaches a log, an event or an evidence file.
    - Say whether Core's persisted run inputs now hold it, or hold `[withheld]`.
 3. W17 pins `web.dom.upload` before its click.
+   - `g-expected-action-guard`'s validator
+     (`packages/test-contracts/src/recordable-actions.ts`) says `upload` yields
+     nothing, so it would reject that pin. You also own that file's `upload` row
+     and its validator test row; the row becomes `["web.dom.upload"]`.
+   - If `f-tab-recording` has reported, also set `switchTab` and `closeTab` to
+     `["web.browser.tab"]`, with a test row. Otherwise, say so.
+   - `packages/test-contracts/dist` is shared: rebuild it once, then run the
+     test-contracts, scenario-lab and test-runner tests against it.
 4. The test-runner resolves the domain through `domain/dist`. If you need a
    rebuild, build the domain once, privately, and say so. Never commit or leave a
    changed tracked build.
@@ -3189,6 +3201,143 @@ Dispatched once two workers have reported:
 - The structure audit.
 
 **Report:** `reports/g-runner-upload-input.md`.
+
+---
+
+# Twenty-ninth dispatch — withholding must not change execution (Core)
+
+`g-core-attempt-withholding`'s redispatch is done. Its open questions show two ways
+the run-input withholding now changes execution:
+- **A live-patch rerun** reads its inputs from the withheld trace
+  (`automation-studio/runtime/service.ts:3528,3583` into `live-patch.ts:177`), so a
+  patched node receives `"[withheld]"`.
+- **A Call Flow parent** builds its outputs from the child's withheld
+  `trace.values` (`composite-executor.ts:50-51`). A pass-through child therefore
+  hands it the marker.
+
+Core is not committed with either of these.
+
+Decided by the supervisor on 2026-09-13:
+- **Execution reads real values,** and only saved or published copies are
+  withheld.
+- **One text-replacement rule,** longest text first, is shared by the executor and
+  the framework runtime. Today the executor's rule can leave fragments of a longer
+  withheld text in a trace (open questions 5 and 6).
+- **Open question 3 stays a known gap for Week 1.** A node could copy an unbound
+  input by key into an output, and nothing withholds that copy. The Flow lane
+  sends only bound `web.secret.*` inputs.
+
+## g-core-withholding-execution — execution uses real values; the saved copy is withheld (Core)
+
+**Owns** (in `F:\!FluxIQ\packages\fluxiq\src\`):
+- `programs/automation-studio/runtime/service.ts`, the live-patch rerun inputs only;
+- `programs/automation-studio/runtime/live-patch.ts` and `composite-executor.ts`;
+- `programs/automation-studio/runtime/executor/graph-run.ts` and
+  `trace-withholding.ts`;
+- `runtime/service.ts`, the replacement rule only, plus a new focused `runtime/`
+  helper file and its `runtime/index.ts` line;
+- their tests, including `runtime/tests/composite-executor.test.ts`;
+- `F:\!FluxIQ\docs\architecture\automation-studio.md:407-418`,
+  `automation-studio-native-nodes.md`, and `package-boundaries.md`, the unreleased
+  0.4.0 entry only.
+
+`g-core-bridge-order` owns `client-gateway/` and `client-gateway.md`.
+
+Every owned file except the new helper carries uncommitted diffs from
+`g-core-input-withholding` and `g-core-attempt-withholding`. Keep those diffs,
+and build on them.
+
+**Read:** `reports/g-core-attempt-withholding.md`, the second "Outcome" through the
+end; `reports/g-core-input-withholding.md`.
+
+**Task.**
+1. **Live-patch reruns** run with the run's real inputs.
+2. **A Call Flow parent** reads its child's real output values. The child's saved
+   trace stays withheld.
+3. **One replacement helper,** longest text first, used by both
+   `trace-withholding.ts` and the runtime service.
+4. **Migration Notes.** Merge the attempt-withholding paragraph as built into the
+   0.4.0 entry, beside the run-input paragraph already there. Say that execution
+   is unchanged.
+5. **The two architecture pages** state the run-input rule.
+
+**Tests.**
+- **Composite:** a child with authored defaults 5 and 0, and output `result` bound
+  to `total`. The parent sees `total === 5`, and the child's saved trace withholds
+  its inputs. Add a mutation.
+- **Live patch:** the rerun receives the real input, and the saved trace holds the
+  marker. Add a mutation.
+- **Replacement rule:** a withheld text containing another leaves no fragment in
+  the trace. Add a mutation.
+- **Gates:**
+  - `npx vitest run` over the fifteen files from the redispatch, plus these files,
+    with `--no-file-parallelism`;
+  - Core `pnpm check`, `pnpm docs:reference` and `pnpm docs:check`;
+  - no Core `pnpm build`.
+
+**Report:** `reports/g-core-withholding-execution.md`.
+
+## g-lane-consistency — every lane reads an expected action the same way, and a bad manifest is fixture.invalid (test-runner)
+
+From `g-expected-action-guard`'s decisions:
+- The existing and clone lanes still read an expected action with no `outcome` as
+  `succeeded` (`existing-flow-run.ts:107`), while the Flow lane judges presence
+  only (H4).
+- A manifest the validator rejects reaches a run classified `unknown`, not
+  `fixture.invalid` (`scenarios.ts:11`).
+
+**Owns:** `packages/test-runner/src/existing-flow-run.ts` (its expected-action
+check only), `src/scenarios.ts`, and their tests.
+
+**Read:** `reports/g-expected-action-guard.md`; `reports/g-bench-expectation-fixes.md` H4.
+
+**Task.**
+1. **One rule for every lane.** The existing and clone lanes judge expected
+   actions exactly as the Flow lane does. Call the Flow lane's `assertFlowActions`
+   rather than keeping a second copy, if the shapes allow it.
+2. **A manifest the validator rejects** fails its run as `fixture.invalid`. The
+   message names the defect, and never a page value.
+3. **Answer, without changing anything:** what does the Flow lane do with a
+   recording that holds zero actions, such as admin-console's
+   `extract-customer-list`?
+
+**Tests.**
+- A row for each fix, with its mutation.
+- Test-runner `check`, and `test` in a private `--outDir`.
+- The structure audit.
+
+**Report:** `reports/g-lane-consistency.md`.
+
+## Amendment to `g-core-bridge-order` — the two races it left (Core)
+
+Decided by the supervisor on 2026-09-13:
+- **The reversal of `0e4edea`'s no-flush rule is accepted.** The mapper's
+  `following` needs storage order. A click's write now also waits for one queued
+  snapshot batch, which is the 25 ms queue.
+- **Flushing before action results is accepted.** The brief said every direct
+  append.
+- **Both races the worker named are fixed now,** because the new chain lengthens
+  the first:
+  1. **Stop and start.** A Stop cleans up only the recording it stopped, never one
+     started while it drains.
+  2. **Messages before a start.** A message received before a start is never
+     stored in the recording that start opens. Say whether the extension can send
+     in that order; either way, a row pins the rule.
+- **The migration-note line goes to `g-core-withholding-execution`,** which owns
+  the 0.4.0 entry in `package-boundaries.md`.
+
+**Owns:** the same client-gateway files as before.
+
+**Tests.**
+- A row for each race, with its mutation.
+- The same vitest set, Core `pnpm check` and `pnpm docs:check`.
+- No Core `pnpm build`.
+
+**Mutation scripts** must copy the file aside and restore it in a `finally`, then
+confirm the hash. The first run left the original `bridge.ts` on disk for
+minutes.
+
+**Report:** append an "Amendment" section to `reports/g-core-bridge-order.md`.
 
 ## f-authgate-followups — the rest of the password text (scenario-lab, extension)
 

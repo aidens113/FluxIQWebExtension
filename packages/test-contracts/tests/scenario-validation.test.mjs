@@ -180,6 +180,54 @@ test("an expectation may only name an attempt status a run can actually record",
   assert.equal(validateWebScenario(actions("succeeded")).valid, true);
 });
 
+/**
+ * W11, W15 and admin-console each pinned a `web.dom.extract` that no recording
+ * holds, because an extract step is the runner's own check. The Flow lane then
+ * failed those rows as if FluxIQ had dropped an action.
+ */
+test("an expected action that no step of its workflow's recording script records is rejected as a scenario defect", () => {
+  const unmeetable = {
+    ...validScenario,
+    recordingScript: [
+      ...validScenario.recordingScript,
+      { id: "read-result", operation: "extract", target: "testid:result", fields: { text: "testid:result-text" } },
+    ],
+    expected: { ...validScenario.expected, actions: [{ action: "web.dom.type" }, { action: "web.dom.extract", outcome: "succeeded" }] },
+    // A variant never changes the recording, so its entries are judged against the workflow's script.
+    variants: [{ id: "keyboard-only", description: "Submit is reachable by keyboard only.", arm: { operation: "set-mode" }, expected: { actions: [{ action: "web.dom.keypress", outcome: "succeeded" }] } }],
+    // A named workflow is judged against its own script, never the primary workflow's click.
+    workflows: [{ id: "scroll-only", description: "Scroll the page.", recordingScript: [{ id: "scroll-down", operation: "scroll", value: 500 }], expected: { actions: [{ action: "web.dom.scroll" }, { action: "web.dom.click", outcome: "succeeded" }] } }],
+  };
+  const result = validateWebScenario(unmeetable);
+  assert.equal(result.valid, false);
+  const issues = result.valid ? [] : result.issues;
+  assert.deepEqual(issues.map(({ path }) => path), ["$.expected.actions[1].action", "$.variants[0].expected.actions[0].action", "$.workflows[0].expected.actions[1].action"]);
+  assert.match(issues[0].message, /^names web\.dom\.extract, which no step of this workflow's recordingScript records/);
+  assert.ok(issues.every(({ message }) => message.endsWith("so it is a scenario defect, not a product failure")), JSON.stringify(issues));
+  assert.throws(() => assertWebScenario(unmeetable), ContractValidationError);
+});
+
+test("an expected action some step records is accepted, and a playback goal with no script is not judged", () => {
+  // delayed-ui's shape: the wait is proposed from the DOM addition recorded before a click.
+  const recordable = { ...validScenario, expected: { ...validScenario.expected, actions: [{ action: "web.dom.type", outcome: "succeeded" }, { action: "web.dom.click", outcome: "succeeded" }, { action: "web.dom.wait_for_selector", outcome: "succeeded" }] } };
+  const accepted = validateWebScenario(recordable);
+  assert.equal(accepted.valid, true, accepted.valid ? "" : JSON.stringify(accepted.issues));
+  const playback = {
+    ...validScenario,
+    recordingScript: [],
+    playbackGoal: { id: "submit", description: "Complete the form from instructions.", successFacts: [{ id: "submitted", subject: "result", predicate: "text", value: "Submitted" }] },
+    expected: { ...validScenario.expected, actions: [{ action: "web.dom.select", outcome: "succeeded" }] },
+  };
+  assert.equal(validateWebScenario(playback).valid, true);
+  // A paginated extract clicks `next` as trusted input, and the extension records those clicks; an unpaginated one only reads.
+  const readStep = { id: "all-products", operation: "extract", target: "testid:product", fields: { name: "testid:name" } };
+  const readsPages = (step) => ({ ...validScenario, workflows: [{ id: "read-catalog", description: "Read the catalog.", recordingScript: [step], expected: { actions: [{ action: "web.dom.click", outcome: "succeeded" }] } }] });
+  const paginated = validateWebScenario(readsPages({ ...readStep, pagination: { next: "testid:next", maxPages: 3 } }));
+  assert.equal(paginated.valid, true, paginated.valid ? "" : JSON.stringify(paginated.issues));
+  const unpaginated = validateWebScenario(readsPages(readStep));
+  assert.deepEqual(unpaginated.valid ? [] : unpaginated.issues.map(({ path }) => path), ["$.workflows[0].expected.actions[0].action"]);
+});
+
 test("rejects malformed workflows, variants, extraction, and step values", () => {
   const invalid = {
     ...catalogScenario,

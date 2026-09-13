@@ -40,7 +40,7 @@ settled ledger entries are in parts one to thirty-five of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13, while workers run.**
-- **This repository:** `1d1e756`, 91 commits ahead of `origin/dev`, not pushed.
+- **This repository:** `7a6a8e7`, 92 commits ahead of `origin/dev`, not pushed.
 - **Core:** `240c73e`, 10 commits ahead of `origin/dev`, `fluxiq` **0.4.0**, built at
   `187f40d`; the tenth is a plan-only commit. The nine code commits:
   - `5d495eb`, trace withholding;
@@ -92,10 +92,10 @@ settled ledger entries are in parts one to thirty-five of
   (P7, a new Core node outcome); both rows stay in the corpus.
 
 **In flight:**
-- **The auth-gate leak:** `g-attestation-sqlite` with its follow-up
-  `g-attestation-sqlite-reader`; in Core, `g-core-attempt-withholding` (whole chain).
-- **From the bench triage:** `g-expected-action-guard`; P1-P3 and H1-H7 are
-  committed.
+- **The auth-gate leak:** `g-attestation-sqlite-reader`; in Core,
+  `g-core-withholding-execution`, then Core's withholding work is committed.
+- **From the bench triage:** `g-expected-action-guard` (verifying) and
+  `g-lane-consistency`; P1-P3 and H1-H7 are committed.
 - **Recording gaps P4-P6:** `f-domain-capability-gaps`, `f-tab-recording`,
   `f-frame-address` and `f-capability-confirmations`; then the runner's upload input.
 - **W25's storage order:** `g-core-bridge-order` in Core; `f-w25-core-order-row` waits for its build.
@@ -692,6 +692,56 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   - real Next clicks, and the wait for the page to be replaced;
   - the start-page visibility probe;
   - the W04-W08, W12 and W29 outcomes.
+- Outcome: Accepted
+
+### 2026-09-13 — g-expected-action-guard: a manifest that expects an action no recording can produce does not load
+
+- Agent: worker `g-expected-action-guard`; decisions and verification by supervisor.
+- Changed:
+  - **New `packages/test-contracts/src/recordable-actions.ts`:** the action types a
+    recording of each step operation can yield. A paginated `extract` yields what a
+    click yields.
+  - **`test-contracts/src/validation.ts`:**
+    - every `expected.actions` entry, in a workflow and in its variants, must be
+      recordable from that workflow's script;
+    - a script with no steps is not judged;
+    - a manifest is checked when it is built and again when the runner loads it.
+  - **`admin-console/manifest.ts`:** its unreachable `web.dom.extract` entry is
+    gone. A scan of all 25 manifests then flagged none.
+  - **Comments H1 made stale:** `test-contracts/src/scenario.ts:21-28` and
+    `flow-lane/expectations.ts`. Plus a doc comment on `ExpectedAction`'s missing
+    outcome.
+  - Tests.
+- Decisions:
+  - **The validator is the check's home,** because it covers every lane and a
+    defective manifest cannot load.
+  - **The table's `upload`, `switchTab` and `closeTab` rows change** with P5 and P4,
+    in `g-runner-upload-input`.
+  - **The existing and clone lanes' outcome rule, and a rejected manifest's
+    category,** go to `g-lane-consistency`.
+- Validation:
+  - **Supervisor, `packages/test-contracts` `pnpm test`,** which rebuilds the shared
+    `dist`: exit=0, "# tests 65", "# pass 65", "# fail 0".
+  - **Supervisor, scenario-lab built into `dist-sup40`:** `check` exit=0, "# tests
+    204", "# pass 204", "# fail 0".
+  - **Supervisor, test-runner gate `sup40`: 8 tests failed.**
+    - The failing tests were week1-corpus 35-37 and demo-llm-exploration-request
+      391-395.
+    - Each was a `ContractValidationError` naming `web.dom.extract`, thrown from the
+      stale shared `apps/scenario-lab/dist`. That build dated from 05:58, before
+      `413dcb3`.
+  - **Supervisor, test-runner gate `sup41`,** after that `dist` was rebuilt
+    (exit=0):
+    - `check` exit=0; private `tsc` exit=0;
+    - `node --test` printed "# tests 545", "# pass 545", "# fail 0";
+    - the structure audit passed.
+  - **Worker mutations:** removing the check, restoring admin-console's entry, and
+    removing the pagination rule each failed a test. Each file was restored and
+    confirmed byte-identical by `cmp`.
+- Not verified:
+  - no Lab run;
+  - the paginated-extract, upload and navigate rows rest on code reading;
+  - the Flow lane with a zero-action recording.
 - Outcome: Accepted
 
 ## Open Questions
