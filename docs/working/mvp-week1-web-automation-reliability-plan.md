@@ -36,7 +36,7 @@ flight. No exit criterion yet carries a quoted Lab observation. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
-settled ledger entries are in parts one to twenty-five of
+settled ledger entries are in parts one to twenty-six of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13, while workers run.**
@@ -96,7 +96,7 @@ settled ledger entries are in parts one to twenty-five of
   payload where Core puts it (twentieth dispatch).
 - **`g-w19-docs`:** the architecture pages for E1-E3, D1 and D1b.
 - **`l-stage2`:** blocked at `7263534`, since every run failed the runner's own
-  discard check. One instrumented diagnostic run is in progress.
+  discard check; an instrumented run confirmed the cause. Its worktrees are kept.
 - **`g-discard-window`:** the check counts only discards inside the recording's
   window (nineteenth dispatch); Stage 2 is redispatched at its commit.
 
@@ -646,46 +646,6 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 `2026-09-12-*` Wave 3 and live-validation files, and
 `2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-13 — w19-d1: the domain mapper builds a click's landing claim, which a live click does not yet reach
-
-- Agent: worker `w19-d1`; verified by supervisor.
-- Changed:
-  - New `domain/src/runtime/expectation/click-landing.ts` and its test, exported
-    through the directory's barrel.
-  - `web-panel-host.ts`'s mapper takes Core's optional context, and a click's
-    `candidate(...)` gets the claim
-    `{ conditions: [{ assert: { kind: "url", expected: <path> } }], mode: "all", timeoutMs: 5000 }`.
-    The path comes from the last explained landing naming the click by event id;
-    without an event id, from the nearest preceding click in the same tab with
-    that sequence.
-  - New rows in `tests/domain.test.ts`, and one in `io/tests/input-model.test.ts`.
-- Found: live, the claim is inert.
-  - Core stores a recorded click as an `action` entry (`io-bridge.ts:31-49`). Its
-    metadata carries no event id, sequence or source id: the envelope metadata
-    built at `bridge.ts:649-655` is not copied (`io-bridge.ts:24-29`).
-  - The mapper returns `null` for that entry, so Core proposes the click through
-    `recordingActionEntryCandidate` (`service.ts:2411`, `:5726-5749`), with no
-    `expectedState`.
-  - The landing itself does reach the mapper intact, as a `domain_event`.
-- Decisions:
-  - Committed as the builder and the domain-event path, labelled inert live.
-  - `g-core-action-entry-identity` keeps the recorded event's id and source on the
-    entry.
-  - `w19-d1b` then proposes a linked click from its action entry. Every unlinked
-    click keeps Core's fallback.
-  - `g-w19-docs` waits for `w19-d1b`.
-- Validation: supervisor read Core `bridge.ts:631-657`, `io-bridge.ts:20-64`,
-  `service.ts:2396-2417` and `:5726-5749`.
-  - `DOMAIN_TEST_BUILD_LABEL=sup13 ... domain check` -> exit 0.
-  - `... test` -> `# tests 364`, `# pass 364`, `# fail 0`, with rows 167-178 ok,
-    from `a click whose landing names its event id claims exactly the landing's
-    path` to `a landing with no event id and no tab to compare claims nothing`.
-  - Worker: dropping `expectedState` from `candidate(...)` failed "D1: a click
-    proposes the path it landed on…"; breaking the event-id match failed rows 169
-    and 175. Both restored, hashes matching.
-- Not verified: the claim in a live proposal; the Lab.
-- Outcome: Revised
-
 ### 2026-09-13 — l-stage2: every run failed the runner's own discard check before measuring anything
 
 - Agent: worker `l-stage2` (Lab); decisions by supervisor.
@@ -715,6 +675,18 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
     - `g-recording-completeness` counts such a session-scoped discard as a loss.
   - Entry counts were 15 in 9 runs and 16 in 2, so the brief's "one entry count
     across all runs" is not a valid pass condition as written.
+  - The instrumented run found six discarded `client.recording_event` messages,
+    all judged executable. It is a single observation, with the check skipped, so
+    its `run.json` is dirty and it is not a measurement.
+    - Two came from the probe before recording, each 2 ms after its navigate or
+      type returned. Record was pressed at 15.339 s; Core's `startedAt` was
+      15.344 s.
+    - None came during the recording.
+    - Four came after finalization (`sinceFinalizedMs` 11165-14533), one at the
+      end of each of the Flow lane's four actions, each carrying the finished
+      recording's id.
+    - That run passed: 4 of 4 Flow actions, 4 of 4 recorded, and 0 declared-value
+      hits in 60 files.
 - Decisions:
   - The runner's check is what is wrong. `g-discard-window` limits it to discards
     audited between the recording's start request and the Flow lane's dispatch.
@@ -735,48 +707,12 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
     `server-command-channel.ts:196-237`.
   - Each run count above is a single Lab observation.
 - Not verified:
-  - which two messages were discarded, and when (the diagnostic is running);
   - step 4b runs 7-24;
   - W18, W25, W10, W27 and W24;
   - smoke gate 5.0;
   - the week1 bench;
   - W19 `expired`.
 - Outcome: Revised
-
-### 2026-09-13 — w19-d1b: a live click's action entry carries its landing claim
-
-- Agent: worker `w19-d1b`; verified by supervisor.
-- Changed: `web-panel-host.ts`'s mapper and `runtime/expectation/click-landing.ts`,
-  with rows in both tests.
-  - A click Core recorded as an `action` entry now gets a candidate when a landing
-    in `following` names the entry's stored `metadata.eventId`. The candidate is
-    what Core's fallback proposes for it, plus the landing claim: output,
-    parameters, source input, confirmation, confidence 0.95, and label
-    "Web Dom Click".
-  - Every other `action` entry still maps to `null`, and an entry the fallback
-    refuses (`policyEligible: false`) is left to it.
-  - Only this new path reads a stored domain event one level deeper, where Core
-    puts its payload.
-- Found:
-  - The mapper's shared reader takes a stored domain event's payload one level too
-    shallow. On a real recording, D1's domain-event path claims nothing, W25's
-    between-evidence URL check misses navigations, and a navigation proposal
-    likely reads no `url`. The existing rows pass only because they build the
-    shallower shape. `g-mapper-stored-payload` fixes it.
-  - An action entry carries no page URL, so its claim cannot be refused for
-    landing on its own path. That is accepted, since such a claim passes on
-    replay.
-  - The probe wrote `recordings/` and `indexes/` into the repository root. The
-    supervisor inspected the five files, an empty probe recording with no page
-    data, and removed them.
-- Validation: supervisor read the diff.
-  - `DOMAIN_TEST_BUILD_LABEL=sup19 ... domain check` -> exit 0.
-  - `... test` -> `# tests 375`, `# pass 375`, `# fail 0`, with rows 176-184 ok.
-  - The structure audit passed; `domain.test.ts` is 400 lines.
-  - Worker: nine mutations each failed a named row, restored byte-identical.
-- Not verified: a live proposal; the Lab, where W19 `expired` must fail as
-  `auth_required` with the click attempt `failed`.
-- Outcome: Accepted
 
 ## Open Questions
 

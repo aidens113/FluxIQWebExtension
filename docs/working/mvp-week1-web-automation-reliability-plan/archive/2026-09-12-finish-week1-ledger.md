@@ -1695,3 +1695,85 @@ import (`6db2ff8`), all committed.
 - Not verified: root gates; the Lab (no change expected).
 - Outcome: Accepted
 
+
+## Part twenty-six, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: the domain landing
+claim builder (`e8a725e`) and the live-click landing claim (`32b4324`), both
+committed.
+
+### 2026-09-13 — w19-d1: the domain mapper builds a click's landing claim, which a live click does not yet reach
+
+- Agent: worker `w19-d1`; verified by supervisor.
+- Changed:
+  - New `domain/src/runtime/expectation/click-landing.ts` and its test, exported
+    through the directory's barrel.
+  - `web-panel-host.ts`'s mapper takes Core's optional context, and a click's
+    `candidate(...)` gets the claim
+    `{ conditions: [{ assert: { kind: "url", expected: <path> } }], mode: "all", timeoutMs: 5000 }`.
+    The path comes from the last explained landing naming the click by event id;
+    without an event id, from the nearest preceding click in the same tab with
+    that sequence.
+  - New rows in `tests/domain.test.ts`, and one in `io/tests/input-model.test.ts`.
+- Found: live, the claim is inert.
+  - Core stores a recorded click as an `action` entry (`io-bridge.ts:31-49`). Its
+    metadata carries no event id, sequence or source id: the envelope metadata
+    built at `bridge.ts:649-655` is not copied (`io-bridge.ts:24-29`).
+  - The mapper returns `null` for that entry, so Core proposes the click through
+    `recordingActionEntryCandidate` (`service.ts:2411`, `:5726-5749`), with no
+    `expectedState`.
+  - The landing itself does reach the mapper intact, as a `domain_event`.
+- Decisions:
+  - Committed as the builder and the domain-event path, labelled inert live.
+  - `g-core-action-entry-identity` keeps the recorded event's id and source on the
+    entry.
+  - `w19-d1b` then proposes a linked click from its action entry. Every unlinked
+    click keeps Core's fallback.
+  - `g-w19-docs` waits for `w19-d1b`.
+- Validation: supervisor read Core `bridge.ts:631-657`, `io-bridge.ts:20-64`,
+  `service.ts:2396-2417` and `:5726-5749`.
+  - `DOMAIN_TEST_BUILD_LABEL=sup13 ... domain check` -> exit 0.
+  - `... test` -> `# tests 364`, `# pass 364`, `# fail 0`, with rows 167-178 ok,
+    from `a click whose landing names its event id claims exactly the landing's
+    path` to `a landing with no event id and no tab to compare claims nothing`.
+  - Worker: dropping `expectedState` from `candidate(...)` failed "D1: a click
+    proposes the path it landed on…"; breaking the event-id match failed rows 169
+    and 175. Both restored, hashes matching.
+- Not verified: the claim in a live proposal; the Lab.
+- Outcome: Revised
+
+### 2026-09-13 — w19-d1b: a live click's action entry carries its landing claim
+
+- Agent: worker `w19-d1b`; verified by supervisor.
+- Changed: `web-panel-host.ts`'s mapper and `runtime/expectation/click-landing.ts`,
+  with rows in both tests.
+  - A click Core recorded as an `action` entry now gets a candidate when a landing
+    in `following` names the entry's stored `metadata.eventId`. The candidate is
+    what Core's fallback proposes for it, plus the landing claim: output,
+    parameters, source input, confirmation, confidence 0.95, and label
+    "Web Dom Click".
+  - Every other `action` entry still maps to `null`, and an entry the fallback
+    refuses (`policyEligible: false`) is left to it.
+  - Only this new path reads a stored domain event one level deeper, where Core
+    puts its payload.
+- Found:
+  - The mapper's shared reader takes a stored domain event's payload one level too
+    shallow. On a real recording, D1's domain-event path claims nothing, W25's
+    between-evidence URL check misses navigations, and a navigation proposal
+    likely reads no `url`. The existing rows pass only because they build the
+    shallower shape. `g-mapper-stored-payload` fixes it.
+  - An action entry carries no page URL, so its claim cannot be refused for
+    landing on its own path. That is accepted, since such a claim passes on
+    replay.
+  - The probe wrote `recordings/` and `indexes/` into the repository root. The
+    supervisor inspected the five files, an empty probe recording with no page
+    data, and removed them.
+- Validation: supervisor read the diff.
+  - `DOMAIN_TEST_BUILD_LABEL=sup19 ... domain check` -> exit 0.
+  - `... test` -> `# tests 375`, `# pass 375`, `# fail 0`, with rows 176-184 ok.
+  - The structure audit passed; `domain.test.ts` is 400 lines.
+  - Worker: nine mutations each failed a named row, restored byte-identical.
+- Not verified: a live proposal; the Lab, where W19 `expired` must fail as
+  `auth_required` with the click attempt `failed`.
+- Outcome: Accepted
+
