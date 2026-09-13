@@ -1,3 +1,4 @@
+import type { ExpectedEvent } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../failure.js";
 import type { FluxIQHttpOptions } from "../http-control.js";
 
@@ -49,6 +50,46 @@ export async function createRecordingFlowProposal(
     candidateCount: candidates.length,
     issues,
   };
+}
+
+/**
+ * The recorded event types Core's web mapper turns into one action candidate
+ * each (`webAutomationRecordedAction`, domain `io/input-model.ts`, called once
+ * per timeline entry by `mapWebRecordingObservation`). Core compacts only state
+ * checkpoints and state observations before mapping, never these.
+ *
+ * Left out, because on some pages they map to no action: a navigation (only a
+ * typed one is an action), a scroll (only with coordinates), and every
+ * evidence type. Kept despite one exception each, which no manifest pins a
+ * count on: a checkbox or radio toggle stays evidence until the recorder
+ * reports its checked state, and a key that only changes a `<select>`'s value
+ * is evidence.
+ */
+const EXECUTABLE_RECORDING_EVENT_TYPES: ReadonlySet<string> = new Set(["web.element.clicked", "web.element.input_changed", "web.element.changed", "web.keyboard.pressed"]);
+
+/**
+ * A proposal short of the recording is a contract failure, not a smaller pass.
+ *
+ * The count comes from the recording workflow's `expected.recordingEvents`,
+ * and only from entries that pin an exact `count` on an executable type. That
+ * is the one declaration already proven true of this very recording: the
+ * recording lane asserts those exact counts against the extension's own log
+ * before the Flow lane starts. So a proposal with fewer candidates lost an
+ * action after the extension recorded it. `expected.actions` cannot say this:
+ * each entry is matched by *some* attempt of its type, so two recorded
+ * `web.dom.type` actions and one are the same declaration. The recording script
+ * cannot either: it says what the lane did to the page, not what the recorder
+ * captured. An entry without a count only says "at least one" and pins nothing.
+ */
+export function assertProposalCoversRecording(proposal: RecordingFlowProposal, recordingEvents: readonly ExpectedEvent[]): void {
+  const pinned = recordingEvents.filter((event) => event.count !== undefined && EXECUTABLE_RECORDING_EVENT_TYPES.has(event.type));
+  const expectedExecutableActions = pinned.reduce((total, event) => total + (event.count ?? 0), 0);
+  if (proposal.candidateCount >= expectedExecutableActions) return;
+  throw new RunnerFailure(
+    "recording.contract",
+    `Core's recording Flow proposal carried ${proposal.candidateCount} action candidate(s), but the recording pins ${expectedExecutableActions} executable action(s), so an approved Flow would silently skip a recorded step`,
+    { details: { candidateCount: proposal.candidateCount, expectedExecutableActions, pinnedEvents: pinned.map((event) => ({ type: event.type, count: event.count ?? 0 })), issues: [...proposal.issues] } },
+  );
 }
 
 /**

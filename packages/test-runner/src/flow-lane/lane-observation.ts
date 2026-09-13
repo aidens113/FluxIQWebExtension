@@ -56,6 +56,36 @@ export function flowLaneObservation(input: {
   };
 }
 
+/**
+ * The one observation a finished run publishes, chosen in one place.
+ *
+ * What the Flow lane published wins, whenever it got that far. A run planned
+ * on the Flow lane that never reached the publish -- a short proposal, a
+ * refused approval, a rig fault before the Flow ran -- is still a Flow-lane
+ * run: no Flow was created, so `flowCreated` is false and FluxIQ reported no
+ * verdict. That is exactly how the bench scores such a run
+ * (`bench/evaluate-run.ts`, `evaluateFlowRun`), so one run read on its own and
+ * the same run read as a corpus row agree. Substituting the recording lane's
+ * observation here filed a Flow run as `lane: "recording"`, and the category
+ * Core reported never reached `evaluation.json`.
+ *
+ * `evaluated` is false on the existing and clone targets, which run a
+ * pre-existing Flow on no evaluation lane and publish nothing. The recording
+ * lane's observation is built only when it is the answer.
+ */
+export function selectLaneObservation(input: {
+  evaluated: boolean;
+  flowLane: boolean;
+  published: RunLaneObservation | undefined;
+  automationFailureExpected: ExpectedFailure | null;
+  recordingLane: () => RunLaneObservation;
+}): RunLaneObservation | undefined {
+  if (input.published) return input.published;
+  if (!input.evaluated) return undefined;
+  if (input.flowLane) return flowLaneObservation({ flowCreated: false, oracleVerdict: null, run: undefined, automationFailureExpected: input.automationFailureExpected });
+  return input.recordingLane();
+}
+
 function reportedVerdict(run: PersistedFlowRunOutcome): RunEvaluation["reportedVerdict"] {
   return run.status === "succeeded" && run.actions.every((action) => action.status === "succeeded") && !run.failure ? "passed" : "failed";
 }

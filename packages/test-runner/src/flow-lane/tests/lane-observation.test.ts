@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { assertRunEvaluation, EVALUATION_SCHEMA_VERSION, type RunEvaluation } from "@fluxiq-web-extension/test-contracts";
-import { flowLaneObservation, recordingLaneObservation, type RunLaneObservation } from "../lane-observation.js";
+import { flowLaneObservation, recordingLaneObservation, selectLaneObservation, type RunLaneObservation } from "../lane-observation.js";
 import type { PersistedFlowRunOutcome } from "../persisted-flow-run.js";
 
 const run = (overrides: Partial<PersistedFlowRunOutcome> = {}): PersistedFlowRunOutcome => ({
@@ -65,4 +65,44 @@ test("no Flow was created, so FluxIQ reported no verdict", () => {
 
 test("harness activations come from Core's run detail", () => {
   assert.equal(flowLaneObservation({ flowCreated: true, oracleVerdict: "passed", run: run({ harnessActivations: 2 }), automationFailureExpected: null }).harnessActivations, 2);
+});
+
+/**
+ * `selectLaneObservation` is what `run-scenario.ts` publishes as the run's
+ * observation. A Flow-lane run whose lane never published used to be filed
+ * under the recording lane's observation, `lane: "recording"`, so neither the
+ * run's own `evaluation.json` nor a corpus reading of it could see that the
+ * Flow was never created.
+ */
+const recordingFallback = (): RunLaneObservation => recordingLaneObservation({ oracleVerdict: "passed", reportedVerdict: "passed", automationFailureReported: null, automationFailureExpected: null, actions: [{ actionType: "web.browser.navigate", durationMs: 3 }] });
+
+test("a Flow-lane run whose lane never published is a Flow run that created no Flow, never a recording-lane run", () => {
+  let recordingLaneBuilt = false;
+  const expected = { category: "target_ambiguous" as const, code: "web.target.ambiguous" };
+  const observation = selectLaneObservation({
+    evaluated: true, flowLane: true, published: undefined, automationFailureExpected: expected,
+    recordingLane: () => { recordingLaneBuilt = true; return recordingFallback(); },
+  });
+  assert.equal(observation?.lane, "flow");
+  assert.equal(observation?.flowCreated, false);
+  assert.equal(observation?.oracleVerdict, null, "the recording lane's oracle judged the recording, not a Flow");
+  assert.equal(observation?.reportedVerdict, null);
+  assert.equal(observation?.automationFailureReported, null);
+  assert.deepEqual(observation?.automationFailureExpected, expected);
+  assert.deepEqual(observation?.actions, []);
+  assert.equal(recordingLaneBuilt, false);
+  assertRunEvaluation(evaluationFrom(observation!));
+});
+
+test("what the Flow lane published is the observation, whatever happened after it", () => {
+  const published = flowLaneObservation({ flowCreated: true, oracleVerdict: "failed", run: run({ status: "failed", failure: { category: "target_not_found", code: "web.target.not_found", retryable: true } }), automationFailureExpected: { category: "target_ambiguous" } });
+  assert.equal(selectLaneObservation({ evaluated: true, flowLane: true, published, automationFailureExpected: null, recordingLane: recordingFallback }), published);
+});
+
+test("a recording-lane run publishes the recording lane's observation, and an unevaluated target publishes none", () => {
+  const recording = selectLaneObservation({ evaluated: true, flowLane: false, published: undefined, automationFailureExpected: null, recordingLane: recordingFallback });
+  assert.equal(recording?.lane, "recording");
+  assert.deepEqual(recording?.actions, [{ actionType: "web.browser.navigate", durationMs: 3 }]);
+  assert.equal(selectLaneObservation({ evaluated: false, flowLane: false, published: undefined, automationFailureExpected: null, recordingLane: recordingFallback }), undefined);
+  assert.equal(selectLaneObservation({ evaluated: false, flowLane: true, published: undefined, automationFailureExpected: null, recordingLane: recordingFallback }), undefined);
 });

@@ -26,7 +26,7 @@ import { createRunOwnedCloneFlowId, createRunOwnedCloneProject, importClonePacka
 import { effectiveEvidencePolicy } from "./evidence-policy/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant, scenarioLabOriginProof } from "./lab-control/index.js";
-import { awaitFinalizedRecording, declaredSecretValues, recordingLaneObservation, resolveDeclaredSecrets, runFlowLane, type DeclaredSecret, type RunLaneObservation } from "./flow-lane/index.js";
+import { awaitFinalizedRecording, declaredSecretValues, flowLaneSnapshot, recordingLaneObservation, resolveDeclaredSecrets, runFlowLane, selectLaneObservation, type DeclaredSecret, type RunLaneObservation } from "./flow-lane/index.js";
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog } from "./run-expectations/index.js";
 import { singleRunEvaluation } from "./run-evaluation/index.js";
 import { automationFailureFromActionResult, createRunManifest, flowActionTimings, runActionStatus, type CloneRunState } from "./run-manifest/index.js";
@@ -95,7 +95,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
   // category cannot tell "the fixture disagreed" from "the rig broke first".
   let oracleVerdict: "passed" | "failed" | null = null;
   const actions: RunActionTiming[] = [];
-  // null: FluxIQ reported no failure. A Flow lane cannot see a failed run's actions, so it stays unobserved until its Flow succeeds.
+  // null: FluxIQ reported no failure. On the Flow lane it is set from the observation the lane publishes, failed runs included.
   let automationFailure: RunAutomationFailure | null | undefined = target.mode === "existing" || target.mode === "clone" ? undefined : null;
   const cloneState: CloneRunState = { sourceSessionIdentityVerified: false, sourceHashVerifiedAfterRun: false, cleanupOutcome: "pending" };
   let topologyStateRemoved = false;
@@ -297,6 +297,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
         const lane = await runFlowLane({
           control, projectId: topology.projectId, authorizationPin: topology.authorizationPin, recordingId,
           scenario, workflow, facilityRunId: runId,
+          // The unarmed workflow's, which the recording lane asserted above.
+          recordingEvents: recordingWorkflow.expected.recordingEvents ?? [],
           scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, secrets: declaredSecrets,
           armVariant: async () => {
             if (workflow.variant) await armScenarioVariant(activeTopology.scenarioOrigin, activeTopology.allocation.controllerToken, scenario.id, workflow.variant);
@@ -313,26 +315,20 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
             await assertExpectedFacts(pageFacts.afterArm, playwrightScenarioFactProbe(page));
           },
           recordEvidence: async (evidence) => {
+            // The lane publishes before it judges any expectation, so these are
+            // set even when an expectation then throws: the run is evaluated as
+            // the Flow run it was, with the category Core actually reported.
+            flowObservation = evidence.observation;
+            oracleVerdict = evidence.observation.oracleVerdict;
+            automationFailure = evidence.observation.automationFailureReported;
             actions.push(...evidence.run.actions.map(action => ({ actionType: action.actionType, startedAt: action.startedAt, ...(action.durationMs === undefined ? {} : { durationMs: action.durationMs }), status: action.status })));
-            await bundle.writeStructured("snapshots/flow-lane.json", {
-              // The recording's own entry count sits beside the candidate count
-              // on purpose: a Flow short of an action shows here as fewer
-              // candidates than entries, which is what nobody could see before.
-              recording: { recordingId: evidence.recording.recordingId, entryCount: evidence.recording.entryCount, entriesAppendedAfterStop: evidence.recording.entriesAppendedWhileWaiting, finalizationWaitMs: evidence.recording.waitedMs, polls: evidence.recording.polls },
-              proposalId: evidence.proposal.proposalId, mapperId: evidence.proposal.mapperId, candidateCount: evidence.proposal.candidateCount, proposalIssues: [...evidence.proposal.issues],
-              flowId: evidence.flowId, runtimeRunId: evidence.run.runId, status: evidence.run.status,
-              harnessActivations: evidence.run.harnessActivations, failure: evidence.run.failure, extractionCount: evidence.run.extracted.length,
-              actions: evidence.run.actions.map(action => ({ actionType: action.actionType, status: action.status, ...(action.failure ? { failure: action.failure } : {}) })),
-            });
+            await bundle.writeStructured("snapshots/flow-lane.json", flowLaneSnapshot(evidence));
           },
           checkFinalState: async () => {
             try { scenarioPage = await findScenarioPageWithExpectedState(context!, page, activeTopology.scenarioOrigin, scenario, workflow); return true; }
             catch { return false; }
           },
         });
-        flowObservation = lane.observation;
-        oracleVerdict = lane.observation.oracleVerdict;
-        automationFailure = lane.observation.automationFailureReported;
         if (lane.observation.oracleVerdict === "failed") throw new RunnerFailure("runtime.behavior", "The generated Flow ran, but the fixture's expected final state did not hold afterwards");
         await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The generated Flow ran and met the workflow's expectations"), details: { runtimeRunId: lane.run.runId, actionCount: lane.run.actions.length, harnessActivations: lane.run.harnessActivations } });
       }
@@ -345,7 +341,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
     failureCategory = classifyRunnerFailure(error);
     failureMessage = error instanceof Error ? error.message : String(error);
     // Recorded-event mismatches are types and counts, never page data, so they are published for diagnosis.
-    const failureEvent = { ...event(runId, scenario.id, undefined, "error", failureMessage), details: { failureCategory, ...(error instanceof RunnerFailure && error.category === "recording.contract" && error.details ? { failureDetails: error.details } : {}) } };
+    // So is what the Flow reported when the lane got that far: Core's category and closed-set code, and nothing else of the record.
+    const flowReported = flowObservation?.automationFailureReported;
+    const failureEvent = { ...event(runId, scenario.id, undefined, "error", failureMessage), details: { failureCategory, ...(error instanceof RunnerFailure && error.category === "recording.contract" && error.details ? { failureDetails: error.details } : {}), ...(flowReported ? { flowReportedFailure: { category: flowReported.category, ...(flowReported.code === undefined ? {} : { code: flowReported.code }) } } : {}) } };
     const failurePage = stepRunner?.activePage() ?? scenarioPage;
     const bytes = evidence.failureScreenshot && scenario.id !== "sensitive-input" && failurePage && !failurePage.isClosed() ? await failurePage.screenshot({ type: "png" }).catch(() => undefined) : undefined;
     if (bytes) {
@@ -400,13 +398,19 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
     assertRunManifest(manifest);
     await bundle.writeStructured("run.json", manifest);
     const metrics = { steps: workflow.recordingScript.length };
-    const observation = flowObservation ?? (target.mode === "isolated" || target.mode === "persistent-isolated"
-      ? recordingLaneObservation({
-          oracleVerdict, ...probeOutcome(actions, automationFailure),
-          automationFailureExpected: workflow.expected.failure ?? null,
-          actions: actions.flatMap(action => action.durationMs === undefined ? [] : [{ actionType: action.actionType, durationMs: action.durationMs }]),
-        })
-      : undefined);
+    // A Flow-lane run the lane never published for is a Flow run that created
+    // no Flow, not a recording-lane run: see `selectLaneObservation`.
+    const observation = selectLaneObservation({
+      evaluated: target.mode === "isolated" || target.mode === "persistent-isolated",
+      flowLane: options.flow === true,
+      published: flowObservation,
+      automationFailureExpected: workflow.expected.failure ?? null,
+      recordingLane: () => recordingLaneObservation({
+        oracleVerdict, ...probeOutcome(actions, automationFailure),
+        automationFailureExpected: workflow.expected.failure ?? null,
+        actions: actions.flatMap(action => action.durationMs === undefined ? [] : [{ actionType: action.actionType, durationMs: action.durationMs }]),
+      }),
+    });
     // The run's own `RunEvaluation`, built from the observation the lane just
     // published: the same judgement `lab bench` records per corpus row, so one
     // run can be read on its own instead of only as a corpus rate. It is

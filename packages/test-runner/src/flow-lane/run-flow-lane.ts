@@ -1,11 +1,11 @@
-import type { ResolvedScenarioWorkflow, WebScenario } from "@fluxiq-web-extension/test-contracts";
+import type { ExpectedEvent, ResolvedScenarioWorkflow, WebScenario } from "@fluxiq-web-extension/test-contracts";
 import type { FluxIQHttpOptions } from "../http-control.js";
 import { declaredSecretBindingInputs, declaredSecretFlowInputs, readFlowSecretRequests, type DeclaredSecret } from "./declared-secrets.js";
 import { assertFlowActions, assertFlowExtraction, assertFlowFailure } from "./expectations.js";
 import { awaitFinalizedRecording, type FinalizedRecording, type FinalizedRecordingWait } from "./finalized-recording.js";
 import { readFlowActionTypes } from "./flow-action-types.js";
 import { flowLaneObservation, type RunLaneObservation } from "./lane-observation.js";
-import { approveRecordingFlowProposal, createRecordingFlowProposal, type RecordingFlowProposal } from "./recording-flow-proposal.js";
+import { approveRecordingFlowProposal, assertProposalCoversRecording, createRecordingFlowProposal, type RecordingFlowProposal } from "./recording-flow-proposal.js";
 import { executeRecordedFlowRun, type PersistedFlowRunControl, type PersistedFlowRunOutcome } from "./persisted-flow-run.js";
 import { resetScenarioLab } from "./reset-scenario-lab.js";
 import type { RecordingProposalControl } from "./recording-flow-proposal.js";
@@ -22,6 +22,13 @@ export type FlowLaneInput = {
   recordingWait?: FinalizedRecordingWait;
   scenario: WebScenario;
   workflow: ResolvedScenarioWorkflow;
+  /**
+   * The `expected.recordingEvents` of the workflow that was recorded -- the
+   * unarmed one -- which the recording lane has already asserted against the
+   * extension's log. The proposal must cover the executable actions they pin
+   * (`assertProposalCoversRecording`).
+   */
+  recordingEvents: readonly ExpectedEvent[];
   facilityRunId: string;
   scenarioOrigin: string;
   runToken: string;
@@ -35,13 +42,17 @@ export type FlowLaneInput = {
    * failed them, which is precisely when it is needed.
    */
   recordEvidence: (evidence: FlowLaneEvidence) => Promise<void>;
-  /** The fixture oracle, run after the Flow. Returns whether the final state held. */
+  /** The fixture oracle, run after the Flow and before its expectations are judged. Returns whether the final state held. */
   checkFinalState: () => Promise<boolean>;
   bounds?: FluxIQHttpOptions;
 };
 
-/** What the lane observed, handed to the runner before the expectations are judged. */
-export type FlowLaneEvidence = { recording: FinalizedRecording; proposal: RecordingFlowProposal; flowId: string; run: PersistedFlowRunOutcome };
+/**
+ * What the lane observed, handed to the runner before the expectations are
+ * judged. `observation` is the run's `RunLaneObservation` as it stands then,
+ * so a run whose expectations fail is still published as the Flow run it was.
+ */
+export type FlowLaneEvidence = { recording: FinalizedRecording; proposal: RecordingFlowProposal; flowId: string; run: PersistedFlowRunOutcome; observation: RunLaneObservation };
 
 export type FlowLaneOutcome = {
   recording: FinalizedRecording;
@@ -69,6 +80,9 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
   // `L-dropped-action` reproduced 12 times in 24 runs.
   const recording = await awaitFinalizedRecording(input.control, { projectId: input.projectId, recordingId: input.recordingId }, bounds, input.recordingWait ?? {});
   const proposal = await createRecordingFlowProposal(input.control, { projectId: input.projectId, recordingId: input.recordingId }, bounds);
+  // Before approval: a proposal short of what the recording pins would become
+  // a Flow that skips a recorded step and can still exit green.
+  assertProposalCoversRecording(proposal, input.recordingEvents);
   const approved = await approveRecordingFlowProposal(input.control, {
     projectId: input.projectId,
     proposalId: proposal.proposalId,
@@ -96,22 +110,47 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
     actionTypes,
     inputs: { ...declaredSecretFlowInputs(input.secrets), ...secretInputs, scenarioId: input.scenario.id, facilityRunId: input.facilityRunId },
   }, bounds);
-  await input.recordEvidence({ recording, proposal, flowId: approved.flowId, run });
   const expected = input.workflow.expected;
+  // The oracle and the publish both come before the asserts. An assert throws
+  // on any mismatch, and a run that failed one used to leave the runner with no
+  // Flow observation at all, so the category Core reported never reached the
+  // evaluation. Consulting the oracle first costs a failing run the oracle's
+  // wait and buys it a real `oracleVerdict` instead of a null.
+  const oracleHeld = await input.checkFinalState();
+  const observation = flowLaneObservation({
+    flowCreated: true,
+    oracleVerdict: oracleHeld ? "passed" : "failed",
+    run,
+    automationFailureExpected: expected.failure ?? null,
+  });
+  await input.recordEvidence({ recording, proposal, flowId: approved.flowId, run, observation });
   assertFlowFailure(expected.failure, run.failure);
   assertFlowActions(expected.actions, run.actions);
   assertFlowExtraction(expected.extracted, run.extracted);
-  const oracleHeld = await input.checkFinalState();
+  return { recording, proposal, flowId: approved.flowId, run, observation };
+}
+
+/**
+ * The `snapshots/flow-lane.json` document for what the lane observed: Core's
+ * identifiers, statuses, counts and structured records, never page content.
+ *
+ * The recording's own entry count sits beside the candidate count on purpose:
+ * a Flow short of an action shows here as fewer candidates than entries, which
+ * is what nobody could see before. Each action carries Core's target
+ * resolution, when Core resolved one, because Core's store is deleted when the
+ * run ends and this file is then the only record of how a target was found.
+ */
+export function flowLaneSnapshot(evidence: FlowLaneEvidence) {
   return {
-    recording,
-    proposal,
-    flowId: approved.flowId,
-    run,
-    observation: flowLaneObservation({
-      flowCreated: true,
-      oracleVerdict: oracleHeld ? "passed" : "failed",
-      run,
-      automationFailureExpected: expected.failure ?? null,
-    }),
+    recording: { recordingId: evidence.recording.recordingId, entryCount: evidence.recording.entryCount, entriesAppendedAfterStop: evidence.recording.entriesAppendedWhileWaiting, finalizationWaitMs: evidence.recording.waitedMs, polls: evidence.recording.polls },
+    proposalId: evidence.proposal.proposalId, mapperId: evidence.proposal.mapperId, candidateCount: evidence.proposal.candidateCount, proposalIssues: [...evidence.proposal.issues],
+    flowId: evidence.flowId, runtimeRunId: evidence.run.runId, status: evidence.run.status,
+    harnessActivations: evidence.run.harnessActivations, failure: evidence.run.failure, extractionCount: evidence.run.extracted.length,
+    actions: evidence.run.actions.map((action) => ({
+      actionType: action.actionType,
+      status: action.status,
+      ...(action.failure ? { failure: action.failure } : {}),
+      ...(action.targetResolution ? { targetResolution: action.targetResolution } : {}),
+    })),
   };
 }

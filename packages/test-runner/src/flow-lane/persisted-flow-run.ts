@@ -20,7 +20,39 @@ export type PersistedFlowAction = {
   durationMs?: number;
   failure: AutomationStudioFailureRecord | null;
   extracted?: Array<Record<string, string>>;
+  /** How Core resolved the attempt's element target before dispatching it; absent when the node dispatched none. */
+  targetResolution?: PersistedTargetResolution;
 };
+
+/**
+ * Core's own record of how it resolved an action's element target before
+ * dispatch: `AutomationNodeTargetResolution` (Core `nodes/contracts.ts`), which
+ * `nodeAttemptFromResult` puts on the attempt and the run detail carries at
+ * `metadata.targetResolution` (Core `service/summaries/conversions.ts`). The
+ * run bundle kept none of it, and Core's store is deleted when the run ends,
+ * so a finished run could not say how any target was resolved.
+ *
+ * Kept by name, and only the fields that cannot carry page content: the
+ * closed `status` and four numbers. `candidateId` is left behind because Core
+ * takes it from a candidate's own `id` or `testId` attribute, and the two
+ * signal lists because they name the fingerprint's paths; neither is a value,
+ * but neither is needed to read the resolution, and a bundle has no redaction
+ * rule for them.
+ *
+ * This is Core's resolution, not the browser's. The browser's
+ * `WebAutomationTargetResolution` reaches Core inside the dispatched result,
+ * which Core stores on the attempt's `outputs`; the run detail drops `outputs`,
+ * so no endpoint this lane reads can return it.
+ */
+export type PersistedTargetResolution = {
+  status: (typeof TARGET_RESOLUTION_STATUSES)[number];
+  candidateCount: number;
+  minimumConfidence: number;
+  confidence?: number;
+  normalizedScore?: number;
+};
+
+const TARGET_RESOLUTION_STATUSES = ["matched", "unresolved_no_candidates", "no_match", "below_confidence"] as const;
 
 export type PersistedFlowRunOutcome = {
   runId: string;
@@ -110,6 +142,7 @@ function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<s
   const finishedAt = typeof attempt.finishedAt === "number" && Number.isFinite(attempt.finishedAt) ? attempt.finishedAt : undefined;
   const extracted = extractedRecords(attempt);
   const nodeId = typeof attempt.nodeId === "string" ? attempt.nodeId : "";
+  const targetResolution = targetResolutionOf(attempt);
   return {
     actionType: actionTypes.get(nodeId) ?? (typeof attempt.definitionId === "string" ? attempt.definitionId : "unknown"),
     status: runActionStatus(attempt.status),
@@ -118,7 +151,35 @@ function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<s
     // Core's own record, parsed by Core's parser. A record Core would reject is treated as absent.
     failure: parseAutomationStudioFailureRecord(attempt.failure) ?? null,
     ...(extracted ? { extracted } : {}),
+    ...(targetResolution ? { targetResolution } : {}),
   };
+}
+
+/**
+ * Core's `metadata.targetResolution`, rebuilt field by field from the closed
+ * ones rather than copied, so a field Core adds later is not carried into the
+ * bundle unexamined. A record with an unknown status or without its counts is
+ * not one Core writes, and is treated as absent rather than half-read.
+ */
+function targetResolutionOf(attempt: Record<string, unknown>): PersistedTargetResolution | undefined {
+  const metadata = attempt.metadata && typeof attempt.metadata === "object" && !Array.isArray(attempt.metadata) ? attempt.metadata as Record<string, unknown> : undefined;
+  const value = metadata?.targetResolution;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  const status = TARGET_RESOLUTION_STATUSES.find((candidate) => candidate === record.status);
+  const { candidateCount, minimumConfidence, confidence, normalizedScore } = record;
+  if (!status || !isFiniteNumber(candidateCount) || !isFiniteNumber(minimumConfidence)) return undefined;
+  return {
+    status,
+    candidateCount,
+    minimumConfidence,
+    ...(isFiniteNumber(confidence) ? { confidence } : {}),
+    ...(isFiniteNumber(normalizedScore) ? { normalizedScore } : {}),
+  };
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 /** Records an extract action reported, wherever Core carried the action result. */

@@ -80,3 +80,40 @@ test("a run with no durable action, or a detail for another run, is refused", as
   const { client: other } = control({}, { summary: { runId: "run.other", status: "succeeded" } });
   await assert.rejects(() => executeRecordedFlowRun(other, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" }), /different run/);
 });
+
+/**
+ * `L-replay` Defect 4: Core records how it resolved each target, the Core store
+ * is deleted when the run ends, and the bundle kept none of it. Core's run
+ * detail carries the record at `metadata.targetResolution`.
+ */
+test("Core's target resolution travels with the attempt, rebuilt from its closed fields only", async () => {
+  // The candidate id Core takes from a page's own `id` or `testId` attribute,
+  // and the signal names, are left behind: only the status and numbers travel.
+  const unresolved = { status: "unresolved_no_candidates", candidateCount: 0, minimumConfidence: 0.55, candidateId: "email-address", matchedSignals: ["testId"], failedSignals: ["accessibleName"] };
+  const { client } = control({}, { actionAttempts: [attempt({ metadata: { regionId: "region.one", targetResolution: unresolved } })] });
+  const outcome = await executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
+  assert.deepEqual(outcome.actions[0]?.targetResolution, { status: "unresolved_no_candidates", candidateCount: 0, minimumConfidence: 0.55 });
+  const serialised = JSON.stringify(outcome);
+  for (const left of ["email-address", "matchedSignals", "failedSignals", "accessibleName"]) assert.equal(serialised.includes(left), false, `${left} must not travel`);
+
+  const matched = { status: "matched", candidateCount: 2, minimumConfidence: 0.55, confidence: 0.884, normalizedScore: 0.94 };
+  const { client: scored } = control({}, { actionAttempts: [attempt({ metadata: { targetResolution: matched } })] });
+  assert.deepEqual((await executeRecordedFlowRun(scored, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" })).actions[0]?.targetResolution, matched);
+});
+
+test("an attempt with no target resolution, or one Core does not write, carries none", async () => {
+  const { client: plain } = control();
+  const outcome = await executeRecordedFlowRun(plain, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
+  assert.equal(Object.hasOwn(outcome.actions[0] ?? {}, "targetResolution"), false);
+  const invalid = [
+    { status: "guessed", candidateCount: 1, minimumConfidence: 0.5 },
+    { status: "matched", minimumConfidence: 0.5 },
+    { status: "matched", candidateCount: "2", minimumConfidence: 0.5 },
+    ["matched"],
+  ];
+  for (const targetResolution of invalid) {
+    const { client } = control({}, { actionAttempts: [attempt({ metadata: { targetResolution } })] });
+    const read = await executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
+    assert.equal(read.actions[0]?.targetResolution, undefined, JSON.stringify(targetResolution));
+  }
+});
