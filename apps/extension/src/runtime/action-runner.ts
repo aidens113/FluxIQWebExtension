@@ -211,12 +211,43 @@ async function runActionInFrame(
       return withTarget(unreachableFrameFailure(action, startedAt, targetFrameId, unreachable), tabId, targetFrameId);
     }
   }
-  return withTarget(await sendToTab<BrowserActionResult>(tabId, {
-    type: "executeAction",
-    action,
-    frameId: targetFrameId,
-    topFrameOnly: frameId === undefined
-  }, targetFrameId), tabId, targetFrameId);
+  const message = { type: "executeAction", action, frameId: targetFrameId, topFrameOnly: frameId === undefined };
+  return withTarget(await sendAction(action, tabId, message, targetFrameId), tabId, targetFrameId);
+}
+
+/**
+ * Chrome's words for a send that found no listener, and for a document that
+ * unloaded before it answered: `executeAction` answers asynchronously
+ * (`content/message-handler.ts`), so a navigation mid-action closes the channel.
+ */
+const NAVIGATING_PAGE_ERRORS = [/Receiving end does not exist/i, /message (port|channel) closed before a response was received/i];
+
+/**
+ * Sends the action, and a `web.dom.assert` once more when the first send met a
+ * page that was navigating: `waitForTabReady` wants only a second of URL
+ * stability, so a navigation a click started late can take the old document
+ * away under the assert, which the router would report as a false
+ * `web.action.failed`. Only the assert is re-sent, because it only reads: a
+ * click or a type may already have acted before the channel closed, and sending
+ * it again would act twice. A second refusal is reported as the first would be.
+ */
+async function sendAction(
+  action: BrowserActionCommand,
+  tabId: number,
+  message: Record<string, unknown>,
+  frameId: number
+): Promise<BrowserActionResult> {
+  try {
+    return await sendToTab<BrowserActionResult>(tabId, message, frameId);
+  } catch (error) {
+    if (action.actionType !== "web.dom.assert" || !metNavigatingPage(error)) throw error;
+    await waitForTabReady(tabId);
+    return await sendToTab<BrowserActionResult>(tabId, message, frameId);
+  }
+}
+
+function metNavigatingPage(error: unknown): boolean {
+  return error instanceof Error && NAVIGATING_PAGE_ERRORS.some((pattern) => pattern.test(error.message));
 }
 
 /**

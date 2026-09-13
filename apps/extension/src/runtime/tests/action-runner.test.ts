@@ -77,7 +77,7 @@ type SentToTab = { tabId: number; message: Record<string, unknown>; frameId: num
  * actions: every child-frame action now pings the frame first, and a row about
  * where an action was delivered should not have to filter that out.
  */
-type ChromeCalls = { sent: SentToTab[]; pinged: number[]; injected: number[][] };
+type ChromeCalls = { sent: SentToTab[]; pinged: number[]; injected: number[][]; timeline: Array<"wait" | "send"> };
 
 /** The content script's answer. Returned verbatim, so a test can tell the runner's own result from the frame's. */
 const FRAME_REPLY: BrowserActionResult = {
@@ -107,16 +107,25 @@ const FRAME_REPLY: BrowserActionResult = {
  * extension reload leaves behind, since the frames survive it and their scripts
  * do not. Injecting into one makes it answer, unless it is also `uninjectable`,
  * which is a frame whose origin the manifest does not cover.
+ *
+ * `refusals` are the errors successive action sends meet, in order; a send past
+ * the list is answered. `timeline` puts each `waitForTabReady` among the sends.
  */
-function installChromeStub(frames: number[] | undefined, silent: number[] = [], uninjectable: number[] = []): ChromeCalls {
-  const calls: ChromeCalls = { sent: [], pinged: [], injected: [] };
+function installChromeStub(
+  frames: number[] | undefined,
+  silent: number[] = [],
+  uninjectable: number[] = [],
+  refusals: string[] = []
+): ChromeCalls {
+  const calls: ChromeCalls = { sent: [], pinged: [], injected: [], timeline: [] };
   const injectedInto = new Set<number>();
+  const pendingRefusals = [...refusals];
   const runtime: { lastError?: { message: string } } = {};
   const stub = {
     runtime,
     tabs: {
       get: (tabId: number) => Promise.resolve({ id: tabId, status: "complete" }),
-      onUpdated: { addListener: () => undefined, removeListener: () => undefined },
+      onUpdated: { addListener: () => void calls.timeline.push("wait"), removeListener: () => undefined },
       sendMessage: (tabId: number, message: unknown, third?: unknown, fourth?: unknown) => {
         const options = typeof third === "object" && third !== null ? third as { frameId?: number } : undefined;
         const callback = (typeof third === "function" ? third : fourth) as ((response: unknown) => void) | undefined;
@@ -134,6 +143,14 @@ function installChromeStub(frames: number[] | undefined, silent: number[] = [], 
           return;
         }
         calls.sent.push({ tabId, message: message as Record<string, unknown>, frameId });
+        calls.timeline.push("send");
+        const refusal = pendingRefusals.shift();
+        if (refusal !== undefined) {
+          runtime.lastError = { message: refusal };
+          callback?.(undefined);
+          delete runtime.lastError;
+          return;
+        }
         callback?.(FRAME_REPLY);
       }
     },
@@ -349,4 +366,60 @@ test("an action on a page the extension cannot automate is refused with the set'
     actual: "Browser and extension pages cannot be automated."
   });
   assert.deepEqual(parseAutomationStudioFailureRecord(run.result.failure), run.result.failure);
+});
+
+/** Chrome's words for a document that unloaded before it answered, older and newer. */
+const PORT_CLOSED_ERROR = "The message port closed before a response was received.";
+const CHANNEL_CLOSED_ERROR =
+  "A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received";
+
+/** Runs a top-frame action whose sends meet `refusals` in order, keeping a rejection as the outcome. */
+async function runAgainstRefusals(action: BrowserActionCommand, refusals: string[]): Promise<ChromeCalls & { outcome: unknown }> {
+  const calls = installChromeStub([0], [], [], refusals);
+  try {
+    const request = { action, attachTabForRecording: () => Promise.resolve() };
+    const outcome = await runBrowserActionCommand(request).catch((error: unknown) => error);
+    return { outcome, ...calls };
+  } finally {
+    delete (globalThis as { chrome?: unknown }).chrome;
+  }
+}
+
+for (const refusal of [CONNECTION_ERROR, PORT_CLOSED_ERROR, CHANNEL_CLOSED_ERROR]) {
+  test(`an assert that meets a navigating page is sent once more after the tab settles: "${refusal}"`, async () => {
+    const action: BrowserActionCommand = { commandId: "c-assert", actionType: "web.dom.assert", selector: "#welcome", tabId: TAB_ID };
+    const { outcome, sent, timeline } = await runAgainstRefusals(action, [refusal]);
+    // The tab is waited for between the sends, not only before the first.
+    assert.deepEqual(timeline, ["wait", "send", "wait", "send"]);
+    assert.deepEqual(sent[1], sent[0]);
+    // One result, and it is the second send's answer rather than a failure.
+    assert.deepEqual(outcome, { result: FRAME_REPLY, tabId: TAB_ID, frameId: 0 });
+  });
+}
+
+for (const actionType of ["web.dom.click", "web.dom.type", "web.dom.extract", "web.dom.wait_for_selector"] as const) {
+  test(`a ${actionType} that meets a navigating page the same way is sent once`, async () => {
+    const action: BrowserActionCommand = { commandId: "c-once", actionType, selector: "#sign-in", tabId: TAB_ID };
+    const { outcome, timeline } = await runAgainstRefusals(action, [CHANNEL_CLOSED_ERROR]);
+    // A click may already have acted before the channel closed; sending it again would act twice.
+    assert.deepEqual(timeline, ["wait", "send"]);
+    assert.ok(outcome instanceof Error);
+    assert.equal(outcome.message, CHANNEL_CLOSED_ERROR);
+  });
+}
+
+test("an assert refused for any other reason is sent once", async () => {
+  const action: BrowserActionCommand = { commandId: "c-other", actionType: "web.dom.assert", selector: "#welcome", tabId: TAB_ID };
+  const { outcome, timeline } = await runAgainstRefusals(action, [`No tab with id: ${TAB_ID}.`]);
+  assert.deepEqual(timeline, ["wait", "send"]);
+  assert.ok(outcome instanceof Error);
+  assert.equal(outcome.message, `No tab with id: ${TAB_ID}.`);
+});
+
+test("an assert refused on both sends is sent exactly twice, and the second refusal is reported", async () => {
+  const action: BrowserActionCommand = { commandId: "c-twice", actionType: "web.dom.assert", selector: "#welcome", tabId: TAB_ID };
+  const { outcome, timeline } = await runAgainstRefusals(action, [CHANNEL_CLOSED_ERROR, CONNECTION_ERROR, CONNECTION_ERROR]);
+  assert.deepEqual(timeline, ["wait", "send", "wait", "send"]);
+  assert.ok(outcome instanceof Error);
+  assert.equal(outcome.message, CONNECTION_ERROR);
 });
