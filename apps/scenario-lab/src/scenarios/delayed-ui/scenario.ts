@@ -37,7 +37,7 @@ export const delayedUiScenario = defineScenario<DelayedUiState>({
       { id: "delay-final", operation: "checkpoint" },
     ],
     expected: {
-      recordingEvents: [{ type: "web.dom.mutated" }],
+      recordingEvents: [{ type: "web.element.clicked", count: 2 }, { type: "web.dom.mutated" }],
       actions: [{ action: "web.dom.click", outcome: "succeeded" }, { action: "web.dom.wait_for_selector", outcome: "succeeded" }],
       finalState: [{ id: "late-visible", subject: "late-action", predicate: "visible", value: true }],
     },

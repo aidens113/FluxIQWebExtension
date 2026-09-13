@@ -29,6 +29,15 @@ test("the manifest is valid and resolves its primary workflow and too-slow varia
   assert.deepEqual(slow.recordingScript, primary.recordingScript);
 });
 
+test("both recorded clicks are pinned, so a Flow proposal that lost Load content is short of the recording", () => {
+  const primary = resolveScenarioWorkflow(scenario.manifest);
+  assert.deepEqual(primary.expected.recordingEvents, [{ type: "web.element.clicked", count: 2 }, { type: "web.dom.mutated" }]);
+  const scriptedClicks = primary.recordingScript.filter(({ operation }) => operation === "click").length;
+  assert.equal(primary.expected.recordingEvents?.find(({ type }) => type === "web.element.clicked")?.count, scriptedClicks);
+  // too-slow runs only on the Flow lane, against the unarmed recording, so it inherits the pin.
+  assert.deepEqual(resolveScenarioWorkflow(scenario.manifest, { variantId: "too-slow" }).expected.recordingEvents, primary.expected.recordingEvents);
+});
+
 test("state is deterministic from the seed and arming clears the recording's reveal", () => {
   assert.deepEqual(scenario.createState(107), scenario.createState(107));
   assert.deepEqual(scenario.createState(107), { revealed: false, delayMs: 150 }, "the unarmed oracle shape is unchanged by the variant");
