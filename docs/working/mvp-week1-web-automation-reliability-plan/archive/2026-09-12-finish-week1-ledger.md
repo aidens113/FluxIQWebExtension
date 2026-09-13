@@ -2999,3 +2999,141 @@ Moved verbatim to keep headroom under the plan limit: the runner's upload input,
   - Core resolving the upload input over HTTP;
   - Chrome sending `hasValue: false` for a cancelled choice.
 - Outcome: Accepted
+
+## Part forty, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: Core's withholding (6621d66) and bridge ordering (949fbb4), and the W25 Core-order row (69f40c1), all committed.
+
+### 2026-09-13 — Core withholding: run inputs and resolved values are withheld at rest, and what a run executes is unchanged (Core `6621d66`)
+
+- Agents: workers `g-core-input-withholding`, `g-core-attempt-withholding` and
+  `g-core-withholding-execution`; decisions and verification by supervisor.
+  - `g-core-attempt-withholding` was blocked once on its brief's ownership.
+  - It was then redispatched to own the whole chain, and amended to cover inputs
+    that no node reads.
+- Changed, in Core `packages/fluxiq/src/`:
+  - **Run inputs at rest.** A run session's `metadata.inputs`, and each run-summary
+    envelope, keep every key and replace every value with `[withheld]`. A queued
+    session run by `runId` without inputs now runs with none.
+  - **Command attempts.**
+    - An attempt is built with the values resolved from state bindings withheld,
+      in `command.parameters`, `result.message`, `result.error` and
+      `attempt.message`. That holds in memory and on disk alike, and the adapter
+      still executes the real value.
+    - `FluxIQRuntimeDispatchContext` gains an optional `withheldValues`, carried
+      from the executor through `io-policy.ts`.
+    - The framework owns the marker, `FLUXIQ_RUNTIME_WITHHELD_VALUE`.
+  - **The trace.**
+    - Each supplied run input is withheld wherever it still holds the supplied
+      value. That is done by position: withholding by value broke a Call Flow
+      child's port defaults in a probe.
+    - A Call Flow parent also withholds what its child withheld.
+  - **Execution is unchanged.** A live-patch rerun takes the executed trace, and a
+    Call Flow parent builds its outputs from what its child executed.
+  - **One text rule,** `runtime/text-withholding.ts`
+    (`fluxiqRuntimeTextWithholding`). It is span-based, so an overlapping value
+    leaves no fragment and a marker is never rewritten.
+  - **Docs:** `runtime-kernel.md`, `automation-studio.md`,
+    `automation-studio-native-nodes.md`, the 0.4.0 migration notes in
+    `package-boundaries.md`, and both framework references.
+- Decisions:
+  - **Execution reads real values;** only saved or published copies are withheld.
+  - **A known gap for Week 1:** a node that copies an unbound input into another
+    key leaves it in clear at that copy. The Flow lane sends only bound
+    `web.secret.*` inputs.
+  - **Not withheld:** `command.metadata`, `result.payload`, `result.failure` and
+    `result.metadata`.
+- Validation:
+  - **Supervisor,** Core gate `sup52`, on the tree holding both Core units, each
+    command run alone:
+    - `pnpm docs:reference` exit=0, "1577 public declarations";
+    - `pnpm docs:check` exit=0;
+    - `pnpm check` exit=0, "structure-audit: passed (122 warning(s), 256
+      baselined)";
+    - `packages/fluxiq` `npx vitest run --no-file-parallelism` exit=0, "Test Files
+      136 passed (136)";
+    - `@fluxiq/contracts`, `@fluxiq/client-gateway-websocket` and `@fluxiq/web`
+      tests each exit=0, with 1, 1 and 228 files passed.
+  - **Supervisor, earlier:** the input-withholding rows, `npx vitest run` over two
+    files, "Tests 15 passed".
+  - **Worker mutations,** each failing its row and restored byte-identical: 3 for
+    the inputs, 8 for the attempts, and 10 for the execution fix.
+- Not verified:
+  - **No Core `pnpm build` yet.**
+  - **No Lab run.** An auth-gate `--flow` run with a kept workspace must show the
+    password typed, 0 declared-value hits, and no fragment.
+  - A real LLM live patch, and a Call Flow error binding.
+- Outcome: Accepted
+
+### 2026-09-13 — g-core-bridge-order: a client's recording messages are stored in arrival order, and a Stop never touches a recording opened during it (Core `949fbb4`)
+
+- Agent: worker `g-core-bridge-order`, with two amendments; decisions and
+  verification by supervisor.
+- Changed, in Core `packages/fluxiq/src/`:
+  - **New `programs/automation-studio/client-gateway/client-recording-write-order.ts`:**
+    one ordered chain per client for the five kinds of message that write to a
+    recording, joined before the bridge's first await. It also holds the snapshot
+    batch queue.
+  - **`client-gateway/bridge.ts`:**
+    - queued snapshots are written before any direct append, action results
+      included;
+    - both Stop paths wait for messages received before their drain ends;
+    - a Stop removes only the recording it stopped;
+    - a start waits for that client's earlier messages.
+  - **`client-gateway/service/inbound.ts`:** a client Stop clears
+    `activeRecordingId` only while it still names the recording that Stop stopped.
+  - **Tests:** `bridge.test.ts`, the new `bridge-restart.test.ts` and
+    `client-recording-write-order.test.ts`, and `client-gateway/tests/service.test.ts`.
+  - **`client-gateway.md`** states the order guarantee.
+- Decisions:
+  - **`0e4edea`'s rule is reversed.** That rule stored a recorded event without
+    writing queued snapshots first. The mapper's `following` needs storage order,
+    so a click's write now waits for one snapshot batch.
+  - **Both races the first pass left are fixed,** since the chain lengthened the
+    first of them.
+- Validation:
+  - **Supervisor:** Core gate `sup52` above, which held this unit.
+  - **Worker mutations,** each failing its own row, restored in a `finally` and
+    hash-checked: 6 for the chain and flush, 4 for the races, and 1 for the session
+    id.
+  - **One early script had no guard,** and left the original `bridge.ts` on disk
+    for minutes. The worker restored the file and hash-verified it.
+- Not verified:
+  - no Core build yet, so the domain row `f-w25-core-order-row` has not run against
+    the fix;
+  - W25 live;
+  - `stateLink` on a real recording;
+  - a Stop overlapping a start, live.
+- Outcome: Accepted
+
+### 2026-09-13 — f-w25-core-order-row: the live W25 messages through Core's gateway propose click, wait, click against the fixed Core, and did not before
+
+- Agent: worker `f-w25-core-order-row`; verification by supervisor.
+- Changed: new `domain/src/tests/core-gateway-recording-order.test.ts`.
+  - It sends the eight live `delayed-ui` messages through Core's real client
+    gateway and Automation Studio bridge. All are started without awaiting, as
+    Core's WebSocket host receives them.
+  - It asserts:
+    - 8 entries;
+    - the "Compacted 3" issue;
+    - the `web` candidates click `begin-delay`, `web.dom.wait_for_selector`
+      `late-action`, click `late-action`.
+- Validation:
+  - **Before the fix, against Core built at `187f40d`:**
+    - worker: five runs of the row alone, each failing with 2 candidates;
+    - supervisor gates `sup47` and `sup53`: "# tests 399", "# pass 398",
+      "# fail 1". The one failure was this row.
+  - **After the fix,** supervisor gate `sup55`, against Core `6621d66`'s
+    `packages/fluxiq/dist`, rebuilt at 07:18. `DOMAIN_TEST_BUILD_LABEL=sup55 pnpm
+    test` gave exit=0, "# tests 399", "# pass 399", "# fail 0", and "ok 380 - W25:
+    the live delayed-ui messages through Core's client gateway, received as its
+    WebSocket host receives them, propose click, wait, click". This is a single
+    observation.
+  - **The failure before and the pass after** stand in for the brief's mutation,
+    which was to remove the chain and rebuild Core.
+- Not verified:
+  - the issues assertion requires exactly the one "Compacted 3" message;
+  - the row copies the extension's evidence message shape by hand, so it does not
+    detect drift in `recording-evidence.ts`;
+  - W25 in the Lab.
+- Outcome: Accepted

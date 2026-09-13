@@ -3436,6 +3436,259 @@ use `SECRET_LEAK_ATTESTATION_DEFAULT_LIMITS`, whose `maxFileBytes` is 1 MiB.
 
 **Report:** `reports/g-demo-attestation-limits.md`.
 
+---
+
+# Thirtieth dispatch — from `l-stage2c` run 3
+
+## i-w25-timeout-code — why W25 `too-slow` reports Core's dispatch timeout, not the action's own (read-only)
+
+`l-stage2c` run 3 found a mismatch in three runs of 3, all
+`delayed-ui --flow --variant too-slow`:
+- **What was reported:** the wait failed with
+  `{"category":"timeout","code":"output_dispatch.timed_out"}`. That is Core's
+  dispatch deadline (`programs/automation-studio/runtime/io-policy.ts:142`, Core
+  `6621d66`).
+- **What the manifest expects:** `web.action.timeout`
+  (`apps/scenario-lab/src/scenarios/delayed-ui/scenario.ts:49-51`), which is the
+  extension's own action timeout (`domain/src/runtime/failure/codes.ts:46,131`).
+- **The result:** the category matches, but the runner fails the run on the code.
+
+**Owns:** `reports/i-w25-timeout-code.md` only.
+- Read code in both repositories.
+- Run unit tests or small probes only, and no Lab command. A Lab campaign is
+  running.
+- Core's source is at `F:\!FluxIQ`. The Lab uses its own worktree under
+  `F:\fxlab\`, so reading is safe.
+
+**Read:** `reports/l-stage2c.md` run 3. For one `too-slow` bundle under
+`F:\fxlab-runs\stage2c\c\`, read only timings, ids and codes.
+
+**Task.**
+1. Where Core's dispatch deadline for an action comes from, and how it relates to
+   the wait's own `timeoutMs` and to the extension's timeout.
+2. From the bundle's timings: which deadline fired first, and by how much.
+3. **The right fix, with file:line.** Choose one of these:
+   - Core's dispatch deadline covers the action's declared timeout plus a margin;
+   - the extension's timeout is shortened;
+   - the expectation names only the category.
+
+   Say which failure code a user should see, and why.
+4. Every week1 row and variant whose outcome that fix changes.
+
+**Report:** `reports/i-w25-timeout-code.md`.
+
+---
+
+# Thirty-first dispatch — from `i-w25-timeout-code`
+
+Decided by the supervisor on 2026-09-13:
+- **Core's two dispatch deadlines outlast the client's own timeout,** by a named
+  margin.
+  - Today Core uses the node's `timeoutMs` (default 5,000 ms) for its runtime and
+    client-gateway deadlines. It sends the same value to the extension as the
+    action's own timeout.
+  - The extension's clock starts after the tab settles, so Core always fires
+    first, and `web.action.timeout` never reaches the run.
+- **The client is still sent the node's `timeoutMs`, unchanged.**
+- **`output_dispatch.timed_out` keeps its meaning:** the client never answered.
+- **The margin covers what the client does before its own clock starts** (the tab
+  settle, `apps/extension/src/runtime/automation-tab.ts:137`), plus transport. Size
+  it from the settle's real bound, and state the reason in the constant's comment.
+
+## g-core-dispatch-deadline — Core hears a client's own timeout before giving up on it (Core, plus three downstream comments)
+
+**Owns:**
+- **In `F:\!FluxIQ\packages\fluxiq\src\`:**
+  - `client-gateway/service/commands.ts`, the command deadline (`:65-70`);
+  - `runtime/service.ts`, the transport-target deadline (`:361-371`);
+  - a focused module for the margin, if one is needed;
+  - their tests.
+- **In `F:\!FluxIQ\docs\architecture\`:**
+  - `package-boundaries.md`, a line in the unreleased 0.4.0 entry;
+  - the page that describes the deadline.
+- **In `F:\!FluxIQWebExtension`, comments only:**
+  - `apps/scenario-lab/src/scenarios/delayed-ui/scenario.ts:16-19`;
+  - `domain/src/recording/proposals/late-target-wait.ts:15`;
+  - `apps/extension/src/runtime/action-runner.ts:197-198`.
+
+Follow `F:\!FluxIQ\AGENTS.md`. A Lab campaign is running on separate worktrees under
+`F:\fxlab\`. Do not touch them, and run no Lab command.
+
+**Read:** `reports/i-w25-timeout-code.md`.
+
+**Task.**
+1. **Both deadlines wait the command's timeout plus the margin.** The client still
+   receives the timeout unchanged.
+2. **Which failure is reported:**
+   - a client that answers with its own failure inside the margin is reported with
+     that failure;
+   - a client that never answers still gets `output_dispatch.timed_out`.
+3. **State what the margin is,** and why, from the settle's real bound.
+4. **Correct the three downstream comments.**
+
+**Tests.**
+- **Core rows,** each with a mutation that restores the old deadline:
+  - a client that answers `web.action.timeout` just after the timeout is reported
+    with it;
+  - a silent client still times out as `output_dispatch.timed_out`.
+- **Core gates:**
+  - `npx vitest run <files> --no-file-parallelism`;
+  - Core `pnpm check`, `pnpm docs:reference` if a cited line moves, and
+    `pnpm docs:check`;
+  - no Core `pnpm build`.
+- **Downstream:** the structure audit.
+
+**Report:** `reports/g-core-dispatch-deadline.md`, with the compatibility effect.
+
+---
+
+# Thirty-second dispatch — from `l-stage2c` run 4
+
+`l-stage2c` run 4 found three problems, at `69f40c1` and Core `6621d66`:
+- **W15.** The Flow's first node is a `web.browser.tab` close that names no tab.
+  - In 6 of 6 runs it timed out at Core's dispatch deadline.
+  - Rerun once, alone, the extension rejected it with `web.action.rejected`
+    ("a tab to close" / "no tab named and none open").
+  - Nothing after it ran. The recording held 5 actions, with the extension equal to
+    Core.
+- **W28.** Run 2 recorded a second scroll. Its Flow ran one `web.dom.scroll` to
+  `succeeded`, then stopped with no failure record (`ambiguous_or_unknown`,
+  `harnessActivations=1`). This is a single observation.
+- **W17.** The upload's saved command attempt holds the chosen file's name twice, at
+  `result.payload.result.validation.expected` and `.actual`. The upload verb's
+  post-condition quotes names (`apps/extension/src/content/actions/upload.ts:19-30`).
+
+Decided by the supervisor:
+- **A chosen file's name is the user's data,** as its value is. The upload
+  post-condition compares names but quotes none.
+- **W15 and W28 are investigated first.** `g-core-dispatch-deadline` may change
+  W15's timeout, but not its close.
+
+## i-w15-w28-flow-order — why W15's Flow starts with a tab close, and why W28's run 2 stopped after a scroll (read-only)
+
+**Owns:** `reports/i-w15-w28-flow-order.md` only.
+- Read code in both repositories, and the bundles. Run unit probes only.
+- A Lab bench is running, with worktrees under `F:\fxlab\` and runs under
+  `F:\fxlab-runs\stage2c\e`. Run no Lab command, and touch neither.
+
+**Read:**
+- `reports/l-stage2c.md`, Run 4.
+- The W15 bundles under `F:\fxlab-runs\stage2c\d` and `d4r`.
+  `run-mtzye7ll-de4dba98` is the rejected close.
+- The W28 bundles `run-mtzy9h6r-08713546` (failed) and `run-mtzy83q6-5a9b03ae`
+  (passed).
+
+Report ids, kinds, paths, orders and counts only.
+
+**Task.**
+1. **W15.**
+   - List the recorded entries in stored order (types, tab operations and paths),
+     and the Flow's candidates in order.
+   - Say which of these puts a close first: the tab recorder, the bridge's storage
+     order, the domain's mapping, or the proposal.
+   - Say why the close has no tab to act on, and what it should do when the
+     recording's tab is already the only one.
+   - Give a fix design, partitioned by file.
+2. **W28.**
+   - Say where run 2's second scroll came from: the runner's start-page load, a
+     frame scroll, or the user script.
+   - Say why the Flow stopped after a scroll that succeeded, with no failure record.
+   - Give a fix design, partitioned by file.
+3. **For each fix,** list every week1 row it changes.
+
+**Report:** `reports/i-w15-w28-flow-order.md`.
+
+## f-upload-validation-names — the upload post-condition quotes no file name (extension)
+
+**Owns:**
+- `apps/extension/src/content/actions/upload.ts` and its test;
+- `apps/extension/e2e/content/tests/upload-dialog.spec.ts`, only the rows that read
+  the upload's validation text.
+
+**Read:** `reports/l-stage2c.md`, the W17 part of Run 4.
+
+**Task.**
+1. **The validation's outcomes stay the same.** It still passes only when the input
+   holds exactly the requested names, and still fails `output_not_observed`
+   otherwise.
+2. **Its `expected` and `actual` quote no name.** They say how many files there are
+   and whether their names match. The rejection path quotes no name either.
+3. **Say whether anything reads the upload validation's text:** the domain
+   comparison, Core, the runner or the bench. If something depends on the names,
+   stop and say what.
+4. **Correct the file's header comment.**
+
+**Tests.**
+- A unit row, for a match and for a mismatch, where neither `expected` nor `actual`
+  contains a requested name. Add a mutation that quotes names again.
+- Extension `check`, and `test` under a private label.
+- The content harness `upload-dialog.spec.ts`, run once, alone. A Lab bench is
+  running, so rerun a faulty-RAM failure once.
+- The structure audit.
+
+**Report:** `reports/f-upload-validation-names.md`.
+
+---
+
+# Thirty-third dispatch — after the session restart (2026-09-13, 08:24)
+
+The user killed every session at 08:22. `l-stage2c`'s run 5 (the week1 bench) stopped
+after 5 of 67 rows, and it runs again on the fixed tree. Runs 1-4 are complete in
+`reports/l-stage2c.md`.
+
+## i-w05-short-catalog — how W05 `short-catalog` should be judged on the Flow lane (read-only)
+
+Since `7a6a8e7`, the recording lane follows pagination by clicking Next, so W05's
+recording holds two Next clicks. The `short-catalog` variant shows five products
+and no Next. A Flow replaying those clicks is therefore predicted to fail
+`target_not_found`, though that has not been observed.
+
+**Owns:** `reports/i-w05-short-catalog.md` only. Read code, and run no Lab command.
+
+**Read:**
+- `apps/scenario-lab/src/scenarios/product-catalog/manifest.ts`;
+- `packages/test-runner/src/scenario-steps/extract-records.ts`;
+- `reports/g-runner-harness-fixes.md`, H1;
+- W05's row in `packages/test-runner/src/bench/corpus/week1.ts`.
+
+**Task.**
+1. **From code:** what a Flow built from W05's recording does on `short-catalog`,
+   which node fails, and with what category.
+2. **The options,** each with its effect on criterion 1 ("week1 W01-W19 through the
+   bench, 3 of 3") and criterion 4 (a negative variant reports its expected
+   category):
+   - (a) the variant declares the expected failure on the Flow lane;
+   - (b) the Flow follows pagination as a loop, which needs a node Core does not
+     have (say what);
+   - (c) the variant runs on the recording lane only;
+   - (d) anything better.
+3. **Recommend one,** with file:line for the change, and say whether it is honest. A
+   Week 1 row must not pass by hiding a product gap.
+
+**Report:** `reports/i-w05-short-catalog.md`.
+
+## i-arch-pages-audit — which architecture pages are not yet in their finished Week 1 state (read-only)
+
+Phase 1.6b needs the architecture pages in their finished state, and much changed
+this session.
+
+**Owns:** `reports/i-arch-pages-audit.md` only. Read `docs/architecture/` and the code
+the pages cite. Run no build or Lab command.
+
+**Task.**
+1. **For each page under `docs/architecture/`,** list:
+   - claims the code at HEAD contradicts, with file:line on both sides;
+   - stale line citations;
+   - behaviour committed this session that the page does not describe. The plan's
+     ledger, and the archive from part thirty-one onward, list that behaviour.
+2. **Skip what the in-flight workers will change:** the upload validation text
+   (`content/actions/upload.ts`), Core's dispatch deadline, and W15's tab-close
+   order.
+3. **Group the fixes by page,** so that docs workers can be partitioned by file, and
+   rank them by how misleading each error is.
+
+**Report:** `reports/i-arch-pages-audit.md`.
+
 ## Amendment to `f-capability-confirmations` — a tab confirmation carries its tab (extension)
 
 Dispatched once `f-tab-recording` has reported.
