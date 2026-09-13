@@ -1020,32 +1020,50 @@ Evidence size row is non-empty for Flow-lane rows.
 
 ## g-integration-small-fixes — the queued comment, cast and script corrections
 
-Dispatched only at integration, when no worker edits these files.
+Dispatched early, on 2026-09-13, because no running worker owns these files.
+Two items stay queued and are not in this dispatch: after the supervisor's Core
+`pnpm build`, `packages/test-runner/src/flow-lane/persisted-flow-run.ts` and its
+test, importing Core's own target-resolution union in place of the local copy
+(`reports/g-target-resolution-union.md`); after W19's domain mapper lands,
+`domain/src/io/input-model.ts`, the checkbox comment at about `:181-184`.
 
 **Owns:** `docs/architecture/failure-taxonomy.md`, the paragraph that miscounts
-producers only; `domain/src/recording/tests/domain.test.ts` (about `:99-104`),
+producers, and about `:133-138`; `docs/architecture/web-capabilities.md`, that
+naming only. Both pages name `runtime/click-landing.ts` as the producer of
+`navigation_unexpected` for a click landing on an error page (`reports/w19-e4.md`).
+`domain/src/recording/tests/domain.test.ts` (about `:99-104`),
 `domain/src/recording/web-state/evidence/tests/project.test.ts` (about `:47`),
-`apps/extension/src/content/evidence/tests/forms.test.ts` (about `:151`);
-`apps/extension/src/background/connection/recording-evidence.ts` and the two
-tests whose comments still name `connection.ts`; `apps/extension/package.json`,
-the `test:content` script only;
-`apps/extension/src/content/action-runtime/validation-outcome.ts`, the comment at
-about `:17-20` only; `apps/extension/e2e/content/tests/identity-fixtures.ts`, its
-header's spec count; `domain/src/output-nodes/targets.ts` (about `:42-53`) and
+`apps/extension/src/content/evidence/tests/forms.test.ts` (about `:151`), the
+casts; `apps/extension/src/background/connection/recording-evidence.ts` and the
+two tests whose comments still name `connection.ts`; `apps/extension/package.json`,
+the `test:content` script only; `apps/extension/src/content/action-runtime/validation-outcome.ts`,
+the comment at about `:17-20`; `apps/extension/e2e/content/tests/identity-fixtures.ts`,
+its header's spec count; `domain/src/output-nodes/targets.ts` (about `:42-53`) and
 `domain/src/client/gateway-mapping.ts` (about `:201-209`), the comments saying
 Core ignores `parameters.element`, which Core's target gate changed;
-`apps/extension/src/content/actions/assert.ts`, the header at about `:34-43`,
-which still calls a failed claim on a sign-in gate a narrow case although
-`w19-e2` gave URL claims that branch too; `packages/test-runner/src/bench/render-markdown.ts`
-near `:154`, the sentence `reports/g-bench-evidence-size.md` proposes saying raw
-snapshot bytes are not measured in Week 1. After the supervisor's Core
-`pnpm build` only: `packages/test-runner/src/flow-lane/persisted-flow-run.ts`,
-replacing the local copy of Core's target-resolution union
-(`reports/g-target-resolution-union.md`) with an import of Core's own type, and
-its test. `docs/architecture/failure-taxonomy.md` (about `:133-138`) and
-`docs/architecture/web-capabilities.md`, naming `runtime/click-landing.ts` as the
-producer of `navigation_unexpected` for a click landing on an error page
-(`reports/w19-e4.md`).
+`apps/extension/src/content/actions/assert.ts`, the header at about `:34-43`, which
+still calls a failed claim on a sign-in gate a narrow case although `w19-e2` gave
+URL claims that branch too; `packages/test-runner/src/bench/render-markdown.ts`
+near `:154`, the sentence `reports/g-bench-evidence-size.md` proposes, saying raw
+snapshot bytes are not measured in Week 1.
+
+**Read:** the "Found" or "Notes" lines naming each item in
+`reports/g-domain-mapping.md`, `g-recorder-signals.md`, `g-snapshot-evidence.md`,
+`f-connection-split.md`, `g-small-fixes.md`, `g-identity-wire-chain.md`,
+`g-bench-evidence-size.md` and `w19-e4.md`.
+
+**Task.** Correct each comment to what the code now does; remove each cast the
+widened `evidence` type made unnecessary; fix the `test:content` script so
+`pnpm --filter @fluxiq-web-extension/extension test:content -- <spec>` runs that
+spec. No behaviour change anywhere else.
+
+**Tests.** Domain and extension `check` and `test` under private build labels;
+test-runner `check`, and `test` built into a private `--outDir` at `dist`'s
+depth (`g-single-run-evidence` builds test-runner at the same time); the fixed
+script run on one spec, quoting its count; the content harness `--list`; the
+structure audit.
+
+**Report:** `reports/g-integration-small-fixes.md`.
 
 ## g-single-run-evidence — a lone `lab run --flow` records the evidence the bench reads
 
@@ -1067,22 +1085,7 @@ its bench row agree.
 sizes and its truncation count, with a mutation; test-runner `check` and `test`,
 built into a private `--outDir` at `dist`'s depth.
 
-**Report:** `reports/g-single-run-evidence.md`. Once W19's domain mapper has landed, also
-`domain/src/io/input-model.ts`, the checkbox comment at about `:181-184` only.
-
-**Read:** the "Found" or "Notes" lines naming each item in
-`reports/g-domain-mapping.md`, `g-recorder-signals.md`, `g-snapshot-evidence.md`,
-`f-connection-split.md`, `g-small-fixes.md` and `g-identity-wire-chain.md`.
-
-**Task.** Correct each comment to what the code now does; remove each cast the
-widened `evidence` type made unnecessary; fix the `test:content` script so
-`pnpm --filter @fluxiq-web-extension/extension test:content -- <spec>` runs that
-spec. No behaviour change anywhere else.
-
-**Tests.** Domain and extension `check` and `test`; the fixed script run on one
-spec, quoting its count; the content harness `--list`; the structure audit.
-
-**Report:** `reports/g-integration-small-fixes.md`.
+**Report:** `reports/g-single-run-evidence.md`.
 
 ---
 
