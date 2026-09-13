@@ -165,7 +165,8 @@ async function runOnce(options: RunBenchOptions, attempt: Attempt): Promise<{ ev
   const wallClockMs = Date.now() - started;
   const problems: string[] = [];
   await options.inspectRun(options.runsDirectory, result.runId).catch((error: unknown) => { problems.push(`inspect: ${describeError(error)}`); });
-  const bundle = await readRunBundle(result.path);
+  // A run can write several `error` events, and its cause is the one written under the category the runner returned.
+  const bundle = await readRunBundle(result.path, result.failureCategory);
   problems.push(...bundle.problems);
   const observed = { ...identity, result, manifest: bundle.manifest, metrics: bundle.metrics, finalSequence: bundle.finalSequence, errorSequence: bundle.errorSequence, wallClockMs };
   const evaluation = entry.lane === "flow" ? evaluateFlowRun(observed) : evaluateRecordingRun(observed);

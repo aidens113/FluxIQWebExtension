@@ -332,3 +332,50 @@ test("no failed run means no cause section, and a run's own cause never displace
     await rm(root, { recursive: true, force: true });
   }
 });
+
+/**
+ * Lab Stage 2's W18 Flow-lane run failed its extraction check, which set the
+ * runner's category, and then its redaction scan, which wrote the last `error`
+ * event. The bench printed `runtime.behavior` beside the redaction message and
+ * hid the extraction failure (`i-bench-triage` H7).
+ */
+test("a run's failure cause is the message written under its failure category, not its last error event's", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-run-"));
+  const extraction = "The Flow produced 0 extraction result(s), expected 1";
+  const redaction = "Redaction attestation found 13 file(s) holding a declared literal or left unread";
+  const superseding = "Clone source post-run verification failed: Source Flow changed while its isolated clone was running";
+  const error = (sequence: number, summary: string, failureCategory: string) => JSON.stringify({ sequence, trigger: "error", summary, details: { failureCategory } });
+  // Per scenario and workflow, the events a run wrote and the category its runner returned.
+  const shapes: Record<string, { events: string[]; category: string }> = {
+    // W18's shape: the extraction failure, then the redaction scan's.
+    "basic-form/primary": { events: [error(20, extraction, "runtime.behavior"), error(22, redaction, "security.redaction")], category: "runtime.behavior" },
+    // A later failure under the same category replaced the runner's message, so the last matching event is the cause.
+    "basic-form/combo": { events: [error(3, extraction, "runtime.behavior"), error(5, superseding, "runtime.behavior"), error(6, redaction, "security.redaction")], category: "runtime.behavior" },
+    // No event records the category: no other category's message is borrowed, and the gap is a problem.
+    "iframe-checkout/primary": { events: [error(4, redaction, "security.redaction")], category: "process.startup" },
+  };
+  try {
+    let index = 0;
+    const outcome = await runBench(options(root, {
+      repeatCount: 1,
+      runScenario: async (run): Promise<RunScenarioResult> => {
+        const shape = shapes[`${run.scenarioId}/${run.workflowId ?? "primary"}`];
+        assert.ok(shape, `no event shape for ${run.scenarioId}`);
+        const runId = `run-unit-${index++}`;
+        const runPath = path.join(run.runsDirectory, runId);
+        await mkdir(runPath, { recursive: true });
+        await writeFile(path.join(runPath, "run.json"), JSON.stringify(runManifest(runId, run.scenarioId, "failed")));
+        await writeFile(path.join(runPath, "summary.json"), JSON.stringify({ verdict: "failed", metrics: {} }));
+        await writeFile(path.join(runPath, "events.ndjson"), `${shape.events.join("\n")}\n`);
+        return { runId, verdict: "failed", path: runPath, failureCategory: shape.category };
+      },
+    }));
+    const evaluated = (await readRuns(outcome.directory)).runs.filter((run) => run.status === "evaluated");
+    assert.deepEqual(evaluated.map((run) => [run.corpusRowId, run.failureCategory, run.failureCause ?? null]), [["W01", "runtime.behavior", extraction], ["W02", "runtime.behavior", superseding], ["W28", "process.startup", null]]);
+    assert.deepEqual(evaluated.map((run) => run.problems ?? []), [[], [], ["events.ndjson: no error event records the run's failure category process.startup"]]);
+    assert.deepEqual(outcome.failureCauses, [`1 run — runtime.behavior: ${extraction}`, `1 run — runtime.behavior: ${superseding}`, "1 run — process.startup: no cause recorded"]);
+    assert.ok(!(await readFile(outcome.markdown, "utf8")).includes(redaction), "report.md must not print a message under a category it does not belong to");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

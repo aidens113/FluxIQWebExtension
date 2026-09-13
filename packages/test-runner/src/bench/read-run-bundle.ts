@@ -4,8 +4,9 @@ import { parseRunManifestJson, type RunManifest } from "@fluxiq-web-extension/te
 import { describeError } from "./describe-error.js";
 
 /**
- * The cause a failed run recorded for itself: the summary of its last `error`
- * evidence event, with the test-rig category the runner attached to it.
+ * The cause a failed run recorded for itself: the summary of the `error`
+ * evidence event written under the runner's failure category, with the
+ * test-rig category that event carries.
  *
  * `runScenario` catches the error that ends a run, writes it to
  * `events.ndjson` as an `error` event, and then returns only a verdict and a
@@ -19,9 +20,9 @@ export type RecordedRunFailure = { message: string; category: string | undefined
 /**
  * What the bench reads from a finalized run bundle: `run.json`, the metrics
  * in `summary.json`, the sequences of the run's `final` and last `error`
- * evidence events, and the cause that last `error` event recorded. A missing
- * or invalid file leaves its part empty and adds a problem; reading never
- * throws for one.
+ * evidence events, and the cause the run recorded under its failure category.
+ * A missing or invalid file leaves its part empty and adds a problem; reading
+ * never throws for one.
  *
  * `problems` and `recordedFailure` are different things and stay apart:
  * a problem is a bundle file the bench could not read or verify, while
@@ -36,7 +37,19 @@ export type RunBundleReading = {
   problems: string[];
 };
 
-export async function readRunBundle(runPath: string): Promise<RunBundleReading> {
+/**
+ * Reads the bundle at `runPath`. `failureCategory` is the category the runner
+ * returned, and it chooses which `error` event is the run's cause: the last one
+ * written under that category. A run can write several. Lab Stage 2's W18
+ * Flow-lane run failed its extraction check, which set the category, and then
+ * its redaction scan, which wrote the last event; the bench paired the first
+ * failure's category with the second's message and hid the extraction failure.
+ * The last matching event rather than the first, because `runScenario` replaces
+ * its message when a later failure supersedes the first, and writes that
+ * failure's event under the category it then returns. With no category, the
+ * last `error` event is the cause.
+ */
+export async function readRunBundle(runPath: string, failureCategory?: string): Promise<RunBundleReading> {
   const problems: string[] = [];
   const read = (name: string): Promise<string | undefined> => readFile(path.join(runPath, name), "utf8").catch((error: unknown) => { problems.push(`${name}: ${describeError(error)}`); return undefined; });
   const manifestText = await read("run.json");
@@ -45,7 +58,7 @@ export async function readRunBundle(runPath: string): Promise<RunBundleReading> 
     try { manifest = parseRunManifestJson(manifestText); } catch (error) { problems.push(`run.json: ${describeError(error)}`); }
   }
   const metrics = summaryMetrics(await read("summary.json"), problems);
-  const closing = closingEvents(await read("events.ndjson"), problems);
+  const closing = closingEvents(await read("events.ndjson"), problems, failureCategory);
   return { manifest, metrics, ...closing, problems };
 }
 
@@ -62,12 +75,15 @@ function summaryMetrics(text: string | undefined, problems: string[]): Record<st
 }
 
 /**
- * The `final` and last `error` events that close a run, and the cause the
- * `error` one carries. The category comes from the event's own
+ * The `final` and last `error` events that close a run, and the cause: the
+ * last `error` event written under `failureCategory`, or the last `error` event
+ * when there is no category to match. The category comes from the event's own
  * `details.failureCategory`, which is what `runScenario` wrote there, and is
- * reported as recorded rather than re-derived.
+ * reported as recorded rather than re-derived. A category no event records
+ * leaves no cause, since another category's message would be the wrong one, and
+ * is a problem: the runner writes an event under every category it returns.
  */
-function closingEvents(text: string | undefined, problems: string[]): Pick<RunBundleReading, "finalSequence" | "errorSequence" | "recordedFailure"> {
+function closingEvents(text: string | undefined, problems: string[], failureCategory: string | undefined): Pick<RunBundleReading, "finalSequence" | "errorSequence" | "recordedFailure"> {
   let finalSequence: number | undefined;
   let errorSequence: number | undefined;
   let recordedFailure: RecordedRunFailure | undefined;
@@ -80,12 +96,14 @@ function closingEvents(text: string | undefined, problems: string[]): Pick<RunBu
       else if (event.trigger === "error") {
         errorSequence = event.sequence;
         const message = typeof event.summary === "string" ? describeError(event.summary) : "";
-        if (message !== "") recordedFailure = { message, category: recordedCategory(event.details) };
+        const category = recordedCategory(event.details);
+        if (message !== "" && (failureCategory === undefined || category === failureCategory)) recordedFailure = { message, category };
       }
     } catch (error) {
       problems.push(`events.ndjson line ${index + 1}: ${describeError(error)}`);
     }
   }
+  if (text !== undefined && failureCategory !== undefined && recordedFailure === undefined) problems.push(`events.ndjson: no error event records the run's failure category ${failureCategory}`);
   return { finalSequence, errorSequence, recordedFailure };
 }
 

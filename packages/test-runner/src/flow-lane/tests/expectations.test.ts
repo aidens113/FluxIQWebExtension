@@ -21,6 +21,27 @@ test("every expected action must appear with its expected outcome", () => {
   assert.throws(() => assertFlowActions([{ action: "web.dom.click", outcome: "failed" }], actions), /outcome failed/);
 });
 
+/**
+ * Lab Stage 2's W15 `popup-blocked` and W26 `no-context`: each negative variant
+ * pins `{ action: "web.dom.click" }` with no outcome, Core failed the click with
+ * the variant's expected failure, and a missing outcome read as `succeeded`
+ * failed both rows.
+ */
+test("an expected action with no outcome is judged on its presence only, never as succeeded", () => {
+  const failedClick = [action("web.dom.type", "succeeded"), action("web.dom.click", "failed")];
+  assertFlowActions([{ action: "web.dom.click" }], failedClick);
+  // A declared outcome is still judged.
+  assert.throws(() => assertFlowActions([{ action: "web.dom.click", outcome: "succeeded" }], failedClick), /with outcome succeeded; it produced web\.dom\.type:succeeded, web\.dom\.click:failed$/);
+  // Absence still fails, and neither the message nor the details claim an outcome the entry did not declare.
+  assert.throws(
+    () => assertFlowActions([{ action: "web.dom.click" }], [action("web.dom.type", "succeeded")]),
+    (error: unknown) => error instanceof RunnerFailure && error.category === "action.dispatch"
+      && error.message === "The Flow did not produce a web.dom.click action; it produced web.dom.type:succeeded"
+      && error.details !== undefined && !("expectedOutcome" in error.details),
+  );
+  assert.throws(() => assertFlowActions([{ action: "web.dom.click" }], []), /action; it produced no attempts$/);
+});
+
 test("an expected failure is matched against Core's structured record, by category and declared code", () => {
   assertFlowFailure({ category: "auth_required" }, { category: "auth_required", code: "web.auth.session_expired", retryable: false });
   assertFlowFailure({ category: "auth_required", code: "session.expired" }, { category: "auth_required", code: "session.expired", retryable: false });

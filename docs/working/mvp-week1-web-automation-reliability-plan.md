@@ -40,7 +40,7 @@ settled ledger entries are in parts one to thirty-two of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13, while workers run.**
-- **This repository:** `eb8bf99`, 87 commits ahead of `origin/dev`, not pushed.
+- **This repository:** `413dcb3`, 88 commits ahead of `origin/dev`, not pushed.
 - **Core:** `240c73e`, 10 commits ahead of `origin/dev`, `fluxiq` **0.4.0**, built at
   `187f40d`; the tenth is a plan-only commit. The nine code commits:
   - `5d495eb`, trace withholding;
@@ -96,8 +96,8 @@ settled ledger entries are in parts one to thirty-two of
 - **The auth-gate leak:** `g-attestation-sqlite`, to be committed with its follow-up
   `g-attestation-sqlite-reader`; `f-authgate-followups`; in Core,
   `g-core-attempt-withholding`, redispatched to own the whole chain.
-- **From the bench triage:** four fix workers for P1-P3, H1-H5 and H7, and the
-  read-only `i-recording-capability-gaps`; then `g-expected-action-guard`.
+- **From the bench triage:** three fix workers for P1-P3, H1-H3 and H5,
+  `g-expected-action-guard`, and the read-only `i-recording-capability-gaps`.
 - **W25's storage order:** `g-core-bridge-order` in Core and `f-w25-core-order-row`.
 
 **Queued, in dependency order**
@@ -750,6 +750,37 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   - no Lab run;
   - W15 still fails first on P4;
   - the existing and clone target modes.
+- Outcome: Accepted
+
+### 2026-09-13 — g-bench-expectation-fixes: an action pinned with no outcome is judged on presence, and a bench row shows its own category's message
+
+- Agent: worker `g-bench-expectation-fixes`; verified by supervisor.
+- Changed:
+  - `packages/test-runner/src/flow-lane/expectations.ts` (H4): an `expected.actions`
+    entry with no `outcome` matches any attempt of its type. A declared outcome is
+    still checked.
+  - `bench/read-run-bundle.ts` and `bench/run-bench.ts` (H7): a row's cause is the
+    last `error` event written under the category the runner returned. When no
+    event records that category, the row shows no cause and a problem line.
+  - Their tests.
+- Scope, per the worker: only three rows pin an action with no outcome. They are
+  W15 `popup-blocked`, W26 `no-context` and W24 `unannounced`, and each also
+  declares its expected failure. No positive workflow changes.
+- Validation:
+  - **Supervisor**, the test-runner gate under label `sup34`:
+    - `check` exit=0; private `tsc` exit=0;
+    - `node --test` printed "# tests 526", "# pass 526", "# fail 0";
+    - the structure audit passed;
+    - the run included other workers' uncommitted test-runner edits.
+  - **Worker mutations,** each failing its row, then restored byte-identical:
+    - restoring the `succeeded` default;
+    - taking the last `error` event again, which gave all three rows the redaction
+      message;
+    - not passing the category from `run-bench.ts`.
+- Not verified:
+  - no Lab run: W15 `popup-blocked` and W26 `no-context` must pass on the Flow lane,
+    and W18's Flow row must show its own message;
+  - the evaluation still cites the last `error` event's sequence.
 - Outcome: Accepted
 
 ## Open Questions

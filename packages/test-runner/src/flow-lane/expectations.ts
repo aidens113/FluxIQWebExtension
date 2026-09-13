@@ -3,17 +3,26 @@ import { RunnerFailure } from "../failure.js";
 import { assertExtraction } from "../run-expectations/index.js";
 import type { PersistedFlowAction } from "./persisted-flow-run.js";
 
-/** Every `expected.actions` entry must match an attempt of that type with that outcome. */
+/**
+ * Every `expected.actions` entry must match an attempt of that type. An entry
+ * that declares an `outcome` must match an attempt with that status; an entry
+ * with no `outcome` is judged on the attempt's presence alone, never as
+ * `succeeded`. Reading a missing outcome as `succeeded` failed Lab Stage 2's
+ * W15 `popup-blocked` and W26 `no-context`: each negative variant pins a click
+ * with no outcome and names its failure in `expected.failure`, and Core failed
+ * the click with exactly that failure.
+ */
 export function assertFlowActions(expected: readonly ExpectedAction[] | undefined, actions: readonly PersistedFlowAction[]): void {
   for (const entry of expected ?? []) {
-    const outcome = entry.outcome ?? "succeeded";
-    const matched = actions.some((action) => action.actionType === entry.action && action.status === outcome);
+    const { outcome } = entry;
+    const matched = actions.some((action) => action.actionType === entry.action && (outcome === undefined || action.status === outcome));
     if (!matched) {
       // Action types and statuses are Core's own vocabulary, never page data,
       // so naming what did run is safe and is what makes this diagnosable.
-      const observed = actions.map((action) => `${action.actionType}:${action.status}`).join(", ") || "no attempts";
-      throw new RunnerFailure("action.dispatch", `The Flow did not produce a ${entry.action} action with outcome ${outcome}; it produced ${observed}`, {
-        details: { expected: entry.action, expectedOutcome: outcome, observed: actions.map((action) => `${action.actionType}:${action.status}`) },
+      const observed = actions.map((action) => `${action.actionType}:${action.status}`);
+      const wanted = outcome === undefined ? `a ${entry.action} action` : `a ${entry.action} action with outcome ${outcome}`;
+      throw new RunnerFailure("action.dispatch", `The Flow did not produce ${wanted}; it produced ${observed.join(", ") || "no attempts"}`, {
+        details: { expected: entry.action, ...(outcome === undefined ? {} : { expectedOutcome: outcome }), observed },
       });
     }
   }
