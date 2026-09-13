@@ -19,11 +19,12 @@ export type BenchCorpusRow = {
 /**
  * A named set of corpus rows `lab bench --corpus <id>` runs.
  *
- * `lanes` is which lanes the corpus runs, and it is what decides whether a
- * result runs at all. Each result runs on exactly one lane, the only lane that
- * can run it: an unarmed workflow on `recording`, where the Testing Lab drives
- * the fixture while the extension records, and a variant on `flow`, which is
- * the only lane that arms one. A result whose lane the corpus does not declare
- * is skipped with that reason, never counted as a pass.
+ * `lanes` is which lanes the corpus runs, and it decides on which lanes a
+ * result runs and whether it runs at all. An unarmed workflow runs on every
+ * declared lane: `recording`, where the Testing Lab drives the fixture while
+ * the extension records, and `flow`, where FluxIQ runs a Flow built from that
+ * recording. A variant runs on `flow` alone, the only lane that arms one. A
+ * result that none of the declared lanes can run is skipped with that reason,
+ * never counted as a pass (`expandCorpus`).
  */
 export type BenchCorpus = { id: string; description: string; lanes: readonly EvaluationLane[]; rows: readonly BenchCorpusRow[] };

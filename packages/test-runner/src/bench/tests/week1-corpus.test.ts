@@ -71,20 +71,27 @@ test("every smoke result resolves and runs on the recording lane", async () => {
 });
 
 /**
- * The corpus runs both lanes, so its variants are planned rather than skipped.
- * Before this, `lab bench --corpus week1` ran the recording lane only and every
- * variant carried `VARIANT_NEEDS_FLOW_LANE`, which left drift recovery, fuzzy
- * recovery and failure classification with a provably empty population.
+ * The corpus runs both lanes, and every unarmed workflow runs on both. Before
+ * the Flow lane ran the variants, every variant carried
+ * `VARIANT_NEEDS_FLOW_LANE`, which left drift recovery, fuzzy recovery and
+ * failure classification with a provably empty population. Before it ran the
+ * unarmed workflows too, FluxIQ executed W01-W18 on no lane at all: the
+ * recording lane executes at most a two-action Core probe.
  */
-test("week1 plans its unarmed workflows on the recording lane and every resolved variant on the Flow lane", async (t) => {
+test("week1 plans 66 runnable results per repeat: every unarmed workflow on both lanes, every resolved variant on the Flow lane", async (t) => {
   const plan = expandCorpus(week1Corpus, await loadScenarioManifests(repositoryRoot));
   const runnable = plan.filter((entry) => entry.skipReason === undefined);
   const byLane = (lane: string) => runnable.filter((entry) => entry.lane === lane);
-  t.diagnostic(`runnable: ${runnable.length} (${byLane("recording").length} recording, ${byLane("flow").length} flow); skipped: ${plan.length - runnable.length}`);
-  t.diagnostic(`flow-lane results: ${byLane("flow").map(label).join(", ")}`);
+  const unarmedOn = (lane: string) => byLane(lane).filter((entry) => entry.variantId === null);
+  const variantsOn = (lane: string) => byLane(lane).filter((entry) => entry.variantId !== null);
+  t.diagnostic(`runnable: ${runnable.length} (${byLane("recording").length} recording; ${byLane("flow").length} flow, ${unarmedOn("flow").length} unarmed and ${variantsOn("flow").length} variants); skipped: ${plan.length - runnable.length}`);
   assert.deepEqual(week1Corpus.lanes, ["recording", "flow"]);
-  assert.equal(byLane("recording").every((entry) => entry.variantId === null), true, "the recording lane never arms a variant");
-  assert.equal(byLane("flow").every((entry) => entry.variantId !== null), true, "the Flow lane runs the corpus's variants");
+  // The count a week1 bench's run time is estimated from. A new corpus row, such as W29, changes it.
+  assert.deepEqual([runnable.length, unarmedOn("recording").length, variantsOn("recording").length, unarmedOn("flow").length, variantsOn("flow").length], [66, 23, 0, 23, 20]);
+  // The Flow lane runs exactly the unarmed workflows the recording lane runs: W01-W18 for criterion 1, and W24-W28.
+  assert.deepEqual(unarmedOn("flow").map(label), unarmedOn("recording").map(label));
+  const criterionOne = Array.from({ length: 18 }, (_, index) => `W${String(index + 1).padStart(2, "0")}`);
+  assert.deepEqual(unarmedOn("flow").map((entry) => entry.corpusRowId), [...criterionOne, "W24", "W25", "W26", "W27", "W28"]);
   // Every resolved result now runs; the only skips left are variants no fixture defines.
   assert.deepEqual(plan.filter((entry) => entry.resolved && entry.skipReason !== undefined).map(label), []);
   assert.deepEqual(plan.filter((entry) => entry.skipReason !== undefined).map(label), UNRESOLVED_TODAY);

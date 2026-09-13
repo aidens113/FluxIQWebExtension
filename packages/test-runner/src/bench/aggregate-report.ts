@@ -1,15 +1,22 @@
 import {
-  BENCH_REPORT_SCHEMA_VERSION, assertBenchReport, benchRateMetrics,
-  type BenchCorpusMetrics, type BenchRate, type BenchRateMetric, type BenchReport, type BenchTarget, type BenchWorkflowResult, type LlmUsage, type RunEvaluation,
+  BENCH_REPORT_SCHEMA_VERSION, assertBenchReport, benchRateMetrics, evaluationLanes,
+  type BenchCorpusMetrics, type BenchRate, type BenchRates, type BenchRateMetric, type BenchReport, type BenchTarget, type BenchWorkflowResult,
+  type EvaluationLane, type LlmUsage, type RunEvaluation,
 } from "@fluxiq-web-extension/test-contracts";
 import { benchDistribution } from "./distribution.js";
 
-/** One bench result, a corpus row's workflow unarmed or one of its variants, with the evaluations of its runs. */
+/**
+ * One bench result, a corpus row's workflow unarmed or one of its variants, on
+ * one lane, with the evaluations of its runs. An unarmed workflow runs on the
+ * recording lane and on the Flow lane, and is a separate result on each.
+ */
 export type BenchResultRuns = {
   corpusRowId: string;
   scenarioId: string;
   workflowId: string | null;
   variantId: string | null;
+  /** The lane every one of `evaluations` ran on. */
+  lane: EvaluationLane;
   /** Ordered by `repeatIndex`. */
   evaluations: readonly RunEvaluation[];
 };
@@ -27,6 +34,7 @@ export type AggregateBenchInput = {
  * How one Metrics-table rate is counted. `applies` selects the rate's
  * population; `first` is whether the run is its result's earliest repeat, its
  * initial execution. `hit` is what the rate counts within that population.
+ * Every rate is counted over one lane's results at a time, never over both.
  */
 export type BenchRateDefinition = {
   unit: "workflows" | "runs";
@@ -121,7 +129,7 @@ export const BENCH_RATE_DEFINITIONS: Readonly<Record<BenchRateMetric, BenchRateD
   },
 };
 
-/** Aggregates per-run evaluations into a `BenchReport` and validates it. */
+/** Aggregates per-run evaluations into a `BenchReport` and validates it. Rates are counted per lane, never over both lanes. */
 export function aggregateBenchReport(input: AggregateBenchInput): BenchReport {
   for (const result of input.results) checkRuns(result, input.repeatCount);
   const report: BenchReport = {
@@ -140,29 +148,50 @@ export function aggregateBenchReport(input: AggregateBenchInput): BenchReport {
   return report;
 }
 
-/** Groups evaluated runs into results by corpus row, scenario, workflow, and variant, in first-run order, each result's runs by repeat. */
+/**
+ * Groups evaluated runs into results by corpus row, scenario, workflow,
+ * variant, and lane, in first-run order, each result's runs by repeat.
+ *
+ * The lane is part of the key. An unarmed row runs on both lanes, and without
+ * it the two lanes' runs merged into one result holding twice the bench's
+ * runs, which `checkRuns` refused -- after the last run of a week1 bench, so
+ * the whole bench would have left no report.
+ */
 export function groupBenchResults(runs: ReadonlyArray<{ corpusRowId: string; evaluation: RunEvaluation }>): BenchResultRuns[] {
   const results = new Map<string, Omit<BenchResultRuns, "evaluations"> & { evaluations: RunEvaluation[] }>();
   for (const { corpusRowId, evaluation } of runs) {
-    const key = JSON.stringify([corpusRowId, evaluation.scenarioId, evaluation.workflowId, evaluation.variantId]);
-    const result = results.get(key) ?? { corpusRowId, scenarioId: evaluation.scenarioId, workflowId: evaluation.workflowId, variantId: evaluation.variantId, evaluations: [] };
+    const key = JSON.stringify([corpusRowId, evaluation.scenarioId, evaluation.workflowId, evaluation.variantId, evaluation.lane]);
+    const result = results.get(key) ?? { corpusRowId, scenarioId: evaluation.scenarioId, workflowId: evaluation.workflowId, variantId: evaluation.variantId, lane: evaluation.lane, evaluations: [] };
     result.evaluations.push(evaluation);
     results.set(key, result);
   }
   return [...results.values()].map((result) => ({ ...result, evaluations: [...result.evaluations].sort((left, right) => left.repeatIndex - right.repeatIndex) }));
 }
 
+/**
+ * The results on each lane the bench has any on, in `evaluationLanes` order.
+ * A rate is counted over one of these groups and never over two, so this is
+ * the one place a bench's lanes are enumerated.
+ */
+export function benchResultsByLane(results: readonly BenchResultRuns[]): Array<[EvaluationLane, BenchResultRuns[]]> {
+  return evaluationLanes.flatMap((lane): Array<[EvaluationLane, BenchResultRuns[]]> => {
+    const onLane = results.filter((result) => result.lane === lane);
+    return onLane.length === 0 ? [] : [[lane, onLane]];
+  });
+}
+
 function checkRuns(result: BenchResultRuns, repeatCount: number): void {
-  const label = `${result.corpusRowId} ${result.scenarioId}/${result.workflowId ?? "primary"}/${result.variantId ?? "unarmed"}`;
+  const label = `${result.corpusRowId} ${result.scenarioId}/${result.workflowId ?? "primary"}/${result.variantId ?? "unarmed"} on the ${result.lane} lane`;
   if (result.evaluations.length !== repeatCount) throw new Error(`${label} has ${result.evaluations.length} runs, not the bench's ${repeatCount}`);
   if (new Set(result.evaluations.map((evaluation) => evaluation.repeatIndex)).size !== repeatCount) throw new Error(`${label} repeats a repeat index`);
+  if (result.evaluations.some((evaluation) => evaluation.lane !== result.lane)) throw new Error(`${label} holds a run from another lane`);
 }
 
 function workflowResult(result: BenchResultRuns): BenchWorkflowResult {
   const runs = result.evaluations.length;
   const passRate = result.evaluations.filter((evaluation) => evaluation.verdict === "passed").length / runs;
   return {
-    corpusRowId: result.corpusRowId, scenarioId: result.scenarioId, workflowId: result.workflowId, variantId: result.variantId,
+    corpusRowId: result.corpusRowId, scenarioId: result.scenarioId, workflowId: result.workflowId, variantId: result.variantId, lane: result.lane,
     runs, passRate, flakeClass: passRate === 1 ? "stable-pass" : passRate === 0 ? "stable-fail" : "flaky",
   };
 }
@@ -171,7 +200,8 @@ function workflowResult(result: BenchResultRuns): BenchWorkflowResult {
  * Every run in a rate's population, each with the index of the result it
  * belongs to. `rate` counts over exactly this, and so does
  * `benchExecutionCoverage`, so the not-executed count a report prints beside a
- * rate is over the same runs the rate was computed from.
+ * rate is over the same runs the rate was computed from. Pass one lane's
+ * results (`benchResultsByLane`): no rate is counted over both lanes.
  */
 export function benchRatePopulation(results: readonly BenchResultRuns[], definition: BenchRateDefinition): Array<{ evaluation: RunEvaluation; resultIndex: number }> {
   return results.flatMap((result, resultIndex) => {
@@ -188,12 +218,19 @@ function rate(results: readonly BenchResultRuns[], definition: BenchRateDefiniti
   return { count, total, workflows, rate: total === 0 ? null : count / total };
 }
 
+/** Every rate over one lane's results. */
+function laneRates(results: readonly BenchResultRuns[]): BenchRates {
+  return Object.fromEntries(benchRateMetrics.map((metric) => [metric, rate(results, BENCH_RATE_DEFINITIONS[metric])])) as BenchRates;
+}
+
 function corpusMetrics(results: readonly BenchResultRuns[]): BenchCorpusMetrics {
   const runs = results.flatMap((result) => result.evaluations);
   const latency = new Map<string, number[]>();
   for (const action of runs.flatMap((run) => run.actions)) latency.set(action.actionType, [...(latency.get(action.actionType) ?? []), action.durationMs]);
   return {
-    rates: Object.fromEntries(benchRateMetrics.map((metric) => [metric, rate(results, BENCH_RATE_DEFINITIONS[metric])])) as Record<BenchRateMetric, BenchRate>,
+    // Per lane, never combined: the recording lane executes no workflow, and a
+    // rate over both lanes would count each unarmed row twice.
+    ratesByLane: Object.fromEntries(benchResultsByLane(results).map(([lane, onLane]) => [lane, laneRates(onLane)])),
     actionLatencyMs: Object.fromEntries([...latency.keys()].sort().map((actionType) => [actionType, benchDistribution(latency.get(actionType) ?? [])])),
     runDurationMs: benchDistribution(runs.map((run) => run.durationMs)),
     sanitizedPacketBytes: benchDistribution(runs.flatMap((run) => run.evidence.sanitizedPacketBytes)),

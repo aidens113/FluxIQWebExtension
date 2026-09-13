@@ -30,7 +30,7 @@ const corpus: BenchCorpus = {
   ],
 };
 
-/** The same corpus run on both lanes: the `drift` variant of W28 becomes a Flow-lane result instead of a skip. */
+/** The same corpus run on both lanes: every unarmed row runs on the Flow lane too, and the `drift` variant of W28 becomes a Flow-lane result instead of a skip. */
 const bothLanes: BenchCorpus = { ...corpus, lanes: ["recording", "flow"] };
 
 function runManifest(runId: string, scenarioId: string, verdict: "passed" | "failed") {
@@ -84,9 +84,11 @@ test("runs each runnable result once per repeat, one pass over the corpus at a t
     assert.deepEqual([outcome.status, outcome.results, outcome.runs, outcome.passed, outcome.skipped], ["passed", 3, 6, 6, 4]);
     assert.equal(path.dirname(outcome.directory), path.join(root, "runs", "bench"));
     const report = parseBenchReportJson(await readFile(path.join(outcome.directory, "report.json"), "utf8"));
-    assert.deepEqual(report.workflows.map((workflow) => [workflow.corpusRowId, workflow.workflowId, workflow.flakeClass]), [["W01", null, "stable-pass"], ["W02", "combo", "stable-pass"], ["W28", null, "stable-pass"]]);
+    assert.deepEqual(report.workflows.map((workflow) => [workflow.corpusRowId, workflow.workflowId, workflow.lane, workflow.flakeClass]), [["W01", null, "recording", "stable-pass"], ["W02", "combo", "recording", "stable-pass"], ["W28", null, "recording", "stable-pass"]]);
     assert.deepEqual([report.reportId, report.corpusId, report.repeatCount, report.target, report.llm.mode], [outcome.benchId, "unit", 2, "isolated", "disabled"]);
-    assert.deepEqual(report.metrics.rates.initialExecutionSuccess, { count: 3, total: 3, workflows: 3, rate: 1 });
+    // A corpus with no Flow lane writes a valid report stating the recording lane's rates alone.
+    assert.deepEqual(Object.keys(report.metrics.ratesByLane ?? {}), ["recording"]);
+    assert.deepEqual(report.metrics.ratesByLane?.recording?.initialExecutionSuccess, { count: 3, total: 3, workflows: 3, rate: 1 });
     assert.deepEqual(report.metrics.actionLatencyMs["web.dom.type"], { samples: 6, p50: 1_500, p95: 1_500 });
     const runs = await readRuns(outcome.directory);
     const skipped = runs.runs.filter((run) => run.status === "skipped");
@@ -133,33 +135,56 @@ test("a failing run fails the bench; a runner that throws is an inconclusive run
   }
 });
 
-test("a corpus that runs the Flow lane runs its variants there, armed, instead of skipping them", async () => {
+/**
+ * An unarmed row runs on both lanes, so one row, scenario, workflow and
+ * variant is two results. Before the lane was part of a result's identity,
+ * this bench ran every run and then threw building its report.
+ */
+test("a corpus that runs the Flow lane runs every unarmed row there as well as on the recording lane, and its variants there, armed", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-run-"));
   try {
     const lanes: string[] = [];
     const runner = fakeRunner([]);
     const outcome = await runBench(options(root, {
       corpus: bothLanes, repeatCount: 1,
-      runScenario: async (run) => { lanes.push(`${run.scenarioId}/${run.variantId ?? "unarmed"}/${run.flow ? "flow" : "recording"}`); return runner(run); },
+      runScenario: async (run) => { lanes.push(`${run.scenarioId}/${run.workflowId ?? "primary"}/${run.variantId ?? "unarmed"}/${run.flow ? "flow" : "recording"}`); return runner(run); },
     }));
-    // The variant reaches the runner with --flow and its variant id; unarmed rows still record.
-    assert.deepEqual(lanes, ["basic-form/unarmed/recording", "basic-form/unarmed/recording", "iframe-checkout/unarmed/recording", "iframe-checkout/drift/flow"]);
-    assert.deepEqual([outcome.results, outcome.runs, outcome.skipped], [4, 4, 1]);
+    // Each unarmed row records, then runs a Flow built from its own recording; the variant runs only as a Flow, armed.
+    assert.deepEqual(lanes, [
+      "basic-form/primary/unarmed/recording", "basic-form/primary/unarmed/flow",
+      "basic-form/combo/unarmed/recording", "basic-form/combo/unarmed/flow",
+      "iframe-checkout/primary/unarmed/recording", "iframe-checkout/primary/unarmed/flow",
+      "iframe-checkout/primary/drift/flow",
+    ]);
+    // W99 does not resolve, and is skipped on both of its lanes.
+    assert.deepEqual([outcome.status, outcome.results, outcome.runs, outcome.skipped], ["passed", 7, 7, 2]);
     const runs = await readRuns(outcome.directory);
     assert.deepEqual(runs.lanes, ["recording", "flow"]);
-    assert.deepEqual(runs.runs.filter((run) => run.status === "evaluated").map((run) => [run.corpusRowId, run.variantId, run.lane]), [["W01", null, "recording"], ["W02", null, "recording"], ["W28", null, "recording"], ["W28", "drift", "flow"]]);
-    assert.equal(runs.runs.find((run) => run.status === "skipped")?.corpusRowId, "W99");
+    const identities = [["W01", null, "recording"], ["W01", null, "flow"], ["W02", null, "recording"], ["W02", null, "flow"], ["W28", null, "recording"], ["W28", null, "flow"], ["W28", "drift", "flow"]];
+    assert.deepEqual(runs.runs.filter((run) => run.status === "evaluated").map((run) => [run.corpusRowId, run.variantId, run.lane]), identities);
+    assert.deepEqual(runs.runs.filter((run) => run.status === "skipped").map((run) => [run.corpusRowId, run.lane]), [["W99", "recording"], ["W99", "flow"]]);
     const flow = runs.runs.find((run) => run.variantId === "drift");
     assert.deepEqual([flow?.status, flow?.actionsExecuted], ["evaluated", 2]);
     const evaluation = parseRunEvaluationJson(await readFile(path.join(outcome.directory, flow?.evaluation ?? "missing"), "utf8"));
     assert.deepEqual([evaluation.lane, evaluation.flowCreated, evaluation.reportedVerdict], ["flow", true, "passed"]);
+    // report.json validates with the same row, scenario, workflow and variant on two lanes, and counts no rate over both.
     const report = parseBenchReportJson(await readFile(path.join(outcome.directory, "report.json"), "utf8"));
-    // The Flow lane is what gives flow creation and fuzzy recovery a population at all.
-    assert.deepEqual(report.metrics.rates.flowCreationSuccess, { count: 1, total: 1, workflows: 1, rate: 1 });
-    assert.deepEqual(report.metrics.rates.fuzzyRecovery, { count: 1, total: 1, workflows: 1, rate: 1 });
+    assert.deepEqual(report.workflows.map((workflow) => [workflow.corpusRowId, workflow.variantId, workflow.lane]), identities);
+    assert.equal(report.metrics.rates, undefined);
+    const [recording, onFlow] = [report.metrics.ratesByLane?.recording, report.metrics.ratesByLane?.flow];
+    // The Flow lane is what gives flow creation and fuzzy recovery a population at all; each unarmed row counts once on each lane.
+    assert.deepEqual(onFlow?.flowCreationSuccess, { count: 4, total: 4, workflows: 4, rate: 1 });
+    assert.deepEqual(onFlow?.fuzzyRecovery, { count: 1, total: 1, workflows: 1, rate: 1 });
+    assert.deepEqual(onFlow?.initialExecutionSuccess, { count: 4, total: 4, workflows: 4, rate: 1 });
+    assert.deepEqual(recording?.initialExecutionSuccess, { count: 3, total: 3, workflows: 3, rate: 1 });
+    assert.deepEqual(recording?.flowCreationSuccess, { count: 0, total: 0, workflows: 0, rate: null });
     const markdown = await readFile(outcome.markdown, "utf8");
     assert.match(markdown, /\| recording, flow \|/);
     assert.match(markdown, /### Flow lane/);
+    assert.match(markdown, /\| Row \| Scenario \| Workflow \| Variant \| Lane \| Runs \| Pass rate \| Flake class \|/);
+    assert.match(markdown, /\| W01 \| basic-form \| primary \| unarmed \| flow \| 1 \| 1\.000 \| stable-pass \|/);
+    assert.match(markdown, /\| recording \| initialExecutionSuccess \| workflows \| 3 \| 3 \| 0 \| 3 \|/);
+    assert.match(markdown, /\| flow \| initialExecutionSuccess \| workflows \| 4 \| 4 \| 0 \| 4 \|/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -202,7 +227,7 @@ test("a run in which FluxIQ executed nothing is counted, printed, and never a hi
     // Every run passed as a test; two of the three executed no FluxIQ action.
     assert.deepEqual([outcome.notExecuted, outcome.actionsExecuted], [2, 1]);
     const report = parseBenchReportJson(await readFile(path.join(outcome.directory, "report.json"), "utf8"));
-    assert.deepEqual(report.metrics.rates.initialExecutionSuccess, { count: 1, total: 3, workflows: 3, rate: 1 / 3 });
+    assert.deepEqual(report.metrics.ratesByLane?.recording?.initialExecutionSuccess, { count: 1, total: 3, workflows: 3, rate: 1 / 3 });
     // The disclosure is machine-readable, not only printed: report.json is
     // what a later bench is compared against and what anyone reads once the
     // terminal has scrolled away, and it states the same counts the CLI did.
@@ -214,8 +239,9 @@ test("a run in which FluxIQ executed nothing is counted, printed, and never a hi
     assert.match(markdown, /## FluxIQ execution/);
     assert.match(markdown, /executed \*\*1 actions\*\* across 3 evaluated runs/);
     assert.match(markdown, /executed nothing at all in 2 of those 3/);
-    assert.match(markdown, /\| Metric \| Unit \| Count \| Total \| Not executed \|/);
-    assert.match(markdown, /\| initialExecutionSuccess \| workflows \| 1 \| 3 \| 2 \|/);
+    assert.match(markdown, /By lane: recording lane, 1 actions across 3 runs, nothing executed in 2\./);
+    assert.match(markdown, /\| Lane \| Metric \| Unit \| Count \| Total \| Not executed \|/);
+    assert.match(markdown, /\| recording \| initialExecutionSuccess \| workflows \| 1 \| 3 \| 2 \|/);
     assert.match(markdown, /Actions FluxIQ executed/);
   } finally {
     await rm(root, { recursive: true, force: true });

@@ -4,7 +4,7 @@ import type { RunEvaluation, WebScenario } from "@fluxiq-web-extension/test-cont
 import type { EvidenceMode } from "../commands.js";
 import type { RunScenarioOptions, RunScenarioResult } from "../run-scenario.js";
 import type { FluxIQTargetConfiguration } from "../target-config.js";
-import { actionsExecuted, aggregateBenchReport, groupBenchResults } from "./aggregate-report.js";
+import { actionsExecuted, aggregateBenchReport, benchResultsByLane, groupBenchResults } from "./aggregate-report.js";
 import type { BenchCorpus } from "./corpus/index.js";
 import { describeError } from "./describe-error.js";
 import { FLOW_LANE_SOURCES, RECORDING_LANE_SOURCES, evaluateFailedAttempt, evaluateFlowRun, evaluateRecordingRun, type RunEvaluationIdentity } from "./evaluate-run.js";
@@ -12,7 +12,7 @@ import { benchExecutionCoverage } from "./execution-coverage.js";
 import { benchFailureCauses, describeBenchFailureCause } from "./failure-cause.js";
 import { expandCorpus, type BenchPlanEntry } from "./expand-corpus.js";
 import { readRunBundle } from "./read-run-bundle.js";
-import { renderBenchMarkdown } from "./render-markdown.js";
+import { renderBenchMarkdown, type BenchMarkdownCoverage } from "./render-markdown.js";
 import { benchDirectory, writeBenchMarkdown, writeBenchReport, writeBenchRuns, writeRunEvaluation, type BenchRunRecord, type BenchRunsFile } from "./report-store.js";
 
 /** The runner's `--repeat` bound. */
@@ -75,15 +75,18 @@ type Attempt = { entry: BenchPlanEntry; repeatIndex: number; attemptId: string; 
  * `lab bench`: runs every runnable corpus result `repeatCount` times, one pass
  * over the corpus per repeat, and writes a `RunEvaluation` per run,
  * `runs.json`, `report.json` (a `BenchReport`), and `report.md` under
- * `<runs directory>/bench/<bench id>/`. Results whose lane the corpus does not
- * run, and unresolved rows, are recorded as skipped with their reason, never
- * as passes.
+ * `<runs directory>/bench/<bench id>/`. Results the corpus runs on no lane,
+ * and unresolved rows, are recorded as skipped with their reason, never as
+ * passes.
  *
- * Each result runs on the one lane that can run it: an unarmed workflow
- * records, and a variant builds a Flow from its recording and runs it armed,
- * which is the only way a variant is exercised at all. Which of those a corpus
- * runs is the corpus's own declaration (`BenchCorpus.lanes`), so `smoke` stays
- * the recording-lane bench every historical report was measured on.
+ * A result runs on every lane the corpus declares that can run it. An unarmed
+ * workflow can run on both: it records, and it also builds a Flow from its
+ * recording and runs it, the only lane on which FluxIQ executes the workflow.
+ * A variant runs a Flow armed, which is the only way a variant is exercised at
+ * all. Which lanes a corpus runs is the corpus's own declaration
+ * (`BenchCorpus.lanes`), so `smoke` stays the recording-lane bench every
+ * historical report was measured on. Each lane's runs of a result are a result
+ * of their own in the report, and every rate is counted per lane.
  */
 export async function runBench(options: RunBenchOptions): Promise<RunBenchOutcome> {
   const { target, repeatCount } = options;
@@ -121,7 +124,8 @@ export async function runBench(options: RunBenchOptions): Promise<RunBenchOutcom
   const report = results.length === 0 ? undefined : aggregateBenchReport({ reportId: benchId, generatedAt: file.finishedAt, corpusId: options.corpus.id, repeatCount, target: target.mode, results });
   const reportPath = report ? await writeBenchReport(directory, report) : null;
   await writeBenchRuns(directory, file);
-  const coverage = benchExecutionCoverage(results);
+  // Per lane as well as in total: each rate's Not executed count is over that rate's own lane.
+  const coverage: BenchMarkdownCoverage = { total: benchExecutionCoverage(results), byLane: Object.fromEntries(benchResultsByLane(results).map(([lane, onLane]) => [lane, benchExecutionCoverage(onLane)])) };
   const markdown = await writeBenchMarkdown(directory, renderBenchMarkdown(file, report, coverage));
   const passed = evaluated.filter(({ evaluation }) => evaluation.verdict === "passed").length;
   const causes = benchFailureCauses(file.runs);
@@ -129,7 +133,7 @@ export async function runBench(options: RunBenchOptions): Promise<RunBenchOutcom
     status: evaluated.length > 0 && passed === evaluated.length ? "passed" : "failed",
     benchId, directory, report: reportPath, markdown,
     results: results.length, runs: evaluated.length, passed, skipped: file.runs.length - evaluated.length,
-    notExecuted: coverage.notExecutedRuns, actionsExecuted: coverage.actions,
+    notExecuted: coverage.total.notExecutedRuns, actionsExecuted: coverage.total.actions,
     ...(causes.length === 0 ? {} : { failureCauses: causes.map(describeBenchFailureCause) }),
   };
 }
@@ -146,9 +150,9 @@ async function runOnce(options: RunBenchOptions, attempt: Attempt): Promise<{ ev
       runsDirectory: options.runsDirectory,
       scenarioId: entry.scenarioId,
       ...(entry.workflowId === null ? {} : { workflowId: entry.workflowId }),
-      // The Flow lane builds a Flow from the run's own recording and runs it
-      // with the variant armed; the recording lane cannot arm one, so a
-      // variant reaches the runner only here.
+      // The Flow lane builds a Flow from the run's own recording and runs it,
+      // with the variant armed when the result names one; the recording lane
+      // cannot arm one, so a variant reaches the runner only here.
       ...(entry.lane === "flow" ? { flow: true, ...(entry.variantId === null ? {} : { variantId: entry.variantId }) } : {}),
       ...(options.evidence ? { evidence: options.evidence } : {}),
       environment: options.environment,
@@ -186,4 +190,5 @@ async function recordRun(attempt: Attempt, evaluation: RunEvaluation, observed: 
 }
 
 const identityOf = (entry: BenchPlanEntry): Pick<BenchRunRecord, "corpusRowId" | "scenarioId" | "workflowId" | "variantId" | "lane"> => ({ corpusRowId: entry.corpusRowId, scenarioId: entry.scenarioId, workflowId: entry.workflowId, variantId: entry.variantId, lane: entry.lane });
-const resultKey = (value: Pick<BenchRunRecord, "corpusRowId" | "scenarioId" | "workflowId" | "variantId">): string => JSON.stringify([value.corpusRowId, value.scenarioId, value.workflowId, value.variantId]);
+// The lane is part of the key: an unarmed row's two lanes are two planned results, sorted apart.
+const resultKey = (value: Pick<BenchRunRecord, "corpusRowId" | "scenarioId" | "workflowId" | "variantId" | "lane">): string => JSON.stringify([value.corpusRowId, value.scenarioId, value.workflowId, value.variantId, value.lane]);

@@ -1,4 +1,5 @@
 import { BENCH_REPORT_SCHEMA_VERSION, benchFlakeClasses, benchRateMetrics, benchTargets, compareBenchMetric, type BenchCorpusMetrics, type BenchReport } from "./bench-report.js";
+import { evaluationLanes, type EvaluationLane } from "./evaluation.js";
 import { validateLlmUsage } from "./evaluation-validation.js";
 import { ContractValidationError, type ValidationIssue, type ValidationResult } from "./validation.js";
 import { add, array, date, enumeration, finite, isObject, keys, object, parseJson, result, text, type JsonObject } from "./runtime-validation.js";
@@ -12,7 +13,10 @@ const week2Keys = ["harnessRecovery", "adaptationCost", "adaptationValidation", 
 /** Optional: the eight benches on disk before these existed omit both, and an omission is an unmeasured count, not a zero one. */
 const coverageKeys = ["notExecutedRuns", "actionsExecuted"] as const;
 const distributionKeys = ["runDurationMs", "sanitizedPacketBytes", "rawSnapshotBytes"] as const;
+/** What a set of counts is bounded by: how many workflow results, each run `repeatCount` times. */
 type Population = { workflows: number; repeatCount: number };
+/** Every result the report lists, the results on each lane, and whether its results state a lane at all. */
+type ReportPopulation = Population & { byLane: ReadonlyMap<EvaluationLane, number>; laned: boolean };
 
 export function validateBenchReport(input: unknown): ValidationResult<BenchReport> {
   const issues: ValidationIssue[] = []; const value = object(input, "$", issues);
@@ -25,8 +29,7 @@ export function validateBenchReport(input: unknown): ValidationResult<BenchRepor
     finite(value.repeatCount, "$.repeatCount", issues, 1, MAX_REPEAT, true);
     enumeration(value.target, benchTargets, "$.target", issues);
     checkWorkflows(value.workflows, value.repeatCount, issues);
-    const population = { workflows: Array.isArray(value.workflows) ? value.workflows.length : 0, repeatCount: typeof value.repeatCount === "number" ? value.repeatCount : 0 };
-    const metricsValid = checkCorpusMetrics(value.metrics, population, issues);
+    const metricsValid = checkCorpusMetrics(value.metrics, reportPopulation(value.workflows, value.repeatCount), issues);
     nest(validateLlmUsage(value.llm), "$.llm", issues);
     if (value.comparison !== null) checkComparison(value.comparison, value, metricsValid, issues);
   }
@@ -39,7 +42,11 @@ export function parseBenchReportJson(json: string): BenchReport {
   assertBenchReport(input); return input;
 }
 
-/** Each result once per scenario, workflow, and variant; each corpus row naming one scenario workflow. */
+/**
+ * Each result once per scenario, workflow, variant, and lane; each corpus row
+ * naming one scenario workflow; a lane stated on every result or, as a report
+ * written before lanes did, on none.
+ */
 function checkWorkflows(input: unknown, repeatCount: unknown, issues: ValidationIssue[]): void {
   array(input, "$.workflows", issues, (entry, path, target) => checkWorkflowResult(entry, path, repeatCount, target));
   if (!Array.isArray(input)) return;
@@ -47,21 +54,25 @@ function checkWorkflows(input: unknown, repeatCount: unknown, issues: Validation
   const results = new Set<string>(); const rows = new Map<string, string>();
   input.forEach((entry, index) => {
     if (!isObject(entry)) return;
-    const identity = JSON.stringify([entry.scenarioId, entry.workflowId, entry.variantId]);
-    if (results.has(identity)) add(issues, `$.workflows[${index}]`, "repeats another result's scenario, workflow, and variant");
+    // The lane is part of a result's identity: an unarmed workflow runs on both lanes and is one result on each.
+    const identity = JSON.stringify([entry.scenarioId, entry.workflowId, entry.variantId, entry.lane ?? null]);
+    if (results.has(identity)) add(issues, `$.workflows[${index}]`, "repeats another result's scenario, workflow, variant, and lane");
     results.add(identity);
     if (typeof entry.corpusRowId !== "string") return;
     const workflow = JSON.stringify([entry.scenarioId, entry.workflowId]); const known = rows.get(entry.corpusRowId);
     if (known === undefined) rows.set(entry.corpusRowId, workflow);
     else if (known !== workflow) add(issues, `$.workflows[${index}].corpusRowId`, "names a row already mapped to another scenario workflow");
   });
+  const laned = input.filter((entry) => isObject(entry) && entry.lane !== undefined).length;
+  if (laned > 0 && laned < input.length) add(issues, "$.workflows", "must state lane on every result, or on none as a report written before lanes did");
 }
 function checkWorkflowResult(input: unknown, path: string, repeatCount: unknown, issues: ValidationIssue[]): void {
   const value = object(input, path, issues); if (!value) return;
-  keys(value, ["corpusRowId", "scenarioId", "workflowId", "variantId", "runs", "passRate", "flakeClass"], path, issues);
+  keys(value, ["corpusRowId", "scenarioId", "workflowId", "variantId", "lane", "runs", "passRate", "flakeClass"], path, issues);
   if (typeof value.corpusRowId !== "string" || !CORPUS_ROW_ID.test(value.corpusRowId)) add(issues, `${path}.corpusRowId`, "must be a corpus row id such as W05");
   if (!isKebabId(value.scenarioId)) add(issues, `${path}.scenarioId`, "must be a kebab-case scenario id");
   for (const key of ["workflowId", "variantId"] as const) if (value[key] !== null && !isKebabId(value[key])) add(issues, `${path}.${key}`, "must be null or a kebab-case id");
+  if (value.lane !== undefined) enumeration(value.lane, evaluationLanes, `${path}.lane`, issues);
   finite(value.runs, `${path}.runs`, issues, 1, MAX_REPEAT, true);
   if (typeof repeatCount === "number" && value.runs !== repeatCount) add(issues, `${path}.runs`, "must equal the report's repeatCount");
   finite(value.passRate, `${path}.passRate`, issues, 0, 1);
@@ -72,14 +83,19 @@ function checkWorkflowResult(input: unknown, path: string, repeatCount: unknown,
   const flakeClass = value.passRate === 1 ? "stable-pass" : value.passRate === 0 ? "stable-fail" : "flaky";
   if (value.flakeClass !== flakeClass) add(issues, `${path}.flakeClass`, `must be ${flakeClass} for passRate ${value.passRate}`);
 }
+function reportPopulation(workflows: unknown, repeatCount: unknown): ReportPopulation {
+  const results = Array.isArray(workflows) ? workflows : [];
+  const byLane = new Map<EvaluationLane, number>();
+  for (const entry of results) if (isObject(entry) && isLane(entry.lane)) byLane.set(entry.lane, (byLane.get(entry.lane) ?? 0) + 1);
+  return { workflows: results.length, repeatCount: typeof repeatCount === "number" ? repeatCount : 0, byLane, laned: results.some((entry) => isObject(entry) && entry.lane !== undefined) };
+}
 
 /** Returns whether the metrics are valid, so comparisons are only recomputed from sound values. */
-function checkCorpusMetrics(input: unknown, population: Population, issues: ValidationIssue[]): boolean {
+function checkCorpusMetrics(input: unknown, population: ReportPopulation, issues: ValidationIssue[]): boolean {
   const before = issues.length; const path = "$.metrics"; const value = object(input, path, issues);
   if (value) {
-    keys(value, ["rates", "actionLatencyMs", ...distributionKeys, "truncationCount", ...coverageKeys, ...week2Keys], path, issues);
-    const rates = object(value.rates, `${path}.rates`, issues);
-    if (rates) { keys(rates, benchRateMetrics, `${path}.rates`, issues); for (const metric of benchRateMetrics) checkRate(rates[metric], `${path}.rates.${metric}`, population, issues); }
+    keys(value, ["ratesByLane", "rates", "actionLatencyMs", ...distributionKeys, "truncationCount", ...coverageKeys, ...week2Keys], path, issues);
+    checkRates(value, path, population, issues);
     const latency = object(value.actionLatencyMs, `${path}.actionLatencyMs`, issues);
     if (latency) for (const [actionType, distribution] of Object.entries(latency)) { if (!actionType) add(issues, `${path}.actionLatencyMs`, "action types must be non-empty"); checkDistribution(distribution, `${path}.actionLatencyMs.${actionType}`, issues); }
     for (const key of distributionKeys) checkDistribution(value[key], `${path}.${key}`, issues);
@@ -88,6 +104,36 @@ function checkCorpusMetrics(input: unknown, population: Population, issues: Vali
     for (const key of week2Keys) if (value[key] !== null) add(issues, `${path}.${key}`, "must be null until Week 2 defines it");
   }
   return issues.length === before;
+}
+/**
+ * Rates are per lane and never combined in any report whose results state
+ * their lane: `ratesByLane` holds exactly the lanes the report lists results
+ * on, each set bounded by that lane's results alone, and a combined `rates` is
+ * refused. A report written before lanes states one `rates` over all of its
+ * results and no per-lane rates.
+ */
+function checkRates(value: JsonObject, path: string, population: ReportPopulation, issues: ValidationIssue[]): void {
+  const { repeatCount } = population;
+  if (!population.laned) {
+    if (value.ratesByLane !== undefined) add(issues, `${path}.ratesByLane`, "must be absent: rates are per lane only in a report whose results state their lane");
+    checkRateSet(value.rates, `${path}.rates`, { workflows: population.workflows, repeatCount }, issues);
+    return;
+  }
+  if (value.rates !== undefined) add(issues, `${path}.rates`, "must be absent: a report whose results state their lane states its rates per lane, never combined");
+  const byLane = object(value.ratesByLane, `${path}.ratesByLane`, issues);
+  if (!byLane) return;
+  keys(byLane, evaluationLanes, `${path}.ratesByLane`, issues);
+  for (const lane of evaluationLanes) {
+    const results = population.byLane.get(lane) ?? 0; const lanePath = `${path}.ratesByLane.${lane}`;
+    if (byLane[lane] === undefined) { if (results > 0) add(issues, lanePath, `must be stated: the report lists ${results} result(s) on the ${lane} lane`); }
+    else if (results === 0) add(issues, lanePath, `must be absent: the report lists no result on the ${lane} lane`);
+    else checkRateSet(byLane[lane], lanePath, { workflows: results, repeatCount }, issues);
+  }
+}
+function checkRateSet(input: unknown, path: string, population: Population, issues: ValidationIssue[]): void {
+  const rates = object(input, path, issues); if (!rates) return;
+  keys(rates, benchRateMetrics, path, issues);
+  for (const metric of benchRateMetrics) checkRate(rates[metric], `${path}.${metric}`, population, issues);
 }
 /**
  * The execution-coverage counts, each optional.
@@ -119,7 +165,7 @@ function checkRate(input: unknown, path: string, population: Population, issues:
   const { count, total, workflows, rate } = value;
   if (typeof count !== "number" || typeof total !== "number" || typeof workflows !== "number") return;
   if (count > total) add(issues, `${path}.count`, "must not exceed total");
-  if (workflows > population.workflows) add(issues, `${path}.workflows`, "must not exceed the report's workflow results");
+  if (workflows > population.workflows) add(issues, `${path}.workflows`, "must not exceed the workflow results it counts over");
   if (workflows > total) add(issues, `${path}.workflows`, "must not exceed total: each workflow in the population adds at least one unit");
   if (total > 0 && workflows === 0) add(issues, `${path}.workflows`, "must be positive when total is");
   if (total > workflows * population.repeatCount) add(issues, `${path}.total`, "must not exceed workflows times repeatCount");
@@ -142,7 +188,8 @@ function checkComparison(input: unknown, report: JsonObject, metricsValid: boole
   keys(input, ["baselineReportId", "metrics"], path, issues);
   text(input, "baselineReportId", path, issues);
   if (input.baselineReportId === report.reportId) add(issues, `${path}.baselineReportId`, "must differ from reportId");
-  const seen = new Set<string>(); const candidate = { metrics: report.metrics as BenchCorpusMetrics };
+  const seen = new Set<string>();
+  const candidate = { metrics: report.metrics as BenchCorpusMetrics, workflows: (Array.isArray(report.workflows) ? report.workflows : []) as BenchReport["workflows"] };
   array(input.metrics, `${path}.metrics`, issues, (entry, entryPath, target) => {
     const compared = object(entry, entryPath, target); if (!compared) return;
     keys(compared, ["metric", "baseline", "candidate", "tolerance", "outcome"], entryPath, target);
@@ -167,3 +214,4 @@ function nest(checked: ValidationResult<unknown>, path: string, issues: Validati
 }
 const near = (actual: unknown, expected: number): boolean => typeof actual === "number" && Math.abs(actual - expected) <= EPSILON * Math.max(1, Math.abs(expected));
 const isKebabId = (input: unknown): boolean => typeof input === "string" && KEBAB_ID.test(input);
+const isLane = (input: unknown): input is EvaluationLane => typeof input === "string" && (evaluationLanes as readonly string[]).includes(input);

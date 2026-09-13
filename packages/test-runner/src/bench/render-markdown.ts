@@ -1,8 +1,15 @@
-import { benchRateMetrics, type BenchDistribution, type BenchReport } from "@fluxiq-web-extension/test-contracts";
+import { benchRateMetrics, evaluationLanes, type BenchDistribution, type BenchReport, type EvaluationLane } from "@fluxiq-web-extension/test-contracts";
 import { BENCH_RATE_DEFINITIONS } from "./aggregate-report.js";
 import type { BenchExecutionCoverage } from "./execution-coverage.js";
 import { benchFailureCauses, type BenchFailureCause } from "./failure-cause.js";
 import type { BenchRunRecord, BenchRunsFile } from "./report-store.js";
+
+/**
+ * Execution coverage over every evaluated run, and over each lane's results
+ * alone. The rates are counted per lane, so the Not executed count beside a
+ * rate has to be counted over the same lane's population.
+ */
+export type BenchMarkdownCoverage = { total: BenchExecutionCoverage; byLane: Partial<Record<EvaluationLane, BenchExecutionCoverage>> };
 
 /**
  * `report.md`: results, skipped results with their reasons, every run's
@@ -12,11 +19,12 @@ import type { BenchRunRecord, BenchRunsFile } from "./report-store.js";
  * The execution line is deliberately above the results, and the Not executed
  * column deliberately beside every rate. A run in which FluxIQ executed
  * nothing still passes as a test — the Testing Lab drove the fixture and the
- * fixture ended in the right state — so a reader who sees only pass rates will
+ * fixture ended in the expected state — so a reader who sees only pass rates will
  * read a bench of such runs as evidence about FluxIQ. It is not, and the
- * report has to say so where the numbers are, not in a footnote.
+ * report has to say so where the numbers are, not in a footnote. For the same
+ * reason every result and every rate names its lane.
  */
-export function renderBenchMarkdown(runs: BenchRunsFile, report: BenchReport | undefined, coverage: BenchExecutionCoverage | undefined): string {
+export function renderBenchMarkdown(runs: BenchRunsFile, report: BenchReport | undefined, coverage: BenchMarkdownCoverage | undefined): string {
   const evaluated = runs.runs.filter((run) => run.status === "evaluated");
   const passed = evaluated.filter((run) => run.verdict === "passed").length;
   const skippedRuns = runs.runs.filter((run) => run.status === "skipped");
@@ -32,7 +40,7 @@ export function renderBenchMarkdown(runs: BenchRunsFile, report: BenchReport | u
     ...(coverage ? executionLines(coverage) : []),
     "## Results",
     "",
-    report ? table(["Row", "Scenario", "Workflow", "Variant", "Runs", "Pass rate", "Flake class"], report.workflows.map((result) => [result.corpusRowId, result.scenarioId, result.workflowId ?? "primary", result.variantId ?? "unarmed", String(result.runs), fixed(result.passRate), result.flakeClass])) : "No result ran, so no report.json was written.",
+    report ? table(["Row", "Scenario", "Workflow", "Variant", "Lane", "Runs", "Pass rate", "Flake class"], report.workflows.map((result) => [result.corpusRowId, result.scenarioId, result.workflowId ?? "primary", result.variantId ?? "unarmed", result.lane ?? "unstated", String(result.runs), fixed(result.passRate), result.flakeClass])) : "No result ran, so no report.json was written.",
     "",
     "## Skipped",
     "",
@@ -84,19 +92,25 @@ function causeAndProblems(run: BenchRunRecord): string {
   return [...(cause !== undefined && !problems.some((problem) => problem.includes(cause)) ? [cause] : []), ...problems].join("; ");
 }
 
-/** What FluxIQ actually did, stated before any pass rate a reader might mistake for it. */
-function executionLines(coverage: BenchExecutionCoverage): string[] {
+/** What FluxIQ actually did, stated before any pass rate a reader might mistake for it: in total, then per lane. */
+function executionLines(coverage: BenchMarkdownCoverage): string[] {
+  const { total } = coverage;
+  const lanes = evaluationLanes.flatMap((lane) => {
+    const onLane = coverage.byLane[lane];
+    return onLane ? [`${lane} lane, ${onLane.actions} actions across ${onLane.runs} runs, nothing executed in ${onLane.notExecutedRuns}`] : [];
+  });
   return [
     "## FluxIQ execution",
     "",
-    `FluxIQ executed **${coverage.actions} actions** across ${coverage.runs} evaluated runs, and **executed nothing at all in ${coverage.notExecutedRuns} of those ${coverage.runs}**. Runs in which it executed at least one action: ${coverage.executedRuns}.`,
+    `FluxIQ executed **${total.actions} actions** across ${total.runs} evaluated runs, and **executed nothing at all in ${total.notExecutedRuns} of those ${total.runs}**. Runs in which it executed at least one action: ${total.executedRuns}.`,
     "",
+    ...(lanes.length > 0 ? [`By lane: ${lanes.join("; ")}.`, ""] : []),
     "A run in which FluxIQ executed nothing is counted as a **miss** by every execution rate below, never dropped from one: the rate's own population still holds it, and the Not executed column says how many of that population it holds. On the recording lane a run's pass means the Testing Lab drove the fixture and the fixture ended in the expected state; FluxIQ executes at most a two-action Core round-trip probe there, never the workflow, so the action count is the only figure on this page that says what FluxIQ did.",
     "",
   ];
 }
 
-function metricLines(report: BenchReport, coverage: BenchExecutionCoverage): string[] {
+function metricLines(report: BenchReport, coverage: BenchMarkdownCoverage): string[] {
   const { metrics } = report;
   const distributions: Array<[string, BenchDistribution]> = [
     ...Object.entries(metrics.actionLatencyMs).map(([actionType, distribution]): [string, BenchDistribution] => [`Action latency ${actionType} (ms)`, distribution]),
@@ -104,16 +118,23 @@ function metricLines(report: BenchReport, coverage: BenchExecutionCoverage): str
     ["Sanitized packet bytes", metrics.sanitizedPacketBytes],
     ["Raw snapshot bytes", metrics.rawSnapshotBytes],
   ];
+  const rates = evaluationLanes.flatMap((lane) => {
+    const onLane = metrics.ratesByLane?.[lane];
+    const notExecuted = coverage.byLane[lane]?.notExecutedByMetric;
+    return onLane === undefined ? [] : benchRateMetrics.map((metric) => {
+      const value = onLane[metric];
+      const definition = BENCH_RATE_DEFINITIONS[metric];
+      return [lane, metric, definition.unit, String(value.count), String(value.total), notExecuted ? String(notExecuted[metric]) : "unmeasured", String(value.workflows), value.rate === null ? "n/a" : fixed(value.rate), definition.definition];
+    });
+  });
   return [
     "## Rates",
     "",
-    table(["Metric", "Unit", "Count", "Total", "Not executed", "Workflows", "Rate", "Population"], benchRateMetrics.map((metric) => {
-      const value = metrics.rates[metric];
-      const definition = BENCH_RATE_DEFINITIONS[metric];
-      return [metric, definition.unit, String(value.count), String(value.total), String(coverage.notExecutedByMetric[metric]), String(value.workflows), value.rate === null ? "n/a" : fixed(value.rate), definition.definition];
-    })),
+    "Every rate is counted over one lane's runs, never over both. An unarmed row runs on the recording lane and on the Flow lane, and the recording lane executes at most a two-action Core round-trip probe, never the workflow: a rate over both lanes would count each unarmed row twice and mix what the Testing Lab did into what FluxIQ did.",
     "",
-    "Not executed is how many runs of that metric's own population executed no FluxIQ action. A rate whose Not executed approaches its Total is a statement about the Testing Lab and the fixture, not about FluxIQ.",
+    table(["Lane", "Metric", "Unit", "Count", "Total", "Not executed", "Workflows", "Rate", "Population"], rates),
+    "",
+    "Not executed is how many runs of that lane's population for the metric executed no FluxIQ action. A rate whose Not executed approaches its Total is a statement about the Testing Lab and the fixture, not about FluxIQ.",
     "",
     "## Distributions",
     "",

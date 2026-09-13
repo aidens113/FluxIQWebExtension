@@ -42,10 +42,10 @@ test("matching reports are equivalent; a rate off by more than one workflow regr
   assert.deepEqual([same.baselineReportId, same.candidateReportId, same.outcome], ["bench-base", "bench-same", "equivalent"]);
   assert.ok(same.metrics.length > 0 && same.metrics.every((metric) => metric.outcome === "equivalent"));
   const oneFailed = summarizeBenchComparison(baseline, bench("bench-one-worse", 1, corpusRuns(1, (scenarioId) => scenarioId === "basic-form" ? failedFields : {})));
-  assert.equal(oneFailed.metrics.find((metric) => metric.metric === "rate:initialExecutionSuccess")?.outcome, "equivalent");
+  assert.equal(oneFailed.metrics.find((metric) => metric.metric === "rate:recording:initialExecutionSuccess")?.outcome, "equivalent");
   const twoFailed = summarizeBenchComparison(baseline, bench("bench-two-worse", 1, corpusRuns(1, (scenarioId) => scenarioId === "basic-form" || scenarioId === "navigation" ? failedFields : {})));
   assert.equal(twoFailed.outcome, "regressed");
-  assert.deepEqual(twoFailed.metrics.find((metric) => metric.metric === "rate:initialExecutionSuccess"), { metric: "rate:initialExecutionSuccess", baseline: 1, candidate: 0.5, tolerance: 0.25, outcome: "regressed" });
+  assert.deepEqual(twoFailed.metrics.find((metric) => metric.metric === "rate:recording:initialExecutionSuccess"), { metric: "rate:recording:initialExecutionSuccess", baseline: 1, candidate: 0.5, tolerance: 0.25, outcome: "regressed" });
   // Four run-duration samples: still compared and still reported as improved,
   // but advisory, so it does not move the comparison's own verdict.
   const faster = summarizeBenchComparison(baseline, bench("bench-fast", 1, corpusRuns(1, () => ({ durationMs: 28_000 }))));
@@ -91,7 +91,7 @@ test("a two-repeat bench's halves compare as equivalent; reports load by bench i
     const first = await writeBench(runsDirectory, "bench-mtx00001-0123abcd", 2, corpusRuns(2, (_, repeatIndex) => ({ durationMs: repeatIndex === 0 ? 40_000 : 42_000 })));
     const halves = await compareBenchCommand({ runsDirectory, cwd: root, halvesOf: first.reportId });
     assert.deepEqual([halves.baselineReportId, halves.candidateReportId, halves.outcome], ["bench-mtx00001-0123abcd-first-half", "bench-mtx00001-0123abcd-second-half", "equivalent"]);
-    assert.ok(halves.metrics.some((metric) => metric.metric === "rate:initialExecutionSuccess"));
+    assert.ok(halves.metrics.some((metric) => metric.metric === "rate:recording:initialExecutionSuccess"));
     assert.ok(halves.metrics.some((metric) => metric.metric === "run-duration-p95"));
     await writeBench(runsDirectory, "bench-mtx00002-4567cdef", 2, corpusRuns(2));
     const byPath = await compareBenchCommand({ runsDirectory, cwd: root, baseline: path.join("runs", "bench", first.reportId, "report.json"), candidate: "bench-mtx00002-4567cdef" });

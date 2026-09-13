@@ -11,12 +11,14 @@ const variantOnly = (id: string, scenarioId: string, workflowId: string | null, 
  * and W27's surfaces are named for the table's "disabled, detached, blocked
  * URL". W19 to W23 are variants only; their rows run no unarmed workflow.
  *
- * Both lanes run. Fourteen of the corpus's resolved results are variants, and
- * a variant is armed only by the Flow lane, so a recording-only bench skips a
- * third of the corpus and leaves drift recovery, fuzzy recovery and failure
- * classification with an empty population. Declaring both lanes is what lets
- * `--corpus week1` cover them; whether a Flow-lane result passes is then a
- * measurement, not an assumption.
+ * Both lanes run. Every unarmed workflow runs on both, and every variant on the
+ * Flow lane, the only lane that arms one: 66 runnable results per repeat, 23 on
+ * the recording lane and 43 on the Flow lane (23 unarmed, 20 variants). The
+ * Flow lane is the only lane on which FluxIQ executes a workflow, so it is what
+ * makes W01-W18 a measurement of FluxIQ and gives drift recovery, fuzzy
+ * recovery and failure classification a population; the recording lane keeps
+ * the measurement every earlier bench made. Whether a Flow-lane result passes
+ * is a measurement, not an assumption.
  */
 export const week1Corpus: BenchCorpus = {
   id: "week1",

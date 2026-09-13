@@ -16,37 +16,59 @@ import {
 const week2 = { harnessRecovery: null, adaptationCost: null, adaptationValidation: null, adaptationPersistence: null, adaptationReuse: null };
 const rate = (count, total, workflows) => ({ count, total, workflows, rate: total === 0 ? null : count / total });
 const spread = (samples, p50, p95) => ({ samples, p50, p95 });
-const rates = (overrides = {}) => ({
+/** The Flow lane's rates: three results (W05's workflow and its short-catalog variant, W26's no-context variant), three repeats each. */
+const flowRates = (overrides = {}) => ({
   flowCreationSuccess: rate(3, 3, 3), initialExecutionSuccess: rate(2, 3, 3), deterministicReplaySuccess: rate(1, 3, 3),
   fuzzyRecovery: rate(0, 0, 0), falseFailure: rate(1, 9, 3), falseSuccess: rate(0, 9, 3),
   failureClassificationAccuracy: rate(0, 3, 1), harnessActivation: rate(0, 9, 3), ...overrides,
 });
-const metrics = (overrides = {}) => ({
-  rates: rates(),
-  actionLatencyMs: { "web.dom.click": spread(12, 80, 140), "web.dom.extract": spread(6, 30, 55), "web.dom.scroll": spread(2, 10, 15) },
-  runDurationMs: spread(9, 1500, 2600), sanitizedPacketBytes: spread(18, 2048, 4096), rawSnapshotBytes: spread(9, 60000, 90000),
-  truncationCount: 0, ...week2, ...overrides,
+/** The recording lane's rates: one result, W05's workflow, which the recording lane runs beside the Flow lane. */
+const recordingRates = (overrides = {}) => ({
+  flowCreationSuccess: rate(0, 0, 0), initialExecutionSuccess: rate(1, 1, 1), deterministicReplaySuccess: rate(2, 2, 1),
+  fuzzyRecovery: rate(0, 0, 0), falseFailure: rate(0, 3, 1), falseSuccess: rate(0, 0, 0),
+  failureClassificationAccuracy: rate(0, 0, 0), harnessActivation: rate(0, 3, 1), ...overrides,
 });
-// W05's workflow and its short-catalog variant, and W26's negative no-context variant, each repeated three times.
+const measurements = () => ({
+  actionLatencyMs: { "web.dom.click": spread(12, 80, 140), "web.dom.extract": spread(6, 30, 55), "web.dom.scroll": spread(2, 10, 15) },
+  runDurationMs: spread(12, 1500, 2600), sanitizedPacketBytes: spread(18, 2048, 4096), rawSnapshotBytes: spread(9, 60000, 90000),
+  truncationCount: 0, ...week2,
+});
+const metrics = (overrides = {}) => ({ ratesByLane: { recording: recordingRates(), flow: flowRates() }, ...measurements(), ...overrides });
+// W05's workflow on both lanes, its short-catalog variant, and W26's negative no-context variant, each repeated three times.
 const workflows = () => [
-  { corpusRowId: "W05", scenarioId: "product-catalog", workflowId: "paginated-extraction", variantId: null, runs: 3, passRate: 1, flakeClass: "stable-pass" },
-  { corpusRowId: "W05", scenarioId: "product-catalog", workflowId: "paginated-extraction", variantId: "short-catalog", runs: 3, passRate: 2 / 3, flakeClass: "flaky" },
-  { corpusRowId: "W26", scenarioId: "ambiguous-targets", workflowId: null, variantId: "no-context", runs: 3, passRate: 0, flakeClass: "stable-fail" },
+  { corpusRowId: "W05", scenarioId: "product-catalog", workflowId: "paginated-extraction", variantId: null, lane: "recording", runs: 3, passRate: 1, flakeClass: "stable-pass" },
+  { corpusRowId: "W05", scenarioId: "product-catalog", workflowId: "paginated-extraction", variantId: null, lane: "flow", runs: 3, passRate: 1, flakeClass: "stable-pass" },
+  { corpusRowId: "W05", scenarioId: "product-catalog", workflowId: "paginated-extraction", variantId: "short-catalog", lane: "flow", runs: 3, passRate: 2 / 3, flakeClass: "flaky" },
+  { corpusRowId: "W26", scenarioId: "ambiguous-targets", workflowId: null, variantId: "no-context", lane: "flow", runs: 3, passRate: 0, flakeClass: "stable-fail" },
 ];
 const report = (overrides = {}) => ({
   schemaVersion: "0.1", reportId: "bench-2026-09-11-a", generatedAt: "2026-09-11T12:00:00.000Z", corpusId: "fluxbench-week1",
   repeatCount: 3, target: "isolated", workflows: workflows(), metrics: metrics(),
   llm: { mode: "disabled", profileId: null, calls: 0 }, comparison: null, ...overrides,
 });
-// An earlier bench of the same corpus: one workflow worse at first execution, better at replay, more false failures, slower.
+const withFlowRates = (rates) => report({ metrics: metrics({ ratesByLane: { recording: recordingRates(), flow: rates } }) });
+// An earlier bench of the same corpus: on the Flow lane one workflow worse at first execution, better at replay, more false failures; slower.
 const baseline = () => report({
   reportId: "bench-2026-09-10-a",
   metrics: metrics({
-    rates: rates({ initialExecutionSuccess: rate(1, 3, 3), deterministicReplaySuccess: rate(3, 3, 3), falseFailure: rate(5, 9, 3) }),
+    ratesByLane: { recording: recordingRates(), flow: flowRates({ initialExecutionSuccess: rate(1, 3, 3), deterministicReplaySuccess: rate(3, 3, 3), falseFailure: rate(5, 9, 3) }) },
     actionLatencyMs: { "web.dom.click": spread(12, 70, 100), "web.dom.extract": spread(6, 30, 50), "web.dom.type": spread(3, 20, 30) },
-    runDurationMs: spread(9, 2000, 4000),
+    runDurationMs: spread(12, 2000, 4000),
   }),
 });
+// The shape of the eight `smoke` benches on disk, written before lanes: no result states one, and one `rates` covers the report.
+const smokeResults = () => [
+  { corpusRowId: "W01", scenarioId: "basic-form", workflowId: null, variantId: null, runs: 3, passRate: 1, flakeClass: "stable-pass" },
+  { corpusRowId: "W28", scenarioId: "iframe-checkout", workflowId: null, variantId: null, runs: 3, passRate: 1, flakeClass: "stable-pass" },
+];
+const smokeRates = (overrides = {}) => ({
+  flowCreationSuccess: rate(0, 0, 0), initialExecutionSuccess: rate(1, 2, 2), deterministicReplaySuccess: rate(2, 4, 2),
+  fuzzyRecovery: rate(0, 0, 0), falseFailure: rate(0, 2, 2), falseSuccess: rate(0, 0, 0),
+  failureClassificationAccuracy: rate(0, 0, 0), harnessActivation: rate(0, 6, 2), ...overrides,
+});
+const legacy = (overrides = {}) => report({ reportId: "bench-mtxoim0b-8ca4952c", corpusId: "smoke", workflows: smokeResults(), metrics: { rates: smokeRates(), ...measurements() }, ...overrides });
+// The same corpus benched now: every result states the recording lane, and the rates are that lane's.
+const smoke = (overrides = {}) => report({ reportId: "bench-2026-09-13-smoke", corpusId: "smoke", workflows: smokeResults().map((result) => ({ ...result, lane: "recording" })), metrics: metrics({ ratesByLane: { recording: smokeRates(overrides) } }) });
 const without = (value, key) => { const copy = { ...value }; delete copy[key]; return copy; };
 const issuesOf = (value) => { const checked = validateBenchReport(value); return checked.valid ? [] : checked.issues.map((issue) => issue.path); };
 const rejects = (value, label) => assert.equal(validateBenchReport(value).valid, false, label);
@@ -62,7 +84,7 @@ test("a bench report validates and round-trips through JSON", () => {
 });
 
 test("per-workflow results keep runs, pass rate, and flake class consistent", () => {
-  const [stable, flaky] = workflows();
+  const [stable, , flaky] = workflows();
   const withFirst = (result) => report({ workflows: [result, ...workflows().slice(1)] });
   rejects(withFirst({ ...stable, passRate: 2 / 3 }), "flaky pass rate labelled stable-pass");
   rejects(withFirst({ ...stable, passRate: 0.5, flakeClass: "flaky" }), "half a run passed");
@@ -74,8 +96,57 @@ test("per-workflow results keep runs, pass rate, and flake class consistent", ()
   rejects(report({ workflows: [...workflows(), { ...stable, scenarioId: "data-table", workflowId: null }] }), "one row mapped to two workflows");
   rejects(report({ workflows: [] }), "no results");
   // W20-W23: several corpus rows are variants of one workflow.
-  const drift = (corpusRowId, variantId) => ({ corpusRowId, scenarioId: "identity-drift", workflowId: null, variantId, runs: 3, passRate: 1, flakeClass: "stable-pass" });
+  const drift = (corpusRowId, variantId) => ({ corpusRowId, scenarioId: "identity-drift", workflowId: null, variantId, lane: "flow", runs: 3, passRate: 1, flakeClass: "stable-pass" });
   assert.equal(validateBenchReport(report({ workflows: [...workflows(), drift("W20", "selector-only"), drift("W21", "text-only")] })).valid, true);
+});
+
+/**
+ * An unarmed row runs on the recording lane and on the Flow lane, so one
+ * scenario, workflow and variant is two results. Before the lane was part of a
+ * result's identity this report was rejected, and every week1 bench would have
+ * died in its report after its last run.
+ */
+test("one result on two lanes is two results; the same result twice on one lane is still a duplicate", () => {
+  const [onRecording, onFlow] = workflows();
+  assert.deepEqual([onRecording.variantId, onFlow.variantId, onRecording.lane, onFlow.lane], [null, null, "recording", "flow"]);
+  assert.deepEqual(issuesOf(report()), []);
+  assert.deepEqual(issuesOf(report({ workflows: [...workflows(), { ...onFlow }] })), ["$.workflows[4]"]);
+  assert.deepEqual(issuesOf(report({ workflows: workflows().map((result, index) => (index === 0 ? { ...result, lane: "replay" } : result)) })), ["$.workflows[0].lane", "$.metrics.ratesByLane.recording"]);
+  // Results state their lane on every result or, as a report written before lanes did, on none.
+  assert.deepEqual(issuesOf(report({ workflows: [without(onRecording, "lane"), ...workflows().slice(1)] })), ["$.workflows", "$.metrics.ratesByLane.recording"]);
+});
+
+test("rates are per lane and never combined: a lane with results has its own rates, a lane without results has none", () => {
+  // A bench with no Flow-lane row -- smoke runs the recording lane alone -- states that lane only, and is valid.
+  assert.deepEqual(issuesOf(smoke()), []);
+  assert.equal(Object.hasOwn(smoke().metrics.ratesByLane, "flow"), false);
+  assert.deepEqual(issuesOf(report({ metrics: metrics({ ratesByLane: { recording: recordingRates() } }) })), ["$.metrics.ratesByLane.flow"]);
+  assert.deepEqual(issuesOf({ ...smoke(), metrics: metrics({ ratesByLane: { recording: smokeRates(), flow: flowRates() } }) }), ["$.metrics.ratesByLane.flow"]);
+  // A combined set beside the per-lane rates, or instead of them.
+  assert.deepEqual(issuesOf(report({ metrics: metrics({ rates: flowRates() }) })), ["$.metrics.rates"]);
+  assert.deepEqual(issuesOf(report({ metrics: { rates: flowRates(), ...measurements() } })), ["$.metrics.rates", "$.metrics.ratesByLane"]);
+  assert.deepEqual(issuesOf(report({ metrics: metrics({ ratesByLane: { recording: recordingRates(), flow: flowRates(), replay: flowRates() } }) })), ["$.metrics.ratesByLane.replay"]);
+  // Each lane's rates are bounded by that lane's own results: the recording lane lists one.
+  assert.deepEqual(issuesOf(report({ metrics: metrics({ ratesByLane: { recording: recordingRates({ falseFailure: rate(0, 3, 2) }), flow: flowRates() } }) })), ["$.metrics.ratesByLane.recording.falseFailure.workflows"]);
+});
+
+test("a report written before lanes still validates, and compares as the recording lane only when it lists no variant", () => {
+  assert.deepEqual(issuesOf(legacy()), []);
+  assert.deepEqual(issuesOf(legacy({ metrics: { rates: smokeRates(), ratesByLane: { recording: smokeRates() }, ...measurements() } })), ["$.metrics.ratesByLane"]);
+  assert.deepEqual(issuesOf(legacy({ metrics: measurements() })), ["$.metrics.rates"]);
+  // Every smoke bench on disk ran the recording lane alone, so its rates are that lane's, and a bench of today compares against them.
+  const comparison = compareBenchReports(legacy(), smoke({ initialExecutionSuccess: rate(2, 2, 2) }));
+  assert.deepEqual(comparison.metrics.filter(({ metric }) => metric.startsWith("rate:")).map(({ metric, outcome }) => [metric, outcome]), [
+    ["rate:recording:initialExecutionSuccess", "equivalent"], // one workflow of two better: inside the one-workflow tolerance
+    ["rate:recording:deterministicReplaySuccess", "equivalent"],
+    ["rate:recording:falseFailure", "equivalent"],
+    ["rate:recording:harnessActivation", "equivalent"],
+  ]);
+  // A report written before lanes that lists a variant ran the Flow lane too; its one set of rates combined both, and is no lane's.
+  const combined = legacy({ workflows: [...smokeResults(), { corpusRowId: "W20", scenarioId: "identity-drift", workflowId: null, variantId: "selector-only", runs: 3, passRate: 1, flakeClass: "stable-pass" }] });
+  assert.deepEqual(issuesOf(combined), []);
+  assert.equal(compareBenchMetric("rate:recording:initialExecutionSuccess", 0.5, combined), undefined);
+  assert.equal(compareBenchReports(combined, smoke()).metrics.some(({ metric }) => metric.startsWith("rate:")), false);
 });
 
 test("corpus rates are counts over totals within a workflow population", () => {
@@ -84,14 +155,14 @@ test("corpus rates are counts over totals within a workflow population", () => {
     "rate not count over total": { initialExecutionSuccess: { ...rate(2, 3, 3), rate: 0.5 } },
     "null rate with a total": { initialExecutionSuccess: { ...rate(2, 3, 3), rate: null } },
     "rate without a total": { fuzzyRecovery: { count: 0, total: 0, workflows: 0, rate: 0 } },
-    "population beyond the results": { falseFailure: rate(1, 12, 4) },
+    "population beyond the lane's results": { falseFailure: rate(1, 12, 4) },
     "total beyond workflows times repeats": { falseFailure: rate(1, 10, 3) },
     "empty population with a total": { falseFailure: rate(1, 9, 0) },
     "population larger than its total": { failureClassificationAccuracy: rate(0, 1, 2) },
     "fractional count": { falseFailure: rate(1.5, 9, 3) },
-  })) rejects(report({ metrics: metrics({ rates: rates(override) }) }), label);
-  rejects(report({ metrics: metrics({ rates: without(rates(), "harnessActivation") }) }), "missing rate metric");
-  rejects(report({ metrics: metrics({ rates: { ...rates(), speed: rate(1, 1, 1) } }) }), "unknown rate metric");
+  })) rejects(withFlowRates(flowRates(override)), label);
+  rejects(withFlowRates(without(flowRates(), "harnessActivation")), "missing rate metric");
+  rejects(withFlowRates({ ...flowRates(), speed: rate(1, 1, 1) }), "unknown rate metric");
 });
 
 test("distributions, evidence, and Week 2 fields are bounded", () => {
@@ -108,7 +179,7 @@ test("distributions, evidence, and Week 2 fields are bounded", () => {
   assert.equal(validateBenchReport(report({ metrics: metrics({ actionLatencyMs: {}, sanitizedPacketBytes: spread(0, null, null) }) })).valid, true);
 });
 
-// 3 workflow results x 3 repeats = 9 evaluated runs; the latency distributions carry 12 + 6 + 2 = 20 samples, one per executed action.
+// 4 workflow results x 3 repeats = 12 evaluated runs; the latency distributions carry 12 + 6 + 2 = 20 samples, one per executed action.
 const covered = (overrides = {}) => report({ metrics: metrics({ notExecutedRuns: 4, actionsExecuted: 20, ...overrides }) });
 
 test("a bench report round-trips the execution-coverage counts, and states them consistently", () => {
@@ -117,8 +188,8 @@ test("a bench report round-trips the execution-coverage counts, and states them 
   assert.deepEqual([parsed.metrics.notExecutedRuns, parsed.metrics.actionsExecuted], [4, 20]);
   assert.deepEqual(parsed, covered());
   // Every run may have executed nothing; more runs than the bench evaluated may not.
-  assert.equal(validateBenchReport(covered({ notExecutedRuns: 9 })).valid, true);
-  assert.deepEqual(issuesOf(covered({ notExecutedRuns: 10 })), ["$.metrics.notExecutedRuns"]);
+  assert.equal(validateBenchReport(covered({ notExecutedRuns: 12 })).valid, true);
+  assert.deepEqual(issuesOf(covered({ notExecutedRuns: 13 })), ["$.metrics.notExecutedRuns"]);
   for (const [label, override] of Object.entries({
     "fractional runs": { notExecutedRuns: 1.5 },
     "negative runs": { notExecutedRuns: -1 },
@@ -130,7 +201,7 @@ test("a bench report round-trips the execution-coverage counts, and states them 
 
 test("a bench report written before the execution-coverage counts still loads, and its counts read as unmeasured rather than zero", () => {
   // The shape of the eight benches on disk: metrics with neither key present.
-  const older = report();
+  const older = legacy();
   assert.deepEqual(Object.keys(older.metrics), [
     "rates", "actionLatencyMs", "runDurationMs", "sanitizedPacketBytes", "rawSnapshotBytes", "truncationCount",
     "harnessRecovery", "adaptationCost", "adaptationValidation", "adaptationPersistence", "adaptationReuse",
@@ -142,7 +213,8 @@ test("a bench report written before the execution-coverage counts still loads, a
   assert.equal(Object.hasOwn(parsed.metrics, "notExecutedRuns"), false);
   assert.equal(Object.hasOwn(parsed.metrics, "actionsExecuted"), false);
   // And such a report is still a usable baseline for a report that does state them: the counts are not compared metrics.
-  const comparison = compareBenchReports(baseline(), covered({}));
+  const stated = smoke();
+  const comparison = compareBenchReports(older, { ...stated, metrics: { ...stated.metrics, notExecutedRuns: 2, actionsExecuted: 20 } });
   assert.equal(comparison.metrics.length > 0, true);
   assert.equal(comparison.metrics.some(({ metric }) => ["notExecutedRuns", "actionsExecuted"].some((count) => metric.endsWith(count))), false);
 });
@@ -162,28 +234,33 @@ test("report identity, target, repeat count, and LLM usage are validated", () =>
   assert.deepEqual(issuesOf(report({ llm: { mode: "disabled", profileId: null, calls: 1 } })), ["$.llm.calls"]);
 });
 
-test("compareBenchReports applies the plan's tolerance per metric and direction", () => {
+test("compareBenchReports applies the plan's tolerance per lane, per metric and direction", () => {
   const candidate = report();
   const comparison = compareBenchReports(baseline(), candidate);
   assert.equal(comparison.baselineReportId, "bench-2026-09-10-a");
   assert.deepEqual(comparison.metrics.map(({ metric, outcome }) => [metric, outcome]), [
-    ["rate:flowCreationSuccess", "equivalent"],
-    ["rate:initialExecutionSuccess", "equivalent"], // one workflow better: inside the one-workflow tolerance
-    ["rate:deterministicReplaySuccess", "regressed"], // two workflows worse
-    ["rate:falseFailure", "improved"], // lower is better
-    ["rate:falseSuccess", "equivalent"],
-    ["rate:failureClassificationAccuracy", "equivalent"],
-    ["rate:harnessActivation", "equivalent"],
+    ["rate:recording:initialExecutionSuccess", "equivalent"],
+    ["rate:recording:deterministicReplaySuccess", "equivalent"],
+    ["rate:recording:falseFailure", "equivalent"],
+    ["rate:recording:harnessActivation", "equivalent"],
+    ["rate:flow:flowCreationSuccess", "equivalent"],
+    ["rate:flow:initialExecutionSuccess", "equivalent"], // one workflow better: inside the one-workflow tolerance
+    ["rate:flow:deterministicReplaySuccess", "regressed"], // two workflows worse
+    ["rate:flow:falseFailure", "improved"], // lower is better
+    ["rate:flow:falseSuccess", "equivalent"],
+    ["rate:flow:failureClassificationAccuracy", "equivalent"],
+    ["rate:flow:harnessActivation", "equivalent"],
     ["action-latency-p95:web.dom.click", "regressed"], // 140 against 100: beyond 25%
     ["action-latency-p95:web.dom.extract", "equivalent"], // 55 against 50
     ["run-duration-p95", "improved"], // 2600 against 4000
   ]);
   const byMetric = Object.fromEntries(comparison.metrics.map((entry) => [entry.metric, entry]));
-  assert.equal(byMetric["rate:initialExecutionSuccess"].tolerance, 1 / 3);
+  assert.equal(byMetric["rate:flow:initialExecutionSuccess"].tolerance, 1 / 3);
+  assert.equal(byMetric["rate:recording:initialExecutionSuccess"].tolerance, 1);
   assert.equal(byMetric["action-latency-p95:web.dom.click"].tolerance, 25);
   assert.equal(byMetric["action-latency-p95:web.dom.click"].candidate, 140);
   // No population, candidate-only, and baseline-only metrics are not compared.
-  for (const metric of ["rate:fuzzyRecovery", "action-latency-p95:web.dom.scroll", "action-latency-p95:web.dom.type"]) assert.equal(byMetric[metric], undefined, metric);
+  for (const metric of ["rate:flow:fuzzyRecovery", "rate:recording:flowCreationSuccess", "action-latency-p95:web.dom.scroll", "action-latency-p95:web.dom.type"]) assert.equal(byMetric[metric], undefined, metric);
   assert.doesNotThrow(() => assertBenchReport({ ...candidate, comparison }));
   assert.deepEqual(parseBenchReportJson(JSON.stringify({ ...candidate, comparison })).comparison, comparison);
 });
@@ -195,9 +272,12 @@ test("compareBenchMetric holds the tolerance boundaries and refuses what the can
   assert.equal(outcome("action-latency-p95:web.dom.click", 111), "regressed");
   assert.equal(outcome("action-latency-p95:web.dom.click", 186), "equivalent");
   assert.equal(outcome("action-latency-p95:web.dom.click", 188), "improved");
-  assert.equal(outcome("rate:initialExecutionSuccess", 1), "equivalent"); // 2/3 against 3/3: one workflow of three
-  assert.equal(outcome("rate:initialExecutionSuccess", 0), "improved"); // two workflows better
-  for (const metric of ["rate:fuzzyRecovery", "rate:speed", "action-latency-p95:web.dom.type", "action-latency-p95:constructor", "latency"]) assert.equal(compareBenchMetric(metric, 1, candidate), undefined, metric);
+  assert.equal(outcome("rate:flow:initialExecutionSuccess", 1), "equivalent"); // 2/3 against 3/3: one workflow of three
+  assert.equal(outcome("rate:flow:initialExecutionSuccess", 0), "improved"); // two workflows better
+  for (const metric of [
+    "rate:flow:fuzzyRecovery", "rate:flow:speed", "rate:initialExecutionSuccess", "rate:replay:initialExecutionSuccess", "rate:flow:initialExecutionSuccess:extra",
+    "action-latency-p95:web.dom.type", "action-latency-p95:constructor", "latency",
+  ]) assert.equal(compareBenchMetric(metric, 1, candidate), undefined, metric);
   assert.throws(() => compareBenchReports({ ...baseline(), corpusId: "fluxbench-week2" }, candidate), /different corpora/u);
   assert.throws(() => compareBenchReports(candidate, candidate), /itself/u);
 });

@@ -1,4 +1,4 @@
-import type { LlmUsage } from "./evaluation.js";
+import { evaluationLanes, type EvaluationLane, type LlmUsage } from "./evaluation.js";
 import type { FluxIQExecutionMetadata } from "./run.js";
 
 export const BENCH_REPORT_SCHEMA_VERSION = "0.1" as const;
@@ -26,7 +26,7 @@ export const BENCH_TOLERANCE: Readonly<{ rateWorkflows: number; latencyP95Ratio:
 
 export type BenchComparisonOutcome = "improved" | "regressed" | "equivalent";
 
-/** One corpus row's workflow, primary or a variant, across the bench's repeats. */
+/** One corpus row's workflow, primary or a variant, on one lane, across the bench's repeats. */
 export type BenchWorkflowResult = {
   /** The corpus row, such as `W05`. A row's workflow and each of its variants are separate results sharing it. */
   corpusRowId: string;
@@ -35,6 +35,13 @@ export type BenchWorkflowResult = {
   workflowId: string | null;
   /** `null` for the unarmed workflow. */
   variantId: string | null;
+  /**
+   * The lane every run of this result ran on. An unarmed workflow runs on the
+   * recording lane and on the Flow lane, and is one result on each, sharing
+   * its row, scenario, workflow, and variant. Absent only in a report written
+   * before lanes, where no result states one.
+   */
+  lane?: EvaluationLane;
   /** Always the report's `repeatCount`. */
   runs: number;
   /** Passing runs over `runs`. */
@@ -51,12 +58,37 @@ export type BenchWorkflowResult = {
  */
 export type BenchRate = { count: number; total: number; workflows: number; rate: number | null };
 
+/** Every rate of the Week 1 Metrics table, over one population of runs. */
+export type BenchRates = Record<BenchRateMetric, BenchRate>;
+
 /** p50 and p95 over `samples` values, both `null` when there are none. */
 export type BenchDistribution = { samples: number; p50: number | null; p95: number | null };
 
-/** The Week 1 Metrics table over the whole corpus. Units are in the field names. */
+/**
+ * The Week 1 Metrics table over the whole corpus. Units are in the field
+ * names. The rates are per lane; the distributions and counts cover every
+ * evaluated run.
+ */
 export type BenchCorpusMetrics = {
-  rates: Record<BenchRateMetric, BenchRate>;
+  /**
+   * The rates, **per lane and never combined**. An unarmed row runs on both
+   * lanes, and the recording lane executes at most a two-action Core
+   * round-trip probe, never the workflow: a rate over both lanes would count
+   * each unarmed row twice and blend a measurement of the Testing Lab into one
+   * of FluxIQ. A lane is present exactly when the report lists a result on it,
+   * so a bench with no Flow-lane row states `recording` alone.
+   *
+   * Absent only in a report written before lanes, which states `rates`.
+   */
+  ratesByLane?: Partial<Record<EvaluationLane, BenchRates>>;
+  /**
+   * One set of rates over every result, as a report written before lanes
+   * states them; never written now. Such a report that lists no variant ran
+   * the recording lane alone, as all eight `smoke` benches on disk did, and its
+   * rates compare as that lane's. One that lists a variant ran the Flow lane as
+   * well, so its rates combine both lanes and compare as neither.
+   */
+  rates?: BenchRates;
   /** Keyed by FluxIQ action type. */
   actionLatencyMs: Record<string, BenchDistribution>;
   runDurationMs: BenchDistribution;
@@ -97,11 +129,11 @@ export type BenchCorpusMetrics = {
 };
 
 /**
- * One metric against a baseline report. `metric` is `rate:<BenchRateMetric>`,
- * `action-latency-p95:<action type>`, or `run-duration-p95`. `candidate` is
- * this report's value; `tolerance` is the largest |candidate - baseline| still
- * `equivalent`: one workflow of this report's rate population, or 25% of the
- * baseline p95.
+ * One metric against a baseline report. `metric` is
+ * `rate:<EvaluationLane>:<BenchRateMetric>`, `action-latency-p95:<action type>`,
+ * or `run-duration-p95`. `candidate` is this report's value; `tolerance` is
+ * the largest |candidate - baseline| still `equivalent`: one workflow of this
+ * report's rate population on that lane, or 25% of the baseline p95.
  */
 export type BenchMetricComparison = { metric: string; baseline: number; candidate: number; tolerance: number; outcome: BenchComparisonOutcome };
 
@@ -127,7 +159,10 @@ export type BenchReport = {
   comparison: BenchComparison | null;
 };
 
-const RATE_PREFIX = "rate:";
+/** What a comparison reads of a report: its metrics, and its results, which say which lane a report written before lanes ran. */
+type ComparedReport = Pick<BenchReport, "metrics" | "workflows">;
+
+const RATE_METRIC = /^rate:([a-z]+):([A-Za-z]+)$/u;
 const ACTION_LATENCY_PREFIX = "action-latency-p95:";
 const RUN_DURATION = "run-duration-p95";
 const EPSILON = 1e-9;
@@ -139,8 +174,8 @@ type MeasuredMetric = { value: number; lowerIsBetter: boolean; tolerance: (basel
  * Judges one metric of `candidate` against a baseline value under the plan's
  * tolerance. `undefined` when `candidate` did not measure `metric`.
  */
-export function compareBenchMetric(metric: string, baseline: number, candidate: Pick<BenchReport, "metrics">): BenchMetricComparison | undefined {
-  const measured = measure(metric, candidate.metrics);
+export function compareBenchMetric(metric: string, baseline: number, candidate: ComparedReport): BenchMetricComparison | undefined {
+  const measured = measure(metric, candidate);
   if (!measured) return undefined;
   const tolerance = measured.tolerance(baseline);
   const delta = measured.value - baseline;
@@ -148,21 +183,23 @@ export function compareBenchMetric(metric: string, baseline: number, candidate: 
   return { metric, baseline, candidate: measured.value, tolerance, outcome };
 }
 
-/** Compares every metric both reports measured: rates in table order, action types by name, then run duration. */
+/** Compares every metric both reports measured: each lane's rates in table order, action types by name, then run duration. */
 export function compareBenchReports(baseline: BenchReport, candidate: BenchReport): BenchComparison {
   if (baseline.corpusId !== candidate.corpusId) throw new Error(`Bench reports of different corpora cannot be compared: ${baseline.corpusId}, ${candidate.corpusId}`);
   if (baseline.reportId === candidate.reportId) throw new Error(`A bench report cannot be compared with itself: ${candidate.reportId}`);
   const metrics: BenchMetricComparison[] = [];
-  const ids = [...benchRateMetrics.map((name) => RATE_PREFIX + name), ...Object.keys(candidate.metrics.actionLatencyMs).sort().map((type) => ACTION_LATENCY_PREFIX + type), RUN_DURATION];
+  const rates = evaluationLanes.flatMap((lane) => benchRateMetrics.map((name) => `rate:${lane}:${name}`));
+  const ids = [...rates, ...Object.keys(candidate.metrics.actionLatencyMs).sort().map((type) => ACTION_LATENCY_PREFIX + type), RUN_DURATION];
   for (const metric of ids) {
-    const base = measure(metric, baseline.metrics);
+    const base = measure(metric, baseline);
     const compared = base && compareBenchMetric(metric, base.value, candidate);
     if (compared) metrics.push(compared);
   }
   return { baselineReportId: baseline.reportId, metrics };
 }
 
-function measure(metric: string, metrics: BenchCorpusMetrics): MeasuredMetric | undefined {
+function measure(metric: string, report: ComparedReport): MeasuredMetric | undefined {
+  const { metrics } = report;
   const latency = (p95: number | null | undefined): MeasuredMetric | undefined =>
     p95 === null || p95 === undefined ? undefined : { value: p95, lowerIsBetter: true, tolerance: (baseline) => BENCH_TOLERANCE.latencyP95Ratio * baseline };
   if (metric === RUN_DURATION) return latency(metrics.runDurationMs.p95);
@@ -170,9 +207,28 @@ function measure(metric: string, metrics: BenchCorpusMetrics): MeasuredMetric | 
     const actionType = metric.slice(ACTION_LATENCY_PREFIX.length);
     return Object.hasOwn(metrics.actionLatencyMs, actionType) ? latency(metrics.actionLatencyMs[actionType]?.p95) : undefined;
   }
-  const name = metric.slice(RATE_PREFIX.length);
-  if (!metric.startsWith(RATE_PREFIX) || !isRateMetric(name)) return undefined;
-  const { rate, workflows } = metrics.rates[name];
-  return rate === null ? undefined : { value: rate, lowerIsBetter: lowerIsBetterRates.has(name), tolerance: () => BENCH_TOLERANCE.rateWorkflows / workflows };
+  const match = RATE_METRIC.exec(metric);
+  const lane = match?.[1];
+  const name = match?.[2];
+  if (!isLane(lane) || !isRateMetric(name)) return undefined;
+  const measured = laneRates(report, lane)?.[name];
+  if (!measured || measured.rate === null) return undefined;
+  const { rate, workflows } = measured;
+  return { value: rate, lowerIsBetter: lowerIsBetterRates.has(name), tolerance: () => BENCH_TOLERANCE.rateWorkflows / workflows };
 }
-const isRateMetric = (name: string): name is BenchRateMetric => (benchRateMetrics as readonly string[]).includes(name);
+
+/**
+ * A report's rates on one lane, or `undefined` when it measured none there. A
+ * report written before lanes states one set of rates and no lane: listing no
+ * variant, it ran the recording lane alone and those rates are that lane's;
+ * listing a variant, it ran the Flow lane as well, and rates combined over
+ * both are neither lane's.
+ */
+function laneRates(report: ComparedReport, lane: EvaluationLane): BenchRates | undefined {
+  const { ratesByLane, rates } = report.metrics;
+  if (ratesByLane) return Object.hasOwn(ratesByLane, lane) ? ratesByLane[lane] : undefined;
+  const recordingAlone = report.workflows.every((result) => result.lane === undefined && result.variantId === null);
+  return lane === "recording" && recordingAlone ? rates : undefined;
+}
+const isRateMetric = (name: string | undefined): name is BenchRateMetric => name !== undefined && (benchRateMetrics as readonly string[]).includes(name);
+const isLane = (name: string | undefined): name is EvaluationLane => name !== undefined && (evaluationLanes as readonly string[]).includes(name);
