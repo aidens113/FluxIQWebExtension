@@ -289,13 +289,15 @@ const authGateNodes = [
 ];
 const authGateSecret: DeclaredSecret = { id: "auth-gate-password", step: "enter-password", value: SUPPLIED };
 
-test("the run's inputs carry the declared value at the path the Flow's node asks for", async () => {
+/** `i-secret-in-workspace` fix 2: Core persists a run's inputs, so each value goes once, under its node's path; one for another workflow's step goes not at all. */
+test("the run's inputs carry the declared value once, at the path the Flow's node asks for, and under no secret id", async () => {
   assert.equal(JSON.stringify(authGateNodes).includes(SUPPLIED), false, "the Flow holds a request, never the value");
+  const otherWorkflowSecret: DeclaredSecret = { id: "auth-gate-passphrase", step: "enter-passphrase", value: "value-declared-for-another-workflow" };
   const fake = fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500, graphNodes: authGateNodes });
-  await runLane(fake, [], { scenarioId: "auth-gate", secrets: [authGateSecret], recordingScript: authGateScript });
-  const expected = { "auth-gate-password": SUPPLIED, "web.secret.password": SUPPLIED, scenarioId: "auth-gate", facilityRunId: "run-test" };
-  assert.deepEqual(fake.startedInputs, [expected], "the run is started with the value under the node's path");
-  assert.deepEqual(fake.runInputs, [expected], "and executed with it");
+  await runLane(fake, [], { scenarioId: "auth-gate", secrets: [authGateSecret, otherWorkflowSecret], recordingScript: authGateScript });
+  const expected = { "web.secret.password": SUPPLIED, scenarioId: "auth-gate", facilityRunId: "run-test" };
+  for (const inputs of [...fake.startedInputs, ...fake.runInputs]) assert.deepEqual([authGateSecret.id, otherWorkflowSecret.id].filter(id => Object.hasOwn(inputs, id)), [], "no input is keyed by a secret id");
+  assert.deepEqual({ started: fake.startedInputs, run: fake.runInputs }, { started: [expected], run: [expected] }, "the run is started and executed with the value once, under the node's path");
 });
 
 test("a request no declaration answers fails the run before it starts, naming the path and never a value", async () => {

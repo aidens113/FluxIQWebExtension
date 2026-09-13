@@ -59,6 +59,8 @@ test("the manifest is a valid W15 workflow whose every target exists where its s
   assert.doesNotMatch(list, /data-testid="reviewed-po-4472"/);
 
   assert.deepEqual(manifest.expected.extracted, [{ step: "extract-order-details", count: 1, records: [SEED_118_ORDERS[1]] }]);
+  // The extract step is the runner's own check, so no recording yields a web.dom.extract action for the Flow lane to judge.
+  assert.deepEqual(manifest.expected.actions, [{ action: "web.dom.click", outcome: "succeeded" }]);
   const extract = manifest.recordingScript.find((step) => step.operation === "extract");
   for (const [field, selector] of Object.entries(extract?.fields ?? {})) {
     const testId = /^\[data-testid="([^"]+)"\]$/.exec(selector)?.[1];

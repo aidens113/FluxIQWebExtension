@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ScenarioStep } from "@fluxiq-web-extension/test-contracts";
-import { declaredSecretBindingInputs, declaredSecretEnvironmentName, declaredSecretFlowInputs, declaredSecretValues, flowSecretRequests, resolveDeclaredSecrets, type FlowSecretRequest, type SecretDeclaringScenario } from "../declared-secrets.js";
+import { declaredSecretBindingInputs, declaredSecretEnvironmentName, declaredSecretValues, flowSecretRequests, resolveDeclaredSecrets, type FlowSecretRequest, type SecretDeclaringScenario } from "../declared-secrets.js";
 import { readFlowNodes } from "../flow-action-types.js";
 import { RunnerFailure } from "../../failure.js";
 import type { RecordingProposalControl } from "../recording-flow-proposal.js";
@@ -30,7 +30,6 @@ test("a secret id becomes an upper-case environment variable name", () => {
 test("declared secrets take their value from the environment, never from the recording", () => {
   const resolved = resolveDeclaredSecrets(scenario, { FLUXIQ_TEST_SECRET_AUTH_GATE_PASSWORD: "supplied-at-replay" });
   assert.deepEqual(resolved, [{ id: "auth-gate-password", step: "enter-password", value: "supplied-at-replay" }]);
-  assert.deepEqual(declaredSecretFlowInputs(resolved), { "auth-gate-password": "supplied-at-replay" });
   assert.deepEqual(declaredSecretValues(resolved), ["supplied-at-replay"]);
   // The declaration names the recorded step, so the recorded value is in
   // reach; the resolver must still never be the thing that reaches for it.
@@ -69,7 +68,6 @@ test("a declaration that names no recorded step fails the run instead of resolvi
 test("a scenario declaring no secret resolves to none", () => {
   assert.deepEqual(resolveDeclaredSecrets({ id: "basic-form", recordingScript: [] }, {}), []);
   assert.deepEqual(resolveDeclaredSecrets({ ...scenario, secrets: [] }, {}), []);
-  assert.deepEqual(declaredSecretFlowInputs([]), {});
 });
 
 // -- Pairing a declaration with the request its node makes --------------------

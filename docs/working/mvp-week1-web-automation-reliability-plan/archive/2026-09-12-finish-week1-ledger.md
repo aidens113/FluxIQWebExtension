@@ -2060,3 +2060,208 @@ expectation corrections (`e3df022`), committed.
   - the retry against the real transient fault.
 - Outcome: Accepted
 
+## Part thirty-one, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: Lab Stage 2's second
+attempt and the secret investigation, whose fixes are dispatched.
+
+### 2026-09-13 — l-stage2, second attempt: the recording fixes held under load; auth-gate leaks its secret into Core, and W18, W19 and W25 fail
+
+- Agent: worker `l-stage2` (Lab); verified by supervisor.
+- Changed: no tracked file.
+  - Worktrees under `F:\fxlab\` moved to `6c22e22`, with Core at `5845f5d`.
+  - 157 runs under `F:\fxlab-runs\stage2b\`.
+  - `reports/l-stage2.md`, "Second attempt".
+- Found (worker figures; each run is a single observation):
+  - **Pin:** the pin proof showed `unpinned=0` on both worktrees.
+  - **Step 4b under two-instance load:** 23 of 24 passed, each with
+    `candidateCount` 4 and equal `recordedActions`.
+    - Run 8 failed `process.startup` before recording, and passed when rerun
+      alone.
+    - The load loop passed 37 of 37.
+    - The lowest free memory was 8.82 GB, and the load never paused.
+  - **Alone, all passing:**
+    - W10 `broken-link` and W27 `blocked-url` each passed 3 of 3, reporting
+      `navigation_unexpected` / `web.navigation.unexpected` with the click
+      `failed`;
+    - `sensitive-input` passed 3 of 3, with its attestation `passed`;
+    - W24 unarmed passed 3 of 3;
+    - smoke gate 5.0 was `equivalent`.
+  - **W18, 0 of 3.** The Flow succeeded, but the Flow-lane extraction expectation
+    can never be met, and the leak attestation failed.
+  - **W19, 0 of 3.**
+    - Its failure category held: the click `failed`, with `auth_required` /
+      `web.auth.required` 3 of 3 and no extract attempt.
+    - `comparisonStatus` is in no bundle, and the leak attestation failed.
+    - Run 1's second discard read hit the fail-closed "no audit log" branch.
+  - **W25, 0 of 3.** No wait was proposed, and `too-slow` failed 0 of 3 as
+    `target_not_found`.
+  - **The week1 bench, `--repeat 1`,** exited 1 with 37 of 67 passed.
+    - Recording lane: `initialExecutionSuccess` 0.174.
+    - Flow lane: `flowCreationSuccess` 0.682, `initialExecutionSuccess` 0.273,
+      `falseSuccess` 0.167, and `failureClassificationAccuracy` 0.727.
+  - **Evidence discards inside the window** occurred in 6 of 37 load runs, W18
+    run 1 and W19 run 3. They failed none.
+- Decisions, set out in the twenty-third dispatch:
+  - the auth-gate secret comes first (`i-secret-in-workspace`, the Lab owner);
+  - the bench's failing rows are triaged (`i-bench-triage`);
+  - W25's live wait is investigated (`i-w25-live-wait`);
+  - `g-flow-lane-expectations` makes the Flow lane stop judging an unreachable
+    extraction expectation, publish each attempt's comparison status, and retry
+    a failed snapshot read once;
+  - step 4b's discard condition counts action discards only.
+- Validation: supervisor, from the bundles.
+  - **A tally of every `run.json` under `F:\fxlab-runs\stage2b\`:**
+    - 157 files, with commit prefixes `6c22e22` ×157 and `5845f5d` ×157;
+    - `"dirty":true` 0 times;
+    - `basic-form`: 65 passed, 1 failed;
+    - `auth-gate`: 5 failed; `auth-gate/expired`: 4 failed;
+    - `delayed-ui`: 4 failed, 1 passed; `delayed-ui/too-slow`: 4 failed;
+    - `navigation/broken-link`: 4 passed; `failure-surfaces/blocked-url`: 4
+      passed;
+    - `sensitive-input`: 3 passed; `intermediate-state`: 5 passed.
+  - **The discard windows published by the 24 step 4b bundles.** 23 carry them,
+    all one shape.
+    - The first read excluded 2 action discards naming no recording, and
+      counted 0.
+    - The second read, with `until` set, excluded 4 naming this run's recording
+      and 2 naming none, with `discardsAfterFirstRead` 0 and 0 counted.
+  - **Two W18 bundles' `redaction-attestation.json`:** `status` `failed`, with
+    `findingCount` 13.
+    - All 13 findings are in scope `workspace`, and none in `bundle`.
+    - 5 are in the project's content-addressed `objects/sha256/`, 5 in the
+      recording's `objects/`, and 3 in
+      `runtime/command-attempts/…/attempt.json`.
+    - Only scopes and paths were printed, never a value.
+- Not verified:
+  - which Core objects and key paths hold the secret (the workspaces were
+    deleted, and `i-secret-in-workspace` keeps one);
+  - W18's username node and start page;
+  - why W25 proposes no wait;
+  - the single failures: W26 `Timed out waiting for client gateway`, W16
+    `fetch failed`, and the startup timeouts;
+  - W19 `expired` against a Core that no longer leaks.
+- Outcome: Revised
+
+### 2026-09-13 — i-secret-in-workspace: the auth-gate secret reaches Core by three routes, none of them typing
+
+- Agent: worker `l-stage2`, as the Lab owner; decisions by supervisor.
+- Changed: no tracked file.
+  - One `auth-gate --flow` run and one recording-lane run, under
+    `F:\fxlab-runs\secret\`. Each kept its Core workspace through a temporary
+    runner edit, was reported, then deleted.
+  - The edit was reverted, and the worktree was proven clean.
+  - `reports/i-secret-in-workspace.md`.
+- Found (a single run per lane):
+  - **The fixture renders the demo password as page text**
+    (`apps/scenario-lab/src/scenarios/auth-gate/pages.ts:21-26`). State
+    snapshots capture it as `visibleText`, `text` and labels: 6 objects per
+    lane, plus the attempts' result snapshots.
+  - **The runner sends the secret twice as Flow run inputs**
+    (`run-flow-lane.ts:133`). Core persists them in the session metadata and in
+    `runDetailEnvelope`'s event chunks.
+  - **Core saves each command attempt whole.** The password step's resolved value
+    sits at `command.parameters.text`, and trace withholding never covered
+    attempts.
+  - Nothing came from typing: the recorder withholds a password field's value.
+  - The attestation undercounts. It skips SQLite, and both runs' databases held
+    the value in 4 rows it never reported.
+- Decisions: the twenty-fourth dispatch takes fixes 1-5.
+  - `f-authgate-fixture`: the fixture stops rendering the password.
+  - `g-attestation-sqlite`: the attestation scans SQLite.
+  - `f-runner-secret-input`: the runner drops its duplicate input, after
+    `g-flow-lane-expectations`.
+  - In Core, `g-core-input-withholding` withholds persisted run inputs, and
+    `g-core-attempt-withholding` withholds resolved values in saved attempts.
+    The user was told the Core areas, the reason and the compatibility effect
+    before dispatch.
+  - Fix 6, a sensitive-display rule in the domain, goes to the Phase 1.6b
+    ranking.
+- Validation:
+  - Supervisor read:
+    - `run-flow-lane.ts:120-134`, where the run's `inputs` spread both
+      `declaredSecretFlowInputs(input.secrets)` and `secretInputs`;
+    - Core `programs/automation-studio/runtime/service.ts:2824-2835`
+      (`metadata: { ..., inputs: input.inputs ?? {} }`, written by
+      `writeRuntimeSession`);
+    - `storage/project/runtime-stream-store.ts` `runDetailEnvelope`
+      (`inputs: detail.inputs`);
+    - `runtime/storage.ts:51-52`, where `saveCommandAttempt` writes the whole
+      attempt.
+  - Worker: 13 and 6 flagged files, as in Stage 2. The revert rebuilt at exit 0,
+    and `git status --short` printed nothing. After deletion, `.work entries
+    after: 0`, and the value count was 0 in 57 run files.
+  - The fixture's page text was never printed.
+- Not verified: the browser profile; the exact Core call writing each recording
+  state file; any fix.
+- Outcome: Revised
+
+## Part thirty-two, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: the bench triage, whose fixes are dispatched, and the runner's single secret input, committed.
+
+### 2026-09-13 — i-bench-triage: the 30 failing bench rows are 9 product defects, 11 harness defects, 3 environment and 7 already decided
+
+- Agent: worker `i-bench-triage` (read-only); decisions by supervisor.
+- Changed: `reports/i-bench-triage.md` only.
+- Found (each row is a single observation):
+  - **The recording lane's `initialExecutionSuccess` of 4/23 measures only
+    whether Core's probe could type one string.** 17 of 23 recording results
+    executed nothing: 12 have no `type` step, and 5 had no Core identity (H2).
+  - **Six Flow-lane rows passed with no Flow built** (W04, W06 and W08, twice
+    each). `scenarioRequiresCore` starts Core only when a workflow pins recording
+    events, actions or a playback goal (H2). The 37 passes overstate by 6.
+  - **The Flow lane's one false success is W03.** A key press was recorded before
+    the text typed just before it (P1).
+  - **Product defects, ranked by failing results:**
+    - P3, a quick repeated click is dropped: 3;
+    - P1, the key press ordering: 2;
+    - 1 each: P2, no check confirmation; P6, a child-frame id replayed after a
+      reload; P4, no recorded tab switch or close; P5, a file input recorded as
+      text; P7, an optional dismissal.
+  - **Harness defects H1-H7,** as the report tabulates.
+- Decisions: the twenty-fifth dispatch.
+  - P1, P2, P3 and H1-H7 are fixed now, across five workers.
+  - P4-P7 are designed first (`i-recording-capability-gaps`), since W15 and W17
+    are in criterion 1's set.
+- Validation: supervisor read the code behind four claims.
+  - `content/dom-events.ts:116-131`: the `keydown` listener emits without
+    flushing pending input.
+  - `background/connection/pointer-click-filter.ts:4-19`: a 750 ms suppression
+    per signature.
+  - `background/connection/runtime-status.ts:93-107`: no `web.dom.check` branch.
+  - `packages/test-runner/src/scenarios.ts:25-27`: `scenarioRequiresCore`.
+  - Worker: its extraction scripts read all 30 failing bundles and a passing
+    comparison, and no fixture value appears in the report.
+- Not verified:
+  - the generated Flows' node order (the workspaces were deleted);
+  - W05's and W07's page-status text;
+  - which tab W15's second click ran in;
+  - reruns of the three environment failures.
+- Outcome: Revised
+
+### 2026-09-13 — f-runner-secret-input: the Flow run gets each declared secret once, under its node's path
+
+- Agent: worker `f-runner-secret-input`; verified by supervisor.
+- Changed:
+  - `packages/test-runner/src/flow-lane/run-flow-lane.ts`: the run's `inputs`;
+  - `flow-lane/declared-secrets.ts`: `declaredSecretFlowInputs` removed, having no
+    other caller;
+  - their tests.
+- Why: Core persists a run's inputs, so the copy keyed by secret id was one more
+  copy on disk (`i-secret-in-workspace` fix 2). This reverses the id-keyed copy that
+  `p-secret-binding` and `f-w18-secret-leg` kept.
+- Validation:
+  - **Supervisor**, the test-runner gate under label `sup31`:
+    - `check` exit=0; private `tsc` exit=0;
+    - `node --test` printed "# tests 524", "# pass 524", "# fail 0";
+    - the private build was removed.
+  - That run included `g-attestation-sqlite`'s uncommitted rows (521 + 3). The
+    structure audit failed only on this plan's length and the stale index, both
+    fixed in this commit.
+  - **Worker mutation:** re-adding the id-keyed spread failed the row "no input is
+    keyed by a secret id". Restored, 521 pass.
+- Not verified: no Lab run. W18 must still type twice, and Core's workspace must
+  hold no `inputs.auth-gate-password` key. `web.secret.password` stays in persisted
+  inputs until `g-core-input-withholding` lands.
+- Outcome: Accepted

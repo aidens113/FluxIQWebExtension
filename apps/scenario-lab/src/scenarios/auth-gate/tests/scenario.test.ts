@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { assertWebScenario, resolveScenarioWorkflow, scenarioPageFactSchedule } from "@fluxiq-web-extension/test-contracts";
+import { escapeHtml } from "../../../html.js";
 import { startScenarioLab } from "../../../server.js";
 import { authGateDemoCredentials } from "../constants.js";
 import { authGateScenario } from "../scenario.js";
@@ -57,8 +58,8 @@ test("manifest is valid and resolves W18 (primary) and W19 (expired)", () => {
  * declares that step instead, and the Flow lane resolves the value from
  * `FLUXIQ_TEST_SECRET_AUTH_GATE_PASSWORD` (the id upper-cased, hyphens as
  * underscores) rather than from anything the run recorded. What the variable
- * must carry is the credential this fixture accepts, which the sign-in page
- * states in plain sight.
+ * must carry is the credential this fixture accepts: the password constant,
+ * which the sign-in page deliberately does not show.
  */
 test("the manifest declares the password step as a replay secret rather than relying on the recording", () => {
   const manifest = authGateScenario.manifest;
@@ -203,13 +204,33 @@ test("the account route serves protected content only to a valid session and not
   for (const subpath of ["account/", "account/settings", "admin", "sign-in"]) assert.equal(route(valid, subpath), undefined, subpath);
 });
 
-test("the sign-in page states the demo credentials, marks the password field, and reveals the expiry notice only on ?expired=1", () => {
+/**
+ * The declared replay secret is never page text. Every state snapshot captures
+ * an element's visible text, and the recorder's sensitive-control rule covers
+ * only a control's value, so a password shown on the page reaches Core's
+ * workspace whatever typing withholds. Each assertion compares a boolean, so a
+ * failure never prints the value.
+ */
+test("no rendering of the fixture contains the password constant", () => {
+  const renderings: Record<string, string> = {
+    "sign-in, seeded": authGateScenario.render(seeded(), context),
+    "sign-in, armed": authGateScenario.render(armed(seeded()), context),
+    "sign-in, signed in": authGateScenario.render(signedIn(), context),
+    "account": route(signedIn(), "account")?.body ?? "",
+  };
+  assert.equal(renderings["account"]?.includes('data-testid="account-summary"'), true, "the account rendering is the protected page");
+  for (const [name, html] of Object.entries(renderings)) {
+    for (const form of [credentials.password, escapeHtml(credentials.password)]) assert.equal(html.includes(form), false, name);
+  }
+});
+
+test("the sign-in page states the demo username, withholds the password, marks the password field, and reveals the expiry notice only on ?expired=1", () => {
   const html = authGateScenario.render(seeded(), context);
   for (const text of [
     'type="password" autocomplete="current-password"',
     'autocomplete="username"',
     'data-testid="demo-username">demo.user<',
-    `data-testid="demo-password">${credentials.password}<`,
+    'data-testid="demo-password">Withheld: a run supplies it as the declared secret auth-gate-password.<',
     '<p role="alert" data-testid="session-expired" hidden>Your session expired. Sign in again to continue.</p>',
     "get('expired') === '1'",
     'location.assign("/scenarios/auth-gate/account")',
@@ -242,6 +263,7 @@ test("through the lab server the account route redirects, records each GET, and 
     const signInPage = await get("/scenarios/auth-gate/?expired=1");
     assert.equal(signInPage.status, 200);
     assert.ok(signInPage.body.includes('data-testid="sign-in-form"'));
+    assert.equal(signInPage.body.includes(credentials.password), false, "the served sign-in page does not contain the password constant");
 
     await post("sign-in", credentials);
     const served = await get("/scenarios/auth-gate/account");

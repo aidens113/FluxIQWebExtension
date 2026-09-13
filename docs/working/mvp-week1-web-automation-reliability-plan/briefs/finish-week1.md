@@ -2557,3 +2557,392 @@ not in `package-boundaries.md`, which `g-core-input-withholding` owns.
 
 **Report:** `reports/g-core-attempt-withholding.md`, with the compatibility
 effect.
+
+---
+
+# Twenty-fifth dispatch — from `i-bench-triage`
+
+Verified by the supervisor on 2026-09-13:
+- **P1.** The `keydown` listener emits without `flushPendingInput()`, which the
+  pointer, input and change listeners all call
+  (`content/dom-events.ts:116-131`).
+- **P3.** A signature is suppressed for 750 ms whatever arrives, so a second real
+  click on the same unmoved control is dropped
+  (`background/connection/pointer-click-filter.ts:4-19`).
+- **P2.** There is no confirmation branch for `web.dom.check`
+  (`background/connection/runtime-status.ts:93-107`).
+- **H2.** `scenarioRequiresCore` is true only when a workflow pins recording
+  events, actions or a playback goal (`packages/test-runner/src/scenarios.ts:25-27`).
+
+Decided:
+- P1, P2, P3 and the harness defects H1-H7 are fixed now.
+- P4 (a tab switch or close) and P5 (a file input mapped to typing) are designed
+  first. W15 and W17 are in criterion 1's W01-W19 set, but they need recording
+  capabilities.
+- P6 (a child frame id after reload) and P7 (an optional dismissal) are designed in
+  the same investigation. Otherwise they go to the Phase 1.6b ranking.
+- A Flow-lane row that built no Flow must never pass. The bench's 37 passes
+  overstate by 6.
+
+## f-recorder-key-order-and-check-confirmation — P1 and P2 (extension)
+
+**Owns:** `apps/extension/src/content/dom-events.ts` or `content/recorder.ts` for
+P1 (name which), `background/connection/runtime-status.ts` for P2, and their
+tests.
+
+**Read:** `reports/i-bench-triage.md` P1 and P2.
+
+**Task.**
+1. **P1.** A pending debounced `dom.input` is emitted before any `dom.keydown`
+   that follows it, as it already is before a click or change. No other
+   ordering changes.
+2. **P2.** A succeeded `web.dom.check` returns the runtime confirmation for the
+   input its recorded check maps to (see `domain/src/io/input-model.ts`). It
+   carries no value from a sensitive control.
+3. Say which other executable verbs have a recorded node that expects a
+   confirmation but get none. Do not fix them.
+
+**Tests.**
+- **P1:** typing then Enter emits `dom.input` before `dom.keydown`, with a mutation.
+- **P2:** a succeeded check yields its confirmation and a failed one yields none,
+  with a mutation.
+- Extension `check` and `test` under a private label; the content-harness recorder
+  spec, if one exists; the structure audit.
+
+**Report:** `reports/f-recorder-key-order-and-check-confirmation.md`.
+
+## f-pointer-click-pairing — P3, a quick second click is kept (extension)
+
+**Owns:** `apps/extension/src/background/connection/pointer-click-filter.ts`, and
+`recorded-event-intake.ts` for its use of the filter only; their tests.
+
+**Read:** `reports/i-bench-triage.md`, P3 and W14's evidence.
+
+**Task.** A `pointerdown` and the `click` it produces stay one recorded action.
+A second activation of the same unmoved control is a second action, however soon
+it comes.
+- Pair each click with its own pointerdown, for example by event order in its
+  frame, instead of suppressing a signature for a fixed window.
+- Say what a keyboard-activated click and a synthetic click now do.
+
+**Tests.**
+- A pointerdown and its click record one action.
+- Two pointerdown-click pairs 250 ms apart record two.
+- A click with no pointerdown records one.
+- Each of the three rows above has a mutation.
+- Extension `check` and `test` under a private label, and the structure audit.
+
+**Report:** `reports/f-pointer-click-pairing.md`.
+
+## g-runner-harness-fixes — H1, H2, H3 and H5 (test-runner)
+
+**Owns:**
+- `packages/test-runner/src/scenarios.ts`;
+- `src/run-scenario.ts`, only the regions H1, H2, H3 and H5 name;
+- the extraction record reader H1 names (name the file);
+- `apps/scenario-lab/src/scenarios/product-catalog/manifest.ts`, only if H1 needs
+  it;
+- their tests, and `run-evaluation/tests/runner-wiring.test.ts` for only the pins
+  these move.
+
+`f-runner-secret-input` owns `run-flow-lane.ts`. If H2 needs it, stop and say
+what.
+
+**Read:** `reports/i-bench-triage.md`: H1, H2, H3, H5, and the two rates.
+
+**Task.**
+1. **H2.** A Flow-lane run always gets a Core identity, and a Flow-lane run that
+   built no Flow fails instead of passing.
+2. **H3.** The Core probe types only into a `type` step whose target is on the
+   page the recording starts on. Otherwise it is skipped, with the reason
+   published.
+3. **H5.** A negative variant is not judged on its primary workflow's
+   playback-goal success facts.
+4. **H1.** The recording lane's final state stops requiring pagination the lane
+   does not follow. Say whether the runner now follows it, or the manifest stops
+   claiming it.
+
+**Tests.**
+- One row for each fix, with a mutation.
+- Test-runner `check`, and `test` in a private `--outDir` at `dist`'s depth.
+- Scenario-lab `check` and `test`, if the manifest changed.
+- The structure audit.
+
+**Report:** `reports/g-runner-harness-fixes.md`.
+
+## g-bench-expectation-fixes — H4 and H7 (test-runner)
+
+**Owns:** `packages/test-runner/src/flow-lane/expectations.ts` and its test;
+`bench/read-run-bundle.ts`, `bench/run-bench.ts` and their tests.
+
+**Read:** `reports/i-bench-triage.md` H4 and H7.
+
+**Task.**
+1. **H4.** An expected action with no `outcome` is judged on its presence only,
+   never as `succeeded`.
+2. **H7.** A bench row's failure message is the one belonging to its failure
+   category, not the last `error` event's. If that needs `run-scenario.ts`, stop
+   and say what, since `g-runner-harness-fixes` owns that file.
+
+**Tests.**
+- One row for each fix, with a mutation.
+- Test-runner `check`, and `test` in a private `--outDir`.
+- The structure audit.
+
+**Report:** `reports/g-bench-expectation-fixes.md`.
+
+## g-manifest-extract-entries — H6 (scenario-lab)
+
+**Owns:** `apps/scenario-lab/src/scenarios/infinite-feed/scenario.ts` and
+`multi-tab/manifest.ts`, the `expected.actions` entries only, and their tests.
+
+**Read:** `reports/i-bench-triage.md` H6; the twenty-third dispatch's extraction
+decision.
+
+**Task.** Remove each `web.dom.extract` entry in `expected.actions` that no
+recording can produce, and keep the recording lane's extraction checks. Say what
+each row's Flow lane now asserts.
+
+**Tests.**
+- Each scenario's test pins the corrected actions, with a mutation.
+- Scenario-lab `check` and `test`.
+- The structure audit.
+
+**Report:** `reports/g-manifest-extract-entries.md`.
+
+## i-recording-capability-gaps — P4, P5, P6 and P7 (read-only design)
+
+**Owns:** `reports/i-recording-capability-gaps.md` only.
+
+**Read:** `reports/i-bench-triage.md` P4-P7, and the rows they fail.
+
+**Task.** For each defect, give:
+- the root cause, with file:line;
+- a fix design partitioned by file across extension, domain and Core;
+- the blast radius on every week1 row;
+- the unit, content-harness and Lab proof it needs;
+- whether it belongs in Week 1. W15 and W17 are in criterion 1's W01-W19 set;
+  W28 and W13 are not.
+
+Recommend an order.
+
+## g-core-attempt-withholding, redispatched — the whole dispatch chain (Core)
+
+The first dispatch was blocked, correctly. Its brief owned the two ends of the chain
+but not the three files between them, so an edit to the owned files would have
+done nothing. Its report holds the design this redispatch adopts.
+
+**Owns** (in `F:\!FluxIQ\packages\fluxiq\src\`), besides the first brief's files:
+- `runtime/contracts.ts`: the dispatch-context field and the framework's marker;
+- `runtime/index.ts`: a barrel line, only if the marker needs one;
+- `programs/automation-studio/runtime/executor/contracts.ts`: the `effectDispatcher`
+  context type;
+- `programs/automation-studio/runtime/io-policy.ts`: forwarding the field;
+- `programs/automation-studio/runtime/tests/io-bridge.test.ts` or
+  `io-policy.test.ts`: the end-to-end row;
+- `F:\!FluxIQ\docs\architecture\runtime-kernel.md`, "Persistence" only.
+
+`g-core-input-withholding` still owns `package-boundaries.md` and
+automation-studio's `runtime/service.ts`.
+
+**Read:** `reports/g-core-attempt-withholding.md`, all of it.
+
+**Decided:**
+1. Build the design in the report's "Design, partitioned by file".
+2. Withhold when the attempt is built, so the attempt in memory and on disk agree.
+3. Withhold `result.message`, `result.error` and `attempt.message`.
+4. The framework owns the marker, and Automation Studio's constant aliases it.
+5. Say whether `result.payload` can carry a resolved value, but do not change it.
+6. Say whether anything in `F:\!FluxIQWebExtension` reads a saved attempt's
+   parameters or messages (read-only).
+
+**Tests:** the report's three rows, each with its mutation.
+- `npx vitest run <files> --no-file-parallelism`;
+- Core `pnpm check`, `pnpm docs:check`, and `pnpm docs:reference` if a cited line
+  moves.
+- No Core `pnpm build`.
+
+**Report:** append a "Redispatch" section to `reports/g-core-attempt-withholding.md`,
+with the Migration Notes paragraph as finally built.
+
+---
+
+# Twenty-sixth dispatch — from `i-w25-live-wait`
+
+Decided by the supervisor on 2026-09-13:
+- **W25 fails on storage order, inside Core's gateway bridge.** Core's WebSocket
+  host handles one client's messages concurrently. The bridge flushes queued state
+  snapshots before an evidence update but not before a recorded event, so a late
+  click is stored ahead of the page change that revealed it.
+- **The fix is the report's design items (a) and (b) together,** in the bridge. It
+  does not go in `ClientGatewayInbound` or in the WebSocket adapter. The domain wait
+  rule, the recorder flush and the manifest stay as they are.
+- **The Core-run row goes in the domain,** as a sibling test file. It builds the
+  evidence message with the domain's builders, copying the metadata
+  `recording-evidence.ts` sends and citing those lines.
+
+## g-core-bridge-order — a client's recording messages are stored in arrival order (Core)
+
+**Owns** (in `F:\!FluxIQ\packages\fluxiq\src\programs\automation-studio\client-gateway\`):
+- `bridge.ts`;
+- new focused modules beside it;
+- `index.ts`, only if a new export is needed;
+- `tests/bridge.test.ts`, and tests for any new module;
+- `F:\!FluxIQ\docs\architecture\automation-studio\client-gateway.md`: the order
+  guarantee only.
+
+`bridge.ts` is 796 lines against an 800-line budget. Move the ordering into a
+focused module; don't squeeze it in. Follow `F:\!FluxIQ\AGENTS.md` and Core's code
+structure. Put the migration-note line in your report, since
+`g-core-input-withholding` owns `package-boundaries.md`.
+
+**Read:** `reports/i-w25-live-wait.md`: Task 3 items 1-3, and open questions 3 and 5.
+
+**Task.**
+1. Build (a) one ordered chain per recording owner, with Stop waiting for it after
+   its drain, and (b) a flush before every direct append.
+2. Say whether any proposal's `stateLink`, or anything else that reads a state
+   beside an action, changes now that snapshots are stored in arrival order.
+
+**Tests.**
+- The report's three rows, each with its mutation. The existing late-discard and
+  ordered-start rows still pass.
+- `npx vitest run <client-gateway and recording test files> --no-file-parallelism`;
+  Core `pnpm check`; `pnpm docs:check`, and `pnpm docs:reference` if a cited line
+  moves.
+- No Core `pnpm build`.
+
+**Report:** `reports/g-core-bridge-order.md`, with the compatibility effect.
+
+## f-w25-core-order-row — the live W25 messages through Core's gateway (domain)
+
+**Owns:** one new test file in `domain/src/tests/`, which you name. Nothing else.
+
+**Read:** `reports/i-w25-live-wait.md` Task 3 item 4. Its probe is in the
+scratchpad folder `iw25\` that the report names.
+
+**Task.**
+1. Write the row the report describes: 8 messages received as Core's WebSocket
+   host delivers them, then the assertions on entries, the compaction issue and
+   the `web` candidates.
+2. Run it against Core as built now, five times. It must fail with 2 candidates
+   every time. Do not skip it or mark it expected-to-fail; the supervisor commits
+   it once Core's fix is built.
+3. Say how long it takes, and whether it leaves any data directory behind.
+
+**Tests.** Domain `check`; the new file under a private
+`DOMAIN_TEST_BUILD_LABEL`, removed afterwards; the structure audit. Never regenerate
+the tracked `domain/.test-build`, and never build Core.
+
+**Report:** `reports/f-w25-core-order-row.md`.
+
+## g-attestation-sqlite-reader — the leak check reads SQLite, not only its bytes (test-runner)
+
+`g-attestation-sqlite` reported that a raw byte scan misses a literal SQLite has
+split across pages: 29 of 101 test positions. A leak check that can miss a leak
+cannot prove 0, so the reader is Week 1 work.
+
+**Owns:** `packages/test-runner/src/secret-leak-attestation.ts`, a focused module
+beside it if the reader needs one, and their tests. The file already carries
+`g-attestation-sqlite`'s uncommitted diff; build on it and keep it.
+
+**Read:** `reports/g-attestation-sqlite.md`.
+
+**Task.**
+1. Also read every text and blob cell of every table in each database the scope
+   finds. The raw scan stays, since it covers freed pages and `-wal` frames.
+2. Choose the reader and say why. Node 22.11's `node:sqlite` needs
+   `--experimental-sqlite`, for example in a child process; a SQLite module
+   already in this workspace's lockfile is the other option. If a new dependency
+   is needed, stop and report.
+3. A database the reader cannot open is an `unscanned-store` finding. Say what a
+   database over the byte limit now gets, including in the demo attestations'
+   1 MB default.
+4. Say whether each Lab run gets a fresh Core workspace, so that an earlier run's
+   leak cannot fail a later run.
+5. Never print, hash or partially quote a literal.
+
+**Tests.**
+- Every split position the raw scan misses is found, with a mutation that turns
+  the reader off.
+- Test-runner `check`, and `test` in a private `--outDir`.
+- The structure audit.
+
+**Report:** `reports/g-attestation-sqlite-reader.md`.
+
+## Amendment to `g-core-attempt-withholding` (redispatched), from `g-core-input-withholding`
+
+`g-core-input-withholding` found, with a temporary probe, that a run input no Flow
+node reads is still saved in clear, in two places:
+- the session record's `trace.values`;
+- each attempt's `inputs`.
+
+The withholding records only values that state resolution supplied. The seed is
+at `executor/graph-run.ts:30`.
+
+**Owns, in addition:** `programs/automation-studio/runtime/executor/graph-run.ts`,
+and its test.
+
+**Task.** Every value a caller supplied as a run input is withheld wherever the
+trace or an attempt saves it, whether or not a node reads it. An authored value is
+kept. Say whether this changes what the runtime dispatch context carries.
+
+**Tests.**
+- A row where a supplied input that no node reads is absent from `trace.values`
+  and from the attempt's `inputs`, and the marker holds its place.
+- A mutation that restores the resolution-only seed.
+
+## g-expected-action-guard — an expected action a recording cannot produce fails the check (test-runner, scenario-lab)
+
+Dispatched once `g-bench-expectation-fixes` has reported, since both edit
+`flow-lane/expectations.ts`.
+
+`g-manifest-extract-entries` removed the unreachable `web.dom.extract` entries from
+W11 and W15, and found the same entry in `admin-console/manifest.ts:143`. A
+written rule did not stop the defect, so a check should.
+
+**Owns:**
+- `packages/test-runner/src/flow-lane/expectations.ts`, or the test-contracts
+  scenario validator (say which, and why);
+- `apps/scenario-lab/src/scenarios/admin-console/manifest.ts`, `expected.actions`
+  only;
+- their tests.
+
+**Task.**
+1. A workflow whose `expected.actions` names an action type that no step of its
+   recording script can produce is rejected as a harness defect. It must never
+   surface as a product failure.
+2. Correct `admin-console`.
+3. Say which other manifests the check flags.
+
+**Tests.**
+- A row that is rejected, and one that is accepted, with a mutation that removes
+  the check.
+- The package gates, and the structure audit.
+
+**Report:** `reports/g-expected-action-guard.md`.
+
+## f-authgate-followups — the rest of the password text (scenario-lab, extension)
+
+Dispatched once `g-manifest-extract-entries` has reported, because scenario-lab's
+`test` builds into the shared `dist`.
+
+**Owns:**
+- `apps/scenario-lab/src/scenarios/auth-gate/constants.ts`, `manifest.ts`,
+  `pages.ts` and `tests/scenario.test.ts`;
+- `apps/extension/e2e/content/tests/failures.spec.ts`, only its two auth-gate rows.
+
+**Read:** `reports/f-authgate-fixture.md`.
+
+**Task.**
+1. Export the sign-in page's password placeholder as a constant, and use it in the
+   page, the scenario test and the two content-harness rows.
+2. Correct every comment or description that still says the page shows the
+   password (`constants.ts:9`, `manifest.ts:28-30,97-98`).
+
+**Tests.**
+- Scenario-lab `check` and `test`;
+- the content harness `failures.spec.ts -g "on auth-gate"`;
+- the structure audit.
+
+**Report:** `reports/f-authgate-followups.md`.

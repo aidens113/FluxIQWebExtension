@@ -1,6 +1,6 @@
 import type { ExpectedEvent, ResolvedScenarioWorkflow, WebScenario } from "@fluxiq-web-extension/test-contracts";
 import type { FluxIQHttpOptions } from "../http-control.js";
-import { declaredSecretBindingInputs, declaredSecretFlowInputs, flowSecretRequests, type DeclaredSecret } from "./declared-secrets.js";
+import { declaredSecretBindingInputs, flowSecretRequests, type DeclaredSecret } from "./declared-secrets.js";
 import { assertFlowActions, assertFlowExtraction, assertFlowFailure, flowExtractionExpectation, type FlowExtractionExpectation } from "./expectations.js";
 import { awaitFinalizedRecording, type FinalizedRecording, type FinalizedRecordingWait } from "./finalized-recording.js";
 import { flowActionTypes, readFlowNodes } from "./flow-action-types.js";
@@ -130,7 +130,8 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
     flowId: approved.flowId,
     facilityRunId: input.facilityRunId,
     actionTypes,
-    inputs: { ...declaredSecretFlowInputs(input.secrets), ...secretInputs, scenarioId: input.scenario.id, facilityRunId: input.facilityRunId },
+    // Each declared value once, under the path a node reads: Core persists a run's inputs, so any further copy is a copy on disk.
+    inputs: { ...secretInputs, scenarioId: input.scenario.id, facilityRunId: input.facilityRunId },
   }, bounds);
   const expected = input.workflow.expected;
   // A Flow with no extract node cannot yield the records a recording's `extract` step checked, so that expectation is not judged here.

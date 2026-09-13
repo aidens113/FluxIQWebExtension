@@ -70,15 +70,6 @@ function recordedStepIds(scenario: SecretDeclaringScenario): Set<string> {
   return new Set([scenario.recordingScript, ...(scenario.workflows ?? []).map((workflow) => workflow.recordingScript)].flat().map((step) => step.id));
 }
 
-/**
- * Declared secrets as Flow-run inputs, keyed by secret id. Core merges a run's
- * inputs into the graph's starting values, so this is the seam a Flow node can
- * read a secret from instead of carrying a literal.
- */
-export function declaredSecretFlowInputs(secrets: readonly DeclaredSecret[]): Record<string, string> {
-  return Object.fromEntries(secrets.map((secret) => [secret.id, secret.value]));
-}
-
 /** Secret values to redact from evidence, in addition to the run's configured credentials. */
 export function declaredSecretValues(secrets: readonly DeclaredSecret[]): string[] {
   return secrets.map((secret) => secret.value);

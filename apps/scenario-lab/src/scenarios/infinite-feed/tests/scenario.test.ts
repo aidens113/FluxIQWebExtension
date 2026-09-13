@@ -39,6 +39,8 @@ test("manifest is valid and scripts W11 as three page-sized scrolls, page waits,
   });
   assert.equal((1 + scrolls.length) * FEED_PAGE_SIZE, 40);
   assert.deepEqual(manifest.expected.extracted, [{ step: "extract-loaded-posts", count: 40 }]);
+  // The extract step is the runner's own check, so no recording yields a web.dom.extract action for the Flow lane to judge.
+  assert.deepEqual(manifest.expected.actions, [{ action: "web.dom.scroll", outcome: "succeeded" }]);
   assert.equal(manifest.expected.failure, undefined);
   assert.equal(manifest.workflows, undefined);
 });

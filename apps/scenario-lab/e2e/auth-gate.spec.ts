@@ -63,11 +63,12 @@ async function expectFacts(page: Page, facts: ExpectedFact[] = []): Promise<void
   }
 }
 
-test("W18 signs in with the stated demo credentials, reaches the account page, and reads the protected content", async ({ page, lab, networkGuard: _guard }) => {
+test("W18 signs in with the demo credentials, reaches the account page, and reads the protected content", async ({ page, lab, networkGuard: _guard }) => {
   await page.goto(`${lab.origin}${manifest.startPath}`);
   await expectFacts(page, primary.expected.pageFacts);
   await expect(page.getByLabel("Password")).toHaveAttribute("autocomplete", "current-password");
-  await expect(page.getByTestId("demo-password")).toHaveText(authGateDemoCredentials.password);
+  // The page never shows the declared secret; a failure reports a boolean, not the value.
+  expect((await page.content()).includes(authGateDemoCredentials.password), "the sign-in page does not show the password constant").toBe(false);
 
   const extracted = await drive(page, primary.recordingScript);
   await expectFacts(page, primary.expected.finalState);

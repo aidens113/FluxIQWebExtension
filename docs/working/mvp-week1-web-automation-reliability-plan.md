@@ -36,11 +36,11 @@ flight. No exit criterion yet carries a quoted Lab observation. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
-settled ledger entries are in parts one to thirty of
+settled ledger entries are in parts one to thirty-two of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13, while workers run.**
-- **This repository:** `e3df022`, 86 commits ahead of `origin/dev`, not pushed.
+- **This repository:** `eb8bf99`, 87 commits ahead of `origin/dev`, not pushed.
 - **Core:** `240c73e`, 10 commits ahead of `origin/dev`, `fluxiq` **0.4.0**, built at
   `187f40d`; the tenth is a plan-only commit. The nine code commits:
   - `5d495eb`, trace withholding;
@@ -93,13 +93,16 @@ settled ledger entries are in parts one to thirty of
   row stays in the corpus.
 
 **In flight:**
-- **Twenty-third dispatch:** `i-bench-triage` and `i-w25-live-wait`. **Twenty-fourth,
-  closing the auth-gate leak:** `f-authgate-fixture`, `g-attestation-sqlite`,
-  `f-runner-secret-input`, and in Core `g-core-input-withholding` and `g-core-attempt-withholding`.
+- **The auth-gate leak:** `g-attestation-sqlite`, to be committed with its follow-up
+  `g-attestation-sqlite-reader`; `f-authgate-followups`; in Core,
+  `g-core-attempt-withholding`, redispatched to own the whole chain.
+- **From the bench triage:** four fix workers for P1-P3, H1-H5 and H7, and the
+  read-only `i-recording-capability-gaps`; then `g-expected-action-guard`.
+- **W25's storage order:** `g-core-bridge-order` in Core and `f-w25-core-order-row`.
 
 **Queued, in dependency order**
-1. **After both dispatches:** a Core build, then W18, W19 and W25 again in the Lab,
-   with the auth-gate leak check expected to read 0.
+1. **After the three dispatches:** a Core build, then W18, W19, W25 and the rows the
+   fixes touch again in the Lab, with the auth-gate leak check reading 0.
 2. **Integration:**
    - Core `package:lint` and `pnpm build` on the 0.4.0 tree (the bump and its
      migration note landed in `5845f5d`);
@@ -643,136 +646,111 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 `2026-09-12-*` Wave 3 and live-validation files, and
 `2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-13 — l-stage2, second attempt: the recording fixes held under load; auth-gate leaks its secret into Core, and W18, W19 and W25 fail
+### 2026-09-13 — g-core-attempt-withholding: blocked on its brief's ownership, and redispatched to own the whole chain
 
-- Agent: worker `l-stage2` (Lab); verified by supervisor.
-- Changed: no tracked file.
-  - Worktrees under `F:\fxlab\` moved to `6c22e22`, with Core at `5845f5d`.
-  - 157 runs under `F:\fxlab-runs\stage2b\`.
-  - `reports/l-stage2.md`, "Second attempt".
-- Found (worker figures; each run is a single observation):
-  - **Pin:** the pin proof showed `unpinned=0` on both worktrees.
-  - **Step 4b under two-instance load:** 23 of 24 passed, each with
-    `candidateCount` 4 and equal `recordedActions`.
-    - Run 8 failed `process.startup` before recording, and passed when rerun
-      alone.
-    - The load loop passed 37 of 37.
-    - The lowest free memory was 8.82 GB, and the load never paused.
-  - **Alone, all passing:**
-    - W10 `broken-link` and W27 `blocked-url` each passed 3 of 3, reporting
-      `navigation_unexpected` / `web.navigation.unexpected` with the click
-      `failed`;
-    - `sensitive-input` passed 3 of 3, with its attestation `passed`;
-    - W24 unarmed passed 3 of 3;
-    - smoke gate 5.0 was `equivalent`.
-  - **W18, 0 of 3.** The Flow succeeded, but the Flow-lane extraction expectation
-    can never be met, and the leak attestation failed.
-  - **W19, 0 of 3.**
-    - Its failure category held: the click `failed`, with `auth_required` /
-      `web.auth.required` 3 of 3 and no extract attempt.
-    - `comparisonStatus` is in no bundle, and the leak attestation failed.
-    - Run 1's second discard read hit the fail-closed "no audit log" branch.
-  - **W25, 0 of 3.** No wait was proposed, and `too-slow` failed 0 of 3 as
-    `target_not_found`.
-  - **The week1 bench, `--repeat 1`,** exited 1 with 37 of 67 passed.
-    - Recording lane: `initialExecutionSuccess` 0.174.
-    - Flow lane: `flowCreationSuccess` 0.682, `initialExecutionSuccess` 0.273,
-      `falseSuccess` 0.167, and `failureClassificationAccuracy` 0.727.
-  - **Evidence discards inside the window** occurred in 6 of 37 load runs, W18
-    run 1 and W19 run 3. They failed none.
-- Decisions, set out in the twenty-third dispatch:
-  - the auth-gate secret comes first (`i-secret-in-workspace`, the Lab owner);
-  - the bench's failing rows are triaged (`i-bench-triage`);
-  - W25's live wait is investigated (`i-w25-live-wait`);
-  - `g-flow-lane-expectations` makes the Flow lane stop judging an unreachable
-    extraction expectation, publish each attempt's comparison status, and retry
-    a failed snapshot read once;
-  - step 4b's discard condition counts action discards only.
-- Validation: supervisor, from the bundles.
-  - **A tally of every `run.json` under `F:\fxlab-runs\stage2b\`:**
-    - 157 files, with commit prefixes `6c22e22` ×157 and `5845f5d` ×157;
-    - `"dirty":true` 0 times;
-    - `basic-form`: 65 passed, 1 failed;
-    - `auth-gate`: 5 failed; `auth-gate/expired`: 4 failed;
-    - `delayed-ui`: 4 failed, 1 passed; `delayed-ui/too-slow`: 4 failed;
-    - `navigation/broken-link`: 4 passed; `failure-surfaces/blocked-url`: 4
-      passed;
-    - `sensitive-input`: 3 passed; `intermediate-state`: 5 passed.
-  - **The discard windows published by the 24 step 4b bundles.** 23 carry them,
-    all one shape.
-    - The first read excluded 2 action discards naming no recording, and
-      counted 0.
-    - The second read, with `until` set, excluded 4 naming this run's recording
-      and 2 naming none, with `discardsAfterFirstRead` 0 and 0 counted.
-  - **Two W18 bundles' `redaction-attestation.json`:** `status` `failed`, with
-    `findingCount` 13.
-    - All 13 findings are in scope `workspace`, and none in `bundle`.
-    - 5 are in the project's content-addressed `objects/sha256/`, 5 in the
-      recording's `objects/`, and 3 in
-      `runtime/command-attempts/…/attempt.json`.
-    - Only scopes and paths were printed, never a value.
+- Agent: worker `g-core-attempt-withholding` (Core); decisions by supervisor.
+- Changed: nothing in Core; `reports/g-core-attempt-withholding.md`.
+- Found: a resolved value reaches the saved attempt through three files the brief
+  did not own.
+  - `executor/contracts.ts:163`: the dispatcher context is `{ signal }` only.
+  - `io-policy.ts:76,88-100`: forwards only the signal and preferred client.
+  - `runtime/contracts.ts:145-148`: the dispatch context has no field for it.
+  - An edit to the owned ends alone would have compiled, passed, and done nothing.
+    The worker said so instead of shipping it.
+- Decisions: the twenty-fifth dispatch's redispatch.
+  - Build the report's design.
+  - Withhold when the attempt is built, so the attempt in memory and on disk agree.
+  - Withhold `result.message`, `result.error` and `attempt.message`.
+  - The framework owns the marker, and Automation Studio aliases it.
+- Validation: worker, in Core: `git status --short` printed nothing at `240c73e`.
+  No code changed, so the supervisor had nothing to rerun.
+- Not verified: the chain in code, by the supervisor. The redispatch's end-to-end
+  row proves it.
+- Outcome: Revised
+
+### 2026-09-13 — i-w25-live-wait: W25 fails because Core's bridge stores the late click before the page change that revealed it
+
+- Agent: worker `i-w25-live-wait` (read-only); decisions by supervisor.
+- Changed: `reports/i-w25-live-wait.md` only; its probes are in the scratchpad.
+- Found: a probe ran Core's real gateway, bridge and service with the domain's
+  mapper.
+  - **Delivered in order:** 8 entries, "Compacted 3", and the candidates click,
+    wait, click.
+  - **Delivered back to back, as Core's WebSocket host delivers:** the late click
+    was stored first in 5 of 5 runs, with 2 candidates. That matches all 8 live
+    Stage 2b `delayed-ui` recordings.
+  - **The cause:** the host starts handling each of a client's messages without
+    awaiting the last (`apps/web/src/server/client-gateway-websocket.ts:172-181`).
+    The bridge flushes queued state snapshots before a state update (`bridge.ts:605`)
+    but appends a recorded event at once (`:390-402`).
+  - **A prototype** combined one ordered chain per recording with a flush before
+    every direct append. It gave click, wait, click in 21 of 21 runs.
+  - **A contradiction:** `i-late-target-wait` said Core appends in arrival order.
+    That holds for the model, not for the bridge.
+- Decisions: the twenty-sixth dispatch.
+  - The fix goes in Core's bridge, and a Core-run row in the domain.
+  - The wait rule, the recorder flush and the manifest stay unchanged.
+  - The user was told this crosses into Core.
+- Validation: the supervisor read Core's `bridge.ts` at `240c73e`.
+  - The recorded-event path calls `recordGatewayInput` with no flush (`:392-402`).
+  - The state-update path awaits `flushRecordingEntries` first (`:605`).
 - Not verified:
-  - which Core objects and key paths hold the secret (the workspaces were
-    deleted, and `i-secret-in-workspace` keeps one);
-  - W18's username node and start page;
-  - why W25 proposes no wait;
-  - the single failures: W26 `Timed out waiting for client gateway`, W16
-    `fetch failed`, and the startup timeouts;
-  - W19 `expired` against a Core that no longer leaks.
+  - Core's live stored order, which is inferred from the fingerprint;
+  - the extension's send order;
+  - Stop and a pending start under the fix;
+  - whether proposal state links change.
 - Outcome: Revised
 
-### 2026-09-13 — i-secret-in-workspace: the auth-gate secret reaches Core by three routes, none of them typing
+### 2026-09-13 — f-authgate-fixture: the auth-gate sign-in page stops showing its password
 
-- Agent: worker `l-stage2`, as the Lab owner; decisions by supervisor.
-- Changed: no tracked file.
-  - One `auth-gate --flow` run and one recording-lane run, under
-    `F:\fxlab-runs\secret\`. Each kept its Core workspace through a temporary
-    runner edit, was reported, then deleted.
-  - The edit was reverted, and the worktree was proven clean.
-  - `reports/i-secret-in-workspace.md`.
-- Found (a single run per lane):
-  - **The fixture renders the demo password as page text**
-    (`apps/scenario-lab/src/scenarios/auth-gate/pages.ts:21-26`). State
-    snapshots capture it as `visibleText`, `text` and labels: 6 objects per
-    lane, plus the attempts' result snapshots.
-  - **The runner sends the secret twice as Flow run inputs**
-    (`run-flow-lane.ts:133`). Core persists them in the session metadata and in
-    `runDetailEnvelope`'s event chunks.
-  - **Core saves each command attempt whole.** The password step's resolved value
-    sits at `command.parameters.text`, and trace withholding never covered
-    attempts.
-  - Nothing came from typing: the recorder withholds a password field's value.
-  - The attestation undercounts. It skips SQLite, and both runs' databases held
-    the value in 4 rows it never reported.
-- Decisions: the twenty-fourth dispatch takes fixes 1-5.
-  - `f-authgate-fixture`: the fixture stops rendering the password.
-  - `g-attestation-sqlite`: the attestation scans SQLite.
-  - `f-runner-secret-input`: the runner drops its duplicate input, after
-    `g-flow-lane-expectations`.
-  - In Core, `g-core-input-withholding` withholds persisted run inputs, and
-    `g-core-attempt-withholding` withholds resolved values in saved attempts.
-    The user was told the Core areas, the reason and the compatibility effect
-    before dispatch.
-  - Fix 6, a sensitive-display rule in the domain, goes to the Phase 1.6b
-    ranking.
+- Agent: worker `f-authgate-fixture`; verified by supervisor.
+- Changed:
+  - `apps/scenario-lab/src/scenarios/auth-gate/pages.ts`: the password row shows a
+    fixed placeholder;
+  - its `tests/scenario.test.ts`: no rendering, and no served sign-in page, contains
+    the constant;
+  - `apps/scenario-lab/e2e/auth-gate.spec.ts`.
+- Why: every state snapshot captures an element's visible text. A page that showed
+  the declared secret put it into Core's workspace, however well typing was
+  withheld (`i-secret-in-workspace` fix 1).
 - Validation:
-  - Supervisor read:
-    - `run-flow-lane.ts:120-134`, where the run's `inputs` spread both
-      `declaredSecretFlowInputs(input.secrets)` and `secretInputs`;
-    - Core `programs/automation-studio/runtime/service.ts:2824-2835`
-      (`metadata: { ..., inputs: input.inputs ?? {} }`, written by
-      `writeRuntimeSession`);
-    - `storage/project/runtime-stream-store.ts` `runDetailEnvelope`
-      (`inputs: detail.inputs`);
-    - `runtime/storage.ts:51-52`, where `saveCommandAttempt` writes the whole
-      attempt.
-  - Worker: 13 and 6 flagged files, as in Stage 2. The revert rebuilt at exit 0,
-    and `git status --short` printed nothing. After deletion, `.work entries
-    after: 0`, and the value count was 0 in 57 run files.
-  - The fixture's page text was never printed.
-- Not verified: the browser profile; the exact Core call writing each recording
-  state file; any fix.
-- Outcome: Revised
+  - **Supervisor**, scenario-lab built into the private directory `dist-sup32`:
+    - `check` exit=0; private build exit=0;
+    - `node --test` printed "# tests 204", "# pass 204", "# fail 0";
+    - the auth-gate diff was byte-identical to the one reviewed.
+  - **Worker:**
+    - the mutation restoring the password `<dd>` failed 3 of 13 auth-gate rows;
+    - the e2e spec gave `6 passed`;
+    - content harness `failures.spec.ts -g "on auth-gate"` gave `4 passed`.
+- Not verified:
+  - no Lab run;
+  - the supervisor did not rerun the e2e spec or the content harness;
+  - two content-harness rows and three comments still describe the old page. That
+    work is `f-authgate-followups`.
+- Outcome: Accepted
+
+### 2026-09-13 — g-manifest-extract-entries: W11 and W15 stop expecting an extract no recording produces
+
+- Agent: worker `g-manifest-extract-entries`; decisions and verification by
+  supervisor.
+- Changed: `expected.actions` only, in `scenario-lab` `infinite-feed/scenario.ts`
+  and `multi-tab/manifest.ts`, and their tests.
+- **The Flow lane now requires** `web.dom.scroll` (W11) and `web.dom.click` (W15).
+  - It still judges final state.
+  - The recording lane still checks extraction: 40 or 25 records for W11, and
+    `PO-4472` for W15.
+- Decision: `admin-console/manifest.ts:143` holds the same unreachable entry, and a
+  written rule did not prevent it. A check replaces the rule (`g-expected-action-guard`,
+  after `g-bench-expectation-fixes`).
+- Validation:
+  - Supervisor: the `sup32` scenario-lab run above, 204 of 204, included both
+    scenarios' diffs.
+  - Worker mutation: restoring both entries failed the W11 and W15 manifest rows.
+- Not verified:
+  - no Lab run;
+  - W15 still fails first on P4;
+  - the existing and clone target modes.
+- Outcome: Accepted
 
 ## Open Questions
 

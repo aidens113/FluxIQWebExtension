@@ -4,9 +4,15 @@ import { authGateDemoCredentials, authGatePaths, authGateProtectedAccount } from
 import type { AuthGateState } from "./state.js";
 
 /**
- * The start page: a sign-in form that states the demo credentials. Opened
+ * The start page: a sign-in form that states the demo username. Opened
  * with `?expired=1`, it says the session expired. A successful sign-in opens
  * the account page, as real sign-in pages redirect to their destination.
+ *
+ * The demo password is never page text. It is the scenario's declared replay
+ * secret, and every state snapshot captures an element's visible text, so a
+ * page that showed it would put the secret into Core's workspace however well
+ * the recorder withholds typed values. Its row keeps a fixed placeholder, so
+ * the page's structure is unchanged; the runner already holds the constant.
  */
 export function renderSignInPage(state: AuthGateState, context: RenderContext): string {
   const body = `<main>
@@ -23,7 +29,7 @@ export function renderSignInPage(state: AuthGateState, context: RenderContext): 
       <p>This is a test fixture. These fixture-only demo credentials work nowhere else; never enter a real password here.</p>
       <dl>
         <dt>Username</dt><dd data-testid="demo-username">${escapeHtml(authGateDemoCredentials.username)}</dd>
-        <dt>Password</dt><dd data-testid="demo-password">${escapeHtml(authGateDemoCredentials.password)}</dd>
+        <dt>Password</dt><dd data-testid="demo-password">Withheld: a run supplies it as the declared secret auth-gate-password.</dd>
       </dl>
     </aside>
     <footer><code data-testid="seed-marker">${escapeHtml(state.seedMarker)}</code></footer>

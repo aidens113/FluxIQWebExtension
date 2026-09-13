@@ -47,7 +47,8 @@ export const infiniteFeedScenario = defineScenario<InfiniteFeedState>({
     ],
     expected: {
       recordingEvents: [{ type: "web.scroll.changed" }],
-      actions: [{ action: "web.dom.scroll", outcome: "succeeded" }, { action: "web.dom.extract", outcome: "succeeded" }],
+      // No `web.dom.extract`: the extract step is the runner's own check, so no recording yields that action. The recording lane judges `extracted`.
+      actions: [{ action: "web.dom.scroll", outcome: "succeeded" }],
       extracted: [{ step: extractStep, count: 40 }],
       finalState: [
         { id: "forty-posts-loaded", subject: "feed-status", predicate: "text", value: "Showing 40 posts" },

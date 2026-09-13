@@ -38,7 +38,8 @@ export const multiTabManifest = createScenarioManifest({
   expected: {
     pageFacts: [{ id: "order-list-visible", subject: "order-list", predicate: "visible", value: true }],
     recordingEvents: [{ type: "web.element.clicked" }],
-    actions: [{ action: "web.dom.click", outcome: "succeeded" }, { action: "web.dom.extract", outcome: "succeeded" }],
+    // No `web.dom.extract`: the extract step is the runner's own check, so no recording yields that action. The recording lane judges `extracted`.
+    actions: [{ action: "web.dom.click", outcome: "succeeded" }],
     finalState: [
       { id: "back-on-order-list", subject: "document", predicate: "path", value: "/scenarios/multi-tab/" },
       { id: "order-reviewed", subject: "reviewed-po-4472", predicate: "text", value: "Reviewed" },
