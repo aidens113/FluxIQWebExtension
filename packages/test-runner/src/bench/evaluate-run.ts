@@ -1,9 +1,7 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { failureCategories, type EvaluationLane, type FailureCategory, type RunEvaluation, type RunEvidenceSizes, type RunManifest } from "@fluxiq-web-extension/test-contracts";
+import { failureCategories, type EvaluationLane, type FailureCategory, type RunEvaluation, type RunManifest } from "@fluxiq-web-extension/test-contracts";
 import { classifyRunnerFailure } from "../failure.js";
-import type { PersistedEvidencePacket, RunLaneObservation } from "../flow-lane/index.js";
-import { evaluateObservedRun, runOutcome, type RunEvaluationIdentity, type RunOutcome } from "../run-evaluation/index.js";
+import type { RunLaneObservation } from "../flow-lane/index.js";
+import { evaluateObservedRun, flowLaneEvidenceSizes, runOutcome, type RunEvaluationIdentity, type RunOutcome } from "../run-evaluation/index.js";
 
 /**
  * Where each recording-lane measurement comes from. The bench writes these
@@ -42,8 +40,6 @@ export const FLOW_LANE_SOURCES = {
 } as const;
 
 const RUNNER_VERDICT = "runner-verdict";
-/** Where the Flow lane writes what it observed, relative to the finalized bundle (`run-scenario.ts`, `flowLaneSnapshot`). */
-const FLOW_LANE_SNAPSHOT = path.join("snapshots", "flow-lane.json");
 
 /** Which run of the corpus an evaluation describes; owned by `run-evaluation`, which both producers share. */
 export type { RunEvaluationIdentity } from "../run-evaluation/index.js";
@@ -110,40 +106,6 @@ export function evaluateFlowRun(input: FlowRunInput): RunEvaluation {
     evidence: flowLaneEvidenceSizes(input.result.path),
   });
 }
-
-/**
- * The Flow lane's evidence sizes, from the `snapshots/flow-lane.json` it wrote
- * into the finalized bundle: one `sanitizedPacketBytes` entry per measured
- * packet, in action order and then capture order, and a `truncationCount` of
- * the packets the domain trimmed. Neither the observation `runScenario`
- * publishes nor `run.json` carries the packets, so the bundle is the only
- * source (`flow-lane/persisted-flow-run.ts`, `PersistedEvidencePacket`).
- *
- * An absent file is a run in which no Flow ran, and yields none. So does a
- * file that cannot be read or parsed, and so does an entry that is not a
- * packet the lane writes: the contract has no way to say "unmeasured", and a
- * size the contract would reject must not throw in the middle of a bench.
- * `rawSnapshotBytes` stays empty, because no producer measures raw snapshots
- * and they are not a Week 1 metric.
- */
-function flowLaneEvidenceSizes(bundlePath: string): RunEvidenceSizes {
-  const packets = snapshotActions(bundlePath).flatMap((action) => Array.isArray(action.evidencePackets) ? action.evidencePackets.filter(isMeasuredPacket) : []);
-  return { sanitizedPacketBytes: packets.map((packet) => packet.bytes), rawSnapshotBytes: [], truncationCount: packets.filter((packet) => packet.truncated).length };
-}
-
-function snapshotActions(bundlePath: string): Array<Record<string, unknown>> {
-  try {
-    const snapshot: unknown = JSON.parse(readFileSync(path.join(bundlePath, FLOW_LANE_SNAPSHOT), "utf8"));
-    return isRecord(snapshot) && Array.isArray(snapshot.actions) ? snapshot.actions.filter(isRecord) : [];
-  } catch {
-    return [];
-  }
-}
-
-const isMeasuredPacket = (value: unknown): value is Pick<PersistedEvidencePacket, "bytes" | "truncated"> =>
-  isRecord(value) && typeof value.bytes === "number" && Number.isSafeInteger(value.bytes) && value.bytes >= 0 && typeof value.truncated === "boolean";
-
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
 /** An attempt whose runner threw before finalizing a bundle: inconclusive, since nothing about the automation was observed. */
 export function evaluateFailedAttempt(input: RunEvaluationIdentity & { lane: EvaluationLane; attemptId: string; error: unknown; wallClockMs: number }): RunEvaluation {

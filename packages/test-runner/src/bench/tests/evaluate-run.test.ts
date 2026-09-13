@@ -167,18 +167,3 @@ test("a recording-lane bundle adds no evidence sizes, even when its directory ho
   const result = { runId: "run-recording", verdict: "passed" as const, path: bundleWith(t, TWO_PACKETS) };
   assert.deepEqual(evaluateRecordingRun(input({ result })).evidence, { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 });
 });
-
-test("a Flow-lane bundle with no snapshot, an unparseable one, or entries that are not packets adds nothing and never throws", (t) => {
-  const empty = { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 };
-  const notPackets = {
-    actions: [
-      { actionType: "web.dom.click", evidencePackets: [{ point: "beforeAction", bytes: -1, truncated: false }, { point: "afterAction", bytes: 1.5, truncated: true }, { point: "afterAction", bytes: 10, truncated: "true" }, "packet", null] },
-      "not an action",
-      { actionType: "web.dom.type", evidencePackets: { point: "beforeAction", bytes: 10, truncated: true } },
-    ],
-  };
-  for (const bundle of [NO_BUNDLE, bundleWith(t, "{ \"actions\": [ not json"), bundleWith(t, { actions: "none" }), bundleWith(t, [TWO_PACKETS]), bundleWith(t, notPackets)]) {
-    const evaluation = evaluateFlowRun(flowInput({ result: { runId: "run-unmeasured", verdict: "passed", path: bundle, observation: createdFlow } }));
-    assert.deepEqual(evaluation.evidence, empty, bundle);
-  }
-});

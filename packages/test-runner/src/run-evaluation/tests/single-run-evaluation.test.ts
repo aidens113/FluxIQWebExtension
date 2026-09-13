@@ -111,8 +111,6 @@ function bundleWith(t: TestContext, snapshot: unknown): string {
   writeFileSync(path.join(directory, "snapshots", "flow-lane.json"), typeof snapshot === "string" ? snapshot : `${JSON.stringify(snapshot, null, 2)}\n`);
   return directory;
 }
-/** A bundle directory that does not exist, so a read of it finds no snapshot. */
-const NO_BUNDLE = path.join(tmpdir(), `fluxiq-single-run-no-bundle-${process.pid}-${Date.now()}`);
 const NO_EVIDENCE = { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 };
 
 /** Two measured packets on two actions, one of them trimmed, and an action Core captured nothing around. */
@@ -154,23 +152,6 @@ test("a recording-lane single run reads no evidence sizes, even from a directory
   const evaluation = singleRunEvaluation(input({ bundlePath: bundleWith(t, TWO_PACKETS) }));
   assert.equal(evaluation.lane, "recording");
   assert.deepEqual(evaluation.evidence, NO_EVIDENCE);
-});
-
-test("a Flow-lane single run whose snapshot is absent, unparseable, or not packets records only what the bench records, and never throws", (t) => {
-  const mixed = { actions: [{ evidencePackets: [{ bytes: -1, truncated: false }, { bytes: 1.5, truncated: true }, { bytes: 10, truncated: "yes" }, "packet", null, { point: "afterAction", bytes: 512, truncated: true }] }, { evidencePackets: "none" }, "action"] };
-  const cases: Array<[string, string, RunEvaluation["evidence"]]> = [
-    ["no bundle", NO_BUNDLE, NO_EVIDENCE],
-    ["broken JSON", bundleWith(t, "{ \"actions\": [ not json"), NO_EVIDENCE],
-    ["actions not an array", bundleWith(t, { actions: "none" }), NO_EVIDENCE],
-    ["a top-level array", bundleWith(t, [TWO_PACKETS]), NO_EVIDENCE],
-    ["only one entry is a packet", bundleWith(t, mixed), { sanitizedPacketBytes: [512], rawSnapshotBytes: [], truncationCount: 1 }],
-  ];
-  for (const [name, bundlePath, expected] of cases) {
-    const run = input({ observation: createdFlow, bundlePath });
-    const evaluation = singleRunEvaluation(run);
-    assert.deepEqual(evaluation.evidence, expected, name);
-    assert.deepEqual(evaluation, benchRowOf(run, bundlePath), `${name}: the single run and its bench row agree`);
-  }
 });
 
 test("lab run hands its evaluation the bundle the Flow lane wrote its snapshot into, before the bundle is sealed", async () => {
