@@ -1,12 +1,19 @@
 // Coverage of server-command-channel.ts: where each server message and command
 // goes. The load-bearing routes are the ones a mistake would hide -- a refused
-// recording start must not fail a healthy socket, and a stop or disconnect must
-// re-enter through the facade's public method rather than short-cut past it.
+// recording start must not fail a healthy socket, a stop or disconnect must
+// re-enter through the facade's public method rather than short-cut past it, and
+// an action's reply sends a recording confirmation only when it succeeded, naming
+// the tab input its own command asked for and carrying that tab without an origin
+// or a query.
 
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
+import { WEB_AUTOMATION_ACTION_TYPES, WEB_AUTOMATION_INPUT_IDS } from "@fluxiq-web-extension/domain/client";
 import type {
   ActivityEntry,
+  BrowserActionCommand,
+  BrowserActionResult,
+  BrowserActionType,
   ClientGatewayServerMessage,
   FluxIQSession,
   FluxIQSettings,
@@ -29,6 +36,7 @@ function harness() {
   const stops: boolean[] = [];
   const snapshotLabels: string[] = [];
   const activities: Array<{ label: string; tone: ActivityEntry["tone"] | undefined }> = [];
+  const sent: Array<{ type: string; payload: unknown }> = [];
   const runtimeStatus = new RuntimeStatusTracker();
   let lastError: string | undefined = "stale error";
   let pageTabId: number | undefined = 3;
@@ -68,7 +76,9 @@ function harness() {
   } as unknown as RecordingEvidenceReporter;
 
   const deps: ServerCommandChannelDeps = {
-    send: (async () => undefined) as ServerCommandChannelDeps["send"],
+    send: (async (type: string, payload: unknown) => {
+      sent.push({ type, payload });
+    }) as ServerCommandChannelDeps["send"],
     gateway,
     recording,
     page,
@@ -104,6 +114,7 @@ function harness() {
     stops,
     snapshotLabels,
     activities,
+    sent,
     runtimeStatus,
     lastError: () => lastError
   };
@@ -197,4 +208,104 @@ test("set_active_tab records the tab before asking the browser to activate it", 
   assert.equal(updates.length, 1);
   assert.equal(updates[0]?.[0], 11);
   assert.ok(updates[0]?.[1].includes("page.setTabId 11"), "the page already names the tab when the browser is asked");
+});
+
+type ResultReply = { sendActionResult(result: BrowserActionResult, tabId?: number, frameId?: number): Promise<void> };
+type SentRecordingEvent = { metadata: { clientKind?: string; inputId?: string; runtimeConfirmation?: boolean }; payload: Record<string, unknown> };
+
+// A command as `execute_action` delivers it. A tab action carries a request, so
+// only its status can keep it from being confirmed.
+function actionCommand(actionType: BrowserActionType, overrides: Partial<BrowserActionCommand> = {}): BrowserActionCommand {
+  return {
+    commandId: `c-${actionType}`,
+    actionType,
+    ...(actionType === "web.browser.tab" ? { tab: { operation: "close" } } : {}),
+    ...overrides
+  };
+}
+
+// Starts the action the way `execute_action` does, then replies on the path the
+// runtime router calls with the action's result. The router itself is not run,
+// so these rows need no browser.
+async function finishAction(
+  h: ReturnType<typeof harness>,
+  action: BrowserActionCommand,
+  result: Partial<BrowserActionResult> = {}
+): Promise<SentRecordingEvent[]> {
+  h.runtimeStatus.startAction(action);
+  await (h.channel as unknown as ResultReply).sendActionResult({
+    commandId: action.commandId,
+    actionType: action.actionType,
+    status: "succeeded",
+    validation: { status: "none", reason: "not-yet-validated" },
+    startedAt: 100,
+    finishedAt: 150,
+    element: { tagName: "input", selector: "#field", value: "entered" },
+    ...result
+  }, 3, 0);
+  return h.sent.filter((message) => message.type === "client.recording_event").map((message) => message.payload as SentRecordingEvent);
+}
+
+test("an action that did not succeed replies with its result and sends no recording confirmation", async () => {
+  for (const actionType of WEB_AUTOMATION_ACTION_TYPES) {
+    for (const status of ["failed", "timed_out"] as const) {
+      const h = harness();
+      const confirmations = await finishAction(h, actionCommand(actionType), { status });
+      assert.equal(h.sent.filter((message) => message.type === "client.action_result").length, 1, `${actionType}, ${status}: the result is sent`);
+      assert.deepEqual(confirmations, [], `${actionType}, ${status}`);
+    }
+  }
+});
+
+test("a succeeded upload, tab switch or tab close is confirmed once, after its result, with no value", async () => {
+  const rows: Array<[label: string, action: BrowserActionCommand, url: string, clientKind: string, inputId: string, tab: object | undefined]> = [
+    ["an upload", actionCommand("web.dom.upload"), "https://shop.test/upload?token=abc", "dom.change", WEB_AUTOMATION_INPUT_IDS.filesChosen, undefined],
+    [
+      "a switch",
+      actionCommand("web.browser.tab", { tab: { operation: "switch", urlPath: "/details" } }),
+      "https://shop.test:8443/details?token=abc#top",
+      "browser.tab",
+      WEB_AUTOMATION_INPUT_IDS.tabSwitched,
+      { operation: "switch", urlPath: "/details" }
+    ],
+    [
+      "a close",
+      actionCommand("web.browser.tab", { tab: { operation: "close" } }),
+      "https://shop.test/list?token=abc",
+      "browser.tab",
+      WEB_AUTOMATION_INPUT_IDS.tabClosed,
+      { operation: "close" }
+    ]
+  ];
+  for (const [label, action, url, clientKind, inputId, tab] of rows) {
+    const h = harness();
+    const confirmations = await finishAction(h, action, { url });
+    assert.deepEqual(h.sent.map((message) => message.type), ["client.action_result", "client.recording_event"], label);
+    const [confirmation] = confirmations;
+    assert.equal(confirmation?.metadata.inputId, inputId, label);
+    assert.equal(confirmation?.metadata.clientKind, clientKind, label);
+    assert.equal(confirmation?.metadata.runtimeConfirmation, true, label);
+    assert.equal("inputValue" in (confirmation?.payload ?? {}), false, `${label}: no inputValue member`);
+    if (tab === undefined) {
+      assert.equal("tab" in (confirmation?.payload ?? {}), false, `${label}: no tab member`);
+      continue;
+    }
+    // The stored payload's tab, in the recorded shape: no origin, port, query or fragment.
+    assert.deepEqual(confirmation?.payload.tab, tab, label);
+    assert.doesNotMatch(JSON.stringify(confirmation?.payload.tab), /shop\.test|8443|token|[?#]/u, label);
+  }
+});
+
+test("a tab result is confirmed only with the request its own command started with", async () => {
+  const h = harness();
+  h.runtimeStatus.startAction(actionCommand("web.browser.tab", { commandId: "c-close", tab: { operation: "close" } }));
+  await (h.channel as unknown as ResultReply).sendActionResult({
+    commandId: "c-late",
+    actionType: "web.browser.tab",
+    status: "succeeded",
+    validation: { status: "none", reason: "not-yet-validated" },
+    startedAt: 100,
+    finishedAt: 150
+  }, 3);
+  assert.deepEqual(h.sent.map((message) => message.type), ["client.action_result"], "another command's close is not this result's operation");
 });

@@ -23,6 +23,7 @@ import { test } from "node:test";
 import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import type { BrowserActionCommand, BrowserActionResult } from "../../shared/protocol";
 import { browserActionFailure, runBrowserActionCommand } from "../action-runner";
+import type { ListedFrame } from "../frame-address";
 
 test("a failure is reported against its command, finished the moment it started", (t) => {
   t.mock.method(Date, "now", () => 9_000);
@@ -117,7 +118,7 @@ const FRAME_REPLY: BrowserActionResult = {
  * navigates, and a click returns once `click-landing.ts`'s start grace ends.
  */
 function installChromeStub(
-  frames: number[] | undefined,
+  frames: Array<number | ListedFrame> | undefined,
   silent: number[] = [],
   uninjectable: number[] = [],
   refusals: string[] = [],
@@ -184,8 +185,9 @@ function installChromeStub(
       }
     },
     webNavigation: {
-      getAllFrames: (_details: { tabId: number }, callback: (found: Array<{ frameId: number }> | undefined) => void) => {
-        callback(frames?.map((frameId) => ({ frameId })));
+      // A bare number is a frame whose URL the row does not care about.
+      getAllFrames: (_details: { tabId: number }, callback: (found: ListedFrame[] | undefined) => void) => {
+        callback(frames?.map((frame) => (typeof frame === "number" ? { frameId: frame } : frame)));
       },
       onBeforeNavigate: navigationEvent(navigation.before),
       onCommitted: navigationEvent(navigation.committed),
@@ -199,7 +201,7 @@ function installChromeStub(
 /** Runs one in-page action against the stub and hands back the result and every browser call it made. */
 async function runAgainstStub(
   action: BrowserActionCommand,
-  frames: number[] | undefined,
+  frames: Array<number | ListedFrame> | undefined,
   silent: number[] = [],
   uninjectable: number[] = []
 ): Promise<ChromeCalls & { run: Awaited<ReturnType<typeof runBrowserActionCommand>> }> {
@@ -307,6 +309,88 @@ test("the top frame is never looked up, because a tab always has one", async () 
   // `ensureContentScript` for the top frame before the action gets here.
   assert.deepEqual(pinged, []);
   assert.equal(run.result.status, "succeeded");
+});
+
+/** W28's page after a Flow reloads its start page: both child frames renumbered, the pay frame cross-origin and carrying a query. */
+const RELOADED_FRAMES: ListedFrame[] = [
+  { frameId: 0, url: "http://127.0.0.1:4173/scenarios/iframe-checkout/" },
+  { frameId: 6, url: "http://127.0.0.1:4173/scenarios/iframe-checkout/shipping" },
+  { frameId: 7, url: "http://127.0.0.1:4174/scenarios/iframe-checkout/pay?session=synthetic-token" }
+];
+const PAY_PATH = "/scenarios/iframe-checkout/pay";
+
+test("a stale recorded frame id with one child frame at its path is sent to that frame, which the result reports", async () => {
+  const { run, sent, pinged } = await runAgainstStub(
+    { commandId: "c-path", actionType: "web.dom.click", selector: "#pay", tabId: TAB_ID, frameId: 4, frameUrlPath: PAY_PATH },
+    RELOADED_FRAMES
+  );
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0]?.frameId, 7);
+  assert.equal(sent[0]?.message["frameId"], 7);
+  assert.equal(sent[0]?.message["topFrameOnly"], false);
+  // The frame found is the one probed for a listener, not the recorded one.
+  assert.deepEqual(pinged, [7]);
+  assert.deepEqual(run, { result: FRAME_REPLY, tabId: TAB_ID, frameId: 7 });
+});
+
+test("two child frames at the path, neither with the recorded id, fail as target_ambiguous and nothing is sent", async () => {
+  const twin: ListedFrame = { frameId: 9, url: `http://127.0.0.1:4174${PAY_PATH}` };
+  const { run, sent, pinged } = await runAgainstStub(
+    { commandId: "c-path-twins", actionType: "web.dom.click", selector: "#pay", tabId: TAB_ID, frameId: 4, frameUrlPath: PAY_PATH },
+    [...RELOADED_FRAMES, twin]
+  );
+  assert.deepEqual(sent, []);
+  assert.deepEqual(pinged, []);
+  assert.equal(run.result.status, "failed");
+  assert.deepEqual(run.result.failure, {
+    category: "target_ambiguous",
+    code: "web.target.ambiguous",
+    retryable: false,
+    stage: "target_resolution",
+    expected: `one child frame at ${PAY_PATH}`,
+    actual: `2 child frames are at ${PAY_PATH}, and none is frame 4`
+  });
+  assert.deepEqual(parseAutomationStudioFailureRecord(run.result.failure), run.result.failure);
+  assert.equal(run.frameId, 4);
+});
+
+test("no child frame at the path fails as target_not_found, naming paths and never a full URL, and nothing is sent", async () => {
+  const receipt = "/scenarios/iframe-checkout/receipt";
+  const { run, sent } = await runAgainstStub(
+    { commandId: "c-path-gone", actionType: "web.dom.click", selector: "#pay", tabId: TAB_ID, frameId: 4, frameUrlPath: receipt },
+    RELOADED_FRAMES
+  );
+  assert.deepEqual(sent, []);
+  assert.equal(run.result.message, `The action is addressed to the frame at ${receipt}, which this tab does not have.`);
+  assert.deepEqual(run.result.failure, {
+    category: "target_not_found",
+    code: "web.target.not_found",
+    retryable: true,
+    stage: "target_resolution",
+    expected: `a child frame at ${receipt}`,
+    actual: "the tab has frame 6 at /scenarios/iframe-checkout/shipping, frame 7 at /scenarios/iframe-checkout/pay"
+  });
+  assert.doesNotMatch(JSON.stringify(run.result), /127\.0\.0\.1|session=|synthetic-token/u);
+});
+
+test("without a path a stale id is refused exactly as before, even when a frame sits at its document's path", async () => {
+  const { run, sent } = await runAgainstStub(
+    { commandId: "c-no-path", actionType: "web.dom.click", selector: "#pay", tabId: TAB_ID, frameId: 4 },
+    RELOADED_FRAMES
+  );
+  assert.deepEqual(sent, []);
+  assert.equal(run.result.message, "The action is addressed to frame 4, which this tab does not have.");
+  assert.deepEqual(run.result.validation, { status: "failed", expected: "frame 4 in the tab", actual: "the tab has frame 0, frame 6, frame 7" });
+});
+
+test("a browser that will not enumerate frames leaves a path-addressed action on its recorded id", async () => {
+  const { run, sent } = await runAgainstStub(
+    { commandId: "c-path-unknown", actionType: "web.dom.click", selector: "#pay", tabId: TAB_ID, frameId: 4, frameUrlPath: PAY_PATH },
+    undefined
+  );
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0]?.frameId, 4);
+  assert.equal(run.frameId, 4);
 });
 
 test("a command addressed to a child frame that lost its content script reaches it once it is injected", async () => {

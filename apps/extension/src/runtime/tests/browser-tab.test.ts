@@ -14,7 +14,7 @@ import { test } from "node:test";
 import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import { WEB_AUTOMATION_FAILURE_CODES, isWebAutomationFailureCode } from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand, BrowserActionResult } from "../../shared/protocol";
-import { forgetAutomationTab } from "../automation-tab";
+import { currentAutomationTabId, forgetAutomationTab, setAutomationTab } from "../automation-tab";
 import { runBrowserTabAction, selectTabForSwitch, type SwitchableTab } from "../browser-tab";
 
 const tabs: SwitchableTab[] = [
@@ -46,12 +46,13 @@ test("without an id or a pattern nothing is selected, rather than an arbitrary t
   assert.equal(selectTabForSwitch([], { urlPattern: "checkout" }), undefined);
 });
 
-/** The `chrome.tabs` calls a failing tab operation makes, and what each answers. */
+/** The `chrome.tabs` calls a tab operation makes, and what each answers. */
 type TabsStub = {
   create?: () => Promise<{ id?: number }>;
-  query?: () => Promise<SwitchableTab[]>;
-  remove?: () => Promise<void>;
-  get?: () => Promise<{ id: number }>;
+  query?: (info: chrome.tabs.QueryInfo) => Promise<Array<SwitchableTab & { status?: string; active?: boolean }>>;
+  remove?: (tabId: number) => Promise<void>;
+  get?: (tabId: number) => Promise<{ id: number; url?: string }>;
+  update?: (tabId: number, properties: chrome.tabs.UpdateProperties) => Promise<unknown>;
 };
 
 /** Runs one tab action against the stub, and puts the global back however it ends. */
@@ -159,4 +160,132 @@ test("a tab that is still open after a close is action_failed, naming the tab", 
   assert.equal(result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.ACTION_FAILED);
   assert.equal(result.failure?.expected, "tab 11 closed");
   assert.equal(result.failure?.actual, "tab 11 is still open");
+});
+
+// --- A recorded switch or close (P4) ------------------------------------------
+//
+// W15's shape: an order list whose path begins its detail page's path, and a
+// detail tab that a link opens.
+
+const LIST_URL = "https://lab.test/scenarios/multi-tab/";
+const DETAILS_URL = "https://lab.test/scenarios/multi-tab/details?order=17";
+
+/** Open tabs a close removes, and the tabs an operation brings to the front. */
+function openTabs(ids: readonly number[]) {
+  const open = new Set(ids);
+  const fronted: number[] = [];
+  const stub: TabsStub = {
+    remove: async (tabId) => {
+      open.delete(tabId);
+    },
+    get: async (tabId) => {
+      if (!open.has(tabId)) throw new Error(`No tab with id: ${tabId}.`);
+      return { id: tabId, url: tabId === 5 ? LIST_URL : DETAILS_URL };
+    },
+    update: async (tabId) => {
+      fronted.push(tabId);
+    }
+  };
+  return { fronted, stub };
+}
+
+test("a switch by path takes the tab at exactly that path, the newest of several, and never a browser page", () => {
+  const open: SwitchableTab[] = [
+    { id: 5, url: LIST_URL },
+    { id: 6, url: DETAILS_URL },
+    { id: 7, url: "https://other.test/scenarios/multi-tab/details" },
+    { id: 8, url: "chrome-extension://abcdefghijklmnop/scenarios/multi-tab/" },
+    { url: LIST_URL }
+  ];
+  assert.equal(selectTabForSwitch(open, { urlPath: "/scenarios/multi-tab/" })?.id, 5, "the list, not a detail page whose URL contains its path");
+  assert.equal(selectTabForSwitch(open, { urlPath: "/scenarios/multi-tab/details" })?.id, 7, "the newest tab at that path");
+  assert.equal(selectTabForSwitch(open, { urlPath: "/scenarios/multi-tab" }), undefined, "a path is not a prefix");
+  assert.equal(selectTabForSwitch(open, { urlPath: "" }), undefined);
+  assert.equal(selectTabForSwitch(open, { tabId: 6, urlPath: "/scenarios/multi-tab/" })?.id, 6, "an id still wins");
+});
+
+test("a switch by path waits for a tab still opening, fronts it, and remembers the tab the Flow was on", async () => {
+  forgetAutomationTab();
+  let lookups = 0;
+  const list = { id: 5, url: LIST_URL, status: "complete" };
+  const details = { id: 6, url: DETAILS_URL, status: "complete", openerTabId: 5 };
+  const { fronted, stub } = openTabs([5, 6]);
+  const result = await runTabAction(
+    { commandId: "t-wait", actionType: "web.browser.tab", tab: { operation: "switch", urlPath: "/scenarios/multi-tab/details" } },
+    {
+      ...stub,
+      query: async (info) => {
+        if (info.active) return [{ ...list, active: true }];
+        lookups += 1;
+        return lookups < 3 ? [list] : [list, details];
+      }
+    }
+  );
+  assert.equal(result.status, "succeeded", result.message);
+  assert.equal(lookups, 3, "it looked again until the tab opened");
+  assert.deepEqual(fronted, [6]);
+  assert.equal(result.url, DETAILS_URL);
+  assert.equal(currentAutomationTabId(), 6);
+  forgetAutomationTab(6);
+  assert.equal(currentAutomationTabId(), 5, "the list is remembered as the tab before it");
+});
+
+test("a switch by path whose tab never opens fails target_not_found once its timeout passes", async () => {
+  const startedAt = Date.now();
+  const result = await runTabAction(
+    { commandId: "t-never", actionType: "web.browser.tab", timeoutMs: 250, tab: { operation: "switch", urlPath: "/scenarios/multi-tab/details" } },
+    { query: async () => [{ id: 5, url: LIST_URL, status: "complete" }] }
+  );
+  assertNameable(result);
+  assert.equal(result.failure?.code, WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND);
+  assert.equal(result.failure?.expected, "a tab at path \"/scenarios/multi-tab/details\" active");
+  assert.equal(result.failure?.actual, "no open tab matched");
+  assert.ok(Date.now() - startedAt >= 200, "it waited for the tab before failing");
+});
+
+test("closing the tab FluxIQ drives fronts the tab driven before it", async () => {
+  forgetAutomationTab();
+  setAutomationTab(5);
+  setAutomationTab(6);
+  const { fronted, stub } = openTabs([5, 6]);
+  const result = await runTabAction({ commandId: "t-close", actionType: "web.browser.tab", tab: { operation: "close" } }, stub);
+  assert.equal(result.status, "succeeded", result.message);
+  assert.deepEqual(fronted, [5]);
+  assert.equal(currentAutomationTabId(), 5);
+  assert.equal(result.url, LIST_URL);
+  assert.deepEqual(result.validation, { status: "passed", expected: "tab 6 closed", actual: "tab 6 closed; tab 5 active" });
+});
+
+test("a close passes over a remembered tab that has closed, and closing a tab FluxIQ is not driving fronts nothing", async () => {
+  forgetAutomationTab();
+  setAutomationTab(4);
+  setAutomationTab(5);
+  setAutomationTab(6);
+  const first = openTabs([4, 6]);
+  const closed = await runTabAction({ commandId: "t-close-gap", actionType: "web.browser.tab", tab: { operation: "close" } }, first.stub);
+  assert.equal(closed.status, "succeeded", closed.message);
+  assert.deepEqual(first.fronted, [4]);
+  assert.equal(currentAutomationTabId(), 4);
+
+  const second = openTabs([4, 9]);
+  const other = await runTabAction({ commandId: "t-close-other", actionType: "web.browser.tab", tab: { operation: "close", tabId: 9 } }, second.stub);
+  assert.equal(other.status, "succeeded", other.message);
+  assert.deepEqual(second.fronted, []);
+  assert.equal(currentAutomationTabId(), 4);
+});
+
+test("a switch to a tab the browser already fronted remembers the tab that opened it, so a close returns there", async () => {
+  forgetAutomationTab();
+  const { fronted, stub } = openTabs([5, 6]);
+  const details = { id: 6, url: DETAILS_URL, status: "complete", openerTabId: 5 };
+  const withQuery: TabsStub = {
+    ...stub,
+    query: async (info) => (info.active ? [{ ...details, active: true }] : [{ id: 5, url: LIST_URL, status: "complete" }, details])
+  };
+  const switched = await runTabAction({ commandId: "t-opened", actionType: "web.browser.tab", tab: { operation: "switch", urlPath: "/scenarios/multi-tab/details" } }, withQuery);
+  assert.equal(switched.status, "succeeded", switched.message);
+  const closed = await runTabAction({ commandId: "t-opened-close", actionType: "web.browser.tab", tab: { operation: "close" } }, withQuery);
+  assert.equal(closed.status, "succeeded", closed.message);
+  assert.deepEqual(fronted, [6, 5]);
+  assert.equal(currentAutomationTabId(), 5);
 });

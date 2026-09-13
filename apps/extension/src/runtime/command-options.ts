@@ -8,6 +8,7 @@
 // malformed value rather than coercing it, so a bad parameter fails the action
 // instead of silently retargeting it at another tab or frame.
 
+import { webAutomationUrlPath } from "@fluxiq-web-extension/domain/client";
 import type {
   BrowserActionCommand,
   WebAutomationDownloadRequest,
@@ -41,6 +42,17 @@ function booleanAt(options: Record<string, unknown>, key: string): boolean | und
  */
 export function frameIdForAction(action: BrowserActionCommand): number | undefined {
   return action.frameId ?? integerAt(optionsOf(action), "browserFrameId");
+}
+
+/**
+ * The path of the child-frame document an action was recorded in, if it names
+ * one: the typed field first, the raw `browserFrameUrlPath` second. Held to the
+ * domain's own rule (`webAutomationUrlPath`), so a malformed value, a full URL or
+ * a protocol-relative host is refused, and the action is addressed by its frame
+ * id alone rather than aimed by a string that is not a path.
+ */
+export function frameUrlPathForAction(action: BrowserActionCommand): string | undefined {
+  return webAutomationUrlPath(action.frameUrlPath ?? optionsOf(action)["browserFrameUrlPath"]);
 }
 
 /** The tab an action names, if it names one. Without it the runner picks the automation or active tab. */

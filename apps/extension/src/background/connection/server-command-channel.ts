@@ -207,10 +207,13 @@ export class ServerCommandChannel {
   }
 
   // A succeeded runtime action is also something the recording must contain:
-  // it is replayed as the recorded event a user would have produced.
+  // it is replayed as the recorded event a user would have produced. An action
+  // that did not succeed gets no confirmation, which
+  // `runtimeConfirmationForActionResult` decides. A tab confirmation's input
+  // depends on the command's operation, which the result does not carry, so the
+  // tracker hands back the request the action started with.
   private async sendRuntimeConfirmation(result: BrowserActionResult, tabId?: number, frameId?: number): Promise<void> {
-    if (result.status !== "succeeded") return;
-    const confirmation = runtimeConfirmationForActionResult(result);
+    const confirmation = runtimeConfirmationForActionResult(result, this.deps.runtimeStatus.tabRequestFor(result.commandId));
     if (!confirmation) return;
     const event = createWebAutomationRecordingEvent({
       kind: confirmation.kind,
@@ -224,6 +227,7 @@ export class ServerCommandChannel {
       inputValue: confirmation.inputValue,
       key: confirmation.key,
       scroll: confirmation.scroll,
+      tab: confirmation.tab,
       actionResult: webAutomationActionResultPayload(result as never),
       metadata: {
         domainId: WEB_AUTOMATION_DOMAIN_ID,

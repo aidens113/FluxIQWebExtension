@@ -1,19 +1,30 @@
 // Coverage of active-page.ts: which tab the extension believes is active, and
 // the two paths that change that belief. Selecting a tab must finish on the
 // facade's public update path, so a caller that replaced that path still sees
-// the selection.
+// the selection. Every tab change and removal is handed to the tab recorder with
+// the page that was in front before it.
 
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
 import type { ActivityEntry, ConnectionState, RecordingState, TabDescriptor } from "../../../shared/protocol";
 import { ActivePage, type ActivePageDeps } from "../active-page";
+import type { KnownActiveTab } from "../tab-recorder";
 
-function harness(options: { recordingState?: RecordingState; gatewayState?: ConnectionState } = {}) {
+type HarnessOptions = {
+  recordingState?: RecordingState;
+  gatewayState?: ConnectionState;
+  failTabRecorder?: boolean;
+};
+
+function harness(options: HarnessOptions = {}) {
   const sent: Array<{ type: string; payload: Record<string, unknown> }> = [];
   const attached: number[] = [];
   const activities: Array<{ label: string; tone: ActivityEntry["tone"] | undefined }> = [];
   const updates: chrome.tabs.Tab[] = [];
+  const tabChanges: Array<{ tabId: number | undefined; lastActive: KnownActiveTab | undefined; pageTabId: number | undefined }> = [];
+  const removals: Array<{ tabId: number; lastActive: KnownActiveTab | undefined }> = [];
   const active: TabDescriptor = { tabId: 5, url: "https://shop.test/" };
+  let page: ActivePage | undefined;
   const deps: ActivePageDeps = {
     send: (async (type: string, payload: Record<string, unknown>) => {
       sent.push({ type, payload });
@@ -32,9 +43,18 @@ function harness(options: { recordingState?: RecordingState; gatewayState?: Conn
     emitStatus: () => undefined,
     updateTab: async (tab) => {
       updates.push(tab);
+    },
+    noteTabChange: async (tab, lastActive) => {
+      tabChanges.push({ tabId: tab.id, lastActive, pageTabId: page?.tabId() });
+      if (options.failTabRecorder) throw new Error("recorder failed");
+    },
+    noteTabRemoved: async (tabId, lastActive) => {
+      removals.push({ tabId, lastActive });
+      if (options.failTabRecorder) throw new Error("recorder failed");
     }
   };
-  return { page: new ActivePage(deps), sent, attached, activities, updates };
+  page = new ActivePage(deps);
+  return { page, sent, attached, activities, updates, tabChanges, removals };
 }
 
 function tab(fields: Partial<chrome.tabs.Tab>): chrome.tabs.Tab {
@@ -63,6 +83,37 @@ test("an unsupported page is adopted but not attached, and nothing is published 
   assert.ok(h.page.unsupported(), "a browser page cannot be recorded");
   assert.deepEqual(h.attached, []);
   assert.deepEqual(h.sent, []);
+});
+
+test("every tab change reaches the tab recorder with the page in front before it, once this page has moved", async () => {
+  const h = harness();
+  await h.page.refresh();
+  await h.page.handleTabUpdate(tab({ id: 6, active: true, url: "https://shop.test/orders" }));
+  await h.page.handleTabUpdate(tab({ id: 7, active: false, url: "https://shop.test/help" }));
+  await h.page.handleTabUpdate(tab({ id: 8, active: true, url: "chrome://extensions/" }));
+  await h.page.handleTabUpdate(tab({ id: 6, active: true, url: "https://shop.test/orders" }));
+  assert.deepEqual(h.tabChanges, [
+    { tabId: 6, lastActive: { tabId: 5, url: "https://shop.test/" }, pageTabId: 6 },
+    { tabId: 7, lastActive: { tabId: 6, url: "https://shop.test/orders" }, pageTabId: 6 },
+    { tabId: 8, lastActive: { tabId: 6, url: "https://shop.test/orders" }, pageTabId: 8 },
+    { tabId: 6, lastActive: undefined, pageTabId: 6 }
+  ], "a page a recording cannot be in is never handed on as the page in front");
+});
+
+test("a removed tab reaches the tab recorder with the page in front", async () => {
+  const h = harness();
+  await h.page.handleTabUpdate(tab({ id: 6, active: true, url: "https://shop.test/orders" }));
+  await h.page.handleTabRemoved(6);
+  assert.deepEqual(h.removals, [{ tabId: 6, lastActive: { tabId: 6, url: "https://shop.test/orders" } }]);
+});
+
+test("a tab recorder that fails does not stop the page being attached and published", async () => {
+  const h = harness({ failTabRecorder: true });
+  await h.page.handleTabUpdate(tab({ id: 5, active: true, url: "https://shop.test/", status: "complete" }));
+  assert.deepEqual(h.attached, [5]);
+  assert.equal(h.sent.length, 2);
+  await h.page.handleTabRemoved(5);
+  assert.equal(h.removals.length, 1);
 });
 
 test("selecting a tab finishes through the facade's update path; an unavailable one is refused", async (t: TestContext) => {

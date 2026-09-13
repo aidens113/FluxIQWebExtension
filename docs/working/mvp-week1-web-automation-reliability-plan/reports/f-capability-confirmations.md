@@ -227,3 +227,161 @@ Script `fcc-mutations.sh` in my scratchpad. Each mutation:
    rows fail. A single unexplained failure in rows 131-153 from another worker
    around this time should be rerun.
 5. **Structure baseline:** no entry needs to change.
+
+## Amendment — a tab confirmation carries its tab
+
+Brief: "## Amendment to `f-capability-confirmations` — a tab confirmation carries
+its tab (extension)", `briefs/finish-week1.md`. This settles open question 2
+above. I built on my uncommitted diff, which matched my last hashes before I
+started. `f-tab-recording` had finished, so `tab?: WebAutomationRecordedTab` was
+already on `RecordingEventPayload` (`shared/protocol.ts:399`).
+
+### Outcome
+
+**Done.** A succeeded tab switch or close now carries its tab in the
+confirmation, in the shape a recorded tab change has:
+- **A switch** carries `tab: { operation: "switch", urlPath }`. `urlPath` is the
+  pathname of the tab the switch left in front, and never holds an origin, query
+  or fragment.
+- **A close** carries `tab: { operation: "close" }`, with no path.
+- **The tab reaches the stored event.** `sendRuntimeConfirmation` passes it in, and
+  the stored payload's `tab` is proved without a host, port or query.
+
+Results:
+- `pnpm check` exited 0.
+- `pnpm test` passed 460 of 460.
+- The structure audit passed.
+- Seven mutations each failed the rows they target, and every file was restored
+  byte-identical.
+
+No domain, tab-recorder or `runtime/command-options.ts` file was touched.
+
+### What changed and why
+
+**`apps/extension/src/background/connection/runtime-status.ts`**
+- **The return type.** The confirmation's type gains
+  `tab?: RecordingEventPayload["tab"]`.
+- **`tabConfirmation(tab, result)` gives each operation its tab:**
+  - **A switch:** `tab: { operation: "switch", urlPath }`, where `urlPath` is the
+    pathname of `result.url`. `browser-tab.ts` sets that to the URL of the tab the
+    switch left in front (`switchTab`, `:214-219`). With no usable path, the tab
+    is `{ operation: "switch" }`.
+  - **A close:** always `tab: { operation: "close" }`, even though its result
+    carries the URL of the tab it returned to (`closeTab`, `:251-256`).
+- **New `frontTabPath(url)`.** It mirrors the tab recorder's rule
+  (`tab-recorder.ts:49-52`) and ends with the domain's rule. A path is carried
+  only when every one of these holds:
+  - the URL is present;
+  - the page is not unsupported (`unsupportedPageForUrl`, `./browser-state`);
+  - the URL parses;
+  - its origin is not opaque (`"null"`);
+  - `webAutomationUrlPath(pathname)` accepts the pathname. It is imported from
+    `@fluxiq-web-extension/domain/client`, as `runtime/command-options.ts` already
+    imports it.
+
+  No origin, query or fragment can reach the path.
+
+**`apps/extension/src/background/connection/server-command-channel.ts`**
+- `sendRuntimeConfirmation` passes `tab: confirmation.tab` into
+  `createWebAutomationRecordingEvent`.
+- That function copies only `operation` and `urlPath` onto the stored payload
+  (`domain/src/client/gateway-mapping.ts:106`).
+
+**Tests**
+- **`tests/runtime-status.test.ts`:**
+  - **The confirmation table's `web.browser.tab` row** now expects
+    `tab: { operation: "close" }`.
+  - **The tab test's rows.** The result URL is
+    `https://shop.test/details?token=abc`. A switch now expects
+    `{ operation: "switch", urlPath: "/details" }`, whether the command named a
+    path or a tab id. A close expects `{ operation: "close" }`.
+  - **New: "a switch confirmation names the tab left in front by its pathname
+    alone, and a close names none".** For each URL, a switch and a close are
+    checked by deep equality. A regex also proves the serialised confirmation
+    holds no host, port, credentials, query, fragment or file name. The URLs:
+    - one with credentials, port, query and fragment, which gives `/details/42`;
+    - no URL; an unreadable one; `about:blank`;
+    - a store page, `https://chromewebstore.google.com/detail/abc?hl=en`, where
+      only the unsupported-page rule refuses a readable https path;
+    - a `file:` page, where only the opaque-origin check refuses a readable path;
+    - `https://shop.test//evil.test/x`, where only the domain's path rule refuses
+      the pathname.
+- **`tests/server-command-channel.test.ts`:**
+  - **The succeeded upload, switch and close rows** now carry result URLs with a
+    port, a query and a fragment.
+  - **The stored `payload.tab`** is `{ operation: "switch", urlPath: "/details" }`
+    and `{ operation: "close" }`, with no host, port or query. An upload's payload
+    has no `tab` member.
+
+### Commands run and observed results
+
+Commands ran from `apps/extension` with `EXTENSION_TEST_BUILD_LABEL=fcc`. Output
+went to scratch logs, which were then read.
+
+| Gate | Result |
+| --- | --- |
+| `pnpm check` | exit 0, no `error TS` lines |
+| `pnpm test` | exit 0; `Extension smoke test passed.`; `# tests 460`, `# pass 460`, `# fail 0`. The total rose from 435 because other workers added tests. Rows 137, 138, 142, 143, 152, 159 and 160 are mine, and all `ok` |
+
+**Mutation proofs.** Script `fcc-amend-mutations.sh` in my scratchpad. Each
+mutation replaced one exact, unique anchor, ran `node scripts/test-extension.mjs`,
+restored the file from a byte copy and compared hashes. The baseline hashes were
+`runtime-status.ts` `0d8f0635…` and `server-command-channel.ts` `9014bd9a…`.
+
+| # | Mutation | Observed failures (`# fail`) | Restore |
+| --- | --- | --- | --- |
+| A1 | A switch's path keeps the query (`pathname + search`) | `not ok 142` (`+ urlPath: '/details?token=abc'`), `143` (switch, the credentials row: `+ urlPath: '/details/42?token=abc'`), `159` (`+ urlPath: '/details?token=abc'`). 3 | byte-identical `0d8f0635…` |
+| A2 | A close carries the front tab's path | `not ok 142` (`+ urlPath: '/details'`), `143` (close, the credentials row: `+ urlPath: '/details/42'`), `159` (`+ urlPath: '/list'`). 3 | byte-identical `0d8f0635…` |
+| A3 | The channel drops `tab: confirmation.tab` | `not ok 159` only (`+ undefined`, `- { operation: 'switch', urlPath: '/details' }`). 1 | byte-identical `9014bd9a…` |
+| A4 | Remove the unsupported-page guard | `not ok 143` only (switch, a store page: `+ urlPath: '/detail/abc'`). 1 | byte-identical `0d8f0635…` |
+| A5 | Remove the opaque-origin check | `not ok 143` only (switch, a file page: `+ urlPath: '/C:/Users/ada/secret.html'`). 1 | byte-identical `0d8f0635…` |
+| A6 | Drop the domain's path rule (return `parsed.pathname` as is) | `not ok 143` only (switch, a pathname beginning with two slashes: `+ urlPath: '//evil.test/x'`). 1 | byte-identical `0d8f0635…` |
+| A7 | A switch carries no path | `not ok 142` (`- urlPath: '/details'`), `143` (switch, the credentials row: `- urlPath: '/details/42'`), `159` (`- urlPath: '/details'`). 3 | byte-identical `0d8f0635…` |
+
+The script's final hashes matched the baseline. A separate
+`sha256sum -c fcc-amend-baseline-hashes.txt` then printed `OK` for all four files.
+Each of the three path guards (A4, A5, A6) is proved by its own row alone.
+
+**Afterwards:**
+- `node scripts/structure-audit.mjs` (repo root): exit 0,
+  `structure-audit: passed (39 warning(s), 17 baselined).`; no line names any of my
+  four files.
+- `rm -rf .test-build-scratch/fcc` ran, and a listing then counted 0 `fcc` entries.
+- `git diff --stat` on my four files, the whole task: 276 insertions, 17
+  deletions.
+
+### Not verified
+
+- **No live browser, no Lab run, no `pnpm build`, no content harness.**
+- **The URL a real switch or close leaves in `result.url`.** I read it in
+  `browser-tab.ts`, which I do not own. No runtime run exercised it.
+- **Core's use of the stored `tab`.** I did not read Core. The domain maps a
+  stored tab event by `payload.tab.operation` (`domain/src/io/input-model.ts:229-234`),
+  and rows 142, 143 and 159 prove that field is on the confirmation.
+- **Each gate result is a single observation.** The mutation runs each rebuilt
+  and reran the suite.
+- **What a Lab run must show:**
+  - **W15 unarmed Flow:**
+    - each replayed switch's recording entry carries
+      `tab: { operation: "switch", urlPath }`, with the same path as the
+      recorded switch;
+    - each close's entry carries `tab: { operation: "close" }`;
+    - no `tab` value holds a host, a port or a query;
+    - no `output_confirmation.not_received`.
+
+### Open questions or contradictions found
+
+1. **The confirmation's `url` still holds the full URL.** `sendRuntimeConfirmation`
+   sets `url` from `result.url`, origin and query included, for every
+   confirmation, a tab one too. The brief covers only `tab`, so I left `url` as
+   is. Recorded events carry `url` the same way.
+2. **The path rule is now written in two extension files:**
+   - `frontTabPath` in `runtime-status.ts`;
+   - the address function in `tab-recorder.ts:48-55`, which I may not edit.
+
+   Both end in the same checks, so they agree today. One exported helper would
+   keep them from drifting.
+3. **A switch whose command named a path takes its path from where it landed,
+   not from the command.** The two match whenever `browser-tab.ts` found the tab
+   by exact path. For a switch by tab id or URL pattern, the landing path is the
+   only one there is.

@@ -16,7 +16,8 @@ import {
   type WebAutomationActionCommand,
   type WebAutomationActionResult,
   type WebAutomationActionType,
-  type WebAutomationActionVisualTarget
+  type WebAutomationActionVisualTarget,
+  type WebAutomationRecordedTab
 } from "@fluxiq-web-extension/domain/client";
 // The page-level evidence a capture gathers is produced in `content/evidence/`
 // but travels on the wire as part of the snapshot, so the snapshot shape
@@ -394,6 +395,8 @@ export type RecordingEventPayload = {
   scroll?: { x: number; y: number } | undefined;
   mutation?: { added: number; removed: number; attributes: number; text: number } | undefined;
   actionResult?: BrowserActionResult | undefined;
+  /** A tab switch or close the background recorded; the recording-start marker has none. */
+  tab?: WebAutomationRecordedTab | undefined;
   metadata?: JsonObject | undefined;
 };
 

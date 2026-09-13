@@ -36,11 +36,11 @@ flight. No exit criterion yet carries a quoted Lab observation. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
-settled ledger entries are in parts one to thirty-six of
+settled ledger entries are in parts one to thirty-seven of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13, while workers run.**
-- **This repository:** `0a8606c`, 95 commits ahead of `origin/dev`, not pushed.
+- **This repository:** `1316533`, 97 commits ahead of `origin/dev`, not pushed.
 - **Core:** `240c73e`, 10 commits ahead of `origin/dev`, `fluxiq` **0.4.0**, built at
   `187f40d`; the tenth is a plan-only commit. The nine code commits:
   - `5d495eb`, trace withholding;
@@ -96,8 +96,8 @@ settled ledger entries are in parts one to thirty-six of
   `g-core-withholding-execution`, then Core's withholding is committed.
 - **From the bench triage:** P1-P3, H1-H7, the expectation check and the lane
   consistency fix are committed.
-- **Recording gaps P4-P6:** `f-domain-capability-gaps`, `f-tab-recording` and
-  `f-frame-address`; confirmations verifying; then the upload input.
+- **Recording gaps P4-P6:** the domain and extension work is committed;
+  `g-runner-upload-input` and `d-capability-docs` are running.
 - **W25's storage order:** `g-core-bridge-order` (its race amendment); `f-w25-core-order-row` waits for Core's build.
 
 **Queued, in dependency order**
@@ -646,89 +646,6 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 `2026-09-12-*` Wave 3 and live-validation files, and
 `2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-13 — g-lane-consistency: every lane judges an expected action alike, and a manifest the validator rejects is fixture.invalid
-
-- Agent: worker `g-lane-consistency`; the test-contracts comment and the
-  verification by supervisor.
-- Changed, in `packages/test-runner/src/`:
-  - **`existing-flow-run.ts`:** the existing and clone lanes call the Flow lane's
-    `assertFlowActions` instead of keeping their own copy. An entry with no
-    `outcome` is therefore judged on presence alone there too, and attempt types
-    are still sanitized.
-  - **`scenarios.ts`:** a contract rejection fails as `fixture.invalid`, whether the
-    registry throws it while being imported or the runner's own check does. The
-    message names issue paths and the validator's wording only. Any other load
-    failure keeps its category.
-  - Tests: `tests/existing-flow-run.test.ts` and `tests/prerequisites.test.ts`.
-  - **`packages/test-contracts/src/scenario.ts`,** by the supervisor: the
-    `ExpectedAction` comment no longer says the existing and clone lanes read a
-    missing outcome as `succeeded`.
-- Found:
-  - **Negative variants cannot pass on the existing and clone lanes.** Those lanes
-    fail any attempt or run that did not succeed before the expected-action check
-    (`existing-flow-run.ts:89-98`), and they never judge `expected.failure`
-    (`run-scenario.ts:229,255`). The Week 1 bench runs isolated targets, so this
-    stays as it is.
-  - **A `fixture.invalid` load failure has no run bundle.** It happens before one
-    exists, so it reaches only the CLI's stderr line, and one bad manifest fails a
-    whole bench.
-  - **A recording with zero actions fails the Flow lane.** Admin-console's
-    `extract-customer-list` fails at the proposal step as `recording.contract`.
-    This was read from code.
-- Validation:
-  - **Supervisor,** the test-runner gate under label `sup44`:
-    - `check` exit=0; private `tsc` exit=0;
-    - `node --test` printed "# tests 550", "# pass 550", "# fail 0";
-    - the structure audit passed;
-    - the run included `g-demo-attestation-limits`'s uncommitted edits.
-  - **Supervisor,** `packages/test-contracts` `pnpm check` after the comment fix:
-    exit=0.
-  - **Worker mutations:** four, each failing its test. Both files were restored and
-    confirmed byte-identical by `cmp`.
-- Not verified:
-  - no Lab run;
-  - the `fixture.invalid` path through the CLI;
-  - a Lab instance that resolves its own copy of the contracts package.
-- Outcome: Accepted
-
-### 2026-09-13 — g-demo-attestation-limits: the demo leak check scans Core's databases up to the Lab run's limits
-
-- Agent: worker `g-demo-attestation-limits`; the shared constant and the
-  verification by supervisor.
-- Changed, in `packages/test-runner/src/`:
-  - **`secret-leak-attestation.ts`,** by the supervisor: exports
-    `SECRET_LEAK_ATTESTATION_RUN_LIMITS`, which is 10,000 files, 8 MiB per file,
-    64 MiB per scan and depth 32. The scanner's absolute ceilings spread it and add
-    128 approved paths.
-  - **`demo-llm-attestation.ts`:** the demo setup scan uses those limits.
-    - Before, it used the defaults.
-    - Under those, a Core database or `-wal` over 1 MiB failed setup on size alone,
-      and so would a workspace of more than 2,000 files.
-  - **`redaction-attestation/attest-run-redaction.ts`,** by the supervisor: the run
-    attestation uses the same constant instead of its own copy.
-  - **Comments in `run-redaction-scopes.ts` and `attest-run-redaction.ts`** now
-    describe the SQLite reading, including that database copies count against a
-    scan's total.
-  - **`tests/demo-llm-attestation.test.ts`:**
-    - a setup whose databases are each between 1 and 8 MiB, and together over
-      16 MiB, passes;
-    - one with a database over 8 MiB fails.
-- Validation:
-  - **Supervisor,** the test-runner gate under label `sup46`, run after the constant
-    was shared:
-    - `check` exit=0; private `tsc` exit=0;
-    - `node --test` printed "# tests 550", "# pass 550", "# fail 0";
-    - the structure audit passed.
-  - **Worker mutations,** made before the constant was shared: removing the limits,
-    and restoring only the 16 MiB total. Each failed the 1-8 MiB row (`not ok 3`).
-    Both were restored and confirmed by `sha256sum -c`.
-- Not verified:
-  - no Lab or demo run;
-  - real demo store sizes;
-  - whether the over-8 MiB row's finding is `unscanned-store`, which that row
-    cannot assert.
-- Outcome: Accepted
-
 ### 2026-09-13 — f-domain-capability-gaps: a recorded file choice, tab switch or close, and child frame each map to a replayable node
 
 - Agent: worker `f-domain-capability-gaps`; verified by supervisor.
@@ -774,6 +691,85 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   - the extension and test-runner compiling against the new exports, which the next
     gates cover;
   - the Lab rows W15, W17 and W28.
+- Outcome: Accepted
+
+### 2026-09-13 — f-tab-recording, f-frame-address and f-capability-confirmations: tab changes record and replay, child frames are found by path, and new actions confirm
+
+- Agents: workers `f-tab-recording`, `f-frame-address` and
+  `f-capability-confirmations`. The shared page-path helper, the switch to the
+  domain's path rule, and the verification are by the supervisor.
+- Changed, in `apps/extension/src/`:
+  - **P4, recording:** new `background/connection/tab-recorder.ts`.
+    - Switching to another page the recording can see records a `browser.tab`
+      event with `tab: { operation: "switch", urlPath }`. Closing the recording's
+      tab records `{ operation: "close" }`.
+    - Both enter through the facade's intake, so each is sent with its input id
+      and counted once.
+    - Browser and extension pages are not recorded, and neither are tab changes
+      made while a command runs.
+    - It is wired through `background/index.ts` (`tabs.onRemoved`),
+      `connection.ts`, `active-page.ts`, `gateway-payloads.ts` and
+      `shared/protocol.ts`, plus one barrel line.
+  - **P4, replay:**
+    - `runtime/browser-tab.ts` switches to the tab at exactly the recorded path,
+      and waits up to the command's timeout for one still opening.
+    - `runtime/automation-tab.ts` remembers the previous tab, so a close brings it
+      back.
+  - **P6:** new `runtime/frame-address.ts`.
+    - An action with `frameUrlPath` goes to the one child frame at that path.
+    - When several frames match, the recorded id breaks the tie. Otherwise the
+      action fails `target_ambiguous` or `target_not_found`, naming paths only.
+    - An action without a path is unchanged.
+  - **Recorder privacy:** `content/describe-element.ts` no longer reads a file
+    input's value, so a chosen file's local name never leaves the page.
+  - **Confirmations,** in `runtime-status.ts` and `server-command-channel.ts`:
+    - a succeeded upload confirms with `web.user.files_chosen`, and carries no
+      value;
+    - a succeeded tab switch or close confirms with its input id and `tab`. A
+      switch's `urlPath` is the pathname of the tab left in front;
+    - the caller's redundant failed-status check is gone.
+  - **By the supervisor:**
+    - **New `background/connection/recordable-page-address.ts`:** the one rule by
+      which the tab recorder and a tab confirmation name a page, under the domain's
+      `webAutomationUrlPath`. Before, the tab recorder accepted a pathname beginning
+      with `//`, which the confirmation refused.
+    - **`runtime/command-options.ts`** imports `webAutomationUrlPath` instead of its
+      own copy, which let a protocol-relative host through as a frame path.
+  - Tests throughout.
+- Decisions:
+  - **The tab worker's extra wiring is accepted:** `connection.ts`'s constructor and
+    the barrel line. Without them nothing called the recorder.
+  - **`chooseFrame` takes the frame list,** and the top frame never matches by path.
+    Both accepted.
+  - **Every confirmation's `url` still carries the full URL,** as a recorded event's
+    does. That predates this work, and is not changed here.
+- Validation:
+  - **Supervisor,** extension gate `sup50`, on diffs frozen after the last change:
+    - `pnpm check` exit=0;
+    - `EXTENSION_TEST_BUILD_LABEL=sup50 pnpm test` printed "# tests 462",
+      "# pass 462", "# fail 0";
+    - the structure audit passed.
+  - **Supervisor,** content harness: the `redaction`, `recorder-trust`, `identity`,
+    `upload-dialog`, `evidence`, `selection-redaction`, `frames` and `keyboard`
+    specs gave exit=0, "78 passed". That run came before the page-path helper,
+    which changes background files only.
+  - **Supervisor mutations:**
+    - with the old frame-path rule back in `command-options.ts`, its test failed
+      "not ok 2" (9 tests, 8 passed). Restored byte-identical, 9 of 9 passed.
+    - with `recordablePageAddress` missing the domain rule, "not ok 2" (2 tests,
+      1 passed). Restored byte-identical, 2 of 2 passed.
+  - **Worker mutations,** each failing its rows: eight for the tab recorder, four for
+    the frame lookup, and six plus seven for the confirmations.
+  - **An earlier supervisor gate, `sup43`,** failed 2 active-page tests, plus a type
+    error in `active-page.test.ts`, while the tab worker was mid-edit. `sup50` is
+    the gate on the finished files.
+- Not verified:
+  - **No browser or Lab run,** so none of these was seen live:
+    - Chrome's close-then-activate order;
+    - the path lookup against the real `chrome.webNavigation`;
+    - W15, W17 and W28.
+  - The runtime guard's timing on the existing and clone lanes.
+  - The `tabs.onRemoved` listener, which no unit test reaches.
 - Outcome: Accepted
 
 ## Open Questions

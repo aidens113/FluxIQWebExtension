@@ -57,6 +57,10 @@ chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
   }
 });
 
+chrome.tabs.onRemoved.addListener((tabId) => {
+  void getConnection().then((manager) => manager.handleTabRemoved(tabId));
+});
+
 chrome.webNavigation.onCommitted.addListener((details) => {
   if (details.frameId !== 0) return;
   void getConnection().then((manager) => manager.handleNavigationCommitted(details));

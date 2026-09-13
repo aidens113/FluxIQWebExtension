@@ -3,13 +3,17 @@
 //
 // The automation tab is remembered so a Flow's actions land on the page the
 // previous action left behind: navigate reuses it by default, a tab switch
-// re-points it, and closing it forgets it. Before Phase 1.2 step 4 every
-// navigation opened a new tab, so each step ran on a fresh blank page and left
-// the last one behind.
+// re-points it, and closing it goes back to the tab driven before it. Before
+// Phase 1.2 step 4 every navigation opened a new tab, so each step ran on a
+// fresh blank page and left the last one behind.
 
 const DEFAULT_AUTOMATION_URL = "about:blank";
 
-let automationTabId: number | undefined;
+/** How many driven tabs are remembered. A Flow nests tabs far less deeply than this. */
+const AUTOMATION_TAB_HISTORY = 8;
+
+// The tabs FluxIQ has driven, oldest first. The last is the automation tab.
+let automationTabs: number[] = [];
 
 export async function resolveAutomationTab(input: { requestedTabId?: number; initialUrl?: string; active?: boolean; forceNew?: boolean } = {}): Promise<number> {
   if (input.requestedTabId !== undefined) {
@@ -28,23 +32,35 @@ export async function resolveAutomationTab(input: { requestedTabId?: number; ini
     active: input.active ?? true
   });
   if (tab.id === undefined) throw new Error("Unable to create FluxIQ automation tab.");
-  automationTabId = tab.id;
+  setAutomationTab(tab.id);
   if (input.initialUrl && input.initialUrl !== DEFAULT_AUTOMATION_URL) await waitForTabReady(tab.id);
   return tab.id;
 }
 
-/** Points FluxIQ at this tab, so the actions that follow run where this one left off. */
+/** Points FluxIQ at this tab, so the actions that follow run where this one left off; the tab before it is remembered. */
 export function setAutomationTab(tabId: number): void {
-  automationTabId = tabId;
+  automationTabs = [...automationTabs.filter((id) => id !== tabId), tabId].slice(-AUTOMATION_TAB_HISTORY);
 }
 
-/** Forgets the automation tab, by id when closing a specific one. */
+/**
+ * Forgets a tab, or every tab when none is named. Forgetting the automation tab
+ * makes the tab driven before it the automation tab again.
+ */
 export function forgetAutomationTab(tabId?: number): void {
-  if (tabId === undefined || automationTabId === tabId) automationTabId = undefined;
+  automationTabs = tabId === undefined ? [] : automationTabs.filter((id) => id !== tabId);
 }
 
 export function currentAutomationTabId(): number | undefined {
-  return automationTabId;
+  return automationTabs.at(-1);
+}
+
+/** The most recently driven tab that is still open. Tabs that have closed are forgotten on the way. */
+export async function latestOpenAutomationTab(): Promise<number | undefined> {
+  for (let tabId = currentAutomationTabId(); tabId !== undefined; tabId = currentAutomationTabId()) {
+    if (await tabIsOpen(tabId)) return tabId;
+    forgetAutomationTab(tabId);
+  }
+  return undefined;
 }
 
 /** The tab's current URL, or undefined when it is gone or unreadable. */
@@ -68,12 +84,13 @@ export async function tabIsOpen(tabId: number): Promise<boolean> {
 }
 
 async function existingAutomationTab(): Promise<number | undefined> {
+  const automationTabId = currentAutomationTabId();
   if (automationTabId === undefined) return undefined;
   try {
     const tab = await chrome.tabs.get(automationTabId);
     return tab.id;
   } catch {
-    automationTabId = undefined;
+    forgetAutomationTab(automationTabId);
     return undefined;
   }
 }

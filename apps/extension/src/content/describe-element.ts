@@ -153,6 +153,10 @@ export function directVisibleText(element: Element): string | undefined {
 export function readElementValue(element: Element | null): string | undefined {
   if (!element) return undefined;
   if (isSensitiveFormControl(element)) return undefined;
+  // A file input's value is the chosen file's local name (`C:\fakepath\…`), which
+  // is the user's, not the page's. Replay supplies the file itself, and presence
+  // still travels as `hasValue`.
+  if (element instanceof HTMLInputElement && element.type.toLowerCase() === "file") return undefined;
   if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) {
     return element.value.slice(0, 2_000);
   }

@@ -10,6 +10,7 @@
 //                        navigation included.
 //   ServerCommandChannel what FluxIQ sends, the runtime command it runs, and the
 //                        result that goes back.
+//   TabRecorder          which tab switches and closes a recording keeps as actions.
 //
 // Beneath those sit the WebSocket session and its reconnection lifecycle, the
 // activity log, the runtime command status, navigation and pointer-click
@@ -52,6 +53,7 @@ import {
   RuntimeStatusTracker,
   ServerCommandChannel,
   StateAssetStore,
+  TabRecorder,
   type CoreApiCredentials,
   type TabSnapshotTransport
 } from "./connection/index";
@@ -72,6 +74,7 @@ export class FluxIQConnection {
   private readonly projects: ProjectContext;
   private readonly attachment: ContentAttachment;
   private readonly evidence: RecordingEvidenceReporter;
+  private readonly tabs: TabRecorder;
   private readonly page: ActivePage;
   private readonly recording: ActiveRecording;
   private readonly intake: RecordedEventIntake;
@@ -155,6 +158,13 @@ export class FluxIQConnection {
         coreApiUrl: this.settings.coreApiUrl
       })
     });
+    this.tabs = new TabRecorder({
+      recordingState: () => this.recording.state(),
+      recordingId: () => this.recording.recordingId(),
+      runtimeBusy: () => this.runtimeStatus.current().state === "running",
+      sequence: this.sequence,
+      recordEvent
+    });
     this.page = new ActivePage({
       send: this.gateway.send,
       gatewayState: () => this.gateway.state(),
@@ -165,7 +175,9 @@ export class FluxIQConnection {
       allTabs,
       onActivity,
       emitStatus,
-      updateTab: (tab) => this.handleTabUpdated(tab)
+      updateTab: (tab) => this.handleTabUpdated(tab),
+      noteTabChange: (tab, lastActive) => this.tabs.noteTabUpdate(tab, lastActive),
+      noteTabRemoved: (tabId, lastActive) => this.tabs.noteTabRemoved(tabId, lastActive)
     });
     this.recording = new ActiveRecording({
       send: this.gateway.send,
@@ -308,6 +320,10 @@ export class FluxIQConnection {
 
   handleTabUpdated(tab: chrome.tabs.Tab): Promise<void> {
     return this.page.handleTabUpdate(tab);
+  }
+
+  handleTabRemoved(tabId: number): Promise<void> {
+    return this.page.handleTabRemoved(tabId);
   }
 
   selectAutomationTab(tabId: number): Promise<void> {

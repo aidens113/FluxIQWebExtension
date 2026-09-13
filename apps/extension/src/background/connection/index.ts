@@ -76,6 +76,7 @@ export {
   runtimeResultTarget
 } from "./runtime-status";
 export { ServerCommandChannel, type ServerCommandChannelDeps } from "./server-command-channel";
+export { TabRecorder, type KnownActiveTab, type TabRecorderDeps } from "./tab-recorder";
 export {
   StateAssetStore,
   type ScreenImageSize,

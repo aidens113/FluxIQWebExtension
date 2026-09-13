@@ -290,3 +290,18 @@ test("a sensitive checkbox sends no checked state, and keeps its landmark's name
   assert.equal("checked" in wire, false, "a sensitive checkbox's state is its contents");
   assert.deepEqual(wire.context, { landmark: "region", landmarkName: "Billing details" });
 });
+
+test("a recorded tab switch or close maps to its input and crosses carrying its operation and path", () => {
+  const switched = recorded("browser.tab", { tab: { operation: "switch", urlPath: "/scenarios/multi-tab/details" } });
+  const closed = recorded("browser.tab", { tab: { operation: "close" } });
+  assert.equal(recordedInputId(switched), WEB_AUTOMATION_INPUT_IDS.tabSwitched);
+  assert.equal(recordedInputId(closed), WEB_AUTOMATION_INPUT_IDS.tabClosed);
+  assert.equal(recordedInputId(recorded("browser.tab", { metadata: { recordingState: "started" } })), undefined, "the recording-start marker");
+  assert.equal(recordedInputId(recorded("browser.tab", { tab: { operation: "switch" } })), undefined, "a switch that names no tab");
+
+  const event = gatewayRecordingEventFromPayload(switched, 3);
+  assert.equal(event.eventType, WEB_AUTOMATION_EVENTS.tabStateChanged);
+  assert.deepEqual((event.payload as { tab?: unknown }).tab, { operation: "switch", urlPath: "/scenarios/multi-tab/details" });
+  assert.equal((event.metadata as { inputId?: unknown }).inputId, WEB_AUTOMATION_INPUT_IDS.tabSwitched);
+  assert.deepEqual(recordingEvidencePayload(closed).tab, { operation: "close" });
+});

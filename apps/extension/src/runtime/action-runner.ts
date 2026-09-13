@@ -17,7 +17,8 @@ import {
 import { runBrowserDownloadAction } from "./browser-download";
 import { runBrowserTabAction } from "./browser-tab";
 import { sendClickCheckingLanding } from "./click-landing";
-import { frameIdForAction, opensNewTab, tabIdForAction } from "./command-options";
+import { frameIdForAction, frameUrlPathForAction, opensNewTab, tabIdForAction } from "./command-options";
+import { chooseFrame } from "./frame-address";
 import { compareNavigatedUrl } from "./navigation-outcome";
 import { unsupportedAutomationPageReason } from "./unsupported-page";
 
@@ -195,13 +196,27 @@ function unsupportedPageFailure(action: BrowserActionCommand, startedAt: number,
  * so a frame that exists can still answer nothing, and a command sent to it is
  * neither refused nor answered. Nothing upstream puts a deadline on a web
  * action, so that is a hang with no end, which is worse than any failure.
+ *
+ * Before either check, a child frame the action also names by its document's
+ * path is found by that path (`frame-address.ts`), and the recorded id only
+ * breaks a tie: Chrome renumbers a frame when it navigates, and a Flow reloads
+ * its start page before it runs. The frame found is the one checked, addressed
+ * and reported. An action with no path lists no frames here and runs as before.
  */
 async function runActionInFrame(
   action: BrowserActionCommand,
   startedAt: number,
   tabId: number,
-  frameId: number | undefined
+  recordedFrameId: number | undefined
 ): Promise<BrowserActionRunResult> {
+  const urlPath = frameUrlPathForAction(action);
+  const choice = urlPath === undefined
+    ? { frameId: recordedFrameId }
+    : chooseFrame(await allTabFrames(tabId), recordedFrameId, urlPath);
+  if ("refused" in choice) {
+    return withTarget(workerActionResult(action, startedAt, choice.refused), tabId, recordedFrameId);
+  }
+  const frameId = choice.frameId;
   const targetFrameId = frameId ?? TOP_FRAME_ID;
   if (targetFrameId !== TOP_FRAME_ID) {
     const absent = await absentFrameReason(tabId, targetFrameId);

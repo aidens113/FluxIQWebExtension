@@ -31,6 +31,7 @@ export function recordedInputId(payload: RecordingEventPayload) {
     ...(payload.inputValue !== undefined ? { inputValue: payload.inputValue } : {}),
     ...(payload.key !== undefined ? { key: payload.key } : {}),
     ...(payload.scroll ? { scroll: payload.scroll } : {}),
+    ...(payload.tab ? { tab: payload.tab as unknown as JsonObject } : {}),
     ...(payload.metadata ? { metadata: payload.metadata } : {})
   });
 }
@@ -51,6 +52,7 @@ export function recordingEvidencePayload(payload: RecordingEventPayload): JsonOb
     scroll: payload.scroll as unknown as JsonObject,
     mutation: payload.mutation as unknown as JsonObject,
     actionResult: payload.actionResult as unknown as JsonObject,
+    tab: payload.tab as unknown as JsonObject,
     metadata: payload.metadata
   }) as JsonObject;
 }
@@ -72,6 +74,7 @@ export function gatewayRecordingEventFromPayload(payload: RecordingEventPayload,
     scroll: payload.scroll as unknown as JsonObject,
     mutation: payload.mutation as unknown as JsonObject,
     actionResult: payload.actionResult ? webAutomationActionResultPayload(payload.actionResult as never) : undefined,
+    tab: payload.tab,
     metadata: inputId === undefined
       ? payload.metadata
       : { ...(payload.metadata ?? {}), inputId, ...(visualTarget ? { visualTarget: visualTarget as unknown as JsonObject } : {}) }

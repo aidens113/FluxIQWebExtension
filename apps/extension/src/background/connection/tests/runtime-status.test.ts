@@ -1,7 +1,9 @@
 // T1 coverage of runtime-status.ts: the recording event and registered input a
 // succeeded runtime action confirms, for every action type; the value a `type`
-// or `select` confirmation carries, which a sensitive field never does; and the
-// panel's status tracker, labels and targets.
+// or `select` confirmation carries, which a sensitive field never does, and the
+// none a `check` or `upload` carries; the tab input a command's operation
+// chooses, and the tab it carries, by pathname alone; and the panel's status
+// tracker, the tab request it hands back, its labels and targets.
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -46,11 +48,19 @@ const confirmations: Record<BrowserActionType, Confirmation> = {
   "web.dom.check": { kind: "dom.change", inputId: WEB_AUTOMATION_INPUT_IDS.checkboxToggled },
   "web.dom.assert": undefined,
   "web.dom.extract_list": undefined,
-  "web.dom.upload": undefined,
+  // The recorder reports a file input's change as `dom.change`, which the domain
+  // maps to the files input, so an upload node waits for it.
+  "web.dom.upload": { kind: "dom.change", inputId: WEB_AUTOMATION_INPUT_IDS.filesChosen },
   "web.dom.dialog": undefined,
-  "web.browser.tab": undefined,
+  // Every row is asked with `closeTab`; the operation decides a tab's input,
+  // which "a tab confirmation names..." covers.
+  "web.browser.tab": { kind: "browser.tab", inputId: WEB_AUTOMATION_INPUT_IDS.tabClosed, tab: { operation: "close" } },
   "web.browser.download": undefined
 };
+
+// The request a tab command carries. Handed in for every action type, so the
+// rows also prove it changes nothing for a verb that is not a tab action.
+const closeTab: BrowserActionCommand["tab"] = { operation: "close" };
 
 // The sensitivity rule the recorder defines (isSensitiveFormControl in
 // content/element-traits.ts), as the worker judges it from the wire descriptor.
@@ -81,14 +91,21 @@ test("the confirmation table covers exactly the domain's action types", () => {
 
 test("a succeeded action confirms the recording event and input its type maps to", () => {
   for (const actionType of WEB_AUTOMATION_ACTION_TYPES) {
-    assert.deepEqual(runtimeConfirmationForActionResult(actionResult(actionType, { element: field() })), confirmations[actionType], actionType);
+    assert.deepEqual(runtimeConfirmationForActionResult(actionResult(actionType, { element: field() }), closeTab), confirmations[actionType], actionType);
   }
 });
 
-test("an action that did not succeed confirms nothing, a check included", () => {
+test("an action that did not succeed confirms nothing, a check, an upload and a tab change included", () => {
+  const tabRequests: Array<NonNullable<BrowserActionCommand["tab"]>> = [{ operation: "close" }, { operation: "switch", urlPath: "/details" }];
   for (const actionType of WEB_AUTOMATION_ACTION_TYPES) {
     for (const status of ["failed", "timed_out"] as const) {
-      assert.equal(runtimeConfirmationForActionResult(actionResult(actionType, { status, element: field() })), undefined, `${actionType}, ${status}`);
+      for (const tab of tabRequests) {
+        assert.equal(
+          runtimeConfirmationForActionResult(actionResult(actionType, { status, element: field() }), tab),
+          undefined,
+          `${actionType}, ${status}, ${tab.operation}`
+        );
+      }
     }
   }
   const failedCheck = actionResult("web.dom.check", {
@@ -112,9 +129,71 @@ test("a check confirmation carries nothing from the control it set, a sensitive 
   }
 });
 
+test("an upload confirmation carries nothing from the input it filled, a sensitive one included", () => {
+  const fileInputs: Array<[label: string, element: DomElementDescriptor]> = [
+    ["a file input", field({ inputType: "file" })],
+    ["a file input marked data-sensitive=true", field({ inputType: "file", attributes: { "data-sensitive": "true" } })]
+  ];
+  for (const [label, element] of fileInputs) {
+    const confirmation = runtimeConfirmationForActionResult(actionResult("web.dom.upload", { element: { ...element, value: "C:\\fakepath\\hunter2-secret.pdf" } }));
+    // Strict deep equality also proves no inputValue member is present at all.
+    assert.deepEqual(confirmation, { kind: "dom.change", inputId: WEB_AUTOMATION_INPUT_IDS.filesChosen }, label);
+  }
+});
+
+test("a tab confirmation names the input its command's operation maps to, and carries only its tab", () => {
+  // The result left the details tab in front; the command's own path or tab id is not what is carried.
+  const switched: Confirmation = { kind: "browser.tab", inputId: WEB_AUTOMATION_INPUT_IDS.tabSwitched, tab: { operation: "switch", urlPath: "/details" } };
+  const closed: Confirmation = { kind: "browser.tab", inputId: WEB_AUTOMATION_INPUT_IDS.tabClosed, tab: { operation: "close" } };
+  const rows: Array<[label: string, tab: BrowserActionCommand["tab"], expected: Confirmation]> = [
+    ["a switch by exact path", { operation: "switch", urlPath: "/details" }, switched],
+    ["a switch by tab id", { operation: "switch", tabId: 7 }, switched],
+    ["a close", { operation: "close" }, closed],
+    ["a close by tab id", { operation: "close", tabId: 7 }, closed],
+    // Opening a tab is not a recorded user action, so no node waits for it.
+    ["an open", { operation: "open", url: "https://shop.test/list?token=abc" }, undefined],
+    // Without the command's request the operation is unknown.
+    ["no request", undefined, undefined]
+  ];
+  for (const [label, tab, expected] of rows) {
+    const result = actionResult("web.browser.tab", { url: "https://shop.test/details?token=abc", element: field({ value: "entered" }) });
+    // Strict deep equality proves no path, tab id, URL or value is carried.
+    assert.deepEqual(runtimeConfirmationForActionResult(result, tab), expected, label);
+  }
+});
+
+test("a switch confirmation names the tab left in front by its pathname alone, and a close names none", () => {
+  const rows: Array<[label: string, url: string | undefined, urlPath: string | undefined]> = [
+    ["an origin with credentials, port, query and fragment", "https://user:pw@shop.test:8443/details/42?token=abc#top", "/details/42"],
+    ["no URL", undefined, undefined],
+    ["an unreadable URL", "not a url", undefined],
+    ["about:blank", "about:blank", undefined],
+    // A readable https path the recorder would not record: only the unsupported-page rule refuses it.
+    ["a store page", "https://chromewebstore.google.com/detail/abc?hl=en", undefined],
+    // A readable path on an opaque origin: only the origin check refuses it.
+    ["a file page", "file:///C:/Users/ada/secret.html", undefined],
+    // A pathname that reads as a host: only the domain's path rule refuses it.
+    ["a pathname beginning with two slashes", "https://shop.test//evil.test/x", undefined]
+  ];
+  for (const [label, url, urlPath] of rows) {
+    const result = actionResult("web.browser.tab", url === undefined ? {} : { url });
+    const switched = runtimeConfirmationForActionResult(result, { operation: "switch", urlPath: "/details" });
+    assert.deepEqual(switched, {
+      kind: "browser.tab",
+      inputId: WEB_AUTOMATION_INPUT_IDS.tabSwitched,
+      tab: urlPath === undefined ? { operation: "switch" } : { operation: "switch", urlPath }
+    }, `switch, ${label}`);
+    const closed = runtimeConfirmationForActionResult(result, { operation: "close" });
+    assert.deepEqual(closed, { kind: "browser.tab", inputId: WEB_AUTOMATION_INPUT_IDS.tabClosed, tab: { operation: "close" } }, `close, ${label}`);
+    for (const confirmation of [switched, closed]) {
+      assert.doesNotMatch(JSON.stringify(confirmation), /shop\.test|8443|pw@|token|hl=|[?#]|chromewebstore|secret|evil/u, label);
+    }
+  }
+});
+
 test("only type and select carry the value the field was left holding; clear carries an empty one", () => {
   for (const actionType of WEB_AUTOMATION_ACTION_TYPES) {
-    const confirmation = runtimeConfirmationForActionResult(actionResult(actionType, { element: field({ value: "entered" }) }));
+    const confirmation = runtimeConfirmationForActionResult(actionResult(actionType, { element: field({ value: "entered" }) }), closeTab);
     const carried = actionType === "web.dom.type" || actionType === "web.dom.select" ? "entered" : confirmations[actionType]?.inputValue;
     assert.equal(confirmation?.inputValue, carried, actionType);
   }
@@ -222,4 +301,20 @@ test("a failed or timed-out action finishes as failed, with its message as the e
   assert.equal(quiet.state, "succeeded");
   assert.equal("message" in quiet, false);
   assert.equal("error" in quiet, false);
+});
+
+test("the tracker hands back a tab request only for the command that started it", () => {
+  const tracker = new RuntimeStatusTracker();
+  assert.equal(tracker.tabRequestFor("c-tab"), undefined, "nothing started");
+
+  tracker.startAction({ commandId: "c-tab", actionType: "web.browser.tab", tab: { operation: "close" } });
+  assert.deepEqual(tracker.tabRequestFor("c-tab"), { operation: "close" });
+  assert.equal(tracker.tabRequestFor("c-other"), undefined, "another command's result gets no tab request");
+
+  tracker.finish(actionResult("web.browser.tab", { commandId: "c-tab" }));
+  assert.deepEqual(tracker.tabRequestFor("c-tab"), { operation: "close" }, "finishing the status keeps the request a confirmation is built from");
+
+  tracker.startAction({ commandId: "c-click", actionType: "web.dom.click", selector: "#buy" });
+  assert.equal(tracker.tabRequestFor("c-tab"), undefined, "a later action replaces it");
+  assert.equal(tracker.tabRequestFor("c-click"), undefined, "an action without a tab request has none");
 });

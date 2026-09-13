@@ -2679,3 +2679,90 @@ Moved verbatim to keep headroom under the plan limit: the runner harness fixes (
   - The reader's timeout and output-limit paths.
   - The demo attestations under their default limit.
 - Outcome: Accepted
+
+## Part thirty-seven, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: the lane consistency fix (0a8606c) and the demo leak check's limits (1aec39e), both committed.
+
+### 2026-09-13 — g-lane-consistency: every lane judges an expected action alike, and a manifest the validator rejects is fixture.invalid
+
+- Agent: worker `g-lane-consistency`; the test-contracts comment and the
+  verification by supervisor.
+- Changed, in `packages/test-runner/src/`:
+  - **`existing-flow-run.ts`:** the existing and clone lanes call the Flow lane's
+    `assertFlowActions` instead of keeping their own copy. An entry with no
+    `outcome` is therefore judged on presence alone there too, and attempt types
+    are still sanitized.
+  - **`scenarios.ts`:** a contract rejection fails as `fixture.invalid`, whether the
+    registry throws it while being imported or the runner's own check does. The
+    message names issue paths and the validator's wording only. Any other load
+    failure keeps its category.
+  - Tests: `tests/existing-flow-run.test.ts` and `tests/prerequisites.test.ts`.
+  - **`packages/test-contracts/src/scenario.ts`,** by the supervisor: the
+    `ExpectedAction` comment no longer says the existing and clone lanes read a
+    missing outcome as `succeeded`.
+- Found:
+  - **Negative variants cannot pass on the existing and clone lanes.** Those lanes
+    fail any attempt or run that did not succeed before the expected-action check
+    (`existing-flow-run.ts:89-98`), and they never judge `expected.failure`
+    (`run-scenario.ts:229,255`). The Week 1 bench runs isolated targets, so this
+    stays as it is.
+  - **A `fixture.invalid` load failure has no run bundle.** It happens before one
+    exists, so it reaches only the CLI's stderr line, and one bad manifest fails a
+    whole bench.
+  - **A recording with zero actions fails the Flow lane.** Admin-console's
+    `extract-customer-list` fails at the proposal step as `recording.contract`.
+    This was read from code.
+- Validation:
+  - **Supervisor,** the test-runner gate under label `sup44`:
+    - `check` exit=0; private `tsc` exit=0;
+    - `node --test` printed "# tests 550", "# pass 550", "# fail 0";
+    - the structure audit passed;
+    - the run included `g-demo-attestation-limits`'s uncommitted edits.
+  - **Supervisor,** `packages/test-contracts` `pnpm check` after the comment fix:
+    exit=0.
+  - **Worker mutations:** four, each failing its test. Both files were restored and
+    confirmed byte-identical by `cmp`.
+- Not verified:
+  - no Lab run;
+  - the `fixture.invalid` path through the CLI;
+  - a Lab instance that resolves its own copy of the contracts package.
+- Outcome: Accepted
+
+### 2026-09-13 — g-demo-attestation-limits: the demo leak check scans Core's databases up to the Lab run's limits
+
+- Agent: worker `g-demo-attestation-limits`; the shared constant and the
+  verification by supervisor.
+- Changed, in `packages/test-runner/src/`:
+  - **`secret-leak-attestation.ts`,** by the supervisor: exports
+    `SECRET_LEAK_ATTESTATION_RUN_LIMITS`, which is 10,000 files, 8 MiB per file,
+    64 MiB per scan and depth 32. The scanner's absolute ceilings spread it and add
+    128 approved paths.
+  - **`demo-llm-attestation.ts`:** the demo setup scan uses those limits.
+    - Before, it used the defaults.
+    - Under those, a Core database or `-wal` over 1 MiB failed setup on size alone,
+      and so would a workspace of more than 2,000 files.
+  - **`redaction-attestation/attest-run-redaction.ts`,** by the supervisor: the run
+    attestation uses the same constant instead of its own copy.
+  - **Comments in `run-redaction-scopes.ts` and `attest-run-redaction.ts`** now
+    describe the SQLite reading, including that database copies count against a
+    scan's total.
+  - **`tests/demo-llm-attestation.test.ts`:**
+    - a setup whose databases are each between 1 and 8 MiB, and together over
+      16 MiB, passes;
+    - one with a database over 8 MiB fails.
+- Validation:
+  - **Supervisor,** the test-runner gate under label `sup46`, run after the constant
+    was shared:
+    - `check` exit=0; private `tsc` exit=0;
+    - `node --test` printed "# tests 550", "# pass 550", "# fail 0";
+    - the structure audit passed.
+  - **Worker mutations,** made before the constant was shared: removing the limits,
+    and restoring only the 16 MiB total. Each failed the 1-8 MiB row (`not ok 3`).
+    Both were restored and confirmed by `sha256sum -c`.
+- Not verified:
+  - no Lab or demo run;
+  - real demo store sizes;
+  - whether the over-8 MiB row's finding is `unscanned-store`, which that row
+    cannot assert.
+- Outcome: Accepted

@@ -4,8 +4,9 @@
 // two paths that change it -- a tab the browser updated, and a tab the server
 // asked for -- live beside the state they change.
 //
-// It owns no recording state. Whether a tab is attached for recording is the
-// caller's decision, reached through the deps below.
+// It owns no recording state. Whether a tab is attached for recording, and
+// whether a tab change is a recorded action, are the caller's decisions, reached
+// through the deps below.
 
 import {
   createWebAutomationStateFromTabs,
@@ -23,6 +24,7 @@ import type {
 import { browserStateFromTabs, describeActiveTabLike, unsupportedPageForUrl } from "./browser-state";
 import type { GatewayMessageSender } from "./gateway-session";
 import { eventSourceId } from "./recording-manifest";
+import type { KnownActiveTab } from "./tab-recorder";
 import { compactObject } from "./value-readers";
 
 export type ActivePageDeps = {
@@ -39,6 +41,10 @@ export type ActivePageDeps = {
   // update path a browser-driven tab change takes, so a caller that has
   // replaced that path still sees the selection.
   readonly updateTab: (tab: chrome.tabs.Tab) => Promise<void>;
+  // The tab recorder. Each is told the page this object had in front before the
+  // change, which is where a recording that has not yet seen a tab event is.
+  readonly noteTabChange: (tab: chrome.tabs.Tab, lastActive: KnownActiveTab | undefined) => Promise<void>;
+  readonly noteTabRemoved: (tabId: number, lastActive: KnownActiveTab | undefined) => Promise<void>;
 };
 
 export class ActivePage {
@@ -88,6 +94,7 @@ export class ActivePage {
   }
 
   async handleTabUpdate(tab: chrome.tabs.Tab): Promise<void> {
+    const lastActive = this.knownActiveTab();
     const becameActive = Boolean(tab.active && tab.id !== undefined && this.currentTabId !== tab.id);
     if (tab.active && tab.id !== undefined) {
       this.currentTabId = tab.id;
@@ -96,6 +103,10 @@ export class ActivePage {
       this.deps.emitStatus();
     }
     if (!tab.id) return;
+    // After the state above, so the evidence captured beside a recorded switch
+    // reads the page switched to; before attaching, so the switch is sent ahead
+    // of anything that page records.
+    await this.deps.noteTabChange(tab, lastActive).catch(() => undefined);
     if (tab.active && this.deps.recordingState() === "recording" && !this.currentUnsupported) {
       await this.deps.attachTabForRecording(tab.id).catch(() => undefined);
       if (becameActive) this.deps.onActivity("tab", "Recording active tab", tab.url ?? `Tab ${tab.id}`);
@@ -117,11 +128,20 @@ export class ActivePage {
     }
   }
 
+  handleTabRemoved(tabId: number): Promise<void> {
+    return this.deps.noteTabRemoved(tabId, this.knownActiveTab()).catch(() => undefined);
+  }
+
   async select(tabId: number): Promise<void> {
     const tab = await chrome.tabs.update(tabId, { active: true });
     if (tab.id !== tabId || unsupportedPageForUrl(tab.url)) {
       throw new Error("The requested automation tab is unavailable or unsupported.");
     }
     await this.deps.updateTab({ ...tab, active: true });
+  }
+
+  // The page in front, when it is one a recording can be in.
+  private knownActiveTab(): KnownActiveTab | undefined {
+    return this.currentTabId === undefined || this.currentUnsupported ? undefined : { tabId: this.currentTabId, url: this.currentUrl };
   }
 }

@@ -9,6 +9,7 @@ import type { BrowserActionCommand } from "../../shared/protocol";
 import {
   downloadRequestForAction,
   frameIdForAction,
+  frameUrlPathForAction,
   opensNewTab,
   tabIdForAction,
   tabRequestForAction
@@ -25,6 +26,17 @@ test("the frame an action names is read from the typed field first, then from br
   // 0 is the top frame and must survive; undefined means "top frame only".
   assert.equal(frameIdForAction(command({ options: { browserFrameId: 0 } })), 0);
   assert.equal(frameIdForAction(command()), undefined);
+});
+
+test("a child frame's path is read from the typed field first, then from browserFrameUrlPath, and must be a bare pathname", () => {
+  assert.equal(frameUrlPathForAction(command({ frameUrlPath: "/frames/pay" })), "/frames/pay");
+  assert.equal(frameUrlPathForAction(command({ options: { browserFrameUrlPath: "/frames/pay" } })), "/frames/pay");
+  assert.equal(frameUrlPathForAction(command({ frameUrlPath: "/typed", options: { browserFrameUrlPath: "/raw" } })), "/typed");
+  assert.equal(frameUrlPathForAction(command()), undefined);
+  // The domain's rule (`webAutomationUrlPath`): an origin, a query, a fragment or a protocol-relative host is not a path, so the action falls back to its id.
+  for (const browserFrameUrlPath of ["", "frames/pay", "http://127.0.0.1:4174/frames/pay", "//127.0.0.1:4174/frames/pay", "/\\127.0.0.1:4174/pay", "/pay?token=x", "/pay#top", 3, null]) {
+    assert.equal(frameUrlPathForAction(command({ options: { browserFrameUrlPath } as never })), undefined, String(browserFrameUrlPath));
+  }
 });
 
 test("a malformed frame or tab id is refused rather than coerced", () => {

@@ -11,12 +11,22 @@ import type {
   RuntimeCommandStatus
 } from "../../shared/protocol";
 import { isSensitiveFieldSignature } from "../../shared/sensitive-field";
+import { recordablePageAddress } from "./recordable-page-address";
 
 export class RuntimeStatusTracker {
   private status: RuntimeCommandStatus = { state: "idle" };
+  // The `tab` request of the last action started, kept apart from the status
+  // because `finish` replaces the status before the confirmation is built.
+  private startedTab: { commandId: string; tab: BrowserActionCommand["tab"] } | undefined;
 
   current(): RuntimeCommandStatus {
     return this.status;
+  }
+
+  // A result does not carry its command's tab operation, which decides the input
+  // a tab confirmation names. Only the action this command started answers.
+  tabRequestFor(commandId: string): BrowserActionCommand["tab"] {
+    return this.startedTab?.commandId === commandId ? this.startedTab.tab : undefined;
   }
 
   start(status: Omit<RuntimeCommandStatus, "state">): RuntimeCommandStatus {
@@ -29,6 +39,7 @@ export class RuntimeStatusTracker {
   }
 
   startAction(action: BrowserActionCommand): RuntimeCommandStatus {
+    this.startedTab = { commandId: action.commandId, tab: action.tab };
     return this.start({
       commandId: action.commandId,
       actionType: action.actionType,
@@ -92,13 +103,18 @@ export function runtimeResultTarget(result: BrowserActionResult): string | undef
 // value the field was left holding, as the recorder would have captured it from
 // a user; a sensitive field never does. A `check` confirmation carries no value:
 // the state it set is the descriptor's `checked`, which the content script
-// withholds for a sensitive control.
-export function runtimeConfirmationForActionResult(result: BrowserActionResult): {
+// withholds for a sensitive control. An `upload` confirmation carries none either:
+// a file input's value is a local file name. A tab confirmation's input depends
+// on the operation the command asked for, which the result does not carry, so
+// the caller hands in the command's `tab` request; the confirmation carries the
+// tab in the shape a recorded tab change has.
+export function runtimeConfirmationForActionResult(result: BrowserActionResult, tab?: BrowserActionCommand["tab"]): {
   kind: RecordingEventPayload["kind"];
   inputId: string;
   inputValue?: string;
   key?: string;
   scroll?: { x: number; y: number };
+  tab?: RecordingEventPayload["tab"];
 } | undefined {
   if (result.status !== "succeeded") return undefined;
   if (result.actionType === "web.browser.navigate") return { kind: "browser.navigation", inputId: WEB_AUTOMATION_INPUT_IDS.navigationRequested };
@@ -109,6 +125,25 @@ export function runtimeConfirmationForActionResult(result: BrowserActionResult):
   if (result.actionType === "web.dom.check") return { kind: "dom.change", inputId: WEB_AUTOMATION_INPUT_IDS.checkboxToggled };
   if (result.actionType === "web.dom.keypress") return { kind: "dom.keydown", inputId: WEB_AUTOMATION_INPUT_IDS.keyPressed };
   if (result.actionType === "web.dom.scroll") return { kind: "dom.scroll", inputId: WEB_AUTOMATION_INPUT_IDS.pageScrolled };
+  if (result.actionType === "web.dom.upload") return { kind: "dom.change", inputId: WEB_AUTOMATION_INPUT_IDS.filesChosen };
+  if (result.actionType === "web.browser.tab") return tabConfirmation(tab, result);
+  return undefined;
+}
+
+// A user's switch and close are the tab changes a recording holds, and the
+// confirmation carries the tab as a recorded one does: a switch names the tab it
+// left in front by the pathname of the result's URL, and a close carries no path.
+// An open, or a tab result whose command request is unknown, confirms nothing
+// rather than guess which input it was.
+function tabConfirmation(
+  tab: BrowserActionCommand["tab"],
+  result: BrowserActionResult
+): { kind: "browser.tab"; inputId: string; tab: NonNullable<RecordingEventPayload["tab"]> } | undefined {
+  if (tab?.operation === "switch") {
+    const urlPath = recordablePageAddress(result.url)?.path;
+    return { kind: "browser.tab", inputId: WEB_AUTOMATION_INPUT_IDS.tabSwitched, tab: { operation: "switch", ...(urlPath !== undefined ? { urlPath } : {}) } };
+  }
+  if (tab?.operation === "close") return { kind: "browser.tab", inputId: WEB_AUTOMATION_INPUT_IDS.tabClosed, tab: { operation: "close" } };
   return undefined;
 }
 

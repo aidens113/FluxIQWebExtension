@@ -8,7 +8,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { WEB_AUTOMATION_EVENTS } from "@fluxiq-web-extension/domain/client";
+import { WEB_AUTOMATION_EVENTS, WEB_AUTOMATION_INPUT_IDS } from "@fluxiq-web-extension/domain/client";
 import type { ActivityEntry, RecordingEventPayload, RecordingState } from "../../../shared/protocol";
 import type { ActivePage } from "../active-page";
 import type { ActiveRecording } from "../active-recording";
@@ -340,4 +340,41 @@ test("a subframe's link, a reload, an unexplained link, and a click nothing can 
 
   assert.deepEqual(h.sent.map((message) => message.type), ["client.recording_event"], "only the click itself");
   assert.deepEqual(h.reentered, [], "no navigation was derived");
+});
+
+// --- A tab switch or close (P4) -----------------------------------------------
+//
+// The tab recorder hands these to the facade, which brings them here. They take
+// the executable branch a click takes -- counted once, sent with an input id --
+// while the recording-start marker, the same kind with no `tab`, stays evidence.
+
+function tabEvent(sequence: number, fields: Partial<RecordingEventPayload>): RecordingEventPayload {
+  return { kind: "browser.tab", sequence, url: "https://shop.test/orders", title: "", eventTimestampMs: 5_000 + sequence, ...fields } as RecordingEventPayload;
+}
+
+type SentTabEvent = SentRecordingEvent & { readonly payload?: { readonly tab?: unknown } };
+
+test("a recorded tab switch and close are each counted once and sent with their input ids; the recording-start marker is neither", async () => {
+  const h = harness();
+  await h.intake.accept(tabEvent(1, { metadata: { recordingState: "started", recordingId: "recording-1" } }));
+  assert.equal(h.counted(), 0);
+  assert.equal(h.sent.length, 0, "the marker is evidence");
+
+  await h.intake.accept(tabEvent(2, { tab: { operation: "switch", urlPath: "/orders/17" } }), 7);
+  await h.intake.accept(tabEvent(3, { tab: { operation: "close" } }));
+  assert.equal(h.counted(), 2);
+  const events = h.sent.map((message) => message.payload as SentTabEvent);
+  assert.deepEqual(h.sent.map((message) => message.type), ["client.recording_event", "client.recording_event"]);
+  assert.deepEqual(events.map((event) => event.eventType), [WEB_AUTOMATION_EVENTS.tabStateChanged, WEB_AUTOMATION_EVENTS.tabStateChanged]);
+  assert.deepEqual(events.map((event) => event.metadata?.inputId), [WEB_AUTOMATION_INPUT_IDS.tabSwitched, WEB_AUTOMATION_INPUT_IDS.tabClosed]);
+  assert.deepEqual(events.map((event) => event.payload?.tab), [{ operation: "switch", urlPath: "/orders/17" }, { operation: "close" }]);
+  assert.deepEqual(events.map((event) => event.recordingId), ["recording-1", "recording-1"]);
+  assert.deepEqual(h.evidenceKinds, ["browser.tab", "browser.tab", "browser.tab"]);
+});
+
+test("a tab switch that names no path is evidence, not an action", async () => {
+  const h = harness();
+  await h.intake.accept(tabEvent(1, { tab: { operation: "switch" } }), 7);
+  assert.equal(h.counted(), 0);
+  assert.deepEqual(h.sent, []);
 });
