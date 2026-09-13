@@ -1862,3 +1862,155 @@ Moved verbatim to keep headroom under the plan limit: the discard window fix
 - Not verified: the Lab.
 - Outcome: Accepted
 
+
+## Part twenty-nine, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: Lab Stage 2's first
+attempt and its blocker diagnosis (superseded by the second attempt's entry),
+the stored-payload correction (`17c5bae`) and the discard window evidence
+(`6c22e22`), all committed.
+
+### 2026-09-13 — l-stage2: every run failed the runner's own discard check before measuring anything
+
+- Agent: worker `l-stage2` (Lab); decisions by supervisor.
+- Changed: no tracked file.
+  - Worktrees `F:\fxlab\fxlab-7263534` and `-load` at `7263534`, and
+    `F:\fxlab\!FluxIQ` at Core `187f40d`, rebuilt.
+  - Runs under `F:\fxlab-runs\stage2\`; `reports/l-stage2.md`.
+- Found:
+  - All 12 runs exited 1 as `recording.persistence`: "Core discarded recorded
+    actions that arrived after their recording was finalized (2 with no recording
+    id)". That was step 4b 0 of 6 (4 under load, 2 alone), the load loop 0 of 5,
+    and `sensitive-input` 0 of 1.
+  - Every recording itself was complete. `recordedActions` for the extension
+    equalled Core's (4 and 4, or 3 and 3), the connection stayed `connected`, and
+    the second discard read added 0.
+  - `sensitive-input`'s leak attestation passed: `findingCount 0`, and 0
+    declared-value hits in 13 files.
+  - The cause, confirmed in code by the supervisor:
+    - the runner's Core action probe (`run-scenario.ts:261`) runs before recording
+      starts (`:273`);
+    - after a Core-dispatched action succeeds, the extension sends a runtime
+      confirmation as a `client.recording_event` with
+      `metadata.runtimeConfirmation: true`, whatever the recording state
+      (`server-command-channel.ts:209-237`);
+    - with no recording open, Core's bridge audits it as an executable
+      `recording.action_discarded` naming no recording id (`bridge.ts:479-499`);
+    - `g-recording-completeness` counts such a session-scoped discard as a loss.
+  - Entry counts were 15 in 9 runs and 16 in 2, so the brief's "one entry count
+    across all runs" is not a valid pass condition as written.
+  - The instrumented run found six discarded `client.recording_event` messages,
+    all judged executable. It is a single observation, with the check skipped, so
+    its `run.json` is dirty and it is not a measurement.
+    - Two came from the probe before recording, each 2 ms after its navigate or
+      type returned. Record was pressed at 15.339 s; Core's `startedAt` was
+      15.344 s.
+    - None came during the recording.
+    - Four came after finalization (`sinceFinalizedMs` 11165-14533), one at the
+      end of each of the Flow lane's four actions, each carrying the finished
+      recording's id.
+    - That run passed: 4 of 4 Flow actions, 4 of 4 recorded, and 0 declared-value
+      hits in 60 files.
+- Decisions:
+  - The runner's check is what is wrong. `g-discard-window` limits it to discards
+    audited between the recording's start request and the Flow lane's dispatch.
+  - Core's audit wording for a runtime confirmation goes to the Phase 1.6b
+    ranking.
+  - Stage 2 is redispatched at the fix commit.
+  - Meanwhile the Lab worker runs one instrumented `basic-form --flow` in its
+    worktree, timing both reads, including any Flow-lane echoes after
+    finalization.
+  - Step 4b's entry-count condition gives way to per-run action equality, which
+    the completeness check enforces.
+- Validation:
+  - Worker: pin proof `exit=0 unpinned=0` on both worktrees; all 12 `run.json`
+    name facility `7263534` and Core `187f40d` with `dirty=false`; lowest free
+    memory 9.88 GB, with no pause.
+  - Supervisor read `bridge.ts:479-499`, `audit-log.ts:14-17`
+    (`timestamp: this.now()`), `run-scenario.ts:261-275` and
+    `server-command-channel.ts:196-237`.
+  - Each run count above is a single Lab observation.
+- Not verified:
+  - step 4b runs 7-24;
+  - W18, W25, W10, W27 and W24;
+  - smoke gate 5.0;
+  - the week1 bench;
+  - W19 `expired`.
+- Outcome: Revised
+
+### 2026-09-13 — g-mapper-stored-payload: the mapper already reads Core's stored domain events correctly
+
+- Agent: worker `g-mapper-stored-payload`; decisions by supervisor.
+- Changed: a new `domain/src/tests/web-panel-host.test.ts`, with five rows that run
+  a recording through Core. The hand-built domain-event rows moved out of
+  `domain/src/tests/domain.test.ts`. `domain/src/web-panel-host.ts` is unchanged.
+- Found:
+  - The brief's premise, taken from `reports/w19-d1b.md` open question 1, was
+    wrong. Core stores each domain event twice: as a `domain_event` entry whose
+    own payload sits inside `{ target?, payload }` (`model/recording-domain.ts:187`),
+    and as an `observation` from the domain's `observationExtractor`, with the
+    payload one level up (`:228-237`).
+  - The mapper reads that observation copy. On a real recording, D1's
+    domain-event click claim, W25's between-evidence URL check and a navigation
+    proposal therefore already work, once each. Reading the entry as well
+    proposes every executable domain event twice (mutation M1: 4 rows fail).
+- Decisions:
+  - Task 1 is withdrawn, and the reader stays as it is; the Core-run rows are
+    kept.
+  - This corrects the `w19-d1b` and `g-w19-docs` entries in archive parts
+    twenty-six and twenty-seven, which said the domain-event path claims
+    nothing on a real recording. The architecture pages never said so.
+  - Stage 2's redispatch now waits only for `g-discard-window-evidence`
+    (twenty-second dispatch).
+- Validation: supervisor confirmed `recording-domain.ts:187` and `:228-237`, and
+  that `web-panel-host.ts` is unchanged against HEAD. With
+  `DOMAIN_TEST_BUILD_LABEL=sup21`:
+  - `domain check` -> exit 0;
+  - `test` -> `# tests 380`, `# pass 380`, `# fail 0`, including `ok 376 - Core
+    shows a mapper a domain event twice, and the mapper reads it from the
+    observation alone` and `ok 377 - D1: a click sent as a domain event is
+    proposed once, claiming the path it landed on`;
+  - the structure audit passed, and `domain.test.ts` is 300 lines.
+  - Worker: M1, the brief's fix, failed 4 rows; M2, which stops reading an
+    observation's payload, failed 5. HEAD was restored after each.
+- Not verified: the Core rows copy the gateway's routing rather than running
+  `ClientGatewayBridge`; the Lab.
+- Outcome: Revised
+
+### 2026-09-13 — g-discard-window-evidence: each discard read shows what its window excluded
+
+- Agent: worker `g-discard-window-evidence`; verified by supervisor.
+- Changed:
+  - `flow-lane/recording-discards.ts` returns a `window` beside each read's
+    discards: `from` (or `null`), and `until` when set.
+  - Per audit type, the window also counts the excluded entries, by whether each
+    names this run's recording, no recording, or another. No entry's id, message,
+    session, recording id, label or input id travels.
+  - Both discard reads' `runtime.settle` events in `run-scenario.ts` publish it as
+    `recordingDiscardWindow`.
+  - The failure text names lost actions "inside this run's recording window",
+    per recording or "with no recording id". It adds "after finalization" only
+    when every entry showing that loss carries `sinceFinalizedMs`.
+  - A bound that is not a finite number now excludes nothing.
+  - Tests, and two moved wiring pins.
+- Found:
+  - The "no recording" count includes other sessions' entries, and counts are per
+    read, not unioned.
+  - The `l-stage2` entry quotes the old failure text as it appeared then.
+- Validation: supervisor read the diff. From `packages/test-runner`:
+  - `pnpm check` -> exit 0;
+  - `tsc --outDir dist-sup22` -> exit 0;
+  - `node --test "dist-sup22/**/*.test.js"` -> `# tests 517`, `# pass 517`,
+    `# fail 0`, including `ok 113 - each read publishes its bounds, until only
+    when set, and counts what the window excluded by audit type and by the
+    recording each entry names` and `ok 115 - the failure names lost actions
+    inside this run's recording window, ...`;
+  - the structure audit passed.
+  - Worker: 17 mutations each failed a test with a real diff, and both files were
+    restored byte-identical.
+- Not verified: the Lab. `basic-form --flow` should show two things:
+  - the first read excluding 2 action discards naming no recording;
+  - the second read adding `until`, and excluding 4 naming this run's recording
+    and 2 naming none, with `discardsAfterFirstRead` 0.
+- Outcome: Accepted
+

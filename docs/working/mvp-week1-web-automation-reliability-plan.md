@@ -36,7 +36,7 @@ flight. No exit criterion yet carries a quoted Lab observation. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
-settled ledger entries are in parts one to twenty-eight of
+settled ledger entries are in parts one to twenty-nine of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13, while workers run.**
@@ -642,149 +642,83 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 `2026-09-12-*` Wave 3 and live-validation files, and
 `2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-13 — l-stage2: every run failed the runner's own discard check before measuring anything
+### 2026-09-13 — l-stage2, second attempt: the recording fixes held under load; auth-gate leaks its secret into Core, and W18, W19 and W25 fail
 
-- Agent: worker `l-stage2` (Lab); decisions by supervisor.
+- Agent: worker `l-stage2` (Lab); verified by supervisor.
 - Changed: no tracked file.
-  - Worktrees `F:\fxlab\fxlab-7263534` and `-load` at `7263534`, and
-    `F:\fxlab\!FluxIQ` at Core `187f40d`, rebuilt.
-  - Runs under `F:\fxlab-runs\stage2\`; `reports/l-stage2.md`.
-- Found:
-  - All 12 runs exited 1 as `recording.persistence`: "Core discarded recorded
-    actions that arrived after their recording was finalized (2 with no recording
-    id)". That was step 4b 0 of 6 (4 under load, 2 alone), the load loop 0 of 5,
-    and `sensitive-input` 0 of 1.
-  - Every recording itself was complete. `recordedActions` for the extension
-    equalled Core's (4 and 4, or 3 and 3), the connection stayed `connected`, and
-    the second discard read added 0.
-  - `sensitive-input`'s leak attestation passed: `findingCount 0`, and 0
-    declared-value hits in 13 files.
-  - The cause, confirmed in code by the supervisor:
-    - the runner's Core action probe (`run-scenario.ts:261`) runs before recording
-      starts (`:273`);
-    - after a Core-dispatched action succeeds, the extension sends a runtime
-      confirmation as a `client.recording_event` with
-      `metadata.runtimeConfirmation: true`, whatever the recording state
-      (`server-command-channel.ts:209-237`);
-    - with no recording open, Core's bridge audits it as an executable
-      `recording.action_discarded` naming no recording id (`bridge.ts:479-499`);
-    - `g-recording-completeness` counts such a session-scoped discard as a loss.
-  - Entry counts were 15 in 9 runs and 16 in 2, so the brief's "one entry count
-    across all runs" is not a valid pass condition as written.
-  - The instrumented run found six discarded `client.recording_event` messages,
-    all judged executable. It is a single observation, with the check skipped, so
-    its `run.json` is dirty and it is not a measurement.
-    - Two came from the probe before recording, each 2 ms after its navigate or
-      type returned. Record was pressed at 15.339 s; Core's `startedAt` was
-      15.344 s.
-    - None came during the recording.
-    - Four came after finalization (`sinceFinalizedMs` 11165-14533), one at the
-      end of each of the Flow lane's four actions, each carrying the finished
-      recording's id.
-    - That run passed: 4 of 4 Flow actions, 4 of 4 recorded, and 0 declared-value
-      hits in 60 files.
-- Decisions:
-  - The runner's check is what is wrong. `g-discard-window` limits it to discards
-    audited between the recording's start request and the Flow lane's dispatch.
-  - Core's audit wording for a runtime confirmation goes to the Phase 1.6b
-    ranking.
-  - Stage 2 is redispatched at the fix commit.
-  - Meanwhile the Lab worker runs one instrumented `basic-form --flow` in its
-    worktree, timing both reads, including any Flow-lane echoes after
-    finalization.
-  - Step 4b's entry-count condition gives way to per-run action equality, which
-    the completeness check enforces.
-- Validation:
-  - Worker: pin proof `exit=0 unpinned=0` on both worktrees; all 12 `run.json`
-    name facility `7263534` and Core `187f40d` with `dirty=false`; lowest free
-    memory 9.88 GB, with no pause.
-  - Supervisor read `bridge.ts:479-499`, `audit-log.ts:14-17`
-    (`timestamp: this.now()`), `run-scenario.ts:261-275` and
-    `server-command-channel.ts:196-237`.
-  - Each run count above is a single Lab observation.
+  - Worktrees under `F:\fxlab\` moved to `6c22e22`, with Core at `5845f5d`.
+  - 157 runs under `F:\fxlab-runs\stage2b\`.
+  - `reports/l-stage2.md`, "Second attempt".
+- Found (worker figures; each run is a single observation):
+  - **Pin:** the pin proof showed `unpinned=0` on both worktrees.
+  - **Step 4b under two-instance load:** 23 of 24 passed, each with
+    `candidateCount` 4 and equal `recordedActions`.
+    - Run 8 failed `process.startup` before recording, and passed when rerun
+      alone.
+    - The load loop passed 37 of 37.
+    - The lowest free memory was 8.82 GB, and the load never paused.
+  - **Alone, all passing:**
+    - W10 `broken-link` and W27 `blocked-url` each passed 3 of 3, reporting
+      `navigation_unexpected` / `web.navigation.unexpected` with the click
+      `failed`;
+    - `sensitive-input` passed 3 of 3, with its attestation `passed`;
+    - W24 unarmed passed 3 of 3;
+    - smoke gate 5.0 was `equivalent`.
+  - **W18, 0 of 3.** The Flow succeeded, but the Flow-lane extraction expectation
+    can never be met, and the leak attestation failed.
+  - **W19, 0 of 3.**
+    - Its failure category held: the click `failed`, with `auth_required` /
+      `web.auth.required` 3 of 3 and no extract attempt.
+    - `comparisonStatus` is in no bundle, and the leak attestation failed.
+    - Run 1's second discard read hit the fail-closed "no audit log" branch.
+  - **W25, 0 of 3.** No wait was proposed, and `too-slow` failed 0 of 3 as
+    `target_not_found`.
+  - **The week1 bench, `--repeat 1`,** exited 1 with 37 of 67 passed.
+    - Recording lane: `initialExecutionSuccess` 0.174.
+    - Flow lane: `flowCreationSuccess` 0.682, `initialExecutionSuccess` 0.273,
+      `falseSuccess` 0.167, and `failureClassificationAccuracy` 0.727.
+  - **Evidence discards inside the window** occurred in 6 of 37 load runs, W18
+    run 1 and W19 run 3. They failed none.
+- Decisions, set out in the twenty-third dispatch:
+  - the auth-gate secret comes first (`i-secret-in-workspace`, the Lab owner);
+  - the bench's failing rows are triaged (`i-bench-triage`);
+  - W25's live wait is investigated (`i-w25-live-wait`);
+  - `g-flow-lane-expectations` makes the Flow lane stop judging an unreachable
+    extraction expectation, publish each attempt's comparison status, and retry
+    a failed snapshot read once;
+  - step 4b's discard condition counts action discards only.
+- Validation: supervisor, from the bundles.
+  - **A tally of every `run.json` under `F:\fxlab-runs\stage2b\`:**
+    - 157 files, with commit prefixes `6c22e22` ×157 and `5845f5d` ×157;
+    - `"dirty":true` 0 times;
+    - `basic-form`: 65 passed, 1 failed;
+    - `auth-gate`: 5 failed; `auth-gate/expired`: 4 failed;
+    - `delayed-ui`: 4 failed, 1 passed; `delayed-ui/too-slow`: 4 failed;
+    - `navigation/broken-link`: 4 passed; `failure-surfaces/blocked-url`: 4
+      passed;
+    - `sensitive-input`: 3 passed; `intermediate-state`: 5 passed.
+  - **The discard windows published by the 24 step 4b bundles.** 23 carry them,
+    all one shape.
+    - The first read excluded 2 action discards naming no recording, and
+      counted 0.
+    - The second read, with `until` set, excluded 4 naming this run's recording
+      and 2 naming none, with `discardsAfterFirstRead` 0 and 0 counted.
+  - **Two W18 bundles' `redaction-attestation.json`:** `status` `failed`, with
+    `findingCount` 13.
+    - All 13 findings are in scope `workspace`, and none in `bundle`.
+    - 5 are in the project's content-addressed `objects/sha256/`, 5 in the
+      recording's `objects/`, and 3 in
+      `runtime/command-attempts/…/attempt.json`.
+    - Only scopes and paths were printed, never a value.
 - Not verified:
-  - step 4b runs 7-24;
-  - W18, W25, W10, W27 and W24;
-  - smoke gate 5.0;
-  - the week1 bench;
-  - W19 `expired`.
+  - which Core objects and key paths hold the secret (the workspaces were
+    deleted, and `i-secret-in-workspace` keeps one);
+  - W18's username node and start page;
+  - why W25 proposes no wait;
+  - the single failures: W26 `Timed out waiting for client gateway`, W16
+    `fetch failed`, and the startup timeouts;
+  - W19 `expired` against a Core that no longer leaks.
 - Outcome: Revised
-
-### 2026-09-13 — g-mapper-stored-payload: the mapper already reads Core's stored domain events correctly
-
-- Agent: worker `g-mapper-stored-payload`; decisions by supervisor.
-- Changed: a new `domain/src/tests/web-panel-host.test.ts`, with five rows that run
-  a recording through Core. The hand-built domain-event rows moved out of
-  `domain/src/tests/domain.test.ts`. `domain/src/web-panel-host.ts` is unchanged.
-- Found:
-  - The brief's premise, taken from `reports/w19-d1b.md` open question 1, was
-    wrong. Core stores each domain event twice: as a `domain_event` entry whose
-    own payload sits inside `{ target?, payload }` (`model/recording-domain.ts:187`),
-    and as an `observation` from the domain's `observationExtractor`, with the
-    payload one level up (`:228-237`).
-  - The mapper reads that observation copy. On a real recording, D1's
-    domain-event click claim, W25's between-evidence URL check and a navigation
-    proposal therefore already work, once each. Reading the entry as well
-    proposes every executable domain event twice (mutation M1: 4 rows fail).
-- Decisions:
-  - Task 1 is withdrawn, and the reader stays as it is; the Core-run rows are
-    kept.
-  - This corrects the `w19-d1b` and `g-w19-docs` entries in archive parts
-    twenty-six and twenty-seven, which said the domain-event path claims
-    nothing on a real recording. The architecture pages never said so.
-  - Stage 2's redispatch now waits only for `g-discard-window-evidence`
-    (twenty-second dispatch).
-- Validation: supervisor confirmed `recording-domain.ts:187` and `:228-237`, and
-  that `web-panel-host.ts` is unchanged against HEAD. With
-  `DOMAIN_TEST_BUILD_LABEL=sup21`:
-  - `domain check` -> exit 0;
-  - `test` -> `# tests 380`, `# pass 380`, `# fail 0`, including `ok 376 - Core
-    shows a mapper a domain event twice, and the mapper reads it from the
-    observation alone` and `ok 377 - D1: a click sent as a domain event is
-    proposed once, claiming the path it landed on`;
-  - the structure audit passed, and `domain.test.ts` is 300 lines.
-  - Worker: M1, the brief's fix, failed 4 rows; M2, which stops reading an
-    observation's payload, failed 5. HEAD was restored after each.
-- Not verified: the Core rows copy the gateway's routing rather than running
-  `ClientGatewayBridge`; the Lab.
-- Outcome: Revised
-
-### 2026-09-13 — g-discard-window-evidence: each discard read shows what its window excluded
-
-- Agent: worker `g-discard-window-evidence`; verified by supervisor.
-- Changed:
-  - `flow-lane/recording-discards.ts` returns a `window` beside each read's
-    discards: `from` (or `null`), and `until` when set.
-  - Per audit type, the window also counts the excluded entries, by whether each
-    names this run's recording, no recording, or another. No entry's id, message,
-    session, recording id, label or input id travels.
-  - Both discard reads' `runtime.settle` events in `run-scenario.ts` publish it as
-    `recordingDiscardWindow`.
-  - The failure text names lost actions "inside this run's recording window",
-    per recording or "with no recording id". It adds "after finalization" only
-    when every entry showing that loss carries `sinceFinalizedMs`.
-  - A bound that is not a finite number now excludes nothing.
-  - Tests, and two moved wiring pins.
-- Found:
-  - The "no recording" count includes other sessions' entries, and counts are per
-    read, not unioned.
-  - The `l-stage2` entry quotes the old failure text as it appeared then.
-- Validation: supervisor read the diff. From `packages/test-runner`:
-  - `pnpm check` -> exit 0;
-  - `tsc --outDir dist-sup22` -> exit 0;
-  - `node --test "dist-sup22/**/*.test.js"` -> `# tests 517`, `# pass 517`,
-    `# fail 0`, including `ok 113 - each read publishes its bounds, until only
-    when set, and counts what the window excluded by audit type and by the
-    recording each entry names` and `ok 115 - the failure names lost actions
-    inside this run's recording window, ...`;
-  - the structure audit passed.
-  - Worker: 17 mutations each failed a test with a real diff, and both files were
-    restored byte-identical.
-- Not verified: the Lab. `basic-form --flow` should show two things:
-  - the first read excluding 2 action discards naming no recording;
-  - the second read adding `until`, and excluding 4 naming this run's recording
-    and 2 naming none, with `discardsAfterFirstRead` 0.
-- Outcome: Accepted
 
 ## Open Questions
 
