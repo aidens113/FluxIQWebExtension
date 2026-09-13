@@ -104,6 +104,17 @@ function selectedTargetCandidate(target: JsonObject | undefined): JsonObject | u
  * the page with no semantic signal at all: `resolve-target.ts` falls back to
  * `role ?? implicitRole` when it counts the same-family controls a not-found
  * failure reports, and a scorer would weigh it where Core weighs `role`.
+ *
+ * `context` is where the element sat. It reached the wire on 2026-09-12 and
+ * died here: this function had no `context` key, so the signal was captured,
+ * carried across the boundary that had been blocking it, and thrown away one
+ * layer later -- which looked fixed from both ends. It is carried now.
+ * **Nothing scores it yet**: Core's `ElementFingerprintWeights` names nineteen
+ * signals and none is a form, a landmark or a position, and
+ * `content/identity/score.ts` `comparableFingerprint` sends Core only the
+ * signals a candidate can answer, which does not include this one. So this
+ * moves no score today; it makes the signal reachable by the consumer that
+ * would.
  */
 export function elementFingerprint(value: unknown): WebAutomationElementFingerprint | undefined {
   const element = objectValue(value);
