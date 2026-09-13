@@ -24,6 +24,7 @@ const DISABLED_TARGET = '[data-testid="disabled-target"]';
 const DETACH_TARGET = '[data-testid="detach-target"]';
 const ACCOUNT_HOLDER = '[data-testid="account-holder"]';
 const SIGN_IN_FORM = '[data-testid="sign-in-form"]';
+const ACCOUNT_PATH = "/scenarios/auth-gate/account";
 const CLAIM_RESULT = '[data-testid="claim-result"]';
 const CLAIM_FORM = '[data-testid="claim-form"]';
 const FULL_NAVIGATION = '[data-testid="full-navigation"]';
@@ -138,6 +139,48 @@ test.describe("on auth-gate", () => {
     expect(demoPassword.length).toBeGreaterThan(0);
     expect(JSON.stringify(reply.failure)).not.toContain(demoPassword);
     expect(JSON.stringify(reply.validation)).not.toContain(demoPassword);
+  });
+
+  test("a URL claim that fails on a sign-in gate is AUTH_REQUIRED, and the record never quotes the page's address", async ({ openHarness, page }) => {
+    // W19's shape: the recorded click landed on the account page, so replay
+    // claims that URL, and an expired session leaves the browser on the gate.
+    const harness = await openHarness("auth-gate");
+    await expect(page.locator(SIGN_IN_FORM)).toBeVisible();
+
+    const reply = await harness.runAction({
+      commandId: "expired-landing",
+      actionType: "web.dom.assert",
+      assert: { kind: "url", expected: ACCOUNT_PATH, timeoutMs: 200 }
+    });
+    expect(reply).toMatchObject({
+      status: "failed",
+      failure: {
+        category: "auth_required",
+        code: WEB_AUTOMATION_FAILURE_CODES.AUTH_REQUIRED,
+        retryable: false,
+        stage: "confirmation",
+        expected: `the page URL is ${ACCOUNT_PATH}`
+      }
+    });
+    expect(reply.failure?.actual).toContain("sign-in gate");
+
+    // The claim is the Flow's; the address and every field are the page's. On
+    // a real gate the address carries a return path or a token.
+    const demoPassword = await page.locator('[data-testid="demo-password"]').innerText();
+    expect(demoPassword.length).toBeGreaterThan(0);
+    expect(JSON.stringify(reply.failure)).not.toContain(demoPassword);
+    expect(JSON.stringify(reply.failure)).not.toContain(harness.url);
+    expect(JSON.stringify(reply.validation)).not.toContain(demoPassword);
+  });
+
+  test("the control: a URL claim that names no URL is malformed on the gate page too, not AUTH_REQUIRED", async ({ openHarness }) => {
+    // No page can satisfy it, so it says the Flow is wrong, not the session.
+    const harness = await openHarness("auth-gate");
+    const reply = await harness.runAction({ commandId: "unnamed-url", actionType: "web.dom.assert", assert: { kind: "url" } });
+    expect(reply).toMatchObject({
+      status: "failed",
+      failure: { code: WEB_AUTOMATION_FAILURE_CODES.STATE_MISMATCH, expected: "the assertion to name the expected URL" }
+    });
   });
 
   test("the control: a target that is present on the gate page fails as itself, not as AUTH_REQUIRED", async ({ openHarness }) => {

@@ -26,12 +26,12 @@
 //
 // Two codes are decided from the page rather than from the verb, and both sit
 // here because this is the single point every result passes through.
-// `authGateFailure` reports AUTH_REQUIRED when the target matched nothing and
-// what is on the page is a sign-in wall. `blockedByModal` reports
-// USER_INTERVENTION_REQUIRED when a target was refused as covered or inert and
-// a modal dialog is standing over the page -- the condition that code was named
-// for, which nothing in the browser path produced until now, and which the
-// plan's own corpus row W14 requires.
+// `authGateFailure` reports AUTH_REQUIRED when the target matched nothing, or a
+// URL claim did not hold, and what is on the page is a sign-in wall.
+// `blockedByModal` reports USER_INTERVENTION_REQUIRED when a target was refused
+// as covered or inert and a modal dialog is standing over the page -- the
+// condition that code was named for, which nothing in the browser path produced
+// until now, and which the plan's own corpus row W14 requires.
 //
 // What a validation implies for the status is decided in
 // `validation-outcome.ts`; this module assembles it with what the page can
@@ -244,17 +244,25 @@ function unobservedOutputCode(action: BrowserActionCommand): WebAutomationFailur
 
 /**
  * AUTH_REQUIRED, when the page itself explains the failure better than the verb
- * could: the element the action named is not in this document, and what is here
+ * could: what the action looked for is not in this document, and what is here
  * is a sign-in gate. An expired session is the common cause, and it is the one
  * failure a retry can never clear -- Core's `auth_required` asks a person to
  * sign in instead of retrying, so reporting it as a missing target or a bare
  * thrown error leaves the orchestrator retrying a wall.
  *
+ * "Not in this document" has two shapes: the element the action named matches
+ * nothing, or a `web.dom.assert` URL claim did not hold. The second is W19's --
+ * a replayed click's recorded landing is checked as a URL, and an expired
+ * session leaves the browser on the gate instead. A URL claim that names no URL
+ * is a malformed Flow, not a session, so it is left as it was, as is an action
+ * that named neither.
+ *
  * Both halves are required, because either alone is ordinary: a sign-in form on
  * a page whose target resolved fine is just a page with a sign-in form, and a
- * missing target with no gate is a missing target. An action that named no
- * selector cannot be judged this way at all, so it is left as it was. Nothing
- * here reads a field's value; only whether a password control is on the page.
+ * missing target or a wrong URL with no gate is exactly that. Nothing here reads
+ * a field's value; only whether a password control is on the page. The URL
+ * record names the claim, never the address the page is at, which on a real
+ * sign-in page carries a return path or a token.
  *
  * This is one of two places a code is decided from the page rather than from
  * the verb, which is why it sits at the single point every result passes
@@ -264,15 +272,22 @@ function unobservedOutputCode(action: BrowserActionCommand): WebAutomationFailur
  * produced. AUTH_REQUIRED winning is deliberate -- a page that has become a
  * sign-in gate needs a person to sign in, which is more specific than "a person
  * must act" -- though the two cannot meet in practice, since a target that
- * resolved well enough to be refused is a target this hook's first condition
- * (nothing matches the selector) rules out.
+ * resolved well enough to be refused is a target this hook's selector condition
+ * (nothing matches it) rules out, and a URL claim is never refused.
  */
 function authGateFailure(action: BrowserActionCommand, failure: FailureRecord): FailureRecord | undefined {
-  if (!action.selector || !selectorMatchesNothing(action.selector) || !signInGatePresent()) return undefined;
+  const missing = action.selector ? selectorMatchesNothing(action.selector) : false;
+  if ((!missing && !namedUrlClaim(action)) || !signInGatePresent()) return undefined;
+  const actual = missing ? failure.actual ?? "nothing matched the target" : "the page is not at the URL the Flow claimed";
   return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.AUTH_REQUIRED, {
-    expected: failure.expected ?? `an element matching ${action.selector}`,
-    actual: `${failure.actual ?? "nothing matched the target"}; the document is a sign-in gate, so the session has probably expired`
+    expected: failure.expected ?? (missing ? `an element matching ${action.selector}` : "the page URL the Flow claimed"),
+    actual: `${actual}; the document is a sign-in gate, so the session has probably expired`
   });
+}
+
+/** A `web.dom.assert` URL claim that names a URL; one that failed says the page is not where the Flow expected it. */
+function namedUrlClaim(action: BrowserActionCommand): boolean {
+  return action.actionType === "web.dom.assert" && action.assert?.kind === "url" && Boolean(action.assert.expected);
 }
 
 /**
