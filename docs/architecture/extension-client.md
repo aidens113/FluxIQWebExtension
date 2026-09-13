@@ -301,7 +301,7 @@ The content script and the background worker emit browser evidence:
 - tab switches, tab closes and navigation changes, from the background worker;
 - click, input, change, and submit;
 - keydown and scroll;
-- batched DOM mutation counts;
+- batched DOM mutation counts, sent ahead of the next action;
 - DOM snapshots.
 
 No focus or blur evidence is emitted. The shared protocol still declares
@@ -332,6 +332,26 @@ first, so no action is recorded ahead of the text typed just before it:
 
 A character, a deletion, a bare modifier, or a key an input method reports while
 composing does not send it, so one run of typing stays one event.
+
+The page's own DOM changes are counted, not described. While mutation capture is
+on, the content script
+([`content/recorder.ts`](../../apps/extension/src/content/recorder.ts)) adds them
+up into one pending `dom.mutation` batch: nodes added, nodes removed, attribute
+changes and text changes. The batch is sent once the page has been quiet for
+500 ms. A DOM change made before an action is never recorded after it:
+- **An action sends the batch first.** A batch still pending goes out ahead of
+  any event of a kind that can become an action: `dom.click`, `dom.input`,
+  `dom.change`, `dom.submit` or `dom.keydown`.
+- **Undelivered changes count.** That early send also counts the changes the
+  page's observer has queued but not yet delivered, so a change made in the same
+  task as the action is not left behind.
+- **Other kinds wait.** A scroll or a navigation leaves the batch to its quiet
+  period.
+
+A batch is evidence only. It carries no DOM snapshot, so the background worker
+sends it as a `client.state_update` under the `web.recording.evidence` input,
+with its counts and page URL in `latestEvidence`. A
+[wait before a late target](#a-wait-before-a-late-target) is proposed from it.
 
 The background process maps this raw evidence into `web-automation` domain
 events such as `web.element.clicked`, `web.element.input_changed`,
@@ -375,7 +395,8 @@ clicks. The landing is sent as a non-executable `client.recording_event`,
 The landing carries no input id. The domain maps it to no input, so it never
 executes, and it is not counted as a recorded action. It is also sent as
 evidence. Core stores it as a domain event on the recording's timeline, where
-the recording mapper finds it beside the click it names (see below).
+the recording mapper finds it beside the click it names
+([A Click's Landing](#a-clicks-landing)).
 
 The background worker also records a tab change as an action
 ([`background/connection/tab-recorder.ts`](../../apps/extension/src/background/connection/tab-recorder.ts)).
@@ -406,10 +427,58 @@ A tab event goes through the same intake as a click, so it is sent once with its
 input id and counted once. The recording-start marker is a `browser.tab` event
 too. It carries no `tab`, which is what keeps it evidence.
 
-A `client.start_recording` waits 750 ms for FluxIQ to answer; on silence the
-recorder starts locally so no user action is lost. A refusal is an answer, so
-it cancels that window — and it is classified rather than treated as a
-connection failure. `classifyRecordingStartRefusal`
+A recording begins with a handshake
+([`background/connection/recording-start/handshake.ts`](../../apps/extension/src/background/connection/recording-start/handshake.ts)).
+A `client.start_recording` waits 750 ms for FluxIQ to answer, and FluxIQ accepts
+with `server.start_recording`. On silence the recorder starts locally, so no user
+action is lost, but never before that attempt's send has settled:
+- **The window measures the user's wait.** It opens before the send, not after
+  it. The send first looks the project up from FluxIQ over HTTP, for at most
+  1,500 ms (`RECORDING_START_PROJECT_LOOKUP_BOUND_MS`), then goes on without one.
+- **An elapsed window waits for the send.** An event recorded while the start is
+  unsent would reach FluxIQ ahead of it, and nothing on FluxIQ's side could put
+  it back. So nothing recorded reaches FluxIQ ahead of its start.
+- **A late answer still counts.** One that arrives after the window has elapsed,
+  but before the send has settled, still decides the start.
+- **Each retry waits for its own send,** not an earlier attempt's, and gets a
+  fresh window.
+- **A send that never settles never falls back.** The start stays pending until
+  it is cancelled, and pressing Record again only says it is starting.
+  Disconnecting cancels it.
+
+A recording starts once
+([`background/connection/active-recording.ts`](../../apps/extension/src/background/connection/active-recording.ts)).
+Every way into one, a local start or a `server.start_recording`, goes through
+`beginOnce`. A start is marked the moment it is decided, and another that arrives
+meanwhile waits for it. `beginAccepted` first reads which recording a
+`server.start_recording` names:
+- **The pending start.** The handshake is cancelled, so the window never fires
+  and the recording starts once.
+- **A local start still under way.** It waits for that start, then only links
+  the project FluxIQ named. The local start's missing project never overwrites
+  it.
+- **The recording already running,** whether the acknowledgement is late or
+  repeated. It only links the project.
+- **Another recording,** while a start is pending or under way, or a recording
+  is running. It is ignored.
+- **The recording this client last stopped.** It is ignored: it crossed that
+  Stop on the wire, and restarting would record into a recording FluxIQ has
+  closed.
+- **Nothing of this client's own,** with no start pending or under way and no
+  recording running. It is FluxIQ's own start, asked for from the web panel,
+  and it begins.
+
+FluxIQ Core keeps the same order on its side, in its Automation Studio client
+gateway bridge (Core's
+`packages/fluxiq/src/programs/automation-studio/client-gateway/bridge.ts`):
+- a client's later messages wait for its start to settle, so they meet the
+  recording it opens, or its refusal;
+- a message the client sent before the start never lands in that recording;
+- the acknowledgement is sent only once the recording is open, and never to a
+  client that has already sent Stop for it.
+
+A refusal is an answer, so it cancels the acceptance window — and it is
+classified rather than treated as a connection failure. `classifyRecordingStartRefusal`
 ([`background/connection/recording-start/refusal.ts`](../../apps/extension/src/background/connection/recording-start/refusal.ts))
 reads Core's `server.error` and separates three cases that arrive under two
 wire codes:
@@ -513,15 +582,39 @@ tab confirmation carries `tab` in the shape above. Which verbs confirm, and what
 each carries, is in
 [web capabilities](web-capabilities.md#recorder-trust-and-runtime-confirmations).
 
-A recorded click proposes the page it landed on as its expected state. When
-Core turns a recording into a proposal, it shows the web recording mapper
-([`domain/src/web-panel-host.ts`](../../domain/src/web-panel-host.ts), with
-the builder in
-[`domain/src/runtime/expectation/click-landing.ts`](../../domain/src/runtime/expectation/click-landing.ts))
-each timeline entry together with up to 32 entries after it (`following`). The
-mapper looks there for explained landings that name the click, and takes the
-**last** one, since a client redirect can commit twice. The claim it adds is
-exactly:
+When a recorded action has an element, the background process derives
+`visualTarget` with the same state ID algorithm used by snapshot conversion.
+Executed action results do the same using the element actually resolved in the
+page, so editor playback can highlight what the browser interacted with.
+
+The side panel recordings tab reads saved summaries from FluxIQ Core:
+
+```text
+GET /api/recordings?page=1&pageSize=10
+```
+
+The extension includes the paired client token as a bearer token when one is
+available.
+
+The extension keeps only transient recorder UI state for the active browser
+session. It does not persist canonical recordings locally.
+
+## Recording Proposals
+
+When Core turns a recording into a proposal, it shows the web recording mapper,
+`mapWebRecordingObservation`
+([`domain/src/web-panel-host.ts`](../../domain/src/web-panel-host.ts)), each
+timeline entry together with up to 32 entries after it (`following`). Besides
+the node each recorded action maps to, the mapper reads `following` for two
+things: the page a click landed on, and a page change just before a click.
+
+### A Click's Landing
+
+A recorded click proposes the page it landed on as its expected state, built in
+[`domain/src/runtime/expectation/click-landing.ts`](../../domain/src/runtime/expectation/click-landing.ts).
+The mapper looks in `following` for explained landings that name the click, and
+takes the **last** one, since a client redirect can commit twice. The claim it
+adds is exactly:
 
 ```json
 { "conditions": [{ "assert": { "kind": "url", "expected": "/the/landing/path" } }], "mode": "all", "timeoutMs": 5000 }
@@ -572,22 +665,59 @@ the page as a `web.dom.assert`. So a replayed click that lands anywhere else
 fails, instead of passing because nothing threw. [Action Surface](#action-surface)
 describes how that failure is named on a sign-in gate.
 
-When a recorded action has an element, the background process derives
-`visualTarget` with the same state ID algorithm used by snapshot conversion.
-Executed action results do the same using the element actually resolved in the
-page, so editor playback can highlight what the browser interacted with.
+### A Wait Before A Late Target
 
-The side panel recordings tab reads saved summaries from FluxIQ Core:
+A recording that saw the page add something just before a click proposes waiting
+for that click's target first. A replay that reaches the click before the page
+has added its target then waits for it, rather than failing to find it. The rule
+is `webAutomationLateTargetWait`
+([`domain/src/recording/proposals/late-target-wait.ts`](../../domain/src/recording/proposals/late-target-wait.ts)).
 
-```text
-GET /api/recordings?page=1&pageSize=10
-```
+It starts from a `dom.mutation` batch that added at least one node. Core hands the
+mapper that batch as an `input.event` observation whose payload is
+`{ latestEvidence }`. The batch's document is its URL without the fragment. A
+batch that only removed nodes, or changed attributes or text, proposes nothing.
 
-The extension includes the paired client token as a bearer token when one is
-available.
+The first executable entry in `following` decides. A Core `action` entry is read
+by its output id, and any other entry through `webAutomationRecordedAction`.
+Evidence before it is skipped. A wait is proposed only when all of these hold:
+- the entry is a `web.dom.click` with a non-empty selector;
+- the click is in the top document. The wait names no frame, so it would run
+  there, and a click recorded in a child frame proposes nothing;
+- the click's own URL, when it carries one, is the batch's document apart from
+  the fragment. An `action` entry carries no URL;
+- no evidence skipped on the way names another URL, which would mean the page
+  changed between the addition and the click.
 
-The extension keeps only transient recorder UI state for the active browser
-session. It does not persist canonical recordings locally.
+Nothing is proposed when the next executable entry is anything else, even if a
+click comes after it, or when no executable entry follows within `following`.
+
+The proposal is a `web.dom.wait_for_selector` for the click's selector, with the
+condition `present`, confidence `0.9` and label `Wait for element`. It carries no
+`sourceInputIds` and no `expectedConfirmation`: Core refuses a source input that
+is not action-role, and a wait has no echo to confirm. The rule does not check
+that the added node is the click's target, so any addition before the click
+proposes the wait.
+
+The wait comes from the batch's own entry, never the click's. In
+`mapWebRecordingObservation` it is tried only for an observation that no action
+maps from. A candidate returned for a click's `action` entry would replace Core's
+fallback click. So the click keeps the candidate it has without this rule, and
+the proposal reads wait, then click.
+
+The rule depends on the order the two entries are stored in:
+- the recorder sends a pending batch before any executable event
+  ([Recording Evidence](#recording-evidence));
+- Core stores one client's recording messages in the order it received them,
+  although its WebSocket host handles one socket's frames concurrently (Core's
+  `packages/fluxiq/src/programs/automation-studio/client-gateway/client-recording-write-order.ts`).
+
+Without both, the click could be stored before the addition that revealed it, and
+no wait would be proposed. `domain/src/tests/core-gateway-recording-order.test.ts`
+pins this end to end. It sends the eight messages of a live `delayed-ui`
+recording through Core's own client gateway, concurrently, and requires the
+proposal click, wait, click. The rule's own cases are in
+`domain/src/recording/proposals/tests/late-target-wait.test.ts`.
 
 ## Default Endpoint
 

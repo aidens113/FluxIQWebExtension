@@ -177,10 +177,15 @@ The browser suite and the four facility target modes must not be conflated:
    Chromium profile between finite invocations. Ports, processes, the Core web
    copy, and process logs remain unique to each invocation.
 
-The isolated action proof uses Core's production client-action API; isolated
-mode does not synthesize or persist a FluxIQ Flow. Existing mode never creates
-or rewrites the selected Flow: it executes the exact pre-existing Flow after
-checking its project scope and recording a stable content hash.
+On the `isolated` and `persistent-isolated` targets a run takes one of two
+lanes. The recording lane, the default, drives the manifest's recording script
+while the extension records, and proves Core's production client-action API
+with a short Core action probe. The Flow lane, `lab run --flow`, goes on to
+build a persisted Flow from that run's own recording through Core's public
+proposal API, and runs it. Both are described in
+[Recording lane and Flow lane](#recording-lane-and-flow-lane). Existing mode
+never creates or rewrites the selected Flow: it executes the exact pre-existing
+Flow after checking its project scope and recording a stable content hash.
 
 ## Ownership boundary
 
@@ -306,16 +311,12 @@ actions. `FLUXIQ_TEST_USERNAME`, `FLUXIQ_TEST_PASSWORD`, optional
 `FLUXIQ_TEST_TOTP`, and optional `FLUXIQ_TEST_PIN` may instead provide an
 explicit test identity.
 
-Core accepts `client.start_recording` only while the approving Automation Studio
-context is under ten seconds old (`resolveClientRecordingProject`, `freshnessMs`
-10_000). Selecting the project once at topology startup is therefore not enough:
-pairing approval, tab activation, and the Core action probe all run after it, and
-when they outrun the window Core answers `recording.project_required`. The
-extension cancels its pending start on that answer, so its own 750 ms local
-fallback never fires and the recorder latches idle, which no amount of polling
-recovers. The isolated lane therefore reselects the project immediately before
-starting the recording. The clone lane does not yet, and carries the same
-exposure, for a different project than the one its startup selection named.
+The isolated lane selects the project again immediately before it starts the
+recording, so whether Core accepts the start does not depend on how long
+pairing, tab activation and the Core action probe took. The clone lane selects
+its project once, when it imports the cloned Flow. How the extension answers a
+start Core refuses is described under
+[recording evidence](extension-client.md#recording-evidence).
 
 The verified Windows run `run-mtnla9cz-a4da1119` paired the extension, retained
 one connected/ready Core session, persisted a completed recording, and proved
@@ -446,9 +447,13 @@ existing file unless passed `--force`.
 same workspace lock, copied-Core lifecycle, authentication cache, headless
 browser profiles, and evidence policy. It creates or reuses the exact global
 DeepSeek key through the real Secret Keys Programs UI. Before reporting
-success, it scans the reviewed textual workspace evidence, logs, metadata, and
-Core storage tree for secret leakage while excluding intentional database and
-binary storage. Output contains only status, the validated key name, and
+success, it scans the workspace's evidence, logs, `latest-evidence.json`,
+metadata files, and Core storage tree (`fluxiq-root/.fluxiq`) for the key, under
+the same `SECRET_LEAK_ATTESTATION_RUN_LIMITS` as the
+[run leak check](#the-run-leak-check). Core's SQLite databases there are
+scanned with their `-wal`, `-shm` and `-journal` files, byte for byte and cell
+by cell; only other known binary formats are skipped. Output contains only
+status, the validated key name, and
 sanitized aggregate attestation counts/categories; the opaque key ID remains
 internal. It neither stores key metadata in `workspace.json`
 nor configures/runs adaptive execution. Core remains the durable owner of the
@@ -658,7 +663,9 @@ A manifest contains:
 - declared web capabilities and a forced `loopback-only` network policy;
 - a semantic recording script using the click, type, select, scroll,
   navigate, waitForState, checkpoint, press, check, upload, switchTab,
-  closeTab, waitForDownload, and extract step operations;
+  closeTab, waitForDownload, and extract step operations, where an `extract`
+  step with `pagination` clicks its `next` control as trusted input to reach up
+  to `maxPages` pages (at most 50), and the extension records those clicks;
 - expected page/final facts, recording events, runtime actions, extracted
   records, and an expected automation failure category, as relevant;
 - optional further `workflows`, each with its own script and expectations,
@@ -670,49 +677,38 @@ A manifest contains:
 - screenshot, trace, video, sampling, and review policy.
 
 `expected.actions` lists the action attempts FluxIQ must report, each an action
-type with an optional `outcome`. The lanes that run a Flow (the Flow lane's
-`assertFlowActions`, and `executeExistingPersistedFlow` for the existing and
-clone lanes) pass an entry when at least one attempt of that type finished with
-that outcome; order and extra attempts are not checked, and an omitted outcome
-means `succeeded`. An outcome is `succeeded` or `failed`
-(`expectedActionOutcomes`), the two a finished attempt reaches. There is no
-`rejected`: no lane can report one, so an expectation spelled that way would
-fail on itself, and manifest validation refuses it. A client refusal is
-declared as `failed`, with `expected.failure` naming the refusal: category
-`blocked_by_capability_or_policy`, code `web.action.rejected`.
+type with an optional `outcome`. The lanes that run a Flow (the Flow lane, and
+`executeExistingPersistedFlow` for the existing and clone lanes) all judge it
+with `assertFlowActions`. An entry passes when at least one attempt of its type
+exists and, if the entry names an `outcome`, finished with that outcome. An
+entry with no `outcome` is judged on the attempt's presence alone, whatever its
+status: a negative variant pins its action that way and names the failure in
+`expected.failure`. Order and extra attempts are not checked. An outcome is
+`succeeded` or `failed` (`expectedActionOutcomes`), the two a finished attempt
+reaches. There is no `rejected`: no lane can report one, so an expectation
+spelled that way would fail on itself, and manifest validation refuses it. A
+client refusal is declared as `failed`, with `expected.failure` naming the
+refusal: category `blocked_by_capability_or_policy`, code
+`web.action.rejected`.
 
-### Declared replay secrets
+Validation also refuses an `expected.actions` entry, on a workflow or on any of
+its variants, whose type no step of that workflow's recording script can yield
+(`recordableActionTypes`, `packages/test-contracts/src/recordable-actions.ts`).
+A variant never changes the recording, so its entries are judged against the
+same script. A `click` step, for example, can yield `web.dom.click`,
+`web.dom.check`, and a `web.dom.wait_for_selector` proposed before it. An
+`extract` step yields nothing unless it has `pagination`, whose recorded Next
+clicks yield what a click yields. A script with no steps is a playback goal and
+is not checked.
 
-The recorder withholds a sensitive control's value at the source, by the one
-rule in `domain/src/sensitivity`, so the recording of a typed password holds no
-password and a Flow generated from it has nothing to type into that field. A
-fixture that must sign in therefore declares the step whose value is missing:
+The runner reports every contract rejection as `fixture.invalid`, whether the
+registry threw it while building a manifest or the runner's own validation
+found it (`packages/test-runner/src/scenarios.ts`). The failure names each
+issue's path and the validator's wording, never a typed value, an expected
+record, or a fact. It happens before a run opens its evidence bundle, so such a
+failure has no run bundle.
 
-```ts
-secrets: [{ id: "auth-gate-password", step: "enter-password" }],
-```
-
-The Flow lane resolves each declaration from an environment variable named
-`FLUXIQ_TEST_SECRET_<ID>` — the id upper-cased with hyphens as underscores —
-and supplies the value to the Flow run. Nothing falls back to the recording: a
-declared secret whose variable is unset fails the run closed with
-`environment.missing` naming the variable. Only the Flow lane resolves
-declarations, so a recording-lane run of the same fixture needs no
-configuration.
-
-| Variable | Meaning |
-| --- | --- |
-| `FLUXIQ_TEST_SECRET_AUTH_GATE_PASSWORD` | The password a Flow-lane run of `auth-gate` (corpus row W19) types into the sign-in form. It must carry the credential the fixture accepts, which its sign-in page states in plain sight. |
-
-**These are fixture credentials, not real ones.** Every scenario is a
-deterministic loopback fixture whose accepted credential is printed on its own
-page; the value opens nothing, protects nothing, and belongs in a local
-`.env.local` rather than in a secret store. It is carried in a variable, and
-kept out of the manifest, only so that no recorded artifact and no generated
-Flow contains a literal that reads like a password. A resolved value also joins
-the run's evidence redaction list.
-
-The Scenario Lab registers 22 deterministic fixtures. Each lives in
+The Scenario Lab registers 25 deterministic fixtures. Each lives in
 `apps/scenario-lab/src/scenarios/<id>/` behind an `index.ts` barrel, which is
 what the registry and the page specs import. Twelve cover foundational browser
 behavior:
@@ -746,9 +742,17 @@ mutation.
 | `modal-flows` | Accessible modal form, a cookie-consent banner covering the primary action, an interstitial that can be armed to block the page, and a `confirm()`-guarded delete. | W12 primary; W13 `consent-then-click`, variant `banner-absent`; W14 `interstitial`, variant `armed` (expected failure `user_intervention_required`). |
 | `multi-tab` | Purchase-order list whose details open in a new tab, by a `target="_blank"` link or `window.open`, where they are extracted before the tab closes and the list confirms the review. | W15 primary, variant `popup-blocked` (expected failure `output_not_observed`). |
 | `file-transfer` | Attachment download of a seeded CSV report, and a labelled file-upload form that echoes the uploaded name. | W16 primary (download); W17 `upload`. |
-| `auth-gate` | Sign-in form with fixture-only demo credentials in front of an account page that redirects to sign-in, with an expiry notice, once the session expires. | W18 primary; W19 variant `expired` (expected failure `auth_required`). |
+| `auth-gate` | Sign-in form for fixture-only demo credentials, whose page states the username and shows a placeholder where the password would be, in front of an account page that redirects to sign-in, with an expiry notice, once the session expires. | W18 primary; W19 variant `expired` (expected failure `auth_required`). |
 | `identity-drift` | Settings form whose Save action drifts by mode: selectors only, visible text and name only, moved below the fold, wrapped with an `aria-labelledby` name, or — in `reworded-aria` — id, class, test id and text all at once, leaving only an `aria-label`. | Variants `selector-only` W20, `text-only` W21, `moved` W22, and `wrapped-aria` W23, each expected to succeed; the primary has no row, and `reworded-aria` is the fifth variant, which reaches [the scored fallback](element-identity.md#level-2-candidates-and-scoring) rather than an exact lookup and has no Week 1 corpus row. |
 | `intermediate-state` | Claim form whose submission shows a fixed-delay "Processing" interstitial before the result; an armed mode adds a confirmation step the recording never saw. | W24 primary, variant `unannounced` (expected failure `output_not_observed`). |
+
+Three reproduce larger application pages and carry no Week 1 corpus row:
+
+| Fixture | Purpose | Workflows and variants |
+| --- | --- | --- |
+| `storefront-checkout` | Store checkout with a consent dialog that owns every click until answered, a promotion, a late address lookup and delivery estimate, and payment inside a card iframe, whose fields are marked the way real card fields are, including a security code that is not marked. | Primary, variant `declined-card`. Declares five replay secrets. |
+| `admin-console` | CRM console with a virtualised customer list that scrolls inside its own pane, client-side routing, inline editing of a record, and a settings switch inside a web component's shadow root. | Primary, variant `read-only`; `extract-customer-list`, variant `short-book`; `browse-to-customer`; `switch-settings-tab`, variant `light-dom-toggle`. |
+| `member-directory` | Members dashboard whose table carries generated class names, row action menus, an edit dialog, filters, and a bulk remove behind a confirmation. | Primary, variants `restyled` and `member-left`; `filter-members`, variant `sorted-by-activity`; `remove-invitations`, variant `support-drawer`. |
 
 Direct Node tests cover manifest validation, loopback-only policy, uniqueness,
 fail-fast mismatch handling, HTTP rendering/control behavior, deterministic
@@ -763,12 +767,382 @@ twelve foundational fixtures (all but `instruction-only-form`); its
 target-drift test proves baseline success, persistent missing-target failure
 across reload, renamed-target state, and restore. Each corpus fixture has its
 own `<id>.spec.ts` that runs every workflow, asserts the final state, then arms
-each variant and asserts the behavior its corpus row describes. Every spec
-takes its `test` object from `e2e/lab-fixture.ts`, which provides an in-process
-lab (`lab`, on seed 42 unless the spec sets `labSeed` with `test.use`), the
-loopback-only network guard (`networkGuard`), and
+each variant and asserts the behavior its corpus row describes. The three
+application fixtures have their own `<id>.spec.ts` too.
+`negative-variants.spec.ts` proves that the armed pages of W10 `broken-link`,
+W25 `too-slow`, W26 `no-context` and W27's three variants really fail the way
+their manifests declare; the failure code a run reports is not pinned there.
+Every spec takes its `test` object from `e2e/lab-fixture.ts`, which provides an
+in-process lab (`lab`, on seed 42 unless the spec sets `labSeed` with
+`test.use`), the loopback-only network guard (`networkGuard`), and
 `readFinalState(lab, scenarioId)` for the `/__control/final-state` oracle.
 These are fixture tests, not extension-to-Core E2E tests.
+
+## Recording lane and Flow lane
+
+Every `lab run` on the `isolated` or `persistent-isolated` target runs the
+recording lane, and `--flow` adds the Flow lane after it. The existing and
+clone targets run a pre-existing Flow on neither lane.
+
+```powershell
+pnpm lab run basic-form
+pnpm lab run basic-form --flow
+pnpm lab run auth-gate --flow --variant expired
+pnpm lab run product-catalog --workflow search --flow
+```
+
+`--workflow <id>` selects a `workflows[]` entry; without it the manifest's
+primary workflow runs. `--variant <id>` requires `--flow`, because only the Flow
+lane arms a variant. `--flow` is refused on the existing and clone targets. A
+`--flow` followed by a bare value is read as `--flow <flow-id>`, the existing
+target's Flow override, so give the Flow-lane flag last or before another
+option (`packages/test-runner/src/commands.ts`).
+
+### The recording lane
+
+The runner opens the scenario's start page, checks its page facts, and pairs
+the extension when the run has a Core identity. It runs the
+[Core action probe](#lane-rules), selects the project again, starts recording,
+and waits up to 15 seconds for the extension to report that it is recording. A
+start that never arrives fails as `recording.persistence`, and writes the
+extension's own account of it, labels and reasons only, to
+`snapshots/recording-start.json`.
+
+Each recording-script step is then driven through Playwright as trusted input
+while the extension records. An `extract` step's records are asserted against
+`expected.extracted` as the step runs. An `extract` step with `pagination`
+reads a page, clicks `next`, waits until the page it read has been replaced (15
+seconds unless the step sets `timeoutMs`), and reads again, until `next` is
+absent or `maxPages` pages were read (`scenario-steps/extract-records.ts`).
+While still recording, the runner asserts `expected.recordingEvents` against
+the extension's own recording log and reads the extension's count of the
+executable actions it recorded. It then checks the final state, stops
+recording, and runs the [recording checks](#recording-checks).
+
+A variant never changes the recording. The recording lane always records the
+workflow unarmed, and judges it against the unarmed workflow's expectations.
+
+### The Flow lane
+
+After the recording checks pass, the Flow lane
+(`packages/test-runner/src/flow-lane/run-flow-lane.ts`) runs with no provider
+configured; every step is a Core call or a fixture assertion:
+
+1. It requires exactly one new recording, and waits until Core has finalized it.
+2. It asks Core's public `create-recording-flow-proposals` for the recording's
+   proposal. A proposal with no candidate, or with fewer candidates than the
+   executable recording events the workflow pins exact counts for, fails as
+   `recording.contract` before anything is approved.
+3. It approves the proposal into a new Flow through
+   `review-recording-flow-proposal`. Core creates and writes the Flow; the lane
+   never authors one.
+4. It resets the fixture state through the Scenario Lab's `/__control/reset`, so
+   the Flow is judged on state it produced itself.
+5. It prepares the page: it arms the variant, if any, loads the scenario's
+   `startPath` in the scenario tab, and checks the armed rendering's page facts.
+   Every Flow run starts on the start page, never wherever the recording left
+   the tab, and never by a reload.
+6. It reads the Flow's nodes once, maps each node to its action type, and pairs
+   the nodes' requests with the [declared replay secrets](#declared-replay-secrets)
+   and [declared uploads](#declared-uploads).
+7. It runs the Flow through Core's persisted-run API, with those values as run
+   inputs and `web-automation` as the authorized domain, and reads Core's run
+   detail whether the Flow succeeded or failed.
+8. It consults the fixture oracle, publishes what it observed, and only then
+   judges the workflow's expectations.
+
+The expectations are judged in this order:
+
+- `expected.failure`, against the structured `failure` record Core wrote on the
+  first attempt that has one: its category, and its code when the workflow
+  names one. An expected failure that did not happen, or a failure nobody
+  expected, fails as `runtime.behavior`. Nothing is read from a message.
+- `expected.actions`, by the rule in [Scenario lab and contract](#scenario-lab-and-contract),
+  failing as `action.dispatch`.
+- `expected.extracted`, only when the Flow holds an extract node
+  (`web.dom.extract` or `web.dom.extract_list`). A recording's `extract` step is
+  the runner's own check and yields no extract node, and a paginated one's Next
+  clicks become click nodes, so a workflow's extraction is usually
+  `not_applicable` on this lane and is judged on the recording lane alone.
+- The fixture oracle. A Flow whose expectations held but whose fixture did not
+  reach its expected final state fails as `runtime.behavior`.
+
+What the lane observed is written to `snapshots/flow-lane.json` before any
+expectation is judged, so a run that fails one still shows the Flow run it was.
+The file holds Core's identifiers, statuses, counts and structured records,
+never page content (`flowLaneSnapshot`):
+
+- the recording's id and entry count, and the lane's own wait on it;
+- the proposal's id, mapper, candidate count, and Core's own issues;
+- the Flow and runtime run ids, the run status, the number of LLM interventions
+  Core recorded (`harnessActivations`), the first failure record, and whether
+  extraction was `judged`, `not_applicable` or `not_expected`;
+- per attempt, in order: its action type and status; its failure record; Core's
+  transition comparison status when Core reported one, kept only when it is
+  shaped like one of Core's names; Core's target resolution, narrowed to its
+  status and numbers; and the size in bytes and truncation flag of each
+  sanitized evidence packet Core captured before and after it. The packets
+  themselves never travel.
+
+Every isolated or persistent-isolated run also writes `evaluation.json`, its own
+`RunEvaluation`: the same judgement [the bench](#the-bench) records for a corpus
+row. A Flow-lane run's evidence sizes are read from `snapshots/flow-lane.json`
+by one reader, `run-evaluation/flow-lane-evidence-sizes.ts`, which a single run
+and its bench row both use, so the two record the same packets.
+`rawSnapshotBytes` stays empty, because no producer measures raw snapshots.
+
+### Declared replay secrets
+
+The recorder withholds a sensitive control's value at the source, by the one
+rule in `domain/src/sensitivity`, so the recording of a typed password holds no
+password. The Flow generated from it asks for the value instead of carrying one:
+the node's `text` is a binding to the run-input path `web.secret.<key>`
+([sensitive values](sensitive-values.md)). A fixture whose Flow must type such a
+value declares the recording-script step whose value is withheld:
+
+```ts
+secrets: [{ id: "auth-gate-password", step: "enter-password" }],
+```
+
+The Flow lane resolves each declaration from an environment variable named
+`FLUXIQ_TEST_SECRET_<ID>`, the id upper-cased with hyphens as underscores,
+before the run's evidence bundle is created, and adds each value to the bundle's
+redaction list. Nothing falls back to the recording:
+
+- a declaration whose variable is unset fails the run closed with
+  `environment.missing`, naming the variable;
+- a declaration naming a step that none of the scenario's recording scripts
+  contains fails it as `fixture.invalid`.
+
+Once Core has approved the Flow, the lane pairs every `web.secret.<key>` request
+in the Flow's nodes with a declaration by control, not by the path's spelling.
+The declared step's `target` is matched against the identity recorded on the
+requesting node: a test id, a role and name, or an identical CSS selector. Only
+declarations whose step this workflow recorded take part. The pairing must be
+exactly one to one. A request that no declaration answers, or a declaration
+that pairs with no request or with several, fails the run as `fixture.invalid`
+before the Flow starts. The failure names secret ids, steps, node ids,
+parameters and paths, never a value (`flow-lane/declared-secrets.ts`). Each
+value is then supplied once, as a run input under the path its node asks for.
+Core keeps a run's input keys and withholds their values at rest, as
+[sensitive values](sensitive-values.md) describes.
+
+Only the Flow lane resolves declarations, so a recording-lane run of the same
+fixture needs no configuration.
+
+| Variable | Meaning |
+| --- | --- |
+| `FLUXIQ_TEST_SECRET_AUTH_GATE_PASSWORD` | The password a Flow-lane run of `auth-gate` types into the sign-in form: W18, and W19's `expired` variant, whose Flow signs in before the account page refuses it. It must carry the credential the fixture accepts, `authGateDemoCredentials.password` in `apps/scenario-lab/src/scenarios/auth-gate/constants.ts`. The sign-in page shows a placeholder in its place. |
+| `FLUXIQ_TEST_SECRET_STOREFRONT_CHECKOUT_PASSWORD`, `..._CARD`, `..._CARD_NAME`, `..._CARD_EXPIRY`, `..._BILLING_CARD` | The five marked fields a Flow-lane run of `storefront-checkout` types into: the account password, the card number, the cardholder name, the expiry, and the billing card number. The unmarked security code is deliberately not declared, because nothing withholds it. |
+
+**These are fixture credentials, not real ones.** Each is a synthetic value that
+belongs to a deterministic loopback fixture. It opens nothing and protects
+nothing, and it belongs in a local `.env.local` rather than in a secret store.
+The manifest's recording script still carries it, as the value the recording
+lane types, and the [run leak check](#the-run-leak-check) scans for exactly that
+value. The Flow lane takes it only from the variable, never from the manifest
+or the recording.
+
+### Declared uploads
+
+A file choice is recorded without its files, so the Flow generated from an
+`upload` step asks for them the same way: the node's `upload` parameter is a
+binding to `web.upload.<key>`, where `<key>` is the domain's key for the control
+the node was recorded on. The Flow lane answers those requests with no
+declaration (`flow-lane/declared-uploads.ts`):
+
+- each request's path must be the one the domain derives from the node's
+  recorded control, or the run fails as `recording.contract`;
+- the lane supplies the file the recording script's `upload` steps name, with
+  the same deterministic bytes the recording lane wrote and handed the browser,
+  as media type `application/octet-stream`, once per path;
+- a request when the script's `upload` steps name no file, or more than one
+  distinct file, fails the run as `fixture.invalid`, because the lane does not
+  pair different files with different controls;
+- a script with an `upload` step but no request supplies nothing, and the
+  workflow's pinned `web.dom.upload` judges that result.
+
+Each failure happens before the Flow starts, and names node ids, steps and
+paths, never a file's name or content.
+
+### Lane rules
+
+`packages/test-runner/src/lane-rules/` holds what a run needs, and what it is
+judged on, by the lane it runs on:
+
+- **Core identity** (`core-identity.ts`). A Flow-lane run and a clone run always
+  bootstrap a Core identity. A recording-lane run bootstraps one only when the
+  workflow it records pins recording events or actions, or the scenario has a
+  playback goal. Without one nothing pairs the extension, and no probe,
+  recording or Flow can run.
+- **A Flow was built** (`built-flow.ts`). A Flow-lane run passes only when the
+  lane published an observation with a created Flow. One that never reached
+  the lane fails as `environment.missing` rather than passing on the
+  recording's checks.
+- **The Core action probe** (`probe-step.ts`). Before recording, Core navigates
+  the extension's automation tab to the start page, then types a fixed probe
+  text into the first `type` step, in script order, whose target resolves to a
+  CSS selector visible on that page within one second. A field that only an
+  earlier step reveals cannot take it. With no such step the probe is skipped,
+  and a `runtime.settle` event publishes the reason (`no-css-type-step` or
+  `not-on-start-page`) and the step ids considered, never a value.
+- **Final-state facts** (`final-state-facts.ts`). A run's final state is judged
+  on the resolved workflow's `finalState`, plus the scenario's playback-goal
+  success facts only for the primary workflow expected to succeed. A negative
+  run, one whose `expected.failure` is set, is not judged on the goal.
+
+### Recording checks
+
+After Stop, on both lanes, the runner checks that Core holds the recording the
+extension made:
+
+- **The recording persisted.** Core's gateway still lists the paired session, a
+  new recording appears within five seconds, and the runner waits for Core's own
+  `endedAt` on it, which Core stamps after the stop drain and the entry flush.
+- **Recording completeness** (`run-expectations/recording-completeness.ts`). The
+  extension's count of the executable actions it recorded, read before Stop, is
+  compared with the action entries in Core's full recording (`get-recording`,
+  counted by Core's own `recordingEntryIsActionLike` test). Core holding fewer
+  fails as `recording.persistence`, naming only the two counts. Core holding
+  more does not fail, because the page can emit an action between the read and
+  Stop. An extension count that cannot be read fails as `extension.worker`, and
+  a Core recording that cannot be read fails as `recording.persistence`.
+- **Discard audit** (`flow-lane/recording-discards.ts`). Core audits a message
+  that reaches a recording after it was finalized as
+  `recording.action_discarded` or `recording.event_discarded`, and tells the
+  client nothing, so its gateway audit log is the only place that loss shows.
+  The runner reads it from `/api/client-gateway/snapshot`. An entry counts when
+  it names one of this run's recordings, or names none and came from this run's
+  session, and only when Core stamped it inside the recording's window. The
+  window runs from just before the runner asks the extension to start
+  recording until just before the Flow lane dispatches its Flow, or without an
+  end when no Flow ran, so it excludes the confirmations of the Core action
+  probe and of the Flow's own actions. An entry with no readable timestamp
+  counts. Any discarded action inside the window fails as
+  `recording.persistence`. Discarded evidence alone does not, because a page
+  unloading after Stop emits some. A snapshot with no audit log fails closed as
+  `gateway.connection`.
+
+  The audit is read twice, because Core audits a discard only when the late
+  message arrives. The first read follows Stop. The second runs after the
+  browser has closed and before Core stops, fetches a snapshot once more when
+  it cannot get one or finds no audit log in it, and unions both reads by audit
+  entry id. A discarded action the second read finds replaces any other
+  failure category the run reached; a second read that cannot rule a loss out
+  fails only a run that had passed. Each read publishes, in a `runtime.settle`
+  event, its discards, its window, and how many discard entries the window
+  excluded, by whether each named this run's recording, no recording, or
+  another.
+
+### The run leak check
+
+Every isolated, persistent-isolated and clone run scans for the values its
+scenario declares secret, once Core has stopped and its logs are in the bundle,
+and before the clone workspace is removed and the bundle is finalized
+(`packages/test-runner/src/redaction-attestation/attest-run-redaction.ts`). It is
+the Lab's on-disk proof that the recorder withheld what
+[sensitive values](sensitive-values.md) says it withholds.
+
+- **Literals.** The recorded `value` of each step that `secrets[]` names, across
+  the primary script and every workflow's. The declaration is `secrets[]` alone:
+  a `redaction` tag describes what a fixture is about, not which of its values
+  are secret. A declared step that no script contains, or whose value is shorter
+  than eight characters, fails the run as `fixture.invalid`. A scenario with no
+  declaration is `not-applicable`. The literals never join the bundle's
+  redaction list, which would scrub the very leak the bundle scan looks for.
+- **Scopes.** `bundle`, the run's evidence bundle at its staging directory; and
+  `workspace`, the FluxIQ storage directory the run's Core wrote
+  (`fluxiq-root/.fluxiq`), which holds its recordings, run traces and SQLite
+  databases. On `persistent-isolated`, whose workspace outlives the run, only
+  files whose modification or creation time is at or after the run's start,
+  less two seconds, are scanned, together with every link or entry the walk
+  could not judge; a SQLite store this run wrote to is scanned whole. The
+  browser profile is not scanned, because the extension's LevelDB storage is
+  binary. The existing target's FluxIQ is remote, so a scenario declaring
+  secrets is left unattested there.
+- **Text files** are searched for each literal. The scanner's credential-syntax
+  categories (`credential-field`, `credential-assignment`,
+  `authorization-material`) are recorded as advisories and do not fail the run.
+- **SQLite stores**, known by a `.db`, `.sqlite` or `.sqlite3` name with or
+  without a `-wal`, `-shm` or `-journal` suffix, or by a database, WAL or journal
+  header, are never skipped as binary. Each file is searched byte for byte for
+  the literal in UTF-8, UTF-16LE and UTF-16BE, which also covers freed pages and
+  log frames no query returns. The database each file belongs to is also copied,
+  with its `-wal` and `-journal`, into a private temporary directory and read
+  cell by cell, so a literal SQLite has split across overflow pages is found too
+  (`sqlite-store-reader/`). A store the scan cannot read in full, a database
+  over a ceiling, and a `-wal` or `-journal` holding bytes with no database
+  beside it are each an `unscanned-store` finding.
+- **Other binaries**, files with a known binary extension such as images,
+  video, archives, fonts and executables, are skipped and counted.
+- **Limits** are `SECRET_LEAK_ATTESTATION_RUN_LIMITS`: 10,000 files, 8 MiB per
+  file, 64 MiB per scan, and depth 32. Anything the scan could not read,
+  including an entry over a limit, is a finding, because a scan that could not
+  look has not attested absence.
+
+A finding fails the run as `security.redaction`, and replaces the run's failure
+category only when the run had otherwise passed. The result holds counts, scope
+names, relative paths with every literal redacted out, and categories, never
+content or a literal. It is written to `snapshots/redaction-attestation.json`,
+and `run.json` records `redactionState`, which is `verified` only when the
+attestation passed.
+
+The cell reader runs Node's built-in `node:sqlite` in a child process started
+with `--experimental-sqlite`. It is given the literal on stdin, only the
+environment a Node process needs to start, and two minutes. If the process
+cannot run or fails, every database it was given is `unreadable`, so a run
+whose scopes hold a database fails.
+
+**Known limit:** a literal split across pages that SQLite has already freed is
+missed. No contiguous copy exists for the byte search to find, and the cell
+reader reads only live cells.
+
+## The bench
+
+`lab bench` runs a corpus of rows, each a scenario's workflow and its variants,
+through the same `runScenario` a `lab run` uses
+(`packages/test-runner/src/bench/run-bench.ts`):
+
+```powershell
+pnpm lab bench --corpus smoke --repeat 2 --target isolated
+pnpm lab bench --corpus week1 --repeat 3 --target isolated
+```
+
+- **Corpora** (`bench/corpus/`). `smoke` is W01 (`basic-form`) and W28
+  (`iframe-checkout`) on the recording lane only. `week1` is W01 to W29 on both
+  lanes: every unarmed workflow runs on the recording lane and on the Flow lane,
+  and every variant runs on the Flow lane alone. That makes 67 results per
+  repeat: 23 on the recording lane, and 44 on the Flow lane (23 unarmed and 21
+  variants). W19 to W23 and W29 are variants only. Because `week1` runs
+  `auth-gate` on the Flow lane, it needs `FLUXIQ_TEST_SECRET_AUTH_GATE_PASSWORD`.
+- **Runs.** Each repeat is one pass over the corpus. `--target` must be
+  `isolated` or `persistent-isolated`. A result the corpus runs on no lane, or
+  one that does not resolve against the registry, is recorded as skipped with
+  its reason, never as a pass.
+- **Output**, under `<runs directory>/bench/<bench id>/`: a `RunEvaluation` per
+  run, `runs.json`, `report.json` (a `BenchReport`), and `report.md`. The bench
+  passes only when at least one run was evaluated and every evaluated run
+  passed.
+- **Rates** (`packages/test-contracts/src/bench-report.ts`) are computed per lane
+  and never combined, because the recording lane executes at most the Core
+  action probe, never the workflow: `flowCreationSuccess`,
+  `initialExecutionSuccess`, `deterministicReplaySuccess`, `fuzzyRecovery`,
+  `falseFailure`, `falseSuccess`, `failureClassificationAccuracy`, and
+  `harnessActivation`. Beside them, `notExecutedRuns` counts evaluated runs in
+  which FluxIQ executed no action, which every rate counts as a miss, and
+  `actionsExecuted` counts the actions it did execute. The report also carries
+  p50 and p95 distributions of per-action-type latency, run duration and
+  sanitized packet bytes, and a truncation count.
+- **Causes.** A failed run's cause is the summary of its own last `error` event
+  written under the category the runner returned (`bench/read-run-bundle.ts`),
+  because the runner's result carries a category and no text. The outcome
+  printed at the end, and the top of `report.md`, list each distinct cause with
+  the number of runs that share it, most first (`bench/failure-cause.ts`). A
+  bundle file the bench could not read, or a `lab inspect` that failed, is
+  recorded separately as a problem of that run.
+
+`lab compare` judges two reports, or one report's repeats split in halves, as
+[Commands and prerequisites](#commands-and-prerequisites) describes.
 
 ## Extension E2E build and finite browser suite
 
@@ -802,16 +1176,21 @@ The implemented specs verify:
   and
 - storage isolation and cleanup across two fresh profiles.
 
-The standalone specs do not use the 22-fixture Scenario Lab registry or the
-FluxIQ gateway. The verified isolated facility runner proves pairing, recording
-persistence, and production client-action dispatch for `basic-form`; those two
-verified lanes do not prove persisted Flow execution. The separate existing
-target implements persisted-Flow execution but still awaits a live validation
-run. The facility also does not yet prove full reconnect/replay, cross-frame
-action behavior, Firefox behavior, or installed Chrome/Edge behavior. The
-verified Windows E2E and isolated facility runs used bundled
-`Chrome/134.0.6998.35`. Chromium is launched headed, so CI requires a
-display-capable runner or suitable virtual display.
+These specs do not use the Scenario Lab registry or the FluxIQ gateway; they
+share only Scenario Lab's network guard. The isolated facility runner's
+recording lane proves pairing, recording persistence, and production
+client-action dispatch, as the verified `basic-form` run showed, and its
+[Flow lane](#the-flow-lane) executes a persisted Flow built from the run's own
+recording. The existing target executes a pre-existing persisted Flow but still
+awaits a live validation run. The facility does not yet prove full
+reconnect/replay, Firefox behavior, or installed Chrome/Edge behavior. Neither
+Playwright suite proves a command's delivery to a child frame through the
+background worker, including addressing a frame by its path: the
+[content-script harness](#content-script-harness) proves only the receiving
+frame's half, and the sending half is covered by unit tests in
+`apps/extension/src/runtime/tests/`. The verified Windows E2E and isolated
+facility runs used bundled `Chrome/134.0.6998.35`. Chromium is launched headed,
+so CI requires a display-capable runner or suitable virtual display.
 
 The finite facility runner installs a context-wide request and WebSocket guard
 before it opens the extension control or scenario pages. It allows only
@@ -821,6 +1200,46 @@ exact FluxIQ HTTP(S) origin, and the configured gateway WS(S) origin. Other
 destinations are blocked, recorded without query strings or credentials, and
 make the run fail. Because the guard is attached to `BrowserContext`, it also
 applies to pages subsequently created by extension actions.
+
+### Content-script harness
+
+A second, larger Playwright suite, the content-script harness, runs the real
+content-script bundle in a headless Chromium page on a Scenario Lab fixture
+(`apps/extension/e2e/playwright.content.config.ts`). Its global setup builds the
+content-script and page-world bundles once per run, with the extension's own
+esbuild settings, into a directory that run owns, so a parallel harness run or a
+concurrent `pnpm build` cannot change a bundle under a running test. The
+page-world bundle and then the content script are injected at document start in
+every frame, and each frame's `chrome.runtime` is replaced by a stub
+(`e2e/content/harness.ts`, `runtime-stub.ts`). A spec talks to the content script
+as the background worker does, and reads back every message it sent. The
+harness imports the Scenario Lab registry and server directly.
+
+Its 25 specs under `apps/extension/e2e/content/tests/` cover actions, clicks,
+keyboard, select, scroll and waits, checks and asserts, list extraction,
+evidence, failures (among them a target behind `auth-gate`'s sign-in form),
+child frames, the `identity-*` resolution family, large-page resolution, modal
+intervention, recorder trust, redaction, and the upload dialog.
+
+The harness loads no extension, starts no background worker and no FluxIQ Core,
+and does no tab or frame routing; the content script runs in the page's main
+world rather than an isolated one. It proves the content script's own behavior
+against a live DOM, and nothing about delivery between extension contexts.
+`frames.spec.ts` proves that a child frame performs a command addressed to it
+and that the top frame refuses it.
+
+Run it from `apps/extension`:
+
+```powershell
+pnpm exec playwright test -c e2e/playwright.content.config.ts --workers=2 <spec>
+```
+
+The config runs four workers when `--workers` is not given, on Chromium's full
+headless build (`channel: "chromium"`). The Scenario Lab source it imports
+resolves `@fluxiq-web-extension/test-contracts` to that package's built `dist/`,
+so build the package first (`pnpm --dir packages/test-contracts build`). The
+extension package's `test:content` script runs that build and then the same
+config.
 
 ## Evidence security and integrity
 
@@ -1001,6 +1420,7 @@ the roots when needed, then run one of the finite commands:
 $env:FLUXIQ_WEB_EXTENSION_ROOT = "F:\!FluxIQWebExtension"
 $env:FLUXIQ_CORE_ROOT = "F:\!FluxIQ"
 pnpm lab run basic-form --seed 1 --evidence events
+pnpm lab run basic-form --flow
 pnpm lab matrix --all --repeat 1 --evidence failure
 pnpm lab inspect <run-id>
 pnpm lab bench --corpus smoke --repeat 2 --target isolated
@@ -1010,7 +1430,9 @@ pnpm lab compare <report> --halves
 
 `compare` takes benchmark reports, not run ids: two reports, or one report's
 repeats split into halves, each metric judged `improved`, `regressed`, or
-`equivalent` within the report contract's tolerances. On a machine whose
+`equivalent` within the report contract's tolerances. A rate is equivalent
+within one workflow of its lane's population, and a p95 latency within 25% of
+the baseline's; evidence sizes are reported, not compared. On a machine whose
 `.env.local` configures an existing installation, prefix an isolated command
 with `FLUXIQ_TEST_ENV_FILES=none` (in PowerShell,
 `$env:FLUXIQ_TEST_ENV_FILES = "none"`).
@@ -1123,4 +1545,4 @@ The setup helper navigates the real Secret Keys Program, reads only its metadata
 Runtime target adaptations remain opaque in Core. When Core applies an `edit_action_target`, the web domain consumes the resulting `parameters.target` object as an override and maps its selector, element, or visual target through the existing client-gateway boundary; the generated top-level parameters remain the fallback.
 
 The certification run removes the recorded target on the loopback Scenario Lab, requires that deterministic action failure to precede exactly one `diagnosis` intervention, and validates the trusted Core budget ledger reports exactly one provider call. It rejects any patch/suggestion/proposal kind, adaptation or change-proposal ID, unexpected provider/model/prompt version, invalid or excessive usage, or nonterminal outcome. It then restores the fixture and runs the same Flow through the real UI in No LLM mode; that replay must succeed with zero interventions and zero Core-accounted provider calls. The fixed retained schema contains only run IDs/statuses, bounded invocation provenance/usage, evaluation, call counts, and aggregate leak-attestation totals. It excludes prompt/response bodies, key references, passwords, PINs, action messages, and raw metadata.
-Post-run provider-secret attestation is a separate bounded gate. A caller supplies one in-memory literal and exact approved relative paths beneath a canonical workspace. The scanner never follows reparse points or path escapes, does not inspect explicit binary formats, limits files and bytes, and fails closed when approved text is unreadable or oversized. Reports contain counts, categories, and sanitized relative paths only; they never include matching content or the literal. Live-lane composition must explicitly select run evidence, logs, manifests, workspace metadata, and cache metadata after UI provisioning and every provider-backed test.
+Post-run provider-secret attestation is a separate bounded gate. A caller supplies one in-memory literal and exact approved relative paths beneath a canonical workspace. The scanner never follows reparse points or path escapes, reads SQLite databases with their `-wal`, `-shm` and `-journal` files byte for byte and cell by cell, skips only other known binary formats, limits files and bytes, and fails closed when approved text or a store is unreadable or oversized. Reports contain counts, categories, and sanitized relative paths only; they never include matching content or the literal. Live-lane composition must explicitly select run evidence, logs, manifests, workspace metadata, and cache metadata after UI provisioning and every provider-backed test.

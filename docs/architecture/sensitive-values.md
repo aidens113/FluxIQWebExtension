@@ -2,7 +2,7 @@
 
 Which controls hold a secret, who asks, and what the guards around them are —
 and are not — a boundary against. Current-state design, verified against
-source on 2026-09-12.
+source on 2026-09-13.
 
 ## One Rule
 
@@ -103,6 +103,16 @@ debugging a read-back needs and says nothing about the content. `type`,
 `clear` and `select` build their validations this way and set
 **`redacted: true`** on the validation to declare it.
 
+`upload` compares file names but quotes none. A chosen file's name is the
+user's data, as a typed value is, and whatever a verb writes into `expected`
+and `actual` is kept in Core's saved command attempt. So its post-condition
+still passes only when the input holds exactly the requested names, in order,
+but both strings say only how many files there are and whether their names
+match, and a page-side refusal names a file by its position in the request
+([`content/actions/upload.ts`](../../apps/extension/src/content/actions/upload.ts),
+`content/action-runtime/file-input.ts`). It sets no `redacted` flag, because it
+names neither a value nor a length.
+
 Two guards then ask about the descriptor riding on the same result:
 
 - `webAutomationSecretSafeValidation`
@@ -155,6 +165,54 @@ declaration and disarmed the adapter's guard for every extension result.
   The tokens are carried on purpose, so a consumer can ask the rule itself
   instead of inheriting whatever the producer concluded.
 
+## Run Time: The Value Returns As A Run Input
+
+A recording holds no secret, so a Flow built from one must be given it. A
+recorded entry into a sensitive control becomes a `web.dom.type` node whose
+`text` is a request rather than a value: Core's parameter state binding,
+`{ $state: { path } }`, at `web.secret.<key>`
+([`domain/src/output-nodes/secret-binding.ts`](../../domain/src/output-nodes/secret-binding.ts);
+`recordedTypedText` in `payloads.ts`). The key names the control, by the rule
+in `recorded-element-key.ts` that a recorded upload's request shares, and never
+the value, so the request is safe in a recording, a stored Flow, a log or an
+evidence packet.
+
+- **The run supplies the value** as a run input at that path. Core resolves
+  the binding before the node executes, so the value reaches the dispatched
+  action. The binding has no `fallback`: an unsupplied value fails the node
+  with its path named, rather than typing nothing and reporting success.
+- **A request that reaches the gateway unanswered is not dispatched.**
+  `webAutomationActionFromGatewayCommand`
+  (`domain/src/client/gateway-mapping.ts`) refuses it as
+  `web.intervention.required`, naming the parameter and the path and never a
+  value. An unanswered upload request is refused the same way.
+- **Core keeps each key and withholds each value at rest** (fluxiq 0.4.0):
+  - a runtime session's `metadata.inputs`, and the `inputs` of the run-summary
+    envelope in the run's event stream, read `[withheld]`;
+  - the persisted run trace withholds each supplied input, and each value the
+    run resolved out of a state binding;
+  - a saved command attempt withholds resolved values in `command.parameters`,
+    `result.message`, `result.error` and the attempt's `message`.
+
+  The run itself executes with the real value. Core states the rules in its own
+  `docs/architecture/automation-studio.md` and `package-boundaries.md`.
+
+What Core does not withhold, and a supplier must allow for:
+
+- **A saved attempt's `command.metadata`, `result.payload`, `result.failure`
+  and `result.metadata`.** An action result's page snapshot is in
+  `result.payload`, which is why page text is a route of its own (see "Not a
+  rule about page text" below).
+- **A copy.** An input no binding reads, which a node copies into an output
+  under another key, stays in clear at that copy. A supplier should give only
+  the inputs a binding asks for.
+- **Records saved before 0.4.0,** which are not rewritten.
+
+In the Lab, the Flow lane supplies each declared secret once, under the path
+its node asks for, paired with its declaration by control one to one; a
+pairing that fails stops the run before the Flow starts
+([declared replay secrets](testing-facility.md#declared-replay-secrets)).
+
 ## What These Guards Are Not
 
 - **Not a text scanner.** Nothing reads a comparison string looking for things
@@ -171,7 +229,15 @@ declaration and disarmed the adapter's guard for every extension result.
 - **Not a rule about page text.** Visible text, extracted values,
   `web.dom.extract` output and assertion text are page content the automation
   was asked for; only the selection has a sensitivity guard, and only because
-  a selection can silently contain a control's value.
+  a selection can silently contain a control's value. A page that displays a
+  secret as text therefore puts it into every state snapshot, into the
+  snapshot each action result carries, and so into Core's workspace, and no
+  guard here or in Core withholds it. A display rule — dropping `visibleText`
+  and `text`, not only the value, for an element marked `data-sensitive` — is
+  not built; whether to build it is ranked with the Week 1 blockers in the
+  [Week 1 plan](../working/mvp-week1-web-automation-reliability-plan.md). The
+  Lab's run leak check finds a declared secret shown this way
+  ([testing facility](testing-facility.md)).
 - **Not shadow-DOM aware.** A selection inside a closed shadow root is not
   reachable, here or anywhere else in the recorder.
 - **Not a substitute for the other end.** The producer redacts, and each

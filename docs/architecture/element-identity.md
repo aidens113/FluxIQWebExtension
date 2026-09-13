@@ -2,7 +2,7 @@
 
 How an action finds the element it acts on, and how sure it is that the
 element it found is the one that was recorded. This page is current-state
-design, verified against source on 2026-09-12. The action vocabulary itself
+design, verified against source on 2026-09-13. The action vocabulary itself
 is in [web capabilities](web-capabilities.md); what a failed resolution
 reports is in [the failure taxonomy](failure-taxonomy.md).
 
@@ -114,7 +114,11 @@ family. "Family" is loose on purpose — a `<button>` that became a
 `<div role="button">` is the same control to a person. The pool is drawn from
 an interactive-element selector (`a[href]`, `button`, `input`, `select`,
 `textarea`, `summary`, `label`, `[role]`, `[tabindex]`, `[onclick]`,
-`[contenteditable]`), bounded to 600 nodes scanned and 60 candidates kept.
+`[contenteditable]`), bounded to 5,000 interactive elements examined and 60
+candidates kept. The pool reports how many elements it `examined` and whether
+either bound `truncated` it (`TargetCandidatePool`), because "no such control"
+and "stopped looking" call for different fixes: a `TARGET_NOT_FOUND` from a
+cut-short scan says the page may hold more rather than that it holds none.
 Each candidate is described as Core's `ElementFingerprintCandidate` by the
 same `identity/` modules `describe-element.ts` uses, so a candidate and a
 recorded descriptor are built from one set of rules.
@@ -191,5 +195,13 @@ contents.
   evidence ([page evidence](page-evidence.md)) but not for resolution; an
   action addresses one frame.
 - No acting verb waits before resolving. `resolveTarget` runs its strategies
-  and then scoring once and throws; nothing retries and nothing polls, so a
-  Flow against a page that renders late must author a wait first.
+  and then scoring once and throws; nothing retries and nothing polls. A page
+  that renders late is covered by a wait step before the action, and a
+  recording proposes one: when the page added nodes and the first executable
+  entry after that is a click on a selector in the same top document, with no
+  evidence in between naming another URL, the recording mapper proposes
+  `web.dom.wait_for_selector` for that selector to be present, ahead of the
+  click (`domain/src/recording/proposals/late-target-wait.ts`; the recording
+  side is in [extension client architecture](extension-client.md#a-wait-before-a-late-target)).
+  A click recorded in a child frame proposes no wait, and a Flow without a
+  recorded addition must author the wait itself.

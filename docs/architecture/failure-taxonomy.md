@@ -2,7 +2,7 @@
 
 Every way the browser path can report that an action did not work, and the
 mechanism that keeps that list closed. Current-state design, verified against
-source on 2026-09-12.
+source on 2026-09-13.
 
 Core owns the failure *categories* (`AutomationStudioAdaptiveFailureClass`)
 and the record shape; the producer owns the *code*. This repository's codes
@@ -207,15 +207,26 @@ meaning Core derives from the command status alone.
 
 ## Two Axes, Never Merged
 
-The Testing Lab has a taxonomy of its own — `FailureCategory` in
-`packages/test-contracts`, raised as `RunnerFailure`
-(`packages/test-runner/src/failure.ts`) — and it answers a different question:
-why the *facility* could not produce a trustworthy run (fixture, environment,
-process, extension, gateway, recording, evidence). The codes on this page say
-how the *automation* failed and travel on
-`RunEvaluation.automationFailureReported` beside Core's category. A run whose
-gateway pairing failed has no automation failure; a run whose automation
-reported `web.target.not_found` is a healthy facility run.
+The Testing Lab has a taxonomy of its own — `FailureCategory`, listed as
+`failureCategories` in `packages/test-contracts/src/evaluation.ts` and raised
+as `RunnerFailure` (`packages/test-runner/src/failure.ts`) — and it answers a
+different question: why the *facility* could not produce a trustworthy run.
+Its categories are dotted by area, such as `fixture.invalid`,
+`environment.missing` and `gateway.pairing`. The codes on this page say how
+the *automation* failed and travel on `RunEvaluation.automationFailureReported`
+beside Core's category. A run whose gateway pairing failed has no automation
+failure; a run whose automation reported `web.target.not_found` is a healthy
+facility run.
+
+A scenario manifest the contract rejects fails as `fixture.invalid`, whether
+the Scenario Lab registry throws while it is imported or the runner's own check
+refuses the manifest (`loadScenarioManifests` in
+`packages/test-runner/src/scenarios.ts`). So does an unknown scenario id. It
+is a facility failure, because a defective fixture says nothing about how the
+automation behaves. The message names each issue's path and the validator's
+wording, never a typed value or an expected record. A missing Scenario Lab
+build is `environment.missing` instead, and any other error while loading the
+registry is passed on unchanged.
 
 ## Comparison Text
 

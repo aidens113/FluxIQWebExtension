@@ -4,7 +4,7 @@ What a browser capture says about the page **as a whole**, rather than about
 one element: the dialogs standing in front of it, what is painted over its
 controls, whether it is still working, how it is laid out, what repeats on it,
 its forms, and how it was navigated to. Current-state design, verified against
-source on 2026-09-12.
+source on 2026-09-13.
 
 Element descriptors and the recording path around them are in
 [extension client architecture](extension-client.md#recording-evidence); what
@@ -124,8 +124,11 @@ until each says what it does with it. Before that, a key added to the contract
 was produced per frame and then silently dropped in the merge — two documents
 carrying less evidence than one.
 
-The action path is top-frame only unless a command addresses a frame, where
-the two agree.
+The action path does not merge. An action runs in one frame — the top frame,
+unless the command addresses a child frame, by its frame id or by the path of
+its document, which survives a reload that renumbers frames (see
+[child frames](web-capabilities.md#child-frames)) — and its result carries that
+frame's own snapshot.
 
 ## The Four Caps
 

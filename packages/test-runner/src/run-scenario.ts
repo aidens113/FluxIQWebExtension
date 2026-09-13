@@ -267,14 +267,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
       if (paired && topology.authorizationPin) await proveCoreActionRoundTrip(page, topology, paired.sessionId, scenario.id, workflow, capture, runId, (timing, result) => { actions.push(timing); automationFailure ??= automationFailureFromActionResult(result); });
       if (topology.control && topology.projectId) recordingBaseline = recordingIds(await topology.control.listRecordings(topology.projectId));
       if (topology.control) {
-        // Core accepts `client.start_recording` only while the approving operator's Automation
-        // Studio context is under 10 s old (Core `resolveClientRecordingProject`, freshnessMs
-        // 10_000). The coordinator stamps that context once, at topology startup; pairing
-        // approval, tab activation and the Core action probe all run after it and can outlast
-        // the window, and Core then answers `recording.project_required`. The extension clears
-        // its pending start on that error, so its own 750 ms local fallback never fires and the
-        // recording stays idle for good -- no poll length can recover it. Restamping the context
-        // here makes acceptance depend on this call instead of on how long startup happened to take.
+        // Selected again immediately before the start, so whether Core accepts the recording
+        // does not depend on how long pairing, tab activation and the Core action probe took.
         if (topology.projectId) await topology.control.selectProject(topology.projectId);
         // The discard window opens here, after the Core action probe above, whose runtime confirmations Core audits with no recording open.
         discardWindowFrom = Date.now();

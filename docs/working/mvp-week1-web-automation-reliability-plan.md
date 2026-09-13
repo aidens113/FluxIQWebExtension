@@ -36,7 +36,7 @@ has its full proof. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
-settled ledger entries are in parts one to forty-one of
+settled ledger entries are in parts one to forty-three of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13.**
@@ -87,13 +87,12 @@ settled ledger entries are in parts one to forty-one of
 - W24 `unannounced` (a recorded-payload contract change) and W13 `banner-absent`
   (P7, a new Core node outcome); both rows stay in the corpus.
 
-**In flight** (the thirty-second to thirty-fourth dispatches, after the 08:22 restart):
-- `g-web-timeout-forwarding` (Core, then domain): Core's dispatch deadline is the
-  timeout plus a 3,000 ms margin, and the web adapter forwards the timeout. It
-  replaces the blocked `g-core-dispatch-deadline`.
-- Read-only: `i-w15-w28-flow-order` and `i-arch-pages-audit`.
-- Settled: the upload check quotes no file name. W05 `short-catalog` is ruled out
-  once the Lab shows its failure.
+**In flight** (the thirty-sixth dispatch):
+- `g-core-start-node` (Core): a Flow without a declared start begins at its graph's
+  root, not at the first node by id (W15, W28).
+- `g-runner-start-guard`: a Flow-lane run that did not start at its first action fails.
+- Held for them: Core's half of `g-web-timeout-forwarding` (verified), then Core's
+  gate, commits and build.
 
 **Queued, in dependency order**
 1. **Fixes from those investigations,** each committed as its gates pass.
@@ -640,73 +639,100 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 `2026-09-12-*` Wave 3 and live-validation files, and
 `2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-13 — i-w05-short-catalog: W05 `short-catalog` is a real product gap, ruled out of Week 1 once the Lab shows its failure
+### 2026-09-13 — the architecture pages match the code at HEAD (four docs workers, from `i-arch-pages-audit`)
 
-- Agent: worker `i-w05-short-catalog` (read-only); decision by supervisor.
-- Changed: `reports/i-w05-short-catalog.md` only.
-- Found, from code. These are predictions until the Lab observes them:
-  - **What the Flow does.** A Flow built from W05's recording is two Next clicks,
-    with a wait before the second.
-    - `short-catalog` shows five products and no Next, so the first click fails
-      `target_not_found`.
-    - The final state still holds.
-    - The run therefore fails only because the variant expects success.
-  - **What Core lacks.** Core already has loop and branch nodes. It lacks a web
-    output that answers whether Next is present, and a recording mapper that builds
-    the loop.
-  - **The Week 2 entry point.** `web.dom.extract_list` with `paginate` already pages
-    until Next is absent, but nothing produces it from a recording.
-- Decision: option (d).
-  - **No code change.** `product-catalog/manifest.ts:66-75` and `week1.ts:34` stay
-    as they are.
-  - **Ruled out once observed.** When the Lab recheck records the failing node and
-    category, W05 `short-catalog` joins "Ruled out of Week 1", beside W13
-    `banner-absent` and W24 `unannounced`. The row stays in the corpus and keeps
-    failing visibly.
-  - **Rejected:** declaring the failure as expected (a), and moving the variant to
-    the recording lane (c). Both would hide the gap.
-- Validation: the supervisor read the report's option analysis. No code ran; the
-  prediction rests on reading, and `reports/l-stage2c.md` holds no W05 observation.
-- Not verified: the live failing node and category, and whether a wait comes before
-  the first click.
-- Outcome: Revised
-
-### 2026-09-13 — f-upload-validation-names: the upload's check and its refusals quote no file name
-
-- Agent: worker `f-upload-validation-names` (Partial). The refusal reasons and the
-  verification are by the supervisor.
-- Changed, in `apps/extension/`:
-  - **`src/content/actions/upload.ts`:** the post-condition's `expected` and `actual`
-    give only the count of files and whether their names match, for example
-    `1 file, named as requested`.
-    - The check still passes only when the input holds exactly the requested names,
-      in order.
-    - Otherwise it still fails `output_not_observed`.
-  - **New `src/content/actions/tests/upload.test.ts`.**
-  - **`src/content/action-runtime/file-input.ts`,** by the supervisor: a refusal
-    names a file by its position ("file 1"), never by its name, and the header says
-    why.
-  - **`e2e/content/tests/upload-dialog.spec.ts`:**
-    - the two upload rows assert that no name appears;
-    - a new row, by the supervisor: a refusal names a file by position.
-- Found: nothing reads the upload validation's text as names. The worker checked the
-  domain's classifier and adapter, Core, the runner and the bench.
+- Agents: workers `d-testing-facility-page`, `d-extension-client-page`,
+  `d-identity-evidence-sensitive-pages` and `d-capabilities-layout-taxonomy-pages`.
+  Two links and the verification are by the supervisor.
+- Changed, in `docs/architecture/`:
+  - **`testing-facility.md`.**
+    - It no longer says the sign-in page prints its password, that a missing
+      outcome means `succeeded`, or that isolated runs never build a Flow.
+    - It gains sections on the recording and Flow lanes, the lane rules, the
+      recording checks, the run leak check with SQLite, declared secrets and
+      uploads, and the bench.
+    - It lists 25 fixtures, and describes the content-script harness.
+  - **`extension-client.md`:** the start-once rule, the page-change flush, and a new
+    section, "A Wait Before A Late Target".
+  - **`element-identity.md`:** the 5,000-element scan bound, and the late-target
+    wait, linked to that new section.
+  - **`sensitive-values.md`:** the upload name rule, and how Core withholds a
+    declared secret sent as a run input.
+  - **`page-evidence.md`, `web-capabilities.md`, `repository-layout.md` and
+    `failure-taxonomy.md`:** smaller corrections, and the content-harness commands.
+    Both command forms ran.
+  - **`packages/test-runner/src/run-scenario.ts`:** a comment no longer repeats the
+    10 s window or the "stays idle" claim.
+  - **`briefs/finish-week1.md`:** the binding rule no longer says the `test:content`
+    filter form finds no tests.
+- Incident: one worker's search printed the auth-gate fixture password into its own
+  tool output. No file holds it: the supervisor's scan counted 0.
 - Validation:
-  - **Supervisor, `sup60`:**
-    - `EXTENSION_TEST_BUILD_LABEL=sup60 pnpm test` printed "# tests 468", "# pass
-      468", "# fail 0";
-    - `upload-dialog.spec.ts` gave "7 passed";
-    - extension `pnpm check` exit=2, on a type error in the supervisor's new row
-      (`validation?.actual` on a union).
-  - **Supervisor, `sup61`,** after that row was rewritten as a `toMatchObject`:
-    extension `pnpm check` exit=0, and `upload-dialog.spec.ts` "7 passed".
-  - **Supervisor mutation, content harness:** quoting the name in the base64 refusal
-    failed the new row ("1 failed"). Restored byte-identical, "1 passed".
-  - **Worker mutations:** putting the names back failed all six new unit rows, and
-    making every upload pass failed the three mismatch rows.
+  - **Supervisor, `dcd-check-links.mjs` over all eight pages:** exit=0, "checked 137
+    relative links in 8 page(s), 0 unresolved".
+  - **Supervisor, `node scripts/structure-audit.mjs`:** "passed (41 warning(s), 17
+    baselined)".
+  - **Supervisor, spot checks in `testing-facility.md`:**
+    - an entry with no `outcome` "is judged on the attempt's presence alone"
+      (`:684`);
+    - a contract rejection is `fixture.invalid` (`:704`);
+    - the auth-gate row "shows a placeholder where the password would be" (`:745`).
+  - **Supervisor, `secret-count.mjs`** over every architecture page and the
+    testing-facility report: "hits=0".
+  - **Worker:** `test:content`, and the direct Playwright form, each ran 12 tests on
+    `select.spec.ts`.
 - Not verified:
-  - a Lab W17 run showing the name 0 times in Core's saved attempt;
-  - `pnpm build`, since the tracked `build/` still holds the old content script.
+  - rendering in a Markdown viewer;
+  - plan-history wording older than the audit, which was left in place;
+  - the Flow lane's new early-stop check, which `g-runner-start-guard` adds.
+- Outcome: Accepted
+
+### 2026-09-13 — g-web-timeout-forwarding: the extension is sent the node's timeout, and Core waits that timeout plus a 3,000 ms margin
+
+- Agent: worker `g-web-timeout-forwarding`; one comment and the verification by
+  supervisor.
+- Changed:
+  - **Core** (`F:\!FluxIQ`), uncommitted until `g-core-start-node` lands:
+    - new `client-gateway/service/command-answer-margin.ts`:
+      `COMMAND_ANSWER_MARGIN_MS = 3_000`;
+    - `runtime/service.ts`: every adapter and transport target's deadline is the
+      timeout plus the margin;
+    - `client-gateway/service/commands.ts`: the gateway timer adds the margin when a
+      timeout is sent. Without one, it still waits 30,000 ms;
+    - tests; `runtime-kernel.md`, the 0.4.0 entry, and both framework references.
+  - **This repository:**
+    - `domain/src/runtime/adapter.ts` forwards `command.timeoutMs` when it is a
+      positive finite number;
+    - `domain/src/io/gateway-output-dispatcher.ts` sends it as the gateway command's
+      timeout;
+    - tests;
+    - comments in `late-target-wait.ts`, `delayed-ui/scenario.ts` and
+      `action-runner.ts`, and, by the supervisor, in `content/actions/execute.ts`.
+- Found:
+  - **No passing action can newly fail.** Four verbs have an extension default above
+    5,000 ms: `wait_for_selector`, `wait_for_text`, a tab switch by path, and
+    `download`. On the Flow lane, Core's 5,000 ms deadline already bounded all four.
+  - **A shorter parameter timeout is overridden.** `gateway-mapping.ts:175` prefers
+    the node's timeout to an output's own `parameters.timeoutMs`. No proposal writes
+    one; this is recorded for the Phase 1.6b ranking.
+- Validation:
+  - **Supervisor, `sup62`:**
+    - in Core, `npx vitest run src/runtime/tests/service.test.ts src/client-gateway/tests/service.test.ts --no-file-parallelism`
+      exit=0, "Test Files 2 passed (2)";
+    - domain `pnpm check` exit=0;
+    - `DOMAIN_TEST_BUILD_LABEL=sup62 pnpm test` printed "# tests 401", "# pass 401",
+      "# fail 0".
+  - **Worker mutations,** each restored with a matching hash:
+    - the runtime deadline back to the timeout failed 4 of 14;
+    - the gateway timer back to the timeout failed 2 of 13;
+    - the adapter not forwarding failed 1 of 20;
+    - the dispatcher dropping it failed 2 of 28.
+  - **Worker:** Core `pnpm check`, `pnpm docs:reference` and `pnpm docs:check` exit=0.
+- Not verified:
+  - Core `pnpm check` by the supervisor, which runs together with
+    `g-core-start-node`'s;
+  - the two sides together, which needs a Core build;
+  - W25 `too-slow` in the Lab.
 - Outcome: Accepted
 
 ## Open Questions

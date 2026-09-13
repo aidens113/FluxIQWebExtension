@@ -19,7 +19,8 @@ are relative to `F:\!FluxIQWebExtension`; report paths are under
   `Not verified` exactly what a Lab run must show.
 - Content harness, from `apps/extension`:
   `pnpm exec playwright test -c e2e/playwright.content.config.ts --workers=2 <spec>`.
-  The `pnpm --filter ... test:content --` form finds no tests.
+  The `pnpm --filter @fluxiq-web-extension/extension test:content -- --workers=2 <spec>`
+  form also runs the named spec: it ran 12 tests on `select.spec.ts` on 2026-09-13.
 - A guard is done only with a mutation proof: break it, quote the failing test,
   restore it, and confirm the file is byte-identical.
 - This machine has faulty RAM. A uniform or impossible failure (every test
@@ -3762,6 +3763,169 @@ Follow `F:\!FluxIQ\AGENTS.md`. Do Core first, then the domain.
   - no Core `pnpm build`.
 
 **Report:** `reports/g-web-timeout-forwarding.md`, with the compatibility effect.
+
+---
+
+# Thirty-fifth dispatch — from `i-arch-pages-audit`
+
+`reports/i-arch-pages-audit.md` lists, page by page, the claims the code contradicts
+and the committed behaviour the pages leave out. There is one docs worker per page
+group, so no two share a file.
+
+Decided by the supervisor on 2026-09-13:
+- **Fix every item the audit lists,** except the areas it held back:
+  - Core's dispatch deadline and timeout forwarding (`g-web-timeout-forwarding`);
+  - W15's tab-close order and W28's scroll (`i-w15-w28-flow-order`);
+  - `late-target-wait.ts:15`.
+
+  The upload validation text is now committed (`af80298`), so it is no longer held
+  back.
+- **Say nothing yet about W05 `short-catalog`.** It is described as ruled out only
+  once the Lab has observed it.
+- **`run-scenario.ts:270-277` repeats two stale claims.** Correct the comment along
+  with its page. Trim the paragraph about reselecting the project, rather than
+  keeping it with a 300 s window as the reason.
+- **Describe the current design only,** with no plan history.
+
+**Every worker in this dispatch:**
+- **Read** its pages' sections of `reports/i-arch-pages-audit.md`, and the code those
+  sections cite.
+- **Tests:**
+  - every relative link on its pages resolves:
+    `node C:/Users/mrjoh/AppData/Local/Temp/claude/f---FluxIQWebExtension/4f264c80-323b-4673-a09a-bde5851669f3/scratchpad/dcd-check-links.mjs <pages>`,
+    run from the repository root;
+  - the structure audit.
+- **Report:** `reports/<worker name>.md`.
+
+## d-testing-facility-page
+
+**Owns:** `docs/architecture/testing-facility.md`, and the comment at
+`packages/test-runner/src/run-scenario.ts:270-277` only.
+
+**Task:** the audit's `testing-facility.md` items. That includes a section on the
+Flow lane, the bench, the lane rules, the run leak check and the recording checks,
+which no page describes today.
+
+## d-extension-client-page
+
+**Owns:** `docs/architecture/extension-client.md`.
+
+**Task:** the audit's items for this page:
+- the rule that a recording starts once;
+- the pending page change being sent before an executable event;
+- the recording side of the late-target wait, but not its timeout.
+
+## d-identity-evidence-sensitive-pages
+
+**Owns:** `docs/architecture/element-identity.md`, `page-evidence.md` and
+`sensitive-values.md`.
+
+**Task:** the audit's items for those three pages.
+
+## d-capabilities-layout-taxonomy-pages
+
+**Owns:** `docs/architecture/web-capabilities.md`, `repository-layout.md` and
+`failure-taxonomy.md`.
+
+**Task:** the audit's items for those three pages. Before documenting the
+content-harness command in `repository-layout.md`, run it once on one spec, and quote
+the result.
+
+---
+
+# Thirty-sixth dispatch — from `i-w15-w28-flow-order`
+
+`i-w15-w28-flow-order` found one cause for both failures:
+- **The start is chosen by list order.** A Flow with no start node begins at the
+  first node of its saved list (`graph-navigation.ts:13-15`). SQLite returns that list
+  sorted by node id (`graph-store.ts:189`).
+- **The ids sort wrongly.** Recorded node ids are `recorded.candidate.entry.<N>.<uuid>`,
+  with `N` unpadded, so `entry.10` sorts before `entry.9`. A recording of more than ten
+  entries can therefore start at a later action.
+- **What it did:**
+  - W15 started at its tab close in 7 of 7 runs;
+  - W28's 12-entry run 2 started at its last scroll, and stopped with no failure
+    record.
+- **Only the start is wrong;** the links between actions are right.
+- **Evidence:** probes in JavaScript, and in SQLite running Core's query, both put
+  `entry.10` first.
+
+Decided by the supervisor on 2026-09-13:
+- **Fix it in Core.** A Flow's start is chosen from its graph, never from a sort of
+  node ids.
+- **The runner also fails a Flow-lane run that did not start at its first action,**
+  so the bench shows every row this touched.
+- **The report's Fix 3 is not taken.** Closing the active tab when no tab is driven
+  would close a tab FluxIQ never opened, so the extension keeps refusing. With the
+  right start, W15's close runs after its switch.
+- **The report's Fix 4 waits for the Lab.** The recheck keeps W28's Core workspace
+  and records where each scroll came from, before the recorder changes.
+
+## g-core-start-node — a Flow without a declared start begins at its graph's root (Core)
+
+**Owns** (in `F:\!FluxIQ\packages\fluxiq\src\programs\automation-studio\`):
+- `runtime/executor/graph-navigation.ts`;
+- where the compiled plan's entry is chosen (`compiled-plan.ts`, or name the file);
+- the recording-approval path that builds a Flow from a proposal, if it can write an
+  explicit start;
+- their tests;
+- `F:\!FluxIQ\docs\architecture\package-boundaries.md`, a line in the unreleased 0.4.0
+  entry;
+- the architecture page that says how a run chooses its first node.
+
+Follow `F:\!FluxIQ\AGENTS.md`. `g-web-timeout-forwarding` is editing Core's
+`runtime/service.ts`, `client-gateway/service/commands.ts`, and perhaps
+`runtime/contracts.ts`. Do not touch those.
+
+**Read:** `reports/i-w15-w28-flow-order.md`.
+
+**Task.**
+1. **A Flow with no declared start begins at the one node no edge points to.**
+   - Say what Core does today, and what it should do, when several nodes qualify or
+     none does (a cycle).
+   - Choose a deterministic rule that never depends on a sort of ids, and document it.
+2. **Write an explicit start where the order is known.** If the path that builds a
+   Flow from a recording proposal knows the order, it writes an explicit start as
+   well.
+3. **Check other uses of the id-sorted list.** Say whether a node list read back in id
+   order matters anywhere else: display, digest or export. Fix only the start choice,
+   unless another use is also wrong.
+
+**Tests.**
+- A Flow of twelve recorded nodes, `entry.1` to `entry.12`, linked in order, starts at
+  `entry.1`. Add a mutation that restores the first-by-id rule.
+- The several-roots case, and the no-root case.
+- **Gates:**
+  - `npx vitest run <files> --no-file-parallelism`;
+  - Core `pnpm check`, `pnpm docs:reference` if a cited line moves, and
+    `pnpm docs:check`;
+  - no Core `pnpm build`.
+
+**Report:** `reports/g-core-start-node.md`, with the compatibility effect: such Flows get
+a changed start node and plan digest.
+
+## g-runner-start-guard — a Flow-lane run that did not start at its first action fails, by name (test-runner)
+
+**Owns:** `packages/test-runner/src/flow-lane/run-flow-lane.ts` and
+`flow-lane/persisted-flow-run.ts`, and their tests.
+
+**Read:** `reports/i-w15-w28-flow-order.md`, Fix 2.
+
+**Task.**
+1. **A wrong start fails by name.** A Flow-lane run whose first attempt is not the
+   Flow's first action fails with a named runner failure, not with an assertion about a
+   later action. Take "first action" from the recording's order or from the graph's
+   root, and say which.
+2. **An early stop is named.** A run that stopped with unvisited actions and no failed
+   attempt is reported as exactly that.
+3. **Say what the bench shows** for each.
+
+**Tests.**
+- A row for each, with a mutation.
+- Test-runner `check`, and `test` in a private `--outDir`.
+- The structure audit.
+
+**Report:** `reports/g-runner-start-guard.md`.
 
 ## Amendment to `f-capability-confirmations` — a tab confirmation carries its tab (extension)
 

@@ -3234,3 +3234,148 @@ Moved verbatim to keep headroom under the plan limit: the Lab rerun's first four
   - when the extension's own answer arrived;
   - how large the margin needs to be under load.
 - Outcome: Revised
+
+## Part forty-two, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: the W05 short-catalog decision and the upload validation fix, both committed in af80298.
+
+### 2026-09-13 — i-w05-short-catalog: W05 `short-catalog` is a real product gap, ruled out of Week 1 once the Lab shows its failure
+
+- Agent: worker `i-w05-short-catalog` (read-only); decision by supervisor.
+- Changed: `reports/i-w05-short-catalog.md` only.
+- Found, from code. These are predictions until the Lab observes them:
+  - **What the Flow does.** A Flow built from W05's recording is two Next clicks,
+    with a wait before the second.
+    - `short-catalog` shows five products and no Next, so the first click fails
+      `target_not_found`.
+    - The final state still holds.
+    - The run therefore fails only because the variant expects success.
+  - **What Core lacks.** Core already has loop and branch nodes. It lacks a web
+    output that answers whether Next is present, and a recording mapper that builds
+    the loop.
+  - **The Week 2 entry point.** `web.dom.extract_list` with `paginate` already pages
+    until Next is absent, but nothing produces it from a recording.
+- Decision: option (d).
+  - **No code change.** `product-catalog/manifest.ts:66-75` and `week1.ts:34` stay
+    as they are.
+  - **Ruled out once observed.** When the Lab recheck records the failing node and
+    category, W05 `short-catalog` joins "Ruled out of Week 1", beside W13
+    `banner-absent` and W24 `unannounced`. The row stays in the corpus and keeps
+    failing visibly.
+  - **Rejected:** declaring the failure as expected (a), and moving the variant to
+    the recording lane (c). Both would hide the gap.
+- Validation: the supervisor read the report's option analysis. No code ran; the
+  prediction rests on reading, and `reports/l-stage2c.md` holds no W05 observation.
+- Not verified: the live failing node and category, and whether a wait comes before
+  the first click.
+- Outcome: Revised
+
+### 2026-09-13 — f-upload-validation-names: the upload's check and its refusals quote no file name
+
+- Agent: worker `f-upload-validation-names` (Partial). The refusal reasons and the
+  verification are by the supervisor.
+- Changed, in `apps/extension/`:
+  - **`src/content/actions/upload.ts`:** the post-condition's `expected` and `actual`
+    give only the count of files and whether their names match, for example
+    `1 file, named as requested`.
+    - The check still passes only when the input holds exactly the requested names,
+      in order.
+    - Otherwise it still fails `output_not_observed`.
+  - **New `src/content/actions/tests/upload.test.ts`.**
+  - **`src/content/action-runtime/file-input.ts`,** by the supervisor: a refusal
+    names a file by its position ("file 1"), never by its name, and the header says
+    why.
+  - **`e2e/content/tests/upload-dialog.spec.ts`:**
+    - the two upload rows assert that no name appears;
+    - a new row, by the supervisor: a refusal names a file by position.
+- Found: nothing reads the upload validation's text as names. The worker checked the
+  domain's classifier and adapter, Core, the runner and the bench.
+- Validation:
+  - **Supervisor, `sup60`:**
+    - `EXTENSION_TEST_BUILD_LABEL=sup60 pnpm test` printed "# tests 468", "# pass
+      468", "# fail 0";
+    - `upload-dialog.spec.ts` gave "7 passed";
+    - extension `pnpm check` exit=2, on a type error in the supervisor's new row
+      (`validation?.actual` on a union).
+  - **Supervisor, `sup61`,** after that row was rewritten as a `toMatchObject`:
+    extension `pnpm check` exit=0, and `upload-dialog.spec.ts` "7 passed".
+  - **Supervisor mutation, content harness:** quoting the name in the base64 refusal
+    failed the new row ("1 failed"). Restored byte-identical, "1 passed".
+  - **Worker mutations:** putting the names back failed all six new unit rows, and
+    making every upload pass failed the three mismatch rows.
+- Not verified:
+  - a Lab W17 run showing the name 0 times in Core's saved attempt;
+  - `pnpm build`, since the tracked `build/` still holds the old content script.
+- Outcome: Accepted
+
+## Part forty-three, archived 2026-09-13
+
+Moved verbatim on arrival to keep headroom under the plan limit: the W15 and W28 start-node investigation and the architecture pages audit, whose follow-ups are dispatched.
+
+### 2026-09-13 — i-w15-w28-flow-order: a Flow built from a recording starts at the first node by id, and `entry.10` sorts before `entry.9`
+
+- Agent: worker `i-w15-w28-flow-order` (read-only); decisions and verification by
+  supervisor.
+- Changed: `reports/i-w15-w28-flow-order.md` only.
+- Found:
+  - **The start rule.**
+    - A Flow with no `builtin.control.start` node begins at `flow.nodes[0]`.
+    - The saved graph is read back `order by node_id`.
+    - Recorded node ids carry an unpadded entry number, so in a recording of more
+      than ten entries a later action can become the start.
+    - The links between actions are right; only the start is wrong.
+  - **W15** starts at its tab close, in 7 of 7 runs. Nothing is driven yet, so the
+    close has no tab to act on. Its six timeouts belong to the dispatch deadline.
+  - **W28 run 2** (12 entries) started at its last scroll. The scroll succeeded, but
+    no next action followed while three were unvisited. Core ended the run with no
+    failed attempt and no failure record.
+  - **W28's second scroll** probably came from a frame. The bundle cannot prove it.
+  - **Other rows.** The same rule may explain other Flow-lane failures in earlier
+    benches.
+- Decisions: the thirty-sixth dispatch.
+  - **Fix the start in Core** (`g-core-start-node`), and **fail a Flow-lane run that
+    does not start at its first action** (`g-runner-start-guard`).
+  - **Fix 3 is not taken.** Closing the active tab when none is driven would close a
+    tab FluxIQ never opened.
+  - **Fix 4 waits** for a Lab run that keeps W28's Core workspace.
+  - The user was told this crosses into Core.
+- Validation:
+  - **Supervisor, at Core `604d0d3`:**
+    - `git show HEAD:…/runtime/executor/graph-navigation.ts`: `findStartNode` returns
+      the `builtin.control.start` node `?? flow.nodes[0]`;
+    - `…/storage/project/graph-store.ts`, `exportSnapshotData`:
+      `select * from graph_nodes where flow_id = ? and deleted_at_ms is null order by node_id`.
+  - **Worker probes:** a JavaScript sort, and SQLite running Core's query
+    (`node --experimental-sqlite`), both put `entry.10` ahead of `entry.9`.
+- Not verified:
+  - the real entry numbers of W15's and W28's actions, since no workspace was kept;
+  - Core's reason for stopping W28 run 2;
+  - which frame scrolled;
+  - the other week1 rows.
+- Outcome: Revised
+
+### 2026-09-13 — i-arch-pages-audit: six of eight architecture pages contradicted the code or left out this session's behaviour
+
+- Agent: worker `i-arch-pages-audit` (read-only); decisions by supervisor.
+- Changed: `reports/i-arch-pages-audit.md` only.
+- Found, by page:
+  - **`testing-facility.md` was furthest off.**
+    - It said the auth-gate sign-in page prints its password.
+    - It said an expected action with no outcome means `succeeded`.
+    - It said isolated runs never build a Flow.
+    - It said the leak checks skip databases.
+    - It said Core's recording-start window is 10 s; it is 300 s.
+    - It missed three fixtures, and no page described the Flow lane or the bench.
+  - **`extension-client.md`** lacked the start-once rule, the page-change flush, and
+    the late-target wait.
+  - **`element-identity.md`** gave the scan bound as 600 elements; it is 5,000.
+  - **`sensitive-values.md`** did not say how a withheld run input is handled.
+  - **Three smaller pages** had stale dates and small gaps.
+  - **`run-scenario.ts:270-277`** repeated two of the stale claims.
+- Decisions: the thirty-fifth dispatch, with one docs worker per page group. Areas
+  still in flight are left for later.
+- Validation: the auth-gate claim matches `1d1e756`, which this session replaced
+  with a placeholder. The docs workers' changes are validated at integration.
+- Not verified: the probe step's 1 s bound, and what `frames.spec.ts` proves about
+  child frames.
+- Outcome: Revised
