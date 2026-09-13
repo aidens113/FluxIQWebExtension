@@ -40,7 +40,7 @@ settled ledger entries are in parts one to twenty-four of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13, while workers run.**
-- **This repository:** `4c8f30c`, 65 commits ahead of `origin/dev`, not pushed.
+- **This repository:** `6db2ff8`, 67 commits ahead of `origin/dev`, not pushed.
 - **Core:** `5845f5d`, 9 commits ahead of `origin/dev`, `fluxiq` **0.4.0**, with its
   packages built at `187f40d`. The nine commits:
   - `5d495eb`, trace withholding;
@@ -63,7 +63,8 @@ settled ledger entries are in parts one to twenty-four of
   snapshot evidence (LR7, LR8); redaction attestation in every Lab run; discard
   audits; single-run evidence sizes, through one reader.
 - **Structure and hygiene:** the `connection.ts` split; the test-runner ratchet;
-  stale comments, casts and the `test:content` script.
+  stale comments, casts and the `test:content` script; the Flow lane imports
+  Core's target-resolution type.
 - **Matching and recording:** resolver corroboration (CS1d, W26); recorder signals
   (B5); `invalid_parameter` (B3); a recording begins locally only after its start
   was sent, and starts once however Core's acknowledgement arrives; a page change
@@ -93,8 +94,6 @@ settled ledger entries are in parts one to twenty-four of
 **In flight:**
 - **`w19-d1b`:** a linked click's action entry carries the landing claim, so
   W19's claim reaches a live click.
-- **`g-target-union-import`:** the Flow lane imports Core's target-resolution
-  type in place of its copy.
 - **`l-stage2`:** Lab Stage 2 at `7263534` and Core `187f40d`. W19 `expired` waits
   for `w19-d1b` (seventeenth dispatch).
 
@@ -745,6 +744,33 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
     between-evidence check, and no frame check.
 - Not verified: the Lab. `delayed-ui --flow` must show click, wait, click 3 of 3;
   `too-slow` must fail as `timeout`; and the rows above must stay unchanged.
+- Outcome: Accepted
+
+### 2026-09-13 — g-target-union-import: the Flow lane takes its target resolution shape from Core's type
+
+- Agent: worker `g-target-union-import`; verified by supervisor.
+- Changed: `flow-lane/persisted-flow-run.ts` only.
+  - `AutomationNodeTargetResolution` is imported from Core's public
+    `fluxiq/automation-studio/nodes` export, and the local copy of the union is
+    gone.
+  - The persisted type narrows each variant to named fields that cannot carry
+    page content.
+  - The scored statuses are a record keyed by Core's own, so the type check fails
+    when Core's union gains or loses one.
+- Found: the persisted fields are still named by hand, so if Core renamed
+  `confidence` or `normalizedScore`, only a test would catch it (report, open
+  question 1).
+- Validation: supervisor read the diff, and confirmed
+  `./automation-studio/nodes` is in Core's `package.json` `exports` with `types`
+  and `import` entries. From `packages/test-runner`:
+  - `pnpm check` -> exit 0;
+  - `tsc --outDir dist-sup18` -> exit 0;
+  - `node --test "dist-sup18/**/*.test.js"` -> `# tests 509`, `# pass 509`,
+    `# fail 0`.
+  - Worker: faking a new scored status or variant in Core, and dropping
+    `no_match` from the reader, each failed `tsc` with TS2741. Breaking the status
+    guard failed test 8. The file was restored byte-identical.
+- Not verified: root gates; the Lab (no change expected).
 - Outcome: Accepted
 
 ## Open Questions

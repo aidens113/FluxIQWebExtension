@@ -2015,3 +2015,50 @@ save wall-clock; everything else it measures is committed and built.
   on this machine. Sample memory as `reports/i-lab-campaign.md` Part 3 says, and
   pause the load instance whenever free memory falls below Part 3's floor. Record
   any pause in the report.
+
+**Amendment to `g-w19-docs`, written while `w19-d1b` runs.**
+- Also read `reports/w19-d1b.md` and `reports/g-core-action-entry-identity.md`.
+- The D1 paragraph must describe both ways a click's landing claim is built: from
+  a click recorded as a domain event, and from a click Core recorded as an
+  `action` entry, matched by its stored `eventId`.
+- It must also say that every unlinked click keeps Core's own candidate.
+
+---
+
+# Eighteenth dispatch — Lab Stage 3, written ahead of need
+
+## l-stage3 — the week1 bench twice, and the provider-free demo (Lab owner)
+
+Dispatched after Lab Stage 2 has reported and the integration gates have passed.
+The dispatch names this repository's commit `<R>` and Core's `<C>`, both pushed.
+
+**Owns:** no tracked file in either repository. Worktrees under `F:\fxlab\`
+pinned as Stage 2 pinned them; run artifacts under `F:\fxlab-runs\stage3\`;
+memory samples in your scratch directory. The "no `pnpm lab`" rule is lifted for
+the runs below only, each with `FLUXIQ_TEST_ENV_FILES=none`.
+
+**Read:** `reports/l-stage2.md`, for the pin and the rows it left open; the plan's
+Objective and Metrics sections; `reports/v-bench-honesty.md`; `live-validation-plan.md`
+step 7.
+
+**Task.**
+1. **Pin and prove** as Stage 2 did, at `<R>` and `<C>`.
+2. **Bench A, then bench B**, one at a time, with no other Lab instance running:
+   `FLUXIQ_TEST_ENV_FILES=none pnpm lab bench --corpus week1 --repeat 3 --target isolated`,
+   headed as `v-bench-honesty` requires, each with its own report directory.
+3. **Compare** A with B on every metric the Metrics section defines, against its
+   stated tolerance, and name every metric outside it with both values.
+4. **Demo:** `demo:record` then `demo:run`, with no provider configured, and the
+   exit of each.
+
+**Report** (`reports/l-stage3.md`), quoted rather than summarised:
+- the pin proof;
+- both bench reports' paths, exits and headline rates per lane;
+- for every exit criterion, the row counts and rates it is judged on;
+- the per-row verdicts that differ between A and B;
+- the comparison table;
+- the demo exits;
+- the lowest free memory.
+
+Label every single observation, and rerun a uniform or impossible failure once,
+alone, before reporting it.
