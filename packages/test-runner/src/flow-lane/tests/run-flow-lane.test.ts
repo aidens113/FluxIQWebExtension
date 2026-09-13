@@ -37,6 +37,8 @@ function fakeCore(options: { appendsAt: readonly number[]; finalizedAt?: number;
   const startedInputs: Record<string, unknown>[] = [];
   const runInputs: Record<string, unknown>[] = [];
   const flowReads: string[] = [];
+  // The lane's steps in the order they reached Core or the page: flow reads, the start, and what `runLane` adds.
+  const sequence: string[] = [];
   const visibleEntries = () => options.appendsAt.filter(at => at <= clock.value).length;
   const proposedCandidates = () => Math.max(0, visibleEntries() - (options.lostCandidates ?? 0));
   const proposal = (candidateCount: number) => ({
@@ -65,11 +67,13 @@ function fakeCore(options: { appendsAt: readonly number[]; finalizedAt?: number;
       }
       if (endpoint === "get-flow") {
         flowReads.push(`get-flow:${String(payload.flowId)}`);
+        sequence.push(`get-flow:${String(payload.flowId)}`);
         if (payload.flowId === "flow.graph") return { flow: { nodes: options.graphNodes ?? [] } };
         return { flow: { nodes: [{ id: "node.one", parameterValues: { outputId: "web.dom.click" } }] } };
       }
       if (endpoint === "list-flow-subflows") {
         flowReads.push(`list-flow-subflows:${String(payload.flowId)}`);
+        sequence.push(`list-flow-subflows:${String(payload.flowId)}`);
         return { subflows: options.graphNodes ? [{ graphFlowId: "flow.graph" }] : [] };
       }
       if (endpoint === "get-flow-run-detail") {
@@ -79,7 +83,7 @@ function fakeCore(options: { appendsAt: readonly number[]; finalizedAt?: number;
       throw new Error(`unexpected endpoint ${endpoint}`);
     },
     selectExistingContext: async () => {},
-    startPersistedFlow: async (input) => { startedInputs.push(input.inputs ?? {}); return { runId: "run.one" }; },
+    startPersistedFlow: async (input) => { sequence.push("start"); startedInputs.push(input.inputs ?? {}); return { runId: "run.one" }; },
     runPersistedFlow: async (input) => { runInputs.push(input.inputs ?? {}); return { session: { runId: "run.one", status: options.runStatus ?? "succeeded" } }; },
   };
   return {
@@ -89,6 +93,7 @@ function fakeCore(options: { appendsAt: readonly number[]; finalizedAt?: number;
     startedInputs,
     runInputs,
     flowReads,
+    sequence,
     now: () => clock.value,
     sleep: async (ms: number) => { clock.value += ms; },
   };
@@ -101,12 +106,13 @@ type LaneOptions = {
   expected?: ResolvedScenarioWorkflow["expected"];
   recordingEvents?: readonly ExpectedEvent[];
   finalStateHolds?: boolean;
+  variant?: ResolvedScenarioWorkflow["variant"];
 };
 
 async function runLane(fake: ReturnType<typeof fakeCore>, evidence: FlowLaneEvidence[], lane: LaneOptions = {}) {
   const resetCalls: string[] = [];
   const realFetch = globalThis.fetch;
-  globalThis.fetch = (async (url: string) => { resetCalls.push(String(url)); return { ok: true, status: 200 }; }) as unknown as typeof globalThis.fetch;
+  globalThis.fetch = (async (url: string) => { resetCalls.push(String(url)); fake.sequence.push("reset"); return { ok: true, status: 200 }; }) as unknown as typeof globalThis.fetch;
   try {
     const outcome = await runFlowLane({
       control: fake.control,
@@ -115,13 +121,13 @@ async function runLane(fake: ReturnType<typeof fakeCore>, evidence: FlowLaneEvid
       recordingId: "recording.one",
       recordingWait: { now: fake.now, sleep: fake.sleep, intervalMs: 100, timeoutMs: 10_000 },
       scenario: { id: lane.scenarioId ?? "basic-form", recordingScript: [], expected: {} } as unknown as WebScenario,
-      workflow: { expected: lane.expected ?? {}, recordingScript: lane.recordingScript ?? [] } as unknown as ResolvedScenarioWorkflow,
+      workflow: { expected: lane.expected ?? {}, recordingScript: lane.recordingScript ?? [], ...(lane.variant ? { variant: lane.variant } : {}) } as unknown as ResolvedScenarioWorkflow,
       recordingEvents: lane.recordingEvents ?? [],
       facilityRunId: "run-test",
       scenarioOrigin: "http://127.0.0.1:4310",
       runToken: "token",
       secrets: lane.secrets ?? [],
-      armVariant: async () => {},
+      prepareFlowPage: async () => { fake.sequence.push("prepare"); },
       recordEvidence: async (item) => { evidence.push(item); },
       checkFinalState: async () => lane.finalStateHolds ?? true,
     });
@@ -180,6 +186,21 @@ test("a proposal short of the actions the recording pins fails the run before an
   assert.deepEqual(fake.reviewedProposals, [], "a short proposal is never approved");
   assert.deepEqual(fake.startedInputs, [], "and nothing runs");
   assert.deepEqual(evidence, []);
+});
+
+/**
+ * F1 (`i-stage1-failures` finding (a)). The page used to be prepared only for a
+ * variant, and the reset reloads nothing, so W18 -- no variant -- ran its Flow
+ * on the account page its recording ended on, where no password field exists.
+ * The order is the lane's: reset first, because a reset discards an arm; then
+ * the page; then the one read of the Flow's nodes, and only then the run.
+ */
+test("every Flow run, armed or not, prepares its page once, after the reset and before the Flow is read or started", async () => {
+  for (const variant of [undefined, { id: "drifted" }] as const) {
+    const fake = fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500 });
+    await runLane(fake, [], variant ? { variant: variant as unknown as ResolvedScenarioWorkflow["variant"] } : {});
+    assert.deepEqual(fake.sequence, ["reset", "prepare", "get-flow:flow.new", "list-flow-subflows:flow.new", "start"], `${variant ? "an armed" : "an unarmed"} run`);
+  }
 });
 
 /**

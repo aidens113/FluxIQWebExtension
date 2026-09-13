@@ -34,8 +34,12 @@ export type FlowLaneInput = {
   runToken: string;
   /** Resolved by the runner, which also adds their values to the evidence redaction list. */
   secrets: readonly DeclaredSecret[];
-  /** Arms the resolved variant. Injected so the runner keeps ownership of Lab control. */
-  armVariant: () => Promise<void>;
+  /**
+   * Presents the page the Flow runs against: arms the resolved variant, if
+   * any, and loads the scenario's start page. Called on every run, armed or
+   * not. Injected so the runner keeps ownership of Lab control and the page.
+   */
+  prepareFlowPage: () => Promise<void>;
   /**
    * Records what the Flow did, before any expectation is judged. Evidence that
    * is only written once the assertions pass cannot explain the run that
@@ -64,13 +68,13 @@ export type FlowLaneOutcome = {
 
 /**
  * The provider-free Flow lane: wait for Core to finish writing the recording,
- * reset, generate a Flow from that recording through Core's public proposal
- * API, arm the variant, run the Flow, and judge it. No provider is configured and none is needed — every step is a
+ * generate a Flow from that recording through Core's public proposal API,
+ * reset, prepare the page, run the Flow, and judge it. No provider is configured and none is needed — every step is a
  * Core call or a fixture assertion.
  *
- * The reset comes before the arm because a reset would discard the arm, and
- * before the run because otherwise the Flow would be judged against the
- * recording lane's own leftovers.
+ * The reset comes before the page is prepared because a reset would discard
+ * an arm, and both come before the run because otherwise the Flow would be
+ * judged against the recording lane's own leftovers.
  */
 export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome> {
   const bounds = input.bounds ?? {};
@@ -90,7 +94,10 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
     name: `Lab flow ${input.facilityRunId}`,
   }, bounds);
   await resetScenarioLab(input.scenarioOrigin, input.runToken);
-  if (input.workflow.variant) await input.armVariant();
+  // Every run, not only an armed one: the reset reloads nothing, so an unarmed
+  // Flow started wherever the recording left the tab (W18, on auth-gate's
+  // account page, where no password field exists).
+  await input.prepareFlowPage();
   // Read before running, and once: the same nodes answer both questions below.
   const nodes = await readFlowNodes(input.control, { projectId: input.projectId, flowId: approved.flowId }, bounds);
   // The map identifies each attempt, and a Flow whose nodes dispatch no output

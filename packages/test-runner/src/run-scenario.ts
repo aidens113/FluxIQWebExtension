@@ -317,16 +317,16 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
           // The unarmed workflow's, which the recording lane asserted above.
           recordingEvents: recordingWorkflow.expected.recordingEvents ?? [],
           scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, secrets: declaredSecrets,
-          armVariant: async () => {
+          prepareFlowPage: async () => {
             if (workflow.variant) await armScenarioVariant(activeTopology.scenarioOrigin, activeTopology.allocation.controllerToken, scenario.id, workflow.variant);
-            // Arming and the reset before it are server-side, so the page left
-            // over from the recording still shows the unarmed DOM and must be
-            // loaded again, or a drift variant would be judged against a page
-            // that never drifted. Load the fixture's entry point rather than
-            // reloading: see `openScenarioStart`.
+            // Runs on every Flow run. The reset and any arm are server-side, and
+            // the tab still shows wherever the recording ended, so it is loaded
+            // again: unarmed, or the Flow starts on the recording's last page;
+            // armed, or a drift variant is judged against a page that never
+            // drifted. Load the entry point, not a reload: see `openScenarioStart`.
             await openScenarioStart(page, activeTopology.scenarioOrigin, scenario);
-            // The armed rendering is now on screen, and it is the one the Flow
-            // will run against. Check its facts here, before the Flow runs, so
+            // The rendering the Flow will run against is now on screen. Check
+            // the armed facts here (none for an unarmed run), before the Flow runs, so
             // "the fixture did not arm as declared" cannot arrive disguised as
             // "the generated Flow failed".
             await assertExpectedFacts(pageFacts.afterArm, playwrightScenarioFactProbe(page));
