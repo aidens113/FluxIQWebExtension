@@ -6,8 +6,9 @@
 //
 //   accepted   FluxIQ sends `server.start_recording`; the handshake is over.
 //   unanswered nothing comes back inside the acceptance window, so recording
-//              begins locally and no user action is lost. This is the original
-//              fallback and it is unchanged.
+//              begins locally and no user action is lost -- once the attempt's
+//              own send has settled and never before, so nothing recorded can
+//              reach FluxIQ ahead of the start it belongs to.
 //   refused    FluxIQ answered. The window is over the moment it does -- a
 //              refusal is an answer, not silence -- so the acceptance timer is
 //              cancelled and `refusal.kind` decides what happens next.
@@ -44,7 +45,7 @@ export type RecordingStartHandshakeDeps = {
   // Sends one attempt. Called synchronously so a caller can observe the send
   // in the same turn the timer fires.
   readonly send: (attempt: RecordingStartAttempt) => Promise<void>;
-  // No answer inside the acceptance window.
+  // No answer inside the acceptance window, and that attempt's send has settled.
   readonly beginLocally: (recordingId: string) => Promise<void>;
   // A refusal the handshake has stopped fighting: persistent, exhausted, or
   // arriving with no start of ours in flight. `attempts` counts sends made.
@@ -63,6 +64,12 @@ type PendingStart = {
   attempt: number;
   acceptTimer: ReturnType<typeof setTimeout> | undefined;
   retryTimer: ReturnType<typeof setTimeout> | undefined;
+  // The latest attempt's send, until it settles. An earlier attempt's send
+  // settling late says nothing about this one.
+  inFlightSend: Promise<void> | undefined;
+  // The latest attempt's window elapsed unanswered while its send was still in
+  // flight: recording begins locally the moment that send settles.
+  localStartDue: boolean;
 };
 
 export class RecordingStartHandshake {
@@ -81,7 +88,7 @@ export class RecordingStartHandshake {
   // Sends the first attempt and opens its acceptance window.
   async begin(input: { recordingId: string; startedAt: number; initialState: JsonObject }): Promise<void> {
     this.cancel();
-    this.pending = { ...input, attempt: 0, acceptTimer: undefined, retryTimer: undefined };
+    this.pending = { ...input, attempt: 0, acceptTimer: undefined, retryTimer: undefined, inFlightSend: undefined, localStartDue: false };
     await this.sendPending(this.pending);
   }
 
@@ -110,6 +117,8 @@ export class RecordingStartHandshake {
       clearTimeout(pending.acceptTimer);
       pending.acceptTimer = undefined;
     }
+    // Still an answer when the window has elapsed and only the send is left.
+    pending.localStartDue = false;
     const attempts = pending.attempt + 1;
     const delays = this.deps.retryDelaysMs ?? RECORDING_START_RETRY_DELAYS_MS;
     const delayMs = refusal.kind === "transient" ? delays[pending.attempt] : undefined;
@@ -131,26 +140,48 @@ export class RecordingStartHandshake {
   }
 
   // The acceptance window is armed before the send rather than after it: it
-  // measures how long the user has been waiting, and a send that never
-  // resolves is exactly the silence the local fallback exists for.
+  // measures how long the user has been waiting. An elapsed window still waits
+  // for the send to settle before recording begins locally. The send may first
+  // look the project up over HTTP, and an event recorded while the start is
+  // unsent reaches FluxIQ ahead of it, where no ordering on FluxIQ's side can
+  // put it back. The price is that a send which never settles never falls back:
+  // the start stays pending, and a second press says so, until it is cancelled.
   private async sendPending(pending: PendingStart): Promise<void> {
+    pending.localStartDue = false;
     pending.acceptTimer = setTimeout(
-      () => this.acceptWindowElapsed(pending.recordingId),
+      () => this.acceptWindowElapsed(pending),
       this.deps.acceptTimeoutMs ?? RECORDING_START_ACCEPT_TIMEOUT_MS
     );
-    await this.deps.send({
+    const send = this.deps.send({
       recordingId: pending.recordingId,
       startedAt: pending.startedAt,
       initialState: pending.initialState,
       attempt: pending.attempt
     });
+    pending.inFlightSend = send;
+    try {
+      await send;
+    } finally {
+      if (pending.inFlightSend === send) {
+        pending.inFlightSend = undefined;
+        if (pending.localStartDue) this.startLocally(pending);
+      }
+    }
   }
 
-  private acceptWindowElapsed(recordingId: string): void {
-    const pending = this.pending;
-    if (!pending || pending.recordingId !== recordingId) return;
+  private acceptWindowElapsed(pending: PendingStart): void {
+    if (this.pending !== pending) return;
     pending.acceptTimer = undefined;
+    if (pending.inFlightSend !== undefined) {
+      pending.localStartDue = true;
+      return;
+    }
+    this.startLocally(pending);
+  }
+
+  private startLocally(pending: PendingStart): void {
+    if (this.pending !== pending) return;
     this.cancel();
-    void this.deps.beginLocally(recordingId);
+    void this.deps.beginLocally(pending.recordingId);
   }
 }

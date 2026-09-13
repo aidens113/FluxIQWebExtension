@@ -38,6 +38,21 @@ function fakeTimers(t: TestContext) {
   };
 }
 
+// Sends the test settles by hand, in the order they were made: a start whose
+// project lookup outlasts the acceptance window.
+function heldSends() {
+  const releases: Array<() => void> = [];
+  return {
+    send: () => new Promise<void>((resolve) => { releases.push(resolve); }),
+    release: (index: number) => releases[index]?.()
+  };
+}
+
+// Lets every promise chain the last call started run to completion.
+async function settle(): Promise<void> {
+  for (let turn = 0; turn < 10; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+}
+
 const STALE: RecordingStartRefusal = {
   code: "recording.project_required",
   kind: "transient",
@@ -61,14 +76,14 @@ const NO_PROJECT: RecordingStartRefusal = {
 const RETRY_DELAYS = [400, 1_200] as const;
 const INITIAL_STATE: JsonObject = { kind: "initial" };
 
-function harness(t: TestContext) {
+function harness(t: TestContext, hold?: () => Promise<void>) {
   const timers = fakeTimers(t);
   const sent: RecordingStartAttempt[] = [];
   const surfaced: { refusal: RecordingStartRefusal; attempts: number }[] = [];
   const retries: { attempt: number; of: number; delayMs: number }[] = [];
   const local: string[] = [];
   const handshake = new RecordingStartHandshake({
-    send: async (attempt) => { sent.push(attempt); },
+    send: async (attempt) => { sent.push(attempt); await hold?.(); },
     beginLocally: async (recordingId) => { local.push(recordingId); },
     surfaceRefusal: (refusal, attempts) => { surfaced.push({ refusal, attempts }); },
     noteRetry: (_refusal, attempt, of, delayMs) => { retries.push({ attempt, of, delayMs }); },
@@ -174,6 +189,70 @@ test("silence still starts the recording locally, once, and only for the pending
   handshake.noteRefusal(STALE);
   assert.deepEqual(surfaced.map((entry) => entry.attempts), [0]);
   assert.equal(timers.count(), 0);
+});
+
+// E1 in i-recording-loss: an event recorded before the start is on the wire
+// reaches FluxIQ ahead of it, and nothing on FluxIQ's side can reorder that.
+test("an elapsed window begins locally only once the start's send has settled", async (t) => {
+  const held = heldSends();
+  const { timers, sent, local, handshake } = harness(t, held.send);
+  const beginning = begin(handshake);
+  assert.equal(sent.length, 1, "the send is under way");
+  assert.deepEqual(timers.delays(), [750], "the window is armed before the send settles");
+
+  timers.fireAll();
+  await settle();
+  assert.deepEqual(local, [], "the window elapsed, but the start is not on the wire yet");
+  assert.equal(handshake.isPending(), true, "a second press still waits rather than starting again");
+
+  held.release(0);
+  await beginning;
+  await settle();
+  assert.deepEqual(local, ["client.alpha.1"]);
+  assert.equal(handshake.isPending(), false);
+  assert.equal(timers.count(), 0);
+});
+
+test("an answer between the elapsed window and the settled send still decides the start", async (t) => {
+  const held = heldSends();
+  const { timers, local, surfaced, handshake } = harness(t, held.send);
+
+  const accepted = begin(handshake);
+  timers.fireAll();
+  handshake.noteAccepted();
+  held.release(0);
+  await accepted;
+  await settle();
+  assert.deepEqual(local, [], "FluxIQ accepted, so the settling send begins nothing");
+
+  const refused = handshake.begin({ recordingId: "client.alpha.2", startedAt: 20, initialState: INITIAL_STATE });
+  timers.fireAll();
+  handshake.noteRefusal(STALE);
+  held.release(1);
+  await refused;
+  await settle();
+  assert.deepEqual(local, [], "a refusal answered the window, so the settling send begins nothing");
+  assert.deepEqual(timers.delays(), [400], "and the retry it asked for is still armed");
+  assert.equal(surfaced.length, 0);
+});
+
+test("a retry's window waits for the retry's own send, not an earlier attempt's", async (t) => {
+  const held = heldSends();
+  const { timers, sent, local, handshake } = harness(t, held.send);
+  void begin(handshake);
+  handshake.noteRefusal(STALE);
+  timers.fireAll();
+  assert.deepEqual(sent.map((attempt) => attempt.attempt), [0, 1], "the retry went out while the first send was in flight");
+
+  held.release(0);
+  await settle();
+  timers.fireAll();
+  await settle();
+  assert.deepEqual(local, [], "the first send settling says nothing about the retry's");
+
+  held.release(1);
+  await settle();
+  assert.deepEqual(local, ["client.alpha.1"]);
 });
 
 test("an accepted start cancels the pending retry", async (t) => {

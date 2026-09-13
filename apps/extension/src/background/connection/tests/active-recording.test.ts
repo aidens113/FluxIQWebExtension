@@ -327,3 +327,60 @@ test("an acceptance while recording only re-links the project; stopping reports 
   await h.recording.stop(false);
   assert.equal(h.sent.length, sentBefore, "a stop FluxIQ asked for is not echoed back");
 });
+
+// C2 in i-recording-loss: FluxIQ acknowledges a client's start with
+// `server.start_recording` for the same id. These rows stub the socket, so they
+// hold whether or not FluxIQ sends that acknowledgement yet.
+test("an acknowledgement inside the window starts the recording once, and the window never fires", async (t) => {
+  stubManifest(t);
+  const timers = fakeTimers(t);
+  const h = harness({ projectId: "project-1" });
+
+  await h.recording.start();
+  await settle();
+  const recordingId = String(h.sent[0]?.payload.recordingId);
+  assert.equal(timers.count(), 1, "the acceptance window is open");
+
+  await h.recording.beginAccepted(recordingId, "project-1");
+  assert.equal(h.recording.state(), "recording");
+  assert.equal(h.recording.recordingId(), recordingId);
+  assert.equal(timers.count(), 0, "the acknowledgement closed the window");
+
+  timers.fireAll();
+  await settle();
+  assert.deepEqual(h.resolveReasons, ["recording_start"], "no local start ran");
+  assert.equal(h.recorded.length, 1, "one start event");
+  assert.deepEqual(h.attached, [7]);
+  assert.deepEqual(h.snapshots, ["Initial snapshot captured"]);
+  assert.equal(h.labels().filter((label) => label === "Recording started").length, 1);
+});
+
+test("an acknowledgement after a local start changes nothing but the project link", async (t) => {
+  stubManifest(t);
+  const timers = fakeTimers(t);
+  const h = harness();
+
+  await h.recording.start();
+  await settle();
+  const recordingId = String(h.sent[0]?.payload.recordingId);
+  timers.fireAll();
+  await settle();
+  assert.equal(h.recording.state(), "recording");
+  assert.equal(h.activeProject(), null, "the local start found no project");
+  h.recording.noteEvent();
+  const sentBefore = h.sent.length;
+
+  await h.recording.beginAccepted(recordingId, "project-1");
+  assert.equal(h.recording.state(), "recording");
+  assert.equal(h.recording.recordingId(), recordingId);
+  assert.equal(h.recording.eventCount(), 1, "actions captured before the acknowledgement are kept");
+  assert.equal(h.activeProject(), "project-1", "the acknowledgement links its project");
+  assert.equal(h.session().projectId, "project-1");
+  assert.equal(h.recorded.length, 1, "no second start event");
+  assert.deepEqual(h.attached, [7], "the tab is not attached again");
+  assert.deepEqual(h.snapshots, ["Initial snapshot captured", "Project-linked snapshot captured"]);
+  assert.equal(h.sent.length, sentBefore, "nothing is sent back");
+
+  await h.recording.beginAccepted(recordingId, "project-1");
+  assert.equal(h.snapshots.length, 2, "the same acknowledgement again changes nothing");
+});
