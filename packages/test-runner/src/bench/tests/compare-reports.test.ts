@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import type { BenchReport, RunEvaluation } from "@fluxiq-web-extension/test-contracts";
 import { aggregateBenchReport, groupBenchResults } from "../aggregate-report.js";
 import { benchHalves, compareBenchCommand, summarizeBenchComparison } from "../compare-reports.js";
+import { compareBenchCloseoutCommand } from "../closeout-comparison.js";
+import { comparisonExitCriteria } from "../comparison-details.js";
 import { benchDirectory, writeBenchReport, writeBenchRuns, writeRunEvaluation, type BenchRunsFile } from "../report-store.js";
 
 type CorpusRun = { corpusRowId: string; evaluation: RunEvaluation };
@@ -28,7 +30,7 @@ async function writeBench(runsDirectory: string, benchId: string, repeatCount: n
   const directory = benchDirectory(runsDirectory, benchId);
   const file: BenchRunsFile = { schemaVersion: "0.1", benchId, corpusId: "smoke", repeatCount, target: "isolated", lanes: ["recording"], startedAt: "2026-09-11T10:00:00.000Z", sources: {}, runs: [] };
   for (const { corpusRowId, evaluation } of runs) {
-    file.runs.push({ corpusRowId, scenarioId: evaluation.scenarioId, workflowId: evaluation.workflowId, variantId: evaluation.variantId, repeatIndex: evaluation.repeatIndex, lane: evaluation.lane, status: "evaluated", runId: evaluation.runId, evaluation: await writeRunEvaluation(directory, evaluation), verdict: evaluation.verdict });
+    file.runs.push({ corpusRowId, scenarioId: evaluation.scenarioId, workflowId: evaluation.workflowId, variantId: evaluation.variantId, repeatIndex: evaluation.repeatIndex, lane: evaluation.lane, status: "evaluated", runId: evaluation.runId, evaluation: await writeRunEvaluation(directory, evaluation), verdict: evaluation.verdict, ...(evaluation.failureCategory ? { failureCategory: evaluation.failureCategory } : {}) });
   }
   await writeBenchRuns(directory, file);
   const report = bench(benchId, repeatCount, runs);
@@ -113,4 +115,86 @@ test("halves need two repeats; an unknown report and a report compared with itse
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("closeout comparison renders metrics, six criteria, changed rows, gaps, and count-only discard diagnostics", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-closeout-"));
+  try {
+    const runsDirectory = path.join(root, "runs");
+    await writeBench(runsDirectory, "bench-mtx00001-0123abcd", 1, corpusRuns(1));
+    const unchanged = await writeBench(runsDirectory, "bench-mtx00002-4567cdef", 1, corpusRuns(1, (scenarioId, repeatIndex) => ({ runId: `run-candidate-${scenarioId}-${repeatIndex}` })));
+    const equal = await compareBenchCloseoutCommand({ runsDirectory, cwd: root, baseline: "bench-mtx00001-0123abcd", candidate: unchanged.reportId, sharedLoad: true });
+    assert.equal(equal.outcome, "equivalent");
+    assert.equal(equal.comparisonPassed, true);
+    assert.deepEqual([equal.differingVerdicts.results.length, equal.differingVerdicts.runs.length], [0, 0]);
+    assert.deepEqual(equal.exitCriteria.map(item => item.criterion), [1, 2, 3, 4, 5, 6]);
+    assert.equal(equal.exitCriteria[0]?.status, "partially-measured");
+    assert.match(equal.exitCriteria[4]?.note ?? "", /shared load/);
+    assert.equal(equal.metrics.filter(item => item.metric.startsWith("rate:")).length, 16);
+    assert.ok(equal.metrics.some(item => item.metric === "evidence-sanitizedPacketBytes-p95" && item.verdict === "no-tolerance-stated"));
+    assert.ok(equal.gaps.some(item => item.includes("no tolerance stated")));
+
+    const changedRuns = corpusRuns(1, (scenarioId, repeatIndex) => scenarioId === "basic-form" ? { ...failedFields, failureCategory: "recording.persistence", runId: "run-persistence-0" } : { runId: `run-changed-${scenarioId}-${repeatIndex}` });
+    const changed = await writeBench(runsDirectory, "bench-mtx00003-89abcdef", 1, changedRuns);
+    const runDirectory = path.join(runsDirectory, "run-persistence-0");
+    await mkdir(runDirectory, { recursive: true });
+    const discardEvent = JSON.stringify({ message: "SECRET PAGE TEXT", details: { recordingDiscards: [{ type: "recording.action_discarded", recordingId: "recording-secret-id", discardedActions: 2, discardedEvents: 3, sinceFinalizedMs: 4 }], recordingDiscardWindow: { excluded: { "recording.action_discarded": { thisRunsRecording: 1, noRecording: 0, anotherRecording: 0 } } } } });
+    await writeFile(path.join(runDirectory, "events.ndjson"), `${discardEvent}\n${discardEvent}\n`, "utf8");
+    const output = await compareBenchCloseoutCommand({ runsDirectory, cwd: root, baseline: "bench-mtx00001-0123abcd", candidate: changed.reportId, sharedLoad: false });
+    assert.equal(output.comparisonPassed, false);
+    assert.deepEqual([output.differingVerdicts.results.length, output.differingVerdicts.runs.length], [1, 1]);
+    assert.deepEqual(output.persistenceDiscards.candidate, { persistenceFailures: 1, runsInspected: 1, actionDiscardEntries: 1, eventDiscardEntries: 0, maxDiscardedActions: 2, maxDiscardedEvents: 3, entriesNamingRecording: 1, entriesAfterFinalization: 1, excludedByWindow: 1, unreadableEventFiles: 0 });
+    assert.doesNotMatch(JSON.stringify(output), /SECRET PAGE TEXT|recording-secret-id/);
+    assert.match(output.exitCriteria[4]?.note ?? "", /sequentially/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("fallback criterion excludes W26 negative variants, requires zero harness use, and marks short repeats partial", () => {
+  const rows: CorpusRun[] = [
+    { corpusRowId: "W20", evaluation: run("identity-drift", 0, { variantId: "selector-only", lane: "flow", harnessActivations: 1 }) },
+    { corpusRowId: "W20", evaluation: run("identity-drift", 0, { variantId: "selector-only", lane: "recording" }) },
+    { corpusRowId: "W26", evaluation: run("ambiguous-targets", 0, { lane: "flow" }) },
+    { corpusRowId: "W26", evaluation: run("ambiguous-targets", 0, { variantId: "no-context", lane: "flow", verdict: "failed", automationFailureExpected: { category: "target_ambiguous" }, reportedVerdict: "failed", automationFailureReported: { category: "target_ambiguous" } }) },
+  ];
+  const report = bench("bench-fallback-a", 1, rows);
+  const figures = comparisonExitCriteria(report, bench("bench-fallback-b", 1, rows), groupBenchResults(rows), groupBenchResults(rows), [], { results: [], runs: [] }, false);
+  assert.deepEqual(figures[2], { criterion: 3, name: "deterministic-fallback", baseline: { recoveredWithoutHarness: 1, total: 2, repeatCount: 1 }, candidate: { recoveredWithoutHarness: 1, total: 2, repeatCount: 1 }, status: "partially-measured", note: "W20-W23 drift variants and unarmed contextual W26 only; every repeat must pass with zero harness activations" });
+});
+
+test("comparison fails when one report lacks a comparable metric, while N/A and disclosure rows do not block a complete repeat-three comparison", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-metric-coverage-"));
+  try {
+    const runsDirectory = path.join(root, "runs");
+    const actionRuns = corpusRuns(3, () => ({ actions: [{ actionType: "web.dom.type", durationMs: 100 }] }));
+    const noActionRuns = corpusRuns(3);
+    await writeBench(runsDirectory, "bench-mtx00001-0123abcd", 3, actionRuns);
+    await writeBench(runsDirectory, "bench-mtx00002-4567cdef", 3, noActionRuns);
+    await writeBench(runsDirectory, "bench-mtx00003-89abcdef", 3, corpusRuns(3, (scenarioId, repeatIndex) => ({ runId: `run-equal-${scenarioId}-${repeatIndex}` })));
+    const missing = await compareBenchCloseoutCommand({ runsDirectory, cwd: root, baseline: "bench-mtx00001-0123abcd", candidate: "bench-mtx00002-4567cdef", sharedLoad: false });
+    assert.equal(missing.comparisonPassed, false);
+    assert.deepEqual(missing.metrics.find(row => row.metric === "action-latency-p95:web.dom.type")?.verdict, "not-compared");
+    assert.equal(missing.exitCriteria[4]?.status, "partially-measured");
+
+    const complete = await compareBenchCloseoutCommand({ runsDirectory, cwd: root, baseline: "bench-mtx00002-4567cdef", candidate: "bench-mtx00003-89abcdef", sharedLoad: false });
+    assert.equal(complete.comparisonPassed, true);
+    assert.ok(complete.metrics.some(row => row.metric === "rate:flow:initialExecutionSuccess" && row.verdict === "not-applicable"));
+    assert.ok(complete.metrics.some(row => row.metric === "evidence-sanitizedPacketBytes-p95" && row.verdict === "no-tolerance-stated"));
+    assert.equal(complete.exitCriteria[4]?.status, "measured");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("closeout comparison rejects a report whose runs file omits an evaluated repeat", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-incomplete-"));
+  try {
+    const runsDirectory = path.join(root, "runs");
+    await writeBench(runsDirectory, "bench-mtx00001-0123abcd", 1, corpusRuns(1));
+    await writeBench(runsDirectory, "bench-mtx00002-4567cdef", 1, corpusRuns(1));
+    const runsFile = path.join(runsDirectory, "bench", "bench-mtx00002-4567cdef", "runs.json");
+    const parsed = JSON.parse(await readFile(runsFile, "utf8")) as BenchRunsFile;
+    const first = parsed.runs[0];
+    if (!first) throw new Error("fixture has no run");
+    first.status = "skipped"; delete first.evaluation;
+    await writeFile(runsFile, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
+    await assert.rejects(compareBenchCloseoutCommand({ runsDirectory, cwd: root, baseline: "bench-mtx00001-0123abcd", candidate: "bench-mtx00002-4567cdef", sharedLoad: true }), /report lists 4 results but runs\.json provides 3 evaluated result groups/);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

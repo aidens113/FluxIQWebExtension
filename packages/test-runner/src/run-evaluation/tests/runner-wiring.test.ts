@@ -24,6 +24,22 @@ test("the runner evaluates every run it observes, exactly once", async () => {
   assert.match(source, /import \{ singleRunEvaluation \} from "\.\/run-evaluation\/index\.js";/u, "through the barrel the bench also evaluates through");
 });
 
+test("the runner publishes safe finalization-wait details and preserves primary failures across cleanup", async () => {
+  const source = await runnerSource();
+  assert.ok(source.includes("const finalizationWaitDetails = finalizedRecordingWaitFailureDetails(error);"), "the wait's narrow safe projection is selected");
+  assert.ok(source.includes("...(finalizationWaitDetails ? { failureDetails: finalizationWaitDetails } : {})"), "the projection reaches the error event");
+  assert.equal(source.match(/cleanupFailureOutcome\(/gu)?.length, 4, "browser, topology and both clone completion paths share the precedence rule");
+  assert.equal(source.match(/details: (?:cleanup|completion)\.event\.details/gu)?.length, 4, "every completion failure appends its own labelled event");
+});
+
+test("the two pairing waits identify whether timeout happened before or after approval", async () => {
+  const source = await runnerSource();
+  assert.match(source, /awaitPairingStatus\([^;]+"pre-approval"\)/u);
+  assert.match(source, /awaitPairingStatus\([^;]+"post-approval"\)/u);
+  assert.ok(source.includes("const pairingWaitDetails = pairingStatusWaitFailureDetails(error);"));
+  assert.ok(source.includes("...(pairingWaitDetails ? { failureDetails: pairingWaitDetails } : {})"));
+});
+
 test("the evaluation is a hashed artifact of the bundle, written before it is sealed", async () => {
   const source = await runnerSource();
   const manifestWritten = source.indexOf('bundle.writeStructured("run.json", manifest)');

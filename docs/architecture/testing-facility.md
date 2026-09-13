@@ -1152,6 +1152,33 @@ pnpm lab bench --corpus week1 --repeat 3 --target isolated
 `lab compare` judges two reports, or one report's repeats split in halves, as
 [Commands and prerequisites](#commands-and-prerequisites) describes.
 
+For two reports, `lab compare <baseline> <candidate>` is also the durable Week
+1 closeout view. It uses the existing `BenchReport` contract comparison and
+adds every Metrics-table rate and latency, explicitly marked absent values and
+unstated tolerances, differing result/run verdicts, and count-only figures for
+all six exit criteria. It reads `recording.persistence` run events only to
+aggregate discard kinds, maxima, recording-presence/finalization counts, and
+window-exclusion counts; it cannot emit event messages, payloads, page data, or
+recording ids. Concurrent benches are labelled as shared-load measurements by
+default; add `--sequential` only when the reports were produced sequentially.
+Any metric outside its tolerance in either direction, any comparable metric
+present on only one side, or any differing result/run verdict exits 1. `--halves`
+retains the narrower contract-only comparison because its reports are computed
+in memory rather than stored as two complete bench bundles.
+The two-report output's `comparisonPassed` means only that those A/B metric and
+verdict comparisons agree. It is not overall Week 1 acceptance: partial or
+unmeasured exit criteria remain visible and require their separate named proof.
+It fails closed when a tolerance-bearing metric is measured by only one report.
+A rate with no population in either report is explicitly `not-applicable` and
+does not fail agreement; p50/evidence rows with no plan tolerance are disclosure
+rows and likewise do not prevent criterion 5 from being measured.
+The command rejects a bundle unless `runs.json` supplies the same result groups
+as `report.json` and exactly the report's repeat count of validated evaluations
+for each group, so partial run data cannot produce closeout figures.
+The deterministic-fallback figure uses only Flow-lane W20-W23 variants and the
+unarmed contextual W26 result; recording-lane observations and W26's negative
+variant do not count as recovery proof.
+
 ## Extension E2E build and finite browser suite
 
 The normal extension build produces Chrome, Firefox, and E2E Chromium targets:
@@ -1433,6 +1460,7 @@ pnpm lab matrix --all --repeat 1 --evidence failure
 pnpm lab inspect <run-id>
 pnpm lab bench --corpus smoke --repeat 2 --target isolated
 pnpm lab compare <baseline-report> <candidate-report>
+pnpm lab compare <baseline-report> <candidate-report> --sequential
 pnpm lab compare <report> --halves
 ```
 

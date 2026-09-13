@@ -1,6 +1,7 @@
 // FluxBench: corpora, per-run evaluation, corpus metrics, reports, and comparison.
 export * from "./aggregate-report.js";
 export * from "./compare-reports.js";
+export * from "./closeout-comparison.js";
 export * from "./corpus/index.js";
 export * from "./describe-error.js";
 export * from "./distribution.js";

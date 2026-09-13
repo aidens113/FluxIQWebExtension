@@ -1,7 +1,7 @@
 # MVP Week 1 — Web Automation Reliability Plan
 
 Status: Active
-Status detail: The Lab rerun proved the fixes for W18, W19, W25 and W17 live, and found four more problems (W15's and W28's wrong start, W17's file name, W25 too-slow's code), whose fixes are committed in both repositories, pass root gates, and await the Lab recheck; no exit criterion is proven yet. Session objective, set by the user: completely finish Week 1, with everything tested.
+Status detail: The audit remediation is implemented and passes focused mutations plus downstream root gates; Stage 4 live proofs and final repeat-three benches remain, so no exit criterion is yet claimed complete. Session objective, set by the user: completely finish Week 1, with everything tested.
 Created: 2026-09-11
 Last updated: 2026-09-13
 Owner: Senior supervisor agent
@@ -29,7 +29,7 @@ document. Read it literally:
   every fix before its ledger entry, and single observations labelled as such,
   because this machine has faulty RAM.
 
-**Phase, as of 2026-09-13: fixing what the Lab rerun found.** The rerun
+**Phase, as of 2026-09-13: readying the pushed pins for Stage 4.** The rerun
 (`l-stage2c`) proved the earlier fixes live for W18, W19, W25 and W17. It also found
 W15, W17's file name, W28 and W25 `too-slow` still failing. No exit criterion yet
 has its full proof. Reports named in
@@ -39,11 +39,16 @@ every dispatch and amendment is in
 settled ledger entries are in parts one to fifty of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
-**True on 2026-09-13.**
-- **This repository:** pushed at wrap-up, with every fix recorded in the ledger.
-- **Core:** `0a2dc53`, pushed with this repository; `fluxiq` **0.4.0**, built at `e5c9828`.
-- **Gates:** Core `e5c9828`'s full sequential suite passed, with build and package lint. Here every
-  package gate over the fixes passed; root gates passed on `4fe671e` (harness 233 of 233).
+**Repository state at remediation intake on 2026-09-13.**
+- **This repository:** `146cdbf`, equal to `origin/dev` before remediation
+  began. The repository-state audit is pushed; remediation changes and their
+  validation must be recorded separately before they are accepted.
+- **Core:** `3d1a4a`, equal to `origin/dev`; `fluxiq` **0.4.0**, with the last
+  Core code build at `e5c9828`.
+- **Established gates:** Core's full sequential suite, build and package lint
+  passed at `e5c9828`. Downstream root gates passed for the source at `4fe671e`,
+  and the repository-state audit recorded a later clean `pnpm check`. These
+  historical results do not validate the remediation now in progress.
 
 **Settled this session** (ledger and archive):
 - **Core:** trace withholding; the late-message discard; W19 C1 and C2; the shared
@@ -91,15 +96,20 @@ settled ledger entries are in parts one to fifty of
   real-page capture cost and candidate caps.
 
 **In flight:**
-- **Nothing running.** The session wrapped up on 2026-09-13. `f-lab-wait-bounds` and
-  `l-probe-late-rows` were stopped; partial edits from the first are uncommitted.
+- The three repository-state-audit repairs are implemented and accepted: the
+  load-derived 90-second finalization bound with selected diagnostics, first
+  functional-failure precedence, and the tracked six-criterion `lab compare`.
+- Supervisor verification passed a 54-test focused suite, eight mutation
+  proofs, and downstream root check/test/build gates. No Lab proof, final
+  bench, comparison, or ranking run is in progress.
 
 **Queued, in dependency order**
-1. **`f-lab-wait-bounds`:** check the stopped worker's partial edits, then redispatch
-   it (brief ready), gate it, commit it and push.
-2. **Lab Stage 4** (briefs): `l-final-proofs` alone at the pushed pins, then the bench
-   pair, together only at a pin carrying `f-lab-wait-bounds`.
-3. **Phase 1.6b:** `bench-compare.mjs`, fill `i-ranking-draft`, write the ranking entry.
+1. Push the coherent, verified paired `dev` heads.
+2. **Lab Stage 4:** run `l-final-proofs` alone at the pushed remediation pins;
+   only after it passes, run the two complete `--repeat 3` benches at those
+   same pins, concurrently only within the documented RAM limit.
+3. **Phase 1.6b:** run the tracked comparison, complete `i-ranking-draft`, and
+   write the six observed exit-criterion figures into the ledger.
 
 **Exit criteria as they stand**
 
@@ -109,7 +119,7 @@ settled ledger entries are in parts one to fifty of
 | Evidence useful | `l-stage2d`: W17's file name and content in Core's workspace 0 times, SQLite included. `l-stage2c`: the auth-gate secret 0 times | `l-evidence`: the `sensitive-input` leak check and the 16 items; both benches: packet budget and leak rows |
 | Deterministic fallback | Corroboration refuses an uncorroborated match (unit and harness) | W20-W23 recover and W26 disambiguates in the Lab |
 | Failures classified | `l-stage2d`, ×3: W15 `popup-blocked` reports `output_not_observed`, and W25 `too-slow` reports `web.action.timeout`. Stage 2: W10 and W27 `navigation_unexpected`. `l-stage2c`: W19 `auth_required` | Both benches: the W14, W19 and W27 negative variants at least 90%, plus the rate over every negative variant |
-| Bench repeatable | `l-stage3a` and `l-stage3b` are running concurrently at the `l-stage2d` pins | Every Metrics tolerance, A against B, through `bench-compare.mjs` |
+| Bench repeatable | Earlier Stage 3 load attempts exposed the wait-bound and pairing-diagnostic defects; no final bench is running and no complete A/B comparison is accepted | Two complete `--repeat 3` benches at the pushed remediation pins, followed by every Metrics tolerance and discard diagnostic through the tracked comparison tool |
 | Blockers ranked | `i-ranking-draft` has drafted the ranking, and its counting questions are ruled; the known leftovers are sized (`i-leftover-sizing`) | The Phase 1.6b ledger entry, with both benches' figures |
 
 **Everything is tested: the operating rules.**

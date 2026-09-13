@@ -6,7 +6,7 @@ import { assertClonePackage, assertRunManifest, canonicalClonePackageJson, flowL
 import { createCorrelationId, EvidenceBundle, EvidenceCaptureController, sha256 } from "@fluxiq-web-extension/test-evidence";
 import type { EvidenceMode } from "./commands.js";
 import { removeRunOwnedTopologyState, startTopology, type RunningTopology } from "./coordinator.js";
-import { classifyRunnerFailure, RunnerFailure } from "./failure.js";
+import { classifyRunnerFailure, RunnerFailure, type RunnerFailureCategory } from "./failure.js";
 import { withoutProviderSecrets } from "./environment.js";
 import { WebPanelAuthSessionCache } from "./auth-session.js";
 import { ExistingFluxIQControlClient } from "./existing-fluxiq-control.js";
@@ -26,13 +26,14 @@ import { createRunOwnedCloneFlowId, createRunOwnedCloneProject, importClonePacka
 import { effectiveEvidencePolicy } from "./evidence-policy/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant, scenarioLabOriginProof } from "./lab-control/index.js";
-import { awaitFinalizedRecording, declaredSecretValues, flowLaneSnapshot, readRecordingDiscards, recordingLaneObservation, resolveDeclaredSecrets, runFlowLane, selectLaneObservation, type DeclaredSecret, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
+import { awaitFinalizedRecording, declaredSecretValues, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneObservation, resolveDeclaredSecrets, runFlowLane, selectLaneObservation, type DeclaredSecret, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
 import { attestRunRedaction, runRedactionScopes, scenarioRedactionLiterals, type RunRedactionAttestation } from "./redaction-attestation/index.js";
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog, readRecordingCompleteness } from "./run-expectations/index.js";
 import { singleRunEvaluation } from "./run-evaluation/index.js";
 import { automationFailureFromActionResult, createRunManifest, flowActionTimings, runActionStatus, type CloneRunState } from "./run-manifest/index.js";
 import { assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, selectCoreProbeStep } from "./lane-rules/index.js";
 import { ScenarioStepRunner } from "./scenario-steps/index.js";
+import { awaitPairingStatus, cleanupFailureOutcome, pairingStatusWaitFailureDetails } from "./run-lifecycle/index.js";
 
 /** `evidence` overrides the manifest's `evidencePolicy`; `workflowId` and `variantId` select what `resolveScenarioWorkflow` resolves. */
 export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flow?: boolean; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration };
@@ -90,7 +91,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
   let recordingStarted = false;
   let browserVersion = "unavailable";
   let verdict: "passed" | "failed" = "failed";
-  let failureCategory: string | undefined;
+  let failureCategory: RunnerFailureCategory | undefined;
   let failureMessage: string | undefined;
   let existingPreflight: ExistingFluxIQPreflight | undefined;
   let existingExecution: ExistingFlowExecution | undefined;
@@ -374,7 +375,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
     // Recorded-event mismatches are types and counts, never page data, so they are published for diagnosis.
     // So is what the Flow reported when the lane got that far: Core's category and closed-set code, and nothing else of the record.
     const flowReported = flowObservation?.automationFailureReported;
-    const failureEvent = { ...event(runId, scenario.id, undefined, "error", failureMessage), details: { failureCategory, ...(error instanceof RunnerFailure && error.category === "recording.contract" && error.details ? { failureDetails: error.details } : {}), ...(flowReported ? { flowReportedFailure: { category: flowReported.category, ...(flowReported.code === undefined ? {} : { code: flowReported.code }) } } : {}) } };
+    const finalizationWaitDetails = finalizedRecordingWaitFailureDetails(error);
+    const pairingWaitDetails = pairingStatusWaitFailureDetails(error);
+    const failureEvent = { ...event(runId, scenario.id, undefined, "error", failureMessage), details: { failureCategory, ...(error instanceof RunnerFailure && error.category === "recording.contract" && error.details ? { failureDetails: error.details } : {}), ...(finalizationWaitDetails ? { failureDetails: finalizationWaitDetails } : {}), ...(pairingWaitDetails ? { failureDetails: pairingWaitDetails } : {}), ...(flowReported ? { flowReportedFailure: { category: flowReported.category, ...(flowReported.code === undefined ? {} : { code: flowReported.code }) } } : {}) } };
     const failurePage = stepRunner?.activePage() ?? scenarioPage;
     const bytes = evidence.failureScreenshot && scenario.id !== "sensitive-input" && failurePage && !failurePage.isClosed() ? await failurePage.screenshot({ type: "png" }).catch(() => undefined) : undefined;
     if (bytes) {
@@ -395,14 +398,19 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
         if (sourceAfter.source.contentHash !== cloneState.clonePackage.source.contentHash) throw new RunnerFailure("runtime.behavior", "Source Flow changed while its isolated clone was running");
         cloneState.sourceHashVerifiedAfterRun = true;
       } catch (error) {
+        const completion = cleanupFailureOutcome({ category: failureCategory, message: failureMessage }, "clone-source-verification", error instanceof Error ? error.message : String(error), classifyRunnerFailure(error));
         verdict = "failed";
-        failureCategory = classifyRunnerFailure(error);
-        failureMessage = `Clone source post-run verification failed: ${error instanceof Error ? error.message : String(error)}`;
-        await capture.trigger({ ...event(runId, scenario.id, undefined, "error", failureMessage), details: { failureCategory } }).catch(() => undefined);
+        failureCategory = completion.primary.category;
+        failureMessage = completion.primary.message;
+        await capture.trigger({ ...event(runId, scenario.id, undefined, "error", completion.event.summary), details: completion.event.details }).catch(() => undefined);
       }
     }
     try { await context?.close(); }
-    catch (error) { verdict = "failed"; failureCategory = "process.startup"; failureMessage = `Browser cleanup failed: ${String(error)}`; }
+    catch (error) {
+      const cleanup = cleanupFailureOutcome({ category: failureCategory, message: failureMessage }, "browser", error);
+      verdict = "failed"; failureCategory = cleanup.primary.category; failureMessage = cleanup.primary.message;
+      await capture.trigger({ ...event(runId, scenario.id, undefined, "error", cleanup.event.summary), details: cleanup.event.details }).catch(() => undefined);
+    }
     // The second read of Core's discard audit. Core audits a discard only when the late
     // message arrives, which can be after the first read; the browser has closed, so no
     // message is still to come, and Core, whose audit is in memory, has not. A discarded
@@ -427,7 +435,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
       }
     }
     try { await topology?.close(); }
-    catch (error) { verdict = "failed"; failureCategory = "process.startup"; failureMessage = `Process cleanup failed: ${String(error)}`; }
+    catch (error) {
+      const cleanup = cleanupFailureOutcome({ category: failureCategory, message: failureMessage }, "topology", error);
+      verdict = "failed"; failureCategory = cleanup.primary.category; failureMessage = cleanup.primary.message;
+      await capture.trigger({ ...event(runId, scenario.id, undefined, "error", cleanup.event.summary), details: cleanup.event.details }).catch(() => undefined);
+    }
     if (failureMessage && !bundle.getEvents().some(item => item.trigger === "error" && item.summary === failureMessage)) {
       await capture.trigger({ ...event(runId, scenario.id, undefined, "error", failureMessage), details: { failureCategory } }).catch(() => undefined);
     }
@@ -453,11 +465,12 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
         topologyStateRemoved = true;
         cloneState.cleanupOutcome = "completed";
       } catch (error) {
+        const cleanup = cleanupFailureOutcome({ category: failureCategory, message: failureMessage }, "clone-destination", error);
         verdict = "failed";
-        failureCategory = "process.startup";
-        failureMessage = `Clone destination cleanup failed: ${String(error)}`;
+        failureCategory = cleanup.primary.category;
+        failureMessage = cleanup.primary.message;
         cloneState.cleanupOutcome = "failed";
-        await capture.trigger({ ...event(runId, scenario.id, undefined, "error", failureMessage), details: { failureCategory } }).catch(() => undefined);
+        await capture.trigger({ ...event(runId, scenario.id, undefined, "error", cleanup.event.summary), details: cleanup.event.details }).catch(() => undefined);
       }
     }
     if (target.mode === "clone" && !topology) cloneState.cleanupOutcome = "completed";
@@ -509,13 +522,17 @@ async function launchBrowser(topology: RunningTopology, extensionPath: string) {
   return { context, browserVersion: context.browser()?.version() ?? "chromium" };
 }
 async function extensionControlPage(context: BrowserContext): Promise<Page> { const worker = context.serviceWorkers()[0] ?? await context.waitForEvent("serviceworker", { timeout: 10_000 }); const id = new URL(worker.url()).hostname; const page = await context.newPage(); await page.goto(`chrome-extension://${id}/sidepanel/index.html`); return page; }
-async function pairExtension(page: Page, topology: RunningTopology) {
+type PairedExtensionStatus = Record<string, unknown> & { connectionState: "connected"; sessionId: string };
+async function pairExtension(page: Page, topology: RunningTopology): Promise<PairedExtensionStatus> {
   await runtimeMessage(page, { type: "fluxiq.connect", settings: { gatewayUrl: topology.gatewayUrl, coreApiUrl: topology.fluxiqOrigin, autoReconnect: true, captureMutations: true, captureInputValues: true, captureSnapshots: true } });
-  const status = await pollStatus(page, value => (value.connectionState === "pairing" && typeof value.pairingReferenceCode === "string") || (value.connectionState === "connected" && typeof value.sessionId === "string"));
-  if (status.connectionState === "connected") return status;
+  const status = await awaitPairingStatus(() => extensionStatus(page), value => (value.connectionState === "pairing" && typeof value.pairingReferenceCode === "string") || connectedExtensionStatus(value), "pre-approval");
+  if (connectedExtensionStatus(status)) return status;
   await topology.control!.approvePairing(String(status.pairingReferenceCode));
-  return pollStatus(page, value => value.connectionState === "connected" && typeof value.sessionId === "string");
+  const approved = await awaitPairingStatus(() => extensionStatus(page), connectedExtensionStatus, "post-approval");
+  if (!connectedExtensionStatus(approved)) throw new RunnerFailure("gateway.connection", "Extension pairing wait returned without a connected session");
+  return approved;
 }
+function connectedExtensionStatus(status: Record<string, unknown>): status is PairedExtensionStatus { return status.connectionState === "connected" && typeof status.sessionId === "string"; }
 /** How long the start page is given to show a probe candidate's target before that step is passed over. */
 const PROBE_TARGET_VISIBLE_MS = 1_000;
 /**
@@ -600,6 +617,7 @@ async function assertCoreRoundTrip(topology: RunningTopology, expectedSessionId?
 }
 function recordingIds(response: any): Set<string> { const values = response?.payload?.recordings ?? response?.payload?.items ?? response?.payload; if (!Array.isArray(values)) return new Set(); return new Set(values.flatMap((item: any) => { const id = item?.recordingId ?? item?.id; return typeof id === "string" && id ? [id] : []; })); }
 async function runtimeMessage(page: Page, message: Record<string, unknown>): Promise<any> { const response = await page.evaluate((value: Record<string, unknown>) => (globalThis as any).chrome.runtime.sendMessage(value), message); if (!response?.ok) throw new RunnerFailure("extension.worker", response?.error ?? "Extension runtime message failed"); return response; }
+async function extensionStatus(page: Page): Promise<unknown> { return (await runtimeMessage(page, { type: "fluxiq.getStatus" })).status; }
 async function pollStatus(page: Page, predicate: (value: any) => boolean): Promise<any> { const deadline = Date.now() + 15_000; while (Date.now() < deadline) { const response = await runtimeMessage(page, { type: "fluxiq.getStatus" }); if (predicate(response.status)) return response.status; await new Promise(resolve => setTimeout(resolve, 100)); } throw new RunnerFailure("gateway.connection", "Timed out waiting for extension connection state"); }
 /** The extension's own account of a recording start. Labels and reasons only: activity details and tab URLs carry page data. */
 function recordingStartDiagnostic(status: any): Record<string, unknown> | undefined {

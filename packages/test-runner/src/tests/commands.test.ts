@@ -142,12 +142,15 @@ test("--variant arms one variant and requires the Flow lane", () => {
 });
 
 test("compare takes two bench reports, or one report with --halves", () => {
-  assert.deepEqual(parseLabCommand(["compare", "bench-a", "bench-b"]), { command: "compare", baselineReport: "bench-a", candidateReport: "bench-b" });
+  assert.deepEqual(parseLabCommand(["compare", "bench-a", "bench-b"]), { command: "compare", baselineReport: "bench-a", candidateReport: "bench-b", sharedLoad: true });
+  assert.deepEqual(parseLabCommand(["compare", "bench-a", "bench-b", "--sequential"]), { command: "compare", baselineReport: "bench-a", candidateReport: "bench-b", sharedLoad: false });
   assert.deepEqual(parseLabCommand(["compare", "bench-a", "--halves"]), { command: "compare", halvesReport: "bench-a" });
   assert.deepEqual(parseLabCommand(["compare", "--halves", "test-runs/bench/bench-a/report.json"]), { command: "compare", halvesReport: "test-runs/bench/bench-a/report.json" });
   assert.throws(() => parseLabCommand(["compare", "bench-a"]), /Usage: lab compare/);
   assert.throws(() => parseLabCommand(["compare", "bench-a", "bench-b", "--halves"]), /Usage: lab compare/);
+  assert.throws(() => parseLabCommand(["compare", "bench-a", "--halves", "--sequential"]), /Usage: lab compare/);
   assert.throws(() => parseLabCommand(["compare", "bench-a", "bench-b", "bench-c"]), /Usage: lab compare/);
   assert.throws(() => parseLabCommand(["compare", "bench-a", "--halves", "--halves"]), /only be specified once/);
+  assert.throws(() => parseLabCommand(["compare", "bench-a", "bench-b", "--sequential", "--sequential"]), /only be specified once/);
   assert.throws(() => parseLabCommand(["compare", "bench-a", "bench-b", "--verbose"]), /Unknown option/);
 });

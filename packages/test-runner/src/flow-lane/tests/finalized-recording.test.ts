@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { RunnerFailure } from "../../failure.js";
-import { awaitFinalizedRecording } from "../finalized-recording.js";
+import { awaitFinalizedRecording, finalizedRecordingWaitFailureDetails } from "../finalized-recording.js";
 
 /**
  * A Core whose recording is still being written: entries appear at the virtual
@@ -89,4 +89,45 @@ test("a recording already finished is confirmed in two reads, and the full sessi
   assert.equal(finalized.polls, 2);
   // Counted from the wait's first poll, not from Stop: a recording already finished reads 0.
   assert.equal(finalized.entriesAppendedWhileWaiting, 0);
+});
+
+test("the production bound admits the measured loaded finalization latency", async () => {
+  const fake = core({ appendsAt: [0, 10_000, 20_000], finalizedAt: 60_000 });
+  const finalized = await awaitFinalizedRecording(fake.control, input, {}, { now: fake.now, sleep: fake.sleep });
+  assert.equal(finalized.endedAt, 60_000);
+  assert.ok(finalized.waitedMs < 90_000);
+});
+
+test("the production bound fails closed at 90 seconds with safe diagnostic details", async () => {
+  const fake = core({ appendsAt: [0, 30_000] });
+  await assert.rejects(
+    () => awaitFinalizedRecording(fake.control, input, {}, { now: fake.now, sleep: fake.sleep }),
+    (error: unknown) => {
+      assert.ok(error instanceof RunnerFailure);
+      assert.equal(error.details?.timeoutMs, 90_000);
+      assert.equal(error.details?.waitedMs, 90_000);
+      return true;
+    },
+  );
+});
+
+test("a finalization first observed at the bound does not claim the timeline kept growing", async () => {
+  const fake = core({ appendsAt: [0], finalizedAt: 1_000 });
+  await assert.rejects(
+    () => awaitFinalizedRecording(fake.control, input, {}, { ...wait(fake), timeoutMs: 1_000 }),
+    (error: unknown) => error instanceof RunnerFailure && /finished only at the 1000 ms bound/.test(error.message) && !/kept growing/.test(error.message),
+  );
+});
+
+test("only the finalization wait's safe detail shape is selected for publication", () => {
+  const error = new RunnerFailure("recording.persistence", "timed out", { details: {
+    recordingId: "recording.one", recordingSeen: true, endedAt: null, entryCount: 2,
+    entriesAppendedWhileWaiting: 1, waitedMs: 90_000, polls: 451, timeoutMs: 90_000,
+    unsafeDiagnostic: "must-not-travel",
+  } });
+  assert.deepEqual(finalizedRecordingWaitFailureDetails(error), {
+    recordingId: "recording.one", recordingSeen: true, endedAt: null, entryCount: 2,
+    entriesAppendedWhileWaiting: 1, waitedMs: 90_000, polls: 451, timeoutMs: 90_000,
+  });
+  assert.equal(finalizedRecordingWaitFailureDetails(new RunnerFailure("recording.persistence", "other", { details: { answered: {} } })), undefined);
 });

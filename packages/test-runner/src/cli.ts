@@ -2,7 +2,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { executeAuthCommand } from "./auth-cli.js";
 import { WebPanelAuthSessionCache } from "./auth-session.js";
-import { compareBenchCommand, findBenchCorpus, runBench } from "./bench/index.js";
+import { compareBenchCloseoutCommand, compareBenchCommand, findBenchCorpus, runBench } from "./bench/index.js";
 import { ClonePackageCache } from "./clone-cache.js";
 import { parseLabCommand, expandMatrix } from "./commands.js";
 import { classifyRunnerFailure } from "./failure.js";
@@ -42,8 +42,11 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
     }
     if (command.command === "inspect") { process.stdout.write(`${JSON.stringify(await inspectRun(runsDirectory, command.runId))}\n`); return 0; }
     if (command.command === "compare") {
-      const comparison = await compareBenchCommand({ runsDirectory, cwd: process.cwd(), ...("halvesReport" in command ? { halvesOf: command.halvesReport } : { baseline: command.baselineReport, candidate: command.candidateReport }) });
-      process.stdout.write(`${JSON.stringify(comparison)}\n`); return comparison.outcome === "regressed" ? 1 : 0;
+      const comparison = "halvesReport" in command
+        ? await compareBenchCommand({ runsDirectory, cwd: process.cwd(), halvesOf: command.halvesReport })
+        : await compareBenchCloseoutCommand({ runsDirectory, cwd: process.cwd(), baseline: command.baselineReport, candidate: command.candidateReport, sharedLoad: command.sharedLoad });
+      process.stdout.write(`${JSON.stringify(comparison)}\n`);
+      return "comparisonPassed" in comparison ? (comparison.comparisonPassed ? 0 : 1) : comparison.outcome === "regressed" ? 1 : 0;
     }
     if (command.command === "bench") {
       const corpus = findBenchCorpus(command.corpusId);

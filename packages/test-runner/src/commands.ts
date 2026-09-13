@@ -14,12 +14,12 @@ export type LabCommand =
   | { command: "auth"; operation: "status" | "clear" }
   | { command: "clone-cache"; operation: "status" | "refresh" | "clear" }
   | { command: "inspect"; runId: string }
-  | { command: "compare"; baselineReport: string; candidateReport: string }
+  | { command: "compare"; baselineReport: string; candidateReport: string; sharedLoad: boolean }
   | { command: "compare"; halvesReport: string }
   | { command: "interactive"; scenarioId: string; seed?: number; target?: TargetMode; workspace?: string; freshLogin?: true };
 
 const KEBAB_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
-const COMPARE_USAGE = "Usage: lab compare <baseline-report> <candidate-report> | compare <report> --halves (a report is a bench id or a path to its report.json)";
+const COMPARE_USAGE = "Usage: lab compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves (a report is a bench id or a path to its report.json)";
 
 export function parseLabCommand(argv: string[]): LabCommand {
   const [command, ...args] = argv;
@@ -81,18 +81,19 @@ export function parseLabCommand(argv: string[]): LabCommand {
   }
   if (command === "inspect") return { command, runId: positional(args, 0, "run ID") };
   if (command === "compare") {
-    rejectUnknownOptions(args, ["--halves"]);
+    rejectUnknownOptions(args, ["--halves", "--sequential"]);
     if (args.filter(value => value === "--halves").length > 1) throw new Error("--halves may only be specified once");
-    const reports = args.filter(value => value !== "--halves");
+    if (args.filter(value => value === "--sequential").length > 1) throw new Error("--sequential may only be specified once");
+    const reports = args.filter(value => value !== "--halves" && value !== "--sequential");
     const [first, second] = reports;
     if (args.includes("--halves")) {
-      if (reports.length !== 1 || first === undefined) throw new Error(COMPARE_USAGE);
+      if (reports.length !== 1 || first === undefined || args.includes("--sequential")) throw new Error(COMPARE_USAGE);
       return { command, halvesReport: first };
     }
     if (reports.length !== 2 || first === undefined || second === undefined) throw new Error(COMPARE_USAGE);
-    return { command, baselineReport: first, candidateReport: second };
+    return { command, baselineReport: first, candidateReport: second, sharedLoad: !args.includes("--sequential") };
   }
-  throw new Error("Usage: lab interactive <scenario> [--target isolated|persistent-isolated|existing] [--workspace NAME] [--fresh-login] | run <scenario> [--workflow ID] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] | matrix (--all|--scenarios-json JSON) [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline-report> <candidate-report> | compare <report> --halves");
+  throw new Error("Usage: lab interactive <scenario> [--target isolated|persistent-isolated|existing] [--workspace NAME] [--fresh-login] | run <scenario> [--workflow ID] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] | matrix (--all|--scenarios-json JSON) [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves");
 }
 
 export function expandMatrix(command: Extract<LabCommand, { command: "matrix" }>, allScenarioIds: string[]): Array<{ scenarioId: string; repeatIndex: number }> {

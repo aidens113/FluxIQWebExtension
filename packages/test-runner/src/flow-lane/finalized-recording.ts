@@ -68,7 +68,11 @@ export type FinalizedRecordingWait = {
   sleep?: (ms: number) => Promise<void>;
 };
 
-const DEFAULT_TIMEOUT_MS = 30_000;
+// Two concurrent Stage 3 benches measured a healthy 26-entry recording at
+// 25,789 ms and projected 49-56 s at the observed p90 per-entry rate. Ninety
+// seconds leaves useful headroom for that loaded path without handing an
+// unfinished recording downstream.
+const DEFAULT_TIMEOUT_MS = 90_000;
 const DEFAULT_INTERVAL_MS = 200;
 
 type RecordingObservation = { seen: boolean; endedAt?: number; entryCount: number };
@@ -95,11 +99,13 @@ export async function awaitFinalizedRecording(
   let firstEntryCount: number | undefined;
   let observed: RecordingObservation | undefined;
   let finished: RecordingObservation | undefined;
+  let finishedReads = 0;
   for (;;) {
     observed = await readRecording(control, input, bounds);
     polls += 1;
     if (firstEntryCount === undefined) firstEntryCount = observed.entryCount;
     if (observed.endedAt !== undefined) {
+      finishedReads += 1;
       // Two consecutive finished reads at the same count: the signal says the
       // timeline is frozen and the count agrees. Either alone would accept a
       // recording the other says is still moving.
@@ -118,7 +124,7 @@ export async function awaitFinalizedRecording(
     if (now() >= deadline) break;
     await sleep(intervalMs);
   }
-  throw new RunnerFailure("recording.persistence", timeoutMessage(observed, timeoutMs), {
+  throw new RunnerFailure("recording.persistence", timeoutMessage(observed, finishedReads, timeoutMs), {
     details: {
       recordingId: input.recordingId,
       recordingSeen: observed?.seen ?? false,
@@ -132,10 +138,42 @@ export async function awaitFinalizedRecording(
   });
 }
 
-function timeoutMessage(observed: RecordingObservation | undefined, timeoutMs: number): string {
+function timeoutMessage(observed: RecordingObservation | undefined, finishedReads: number, timeoutMs: number): string {
   if (!observed?.seen) return `Core did not report the run's recording within ${timeoutMs} ms, so nothing downstream may read it`;
   if (observed.endedAt === undefined) return `Core was still writing the run's recording after ${timeoutMs} ms, and a Flow built from an unfinished recording silently loses the actions Core has not appended yet`;
+  if (finishedReads === 1) return `Core reported the run's recording finished only at the ${timeoutMs} ms bound, so there was no confirming read before anything downstream could safely read it`;
   return `Core reported the run's recording finished but its timeline kept growing for ${timeoutMs} ms, so it was never safe to read`;
+}
+
+/**
+ * Selects only the finalization wait's ids, booleans, counts and times for a
+ * run-bundle error event. Other `recording.persistence` failures can carry
+ * broader diagnostics and must not become evidence merely because they share
+ * the category.
+ */
+export function finalizedRecordingWaitFailureDetails(error: unknown): Readonly<Record<string, unknown>> | undefined {
+  if (!(error instanceof RunnerFailure) || error.category !== "recording.persistence") return undefined;
+  const details = error.details;
+  if (
+    typeof details?.recordingId !== "string"
+    || typeof details.recordingSeen !== "boolean"
+    || !(details.endedAt === null || finiteNumber(details.endedAt))
+    || !(details.entryCount === null || finiteNumber(details.entryCount))
+    || !(details.entriesAppendedWhileWaiting === null || finiteNumber(details.entriesAppendedWhileWaiting))
+    || !finiteNumber(details.waitedMs)
+    || !finiteNumber(details.polls)
+    || !finiteNumber(details.timeoutMs)
+  ) return undefined;
+  return {
+    recordingId: details.recordingId,
+    recordingSeen: details.recordingSeen,
+    endedAt: details.endedAt,
+    entryCount: details.entryCount,
+    entriesAppendedWhileWaiting: details.entriesAppendedWhileWaiting,
+    waitedMs: details.waitedMs,
+    polls: details.polls,
+    timeoutMs: details.timeoutMs,
+  };
 }
 
 /**
@@ -181,4 +219,8 @@ function optionalRecord(value: unknown): Record<string, unknown> | undefined {
 
 function numberOrUndefined(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function finiteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
 }
