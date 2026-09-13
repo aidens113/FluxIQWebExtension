@@ -33,11 +33,11 @@
 // producer emitting an optional field as `...(label ? { label } : {})` could
 // rename it to `title` with both packages' `check` and every test still green:
 // the field simply stopped arriving. Every optional field on this contract was
-// written that way, thirty-three times. So the producer now writes each field
-// as a plain property through `present` in
-// `apps/extension/src/content/evidence/present.ts`, which is checked against
-// these keys and then drops the fields that came out `undefined`. `wire.ts` is
-// how this contract is read; `present.ts` is how it is written.
+// written that way, thirty-three times. So both producers -- the content script
+// and the background frame merge -- now write each field as a plain property
+// through `present` in `apps/extension/src/shared/present.ts`, which is checked
+// against these keys and then drops the fields that came out `undefined`.
+// `wire.ts` is how this contract is read; `present.ts` is how it is written.
 //
 // A type both sides satisfy can still be populated by neither, so the type is
 // only half of it. `./capture.ts` is the other half: one capture taken from the

@@ -235,3 +235,55 @@ for (const [what, redacted] of absentDeclarations) {
     assert.equal(((result.payload as JsonObject).result as JsonObject).validation !== undefined, true);
   });
 }
+
+// -- The three-state probe, against the client as it shipped and as it is now --
+// `v-redaction-producer` section 4 measured this exit leaking in every
+// declaration state. The extension's own withholding layer,
+// `webAutomationSecretSafeValidation`, stamped `redacted: true` on the
+// comparison it withheld, and this adapter read that stamp as the producer's
+// declaration and let the failure record through. The layer stopped stamping in
+// 1b6f5df, but a client built before then still sends the stamp, so the adapter
+// has to tell a stamp from a declaration itself.
+//
+// Each row is what one client puts on the wire for a producer in one state.
+// Undeclared, the producer wrote the value (its redaction removed) and the layer
+// withheld the validation but never saw the record, which `result-mapping.ts`
+// puts on the gateway result directly. Declared, the producer wrote a length
+// and the layer passed it through untouched, so the sentinel is absent by
+// construction and the row's teeth are that the phrasing survives.
+
+/** The withheld branch of the client's withholding layer, with the stamp it used to write and without. */
+const withholdingClients: Array<[client: string, withheld: (status: string) => JsonObject]> = [
+  ["a client built before the stamp was removed", (status) => ({ status, expected: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, actual: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, redacted: true })],
+  ["this client", (status) => ({ status, expected: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, actual: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT })]
+];
+
+for (const [client, withheld] of withholdingClients) {
+  for (const declaration of [undefined, false, true]) {
+    test(`the three-state probe, ${client}: declaration ${String(declaration)}`, async () => {
+      const declared = declaration === true;
+      const expected = declared ? redactedPhrasing : `the field holds "${producerSentinel}"`;
+      const actual = `${expected}, which is not the text that was sent`;
+      const produced: JsonObject = declaration === undefined ? { status: "failed", expected, actual } : { status: "failed", expected, actual, redacted: declaration };
+      const result = await runCommand({
+        commandId: "client.command.probe",
+        status: "failed",
+        message: "The field did not keep the text.",
+        failure: { ...leakingClientRecord, expected, actual },
+        payload: sensitivePayload({ status: "failed", validation: declared ? produced : withheld("failed") })
+      });
+      assert.equal(JSON.stringify(result).includes(producerSentinel), false, "no declaration state lets the value through, whatever the layer before this one wrote");
+      const validation = ((result.payload as JsonObject).result as JsonObject).validation as JsonObject;
+      if (declared) {
+        assert.equal(result.failure?.expected, redactedPhrasing, "a genuine producer redaction is still honoured on the record");
+        assert.equal(result.failure?.actual, actual);
+        assert.equal(validation.redacted, true, "and its declaration still rides on the payload");
+      } else {
+        assert.equal(result.failure?.expected, WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, "a stamp beside the marker is not a declaration");
+        assert.equal(result.failure?.actual, WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT);
+        assert.equal("redacted" in validation, false, "a stamp that arrived does not leave, or it disarms whatever reads the payload next");
+      }
+      assert.equal(result.failure?.code, "web.validation.output_not_observed", "only the two strings are touched");
+    });
+  }
+}

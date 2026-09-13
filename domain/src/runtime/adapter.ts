@@ -91,11 +91,10 @@ async function executeWebAutomationRuntimeCommand(fluxiq: FluxIQ, command: FluxI
   const diagnostics = failureDiagnostics(status, result.payload);
   // Asked once, of the result the client sent, and used at both exits a
   // comparison takes from here: is the target a control that holds a secret,
-  // and did the producer declare it had already withheld the values? An absent
-  // declaration means withhold, so a client that predates the flag is treated
-  // exactly as it was before the flag existed.
+  // and did the producer -- not a layer after it -- declare it had already
+  // withheld the values? An absent declaration means withhold.
   const clientResult = jsonObject(result.payload?.result);
-  const withholdComparison = isSensitiveElementDescriptor(clientResult?.element) && !isProducerRedactedComparison(clientResult?.validation);
+  const withholdComparison = isSensitiveElementDescriptor(clientResult?.element) && !producerDeclaredRedaction(clientResult?.validation);
   const failure = commandFailure(status, outputId as WebAutomationActionType, message, result.failure, diagnostics?.evidenceDigest, withholdComparison);
   const runtimeResult: FluxIQRuntimeCommandResult = {
     commandId: command.commandId ?? `web.${Date.now()}`,
@@ -249,6 +248,20 @@ function secretSafeComparisonText(text: string | undefined, withholdComparison: 
 }
 
 /**
+ * Whether the producer declared the comparison withheld. A layer's stamp looks
+ * identical, `redacted: true`: the extension's `webAutomationSecretSafeValidation`
+ * stamped what it withheld until 1b6f5df, disarming this guard for every result,
+ * and an older client still does. Only a layer writes the marker, and only when
+ * the producer did not declare, so a flag beside it is never the producer's --
+ * an exact test against this domain's constant, not a scan of the text.
+ */
+function producerDeclaredRedaction(validation: unknown): boolean {
+  if (!isProducerRedactedComparison(validation)) return false;
+  const { expected, actual } = validation as JsonObject;
+  return expected !== WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT && actual !== WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT;
+}
+
+/**
  * The dispatch payload with the action result's own post-condition withheld.
  *
  * `webAutomationActionResultPayload` already withholds it where the payload is
@@ -260,34 +273,24 @@ function secretSafeComparisonText(text: string | undefined, withholdComparison: 
  * was before the flag existed, because an absent declaration means withhold.
  *
  * A *false* declaration is another matter, and this guard does not survive one.
- * `withholdComparison` at the caller is `isSensitiveElementDescriptor(element)`
- * and `!isProducerRedactedComparison(validation)`, and both halves read what the
- * client sent: one boolean disarms this payload withholding and
- * `clientReportedFailure`'s record withholding together, and omitting `element`
- * disarms them just as completely -- a limit the sibling guard's row in
- * `client/tests/gateway-mapping.test.ts` already pins. Honouring the flag is
- * deliberate, because only the producer knows whether it wrote a length or a
- * value, and refusing it costs that phrasing on every sensitive-control failure
- * (`sensitivity/redaction.ts` argues the trade). What follows is that this is
- * defence in depth against *our own* producers -- a verb that forgets to redact
- * and so also forgets to declare -- and not a boundary against a client that
- * lies. Nothing reachable here would make it one: the dispatcher only sends to
- * a session whose `clientType` is `"extension"` and which advertises
- * `web.actions` (`io/gateway-output-dispatcher.ts`), but Core takes both of
- * those from the client's own `client.hello`, so gating the flag on either
- * would gate a client-supplied claim on another. The operator's pairing
- * approval is what stands behind it, not a check this domain can make.
+ * Both halves of `withholdComparison` read what the client sent: one boolean
+ * disarms this payload withholding and `clientReportedFailure`'s record
+ * withholding together, and omitting `element` disarms them just as completely
+ * (pinned in `client/tests/gateway-mapping.test.ts`). Honouring the flag is
+ * deliberate -- only the producer knows whether it wrote a length or a value
+ * (`sensitivity/redaction.ts` argues the trade) -- so this is defence in depth
+ * against *our own* producers, a verb that forgets to redact and so forgets to
+ * declare, not a boundary against a client that lies. Nothing reachable here
+ * would make it one: the dispatcher's `clientType` and `web.actions` gates
+ * (`io/gateway-output-dispatcher.ts`) are both taken from the client's own
+ * `client.hello`, so gating the flag on either gates one client claim on
+ * another. The operator's pairing approval stands behind it, not this domain.
  *
- * This runs only when the caller found no `redacted` declaration on the
- * validation, so a producer that withheld the values itself keeps its phrasing
- * here as it does on the record. What leaves carries **no** flag, deliberately.
- * The flag means "the producer named a length rather than a value", not "this
- * text is safe", and a layer that stamps its own output makes the next reader
- * treat that stamp as a producer declaration and stand down. That is not
- * hypothetical: the same stamp in `gateway-mapping.ts` runs inside the
- * extension before the result crosses the wire, and it disarmed this guard for
- * every extension result until 2026-09-12. Each layer judges the producer, not
- * the layer above it, and withholding already-withheld text is idempotent.
+ * This runs only when no producer declared, so a producer that withheld the
+ * values itself keeps its phrasing here as on the record, and any `redacted`
+ * flag present is a stamp (`producerDeclaredRedaction`). None leaves, not even
+ * one that arrived: a passed-on stamp makes the next reader stand down, as it
+ * did this one. Withholding already-withheld text is idempotent.
  *
  * Only the comparison is touched. `message`, which an operator reads, is left
  * as the client wrote it: it is free-form prose rather than a value read back
@@ -298,12 +301,13 @@ function secretSafeDispatchPayload(payload: JsonObject): JsonObject {
   const actionResult = jsonObject(payload.result);
   const validation = jsonObject(actionResult?.validation);
   if (!actionResult || !validation || validation.status === "none") return payload;
+  const { redacted: _stamp, ...unstamped } = validation;
   return {
     ...payload,
     result: {
       ...actionResult,
       validation: {
-        ...validation,
+        ...unstamped,
         ...(validation.expected === undefined ? {} : { expected: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT }),
         ...(validation.actual === undefined ? {} : { actual: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT })
       }

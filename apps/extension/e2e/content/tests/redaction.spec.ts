@@ -30,11 +30,9 @@
 // explicitly `false`, still withhold, against strings holding the value the
 // field really holds.
 //
-// One of those rows is `fixme`, and it is the only one in this file. It is the
-// same fail-safe at the failure-record exit, where the guard is disarmed today
-// by a stamp the withholding layer writes and the next layer mistakes for the
-// producer's declaration. The row is right, the code is wrong, and the code is
-// in `domain/`; the whole of it is written out at the row.
+// The last of those rows is the same fail-safe at the failure-record exit, run
+// through a client that stamps its withheld comparison `redacted: true` as well
+// as through this one, because that stamp once disarmed the adapter's guard.
 //
 // The fixture's two sensitive controls are both covered: the password field,
 // and the card field, which is sensitive because it carries
@@ -255,14 +253,18 @@ const WITHHELD = "(withheld: the action ran on a control that holds a secret)";
  * Flow asks to be typed is the Flow's own input and travels with the command
  * whatever the page is; the question here is what the *page's answer* carries
  * back, which is the thing a redaction can be responsible for.
+ *
+ * `stamped` sends the validation as a client built before 1b6f5df did for a
+ * producer that did not declare: withheld, and stamped `redacted: true`.
  */
-async function throughTheDomain(result: BrowserActionResult): Promise<FluxIQRuntimeCommandResult> {
+async function throughTheDomain(result: BrowserActionResult, stamped = false): Promise<FluxIQRuntimeCommandResult> {
+  const payload = webAutomationActionResultPayload(result as never) as Record<string, unknown>;
   const gatewayResult = {
     commandId: result.commandId,
     status: result.status,
     ...(result.status === "succeeded" ? {} : { error: result.message }),
     message: result.message,
-    payload: webAutomationActionResultPayload(result as never),
+    payload: stamped ? { ...payload, validation: { status: result.validation.status, expected: WITHHELD, actual: WITHHELD, redacted: true } } : payload,
     failure: result.failure
   };
   const fluxiq = {
@@ -411,53 +413,41 @@ test("the declaration is what buys a sensitive control's phrasing through, and e
 });
 
 /**
- * The same fail-safe at the OTHER exit, and it does not hold today. Marked
- * `fixme` rather than deleted, because the row is right and the code is wrong,
- * and rather than left failing, because the fix is in `domain/` and this spec
- * runs in everyone's gate.
- *
- * The failure record does not travel through `webAutomationActionResultPayload`
- * at all: `runtime/result-mapping.ts` puts the content script's record straight
- * onto the gateway result, and `domain/src/runtime/adapter.ts` is its only
- * guard. That guard asks whether the producer declared a redaction — and it
- * asks the validation inside `payload.result`, which the *client* has already
- * run through `webAutomationSecretSafeValidation`. That function stamps
- * `redacted: true` on the comparison it withheld, so the adapter reads the
- * withholding layer's own stamp as if it were the producer's declaration and
- * concludes it has nothing to do. It reaches that conclusion for every
- * extension result, whatever the producer said, so the guard is disarmed rather
- * than weakened.
- *
- * The three verbs this row is written against are safe anyway, because they
- * redact before the record is built. What is unguarded is every other producer
- * of a comparison on a sensitive control, and any client that is not this
- * extension.
- *
- * Measured, with the sentinel below standing in for a value: absent, `false`
- * and `true` all pass the record through unredacted. Deleting the stamp from
- * the withheld branch of `webAutomationSecretSafeValidation` restores all
- * three to the intended answers — absent and `false` withhold, `true` is
- * believed — which is one line in `domain/src/client/gateway-mapping.ts`.
- * Written up in reports/v-redaction-producer.md; `domain/` was not this
- * brief's to edit.
+ * The same fail-safe at the OTHER exit. The failure record never travels
+ * through `webAutomationActionResultPayload`: `runtime/result-mapping.ts` puts
+ * the content script's record straight onto the gateway result, and
+ * `domain/src/runtime/adapter.ts` is its only guard. That guard asks whether the
+ * producer declared a redaction, of a validation the client has already run
+ * through its own withholding layer, and until 1b6f5df that layer stamped
+ * `redacted: true` on what it withheld: the adapter took the stamp for a
+ * declaration and let every record through (reports/v-redaction-producer.md
+ * section 4, fixed in reports/f-adapter-guard.md). A client built before then
+ * still stamps, so each state runs through this client and through one that
+ * stamps, against strings holding the value the field really holds.
  */
-test.fixme("the runtime adapter withholds a failure record's comparison when the producer did not declare one", async ({ openHarness, page }) => {
+test("the runtime adapter withholds a failure record's comparison when the producer did not declare one", async ({ openHarness, page }) => {
   const harness = await openHarness("sensitive-input");
   const prefilled = await page.locator(CARD).inputValue();
   expect(prefilled.length, "the card field has no value to redact").toBeGreaterThan(0);
   const result = await harness.runAction({ commandId: "type-card-record-guard", actionType: "web.dom.type", selector: CARD, text: TYPED_CARD });
 
   const leaked = `the field holds "${prefilled}"`;
-  const asIfOnTheRecord: BrowserActionResult = {
-    ...result,
-    status: "failed",
-    validation: { status: "failed", expected: leaked, actual: leaked, redacted: false },
-    failure: { category: "output_not_observed", code: "web.validation.output_not_observed", retryable: true, stage: "verification", expected: leaked, actual: leaked }
-  };
-  const runtimeResult = await throughTheDomain(asIfOnTheRecord);
-  expect(JSON.stringify(runtimeResult)).not.toContain(prefilled);
-  expect(runtimeResult.failure?.expected).toBe(WITHHELD);
-  expect(runtimeResult.failure?.code, "the classification is untouched; only the two strings are").toBe("web.validation.output_not_observed");
+  for (const declaration of [undefined, false] as const) {
+    const asIfOnTheRecord: BrowserActionResult = {
+      ...result,
+      status: "failed",
+      validation: declaration === undefined ? { status: "failed", expected: leaked, actual: leaked } : { status: "failed", expected: leaked, actual: leaked, redacted: declaration },
+      failure: { category: "output_not_observed", code: "web.validation.output_not_observed", retryable: true, stage: "verification", expected: leaked, actual: leaked }
+    };
+    for (const stamped of [false, true]) {
+      // Soft, so one run names every state that leaks rather than the first.
+      const state = `declaration ${String(declaration)}, ${stamped ? "a client that stamps" : "this client"}`;
+      const runtimeResult = await throughTheDomain(asIfOnTheRecord, stamped);
+      expect.soft(JSON.stringify(runtimeResult), state).not.toContain(prefilled);
+      expect.soft(runtimeResult.failure?.expected, state).toBe(WITHHELD);
+      expect.soft(runtimeResult.failure?.code, "the classification is untouched; only the two strings are").toBe("web.validation.output_not_observed");
+    }
+  }
 });
 
 test("a multi-token autocomplete is sensitive by the shared rule, so no path carries its value", async ({ openHarness, page }) => {

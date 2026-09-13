@@ -197,122 +197,10 @@ scoring would work (it could not, until D13); **D11** established that a change
 belonging in Core is made in Core, which is why D13 exists rather than a
 downstream approximation.
 
-- **D13 — Core charges a missing stable identifier less than a contradicted
-  one.** Accepted by the supervisor 2026-09-12 on measured evidence, and it is a
-  change to Core's published element matcher, not a downstream tweak.
-  Level 2 scoring could not succeed: reaching it requires the recorded
-  identifiers to be gone, and Core charged their *absence* nearly as heavily as
-  a *contradiction*. Proved exhaustively — of 9,720 candidate profiles that can
-  reach Level 2 against the test descriptor, none cleared the 0.35 floor; the
-  maximum was 0.233. `MISSING_STABLE_IDENTIFIER_SIMILARITY` is now −0.1 against
-  `CONTRADICTED_STABLE_IDENTIFIER_SIMILARITY` at −0.8.
-  Two alternatives were rejected **by measurement**, not preference. Lowering the
-  floor admits a genuinely different action: a lone "Save changes and exit"
-  button scores 0.088 and resolves with no runner-up and therefore no margin,
-  0.130 from the case we want, so any floor between them is fitted to a hair.
-  Normalizing over answerable weight inverts the scale — the less a candidate can
-  answer the higher it scores, and a bare `<button></button>` reaches 1.000 and
-  gets clicked.
-  Result, every figure measured before and after: the drift case rises 0.218 →
-  **0.389** and resolves; the near-miss stays **0.088** and is refused;
-  separation widens from 0.130 to 0.301. The safety cases are unchanged and
-  still refused — Discard at −0.360 against the real Save at −0.375, and the
-  nameless buttons. `ambiguous-targets` still resolves the recorded twin at
-  1.000 against 0.382, confirmed by measurement rather than by argument.
-  **The accepted cost.** Core's matcher is published, and one seam loosened: a
-  candidate matching visible text and accessible name exactly but carrying no
-  ID rises from confidence 0.428 to 0.577, crossing the `safe` (0.45) and
-  default (0.5) rungs of Core's ladder. `review`, `privileged` and `destructive`
-  still refuse it. The supervisor accepts this: such a candidate answers
-  everything it can be asked and differs only by lacking an identifier, which is
-  precisely the distinction the change exists to draw, and the tiers guarding
-  destructive work are unmoved. One profile also crosses zero, so
-  `element_target.no_match` becomes `element_target.below_confidence` — the same
-  category, a more accurate code.
-  **This change and the downstream `reworded-aria` spec row must ship together.**
-  Flipping the constant back was measured to turn that row red. Push both `dev`
-  branches in one unit.
-
-- **D14 — Level 1 selects, the scorer vetoes.** Accepted 2026-09-12. The
-  largest safety exposure found in this plan: Level 1's class-set query resolved
-  and **clicked** `<button class="btn btn-primary">Delete workspace</button>` on
-  a page whose Save button had been replaced, with no score and no floor, while
-  Level 2 refused a 0.218 near-certainty. Every safety property built this week
-  guarded only the path that was already cautious.
-  A Level 1 match is now scored and refused if the candidate contradicts the
-  recording, **and refused again if nothing the recording named agrees on it**.
-  Two rules, because one was not enough; the second was added on 2026-09-12
-  after the first proof was found to cover only half the question.
-  **Rule 1, the threshold, is 0 and not the 0.35 selection floor.** The two
-  answer different questions: the floor asks "is this good enough to choose
-  among several", the veto asks "is this so wrong that acting is dangerous".
-  Zero is a statement rather than a fitted value — `normalizedScore` is agreeing
-  weight minus disagreeing weight, so below zero the page contradicts more than
-  it confirms.
-  **What rule 1 was actually proved over, and what it was not.** The original
-  enumeration varied the *candidate* — every profile a weak Level 1 query can
-  land on, 1,488 class-reachable and 240 text-reachable — and found none whose
-  label contradicts the recording reaching 0, on either scoring scale. That is
-  exhaustive over the candidate axis and it holds. It is **not** exhaustive over
-  the *recording* axis, which it held fixed at a descriptor carrying both an id
-  and a test id; those two supply most of an impostor's negative weight, and
-  `normalizedScore` divides by the weight of the signals the recording carried,
-  so a thinner recording loses that weight from numerator and denominator at
-  once. Re-run across 16 recording classes (id, test id, visible text and
-  accessible name each present or absent), rule 1 alone separates for **3** —
-  the three carrying a stable identifier *and* both text signals. In the other
-  13 an impostor is acted on, the worst at **+0.563**. The ordinary case is the
-  plain one: a control with no id and no test id, recorded with its text and its
-  name, is landed on by a nameless icon button wearing the recorded class set at
-  **+0.010**, and clicked.
-  **Rule 2, corroboration, closes 12 of those 13.** If the recording named
-  anything distinguishing — visible text, accessible name, label, id, test id —
-  at least one of them must agree on the candidate at any of Core's positive
-  rungs. Measured over the same enumeration it refuses 240 impostor profiles,
-  **none** of which Level 2 then re-resolves (the highest scores 0.302 against a
-  floor of 0.35), and **not one** profile whose label agrees or partly agrees —
-  free by construction, since an agreeing label is itself the corroboration.
-  All four `identity-drift` modes still resolve; the tightest, `selector-only`
-  at 0.149, is precisely what a veto set at the floor would have destroyed. No
-  strategy is exempt, and that was measured rather than conceded — an id
-  exemption saves nothing and would admit 339 profiles where an identifier
-  survived onto a relabelled control.
-  **The alternative was measured and rejected.** Refusing a class-set or
-  bare-text match outright whenever the recording carries no stable identifier
-  costs 306 legitimate resolutions across the four identifier-less recording
-  classes — 115 whose label agrees exactly — to stop 84 impostors, 16 of which
-  return through Level 2 anyway. A common failure traded for a rare wrong click.
-  **An interaction with D13 to watch.** The Core weighting change moved the worst
-  impostor from −0.203 to −0.032, so headroom below the veto line is now 0.032
-  rather than 0.203 — the safety margin shrank sixfold as a side effect of a
-  change made for a different reason. It is still on the right side, and
-  `veto.test.ts` asserts the *separation* rather than any absolute value, on
-  both axes, so a further weight change in either repository fails the build
-  rather than silently eroding it. Treat that test as the guard on D13, not only
-  on D14.
-  **Two limits remain open**, both measured, and one of them is the 13th
-  recording class. A recording that names **nothing** — no text, no accessible
-  name, no id, no test id, only a class set and a structural path — cannot be
-  protected: it asked no question a candidate could answer, so refusing would
-  only be the class-set strategy disagreeing with itself. An impostor reaches
-  **+0.563** there and Level 2 would resolve it too. And an impostor that
-  carries the recorded label passes by construction, because the label is
-  exactly what corroborates.
-  **The wider precondition was queried and measured, and it stands.** An
-  identifier counts and not only a label, so the veto also runs on the
-  `coordinates` and `visual-target` strategies. Over those, narrowing it back
-  would act on **120 more profiles and not one carrying any signal the
-  recording named**: a point runs only after the recorded selector missed, and
-  for a single-identifier recording that selector *is* the identifier. The
-  feared fresh-point-beside-stale-descriptor case has no producer: `coordinates`
-  is declared by no web action, and a `visual-target` is derived from the
-  recorded element, so its point is as stale as the descriptor. The cost is
-  narrow and real: **29 of 587** live fixture descriptors (4.9%) carry an
-  identifier and no text, name or label, and for those a changed identifier
-  fails `TARGET_NOT_FOUND` rather than clicking whatever holds the recorded
-  position — buying 96 class- and 120 point-reachable impostors, worst +0.302.
-  Measurements: `reports/v-level1-veto.md`, `reports/L-veto-recordings.md` and
-  `reports/p-veto-coords.md` (point strategies, and the descriptor census).
+Decisions **D13** (Core charges a missing stable identifier less than a
+contradicted one) and **D14** (Level 1 selects, the scorer vetoes), both accepted
+2026-09-12, are archived verbatim at
+[archive/2026-09-12-decisions-d13-d14.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-decisions-d13-d14.md).
 
 ## How Week 1 Is Proven
 
@@ -754,42 +642,75 @@ audit briefs are in [archive/2026-09-11-audit-briefs.md](./mvp-week1-web-automat
 ## Work Ledger
 
 Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliability-plan/archive/): planning,
-`2026-09-11-wave-1-ledger.md` through the Wave 2 integration, and the
-`2026-09-12-*` Wave 3 and live-validation files.
+`2026-09-11-wave-1-ledger.md` through the Wave 2 integration, the
+`2026-09-12-*` Wave 3 and live-validation files, and
+`2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-12 — Compaction at handoff
-
-- Agent: supervisor
-- Changed: this document; `archive/2026-09-12-decisions-d1-d12.md` (D12
-  appended); new `archive/2026-09-12-superseded-plan-sections.md`.
-- Why: The handoff rewrite took the document to 851 lines. D12 was still in the
-  plan although the Decisions intro said D1-D12 were archived, and the archive
-  held only its title, so D12 was moved there verbatim rather than deleted. The
-  wave table, the risk list, and the Phase 1.1 and 1.6a landing narratives are
-  superseded and moved whole, each leaving a pointer.
-- Validation: `grep -n "D12"` on the decisions archive before the move -> the
-  title line only; `wc -l` on this document after compaction -> 796.
-- Outcome: Accepted
-- Follow-up: none.
-
-### 2026-09-12 — Handoff: the next session's objective is finishing Week 1
+### 2026-09-12 — Finish-Week-1 session: first dispatch
 
 - Agent: supervisor
-- Changed: this document (header, Current State, Worker Briefs, Work Ledger,
-  Open Questions); `docs/working/README.md` regenerated.
-- Why: The user set the objective of the resuming session: completely finish
-  every Week 1 item, using as many subagents as needed, with everything tested.
-  Current State had also drifted: it said live validation both ran and was not
-  done, and its next steps were the already-finished Wave 3 integration.
-- Validation: `pnpm check` -> `check exit=0`,
-  `structure-audit: passed (35 warning(s), 17 baselined)`; `pnpm test` ->
-  `test exit=0`, extension `# pass 294`, domain `# pass 343`, test-runner
-  `# pass 439`, scenario-lab `# pass 197`, every package `# fail 0`. Not run: the
-  content harness, any Lab command, Core. Core's eight uncommitted files were
-  read, not verified.
+- Changed: new `briefs/finish-week1.md`; this ledger.
+- Why: Next steps 1-2. No other Claude session was running, so Core's
+  uncommitted trace withholding was taken over (Core ledger). Nine workers,
+  partitioned by file: five fixes, the read-only `c-remaining` inventory, and
+  three read-only investigations so later briefs need not wait on it.
+- Validation: `git status -sb` in both trees -> `## dev...origin/dev`. Grep for
+  `webAutomationSecretBindingPath` outside `output-nodes/` -> no use in
+  `input-model.ts` or `gateway-mapping.ts`: W18 edits 1-3 had not landed.
+- Outcome: In progress
+- Follow-up: verify each report before accepting it.
+
+### 2026-09-12 — f-test-runner-ratchet: already settled at HEAD
+
+- Agent: worker `f-test-runner-ratchet`; verified by supervisor.
+- Changed: its report only; `ab736a1` had moved the feature into
+  `src/demo-llm-create-ui/` with its own `tests/`.
+- Validation: `git ls-files packages/test-runner/src/tests` -> 50 files, none
+  `demo-llm-create-ui`; `.structure-baseline.json:21` -> 50.
+- Found: this document had passed 800 lines; the previous session's ledger
+  entries moved verbatim to `archive/2026-09-12-handoff-ledger.md`, and D13-D14
+  to `archive/2026-09-12-decisions-d13-d14.md`.
 - Outcome: Accepted
-- Follow-up: the resuming session settles Core's uncommitted trace withholding,
-  then runs Next steps.
+
+### 2026-09-12 — f-evidence-producers: already settled at HEAD
+
+- Agent: worker `f-evidence-producers`; verified by supervisor.
+- Changed: `domain/src/page-evidence/types.ts`, a comment naming the old
+  `content/evidence/present.ts` path (5 lines, same count); its report.
+  `1b6f5df` had already removed the second producer's conditional spreads and
+  moved `present` to `apps/extension/src/shared/present.ts`. Open work item 4's
+  second-producer and merge-safety parts are settled.
+- Validation: `grep -cE '\.\.\.\('` on `connection/dom-snapshot.ts` -> 1, and
+  that one is in the header comment; `dom-snapshot.ts:33` imports
+  `../../shared/present`; `git log -S'shared/present'` -> `1b6f5df`. Worker:
+  extension `test` -> 294 of 294; three compile mutations in `dom-snapshot.ts`
+  -> TS2353/TS2339/TS2345, restored byte-identical.
+- Not verified: the Lab two-frame evidence packet.
+- Outcome: Accepted
+
+### 2026-09-12 — f-adapter-guard: the failure-record guard re-armed
+
+- Agent: worker `f-adapter-guard`; verified by supervisor.
+- Changed: `domain/src/runtime/adapter.ts` (399 lines): `producerDeclaredRedaction`
+  refuses `redacted: true` beside the domain's withheld marker, which only a
+  layer writes, and `secretSafeDispatchPayload` strips any received stamp
+  instead of passing it on; `runtime/tests/adapter-redaction.test.ts` (the
+  three-state probe, for a current and a pre-`1b6f5df` stamping client);
+  `e2e/content/tests/redaction.spec.ts` (the `test.fixme` adapter row now runs).
+- Why: open work item 4. At HEAD the extension no longer stamped, but the adapter
+  still read any stamp as a producer declaration, so a stamping client leaked a
+  sensitive control's `expected`/`actual`.
+- Validation: supervisor `DOMAIN_TEST_BUILD_LABEL=supervisor-guard pnpm --filter
+  @fluxiq-web-extension/domain test` -> `# tests 349`, `# pass 349`, `# fail 0`;
+  content harness `redaction.spec.ts --workers=2` -> `Running 14 tests`,
+  `14 passed`, none skipped. Grep for readers of `redacted` in both
+  repositories -> only `sensitivity/redaction.ts:60`, which runs before the
+  strip; Core has none. Worker: old conjunction restored -> domain 2 fail, spec
+  1 fail, restored byte-identical. The worker's "19 passed" for the spec does
+  not match the 14 rows the file declares.
+- Not verified: the supervisor's own mutation rerun, deferred while
+  `f-w18-secret-leg` compiles the domain package from the same tree; Lab.
+- Outcome: Accepted
 
 ## Open Questions
 
