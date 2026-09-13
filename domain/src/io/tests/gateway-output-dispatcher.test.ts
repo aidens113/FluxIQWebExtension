@@ -37,24 +37,30 @@ const dispatchRequest = {
   payload: { selector: "#save" } as JsonObject
 };
 
-const executed: Array<{ sessionId: string; actionType: string; parameters?: JsonObject }> = [];
+const executed: Array<{ sessionId: string; actionType: string; parameters?: JsonObject; timeoutMs?: number }> = [];
 
 function dispatch(
   answer: GatewayActionResult | (() => never),
-  sessions: unknown[] = [readySession]
+  sessions: unknown[] = [readySession],
+  request: Parameters<typeof dispatchWebAutomationOutput>[1] = dispatchRequest
 ): ReturnType<typeof dispatchWebAutomationOutput> {
   const fluxiq = {
     programs: {
       clientGateway: { snapshot: () => ({ sessions }) },
       automationStudioClientGateway: {
-        executeAction: async (sessionId: string, command: { actionType: string; parameters?: JsonObject }) => {
-          executed.push({ sessionId, actionType: command.actionType, ...(command.parameters ? { parameters: command.parameters } : {}) });
+        executeAction: async (sessionId: string, command: { actionType: string; parameters?: JsonObject; timeoutMs?: number }) => {
+          executed.push({
+            sessionId,
+            actionType: command.actionType,
+            ...(command.parameters ? { parameters: command.parameters } : {}),
+            ...(command.timeoutMs !== undefined ? { timeoutMs: command.timeoutMs } : {})
+          });
           return typeof answer === "function" ? answer() : answer;
         }
       }
     }
   } as unknown as FluxIQ;
-  return dispatchWebAutomationOutput(fluxiq, dispatchRequest);
+  return dispatchWebAutomationOutput(fluxiq, request);
 }
 
 test("a succeeded command dispatches to the paired client and reports ok with its status", async () => {
@@ -65,6 +71,17 @@ test("a succeeded command dispatches to the paired client and reports ok with it
   assert.equal(result.status, "succeeded");
   assert.equal(result.error, undefined, "a success never gains an error");
   assert.deepEqual(result.payload, { status: "succeeded", message: "Clicked Save.", result: { clicked: true } });
+});
+
+test("a request's timeout is sent as the command's timeout, and a request without one sends none", async () => {
+  executed.length = 0;
+  const answer: GatewayActionResult = { commandId: "client.command.timeout", status: "succeeded" };
+  await dispatch(answer, [readySession], { ...dispatchRequest, timeoutMs: 5_000 });
+  await dispatch(answer);
+  assert.deepEqual(executed, [
+    { sessionId: "session.one", actionType: "web.dom.click", parameters: { selector: "#save" }, timeoutMs: 5_000 },
+    { sessionId: "session.one", actionType: "web.dom.click", parameters: { selector: "#save" } }
+  ]);
 });
 
 test("a timed out command keeps its status and promotes its message into the reason Core reads", async () => {

@@ -12,9 +12,11 @@
 //
 // The wait is proposed from the mutation's call, never from the click's: a
 // candidate returned for a click's `action` entry replaces Core's fallback click.
-// It carries no `timeoutMs`, so the content script's default applies, and no
-// `sourceInputIds` or `expectedConfirmation`: Core refuses a source input that is
-// not action-role, and a wait has no echo to confirm.
+// It carries no `timeoutMs` in its parameters: a replay waits as long as its Flow
+// node's timeout, 5,000 ms unless the node sets one, which the runtime adapter
+// sends the client as the command's timeout. It carries no `sourceInputIds` or
+// `expectedConfirmation` either: Core refuses a source input that is not
+// action-role, and a wait has no echo to confirm.
 
 import type { AutomationStudioRecordingMapperCandidate } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";

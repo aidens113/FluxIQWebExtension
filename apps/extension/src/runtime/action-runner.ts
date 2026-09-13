@@ -194,8 +194,11 @@ function unsupportedPageFailure(action: BrowserActionCommand, startedAt: number,
  * the top frame, and an extension reload or update leaves every other
  * already-loaded frame without a script while the frames themselves survive --
  * so a frame that exists can still answer nothing, and a command sent to it is
- * neither refused nor answered. Nothing upstream puts a deadline on a web
- * action, so that is a hang with no end, which is worse than any failure.
+ * neither refused nor answered. Core does stop waiting -- on a Flow action once
+ * its node's timeout and Core's answer margin have passed, and on a command sent
+ * with no timeout after the gateway's default -- but it can then say only that
+ * the client never answered, while the command still hangs here, which is worse
+ * than any failure these checks can report.
  *
  * Before either check, a child frame the action also names by its document's
  * path is found by that path (`frame-address.ts`), and the recorded id only

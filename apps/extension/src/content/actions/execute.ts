@@ -8,11 +8,10 @@
 // is awaited rather than returned, so a rejection from any of them becomes the
 // caller's failure result. A returned promise settles after the try block has
 // exited and its rejection escapes the catch: `executeContentAction` would
-// reject rather than resolve, `message-handler.ts` would post no reply, and
-// nothing upstream ends the command, because Core applies no runtime deadline
-// to a web action and `timeoutMs` is deliberately kept out of the effect
-// payload so a Core timer cannot displace the structured `timed_out` result the
-// client reports itself. That is a hung command, not a failed one.
+// reject rather than resolve, and `message-handler.ts` would post no reply. The
+// command would then end only at Core's runtime deadline -- the node's timeout
+// plus Core's answer margin -- as `timed_out`, with no record of which verb
+// failed or why. That is a lost failure, not a reported one.
 //
 // Only the two waits were awaited until 2026-09-11, when three Wave 2 workers
 // found the hole independently. It had never fired, which is why it survived

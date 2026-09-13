@@ -81,6 +81,13 @@ async function executeWebAutomationRuntimeCommand(fluxiq: FluxIQ, command: FluxI
     payload
   };
   if (command.metadata) request.metadata = command.metadata;
+  // The client is given the command's own timeout -- its Flow node's, 5,000 ms
+  // unless the node sets one -- so it gives up when the node does and answers
+  // with its own `web.action.timeout`, carrying what it expected and saw. Core's
+  // runtime waits that timeout plus its answer margin for the answer. A timeout
+  // the runtime arms no deadline for (not a positive finite number) is not
+  // sent, so the client keeps its own default, as it did before.
+  if (command.timeoutMs !== undefined && Number.isFinite(command.timeoutMs) && command.timeoutMs > 0) request.timeoutMs = command.timeoutMs;
   const result = await dispatchWebAutomationOutput(fluxiq, request);
   const message = result.error ?? dispatchPayloadMessage(result.payload);
   // The command's own status, never a success flag. `timed_out` and

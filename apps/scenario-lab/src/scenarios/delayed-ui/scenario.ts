@@ -14,9 +14,14 @@ export type DelayedUiState = { revealed: boolean; delayMs: number; mode?: Delaye
 
 /**
  * How long the armed page takes to produce the late content: twenty times the
- * recorded 1,000 ms wait, and twice the content script's 10,000 ms default
- * (`content/action-runtime/waits.ts` `DEFAULT_WAIT_TIMEOUT_MS`), so neither the
- * recorded timeout nor the default can be satisfied by waiting longer.
+ * recorded 1,000 ms wait; four times the 5,000 ms a replayed wait is given,
+ * which is its Flow node's default timeout, sent to the extension as the
+ * command's timeout; and twice the content script's 10,000 ms default for a wait
+ * sent with no timeout (`content/action-runtime/waits.ts`
+ * `DEFAULT_WAIT_TIMEOUT_MS`). So no timeout on either lane can be satisfied by
+ * waiting longer, and the replayed wait ends in the extension's own
+ * `web.action.timeout`, inside Core's deadline of that timeout plus its 3,000 ms
+ * answer margin.
  *
  * The content still arrives. Nothing here reports slowness or refuses to
  * render: this page is slow, in the way an overloaded backend is slow, and a

@@ -187,6 +187,34 @@ test("a dispatch with no eligible client fails with the selection reason", async
   assert.match(result.error ?? "", /single paired web-automation client/u);
 });
 
+test("the command's timeout is sent to the client as the gateway command's timeout, and none is invented", async () => {
+  // Without it the client waits its own default (10,000 ms for a wait) while
+  // Core gives up on the node's timeout plus its answer margin, so a page that
+  // never shows the target is reported as a client that never answered.
+  const sent: JsonObject[] = [];
+  const fluxiq = {
+    programs: {
+      clientGateway: { snapshot: () => ({ sessions: [readySession] }) },
+      automationStudioClientGateway: {
+        executeAction: async (_sessionId: string, command: JsonObject) => {
+          sent.push(command);
+          return succeeded;
+        }
+      }
+    }
+  } as unknown as FluxIQ;
+  const adapter = createWebAutomationRuntimeAdapter({ fluxiq });
+
+  await adapter.execute({ ...clickCommand, timeoutMs: 5_000 }, {});
+  await adapter.execute(clickCommand, {});
+  await adapter.execute({ ...clickCommand, timeoutMs: 0 }, {});
+
+  assert.equal(sent.length, 3);
+  assert.equal(sent[0]?.timeoutMs, 5_000, "the client gives up when the node does");
+  assert.equal(Object.hasOwn(sent[1] ?? {}, "timeoutMs"), false, "a command without a timeout sends none, so the client keeps its default");
+  assert.equal(Object.hasOwn(sent[2] ?? {}, "timeoutMs"), false, "a timeout the runtime arms no deadline for is not sent either");
+});
+
 // --- Phase 1.5 steps 3 and 4: the structured failure and the evidence packet ---
 
 /**

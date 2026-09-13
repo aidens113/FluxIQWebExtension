@@ -5,20 +5,21 @@ import { outputTargetFromPayload } from "../output-nodes";
 
 export async function dispatchWebAutomationOutput(
   fluxiq: FluxIQ,
-  request: OutputDispatchRequest<JsonObject>
+  // `timeoutMs` is the time the client is given, sent as the gateway command's
+  // own timeout when a caller has one: the runtime adapter passes its command's.
+  // Core's IO output path has none, and a request without one sends none.
+  request: OutputDispatchRequest<JsonObject> & { timeoutMs?: number }
 ): Promise<OutputDispatchResult<JsonObject>> {
   const sessionId = targetSessionId(fluxiq, request.metadata);
   if (!sessionId) return { ok: false, outputId: request.outputId, error: "A single paired web-automation client must be selected before dispatching an output." };
   try {
     const target = outputTargetFromPayload(request.payload);
-    const command = target ? {
-      actionType: request.outputId,
-      parameters: request.payload,
-      target
-    } : {
+    const command: { actionType: string; parameters: JsonObject; target?: JsonObject; timeoutMs?: number } = {
       actionType: request.outputId,
       parameters: request.payload
     };
+    if (target) command.target = target;
+    if (request.timeoutMs !== undefined) command.timeoutMs = request.timeoutMs;
     const result = await fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, command);
     const succeeded = result.status === "succeeded";
     const message = stringValue(result.message);
