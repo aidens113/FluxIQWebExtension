@@ -18,15 +18,9 @@
   },
   "rules": {
     "directory-files": {
-      "packages/test-runner/src/tests": 51,
-      "packages/test-runner/src": 50,
+      "packages/test-runner/src/tests": 50,
+      "packages/test-runner/src": 49,
       "scripts": 32
-    },
-    "exported-values": {
-      "packages/test-runner/src/demo-llm-create-ui.ts::values": 21
-    },
-    "file-lines": {
-      "packages/test-runner/src/demo-llm-create-ui.ts": 837
     },
     "imports": {
       "domain/src/index.ts": 2,
@@ -37,7 +31,7 @@
       "domain/src/host.ts": 1
     },
     "naming": {
-      "packages/test-runner/src::demo": 17,
+      "packages/test-runner/src::demo": 16,
       "scripts::run": 12,
       "scripts::inspect": 6,
       "packages/test-runner/src::clone": 3,

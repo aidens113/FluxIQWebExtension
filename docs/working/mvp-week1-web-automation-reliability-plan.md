@@ -1,7 +1,7 @@
 # MVP Week 1 — Web Automation Reliability Plan
 
 Status: Active
-Status detail: Waves 1, 2 and 3 complete, verified and pushed, with Core's share complete alongside. Phases 1.3, 1.4 and 1.5 have landed; what remains for Week 1 is Phase 1.6 (FluxBench measurement) and live browser validation, neither of which has been exercised.
+Status detail: Waves 1-3 and the 2026-09-12 live-validation work committed and pushed; four of six exit criteria have never had a valid proof and Phase 1.6b has not started. Session objective, set by the user: completely finish Week 1, with everything tested.
 Created: 2026-09-11
 Last updated: 2026-09-12
 Owner: Senior supervisor agent
@@ -13,90 +13,151 @@ Related: [30-Day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 
 ## Current State
 
-**Phase: Waves 1-3 pushed. Live validation ran on 2026-09-12 and falsified a
-great deal of what the green gates implied.** Roughly seventy workers ran that
-day, first preparing for live validation and then reacting to what it found. The
-work is substantial and the conclusion is uncomfortable: **every signal Week 1
-had been reading was measuring something narrower than it appeared.**
+**Session objective, set by the user on 2026-09-12: COMPLETELY FINISH every
+Week 1 item, using as many subagents as needed to do it quickly AND properly,
+with EVERYTHING tested.** This is the objective of the session that resumes this
+document. Read it literally:
 
-The five that matter, each measured rather than argued, each with a report under
-[reports/](./mvp-week1-web-automation-reliability-plan/reports/):
+- **Finished** means all six exit criteria in [Objective](#objective) carry a
+  quoted observation from a real Testing Lab run in the Work Ledger, and every
+  open item below is closed, or ruled out of Week 1 with the reason recorded.
+  Nothing closes on a unit test, a compile, a harness row, or a worker's report.
+- **Quickly** means wide parallelism partitioned by file from the first dispatch.
+  Lab runs may run concurrently, one instance per worker (`L-lab-concurrency`),
+  bounded by this machine's RAM. Do not stop at phase boundaries to ask.
+- **Properly** means a mutation proof for every guard, the supervisor re-running
+  every fix before its ledger entry, and single observations labelled as such,
+  because this machine has faulty RAM.
 
-- **FluxBench reported 100% while scoring runs that executed nothing.** The
-  success predicate accepted any run whose verdict was not `failed`, and an
-  unexecuted run reports `null`. Sixteen of twenty-three rows were in that state.
-  Honest figure: **30%**. Fixed, with the not-executed count now reported beside
-  every rate.
-- **A week of element-identity work never reached the browser.** A 17-key
-  allowlist in the gateway payload carried none of the five signals Phase 1.3
-  captured; two survived only by accidental re-derivation. The allowlist had no
-  reason to exist — no size cap, no redaction boundary, just accretion from a
-  five-key draft.
-- **The fixtures guaranteed their own safety margins.** 286 test ids across 22
-  scenarios, 81% of buttons carrying an identifier *and* text. Core's matcher
-  divides by the weight the recording carried, so a fixture recording hands every
-  comparison 38% of the scale for free.
-- **The failure history had its failures deleted.** A serialiser treated a shared
-  object reference as a cycle, so a Flow-lane run crashed writing evidence
-  exactly when it had a structured failure to report — and recorded
-  `ambiguous_or_unknown`, a legitimate enum member indistinguishable from a real
-  measurement. Of 33 surviving records, **zero** carry a structured failure.
-- **On production-shaped recordings the resolver clicks a different action and
-  reports success**, at 0.633 against a 0.35 floor. And no floor can fix it: with
-  identifiers the good and bad cases sit 0.301 apart, without them 0.057.
+**Phase: Waves 1-3 and the 2026-09-12 live-validation work are committed and
+pushed. Four of the six exit criteria have never had a valid proof, and Phase
+1.6b has not started.** Reports named in backticks are under
+[reports/](./mvp-week1-web-automation-reliability-plan/reports/).
 
-**What this means for the exit criteria.** The classification criterion has never
-been measurable — its evidence was being deleted before it could be counted.
-Target matching is proven on pages that guarantee the result. Every criterion
-whose proof was a bench number needs re-reading against the corrected metric.
+**True at handoff.** This repository: `HEAD 498b6f0`, even with `origin/dev`,
+clean tree; root `pnpm check` exit 0 with the structure audit passing, root
+`pnpm test` exit 0 (extension 294/294, domain 343/343, test-runner 439/439,
+scenario-lab 197/197). The content harness, the Lab and Core were not re-run at
+handoff. Core: `368b3c9` on `origin/dev`, `fluxiq` 0.3.0.
 
-**Live validation did confirm things too**, and they should not be lost in the
-above: the smoke corpus is clean against eight historical baselines with every
-difference explained; the real unpacked extension loads and is driven, MV3 worker
-restart included; the Lab now runs concurrent instances, one per worker.
+**Uncommitted in Core, unverified, and recorded nowhere.** Eight files in
+`F:\!FluxIQ` withhold state-bound values from the run trace:
+`runtime/executor/graph-run.ts`, `executor/index.ts`, `executor/node-execution.ts`,
+`flow-bootstrap/plan/validation.ts` and its test, a new
+`executor/tests/trace-withholding.test.ts`, and two architecture pages. This is
+the Core leg `p-secret-binding` named and did not own; no ledger entry in either
+repository describes it, and it was most likely written by session `fluxiq-df`.
+Settle it before anything else touches Core: verify and commit it with a Core
+ledger entry, or ask the user before discarding it.
 
-**Waves 1 and 2 are settled.** Their outcomes — the domain test runner and its
-parallel-run isolation, the scenario contract and Scenario Lab consolidation, the
-type-checked domain tests, the content-script harness, the browser action
-vocabulary, and FluxBench's `pnpm lab bench` with its `week1` and `smoke` corpora
-— are recorded in
-[archive/2026-09-12-waves-1-2-outcomes.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-waves-1-2-outcomes.md)
-and their ledgers alongside it.
+**What live validation established.**
+- **Confirmed:** the smoke corpus is clean against eight baselines (`L-smoke`);
+  the real unpacked extension loads and is driven, MV3 worker restart included;
+  the Lab runs concurrent instances.
+- **Corrected and fixed:** FluxBench scored runs that executed nothing, reading
+  100% where the honest figure was 30% (`v-bench-honesty`); the five Phase 1.3
+  identity signals never crossed the wire (`x-identity-wire`, `x-identity-chain`);
+  a serialiser deleted every structured failure from run history
+  (`x-evidence-crash`); fixtures handed the matcher its margins, so three
+  realistic ones now exist (`admin-console`, `storefront-checkout`,
+  `member-directory`). Seven redaction leaks are closed.
+- **Still open:** on production-shaped recordings the resolver picks a different
+  action and reports success, 0.633 against a 0.35 floor (`L-review` finding 1,
+  `L-veto-recordings`); live, `reworded-aria` refuses at confidence 0.173 and the
+  element-target floor sees `unresolved_no_candidates`, `candidateCount 0`, on
+  every dispatch (`L-replay`); Firefox installs but cannot reach the gateway
+  (its background may not open `ws://`) and has no side panel (`p-firefox`).
 
-**Findings that change later work** are archived at
-[archive/2026-09-12-wave-1-3-findings.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-wave-1-3-findings.md).
-The operationally important ones — this machine's three false-failure shapes,
-and the rule that `.env.local` selects the existing target so every isolated
-command needs `FLUXIQ_TEST_ENV_FILES=none` — are restated where an operator will
-meet them, in
-[live-validation-plan.md](./mvp-week1-web-automation-reliability-plan/live-validation-plan.md).
+**Exit criteria as they stand**
 
-**Not done:** live validation. Nothing in Waves 1-3 has run in a real browser.
-The plan and its safety rules are in
-[live-validation-plan.md](./mvp-week1-web-automation-reliability-plan/live-validation-plan.md);
-Waves 4 and 5 follow it.
+| Criterion | State | Proof still to observe |
+| --- | --- | --- |
+| Actions reliable | Harness green; replays never run | week1 W01-W19 through the bench, 3 of 3 |
+| Evidence useful | Harness and unit only | Lab run: the 16 items, packet budget, leak rows |
+| Deterministic fallback | Refusal proven on fixtures; wrong action on production-shaped recordings | W20-W23 recover and W26 disambiguates, realistic fixtures included |
+| Failures classified | Never measured | Negative variants (W14, W19, W27) report the expected category, at least 90% |
+| Bench repeatable | Honesty fixed; week1 x3 never run | `--repeat 3` twice, agreeing within tolerance |
+| Blockers ranked | Not started | Phase 1.6b ledger entry |
 
-**Next steps**
+The bench now declares both lanes (`bench/corpus/week1.ts:19`), so variants arm
+and 43 results run. `v-bench-honesty` predicts `--corpus week1 --repeat 3` exits
+1, because ten Flow-lane variants expect failures that lane has never been seen
+to report, and takes 130-205 minutes headed. That exit is a measurement to
+diagnose, not a reason to revert the lanes.
 
-1. Integrate the ten Wave 3 reports as they land, resolving conflicts where two
-   briefs touched the same contract from opposite sides — `browserFrameId`
-   (`w3-domain-contracts` and `w3-frame-plumbing`), the new evidence items
-   (`w3-evidence` and `w3-llm-packet`), and `expectedState`
-   (`w3-domain-contracts` and `w3-host-runtime`).
-2. Verify the integrated tree with `pnpm check`, `pnpm test` and `pnpm build`,
-   run one at a time, then a Lab run for the browser behaviour the unit tests
-   cannot prove.
-3. Close the two open questions this wave should settle: narrowing
-   `WebAutomationRuntimeError["code"]` to the closed set, and whether the
-   runner's allowlist and the test-rig `failureCategories` stay separate axes.
-4. Keep Lab runs serialized: only one may execute on this machine at a time.
+**Open work, ranked by the criterion it blocks.** Each item is as of its report;
+re-verify at HEAD before briefing, because settled items were briefed twice on
+2026-09-12.
+1. **Flow-lane correctness (blocks 1, 3, 4, 5).** A recorded action went missing
+   in 12 of 24 runs; the fix is unit-proven, the 24-run reproduction not repeated
+   (`L-dropped-action`, `L-race-fix`). Core logs a late event but does not tell
+   the client, a contract decision handed back (`L-core-discard`). A failing
+   Flow-lane run became an unexplained runner error (`L-replay` defects).
+2. **Resolver safety and calibration (blocks 3).** The veto margin belongs to the
+   fixture's recording and D14 overstates it (`L-review` 1, `p-openq-triage`
+   Group 1); calibration does not transfer live and the floor receives no
+   candidates (`L-replay` 3-4). Scoring changes belong in Core
+   (`v-matcher-calibration`, D13).
+3. **W18 auth-gate replay (blocks 1, 4).** The secret binding's last leg
+   (`p-secret-binding`, `p-declared-secrets`) and Core's uncommitted change above.
+4. **Failure evidence integrity (blocks 4).** The runtime adapter's failure-record
+   guard is disarmed for every extension result, one-line fix measured
+   (`v-redaction-producer` item 5); a second evidence producer keeps the
+   conditional-spread hole (`v-producer-safety`); one merge-safety gate is a line
+   outside its owner's files (`v-merge-safety`).
+5. **Gate hygiene.** `connection.ts` is 764 of 800 lines and its split was blocked
+   on a collision that has since cleared (`p-connection-split`); recording-latch
+   work waits on it. The `packages/test-runner/src/tests/` ratchet has no headroom
+   for `p-test-split`. `p-openq-triage` Band A: the domain runner aborts on the
+   first throw, two test-command traps, stale tracked `domain/.test-build/`.
+6. **Scope, to settle from the 30-day plan's text rather than by asking:** whether
+   Week 1 requires Firefox, and whether a late recording event reaches the client
+   as an error frame.
+7. **Doc truth.** `L-review` findings 2-9 and `p-openq-triage` Parts 3-4; the three
+   architecture pages Phase 1.6b step 4 names must match the finished state.
 
-**Core unit (D11):** complete. The baseline ratchet (mirrored here),
-domain-host loading, the failure taxonomy and carriers, the web and runtime test
-suites, and now the expectation-evaluator seam are all verified and pushed, as
-recorded in the paired Core document. Week 1 asks nothing further of Core.
+**Next steps, in order**
+1. `/resume` this document; declare `Mode: Execute Plan With Workers`, then
+   `Testing And Live Validation`. Confirm both trees against `origin/dev` and
+   settle Core's uncommitted change.
+2. Dispatch together: one read-only inventory worker writing
+   `reports/c-remaining.md` (every item above, `L-review` 1-9, `p-openq-triage`
+   Part 3, every Partial or Blocked report, each marked settled or open at HEAD
+   with file:line), plus the fixes that need no inventory: the adapter guard, the
+   second producer, the `connection.ts` split, the test-runner ratchet, and the
+   W18 binding's last leg.
+3. From the inventory, brief the rest partitioned by file: resolver calibration
+   (Core, user alerted first), the Flow-lane error path, drift rows on realistic
+   fixtures, doc truth.
+4. Live campaign from
+   [live-validation-plan.md](./mvp-week1-web-automation-reliability-plan/live-validation-plan.md),
+   one Lab instance per worker: step 4, step 4b (24 runs against the race fix),
+   steps 5, 6 and 8, then step 7
+   (`FLUXIQ_TEST_ENV_FILES=none pnpm lab bench --corpus week1 --repeat 3 --target isolated`)
+   twice.
+5. Phase 1.6b: rank blockers from both bench reports, confirm `demo:record` then
+   `demo:run` provider-free, update the architecture pages, record Week 2 entry
+   points.
+6. Close: an observation quoted for every criterion row; root `pnpm check`,
+   `pnpm test`, `pnpm build`, the content harness and Core run one at a time;
+   push both `dev` branches.
 
-**Blockers:** none. The user was alerted before the first Core edit.
+**Everything is tested: the operating rules.**
+- Three tiers per change: unit (`tests/` beside the subject), content harness,
+  Lab. A guard is done only when a mutation shows its test failing.
+- Commands that work here: content harness
+  `pnpm exec playwright test -c e2e/playwright.content.config.ts --workers=4` from
+  `apps/extension` (the `pnpm --filter ... test:content --` form finds no tests);
+  Core tests `npx vitest run --no-file-parallelism`; isolated Lab commands need
+  `FLUXIQ_TEST_ENV_FILES=none`.
+- Faulty RAM: a rare, uniform or impossible failure is rerun once, alone, before
+  it is chased; heavy gates run one at a time; the false-failure shapes are in
+  `live-validation-plan.md`.
+- One supervisor session per repository. On 2026-09-12 two sessions committed
+  each other's in-flight work, once capturing a tree mid-mutation. Workers never
+  commit.
+
+**Blockers:** none needing the user. The first action is Core's uncommitted change.
 
 ---
 
@@ -253,18 +314,6 @@ downstream approximation.
   Measurements: `reports/v-level1-veto.md`, `reports/L-veto-recordings.md` and
   `reports/p-veto-coords.md` (point strategies, and the descriptor census).
 
-- **D12 — Three Wave 2 worker judgments, ratified by the supervisor.** Each was
-  raised by its worker as needing ratification, and each stands. Tripping the
-  scroll cap while the document is still growing is a failed validation reporting
-  `output_not_observed`, not a success, because the contract defines that category
-  as an action that ran whose post-condition did not hold. The parameter readers
-  live in a sibling module rather than inline, because inlining would have pushed
-  `gateway-mapping.ts` past the size threshold, and the alternatives were a new
-  audit warning or deleting the explanatory comments. A disabled `<option>` is
-  refused inside the select verb rather than through the actionability capability,
-  because an option in a closed select has no box and the capability would
-  mis-report it as hidden.
-
 ## How Week 1 Is Proven
 
 Three tiers, all provider-free, all runnable by a worker:
@@ -297,41 +346,20 @@ phase is proven with it. The corpus run (1.6b) closes the week.
 
 ### Phase 1.1 — Consolidate the web domain
 
-Steps 1–4 landed in Wave 1; the step plan is archived at
-[archive/2026-09-11-phase-1-1-plan.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-11-phase-1-1-plan.md).
-Landed: the content script's `actions.ts` and `action-runtime.ts` split
-into directories (44 of 44 moved bodies identical); mapping fixes (scroll
-key, top-level `domainId`, unknown types rejected with `ACTION_REJECTED`,
-one input→output mapper that keeps fingerprints); recorder hygiene; one
-safety registry; dead exports removed; legacy aliases and the looser
-content types gone. Step 5 (capability matrix, `extension-client.md`) is
-with w1-capability-docs.
-
-Exit checks at Wave 1 integration: T1 tests for steps 2–4;
-`content/actions.spec.ts` on `basic-form`; `lab run basic-form --target
-isolated`; `pnpm check`, `pnpm test`, `pnpm build`; structure audit with
-no new finding. The alias grep is already empty.
-
+Landed in Wave 1. Step plan:
+[archive/2026-09-11-phase-1-1-plan.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-11-phase-1-1-plan.md);
+landing narrative and exit checks:
+[archive/2026-09-12-superseded-plan-sections.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-superseded-plan-sections.md).
 Core: none.
 
 ### Phase 1.6a — FluxBench foundation
 
-Steps 1–3 and 5–7 landed in Wave 1; the step plan is archived at
-[archive/2026-09-11-phase-1-6a-plan.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-11-phase-1-6a-plan.md).
-Landed: the T2 content-script harness (`test:content`); the runner asserting
-what manifests declare; the scenario contract's workflows, variants,
-extraction, and expected failures; the evaluation and benchmark contracts;
-`pnpm lab bench` with the `week1` and `smoke` corpora and report comparison;
-the registry-derived test-matrix catalog; ten new fixtures (22 in all). Step
-4, the provider-free Flow lane, is Wave 2 (`w2-flow-lane` in
-[briefs/wave-2.md](./mvp-week1-web-automation-reliability-plan/briefs/wave-2.md)).
-
-Proof so far: the Scenario Lab suite green with 22 fixtures; `test:content`
-31 passed; `FLUXIQ_TEST_ENV_FILES=none pnpm lab bench --corpus smoke --repeat
-2 --target isolated` 4/4 passed with `compare --halves` `equivalent`. Still to
-prove: `pnpm lab run basic-form --flow --target isolated` (Wave 2).
-
-Core: none.
+Landed across Waves 1 and 2: the content-script harness, the scenario contract,
+`pnpm lab bench` with the `week1` and `smoke` corpora, and the Flow lane. Step
+plan:
+[archive/2026-09-11-phase-1-6a-plan.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-11-phase-1-6a-plan.md);
+landing narrative in the superseded-sections archive above; the bench honesty
+fixes of 2026-09-12 in `reports/v-bench-honesty.md`. Core: none.
 
 ### Phase 1.2 — Action vocabulary and outcome validation
 
@@ -705,92 +733,64 @@ carry `expected.failure.category`.
 and `long-document` remain in the Lab for their existing lanes;
 `sensitive-input` is the Phase 1.4 redaction proof.
 
-## Sequencing
+## Sequencing and Risks
 
-Seven working days; waves are partitioned by file so workers run in
-parallel; serial steps are marked.
-
-| Wave | Days | Work | Workers |
-| --- | --- | --- | --- |
-| 1 | 1–2 | 1.1 step 1 (serial, first); 1.1 steps 2–4; 1.6a steps 1–3, 5, 6; 1.6a fixtures (10) | ~16 |
-| 2 | 2–4 | 1.6a step 4 (Flow lane); 1.2 steps 1–5 (per action file); 1.3 steps 1–2 (capture side) | ~12 |
-| 3 | 4–5 | paired Core document and user alert first; 1.3 steps 3–6; 1.4 steps 1–7 (step 7 Core); 1.5 steps 1–2 (Core) — C1–C3 form one Core work unit | ~9 |
-| 4 | 5–6 | 1.5 steps 3–5; corpus manifests finalised with expected categories | ~5 |
-| 5 | 6–7 | 1.6b | supervisor + 1 |
-
-Supervisor-owned throughout: registry/type-tuple edits that every fixture
-touches, verification of every claim, ledger, pushes, the architecture
-docs.
-
-## Risks
-
-- **Trusted-input emulation** may not satisfy some widgets; the corpus
-  (W02, W03) decides whether `chrome.debugger` is reconsidered — post-MVP
-  unless it blocks a category.
-- **Core coordination**: one Core work unit spanning C1–C3 (Phase 1.4
-  step 7, Phase 1.5 step 2) including a minor bump; both `dev` branches
-  move together; downstream
-  live checks require a rebuilt Core `dist`.
-- **Headed-only lanes** on the Windows host make the corpus ~45 min per
-  three repeats; the content harness is headless and carries most of the
-  per-phase proof. Xvfb remains a CI verification item.
-- **Hot-spot files** (`actions.ts`, `action-runtime.ts`, `connection.ts`,
-  `web-state.ts`, `llm-evidence.ts`) are decomposed before parallel edits;
-  `structure:check` guards the result.
-- **Scope**: shadow-DOM addressing, real sites, CDP input, and Core's
-  `builtin.policy.expectation` stub are recorded, not fixed, this week.
+The seven-day wave table and the risk list are superseded and archived at
+[archive/2026-09-12-superseded-plan-sections.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-superseded-plan-sections.md);
+the remaining order of work is `Current State`'s Next steps.
 
 ## Audit Summary
 
 Seven audits ran on 2026-09-11; the supervisor verified every load-bearing
-claim against source. The verified digest is
-[reports/README.md](./mvp-week1-web-automation-reliability-plan/reports/README.md);
-the full reports with `file:line` citations sit beside it. The
-[Current State](#current-state) headline numbers and the per-phase gap
-statements above are drawn from that digest.
+claim against source. The verified digest, including the baseline figures the
+work is measured against, is
+[reports/README.md](./mvp-week1-web-automation-reliability-plan/reports/README.md).
 
 ## Worker Briefs
 
-The seven audit briefs dispatched 2026-09-11 are archived at
-[archive/2026-09-11-audit-briefs.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-11-audit-briefs.md).
-Implementation briefs live beside the plan, one file per wave, written
-before dispatch, because the plan sits at the 800-line threshold: Wave 1 is
-[briefs/wave-1.md](./mvp-week1-web-automation-reliability-plan/briefs/wave-1.md).
+Briefs live under [briefs/](./mvp-week1-web-automation-reliability-plan/briefs/), one file per wave; the 2026-09-11
+audit briefs are in [archive/2026-09-11-audit-briefs.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-11-audit-briefs.md).
 
 ## Work Ledger
 
-The three planning entries of 2026-09-11 (document created; audits
-verified; user decisions) are archived at
-[archive/2026-09-11-planning-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-11-planning-ledger.md).
+Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliability-plan/archive/): planning,
+`2026-09-11-wave-1-ledger.md` through the Wave 2 integration, and the
+`2026-09-12-*` Wave 3 and live-validation files.
 
-Wave 1 entries up to the first three verified fixtures are archived at
-[archive/2026-09-11-wave-1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-11-wave-1-ledger.md).
+### 2026-09-12 — Compaction at handoff
 
-The next two Wave 1 entries (six more fixtures verified; harness,
-contracts, and catalog verified) are appended to the same archive.
+- Agent: supervisor
+- Changed: this document; `archive/2026-09-12-decisions-d1-d12.md` (D12
+  appended); new `archive/2026-09-12-superseded-plan-sections.md`.
+- Why: The handoff rewrite took the document to 851 lines. D12 was still in the
+  plan although the Decisions intro said D1-D12 were archived, and the archive
+  held only its title, so D12 was moved there verbatim rather than deleted. The
+  wave table, the risk list, and the Phase 1.1 and 1.6a landing narratives are
+  superseded and moved whole, each leaving a pointer.
+- Validation: `grep -n "D12"` on the decisions archive before the move -> the
+  title line only; `wc -l` on this document after compaction -> 796.
+- Outcome: Accepted
+- Follow-up: none.
 
-So are the entries for decision D11 (recorded under Decisions); the
-consolidation, extension unit tests, and sensitivity fix; the runner lane,
-Scenario Lab cleanup, and baseline mirror; and the runner-suite repair,
-including the decision that the one-call live ceiling holds; and FluxBench
-with the env-file opt-in and the Core contracts link.
+### 2026-09-12 — Handoff: the next session's objective is finishing Week 1
 
-So is the entry recording the Core failure categories being adopted here, the
-gate run that followed, and the first sighting of the recording-start flake.
-
-So is the entry for the Wave 1 gate run that traced the recording start to a
-10 s context window and fixed it in the runner.
-
-So is the entry recording the paired Wave 1 push and the opening of Wave 2.
-
-So is the Wave 2 foundation entry, which recorded the contract the other thirteen
-briefs were written against.
-
-So is the Wave 2 entry itself, recording the vocabulary and its integration.
+- Agent: supervisor
+- Changed: this document (header, Current State, Worker Briefs, Work Ledger,
+  Open Questions); `docs/working/README.md` regenerated.
+- Why: The user set the objective of the resuming session: completely finish
+  every Week 1 item, using as many subagents as needed, with everything tested.
+  Current State had also drifted: it said live validation both ran and was not
+  done, and its next steps were the already-finished Wave 3 integration.
+- Validation: `pnpm check` -> `check exit=0`,
+  `structure-audit: passed (35 warning(s), 17 baselined)`; `pnpm test` ->
+  `test exit=0`, extension `# pass 294`, domain `# pass 343`, test-runner
+  `# pass 439`, scenario-lab `# pass 197`, every package `# fail 0`. Not run: the
+  content harness, any Lab command, Core. Core's eight uncommitted files were
+  read, not verified.
+- Outcome: Accepted
+- Follow-up: the resuming session settles Core's uncommitted trace withholding,
+  then runs Next steps.
 
 ## Open Questions
 
-Open questions live in
-[open-questions.md](./mvp-week1-web-automation-reliability-plan/open-questions.md),
-moved there on 2026-09-11 so a growing list does not push this document past its
-800-line threshold.
+Open questions live in [open-questions.md](./mvp-week1-web-automation-reliability-plan/open-questions.md).
