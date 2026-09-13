@@ -2276,3 +2276,128 @@ Decided:
 - **`l-stage2`'s redispatch no longer waits for a mapper change.** It waits for
   `g-discard-window-evidence`. The message names the first commit that holds both
   that change and this test change.
+
+---
+
+# Twenty-third dispatch — from Lab Stage 2's second attempt
+
+From `reports/l-stage2.md` "Second attempt": 157 runs at `6c22e22` with Core
+`5845f5d`, all `dirty=false`.
+- **Passed:** step 4b 23 of 24 under load; W10, W27, `sensitive-input` and W24,
+  3 of 3 each alone; smoke gate 5.0 equivalent.
+- **Failed:** W18 0 of 3; W19 0 of 3; W25 0 of 3, and `too-slow` 0 of 3; the week1
+  bench passed 37 of 67.
+
+Decided:
+- **Security first.** The auth-gate declared secret reached Core's persisted
+  workspace: 13 objects per Flow-lane run, and 6 on a recording-lane run. It is
+  investigated before any other auth-gate work, by the Lab owner, who has the
+  environment.
+- **W18's and W09's Flow-lane extraction expectation is unreachable.** A
+  recording's `extract` step is the runner's own check, not a user action, so no
+  extract node can be proposed. The Flow lane stops judging it; the recording
+  lane keeps it.
+- **W19's `comparisonStatus` is supplementary.** Its category proof holds: the
+  click `failed`, and `auth_required` 3 of 3. The Flow lane will publish the
+  attempt's comparison status, so the next run can quote it.
+- **A single failed gateway snapshot read must not fail a run** that met its
+  expectations. The second discard read retries once before failing closed.
+- **Step 4b's "zero windowed discards" means zero windowed action discards.**
+  Evidence discards inside the window, from a page unloading after Stop, are
+  reported, not judged.
+- **W25's live failure and the bench's 30 failing rows are investigated** before
+  any fix.
+
+## i-secret-in-workspace — where the declared auth-gate secret enters Core's workspace (Lab owner, read-only)
+
+Sent to the `l-stage2` worker, resumed.
+
+**Owns:**
+- `reports/i-secret-in-workspace.md`;
+- a temporary local edit in its own worktree only, reverted and proven clean, to
+  keep a run's isolated Core workspace instead of deleting it;
+- runs under `F:\fxlab-runs\secret\`.
+
+**Task.**
+1. Run `auth-gate --flow` once and the recording-lane `auth-gate` once, alone,
+   keeping each Core workspace.
+2. For every Core object the redaction attestation flags, report three things:
+   - its kind: recording, timeline entry, proposal, Flow, run record, trace,
+     evidence packet, audit log, or other;
+   - the JSON key path that holds the value;
+   - the code that writes it, with file:line in this repository or Core.
+3. Say whether the value came from the recording (typed into the field) or from
+   the declared secret supplied to the Flow run.
+4. Never print, hash or partially quote the value. Report key paths, kinds and
+   counts only.
+5. End with a fix design partitioned by file, with the proof each change needs.
+
+## i-bench-triage — why 30 of 67 week1 bench rows failed (read-only)
+
+**Owns:** `reports/i-bench-triage.md` only.
+
+**Read:** `reports/l-stage2.md` "The week1 bench result"; the bench bundle under
+`F:\fxlab-runs\stage2b\`; `packages/test-runner/src/bench/corpus/week1.ts`.
+
+**Task.**
+1. For every failing row, lane and variant, give the failure category and code,
+   and the root cause with bundle evidence and file:line.
+2. Classify each failure as one of:
+   - a product defect;
+   - a harness or expectation defect;
+   - environment (a single observation);
+   - already fixed by a named decision of this dispatch.
+3. Explain the recording lane's `initialExecutionSuccess` of 0.174 and the Flow
+   lane's `falseSuccess` of 0.167.
+4. Rank the product defects by corpus impact, as the input to Phase 1.6b.
+
+## i-w25-live-wait — why a live `delayed-ui` recording proposes no wait (domain, read-only)
+
+**Owns:** `reports/i-w25-live-wait.md`, and scratch probes outside every tree.
+
+**Read:**
+- `reports/i-late-target-wait.md`, `reports/w25-wait-mapper.md` and
+  `reports/g-mapper-stored-payload.md`;
+- the stage2b `delayed-ui` bundles;
+- `domain/src/tests/web-panel-host.test.ts`, for how a row runs a recording
+  through Core.
+
+**Task.**
+1. Use the bundles, and a probe that runs the recorded shape through Core's
+   proposal generation.
+2. Find which condition of the wait rule fails on a live recording:
+   - the mutation observation's type;
+   - its `latestEvidence`, or `added`;
+   - its order against the click;
+   - the click's `selector` or frame;
+   - the between-evidence URL check.
+3. Give the fix design partitioned by file, with a Core-run row as its proof.
+
+## g-flow-lane-expectations — three runner corrections from Stage 2 (test-runner)
+
+**Owns:**
+- the Flow lane's extraction expectation and its test (name the file);
+- `flow-lane/persisted-flow-run.ts` and its test, for the attempt's comparison
+  status;
+- `src/run-scenario.ts`, the second discard read's snapshot fetch only;
+- `run-evaluation/tests/runner-wiring.test.ts`, only the pins these changes
+  move.
+
+**Read:** `reports/l-stage2.md` "Second attempt: outcome", and its open questions
+2, 3 and 5.
+
+**Task.**
+1. The Flow lane does not judge a workflow's extraction expectation unless the
+   generated Flow contains an extract node. It records that the expectation did
+   not apply, and the recording lane still judges it.
+2. The persisted Flow-lane record carries each attempt's transition comparison
+   status, when Core reports one.
+3. The second discard read retries a failed gateway snapshot fetch once, before
+   it fails closed.
+
+**Tests.**
+- One row for each change, with a mutation.
+- Test-runner `check`, and `test` in a private `--outDir` at `dist`'s depth.
+- The structure audit.
+
+**Report:** `reports/g-flow-lane-expectations.md`.

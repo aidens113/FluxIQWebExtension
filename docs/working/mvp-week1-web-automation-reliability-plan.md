@@ -93,11 +93,12 @@ settled ledger entries are in parts one to twenty-eight of
   row stays in the corpus.
 
 **In flight:**
-- **`l-stage2`:** second attempt due at `6c22e22` with Core `5845f5d`; the first was
-  blocked by the runner's own discard check (twenty-second dispatch).
+- **Twenty-third dispatch, from Stage 2's second attempt:** `i-secret-in-workspace`
+  (Lab owner), `i-bench-triage`, `i-w25-live-wait` and `g-flow-lane-expectations`.
 
 **Queued, in dependency order**
-1. **After Lab Stage 2:** its ledger entry, with every pass condition quoted.
+1. **After the twenty-third dispatch:** the fixes it names, then W18, W19 and W25
+   again in the Lab.
 2. **Integration:**
    - Core `package:lint` and `pnpm build` on the 0.4.0 tree (the bump and its
      migration note landed in `5845f5d`);
@@ -118,11 +119,11 @@ settled ledger entries are in parts one to twenty-eight of
 
 | Criterion | State | Proof still to observe |
 | --- | --- | --- |
-| Actions reliable | Stage 1: W18 0 of 3, and recordings lose entries under load; fixes in flight | week1 W01-W19 through the bench, 3 of 3 |
-| Evidence useful | Sizes reach bench and single-run evaluations; the leak attestation runs in every Lab run | Lab run: the 16 items, packet budget, leak rows |
+| Actions reliable | Stage 2, single runs: step 4b 23 of 24 under load; W18, W19 and W25 0 of 3 each, under investigation | week1 W01-W19 through the bench, 3 of 3 |
+| Evidence useful | Stage 2: `sensitive-input` leak check 3 of 3, but the auth-gate declared secret reached 13 Core workspace objects | Lab run: the 16 items, packet budget, leak rows |
 | Deterministic fallback | Corroboration refuses an uncorroborated match (unit and harness) | W20-W23 recover and W26 disambiguates in the Lab |
-| Failures classified | Stage 1: W24 and W25 report the wrong category; W24 ruled out of Week 1, W25's recorder flush and wait rule landed | Negative variants report the expected category, at least 90% |
-| Bench repeatable | Both lanes run; week1 ×3 never run | `--repeat 3` twice, agreeing within tolerance |
+| Failures classified | Stage 2: W10 and W27 `navigation_unexpected` 3 of 3; W19 `auth_required` 3 of 3; W25 `too-slow` still `target_not_found`; W24 ruled out | Negative variants report the expected category, at least 90% |
+| Bench repeatable | Stage 2: week1 `--repeat 1` passed 37 of 67; `--repeat 3` never run | `--repeat 3` twice, agreeing within tolerance |
 | Blockers ranked | Not started | Phase 1.6b ledger entry |
 
 **Everything is tested: the operating rules.**
