@@ -48,6 +48,14 @@ export type FlowLaneInput = {
   recordEvidence: (evidence: FlowLaneEvidence) => Promise<void>;
   /** The fixture oracle, run after the Flow and before its expectations are judged. Returns whether the final state held. */
   checkFinalState: () => Promise<boolean>;
+  /**
+   * Told the time, in epoch milliseconds, just before the lane dispatches the
+   * Flow run, and never when the lane fails before that. Each Flow action
+   * reaches the page through Core, and the extension confirms it on the
+   * recording channel after the recording was finalized, so Core audits it as a
+   * discard against that recording: the runner's discard read stops here.
+   */
+  flowDispatchStarting: (at: number) => void;
   bounds?: FluxIQHttpOptions;
 };
 
@@ -112,6 +120,8 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
     steps: input.workflow.recordingScript,
     requests: flowSecretRequests(nodes),
   });
+  // Just before the first Flow action can reach Core, whose runtime confirmation Core audits against the finalized recording.
+  input.flowDispatchStarting(Date.now());
   const run = await executeRecordedFlowRun(input.control, {
     projectId: input.projectId,
     flowId: approved.flowId,

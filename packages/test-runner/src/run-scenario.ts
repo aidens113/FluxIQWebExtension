@@ -101,8 +101,13 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
   // The extension's count of the executable actions it recorded, read before Stop and compared with Core's.
   let extensionActionCount: unknown;
   let flowObservation: RunLaneObservation | undefined;
-  // The first read of Core's discard audit, which `finally` reads again, in the same scope, and unions with it before the topology closes.
+  // The first read of Core's discard audit, which `finally` reads again, in the same scope closed at the Flow lane's dispatch, and unions with it before the topology closes.
   let firstDiscardRead: { scope: RecordingDiscardScope; discards: RecordingDiscard[] } | undefined;
+  // The window in which a discard Core audits is this recording's loss: from just before the extension is asked to start
+  // recording, whose Core action probe's runtime confirmations reach Core with no recording open, until the Flow lane
+  // dispatches its Flow, whose runtime confirmations Core audits against the finalized recording.
+  let discardWindowFrom: number | undefined;
+  let discardWindowUntil: number | undefined;
   // The fixture oracle's own verdict, published rather than inferred: a failure
   // category cannot tell "the fixture disagreed" from "the rig broke first".
   let oracleVerdict: "passed" | "failed" | null = null;
@@ -270,6 +275,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
         // recording stays idle for good -- no poll length can recover it. Restamping the context
         // here makes acceptance depend on this call instead of on how long startup happened to take.
         if (topology.projectId) await topology.control.selectProject(topology.projectId);
+        // The discard window opens here, after the Core action probe above, whose runtime confirmations Core audits with no recording open.
+        discardWindowFrom = Date.now();
         const startResponse = await runtimeMessage(extensionControl, { type: "fluxiq.startRecording" }); recordingStarted = true;
         // startRecording answers before Core accepts the recording, and input before then is not recorded.
         await pollStatus(extensionControl, value => value.recordingState === "recording").catch(async cause => {
@@ -301,8 +308,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
       // Core audits a message that reached a finalized recording, tells the client
       // nothing, and since `267a2ca` no longer fails the connection for it: its audit
       // log and the extension's own state after Stop are where a short recording shows.
-      // A discard is this run's by its recording, or, naming none, by the session this run paired.
-      const discardScope: RecordingDiscardScope = { recordingIds: outcome.newRecordingIds, sessionId: paired?.sessionId };
+      // A discard is this run's by its recording, or, naming none, by the session this run paired, and only inside the recording's window.
+      const discardScope: RecordingDiscardScope = { recordingIds: outcome.newRecordingIds, sessionId: paired?.sessionId, from: discardWindowFrom };
       const discardAudit = readRecordingDiscards(await topology.control.gatewaySnapshot(), discardScope);
       firstDiscardRead = { scope: discardScope, discards: discardAudit.discards };
       const connectionAfterStop = await runtimeMessage(extensionControl, { type: "fluxiq.getStatus" }).then((response: any) => String(response.status?.connectionState ?? "unreported"), () => "unavailable");
@@ -325,6 +332,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
           // The unarmed workflow's, which the recording lane asserted above.
           recordingEvents: recordingWorkflow.expected.recordingEvents ?? [],
           scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, secrets: declaredSecrets,
+          // Closes the discard window for the second read: Core audits the Flow's runtime confirmations against the finalized recording.
+          flowDispatchStarting: at => { discardWindowUntil = at; },
           prepareFlowPage: async () => {
             if (workflow.variant) await armScenarioVariant(activeTopology.scenarioOrigin, activeTopology.allocation.controllerToken, scenario.id, workflow.variant);
             // Runs on every Flow run. The reset and any arm are server-side, and
@@ -404,7 +413,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
     // cannot get fails only a run that had passed.
     if (firstDiscardRead && topology?.control) {
       const earlier = firstDiscardRead.discards;
-      const secondRead = readRecordingDiscards(await topology.control.gatewaySnapshot().catch(() => undefined), firstDiscardRead.scope, earlier);
+      const secondRead = readRecordingDiscards(await topology.control.gatewaySnapshot().catch(() => undefined), { ...firstDiscardRead.scope, until: discardWindowUntil }, earlier);
       await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "Core's discard audit was read again before the topology closed"), details: { recordingDiscards: secondRead.discards, discardsAfterFirstRead: secondRead.discards.length - earlier.length } }).catch(() => undefined);
       const failure = secondRead.failure;
       if (failure && (failure.category === "recording.persistence" ? failureCategory !== "recording.persistence" : verdict === "passed")) {

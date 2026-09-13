@@ -107,6 +107,7 @@ type LaneOptions = {
   recordingEvents?: readonly ExpectedEvent[];
   finalStateHolds?: boolean;
   variant?: ResolvedScenarioWorkflow["variant"];
+  flowDispatchStarting?: (at: number) => void;
 };
 
 async function runLane(fake: ReturnType<typeof fakeCore>, evidence: FlowLaneEvidence[], lane: LaneOptions = {}) {
@@ -130,6 +131,7 @@ async function runLane(fake: ReturnType<typeof fakeCore>, evidence: FlowLaneEvid
       prepareFlowPage: async () => { fake.sequence.push("prepare"); },
       recordEvidence: async (item) => { evidence.push(item); },
       checkFinalState: async () => lane.finalStateHolds ?? true,
+      flowDispatchStarting: lane.flowDispatchStarting ?? (() => {}),
     });
     return { outcome, resetCalls };
   } finally {
@@ -339,4 +341,28 @@ test("each action's evidence packet sizes reach the flow-lane snapshot, and the 
   ]);
   const serialised = JSON.stringify(snapshot);
   for (const content of ["private.person", "#account-summary", "web.state.2"]) assert.equal(serialised.includes(content), false, `${content} must not reach the snapshot`);
+});
+
+/**
+ * Each Flow action reaches the page through Core, and the extension confirms it
+ * on the recording channel after the recording was finalized, which Core audits
+ * as a discard against that recording. The lane reports when it begins
+ * dispatching, so the runner's second discard read stops counting there; a lane
+ * that fails before dispatching reports nothing, and the runner's window stays
+ * open.
+ */
+test("the lane reports the time just before it dispatches the Flow run, and a lane that never dispatches reports none", async () => {
+  const fake = fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500 });
+  const reported: number[] = [];
+  const before = Date.now();
+  await runLane(fake, [], { flowDispatchStarting: at => { reported.push(at); fake.sequence.push("dispatch-reported"); } });
+  const after = Date.now();
+  assert.deepEqual(fake.sequence, ["reset", "prepare", "get-flow:flow.new", "list-flow-subflows:flow.new", "dispatch-reported", "start"], "reported once, after every read and before the Flow run is started");
+  assert.equal(reported.length, 1);
+  assert.ok(reported[0]! >= before && reported[0]! <= after, `reported ${String(reported[0])}, outside the lane's run from ${before} to ${after}`);
+
+  const short = fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500, lostCandidates: 1 });
+  const neverDispatched: number[] = [];
+  await assert.rejects(() => runLane(short, [], { recordingEvents: basicFormEvents, flowDispatchStarting: at => { neverDispatched.push(at); } }));
+  assert.deepEqual(neverDispatched, [], "a proposal refused before approval dispatches nothing, so nothing is reported");
 });

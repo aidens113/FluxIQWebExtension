@@ -79,6 +79,8 @@ test("Core's audit of discarded recording messages is read after the round trip,
   assert.ok(at.settled < at.failed, "the discards are in the bundle before the run fails on them");
   assert.ok(at.failed < at.flowLane, "a recording that reached Core short never becomes a Flow");
   assert.match(source, /"Core persisted the completed recording"\), details: \{[^}]*recordingDiscards: discardAudit\.discards, extensionConnectionAfterStop: connectionAfterStop/u);
+  assert.match(source, /discardWindowFrom = Date\.now\(\);\s*const startResponse = await runtimeMessage\(extensionControl, \{ type: "fluxiq\.startRecording" \}\)/u, "the window opens just before the extension is asked to start recording, after the Core action probe");
+  assert.ok(source.includes("const discardScope: RecordingDiscardScope = { recordingIds: outcome.newRecordingIds, sessionId: paired?.sessionId, from: discardWindowFrom };"), "both reads are bounded by that window");
 });
 
 test("Core's discard audit is read a second time, after the Flow lane and the browser close and before the topology closes, and unioned with the first", async () => {
@@ -89,7 +91,7 @@ test("Core's discard audit is read a second time, after the Flow lane and the br
     firstFailed: source.indexOf("if (discardAudit.failure) throw discardAudit.failure;"),
     flowLane: source.indexOf("await runFlowLane({"),
     browserClosed: source.indexOf("await context?.close();"),
-    secondRead: source.indexOf("readRecordingDiscards(await topology.control.gatewaySnapshot().catch(() => undefined), firstDiscardRead.scope, earlier)"),
+    secondRead: source.indexOf("readRecordingDiscards(await topology.control.gatewaySnapshot().catch(() => undefined), { ...firstDiscardRead.scope, until: discardWindowUntil }, earlier)"),
     published: source.indexOf("\"Core's discard audit was read again before the topology closed\"), details: { recordingDiscards: secondRead.discards"),
     topologyClosed: source.indexOf("await topology?.close();"),
   };
@@ -102,6 +104,7 @@ test("Core's discard audit is read a second time, after the Flow lane and the br
     source.includes('failure.category === "recording.persistence" ? failureCategory !== "recording.persistence" : verdict === "passed"'),
     "an action either read finds discarded fails the run as recording.persistence; an audit the second read cannot get fails only a run that had passed",
   );
+  assert.ok(source.includes("flowDispatchStarting: at => { discardWindowUntil = at; },"), "the second read's window closes when the Flow lane reports it is dispatching the Flow, whose runtime confirmations Core audits against the finalized recording");
 });
 
 test("the evaluation reaches the caller, so lab run reports it without a bench", async () => {
