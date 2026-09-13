@@ -10,7 +10,7 @@ export const sensitiveInputScenario = defineScenario<State>({
     id: "sensitive-input", title: "Sensitive input", tags: ["redaction", "security"], seed: 110,
     startPath: "/scenarios/sensitive-input/", capabilities: ["forms"],
     recordingScript: [
-      { id: "replace-password", operation: "type", target: "role:textbox[name=Password]", value: "synthetic-secret" },
+      { id: "replace-password", operation: "type", target: "testid:password", value: "synthetic-secret" },
       { id: "replace-payment", operation: "type", target: "testid:payment", value: "4242424242424242" },
       { id: "submit-sensitive", operation: "click", target: "role:button[name=Submit synthetic values]" },
       { id: "redaction-final", operation: "checkpoint" },
@@ -20,6 +20,16 @@ export const sensitiveInputScenario = defineScenario<State>({
       actions: [{ action: "web.dom.type", outcome: "succeeded" }, { action: "web.dom.click", outcome: "succeeded" }],
       finalState: [{ id: "secrets-discarded", subject: "result", predicate: "text", value: "Submitted with secrets discarded" }],
     },
+    // Both typed fields are marked sensitive, so the recorder withholds their
+    // values and the Flow asks for each at run time. The Flow lane pairs every
+    // such request with exactly one declaration, matching the step's `testid:`
+    // target against the control's recorded test id. That is why the password
+    // step targets its test id: a password input has no implicit ARIA role in
+    // the recorder, so a `role:textbox` target would pair with nothing.
+    secrets: [
+      { id: "sensitive-input-password", step: "replace-password" },
+      { id: "sensitive-input-payment", step: "replace-payment" },
+    ],
     evidencePolicy: { screenshots: "events", trace: "failure", video: "failure", sampleFps: 0, reviewRequired: true },
   }),
   createState: () => ({ submitted: false, username: SYNTHETIC_USER, passwordStored: false, paymentStored: false }),

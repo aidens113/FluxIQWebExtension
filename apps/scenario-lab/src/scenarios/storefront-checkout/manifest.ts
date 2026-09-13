@@ -138,26 +138,37 @@ export const storefrontCheckoutManifest = createScenarioManifest({
     },
   }],
   /**
-   * The two values a Flow built from this recording cannot recover, and the
-   * one that tells the story. The recorder withholds a *marked* sensitive
-   * control's value at the source, so `enter-card-number` (`cc-number`) and
-   * `enter-billing-card-number` (`billing cc-number`) reach the Flow empty and
-   * must be supplied from `FLUXIQ_TEST_SECRET_STOREFRONT_CHECKOUT_CARD` and
-   * `..._BILLING_CARD` instead.
+   * One declaration for every step that types into a control the domain's
+   * sensitivity rule marks (`domain/src/sensitivity/signature.ts`): `type`
+   * `password`, `data-sensitive="true"`, or an `autocomplete` token that is
+   * `current-password`, `new-password`, `one-time-code` or any `cc-` token.
+   * The recorder withholds such a control's value, and the Flow's node asks
+   * for it under `web.secret.<key>` instead. The Flow lane pairs those
+   * requests with these declarations one-to-one, matching each step's
+   * `testid:` target against the control's recorded test id, and fails the
+   * run with `fixture.invalid` when they do not pair. So a marked step with
+   * no declaration here fails the lane as surely as a wrong one.
+   *
+   * That makes five, not the obvious three. Beside the password
+   * (`new-password`) and the two card numbers (`cc-number`,
+   * `billing cc-number`), the cardholder name carries `cc-name` and the
+   * expiry `cc-exp`, which the rule marks exactly as it marks the number.
+   * Each value comes from `FLUXIQ_TEST_SECRET_<ID>`, the id upper-cased with
+   * underscores.
    *
    * `enter-security-code` is not declared here, and that is not an oversight:
    * the field carries no marking, so nothing withholds it and the recording
    * replays whatever was typed. An unmarked card field needs no secret
    * precisely because it was never treated as one -- which is the asymmetry
-   * this fixture exists to expose.
-   *
-   * The account password is declared too, for the same reason as the card
-   * numbers.
+   * this fixture exists to expose. A declaration for it would pair with no
+   * request and fail the run.
    */
   secrets: [
-    { id: "storefront-checkout-card", step: "enter-card-number" },
-    { id: "storefront-checkout-billing-card", step: "enter-billing-card-number" },
     { id: "storefront-checkout-password", step: "enter-account-password" },
+    { id: "storefront-checkout-card", step: "enter-card-number" },
+    { id: "storefront-checkout-card-name", step: "enter-card-name" },
+    { id: "storefront-checkout-card-expiry", step: "enter-card-expiry" },
+    { id: "storefront-checkout-billing-card", step: "enter-billing-card-number" },
   ],
   evidencePolicy: { screenshots: "events", trace: "failure", video: "failure", sampleFps: 0, reviewRequired: true },
 });

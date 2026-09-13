@@ -15,12 +15,12 @@
 // plumbing that fills `options` on a live run. That half lives in the domain --
 // `webAutomationOutputPayload` puts the fingerprint in a node's `parameters`
 // and `webAutomationActionFromGatewayCommand` copies `parameters` into
-// `options` -- and belongs to the domain's own tests. One difference between
-// the two halves is worth knowing: the wire fingerprint is narrowed by
-// `output-nodes/targets.ts`, which keeps every signal resolution reads
-// (selector, xpath, id, test id, tag, class names, visible text, name,
-// attributes) but drops `implicitRole`, so only an explicit `role` reaches the
-// candidate family on a live run.
+// `options` -- and belongs to the domain's own tests. The two halves no longer
+// differ in what they carry: the wire projection in `gateway-payloads.ts` and
+// `output-nodes/targets.ts` both keep `testId`, `accessibleName`, `label`,
+// `implicitRole` and `context`, and `identity-wire-chain.spec.ts` runs a
+// recorded click through both before replaying it, so a signal lost on the way
+// fails a row there instead of a refusal on a live run.
 
 import { expect } from "../index.js";
 import type { ContentHarness } from "../index.js";
