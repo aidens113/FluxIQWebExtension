@@ -465,9 +465,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
     // written into the bundle before finalization, which makes it a hashed
     // artifact `lab inspect` verifies, and returned so `lab run` prints it.
     // The existing and clone targets run a pre-existing Flow on no evaluation
-    // lane, publish no observation, and so get no evaluation.
+    // lane, publish no observation, and so get no evaluation. A Flow-lane run's
+    // evidence sizes come from the staging directory's `snapshots/flow-lane.json`,
+    // the file the bench reads once `finalize` has renamed that directory.
     const evaluation = observation
-      ? singleRunEvaluation({ runId, verdict, failureCategory, scenarioId: scenario.id, workflowId: workflow.workflowId, variantId: workflow.variant?.id, observation, manifest, metrics, events: bundle.getEvents(), wallClockMs: Date.now() - Date.parse(startedAt) })
+      ? singleRunEvaluation({ runId, verdict, failureCategory, scenarioId: scenario.id, workflowId: workflow.workflowId, variantId: workflow.variant?.id, observation, manifest, metrics, events: bundle.getEvents(), wallClockMs: Date.now() - Date.parse(startedAt), bundlePath: bundle.stagingPath })
       : undefined;
     if (evaluation) await bundle.writeStructured("evaluation.json", evaluation);
     bundle.registerEvidencePolicy(evidence.capture);

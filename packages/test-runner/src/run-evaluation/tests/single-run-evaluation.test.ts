@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
-import test from "node:test";
-import { parseRunEvaluationJson, type RunManifest } from "@fluxiq-web-extension/test-contracts";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import test, { type TestContext } from "node:test";
+import { parseRunEvaluationJson, type RunEvaluation, type RunManifest } from "@fluxiq-web-extension/test-contracts";
+import { evaluateFlowRun } from "../../bench/index.js";
 import { flowLaneObservation, recordingLaneObservation } from "../../flow-lane/index.js";
 import { singleRunEvaluation, type SingleRunInput } from "../single-run-evaluation.js";
 
@@ -96,4 +101,90 @@ test("a category the evaluation contract does not carry reads as unknown, never 
   for (const foreign of ["target_not_found", "web.target.not_found", "not-a-category"]) {
     assert.equal(singleRunEvaluation(input({ verdict: "failed", failureCategory: foreign })).failureCategory, "unknown");
   }
+});
+
+/** A bundle directory holding only `snapshots/flow-lane.json`: `snapshot` as `flowLaneSnapshot` writes it, or raw text. */
+function bundleWith(t: TestContext, snapshot: unknown): string {
+  const directory = mkdtempSync(path.join(tmpdir(), "fluxiq-single-run-evidence-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  mkdirSync(path.join(directory, "snapshots"));
+  writeFileSync(path.join(directory, "snapshots", "flow-lane.json"), typeof snapshot === "string" ? snapshot : `${JSON.stringify(snapshot, null, 2)}\n`);
+  return directory;
+}
+/** A bundle directory that does not exist, so a read of it finds no snapshot. */
+const NO_BUNDLE = path.join(tmpdir(), `fluxiq-single-run-no-bundle-${process.pid}-${Date.now()}`);
+const NO_EVIDENCE = { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 };
+
+/** Two measured packets on two actions, one of them trimmed, and an action Core captured nothing around. */
+const TWO_PACKETS = {
+  flowId: "flow.basic", runtimeRunId: "core-run.1", status: "succeeded", harnessActivations: 0, failure: null, extractionCount: 0,
+  actions: [
+    { actionType: "web.dom.type", status: "succeeded", evidencePackets: [{ point: "beforeAction", bytes: 2_048, truncated: false }] },
+    { actionType: "web.browser.wait", status: "succeeded" },
+    { actionType: "web.dom.click", status: "succeeded", evidencePackets: [{ point: "afterAction", bytes: 4_096, truncated: true }] },
+  ],
+};
+
+const createdFlow = flowLaneObservation({
+  flowCreated: true, oracleVerdict: "passed", automationFailureExpected: null,
+  run: { runId: "core-run.1", status: "succeeded", harnessActivations: 0, failure: null, extracted: [], actions: [{ actionType: "web.dom.click", status: "succeeded", startedAt: "2026-09-12T10:00:11.000Z", durationMs: 210, failure: null }] },
+});
+
+/** The same run as the bench's Flow lane evaluates it, from the finalized bundle at `bundlePath`. `input()` closes on its `final` event, sequence 17. */
+function benchRowOf(run: SingleRunInput, bundlePath: string): RunEvaluation {
+  return evaluateFlowRun({
+    scenarioId: run.scenarioId, workflowId: run.workflowId ?? null, variantId: run.variantId ?? null, repeatIndex: 0, expectedFailure: run.observation.automationFailureExpected,
+    result: { runId: run.runId, verdict: run.verdict, ...(run.failureCategory === undefined ? {} : { failureCategory: run.failureCategory }), path: bundlePath, observation: run.observation },
+    manifest: run.manifest, metrics: run.metrics, finalSequence: 17, errorSequence: undefined, wallClockMs: run.wallClockMs,
+  });
+}
+
+test("a Flow-lane single run records the packets its bundle measured, and agrees with its bench row field for field", (t) => {
+  const bundlePath = bundleWith(t, TWO_PACKETS);
+  const run = input({ observation: createdFlow, bundlePath });
+  const evaluation = singleRunEvaluation(run);
+  assert.deepEqual(evaluation.evidence, { sanitizedPacketBytes: [2_048, 4_096], rawSnapshotBytes: [], truncationCount: 1 });
+  assert.deepEqual(parseRunEvaluationJson(JSON.stringify(evaluation)), evaluation);
+  // Until this read existed, `evaluation.json` recorded no packets for the run
+  // whose bench row recorded two. One file, one judgement.
+  assert.deepEqual(evaluation, benchRowOf(run, bundlePath));
+});
+
+test("a recording-lane single run reads no evidence sizes, even from a directory holding Flow-lane packets", (t) => {
+  const evaluation = singleRunEvaluation(input({ bundlePath: bundleWith(t, TWO_PACKETS) }));
+  assert.equal(evaluation.lane, "recording");
+  assert.deepEqual(evaluation.evidence, NO_EVIDENCE);
+});
+
+test("a Flow-lane single run whose snapshot is absent, unparseable, or not packets records only what the bench records, and never throws", (t) => {
+  const mixed = { actions: [{ evidencePackets: [{ bytes: -1, truncated: false }, { bytes: 1.5, truncated: true }, { bytes: 10, truncated: "yes" }, "packet", null, { point: "afterAction", bytes: 512, truncated: true }] }, { evidencePackets: "none" }, "action"] };
+  const cases: Array<[string, string, RunEvaluation["evidence"]]> = [
+    ["no bundle", NO_BUNDLE, NO_EVIDENCE],
+    ["broken JSON", bundleWith(t, "{ \"actions\": [ not json"), NO_EVIDENCE],
+    ["actions not an array", bundleWith(t, { actions: "none" }), NO_EVIDENCE],
+    ["a top-level array", bundleWith(t, [TWO_PACKETS]), NO_EVIDENCE],
+    ["only one entry is a packet", bundleWith(t, mixed), { sanitizedPacketBytes: [512], rawSnapshotBytes: [], truncationCount: 1 }],
+  ];
+  for (const [name, bundlePath, expected] of cases) {
+    const run = input({ observation: createdFlow, bundlePath });
+    const evaluation = singleRunEvaluation(run);
+    assert.deepEqual(evaluation.evidence, expected, name);
+    assert.deepEqual(evaluation, benchRowOf(run, bundlePath), `${name}: the single run and its bench row agree`);
+  }
+});
+
+test("lab run hands its evaluation the bundle the Flow lane wrote its snapshot into, before the bundle is sealed", async () => {
+  // A read nothing passes a path to would leave `evaluation.json` empty while
+  // every row above stayed green, so the call site is checked too.
+  const root = path.resolve(import.meta.dirname, "..", "..", "..", "..", "..");
+  const source = await readFile(path.join(root, "packages", "test-runner", "src", "run-scenario.ts"), "utf8");
+  const at = {
+    snapshot: source.indexOf('await bundle.writeStructured("snapshots/flow-lane.json", flowLaneSnapshot(evidence));'),
+    evaluated: source.indexOf("? singleRunEvaluation({"),
+    finalized: source.indexOf("await bundle.finalize("),
+  };
+  for (const [name, index] of Object.entries(at)) assert.ok(index > 0, `${name} is in the runner`);
+  assert.ok(at.snapshot < at.evaluated, "the Flow lane's snapshot is written before the run is evaluated");
+  assert.ok(at.evaluated < at.finalized, "the staging directory still exists: finalize renames it");
+  assert.match(source, /\? singleRunEvaluation\(\{[^}]*\bbundlePath: bundle\.stagingPath\b[^}]*\}\)/u, "the evaluation reads the bundle this run is writing");
 });
