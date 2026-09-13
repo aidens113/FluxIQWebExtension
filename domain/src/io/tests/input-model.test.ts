@@ -185,6 +185,18 @@ for (const outputId of dispatchOnlyOutputs) {
   assert.equal(recordableOutputs.includes(outputId), false, `${outputId} is dispatch-only`);
 }
 
+// A control whose value the recorder withheld asks for it at run time instead of
+// carrying it (`output-nodes/secret-binding.ts`). That request satisfies the
+// required `text`: refusing it dropped the step from the Flow without a word.
+const passwordField = { selector: "#password", tagName: "input", inputType: "password", testId: "password", attributes: { type: "password", "data-testid": "password" } };
+const withheld = webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.elementInputChanged, { element: passwordField });
+assert.equal(withheld?.inputId, WEB_AUTOMATION_INPUT_IDS.textEntered, "a withheld value is still a text entry, not evidence");
+assert.equal(withheld?.outputId, "web.dom.type");
+assert.deepEqual(withheld?.parameters.text, { $state: { path: "web.secret.password" } }, "the node carries the request, and no value");
+assert.equal(webAutomationInputIdForRecordedEvent(recorded("dom.input", { element: passwordField })), WEB_AUTOMATION_INPUT_IDS.textEntered, "the live gateway path agrees with the mapper");
+// Only a request counts: an ordinary control with no recorded value has nothing to type.
+assert.equal(webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.elementInputChanged, { element: field }), undefined, "an empty literal is still not executable");
+
 // State and evidence inputs never become executable.
 assert.equal(stateInputDefinitions.every((input) => (input.role as string) !== "action"), true);
 const stateInputIds: string[] = stateInputDefinitions.map((input) => input.id);

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { ResolvedScenarioWorkflow, WebScenario } from "@fluxiq-web-extension/test-contracts";
+import type { ResolvedScenarioWorkflow, ScenarioStep, WebScenario } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../../failure.js";
+import type { DeclaredSecret } from "../declared-secrets.js";
 import { runFlowLane, type FlowLaneControl, type FlowLaneEvidence } from "../run-flow-lane.js";
 
 /**
@@ -21,10 +22,15 @@ import { runFlowLane, type FlowLaneControl, type FlowLaneEvidence } from "../run
  * *visible at the moment it is called*. A lane that asks immediately gets one
  * candidate of four and passes its own assertions; a lane that waits for
  * Core's completion signal gets four.
+ *
+ * `graphNodes`, when given, are the nodes approval wrote onto the primary
+ * Subflow's graph Flow, which is where recorded actions live.
  */
-function fakeCore(options: { appendsAt: readonly number[]; finalizedAt?: number }) {
+function fakeCore(options: { appendsAt: readonly number[]; finalizedAt?: number; graphNodes?: readonly unknown[] }) {
   const clock = { value: 0 };
   const proposalRequestedAt: number[] = [];
+  const startedInputs: Record<string, unknown>[] = [];
+  const runInputs: Record<string, unknown>[] = [];
   const visibleEntries = () => options.appendsAt.filter(at => at <= clock.value).length;
   const proposal = (candidateCount: number) => ({
     proposalId: "proposal.one",
@@ -35,7 +41,7 @@ function fakeCore(options: { appendsAt: readonly number[]; finalizedAt?: number 
     candidates: Array.from({ length: candidateCount }, (_value, index) => ({ candidateId: `candidate.${index}`, outputId: "web.dom.type" })),
   });
   const control: FlowLaneControl = {
-    automationStudioCall: async (endpoint: string) => {
+    automationStudioCall: async (endpoint: string, payload: Record<string, unknown>) => {
       if (endpoint === "list-recordings") {
         const ended = options.finalizedAt !== undefined && clock.value >= options.finalizedAt;
         return { recordings: [{ recordingId: "recording.one", startedAt: 0, ...(ended ? { endedAt: options.finalizedAt } : {}), metadata: { summaryOnly: true, eventCount: visibleEntries() } }] };
@@ -49,26 +55,31 @@ function fakeCore(options: { appendsAt: readonly number[]; finalizedAt?: number 
       if (endpoint === "review-recording-flow-proposal") {
         return { proposal: { ...proposal(visibleEntries()), status: "approved", review: { decision: "approved", destination: { kind: "flow", flowId: "flow.new", created: true } } }, flow: { flowId: "flow.new" } };
       }
-      if (endpoint === "get-flow") return { flow: { nodes: [{ id: "node.one", parameterValues: { outputId: "web.dom.click" } }] } };
-      if (endpoint === "list-flow-subflows") return { subflows: [] };
+      if (endpoint === "get-flow") {
+        if (payload.flowId === "flow.graph") return { flow: { nodes: options.graphNodes ?? [] } };
+        return { flow: { nodes: [{ id: "node.one", parameterValues: { outputId: "web.dom.click" } }] } };
+      }
+      if (endpoint === "list-flow-subflows") return { subflows: options.graphNodes ? [{ graphFlowId: "flow.graph" }] : [] };
       if (endpoint === "get-flow-run-detail") {
         return { runDetail: { summary: { runId: "run.one", status: "succeeded" }, actionAttempts: [{ attemptId: "attempt.one", nodeId: "node.one", definitionId: "builtin.policy.action", order: 1, status: "succeeded", startedAt: 10, finishedAt: 20 }], interventions: [] } };
       }
       throw new Error(`unexpected endpoint ${endpoint}`);
     },
     selectExistingContext: async () => {},
-    startPersistedFlow: async () => ({ runId: "run.one" }),
-    runPersistedFlow: async () => ({ session: { runId: "run.one", status: "succeeded" } }),
+    startPersistedFlow: async (input) => { startedInputs.push(input.inputs ?? {}); return { runId: "run.one" }; },
+    runPersistedFlow: async (input) => { runInputs.push(input.inputs ?? {}); return { session: { runId: "run.one", status: "succeeded" } }; },
   };
   return {
     control,
     proposalRequestedAt,
+    startedInputs,
+    runInputs,
     now: () => clock.value,
     sleep: async (ms: number) => { clock.value += ms; },
   };
 }
 
-async function runLane(fake: ReturnType<typeof fakeCore>, evidence: FlowLaneEvidence[]) {
+async function runLane(fake: ReturnType<typeof fakeCore>, evidence: FlowLaneEvidence[], lane: { scenarioId?: string; secrets?: readonly DeclaredSecret[]; recordingScript?: readonly ScenarioStep[] } = {}) {
   const resetCalls: string[] = [];
   const realFetch = globalThis.fetch;
   globalThis.fetch = (async (url: string) => { resetCalls.push(String(url)); return { ok: true, status: 200 }; }) as unknown as typeof globalThis.fetch;
@@ -79,12 +90,12 @@ async function runLane(fake: ReturnType<typeof fakeCore>, evidence: FlowLaneEvid
       authorizationPin: "123456",
       recordingId: "recording.one",
       recordingWait: { now: fake.now, sleep: fake.sleep, intervalMs: 100, timeoutMs: 10_000 },
-      scenario: { id: "basic-form", recordingScript: [], expected: {} } as unknown as WebScenario,
-      workflow: { expected: {} } as unknown as ResolvedScenarioWorkflow,
+      scenario: { id: lane.scenarioId ?? "basic-form", recordingScript: [], expected: {} } as unknown as WebScenario,
+      workflow: { expected: {}, recordingScript: lane.recordingScript ?? [] } as unknown as ResolvedScenarioWorkflow,
       facilityRunId: "run-test",
       scenarioOrigin: "http://127.0.0.1:4310",
       runToken: "token",
-      secrets: [],
+      secrets: lane.secrets ?? [],
       armVariant: async () => {},
       recordEvidence: async (item) => { evidence.push(item); },
       checkFinalState: async () => true,
@@ -120,4 +131,50 @@ test("a recording Core never finishes fails the run, and no proposal is asked fo
   );
   assert.deepEqual(fake.proposalRequestedAt, [], "the lane must not propose from a recording Core never finished");
   assert.deepEqual(evidence, []);
+});
+
+/**
+ * W18's shape: auth-gate records a username and a password, and the recorder
+ * withholds the password, so the approved Flow's password node carries a
+ * request under `web.secret.password` instead of a value. Core resolves that
+ * path as a flat key of the run's inputs, so the declared value has to arrive
+ * under exactly that key. `SUPPLIED` stands for the declared value and appears
+ * nowhere in the Flow.
+ */
+const SUPPLIED = "value-declared-for-the-run";
+const authGateScript: ScenarioStep[] = [
+  { id: "enter-username", operation: "type", target: "testid:username" },
+  { id: "enter-password", operation: "type", target: "testid:password" },
+  { id: "submit-sign-in", operation: "click", target: "testid:sign-in" },
+];
+const authGateNodes = [
+  { id: "node.username", parameterValues: { outputId: "web.dom.type", parameters: { selector: "#username", text: "demo-user", element: { selector: "#username", testId: "username" } } } },
+  { id: "node.password", parameterValues: { outputId: "web.dom.type", parameters: { selector: "#password", text: { $state: { path: "web.secret.password" } }, element: { selector: "#password", inputType: "password", testId: "password", attributes: { "data-testid": "password", type: "password" } } } } },
+];
+const authGateSecret: DeclaredSecret = { id: "auth-gate-password", step: "enter-password", value: SUPPLIED };
+
+test("the run's inputs carry the declared value at the path the Flow's node asks for", async () => {
+  assert.equal(JSON.stringify(authGateNodes).includes(SUPPLIED), false, "the Flow holds a request, never the value");
+  const fake = fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500, graphNodes: authGateNodes });
+  await runLane(fake, [], { scenarioId: "auth-gate", secrets: [authGateSecret], recordingScript: authGateScript });
+  const expected = { "auth-gate-password": SUPPLIED, "web.secret.password": SUPPLIED, scenarioId: "auth-gate", facilityRunId: "run-test" };
+  assert.deepEqual(fake.startedInputs, [expected], "the run is started with the value under the node's path");
+  assert.deepEqual(fake.runInputs, [expected], "and executed with it");
+});
+
+test("a request no declaration answers fails the run before it starts, naming the path and never a value", async () => {
+  const fake = fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500, graphNodes: authGateNodes });
+  // Declared, but for the username step, whose node asks for nothing: the
+  // password request is unanswered and the declaration pairs with nothing.
+  const misdeclared: DeclaredSecret = { id: "auth-gate-password", step: "enter-username", value: SUPPLIED };
+  await assert.rejects(
+    () => runLane(fake, [], { scenarioId: "auth-gate", secrets: [misdeclared], recordingScript: authGateScript }),
+    (error: unknown) => error instanceof RunnerFailure
+      && error.category === "fixture.invalid"
+      && error.message.includes("web.secret.password")
+      && error.message.includes("auth-gate-password")
+      && !JSON.stringify({ message: error.message, details: error.details }).includes(SUPPLIED),
+  );
+  assert.deepEqual(fake.startedInputs, [], "nothing was started with an unanswered request");
+  assert.deepEqual(fake.runInputs, []);
 });

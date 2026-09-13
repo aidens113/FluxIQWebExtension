@@ -441,4 +441,64 @@ assert.deepEqual(
 // no named target -- gains no empty measurement.
 assert.equal("resolution" in webAutomationActionResultPayload(failedValidationResult), false);
 
+// -- A value the run never supplied is refused, never typed as nothing --------
+// A sensitive control's node asks for its value under a path. Core answers the
+// request from the run's inputs before dispatch; a command that still carries
+// one was never answered, and reading it as absent text would type an empty
+// string and report success. The refusal names parameters and paths only.
+
+const unsuppliedFailure = {
+  category: "user_intervention_required",
+  code: "web.intervention.required",
+  retryable: false,
+  stage: "execution",
+  expected: "values supplied at run time for web.secret.password",
+  actual: "the run supplied none, so the action was not dispatched"
+};
+const unsupplied = webAutomationActionFromGatewayCommand({
+  commandId: "command.unsupplied",
+  actionType: "web.dom.type",
+  target: { selector: "#password" },
+  parameters: { selector: "#password", text: { $state: { path: "web.secret.password" } } }
+});
+assert.deepEqual(unsupplied, {
+  commandId: "command.unsupplied",
+  status: "rejected",
+  actionType: "web.dom.type",
+  message: "Not dispatched: these parameters need values supplied at run time that this run did not supply: text (web.secret.password)",
+  failure: unsuppliedFailure
+});
+assert.equal("text" in unsupplied, false, "a refused command carries nothing to type");
+assert.deepEqual(parseAutomationStudioFailureRecord("failure" in unsupplied ? unsupplied.failure : undefined), unsuppliedFailure, "Core's parser keeps the record whole");
+
+// Answered, the request is gone -- Core replaced it with the run input -- and the
+// command dispatches as ordinary text.
+const answeredSentinel = "run-supplied-sentinel";
+const answered = webAutomationActionFromGatewayCommand({
+  commandId: "command.answered",
+  actionType: "web.dom.type",
+  target: { selector: "#password" },
+  parameters: { selector: "#password", text: answeredSentinel }
+});
+assert.equal("status" in answered, false, "an answered request is not refused");
+assert.equal((answered as { text?: string }).text, answeredSentinel);
+
+// Several unmet requests are all named, each with its path, and a literal
+// beside them is neither named nor echoed.
+const several = webAutomationActionFromGatewayCommand({
+  commandId: "command.several",
+  actionType: "web.dom.type",
+  parameters: { text: { $state: { path: "web.secret.password" } }, value: { $state: { path: "web.secret.card-number" } }, key: answeredSentinel }
+});
+assert.equal("message" in several ? several.message : undefined, "Not dispatched: these parameters need values supplied at run time that this run did not supply: text (web.secret.password), value (web.secret.card-number)");
+assert.equal(JSON.stringify(several).includes(answeredSentinel), false, "the refusal carries names and paths, never a parameter value");
+
+// The guard's reach: a binding on another namespace is not a secret request.
+assert.equal("status" in webAutomationActionFromGatewayCommand({ commandId: "command.other", actionType: "web.dom.type", parameters: { text: { $state: { path: "web.elements.password" } } } }), false);
+// An unknown action type is still refused as unknown first.
+assert.equal(
+  (webAutomationActionFromGatewayCommand({ commandId: "command.unknown", actionType: "web.dom.hover", parameters: { text: { $state: { path: "web.secret.password" } } } }) as { failure?: { code?: string } }).failure?.code,
+  "web.action.unsupported_type"
+);
+
 console.log("Web automation gateway mapping tests passed.");

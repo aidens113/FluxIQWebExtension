@@ -14,7 +14,7 @@ import {
   type WebAutomationActionValidation,
   type WebAutomationElementFingerprint
 } from "../actions/types";
-import { elementFingerprint } from "../output-nodes";
+import { elementFingerprint, webAutomationUnresolvedSecretParameters } from "../output-nodes";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "../runtime/failure";
 import { WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, isProducerRedactedComparison, isSensitiveElementDescriptor } from "../sensitivity";
 import { webAutomationLiftedActionParameters } from "./gateway-action-parameters";
@@ -36,7 +36,10 @@ export type WebAutomationRecordedPayload = {
   metadata?: JsonObject | undefined;
 };
 
-/** A gateway command whose action type is not a web automation action. Nothing is dispatched for it. */
+/**
+ * A gateway command nothing is dispatched for: its action type is not a web
+ * automation action, or it still asks for a value the run never supplied.
+ */
 export type WebAutomationActionRejection = {
   commandId: string;
   status: "rejected";
@@ -126,6 +129,12 @@ export function webAutomationActionFromGatewayCommand(command: ClientGatewayActi
     return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: normalized.message, failure: normalized.failure };
   }
   const parameters = command.parameters ?? {};
+  // A request the run never answered would otherwise read as absent text and
+  // type nothing, reporting success. Refused instead, by name and path only.
+  const unmet = webAutomationUnresolvedSecretParameters(parameters);
+  if (unmet.length > 0) {
+    return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: unsuppliedValueMessage(unmet), failure: unsuppliedValueFailure(unmet) };
+  }
   const target = command.target ?? {};
   return compactJsonObject({
     commandId: command.commandId,
@@ -319,6 +328,23 @@ export function normalizeWebAutomationActionType(actionType: string): WebAutomat
  * compiler, rather than a comment, is now what keeps the code correct.
  */
 const UNSUPPORTED_ACTION_TYPE_FAILURE = Object.freeze(webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE));
+
+/**
+ * The refusal of a command that still asks for a value the run never supplied.
+ * Only an operator can fix it, by supplying the value, and retrying the command
+ * unchanged can never succeed, so it is the closed set's user-intervention code.
+ * The text names paths, which identify a control, and never a value.
+ */
+function unsuppliedValueFailure(unmet: readonly { parameter: string; path: string }[]): AutomationStudioFailureRecord {
+  return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED, {
+    expected: `values supplied at run time for ${unmet.map((entry) => entry.path).join(", ")}`,
+    actual: "the run supplied none, so the action was not dispatched"
+  });
+}
+
+function unsuppliedValueMessage(unmet: readonly { parameter: string; path: string }[]): string {
+  return `Not dispatched: these parameters need values supplied at run time that this run did not supply: ${unmet.map((entry) => `${entry.parameter} (${entry.path})`).join(", ")}`;
+}
 
 const CANONICAL_ACTION_TYPES: ReadonlySet<string> = new Set(WEB_AUTOMATION_ACTION_TYPES);
 

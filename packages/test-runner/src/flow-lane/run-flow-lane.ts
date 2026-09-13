@@ -1,6 +1,6 @@
 import type { ResolvedScenarioWorkflow, WebScenario } from "@fluxiq-web-extension/test-contracts";
 import type { FluxIQHttpOptions } from "../http-control.js";
-import { declaredSecretFlowInputs, type DeclaredSecret } from "./declared-secrets.js";
+import { declaredSecretBindingInputs, declaredSecretFlowInputs, readFlowSecretRequests, type DeclaredSecret } from "./declared-secrets.js";
 import { assertFlowActions, assertFlowExtraction, assertFlowFailure } from "./expectations.js";
 import { awaitFinalizedRecording, type FinalizedRecording, type FinalizedRecordingWait } from "./finalized-recording.js";
 import { readFlowActionTypes } from "./flow-action-types.js";
@@ -80,12 +80,21 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
   // Read before running: the map identifies each attempt, and a Flow whose
   // nodes dispatch no output could not have run the recording at all.
   const actionTypes = await readFlowActionTypes(input.control, { projectId: input.projectId, flowId: approved.flowId }, bounds);
+  // A node on a sensitive control asks for its value under a path rather than
+  // carrying it. Each such request is answered by exactly one declared secret,
+  // keyed by the path Core resolves, or the run fails here, before it starts.
+  const secretInputs = declaredSecretBindingInputs({
+    scenarioId: input.scenario.id,
+    secrets: input.secrets,
+    steps: input.workflow.recordingScript,
+    requests: await readFlowSecretRequests(input.control, { projectId: input.projectId, flowId: approved.flowId }, bounds),
+  });
   const run = await executeRecordedFlowRun(input.control, {
     projectId: input.projectId,
     flowId: approved.flowId,
     facilityRunId: input.facilityRunId,
     actionTypes,
-    inputs: { ...declaredSecretFlowInputs(input.secrets), scenarioId: input.scenario.id, facilityRunId: input.facilityRunId },
+    inputs: { ...declaredSecretFlowInputs(input.secrets), ...secretInputs, scenarioId: input.scenario.id, facilityRunId: input.facilityRunId },
   }, bounds);
   await input.recordEvidence({ recording, proposal, flowId: approved.flowId, run });
   const expected = input.workflow.expected;

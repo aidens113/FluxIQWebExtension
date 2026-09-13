@@ -2,7 +2,7 @@ import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_EVENTS, type WebAutomationEventType } from "../constants";
 import { webAutomationActionDefinitions } from "../actions/schemas";
 import type { WebAutomationActionType } from "../actions/types";
-import { webAutomationOutputPayload } from "../output-nodes";
+import { webAutomationOutputPayload, webAutomationSecretBindingPath } from "../output-nodes";
 
 export const WEB_AUTOMATION_INPUT_IDS = {
   browserState: "web.browser.state",
@@ -162,13 +162,20 @@ function isSelectValueChangeKeyPress(payload: JsonObject): boolean {
 
 /**
  * Complete when every parameter the schema of the output requires is a
- * non-empty string. Key press and scroll declare no required parameter but do
- * nothing without the recorded key or a scroll coordinate.
+ * non-empty string, or a request for a value supplied at run time. Key press
+ * and scroll declare no required parameter but do nothing without the recorded
+ * key or a scroll coordinate.
+ *
+ * The request is what `output-nodes/payloads.ts` writes in place of a value the
+ * recorder withheld from a sensitive control. Refusing it here dropped the step
+ * from the Flow without a word, so a replay failed at the final state with
+ * nothing naming the missing value. Accepted, the node reaches Core, which
+ * either answers it from the run's inputs or fails the node naming the path.
  */
 function hasExecutableParameters(outputId: WebAutomationActionType, parameters: JsonObject): boolean {
   const schema = webAutomationActionDefinitions.find((definition) => definition.actionType === outputId)?.parameterSchema;
   const required = Array.isArray(schema?.required) ? schema.required.filter((key): key is string => typeof key === "string") : [];
-  if (!required.every((key) => isNonEmptyString(parameters[key]))) return false;
+  if (!required.every((key) => isNonEmptyString(parameters[key]) || webAutomationSecretBindingPath(parameters[key]) !== undefined)) return false;
   if (outputId === "web.dom.keypress") return isNonEmptyString(parameters.key);
   if (outputId === "web.dom.scroll") return typeof parameters.x === "number" || typeof parameters.y === "number";
   // A check whose state is unknown would have to guess between checking and
