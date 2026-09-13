@@ -1111,9 +1111,13 @@ pnpm lab bench --corpus week1 --repeat 3 --target isolated
 - **Corpora** (`bench/corpus/`). `smoke` is W01 (`basic-form`) and W28
   (`iframe-checkout`) on the recording lane only. `week1` is W01 to W29 on both
   lanes: every unarmed workflow runs on the recording lane and on the Flow lane,
-  and every variant runs on the Flow lane alone. That makes 67 results per
-  repeat: 23 on the recording lane, and 44 on the Flow lane (23 unarmed and 21
-  variants). W19 to W23 and W29 are variants only. Because `week1` runs
+  and every variant runs on the Flow lane alone. A workflow whose script
+  performs no action has no Flow lane, because no recording of it can become a
+  Flow, so W04's and W08's four Flow-lane entries are planned as skipped with
+  that reason. That leaves 63 runnable results per repeat: 23 on the recording
+  lane, and 40 on the Flow lane (21 unarmed and 19 variants). A `lab run --flow`
+  of such a workflow is refused as `fixture.invalid` before anything starts.
+  W19 to W23 and W29 are variants only. Because `week1` runs
   `auth-gate` on the Flow lane, it needs `FLUXIQ_TEST_SECRET_AUTH_GATE_PASSWORD`.
 - **Runs.** Each repeat is one pass over the corpus. `--target` must be
   `isolated` or `persistent-isolated`. A result the corpus runs on no lane, or

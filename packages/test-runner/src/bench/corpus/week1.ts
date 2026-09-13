@@ -14,8 +14,11 @@ const variantOnly = (id: string, scenarioId: string, workflowId: string | null, 
  * Save's slot, which the resolver must refuse as `target_not_found`.
  *
  * Both lanes run. Every unarmed workflow runs on both, and every variant on the
- * Flow lane, the only lane that arms one: 67 runnable results per repeat, 23 on
- * the recording lane and 44 on the Flow lane (23 unarmed, 21 variants). The
+ * Flow lane, the only lane that arms one, except a workflow whose script performs
+ * no action, which no recording can turn into a Flow: W04's and W08's four
+ * Flow-lane entries are planned as skipped, with that reason. That leaves 63
+ * runnable results per repeat, 23 on the recording lane and 40 on the Flow lane
+ * (21 unarmed, 19 variants). The
  * Flow lane is the only lane on which FluxIQ executes a workflow, so it is what
  * makes W01-W18 a measurement of FluxIQ and gives drift recovery, fuzzy
  * recovery and failure classification a population; the recording lane keeps

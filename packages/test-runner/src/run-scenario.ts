@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { chromium, type BrowserContext, type Page } from "@playwright/test";
-import { assertClonePackage, assertRunManifest, canonicalClonePackageJson, resolveScenarioWorkflow, scenarioPageFactSchedule, type ResolvedScenarioWorkflow, type RunActionTiming, type RunAutomationFailure, type RunEvaluation, type ScenarioArming, type WebScenario } from "@fluxiq-web-extension/test-contracts";
+import { assertClonePackage, assertRunManifest, canonicalClonePackageJson, flowLaneExclusion, resolveScenarioWorkflow, scenarioPageFactSchedule, type ResolvedScenarioWorkflow, type RunActionTiming, type RunAutomationFailure, type RunEvaluation, type ScenarioArming, type WebScenario } from "@fluxiq-web-extension/test-contracts";
 import { createCorrelationId, EvidenceBundle, EvidenceCaptureController, sha256 } from "@fluxiq-web-extension/test-evidence";
 import type { EvidenceMode } from "./commands.js";
 import { removeRunOwnedTopologyState, startTopology, type RunningTopology } from "./coordinator.js";
@@ -675,6 +675,9 @@ function resolveWorkflow(scenario: WebScenario, options: RunScenarioOptions, tar
   try { workflow = resolveScenarioWorkflow(scenario, { ...(options.workflowId === undefined ? {} : { workflowId: options.workflowId }), ...(options.variantId === undefined ? {} : { variantId: options.variantId }) }); }
   catch (cause) { throw new RunnerFailure("fixture.invalid", cause instanceof Error ? cause.message : String(cause), { cause }); }
   if (workflow.variant && !options.flow && target.mode !== "existing" && target.mode !== "clone") throw new RunnerFailure("fixture.invalid", "A variant is armed only before a Flow run; the recording lane always records the workflow unarmed");
+  // A script that records no action yields no Flow on any product: refused before the bundle, Core or a browser exists, with the reason the bench skips it for.
+  const noFlowLane = options.flow ? flowLaneExclusion(workflow.recordingScript) : undefined;
+  if (noFlowLane !== undefined) throw new RunnerFailure("fixture.invalid", `A Flow run was refused: ${noFlowLane}`);
   return workflow;
 }
 function probeTiming(actionType: string, startedAt: number, result: any): RunActionTiming { return { actionType, startedAt: new Date(startedAt).toISOString(), durationMs: Math.max(0, Date.now() - startedAt), status: runActionStatus(result?.status) }; }

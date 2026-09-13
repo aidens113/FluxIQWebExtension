@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { RunnerFailure } from "../../failure.js";
+import { runScenario } from "../../run-scenario.js";
 
 /**
  * That the runner *calls* the evaluator is not something a unit of the
@@ -143,4 +146,38 @@ test("the evaluation reaches the caller, so lab run reports it without a bench",
   // `cli.ts` prints the whole result of a `lab run`, so returning it is what
   // puts the judgement in front of whoever ran the scenario.
   assert.ok(source.includes("...(evaluation ? { evaluation } : {})"), "the result carries the evaluation");
+});
+
+/**
+ * `lab run --flow` builds its Flow from the run's own recording, so a workflow
+ * whose script records no action can never pass it: W04, `product-catalog`'s
+ * primary workflow, only reads the page. The runner refuses such a run with the
+ * shared check the bench skips it by, before a bundle, Core or a browser exists.
+ */
+test("a Flow-lane run of a workflow whose script records no action is refused as fixture.invalid before a bundle, Core or a browser exists", async () => {
+  const source = await runnerSource();
+  assert.match(source, /import \{[^}]*\bflowLaneExclusion\b[^}]*\} from "@fluxiq-web-extension\/test-contracts";/u, "the runner reads the check the bench plans with");
+  assert.equal(source.match(/flowLaneExclusion\(/gu)?.length, 1, "one refusal, in one place");
+  assert.ok(source.includes("const noFlowLane = options.flow ? flowLaneExclusion(workflow.recordingScript) : undefined;"), "only a Flow-lane run is refused: the recording lane still runs the workflow");
+  const at = {
+    resolved: source.indexOf("const workflow = resolveWorkflow(scenario, options, target);"),
+    bundle: source.indexOf("await bundle.initialize();"),
+    extension: source.indexOf("await requireExtension(extensionPath);"),
+    topology: source.indexOf("topology = await startTopology({"),
+  };
+  for (const [name, index] of Object.entries(at)) assert.ok(index > 0, `${name} is in the runner`);
+  assert.ok(at.resolved < at.bundle && at.bundle < at.extension && at.extension < at.topology, "the workflow is resolved, and refused, before anything is created or started");
+
+  const runsDirectory = await mkdtemp(path.join(os.tmpdir(), "fluxiq-no-flow-lane-"));
+  try {
+    // The extension path does not exist, so a run the refusal missed stops at `requireExtension`, before Core or a browser.
+    const outcome: unknown = await runScenario({ repositoryRoot: root, fluxiqRepositoryRoot: path.join(runsDirectory, "no-core"), runsDirectory, scenarioId: "product-catalog", flow: true, environment: { FLUXIQ_LAB_EXTENSION_PATH: path.join(runsDirectory, "no-extension") } }).then((result) => result, (error: unknown) => error);
+    assert.ok(outcome instanceof RunnerFailure, `the run is refused, not run: ${outcome instanceof Error ? outcome.message : JSON.stringify(outcome)}`);
+    assert.equal(outcome.category, "fixture.invalid");
+    assert.match(outcome.message, /^A Flow run was refused: the Flow lane builds its Flow from the workflow's own recording, and no step of the workflow's recordingScript records an action \(operations: extract, checkpoint\)/u);
+    assert.deepEqual(await readdir(runsDirectory), [], "no evidence bundle was created");
+  } finally {
+    // Retried: a run the refusal missed may still be closing bundle files, and a cleanup error must not hide the assertion.
+    await rm(runsDirectory, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  }
 });

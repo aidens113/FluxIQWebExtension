@@ -1,5 +1,6 @@
 export * from "./scenario.js";
 export * from "./scenario-workflow.js";
+export * from "./flow-lane-exclusion.js";
 export * from "./failure-category.js";
 export * from "./run.js";
 export * from "./evidence.js";

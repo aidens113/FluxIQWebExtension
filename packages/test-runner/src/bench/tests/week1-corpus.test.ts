@@ -71,6 +71,9 @@ test("every smoke result resolves and runs on the recording lane", async () => {
   assert.deepEqual(smokeCorpus.lanes, ["recording"], "smoke is the corpus every historical bench was measured on: its plan must not change");
 });
 
+/** The week1 rows whose workflow's script records no action (`flowLaneExclusion`). */
+const NO_FLOW_LANE_ROWS = new Set(["W04", "W08"]);
+
 /**
  * The corpus runs both lanes, and every unarmed workflow runs on both. Before
  * the Flow lane ran the variants, every variant carried
@@ -78,8 +81,14 @@ test("every smoke result resolves and runs on the recording lane", async () => {
  * failure classification with a provably empty population. Before it ran the
  * unarmed workflows too, FluxIQ executed W01-W18 on no lane at all: the
  * recording lane executes at most a two-action Core probe.
+ *
+ * The exception is a workflow whose script records no action. W04 and W08 only
+ * read the page, so no recording of either yields a Flow, and their four
+ * Flow-lane results failed every bench as `recording.contract` whatever FluxIQ
+ * did. They are planned and skipped with the shared check's reason, and W04
+ * and W08 count for criterion 1 on the recording lane only.
  */
-test("week1 plans 67 runnable results per repeat: every unarmed workflow on both lanes, every resolved variant on the Flow lane", async (t) => {
+test("week1 plans 63 runnable results per repeat: every unarmed workflow on both lanes and every resolved variant on the Flow lane, except a workflow whose script records no action, which the Flow lane skips", async (t) => {
   const plan = expandCorpus(week1Corpus, await loadScenarioManifests(repositoryRoot));
   const runnable = plan.filter((entry) => entry.skipReason === undefined);
   const byLane = (lane: string) => runnable.filter((entry) => entry.lane === lane);
@@ -87,15 +96,18 @@ test("week1 plans 67 runnable results per repeat: every unarmed workflow on both
   const variantsOn = (lane: string) => byLane(lane).filter((entry) => entry.variantId !== null);
   t.diagnostic(`runnable: ${runnable.length} (${byLane("recording").length} recording; ${byLane("flow").length} flow, ${unarmedOn("flow").length} unarmed and ${variantsOn("flow").length} variants); skipped: ${plan.length - runnable.length}`);
   assert.deepEqual(week1Corpus.lanes, ["recording", "flow"]);
-  // The count a week1 bench's run time is estimated from. A new corpus row changes it: W29's variant made it 67.
-  assert.deepEqual([runnable.length, unarmedOn("recording").length, variantsOn("recording").length, unarmedOn("flow").length, variantsOn("flow").length], [67, 23, 0, 23, 21]);
-  // The Flow lane runs exactly the unarmed workflows the recording lane runs: W01-W18 for criterion 1, and W24-W28.
-  assert.deepEqual(unarmedOn("flow").map(label), unarmedOn("recording").map(label));
-  const criterionOne = Array.from({ length: 18 }, (_, index) => `W${String(index + 1).padStart(2, "0")}`);
+  // The count a week1 bench's run time is estimated from. A new corpus row changes it: W29's variant made it 67, and skipping W04's and W08's four Flow-lane results made it 63.
+  assert.deepEqual([runnable.length, unarmedOn("recording").length, variantsOn("recording").length, unarmedOn("flow").length, variantsOn("flow").length], [63, 23, 0, 21, 19]);
+  // The Flow lane runs the unarmed workflows the recording lane runs, bar W04 and W08: the rest of W01-W18 for criterion 1, and W24-W28.
+  assert.deepEqual(unarmedOn("flow").map(label), unarmedOn("recording").filter((entry) => !NO_FLOW_LANE_ROWS.has(entry.corpusRowId)).map(label));
+  const criterionOne = Array.from({ length: 18 }, (_, index) => `W${String(index + 1).padStart(2, "0")}`).filter((row) => !NO_FLOW_LANE_ROWS.has(row));
   assert.deepEqual(unarmedOn("flow").map((entry) => entry.corpusRowId), [...criterionOne, "W24", "W25", "W26", "W27", "W28"]);
-  // Every resolved result now runs; the only skips left are variants no fixture defines.
-  assert.deepEqual(plan.filter((entry) => entry.resolved && entry.skipReason !== undefined).map(label), []);
-  assert.deepEqual(plan.filter((entry) => entry.skipReason !== undefined).map(label), UNRESOLVED_TODAY);
+  assert.deepEqual(unarmedOn("recording").filter((entry) => NO_FLOW_LANE_ROWS.has(entry.corpusRowId)).map(label), ["W04 product-catalog/primary/unarmed", "W08 data-table/primary/unarmed"], "W04 and W08 still run on the recording lane");
+  // Every other resolved result runs. The skips are those four Flow-lane results, each with the shared check's reason, and any variant no fixture defines.
+  const skippedResolved = plan.filter((entry) => entry.resolved && entry.skipReason !== undefined);
+  assert.deepEqual(skippedResolved.map((entry) => `${label(entry)} on ${entry.lane}`), ["W04 product-catalog/primary/unarmed", "W04 product-catalog/primary/text-variant", "W08 data-table/primary/unarmed", "W08 data-table/primary/column-reorder"].map((name) => `${name} on flow`));
+  for (const entry of skippedResolved) assert.match(entry.skipReason ?? "", /no step of the workflow's recordingScript records an action \(operations: extract\b/u, label(entry));
+  assert.deepEqual(plan.filter((entry) => !entry.resolved).map(label), UNRESOLVED_TODAY);
   const negatives = byLane("flow").filter((entry) => entry.expectedFailure !== null);
   t.diagnostic(`flow-lane results with an expected failure: ${negatives.length} (${negatives.map((entry) => `${label(entry)}=${entry.expectedFailure?.category ?? ""}`).join(", ")})`);
   assert.ok(negatives.length > 0, "failure classification accuracy has a population only because negative variants now run");

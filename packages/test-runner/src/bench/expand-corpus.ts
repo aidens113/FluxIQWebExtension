@@ -1,4 +1,4 @@
-import { resolveScenarioWorkflow, type EvaluationLane, type ExpectedFailure, type WebScenario } from "@fluxiq-web-extension/test-contracts";
+import { flowLaneExclusion, resolveScenarioWorkflow, type EvaluationLane, type ExpectedFailure, type WebScenario } from "@fluxiq-web-extension/test-contracts";
 import type { BenchCorpus, BenchCorpusRow } from "./corpus/index.js";
 
 /** Why a resolved variant does not run: a variant is armed only by the Flow lane, and this corpus does not run it. */
@@ -14,7 +14,9 @@ export const UNARMED_NEEDS_A_LANE = "an unarmed workflow runs on the recording l
  * FluxIQ runs a Flow built from that recording, the only lane on which FluxIQ
  * executes the workflow at all. Planning an unarmed workflow on both is what
  * lets one week1 bench measure FluxIQ executing W01-W18 beside the recording
- * lane every earlier bench measured.
+ * lane every earlier bench measured. A workflow whose script records no
+ * action is still planned on the Flow lane, and skipped there once it
+ * resolves (`planEntry`).
  */
 export const lanesForResult = (variantId: string | null): readonly EvaluationLane[] => (variantId === null ? ["recording", "flow"] : ["flow"]);
 
@@ -24,7 +26,8 @@ export const lanesForResult = (variantId: string | null): readonly EvaluationLan
  * `resolved` is whether `resolveScenarioWorkflow` finds the scenario,
  * workflow, and variant in the registry. `lane` is the lane the entry runs on.
  * `skipReason` is set exactly when the entry does not run: it did not resolve,
- * or the corpus runs none of the lanes that can run it.
+ * the corpus runs none of the lanes that can run it, or it is on the Flow lane
+ * and its workflow's script records no action (`flowLaneExclusion`).
  */
 export type BenchPlanEntry = {
   corpusRowId: string;
@@ -57,6 +60,12 @@ function plannedLanes(corpus: BenchCorpus, variantId: string | null): Array<{ la
   return [{ lane: capable[0] ?? "flow", laneSkip: variantId === null ? UNARMED_NEEDS_A_LANE : VARIANT_NEEDS_FLOW_LANE }];
 }
 
+/**
+ * A resolved Flow-lane entry whose workflow's script records no action is
+ * skipped with `flowLaneExclusion`'s reason: no Flow can be built from its
+ * recording, so it would fail every repeat as `recording.contract` whatever
+ * FluxIQ did. The runner refuses a `--flow` run of it with the same reason.
+ */
 function planEntry(row: BenchCorpusRow, variantId: string | null, lane: EvaluationLane, laneSkip: string | undefined, manifests: readonly WebScenario[]): BenchPlanEntry {
   const identity = { corpusRowId: row.id, scenarioId: row.scenarioId, workflowId: row.workflowId, variantId, lane };
   const scenario = manifests.find((candidate) => candidate.id === row.scenarioId);
@@ -64,7 +73,8 @@ function planEntry(row: BenchCorpusRow, variantId: string | null, lane: Evaluati
   try {
     const resolved = resolveScenarioWorkflow(scenario, { ...(row.workflowId === null ? {} : { workflowId: row.workflowId }), ...(variantId === null ? {} : { variantId }) });
     const expectedFailure = resolved.expected.failure ?? null;
-    return { ...identity, resolved: true, ...(laneSkip === undefined ? {} : { skipReason: laneSkip }), expectedFailure };
+    const skipReason = laneSkip ?? (lane === "flow" ? flowLaneExclusion(resolved.recordingScript) : undefined);
+    return { ...identity, resolved: true, ...(skipReason === undefined ? {} : { skipReason }), expectedFailure };
   } catch (error) {
     return { ...identity, resolved: false, skipReason: `unresolved: ${error instanceof Error ? error.message : String(error)}`, expectedFailure: null };
   }
