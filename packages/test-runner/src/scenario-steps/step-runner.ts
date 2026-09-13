@@ -19,11 +19,25 @@ export type ScenarioStepRunnerOptions = {
   /** Run-owned directory for `upload` files. */
   uploadDirectory: string;
   now?: () => number;
+  /** Test seam for the recording settle barrier; production uses a timer. */
+  sleep?: (ms: number) => Promise<void>;
 };
 
 export type ScenarioStepResult = { extracted?: ExtractedRecord[] };
 
 const DEFAULT_WAIT_MS = 15_000;
+// The recorder keeps a click/submit able to explain navigation for 5 s, and a
+// commit at the end of that window may remain in its debounce queue for 250 ms.
+// A following scripted navigation must cross both bounds or an `other`
+// transition can still be attributed to the previous trusted input and drop.
+const NAVIGATION_DEBOUNCE_MS = 250;
+const NAVIGATION_EXPLANATION_MS = 5_000;
+const SCRIPTED_NAVIGATION_SETTLE_MS = NAVIGATION_EXPLANATION_MS + NAVIGATION_DEBOUNCE_MS;
+
+// These trusted operations can emit the click or submit events the extension
+// treats as navigation explainers. Other trusted input does not open that
+// window, so it must not impose a five-second delay on a later navigation.
+const NAVIGATION_EXPLAINING_OPERATIONS: ReadonlySet<ScenarioStep["operation"]> = new Set(["click", "press", "check"]);
 
 /**
  * Performs recording-script steps with Playwright on the active scenario tab,
@@ -34,9 +48,12 @@ export class ScenarioStepRunner {
   private readonly downloads: DownloadWatch;
   private readonly recorded: RunStepTiming[] = [];
   private readonly now: () => number;
+  private readonly sleep: (ms: number) => Promise<void>;
+  private lastNavigationExplainingInputCompletedAt: number | undefined;
 
   constructor(private readonly options: ScenarioStepRunnerOptions) {
     this.now = options.now ?? Date.now;
+    this.sleep = options.sleep ?? (ms => new Promise(resolve => setTimeout(resolve, ms)));
     this.tabs = new ScenarioTabs(options.context, options.page, options.isScenarioUrl, this.now);
     this.downloads = new DownloadWatch(options.context, this.now);
   }
@@ -53,8 +70,10 @@ export class ScenarioStepRunner {
   async run(step: ScenarioStep): Promise<ScenarioStepResult> {
     const startedAt = this.now();
     try {
-      const result = await this.perform(step);
-      this.record(step, startedAt, "succeeded");
+      const result = await this.perform(step, startedAt);
+      const completedAt = this.now();
+      this.record(step, startedAt, "succeeded", completedAt);
+      if (NAVIGATION_EXPLAINING_OPERATIONS.has(step.operation)) this.lastNavigationExplainingInputCompletedAt = completedAt;
       return result;
     } catch (error) {
       this.record(step, startedAt, "failed");
@@ -66,11 +85,11 @@ export class ScenarioStepRunner {
     this.downloads.dispose();
   }
 
-  private record(step: ScenarioStep, startedAt: number, outcome: RunStepTiming["outcome"]): void {
-    this.recorded.push({ stepId: step.id, operation: step.operation, startedAt: new Date(startedAt).toISOString(), durationMs: Math.max(0, Math.round(this.now() - startedAt)), outcome });
+  private record(step: ScenarioStep, startedAt: number, outcome: RunStepTiming["outcome"], completedAt = this.now()): void {
+    this.recorded.push({ stepId: step.id, operation: step.operation, startedAt: new Date(startedAt).toISOString(), durationMs: Math.max(0, Math.round(completedAt - startedAt)), outcome });
   }
 
-  private async perform(step: ScenarioStep): Promise<ScenarioStepResult> {
+  private async perform(step: ScenarioStep, startedAt: number): Promise<ScenarioStepResult> {
     const page = this.tabs.active();
     const timeout = step.timeoutMs === undefined ? {} : { timeout: step.timeoutMs };
     const timeoutMs = step.timeoutMs === undefined ? {} : { timeoutMs: step.timeoutMs };
@@ -80,7 +99,11 @@ export class ScenarioStepRunner {
       case "type": await target().fill(String(step.value ?? ""), timeout); return {};
       case "select": await selectOptionByKeyboard(target(), String(step.value ?? ""), timeoutMs); return {};
       case "scroll": await page.mouse.wheel(0, Number(step.value ?? 500)); return {};
-      case "navigate": await page.goto(`${this.options.origin}${step.path ?? "/"}`, timeout); return {};
+      case "navigate": {
+        await this.settleNavigationAfterTrustedInput(startedAt);
+        await page.goto(`${this.options.origin}${step.path ?? "/"}`, timeout);
+        return {};
+      }
       case "waitForState": await target().waitFor({ state: "visible", ...timeout }); return {};
       case "checkpoint": return {};
       case "press": {
@@ -103,6 +126,13 @@ export class ScenarioStepRunner {
         throw new RunnerFailure("fixture.invalid", `Unsupported scenario step operation: ${String(unsupported)}`);
       }
     }
+  }
+
+  /** Wait only what remains of the recorder's combined explanation/debounce bound. */
+  private async settleNavigationAfterTrustedInput(at: number): Promise<void> {
+    if (this.lastNavigationExplainingInputCompletedAt === undefined) return;
+    const remaining = this.lastNavigationExplainingInputCompletedAt + SCRIPTED_NAVIGATION_SETTLE_MS - at;
+    if (remaining > 0) await this.sleep(remaining);
   }
 }
 

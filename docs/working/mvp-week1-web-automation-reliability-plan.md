@@ -100,14 +100,22 @@ settled ledger entries are in parts one to fifty of
   load-derived 90-second finalization bound with selected diagnostics, first
   functional-failure precedence, and the tracked six-criterion `lab compare`.
 - Supervisor verification passed a 54-test focused suite, eight mutation
-  proofs, and downstream root check/test/build gates. No Lab proof, final
-  bench, comparison, or ranking run is in progress.
+  proofs, and downstream root check/test/build gates. `l-final-proofs` passed
+  at downstream `4cde72d` and Core `19468b7`; the supervisor independently
+  parsed all 19 accepted bundles and confirmed their bounded results.
+- The first final-bench pair was stopped cleanly after both reproduced W02's
+  false no-action result; B also exposed W10 primary's one-candidate recording
+  race. Both had zero leak and recording-persistence findings before stop.
+- Both fixes are supervisor-tested: package check and 617 tests pass; mutations
+  fail 2/16 and 2/6 rows, then restore to 22/22. Root gates pass; push remains.
+- Both benches reproduced W02 `keyboard-forms` Flow repeat 0 failing as
+  `action.dispatch` with no durable action attempt. `i-final-w02` is assigned
+  read-only to classify that miss while the benches continue.
 
 **Queued, in dependency order**
-1. Push the coherent, verified paired `dev` heads.
-2. **Lab Stage 4:** run `l-final-proofs` alone at the pushed remediation pins;
-   only after it passes, run the two complete `--repeat 3` benches at those
-   same pins, concurrently only within the documented RAM limit.
+1. Push a new downstream pin paired with the unchanged Core pin.
+2. Recheck W02 and W10 live, then restart both complete repeat-three benches
+   concurrently at the new pushed pins.
 3. **Phase 1.6b:** run the tracked comparison, complete `i-ranking-draft`, and
    write the six observed exit-criterion figures into the ledger.
 

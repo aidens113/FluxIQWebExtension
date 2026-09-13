@@ -45,13 +45,72 @@ test("a clean Flow run reports its actions and no failure", async () => {
 test("a failed Flow is a result, not a runner fault: the structured failure survives to be asserted", async () => {
   const failure = { category: "auth_required", code: "session.expired", retryable: false };
   const { client } = control(
-    { runPersistedFlow: async () => { throw new RunnerFailure("runtime.behavior", "Flow finished with status failed"); } },
+    { runPersistedFlow: async () => ({ session: { runId: "run.one", status: "failed" } }) },
     { summary: { runId: "run.one", status: "failed" }, actionAttempts: [attempt({ status: "failed", failure })] },
   );
   const outcome = await executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
   assert.equal(outcome.status, "failed");
   assert.deepEqual(outcome.failure, failure);
   assert.equal(outcome.actions[0]?.status, "failed");
+});
+
+test("a bounded run timeout or abort waits through an empty running detail for terminal durable attempts", async () => {
+  for (const bounded of ["timeout", "abort"] as const) {
+    const original = new RunnerFailure("runtime.behavior", `synthetic ${bounded}`, { details: { bounded, timeoutMs: 30_000 } });
+    let reads = 0;
+    const { client } = control({
+      runPersistedFlow: async () => { throw original; },
+      automationStudioCall: async () => {
+        reads += 1;
+        return reads === 1
+          ? { runDetail: { summary: { runId: "run.one", status: "running" }, actionAttempts: [], interventions: [] } }
+          : { runDetail: { summary: { runId: "run.one", status: "succeeded" }, actionAttempts: [attempt()], interventions: [] } };
+      },
+    });
+    const clock = { value: 0 };
+    const outcome = await executeRecordedFlowRun(
+      client,
+      { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" },
+      {},
+      { now: () => clock.value, sleep: async ms => { clock.value += ms; }, timeoutMs: 1_000, intervalMs: 100 },
+    );
+    assert.equal(outcome.status, "succeeded", bounded);
+    assert.equal(outcome.actions.length, 1, bounded);
+    assert.equal(reads, 2, bounded);
+  }
+});
+
+test("a bounded run failure with no terminal durable evidence preserves the original failure", async () => {
+  const original = new RunnerFailure("runtime.behavior", "synthetic bounded timeout", { details: { bounded: "timeout", timeoutMs: 30_000 } });
+  let reads = 0;
+  const { client } = control({
+    runPersistedFlow: async () => { throw original; },
+    automationStudioCall: async () => {
+      reads += 1;
+      return { runDetail: { summary: { runId: "run.one", status: "running" }, actionAttempts: [], interventions: [] } };
+    },
+  });
+  const clock = { value: 0 };
+  await assert.rejects(
+    () => executeRecordedFlowRun(
+      client,
+      { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" },
+      {},
+      { now: () => clock.value, sleep: async ms => { clock.value += ms; }, timeoutMs: 250, intervalMs: 100 },
+    ),
+    error => error === original,
+  );
+  assert.equal(reads, 3);
+});
+
+test("a non-bounded run failure is rethrown without reading a run detail", async () => {
+  const original = new RunnerFailure("runtime.behavior", "synthetic non-bounded failure");
+  const { client, calls } = control({ runPersistedFlow: async () => { throw original; } });
+  await assert.rejects(
+    () => executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" }),
+    error => error === original,
+  );
+  assert.deepEqual(calls, ["select", "start"]);
 });
 
 test("a failure record Core's own parser rejects is treated as absent, never half-read", async () => {

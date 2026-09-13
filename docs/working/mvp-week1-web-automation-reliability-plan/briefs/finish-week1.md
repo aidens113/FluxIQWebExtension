@@ -5011,3 +5011,66 @@ headed as `v-bench-honesty` requires, with the auth-gate secret supplied as in S
 - any `recording.persistence` failure's discard kinds.
 
 The supervisor compares A with B with `bench-compare.mjs`.
+
+## f-final-flow-run-bound — a bounded run request must not become a false no-action failure
+
+From `i-final-w02`: both final benches reproduced W02 Flow repeat 0 as
+`action.dispatch` with no durable attempt. A synthetic probe confirms that
+`executeRecordedFlowRun` swallows a bounded 30-second request failure and reads
+one still-running, zero-attempt detail immediately.
+
+**Owns:**
+- `packages/test-runner/src/flow-lane/persisted-flow-run.ts`;
+- `packages/test-runner/src/flow-lane/tests/persisted-flow-run.test.ts`;
+- `reports/f-final-flow-run-bound.md`.
+
+**Read:** Week 1 Current State; `reports/i-final-w02.md`; the two owned files;
+`existing-flow-run.ts` only for its bounded-failure distinction; HTTP control
+types only as needed to use the existing public seam.
+
+**Task.**
+1. Do not treat arbitrary `RunnerFailure` as permission to read a terminal run.
+2. On a bounded timeout/abort for the expected run, poll boundedly for terminal
+   detail and durable attempts, using a measured bound compatible with the
+   existing 90-second finalization/load evidence. Preserve the original failure
+   if terminal evidence never arrives; never emit the false no-action failure.
+3. Keep successful and genuinely failed terminal-run behaviour unchanged.
+4. Add focused rows for timeout then terminal attempts, timeout that never
+   reaches terminal evidence, and non-bounded failures.
+
+**Validation:** focused private-build tests and typecheck; a mutation that
+restores the immediate detail read and makes the new row fail, restored exactly.
+No Lab, source outside the owned files, commit, or push.
+
+**Report:** `reports/f-final-flow-run-bound.md`.
+
+## f-final-scripted-navigation-settle — preserve two intentional recording actions
+
+From `i-final-w10`: W10 primary sometimes records only its click, so Core
+faithfully runs a short Flow and the final-state oracle rejects the false
+success. Historical candidate counts 1/2/1 confirm a driver/intake race.
+
+**Owns:**
+- `packages/test-runner/src/scenario-steps/step-runner.ts`;
+- `packages/test-runner/src/scenario-steps/tests/step-runner.test.ts`;
+- `reports/f-final-scripted-navigation-settle.md`.
+
+**Read:** Week 1 Current State; `reports/i-final-w10.md`; owned files; and
+`navigation-recorder.ts` constants/decision rules only.
+
+**Task.**
+1. Before a scripted `navigate` following trusted user input, wait until the
+   prior navigation cannot remain pending or be attributed to that input.
+2. Derive the bound from both the 250 ms debounce and 5,000 ms explanatory
+   window; do not assume waiting only past the debounce makes an `other`
+   transition intentional. Avoid delaying navigation when no relevant input
+   preceded it or the elapsed time already satisfies the bound.
+3. Keep step timing honest: the barrier is part of the navigate step.
+4. Add deterministic injected-clock/sleep tests for waiting, already-settled,
+   and no-prior-input paths.
+
+**Validation:** test-runner check; focused private test; mutation removing the
+barrier makes its row fail, then exact restoration. No Lab, Core/extension
+source, other shared docs, commits, or pushes.
+
+**Report:** `reports/f-final-scripted-navigation-settle.md`.

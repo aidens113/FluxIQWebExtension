@@ -2,8 +2,26 @@ import { randomUUID } from "node:crypto";
 import { parseAutomationStudioFailureRecord, type AutomationStudioFailureRecord, type RunActionTiming } from "@fluxiq-web-extension/test-contracts";
 import type { AutomationNodeTargetResolution } from "fluxiq/automation-studio/nodes";
 import { RunnerFailure } from "../failure.js";
-import type { FluxIQHttpOptions } from "../http-control.js";
+import { isBoundedHttpFailure, type FluxIQHttpOptions } from "../http-control.js";
 import { runActionStatus } from "../run-manifest/index.js";
+
+/**
+ * A timed-out synchronous Core run can keep executing after its HTTP client has
+ * gone away. Under the final two-bench load, the first W02 Flow crossed the
+ * request's 30-second bound in both campaigns and completed its runner cleanup
+ * 42.9-46.5 seconds after Flow-lane dispatch. Give that exact run the same
+ * load-proven 90-second window used for recording finalization to publish a
+ * terminal detail with durable attempts.
+ */
+const TERMINAL_DETAIL_WAIT_MS = 90_000;
+const TERMINAL_DETAIL_POLL_MS = 250;
+
+export type PersistedFlowTerminalWait = {
+  now?: () => number;
+  sleep?: (ms: number) => Promise<void>;
+  timeoutMs?: number;
+  intervalMs?: number;
+};
 
 /** The Core calls a Flow run makes; `ExistingFluxIQControlClient` satisfies it. */
 export type PersistedFlowRunControl = {
@@ -147,6 +165,7 @@ export async function executeRecordedFlowRun(
   control: PersistedFlowRunControl,
   input: { projectId: string; flowId: string; facilityRunId: string; inputs?: Record<string, unknown>; actionTypes?: ReadonlyMap<string, string>; candidateOrder?: ReadonlyMap<string, number> },
   bounds: FluxIQHttpOptions = {},
+  terminalWait: PersistedFlowTerminalWait = {},
 ): Promise<PersistedFlowRunOutcome> {
   await control.selectExistingContext(input.projectId, undefined, bounds, input.flowId);
   const inputs = input.inputs ?? {};
@@ -159,21 +178,31 @@ export async function executeRecordedFlowRun(
     sessionStatus = result.session.status;
     if (result.session.runId !== runId) throw new RunnerFailure("runtime.behavior", "Core ran a different run than the one it started");
   } catch (error) {
-    // A Flow that fails its actions is a result, not a runner fault: read the
-    // detail below so the expected failure can still be asserted. A transport
-    // fault leaves no detail and is rethrown by `readRunDetail`.
-    if (!(error instanceof RunnerFailure)) throw error;
-    sessionStatus = "failed";
+    // Only a bounded request can have left Core executing after the client went
+    // away. An arbitrary runner failure is not evidence that a run completed.
+    if (!isBoundedHttpFailure(error)) throw error;
+    const detail = await awaitTerminalRunDetail(control, input.projectId, runId, input.actionTypes ?? new Map(), error, terminalWait);
+    return outcomeFromDetail(runId, detail, sessionStatus, input.actionTypes, input.candidateOrder);
   }
   const detail = await readRunDetail(control, input.projectId, runId, bounds, input.actionTypes ?? new Map());
+  return outcomeFromDetail(runId, detail, sessionStatus, input.actionTypes, input.candidateOrder);
+}
+
+function outcomeFromDetail(
+  runId: string,
+  detail: Awaited<ReturnType<typeof readRunDetail>>,
+  sessionStatus: string,
+  actionTypes: ReadonlyMap<string, string> | undefined,
+  candidateOrder: ReadonlyMap<string, number> | undefined,
+): PersistedFlowRunOutcome {
   const actions = detail.actions;
   if (!actions.length) throw new RunnerFailure("action.dispatch", "The approved Flow produced no durable action attempt");
   const failure = actions.map((action) => action.failure).find((record): record is AutomationStudioFailureRecord => record !== null) ?? null;
   const status = runStatus(detail.summaryStatus ?? sessionStatus);
-  const stop = stopWithoutFailedAttempt(status, actions, new Set(detail.attemptNodeIds), input.actionTypes);
+  const stop = stopWithoutFailedAttempt(status, actions, new Set(detail.attemptNodeIds), actionTypes);
   // The attempts are in Core's `order`, so the first one on a node the recording's order names is where the run started.
-  const startNodeId = detail.attemptNodeIds.find((nodeId) => input.candidateOrder?.has(nodeId) === true);
-  const startCandidateIndex = startNodeId === undefined ? undefined : input.candidateOrder?.get(startNodeId);
+  const startNodeId = detail.attemptNodeIds.find((nodeId) => candidateOrder?.has(nodeId) === true);
+  const startCandidateIndex = startNodeId === undefined ? undefined : candidateOrder?.get(startNodeId);
   return {
     runId,
     status,
@@ -184,6 +213,38 @@ export async function executeRecordedFlowRun(
     ...(stop ? { stoppedWithoutFailedAttempt: stop } : {}),
     ...(startCandidateIndex === undefined ? {} : { startCandidateIndex }),
   };
+}
+
+async function awaitTerminalRunDetail(
+  control: PersistedFlowRunControl,
+  projectId: string,
+  runId: string,
+  actionTypes: ReadonlyMap<string, string>,
+  originalFailure: unknown,
+  wait: PersistedFlowTerminalWait,
+): Promise<Awaited<ReturnType<typeof readRunDetail>>> {
+  const now = wait.now ?? Date.now;
+  const sleep = wait.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const timeoutMs = wait.timeoutMs ?? TERMINAL_DETAIL_WAIT_MS;
+  const intervalMs = wait.intervalMs ?? TERMINAL_DETAIL_POLL_MS;
+  const deadline = now() + timeoutMs;
+  while (now() < deadline) {
+    const remaining = deadline - now();
+    try {
+      const detail = await readRunDetail(control, projectId, runId, { timeoutMs: Math.min(30_000, remaining) }, actionTypes);
+      if (terminalRunStatus(detail.summaryStatus) && detail.actions.length > 0) return detail;
+    } catch {
+      // The original timeout/abort remains authoritative until exact terminal
+      // evidence arrives; a diagnostic read must never replace it.
+    }
+    const delay = Math.min(intervalMs, Math.max(0, deadline - now()));
+    if (delay > 0) await sleep(delay);
+  }
+  throw originalFailure;
+}
+
+function terminalRunStatus(status: string | undefined): boolean {
+  return status === "succeeded" || status === "failed" || status === "cancelled";
 }
 
 /**
