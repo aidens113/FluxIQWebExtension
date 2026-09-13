@@ -201,6 +201,7 @@ const recordedContext = {
   formAction: "/workspace/settings",
   fieldsetLegend: "General",
   landmark: "main",
+  landmarkName: "Workspace",
   heading: "Workspace settings",
   listPosition: { index: 3, total: 24 },
   tablePosition: { row: 2, column: 4, columnHeader: "Total" }
@@ -248,4 +249,34 @@ test("the attribute map is narrowed to the strings Core compares", () => {
   });
   assert.deepEqual(fingerprint?.attributes, { "data-testid": "save" });
   assert.deepEqual(elementFingerprint({ selector: "#save", attributes: {} })?.attributes, {}, "an element that carried an empty map still carries one");
+});
+
+// --- A checkbox's state and its landmark's name (B5) -------------------------
+//
+// Both are read as their own type and nothing else, which matters most for the
+// state: an unchecked box is `false`, and a normalizer that treated `false` as
+// absent would replay every toggle as "leave it alone".
+
+test("a checkbox's checked state survives into the fingerprint and the dispatched target, unchecked included", () => {
+  assert.equal(elementFingerprint({ selector: "#agree", inputType: "checkbox", checked: true })?.checked, true);
+  const target = outputTargetFromPayload({
+    selector: "#agree",
+    element: { selector: "#agree", tagName: "input", inputType: "checkbox", checked: false }
+  });
+  assert.equal((target?.element as { checked?: unknown }).checked, false, "false is a state, not an absence");
+});
+
+test("a checked state that is not a boolean does not reach the page", () => {
+  for (const checked of ["true", 1, null, { value: true }]) {
+    assert.equal("checked" in (elementFingerprint({ selector: "#agree", checked }) ?? {}), false, JSON.stringify(checked));
+  }
+});
+
+test("a landmark's name reaches the dispatched target beside the role it names", () => {
+  const target = outputTargetFromPayload({
+    selector: "#agree",
+    element: { selector: "#agree", context: { landmark: "region", landmarkName: "Billing details" } }
+  });
+  assert.deepEqual((target?.element as { context?: unknown }).context, { landmark: "region", landmarkName: "Billing details" });
+  assert.equal("context" in (elementFingerprint({ selector: "#agree", context: { landmarkName: 7 } }) ?? {}), false, "a name that is not text is no context at all");
 });

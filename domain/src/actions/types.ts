@@ -54,6 +54,8 @@ export type WebAutomationElementContext = {
   fieldsetLegend?: string | undefined;
   /** The nearest landmark role, for example `main`, `navigation`, `search`. */
   landmark?: string | undefined;
+  /** That landmark's accessible name, where the page gave it one: what separates two `region`s a role cannot. */
+  landmarkName?: string | undefined;
   /** The nearest preceding heading's text. */
   heading?: string | undefined;
   listPosition?: { index: number; total: number } | undefined;
@@ -83,6 +85,8 @@ export type WebAutomationElementFingerprint = ElementFingerprint & {
   name?: string | undefined;
   href?: string | undefined;
   inputType?: string | undefined;
+  /** A checkbox's or radio's recorded state. A sensitive control never yields one: its state is its contents. */
+  checked?: boolean | undefined;
   /** The role the markup implies when no `role` attribute was authored. */
   implicitRole?: string | undefined;
   /**

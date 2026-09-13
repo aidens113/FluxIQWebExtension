@@ -66,6 +66,8 @@ export function describeElement(element: Element): DomElementDescriptor {
   const href = linkHref(element);
   if (href) descriptor.href = href;
   if (element instanceof HTMLInputElement && element.type) descriptor.inputType = element.type;
+  const checked = checkedState(element);
+  if (checked !== undefined) descriptor.checked = checked;
   const valuePresent = hasEnteredValue(element);
   if (valuePresent !== undefined) descriptor.hasValue = valuePresent;
   const testId = testIdFor(element);
@@ -156,6 +158,20 @@ export function readElementValue(element: Element | null): string | undefined {
   }
   if (element instanceof HTMLElement && element.isContentEditable) return element.innerText.slice(0, 2_000);
   return undefined;
+}
+
+/**
+ * Whether a checkbox or radio is checked, or `undefined` for every other
+ * control -- and for a sensitive one. The checked state is state rather than a
+ * value, but for these two controls it is everything they hold, so it follows
+ * the rule `readElementValue` follows: a control the sensitivity rule marks
+ * yields nothing, and the wire projection withholds it a second time.
+ */
+function checkedState(element: Element): boolean | undefined {
+  if (!(element instanceof HTMLInputElement)) return undefined;
+  const type = element.type.toLowerCase();
+  if (type !== "checkbox" && type !== "radio") return undefined;
+  return isSensitiveFormControl(element) ? undefined : element.checked;
 }
 
 /**

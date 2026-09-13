@@ -18,8 +18,9 @@
 // does.
 //
 // The DOM is a stub because the extension's unit runner is Node; the browser
-// side of this module is `e2e/content/tests/` and the region half of the
-// landmark rule is `content/tests/landmark-role.test.ts`.
+// side of this module is `e2e/content/tests/` (`identity-signals.spec.ts` for
+// the landmark's name) and the region half of the landmark rule is
+// `content/tests/landmark-role.test.ts`.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -32,6 +33,10 @@ type StubOptions = {
   readonly querySelector?: Element | null;
   readonly form?: Element | null;
   readonly textContent?: string;
+  readonly parentElement?: Element | null;
+  readonly contentEditable?: boolean;
+  /** What the element's own document answers to `getElementById`. */
+  readonly byId?: Record<string, Element>;
 };
 
 /** An element that answers only the lookups `context.ts` performs, and `null` to the rest. */
@@ -42,11 +47,13 @@ function stub(options: StubOptions = {}): Element {
     // Uppercase as a real element reports it: `landmarkRole` lowercases it, and
     // a stub that handed it an already-lowercase string would not prove that.
     tagName: options.tagName ?? "DIV",
-    parentElement: null,
+    parentElement: options.parentElement ?? null,
     previousElementSibling: null,
     children: [],
     textContent: options.textContent ?? "",
     form: options.form ?? null,
+    isContentEditable: options.contentEditable ?? false,
+    ownerDocument: { getElementById: (id: string) => options.byId?.[id] ?? null },
     getAttribute: (name: string) => attributes[name] ?? null,
     hasAttribute: (name: string) => name in attributes,
     closest: (selector: string) => closest[selector] ?? null,
@@ -95,7 +102,64 @@ test("the keys keep the contract's order, with the absent ones simply gone", () 
 });
 
 test("an element with nothing around it has no context at all", () => {
-  // Not an object of eight undefined values, and not an empty object: the
+  // Not an object of nine undefined values, and not an empty object: the
   // descriptor omits the field entirely.
   assert.equal(elementContext(stub()), undefined);
+});
+
+// --- The landmark around it, and its name (B5) ------------------------------
+//
+// A role says what kind of landmark an element sits in, and two `region`s on
+// one page share it. The name is what tells them apart, read in the order the
+// accessible-name calculation reads one for an element never named by content.
+
+test("a control inside a landmark named by aria-label reports the role, then the name", () => {
+  const nav = stub({ tagName: "NAV", attributes: { "aria-label": "  Account \n menu " } });
+  const context = elementContext(stub({ tagName: "INPUT", parentElement: nav }));
+  assert.deepStrictEqual(context, { landmark: "navigation", landmarkName: "Account menu" });
+  assert.deepStrictEqual(Object.keys(context ?? {}), ["landmark", "landmarkName"]);
+});
+
+test("a region named by reference reports the referenced text, in the order the ids are listed", () => {
+  const section = stub({
+    tagName: "SECTION",
+    attributes: { "aria-labelledby": "billing-title billing-hint", "aria-label": "Not this one" },
+    byId: {
+      "billing-title": stub({ tagName: "H2", textContent: "Billing" }),
+      "billing-hint": stub({ tagName: "P", textContent: " details\n" })
+    }
+  });
+  assert.deepStrictEqual(elementContext(stub({ parentElement: section })), { landmark: "region", landmarkName: "Billing details" });
+});
+
+test("a reference that finds nothing falls back to aria-label, and then to title", () => {
+  const labelled = stub({ tagName: "SECTION", attributes: { "aria-labelledby": "gone", "aria-label": "Shipping" } });
+  assert.equal(elementContext(stub({ parentElement: labelled }))?.landmarkName, "Shipping");
+  const titled = stub({ tagName: "FORM", attributes: { title: "Checkout" } });
+  assert.deepStrictEqual(elementContext(stub({ parentElement: titled })), { landmark: "form", landmarkName: "Checkout" });
+});
+
+test("a reference to a form control or an editable region names nothing, so nothing typed becomes a name", () => {
+  // `context` rides on every control, a password field included, so this is the
+  // one path by which what a person typed could reach the wire through it.
+  const typed = "hunter2-typed-into-the-page";
+  const section = stub({
+    tagName: "SECTION",
+    attributes: { "aria-labelledby": "note draft code" },
+    byId: {
+      note: stub({ tagName: "TEXTAREA", textContent: typed }),
+      draft: stub({ tagName: "DIV", textContent: typed, contentEditable: true }),
+      code: stub({ tagName: "INPUT", textContent: typed })
+    }
+  });
+  const context = elementContext(stub({ parentElement: section }));
+  assert.deepStrictEqual(context, { landmark: "region" });
+  assert.equal(JSON.stringify(context).includes(typed), false);
+});
+
+test("a landmark the page did not name reports its role and no name key", () => {
+  const main = stub({ tagName: "MAIN" });
+  const context = elementContext(stub({ parentElement: main }));
+  assert.deepStrictEqual(context, { landmark: "main" });
+  assert.equal("landmarkName" in (context ?? {}), false);
 });

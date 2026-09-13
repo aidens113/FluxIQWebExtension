@@ -115,6 +115,13 @@ function selectedTargetCandidate(target: JsonObject | undefined): JsonObject | u
  * signals a candidate can answer, which does not include this one. So this
  * moves no score today; it makes the signal reachable by the consumer that
  * would.
+ *
+ * `checked` is a checkbox's or radio's state as it was recorded, and
+ * `context.landmarkName` is the name of the landmark the element sat in (B5):
+ * the first is what a replayed toggle has to reproduce, the second is what
+ * separates two `region`s whose role is the same. Each is read as its own type
+ * only, so `false` survives and a string `"true"` does not. Neither is scored:
+ * Core's matcher has no state or landmark signal.
  */
 export function elementFingerprint(value: unknown): WebAutomationElementFingerprint | undefined {
   const element = objectValue(value);
@@ -134,6 +141,7 @@ export function elementFingerprint(value: unknown): WebAutomationElementFingerpr
     name: stringValue(element.name),
     href: stringValue(element.href),
     inputType: stringValue(element.inputType),
+    checked: booleanValue(element.checked),
     testId: elementTestId(element, attributes),
     accessibleName: stringValue(element.accessibleName) ?? stringValue(attributes?.["aria-label"]),
     label: stringValue(element.label),
@@ -200,6 +208,7 @@ function elementContext(value: unknown): WebAutomationElementContext | undefined
     formAction: stringValue(context.formAction),
     fieldsetLegend: stringValue(context.fieldsetLegend),
     landmark: stringValue(context.landmark),
+    landmarkName: stringValue(context.landmarkName),
     heading: stringValue(context.heading),
     listPosition: listPosition(context.listPosition),
     tablePosition: tablePosition(context.tablePosition)
@@ -268,4 +277,9 @@ export function stringValue(value: unknown): string | undefined {
 
 export function numberValue(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+/** A boolean, or nothing: `false` is a reading, and the string `"false"` is not one. */
+function booleanValue(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined;
 }

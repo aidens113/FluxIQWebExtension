@@ -194,6 +194,12 @@ export type DomElementDescriptor = {
   name?: string | undefined;
   href?: string | undefined;
   inputType?: string | undefined;
+  /**
+   * A checkbox's or radio's checked state when it was described (B5). State
+   * rather than a value, but for these two controls the state is everything
+   * they hold, so a sensitive one reports none and no other control reports one.
+   */
+  checked?: boolean | undefined;
   hasValue?: boolean | undefined;
   selectedValue?: string | undefined;
   bounds?: RectDescriptor | undefined;
@@ -231,6 +237,11 @@ export type DomElementContext = {
   fieldsetLegend?: string | undefined;
   /** The nearest landmark role, for example `main`, `navigation`, `search`. */
   landmark?: string | undefined;
+  /**
+   * That landmark's accessible name, where the page gave it one (B5). A role
+   * alone cannot tell two `region`s on one page apart; their names can.
+   */
+  landmarkName?: string | undefined;
   /** The nearest preceding heading's text. */
   heading?: string | undefined;
   listPosition?: { index: number; total: number } | undefined;

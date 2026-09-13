@@ -105,7 +105,9 @@ export function gatewayRecordingEventFromPayload(payload: RecordingEventPayload,
  * and `text` are withheld (a `contenteditable` marked sensitive puts what was
  * typed into its own text, and `describeElement` reads that text without asking
  * the rule), and so is `accessibleName`, whose specified derivation ends at a
- * push button's `value`. `label`, `context`, `attributes` and the structural
+ * push button's `value`, and so is `checked`, which for a checkbox or radio is
+ * everything it holds. `label`, `context` (a landmark's name included),
+ * `attributes` and the structural
  * signals are author-written and are kept: they cannot hold what a person
  * typed, and withholding them would cost every login form its identity while
  * protecting nothing.
@@ -131,6 +133,7 @@ function elementTarget(element: DomElementDescriptor): JsonObject {
     name: element.name,
     href: element.href,
     inputType: element.inputType,
+    checked: secret ? undefined : element.checked,
     bounds: element.bounds,
     documentBounds: element.documentBounds,
     isVisibleOnViewport: element.isVisibleOnViewport,

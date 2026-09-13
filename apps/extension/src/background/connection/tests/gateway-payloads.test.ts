@@ -106,7 +106,7 @@ type Nothing<T extends never> = T;
  */
 const WIRE_ELEMENT_FIELDS = [
   "selector", "tagName", "xpath", "id", "classNames", "visibleText", "text", "value",
-  "role", "name", "href", "inputType", "bounds", "documentBounds", "isVisibleOnViewport",
+  "role", "name", "href", "inputType", "checked", "bounds", "documentBounds", "isVisibleOnViewport",
   "hasClickHandler", "attributes", "testId", "accessibleName", "label", "implicitRole", "context"
 ] as const satisfies readonly (keyof WireElementTarget)[];
 
@@ -131,6 +131,7 @@ const fullyDescribed: DomElementDescriptor = {
   name: "Save changes",
   href: "https://example.test/save",
   inputType: "submit",
+  checked: true,
   hasValue: true,
   selectedValue: "save",
   bounds: { x: 1, y: 2, width: 3, height: 4 },
@@ -143,7 +144,7 @@ const fullyDescribed: DomElementDescriptor = {
   accessibleName: "Save changes",
   label: "Workspace name",
   implicitRole: "button",
-  context: { formId: "settings-form", formName: "settings", fieldsetLegend: "General", heading: "Workspace settings" },
+  context: { formId: "settings-form", formName: "settings", fieldsetLegend: "General", landmark: "region", landmarkName: "Workspace", heading: "Workspace settings" },
   changed: true,
   recentlyInteracted: true
 };
@@ -233,4 +234,43 @@ test("an ordinary control still sends its text, and a passive event's element is
   const wire = wireElement({ tagName: "input", selector: "#q", inputType: "search", value: "shoes", visibleText: "shoes" });
   assert.equal(wire.value, "shoes");
   assert.equal(wire.visibleText, "shoes");
+});
+
+// --- A checkbox's state and its landmark's name (B5) ------------------------
+//
+// Both are state rather than contents, with one exception the sensitivity rule
+// already draws: for a checkbox or radio the checked state is everything it
+// holds, so a sensitive one sends none. The landmark's name travels inside
+// `context`, which is author-written page chrome and kept on every control.
+
+const billingAgreement: DomElementDescriptor = {
+  tagName: "input",
+  selector: "#agree",
+  inputType: "checkbox",
+  checked: false,
+  attributes: { id: "agree", type: "checkbox" },
+  context: { landmark: "region", landmarkName: "Billing details" }
+};
+
+test("a checkbox's checked state and its landmark's name reach the wire, unchecked included", () => {
+  const wire = wireElement(billingAgreement);
+  assert.equal(wire.checked, false, "false is a state, not an absence");
+  assert.deepEqual(wire.context, { landmark: "region", landmarkName: "Billing details" });
+  assert.equal(wireElement({ ...billingAgreement, checked: true }).checked, true);
+});
+
+test("both survive into the element the recording's Flow node replays against", () => {
+  const fingerprint = elementFingerprint(JSON.parse(JSON.stringify(wireElement(billingAgreement))));
+  assert.equal(fingerprint?.checked, false);
+  assert.deepEqual(fingerprint?.context, { landmark: "region", landmarkName: "Billing details" });
+});
+
+test("a sensitive checkbox sends no checked state, and keeps its landmark's name", () => {
+  const wire = wireElement({
+    ...billingAgreement,
+    checked: true,
+    attributes: { id: "agree", type: "checkbox", "data-sensitive": "true" }
+  });
+  assert.equal("checked" in wire, false, "a sensitive checkbox's state is its contents");
+  assert.deepEqual(wire.context, { landmark: "region", landmarkName: "Billing details" });
 });
