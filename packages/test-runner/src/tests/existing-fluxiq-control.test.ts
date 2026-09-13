@@ -256,7 +256,7 @@ test("starts and runs the exact persisted Flow with deterministic non-adaptive c
   const ran = await client.runPersistedFlow({ projectId: "project.web", flowId: "flow.main", runId: started.runId, maxSteps: 20, idempotencyKey: "test-one" });
   assert.equal(ran.summary?.status, "succeeded");
   assert.deepEqual(requests[0]?.body, { projectId: "project.web", flowId: "flow.main", targetKind: "flow", targetId: "flow.main" });
-  assert.deepEqual(requests[1]?.body, { projectId: "project.web", flowId: "flow.main", runId: "run.one", maxSteps: 20, idempotencyKey: "test-one", adaptiveMode: "deterministic", dryRunLlm: true, authorizedExternalSideEffects: false });
+  assert.deepEqual(requests[1]?.body, { projectId: "project.web", flowId: "flow.main", runId: "run.one", maxSteps: 20, idempotencyKey: "test-one", adaptiveMode: "deterministic", authorizedExternalSideEffects: false });
   const serialized = JSON.stringify(requests);
   assert.equal(serialized.includes(credentials.pin), false);
   assert.equal(serialized.includes(credentials.password), false);

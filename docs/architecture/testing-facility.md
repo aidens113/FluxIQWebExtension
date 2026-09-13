@@ -365,8 +365,9 @@ Flow, the complete Flow document, its stable SHA-256 content hash, and an
 enabled/listening gateway. It starts the disposable Scenario Lab, launches the
 current extension in a fresh profile, opens the seeded scenario page, pairs the
 extension, selects the configured project context, and starts recording. It
-then starts and runs the persisted Flow in deterministic/dry-LLM mode with
-external side effects disabled and supplies the scenario id, origin, URL,
+then starts and runs the persisted Flow in deterministic adaptive mode, without
+asking Core for an LLM dry run, with external side effects disabled, and supplies
+the scenario id, origin, URL,
 seed, and facility run id as inputs. Success requires a matching successful
 durable run, at least one successful durable action attempt, the scenario's
 expected browser state, and a persisted recording.

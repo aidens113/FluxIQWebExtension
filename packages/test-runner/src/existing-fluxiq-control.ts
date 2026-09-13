@@ -247,7 +247,7 @@ export class ExistingFluxIQControlClient extends FluxIQControlClient {
     const payload = record(await this.automationStudioCall("run-runtime-session", {
       projectId: input.projectId, flowId: input.flowId, ...(input.runId ? { runId: input.runId } : {}), ...(input.inputs ? { inputs: input.inputs } : {}),
       ...(input.maxSteps === undefined ? {} : { maxSteps: positiveInteger(input.maxSteps, "maxSteps") }), ...(input.authorizedDomainIds ? { authorizedDomainIds: input.authorizedDomainIds } : {}),
-      ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}), adaptiveMode: "deterministic", dryRunLlm: true, authorizedExternalSideEffects: false,
+      ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}), adaptiveMode: "deterministic", authorizedExternalSideEffects: false,
     }, input), "run runtime payload");
     const session = runtimeSession(payload.runtimeSession, "runtimeSession", input.projectId, input.flowId);
     const summary = payload.runSummary == null ? undefined : runSummary(payload.runSummary, "runSummary");
