@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page } from "@playwright/test";
-import { resolveScenarioWorkflow, type ExpectedFact } from "@fluxiq-web-extension/test-contracts";
+import { resolveScenarioWorkflow, type ExpectedFact, type ExpectedFailure } from "@fluxiq-web-extension/test-contracts";
 import { identityDriftScenario, type IdentityDriftMode, type IdentityDriftState } from "../src/scenarios/identity-drift/index.js";
 import type { RunningScenarioLab } from "../src/server.js";
 import { armVariant, readFinalState, test } from "./lab-fixture.js";
@@ -10,10 +10,15 @@ const workspaceName = String(manifest.recordingScript.find((step) => step.operat
 
 type Box = { x: number; y: number; width: number; height: number };
 type DriftCase = {
-  /** Finds the drifted Save action as a person would: by role and its current name. */
+  /** Finds the control in Save's slot as a person would: by role and its current name. */
   control(page: Page): Locator;
-  /** Asserts the drift the variant's corpus row describes, against the recorded button's box. */
+  /** Asserts the rendering the variant's corpus row describes, against the recorded button's box. */
   assertDrift(page: Page, save: Locator, recorded: Box): Promise<void>;
+  /**
+   * Set only where the control is not Save: the refusal its variant must
+   * declare. Every case without one is a drift of Save and must save.
+   */
+  refusal?: ExpectedFailure;
 };
 
 const driftCases: Record<Exclude<IdentityDriftMode, "baseline">, DriftCase> = {
@@ -76,6 +81,21 @@ const driftCases: Record<Exclude<IdentityDriftMode, "baseline">, DriftCase> = {
       expect(await wrapperDepth(save)).toBe(2);
     },
   },
+  "save-and-exit": {
+    // Not Save: a different action in its slot, found by its own name, with
+    // nothing else on it and Discard gone -- row R7 of
+    // reports/i-resolver-safety.md.
+    control: (page) => page.getByRole("button", { name: "Save changes and exit", exact: true }),
+    async assertDrift(page, control, recorded) {
+      await expect(page.getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
+      expect(await control.evaluate((element) => element.getAttributeNames())).toEqual([]);
+      await expect(page.getByTestId("primary-actions").getByRole("button")).toHaveText(["Save changes and exit"]);
+      await expect(page.getByTestId("footer-actions").getByRole("button")).toHaveCount(0);
+      const box = await control.boundingBox();
+      expect({ x: box?.x, y: box?.y }).toEqual({ x: recorded.x, y: recorded.y });
+    },
+    refusal: { category: "target_not_found", code: "web.target.not_found" },
+  },
 };
 
 const state = (lab: RunningScenarioLab) => readFinalState<IdentityDriftState>(lab, "identity-drift");
@@ -87,6 +107,7 @@ async function expectFacts(page: Page, facts: ExpectedFact[] | undefined): Promi
     const subject = page.getByTestId(fact.subject);
     if (fact.predicate === "text") await expect(subject).toHaveText(String(fact.value));
     else if (fact.predicate === "visible") await (fact.value ? expect(subject).toBeVisible() : expect(subject).toBeHidden());
+    else if (fact.predicate === "exists") await expect(subject).toHaveCount(fact.value ? 1 : 0);
     else throw new Error(`identity-drift spec does not probe predicate ${fact.predicate}`);
   }
 }
@@ -133,11 +154,14 @@ test("every manifest variant has a drift case in this spec", () => {
 });
 
 for (const variant of manifest.variants ?? []) {
-  test(`${variant.id} variant: the drifted Save action is recoverable and the save succeeds`, async ({ page, lab, networkGuard: _guard }) => {
-    const drift = driftCases[variant.id as keyof typeof driftCases];
+  const drift: DriftCase | undefined = driftCases[variant.id as keyof typeof driftCases];
+  const title = drift?.refusal
+    ? `${variant.id} variant: a different action stands in Save's slot, and pressing it saves nothing`
+    : `${variant.id} variant: the drifted Save action is recoverable and the save succeeds`;
+  test(title, async ({ page, lab, networkGuard: _guard }) => {
     if (!drift) throw new Error(`no drift case for variant ${variant.id}`);
     const expected = resolveScenarioWorkflow(manifest, { variantId: variant.id }).expected;
-    expect(expected.failure).toBeUndefined();
+    expect(expected.failure).toEqual(drift.refusal);
 
     // Record in the baseline, as the recording lane does, then arm the variant.
     await page.goto(`${lab.origin}${startPath}`);
@@ -159,8 +183,21 @@ for (const variant of manifest.variants ?? []) {
     await drift.assertDrift(page, save, recordedBox);
 
     await page.getByTestId("display-name").fill(workspaceName);
+    if (drift.refusal) {
+      // A refusing run leaves exactly this page: the armed rendering as the
+      // variant declares it, the name typed, and nothing saved.
+      await expectFacts(page, variant.expected.pageFacts);
+      await expectFacts(page, expected.finalState);
+      // Pressed, the control runs its own operation, whose status satisfies
+      // neither that final state nor Save's oracle: a run that presses it
+      // cannot pass. This checks the fixture, not the resolver's refusal.
+      await save.click();
+      await expect(page.getByTestId("save-status")).toHaveText(`Saved and exited: ${workspaceName}`);
+      expect(await state(lab)).toMatchObject({ mode: variant.id, savedDisplayName: null, saveCount: 0, savedInMode: null, saveAndExitCount: 1, discardCount: 0 });
+      return;
+    }
     await save.click();
     await expectFacts(page, expected.finalState);
-    expect(await state(lab)).toMatchObject({ mode: variant.id, savedDisplayName: workspaceName, saveCount: 1, savedInMode: variant.id, discardCount: 0 });
+    expect(await state(lab)).toMatchObject({ mode: variant.id, savedDisplayName: workspaceName, saveCount: 1, savedInMode: variant.id, discardCount: 0, saveAndExitCount: 0 });
   });
 }

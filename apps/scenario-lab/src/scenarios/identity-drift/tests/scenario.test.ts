@@ -9,7 +9,11 @@ import { identityDriftScenario as scenario } from "../scenario.js";
 const context: RenderContext = { runToken: "identity-drift-unit-token", seed: 42 };
 const manifest = scenario.manifest;
 const workspaceName = "Aurora Field Team";
-const driftModes = identityDriftModes.filter((mode) => mode !== "baseline");
+const armedModes = identityDriftModes.filter((mode) => mode !== "baseline");
+/** The armed modes that redraw Save itself; `save-and-exit` puts a different action in its place. */
+const driftModes = armedModes.filter((mode) => mode !== "save-and-exit");
+/** Row R7 of reports/i-resolver-safety.md, as measured. */
+const R7_MARKUP = "<button>Save changes and exit</button>";
 
 function pageIn(mode: IdentityDriftMode): string {
   return scenario.render(scenario.mutate(scenario.createState(42), "set-mode", { mode }), context);
@@ -30,6 +34,11 @@ function submitButton(fragment: string): { attributes: Record<string, string>; t
   return { attributes, text: (match[2] ?? "").replace(/<[^>]+>/g, "").trim() };
 }
 
+/** Every `<button>` opening tag in `html` that submits its form: one with no `type="reset"` or `type="button"`. */
+function submitControls(html: string): string[] {
+  return [...html.matchAll(/<button\b[^>]*>/g)].map((match) => match[0]).filter((tag) => !/\stype="(?:reset|button)"/.test(tag));
+}
+
 test("manifest keeps the placeholder identity, validates, and records through the baseline target", () => {
   assert.equal(validateWebScenario(manifest).valid, true);
   assert.deepEqual({ id: scenario.id, seed: scenario.seed, startPath: scenario.startPath }, { id: "identity-drift", seed: 121, startPath: "/scenarios/identity-drift/" });
@@ -45,23 +54,35 @@ test("manifest keeps the placeholder identity, validates, and records through th
   assert.equal(manifest.workflows, undefined);
 });
 
-test("each drift mode is one variant, armed by one set-mode and expected to save successfully", () => {
+test("each armed mode is one variant, armed by one set-mode, and every drift expects Save to succeed", () => {
   const variants = manifest.variants ?? [];
-  assert.deepEqual(variants.map((variant) => variant.id), driftModes);
+  assert.deepEqual(variants.map((variant) => variant.id), armedModes);
   for (const variant of variants) {
-    assert.deepEqual(variant.arm, { operation: "set-mode", payload: { mode: variant.id } });
-    const resolved = resolveScenarioWorkflow(manifest, { variantId: variant.id });
-    assert.equal(resolved.expected.failure, undefined, variant.id);
-    assert.deepEqual(resolved.expected.finalState, manifest.expected.finalState, variant.id);
-    assert.deepEqual(resolved.expected.actions, [{ action: "web.dom.type", outcome: "succeeded" }, { action: "web.dom.click", outcome: "succeeded" }], variant.id);
-    assert.equal(resolved.recordingScript, manifest.recordingScript, variant.id);
+    assert.deepEqual(variant.arm, { operation: "set-mode", payload: { mode: variant.id } }, variant.id);
+    assert.equal(resolveScenarioWorkflow(manifest, { variantId: variant.id }).recordingScript, manifest.recordingScript, variant.id);
   }
+  for (const mode of driftModes) {
+    const resolved = resolveScenarioWorkflow(manifest, { variantId: mode });
+    assert.equal(resolved.expected.failure, undefined, mode);
+    assert.deepEqual(resolved.expected.finalState, manifest.expected.finalState, mode);
+    assert.deepEqual(resolved.expected.actions, [{ action: "web.dom.type", outcome: "succeeded" }, { action: "web.dom.click", outcome: "succeeded" }], mode);
+  }
+});
+
+test("save-and-exit is declared a refusal: target_not_found, the click failed, the status line left empty", () => {
+  const resolved = resolveScenarioWorkflow(manifest, { variantId: "save-and-exit" });
+  assert.deepEqual(resolved.expected.failure, { category: "target_not_found", code: "web.target.not_found" });
+  assert.deepEqual(resolved.expected.actions, [{ action: "web.dom.type", outcome: "succeeded" }, { action: "web.dom.click", outcome: "failed" }]);
+  assert.deepEqual(resolved.expected.finalState, [{ id: "nothing-saved", subject: "save-status", predicate: "text", value: "" }]);
+  // A run that presses the wrong action satisfies neither that fact nor Save's oracle.
+  const pressed = scenario.mutate(scenario.mutate(scenario.createState(42), "set-mode", { mode: "save-and-exit" }), "save-and-exit", { displayName: workspaceName });
+  for (const fact of [...(resolved.expected.finalState ?? []), ...(manifest.expected.finalState ?? [])]) assert.notEqual(pressed.status, fact.value, fact.id);
 });
 
 test("state is seeded deterministically and renders identically for one seed", () => {
   assert.deepEqual(scenario.createState(42), {
     mode: "baseline", defaultDisplayName: "Workspace 42", savedDisplayName: null, saveCount: 0,
-    savedInMode: null, discardCount: 0, lastOperation: "seeded", status: "",
+    savedInMode: null, discardCount: 0, saveAndExitCount: 0, lastOperation: "seeded", status: "",
   });
   assert.notEqual(scenario.createState(42), scenario.createState(42));
   assert.equal(scenario.createState(7).defaultDisplayName, "Workspace 7");
@@ -82,6 +103,22 @@ test("save records the trimmed name and the rendering it went through; invalid s
   assert.match(scenario.render(scenario.mutate(seeded, "save", { displayName: "<b>Aurora</b>" }), context), /value="&lt;b&gt;Aurora&lt;\/b&gt;"/);
 });
 
+test("save-and-exit is recorded apart from Save: a press saves nothing, and a save stays a save", () => {
+  const armed = scenario.mutate(scenario.createState(42), "set-mode", { mode: "save-and-exit" });
+  const pressed = scenario.mutate(armed, "save-and-exit", { displayName: `  ${workspaceName}  ` });
+  assert.deepEqual(pressed, { ...armed, saveAndExitCount: 1, lastOperation: "saved-and-exited", status: `Saved and exited: ${workspaceName}` });
+  assert.deepEqual([pressed.savedDisplayName, pressed.saveCount, pressed.savedInMode], [null, 0, null]);
+  for (const payload of [{ displayName: "   " }, { displayName: 5 }, { displayName: "x".repeat(81) }, {}, null]) {
+    assert.equal(scenario.mutate(armed, "save-and-exit", payload), armed, JSON.stringify(payload));
+  }
+  const html = scenario.render(pressed, context);
+  assert.match(html, /id="display-name"[^>]*value="Workspace 42"/);
+  assert.match(html, new RegExp(`data-testid="save-status"[^>]*>Saved and exited: ${workspaceName}</p>`));
+  const saved = scenario.mutate(scenario.createState(42), "save", { displayName: workspaceName });
+  assert.equal(saved.saveAndExitCount, 0);
+  assert.deepEqual(scenario.mutate(saved, "save-and-exit", { displayName: "Other" }), { ...saved, saveAndExitCount: 1, lastOperation: "saved-and-exited", status: "Saved and exited: Other" });
+});
+
 test("discard is recorded without undoing an earlier save", () => {
   const saved = scenario.mutate(scenario.createState(42), "save", { displayName: workspaceName });
   const discarded = scenario.mutate(saved, "discard", {});
@@ -90,12 +127,12 @@ test("discard is recorded without undoing an earlier save", () => {
 });
 
 test("each variant arm switches the rendering and clears the save record; bad arms change nothing", () => {
-  const recorded = scenario.mutate(scenario.mutate(scenario.createState(42), "save", { displayName: workspaceName }), "discard", {});
+  const recorded = scenario.mutate(scenario.mutate(scenario.mutate(scenario.createState(42), "save", { displayName: workspaceName }), "discard", {}), "save-and-exit", { displayName: workspaceName });
   for (const variant of manifest.variants ?? []) {
     const armed = scenario.mutate(recorded, variant.arm.operation, variant.arm.payload);
     assert.deepEqual(armed, {
       mode: variant.id, defaultDisplayName: "Workspace 42", savedDisplayName: null, saveCount: 0,
-      savedInMode: null, discardCount: 0, lastOperation: "armed", status: "",
+      savedInMode: null, discardCount: 0, saveAndExitCount: 0, lastOperation: "armed", status: "",
     });
     const resaved = scenario.mutate(armed, "save", { displayName: workspaceName });
     assert.equal(resaved.savedInMode, variant.id);
@@ -107,13 +144,27 @@ test("each variant arm switches the rendering and clears the save record; bad ar
   }
 });
 
-test("only the baseline carries the recorded test id; every mode keeps the field and one submit control", () => {
+test("only the baseline carries the recorded test id; every mode keeps the field and one control that submits", () => {
   assert.match(pageIn("baseline"), /data-testid="save-changes"/);
-  for (const mode of driftModes) assert.doesNotMatch(pageIn(mode), /data-testid="save-changes"/, mode);
+  for (const mode of armedModes) assert.doesNotMatch(pageIn(mode), /data-testid="save-changes"/, mode);
   for (const mode of identityDriftModes) {
     const html = pageIn(mode);
     assert.match(html, /data-testid="display-name"/, mode);
-    assert.equal(html.match(/type="submit"/g)?.length, 1, mode);
+    assert.equal(submitControls(html).length, 1, mode);
+  }
+});
+
+test("save-and-exit renders row R7: a lone, identifier-less Save changes and exit in Save's slot that posts its own operation", () => {
+  assert.equal(renderSaveAction("save-and-exit"), R7_MARKUP);
+  const html = pageIn("save-and-exit");
+  assert.equal(region(html, "primary-actions", "div"), R7_MARKUP);
+  assert.doesNotMatch(region(html, "footer-actions", "footer"), /<button/);
+  assert.deepEqual(submitControls(html), ["<button>"]);
+  assert.doesNotMatch(html, /data-testid="(?:save-changes|discard-changes)"|>Save changes</);
+  assert.match(html, /mutate\('save-and-exit', \{ displayName \}\)/);
+  for (const mode of identityDriftModes.filter((candidate) => candidate !== "save-and-exit")) {
+    assert.match(pageIn(mode), /mutate\('save', \{ displayName \}\)/, mode);
+    assert.doesNotMatch(pageIn(mode), /save-and-exit/, mode);
   }
 });
 

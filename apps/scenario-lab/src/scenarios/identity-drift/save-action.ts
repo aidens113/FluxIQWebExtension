@@ -5,7 +5,8 @@ import type { IdentityDriftMode } from "./modes.js";
  * keeps the recorded `data-testid`: every drifted rendering drops or changes
  * it on purpose, so a run recovers the action only through the identity
  * signals its mode leaves intact. Where the button sits (the `moved` footer)
- * belongs to the page layout in `render.ts`.
+ * belongs to the page layout in `render.ts`. `save-and-exit` renders a
+ * different action in Save's place instead.
  */
 export function renderSaveAction(mode: IdentityDriftMode): string {
   switch (mode) {
@@ -31,5 +32,12 @@ export function renderSaveAction(mode: IdentityDriftMode): string {
       // satisfy WCAG 2.5.3 -- so the accessible name is preserved by the
       // redesign's own accessibility rule, not by the fixture's convenience.
       return '<button type="submit" class="ui-button ui-button--accent" aria-label="Save changes">Save</button>';
+    case "save-and-exit":
+      // Not Save at all: a different action in its slot, carrying nothing but
+      // its own text. This is row R7's markup exactly; an added `type`, class
+      // or `data-*` hook would change the fingerprint that row was measured on.
+      // With no `type` it still submits the form, and `render.ts` routes that
+      // submission to the fixture's `save-and-exit` operation, not to `save`.
+      return "<button>Save changes and exit</button>";
   }
 }

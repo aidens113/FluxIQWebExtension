@@ -1,6 +1,7 @@
 /**
  * How the settings page renders its "Save changes" action. `baseline` is what
- * the recording sees; each other mode is one identity drift.
+ * the recording sees; each other mode but `save-and-exit` is one identity
+ * drift.
  *
  * The first four are corpus variants W20-W23, and each stops one step short of
  * taking every recorded signal away. `reworded-aria` is the step past them: one
@@ -23,7 +24,15 @@
  * reports/v-core-scoring.md the post-D13 ones, and
  * `apps/extension/e2e/content/tests/identity-resolution.spec.ts` pins 0.389 and
  * 0.366 in real Chromium.
+ *
+ * `save-and-exit` is not a drift of Save but the negative case beside them:
+ * Save is gone, and its slot holds a lone "Save changes and exit" with no id,
+ * class or test id -- a different action whose name contains the recorded one.
+ * Against the authored recording it scored 0.359 at confidence 0.337 and was
+ * clicked (reports/i-resolver-safety.md, row R7, a single observation), so its
+ * variant expects `target_not_found`, and pressing it records an operation of
+ * its own rather than a save.
  */
-export const identityDriftModes = ["baseline", "selector-only", "text-only", "moved", "wrapped-aria", "reworded-aria"] as const;
+export const identityDriftModes = ["baseline", "selector-only", "text-only", "moved", "wrapped-aria", "reworded-aria", "save-and-exit"] as const;
 
 export type IdentityDriftMode = (typeof identityDriftModes)[number];

@@ -4,7 +4,7 @@ import type { IdentityDriftMode } from "./modes.js";
 
 const WORKSPACE_NAME = "Aurora Field Team";
 
-/** The oracle every variant shares: the status line shows the save the fixture state recorded. */
+/** The oracle every drift variant shares: the status line shows the save the fixture state recorded. */
 const SAVED_FACT: ExpectedFact = { id: "settings-saved", subject: "save-status", predicate: "text", value: `Saved: ${WORKSPACE_NAME}` };
 const SAVE_ACTIONS: ExpectedAction[] = [{ action: "web.dom.type", outcome: "succeeded" }, { action: "web.dom.click", outcome: "succeeded" }];
 
@@ -12,7 +12,7 @@ const SAVE_ACTIONS: ExpectedAction[] = [{ action: "web.dom.type", outcome: "succ
  * One drift corpus row: arming renders the Save action in `mode`, and the run
  * must recover it without the harness and save exactly as recorded.
  */
-function driftVariant(mode: Exclude<IdentityDriftMode, "baseline">, description: string): ScenarioVariant {
+function driftVariant(mode: Exclude<IdentityDriftMode, "baseline" | "save-and-exit">, description: string): ScenarioVariant {
   return {
     id: mode,
     description,
@@ -20,6 +20,30 @@ function driftVariant(mode: Exclude<IdentityDriftMode, "baseline">, description:
     expected: { actions: [...SAVE_ACTIONS], finalState: [{ ...SAVED_FACT }] },
   };
 }
+
+/**
+ * The negative row beside the drifts, row R7 of reports/i-resolver-safety.md:
+ * Save is gone, and a different action whose name contains Save's stands alone
+ * in its slot. The only right outcome is a refusal, so the click is declared
+ * `failed` with `target_not_found`, and the status line must stay empty.
+ * Pressing the wrong action writes "Saved and exited", which fails that fact as
+ * surely as it misses Save's oracle.
+ */
+const wrongActionVariant: ScenarioVariant = {
+  id: "save-and-exit",
+  description: "Save is gone, and a lone Save changes and exit stands in its slot with no id, class, or test id: a different action whose name contains the recorded one. The run must refuse it rather than press it.",
+  arm: { operation: "set-mode", payload: { mode: "save-and-exit" } },
+  expected: {
+    pageFacts: [
+      { id: "settings-form-visible", subject: "settings-form", predicate: "visible", value: true },
+      { id: "recorded-save-gone", subject: "save-changes", predicate: "exists", value: false },
+      { id: "discard-gone", subject: "discard-changes", predicate: "exists", value: false },
+    ],
+    actions: [{ action: "web.dom.type", outcome: "succeeded" }, { action: "web.dom.click", outcome: "failed" }],
+    finalState: [{ id: "nothing-saved", subject: "save-status", predicate: "text", value: "" }],
+    failure: { category: "target_not_found", code: "web.target.not_found" },
+  },
+};
 
 export const identityDriftManifest = createScenarioManifest({
   id: "identity-drift",
@@ -53,5 +77,6 @@ export const identityDriftManifest = createScenarioManifest({
     driftVariant("moved", "W22: the Save action renders in the form footer, below the fold, without its test id; its text, role, id, and class do not change."),
     driftVariant("wrapped-aria", "W23: the Save action gains wrapper elements, takes its accessible name from aria-labelledby, and loses its test id."),
     driftVariant("reworded-aria", "One redesign changes the Save action's id, class, test id, and visible text together; only its accessible name survives, in an aria-label. No week 1 corpus row covers it yet."),
+    wrongActionVariant,
   ],
 });

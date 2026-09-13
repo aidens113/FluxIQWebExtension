@@ -11,14 +11,19 @@ const styles = `<style>
       .advanced { min-height: 110vh; }
     </style>`;
 
+const discardAction = '<button type="reset" id="discard-settings" class="btn btn-secondary" data-testid="discard-changes">Discard changes</button>';
+
 /**
- * The workspace settings page. Only the Save action differs between modes:
- * its markup comes from `renderSaveAction`, and `moved` places it in the form
- * footer instead of beside Discard. Everything else renders identically.
+ * The workspace settings page. Only the control in Save's slot differs between
+ * modes: its markup comes from `renderSaveAction`, `moved` places it in the
+ * form footer instead of beside Discard, and `save-and-exit` drops Discard so
+ * its different action stands alone, as row R7 measured it. Everything else
+ * renders identically.
  */
 export function renderIdentityDriftPage(state: IdentityDriftState, context: RenderContext): string {
   const saveAction = renderSaveAction(state.mode);
   const inFooter = state.mode === "moved";
+  const alone = state.mode === "save-and-exit";
   const body = `${styles}<main>
     <header>
       <h1>Workspace settings</h1>
@@ -30,7 +35,7 @@ export function renderIdentityDriftPage(state: IdentityDriftState, context: Rend
         <label for="display-name">Workspace name</label>
         <input id="display-name" name="displayName" data-testid="display-name" type="text" autocomplete="organization" required aria-describedby="display-name-hint" value="${escapeHtml(state.savedDisplayName ?? state.defaultDisplayName)}">
         <p id="display-name-hint">Shown in the sidebar and on invitations.</p>
-        <div class="form-actions" role="group" aria-label="General actions" data-testid="primary-actions">${inFooter ? "" : saveAction}<button type="reset" id="discard-settings" class="btn btn-secondary" data-testid="discard-changes">Discard changes</button></div>
+        <div class="form-actions" role="group" aria-label="General actions" data-testid="primary-actions">${inFooter ? "" : saveAction}${alone ? "" : discardAction}</div>
       </section>
       <section class="advanced" aria-labelledby="advanced-heading">
         <h2 id="advanced-heading">Advanced</h2>
@@ -46,11 +51,15 @@ export function renderIdentityDriftPage(state: IdentityDriftState, context: Rend
     </form>
     <p data-testid="save-status" role="status" aria-live="polite">${escapeHtml(state.status)}</p>
   </main>`;
-  return page("Workspace settings", body, clientScript(context));
+  return page("Workspace settings", body, clientScript(context, alone ? "save-and-exit" : "save"));
 }
 
-/** Submitting saves through `mutate`; Discard (a native reset) is recorded too. */
-function clientScript(context: RenderContext): string {
+/**
+ * Submitting posts `submitOperation` through `mutate`: `save` from every
+ * rendering of Save, and `save-and-exit` when that mode's different action is
+ * the form's only submit control. Discard (a native reset) is recorded too.
+ */
+function clientScript(context: RenderContext, submitOperation: "save" | "save-and-exit"): string {
   return `${fixtureClient(context.runToken, "identity-drift")}
 const form = document.querySelector('[data-testid="settings-form"]');
 const field = document.querySelector('[data-testid="display-name"]');
@@ -59,7 +68,7 @@ form.addEventListener('submit', async (event) => {
   event.preventDefault();
   const displayName = field.value.trim();
   if (!displayName) { status.textContent = 'Enter a workspace name.'; return; }
-  const snapshot = await mutate('save', { displayName });
+  const snapshot = await mutate('${submitOperation}', { displayName });
   if (snapshot.state.savedDisplayName) field.defaultValue = snapshot.state.savedDisplayName;
   status.textContent = snapshot.state.status;
 });
