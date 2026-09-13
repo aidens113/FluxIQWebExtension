@@ -36,20 +36,14 @@ has its full proof. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
-settled ledger entries are in parts one to forty-nine of
+settled ledger entries are in parts one to fifty of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13.**
-- **This repository:** pushed; `origin/dev` holds the architecture-page commit
-  after `d639415`.
-- **Core:** `f22f401`, pushed; a docs commit after the Lab pin `3cb8976`. `fluxiq`
-  **0.4.0**, built at `20bb3b4`, its last code commit.
-  The newest two are `b54df69`, which waits a command's timeout plus a 3,000 ms
-  answer margin, and `20bb3b4`, which begins a Flow with no Start node at its
-  graph's root.
-- **Gates:** per-package gates reran for every commit. On Core `20bb3b4` the full
-  sequential suite, `pnpm build` and `pnpm package:lint` passed. Here on `f840b75`,
-  root `pnpm check`, `pnpm test`, `pnpm build` and the content harness passed.
+- **This repository:** `4fe671e` and this record, not pushed; root gates run next.
+- **Core:** `e5c9828`, 2 commits ahead of `origin/dev`, not pushed; `fluxiq` **0.4.0**, built at `e5c9828`.
+- **Gates:** Core `e5c9828`'s full sequential suite passed, with build and package lint. Here every
+  package gate over the fixes passed; root gates last passed on `f840b75`.
 
 **Settled this session** (ledger and archive):
 - **Core:** trace withholding; the late-message discard; W19 C1 and C2; the shared
@@ -97,26 +91,15 @@ settled ledger entries are in parts one to forty-nine of
   real-page capture cost and candidate caps.
 
 **In flight:**
-- **Fixes, in parallel (ledger "Four Lab-proof gaps"):**
-  - evidence packets on recorded Flows: `f-host-runtime-policy-action` (domain) and
-    `g-core-host-state-node` (Core);
-  - no LLM request with the LLM off: `f-runner-no-dry-run-llm` and `g-core-ladder-llm-off` (Core);
-  - `f-actionless-flow-lane`, `g-evidence-budget-invariant`, `f-demo-wait-finalized`, and
-    `f-evidence-items-harness` for the six unasserted evidence items;
-  - verified and awaiting the test-runner gate: `f-demo-cleanup-error`.
-- **Lab:** `l-probe-late-rows` runs W13-W29 once at the old pins to find defects early;
-  `l-stage3a` and `l-stage3b` are stopping with partial reports.
+- **Lab:** `l-probe-late-rows`, W13-W29 once at the old pins.
+- **Read-only:** `i-stage3-load-failures`, W10's `recording.persistence` and W13's
+  `gateway.connection` in the stopped benches (ledger "l-stage3a and l-stage3b").
 
 **Queued, in dependency order**
-1. **Gates** per package over the fixes, Core's full gate and build, the commits, root
-   gates, and both `dev` branches pushed.
-2. **The final Lab campaign at the new pins:**
-   - bench A and bench B, `--repeat 3`;
-   - W25 `too-slow` and W15 `popup-blocked`, showing harness activation 0;
-   - a `product-catalog` Flow run whose packets are within budget;
-   - the `auth-gate` and `sensitive-input` leak rows ×3, and the demo.
-3. **Phase 1.6b:** compare A with B, fill `i-ranking-draft`, and write the ranking
-   ledger entry.
+1. **Root gates here,** then both `dev` branches pushed together.
+2. **Lab Stage 4** (briefs): `l-final-proofs` alone, then `l-final-bench-a` and
+   `l-final-bench-b`.
+3. **Phase 1.6b:** compare A with B, fill `i-ranking-draft`, write the ranking entry.
 
 **Exit criteria as they stand**
 
@@ -647,111 +630,6 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 `2026-09-12-*` Wave 3 and live-validation files, and
 `2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-13 — i-open-questions-refresh: every open question carries its true status, and six are ruled
-
-- Agent: worker `i-open-questions-refresh`, read-only; rulings, edits and verification
-  by supervisor.
-- Changed:
-  - `open-questions.md`: 25 tags and closing paragraphs, a `[RULED OUT OF WEEK 1 …]`
-    tag row, and the audit sentence;
-  - Current State's ruled-out list;
-  - the plan's failure-vocabulary sentences (E32).
-- Found:
-  - Of 33 entries not tagged settled:
-    - 21 are settled at HEAD, and 4 are ruled out by recorded decisions;
-    - 2 stay open: E32's plan text, now fixed, and E52's classification rate, which
-      both benches owe;
-    - 6 had no ruling.
-  - **Four settlements had no ledger heading until this one:**
-    - E3, the classified and retried recording-start refusal (`ab736a1`);
-    - E20, the Lab instance's own extension build root (`ab736a1`);
-    - E28, the removed runtime error class (`1b6f5df`);
-    - E37, the read of the declared `action.element` (`ab736a1`).
-  - PB10b is Week 1 work that landed as `w19-c2`, not a ruled-out item.
-    `i-ranking-draft` section 2 lists it wrongly.
-- Decisions:
-  - **Ruled out of Week 1 by the supervisor:**
-    - E2, the selector-keyed patch lane, a Week 2 contract;
-    - E55, the `admin-console` defects, and E58, the `member-directory` scale findings.
-      Both fixtures are outside the week1 corpus;
-    - E57, real-page capture cost. No week1 page is that size, so it becomes a blocker
-      only if a bench p95 traces to capture.
-  - **Scoped out of Week 1, with the product choice left to the user:**
-    - E53, redaction beyond marked fields; the signature limit is documented;
-    - E54, D13's loosened `destructive` rung. Core's element-target gate is inert for web
-      this week.
-  - **E56** is settled in code by the supervisor's design A, a corroboration predicate,
-    and W29 carries its Lab proof. The user has not explicitly accepted design A, and is
-    told so.
-- Validation: supervisor reads at `0257357`:
-  - `domain/src/runtime/errors.ts` does not exist;
-  - `apps/extension/src/background/connection.ts` is 360 lines;
-  - `background/connection/recording-start/refusal.ts` exists;
-  - `apps/extension/package.json:10` drops a leading `--` before calling Playwright;
-  - `manifest.firefox.json:43` is `"strict_min_version": "109.0"`;
-  - `content/action-runtime/resolve-target.ts:572` reads
-    `describedElement(action.element) ?? describedElement(action.options?.element)`;
-  - `content/identity/corroboration.ts:67` compares against `EXACT_SIMILARITY`;
-  - AGENTS.md:96 holds "If two briefs need the same file, the work is serial."
-- Not verified: the 26 settled entries the worker did not re-read; the Core claims behind
-  E51 and E54, which rest on the archive.
-- Outcome: Accepted
-
-### 2026-09-13 — Four Lab-proof gaps traced to their causes, the old-pin benches stopped, and the fixes briefed
-
-- Agents: workers `i-evidence-packets`, `i-harness-activation`,
-  `i-demo-recording-finalize`, `i-w04-w08-no-proposal`, `l-evidence` and
-  `l-stage3-demo`; decisions and verification by supervisor.
-- Found:
-  - **No Lab Flow run has ever produced an evidence packet.**
-    - Core records every recorded action as `builtin.policy.action`.
-    - The domain's host runtime captures only `web.output.*` nodes, and throws for
-      anything else; Core swallows the throw.
-    - Behind it, Core hands the after-action capture a stub node with empty
-      `parameterValues`.
-    - The four earlier evidence-size entries were proven on fixtures only.
-  - **Harness activations are LLM requests the Lab itself switches on.** The runner
-    sends `dryRunLlm: true`, and Core's recovery ladder offers its LLM rung with the
-    LLM off. So every failed Flow run records diagnosis interventions and an
-    `llm.provider_missing` request.
-  - **The demo's recording never finalizes under load.** Core stored the recording's
-    entries 7-21 s late. `waitForNewRecording` gave up at 10 s, and the demo stopped
-    Core mid-write. Its session cleanup's `EBUSY` then hid the lane's error.
-  - **W04 and W08 perform no action,** so no Flow can be proposed and their Flow rows
-    can never pass.
-  - **`l-evidence`:** `sensitive-input` passed 6 of 6 runs, 3 per lane, with 0
-    attestation findings. Both declared literals and three prefilled values were found
-    0 times, SQLite included. Of the 16 items, 12 are present and 4 absent in that
-    page's stored snapshots, and the content harness asserts only 10.
-  - **`l-stage3-demo`:** `demo:record` exited 1 twice and `demo:run` exited 1, from the
-    causes above.
-  - **Lab throughput:** under four concurrent Lab processes a bench run took about
-    5 minutes, against about 1 minute alone.
-- Decisions:
-  - **W04 and W08** count on the recording lane only. The bench plans no Flow row for
-    a workflow without actions.
-  - **The old-pin benches `l-stage3a` and `l-stage3b` are stopped,** and report
-    partial passes. Criterion 5's pair runs at the new pins after the fixes.
-  - **Briefed:** `f-host-runtime-policy-action`, `g-core-host-state-node`,
-    `g-core-ladder-llm-off`, `f-runner-no-dry-run-llm`, `g-evidence-budget-invariant`,
-    `f-demo-cleanup-error`, `f-demo-wait-finalized`, `f-actionless-flow-lane` and
-    `f-evidence-items-harness`, plus the defect-finding `l-probe-late-rows`.
-  - **For the ranking:** Core rewrites several documents for every stored recording
-    entry, a Core performance item.
-- Validation: supervisor reads of the committed code:
-  - `domain/src/runtime/host-runtime.ts:65` builds the accepted set from
-    `webAutomationOutputNodeId`, and `:76-77` throws "does not act on a page, so no web
-    state was captured";
-  - Core `runtime/executor/host-state.ts:14` catches the capture's throw, and `:25`
-    builds `{ id: attempt.nodeId, definitionId: attempt.definitionId, parameterValues: {} }`
-    for `after_action`;
-  - Core `recordings/proposal-candidates.ts` :99 writes `definitionId: "builtin.policy.action"`;
-  - `packages/test-runner/src/existing-fluxiq-control.ts:250` sends `dryRunLlm: true`;
-  - `packages/test-runner/src/demo-workspace/control-waits.ts:29` sets a 10,000 ms
-    deadline, and `:40` fails "persisted demo recording … but did not finalize it".
-- Not verified: every Lab figure above is a single observation under concurrent load.
-- Outcome: Accepted
-
 ### 2026-09-13 — f-host-runtime-policy-action: the domain snapshots a recorded Flow's web actions
 
 - Agent: worker `f-host-runtime-policy-action`; the architecture page and the
@@ -774,6 +652,93 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 - Not verified: a Lab `product-catalog` Flow run showing a `beforeAction` packet on every
   web action, each at most 6,000 bytes. `afterAction` also needs Core's
   `g-core-host-state-node`.
+- Outcome: Accepted
+
+### 2026-09-13 — l-stage3a and l-stage3b: the old-pin benches, stopped partway, show one new failure pattern
+
+- Agents: workers `l-stage3a` and `l-stage3b` (Lab owners), stopped by the supervisor;
+  tally by supervisor.
+- Observed at `d639415` and Core `3cb8976`, in the first repeat only, under four
+  concurrent Lab processes. Every figure is a single observation, and neither is the
+  criterion-5 bench.
+  - **Bench A:** 40 runs, 30 passed, 9 failed, 1 inconclusive (W16's recording lane).
+  - **Bench B:** 34 runs, 25 passed, 9 failed.
+- Found:
+  - **W10 `navigation` failed `recording.persistence` in both benches,** with no
+    discards: 3 runs in A (unarmed Flow, recording, `broken-link` Flow), 2 in B. At the
+    same pins with one Lab running, `l-stage2d`'s partial bench passed W10 on both lanes.
+    Dispatched as `i-stage3-load-failures`.
+  - **W13 `consent-then-click`'s Flow row failed `gateway.connection`** in B only.
+  - Otherwise the known shapes: W04's and W08's Flow rows get no proposal (fixed by
+    `f-actionless-flow-lane`); W05 `short-catalog` and W13 `banner-absent` fail
+    `target_not_found`, both ruled out; `harnessActivations` 2 on failed Flows (fixed by
+    `f-runner-no-dry-run-llm` and `g-core-ladder-llm-off`); no evidence packet (fixed by
+    `f-host-runtime-policy-action` and `g-core-host-state-node`).
+- Validation: supervisor, a reader over every `evaluation.json` and
+  `snapshots/flow-lane.json` under `F:\fxlab-runs\stage3\` `a` and `b` printed:
+  - A: `evaluations=39 verdicts={"passed":30,"failed":9} flowLaneFiles=18 start0=18 actions=62 actionsWithPackets=0`;
+  - B: `evaluations=34 verdicts={"passed":25,"failed":9} flowLaneFiles=14 start0=14 actions=49 actionsWithPackets=0`;
+  - failures by scenario, workflow, variant, lane and category: `recording.contract` ×4 in
+    each (`product-catalog` and `data-table`, unarmed and variant, Flow lane);
+    `recording.persistence` ×3 in A and ×2 in B (`navigation`); `runtime.behavior` ×2 in
+    each (`short-catalog`, `banner-absent`); `gateway.connection` ×1 in B
+    (`consent-then-click`, Flow lane).
+- Not verified: W14's Flow row onward, W16's Flow row through W29, and repeats 2 and 3
+  never ran. Nothing was rerun, per the stop order.
+- Outcome: Accepted
+
+### 2026-09-13 — The Lab-proof gap fixes, verified and committed
+
+- Agents: workers `f-host-runtime-policy-action`, `g-core-host-state-node`,
+  `g-core-ladder-llm-off`, `f-runner-no-dry-run-llm`, `f-actionless-flow-lane`,
+  `g-evidence-budget-invariant`, `f-demo-cleanup-error`, `f-demo-wait-finalized` and
+  `f-evidence-items-harness`. Decisions, documentation edits and verification by
+  supervisor.
+- Committed:
+  - **Core:**
+    - `b94eca4`: the after-action capture and state diff get the node that ran;
+    - `e5c9828`: the recovery ladder offers no LLM rung when a run's LLM is off.
+  - **Here:**
+    - `d69aa09`: the domain snapshots a recorded Flow's web actions;
+    - `67e39fa`: no Flow-lane run for a workflow without actions;
+    - `0dcfa52`: the evidence packet budget invariant;
+    - `2357968`: the Lab sends no `dryRunLlm`;
+    - `cf6c549` and `9a96352`: the demo keeps its lane's error, and waits for its
+      recording to finalize;
+    - `4fe671e`: the content harness asserts all 16 evidence items.
+- Decisions:
+  - Route B for the ladder: an optional `allowLlmDiagnosis`, set from `invokeLlm`.
+  - A packet over the domain's exploration budget, imported and not restated, fails
+    as `performance.budget`.
+- Found: the supervisor's own exclusion mutation ran test-contracts' `test` script,
+  which rebuilt the shared `dist` while the file was mutated. Two test-runner rows
+  then failed until that `dist` was rebuilt. A mutation that runs a package's `test`
+  script must rebuild the package's `dist` after restoring.
+- Validation: supervisor, each gate alone.
+  - **Core gate `sup68`,** on the tree of both Core commits:
+    - `pnpm check` exit=0;
+    - fluxiq "Test Files 138 passed (138)" and "Tests 965 passed (965)"; web 228
+      files and "Tests 1156 passed (1156)";
+    - the stub node put back failed 5 of 19 tests, and `allowLlmDiagnosis` ignored
+      failed 2 of 5, each "restored identical=true".
+  - **Domain `sup66`:** "# tests 404", "# pass 404"; the definitionId-only check
+    failed 1 of 404.
+  - **Test-contracts:** "# tests 69", "# pass 69"; the exclusion never excluding
+    failed 1 of 69.
+  - **Test-runner gate `sup69`:**
+    - check exit=0; "# tests 588", "# pass 586";
+    - the 2 failures were the exclusion rows. They passed 12 of 12 once the stale
+      shared build was rebuilt, printing
+      `# runnable: 63 (23 recording; 40 flow, 21 unarmed and 19 variants); skipped: 4`.
+  - **Test-runner mutations,** each restored identical:
+    - the budget comparison as `>=` failed 3 of 7;
+    - the planner's exclusion removed failed 1 of 4;
+    - the runner's refusal disabled failed 1 of 8;
+    - no finalize wait failed 4 of 7;
+    - no retried removal codes failed 2 of 10;
+    - `dryRunLlm` restored failed 1 of 17.
+  - **Extension:** `pnpm check` exit=0, and `evidence.spec.ts` "30 passed (7.9s)".
+- Not verified: the Lab. `l-final-proofs` and the final bench pair run at the new pins.
 - Outcome: Accepted
 
 ## Open Questions

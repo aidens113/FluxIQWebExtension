@@ -4857,3 +4857,123 @@ built by `l-stage2d`: verify it, and do not rebuild or check out Core. Runs unde
 Stop on a leak above 0.
 
 **Report:** `reports/l-probe-late-rows.md`.
+
+## Amendment to `g-core-ladder-llm-off` — Route B (Core)
+
+The worker stopped as its step 3 required. The ladder's options
+(`runtime/executor/contracts.ts:153-187`) carry no LLM field. The only LLM input is an
+attempt count, set at `runtime/service.ts:3447` from `maxInterventionsPerRun`.
+
+**Decided: Route B.** Route A would report a disabled LLM as a used-up budget, so it is
+rejected.
+1. Add one optional option to the graph execution options in `executor/contracts.ts`,
+   saying whether the LLM rung may be offered. Absent means today's behaviour.
+2. Set it at `service.ts:3447` from the run's LLM setting, with no net line growth in
+   `service.ts`, which is at its line limit.
+3. Check it at `recovery-ladder.ts:54`, so an LLM that is off gives no LLM rung.
+
+**Owns, widened:** `executor/contracts.ts`, that one site in `runtime/service.ts`,
+`executor/recovery-ladder.ts`, and tests in `runtime/executor/tests/`.
+
+**Still not yours:** `host-state.ts`, `node-execution.ts`, `runtime/tests/executor.test.ts`,
+`package-boundaries.md`, and both framework references. The supervisor regenerates the
+references at Core's gate and merges your Migration Notes paragraph from your report.
+
+**Tests** as the brief says, plus a row showing an absent option keeps the LLM rung.
+
+## i-stage3-load-failures — W10's `recording.persistence` and W13's `gateway.connection` in stopped bench B (read-only)
+
+From `l-stage3b`. Under four concurrent Lab processes, W10 failed `recording.persistence`
+on both lanes, and W13's Flow row failed `gateway.connection`. At the same pins with less
+load, `l-stage2d`'s partial bench passed W10 on both lanes. Stage 4's benches may run
+together, so a load-only failure must be told apart from a defect first.
+
+**Owns:** `reports/i-stage3-load-failures.md`. Nothing tracked.
+
+**Read:**
+- `reports/l-stage3b.md`, and `reports/l-stage3a.md` if it has landed;
+- `reports/i-demo-recording-finalize.md`, where Core stored entries 7-21 s late under
+  load;
+- the runner's recording completeness check and the Flow lane's finalize wait, and their
+  bounds.
+
+**Evidence, read-only:**
+- the W10 bundles, both lanes, and the W13 Flow bundle under `F:\fxlab-runs\stage3\b\`;
+- `stage3\a` too, if its report has landed.
+
+Report keys, kinds, counts and timings only.
+
+**Task.**
+1. **W10:** the exact failure message and details (a short count, a recording not
+   finalized, or a bound hit); the timings from Stop to finalize to deadline; and
+   `recordedActions`, extension against Core.
+2. **W13:** where `gateway.connection` was raised (the runner phase and message), and the
+   Core and extension log lines around it.
+3. **For each:** a load artifact, meaning a bound shorter than Core's measured latency
+   under load, or a defect. Cite bundle fields and code.
+4. **If a bound is too short:** the smallest fix (file, named bound, and a value justified
+   by the measured latency), and whether Stage 4's benches should run concurrently.
+
+No runs and no edits.
+
+**Report:** `reports/i-stage3-load-failures.md`.
+
+# Lab Stage 4 — the final campaign at the fix pins
+
+**Pins:** named by the supervisor at dispatch, after the fixes' gates, the Core build, and
+both `dev` branches pushed.
+
+**Order:**
+1. `l-final-proofs` runs alone.
+2. `l-final-bench-a` and `l-final-bench-b` start together only once it reports without a
+   blocker.
+
+Measured under load, concurrent Lab instances do not raise throughput on this machine,
+and a failed proof would waste both benches.
+
+**Every Stage 4 worker:**
+- sets up its worktree as `reports/l-stage2d.md` "Setup" did, uses the pinned Core read-only
+  after one build, and follows the memory guard in the `l-stage3` amendment;
+- uses the counting rulings in "Rulings on how the criteria count", with W04's and W08's
+  Flow rows absent from the plan;
+- stops on a leak above 0, and labels single observations.
+
+## l-final-proofs — the fixes, observed live before the benches (Lab owner)
+
+**Owns:** worktree `F:\fxlab\fxlab-7263534`, runs under `F:\fxlab-runs\final\proofs\`, and
+`reports/l-final-proofs.md`.
+
+**Runs, in order:**
+1. **Evidence packets:** `product-catalog` Flow lane ×1, workspace kept.
+   - Every web action has `beforeAction` and `afterAction` packets, and a `stateDiff`.
+   - Each packet is at most 6,000 bytes, and `truncationCount` equals the `truncated`
+     packets.
+   - The budget invariant does not fire, and statuses and `comparisonStatus` values match
+     `l-stage2d`'s.
+2. **The LLM stays off:** W25 `too-slow` ×3 and W15 `popup-blocked` ×3, Flow lane.
+   - `harnessActivations` is 0.
+   - The categories are unchanged: `timeout` / `web.action.timeout`, and
+     `output_not_observed`.
+3. **Leak rows with snapshots stored:** `auth-gate` ×3 and `sensitive-input` ×3, on each
+   lane, workspaces kept. Each declared literal is found 0 times, SQLite included.
+4. **The demo:** `demo:record` then `demo:run`, provider-free, with the credentials as
+   process variables. Both must exit 0.
+
+**Report:** each run's figures, and any blocker, before the benches start.
+
+## l-final-bench-a and l-final-bench-b — criterion 5's pair (Lab owner)
+
+**Owns:**
+- worktrees `F:\fxlab\fxlab-7263534-load` (A) and `F:\fxlab\fxlab-16ff729-b` (B);
+- runs under `F:\fxlab-runs\final\a\` and `F:\fxlab-runs\final\b\`;
+- reports `reports/l-final-bench-a.md` and `reports/l-final-bench-b.md`.
+
+**Run:** `FLUXIQ_TEST_ENV_FILES=none pnpm lab bench --corpus week1 --repeat 3 --target isolated`,
+headed as `v-bench-honesty` requires, with the auth-gate secret supplied as in Stage 2.
+
+**Report:** the `l-stage3` list, as the rulings count it, plus:
+- the packet count, sizes and truncation per lane;
+- `harnessActivations` per row;
+- any `recording.persistence` failure's discard kinds.
+
+The supervisor compares A with B with `bench-compare.mjs`.

@@ -3808,3 +3808,112 @@ The counting rulings and Core LLM page entries, archived when the four Lab-proof
   - pushed, Core `3cb8976..f22f401`.
 - Not verified: the new in-page anchor link, which the checker skips.
 - Outcome: Accepted
+
+## Part fifty, archived 2026-09-13
+
+The open-questions refresh and the four Lab-proof gaps entries, archived when the fixes were recorded.
+
+### 2026-09-13 — i-open-questions-refresh: every open question carries its true status, and six are ruled
+
+- Agent: worker `i-open-questions-refresh`, read-only; rulings, edits and verification
+  by supervisor.
+- Changed:
+  - `open-questions.md`: 25 tags and closing paragraphs, a `[RULED OUT OF WEEK 1 …]`
+    tag row, and the audit sentence;
+  - Current State's ruled-out list;
+  - the plan's failure-vocabulary sentences (E32).
+- Found:
+  - Of 33 entries not tagged settled:
+    - 21 are settled at HEAD, and 4 are ruled out by recorded decisions;
+    - 2 stay open: E32's plan text, now fixed, and E52's classification rate, which
+      both benches owe;
+    - 6 had no ruling.
+  - **Four settlements had no ledger heading until this one:**
+    - E3, the classified and retried recording-start refusal (`ab736a1`);
+    - E20, the Lab instance's own extension build root (`ab736a1`);
+    - E28, the removed runtime error class (`1b6f5df`);
+    - E37, the read of the declared `action.element` (`ab736a1`).
+  - PB10b is Week 1 work that landed as `w19-c2`, not a ruled-out item.
+    `i-ranking-draft` section 2 lists it wrongly.
+- Decisions:
+  - **Ruled out of Week 1 by the supervisor:**
+    - E2, the selector-keyed patch lane, a Week 2 contract;
+    - E55, the `admin-console` defects, and E58, the `member-directory` scale findings.
+      Both fixtures are outside the week1 corpus;
+    - E57, real-page capture cost. No week1 page is that size, so it becomes a blocker
+      only if a bench p95 traces to capture.
+  - **Scoped out of Week 1, with the product choice left to the user:**
+    - E53, redaction beyond marked fields; the signature limit is documented;
+    - E54, D13's loosened `destructive` rung. Core's element-target gate is inert for web
+      this week.
+  - **E56** is settled in code by the supervisor's design A, a corroboration predicate,
+    and W29 carries its Lab proof. The user has not explicitly accepted design A, and is
+    told so.
+- Validation: supervisor reads at `0257357`:
+  - `domain/src/runtime/errors.ts` does not exist;
+  - `apps/extension/src/background/connection.ts` is 360 lines;
+  - `background/connection/recording-start/refusal.ts` exists;
+  - `apps/extension/package.json:10` drops a leading `--` before calling Playwright;
+  - `manifest.firefox.json:43` is `"strict_min_version": "109.0"`;
+  - `content/action-runtime/resolve-target.ts:572` reads
+    `describedElement(action.element) ?? describedElement(action.options?.element)`;
+  - `content/identity/corroboration.ts:67` compares against `EXACT_SIMILARITY`;
+  - AGENTS.md:96 holds "If two briefs need the same file, the work is serial."
+- Not verified: the 26 settled entries the worker did not re-read; the Core claims behind
+  E51 and E54, which rest on the archive.
+- Outcome: Accepted
+
+### 2026-09-13 — Four Lab-proof gaps traced to their causes, the old-pin benches stopped, and the fixes briefed
+
+- Agents: workers `i-evidence-packets`, `i-harness-activation`,
+  `i-demo-recording-finalize`, `i-w04-w08-no-proposal`, `l-evidence` and
+  `l-stage3-demo`; decisions and verification by supervisor.
+- Found:
+  - **No Lab Flow run has ever produced an evidence packet.**
+    - Core records every recorded action as `builtin.policy.action`.
+    - The domain's host runtime captures only `web.output.*` nodes, and throws for
+      anything else; Core swallows the throw.
+    - Behind it, Core hands the after-action capture a stub node with empty
+      `parameterValues`.
+    - The four earlier evidence-size entries were proven on fixtures only.
+  - **Harness activations are LLM requests the Lab itself switches on.** The runner
+    sends `dryRunLlm: true`, and Core's recovery ladder offers its LLM rung with the
+    LLM off. So every failed Flow run records diagnosis interventions and an
+    `llm.provider_missing` request.
+  - **The demo's recording never finalizes under load.** Core stored the recording's
+    entries 7-21 s late. `waitForNewRecording` gave up at 10 s, and the demo stopped
+    Core mid-write. Its session cleanup's `EBUSY` then hid the lane's error.
+  - **W04 and W08 perform no action,** so no Flow can be proposed and their Flow rows
+    can never pass.
+  - **`l-evidence`:** `sensitive-input` passed 6 of 6 runs, 3 per lane, with 0
+    attestation findings. Both declared literals and three prefilled values were found
+    0 times, SQLite included. Of the 16 items, 12 are present and 4 absent in that
+    page's stored snapshots, and the content harness asserts only 10.
+  - **`l-stage3-demo`:** `demo:record` exited 1 twice and `demo:run` exited 1, from the
+    causes above.
+  - **Lab throughput:** under four concurrent Lab processes a bench run took about
+    5 minutes, against about 1 minute alone.
+- Decisions:
+  - **W04 and W08** count on the recording lane only. The bench plans no Flow row for
+    a workflow without actions.
+  - **The old-pin benches `l-stage3a` and `l-stage3b` are stopped,** and report
+    partial passes. Criterion 5's pair runs at the new pins after the fixes.
+  - **Briefed:** `f-host-runtime-policy-action`, `g-core-host-state-node`,
+    `g-core-ladder-llm-off`, `f-runner-no-dry-run-llm`, `g-evidence-budget-invariant`,
+    `f-demo-cleanup-error`, `f-demo-wait-finalized`, `f-actionless-flow-lane` and
+    `f-evidence-items-harness`, plus the defect-finding `l-probe-late-rows`.
+  - **For the ranking:** Core rewrites several documents for every stored recording
+    entry, a Core performance item.
+- Validation: supervisor reads of the committed code:
+  - `domain/src/runtime/host-runtime.ts:65` builds the accepted set from
+    `webAutomationOutputNodeId`, and `:76-77` throws "does not act on a page, so no web
+    state was captured";
+  - Core `runtime/executor/host-state.ts:14` catches the capture's throw, and `:25`
+    builds `{ id: attempt.nodeId, definitionId: attempt.definitionId, parameterValues: {} }`
+    for `after_action`;
+  - Core `recordings/proposal-candidates.ts` :99 writes `definitionId: "builtin.policy.action"`;
+  - `packages/test-runner/src/existing-fluxiq-control.ts:250` sends `dryRunLlm: true`;
+  - `packages/test-runner/src/demo-workspace/control-waits.ts:29` sets a 10,000 ms
+    deadline, and `:40` fails "persisted demo recording … but did not finalize it".
+- Not verified: every Lab figure above is a single observation under concurrent load.
+- Outcome: Accepted
