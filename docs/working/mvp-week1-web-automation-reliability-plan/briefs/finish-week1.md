@@ -4597,3 +4597,263 @@ Report key names and counts only.
 No runs and no edits.
 
 **Report:** `reports/i-evidence-packets.md`.
+
+## f-host-runtime-policy-action — the domain snapshots a recorded Flow's web actions (domain)
+
+From `i-evidence-packets`, Part 1. `host-runtime.ts:76` refuses every node that is not
+`web.output.*`. Core makes every recorded action `builtin.policy.action`, with the web
+output in `parameterValues.outputId`. So no Lab Flow run has ever produced an evidence
+packet.
+
+**Owns:** `domain/src/runtime/host-runtime.ts` and
+`domain/src/runtime/tests/host-runtime.test.ts`.
+
+**Read:** `reports/i-evidence-packets.md`, sections 2 and 4.
+
+**Task.**
+1. **Which nodes count as web nodes:** a `definitionId` in `WEB_AUTOMATION_NODE_IDS`, or
+   `builtin.policy.action` whose `parameterValues.outputId` is a string in
+   `WEB_AUTOMATION_ACTION_TYPES`. Nothing else.
+2. **A one-sided diff:** `inspectStateDiff` declines by throwing when either side's
+   snapshot is missing, so no diff claims that every element was removed.
+3. Correct the file's header comment where it says the binding already gives a web
+   attempt its `stateRefs`.
+
+**Tests.**
+- A policy action with `outputId: "web.dom.click"` dispatches
+  `web.dom.capture_snapshot` and returns a summary with a boolean `truncated`.
+- A policy action with a non-web `outputId`, or none, is declined with 0 dispatches.
+- A one-sided diff is declined.
+- Mutations, each restored byte-identical:
+  - the old `definitionId`-only check fails the first row;
+  - dropping the diff guard fails the third.
+- Domain `pnpm check` and `pnpm test` with a private `DOMAIN_TEST_BUILD_LABEL`, and the
+  structure audit.
+
+**Report:** `reports/f-host-runtime-policy-action.md`.
+
+## g-core-host-state-node — the after-action capture and state diff get the executed node (Core)
+
+From `i-evidence-packets`, Part 2. The user was alerted before this Core area's first
+edit. `enrichAttemptWithHostState` hands the `after_action` capture and
+`inspectStateDiff` a stub node, `{ id, definitionId, parameterValues: {} }`
+(`host-state.ts:25-26,31-36`). So a host cannot tell which web action ran.
+
+**Owns (Core):**
+- `packages/fluxiq/src/programs/automation-studio/runtime/executor/host-state.ts`;
+- its callers in `runtime/executor/node-execution.ts`;
+- their tests;
+- the unreleased `0.4.0` entry in `docs/architecture/package-boundaries.md`;
+- regenerating both framework references.
+
+**Read:** `reports/i-evidence-packets.md`, sections 2 and 4.
+
+**Task.** Pass the execution node, with its resolved `parameterValues`, into
+`enrichAttemptWithHostState`. Use that node for the `after_action` capture and for
+`inspectStateDiff`. Before-action behaviour is unchanged.
+
+**Tests.**
+- An executor row whose host runtime records both capture inputs, asserting that
+  `after_action` and the diff receive the node's `parameterValues.outputId`.
+- A failure-branch row: the node reaches the capture there too.
+- A mutation that restores the stub node fails those rows.
+- `npx vitest run <files> --no-file-parallelism`, `pnpm check` and `pnpm docs:check`.
+  The supervisor runs the full gate and the build.
+
+**Migration Notes:** one paragraph in the `0.4.0` entry. A host runtime's `after_action`
+capture and `inspectStateDiff` now receive the node's resolved parameter values.
+
+**Report:** `reports/g-core-host-state-node.md`, in this repository.
+
+## g-evidence-budget-invariant — a Flow-lane run fails when a packet exceeds its budget (test-runner)
+
+From `i-evidence-packets` open question 2. Criterion 2 says "sanitized packet ≤ budget",
+but no runner code compares `sanitizedPacketBytes` to a budget.
+
+**Decided:** the budget is the one the domain's host runtime applies, the exploration
+budget of 6,000 bytes. Import it from the domain; do not restate it.
+
+**Owns:** the run-evaluation module that computes a run's failed invariants, under
+`packages/test-runner/src/run-evaluation/`, and its tests. Do not edit
+`run-scenario.ts`, `bench/expand-corpus.ts` or anything under `demo-workspace/`; other
+workers hold them. If the check needs one of those files, stop and report.
+
+**Task.**
+1. A Flow-lane run whose any measured packet is over the budget gets a failed
+   invariant. Its message names the action's position, the point and the bytes, and
+   quotes no packet content.
+2. A run with no packets gets no such invariant, because another criterion row reports
+   that gap.
+
+**Tests.**
+- A packet at the budget passes, and one over it fails.
+- No packets: no invariant.
+- A mutation for the comparison, restored byte-identical.
+- The test-runner gates with a private build directory, and the structure audit.
+
+No Lab runs.
+
+**Report:** `reports/g-evidence-budget-invariant.md`.
+
+## f-runner-no-dry-run-llm — the Lab no longer switches Core's LLM on (test-runner)
+
+From `i-harness-activation`, which found (d). The runner sends `dryRunLlm: true`
+(`existing-fluxiq-control.ts:250`), which turns Core's LLM step back on. So every failed
+Flow run records an LLM request that fails with `llm.provider_missing`.
+
+**Owns:** `packages/test-runner/src/existing-fluxiq-control.ts` (or wherever that request
+is built) and its test, `existing-fluxiq-control.test.ts`. Do not edit `run-scenario.ts`,
+`bench/expand-corpus.ts`, `run-evaluation/`, `demo-workspace/` or `packages/test-contracts/`;
+other workers hold them.
+
+**Read:** `reports/i-harness-activation.md`; `git log -S dryRunLlm` over the runner, to
+learn why the flag was added.
+
+**Task.**
+1. Stop sending `dryRunLlm: true` on runs where no provider is configured.
+2. If the flag's commit shows a purpose a Lab run still needs, name it and stop. Do not
+   work around it.
+
+**Tests.**
+- The row at `existing-fluxiq-control.test.ts:259` asserts the request carries no
+  `dryRunLlm`.
+- A mutation restoring the flag fails it.
+- The test-runner gates with a private build directory, and the structure audit.
+
+**Report:** `reports/f-runner-no-dry-run-llm.md`.
+
+## g-core-ladder-llm-off — the recovery ladder offers no LLM step when the LLM is off (Core)
+
+From `i-harness-activation`. The user was alerted before this Core area's first edit. With
+the LLM disabled, Core's recovery ladder still offers its LLM rung
+(`runtime/executor/recovery-ladder.ts`), and a failed node records a diagnosis
+intervention.
+
+**Owns (Core):** `packages/fluxiq/src/programs/automation-studio/runtime/executor/recovery-ladder.ts`,
+and its tests in `runtime/executor/tests/`.
+
+Do not edit:
+- `host-state.ts` or `node-execution.ts`, or `runtime/tests/executor.test.ts`;
+- `docs/architecture/package-boundaries.md`, or the framework references.
+
+`g-core-host-state-node` holds those. Put your Migration Notes paragraph in your report
+for the supervisor to merge.
+
+**Read:** `reports/i-harness-activation.md`.
+
+**Task.**
+1. When the run's LLM setting is off, the ladder offers no LLM rung. The deterministic
+   rungs, and a run's final failure, are unchanged.
+2. When the LLM is on, behaviour is unchanged.
+3. Cite where the ladder reads "LLM off": the setting or policy it already receives. Add
+   no new input unless none exists; if none does, stop and report.
+
+**Tests.**
+- LLM off: no LLM rung, and the failure is unchanged.
+- LLM on: the rung is offered as before.
+- A mutation that ignores the setting fails the first row.
+- `npx vitest run <files> --no-file-parallelism` and `pnpm check` in `F:\!FluxIQ`.
+
+**Report:** `reports/g-core-ladder-llm-off.md`, in this repository.
+
+## f-demo-wait-finalized — the demo waits for its recording to finalize (test-runner)
+
+From `i-demo-recording-finalize`. Under load, Core was still storing the recording's
+entries when `waitForNewRecording`'s 10 s ran out. The demo then stopped Core
+mid-write, so the recording never finalized.
+
+**Owns:** `packages/test-runner/src/demo-workspace/control-waits.ts`, and a new
+`packages/test-runner/src/demo-workspace/tests/control-waits.test.ts`. Do not edit
+`core-process.ts` or its test; they are verified and awaiting commit.
+
+**Read:** `reports/i-demo-recording-finalize.md`, especially its fix section.
+
+**Task.**
+1. `waitForNewRecording` waits for the recording's `endedAt`, reusing
+   `awaitFinalizedRecording` with `summaries: true`.
+2. Give it a named, injectable bound, with the default chosen and justified in the
+   report. Its failure message names the recording id and the last observed entry
+   count, and no page data.
+
+**Tests.**
+- A recording that finalizes after several polls resolves.
+- One that never finalizes fails with the named bound.
+- A mutation back to "any new recording" fails the first row.
+- The test-runner gates with a private build directory, and the structure audit.
+
+**Report:** `reports/f-demo-wait-finalized.md`.
+
+## f-evidence-items-harness — the content harness asserts all 16 evidence items (extension e2e)
+
+From `l-evidence`. Criterion 2 needs "evidence fixture assertions (16 items) green", but
+`evidence.spec.ts` has rows for only 10 of the 16 items. Items 2, 4, 5, 10, 13 and 16
+have none.
+
+**Owns:** `apps/extension/e2e/content/tests/evidence.spec.ts`, and any content-harness
+fixture page it needs under `apps/extension/e2e/`. Do not edit `apps/scenario-lab/src`,
+`packages/test-contracts/src` or extension source; other workers hold them. If a missing
+item needs a product change, stop and report it.
+
+**Read:**
+- `reports/audit-evidence.md:31-53`, which lists the 16 items;
+- `reports/l-evidence.md`, section "The 16 items";
+- `docs/architecture/page-evidence.md`.
+
+**Task.** For each missing item:
+- a row that asserts the page evidence carries the item on a page that has it;
+- where it is cheap, the row where a page lacks it.
+
+Follow the spec's existing fixture and assertion pattern. Quote no page content beyond
+what the fixture itself defines.
+
+**Tests.**
+- From `apps/extension`, run
+  `pnpm exec playwright test -c e2e/playwright.content.config.ts --workers=2 evidence.spec.ts`.
+  Do not use `test:content`, which rebuilds a shared `dist` another worker is changing.
+- A mutation per new row (drop the field it reads, or break its expectation), restored
+  byte-identical.
+- The extension's `pnpm check`, and the structure audit.
+
+**Report:** `reports/f-evidence-items-harness.md`.
+
+## Amendment to `l-stage3a` and `l-stage3b` — stopped
+
+Both benches are stopped and report partial, single-observation passes. The fixes now
+landing (evidence packets, the LLM rung, action-less rows, the demo wait) change runtime
+behaviour, so criterion 5's pair runs later at new pins. Under concurrent load the pace
+was about one run per 5 minutes, so the old pair could not finish in time to count.
+
+## l-probe-late-rows — the week1 rows the stopped benches never reached, once each (Lab owner)
+
+A defect-finding pass at `d639415` and Core `3cb8976`, so the late rows' defects surface
+while the current fixes are still in flight. It is not a criterion proof: every run is a
+single observation.
+
+**Owns:** no tracked file. Worktree `F:\fxlab\fxlab-7263534`, already at `d639415` and
+built by `l-stage2d`: verify it, and do not rebuild or check out Core. Runs under
+`F:\fxlab-runs\probe\`; report `reports/l-probe-late-rows.md`.
+
+**Read:**
+- `packages/test-runner/src/bench/corpus/week1.ts`: rows W13-W29, their workflows,
+  variants and lanes;
+- `reports/l-stage2d.md`, "How the campaign runs", for the driver, environment and
+  command shapes, including the auth-gate secret for W18;
+- the `l-stage3` amendment's "Each worker" rules.
+
+**Runs.**
+- For each row from W13 to W29, and each variant the corpus lists, run one
+  `lab run <scenario> [--workflow …] [--variant …] --target isolated`. Run it on the
+  Flow lane (`--flow`), and on the recording lane where the bench runs one.
+- Skip what `l-stage2d` measured three times at these pins: W15 unarmed and
+  `popup-blocked`, W17 `upload`, W25 `too-slow`, and W28.
+
+**Report, per run:**
+- the verdict, and the reported and expected failure category and code;
+- `startCandidateIndex` and `harnessActivations`;
+- for W20-W23, whether the run recovered without the harness;
+- the categories for W26 `no-context` and W29;
+- any `recording.persistence` failure, and the lowest free memory.
+
+Stop on a leak above 0.
+
+**Report:** `reports/l-probe-late-rows.md`.

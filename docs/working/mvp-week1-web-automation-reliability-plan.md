@@ -36,7 +36,7 @@ has its full proof. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
-settled ledger entries are in parts one to forty-eight of
+settled ledger entries are in parts one to forty-nine of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13.**
@@ -97,21 +97,26 @@ settled ledger entries are in parts one to forty-eight of
   real-page capture cost and candidate caps.
 
 **In flight:**
-- **Lab Stage 3, concurrently at `d639415` and Core `3cb8976`:** `l-stage3a` and
-  `l-stage3b`, the week1 bench `--repeat 3`; `l-stage3-demo`; and `l-evidence`, the
-  `sensitive-input` leak check and the 16 items.
-- **`i-w04-w08-no-proposal` (read-only):** why W04's and W08's Flow rows get no Flow
-  proposal. They are criterion 1 workflows.
-- **`i-bench-compare-prep`:** a ready A-against-B comparison script.
-- **Done (ledger):** `l-stage2d`; `i-ranking-draft`, whose Q1-Q4 are ruled; Core's
-  LLM page (`f22f401`).
+- **Fixes, in parallel (ledger "Four Lab-proof gaps"):**
+  - evidence packets on recorded Flows: `f-host-runtime-policy-action` (domain) and
+    `g-core-host-state-node` (Core);
+  - no LLM request with the LLM off: `f-runner-no-dry-run-llm` and `g-core-ladder-llm-off` (Core);
+  - `f-actionless-flow-lane`, `g-evidence-budget-invariant`, `f-demo-wait-finalized`, and
+    `f-evidence-items-harness` for the six unasserted evidence items;
+  - verified and awaiting the test-runner gate: `f-demo-cleanup-error`.
+- **Lab:** `l-probe-late-rows` runs W13-W29 once at the old pins to find defects early;
+  `l-stage3a` and `l-stage3b` are stopping with partial reports.
 
 **Queued, in dependency order**
-1. **Compare** bench A with bench B, and fill `i-ranking-draft`'s placeholders.
-2. **Fix W04 and W08** if `i-w04-w08-no-proposal` finds a defect, and rerun those
-   rows.
-3. **Phase 1.6b:** the ranking ledger entry, quoting an observation for every
-   criterion row.
+1. **Gates** per package over the fixes, Core's full gate and build, the commits, root
+   gates, and both `dev` branches pushed.
+2. **The final Lab campaign at the new pins:**
+   - bench A and bench B, `--repeat 3`;
+   - W25 `too-slow` and W15 `popup-blocked`, showing harness activation 0;
+   - a `product-catalog` Flow run whose packets are within budget;
+   - the `auth-gate` and `sensitive-input` leak rows ×3, and the demo.
+3. **Phase 1.6b:** compare A with B, fill `i-ranking-draft`, and write the ranking
+   ledger entry.
 
 **Exit criteria as they stand**
 
@@ -642,53 +647,6 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 `2026-09-12-*` Wave 3 and live-validation files, and
 `2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-13 — Rulings on how the criteria count, and Lab Stage 3 split across concurrent workers
-
-- Agent: supervisor, on `i-ranking-draft` Q1-Q4, and on the user's question why only
-  one worker was running.
-- Decisions:
-  - **Criterion 1** counts the unarmed workflows W01-W19, 3 of 3 on each lane.
-    Variant rows are reported outside it.
-  - **Criterion 4** is judged on the W14, W19 and W27 negative variants, at least
-    90%. The rate over every negative variant, W24 included, is reported beside it,
-    and every miss is ranked.
-  - **Criterion 5:** `l-stage3a` and `l-stage3b` run concurrently at the same pins and
-    count as the two consecutive runs. A metric outside tolerance sends a third bench,
-    alone, before the criterion is called failed.
-  - **Criterion 2** needs Lab observations that no run made, so `l-evidence` runs
-    `sensitive-input` and reads the 16 items.
-  - **Lab Stage 3 runs as three concurrent workers** in their own worktrees, each
-    waiting while free memory is under 3 GB. The "one Lab instance at a time" line in
-    `l-stage2d`'s brief was the supervisor's own, not a limit of the Lab.
-- Validation: not validated, because these are decisions. Free memory read 11.1 GB
-  with four Lab workers running.
-- Outcome: Accepted
-
-### 2026-09-13 — d-core-llm-reachability: Core's LLM page says what the shipped app reaches (Core `f22f401`)
-
-- Agent: worker `d-core-llm-reachability`; verification and commit by supervisor.
-- Changed: Core `docs/architecture/automation-studio.md`. It now gives each grant
-  purpose's task kinds as the production resolver binds them, and adds "What the
-  shipped app reaches".
-- Validation: supervisor:
-  - Core `pnpm docs:check` exit=0, "Deterministic framework reference is current.";
-  - each claim read against Core's code:
-    - `_shared/runtime.ts:74-83` binds `build_and_adapt` to `flow_bootstrap` and
-      `evidence_tool_decision`, and `diagnose_and_adapt` to `runtime_diagnosis` and
-      `runtime_patch`;
-    - `execution-grants.ts:504-510` matches a build grant to six request kinds and
-      change proposals;
-    - `service.ts:3110` makes a `diagnose_and_adapt` target override proposal-only,
-      and `service.ts:3362` accepts only `diagnosis_only` and `diagnose_and_adapt` on
-      a run;
-    - the promotion gate in `training-modes.ts` sends high-risk adaptations to manual
-      review;
-    - `harness/run.ts:99` records `llm.provider_missing`;
-    - `live-patch.ts:178` starts a patch clone at the failed node;
-  - pushed, Core `3cb8976..f22f401`.
-- Not verified: the new in-page anchor link, which the checker skips.
-- Outcome: Accepted
-
 ### 2026-09-13 — i-open-questions-refresh: every open question carries its true status, and six are ruled
 
 - Agent: worker `i-open-questions-refresh`, read-only; rulings, edits and verification
@@ -737,6 +695,61 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   - AGENTS.md:96 holds "If two briefs need the same file, the work is serial."
 - Not verified: the 26 settled entries the worker did not re-read; the Core claims behind
   E51 and E54, which rest on the archive.
+- Outcome: Accepted
+
+### 2026-09-13 — Four Lab-proof gaps traced to their causes, the old-pin benches stopped, and the fixes briefed
+
+- Agents: workers `i-evidence-packets`, `i-harness-activation`,
+  `i-demo-recording-finalize`, `i-w04-w08-no-proposal`, `l-evidence` and
+  `l-stage3-demo`; decisions and verification by supervisor.
+- Found:
+  - **No Lab Flow run has ever produced an evidence packet.**
+    - Core records every recorded action as `builtin.policy.action`.
+    - The domain's host runtime captures only `web.output.*` nodes, and throws for
+      anything else; Core swallows the throw.
+    - Behind it, Core hands the after-action capture a stub node with empty
+      `parameterValues`.
+    - The four earlier evidence-size entries were proven on fixtures only.
+  - **Harness activations are LLM requests the Lab itself switches on.** The runner
+    sends `dryRunLlm: true`, and Core's recovery ladder offers its LLM rung with the
+    LLM off. So every failed Flow run records diagnosis interventions and an
+    `llm.provider_missing` request.
+  - **The demo's recording never finalizes under load.** Core stored the recording's
+    entries 7-21 s late. `waitForNewRecording` gave up at 10 s, and the demo stopped
+    Core mid-write. Its session cleanup's `EBUSY` then hid the lane's error.
+  - **W04 and W08 perform no action,** so no Flow can be proposed and their Flow rows
+    can never pass.
+  - **`l-evidence`:** `sensitive-input` passed 6 of 6 runs, 3 per lane, with 0
+    attestation findings. Both declared literals and three prefilled values were found
+    0 times, SQLite included. Of the 16 items, 12 are present and 4 absent in that
+    page's stored snapshots, and the content harness asserts only 10.
+  - **`l-stage3-demo`:** `demo:record` exited 1 twice and `demo:run` exited 1, from the
+    causes above.
+  - **Lab throughput:** under four concurrent Lab processes a bench run took about
+    5 minutes, against about 1 minute alone.
+- Decisions:
+  - **W04 and W08** count on the recording lane only. The bench plans no Flow row for
+    a workflow without actions.
+  - **The old-pin benches `l-stage3a` and `l-stage3b` are stopped,** and report
+    partial passes. Criterion 5's pair runs at the new pins after the fixes.
+  - **Briefed:** `f-host-runtime-policy-action`, `g-core-host-state-node`,
+    `g-core-ladder-llm-off`, `f-runner-no-dry-run-llm`, `g-evidence-budget-invariant`,
+    `f-demo-cleanup-error`, `f-demo-wait-finalized`, `f-actionless-flow-lane` and
+    `f-evidence-items-harness`, plus the defect-finding `l-probe-late-rows`.
+  - **For the ranking:** Core rewrites several documents for every stored recording
+    entry, a Core performance item.
+- Validation: supervisor reads of the committed code:
+  - `domain/src/runtime/host-runtime.ts:65` builds the accepted set from
+    `webAutomationOutputNodeId`, and `:76-77` throws "does not act on a page, so no web
+    state was captured";
+  - Core `runtime/executor/host-state.ts:14` catches the capture's throw, and `:25`
+    builds `{ id: attempt.nodeId, definitionId: attempt.definitionId, parameterValues: {} }`
+    for `after_action`;
+  - Core `recordings/proposal-candidates.ts` :99 writes `definitionId: "builtin.policy.action"`;
+  - `packages/test-runner/src/existing-fluxiq-control.ts:250` sends `dryRunLlm: true`;
+  - `packages/test-runner/src/demo-workspace/control-waits.ts:29` sets a 10,000 ms
+    deadline, and `:40` fails "persisted demo recording … but did not finalize it".
+- Not verified: every Lab figure above is a single observation under concurrent load.
 - Outcome: Accepted
 
 ## Open Questions

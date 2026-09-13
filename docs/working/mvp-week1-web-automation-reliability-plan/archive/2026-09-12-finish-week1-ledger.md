@@ -3757,3 +3757,54 @@ The Lab recheck entry, archived when the open-questions refresh was recorded.
 - Not verified: the full bench, which was stopped; what causes the trailing scrolls;
   which action Core held extra in W05 run 1.
 - Outcome: Accepted
+
+## Part forty-nine, archived 2026-09-13
+
+The counting rulings and Core LLM page entries, archived when the four Lab-proof gaps were recorded.
+
+### 2026-09-13 — Rulings on how the criteria count, and Lab Stage 3 split across concurrent workers
+
+- Agent: supervisor, on `i-ranking-draft` Q1-Q4, and on the user's question why only
+  one worker was running.
+- Decisions:
+  - **Criterion 1** counts the unarmed workflows W01-W19, 3 of 3 on each lane.
+    Variant rows are reported outside it.
+  - **Criterion 4** is judged on the W14, W19 and W27 negative variants, at least
+    90%. The rate over every negative variant, W24 included, is reported beside it,
+    and every miss is ranked.
+  - **Criterion 5:** `l-stage3a` and `l-stage3b` run concurrently at the same pins and
+    count as the two consecutive runs. A metric outside tolerance sends a third bench,
+    alone, before the criterion is called failed.
+  - **Criterion 2** needs Lab observations that no run made, so `l-evidence` runs
+    `sensitive-input` and reads the 16 items.
+  - **Lab Stage 3 runs as three concurrent workers** in their own worktrees, each
+    waiting while free memory is under 3 GB. The "one Lab instance at a time" line in
+    `l-stage2d`'s brief was the supervisor's own, not a limit of the Lab.
+- Validation: not validated, because these are decisions. Free memory read 11.1 GB
+  with four Lab workers running.
+- Outcome: Accepted
+
+### 2026-09-13 — d-core-llm-reachability: Core's LLM page says what the shipped app reaches (Core `f22f401`)
+
+- Agent: worker `d-core-llm-reachability`; verification and commit by supervisor.
+- Changed: Core `docs/architecture/automation-studio.md`. It now gives each grant
+  purpose's task kinds as the production resolver binds them, and adds "What the
+  shipped app reaches".
+- Validation: supervisor:
+  - Core `pnpm docs:check` exit=0, "Deterministic framework reference is current.";
+  - each claim read against Core's code:
+    - `_shared/runtime.ts:74-83` binds `build_and_adapt` to `flow_bootstrap` and
+      `evidence_tool_decision`, and `diagnose_and_adapt` to `runtime_diagnosis` and
+      `runtime_patch`;
+    - `execution-grants.ts:504-510` matches a build grant to six request kinds and
+      change proposals;
+    - `service.ts:3110` makes a `diagnose_and_adapt` target override proposal-only,
+      and `service.ts:3362` accepts only `diagnosis_only` and `diagnose_and_adapt` on
+      a run;
+    - the promotion gate in `training-modes.ts` sends high-risk adaptations to manual
+      review;
+    - `harness/run.ts:99` records `llm.provider_missing`;
+    - `live-patch.ts:178` starts a patch clone at the failed node;
+  - pushed, Core `3cb8976..f22f401`.
+- Not verified: the new in-page anchor link, which the checker skips.
+- Outcome: Accepted
