@@ -470,7 +470,7 @@ function finite2(value) {
 
 // src/recording/web-state/evidence/input.ts
 function pageEvidenceOfSnapshot(snapshot) {
-  return pageEvidenceWire(pageEvidenceWire(snapshot)?.evidence);
+  return pageEvidenceWire(snapshot.evidence);
 }
 function pageEvidenceTruncatedElements(evidence2) {
   return pageEvidenceWire(evidence2?.elements)?.truncated === true;

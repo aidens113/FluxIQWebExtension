@@ -215,7 +215,8 @@ var tabSchema = {
     url: { type: "string", label: "URL" },
     active: { type: "boolean", label: "Activate" },
     tabId: { type: "integer", label: "Tab id" },
-    urlPattern: { type: "string", label: "URL contains" }
+    urlPattern: { type: "string", label: "URL contains" },
+    urlPath: { type: "string", label: "URL path" }
   }
 };
 var downloadSchema = {
@@ -397,7 +398,7 @@ var webAutomationOutputNodeDefinitions = webAutomationActionDefinitions.map(
 );
 function createWebAutomationOutputNodeDefinition(definition) {
   const safeOutput = WEB_AUTOMATION_ACTION_SAFETY[definition.actionType] === "safe";
-  const requiredParameters = new Set(
+  const requiredParameters2 = new Set(
     Array.isArray(definition.parameterSchema.required) ? definition.parameterSchema.required.filter((value) => typeof value === "string") : []
   );
   return {
@@ -426,7 +427,7 @@ function createWebAutomationOutputNodeDefinition(definition) {
     outputs: outputPorts,
     parameters: [...parametersForOutput(definition.actionType), expectedStateParameter].map((parameter) => ({
       ...parameter,
-      ...requiredParameters.has(parameter.id) ? { required: true } : {},
+      ...requiredParameters2.has(parameter.id) ? { required: true } : {},
       allowStateBinding: true
     })),
     icon: iconForOutput(definition.actionType),
@@ -444,7 +445,7 @@ function createWebAutomationOutputNodeDefinition(definition) {
       // key press to the focused element, a URL assertion, a tab operation —
       // must not declare it, because Core fails an action outright when a
       // declared element target has no fingerprint to resolve.
-      ...requiredParameters.has("selector") ? { elementTarget: true } : {}
+      ...requiredParameters2.has("selector") ? { elementTarget: true } : {}
     }
   };
 }
@@ -522,6 +523,7 @@ function elementFingerprint(value) {
     name: stringValue(element.name),
     href: stringValue(element.href),
     inputType: stringValue(element.inputType),
+    checked: booleanValue(element.checked),
     testId: elementTestId(element, attributes),
     accessibleName: stringValue(element.accessibleName) ?? stringValue(attributes?.["aria-label"]),
     label: stringValue(element.label),
@@ -554,6 +556,7 @@ function elementContext(value) {
     formAction: stringValue(context.formAction),
     fieldsetLegend: stringValue(context.fieldsetLegend),
     landmark: stringValue(context.landmark),
+    landmarkName: stringValue(context.landmarkName),
     heading: stringValue(context.heading),
     listPosition: listPosition(context.listPosition),
     tablePosition: tablePosition(context.tablePosition)
@@ -598,6 +601,34 @@ function stringValue(value) {
 function numberValue(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : void 0;
 }
+function booleanValue(value) {
+  return typeof value === "boolean" ? value : void 0;
+}
+
+// src/output-nodes/secret-binding.ts
+var WEB_AUTOMATION_SECRET_STATE_PREFIX = "web.secret.";
+function webAutomationSecretBindingPath(value) {
+  const path = stringValue(objectValue(objectValue(value)?.$state)?.path);
+  return path?.startsWith(WEB_AUTOMATION_SECRET_STATE_PREFIX) ? path : void 0;
+}
+function webAutomationUnresolvedSecretParameters(parameters) {
+  return Object.entries(parameters).flatMap(([parameter, value]) => {
+    const path = webAutomationSecretBindingPath(value);
+    return path === void 0 ? [] : [{ parameter, path }];
+  });
+}
+
+// src/output-nodes/upload-binding.ts
+var WEB_AUTOMATION_UPLOAD_STATE_PREFIX = "web.upload.";
+function webAutomationUploadBindingPath(value) {
+  const path = stringValue(objectValue(objectValue(value)?.$state)?.path);
+  return path?.startsWith(WEB_AUTOMATION_UPLOAD_STATE_PREFIX) ? path : void 0;
+}
+
+// src/output-nodes/url-path.ts
+function webAutomationUrlPath(value) {
+  return typeof value === "string" && /^\/(?![/\\])[^?#]*$/u.test(value) ? value : void 0;
+}
 
 // src/io/input-model.ts
 var WEB_AUTOMATION_INPUT_IDS = {
@@ -610,7 +641,10 @@ var WEB_AUTOMATION_INPUT_IDS = {
   optionSelected: "web.user.option_selected",
   checkboxToggled: "web.user.checkbox_toggled",
   keyPressed: "web.user.key_pressed",
-  pageScrolled: "web.user.page_scrolled"
+  pageScrolled: "web.user.page_scrolled",
+  filesChosen: "web.user.files_chosen",
+  tabSwitched: "web.user.tab_switched",
+  tabClosed: "web.user.tab_closed"
 };
 var stateInputDefinitions = [
   { id: WEB_AUTOMATION_INPUT_IDS.browserState, title: "Browser state", description: "Current browser, tab, and compact DOM state available for policy conditions.", role: "state" },
@@ -624,7 +658,10 @@ var actionInputDefinitions = [
   [WEB_AUTOMATION_INPUT_IDS.optionSelected, "Option selected", "web.dom.select"],
   [WEB_AUTOMATION_INPUT_IDS.checkboxToggled, "Checkbox toggled", "web.dom.check"],
   [WEB_AUTOMATION_INPUT_IDS.keyPressed, "Key pressed", "web.dom.keypress"],
-  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"]
+  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"],
+  [WEB_AUTOMATION_INPUT_IDS.filesChosen, "Files chosen", "web.dom.upload"],
+  [WEB_AUTOMATION_INPUT_IDS.tabSwitched, "Tab switched", "web.browser.tab"],
+  [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"]
 ];
 var OUTPUT_FOR_ACTION_INPUT = new Map(
   actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
@@ -737,6 +774,14 @@ var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   UNSUPPORTED_TYPE: "web.action.unsupported_type",
   /** The verb is registered but not built yet, so a Flow that reaches one fails honestly. */
   NOT_IMPLEMENTED: "web.action.not_implemented",
+  /**
+   * A field the action requires arrived in a shape that cannot be read, so the
+   * command was refused before dispatch. `client/gateway-mapping.ts` decides it
+   * from what `client/gateway-action-parameters.ts` refused. The Flow's node is
+   * authored wrong and only an edit fixes it: a structural fault in the Flow,
+   * not a capability the client lacks.
+   */
+  INVALID_PARAMETER: "web.action.invalid_parameter",
   /** The action ran and failed for a reason no other code names. */
   ACTION_FAILED: "web.action.failed",
   /** Nothing said why the action failed. */
@@ -755,6 +800,7 @@ var WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS = Object.freeze({
   "web.intervention.required": { category: "user_intervention_required", retryable: false, stage: "execution" },
   "web.action.unsupported_type": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
   "web.action.not_implemented": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
+  "web.action.invalid_parameter": { category: "graph_validation_or_unknown_node", retryable: false, stage: "dispatch" },
   "web.action.failed": { category: "action_failed", retryable: true, stage: "execution" },
   "web.action.unknown": { category: "ambiguous_or_unknown", retryable: false, stage: "execution" }
 });
@@ -788,18 +834,21 @@ var LIVE_COLLECTION = { ...COLLECTION, volatility: "rapid" };
 var SETTLED_COLLECTION = { ...COLLECTION, volatility: "slow" };
 
 // src/client/gateway-action-parameters.ts
-function webAutomationLiftedActionParameters(parameters) {
-  return {
+function webAutomationReadActionParameters(parameters) {
+  const lifted = {
     // Which tab and frame the action runs in, as opposed to the tab a
     // `web.browser.tab` operation acts on, which travels inside `tab`.
     tabId: nonNegativeInteger(parameters.browserTabId ?? parameters.tabId),
     frameId: nonNegativeInteger(parameters.browserFrameId ?? parameters.frameId),
-    newTab: booleanValue(parameters.newTab),
+    // The child frame's document path, which finds the frame again after Chrome
+    // renumbers it. Only the recorded node's name is read.
+    frameUrlPath: webAutomationUrlPath(parameters.browserFrameUrlPath),
+    newTab: booleanValue2(parameters.newTab),
     option: optionSelectorValue(parameters.option),
     scroll: scrollRequestValue(parameters.scroll),
     wait: waitRequestValue(parameters.wait),
     modifiers: keyModifiersValue(parameters.modifiers),
-    checked: booleanValue(parameters.checked),
+    checked: booleanValue2(parameters.checked),
     assert: assertRequestValue(parameters.assert),
     extractList: extractListRequestValue(parameters.extractList),
     upload: uploadRequestValue(parameters.upload),
@@ -807,6 +856,14 @@ function webAutomationLiftedActionParameters(parameters) {
     tab: tabRequestValue(parameters.tab),
     download: downloadRequestValue(parameters.download)
   };
+  const refused = Object.keys(lifted).filter((field) => lifted[field] === void 0 && suppliedParameter(parameters, field) !== void 0);
+  return { lifted, refused };
+}
+function suppliedParameter(parameters, field) {
+  if (field === "tabId") return parameters.browserTabId ?? parameters.tabId;
+  if (field === "frameId") return parameters.browserFrameId ?? parameters.frameId;
+  if (field === "frameUrlPath") return parameters.browserFrameUrlPath;
+  return parameters[field];
 }
 function optionSelectorValue(value) {
   const request = jsonObject(value);
@@ -925,12 +982,14 @@ function tabRequestValue(value) {
   const tabId = nonNegativeInteger(request.tabId);
   if (operation === "open") {
     const url = nonEmptyString(request.url);
-    const active = booleanValue(request.active);
+    const active = booleanValue2(request.active);
     return { operation, ...url !== void 0 ? { url } : {}, ...active !== void 0 ? { active } : {} };
   }
   if (operation === "switch") {
     const urlPattern = nonEmptyString(request.urlPattern);
-    return { operation, ...tabId !== void 0 ? { tabId } : {}, ...urlPattern !== void 0 ? { urlPattern } : {} };
+    const urlPath = webAutomationUrlPath(request.urlPath);
+    if (request.urlPath !== void 0 && urlPath === void 0) return void 0;
+    return { operation, ...tabId !== void 0 ? { tabId } : {}, ...urlPattern !== void 0 ? { urlPattern } : {}, ...urlPath !== void 0 ? { urlPath } : {} };
   }
   return { operation, ...tabId !== void 0 ? { tabId } : {} };
 }
@@ -943,7 +1002,7 @@ function downloadRequestValue(value) {
 }
 var WAIT_CONDITIONS = ["present", "visible", "enabled", "absent", "url", "stable"];
 var ASSERT_KINDS = ["exists", "absent", "text", "url", "visible", "enabled"];
-function booleanValue(value) {
+function booleanValue2(value) {
   return typeof value === "boolean" ? value : void 0;
 }
 function finiteNumber(value) {
@@ -975,6 +1034,17 @@ function webAutomationActionFromGatewayCommand(command) {
     return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: normalized.message, failure: normalized.failure };
   }
   const parameters = command.parameters ?? {};
+  const uploadPath = webAutomationUploadBindingPath(parameters.upload);
+  const unmet = [...webAutomationUnresolvedSecretParameters(parameters), ...uploadPath !== void 0 ? [{ parameter: "upload", path: uploadPath }] : []];
+  if (unmet.length > 0) {
+    return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: unsuppliedValueMessage(unmet), failure: unsuppliedValueFailure(unmet) };
+  }
+  const { lifted, refused } = webAutomationReadActionParameters(parameters);
+  const required = requiredParameters(normalized.actionType);
+  const unreadable = refused.filter((field) => required.includes(field));
+  if (unreadable.length > 0) {
+    return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: unreadableFieldMessage(normalized.actionType, unreadable), failure: unreadableFieldFailure(normalized.actionType, unreadable) };
+  }
   const target = command.target ?? {};
   return compactJsonObject2({
     commandId: command.commandId,
@@ -988,7 +1058,7 @@ function webAutomationActionFromGatewayCommand(command) {
     coordinates: pointValue(target.coordinates ?? parameters.coordinates),
     visualTarget: jsonObject2(target.visualTarget ?? parameters.visualTarget),
     element: commandElementFingerprint(target, parameters),
-    ...webAutomationLiftedActionParameters(parameters),
+    ...lifted,
     options: parameters
   });
 }
@@ -1011,6 +1081,28 @@ function normalizeWebAutomationActionType(actionType) {
   return { ok: false, failure: UNSUPPORTED_ACTION_TYPE_FAILURE, message: `Unsupported web automation action type: ${requested}` };
 }
 var UNSUPPORTED_ACTION_TYPE_FAILURE = Object.freeze(webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE));
+function unsuppliedValueFailure(unmet) {
+  return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED, {
+    expected: `values supplied at run time for ${unmet.map((entry) => entry.path).join(", ")}`,
+    actual: "the run supplied none, so the action was not dispatched"
+  });
+}
+function unsuppliedValueMessage(unmet) {
+  return `Not dispatched: these parameters need values supplied at run time that this run did not supply: ${unmet.map((entry) => `${entry.parameter} (${entry.path})`).join(", ")}`;
+}
+function unreadableFieldFailure(actionType, fields) {
+  return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER, {
+    expected: `${actionType} with a well-formed ${fields.join(", ")}`,
+    actual: `${fields.join(", ")} could not be read, so the action was not dispatched`
+  });
+}
+function unreadableFieldMessage(actionType, fields) {
+  return `Not dispatched: ${actionType} requires ${fields.join(", ")}, and what was sent could not be read.`;
+}
+function requiredParameters(actionType) {
+  const schema = webAutomationActionDefinitions.find((definition) => definition.actionType === actionType)?.parameterSchema;
+  return Array.isArray(schema?.required) ? schema.required.filter((key) => typeof key === "string") : [];
+}
 var CANONICAL_ACTION_TYPES = new Set(WEB_AUTOMATION_ACTION_TYPES);
 var LEGACY_ACTION_TYPE_ALIASES = new Map(
   Object.entries(WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER).map(([canonical, legacy]) => [legacy, canonical])

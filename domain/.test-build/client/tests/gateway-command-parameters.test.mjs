@@ -47,6 +47,100 @@ var WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = {
   "web.browser.download": "browser.download"
 };
 
+// src/runtime/failure/codes.ts
+var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
+  /** The target was found but refused the action: disabled, hidden, or covered by another element. */
+  ACTION_REJECTED: "web.action.rejected",
+  /** No element matched the action's target with enough confidence. */
+  TARGET_NOT_FOUND: "web.target.not_found",
+  /** Several elements matched the action's target and none could be preferred. */
+  TARGET_AMBIGUOUS: "web.target.ambiguous",
+  /** The action ran and its post-condition did not hold (decision D4). */
+  OUTPUT_NOT_OBSERVED: "web.validation.output_not_observed",
+  /** An authored `web.dom.assert` condition did not hold. */
+  STATE_MISMATCH: "web.validation.state_mismatch",
+  /** The browser landed somewhere other than the requested URL, or never left where it was. */
+  NAVIGATION_UNEXPECTED: "web.navigation.unexpected",
+  /**
+   * The document was replaced, or routed away, while the action was running.
+   * Produced by `apps/extension/src/content/actions/page-identity.ts`, which
+   * remembers the page an action started on and supersedes the verb's own code
+   * when it finished somewhere else.
+   */
+  PAGE_CHANGED: "web.page.changed",
+  /** A wait, or an action, ran out of time. */
+  TIMEOUT: "web.action.timeout",
+  /** The host wants a sign-in before the action can continue. */
+  AUTH_REQUIRED: "web.auth.required",
+  /**
+   * A person must act before the run can continue -- Core's category, stated no
+   * more narrowly here than Core states it. Two producers, and they are not the
+   * same shape of "act": `content/action-runtime/results.ts` reports it when a
+   * modal dialog is standing over the page and the target is behind it, and
+   * `runtime/adapter.ts` when no single paired client could be selected, which
+   * only the operator can fix. The narrower gloss this carried before -- "a
+   * captcha, or a native dialog waiting for an answer" -- described neither,
+   * and reading it as the definition made both look wrong.
+   */
+  USER_INTERVENTION_REQUIRED: "web.intervention.required",
+  /** The client does not implement the requested action type at all. */
+  UNSUPPORTED_TYPE: "web.action.unsupported_type",
+  /** The verb is registered but not built yet, so a Flow that reaches one fails honestly. */
+  NOT_IMPLEMENTED: "web.action.not_implemented",
+  /**
+   * A field the action requires arrived in a shape that cannot be read, so the
+   * command was refused before dispatch. `client/gateway-mapping.ts` decides it
+   * from what `client/gateway-action-parameters.ts` refused. The Flow's node is
+   * authored wrong and only an edit fixes it: a structural fault in the Flow,
+   * not a capability the client lacks.
+   */
+  INVALID_PARAMETER: "web.action.invalid_parameter",
+  /** The action ran and failed for a reason no other code names. */
+  ACTION_FAILED: "web.action.failed",
+  /** Nothing said why the action failed. */
+  UNKNOWN: "web.action.unknown"
+});
+var WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS = Object.freeze({
+  "web.action.rejected": { category: "blocked_by_capability_or_policy", retryable: false, stage: "execution" },
+  "web.target.not_found": { category: "target_not_found", retryable: true, stage: "target_resolution" },
+  "web.target.ambiguous": { category: "target_ambiguous", retryable: false, stage: "target_resolution" },
+  "web.validation.output_not_observed": { category: "output_not_observed", retryable: true, stage: "verification" },
+  "web.validation.state_mismatch": { category: "unexpected_state", retryable: false, stage: "verification" },
+  "web.navigation.unexpected": { category: "navigation_unexpected", retryable: false, stage: "confirmation" },
+  "web.page.changed": { category: "page_changed", retryable: true, stage: "execution" },
+  "web.action.timeout": { category: "timeout", retryable: true, stage: "execution" },
+  "web.auth.required": { category: "auth_required", retryable: false, stage: "confirmation" },
+  "web.intervention.required": { category: "user_intervention_required", retryable: false, stage: "execution" },
+  "web.action.unsupported_type": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
+  "web.action.not_implemented": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
+  "web.action.invalid_parameter": { category: "graph_validation_or_unknown_node", retryable: false, stage: "dispatch" },
+  "web.action.failed": { category: "action_failed", retryable: true, stage: "execution" },
+  "web.action.unknown": { category: "ambiguous_or_unknown", retryable: false, stage: "execution" }
+});
+function webAutomationFailureRecord(code, comparison = {}) {
+  const definition = WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[code];
+  const expected = boundedText(comparison.expected);
+  const actual = boundedText(comparison.actual);
+  const evidenceDigest = comparison.evidenceDigest !== void 0 && EVIDENCE_DIGEST_PATTERN.test(comparison.evidenceDigest) ? comparison.evidenceDigest : void 0;
+  return {
+    category: definition.category,
+    code,
+    retryable: definition.retryable,
+    stage: definition.stage,
+    ...expected === void 0 ? {} : { expected },
+    ...actual === void 0 ? {} : { actual },
+    ...evidenceDigest === void 0 ? {} : { evidenceDigest }
+  };
+}
+var EVIDENCE_DIGEST_PATTERN = /^[a-f0-9]{64}$/u;
+function boundedText(value) {
+  if (value === void 0) return void 0;
+  const collapsed = value.replace(/\s+/gu, " ").trim();
+  if (collapsed.length === 0) return void 0;
+  if (collapsed.length <= WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH) return collapsed;
+  return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
+}
+
 // src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 
@@ -214,7 +308,8 @@ var tabSchema = {
     url: { type: "string", label: "URL" },
     active: { type: "boolean", label: "Activate" },
     tabId: { type: "integer", label: "Tab id" },
-    urlPattern: { type: "string", label: "URL contains" }
+    urlPattern: { type: "string", label: "URL contains" },
+    urlPath: { type: "string", label: "URL path" }
   }
 };
 var downloadSchema = {
@@ -396,7 +491,7 @@ var webAutomationOutputNodeDefinitions = webAutomationActionDefinitions.map(
 );
 function createWebAutomationOutputNodeDefinition(definition) {
   const safeOutput = WEB_AUTOMATION_ACTION_SAFETY[definition.actionType] === "safe";
-  const requiredParameters = new Set(
+  const requiredParameters2 = new Set(
     Array.isArray(definition.parameterSchema.required) ? definition.parameterSchema.required.filter((value) => typeof value === "string") : []
   );
   return {
@@ -425,7 +520,7 @@ function createWebAutomationOutputNodeDefinition(definition) {
     outputs: outputPorts,
     parameters: [...parametersForOutput(definition.actionType), expectedStateParameter].map((parameter) => ({
       ...parameter,
-      ...requiredParameters.has(parameter.id) ? { required: true } : {},
+      ...requiredParameters2.has(parameter.id) ? { required: true } : {},
       allowStateBinding: true
     })),
     icon: iconForOutput(definition.actionType),
@@ -443,7 +538,7 @@ function createWebAutomationOutputNodeDefinition(definition) {
       // key press to the focused element, a URL assertion, a tab operation —
       // must not declare it, because Core fails an action outright when a
       // declared element target has no fingerprint to resolve.
-      ...requiredParameters.has("selector") ? { elementTarget: true } : {}
+      ...requiredParameters2.has("selector") ? { elementTarget: true } : {}
     }
   };
 }
@@ -521,6 +616,7 @@ function elementFingerprint(value) {
     name: stringValue(element.name),
     href: stringValue(element.href),
     inputType: stringValue(element.inputType),
+    checked: booleanValue(element.checked),
     testId: elementTestId(element, attributes),
     accessibleName: stringValue(element.accessibleName) ?? stringValue(attributes?.["aria-label"]),
     label: stringValue(element.label),
@@ -553,6 +649,7 @@ function elementContext(value) {
     formAction: stringValue(context.formAction),
     fieldsetLegend: stringValue(context.fieldsetLegend),
     landmark: stringValue(context.landmark),
+    landmarkName: stringValue(context.landmarkName),
     heading: stringValue(context.heading),
     listPosition: listPosition(context.listPosition),
     tablePosition: tablePosition(context.tablePosition)
@@ -597,6 +694,34 @@ function stringValue(value) {
 function numberValue(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : void 0;
 }
+function booleanValue(value) {
+  return typeof value === "boolean" ? value : void 0;
+}
+
+// src/output-nodes/secret-binding.ts
+var WEB_AUTOMATION_SECRET_STATE_PREFIX = "web.secret.";
+function webAutomationSecretBindingPath(value) {
+  const path = stringValue(objectValue(objectValue(value)?.$state)?.path);
+  return path?.startsWith(WEB_AUTOMATION_SECRET_STATE_PREFIX) ? path : void 0;
+}
+function webAutomationUnresolvedSecretParameters(parameters) {
+  return Object.entries(parameters).flatMap(([parameter, value]) => {
+    const path = webAutomationSecretBindingPath(value);
+    return path === void 0 ? [] : [{ parameter, path }];
+  });
+}
+
+// src/output-nodes/upload-binding.ts
+var WEB_AUTOMATION_UPLOAD_STATE_PREFIX = "web.upload.";
+function webAutomationUploadBindingPath(value) {
+  const path = stringValue(objectValue(objectValue(value)?.$state)?.path);
+  return path?.startsWith(WEB_AUTOMATION_UPLOAD_STATE_PREFIX) ? path : void 0;
+}
+
+// src/output-nodes/url-path.ts
+function webAutomationUrlPath(value) {
+  return typeof value === "string" && /^\/(?![/\\])[^?#]*$/u.test(value) ? value : void 0;
+}
 
 // src/io/input-model.ts
 var WEB_AUTOMATION_INPUT_IDS = {
@@ -609,7 +734,10 @@ var WEB_AUTOMATION_INPUT_IDS = {
   optionSelected: "web.user.option_selected",
   checkboxToggled: "web.user.checkbox_toggled",
   keyPressed: "web.user.key_pressed",
-  pageScrolled: "web.user.page_scrolled"
+  pageScrolled: "web.user.page_scrolled",
+  filesChosen: "web.user.files_chosen",
+  tabSwitched: "web.user.tab_switched",
+  tabClosed: "web.user.tab_closed"
 };
 var stateInputDefinitions = [
   { id: WEB_AUTOMATION_INPUT_IDS.browserState, title: "Browser state", description: "Current browser, tab, and compact DOM state available for policy conditions.", role: "state" },
@@ -623,7 +751,10 @@ var actionInputDefinitions = [
   [WEB_AUTOMATION_INPUT_IDS.optionSelected, "Option selected", "web.dom.select"],
   [WEB_AUTOMATION_INPUT_IDS.checkboxToggled, "Checkbox toggled", "web.dom.check"],
   [WEB_AUTOMATION_INPUT_IDS.keyPressed, "Key pressed", "web.dom.keypress"],
-  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"]
+  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"],
+  [WEB_AUTOMATION_INPUT_IDS.filesChosen, "Files chosen", "web.dom.upload"],
+  [WEB_AUTOMATION_INPUT_IDS.tabSwitched, "Tab switched", "web.browser.tab"],
+  [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"]
 ];
 var OUTPUT_FOR_ACTION_INPUT = new Map(
   actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
@@ -634,104 +765,22 @@ var COLLECTION = { elementKind: "collection", comparable: false };
 var LIVE_COLLECTION = { ...COLLECTION, volatility: "rapid" };
 var SETTLED_COLLECTION = { ...COLLECTION, volatility: "slow" };
 
-// src/runtime/failure/codes.ts
-var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
-  /** The target was found but refused the action: disabled, hidden, or covered by another element. */
-  ACTION_REJECTED: "web.action.rejected",
-  /** No element matched the action's target with enough confidence. */
-  TARGET_NOT_FOUND: "web.target.not_found",
-  /** Several elements matched the action's target and none could be preferred. */
-  TARGET_AMBIGUOUS: "web.target.ambiguous",
-  /** The action ran and its post-condition did not hold (decision D4). */
-  OUTPUT_NOT_OBSERVED: "web.validation.output_not_observed",
-  /** An authored `web.dom.assert` condition did not hold. */
-  STATE_MISMATCH: "web.validation.state_mismatch",
-  /** The browser landed somewhere other than the requested URL, or never left where it was. */
-  NAVIGATION_UNEXPECTED: "web.navigation.unexpected",
-  /**
-   * The document was replaced, or routed away, while the action was running.
-   * Produced by `apps/extension/src/content/actions/page-identity.ts`, which
-   * remembers the page an action started on and supersedes the verb's own code
-   * when it finished somewhere else.
-   */
-  PAGE_CHANGED: "web.page.changed",
-  /** A wait, or an action, ran out of time. */
-  TIMEOUT: "web.action.timeout",
-  /** The host wants a sign-in before the action can continue. */
-  AUTH_REQUIRED: "web.auth.required",
-  /**
-   * A person must act before the run can continue -- Core's category, stated no
-   * more narrowly here than Core states it. Two producers, and they are not the
-   * same shape of "act": `content/action-runtime/results.ts` reports it when a
-   * modal dialog is standing over the page and the target is behind it, and
-   * `runtime/adapter.ts` when no single paired client could be selected, which
-   * only the operator can fix. The narrower gloss this carried before -- "a
-   * captcha, or a native dialog waiting for an answer" -- described neither,
-   * and reading it as the definition made both look wrong.
-   */
-  USER_INTERVENTION_REQUIRED: "web.intervention.required",
-  /** The client does not implement the requested action type at all. */
-  UNSUPPORTED_TYPE: "web.action.unsupported_type",
-  /** The verb is registered but not built yet, so a Flow that reaches one fails honestly. */
-  NOT_IMPLEMENTED: "web.action.not_implemented",
-  /** The action ran and failed for a reason no other code names. */
-  ACTION_FAILED: "web.action.failed",
-  /** Nothing said why the action failed. */
-  UNKNOWN: "web.action.unknown"
-});
-var WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS = Object.freeze({
-  "web.action.rejected": { category: "blocked_by_capability_or_policy", retryable: false, stage: "execution" },
-  "web.target.not_found": { category: "target_not_found", retryable: true, stage: "target_resolution" },
-  "web.target.ambiguous": { category: "target_ambiguous", retryable: false, stage: "target_resolution" },
-  "web.validation.output_not_observed": { category: "output_not_observed", retryable: true, stage: "verification" },
-  "web.validation.state_mismatch": { category: "unexpected_state", retryable: false, stage: "verification" },
-  "web.navigation.unexpected": { category: "navigation_unexpected", retryable: false, stage: "confirmation" },
-  "web.page.changed": { category: "page_changed", retryable: true, stage: "execution" },
-  "web.action.timeout": { category: "timeout", retryable: true, stage: "execution" },
-  "web.auth.required": { category: "auth_required", retryable: false, stage: "confirmation" },
-  "web.intervention.required": { category: "user_intervention_required", retryable: false, stage: "execution" },
-  "web.action.unsupported_type": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
-  "web.action.not_implemented": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
-  "web.action.failed": { category: "action_failed", retryable: true, stage: "execution" },
-  "web.action.unknown": { category: "ambiguous_or_unknown", retryable: false, stage: "execution" }
-});
-function webAutomationFailureRecord(code, comparison = {}) {
-  const definition = WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[code];
-  const expected = boundedText(comparison.expected);
-  const actual = boundedText(comparison.actual);
-  const evidenceDigest = comparison.evidenceDigest !== void 0 && EVIDENCE_DIGEST_PATTERN.test(comparison.evidenceDigest) ? comparison.evidenceDigest : void 0;
-  return {
-    category: definition.category,
-    code,
-    retryable: definition.retryable,
-    stage: definition.stage,
-    ...expected === void 0 ? {} : { expected },
-    ...actual === void 0 ? {} : { actual },
-    ...evidenceDigest === void 0 ? {} : { evidenceDigest }
-  };
-}
-var EVIDENCE_DIGEST_PATTERN = /^[a-f0-9]{64}$/u;
-function boundedText(value) {
-  if (value === void 0) return void 0;
-  const collapsed = value.replace(/\s+/gu, " ").trim();
-  if (collapsed.length === 0) return void 0;
-  if (collapsed.length <= WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH) return collapsed;
-  return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
-}
-
 // src/client/gateway-action-parameters.ts
-function webAutomationLiftedActionParameters(parameters) {
-  return {
+function webAutomationReadActionParameters(parameters) {
+  const lifted = {
     // Which tab and frame the action runs in, as opposed to the tab a
     // `web.browser.tab` operation acts on, which travels inside `tab`.
     tabId: nonNegativeInteger(parameters.browserTabId ?? parameters.tabId),
     frameId: nonNegativeInteger(parameters.browserFrameId ?? parameters.frameId),
-    newTab: booleanValue(parameters.newTab),
+    // The child frame's document path, which finds the frame again after Chrome
+    // renumbers it. Only the recorded node's name is read.
+    frameUrlPath: webAutomationUrlPath(parameters.browserFrameUrlPath),
+    newTab: booleanValue2(parameters.newTab),
     option: optionSelectorValue(parameters.option),
     scroll: scrollRequestValue(parameters.scroll),
     wait: waitRequestValue(parameters.wait),
     modifiers: keyModifiersValue(parameters.modifiers),
-    checked: booleanValue(parameters.checked),
+    checked: booleanValue2(parameters.checked),
     assert: assertRequestValue(parameters.assert),
     extractList: extractListRequestValue(parameters.extractList),
     upload: uploadRequestValue(parameters.upload),
@@ -739,6 +788,14 @@ function webAutomationLiftedActionParameters(parameters) {
     tab: tabRequestValue(parameters.tab),
     download: downloadRequestValue(parameters.download)
   };
+  const refused = Object.keys(lifted).filter((field) => lifted[field] === void 0 && suppliedParameter(parameters, field) !== void 0);
+  return { lifted, refused };
+}
+function suppliedParameter(parameters, field) {
+  if (field === "tabId") return parameters.browserTabId ?? parameters.tabId;
+  if (field === "frameId") return parameters.browserFrameId ?? parameters.frameId;
+  if (field === "frameUrlPath") return parameters.browserFrameUrlPath;
+  return parameters[field];
 }
 function optionSelectorValue(value) {
   const request = jsonObject(value);
@@ -857,12 +914,14 @@ function tabRequestValue(value) {
   const tabId = nonNegativeInteger(request.tabId);
   if (operation === "open") {
     const url = nonEmptyString(request.url);
-    const active = booleanValue(request.active);
+    const active = booleanValue2(request.active);
     return { operation, ...url !== void 0 ? { url } : {}, ...active !== void 0 ? { active } : {} };
   }
   if (operation === "switch") {
     const urlPattern = nonEmptyString(request.urlPattern);
-    return { operation, ...tabId !== void 0 ? { tabId } : {}, ...urlPattern !== void 0 ? { urlPattern } : {} };
+    const urlPath = webAutomationUrlPath(request.urlPath);
+    if (request.urlPath !== void 0 && urlPath === void 0) return void 0;
+    return { operation, ...tabId !== void 0 ? { tabId } : {}, ...urlPattern !== void 0 ? { urlPattern } : {}, ...urlPath !== void 0 ? { urlPath } : {} };
   }
   return { operation, ...tabId !== void 0 ? { tabId } : {} };
 }
@@ -875,7 +934,7 @@ function downloadRequestValue(value) {
 }
 var WAIT_CONDITIONS = ["present", "visible", "enabled", "absent", "url", "stable"];
 var ASSERT_KINDS = ["exists", "absent", "text", "url", "visible", "enabled"];
-function booleanValue(value) {
+function booleanValue2(value) {
   return typeof value === "boolean" ? value : void 0;
 }
 function finiteNumber(value) {
@@ -907,6 +966,17 @@ function webAutomationActionFromGatewayCommand(command) {
     return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: normalized.message, failure: normalized.failure };
   }
   const parameters = command.parameters ?? {};
+  const uploadPath = webAutomationUploadBindingPath(parameters.upload);
+  const unmet = [...webAutomationUnresolvedSecretParameters(parameters), ...uploadPath !== void 0 ? [{ parameter: "upload", path: uploadPath }] : []];
+  if (unmet.length > 0) {
+    return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: unsuppliedValueMessage(unmet), failure: unsuppliedValueFailure(unmet) };
+  }
+  const { lifted, refused } = webAutomationReadActionParameters(parameters);
+  const required = requiredParameters(normalized.actionType);
+  const unreadable = refused.filter((field) => required.includes(field));
+  if (unreadable.length > 0) {
+    return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: unreadableFieldMessage(normalized.actionType, unreadable), failure: unreadableFieldFailure(normalized.actionType, unreadable) };
+  }
   const target = command.target ?? {};
   return compactJsonObject2({
     commandId: command.commandId,
@@ -920,7 +990,7 @@ function webAutomationActionFromGatewayCommand(command) {
     coordinates: pointValue(target.coordinates ?? parameters.coordinates),
     visualTarget: jsonObject2(target.visualTarget ?? parameters.visualTarget),
     element: commandElementFingerprint(target, parameters),
-    ...webAutomationLiftedActionParameters(parameters),
+    ...lifted,
     options: parameters
   });
 }
@@ -943,6 +1013,28 @@ function normalizeWebAutomationActionType(actionType) {
   return { ok: false, failure: UNSUPPORTED_ACTION_TYPE_FAILURE, message: `Unsupported web automation action type: ${requested}` };
 }
 var UNSUPPORTED_ACTION_TYPE_FAILURE = Object.freeze(webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE));
+function unsuppliedValueFailure(unmet) {
+  return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED, {
+    expected: `values supplied at run time for ${unmet.map((entry) => entry.path).join(", ")}`,
+    actual: "the run supplied none, so the action was not dispatched"
+  });
+}
+function unsuppliedValueMessage(unmet) {
+  return `Not dispatched: these parameters need values supplied at run time that this run did not supply: ${unmet.map((entry) => `${entry.parameter} (${entry.path})`).join(", ")}`;
+}
+function unreadableFieldFailure(actionType, fields) {
+  return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER, {
+    expected: `${actionType} with a well-formed ${fields.join(", ")}`,
+    actual: `${fields.join(", ")} could not be read, so the action was not dispatched`
+  });
+}
+function unreadableFieldMessage(actionType, fields) {
+  return `Not dispatched: ${actionType} requires ${fields.join(", ")}, and what was sent could not be read.`;
+}
+function requiredParameters(actionType) {
+  const schema = webAutomationActionDefinitions.find((definition) => definition.actionType === actionType)?.parameterSchema;
+  return Array.isArray(schema?.required) ? schema.required.filter((key) => typeof key === "string") : [];
+}
 var CANONICAL_ACTION_TYPES = new Set(WEB_AUTOMATION_ACTION_TYPES);
 var LEGACY_ACTION_TYPE_ALIASES = new Map(
   Object.entries(WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER).map(([canonical, legacy]) => [legacy, canonical])
@@ -977,6 +1069,13 @@ function mapped(actionType, parameters, extra = {}) {
   assert.equal("status" in command, false, `${actionType} was rejected`);
   return command;
 }
+function refusedWhole(actionType, parameters, fields, why) {
+  const command = webAutomationActionFromGatewayCommand({ commandId: `command.${actionType}`, actionType, parameters });
+  assert.equal("status" in command, true, `${actionType} was dispatched: ${why}`);
+  const rejection = command;
+  assert.equal(rejection.failure.code, WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER, why);
+  assert.equal(rejection.message, `Not dispatched: ${actionType} requires ${fields.join(", ")}, and what was sent could not be read.`, why);
+}
 function base64OfBytes(bytes) {
   return "A".repeat(bytes / 3 * 4);
 }
@@ -999,44 +1098,59 @@ assert.deepEqual(mapped("web.dom.assert", { assert: { kind: "visible" } }).asser
 for (const kind of ["exists", "absent", "text", "url", "visible", "enabled"]) {
   assert.deepEqual(mapped("web.dom.assert", { assert: { kind } }).assert, { kind }, kind);
 }
-assert.equal(mapped("web.dom.assert", { assert: { kind: "contains" } }).assert, void 0, "an unknown kind is no assertion");
-assert.equal(mapped("web.dom.assert", { assert: { expected: "Saved" } }).assert, void 0, "an assertion with no kind claims nothing");
+refusedWhole("web.dom.assert", { assert: { kind: "contains" } }, ["assert"], "an unknown kind is no assertion");
+refusedWhole("web.dom.assert", { assert: { expected: "Saved" } }, ["assert"], "an assertion with no kind claims nothing");
 assert.equal(mapped("web.dom.assert", { assert: { kind: "text", expected: "Saved", timeoutMs: 0 } }).assert?.timeoutMs, void 0, "a zero timeout is not a timeout");
 assert.deepEqual(mapped("web.dom.extract_list", {
   extractList: { item: "tr.row", fields: { name: "td.name", href: "a@href", price: "column:Price" }, paginate: { next: "a.next", maxPages: 3 }, maxItems: 40 }
 }).extractList, { item: "tr.row", fields: { name: "td.name", href: "a@href", price: "column:Price" }, paginate: { next: "a.next", maxPages: 3 }, maxItems: 40 });
 assert.deepEqual(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" } } }).extractList, { item: "li", fields: { title: "h3" } });
 assert.equal(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, paginate: { next: "a.next", maxPages: 5e3 } } }).extractList?.paginate?.maxPages, WEB_AUTOMATION_EXTRACT_MAX_PAGES);
-assert.equal(mapped("web.dom.extract_list", { extractList: { item: "li", fields: {} } }).extractList, void 0, "no fields extracts nothing");
-assert.equal(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "" } } }).extractList, void 0, "a field naming no selector would extract a column of nothing");
-assert.equal(mapped("web.dom.extract_list", { extractList: { fields: { title: "h3" } } }).extractList, void 0, "no item selector selects no records");
-assert.equal(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, paginate: { maxPages: 3 } } }).extractList, void 0);
+refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: {} } }, ["extractList"], "no fields extracts nothing");
+refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "" } } }, ["extractList"], "a field naming no selector would extract a column of nothing");
+refusedWhole("web.dom.extract_list", { extractList: { fields: { title: "h3" } } }, ["extractList"], "no item selector selects no records");
+refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, paginate: { maxPages: 3 } } }, ["extractList"], "a paginate with no next link");
 assert.deepEqual(mapped("web.dom.upload", { selector: "input[type=file]", upload: { files: [{ name: "a.txt", mimeType: "text/plain", contentBase64: "aGk=" }] } }).upload, {
   files: [{ name: "a.txt", mimeType: "text/plain", contentBase64: "aGk=" }]
 });
-assert.equal(mapped("web.dom.upload", { selector: "#f", upload: { files: [] } }).upload, void 0);
-assert.equal(mapped("web.dom.upload", { selector: "#f", upload: { files: [{ name: "a.txt", mimeType: "text/plain" }] } }).upload, void 0, "a file with no content is not a file");
-assert.equal(mapped("web.dom.upload", { selector: "#f", upload: { files: [{ name: "a.txt", mimeType: "text/plain", contentBase64: "not base64!" }] } }).upload, void 0);
+refusedWhole("web.dom.upload", { selector: "#f", upload: { files: [] } }, ["upload"], "an upload of no files");
+refusedWhole("web.dom.upload", { selector: "#f", upload: { files: [{ name: "a.txt", mimeType: "text/plain" }] } }, ["upload"], "a file with no content is not a file");
+refusedWhole("web.dom.upload", { selector: "#f", upload: { files: [{ name: "a.txt", mimeType: "text/plain", contentBase64: "not base64!" }] } }, ["upload"], "content that is not base64");
 var oversized = base64OfBytes(WEB_AUTOMATION_UPLOAD_MAX_FILE_BYTES + 2);
-assert.equal(mapped("web.dom.upload", { selector: "#f", upload: { files: [{ name: "big.bin", mimeType: "application/octet-stream", contentBase64: oversized }] } }).upload, void 0);
+refusedWhole("web.dom.upload", { selector: "#f", upload: { files: [{ name: "big.bin", mimeType: "application/octet-stream", contentBase64: oversized }] } }, ["upload"], "a file past the per-file bound");
 var nearLimit = { name: "part.bin", mimeType: "application/octet-stream", contentBase64: base64OfBytes(1048575) };
 assert.equal(mapped("web.dom.upload", { selector: "#f", upload: { files: [nearLimit] } }).upload?.files.length, 1, "a file inside the per-file bound is carried");
-assert.equal(mapped("web.dom.upload", { selector: "#f", upload: { files: [nearLimit, nearLimit, nearLimit, nearLimit, nearLimit] } }).upload, void 0, "five near-limit files exceed the total bound");
+refusedWhole("web.dom.upload", { selector: "#f", upload: { files: [nearLimit, nearLimit, nearLimit, nearLimit, nearLimit] } }, ["upload"], "five near-limit files exceed the total bound");
 assert.deepEqual(mapped("web.dom.dialog", { dialog: { response: "accept", promptText: "Ada" } }).dialog, { response: "accept", promptText: "Ada" });
 assert.deepEqual(mapped("web.dom.dialog", { dialog: { response: "dismiss" } }).dialog, { response: "dismiss" });
 assert.deepEqual(mapped("web.dom.dialog", { dialog: { response: "dismiss", promptText: "Ada" } }).dialog, { response: "dismiss" }, "a dismissal answers nothing, so it carries no reply");
-assert.equal(mapped("web.dom.dialog", { dialog: { response: "ignore" } }).dialog, void 0);
-assert.equal(mapped("web.dom.dialog", {}).dialog, void 0);
+refusedWhole("web.dom.dialog", { dialog: { response: "ignore" } }, ["dialog"], "a response that is neither accept nor dismiss");
+assert.equal(mapped("web.dom.dialog", {}).dialog, void 0, "an absent field is not a refused one: the verb still decides what an empty request means");
 assert.deepEqual(mapped("web.browser.tab", { tab: { operation: "open", url: "https://example.test/report", active: true } }).tab, { operation: "open", url: "https://example.test/report", active: true });
 assert.deepEqual(mapped("web.browser.tab", { tab: { operation: "switch", urlPattern: "/report" } }).tab, { operation: "switch", urlPattern: "/report" });
 assert.deepEqual(mapped("web.browser.tab", { tab: { operation: "switch", tabId: 9 } }).tab, { operation: "switch", tabId: 9 });
 assert.deepEqual(mapped("web.browser.tab", { tab: { operation: "close", tabId: 9 } }).tab, { operation: "close", tabId: 9 });
 assert.deepEqual(mapped("web.browser.tab", { tab: { operation: "close", url: "https://example.test", active: true, tabId: 4 } }).tab, { operation: "close", tabId: 4 });
-assert.equal(mapped("web.browser.tab", { tab: { operation: "reload" } }).tab, void 0);
+refusedWhole("web.browser.tab", { tab: { operation: "reload" } }, ["tab"], "an operation that is not open, switch or close");
 assert.equal(mapped("web.browser.tab", { tab: { operation: "close", tabId: 9 } }).tabId, void 0);
 assert.deepEqual(mapped("web.browser.download", { download: { filename: "report.csv", timeoutMs: 3e4 } }).download, { filename: "report.csv", timeoutMs: 3e4 });
 assert.deepEqual(mapped("web.browser.download", { download: {} }).download, {}, "waiting for whichever download finishes next is a request");
 assert.equal(mapped("web.browser.download", {}).download, void 0);
+assert.deepEqual(mapped("web.browser.tab", { tab: { operation: "switch", urlPath: "/scenarios/multi-tab/list" } }).tab, { operation: "switch", urlPath: "/scenarios/multi-tab/list" });
+for (const urlPath of ["http://127.0.0.1:4173/scenarios/multi-tab/list", "/list?session=tok", "/list#top", "list", "", 7, null]) {
+  refusedWhole("web.browser.tab", { tab: { operation: "switch", urlPath } }, ["tab"], `a switch path that is not a bare pathname: ${JSON.stringify(urlPath)}`);
+}
+assert.deepEqual(mapped("web.browser.tab", { tab: { operation: "close", urlPath: "/list" } }).tab, { operation: "close" }, "a close names no tab, so it carries no path");
+var childFrameClick = mapped("web.dom.click", { browserFrameId: 4, browserFrameUrlPath: "/scenarios/iframe-checkout/payment", selector: "#pay" });
+assert.equal(childFrameClick.frameUrlPath, "/scenarios/iframe-checkout/payment");
+assert.equal(childFrameClick.frameId, 4, "the id still travels, as the tie-break");
+assert.equal(mapped("web.dom.click", { browserFrameId: 0, selector: "#pay" }).frameUrlPath, void 0, "a top-frame command names no path");
+assert.equal(mapped("web.dom.click", { frameUrlPath: "/payment", selector: "#pay" }).frameUrlPath, void 0, "only the recorded node's name is read");
+for (const browserFrameUrlPath of ["", "http://127.0.0.1:5174/payment", "/payment?session=tok", "payment", 4, null]) {
+  const command = mapped("web.dom.click", { browserFrameId: 4, browserFrameUrlPath, selector: "#pay" });
+  assert.equal(command.frameUrlPath, void 0, `refused: ${JSON.stringify(browserFrameUrlPath)}`);
+  assert.equal(command.frameId, 4, "a refused path does not take the frame id with it");
+}
 assert.deepEqual(mapped("web.dom.select", { selector: "#country", option: { by: "label", label: "Ireland" } }).option, { by: "label", label: "Ireland" });
 assert.deepEqual(mapped("web.dom.select", { selector: "#country", option: { by: "index", index: 0 } }).option, { by: "index", index: 0 }, "the first option is index 0");
 assert.deepEqual(mapped("web.dom.select", { selector: "#country", option: { by: "value", value: "" } }).option, { by: "value", value: "" }, "an option's value may legitimately be empty");
@@ -1054,9 +1168,9 @@ assert.equal(mapped("web.dom.wait_for_selector", { selector: "#row", wait: { con
 assert.deepEqual(mapped("web.dom.keypress", { key: "Enter", modifiers: { ctrl: true, shift: false } }).modifiers, { ctrl: true, shift: false });
 assert.equal(mapped("web.dom.keypress", { key: "Enter", modifiers: {} }).modifiers, void 0, "a modifier set naming nothing is no modifier set");
 assert.deepEqual(mapped("web.dom.keypress", { key: "Enter", modifiers: { alt: true, meta: "yes" } }).modifiers, { alt: true }, "only the modifiers actually named are carried");
-var withBadAssert = mapped("web.dom.assert", { assert: { kind: "contains", expected: "x" } });
-assert.equal(withBadAssert.assert, void 0);
-assert.deepEqual(withBadAssert.options, { assert: { kind: "contains", expected: "x" } }, "a refused value stays in options rather than vanishing");
+var withBadScroll = mapped("web.dom.scroll", { scroll: { mode: "down" } });
+assert.equal(withBadScroll.scroll, void 0);
+assert.deepEqual(withBadScroll.options, { scroll: { mode: "down" } }, "a refused optional value stays in options rather than vanishing");
 assert.deepEqual(webAutomationActionFromGatewayCommand({ commandId: "command.type", actionType: "dom.type", target: { selector: "input[name=q]" }, parameters: { text: "ada" } }), {
   commandId: "command.type",
   actionType: "web.dom.type",
@@ -1069,4 +1183,7 @@ assert.deepEqual(webAutomationActionFromGatewayCommand({ commandId: "command.sna
   actionType: "web.dom.capture_snapshot",
   options: {}
 });
+var LIFTED_PARAMETER_NAMES = ["browserTabId", "tabId", "browserFrameId", "frameId", "browserFrameUrlPath", "newTab", "option", "scroll", "wait", "modifiers", "checked", "assert", "extractList", "upload", "dialog", "tab", "download"];
+var refusedPairs = WEB_AUTOMATION_ACTION_TYPES.flatMap((actionType) => LIFTED_PARAMETER_NAMES.filter((name) => "status" in webAutomationActionFromGatewayCommand({ commandId: "command.matrix", actionType, parameters: { [name]: "unreadable" } })).map((name) => `${actionType} ${name}`));
+assert.deepEqual(refusedPairs.sort(), ["web.browser.tab tab", "web.dom.assert assert", "web.dom.dialog dialog", "web.dom.extract_list extractList", "web.dom.upload upload"]);
 console.log("Web automation gateway command parameter tests passed.");

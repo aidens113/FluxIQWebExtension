@@ -252,7 +252,8 @@ var tabSchema = {
     url: { type: "string", label: "URL" },
     active: { type: "boolean", label: "Activate" },
     tabId: { type: "integer", label: "Tab id" },
-    urlPattern: { type: "string", label: "URL contains" }
+    urlPattern: { type: "string", label: "URL contains" },
+    urlPath: { type: "string", label: "URL path" }
   }
 };
 var downloadSchema = {
@@ -551,7 +552,10 @@ var WEB_AUTOMATION_INPUT_IDS = {
   optionSelected: "web.user.option_selected",
   checkboxToggled: "web.user.checkbox_toggled",
   keyPressed: "web.user.key_pressed",
-  pageScrolled: "web.user.page_scrolled"
+  pageScrolled: "web.user.page_scrolled",
+  filesChosen: "web.user.files_chosen",
+  tabSwitched: "web.user.tab_switched",
+  tabClosed: "web.user.tab_closed"
 };
 var stateInputDefinitions = [
   { id: WEB_AUTOMATION_INPUT_IDS.browserState, title: "Browser state", description: "Current browser, tab, and compact DOM state available for policy conditions.", role: "state" },
@@ -565,7 +569,10 @@ var actionInputDefinitions = [
   [WEB_AUTOMATION_INPUT_IDS.optionSelected, "Option selected", "web.dom.select"],
   [WEB_AUTOMATION_INPUT_IDS.checkboxToggled, "Checkbox toggled", "web.dom.check"],
   [WEB_AUTOMATION_INPUT_IDS.keyPressed, "Key pressed", "web.dom.keypress"],
-  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"]
+  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"],
+  [WEB_AUTOMATION_INPUT_IDS.filesChosen, "Files chosen", "web.dom.upload"],
+  [WEB_AUTOMATION_INPUT_IDS.tabSwitched, "Tab switched", "web.browser.tab"],
+  [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"]
 ];
 var OUTPUT_FOR_ACTION_INPUT = new Map(
   actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
@@ -616,6 +623,14 @@ var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   UNSUPPORTED_TYPE: "web.action.unsupported_type",
   /** The verb is registered but not built yet, so a Flow that reaches one fails honestly. */
   NOT_IMPLEMENTED: "web.action.not_implemented",
+  /**
+   * A field the action requires arrived in a shape that cannot be read, so the
+   * command was refused before dispatch. `client/gateway-mapping.ts` decides it
+   * from what `client/gateway-action-parameters.ts` refused. The Flow's node is
+   * authored wrong and only an edit fixes it: a structural fault in the Flow,
+   * not a capability the client lacks.
+   */
+  INVALID_PARAMETER: "web.action.invalid_parameter",
   /** The action ran and failed for a reason no other code names. */
   ACTION_FAILED: "web.action.failed",
   /** Nothing said why the action failed. */
@@ -634,6 +649,7 @@ var WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS = Object.freeze({
   "web.intervention.required": { category: "user_intervention_required", retryable: false, stage: "execution" },
   "web.action.unsupported_type": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
   "web.action.not_implemented": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
+  "web.action.invalid_parameter": { category: "graph_validation_or_unknown_node", retryable: false, stage: "dispatch" },
   "web.action.failed": { category: "action_failed", retryable: true, stage: "execution" },
   "web.action.unknown": { category: "ambiguous_or_unknown", retryable: false, stage: "execution" }
 });

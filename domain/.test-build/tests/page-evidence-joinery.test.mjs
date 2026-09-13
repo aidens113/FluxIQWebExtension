@@ -720,7 +720,7 @@ function finite2(value) {
 
 // src/recording/web-state/evidence/input.ts
 function pageEvidenceOfSnapshot(snapshot2) {
-  return pageEvidenceWire(pageEvidenceWire(snapshot2)?.evidence);
+  return pageEvidenceWire(snapshot2.evidence);
 }
 function pageEvidenceTruncatedElements(evidence) {
   return pageEvidenceWire(evidence?.elements)?.truncated === true;

@@ -54,6 +54,7 @@ function elementFingerprint(value) {
     name: stringValue(element.name),
     href: stringValue(element.href),
     inputType: stringValue(element.inputType),
+    checked: booleanValue(element.checked),
     testId: elementTestId(element, attributes),
     accessibleName: stringValue(element.accessibleName) ?? stringValue(attributes?.["aria-label"]),
     label: stringValue(element.label),
@@ -86,6 +87,7 @@ function elementContext(value) {
     formAction: stringValue(context.formAction),
     fieldsetLegend: stringValue(context.fieldsetLegend),
     landmark: stringValue(context.landmark),
+    landmarkName: stringValue(context.landmarkName),
     heading: stringValue(context.heading),
     listPosition: listPosition(context.listPosition),
     tablePosition: tablePosition(context.tablePosition)
@@ -130,6 +132,23 @@ function stringValue(value) {
 function numberValue(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : void 0;
 }
+function booleanValue(value) {
+  return typeof value === "boolean" ? value : void 0;
+}
+
+// src/output-nodes/recorded-element-key.ts
+function webAutomationRecordedElementKey(payload) {
+  const element = objectValue(payload.element);
+  const attributes = objectValue(element?.attributes);
+  const statePath = stringValue(objectValue(payload.visualTarget)?.statePath);
+  const fromStatePath = statePath?.startsWith("web.elements.") ? statePath.slice("web.elements.".length) : void 0;
+  const identity = fromStatePath ?? stringValue(element?.testId) ?? stringValue(attributes?.["data-testid"]) ?? stringValue(attributes?.["data-test"]) ?? stringValue(attributes?.["data-cy"]) ?? stringValue(element?.id) ?? stringValue(attributes?.id) ?? stringValue(element?.name) ?? stringValue(attributes?.name) ?? stringValue(element?.selector) ?? stringValue(payload.selector);
+  const key = sanitizeRecordedElementKey(identity ?? "");
+  return key.length ? key : void 0;
+}
+function sanitizeRecordedElementKey(value) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 120);
+}
 
 // src/output-nodes/secret-binding.ts
 var WEB_AUTOMATION_SECRET_STATE_PREFIX = "web.secret.";
@@ -149,17 +168,19 @@ function webAutomationUnresolvedSecretParameters(parameters) {
     return path === void 0 ? [] : [{ parameter, path }];
   });
 }
-function webAutomationSecretKeyForRecordedElement(payload) {
-  const element = objectValue(payload.element);
-  const attributes = objectValue(element?.attributes);
-  const statePath = stringValue(objectValue(payload.visualTarget)?.statePath);
-  const fromStatePath = statePath?.startsWith("web.elements.") ? statePath.slice("web.elements.".length) : void 0;
-  const identity = fromStatePath ?? stringValue(element?.testId) ?? stringValue(attributes?.["data-testid"]) ?? stringValue(attributes?.["data-test"]) ?? stringValue(attributes?.["data-cy"]) ?? stringValue(element?.id) ?? stringValue(attributes?.id) ?? stringValue(element?.name) ?? stringValue(attributes?.name) ?? stringValue(element?.selector) ?? stringValue(payload.selector);
-  const key = sanitizeSecretKey(identity ?? "");
-  return key.length ? key : void 0;
+
+// src/output-nodes/upload-binding.ts
+var WEB_AUTOMATION_UPLOAD_STATE_PREFIX = "web.upload.";
+function webAutomationUploadStatePath(key) {
+  return `${WEB_AUTOMATION_UPLOAD_STATE_PREFIX}${key}`;
 }
-function sanitizeSecretKey(value) {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 120);
+function webAutomationUploadBinding(key) {
+  return { $state: { path: webAutomationUploadStatePath(key) } };
+}
+
+// src/output-nodes/url-path.ts
+function webAutomationUrlPath(value) {
+  return typeof value === "string" && /^\/(?![/\\])[^?#]*$/u.test(value) ? value : void 0;
 }
 
 // src/output-nodes/payloads.ts
@@ -169,10 +190,21 @@ function webAutomationOutputPayload(outputId, payload) {
 function withRecordedFrame(outputId, payload, parameters) {
   const browserFrameId = frameIdValue(payload.browserFrameId);
   if (browserFrameId === void 0 || !outputId.startsWith("web.dom.")) return parameters;
-  return Object.keys(parameters).length === 0 ? parameters : { ...parameters, browserFrameId };
+  if (Object.keys(parameters).length === 0) return parameters;
+  const browserFrameUrlPath = browserFrameId > 0 ? httpUrlPath(payload.url) : void 0;
+  return { ...parameters, browserFrameId, ...browserFrameUrlPath !== void 0 ? { browserFrameUrlPath } : {} };
 }
 function frameIdValue(value) {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
+}
+function httpUrlPath(value) {
+  if (typeof value !== "string") return void 0;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.pathname : void 0;
+  } catch {
+    return void 0;
+  }
 }
 function recordedOutputParameters(outputId, payload) {
   const element = elementFingerprint(payload.element);
@@ -196,14 +228,30 @@ function recordedOutputParameters(outputId, payload) {
   if (outputId === "web.dom.wait_for_selector") return compact({ selector, ...hasTarget ? target : {} });
   if (outputId === "web.dom.wait_for_text") return compact({ text: stringValue(payload.inputValue) ?? stringValue(payload.title) });
   if (outputId === "web.dom.extract") return compact({ selector, ...hasTarget ? target : {} });
+  if (outputId === "web.dom.upload") return recordedUploadParameters(payload, selector, target);
+  if (outputId === "web.browser.tab") return recordedTabParameters(payload);
   if (outputId === "web.dom.capture_snapshot") return {};
   return {};
+}
+function recordedUploadParameters(payload, selector, target) {
+  const key = webAutomationRecordedElementKey(payload);
+  if (key === void 0) return {};
+  const element = objectValue(target.element);
+  const fileTarget = element === void 0 ? target : { ...target, element: Object.fromEntries(Object.entries(element).filter(([name]) => name !== "value")) };
+  return compact({ selector, upload: webAutomationUploadBinding(key), ...fileTarget });
+}
+function recordedTabParameters(payload) {
+  const tab = objectValue(payload.tab);
+  if (tab?.operation === "close") return { tab: { operation: "close" } };
+  if (tab?.operation !== "switch") return {};
+  const urlPath = webAutomationUrlPath(tab.urlPath);
+  return { tab: { operation: "switch", ...urlPath !== void 0 ? { urlPath } : {} } };
 }
 function recordedTypedText(payload) {
   const recorded = stringValue(payload.inputValue);
   if (recorded !== void 0) return recorded;
   if (!isSensitiveElementDescriptor(payload.element)) return "";
-  const key = webAutomationSecretKeyForRecordedElement(payload);
+  const key = webAutomationRecordedElementKey(payload);
   return key === void 0 ? "" : webAutomationSecretBinding(key);
 }
 function recordedCheckedState(payload) {
@@ -254,17 +302,9 @@ test("a recorded value still replays as itself", () => {
 });
 test("only a request on the secret namespace is one", () => {
   assert.equal(webAutomationSecretStatePath("password").startsWith(WEB_AUTOMATION_SECRET_STATE_PREFIX), true);
-  for (const value of ["password", "", 0, null, void 0, { $state: {} }, { $state: { path: "web.elements.password" } }]) {
+  for (const value of ["password", "", 0, null, void 0, { $state: {} }, { $state: { path: "web.elements.password" } }, { $state: { path: "web.upload.password" } }]) {
     assert.equal(webAutomationSecretBindingPath(value), void 0, JSON.stringify(value) ?? "undefined");
   }
-});
-test("the key comes from identity the node already carries, richest first", () => {
-  const key = (payload) => webAutomationSecretKeyForRecordedElement(payload);
-  assert.equal(key(withheldPasswordEntry), "password");
-  assert.equal(key({ ...withheldPasswordEntry, visualTarget: { statePath: "web.elements.password.2" } }), "password-2");
-  assert.equal(key({ element: withheldPasswordEntry.element }), "password");
-  assert.equal(key({ element: { selector: "form > input:nth-child(2)" } }), "form-input-nth-child-2");
-  assert.equal(key({}), void 0);
 });
 test("a value supplied to the run reaches the dispatched parameters, and follows the run rather than any constant", () => {
   const parameters = parametersOf(withheldPasswordEntry);

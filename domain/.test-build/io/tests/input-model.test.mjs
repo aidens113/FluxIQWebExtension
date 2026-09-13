@@ -234,7 +234,8 @@ var tabSchema = {
     url: { type: "string", label: "URL" },
     active: { type: "boolean", label: "Activate" },
     tabId: { type: "integer", label: "Tab id" },
-    urlPattern: { type: "string", label: "URL contains" }
+    urlPattern: { type: "string", label: "URL contains" },
+    urlPath: { type: "string", label: "URL path" }
   }
 };
 var downloadSchema = {
@@ -548,6 +549,7 @@ function elementFingerprint(value) {
     name: stringValue(element.name),
     href: stringValue(element.href),
     inputType: stringValue(element.inputType),
+    checked: booleanValue(element.checked),
     testId: elementTestId(element, attributes),
     accessibleName: stringValue(element.accessibleName) ?? stringValue(attributes?.["aria-label"]),
     label: stringValue(element.label),
@@ -580,6 +582,7 @@ function elementContext(value) {
     formAction: stringValue(context.formAction),
     fieldsetLegend: stringValue(context.fieldsetLegend),
     landmark: stringValue(context.landmark),
+    landmarkName: stringValue(context.landmarkName),
     heading: stringValue(context.heading),
     listPosition: listPosition(context.listPosition),
     tablePosition: tablePosition(context.tablePosition)
@@ -624,6 +627,23 @@ function stringValue(value) {
 function numberValue(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : void 0;
 }
+function booleanValue(value) {
+  return typeof value === "boolean" ? value : void 0;
+}
+
+// src/output-nodes/recorded-element-key.ts
+function webAutomationRecordedElementKey(payload) {
+  const element = objectValue(payload.element);
+  const attributes = objectValue(element?.attributes);
+  const statePath = stringValue(objectValue(payload.visualTarget)?.statePath);
+  const fromStatePath = statePath?.startsWith("web.elements.") ? statePath.slice("web.elements.".length) : void 0;
+  const identity = fromStatePath ?? stringValue(element?.testId) ?? stringValue(attributes?.["data-testid"]) ?? stringValue(attributes?.["data-test"]) ?? stringValue(attributes?.["data-cy"]) ?? stringValue(element?.id) ?? stringValue(attributes?.id) ?? stringValue(element?.name) ?? stringValue(attributes?.name) ?? stringValue(element?.selector) ?? stringValue(payload.selector);
+  const key = sanitizeRecordedElementKey(identity ?? "");
+  return key.length ? key : void 0;
+}
+function sanitizeRecordedElementKey(value) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 120);
+}
 
 // src/output-nodes/secret-binding.ts
 var WEB_AUTOMATION_SECRET_STATE_PREFIX = "web.secret.";
@@ -633,17 +653,27 @@ function webAutomationSecretStatePath(key) {
 function webAutomationSecretBinding(key) {
   return { $state: { path: webAutomationSecretStatePath(key) } };
 }
-function webAutomationSecretKeyForRecordedElement(payload) {
-  const element = objectValue(payload.element);
-  const attributes = objectValue(element?.attributes);
-  const statePath = stringValue(objectValue(payload.visualTarget)?.statePath);
-  const fromStatePath = statePath?.startsWith("web.elements.") ? statePath.slice("web.elements.".length) : void 0;
-  const identity = fromStatePath ?? stringValue(element?.testId) ?? stringValue(attributes?.["data-testid"]) ?? stringValue(attributes?.["data-test"]) ?? stringValue(attributes?.["data-cy"]) ?? stringValue(element?.id) ?? stringValue(attributes?.id) ?? stringValue(element?.name) ?? stringValue(attributes?.name) ?? stringValue(element?.selector) ?? stringValue(payload.selector);
-  const key = sanitizeSecretKey(identity ?? "");
-  return key.length ? key : void 0;
+function webAutomationSecretBindingPath(value) {
+  const path = stringValue(objectValue(objectValue(value)?.$state)?.path);
+  return path?.startsWith(WEB_AUTOMATION_SECRET_STATE_PREFIX) ? path : void 0;
 }
-function sanitizeSecretKey(value) {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 120);
+
+// src/output-nodes/upload-binding.ts
+var WEB_AUTOMATION_UPLOAD_STATE_PREFIX = "web.upload.";
+function webAutomationUploadStatePath(key) {
+  return `${WEB_AUTOMATION_UPLOAD_STATE_PREFIX}${key}`;
+}
+function webAutomationUploadBinding(key) {
+  return { $state: { path: webAutomationUploadStatePath(key) } };
+}
+function webAutomationUploadBindingPath(value) {
+  const path = stringValue(objectValue(objectValue(value)?.$state)?.path);
+  return path?.startsWith(WEB_AUTOMATION_UPLOAD_STATE_PREFIX) ? path : void 0;
+}
+
+// src/output-nodes/url-path.ts
+function webAutomationUrlPath(value) {
+  return typeof value === "string" && /^\/(?![/\\])[^?#]*$/u.test(value) ? value : void 0;
 }
 
 // src/output-nodes/payloads.ts
@@ -653,10 +683,21 @@ function webAutomationOutputPayload(outputId, payload) {
 function withRecordedFrame(outputId, payload, parameters) {
   const browserFrameId = frameIdValue(payload.browserFrameId);
   if (browserFrameId === void 0 || !outputId.startsWith("web.dom.")) return parameters;
-  return Object.keys(parameters).length === 0 ? parameters : { ...parameters, browserFrameId };
+  if (Object.keys(parameters).length === 0) return parameters;
+  const browserFrameUrlPath = browserFrameId > 0 ? httpUrlPath(payload.url) : void 0;
+  return { ...parameters, browserFrameId, ...browserFrameUrlPath !== void 0 ? { browserFrameUrlPath } : {} };
 }
 function frameIdValue(value) {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
+}
+function httpUrlPath(value) {
+  if (typeof value !== "string") return void 0;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.pathname : void 0;
+  } catch {
+    return void 0;
+  }
 }
 function recordedOutputParameters(outputId, payload) {
   const element = elementFingerprint(payload.element);
@@ -680,14 +721,30 @@ function recordedOutputParameters(outputId, payload) {
   if (outputId === "web.dom.wait_for_selector") return compact({ selector, ...hasTarget ? target : {} });
   if (outputId === "web.dom.wait_for_text") return compact({ text: stringValue(payload.inputValue) ?? stringValue(payload.title) });
   if (outputId === "web.dom.extract") return compact({ selector, ...hasTarget ? target : {} });
+  if (outputId === "web.dom.upload") return recordedUploadParameters(payload, selector, target);
+  if (outputId === "web.browser.tab") return recordedTabParameters(payload);
   if (outputId === "web.dom.capture_snapshot") return {};
   return {};
+}
+function recordedUploadParameters(payload, selector, target) {
+  const key = webAutomationRecordedElementKey(payload);
+  if (key === void 0) return {};
+  const element = objectValue(target.element);
+  const fileTarget = element === void 0 ? target : { ...target, element: Object.fromEntries(Object.entries(element).filter(([name]) => name !== "value")) };
+  return compact({ selector, upload: webAutomationUploadBinding(key), ...fileTarget });
+}
+function recordedTabParameters(payload) {
+  const tab = objectValue(payload.tab);
+  if (tab?.operation === "close") return { tab: { operation: "close" } };
+  if (tab?.operation !== "switch") return {};
+  const urlPath = webAutomationUrlPath(tab.urlPath);
+  return { tab: { operation: "switch", ...urlPath !== void 0 ? { urlPath } : {} } };
 }
 function recordedTypedText(payload) {
   const recorded2 = stringValue(payload.inputValue);
   if (recorded2 !== void 0) return recorded2;
   if (!isSensitiveElementDescriptor(payload.element)) return "";
-  const key = webAutomationSecretKeyForRecordedElement(payload);
+  const key = webAutomationRecordedElementKey(payload);
   return key === void 0 ? "" : webAutomationSecretBinding(key);
 }
 function recordedCheckedState(payload) {
@@ -719,7 +776,10 @@ var WEB_AUTOMATION_INPUT_IDS = {
   optionSelected: "web.user.option_selected",
   checkboxToggled: "web.user.checkbox_toggled",
   keyPressed: "web.user.key_pressed",
-  pageScrolled: "web.user.page_scrolled"
+  pageScrolled: "web.user.page_scrolled",
+  filesChosen: "web.user.files_chosen",
+  tabSwitched: "web.user.tab_switched",
+  tabClosed: "web.user.tab_closed"
 };
 function webAutomationEventTypeForClientKind(kind) {
   if (kind === "content.ready") return WEB_AUTOMATION_EVENTS.clientReady;
@@ -762,7 +822,10 @@ var actionInputDefinitions = [
   [WEB_AUTOMATION_INPUT_IDS.optionSelected, "Option selected", "web.dom.select"],
   [WEB_AUTOMATION_INPUT_IDS.checkboxToggled, "Checkbox toggled", "web.dom.check"],
   [WEB_AUTOMATION_INPUT_IDS.keyPressed, "Key pressed", "web.dom.keypress"],
-  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"]
+  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"],
+  [WEB_AUTOMATION_INPUT_IDS.filesChosen, "Files chosen", "web.dom.upload"],
+  [WEB_AUTOMATION_INPUT_IDS.tabSwitched, "Tab switched", "web.browser.tab"],
+  [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"]
 ];
 var OUTPUT_FOR_ACTION_INPUT = new Map(
   actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
@@ -780,9 +843,12 @@ function recordedActionInputId(eventType, payload, metadata) {
     // `dom.wheel` is never emitted, so its event type maps to no input.
     case WEB_AUTOMATION_EVENTS.scrollChanged:
       return WEB_AUTOMATION_INPUT_IDS.pageScrolled;
+    case WEB_AUTOMATION_EVENTS.tabStateChanged:
+      return recordedTabInputId(payload);
     case WEB_AUTOMATION_EVENTS.elementInputChanged:
     case WEB_AUTOMATION_EVENTS.elementChanged: {
       const element = objectValue2(payload.element);
+      if (stringValue2(element?.inputType)?.toLowerCase() === "file") return payload.inputValue === "" || element?.hasValue === false ? void 0 : WEB_AUTOMATION_INPUT_IDS.filesChosen;
       if (stringValue2(element?.tagName)?.toLowerCase() === "select") return WEB_AUTOMATION_INPUT_IDS.optionSelected;
       if (isCheckableElement(element)) return WEB_AUTOMATION_INPUT_IDS.checkboxToggled;
       return payload.inputValue === "" ? WEB_AUTOMATION_INPUT_IDS.fieldCleared : WEB_AUTOMATION_INPUT_IDS.textEntered;
@@ -808,11 +874,25 @@ function isSelectValueChangeKeyPress(payload) {
 function hasExecutableParameters(outputId, parameters) {
   const schema = webAutomationActionDefinitions.find((definition) => definition.actionType === outputId)?.parameterSchema;
   const required = Array.isArray(schema?.required) ? schema.required.filter((key) => typeof key === "string") : [];
-  if (!required.every((key) => isNonEmptyString(parameters[key]))) return false;
+  if (!required.every((key) => isExecutableRequiredParameter(key, parameters[key]))) return false;
   if (outputId === "web.dom.keypress") return isNonEmptyString(parameters.key);
   if (outputId === "web.dom.scroll") return typeof parameters.x === "number" || typeof parameters.y === "number";
   if (outputId === "web.dom.check") return typeof parameters.checked === "boolean";
   return true;
+}
+function isExecutableRequiredParameter(key, value) {
+  if (key === "upload") return webAutomationUploadBindingPath(value) !== void 0;
+  if (key === "tab") {
+    const tab = objectValue2(value);
+    return tab?.operation === "close" || tab?.operation === "switch" && isNonEmptyString(tab.urlPath);
+  }
+  return isNonEmptyString(value) || webAutomationSecretBindingPath(value) !== void 0;
+}
+function recordedTabInputId(payload) {
+  const operation = objectValue2(payload.tab)?.operation;
+  if (operation === "switch") return WEB_AUTOMATION_INPUT_IDS.tabSwitched;
+  if (operation === "close") return WEB_AUTOMATION_INPUT_IDS.tabClosed;
+  return void 0;
 }
 function isNonEmptyString(value) {
   return typeof value === "string" && value.length > 0;
@@ -846,6 +926,7 @@ var rows = [
     outputId: "web.browser.navigate"
   },
   { row: "4 browser.navigation, not typed", event: recorded("browser.navigation", { metadata: { transition: "link" } }), eventType: WEB_AUTOMATION_EVENTS.pageNavigated },
+  { row: "4a browser.navigation, explained: a click's landing is evidence", event: recorded("browser.navigation", { metadata: { transition: "explained", explainedBy: 1, explainedByEventId: "web.1.100" } }), eventType: WEB_AUTOMATION_EVENTS.pageNavigated },
   {
     row: "5 dom.click",
     event: recorded("dom.click", { element: button }),
@@ -920,6 +1001,50 @@ var rows = [
   { row: "18 action.result", event: recorded("action.result"), eventType: WEB_AUTOMATION_EVENTS.actionExecuted },
   { row: "19 client.error, never emitted", event: recorded("client.error"), eventType: WEB_AUTOMATION_EVENTS.clientError }
 ];
+var fileInput = { selector: "#attachment", tagName: "input", inputType: "file", id: "attachment" };
+rows.push(
+  {
+    row: "2a browser.tab, a switch with a path",
+    event: recorded("browser.tab", { tab: { operation: "switch", urlPath: "/scenarios/multi-tab/details" } }),
+    eventType: WEB_AUTOMATION_EVENTS.tabStateChanged,
+    inputId: WEB_AUTOMATION_INPUT_IDS.tabSwitched,
+    outputId: "web.browser.tab"
+  },
+  {
+    row: "2b browser.tab, a close",
+    event: recorded("browser.tab", { tab: { operation: "close" } }),
+    eventType: WEB_AUTOMATION_EVENTS.tabStateChanged,
+    inputId: WEB_AUTOMATION_INPUT_IDS.tabClosed,
+    outputId: "web.browser.tab"
+  },
+  // A switch naming no tab would go to whichever tab happened to be in front.
+  { row: "2c browser.tab, a switch without a path", event: recorded("browser.tab", { tab: { operation: "switch" } }), eventType: WEB_AUTOMATION_EVENTS.tabStateChanged },
+  { row: "2d browser.tab, a switch whose path is a full URL", event: recorded("browser.tab", { tab: { operation: "switch", urlPath: "https://example.test/details?session=tok" } }), eventType: WEB_AUTOMATION_EVENTS.tabStateChanged },
+  { row: "2e browser.tab, the recording-start marker", event: recorded("browser.tab", { metadata: { recordingState: "started" } }), eventType: WEB_AUTOMATION_EVENTS.tabStateChanged },
+  {
+    row: "9c dom.change, file input",
+    event: recorded("dom.change", { element: fileInput, inputValue: "C:\\fakepath\\tax-return-2025.pdf" }),
+    eventType: WEB_AUTOMATION_EVENTS.elementChanged,
+    inputId: WEB_AUTOMATION_INPUT_IDS.filesChosen,
+    outputId: "web.dom.upload"
+  },
+  {
+    // What the recorder sends once it stops reading a file input's value.
+    row: "9d dom.change, file input with no recorded value",
+    event: recorded("dom.change", { element: fileInput }),
+    eventType: WEB_AUTOMATION_EVENTS.elementChanged,
+    inputId: WEB_AUTOMATION_INPUT_IDS.filesChosen,
+    outputId: "web.dom.upload"
+  },
+  // An input the user emptied holds no files: no upload, and never a cleared field.
+  { row: "9e dom.change, file input emptied", event: recorded("dom.change", { element: fileInput, inputValue: "" }), eventType: WEB_AUTOMATION_EVENTS.elementChanged },
+  { row: "9f dom.input, file input", event: recorded("dom.input", { element: fileInput, inputValue: "C:\\fakepath\\tax-return-2025.pdf" }), eventType: WEB_AUTOMATION_EVENTS.elementInputChanged, inputId: WEB_AUTOMATION_INPUT_IDS.filesChosen, outputId: "web.dom.upload" },
+  // What the recorder sends since it withholds a file input's value: presence only.
+  { row: "9g dom.change, file input recorded holding files", event: recorded("dom.change", { element: { ...fileInput, hasValue: true } }), eventType: WEB_AUTOMATION_EVENTS.elementChanged, inputId: WEB_AUTOMATION_INPUT_IDS.filesChosen, outputId: "web.dom.upload" },
+  // A cancelled choice recorded the same way holds no files. As an upload, the runner would fill it.
+  { row: "9h dom.change, file input recorded holding no files", event: recorded("dom.change", { element: { ...fileInput, hasValue: false } }), eventType: WEB_AUTOMATION_EVENTS.elementChanged },
+  { row: "9i dom.input, file input recorded holding no files", event: recorded("dom.input", { element: { ...fileInput, hasValue: false } }), eventType: WEB_AUTOMATION_EVENTS.elementInputChanged }
+);
 var outputNodes = listWebAutomationOutputNodeDefinitions();
 for (const { row, event, eventType, inputId, outputId } of rows) {
   assert.equal(webAutomationEventTypeForClientKind(event.kind), eventType, `row ${row}: domain event type`);
@@ -955,27 +1080,40 @@ assert.equal(webAutomationInputIdForRecordedEvent(recorded("dom.keydown", { elem
 assert.equal(webAutomationInputIdForRecordedEvent(recorded("dom.keydown", { key: "Escape" })), WEB_AUTOMATION_INPUT_IDS.keyPressed, "a key press may target the focused element");
 assert.equal(webAutomationInputIdForRecordedEvent(recorded("dom.scroll")), void 0, "scroll needs a coordinate");
 assert.equal(webAutomationInputIdForRecordedEvent(recorded("dom.scroll", { scroll: { y: 0 } })), WEB_AUTOMATION_INPUT_IDS.pageScrolled, "scrolling back to the top is a coordinate");
-var recordableOutputs = actionInputDefinitions.map(([, , outputId]) => outputId);
+var inputOutputs = actionInputDefinitions.map(([, , outputId]) => outputId);
+var recordableOutputs = [...new Set(inputOutputs)];
 var dispatchOnlyOutputs = [
   "web.dom.wait_for_selector",
   "web.dom.wait_for_text",
   "web.dom.extract",
   "web.dom.capture_snapshot",
   // Added in Week 1 (decision D6). `web.dom.check` is recordable, from a
-  // checkbox or radio change; the other six are authored or driven by a Flow
-  // and no recorded user event produces one.
+  // checkbox or radio change; `web.dom.upload` from a file choice; and
+  // `web.browser.tab` from a tab switch or close. The other four are authored
+  // or driven by a Flow and no recorded user event produces one.
   "web.dom.assert",
   "web.dom.extract_list",
-  "web.dom.upload",
   "web.dom.dialog",
-  "web.browser.tab",
   "web.browser.download"
 ];
-assert.equal(new Set(recordableOutputs).size, recordableOutputs.length, "each action input maps to its own output");
+assert.deepEqual(inputOutputs.filter((outputId, index) => inputOutputs.indexOf(outputId) !== index), ["web.browser.tab"], "only the tab operations share an output");
 assert.deepEqual([...recordableOutputs, ...dispatchOnlyOutputs].sort(), [...WEB_AUTOMATION_ACTION_TYPES].sort(), "every output is recordable or dispatch-only");
+assert.equal(webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.tabStateChanged, { url: "https://example.test/start", title: "Start", sequence: 1, recordingState: "started" }), void 0);
+assert.equal(webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.tabStateChanged, { url: "https://example.test/start", recordingState: "started" }, { recordingState: "started", clientKind: "browser.tab" }), void 0);
+assert.deepEqual(webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.tabStateChanged, { url: "http://127.0.0.1:4173/details?session=tok", tab: { operation: "switch", urlPath: "/details" } })?.parameters, { tab: { operation: "switch", urlPath: "/details" } });
+var chosen = webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.elementChanged, { element: { ...fileInput, value: "C:\\fakepath\\tax-return-2025.pdf" }, inputValue: "C:\\fakepath\\tax-return-2025.pdf" });
+assert.deepEqual(chosen?.parameters.upload, { $state: { path: "web.upload.attachment" } });
+assert.equal(JSON.stringify(chosen?.parameters).includes("tax-return"), false, "the recorded file name is nowhere in the node");
 for (const outputId of dispatchOnlyOutputs) {
   assert.equal(recordableOutputs.includes(outputId), false, `${outputId} is dispatch-only`);
 }
+var passwordField = { selector: "#password", tagName: "input", inputType: "password", testId: "password", attributes: { type: "password", "data-testid": "password" } };
+var withheld = webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.elementInputChanged, { element: passwordField });
+assert.equal(withheld?.inputId, WEB_AUTOMATION_INPUT_IDS.textEntered, "a withheld value is still a text entry, not evidence");
+assert.equal(withheld?.outputId, "web.dom.type");
+assert.deepEqual(withheld?.parameters.text, { $state: { path: "web.secret.password" } }, "the node carries the request, and no value");
+assert.equal(webAutomationInputIdForRecordedEvent(recorded("dom.input", { element: passwordField })), WEB_AUTOMATION_INPUT_IDS.textEntered, "the live gateway path agrees with the mapper");
+assert.equal(webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.elementInputChanged, { element: field }), void 0, "an empty literal is still not executable");
 assert.equal(stateInputDefinitions.every((input) => input.role !== "action"), true);
 var stateInputIds = stateInputDefinitions.map((input) => input.id);
 for (const { event, eventType } of rows) {

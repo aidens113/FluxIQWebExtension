@@ -1,5 +1,6 @@
-// src/io/tests/gateway-input-hub.test.ts
+// src/recording/proposals/tests/late-target-wait.test.ts
 import assert from "node:assert/strict";
+import test from "node:test";
 
 // src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
@@ -551,6 +552,236 @@ function stringField(value) {
   return typeof value === "string" ? value : void 0;
 }
 
+// src/output-nodes/targets.ts
+function elementFingerprint(value) {
+  const element = objectValue(value);
+  if (!element) return void 0;
+  const attributes = elementAttributes(element.attributes);
+  return compact({
+    selector: stringValue(element.selector),
+    xpath: stringValue(element.xpath),
+    id: stringValue(element.id),
+    classNames: Array.isArray(element.classNames) ? element.classNames.filter((item) => typeof item === "string") : void 0,
+    visibleText: stringValue(element.visibleText),
+    tagName: stringValue(element.tagName),
+    text: stringValue(element.text),
+    value: stringValue(element.value),
+    role: stringValue(element.role),
+    implicitRole: stringValue(element.implicitRole),
+    name: stringValue(element.name),
+    href: stringValue(element.href),
+    inputType: stringValue(element.inputType),
+    checked: booleanValue(element.checked),
+    testId: elementTestId(element, attributes),
+    accessibleName: stringValue(element.accessibleName) ?? stringValue(attributes?.["aria-label"]),
+    label: stringValue(element.label),
+    attributes,
+    context: elementContext(element.context),
+    // Core's remaining fingerprint signals, named so their absence is a
+    // decision and so a signal Core adds stops this producer compiling. A
+    // browser recording has no source for any of them: the first four are a
+    // host application's own identifiers and a Core state path, `url` names
+    // the page rather than the control, `bounds` are the capture's viewport
+    // and not this instant's (which is why `content/identity/score.ts` refuses
+    // to compare them), and `metadata` is Core's own passthrough slot, which
+    // this normalizer must not start writing into behind the declared fields.
+    automationId: void 0,
+    entityId: void 0,
+    entityKind: void 0,
+    statePath: void 0,
+    queryPath: void 0,
+    url: void 0,
+    bounds: void 0,
+    metadata: void 0
+  });
+}
+function elementContext(value) {
+  const context = objectValue(value);
+  if (!context) return void 0;
+  const fields = compact({
+    formId: stringValue(context.formId),
+    formName: stringValue(context.formName),
+    formAction: stringValue(context.formAction),
+    fieldsetLegend: stringValue(context.fieldsetLegend),
+    landmark: stringValue(context.landmark),
+    landmarkName: stringValue(context.landmarkName),
+    heading: stringValue(context.heading),
+    listPosition: listPosition(context.listPosition),
+    tablePosition: tablePosition(context.tablePosition)
+  });
+  return Object.keys(fields).length > 0 ? fields : void 0;
+}
+function listPosition(value) {
+  const position = objectValue(value);
+  const index = numberValue(position?.index);
+  const total = numberValue(position?.total);
+  return index === void 0 || total === void 0 ? void 0 : { index, total };
+}
+function tablePosition(value) {
+  const position = objectValue(value);
+  const row = numberValue(position?.row);
+  const column = numberValue(position?.column);
+  if (row === void 0 || column === void 0) return void 0;
+  const columnHeader = stringValue(position?.columnHeader);
+  return columnHeader === void 0 ? { row, column } : { row, column, columnHeader };
+}
+function elementAttributes(value) {
+  const attributes = objectValue(value);
+  if (!attributes) return void 0;
+  const strings = {};
+  for (const [name, item] of Object.entries(attributes)) {
+    if (typeof item === "string") strings[name] = item;
+  }
+  return strings;
+}
+function elementTestId(element, attributes) {
+  return stringValue(element.testId) ?? stringValue(attributes?.["data-testid"]) ?? stringValue(attributes?.["data-test"]) ?? stringValue(attributes?.["data-cy"]);
+}
+function compact(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== void 0));
+}
+function objectValue(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+function stringValue(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function numberValue(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+function booleanValue(value) {
+  return typeof value === "boolean" ? value : void 0;
+}
+
+// src/output-nodes/recorded-element-key.ts
+function webAutomationRecordedElementKey(payload) {
+  const element = objectValue(payload.element);
+  const attributes = objectValue(element?.attributes);
+  const statePath = stringValue(objectValue(payload.visualTarget)?.statePath);
+  const fromStatePath = statePath?.startsWith("web.elements.") ? statePath.slice("web.elements.".length) : void 0;
+  const identity = fromStatePath ?? stringValue(element?.testId) ?? stringValue(attributes?.["data-testid"]) ?? stringValue(attributes?.["data-test"]) ?? stringValue(attributes?.["data-cy"]) ?? stringValue(element?.id) ?? stringValue(attributes?.id) ?? stringValue(element?.name) ?? stringValue(attributes?.name) ?? stringValue(element?.selector) ?? stringValue(payload.selector);
+  const key = sanitizeRecordedElementKey(identity ?? "");
+  return key.length ? key : void 0;
+}
+function sanitizeRecordedElementKey(value) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 120);
+}
+
+// src/output-nodes/secret-binding.ts
+var WEB_AUTOMATION_SECRET_STATE_PREFIX = "web.secret.";
+function webAutomationSecretStatePath(key) {
+  return `${WEB_AUTOMATION_SECRET_STATE_PREFIX}${key}`;
+}
+function webAutomationSecretBinding(key) {
+  return { $state: { path: webAutomationSecretStatePath(key) } };
+}
+function webAutomationSecretBindingPath(value) {
+  const path = stringValue(objectValue(objectValue(value)?.$state)?.path);
+  return path?.startsWith(WEB_AUTOMATION_SECRET_STATE_PREFIX) ? path : void 0;
+}
+
+// src/output-nodes/upload-binding.ts
+var WEB_AUTOMATION_UPLOAD_STATE_PREFIX = "web.upload.";
+function webAutomationUploadStatePath(key) {
+  return `${WEB_AUTOMATION_UPLOAD_STATE_PREFIX}${key}`;
+}
+function webAutomationUploadBinding(key) {
+  return { $state: { path: webAutomationUploadStatePath(key) } };
+}
+function webAutomationUploadBindingPath(value) {
+  const path = stringValue(objectValue(objectValue(value)?.$state)?.path);
+  return path?.startsWith(WEB_AUTOMATION_UPLOAD_STATE_PREFIX) ? path : void 0;
+}
+
+// src/output-nodes/url-path.ts
+function webAutomationUrlPath(value) {
+  return typeof value === "string" && /^\/(?![/\\])[^?#]*$/u.test(value) ? value : void 0;
+}
+
+// src/output-nodes/payloads.ts
+function webAutomationOutputPayload(outputId, payload) {
+  return withRecordedFrame(outputId, payload, recordedOutputParameters(outputId, payload));
+}
+function withRecordedFrame(outputId, payload, parameters) {
+  const browserFrameId = frameIdValue(payload.browserFrameId);
+  if (browserFrameId === void 0 || !outputId.startsWith("web.dom.")) return parameters;
+  if (Object.keys(parameters).length === 0) return parameters;
+  const browserFrameUrlPath = browserFrameId > 0 ? httpUrlPath(payload.url) : void 0;
+  return { ...parameters, browserFrameId, ...browserFrameUrlPath !== void 0 ? { browserFrameUrlPath } : {} };
+}
+function frameIdValue(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
+}
+function httpUrlPath(value) {
+  if (typeof value !== "string") return void 0;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.pathname : void 0;
+  } catch {
+    return void 0;
+  }
+}
+function recordedOutputParameters(outputId, payload) {
+  const element = elementFingerprint(payload.element);
+  const selector = stringValue(element?.selector);
+  const visualTarget = objectValue(payload.visualTarget);
+  const target = compact({ ...element ? { element } : {}, ...visualTarget ? { visualTarget } : {} });
+  const hasTarget = Object.keys(target).length > 0;
+  if (outputId === "web.browser.navigate") return compact({ url: stringValue(payload.url) });
+  if (outputId === "web.dom.click" || outputId === "web.dom.clear") return compact({ selector, ...hasTarget ? target : {} });
+  if (outputId === "web.dom.type") return compact({ selector, text: recordedTypedText(payload), ...hasTarget ? target : {} });
+  if (outputId === "web.dom.select") return compact({ selector, value: stringValue(payload.inputValue) ?? "", ...hasTarget ? target : {} });
+  if (outputId === "web.dom.keypress") return compact({ selector, key: stringValue(payload.key) ?? "", ...hasTarget ? target : {} });
+  if (outputId === "web.dom.scroll") {
+    const scroll = objectValue(payload.scroll);
+    return compact({ x: numberValue(scroll?.x), y: numberValue(scroll?.y) });
+  }
+  if (outputId === "web.dom.check") {
+    const checked = recordedCheckedState(payload);
+    return compact({ selector, checked, ...hasTarget ? target : {} });
+  }
+  if (outputId === "web.dom.wait_for_selector") return compact({ selector, ...hasTarget ? target : {} });
+  if (outputId === "web.dom.wait_for_text") return compact({ text: stringValue(payload.inputValue) ?? stringValue(payload.title) });
+  if (outputId === "web.dom.extract") return compact({ selector, ...hasTarget ? target : {} });
+  if (outputId === "web.dom.upload") return recordedUploadParameters(payload, selector, target);
+  if (outputId === "web.browser.tab") return recordedTabParameters(payload);
+  if (outputId === "web.dom.capture_snapshot") return {};
+  return {};
+}
+function recordedUploadParameters(payload, selector, target) {
+  const key = webAutomationRecordedElementKey(payload);
+  if (key === void 0) return {};
+  const element = objectValue(target.element);
+  const fileTarget = element === void 0 ? target : { ...target, element: Object.fromEntries(Object.entries(element).filter(([name]) => name !== "value")) };
+  return compact({ selector, upload: webAutomationUploadBinding(key), ...fileTarget });
+}
+function recordedTabParameters(payload) {
+  const tab = objectValue(payload.tab);
+  if (tab?.operation === "close") return { tab: { operation: "close" } };
+  if (tab?.operation !== "switch") return {};
+  const urlPath = webAutomationUrlPath(tab.urlPath);
+  return { tab: { operation: "switch", ...urlPath !== void 0 ? { urlPath } : {} } };
+}
+function recordedTypedText(payload) {
+  const recorded2 = stringValue(payload.inputValue);
+  if (recorded2 !== void 0) return recorded2;
+  if (!isSensitiveElementDescriptor(payload.element)) return "";
+  const key = webAutomationRecordedElementKey(payload);
+  return key === void 0 ? "" : webAutomationSecretBinding(key);
+}
+function recordedCheckedState(payload) {
+  const element = objectValue(payload.element);
+  if (!element) return void 0;
+  if (typeof element.checked === "boolean") return element.checked;
+  const ariaChecked = stringValue(objectValue(element.attributes)?.["aria-checked"]);
+  if (ariaChecked === "true") return true;
+  if (ariaChecked === "false") return false;
+  return isRadioElement(element) ? true : void 0;
+}
+function isRadioElement(element) {
+  return stringValue(element.inputType)?.toLowerCase() === "radio" || stringValue(element.role)?.toLowerCase() === "radio";
+}
+
 // src/io/input-model.ts
 var WEB_AUTOMATION_INPUT_IDS = {
   browserState: "web.browser.state",
@@ -585,6 +816,14 @@ function webAutomationEventTypeForClientKind(kind) {
   if (kind === "action.result") return WEB_AUTOMATION_EVENTS.actionExecuted;
   return WEB_AUTOMATION_EVENTS.clientError;
 }
+function webAutomationRecordedAction(eventType, payload, metadata = {}) {
+  const inputId = recordedActionInputId(eventType, payload, metadata);
+  if (inputId === void 0) return void 0;
+  const outputId = OUTPUT_FOR_ACTION_INPUT.get(inputId);
+  if (outputId === void 0) return void 0;
+  const parameters = webAutomationOutputPayload(outputId, payload);
+  return hasExecutableParameters(outputId, parameters) ? { inputId, outputId, parameters } : void 0;
+}
 var stateInputDefinitions = [
   { id: WEB_AUTOMATION_INPUT_IDS.browserState, title: "Browser state", description: "Current browser, tab, and compact DOM state available for policy conditions.", role: "state" },
   { id: WEB_AUTOMATION_INPUT_IDS.recordingEvidence, title: "Web recording evidence", description: "Passive browser observations that may inform recordings but never execute a policy.", role: "event" }
@@ -605,6 +844,79 @@ var actionInputDefinitions = [
 var OUTPUT_FOR_ACTION_INPUT = new Map(
   actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
 );
+var RECORDING_START_REASON = "recording_start";
+function recordedActionInputId(eventType, payload, metadata) {
+  switch (eventType) {
+    case WEB_AUTOMATION_EVENTS.pageNavigated:
+      return metadata.transition === "typed" && metadata.reason !== RECORDING_START_REASON ? WEB_AUTOMATION_INPUT_IDS.navigationRequested : void 0;
+    case WEB_AUTOMATION_EVENTS.elementClicked:
+      return WEB_AUTOMATION_INPUT_IDS.elementClicked;
+    case WEB_AUTOMATION_EVENTS.keyboardPressed:
+      return isSelectValueChangeKeyPress(payload) ? void 0 : WEB_AUTOMATION_INPUT_IDS.keyPressed;
+    // The recorder emits `dom.scroll` for wheel and window scrolling alike;
+    // `dom.wheel` is never emitted, so its event type maps to no input.
+    case WEB_AUTOMATION_EVENTS.scrollChanged:
+      return WEB_AUTOMATION_INPUT_IDS.pageScrolled;
+    case WEB_AUTOMATION_EVENTS.tabStateChanged:
+      return recordedTabInputId(payload);
+    case WEB_AUTOMATION_EVENTS.elementInputChanged:
+    case WEB_AUTOMATION_EVENTS.elementChanged: {
+      const element = objectValue2(payload.element);
+      if (stringValue2(element?.inputType)?.toLowerCase() === "file") return payload.inputValue === "" || element?.hasValue === false ? void 0 : WEB_AUTOMATION_INPUT_IDS.filesChosen;
+      if (stringValue2(element?.tagName)?.toLowerCase() === "select") return WEB_AUTOMATION_INPUT_IDS.optionSelected;
+      if (isCheckableElement(element)) return WEB_AUTOMATION_INPUT_IDS.checkboxToggled;
+      return payload.inputValue === "" ? WEB_AUTOMATION_INPUT_IDS.fieldCleared : WEB_AUTOMATION_INPUT_IDS.textEntered;
+    }
+    default:
+      return void 0;
+  }
+}
+function isCheckableElement(element) {
+  const inputType = stringValue2(element?.inputType)?.toLowerCase();
+  if (inputType === "checkbox" || inputType === "radio") return true;
+  const role = stringValue2(element?.role)?.toLowerCase();
+  return role === "checkbox" || role === "radio" || role === "switch";
+}
+var SELECT_VALUE_CHANGE_KEYS = /* @__PURE__ */ new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"]);
+function isSelectValueChangeKeyPress(payload) {
+  const element = objectValue2(payload.element);
+  if (stringValue2(element?.tagName)?.toLowerCase() !== "select") return false;
+  const key = stringValue2(payload.key);
+  if (key === void 0) return false;
+  return SELECT_VALUE_CHANGE_KEYS.has(key) || [...key].length === 1;
+}
+function hasExecutableParameters(outputId, parameters) {
+  const schema = webAutomationActionDefinitions.find((definition) => definition.actionType === outputId)?.parameterSchema;
+  const required = Array.isArray(schema?.required) ? schema.required.filter((key) => typeof key === "string") : [];
+  if (!required.every((key) => isExecutableRequiredParameter(key, parameters[key]))) return false;
+  if (outputId === "web.dom.keypress") return isNonEmptyString(parameters.key);
+  if (outputId === "web.dom.scroll") return typeof parameters.x === "number" || typeof parameters.y === "number";
+  if (outputId === "web.dom.check") return typeof parameters.checked === "boolean";
+  return true;
+}
+function isExecutableRequiredParameter(key, value) {
+  if (key === "upload") return webAutomationUploadBindingPath(value) !== void 0;
+  if (key === "tab") {
+    const tab = objectValue2(value);
+    return tab?.operation === "close" || tab?.operation === "switch" && isNonEmptyString(tab.urlPath);
+  }
+  return isNonEmptyString(value) || webAutomationSecretBindingPath(value) !== void 0;
+}
+function recordedTabInputId(payload) {
+  const operation = objectValue2(payload.tab)?.operation;
+  if (operation === "switch") return WEB_AUTOMATION_INPUT_IDS.tabSwitched;
+  if (operation === "close") return WEB_AUTOMATION_INPUT_IDS.tabClosed;
+  return void 0;
+}
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.length > 0;
+}
+function objectValue2(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+function stringValue2(value) {
+  return typeof value === "string" ? value : void 0;
+}
 
 // src/runtime/capabilities.ts
 var webAutomationRuntimeCapabilities = [
@@ -948,18 +1260,6 @@ function createWebAutomationRecordingEvent(payload, input = {}) {
     })
   };
 }
-function createWebAutomationStateUpdate(input) {
-  return {
-    ...input.activeContextId !== void 0 ? { activeContextId: input.activeContextId } : {},
-    ...input.contexts !== void 0 ? { contexts: input.contexts } : {},
-    ...input.state !== void 0 ? { state: input.state } : {},
-    ...input.recording !== void 0 ? { recording: input.recording } : {},
-    metadata: compactJsonObject2({
-      domainId: WEB_AUTOMATION_DOMAIN_ID,
-      ...input.metadata ?? {}
-    })
-  };
-}
 var UNSUPPORTED_ACTION_TYPE_FAILURE = Object.freeze(webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE));
 var CANONICAL_ACTION_TYPES = new Set(WEB_AUTOMATION_ACTION_TYPES);
 var LEGACY_ACTION_TYPE_ALIASES = new Map(
@@ -969,122 +1269,145 @@ function compactJsonObject2(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
 
-// src/io/gateway-input-hub.ts
-var GatewayInputHub = class {
-  listeners = /* @__PURE__ */ new Map();
-  constructor(fluxiq2) {
-    fluxiq2.programs.clientGateway.onEvent((event) => this.accept(event));
+// src/recording/proposals/late-target-wait.ts
+var EVIDENCE_OBSERVATION = "input.event";
+var ACTION_ENTRY = "action";
+var MUTATION_KIND = "dom.mutation";
+var CLICK_OUTPUT = "web.dom.click";
+var WAIT_OUTPUT = "web.dom.wait_for_selector";
+var TOP_FRAME_ID = 0;
+function webAutomationLateTargetWait(step, following) {
+  const document = addedNodesDocument(step);
+  if (document === void 0) return void 0;
+  for (const next of following) {
+    const action = executableAction(next);
+    if (action === void 0) {
+      if (namesAnotherDocument(next, document)) return void 0;
+      continue;
+    }
+    return clickTargetWait(action, next, document);
   }
-  subscribe(inputId, handler) {
-    const handlers = this.listeners.get(inputId) ?? /* @__PURE__ */ new Set();
-    handlers.add(handler);
-    this.listeners.set(inputId, handlers);
-    return () => {
-      handlers.delete(handler);
-      if (!handlers.size) this.listeners.delete(inputId);
-    };
-  }
-  accept(event) {
-    if (event.type !== "client.recording_event" && event.type !== "client.state_update") return;
-    const messagePayload = jsonObject(event.message.payload);
-    if (!messagePayload) return;
-    const metadata = jsonObject(messagePayload.metadata);
-    const domainId = stringValue2(messagePayload.domainId) ?? stringValue2(metadata?.domainId);
-    if (domainId !== WEB_AUTOMATION_DOMAIN_ID) return;
-    const inputId = stringValue2(metadata?.inputId);
-    if (!inputId) return;
-    const payload = event.type === "client.recording_event" ? jsonObject(messagePayload.payload) ?? {} : jsonObject(messagePayload.state) ?? messagePayload;
-    const envelope = {
-      id: event.message.id,
-      domainId: WEB_AUTOMATION_DOMAIN_ID,
-      ioId: inputId,
-      sequence: typeof payload.sequence === "number" ? payload.sequence : 0,
-      timestampMs: event.message.timestamp ?? Date.now(),
-      payload,
-      metadata: { sessionId: event.session.sessionId, clientId: event.session.clientId, ...metadata }
-    };
-    for (const handler of this.listeners.get(inputId) ?? []) handler(envelope);
-  }
-};
-function stringValue2(value) {
-  return typeof value === "string" ? value : void 0;
+  return void 0;
 }
-function jsonObject(value) {
+function addedNodesDocument(step) {
+  if (step.eventType !== EVIDENCE_OBSERVATION) return void 0;
+  const evidence2 = objectValue3(step.payload.latestEvidence);
+  if (evidence2?.kind !== MUTATION_KIND) return void 0;
+  const added = objectValue3(evidence2.mutation)?.added;
+  return typeof added === "number" && added > 0 ? documentKey(evidence2.url) : void 0;
+}
+function executableAction(step) {
+  if (step.eventType === ACTION_ENTRY) {
+    const outputId = stringValue3(step.payload.outputId) ?? stringValue3(step.payload.actionType);
+    return outputId === void 0 ? void 0 : { outputId, parameters: objectValue3(step.payload.parameters) ?? {} };
+  }
+  return webAutomationRecordedAction(step.eventType, step.payload, step.metadata);
+}
+function clickTargetWait(action, step, document) {
+  if (action.outputId !== CLICK_OUTPUT) return void 0;
+  const selector = stringValue3(action.parameters.selector);
+  if (selector === void 0 || selector.length === 0) return void 0;
+  const frameId = action.parameters.browserFrameId;
+  if (frameId !== void 0 && frameId !== TOP_FRAME_ID) return void 0;
+  if (step.payload.url !== void 0 && documentKey(step.payload.url) !== document) return void 0;
+  return { outputId: WAIT_OUTPUT, parameters: { selector, wait: { condition: "present" } }, confidence: 0.9, label: "Wait for element" };
+}
+function namesAnotherDocument(step, document) {
+  const url = step.payload.url ?? objectValue3(step.payload.latestEvidence)?.url;
+  const key = documentKey(url);
+  return key !== void 0 && key !== document;
+}
+function documentKey(value) {
+  if (typeof value !== "string") return void 0;
+  try {
+    const url = new URL(value);
+    url.hash = "";
+    return url.href;
+  } catch {
+    return void 0;
+  }
+}
+function objectValue3(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
-
-// src/io/tests/gateway-input-hub.test.ts
-var emit = () => {
-  throw new Error("GatewayInputHub did not subscribe to client gateway events.");
-};
-var fluxiq = {
-  programs: {
-    clientGateway: {
-      onEvent(listener) {
-        emit = listener;
-        return () => void 0;
-      }
-    }
-  }
-};
-var hub = new GatewayInputHub(fluxiq);
-var session = { sessionId: "session.1", clientId: "client.1" };
-var messageSequence = 0;
-function gatewayMessage(type, payload) {
-  messageSequence += 1;
-  return { type, session, message: { id: `message.${messageSequence}`, type, timestamp: 1e3 + messageSequence, payload } };
+function stringValue3(value) {
+  return typeof value === "string" ? value : void 0;
 }
-var clicked = [];
-var unsubscribeClicked = hub.subscribe(WEB_AUTOMATION_INPUT_IDS.elementClicked, (event) => clicked.push(event));
-var browserState = [];
-hub.subscribe(WEB_AUTOMATION_INPUT_IDS.browserState, (event) => browserState.push(event));
-var userClick = createWebAutomationRecordingEvent({
-  kind: "dom.click",
-  sequence: 7,
-  url: "https://example.test/form",
-  title: "Form",
-  eventTimestampMs: 10,
-  element: { selector: "#save", tagName: "button", text: "Save" },
-  metadata: { inputId: WEB_AUTOMATION_INPUT_IDS.elementClicked }
+
+// src/recording/proposals/tests/late-target-wait.test.ts
+var PAGE = "https://example.test/scenarios/delayed-ui/";
+var OTHER_PAGE = "https://example.test/scenarios/delayed-ui/other";
+var LATE = "#late-action";
+var lateWait = { outputId: "web.dom.wait_for_selector", parameters: { selector: LATE, wait: { condition: "present" } }, confidence: 0.9, label: "Wait for element" };
+function mutation(added, url = PAGE) {
+  return evidence({ kind: "dom.mutation", url, title: "Delayed UI", sequence: 2, timestamp: 1e3, mutation: { added, removed: 0, attributes: 0, text: 0 } });
+}
+function evidence(latestEvidence) {
+  return { eventType: "input.event", timestamp: 1e3, payload: { latestEvidence }, metadata: { inputId: "web.recording.evidence", inputRole: "event", policyEligible: false } };
+}
+function recorded(input, frameId) {
+  const wire = createWebAutomationRecordingEvent(input, frameId === void 0 ? {} : { tabId: 7, frameId });
+  return { eventType: wire.eventType, timestamp: input.eventTimestampMs, payload: wire.payload ?? {}, metadata: wire.metadata ?? {} };
+}
+function clickEvent(input = {}) {
+  const element = input.selector === void 0 ? { selector: LATE, tagName: "button", text: "Late action" } : { selector: input.selector, tagName: "button" };
+  return recorded({ kind: "dom.click", sequence: 3, url: input.url ?? PAGE, title: "Delayed UI", eventTimestampMs: 1100, element }, input.frameId);
+}
+function clickEntry(input = {}) {
+  const parameters = input.parameters ?? webAutomationOutputPayload("web.dom.click", clickEvent({ ...input.frameId === void 0 ? {} : { frameId: input.frameId } }).payload);
+  const outputId = input.outputId ?? "web.dom.click";
+  return {
+    eventType: "action",
+    timestamp: 1100,
+    payload: { type: "action", actionType: outputId, outputId, confirmationInputId: "web.user.element_clicked", confirmationTimeoutMs: 5e3, parameters, origin: "operator", startedAt: 1100, completedAt: 1100 },
+    metadata: { inputId: "web.user.element_clicked", inputRole: "action", policyEligible: true }
+  };
+}
+test("a mutation that added nodes, then a click in the same document, proposes waiting for the click's selector", () => {
+  assert.deepEqual(webAutomationLateTargetWait(mutation(1), [clickEntry()]), lateWait, "the live form: a Core action entry");
+  assert.deepEqual(webAutomationLateTargetWait(mutation(3), [clickEvent()]), lateWait, "the recorded-event form");
+  assert.deepEqual(webAutomationLateTargetWait(mutation(1), [clickEvent({ url: `${PAGE}#details` })]), lateWait, "a fragment does not change the document");
 });
-assert.equal(userClick.domainId, WEB_AUTOMATION_DOMAIN_ID);
-assert.equal(userClick.metadata?.domainId, void 0, "the recorded event names its domain only at the top level");
-emit(gatewayMessage("client.recording_event", userClick));
-assert.equal(clicked.length, 1, "a user-recorded action reaches its input subscribers");
-assert.equal(clicked[0]?.ioId, WEB_AUTOMATION_INPUT_IDS.elementClicked);
-assert.equal(clicked[0]?.domainId, WEB_AUTOMATION_DOMAIN_ID);
-assert.equal(clicked[0]?.sequence, 7);
-assert.equal(clicked[0]?.payload.element?.selector, "#save");
-assert.equal(clicked[0]?.metadata?.sessionId, "session.1");
-assert.equal(clicked[0]?.metadata?.clientId, "client.1");
-assert.equal(clicked[0]?.metadata?.inputId, WEB_AUTOMATION_INPUT_IDS.elementClicked);
-emit(gatewayMessage("client.recording_event", {
-  eventType: "web.element.clicked",
-  payload: { sequence: 8, element: { selector: "#save" } },
-  metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputId: WEB_AUTOMATION_INPUT_IDS.elementClicked }
-}));
-assert.equal(clicked.length, 2, "a runtime confirmation reaches its input subscribers");
-assert.equal(clicked[1]?.sequence, 8);
-emit(gatewayMessage("client.recording_event", {
-  domainId: "another-domain",
-  eventType: "web.element.clicked",
-  payload: { sequence: 9 },
-  metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputId: WEB_AUTOMATION_INPUT_IDS.elementClicked }
-}));
-emit(gatewayMessage("client.recording_event", { eventType: "web.element.clicked", payload: { sequence: 10 }, metadata: { inputId: WEB_AUTOMATION_INPUT_IDS.elementClicked } }));
-emit(gatewayMessage("client.recording_event", { domainId: WEB_AUTOMATION_DOMAIN_ID, eventType: "web.dom.mutated", payload: { sequence: 11 }, metadata: {} }));
-emit(gatewayMessage("client.recording_event", void 0));
-emit(gatewayMessage("client.snapshot", { domainId: WEB_AUTOMATION_DOMAIN_ID, metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputId: WEB_AUTOMATION_INPUT_IDS.elementClicked } }));
-assert.equal(clicked.length, 2, "another domain, no domain, no input id, no payload, and other message types are not delivered");
-emit(gatewayMessage("client.state_update", createWebAutomationStateUpdate({
-  state: { sequence: 12, url: "https://example.test/form" },
-  metadata: { inputId: WEB_AUTOMATION_INPUT_IDS.browserState }
-})));
-assert.equal(browserState.length, 1);
-assert.equal(browserState[0]?.payload.url, "https://example.test/form");
-assert.equal(browserState[0]?.sequence, 12);
-assert.equal(clicked.length, 2, "an envelope reaches only the subscribers of its own input");
-unsubscribeClicked();
-emit(gatewayMessage("client.recording_event", userClick));
-assert.equal(clicked.length, 2, "an unsubscribed handler receives nothing");
-console.log("Gateway input hub tests passed.");
+test("the wait carries no timeout, source input or confirmation", () => {
+  const wait = webAutomationLateTargetWait(mutation(1), [clickEntry()]);
+  assert.ok(wait);
+  assert.equal("timeoutMs" in (wait.parameters ?? {}), false);
+  assert.equal("sourceInputIds" in wait, false);
+  assert.equal("expectedConfirmation" in wait, false);
+});
+test("evidence before the click is skipped", () => {
+  const tab = evidence({ kind: "browser.tab", url: PAGE, title: "Delayed UI", sequence: 0, timestamp: 1050 });
+  const navigation = recorded({ kind: "browser.navigation", sequence: 0, url: PAGE, title: "", eventTimestampMs: 1060, metadata: { transition: "link" } });
+  assert.deepEqual(webAutomationLateTargetWait(mutation(1), [tab, navigation, clickEntry()]), lateWait);
+});
+test("a batch that added nothing proposes nothing", () => {
+  assert.equal(webAutomationLateTargetWait(mutation(0), [clickEntry()]), void 0);
+  assert.equal(webAutomationLateTargetWait(evidence({ kind: "dom.mutation", url: PAGE, timestamp: 1e3 }), [clickEntry()]), void 0, "a batch with no counts");
+  assert.equal(webAutomationLateTargetWait(evidence({ kind: "browser.tab", url: PAGE, timestamp: 1e3 }), [clickEntry()]), void 0, "evidence that is not a mutation");
+});
+test("when the next executable entry is not a click, nothing is proposed, even with a click after it", () => {
+  const typed = recorded({ kind: "dom.input", sequence: 3, url: PAGE, title: "Delayed UI", eventTimestampMs: 1100, element: { selector: "input[name=q]", tagName: "input" }, inputValue: "ada" });
+  assert.equal(webAutomationLateTargetWait(mutation(1), [typed, clickEntry()]), void 0, "the recorded-event form");
+  assert.equal(webAutomationLateTargetWait(mutation(1), [clickEntry({ outputId: "web.dom.type", parameters: { selector: "input[name=q]", text: "ada" } }), clickEntry()]), void 0, "the live form");
+});
+test("a click with no selector proposes nothing", () => {
+  const coordinatesOnly = clickEntry({ parameters: { visualTarget: { namespace: "web", bounds: { x: 10, y: 20, width: 90, height: 30 } } } });
+  assert.equal(webAutomationLateTargetWait(mutation(1), [coordinatesOnly]), void 0);
+  assert.equal(webAutomationLateTargetWait(mutation(1), [clickEntry({ parameters: { selector: "" } })]), void 0, "an empty selector");
+});
+test("a click in another document or frame proposes nothing", () => {
+  assert.equal(webAutomationLateTargetWait(mutation(1), [clickEvent({ url: OTHER_PAGE })]), void 0, "the click names another URL");
+  assert.equal(webAutomationLateTargetWait(mutation(1, "not a url"), [clickEntry()]), void 0, "the mutation names no document");
+  assert.equal(webAutomationLateTargetWait(mutation(1), [evidence({ kind: "browser.tab", url: OTHER_PAGE, timestamp: 1050 }), clickEntry()]), void 0, "evidence between them names another URL");
+  assert.equal(webAutomationLateTargetWait(mutation(1), [clickEntry({ frameId: 2 })]), void 0, "a live click in a child frame");
+  assert.equal(webAutomationLateTargetWait(mutation(1), [clickEvent({ frameId: 2 })]), void 0, "a recorded click in a child frame");
+  assert.deepEqual(webAutomationLateTargetWait(mutation(1), [clickEntry({ frameId: 0 })]), lateWait, "frame 0 is the top document");
+});
+test("with no executable entry after it, a mutation proposes nothing", () => {
+  assert.equal(webAutomationLateTargetWait(mutation(1), []), void 0);
+  assert.equal(webAutomationLateTargetWait(mutation(1), [evidence({ kind: "browser.tab", url: PAGE, timestamp: 1050 })]), void 0);
+});
+test("only a mutation proposes: a click's own entry proposes nothing, so Core's fallback click is not replaced", () => {
+  assert.equal(webAutomationLateTargetWait(clickEntry(), [clickEntry()]), void 0);
+  assert.equal(webAutomationLateTargetWait(clickEvent(), [clickEntry()]), void 0);
+});

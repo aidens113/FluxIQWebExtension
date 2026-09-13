@@ -256,7 +256,8 @@ var tabSchema = {
     url: { type: "string", label: "URL" },
     active: { type: "boolean", label: "Activate" },
     tabId: { type: "integer", label: "Tab id" },
-    urlPattern: { type: "string", label: "URL contains" }
+    urlPattern: { type: "string", label: "URL contains" },
+    urlPath: { type: "string", label: "URL path" }
   }
 };
 var downloadSchema = {
@@ -600,6 +601,7 @@ function elementFingerprint(value) {
     name: stringValue(element.name),
     href: stringValue(element.href),
     inputType: stringValue(element.inputType),
+    checked: booleanValue(element.checked),
     testId: elementTestId(element, attributes),
     accessibleName: stringValue(element.accessibleName) ?? stringValue(attributes?.["aria-label"]),
     label: stringValue(element.label),
@@ -632,6 +634,7 @@ function elementContext(value) {
     formAction: stringValue(context.formAction),
     fieldsetLegend: stringValue(context.fieldsetLegend),
     landmark: stringValue(context.landmark),
+    landmarkName: stringValue(context.landmarkName),
     heading: stringValue(context.heading),
     listPosition: listPosition(context.listPosition),
     tablePosition: tablePosition(context.tablePosition)
@@ -676,6 +679,23 @@ function stringValue(value) {
 function numberValue(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : void 0;
 }
+function booleanValue(value) {
+  return typeof value === "boolean" ? value : void 0;
+}
+
+// src/output-nodes/recorded-element-key.ts
+function webAutomationRecordedElementKey(payload) {
+  const element = objectValue(payload.element);
+  const attributes = objectValue(element?.attributes);
+  const statePath = stringValue(objectValue(payload.visualTarget)?.statePath);
+  const fromStatePath = statePath?.startsWith("web.elements.") ? statePath.slice("web.elements.".length) : void 0;
+  const identity = fromStatePath ?? stringValue(element?.testId) ?? stringValue(attributes?.["data-testid"]) ?? stringValue(attributes?.["data-test"]) ?? stringValue(attributes?.["data-cy"]) ?? stringValue(element?.id) ?? stringValue(attributes?.id) ?? stringValue(element?.name) ?? stringValue(attributes?.name) ?? stringValue(element?.selector) ?? stringValue(payload.selector);
+  const key = sanitizeRecordedElementKey(identity ?? "");
+  return key.length ? key : void 0;
+}
+function sanitizeRecordedElementKey(value) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 120);
+}
 
 // src/output-nodes/secret-binding.ts
 var WEB_AUTOMATION_SECRET_STATE_PREFIX = "web.secret.";
@@ -685,17 +705,19 @@ function webAutomationSecretStatePath(key) {
 function webAutomationSecretBinding(key) {
   return { $state: { path: webAutomationSecretStatePath(key) } };
 }
-function webAutomationSecretKeyForRecordedElement(payload) {
-  const element = objectValue(payload.element);
-  const attributes = objectValue(element?.attributes);
-  const statePath = stringValue(objectValue(payload.visualTarget)?.statePath);
-  const fromStatePath = statePath?.startsWith("web.elements.") ? statePath.slice("web.elements.".length) : void 0;
-  const identity = fromStatePath ?? stringValue(element?.testId) ?? stringValue(attributes?.["data-testid"]) ?? stringValue(attributes?.["data-test"]) ?? stringValue(attributes?.["data-cy"]) ?? stringValue(element?.id) ?? stringValue(attributes?.id) ?? stringValue(element?.name) ?? stringValue(attributes?.name) ?? stringValue(element?.selector) ?? stringValue(payload.selector);
-  const key = sanitizeSecretKey(identity ?? "");
-  return key.length ? key : void 0;
+
+// src/output-nodes/upload-binding.ts
+var WEB_AUTOMATION_UPLOAD_STATE_PREFIX = "web.upload.";
+function webAutomationUploadStatePath(key) {
+  return `${WEB_AUTOMATION_UPLOAD_STATE_PREFIX}${key}`;
 }
-function sanitizeSecretKey(value) {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 120);
+function webAutomationUploadBinding(key) {
+  return { $state: { path: webAutomationUploadStatePath(key) } };
+}
+
+// src/output-nodes/url-path.ts
+function webAutomationUrlPath(value) {
+  return typeof value === "string" && /^\/(?![/\\])[^?#]*$/u.test(value) ? value : void 0;
 }
 
 // src/output-nodes/payloads.ts
@@ -705,10 +727,21 @@ function webAutomationOutputPayload(outputId, payload) {
 function withRecordedFrame(outputId, payload, parameters) {
   const browserFrameId = frameIdValue(payload.browserFrameId);
   if (browserFrameId === void 0 || !outputId.startsWith("web.dom.")) return parameters;
-  return Object.keys(parameters).length === 0 ? parameters : { ...parameters, browserFrameId };
+  if (Object.keys(parameters).length === 0) return parameters;
+  const browserFrameUrlPath = browserFrameId > 0 ? httpUrlPath(payload.url) : void 0;
+  return { ...parameters, browserFrameId, ...browserFrameUrlPath !== void 0 ? { browserFrameUrlPath } : {} };
 }
 function frameIdValue(value) {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
+}
+function httpUrlPath(value) {
+  if (typeof value !== "string") return void 0;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.pathname : void 0;
+  } catch {
+    return void 0;
+  }
 }
 function recordedOutputParameters(outputId, payload) {
   const element = elementFingerprint(payload.element);
@@ -732,14 +765,30 @@ function recordedOutputParameters(outputId, payload) {
   if (outputId === "web.dom.wait_for_selector") return compact({ selector, ...hasTarget ? target : {} });
   if (outputId === "web.dom.wait_for_text") return compact({ text: stringValue(payload.inputValue) ?? stringValue(payload.title) });
   if (outputId === "web.dom.extract") return compact({ selector, ...hasTarget ? target : {} });
+  if (outputId === "web.dom.upload") return recordedUploadParameters(payload, selector, target);
+  if (outputId === "web.browser.tab") return recordedTabParameters(payload);
   if (outputId === "web.dom.capture_snapshot") return {};
   return {};
+}
+function recordedUploadParameters(payload, selector, target) {
+  const key = webAutomationRecordedElementKey(payload);
+  if (key === void 0) return {};
+  const element = objectValue(target.element);
+  const fileTarget = element === void 0 ? target : { ...target, element: Object.fromEntries(Object.entries(element).filter(([name]) => name !== "value")) };
+  return compact({ selector, upload: webAutomationUploadBinding(key), ...fileTarget });
+}
+function recordedTabParameters(payload) {
+  const tab = objectValue(payload.tab);
+  if (tab?.operation === "close") return { tab: { operation: "close" } };
+  if (tab?.operation !== "switch") return {};
+  const urlPath = webAutomationUrlPath(tab.urlPath);
+  return { tab: { operation: "switch", ...urlPath !== void 0 ? { urlPath } : {} } };
 }
 function recordedTypedText(payload) {
   const recorded = stringValue(payload.inputValue);
   if (recorded !== void 0) return recorded;
   if (!isSensitiveElementDescriptor(payload.element)) return "";
-  const key = webAutomationSecretKeyForRecordedElement(payload);
+  const key = webAutomationRecordedElementKey(payload);
   return key === void 0 ? "" : webAutomationSecretBinding(key);
 }
 function recordedCheckedState(payload) {
@@ -766,7 +815,10 @@ var WEB_AUTOMATION_INPUT_IDS = {
   optionSelected: "web.user.option_selected",
   checkboxToggled: "web.user.checkbox_toggled",
   keyPressed: "web.user.key_pressed",
-  pageScrolled: "web.user.page_scrolled"
+  pageScrolled: "web.user.page_scrolled",
+  filesChosen: "web.user.files_chosen",
+  tabSwitched: "web.user.tab_switched",
+  tabClosed: "web.user.tab_closed"
 };
 function webAutomationEventTypeForClientKind(kind) {
   if (kind === "content.ready") return WEB_AUTOMATION_EVENTS.clientReady;
@@ -798,7 +850,10 @@ var actionInputDefinitions = [
   [WEB_AUTOMATION_INPUT_IDS.optionSelected, "Option selected", "web.dom.select"],
   [WEB_AUTOMATION_INPUT_IDS.checkboxToggled, "Checkbox toggled", "web.dom.check"],
   [WEB_AUTOMATION_INPUT_IDS.keyPressed, "Key pressed", "web.dom.keypress"],
-  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"]
+  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"],
+  [WEB_AUTOMATION_INPUT_IDS.filesChosen, "Files chosen", "web.dom.upload"],
+  [WEB_AUTOMATION_INPUT_IDS.tabSwitched, "Tab switched", "web.browser.tab"],
+  [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"]
 ];
 var OUTPUT_FOR_ACTION_INPUT = new Map(
   actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
@@ -979,6 +1034,14 @@ var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   UNSUPPORTED_TYPE: "web.action.unsupported_type",
   /** The verb is registered but not built yet, so a Flow that reaches one fails honestly. */
   NOT_IMPLEMENTED: "web.action.not_implemented",
+  /**
+   * A field the action requires arrived in a shape that cannot be read, so the
+   * command was refused before dispatch. `client/gateway-mapping.ts` decides it
+   * from what `client/gateway-action-parameters.ts` refused. The Flow's node is
+   * authored wrong and only an edit fixes it: a structural fault in the Flow,
+   * not a capability the client lacks.
+   */
+  INVALID_PARAMETER: "web.action.invalid_parameter",
   /** The action ran and failed for a reason no other code names. */
   ACTION_FAILED: "web.action.failed",
   /** Nothing said why the action failed. */
@@ -997,6 +1060,7 @@ var WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS = Object.freeze({
   "web.intervention.required": { category: "user_intervention_required", retryable: false, stage: "execution" },
   "web.action.unsupported_type": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
   "web.action.not_implemented": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
+  "web.action.invalid_parameter": { category: "graph_validation_or_unknown_node", retryable: false, stage: "dispatch" },
   "web.action.failed": { category: "action_failed", retryable: true, stage: "execution" },
   "web.action.unknown": { category: "ambiguous_or_unknown", retryable: false, stage: "execution" }
 });
@@ -1058,6 +1122,9 @@ function createWebAutomationRecordingEvent(payload, input = {}) {
       mutation: payload.mutation,
       snapshot: payload.snapshot,
       actionResult: payload.actionResult,
+      // Only the two declared fields are copied, so nothing else a caller put on
+      // the tab change -- a tab id, a full URL -- reaches the stored recording.
+      tab: payload.tab === void 0 ? void 0 : { operation: payload.tab.operation, ...payload.tab.urlPath !== void 0 ? { urlPath: payload.tab.urlPath } : {} },
       ...payload.metadata?.recordingState !== void 0 ? { recordingState: payload.metadata.recordingState } : {}
     }),
     metadata: compactJsonObject2({

@@ -262,7 +262,8 @@ var tabSchema = {
     url: { type: "string", label: "URL" },
     active: { type: "boolean", label: "Activate" },
     tabId: { type: "integer", label: "Tab id" },
-    urlPattern: { type: "string", label: "URL contains" }
+    urlPattern: { type: "string", label: "URL contains" },
+    urlPath: { type: "string", label: "URL path" }
   }
 };
 var downloadSchema = {
@@ -574,6 +575,7 @@ function elementFingerprint(value) {
     name: stringValue(element.name),
     href: stringValue(element.href),
     inputType: stringValue(element.inputType),
+    checked: booleanValue(element.checked),
     testId: elementTestId(element, attributes),
     accessibleName: stringValue(element.accessibleName) ?? stringValue(attributes?.["aria-label"]),
     label: stringValue(element.label),
@@ -606,6 +608,7 @@ function elementContext(value) {
     formAction: stringValue(context.formAction),
     fieldsetLegend: stringValue(context.fieldsetLegend),
     landmark: stringValue(context.landmark),
+    landmarkName: stringValue(context.landmarkName),
     heading: stringValue(context.heading),
     listPosition: listPosition(context.listPosition),
     tablePosition: tablePosition(context.tablePosition)
@@ -650,6 +653,9 @@ function stringValue(value) {
 function numberValue(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : void 0;
 }
+function booleanValue(value) {
+  return typeof value === "boolean" ? value : void 0;
+}
 
 // src/io/gateway-output-dispatcher.ts
 async function dispatchWebAutomationOutput(fluxiq, request) {
@@ -657,14 +663,12 @@ async function dispatchWebAutomationOutput(fluxiq, request) {
   if (!sessionId) return { ok: false, outputId: request.outputId, error: "A single paired web-automation client must be selected before dispatching an output." };
   try {
     const target = outputTargetFromPayload(request.payload);
-    const command = target ? {
-      actionType: request.outputId,
-      parameters: request.payload,
-      target
-    } : {
+    const command = {
       actionType: request.outputId,
       parameters: request.payload
     };
+    if (target) command.target = target;
+    if (request.timeoutMs !== void 0) command.timeoutMs = request.timeoutMs;
     const result = await fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, command);
     const succeeded = result.status === "succeeded";
     const message = stringValue2(result.message);
@@ -714,7 +718,10 @@ var WEB_AUTOMATION_INPUT_IDS = {
   optionSelected: "web.user.option_selected",
   checkboxToggled: "web.user.checkbox_toggled",
   keyPressed: "web.user.key_pressed",
-  pageScrolled: "web.user.page_scrolled"
+  pageScrolled: "web.user.page_scrolled",
+  filesChosen: "web.user.files_chosen",
+  tabSwitched: "web.user.tab_switched",
+  tabClosed: "web.user.tab_closed"
 };
 var stateInputDefinitions = [
   { id: WEB_AUTOMATION_INPUT_IDS.browserState, title: "Browser state", description: "Current browser, tab, and compact DOM state available for policy conditions.", role: "state" },
@@ -728,7 +735,10 @@ var actionInputDefinitions = [
   [WEB_AUTOMATION_INPUT_IDS.optionSelected, "Option selected", "web.dom.select"],
   [WEB_AUTOMATION_INPUT_IDS.checkboxToggled, "Checkbox toggled", "web.dom.check"],
   [WEB_AUTOMATION_INPUT_IDS.keyPressed, "Key pressed", "web.dom.keypress"],
-  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"]
+  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"],
+  [WEB_AUTOMATION_INPUT_IDS.filesChosen, "Files chosen", "web.dom.upload"],
+  [WEB_AUTOMATION_INPUT_IDS.tabSwitched, "Tab switched", "web.browser.tab"],
+  [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"]
 ];
 var OUTPUT_FOR_ACTION_INPUT = new Map(
   actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
@@ -841,6 +851,14 @@ var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   UNSUPPORTED_TYPE: "web.action.unsupported_type",
   /** The verb is registered but not built yet, so a Flow that reaches one fails honestly. */
   NOT_IMPLEMENTED: "web.action.not_implemented",
+  /**
+   * A field the action requires arrived in a shape that cannot be read, so the
+   * command was refused before dispatch. `client/gateway-mapping.ts` decides it
+   * from what `client/gateway-action-parameters.ts` refused. The Flow's node is
+   * authored wrong and only an edit fixes it: a structural fault in the Flow,
+   * not a capability the client lacks.
+   */
+  INVALID_PARAMETER: "web.action.invalid_parameter",
   /** The action ran and failed for a reason no other code names. */
   ACTION_FAILED: "web.action.failed",
   /** Nothing said why the action failed. */
@@ -859,6 +877,7 @@ var WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS = Object.freeze({
   "web.intervention.required": { category: "user_intervention_required", retryable: false, stage: "execution" },
   "web.action.unsupported_type": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
   "web.action.not_implemented": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
+  "web.action.invalid_parameter": { category: "graph_validation_or_unknown_node", retryable: false, stage: "dispatch" },
   "web.action.failed": { category: "action_failed", retryable: true, stage: "execution" },
   "web.action.unknown": { category: "ambiguous_or_unknown", retryable: false, stage: "execution" }
 });
@@ -1433,12 +1452,13 @@ async function executeWebAutomationRuntimeCommand(fluxiq, command) {
     payload
   };
   if (command.metadata) request.metadata = command.metadata;
+  if (command.timeoutMs !== void 0 && Number.isFinite(command.timeoutMs) && command.timeoutMs > 0) request.timeoutMs = command.timeoutMs;
   const result = await dispatchWebAutomationOutput(fluxiq, request);
   const message = result.error ?? dispatchPayloadMessage(result.payload);
   const status = result.status ?? (result.ok ? "succeeded" : "failed");
   const diagnostics = failureDiagnostics(status, result.payload);
   const clientResult = jsonObject(result.payload?.result);
-  const withholdComparison = isSensitiveElementDescriptor(clientResult?.element) && !isProducerRedactedComparison(clientResult?.validation);
+  const withholdComparison = isSensitiveElementDescriptor(clientResult?.element) && !producerDeclaredRedaction(clientResult?.validation);
   const failure = commandFailure(status, outputId, message, result.failure, diagnostics?.evidenceDigest, withholdComparison);
   const runtimeResult = {
     commandId: command.commandId ?? `web.${Date.now()}`,
@@ -1527,16 +1547,22 @@ function secretSafeComparisonText(text2, withholdComparison) {
   if (text2 === void 0 || !withholdComparison) return text2;
   return WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT;
 }
+function producerDeclaredRedaction(validation) {
+  if (!isProducerRedactedComparison(validation)) return false;
+  const { expected, actual } = validation;
+  return expected !== WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT && actual !== WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT;
+}
 function secretSafeDispatchPayload(payload) {
   const actionResult = jsonObject(payload.result);
   const validation = jsonObject(actionResult?.validation);
   if (!actionResult || !validation || validation.status === "none") return payload;
+  const { redacted: _stamp, ...unstamped } = validation;
   return {
     ...payload,
     result: {
       ...actionResult,
       validation: {
-        ...validation,
+        ...unstamped,
         ...validation.expected === void 0 ? {} : { expected: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT },
         ...validation.actual === void 0 ? {} : { actual: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT }
       }
@@ -1758,4 +1784,37 @@ for (const [what, redacted] of absentDeclarations) {
     assert.equal(result.failure?.expected, WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT);
     assert.equal(result.payload.result.validation !== void 0, true);
   });
+}
+var withholdingClients = [
+  ["a client built before the stamp was removed", (status) => ({ status, expected: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, actual: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, redacted: true })],
+  ["this client", (status) => ({ status, expected: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, actual: WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT })]
+];
+for (const [client, withheld] of withholdingClients) {
+  for (const declaration of [void 0, false, true]) {
+    test(`the three-state probe, ${client}: declaration ${String(declaration)}`, async () => {
+      const declared = declaration === true;
+      const expected = declared ? redactedPhrasing : `the field holds "${producerSentinel}"`;
+      const actual = `${expected}, which is not the text that was sent`;
+      const produced = declaration === void 0 ? { status: "failed", expected, actual } : { status: "failed", expected, actual, redacted: declaration };
+      const result = await runCommand({
+        commandId: "client.command.probe",
+        status: "failed",
+        message: "The field did not keep the text.",
+        failure: { ...leakingClientRecord, expected, actual },
+        payload: sensitivePayload({ status: "failed", validation: declared ? produced : withheld("failed") })
+      });
+      assert.equal(JSON.stringify(result).includes(producerSentinel), false, "no declaration state lets the value through, whatever the layer before this one wrote");
+      const validation = result.payload.result.validation;
+      if (declared) {
+        assert.equal(result.failure?.expected, redactedPhrasing, "a genuine producer redaction is still honoured on the record");
+        assert.equal(result.failure?.actual, actual);
+        assert.equal(validation.redacted, true, "and its declaration still rides on the payload");
+      } else {
+        assert.equal(result.failure?.expected, WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, "a stamp beside the marker is not a declaration");
+        assert.equal(result.failure?.actual, WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT);
+        assert.equal("redacted" in validation, false, "a stamp that arrived does not leave, or it disarms whatever reads the payload next");
+      }
+      assert.equal(result.failure?.code, "web.validation.output_not_observed", "only the two strings are touched");
+    });
+  }
 }

@@ -197,7 +197,8 @@ var tabSchema = {
     url: { type: "string", label: "URL" },
     active: { type: "boolean", label: "Activate" },
     tabId: { type: "integer", label: "Tab id" },
-    urlPattern: { type: "string", label: "URL contains" }
+    urlPattern: { type: "string", label: "URL contains" },
+    urlPath: { type: "string", label: "URL path" }
   }
 };
 var downloadSchema = {
@@ -509,6 +510,7 @@ function elementFingerprint(value) {
     name: stringValue(element.name),
     href: stringValue(element.href),
     inputType: stringValue(element.inputType),
+    checked: booleanValue(element.checked),
     testId: elementTestId(element, attributes),
     accessibleName: stringValue(element.accessibleName) ?? stringValue(attributes?.["aria-label"]),
     label: stringValue(element.label),
@@ -541,6 +543,7 @@ function elementContext(value) {
     formAction: stringValue(context.formAction),
     fieldsetLegend: stringValue(context.fieldsetLegend),
     landmark: stringValue(context.landmark),
+    landmarkName: stringValue(context.landmarkName),
     heading: stringValue(context.heading),
     listPosition: listPosition(context.listPosition),
     tablePosition: tablePosition(context.tablePosition)
@@ -585,6 +588,9 @@ function stringValue(value) {
 function numberValue(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : void 0;
 }
+function booleanValue(value) {
+  return typeof value === "boolean" ? value : void 0;
+}
 
 // src/io/gateway-output-dispatcher.ts
 async function dispatchWebAutomationOutput(fluxiq, request) {
@@ -592,14 +598,12 @@ async function dispatchWebAutomationOutput(fluxiq, request) {
   if (!sessionId) return { ok: false, outputId: request.outputId, error: "A single paired web-automation client must be selected before dispatching an output." };
   try {
     const target = outputTargetFromPayload(request.payload);
-    const command = target ? {
-      actionType: request.outputId,
-      parameters: request.payload,
-      target
-    } : {
+    const command = {
       actionType: request.outputId,
       parameters: request.payload
     };
+    if (target) command.target = target;
+    if (request.timeoutMs !== void 0) command.timeoutMs = request.timeoutMs;
     const result = await fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, command);
     const succeeded = result.status === "succeeded";
     const message = stringValue2(result.message);
@@ -652,19 +656,24 @@ var dispatchRequest = {
   payload: { selector: "#save" }
 };
 var executed = [];
-function dispatch(answer, sessions = [readySession]) {
+function dispatch(answer, sessions = [readySession], request = dispatchRequest) {
   const fluxiq = {
     programs: {
       clientGateway: { snapshot: () => ({ sessions }) },
       automationStudioClientGateway: {
         executeAction: async (sessionId, command) => {
-          executed.push({ sessionId, actionType: command.actionType, ...command.parameters ? { parameters: command.parameters } : {} });
+          executed.push({
+            sessionId,
+            actionType: command.actionType,
+            ...command.parameters ? { parameters: command.parameters } : {},
+            ...command.timeoutMs !== void 0 ? { timeoutMs: command.timeoutMs } : {}
+          });
           return typeof answer === "function" ? answer() : answer;
         }
       }
     }
   };
-  return dispatchWebAutomationOutput(fluxiq, dispatchRequest);
+  return dispatchWebAutomationOutput(fluxiq, request);
 }
 test("a succeeded command dispatches to the paired client and reports ok with its status", async () => {
   executed.length = 0;
@@ -674,6 +683,16 @@ test("a succeeded command dispatches to the paired client and reports ok with it
   assert.equal(result.status, "succeeded");
   assert.equal(result.error, void 0, "a success never gains an error");
   assert.deepEqual(result.payload, { status: "succeeded", message: "Clicked Save.", result: { clicked: true } });
+});
+test("a request's timeout is sent as the command's timeout, and a request without one sends none", async () => {
+  executed.length = 0;
+  const answer = { commandId: "client.command.timeout", status: "succeeded" };
+  await dispatch(answer, [readySession], { ...dispatchRequest, timeoutMs: 5e3 });
+  await dispatch(answer);
+  assert.deepEqual(executed, [
+    { sessionId: "session.one", actionType: "web.dom.click", parameters: { selector: "#save" }, timeoutMs: 5e3 },
+    { sessionId: "session.one", actionType: "web.dom.click", parameters: { selector: "#save" } }
+  ]);
 });
 test("a timed out command keeps its status and promotes its message into the reason Core reads", async () => {
   const result = await dispatch({ commandId: "client.command.two", status: "timed_out", message: "The element never became visible." });

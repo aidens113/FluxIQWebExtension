@@ -53,6 +53,26 @@ var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.tab",
   "web.browser.download"
 ];
+var WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = {
+  "web.browser.navigate": "browser.navigate",
+  "web.dom.click": "dom.click",
+  "web.dom.type": "dom.type",
+  "web.dom.clear": "dom.clear",
+  "web.dom.select": "dom.select",
+  "web.dom.scroll": "dom.scroll",
+  "web.dom.keypress": "dom.keypress",
+  "web.dom.wait_for_selector": "dom.wait_for_selector",
+  "web.dom.wait_for_text": "dom.wait_for_text",
+  "web.dom.extract": "dom.extract",
+  "web.dom.capture_snapshot": "dom.capture_snapshot",
+  "web.dom.check": "dom.check",
+  "web.dom.assert": "dom.assert",
+  "web.dom.extract_list": "dom.extract_list",
+  "web.dom.upload": "dom.upload",
+  "web.dom.dialog": "dom.dialog",
+  "web.browser.tab": "browser.tab",
+  "web.browser.download": "browser.download"
+};
 
 // src/actions/schemas.ts
 var elementFingerprintSchema = {
@@ -218,7 +238,8 @@ var tabSchema = {
     url: { type: "string", label: "URL" },
     active: { type: "boolean", label: "Activate" },
     tabId: { type: "integer", label: "Tab id" },
-    urlPattern: { type: "string", label: "URL contains" }
+    urlPattern: { type: "string", label: "URL contains" },
+    urlPath: { type: "string", label: "URL path" }
   }
 };
 var downloadSchema = {
@@ -513,6 +534,224 @@ function stringField(value) {
   return typeof value === "string" ? value : void 0;
 }
 
+// src/io/input-model.ts
+var WEB_AUTOMATION_INPUT_IDS = {
+  browserState: "web.browser.state",
+  recordingEvidence: "web.recording.evidence",
+  navigationRequested: "web.user.navigation_requested",
+  elementClicked: "web.user.element_clicked",
+  textEntered: "web.user.text_entered",
+  fieldCleared: "web.user.field_cleared",
+  optionSelected: "web.user.option_selected",
+  checkboxToggled: "web.user.checkbox_toggled",
+  keyPressed: "web.user.key_pressed",
+  pageScrolled: "web.user.page_scrolled",
+  filesChosen: "web.user.files_chosen",
+  tabSwitched: "web.user.tab_switched",
+  tabClosed: "web.user.tab_closed"
+};
+var stateInputDefinitions = [
+  { id: WEB_AUTOMATION_INPUT_IDS.browserState, title: "Browser state", description: "Current browser, tab, and compact DOM state available for policy conditions.", role: "state" },
+  { id: WEB_AUTOMATION_INPUT_IDS.recordingEvidence, title: "Web recording evidence", description: "Passive browser observations that may inform recordings but never execute a policy.", role: "event" }
+];
+var actionInputDefinitions = [
+  [WEB_AUTOMATION_INPUT_IDS.navigationRequested, "Navigation requested", "web.browser.navigate"],
+  [WEB_AUTOMATION_INPUT_IDS.elementClicked, "Element clicked", "web.dom.click"],
+  [WEB_AUTOMATION_INPUT_IDS.textEntered, "Text entered", "web.dom.type"],
+  [WEB_AUTOMATION_INPUT_IDS.fieldCleared, "Field cleared", "web.dom.clear"],
+  [WEB_AUTOMATION_INPUT_IDS.optionSelected, "Option selected", "web.dom.select"],
+  [WEB_AUTOMATION_INPUT_IDS.checkboxToggled, "Checkbox toggled", "web.dom.check"],
+  [WEB_AUTOMATION_INPUT_IDS.keyPressed, "Key pressed", "web.dom.keypress"],
+  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"],
+  [WEB_AUTOMATION_INPUT_IDS.filesChosen, "Files chosen", "web.dom.upload"],
+  [WEB_AUTOMATION_INPUT_IDS.tabSwitched, "Tab switched", "web.browser.tab"],
+  [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"]
+];
+var OUTPUT_FOR_ACTION_INPUT = new Map(
+  actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
+);
+
+// src/runtime/capabilities.ts
+var webAutomationRuntimeCapabilities = [
+  {
+    id: "web.actions",
+    label: "Web actions",
+    kind: "action",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    actionTypes: WEB_AUTOMATION_ACTION_TYPES,
+    outputIds: WEB_AUTOMATION_ACTION_TYPES
+  },
+  {
+    id: "web.snapshots",
+    label: "Web snapshots",
+    kind: "snapshot",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence]
+  },
+  {
+    id: "web.state",
+    label: "Web state",
+    kind: "state",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState, WEB_AUTOMATION_INPUT_IDS.recordingEvidence]
+  },
+  {
+    id: "web.flow-runtime",
+    label: "Web flow runtime",
+    kind: "flow",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    metadata: { executionHost: "fluxiq-core", actionTransport: "extension" }
+  }
+];
+var webAutomationGatewayCapabilities = [
+  {
+    id: "web.context.state",
+    label: "Web context state",
+    kind: "state",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState],
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState] }
+  },
+  {
+    id: "web.structured.snapshot",
+    label: "Structured web snapshots",
+    kind: "snapshot",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence],
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence] }
+  },
+  {
+    id: "web.recording.events",
+    label: "Web recording events",
+    kind: "recording",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID }
+  },
+  {
+    id: "web.actions",
+    label: "Web actions",
+    kind: "action",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    actionTypes: WEB_AUTOMATION_ACTION_TYPES,
+    outputIds: WEB_AUTOMATION_ACTION_TYPES,
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, outputIds: WEB_AUTOMATION_ACTION_TYPES }
+  }
+];
+
+// src/runtime/failure/codes.ts
+var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
+  /** The target was found but refused the action: disabled, hidden, or covered by another element. */
+  ACTION_REJECTED: "web.action.rejected",
+  /** No element matched the action's target with enough confidence. */
+  TARGET_NOT_FOUND: "web.target.not_found",
+  /** Several elements matched the action's target and none could be preferred. */
+  TARGET_AMBIGUOUS: "web.target.ambiguous",
+  /** The action ran and its post-condition did not hold (decision D4). */
+  OUTPUT_NOT_OBSERVED: "web.validation.output_not_observed",
+  /** An authored `web.dom.assert` condition did not hold. */
+  STATE_MISMATCH: "web.validation.state_mismatch",
+  /** The browser landed somewhere other than the requested URL, or never left where it was. */
+  NAVIGATION_UNEXPECTED: "web.navigation.unexpected",
+  /**
+   * The document was replaced, or routed away, while the action was running.
+   * Produced by `apps/extension/src/content/actions/page-identity.ts`, which
+   * remembers the page an action started on and supersedes the verb's own code
+   * when it finished somewhere else.
+   */
+  PAGE_CHANGED: "web.page.changed",
+  /** A wait, or an action, ran out of time. */
+  TIMEOUT: "web.action.timeout",
+  /** The host wants a sign-in before the action can continue. */
+  AUTH_REQUIRED: "web.auth.required",
+  /**
+   * A person must act before the run can continue -- Core's category, stated no
+   * more narrowly here than Core states it. Two producers, and they are not the
+   * same shape of "act": `content/action-runtime/results.ts` reports it when a
+   * modal dialog is standing over the page and the target is behind it, and
+   * `runtime/adapter.ts` when no single paired client could be selected, which
+   * only the operator can fix. The narrower gloss this carried before -- "a
+   * captcha, or a native dialog waiting for an answer" -- described neither,
+   * and reading it as the definition made both look wrong.
+   */
+  USER_INTERVENTION_REQUIRED: "web.intervention.required",
+  /** The client does not implement the requested action type at all. */
+  UNSUPPORTED_TYPE: "web.action.unsupported_type",
+  /** The verb is registered but not built yet, so a Flow that reaches one fails honestly. */
+  NOT_IMPLEMENTED: "web.action.not_implemented",
+  /**
+   * A field the action requires arrived in a shape that cannot be read, so the
+   * command was refused before dispatch. `client/gateway-mapping.ts` decides it
+   * from what `client/gateway-action-parameters.ts` refused. The Flow's node is
+   * authored wrong and only an edit fixes it: a structural fault in the Flow,
+   * not a capability the client lacks.
+   */
+  INVALID_PARAMETER: "web.action.invalid_parameter",
+  /** The action ran and failed for a reason no other code names. */
+  ACTION_FAILED: "web.action.failed",
+  /** Nothing said why the action failed. */
+  UNKNOWN: "web.action.unknown"
+});
+var WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS = Object.freeze({
+  "web.action.rejected": { category: "blocked_by_capability_or_policy", retryable: false, stage: "execution" },
+  "web.target.not_found": { category: "target_not_found", retryable: true, stage: "target_resolution" },
+  "web.target.ambiguous": { category: "target_ambiguous", retryable: false, stage: "target_resolution" },
+  "web.validation.output_not_observed": { category: "output_not_observed", retryable: true, stage: "verification" },
+  "web.validation.state_mismatch": { category: "unexpected_state", retryable: false, stage: "verification" },
+  "web.navigation.unexpected": { category: "navigation_unexpected", retryable: false, stage: "confirmation" },
+  "web.page.changed": { category: "page_changed", retryable: true, stage: "execution" },
+  "web.action.timeout": { category: "timeout", retryable: true, stage: "execution" },
+  "web.auth.required": { category: "auth_required", retryable: false, stage: "confirmation" },
+  "web.intervention.required": { category: "user_intervention_required", retryable: false, stage: "execution" },
+  "web.action.unsupported_type": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
+  "web.action.not_implemented": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
+  "web.action.invalid_parameter": { category: "graph_validation_or_unknown_node", retryable: false, stage: "dispatch" },
+  "web.action.failed": { category: "action_failed", retryable: true, stage: "execution" },
+  "web.action.unknown": { category: "ambiguous_or_unknown", retryable: false, stage: "execution" }
+});
+function isWebAutomationFailureCode(value) {
+  return typeof value === "string" && Object.hasOwn(WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS, value);
+}
+function webAutomationFailureRecord(code, comparison = {}) {
+  const definition = WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[code];
+  const expected = boundedText(comparison.expected);
+  const actual = boundedText(comparison.actual);
+  const evidenceDigest = comparison.evidenceDigest !== void 0 && EVIDENCE_DIGEST_PATTERN.test(comparison.evidenceDigest) ? comparison.evidenceDigest : void 0;
+  return {
+    category: definition.category,
+    code,
+    retryable: definition.retryable,
+    stage: definition.stage,
+    ...expected === void 0 ? {} : { expected },
+    ...actual === void 0 ? {} : { actual },
+    ...evidenceDigest === void 0 ? {} : { evidenceDigest }
+  };
+}
+var EVIDENCE_DIGEST_PATTERN = /^[a-f0-9]{64}$/u;
+function boundedText(value) {
+  if (value === void 0) return void 0;
+  const collapsed = value.replace(/\s+/gu, " ").trim();
+  if (collapsed.length === 0) return void 0;
+  if (collapsed.length <= WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH) return collapsed;
+  return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
+}
+
+// src/page-evidence/wire.ts
+function pageEvidenceWire(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+
+// src/recording/web-state/evidence/project.ts
+var COLLECTION = { elementKind: "collection", comparable: false };
+var LIVE_COLLECTION = { ...COLLECTION, volatility: "rapid" };
+var SETTLED_COLLECTION = { ...COLLECTION, volatility: "slow" };
+
+// src/client/gateway-mapping.ts
+var UNSUPPORTED_ACTION_TYPE_FAILURE = Object.freeze(webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE));
+var CANONICAL_ACTION_TYPES = new Set(WEB_AUTOMATION_ACTION_TYPES);
+var LEGACY_ACTION_TYPE_ALIASES = new Map(
+  Object.entries(WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER).map(([canonical, legacy]) => [legacy, canonical])
+);
+
 // src/runtime/expectation/conditions.ts
 var ASSERT_KINDS = Object.freeze({
   exists: true,
@@ -586,94 +825,6 @@ function nonNegativeInteger(value) {
 function bounded(value) {
   const collapsed = value.replace(/\s+/gu, " ").trim();
   return collapsed.length <= MAX_DESCRIPTION_LENGTH ? collapsed : `${collapsed.slice(0, MAX_DESCRIPTION_LENGTH - 1)}\u2026`;
-}
-
-// src/runtime/failure/codes.ts
-var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
-  /** The target was found but refused the action: disabled, hidden, or covered by another element. */
-  ACTION_REJECTED: "web.action.rejected",
-  /** No element matched the action's target with enough confidence. */
-  TARGET_NOT_FOUND: "web.target.not_found",
-  /** Several elements matched the action's target and none could be preferred. */
-  TARGET_AMBIGUOUS: "web.target.ambiguous",
-  /** The action ran and its post-condition did not hold (decision D4). */
-  OUTPUT_NOT_OBSERVED: "web.validation.output_not_observed",
-  /** An authored `web.dom.assert` condition did not hold. */
-  STATE_MISMATCH: "web.validation.state_mismatch",
-  /** The browser landed somewhere other than the requested URL, or never left where it was. */
-  NAVIGATION_UNEXPECTED: "web.navigation.unexpected",
-  /**
-   * The document was replaced, or routed away, while the action was running.
-   * Produced by `apps/extension/src/content/actions/page-identity.ts`, which
-   * remembers the page an action started on and supersedes the verb's own code
-   * when it finished somewhere else.
-   */
-  PAGE_CHANGED: "web.page.changed",
-  /** A wait, or an action, ran out of time. */
-  TIMEOUT: "web.action.timeout",
-  /** The host wants a sign-in before the action can continue. */
-  AUTH_REQUIRED: "web.auth.required",
-  /**
-   * A person must act before the run can continue -- Core's category, stated no
-   * more narrowly here than Core states it. Two producers, and they are not the
-   * same shape of "act": `content/action-runtime/results.ts` reports it when a
-   * modal dialog is standing over the page and the target is behind it, and
-   * `runtime/adapter.ts` when no single paired client could be selected, which
-   * only the operator can fix. The narrower gloss this carried before -- "a
-   * captcha, or a native dialog waiting for an answer" -- described neither,
-   * and reading it as the definition made both look wrong.
-   */
-  USER_INTERVENTION_REQUIRED: "web.intervention.required",
-  /** The client does not implement the requested action type at all. */
-  UNSUPPORTED_TYPE: "web.action.unsupported_type",
-  /** The verb is registered but not built yet, so a Flow that reaches one fails honestly. */
-  NOT_IMPLEMENTED: "web.action.not_implemented",
-  /** The action ran and failed for a reason no other code names. */
-  ACTION_FAILED: "web.action.failed",
-  /** Nothing said why the action failed. */
-  UNKNOWN: "web.action.unknown"
-});
-var WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS = Object.freeze({
-  "web.action.rejected": { category: "blocked_by_capability_or_policy", retryable: false, stage: "execution" },
-  "web.target.not_found": { category: "target_not_found", retryable: true, stage: "target_resolution" },
-  "web.target.ambiguous": { category: "target_ambiguous", retryable: false, stage: "target_resolution" },
-  "web.validation.output_not_observed": { category: "output_not_observed", retryable: true, stage: "verification" },
-  "web.validation.state_mismatch": { category: "unexpected_state", retryable: false, stage: "verification" },
-  "web.navigation.unexpected": { category: "navigation_unexpected", retryable: false, stage: "confirmation" },
-  "web.page.changed": { category: "page_changed", retryable: true, stage: "execution" },
-  "web.action.timeout": { category: "timeout", retryable: true, stage: "execution" },
-  "web.auth.required": { category: "auth_required", retryable: false, stage: "confirmation" },
-  "web.intervention.required": { category: "user_intervention_required", retryable: false, stage: "execution" },
-  "web.action.unsupported_type": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
-  "web.action.not_implemented": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
-  "web.action.failed": { category: "action_failed", retryable: true, stage: "execution" },
-  "web.action.unknown": { category: "ambiguous_or_unknown", retryable: false, stage: "execution" }
-});
-function isWebAutomationFailureCode(value) {
-  return typeof value === "string" && Object.hasOwn(WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS, value);
-}
-function webAutomationFailureRecord(code, comparison = {}) {
-  const definition = WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[code];
-  const expected = boundedText(comparison.expected);
-  const actual = boundedText(comparison.actual);
-  const evidenceDigest = comparison.evidenceDigest !== void 0 && EVIDENCE_DIGEST_PATTERN.test(comparison.evidenceDigest) ? comparison.evidenceDigest : void 0;
-  return {
-    category: definition.category,
-    code,
-    retryable: definition.retryable,
-    stage: definition.stage,
-    ...expected === void 0 ? {} : { expected },
-    ...actual === void 0 ? {} : { actual },
-    ...evidenceDigest === void 0 ? {} : { evidenceDigest }
-  };
-}
-var EVIDENCE_DIGEST_PATTERN = /^[a-f0-9]{64}$/u;
-function boundedText(value) {
-  if (value === void 0) return void 0;
-  const collapsed = value.replace(/\s+/gu, " ").trim();
-  if (collapsed.length === 0) return void 0;
-  if (collapsed.length <= WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH) return collapsed;
-  return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
 }
 
 // src/runtime/expectation/evaluate.ts
@@ -862,7 +1013,7 @@ function sanitizedEvidenceElement(raw, context) {
   const role = boundedText2(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
   const name = boundedText2(raw.name, WEB_LLM_EVIDENCE_BOUNDS.text);
   const rawText = boundedText2(raw.visibleText ?? raw.text, WEB_LLM_EVIDENCE_BOUNDS.text);
-  const text = rawText === name ? void 0 : rawText;
+  const text2 = rawText === name ? void 0 : rawText;
   const rawInputType = boundedText2(raw.inputType, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
   const inputType = rawInputType === "text" ? void 0 : rawInputType;
   const rawControlType = boundedText2(attributes.type, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
@@ -873,7 +1024,7 @@ function sanitizedEvidenceElement(raw, context) {
   const selectedValue = options ? sanitizedSelectedValue(raw.selectedValue, options) : void 0;
   const revealKind = semanticRevealKind(tag, role, attributes);
   const expanded = revealKind === "disclosure" ? semanticExpandedState(attributes) : void 0;
-  const placement = elementPlacement(raw.context, { name, text });
+  const placement = elementPlacement(raw.context, { name, text: text2 });
   const focused = context.focusedSelector !== void 0 && context.focusedSelector === addressed.selector ? true : void 0;
   return present({
     target: context.target,
@@ -882,7 +1033,7 @@ function sanitizedEvidenceElement(raw, context) {
     frameId: addressed.frameId,
     role: role || void 0,
     name: name || void 0,
-    text: text || void 0,
+    text: text2 || void 0,
     inputType: inputType || void 0,
     controlType: controlType || void 0,
     hasValue,
@@ -971,11 +1122,6 @@ function sanitizedOptions(input) {
 function sanitizedSelectedValue(input, options) {
   const value = boundedText2(input, WEB_LLM_EVIDENCE_BOUNDS.attribute);
   return value && options.some((option) => option.value === value) ? value : void 0;
-}
-
-// src/page-evidence/wire.ts
-function pageEvidenceWire(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
 // src/runtime/llm-evidence/page-evidence.ts

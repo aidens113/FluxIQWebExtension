@@ -479,7 +479,8 @@
       url: { type: "string", label: "URL" },
       active: { type: "boolean", label: "Activate" },
       tabId: { type: "integer", label: "Tab id" },
-      urlPattern: { type: "string", label: "URL contains" }
+      urlPattern: { type: "string", label: "URL contains" },
+      urlPath: { type: "string", label: "URL path" }
     }
   };
   var downloadSchema = {
@@ -506,7 +507,18 @@
       actionType: "web.dom.type",
       label: "Type Text",
       description: "Enter text into an editable DOM element.",
-      parameterSchema: { type: "object", required: ["selector"], properties: { ...elementProperties, text: { type: "string" }, value: { type: "string" } } }
+      // `text` is required. It was not, and that is why a recorded password step
+      // replayed as a field typed empty: `payloads.ts` filled `text` with `""`
+      // when the recorder had withheld the value, `hasExecutableParameters`
+      // (`io/input-model.ts`) checks only the parameters this list names, so the
+      // node validated, survived, ran, and reported success having typed
+      // nothing. An entry the user emptied is `web.dom.clear`, never this, so a
+      // type action with no text is always a value that went missing.
+      //
+      // A withheld value is supplied at run time instead of carried: `text` may
+      // therefore also be the secret request `output-nodes/secret-binding.ts`
+      // builds, which names the run input the value arrives in and never a value.
+      parameterSchema: { type: "object", required: ["selector", "text"], properties: { ...elementProperties, text: { type: "string", label: "Text, or the secret request it is supplied through" }, value: { type: "string" } } }
     },
     { actionType: "web.dom.clear", label: "Clear Field", description: "Clear an editable DOM element.", parameterSchema: selectorSchema },
     {
@@ -756,6 +768,19 @@
     return "square-dot";
   }
 
+  // ../../domain/src/sensitivity/signature.ts
+  var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
+  var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
+  var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
+  function isSensitiveFieldSignature(signature) {
+    if (isSensitiveControlType(signature.inputType) || isSensitiveControlType(signature.controlType)) return true;
+    if (signature.dataSensitive?.trim().toLowerCase() === "true") return true;
+    return (signature.autocomplete ?? "").toLowerCase().split(/\s+/u).some((token) => Boolean(token) && (SENSITIVE_AUTOCOMPLETE_TOKENS.has(token) || token.startsWith(SENSITIVE_AUTOCOMPLETE_PREFIX)));
+  }
+  function isSensitiveControlType(type) {
+    return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
+  }
+
   // ../../domain/src/io/input-model.ts
   var WEB_AUTOMATION_INPUT_IDS = {
     browserState: "web.browser.state",
@@ -767,7 +792,10 @@
     optionSelected: "web.user.option_selected",
     checkboxToggled: "web.user.checkbox_toggled",
     keyPressed: "web.user.key_pressed",
-    pageScrolled: "web.user.page_scrolled"
+    pageScrolled: "web.user.page_scrolled",
+    filesChosen: "web.user.files_chosen",
+    tabSwitched: "web.user.tab_switched",
+    tabClosed: "web.user.tab_closed"
   };
   var stateInputDefinitions = [
     { id: WEB_AUTOMATION_INPUT_IDS.browserState, title: "Browser state", description: "Current browser, tab, and compact DOM state available for policy conditions.", role: "state" },
@@ -781,7 +809,10 @@
     [WEB_AUTOMATION_INPUT_IDS.optionSelected, "Option selected", "web.dom.select"],
     [WEB_AUTOMATION_INPUT_IDS.checkboxToggled, "Checkbox toggled", "web.dom.check"],
     [WEB_AUTOMATION_INPUT_IDS.keyPressed, "Key pressed", "web.dom.keypress"],
-    [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"]
+    [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"],
+    [WEB_AUTOMATION_INPUT_IDS.filesChosen, "Files chosen", "web.dom.upload"],
+    [WEB_AUTOMATION_INPUT_IDS.tabSwitched, "Tab switched", "web.browser.tab"],
+    [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"]
   ];
   var OUTPUT_FOR_ACTION_INPUT = new Map(
     actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
@@ -868,18 +899,40 @@
     STATE_MISMATCH: "web.validation.state_mismatch",
     /** The browser landed somewhere other than the requested URL, or never left where it was. */
     NAVIGATION_UNEXPECTED: "web.navigation.unexpected",
-    /** The document was replaced between resolving the target and running the action. */
+    /**
+     * The document was replaced, or routed away, while the action was running.
+     * Produced by `apps/extension/src/content/actions/page-identity.ts`, which
+     * remembers the page an action started on and supersedes the verb's own code
+     * when it finished somewhere else.
+     */
     PAGE_CHANGED: "web.page.changed",
     /** A wait, or an action, ran out of time. */
     TIMEOUT: "web.action.timeout",
     /** The host wants a sign-in before the action can continue. */
     AUTH_REQUIRED: "web.auth.required",
-    /** A person must act first: a captcha, or a native dialog waiting for an answer. */
+    /**
+     * A person must act before the run can continue -- Core's category, stated no
+     * more narrowly here than Core states it. Two producers, and they are not the
+     * same shape of "act": `content/action-runtime/results.ts` reports it when a
+     * modal dialog is standing over the page and the target is behind it, and
+     * `runtime/adapter.ts` when no single paired client could be selected, which
+     * only the operator can fix. The narrower gloss this carried before -- "a
+     * captcha, or a native dialog waiting for an answer" -- described neither,
+     * and reading it as the definition made both look wrong.
+     */
     USER_INTERVENTION_REQUIRED: "web.intervention.required",
     /** The client does not implement the requested action type at all. */
     UNSUPPORTED_TYPE: "web.action.unsupported_type",
     /** The verb is registered but not built yet, so a Flow that reaches one fails honestly. */
     NOT_IMPLEMENTED: "web.action.not_implemented",
+    /**
+     * A field the action requires arrived in a shape that cannot be read, so the
+     * command was refused before dispatch. `client/gateway-mapping.ts` decides it
+     * from what `client/gateway-action-parameters.ts` refused. The Flow's node is
+     * authored wrong and only an edit fixes it: a structural fault in the Flow,
+     * not a capability the client lacks.
+     */
+    INVALID_PARAMETER: "web.action.invalid_parameter",
     /** The action ran and failed for a reason no other code names. */
     ACTION_FAILED: "web.action.failed",
     /** Nothing said why the action failed. */
@@ -898,6 +951,7 @@
     "web.intervention.required": { category: "user_intervention_required", retryable: false, stage: "execution" },
     "web.action.unsupported_type": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
     "web.action.not_implemented": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
+    "web.action.invalid_parameter": { category: "graph_validation_or_unknown_node", retryable: false, stage: "dispatch" },
     "web.action.failed": { category: "action_failed", retryable: true, stage: "execution" },
     "web.action.unknown": { category: "ambiguous_or_unknown", retryable: false, stage: "execution" }
   });
@@ -990,19 +1044,6 @@
     if (typeof error !== "object" || error === null) return void 0;
     const message = error.message;
     return typeof message === "string" && message.length > 0 ? message : void 0;
-  }
-
-  // ../../domain/src/sensitivity/signature.ts
-  var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
-  var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
-  var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
-  function isSensitiveFieldSignature(signature) {
-    if (isSensitiveControlType(signature.inputType) || isSensitiveControlType(signature.controlType)) return true;
-    if (signature.dataSensitive?.trim().toLowerCase() === "true") return true;
-    return (signature.autocomplete ?? "").toLowerCase().split(/\s+/u).some((token) => Boolean(token) && (SENSITIVE_AUTOCOMPLETE_TOKENS.has(token) || token.startsWith(SENSITIVE_AUTOCOMPLETE_PREFIX)));
-  }
-  function isSensitiveControlType(type) {
-    return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
   }
 
   // ../../domain/src/recording/web-state/evidence/project.ts
@@ -1504,7 +1545,7 @@
   }
 
   // src/content/identity/candidates.ts
-  var MAX_SCANNED = 600;
+  var MAX_SCANNED = 5e3;
   var MAX_CANDIDATES = 60;
   var MAX_SIGNAL_LENGTH = 200;
   var MAX_LABEL_LENGTH2 = 40;
@@ -1524,16 +1565,17 @@
   function collectTargetCandidates(family, root = document) {
     const tagName = family.tagName?.toLowerCase();
     const role = family.role?.toLowerCase();
+    const interactive = root.querySelectorAll(CANDIDATE_SELECTOR);
     const candidates = [];
-    let scanned = 0;
-    for (const element of root.querySelectorAll(CANDIDATE_SELECTOR)) {
-      scanned += 1;
-      if (scanned > MAX_SCANNED) break;
+    let examined = 0;
+    for (const element of interactive) {
+      if (examined >= MAX_SCANNED) return { candidates, examined, truncated: true };
+      examined += 1;
       if (!inFamily(element, tagName, role)) continue;
       candidates.push({ element, fingerprint: candidateFingerprint(element, candidates.length) });
-      if (candidates.length >= MAX_CANDIDATES) break;
+      if (candidates.length >= MAX_CANDIDATES) return { candidates, examined, truncated: examined < interactive.length };
     }
-    return candidates;
+    return { candidates, examined, truncated: false };
   }
   function candidateFingerprint(element, index) {
     const tagName = element.tagName.toLowerCase();
@@ -1585,6 +1627,26 @@
     return declared === role || implicitRole(element) === role;
   }
 
+  // src/content/identity/corroboration.ts
+  var EXACT_SIMILARITY = 0.92;
+  var DISTINGUISHING_SIGNALS = ["visibleText", "accessibleName", "label", "id", "testId"];
+  function corroboratesExactly(score) {
+    return score.positiveContributions.some(
+      (contribution) => DISTINGUISHING_SIGNALS.includes(contribution.signalPath) && contribution.weight > 0 && contribution.score / contribution.weight >= EXACT_SIMILARITY
+    );
+  }
+
+  // src/shared/present.ts
+  function present(fields) {
+    const source = fields;
+    const written = {};
+    for (const key of Object.keys(source)) {
+      const value = source[key];
+      if (value !== void 0) written[key] = value;
+    }
+    return written;
+  }
+
   // src/content/identity/context.ts
   var MAX_CONTEXT_TEXT = 200;
   var HEADING_SELECTOR = "h1,h2,h3,h4,h5,h6,[role='heading']";
@@ -1593,6 +1655,8 @@
   var MAX_HEADING_LEVELS = 10;
   var MAX_HEADING_SIBLINGS = 12;
   var MAX_HEADING_SUBTREE_QUERIES = 24;
+  var MAX_LABELLEDBY_IDS2 = 8;
+  var FORM_CONTROL_TAGS = /* @__PURE__ */ new Set(["input", "select", "textarea"]);
   var LANDMARK_ROLES = /* @__PURE__ */ new Set(["banner", "complementary", "contentinfo", "form", "main", "navigation", "region", "search"]);
   var LANDMARK_TAG_ROLES = {
     main: "main",
@@ -1605,25 +1669,27 @@
     form: "form"
   };
   function elementContext(element) {
-    const context = compactObject({
-      ...formContext(element),
+    const form = owningForm(element);
+    const landmark = nearestLandmark(element);
+    const context = present({
+      formId: formAttribute(form, "id"),
+      formName: formAttribute(form, "name"),
+      formAction: formAttribute(form, "action"),
       fieldsetLegend: fieldsetLegend(element),
-      landmark: nearestLandmark(element),
+      landmark: landmark?.role,
+      landmarkName: landmark ? landmarkName(landmark.element) : void 0,
       heading: nearestHeading(element),
       listPosition: listPosition(element),
       tablePosition: tablePosition(element)
     });
     return Object.keys(context).length ? context : void 0;
   }
-  function formContext(element) {
+  function owningForm(element) {
     const owned = element.form;
-    const form = owned ?? element.closest("form");
-    if (!form) return {};
-    return {
-      formId: boundedText2(form.getAttribute("id"), MAX_CONTEXT_TEXT),
-      formName: boundedText2(form.getAttribute("name"), MAX_CONTEXT_TEXT),
-      formAction: boundedText2(form.getAttribute("action"), MAX_CONTEXT_TEXT)
-    };
+    return owned ?? element.closest("form");
+  }
+  function formAttribute(form, name) {
+    return form ? boundedText2(form.getAttribute(name), MAX_CONTEXT_TEXT) : void 0;
   }
   function fieldsetLegend(element) {
     const legend = element.closest("fieldset")?.querySelector(":scope > legend");
@@ -1635,10 +1701,26 @@
     while (current && depth < MAX_LANDMARK_DEPTH) {
       depth += 1;
       const role = landmarkRole(current);
-      if (role) return role;
+      if (role) return { element: current, role };
       current = current.parentElement;
     }
     return void 0;
+  }
+  function landmarkName(landmark) {
+    return labelledByText(landmark) ?? boundedText2(landmark.getAttribute("aria-label"), MAX_CONTEXT_TEXT) ?? boundedText2(landmark.getAttribute("title"), MAX_CONTEXT_TEXT);
+  }
+  function labelledByText(landmark) {
+    const ids = (landmark.getAttribute("aria-labelledby") ?? "").split(/\s+/u).filter(Boolean).slice(0, MAX_LABELLEDBY_IDS2);
+    const parts = ids.flatMap((id) => {
+      const target = landmark.ownerDocument?.getElementById(id);
+      if (!target || target === landmark || holdsInput(target)) return [];
+      const text3 = boundedText2(target.textContent, MAX_CONTEXT_TEXT);
+      return text3 ? [text3] : [];
+    });
+    return boundedText2(parts.join(" "), MAX_CONTEXT_TEXT);
+  }
+  function holdsInput(element) {
+    return FORM_CONTROL_TAGS.has(element.tagName.toLowerCase()) || element.isContentEditable === true;
   }
   function landmarkRole(element) {
     const explicit = element.getAttribute("role")?.trim().toLowerCase();
@@ -1685,7 +1767,7 @@
     if (!(cell instanceof HTMLTableCellElement)) return void 0;
     const row = cell.closest("tr");
     if (!(row instanceof HTMLTableRowElement) || row.rowIndex < 0 || cell.cellIndex < 0) return void 0;
-    return compactObject({
+    return present({
       row: row.rowIndex + 1,
       column: cell.cellIndex + 1,
       columnHeader: columnHeader(row, cell)
@@ -2034,6 +2116,7 @@
     if (runnerUp && chosen.score.normalizedScore - runnerUp.score.normalizedScore < TARGET_SCORE_MARGIN) {
       return { outcome: "ambiguous", ranked };
     }
+    if (!corroboratesExactly(chosen.score)) return { outcome: "unmatched", ranked };
     return { outcome: "resolved", chosen, runnerUp, ranked };
   }
   function scoreTargetCandidate(target, candidate) {
@@ -2067,23 +2150,19 @@
   // src/content/identity/veto.ts
   var TARGET_VETO_FLOOR = 0;
   function vetoCandidate(target, candidate) {
-    if (!recordedDistinguisher(target)) return void 0;
+    if (!recordedDistinguisher(target)) return {};
     const score = scoreTargetCandidate(target, candidate);
-    if (!score) return void 0;
-    const measured = score.normalizedScore;
-    if (measured < TARGET_VETO_FLOOR) return { score: measured, reason: "contradicted" };
-    return corroborated(score) ? void 0 : { score: measured, reason: "uncorroborated" };
+    if (!score) return {};
+    const measurement = { score: score.normalizedScore, confidence: score.confidence };
+    if (measurement.score < TARGET_VETO_FLOOR) return { measurement, refusedBecause: "contradicted" };
+    return corroboratesExactly(score) ? { measurement } : { measurement, refusedBecause: "uncorroborated" };
   }
   function vetoExactMatch(target, element) {
-    if (!recordedDistinguisher(target)) return void 0;
-    const decision = vetoCandidate(target, { element, fingerprint: candidateFingerprint(element, 0) });
-    if (!decision) return void 0;
-    const because = decision.reason === "uncorroborated" ? " with nothing the recording named agreeing" : "";
-    return { ...decision, summary: `refused ${candidateLabel(element)} scoring ${decision.score.toFixed(2)}${because}` };
-  }
-  var CORROBORATING_SIGNALS = ["visibleText", "accessibleName", "label", "id", "testId"];
-  function corroborated(score) {
-    return score.positiveContributions.some((contribution) => CORROBORATING_SIGNALS.includes(contribution.signalPath));
+    if (!recordedDistinguisher(target)) return {};
+    const verdict = vetoCandidate(target, { element, fingerprint: candidateFingerprint(element, 0) });
+    if (!verdict.refusedBecause) return verdict;
+    const because = verdict.refusedBecause === "uncorroborated" ? " with nothing the recording named agreeing exactly" : "";
+    return { ...verdict, summary: `refused ${candidateLabel(element)} scoring ${verdict.measurement.score.toFixed(2)}${because}` };
   }
   function recordedDistinguisher(target) {
     return Boolean(
@@ -2121,6 +2200,8 @@
     const href = linkHref(element);
     if (href) descriptor.href = href;
     if (element instanceof HTMLInputElement && element.type) descriptor.inputType = element.type;
+    const checked = checkedState(element);
+    if (checked !== void 0) descriptor.checked = checked;
     const valuePresent = hasEnteredValue(element);
     if (valuePresent !== void 0) descriptor.hasValue = valuePresent;
     const testId = testIdFor(element);
@@ -2179,11 +2260,18 @@
   function readElementValue(element) {
     if (!element) return void 0;
     if (isSensitiveFormControl(element)) return void 0;
+    if (element instanceof HTMLInputElement && element.type.toLowerCase() === "file") return void 0;
     if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) {
       return element.value.slice(0, 2e3);
     }
     if (element instanceof HTMLElement && element.isContentEditable) return element.innerText.slice(0, 2e3);
     return void 0;
+  }
+  function checkedState(element) {
+    if (!(element instanceof HTMLInputElement)) return void 0;
+    const type = element.type.toLowerCase();
+    if (type !== "checkbox" && type !== "radio") return void 0;
+    return isSensitiveFormControl(element) ? void 0 : element.checked;
   }
   function testIdFor(element) {
     return element.getAttribute("data-testid") ?? element.getAttribute("data-test") ?? element.getAttribute("data-cy") ?? void 0;
@@ -2197,17 +2285,6 @@
   }
   function cssString3(value) {
     return CSS.escape(value).replace(/"/g, '\\"');
-  }
-
-  // src/shared/present.ts
-  function present(fields) {
-    const source = fields;
-    const written = {};
-    for (const key of Object.keys(source)) {
-      const value = source[key];
-      if (value !== void 0) written[key] = value;
-    }
-    return written;
   }
 
   // src/content/evidence/dialogs.ts
@@ -2839,6 +2916,7 @@
   }
 
   // src/content/recorder.ts
+  var EXECUTABLE_KINDS = /* @__PURE__ */ new Set(["dom.click", "dom.input", "dom.change", "dom.submit", "dom.keydown"]);
   var recording = false;
   var sequence = 0;
   var mutationTimer;
@@ -2847,17 +2925,9 @@
   var pendingMutation = { added: 0, removed: 0, attributes: 0, text: 0 };
   var observer = new MutationObserver((mutations) => {
     if (!captureSettings.mutations || !recording) return;
-    for (const mutation of mutations) {
-      pendingMutation.added += mutation.addedNodes.length;
-      pendingMutation.removed += mutation.removedNodes.length;
-      if (mutation.type === "attributes") pendingMutation.attributes += 1;
-      if (mutation.type === "characterData") pendingMutation.text += 1;
-    }
+    tallyMutations(mutations);
     if (mutationTimer) clearTimeout(mutationTimer);
-    mutationTimer = setTimeout(() => {
-      emit("dom.mutation", { mutation: pendingMutation });
-      pendingMutation = { added: 0, removed: 0, attributes: 0, text: 0 };
-    }, 500);
+    mutationTimer = setTimeout(() => flushPendingMutation(), 500);
   });
   function isRecording() {
     return recording;
@@ -2872,6 +2942,7 @@
   function emit(kind, details) {
     if (!isActiveContentInstance()) return;
     if (!recording && kind !== "content.ready") return;
+    if (EXECUTABLE_KINDS.has(kind)) flushPendingMutation();
     const payload = basePayload(kind, details);
     void chrome.runtime.sendMessage({ type: CONTENT_EVENT, payload });
   }
@@ -2914,6 +2985,23 @@
       inputValue: captureSettings.inputValues ? readElementValue(element) : void 0
     }));
   }
+  function flushPendingMutation() {
+    if (captureSettings.mutations && recording) tallyMutations(observer.takeRecords());
+    if (mutationTimer) clearTimeout(mutationTimer);
+    mutationTimer = void 0;
+    const mutation = pendingMutation;
+    pendingMutation = { added: 0, removed: 0, attributes: 0, text: 0 };
+    if (mutation.added + mutation.removed + mutation.attributes + mutation.text === 0) return;
+    emit("dom.mutation", { mutation });
+  }
+  function tallyMutations(mutations) {
+    for (const mutation of mutations) {
+      pendingMutation.added += mutation.addedNodes.length;
+      pendingMutation.removed += mutation.removedNodes.length;
+      if (mutation.type === "attributes") pendingMutation.attributes += 1;
+      if (mutation.type === "characterData") pendingMutation.text += 1;
+    }
+  }
   function basePayload(kind, details) {
     const payload = {
       kind,
@@ -2940,6 +3028,42 @@
   async function captureSnapshotForResponse() {
     if (!isTopFrame()) await requestFrameGeometry();
     return captureSnapshot();
+  }
+
+  // src/content/actions/page-identity.ts
+  function observePageIdentity() {
+    if (typeof location === "undefined" || typeof document === "undefined") return void 0;
+    const href = location.href;
+    if (typeof href !== "string") return void 0;
+    return { href, root: document.documentElement };
+  }
+  function reportPageChange(result, before) {
+    if (result.status === "succeeded") return result;
+    const failure = result.failure;
+    if (!failure || EXPLAINED_WITHOUT_THE_PAGE.has(failure.code)) return result;
+    const change = pageChangeSince(before);
+    if (!change) return result;
+    result.failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.PAGE_CHANGED, {
+      expected: failure.expected ?? "the action to run against the document it started on",
+      actual: `${change}; the action reported ${failure.code}${failure.actual ? `: ${failure.actual}` : ""}`
+    });
+    return result;
+  }
+  var EXPLAINED_WITHOUT_THE_PAGE = /* @__PURE__ */ new Set([
+    WEB_AUTOMATION_FAILURE_CODES.AUTH_REQUIRED,
+    WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED,
+    WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE,
+    WEB_AUTOMATION_FAILURE_CODES.NOT_IMPLEMENTED,
+    WEB_AUTOMATION_FAILURE_CODES.NAVIGATION_UNEXPECTED,
+    WEB_AUTOMATION_FAILURE_CODES.PAGE_CHANGED
+  ]);
+  function pageChangeSince(before) {
+    if (!before) return void 0;
+    const now = observePageIdentity();
+    if (!now) return void 0;
+    if (now.root !== before.root) return "the document was replaced while the action ran";
+    if (now.href !== before.href) return "the page navigated to a different URL while the action ran";
+    return void 0;
   }
 
   // src/content/actions/capture-snapshot.ts
@@ -3033,21 +3157,23 @@
 
   // src/content/actions/extract.ts
   function extractAction(action, deps, startedAt) {
-    const element = deps.resolveTarget(action);
+    const { element, resolution } = deps.resolveTarget(action);
     const extracted = deps.extractElement(element, action.options);
     return deps.success(action, startedAt, "Value extracted.", { status: "none", reason: "evidence-only" }, {
       element: deps.describeElement(element),
       snapshot: deps.captureSnapshot(),
-      extracted
+      extracted,
+      resolution
     });
   }
 
   // src/content/actions/click.ts
   function clickAction(action, deps, startedAt) {
-    const element = deps.resolveTarget(action);
+    const { element, resolution } = deps.resolveTarget(action);
     const evidence = () => ({
       element: deps.describeElement(element),
-      snapshot: deps.captureSnapshot()
+      snapshot: deps.captureSnapshot(),
+      resolution
     });
     const report = deps.checkActionability(element);
     if (!report.actionable) {
@@ -3128,10 +3254,10 @@
 
   // src/content/actions/type.ts
   function typeAction(action, deps, startedAt) {
-    const element = deps.resolveTarget(action);
+    const { element, resolution } = deps.resolveTarget(action);
     const text3 = action.text ?? action.value ?? "";
     const withheld = isSensitiveFormControl(element);
-    const evidence = () => ({ element: deps.describeElement(element), snapshot: deps.captureSnapshot() });
+    const evidence = () => ({ element: deps.describeElement(element), snapshot: deps.captureSnapshot(), resolution });
     const report = deps.checkActionability(element);
     if (!report.actionable) {
       return deps.rejected(action, startedAt, report.code, "a target that can be typed into", report.detail, evidence());
@@ -3171,9 +3297,9 @@
 
   // src/content/actions/clear.ts
   function clearAction(action, deps, startedAt) {
-    const element = deps.resolveTarget(action);
+    const { element, resolution } = deps.resolveTarget(action);
     const withheld = isSensitiveFormControl(element);
-    const evidence = () => ({ element: deps.describeElement(element), snapshot: deps.captureSnapshot() });
+    const evidence = () => ({ element: deps.describeElement(element), snapshot: deps.captureSnapshot(), resolution });
     const report = deps.checkActionability(element);
     if (!report.actionable) {
       return deps.rejected(action, startedAt, report.code, "a target that can be cleared", report.detail, evidence());
@@ -3202,9 +3328,9 @@
   // src/content/actions/select.ts
   var OPTIONS_LISTED_ON_FAILURE = 20;
   function selectAction(action, deps, startedAt) {
-    const element = deps.resolveTarget(action);
+    const { element, resolution } = deps.resolveTarget(action);
     const withheld = isSensitiveFormControl(element);
-    const evidence = () => ({ element: deps.describeElement(element), snapshot: deps.captureSnapshot() });
+    const evidence = () => ({ element: deps.describeElement(element), snapshot: deps.captureSnapshot(), resolution });
     const request = requestedOption(action);
     const report = deps.checkActionability(element);
     if (!report.actionable) {
@@ -3333,7 +3459,7 @@
     });
   }
   function scrollToElement(action, deps, startedAt) {
-    const element = deps.resolveTarget(action);
+    const { element, resolution } = deps.resolveTarget(action);
     deps.scrollElementIntoView(element);
     const rect2 = element.getBoundingClientRect();
     const inView = rect2.bottom > 0 && rect2.top < window.innerHeight && rect2.right > 0 && rect2.left < window.innerWidth;
@@ -3341,7 +3467,7 @@
       status: inView ? "passed" : "failed",
       expected: "the target within the viewport",
       actual: `the target is at ${Math.round(rect2.left)},${Math.round(rect2.top)} in a ${window.innerWidth}x${window.innerHeight} viewport`
-    }, { element: deps.describeElement(element), snapshot: deps.captureSnapshot() });
+    }, { element: deps.describeElement(element), snapshot: deps.captureSnapshot(), resolution });
   }
   async function scrollUntilStable(action, request, deps, startedAt) {
     const cap = Math.max(1, Math.floor(finiteNumber(request.maxScrolls, 1)));
@@ -3438,9 +3564,14 @@
   // src/content/actions/keypress.ts
   function keypressAction(action, deps, startedAt) {
     const named = Boolean(action.selector);
-    const target = named ? deps.resolveTarget(action) : document.activeElement ?? document.body;
+    const resolved = named ? deps.resolveTarget(action) : void 0;
+    const target = resolved?.element ?? document.activeElement ?? document.body;
     const key = action.key ?? action.text ?? "";
-    const evidence = () => ({ element: deps.describeElement(target), snapshot: deps.captureSnapshot() });
+    const evidence = () => ({
+      element: deps.describeElement(target),
+      snapshot: deps.captureSnapshot(),
+      ...resolved ? { resolution: resolved.resolution } : {}
+    });
     if (named) {
       const report = deps.checkActionability(target);
       if (!report.actionable) {
@@ -3460,11 +3591,11 @@
 
   // src/content/actions/check.ts
   function checkAction(action, deps, startedAt) {
-    const element = deps.resolveTarget(action);
+    const { element, resolution } = deps.resolveTarget(action);
     const requested = action.checked ?? true;
     deps.scrollElementIntoView(element);
     const outcome = deps.setCheckedState(element, requested);
-    const evidence = { element: deps.describeElement(element), snapshot: deps.captureSnapshot() };
+    const evidence = { element: deps.describeElement(element), snapshot: deps.captureSnapshot(), resolution };
     const expected = `the control is ${stateWord(requested)}`;
     if (!outcome.ok) {
       const code = outcome.code === "disabled" ? "disabled" : "not_checkable";
@@ -3483,11 +3614,12 @@
     try {
       const request = action.assert;
       if (!request) throw new Error("web.dom.assert requires assert parameters naming the kind of claim.");
-      const target = assertionTarget(action, deps);
+      const { target, resolution } = assertionTarget(action, deps);
       const outcome = await deps.evaluateAssertion(request, target);
       const evidence = {
         ...target.element ? { element: deps.describeElement(target.element) } : {},
-        snapshot: deps.captureSnapshot()
+        snapshot: deps.captureSnapshot(),
+        ...resolution ? { resolution } : {}
       };
       const validation = outcome.held ? { status: "passed", expected: outcome.expected, actual: outcome.actual } : { status: "failed", expected: outcome.expected, actual: outcome.actual };
       if (assertionTimedOut(outcome)) {
@@ -3500,11 +3632,12 @@
     }
   }
   function assertionTarget(action, deps) {
-    if (action.selector) return { selector: action.selector };
+    if (action.selector) return { target: { selector: action.selector } };
     try {
-      return { element: deps.resolveTarget(action) };
+      const resolved = deps.resolveTarget(action);
+      return { target: { element: resolved.element }, resolution: resolved.resolution };
     } catch {
-      return {};
+      return { target: {} };
     }
   }
   function assertionTimedOut(outcome) {
@@ -3537,22 +3670,28 @@
   // src/content/actions/upload.ts
   function uploadAction(action, deps, startedAt) {
     const files = action.upload?.files ?? [];
-    const element = deps.resolveTarget(action);
-    const evidence = { element: deps.describeElement(element), snapshot: deps.captureSnapshot() };
-    const expected = fileNameList(files.map((file) => file.name));
+    const requested = files.map((file) => file.name);
+    const { element, resolution } = deps.resolveTarget(action);
+    const evidence = { element: deps.describeElement(element), snapshot: deps.captureSnapshot(), resolution };
+    const expected = describeFiles(requested.length, true);
     const outcome = deps.setInputFiles(element, files);
     if (!outcome.ok) {
       return deps.rejected(action, startedAt, "upload_rejected", expected, outcome.reason, evidence);
     }
-    const actual = fileNameList(outcome.fileNames);
+    const matched = sameNames(outcome.fileNames, requested);
     return deps.success(action, startedAt, "Files uploaded.", {
-      status: actual === expected ? "passed" : "failed",
+      status: matched ? "passed" : "failed",
       expected,
-      actual
+      actual: describeFiles(outcome.fileNames.length, matched)
     }, evidence);
   }
-  function fileNameList(names) {
-    return names.length === 0 ? "(no files)" : names.join(", ");
+  function describeFiles(count3, named) {
+    if (count3 === 0) return "no files";
+    const files = count3 === 1 ? "1 file" : `${count3} files`;
+    return named ? `${files}, named as requested` : `${files}, not named as requested`;
+  }
+  function sameNames(held, requested) {
+    return held.length === requested.length && held.every((name, index) => name === requested[index]);
   }
 
   // src/content/actions/dialog.ts
@@ -3601,6 +3740,10 @@
   };
   async function executeContentAction(action, deps) {
     const startedAt = Date.now();
+    const startedOn = observePageIdentity();
+    return reportPageChange(await routeContentAction(action, deps, startedAt), startedOn);
+  }
+  async function routeContentAction(action, deps, startedAt) {
     try {
       if (action.actionType === "web.dom.capture_snapshot") {
         return await captureSnapshotAction(action, deps, startedAt);
@@ -3667,11 +3810,10 @@
     }
   };
   function resolveTarget(action) {
-    return resolveTargetWithDiagnostics(action).element;
-  }
-  function resolveTargetWithDiagnostics(action) {
     const target = recordedTarget(action);
     const misses = [];
+    let family;
+    const scoredFamily = (known) => family ??= scoreFamily(known);
     for (const attempt of exactAttempts(action, target)) {
       if (!attempt.matches.length) {
         misses.push(attempt.description);
@@ -3680,10 +3822,16 @@
       const pool = gatedPool(attempt.matches, target);
       const only = pool.length === 1 ? pool[0] : void 0;
       if (only) {
-        const veto = target ? vetoExactMatch(target, only) : void 0;
-        if (!veto) return { element: only, resolution: { strategy: attempt.strategy, candidateCount: attempt.matches.length } };
-        misses.push(`${attempt.description} (${veto.summary})`);
-        continue;
+        const verdict = target ? vetoExactMatch(target, only) : void 0;
+        if (verdict?.refusedBecause) {
+          misses.push(`${attempt.description} (${verdict.summary})`);
+          continue;
+        }
+        if (target && POSITIONAL_STRATEGIES.has(attempt.strategy)) {
+          const { decided: decided3 } = scoredFamily(target);
+          if (decided3?.outcome === "ambiguous") throw scoredAmbiguous(decided3, [...misses, attempt.description]);
+        }
+        return { element: only, resolution: exactResolution(attempt, verdict?.measurement) };
       }
       const decided2 = target ? scoreTargetCandidates(target, describePool(pool)) : void 0;
       if (decided2?.outcome === "resolved") return scoredTarget(decided2, pool.length);
@@ -3692,13 +3840,26 @@
     if (!misses.length) {
       const active = document.activeElement;
       if (active) return { element: active, resolution: { strategy: "active-element", candidateCount: 1 } };
-      throw notFound("No selector, coordinates, or active element was available.", [], 0);
+      throw notFound("No selector, coordinates, or active element was available.", [], NO_POOL);
     }
-    const nearby = target ? collectTargetCandidates(candidateFamily(target)) : [];
-    const decided = target ? scoreTargetCandidates(target, nearby) : void 0;
-    if (decided?.outcome === "resolved") return scoredTarget(decided, nearby.length);
+    const { nearby, decided } = target ? scoredFamily(target) : NO_FAMILY;
+    if (decided?.outcome === "resolved") return scoredTarget(decided, nearby.candidates.length);
     if (decided?.outcome === "ambiguous") throw scoredAmbiguous(decided, misses);
-    throw notFound(`No target resolved from ${misses.join(", ")}.`, misses, nearby.length, decided);
+    throw notFound(`No target resolved from ${misses.join(", ")}.`, misses, nearby, decided);
+  }
+  var NO_POOL = { candidates: [], examined: 0, truncated: false };
+  var POSITIONAL_STRATEGIES = /* @__PURE__ */ new Set(["coordinates", "visual-target"]);
+  var NO_FAMILY = { nearby: NO_POOL, decided: void 0 };
+  function scoreFamily(target) {
+    const nearby = collectTargetCandidates(candidateFamily(target));
+    return { nearby, decided: scoreTargetCandidates(target, nearby.candidates) };
+  }
+  function exactResolution(attempt, measurement) {
+    return {
+      strategy: attempt.strategy,
+      candidateCount: attempt.matches.length,
+      ...measurement ? { bestScore: measurement.score, confidence: measurement.confidence } : {}
+    };
   }
   function scoredTarget(decided, candidateCount) {
     return {
@@ -3806,19 +3967,24 @@
       ...decided.ranked[1] ? { runnerUpScore: decided.ranked[1].score.normalizedScore } : {}
     });
   }
-  function notFound(message, misses, nearbyCount, decided) {
+  function notFound(message, misses, pool, decided) {
     const best = decided?.ranked[0];
     const runnerUp = decided?.ranked[1];
     const failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, {
       expected: misses.length ? `an element matching ${misses.join(", ")}` : "a selector, coordinates, or a focused element",
-      actual: `nothing matched; ${nearbyCount} control(s) of the same family are on the page${best ? `; best scored ${best.score.normalizedScore.toFixed(2)}` : ""}`
+      actual: `nothing matched; ${familySeen(pool)}${best ? `; best scored ${best.score.normalizedScore.toFixed(2)}` : ""}`
     });
     return new TargetResolutionError(message, failure, {
       strategy: strategyOf(misses),
-      candidateCount: nearbyCount,
+      candidateCount: pool.candidates.length,
       ...best ? { bestScore: best.score.normalizedScore, confidence: best.score.confidence } : {},
       ...runnerUp ? { runnerUpScore: runnerUp.score.normalizedScore } : {}
     });
+  }
+  function familySeen(pool) {
+    const found = `${pool.candidates.length} control(s) of the same family`;
+    if (!pool.truncated) return `${found} are on the page`;
+    return `${found} in the first ${pool.examined} interactive element(s); the scan was cut short there, so the page may hold more`;
   }
   function scoreByElement(decided) {
     return new Map((decided?.ranked ?? []).map((entry) => [entry.element, entry.score.normalizedScore]));
@@ -4532,11 +4698,11 @@
     }
     const transfer = new DataTransfer();
     let totalBytes = 0;
-    for (const file of files) {
+    for (const [index, file] of files.entries()) {
       const content = decodeBase64(file.contentBase64);
-      if (!content) return { ok: false, reason: `the content of ${file.name} is not valid base64` };
+      if (!content) return { ok: false, reason: `the content of file ${index + 1} is not valid base64` };
       if (content.byteLength > UPLOAD_MAX_FILE_BYTES) {
-        return { ok: false, reason: `${file.name} is ${content.byteLength} bytes, over the ${UPLOAD_MAX_FILE_BYTES}-byte file limit` };
+        return { ok: false, reason: `file ${index + 1} is ${content.byteLength} bytes, over the ${UPLOAD_MAX_FILE_BYTES}-byte file limit` };
       }
       totalBytes += content.byteLength;
       if (totalBytes > UPLOAD_MAX_TOTAL_BYTES) {
@@ -4894,6 +5060,18 @@
   function actionRejected(action, startedAt, reason, expected, actual, evidence = {}) {
     const validation = boundValidation({ status: "failed", expected, actual });
     const observed = validation.status === "failed" ? validation.actual : actual;
+    const modal = blockedByModal(reason);
+    if (modal) {
+      return buildResult(action, startedAt, {
+        status: "failed",
+        validation,
+        message: `Action blocked: ${observed}; ${modal}`,
+        failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED, {
+          expected,
+          actual: `${reason}: ${observed}; ${modal}`
+        })
+      }, evidence);
+    }
     return buildResult(action, startedAt, {
       status: "failed",
       validation,
@@ -4925,11 +5103,34 @@
     return action.actionType === "web.dom.assert" ? WEB_AUTOMATION_FAILURE_CODES.STATE_MISMATCH : WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED;
   }
   function authGateFailure(action, failure) {
-    if (!action.selector || !selectorMatchesNothing(action.selector) || !signInGatePresent()) return void 0;
+    const missing = action.selector ? selectorMatchesNothing(action.selector) : false;
+    if (!missing && !namedUrlClaim(action) || !signInGatePresent()) return void 0;
+    const actual = missing ? failure.actual ?? "nothing matched the target" : "the page is not at the URL the Flow claimed";
     return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.AUTH_REQUIRED, {
-      expected: failure.expected ?? `an element matching ${action.selector}`,
-      actual: `${failure.actual ?? "nothing matched the target"}; the document is a sign-in gate, so the session has probably expired`
+      expected: failure.expected ?? (missing ? `an element matching ${action.selector}` : "the page URL the Flow claimed"),
+      actual: `${actual}; the document is a sign-in gate, so the session has probably expired`
     });
+  }
+  function namedUrlClaim(action) {
+    return action.actionType === "web.dom.assert" && action.assert?.kind === "url" && Boolean(action.assert.expected);
+  }
+  var MODAL_BLOCKED_REFUSALS = /* @__PURE__ */ new Set(["covered", "hidden"]);
+  function blockedByModal(reason) {
+    if (!MODAL_BLOCKED_REFUSALS.has(reason) || !renderedModalPresent()) return void 0;
+    return "a modal dialog is open over the page, so a person has to answer it before the run can continue";
+  }
+  function renderedModalPresent() {
+    return rendered('[aria-modal="true"]') || rendered("dialog:modal");
+  }
+  function rendered(selector) {
+    try {
+      for (const element of document.querySelectorAll(selector)) {
+        if (element.getClientRects().length > 0) return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
   }
   function selectorMatchesNothing(selector) {
     try {
@@ -5102,6 +5303,7 @@
       if (!event.isTrusted) return;
       rememberEventPathElements(event);
       const keyTarget = event.target instanceof Element ? event.target : null;
+      if (!continuesTyping(event, keyTarget)) flushPendingInput();
       emit("dom.keydown", compactObject({
         key: recordableKey(event.key, keyTarget),
         element: keyTarget ? describeElement(keyTarget) : void 0,
@@ -5145,6 +5347,23 @@
   function recordableKey(key, target) {
     if (!target || [...key].length !== 1) return key;
     return isSensitiveFormControl(target) ? void 0 : key;
+  }
+  var TYPING_KEYS = /* @__PURE__ */ new Set([
+    "Backspace",
+    "Delete",
+    "Shift",
+    "Control",
+    "Alt",
+    "AltGraph",
+    "Meta",
+    "CapsLock",
+    "Dead",
+    "Process",
+    "Unidentified"
+  ]);
+  function continuesTyping(event, target) {
+    if (!target || !isTextEntryElement(target)) return false;
+    return event.isComposing || [...event.key].length === 1 || TYPING_KEYS.has(event.key);
   }
   function pointerMetadata(event) {
     return {

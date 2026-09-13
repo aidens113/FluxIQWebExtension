@@ -191,7 +191,8 @@ var tabSchema = {
     url: { type: "string", label: "URL" },
     active: { type: "boolean", label: "Activate" },
     tabId: { type: "integer", label: "Tab id" },
-    urlPattern: { type: "string", label: "URL contains" }
+    urlPattern: { type: "string", label: "URL contains" },
+    urlPath: { type: "string", label: "URL path" }
   }
 };
 var downloadSchema = {
@@ -838,7 +839,7 @@ function finite2(value) {
 
 // src/recording/web-state/evidence/input.ts
 function pageEvidenceOfSnapshot(snapshot) {
-  return pageEvidenceWire(pageEvidenceWire(snapshot)?.evidence);
+  return pageEvidenceWire(snapshot.evidence);
 }
 function pageEvidenceTruncatedElements(evidence) {
   return pageEvidenceWire(evidence?.elements)?.truncated === true;
@@ -1438,7 +1439,7 @@ var pageEvidence = {
   dialogs: {
     open: [{ selector: "#terms", role: "dialog", modal: true, native: false, label: "Terms" }],
     modal: true,
-    armPending: false,
+    armPending: true,
     lastNative: { kind: "confirm", message: "Leave this page?", response: "dismiss", at: 9 }
   },
   overlays: {
@@ -1460,10 +1461,6 @@ var snapshotState = createWebAutomationStateFromSnapshot({
     { tagName: "button", selector: "button.pay", text: "Pay", bounds: { x: 20, y: 40, width: 90, height: 36 } },
     { tagName: "input", selector: "input#coupon", attributes: { name: "coupon" }, bounds: { x: 20, y: 100, width: 200, height: 32 } }
   ],
-  // Reached through a cast for the same reason the projection reaches it
-  // through a narrow read: `WebAutomationDomSnapshotInput` declares only the
-  // fields that predate `web-state/evidence/`, and widening it is that
-  // directory's decision, not this test's.
   evidence: pageEvidence
 }, { timestamp: 10, sourceId: "tab:1" });
 var tabState = createWebAutomationStateFromTabs(

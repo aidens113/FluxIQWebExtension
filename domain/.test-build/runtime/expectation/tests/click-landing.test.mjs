@@ -1,12 +1,27 @@
-// src/runtime/tests/reusable-evidence-coordinator.test.ts
+// src/runtime/expectation/tests/click-landing.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// src/runtime/adapter.ts
-import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES as AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES2 } from "fluxiq/automation-studio";
-
 // src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
+var WEB_AUTOMATION_EVENTS = {
+  clientReady: "web.client.ready",
+  tabStateChanged: "web.tab.state_changed",
+  pageNavigated: "web.page.navigated",
+  elementClicked: "web.element.clicked",
+  elementInputChanged: "web.element.input_changed",
+  elementChanged: "web.element.changed",
+  formSubmitted: "web.form.submitted",
+  elementFocused: "web.element.focused",
+  elementBlurred: "web.element.blurred",
+  keyboardPressed: "web.keyboard.pressed",
+  mouseWheel: "web.mouse.wheel",
+  scrollChanged: "web.scroll.changed",
+  domMutated: "web.dom.mutated",
+  snapshotCaptured: "web.snapshot.captured",
+  actionExecuted: "web.action.executed",
+  clientError: "web.client.error"
+};
 
 // src/actions/types.ts
 var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
@@ -50,31 +65,6 @@ var WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = {
   "web.dom.dialog": "dom.dialog",
   "web.browser.tab": "browser.tab",
   "web.browser.download": "browser.download"
-};
-
-// src/actions/safety.ts
-var WEB_AUTOMATION_ACTION_SAFETY = {
-  "web.browser.navigate": "review",
-  "web.dom.click": "review",
-  "web.dom.type": "review",
-  "web.dom.clear": "review",
-  "web.dom.select": "review",
-  "web.dom.scroll": "review",
-  "web.dom.keypress": "review",
-  "web.dom.wait_for_selector": "safe",
-  "web.dom.wait_for_text": "safe",
-  "web.dom.extract": "safe",
-  "web.dom.capture_snapshot": "safe",
-  // Added in Week 1 (decision D6). An assertion and a list extraction only read
-  // the page, so they are safe; check, upload, and dialog change it, and a tab
-  // or download acts on the browser, so all five need approval.
-  "web.dom.check": "review",
-  "web.dom.assert": "safe",
-  "web.dom.extract_list": "safe",
-  "web.dom.upload": "review",
-  "web.dom.dialog": "review",
-  "web.browser.tab": "review",
-  "web.browser.download": "review"
 };
 
 // src/actions/schemas.ts
@@ -378,6 +368,31 @@ var webAutomationActionDefinitions = [
   }
 ];
 
+// src/actions/safety.ts
+var WEB_AUTOMATION_ACTION_SAFETY = {
+  "web.browser.navigate": "review",
+  "web.dom.click": "review",
+  "web.dom.type": "review",
+  "web.dom.clear": "review",
+  "web.dom.select": "review",
+  "web.dom.scroll": "review",
+  "web.dom.keypress": "review",
+  "web.dom.wait_for_selector": "safe",
+  "web.dom.wait_for_text": "safe",
+  "web.dom.extract": "safe",
+  "web.dom.capture_snapshot": "safe",
+  // Added in Week 1 (decision D6). An assertion and a list extraction only read
+  // the page, so they are safe; check, upload, and dialog change it, and a tab
+  // or download acts on the browser, so all five need approval.
+  "web.dom.check": "review",
+  "web.dom.assert": "safe",
+  "web.dom.extract_list": "safe",
+  "web.dom.upload": "review",
+  "web.dom.dialog": "review",
+  "web.browser.tab": "review",
+  "web.browser.download": "review"
+};
+
 // src/output-nodes/definitions.ts
 var controlInput = { id: "in", label: "In", valueType: "signal", role: "control" };
 var outputPorts = [
@@ -518,6 +533,25 @@ function isSensitiveControlType(type) {
   return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
 }
 
+// src/sensitivity/descriptor.ts
+function sensitiveFieldSignatureOfDescriptor(descriptor) {
+  if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
+  const record = descriptor;
+  const attributes = record.attributes && typeof record.attributes === "object" && !Array.isArray(record.attributes) ? record.attributes : {};
+  return {
+    inputType: stringField(record.inputType),
+    controlType: stringField(attributes.type),
+    autocomplete: stringField(attributes.autocomplete),
+    dataSensitive: stringField(attributes["data-sensitive"])
+  };
+}
+function isSensitiveElementDescriptor(descriptor) {
+  return isSensitiveFieldSignature(sensitiveFieldSignatureOfDescriptor(descriptor));
+}
+function stringField(value) {
+  return typeof value === "string" ? value : void 0;
+}
+
 // src/io/input-model.ts
 var WEB_AUTOMATION_INPUT_IDS = {
   browserState: "web.browser.state",
@@ -534,6 +568,24 @@ var WEB_AUTOMATION_INPUT_IDS = {
   tabSwitched: "web.user.tab_switched",
   tabClosed: "web.user.tab_closed"
 };
+function webAutomationEventTypeForClientKind(kind) {
+  if (kind === "content.ready") return WEB_AUTOMATION_EVENTS.clientReady;
+  if (kind === "browser.tab") return WEB_AUTOMATION_EVENTS.tabStateChanged;
+  if (kind === "browser.navigation") return WEB_AUTOMATION_EVENTS.pageNavigated;
+  if (kind === "dom.click") return WEB_AUTOMATION_EVENTS.elementClicked;
+  if (kind === "dom.input") return WEB_AUTOMATION_EVENTS.elementInputChanged;
+  if (kind === "dom.change") return WEB_AUTOMATION_EVENTS.elementChanged;
+  if (kind === "dom.submit") return WEB_AUTOMATION_EVENTS.formSubmitted;
+  if (kind === "dom.focus") return WEB_AUTOMATION_EVENTS.elementFocused;
+  if (kind === "dom.blur") return WEB_AUTOMATION_EVENTS.elementBlurred;
+  if (kind === "dom.keydown") return WEB_AUTOMATION_EVENTS.keyboardPressed;
+  if (kind === "dom.wheel") return WEB_AUTOMATION_EVENTS.mouseWheel;
+  if (kind === "dom.scroll") return WEB_AUTOMATION_EVENTS.scrollChanged;
+  if (kind === "dom.mutation") return WEB_AUTOMATION_EVENTS.domMutated;
+  if (kind === "dom.snapshot") return WEB_AUTOMATION_EVENTS.snapshotCaptured;
+  if (kind === "action.result") return WEB_AUTOMATION_EVENTS.actionExecuted;
+  return WEB_AUTOMATION_EVENTS.clientError;
+}
 var stateInputDefinitions = [
   { id: WEB_AUTOMATION_INPUT_IDS.browserState, title: "Browser state", description: "Current browser, tab, and compact DOM state available for policy conditions.", role: "state" },
   { id: WEB_AUTOMATION_INPUT_IDS.recordingEvidence, title: "Web recording evidence", description: "Passive browser observations that may inform recordings but never execute a policy.", role: "event" }
@@ -716,55 +768,135 @@ function boundedText(value) {
   return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
 }
 
-// src/runtime/llm-evidence/limits.ts
-import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES } from "fluxiq/automation-studio";
-var WEB_LLM_EVIDENCE_BYTE_BUDGETS = Object.freeze({
-  ceiling: 12e3,
-  exploration: 6e3,
-  failure: AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES
-});
-var WEB_LLM_EVIDENCE_BOUNDS = Object.freeze({
-  elements: 40,
-  url: 2e3,
-  text: 300,
-  selector: 500,
-  tag: 40,
-  role: 80,
-  attribute: 200,
-  options: 20,
-  placement: 80,
-  dialogs: 3
-});
+// src/recording/state.ts
+var WEB_AUTOMATION_STATE_NAMESPACE = "web";
 
-// src/runtime/llm-evidence/sanitize.ts
-var WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v1";
-
-// src/runtime/llm-evidence/tool-rejection.ts
-var WEB_LLM_TOOL_REJECTION_CODES = [
-  "invalid_input",
-  "cross_origin",
-  "no_progress",
-  "target_unobserved",
-  "target_unsafe",
-  "sensitive_value"
-];
-
-// src/runtime/llm-evidence/vocabulary.ts
-var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe"];
-var WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
-var WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
-var WEB_LLM_REVEAL_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[2];
-var WEB_LLM_INSPECT_RESULT_CODE = "web.inspect.succeeded";
-var WEB_LLM_ACTION_RESULT_CODE = "web.action.succeeded";
-var REJECTION_RESULT_CODE_PREFIX = "web.action.rejected.";
-function webLlmToolRejectionResultCode(code) {
-  return `${REJECTION_RESULT_CODE_PREFIX}${code}`;
+// src/recording/web-state/compact-json-object.ts
+function compactJsonObject(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
-var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
-  WEB_LLM_INSPECT_RESULT_CODE,
-  WEB_LLM_ACTION_RESULT_CODE,
-  ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
-]);
+
+// src/recording/web-state/element/identity.ts
+var MAX_STATE_ID_LENGTH = 120;
+function meaningfulText(value) {
+  return typeof value === "string" && value.trim().length >= 2;
+}
+function stableAttribute(element, name) {
+  const value = element.attributes?.[name];
+  return meaningfulText(value) ? value : void 0;
+}
+function stableElementId(element) {
+  return stableAttribute(element, "data-testid") ?? stableAttribute(element, "data-test") ?? stableAttribute(element, "data-cy") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name");
+}
+function elementStateId(element) {
+  const stable = stableElementPathId(element);
+  if (stable) return sanitizeStateId(stable);
+  const name = stableAttribute(element, "name");
+  if (name) return sanitizeStateId(`${name}.${element.selector}`);
+  return sanitizeStateId(element.selector);
+}
+function stableElementPathId(element) {
+  return stableAttribute(element, "data-testid") ?? stableAttribute(element, "data-test") ?? stableAttribute(element, "data-cy") ?? stableAttribute(element, "id");
+}
+function sanitizeStateId(value) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, MAX_STATE_ID_LENGTH) || "element";
+}
+
+// src/recording/web-state/geometry.ts
+function stateBounds(bounds) {
+  if (!bounds) return void 0;
+  const x = finite(bounds.x);
+  const y = finite(bounds.y);
+  const width = positiveFinite(bounds.width);
+  const height = positiveFinite(bounds.height);
+  return x !== void 0 && y !== void 0 && width !== void 0 && height !== void 0 ? { x, y, width, height } : void 0;
+}
+function positiveFinite(value) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : void 0;
+}
+function finite(value) {
+  return Number.isFinite(value) ? value : void 0;
+}
+
+// src/recording/web-state/visual-frame.ts
+var WEB_AUTOMATION_SCREEN_FRAME_ID = "screen";
+function safeLayerId(value, fallbackIndex) {
+  return value.replace(/[^a-z0-9.]+/gi, ".").replace(/^\.+|\.+$/g, "").slice(0, 80) || String(fallbackIndex);
+}
+
+// src/recording/web-state/action-target.ts
+function webAutomationActionTargetFromElement(element) {
+  const secret = isSensitiveElementDescriptor(element);
+  const visibleText = secret ? void 0 : element.visibleText;
+  const text2 = secret ? void 0 : element.text;
+  const value = secret ? void 0 : element.value;
+  return compactJsonObject({
+    type: element.role ?? element.inputType ?? element.tagName,
+    id: stableAttribute(element, "data-testid") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name"),
+    label: element.name ?? visibleText ?? text2 ?? value,
+    selector: element.selector,
+    bounds: element.bounds,
+    // Neither is this producer's to fill: a relative position belongs to a
+    // click that carried one, and both `visualTarget` and `elementTarget` are
+    // written by the callers that have them
+    // (`client/gateway-mapping.ts`, and Core's own dispatch preparation).
+    relativePosition: void 0,
+    visualTarget: void 0,
+    elementTarget: void 0,
+    metadata: compactJsonObject({
+      tagName: element.tagName,
+      xpath: element.xpath,
+      id: element.id,
+      classNames: element.classNames,
+      visibleText,
+      role: element.role,
+      href: element.href,
+      inputType: element.inputType,
+      documentBounds: stateBounds(element.documentBounds),
+      isVisibleOnViewport: element.isVisibleOnViewport ?? Boolean(stateBounds(element.bounds)),
+      hasClickHandler: element.hasClickHandler,
+      attributes: element.attributes,
+      testId: element.testId,
+      accessibleName: secret ? void 0 : element.accessibleName,
+      label: element.label,
+      implicitRole: element.implicitRole,
+      context: element.context
+    })
+  });
+}
+function webAutomationActionVisualTargetFromElement(element, input = {}) {
+  const stateId = input.stateId ?? elementStateId(element);
+  const statePath = `${WEB_AUTOMATION_STATE_NAMESPACE}.elements.${stateId}`;
+  const bounds = stateBounds(element.bounds);
+  const documentBounds = stateBounds(element.documentBounds ?? element.bounds);
+  const anchorBounds = documentBounds ?? bounds;
+  const safeId = safeLayerId(stateId, input.layerIndex ?? 1);
+  return compactJsonObject({
+    namespace: WEB_AUTOMATION_STATE_NAMESPACE,
+    statePath,
+    selector: element.selector,
+    frameId: WEB_AUTOMATION_SCREEN_FRAME_ID,
+    layerId: `element.${safeId}`,
+    documentLayerId: `document.element.${safeId}`,
+    bounds,
+    documentBounds,
+    anchor: anchorBounds ? { type: "bounds", bounds: anchorBounds } : void 0,
+    confidence: input.confidence ?? (stableElementId(element) ? 0.98 : 0.88),
+    metadata: compactJsonObject({
+      tagName: element.tagName,
+      xpath: element.xpath,
+      id: element.id,
+      classNames: element.classNames,
+      visibleText: element.visibleText,
+      role: element.role,
+      name: element.name,
+      href: element.href,
+      inputType: element.inputType,
+      stableId: stableElementId(element),
+      isVisibleOnViewport: element.isVisibleOnViewport ?? Boolean(bounds)
+    })
+  });
+}
 
 // src/recording/web-state/evidence/project.ts
 var COLLECTION = { elementKind: "collection", comparable: false };
@@ -772,359 +904,216 @@ var LIVE_COLLECTION = { ...COLLECTION, volatility: "rapid" };
 var SETTLED_COLLECTION = { ...COLLECTION, volatility: "slow" };
 
 // src/client/gateway-mapping.ts
+function createWebAutomationRecordingEvent(payload, input = {}) {
+  const eventType = webAutomationEventTypeForClientKind(payload.kind);
+  const target = payload.element;
+  const visualTarget = payload.visualTarget ?? (target !== void 0 ? webAutomationActionVisualTargetFromElement(target) : void 0);
+  return {
+    eventId: `web.${payload.sequence}.${payload.eventTimestampMs}`,
+    ...input.recordingId !== void 0 ? { recordingId: input.recordingId } : {},
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    eventType,
+    timestamp: payload.eventTimestampMs,
+    ...input.tabId === void 0 ? {} : { sourceId: `tab:${input.tabId}${input.frameId === void 0 ? "" : `:frame:${input.frameId}`}` },
+    ...target !== void 0 ? { target: webAutomationActionTargetFromElement(target) } : {},
+    payload: compactJsonObject2({
+      url: payload.url,
+      title: payload.title,
+      sequence: payload.sequence,
+      // The frame the interaction happened in, under the name the parameter
+      // lift reads (`gateway-action-parameters.ts` maps `browserFrameId` onto
+      // `action.frameId`). `sourceId` above names the same frame, but only as
+      // text nothing downstream parses, and `webAutomationOutputPayload` reads
+      // this payload rather than the envelope: without the field here, a click
+      // recorded inside an iframe replays against the top document. Frame 0 is
+      // the top frame and survives `compactJsonObject`, which drops only
+      // `undefined`.
+      browserFrameId: input.frameId,
+      element: payload.element,
+      visualTarget,
+      inputValue: payload.inputValue,
+      key: payload.key,
+      scroll: payload.scroll,
+      mutation: payload.mutation,
+      snapshot: payload.snapshot,
+      actionResult: payload.actionResult,
+      // Only the two declared fields are copied, so nothing else a caller put on
+      // the tab change -- a tab id, a full URL -- reaches the stored recording.
+      tab: payload.tab === void 0 ? void 0 : { operation: payload.tab.operation, ...payload.tab.urlPath !== void 0 ? { urlPath: payload.tab.urlPath } : {} },
+      ...payload.metadata?.recordingState !== void 0 ? { recordingState: payload.metadata.recordingState } : {}
+    }),
+    metadata: compactJsonObject2({
+      clientKind: payload.kind,
+      ...visualTarget !== void 0 ? { visualTarget } : {},
+      ...payload.metadata ?? {}
+    })
+  };
+}
 var UNSUPPORTED_ACTION_TYPE_FAILURE = Object.freeze(webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE));
 var CANONICAL_ACTION_TYPES = new Set(WEB_AUTOMATION_ACTION_TYPES);
 var LEGACY_ACTION_TYPE_ALIASES = new Map(
   Object.entries(WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER).map(([canonical, legacy]) => [legacy, canonical])
 );
+function compactJsonObject2(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
+}
 
-// src/runtime/expectation/conditions.ts
-var ASSERT_KINDS = Object.freeze({
-  exists: true,
-  absent: true,
-  text: true,
-  url: true,
-  visible: true,
-  enabled: true
-});
-
-// src/runtime/host-runtime.ts
-var WEB_AUTOMATION_NODE_IDS = new Set(WEB_AUTOMATION_ACTION_TYPES.map(webAutomationOutputNodeId));
-var HOST_RUNTIME_CAPABILITIES = Object.freeze(["state-snapshot", "state-diff", "expectation-evaluation"]);
-
-// src/runtime/reusable-evidence.ts
-import { createHash } from "node:crypto";
-var WEB_REUSABLE_EVIDENCE_FINGERPRINT_SCHEMA_VERSION = "web-reusable-evidence-fingerprint.v1";
-var WEB_REUSABLE_EVIDENCE_PROJECTION_SCHEMA_VERSION = "web-reusable-evidence-projection.v1";
-var WEB_REUSABLE_EVIDENCE_SANITIZER_VERSION = "web-reusable-evidence-sanitizer.v1";
-var WEB_REUSABLE_EVIDENCE_CAPABILITY_SCHEMA_VERSION = "web-client-capabilities.v1";
-var WEB_REUSABLE_EVIDENCE_MAX_ELEMENTS = 40;
-var WEB_REUSABLE_EVIDENCE_MAX_ACTIONS = 20;
-var WEB_REUSABLE_EVIDENCE_MAX_CAPABILITIES = 20;
-var WEB_REUSABLE_EVIDENCE_MAX_PROJECTION_ITEMS = 24;
-var WEB_REUSABLE_EVIDENCE_MAX_PROJECTION_BYTES = 4096;
-function produceWebReusableEvidence(input2, options = {}) {
-  if (input2.evidence.schemaVersion !== WEB_LLM_EVIDENCE_SCHEMA_VERSION || input2.evidence.trust !== "untrusted-page-evidence" || !Array.isArray(input2.evidence.elements)) {
-    throw new Error("Reusable web evidence requires the current sanitized evidence schema");
+// src/runtime/expectation/click-landing.ts
+var LANDING_WAIT_MS = 5e3;
+var EXPLAINED_TRANSITION = "explained";
+var ACTION_ENTRY = "action";
+function webAutomationClickLandingExpectation(click2, following) {
+  const storedEntry = click2.eventType === ACTION_ENTRY;
+  const clickPath = urlPath(click2.payload.url);
+  if (clickPath === void 0 && !storedEntry) return void 0;
+  const clickEventId = storedEntry ? storedEventId(click2) : recordedClickEventId(click2);
+  let landing2;
+  for (const [index, step] of following.entries()) {
+    if (isExplainedLanding(step) && namesClick(step, click2, clickEventId, following.slice(0, index))) landing2 = step;
   }
-  enforceSourceItemLimit(input2.evidence.elements.length, WEB_REUSABLE_EVIDENCE_MAX_ELEMENTS, "element");
-  enforceSourceItemLimit(input2.actions?.length ?? 0, WEB_REUSABLE_EVIDENCE_MAX_ACTIONS, "action");
-  enforceSourceItemLimit(input2.clientCapabilities?.length ?? 0, WEB_REUSABLE_EVIDENCE_MAX_CAPABILITIES, "capability");
-  const location = safeLocation(input2.evidence.location);
-  const elements = normalizedElements(input2.evidence.elements, location);
-  const actions = normalizedActions(input2.actions ?? []);
-  const capabilities = normalizedCapabilities(input2.clientCapabilities ?? []);
-  const structuralDigest = digest({ location, elements });
-  const capabilityDigest = digest({ schemaVersion: WEB_REUSABLE_EVIDENCE_CAPABILITY_SCHEMA_VERSION, capabilities });
-  const fingerprintBase = {
-    schemaVersion: WEB_REUSABLE_EVIDENCE_FINGERPRINT_SCHEMA_VERSION,
-    sanitizerVersion: WEB_REUSABLE_EVIDENCE_SANITIZER_VERSION,
-    evidenceSchemaVersion: boundedTag(input2.evidence.schemaVersion, "evidence schema version"),
-    capabilitySchemaVersion: WEB_REUSABLE_EVIDENCE_CAPABILITY_SCHEMA_VERSION,
-    location,
-    structuralDigest,
-    capabilityDigest,
-    compatibilityTags: [
-      `web.location:${digest(location)}`,
-      `web.structure:${structuralDigest}`,
-      `web.capabilities:${capabilityDigest}`,
-      `web.sanitizer:${WEB_REUSABLE_EVIDENCE_SANITIZER_VERSION}`
-    ]
-  };
-  const fingerprint = { ...fingerprintBase, digest: digest(fingerprintBase) };
-  const candidates = [
-    ...elements.map(promptElementFact),
-    ...actions.map((action) => ({ kind: "action", ...action }))
-  ];
-  return {
-    fingerprint,
-    promptProjection: boundedProjection(fingerprint, candidates, options)
-  };
+  const landingPath = landing2 === void 0 ? void 0 : urlPath(landing2.payload.url);
+  if (landingPath === void 0 || landingPath === "/" || landingPath === clickPath) return void 0;
+  return { conditions: [{ assert: { kind: "url", expected: landingPath } }], mode: "all", timeoutMs: LANDING_WAIT_MS };
 }
-function normalizedElements(input2, location) {
-  const unique = /* @__PURE__ */ new Map();
-  for (const element of input2) {
-    const tag = boundedToken(element.tag, 40);
-    const selector = boundedText3(element.selector, 500);
-    if (!tag || !selector || unshareableControl(element)) continue;
-    const normalized = compact2({
-      tag: tag.toLowerCase(),
-      selectorDigest: digest(selector),
-      role: boundedToken(element.role, 80)?.toLowerCase(),
-      name: boundedText3(element.name, 160),
-      inputType: boundedToken(element.inputType, 40)?.toLowerCase(),
-      controlType: boundedToken(element.controlType, 40)?.toLowerCase(),
-      optionCount: Array.isArray(element.options) ? Math.min(element.options.length, 20) : void 0,
-      sameOriginLink: sameOriginHref2(element.href, location.origin) ? true : void 0
-    });
-    unique.set(canonicalJson(normalized), normalized);
-  }
-  return [...unique.values()].sort(compareCanonical);
+function isExplainedLanding(step) {
+  return step.eventType === WEB_AUTOMATION_EVENTS.pageNavigated && step.metadata.transition === EXPLAINED_TRANSITION;
 }
-function normalizedActions(input2) {
-  const unique = /* @__PURE__ */ new Map();
-  for (const action of input2) {
-    const definitionId = boundedTag(action.definitionId, "action definition ID");
-    if (!definitionId.startsWith("web.")) continue;
-    if (action.status !== "succeeded" && action.status !== "failed") continue;
-    if (action.route !== void 0 && action.route !== "success" && action.route !== "failed") continue;
-    const normalized = compact2({ definitionId, status: action.status, route: action.route });
-    unique.set(canonicalJson(normalized), normalized);
-  }
-  return [...unique.values()].sort(compareCanonical);
+function namesClick(landing2, click2, clickEventId, stepsBefore) {
+  const explainedByEventId = landing2.metadata.explainedByEventId;
+  if (typeof explainedByEventId === "string") return clickEventId !== void 0 && explainedByEventId === clickEventId;
+  const sequence = landing2.metadata.explainedBy;
+  const tab = tabOf(landing2.metadata.sourceId);
+  if (typeof sequence !== "number" || tab === void 0) return false;
+  const isNamedClick = (step) => step.eventType === WEB_AUTOMATION_EVENTS.elementClicked && step.payload.sequence === sequence && tabOf(step.metadata.sourceId) === tab;
+  return isNamedClick(click2) && !stepsBefore.some(isNamedClick);
 }
-function normalizedCapabilities(input2) {
-  const values = input2.map((value) => boundedTag(value, "client capability"));
-  return [...new Set(values)].sort();
+function recordedClickEventId(click2) {
+  const sequence = click2.payload.sequence;
+  if (typeof sequence !== "number") return void 0;
+  return createWebAutomationRecordingEvent({ kind: "dom.click", sequence, url: "", title: "", eventTimestampMs: click2.timestamp }).eventId;
 }
-function promptElementFact(element) {
-  const { selectorDigest: _selectorDigest, ...fact } = element;
-  return { kind: "element", ...fact };
+function storedEventId(click2) {
+  const eventId = click2.metadata.eventId;
+  return typeof eventId === "string" && eventId.trim() ? eventId : void 0;
 }
-function boundedProjection(fingerprint, candidates, options) {
-  const maxBytes = boundedLimit(options.maxProjectionBytes, WEB_REUSABLE_EVIDENCE_MAX_PROJECTION_BYTES, "projection byte limit");
-  const maxItems = boundedLimit(options.maxProjectionItems, WEB_REUSABLE_EVIDENCE_MAX_PROJECTION_ITEMS, "projection item limit");
-  const facts = candidates.slice(0, maxItems);
-  let truncated = facts.length !== candidates.length;
-  for (; ; ) {
-    const base = {
-      schemaVersion: WEB_REUSABLE_EVIDENCE_PROJECTION_SCHEMA_VERSION,
-      sanitizerVersion: WEB_REUSABLE_EVIDENCE_SANITIZER_VERSION,
-      compatibilityDigest: fingerprint.digest,
-      location: fingerprint.location,
-      facts,
-      truncated
-    };
-    const withDigest = { ...base, digest: digest(base) };
-    const byteCount = stableByteCount(withDigest);
-    const result = { ...withDigest, byteCount };
-    if (serializedBytes2(result) <= maxBytes) return result;
-    if (!facts.length) throw new Error("Web reusable-evidence projection envelope exceeds the byte limit");
-    facts.pop();
-    truncated = true;
-  }
+function tabOf(sourceId) {
+  if (typeof sourceId !== "string") return void 0;
+  return /^tab:\d+(?=$|:)/u.exec(sourceId)?.[0];
 }
-function stableByteCount(input2) {
-  let value = 0;
-  for (let index = 0; index < 8; index += 1) {
-    const next = serializedBytes2({ ...input2, byteCount: value });
-    if (next === value) return value;
-    value = next;
-  }
-  return value;
-}
-function safeLocation(input2) {
-  const url = new URL(input2);
-  if (url.protocol !== "http:" && url.protocol !== "https:" || url.username || url.password) throw new Error("Reusable web evidence requires an HTTP(S) location without credentials");
-  return { origin: url.origin, path: url.pathname };
-}
-function sameOriginHref2(input2, origin) {
-  if (typeof input2 !== "string" || !input2) return false;
+function urlPath(value) {
+  if (typeof value !== "string") return void 0;
   try {
-    const url = new URL(input2, origin);
-    return (url.protocol === "http:" || url.protocol === "https:") && !url.username && !url.password && url.origin === origin;
+    const pathname = new URL(value).pathname;
+    return pathname.startsWith("/") ? pathname : void 0;
   } catch {
-    return false;
+    return void 0;
   }
-}
-var NON_REUSABLE_CONTROL_TYPES = /* @__PURE__ */ new Set(["hidden", "file"]);
-function unshareableControl(element) {
-  const types = [element.inputType, element.controlType].filter((value) => typeof value === "string").map((value) => value.trim().toLowerCase());
-  if (types.some((value) => NON_REUSABLE_CONTROL_TYPES.has(value))) return true;
-  return isSensitiveFieldSignature({ inputType: element.inputType, controlType: element.controlType });
-}
-function boundedLimit(input2, hardMaximum, label) {
-  if (input2 === void 0) return hardMaximum;
-  if (!Number.isSafeInteger(input2) || input2 < 1 || input2 > hardMaximum) throw new Error(`${label} must be between 1 and ${hardMaximum}`);
-  return input2;
-}
-function enforceSourceItemLimit(actual, maximum, label) {
-  if (actual > maximum) throw new Error(`Reusable web evidence ${label} count exceeds ${maximum}`);
-}
-function boundedTag(input2, label) {
-  const value = boundedText3(input2, 160);
-  if (!value || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,159}$/u.test(value)) throw new Error(`${label} is malformed`);
-  return value;
-}
-function boundedToken(input2, maximum) {
-  const value = boundedText3(input2, maximum);
-  return value && /^[A-Za-z0-9_.:-]+$/u.test(value) ? value : void 0;
-}
-function boundedText3(input2, maximum) {
-  if (typeof input2 !== "string") return void 0;
-  const value = input2.replace(/\s+/gu, " ").trim();
-  return value ? value.slice(0, maximum) : void 0;
-}
-function compact2(input2) {
-  return Object.fromEntries(Object.entries(input2).filter(([, value]) => value !== void 0));
-}
-function compareCanonical(left, right) {
-  return canonicalJson(left).localeCompare(canonicalJson(right));
-}
-function digest(input2) {
-  return createHash("sha256").update(canonicalJson(input2)).digest("hex");
-}
-function serializedBytes2(input2) {
-  return Buffer.byteLength(JSON.stringify(input2), "utf8");
-}
-function canonicalJson(input2) {
-  if (Array.isArray(input2)) return `[${input2.map(canonicalJson).join(",")}]`;
-  if (input2 && typeof input2 === "object") return `{${Object.entries(input2).filter(([, value]) => value !== void 0).sort(([left], [right]) => left.localeCompare(right)).map(([key, value]) => `${JSON.stringify(key)}:${canonicalJson(value)}`).join(",")}}`;
-  return JSON.stringify(input2);
 }
 
-// src/runtime/reusable-evidence-coordinator.ts
-function mapCompletedWebReusableEvidenceToPutRequest(input2) {
-  if (input2.completionStatus !== "completed") throw new Error("Reusable web evidence can be written only after completion");
-  const projectId = identifier(input2.projectId, "project");
-  const flowId = identifier(input2.flowId, "Flow");
-  const subflowId = input2.subflowId === void 0 ? void 0 : identifier(input2.subflowId, "Subflow");
-  const recordId = input2.recordId === void 0 ? void 0 : identifier(input2.recordId, "record");
-  const sourceRunIds = identifiers(input2.sourceRunIds ?? [], "source run");
-  const sourceAdaptationIds = identifiers(input2.sourceAdaptationIds ?? [], "source adaptation");
-  if (!sourceRunIds.length && !sourceAdaptationIds.length) throw new Error("Reusable web evidence requires explicit source provenance");
-  if (!Number.isSafeInteger(input2.completedAt) || input2.completedAt < 0) throw new Error("Reusable web evidence completion time is invalid");
-  if (input2.ttlMs !== void 0 && (!Number.isSafeInteger(input2.ttlMs) || input2.ttlMs < 1)) throw new Error("Reusable web evidence TTL is invalid");
-  const produced = produceWebReusableEvidence({
-    evidence: input2.evidence,
-    ...input2.actions === void 0 ? {} : { actions: input2.actions },
-    ...input2.clientCapabilities === void 0 ? {} : { clientCapabilities: input2.clientCapabilities }
+// src/runtime/expectation/tests/click-landing.test.ts
+var SIGN_IN = "https://example.test/scenarios/auth-gate/sign-in";
+var ACCOUNT = "https://example.test/scenarios/auth-gate/account";
+function urlClaim(expected) {
+  return { conditions: [{ assert: { kind: "url", expected } }], mode: "all", timeoutMs: 5e3 };
+}
+function click(sequence, timestamp, input = {}) {
+  const wire = createWebAutomationRecordingEvent({
+    kind: "dom.click",
+    sequence,
+    url: input.url ?? SIGN_IN,
+    title: "Sign in",
+    eventTimestampMs: timestamp,
+    element: { selector: "#continue", tagName: "button", text: "Continue" }
   });
-  const compatibilityTags = produced.fingerprint.compatibilityTags.map((tag) => {
-    const separator = tag.indexOf(":");
-    if (separator < 1 || separator === tag.length - 1) throw new Error("Reusable web evidence compatibility tag is malformed");
-    return { name: tag.slice(0, separator), value: tag.slice(separator + 1) };
-  });
-  compatibilityTags.push({ name: "web.fingerprint", value: produced.fingerprint.digest });
-  compatibilityTags.push({ name: "web.fingerprint-schema", value: WEB_REUSABLE_EVIDENCE_FINGERPRINT_SCHEMA_VERSION });
-  compatibilityTags.sort((left, right) => left.name.localeCompare(right.name) || left.value.localeCompare(right.value));
-  return {
-    projectId,
-    record: {
-      ...recordId ? { recordId } : {},
-      flowId,
-      ...subflowId ? { subflowId } : {},
-      domainId: WEB_AUTOMATION_DOMAIN_ID,
-      evidenceKind: input2.evidenceKind,
-      evidenceSchemaVersion: produced.fingerprint.evidenceSchemaVersion,
-      sanitizerVersion: produced.fingerprint.sanitizerVersion,
-      compatibilityTags,
-      promptProjection: produced.promptProjection,
-      outcome: input2.outcome,
-      reviewerState: input2.reviewerState,
-      validationState: input2.validationState,
-      sourceRunIds,
-      sourceAdaptationIds,
-      createdAt: input2.completedAt,
-      ...input2.ttlMs === void 0 ? {} : { ttlMs: input2.ttlMs }
-    }
-  };
+  const metadata = { ...wire.metadata ?? {}, ...input.sourceId === void 0 ? {} : { sourceId: input.sourceId } };
+  assert.ok(wire.eventId, "the builder names every recording event");
+  return { step: { eventType: wire.eventType, timestamp, payload: wire.payload ?? {}, metadata }, eventId: wire.eventId };
 }
-async function writeCompletedWebReusableEvidence(input2, port) {
-  if (input2.enabled !== true) return { status: "disabled" };
-  const request = mapCompletedWebReusableEvidenceToPutRequest(input2);
-  let response;
-  try {
-    response = await port.putReusableLlmContext(request);
-  } catch {
-    throw new Error("Protected reusable-context write was rejected by Core");
-  }
-  const recordId = response.payload?.context?.recordId;
-  const contentDigest = response.payload?.context?.contentDigest;
-  if (!response.ok || typeof recordId !== "string" || !recordId || typeof contentDigest !== "string" || !/^[a-f0-9]{64}$/u.test(contentDigest)) {
-    throw new Error("Protected reusable-context write was rejected by Core");
-  }
-  return { status: "stored", recordId, contentDigest };
+function navigation(url, metadata) {
+  const wire = createWebAutomationRecordingEvent({ kind: "browser.navigation", sequence: 0, url, title: "", eventTimestampMs: 2e3, metadata });
+  return { eventType: wire.eventType, timestamp: 2e3, payload: wire.payload ?? {}, metadata: wire.metadata ?? {} };
 }
-function identifiers(input2, label) {
-  if (input2.length > 25) throw new Error(`Reusable web evidence ${label} IDs exceed 25`);
-  return [...new Set(input2.map((value) => identifier(value, label)))].sort();
+function landing(url, eventId) {
+  return navigation(url, { transition: "explained", explainedBy: 0, explainedByEventId: eventId });
 }
-function identifier(input2, label) {
-  const value = typeof input2 === "string" ? input2.trim() : "";
-  if (!value || value.length > 200 || !/^[A-Za-z0-9._:-]+$/u.test(value)) throw new Error(`Reusable web evidence ${label} ID is invalid`);
-  return value;
-}
-
-// src/runtime/tests/reusable-evidence-coordinator.test.ts
-function input(overrides = {}) {
-  return {
-    enabled: true,
-    completionStatus: "completed",
-    projectId: "project.one",
-    flowId: "flow.one",
-    subflowId: "subflow.one",
-    evidenceKind: "runtime_failure",
-    evidence: {
-      schemaVersion: "web-llm-evidence.v1",
-      trust: "untrusted-page-evidence",
-      location: "https://example.test/form?secret=query#fragment",
-      elements: [
-        { target: "target.1", tag: "textarea", selector: '[data-testid="adapted-name"]', name: "Name", hasValue: true },
-        { target: "target.2", tag: "input", selector: "#password", inputType: "password", name: "Password" },
-        { target: "target.3", tag: "select", selector: "#plan", name: "Plan", selectedValue: "private-value", options: [{ value: "private-value", label: "Private label" }] }
-      ],
-      truncated: false
-    },
-    actions: [{ definitionId: "web.output.dom-type", status: "failed", route: "failed" }],
-    clientCapabilities: ["web.actions.v1", "web.snapshots.v1"],
-    outcome: "failed",
-    reviewerState: "unreviewed",
-    validationState: "unknown",
-    sourceRunIds: ["run.one"],
-    sourceAdaptationIds: [],
-    completedAt: 1e3,
-    ttlMs: 6e4,
-    ...overrides
-  };
-}
-test("maps completed sanitized evidence to the protected Core put contract", () => {
-  const request = mapCompletedWebReusableEvidenceToPutRequest(input());
-  assert.equal(request.projectId, "project.one");
-  assert.deepEqual(request.record.sourceRunIds, ["run.one"]);
-  assert.equal(request.record.domainId, "web-automation");
-  assert.equal(request.record.outcome, "failed");
-  assert.match(request.record.compatibilityTags.find((tag) => tag.name === "web.fingerprint")?.value ?? "", /^[a-f0-9]{64}$/u);
-  const serialized = JSON.stringify(request);
-  assert.doesNotMatch(serialized, /secret=query|fragment|private-value|Private label|Password|adapted-name|#plan|#password|target\.1/iu);
-  assert.doesNotMatch(serialized, /selector|selectedValue|hasValue|options|rawDom|cookie|headers/iu);
-  const projection = request.record.promptProjection;
-  assert.ok(projection.facts.some((fact) => fact.kind === "action" && fact.status === "failed"));
-  assert.ok(projection.facts.some((fact) => fact.kind === "element" && fact.tag === "textarea"));
+test("a click whose landing names its event id claims exactly the landing's path", () => {
+  const signIn = click(3, 900);
+  assert.deepEqual(webAutomationClickLandingExpectation(signIn.step, [landing(ACCOUNT, signIn.eventId)]), urlClaim("/scenarios/auth-gate/account"));
 });
-test("does not call Core while feature-gated off", async () => {
-  let calls = 0;
-  const result = await writeCompletedWebReusableEvidence(input({ enabled: false }), { putReusableLlmContext: async () => {
-    calls += 1;
-    return { ok: true };
-  } });
-  assert.deepEqual(result, { status: "disabled" });
-  assert.equal(calls, 0);
+test("the claim is the path only: the query and hash are dropped", () => {
+  const signIn = click(3, 900);
+  assert.deepEqual(webAutomationClickLandingExpectation(signIn.step, [landing(`${ACCOUNT}?welcome=1#profile`, signIn.eventId)]), urlClaim("/scenarios/auth-gate/account"));
 });
-test("writes once and returns only protected Core identity", async () => {
-  const requests = [];
-  const result = await writeCompletedWebReusableEvidence(input(), {
-    putReusableLlmContext: async (request) => {
-      requests.push(request);
-      return { ok: true, payload: { context: { recordId: "llm-context:one", contentDigest: "a".repeat(64) } } };
-    }
-  });
-  assert.deepEqual(result, { status: "stored", recordId: "llm-context:one", contentDigest: "a".repeat(64) });
-  assert.equal(requests.length, 1);
+test("a landing that names another click's event id claims nothing", () => {
+  const signIn = click(3, 900);
+  const other = click(3, 901);
+  assert.equal(webAutomationClickLandingExpectation(signIn.step, [landing(ACCOUNT, other.eventId)]), void 0);
 });
-test("fails closed on incomplete provenance and every rejected protected write", async () => {
-  assert.throws(() => mapCompletedWebReusableEvidenceToPutRequest(input({ completionStatus: "running" })), /only after completion/u);
-  assert.throws(() => mapCompletedWebReusableEvidenceToPutRequest(input({ sourceRunIds: [], sourceAdaptationIds: [] })), /explicit source provenance/u);
-  let rejectedCalls = 0;
-  await assert.rejects(() => writeCompletedWebReusableEvidence(input(), { putReusableLlmContext: async () => {
-    rejectedCalls += 1;
-    return { ok: false };
-  } }), /rejected by Core/u);
-  assert.equal(rejectedCalls, 1);
-  let thrownCalls = 0;
-  await assert.rejects(() => writeCompletedWebReusableEvidence(input(), { putReusableLlmContext: async () => {
-    thrownCalls += 1;
-    throw new Error("content protection unavailable");
-  } }), /rejected by Core/u);
-  assert.equal(thrownCalls, 1);
+test("a typed navigation is not a landing, even when it names the click", () => {
+  const signIn = click(3, 900);
+  const typed = navigation(ACCOUNT, { transition: "typed", explainedBy: 3, explainedByEventId: signIn.eventId });
+  assert.equal(webAutomationClickLandingExpectation(signIn.step, [typed]), void 0);
+});
+test("no following landing claims nothing", () => {
+  assert.equal(webAutomationClickLandingExpectation(click(3, 900).step, []), void 0);
+});
+test("a landing on the click page's own path claims nothing", () => {
+  const signIn = click(3, 900);
+  assert.equal(webAutomationClickLandingExpectation(signIn.step, [landing(`${SIGN_IN}?error=1`, signIn.eventId)]), void 0);
+});
+test("a landing on / claims nothing", () => {
+  const signIn = click(3, 900);
+  assert.equal(webAutomationClickLandingExpectation(signIn.step, [landing("https://example.test/", signIn.eventId)]), void 0);
+});
+test("a landing whose URL cannot be parsed claims nothing", () => {
+  const signIn = click(3, 900);
+  assert.equal(webAutomationClickLandingExpectation(signIn.step, [landing("not a url", signIn.eventId)]), void 0);
+  assert.equal(webAutomationClickLandingExpectation(signIn.step, [landing("about:blank", signIn.eventId)]), void 0, "an opaque URL has no path to claim");
+});
+test("two clicks sharing a sequence each claim their own landing", () => {
+  const first = click(1, 100);
+  const second = click(1, 900, { url: ACCOUNT });
+  const firstLanding = landing(ACCOUNT, first.eventId);
+  const secondLanding = landing("https://example.test/scenarios/auth-gate/settings", second.eventId);
+  assert.deepEqual(webAutomationClickLandingExpectation(first.step, [firstLanding, second.step, secondLanding]), urlClaim("/scenarios/auth-gate/account"));
+  assert.deepEqual(webAutomationClickLandingExpectation(second.step, [secondLanding]), urlClaim("/scenarios/auth-gate/settings"));
+});
+test("two landings for one click give the last", () => {
+  const signIn = click(3, 900);
+  const interstitial = landing("https://example.test/scenarios/auth-gate/checking", signIn.eventId);
+  assert.deepEqual(webAutomationClickLandingExpectation(signIn.step, [interstitial, landing(ACCOUNT, signIn.eventId)]), urlClaim("/scenarios/auth-gate/account"));
+  assert.equal(webAutomationClickLandingExpectation(signIn.step, [landing(ACCOUNT, signIn.eventId), landing(SIGN_IN, signIn.eventId)]), void 0, "the page settled back where it started, so the claim would prove nothing");
+});
+test("a landing with no event id names the nearest preceding click in its tab with that sequence", () => {
+  const signIn = click(3, 900, { sourceId: "tab:7:frame:0" });
+  const byTab = navigation(ACCOUNT, { transition: "explained", explainedBy: 3, sourceId: "tab:7" });
+  assert.deepEqual(webAutomationClickLandingExpectation(signIn.step, [byTab]), urlClaim("/scenarios/auth-gate/account"));
+  const nearer = click(3, 950, { url: SIGN_IN, sourceId: "tab:7:frame:0" });
+  assert.equal(webAutomationClickLandingExpectation(signIn.step, [nearer.step, byTab]), void 0, "a nearer click in the tab with the same sequence owns the landing");
+  assert.deepEqual(webAutomationClickLandingExpectation(nearer.step, [byTab]), urlClaim("/scenarios/auth-gate/account"));
+  const otherTab = click(3, 950, { sourceId: "tab:8:frame:0" });
+  assert.deepEqual(webAutomationClickLandingExpectation(signIn.step, [otherTab.step, byTab]), urlClaim("/scenarios/auth-gate/account"), "a click in another tab does not");
+});
+test("a landing with no event id and no tab to compare claims nothing", () => {
+  const signIn = click(3, 900);
+  assert.equal(webAutomationClickLandingExpectation(signIn.step, [navigation(ACCOUNT, { transition: "explained", explainedBy: 3 })]), void 0);
+  const inTab = click(3, 900, { sourceId: "tab:7:frame:0" });
+  assert.equal(webAutomationClickLandingExpectation(inTab.step, [navigation(ACCOUNT, { transition: "explained", explainedBy: 4, sourceId: "tab:7" })]), void 0, "another sequence names another click");
+});
+function storedClick(eventId, payload = {}) {
+  const entry = { type: "action", actionType: "web.dom.click", outputId: "web.dom.click", parameters: { selector: "#continue" }, ...payload };
+  return { eventType: "action", timestamp: 1789e9, payload: entry, metadata: { sourceId: "tab:7:frame:0", ...eventId === void 0 ? {} : { eventId } } };
+}
+test("a click's action entry claims the landing that names its stored event id", () => {
+  const signIn = click(3, 900);
+  assert.deepEqual(webAutomationClickLandingExpectation(storedClick(signIn.eventId), [landing(ACCOUNT, signIn.eventId)]), urlClaim("/scenarios/auth-gate/account"));
+  assert.deepEqual(webAutomationClickLandingExpectation(storedClick(signIn.eventId), [landing(`${SIGN_IN}?error=1`, signIn.eventId)]), urlClaim("/scenarios/auth-gate/sign-in"), "the entry names no page, so a landing on the click page's own path is still claimed");
+  assert.equal(webAutomationClickLandingExpectation(storedClick(signIn.eventId), [landing("https://example.test/", signIn.eventId)]), void 0, "a landing on / still claims nothing");
+});
+test("a click's action entry is named by its stored event id alone", () => {
+  const signIn = click(3, 900);
+  assert.equal(webAutomationClickLandingExpectation(storedClick(click(3, 901).eventId), [landing(ACCOUNT, signIn.eventId)]), void 0, "a landing naming another click's id");
+  assert.equal(webAutomationClickLandingExpectation(storedClick(), [landing(ACCOUNT, signIn.eventId)]), void 0, "an entry with no stored id");
+  assert.equal(webAutomationClickLandingExpectation(storedClick(" "), [landing(ACCOUNT, " ")]), void 0, "a blank id names nothing");
+  assert.equal(webAutomationClickLandingExpectation(storedClick(signIn.eventId, { sequence: 3 }), [navigation(ACCOUNT, { transition: "explained", explainedBy: 3, sourceId: "tab:7" })]), void 0, "a landing with no event id names no entry by sequence and tab");
 });

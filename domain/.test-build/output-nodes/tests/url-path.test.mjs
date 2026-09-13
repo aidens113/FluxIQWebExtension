@@ -1,30 +1,37 @@
-// src/output-nodes/tests/definitions.test.ts
+// src/output-nodes/tests/url-path.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateAutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
+
+// src/constants.ts
+var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
+
+// src/actions/safety.ts
+var WEB_AUTOMATION_ACTION_SAFETY = {
+  "web.browser.navigate": "review",
+  "web.dom.click": "review",
+  "web.dom.type": "review",
+  "web.dom.clear": "review",
+  "web.dom.select": "review",
+  "web.dom.scroll": "review",
+  "web.dom.keypress": "review",
+  "web.dom.wait_for_selector": "safe",
+  "web.dom.wait_for_text": "safe",
+  "web.dom.extract": "safe",
+  "web.dom.capture_snapshot": "safe",
+  // Added in Week 1 (decision D6). An assertion and a list extraction only read
+  // the page, so they are safe; check, upload, and dialog change it, and a tab
+  // or download acts on the browser, so all five need approval.
+  "web.dom.check": "review",
+  "web.dom.assert": "safe",
+  "web.dom.extract_list": "safe",
+  "web.dom.upload": "review",
+  "web.dom.dialog": "review",
+  "web.browser.tab": "review",
+  "web.browser.download": "review"
+};
 
 // src/actions/types.ts
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
-var WEB_AUTOMATION_ACTION_TYPES = [
-  "web.browser.navigate",
-  "web.dom.click",
-  "web.dom.type",
-  "web.dom.clear",
-  "web.dom.select",
-  "web.dom.scroll",
-  "web.dom.keypress",
-  "web.dom.wait_for_selector",
-  "web.dom.wait_for_text",
-  "web.dom.extract",
-  "web.dom.capture_snapshot",
-  "web.dom.check",
-  "web.dom.assert",
-  "web.dom.extract_list",
-  "web.dom.upload",
-  "web.dom.dialog",
-  "web.browser.tab",
-  "web.browser.download"
-];
 
 // src/actions/schemas.ts
 var elementFingerprintSchema = {
@@ -327,34 +334,6 @@ var webAutomationActionDefinitions = [
   }
 ];
 
-// src/constants.ts
-var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
-
-// src/actions/safety.ts
-var WEB_AUTOMATION_ACTION_SAFETY = {
-  "web.browser.navigate": "review",
-  "web.dom.click": "review",
-  "web.dom.type": "review",
-  "web.dom.clear": "review",
-  "web.dom.select": "review",
-  "web.dom.scroll": "review",
-  "web.dom.keypress": "review",
-  "web.dom.wait_for_selector": "safe",
-  "web.dom.wait_for_text": "safe",
-  "web.dom.extract": "safe",
-  "web.dom.capture_snapshot": "safe",
-  // Added in Week 1 (decision D6). An assertion and a list extraction only read
-  // the page, so they are safe; check, upload, and dialog change it, and a tab
-  // or download acts on the browser, so all five need approval.
-  "web.dom.check": "review",
-  "web.dom.assert": "safe",
-  "web.dom.extract_list": "safe",
-  "web.dom.upload": "review",
-  "web.dom.dialog": "review",
-  "web.browser.tab": "review",
-  "web.browser.download": "review"
-};
-
 // src/output-nodes/definitions.ts
 var controlInput = { id: "in", label: "In", valueType: "signal", role: "control" };
 var outputPorts = [
@@ -482,124 +461,22 @@ function iconForOutput(outputId) {
   return "square-dot";
 }
 
-// src/output-nodes/tests/definitions.test.ts
-var nodes = webAutomationOutputNodeDefinitions;
-function nodeFor(outputId) {
-  const node = nodes.find((definition) => definition.outputAction?.fixedOutputId === outputId);
-  assert.ok(node, `${outputId} has no output node`);
-  return node;
+// src/output-nodes/url-path.ts
+function webAutomationUrlPath(value) {
+  return typeof value === "string" && /^\/(?![/\\])[^?#]*$/u.test(value) ? value : void 0;
 }
-function parameterIds(outputId) {
-  return nodeFor(outputId).parameters.map((parameter) => parameter.id);
-}
-var WEEK_ONE_ACTIONS = [
-  "web.dom.check",
-  "web.dom.assert",
-  "web.dom.extract_list",
-  "web.dom.upload",
-  "web.dom.dialog",
-  "web.browser.tab",
-  "web.browser.download"
-];
-test("every action type has one valid output node, derived from its own schema row", () => {
-  assert.equal(nodes.length, WEB_AUTOMATION_ACTION_TYPES.length);
-  for (const outputId of WEB_AUTOMATION_ACTION_TYPES) {
-    const node = nodeFor(outputId);
-    assert.equal(node.id, webAutomationOutputNodeId(outputId));
-    const validation = validateAutomationStudioNodeDefinition(node);
-    assert.equal(validation.ok, true, `${outputId}: ${validation.issues.map((issue) => issue.code).join(", ")}`);
-    const definition = webAutomationActionDefinitions.find((candidate) => candidate.actionType === outputId);
-    assert.equal(node.label, definition?.label, `${outputId} label`);
-    assert.deepEqual(node.metadata?.parameterSchema, definition?.parameterSchema, `${outputId} carries its own parameter schema`);
-    assert.equal(node.parameters.every((parameter) => parameter.allowStateBinding === true), true, `${outputId} parameters must be state-bindable`);
-    assert.equal(typeof node.icon === "string" && node.icon.length > 0, true, `${outputId} needs an icon`);
+
+// src/output-nodes/tests/url-path.test.ts
+test("an exact pathname is itself", () => {
+  for (const path of ["/", "/scenarios/multi-tab/details", "/scenarios/iframe-checkout/payment", "/a%3Fb%23c"]) {
+    assert.equal(webAutomationUrlPath(path), path, path);
   }
 });
-test("a node's required parameters are exactly the ones its schema requires", () => {
-  for (const outputId of WEB_AUTOMATION_ACTION_TYPES) {
-    const schema = webAutomationActionDefinitions.find((candidate) => candidate.actionType === outputId)?.parameterSchema;
-    const required = Array.isArray(schema?.required) ? schema.required.filter((key) => typeof key === "string") : [];
-    for (const key of required) {
-      const parameter = nodeFor(outputId).parameters.find((candidate) => candidate.id === key);
-      assert.ok(parameter, `${outputId} requires ${key} but offers no parameter for it`);
-      assert.equal(parameter.required, true, `${outputId}.${key} must be required on the node`);
-    }
+test("a full URL, a query, a fragment, a relative path or a non-string is no path, and is never trimmed into one", () => {
+  for (const value of ["http://127.0.0.1:4173/list", "https://example.test/", "//example.test/list", "/\\example.test/list", "/list?session=tok-123", "/list#top", "/list?", "list", "", 7, null, void 0, { path: "/list" }]) {
+    assert.equal(webAutomationUrlPath(value), void 0, JSON.stringify(value) ?? "undefined");
   }
 });
-test("each Week 1 action offers the structured parameter its command field expects", () => {
-  assert.equal(parameterIds("web.dom.check").includes("checked"), true);
-  const checked = nodeFor("web.dom.check").parameters.find((parameter) => parameter.id === "checked");
-  assert.equal(checked?.valueType, "boolean");
-  assert.equal(checked?.defaultValue, true);
-  for (const [outputId, parameterId] of [
-    ["web.dom.assert", "assert"],
-    ["web.dom.extract_list", "extractList"],
-    ["web.dom.upload", "upload"],
-    ["web.dom.dialog", "dialog"],
-    ["web.browser.tab", "tab"],
-    ["web.browser.download", "download"]
-  ]) {
-    const parameter = nodeFor(outputId).parameters.find((candidate) => candidate.id === parameterId);
-    assert.ok(parameter, `${outputId} offers no ${parameterId} parameter`);
-    assert.equal(parameter.valueType, "object", `${outputId}.${parameterId} carries the command field's shape`);
-  }
-});
-test("the actions that act on an element can be aimed at one, and the others cannot", () => {
-  for (const outputId of ["web.dom.check", "web.dom.assert", "web.dom.upload"]) {
-    for (const parameterId of ["target", "selector", "element", "visualTarget"]) {
-      assert.equal(parameterIds(outputId).includes(parameterId), true, `${outputId} is missing ${parameterId}`);
-    }
-  }
-  for (const outputId of ["web.dom.dialog", "web.browser.tab", "web.browser.download", "web.dom.extract_list"]) {
-    assert.equal(parameterIds(outputId).includes("selector"), false, `${outputId} must not take an element target`);
-  }
-});
-test("the original eleven gained the node parameters D6 added", () => {
-  assert.equal(parameterIds("web.browser.navigate").includes("newTab"), true);
-  assert.equal(parameterIds("web.dom.select").includes("option"), true);
-  assert.equal(parameterIds("web.dom.keypress").includes("modifiers"), true);
-  assert.equal(parameterIds("web.dom.wait_for_selector").includes("wait"), true);
-  assert.equal(parameterIds("web.dom.wait_for_text").includes("wait"), true);
-  const scroll = parameterIds("web.dom.scroll");
-  assert.equal(scroll.includes("scroll"), true);
-  assert.equal(scroll.includes("selector"), true);
-});
-test("no node declares a parameter twice", () => {
-  for (const node of nodes) {
-    const ids = node.parameters.map((parameter) => parameter.id);
-    assert.equal(new Set(ids).size, ids.length, `${node.id} declares a parameter twice`);
-  }
-});
-test("the seven Week 1 actions are all registered", () => {
-  for (const outputId of WEEK_ONE_ACTIONS) {
-    assert.equal(WEB_AUTOMATION_ACTION_TYPES.includes(outputId), true, `${outputId} is not a registered action type`);
-    assert.ok(nodeFor(outputId));
-  }
-});
-test("every node can carry the post-conditions Core's transition comparison evaluates", () => {
-  for (const outputId of WEB_AUTOMATION_ACTION_TYPES) {
-    const parameter = nodeFor(outputId).parameters.find((candidate) => candidate.id === "expectedState");
-    assert.ok(parameter, `${outputId} offers no expectedState parameter`);
-    assert.equal(parameter.valueType, "object", `${outputId}.expectedState carries { conditions, mode, timeoutMs }`);
-    assert.equal(parameter.required, void 0, `${outputId}.expectedState is optional: not every action has a post-condition`);
-    assert.equal(parameter.defaultValue, void 0, `${outputId}.expectedState has no default: an empty condition list would report a pass`);
-  }
-});
-test("element targeting is declared by exactly the actions that cannot run without an element", () => {
-  const declared = WEB_AUTOMATION_ACTION_TYPES.filter((outputId) => nodeFor(outputId).metadata?.elementTarget === true);
-  assert.deepEqual(declared.slice().sort(), [
-    "web.dom.check",
-    "web.dom.clear",
-    "web.dom.click",
-    "web.dom.extract",
-    "web.dom.select",
-    "web.dom.type",
-    "web.dom.upload",
-    "web.dom.wait_for_selector"
-  ]);
-  for (const outputId of WEB_AUTOMATION_ACTION_TYPES) {
-    const schema = webAutomationActionDefinitions.find((candidate) => candidate.actionType === outputId)?.parameterSchema;
-    const requiresSelector = Array.isArray(schema?.required) && schema.required.includes("selector");
-    assert.equal(nodeFor(outputId).metadata?.elementTarget === true, requiresSelector, `${outputId}: element targeting must follow its schema`);
-  }
+test("the output-nodes barrel exports the rule, so the client barrel re-exports it", () => {
+  assert.equal(webAutomationUrlPath, webAutomationUrlPath);
 });

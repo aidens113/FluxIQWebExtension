@@ -1,7 +1,7 @@
 # MVP Week 1 — Web Automation Reliability Plan
 
 Status: Active
-Status detail: The Lab rerun proved the fixes for W18, W19, W25 and W17 live, and found four more problems (W15's and W28's wrong start, W17's file name, W25 too-slow's code), whose fixes are committed in both repositories and await root gates and the Lab recheck; no exit criterion is proven yet. Session objective, set by the user: completely finish Week 1, with everything tested.
+Status detail: The Lab rerun proved the fixes for W18, W19, W25 and W17 live, and found four more problems (W15's and W28's wrong start, W17's file name, W25 too-slow's code), whose fixes are committed in both repositories, pass root gates, and await the Lab recheck; no exit criterion is proven yet. Session objective, set by the user: completely finish Week 1, with everything tested.
 Created: 2026-09-11
 Last updated: 2026-09-13
 Owner: Senior supervisor agent
@@ -40,15 +40,16 @@ settled ledger entries are in parts one to forty-five of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13.**
-- **This repository:** `b5c5db2`, 107 commits ahead of `origin/dev`, not pushed.
+- **This repository:** `f840b75` and this record's commit, 109 commits ahead of
+  `origin/dev`; both `dev` branches are pushed next.
 - **Core:** `20bb3b4` and its plan commit, 16 commits ahead of `origin/dev`, `fluxiq`
   **0.4.0**, built at `20bb3b4`. Its thirteen code commits are listed in Core's plan.
   The newest two are `b54df69`, which waits a command's timeout plus a 3,000 ms
   answer margin, and `20bb3b4`, which begins a Flow with no Start node at its
   graph's root.
 - **Gates:** per-package gates reran for every commit. On Core `20bb3b4` the full
-  sequential suite, `pnpm build` and `pnpm package:lint` passed. Root gates here
-  have not run.
+  sequential suite, `pnpm build` and `pnpm package:lint` passed. Here on `f840b75`,
+  root `pnpm check`, `pnpm test`, `pnpm build` and the content harness passed.
 
 **Settled this session** (ledger and archive):
 - **Core:** trace withholding; the late-message discard; W19 C1 and C2; the shared
@@ -88,30 +89,23 @@ settled ledger entries are in parts one to forty-five of
   (P7, a new Core node outcome); both rows stay in the corpus.
 
 **In flight:**
-- **Read-only, for Phase 1.6b:** `i-leftover-sizing` sizes the known leftovers.
-- **Reported:** `i-week2-entry-points`. Typing instructions, AI exploration of a site
-  and a reviewed Flow build exist today. Changing a Flow while it runs does not: the
-  shipped app gives that path no AI provider without an explicit grant
-  (`_shared/runtime.ts:74-83`, supervisor-read), and its retry reruns from the start.
-- **Committed:** Core `b54df69` and `20bb3b4`, gated and built; here,
-  `g-runner-start-guard`.
+- **`d-arch-history` (docs):** takes plan history off six architecture pages, the
+  only Week 1 item in `i-leftover-sizing`'s ranking.
+- **Reported, read-only:** `i-leftover-sizing` and `i-week2-entry-points` (ledger).
+  Changing a Flow while it runs is Week 2 work that needs a resume design.
 
 **Queued, in dependency order**
-1. **Integration:**
-   - root `pnpm check`, `pnpm test`, `pnpm build` and the content harness, one at
-     a time;
-   - regenerate `domain/.test-build`;
-   - push both `dev` branches together.
+1. **Push both `dev` branches together,** now that the root gates pass (ledger).
 2. **Lab recheck, `l-stage2d`:** W15 unarmed and `popup-blocked`, W28, W25
    `too-slow`, W17 and W05 `short-catalog`, ×3 each. Then the week1 bench
    `--repeat 1`.
 3. **Lab Stage 3:** run
    `FLUXIQ_TEST_ENV_FILES=none pnpm lab bench --corpus week1 --repeat 3 --target isolated`
    twice, then `demo:record` and `demo:run` provider-free.
-5. **Phase 1.6b:**
-   - rank blockers from both bench reports;
-   - bring the architecture pages to the finished state;
-   - record Week 2 entry points;
+4. **Phase 1.6b:**
+   - rank blockers from both bench reports, starting from `i-leftover-sizing`'s
+     table;
+   - commit `d-arch-history` once verified;
    - quote an observation for every criterion row.
 
 **Exit criteria as they stand**
@@ -123,7 +117,7 @@ settled ledger entries are in parts one to forty-five of
 | Deterministic fallback | Corroboration refuses an uncorroborated match (unit and harness) | W20-W23 recover and W26 disambiguates in the Lab |
 | Failures classified | Stage 2: W10 and W27 `navigation_unexpected` 3 of 3. `l-stage2c`: W19 `auth_required` 3 of 3; W25 `too-slow` right category, wrong code (Core's deadline, fix in flight); W15 `popup-blocked` `timeout`, not `output_not_observed`; W24 ruled out | Negative variants report the expected category, at least 90% |
 | Bench repeatable | Stage 2: week1 `--repeat 1` passed 37 of 67. `l-stage2c`'s bench stopped after 5 of 67 rows when the sessions were killed; `--repeat 3` never run | `--repeat 3` twice, agreeing within tolerance |
-| Blockers ranked | Not started | Phase 1.6b ledger entry |
+| Blockers ranked | Known leftovers sized (`i-leftover-sizing`): none blocks a criterion; one Week 1 close-out item (`d-arch-history`) | Phase 1.6b ranking from both bench reports |
 
 **Everything is tested: the operating rules.**
 - **Three tiers per change:** unit tests in `tests/` beside the subject, the
@@ -698,6 +692,69 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
     esm-only profile "node16 (from ESM): 🟢" and "bundler: 🟢" for each package.
 - Not verified: the Lab (`l-stage2d`); a stored artifact recompiling in a live host;
   the web panel showing a refusal message.
+- Outcome: Accepted
+
+### 2026-09-13 — i-leftover-sizing and i-week2-entry-points: the known leftovers ranked, and where Week 2 starts
+
+- Agent: workers `i-leftover-sizing` and `i-week2-entry-points`, both read-only; spot
+  checks by supervisor.
+- Found, the leftovers (table in `reports/i-leftover-sizing.md`):
+  - **Week 1 close-out:** plan history on six architecture pages, dispatched as
+    `d-arch-history`.
+  - **Week 2 entry:** a stored event's `url` keeps the full URL, query included, on
+    runtime confirmations, content-recorded events and unexplained navigations.
+    Criterion 2 is unaffected: the leak check scans Core's whole workspace for each
+    declared secret, wherever it is stored.
+  - **Later:** a node's timeout overrides an output's `parameters.timeoutMs`; the
+    byte search misses a literal split across freed SQLite pages; an appended
+    recording's second root; duplicate edges on one route; and Core's `hello`
+    identity, `failureRoute`, node-definition `expectedState` and `dataDir` items.
+  - **Decided by the bench:** Core audits a runtime confirmation that reached no open
+    recording as a lost action. It is a Week 1 blocker only if a
+    `recording.persistence` failure's discards are runtime confirmations.
+- Found, Week 2 (`reports/i-week2-entry-points.md`):
+  - typed instructions, bounded same-site AI exploration and a reviewed Flow build
+    exist in Core today;
+  - changing a Flow while it runs does not. The shipped app binds no AI provider
+    without an explicit grant, the retry after an automatic patch is skipped for
+    explicit AI runs, and that retry reruns from the start, so Week 2's resume needs
+    a design;
+  - Core's `automation-studio.md` describes live patch testing and automatic
+    promotion as current without saying the shipped app cannot reach them.
+- Validation: supervisor reads:
+  - `domain/src/client/gateway-mapping.ts:175` reads
+    `timeoutMs: numberValue(command.timeoutMs ?? parameters.timeoutMs)`;
+  - `server-command-channel.ts:199` and `:221` set
+    `url: result.url ?? this.deps.page.url() ?? ""`;
+  - `flow-lane/recording-flow-proposal.ts:116` approves with
+    `destination: { kind: "flow", name: input.name }`, with no `flowId`;
+  - Core `programs/_shared/runtime.ts:74-83` resolves a provider only when
+    `input.executionGrant` is set, and otherwise `undefined`;
+  - Core `automation-studio/runtime/service.ts:3540` and `:3594` skip
+    `retryRuntimeSessionAfterAutoAppliedPatch` when `input.llmExecution` is set, and
+    the file names no `startNodeId`.
+- Not verified: nothing was executed; whether replay reads a URL's query; item 7d,
+  until the bench runs.
+- Outcome: Accepted
+
+### 2026-09-13 — Integration: root gates pass here against Core built at `20bb3b4`
+
+- Agent: supervisor.
+- Changed: `apps/extension/build/` and `domain/.test-build/`, regenerated by the root
+  build and tests.
+- Validation: supervisor gate `sup65` on `f840b75`, each step alone:
+  - `pnpm check` exit=0, "structure-audit: passed (41 warning(s), 17 baselined)";
+  - `pnpm test` exit=0:
+    - domain "# pass 401", "# fail 0";
+    - test-runner "# tests 562", "# pass 562";
+    - extension "# tests 468", "# pass 468";
+    - scenario-lab "# tests 204", "# pass 204";
+    - test-matrix 17, test-evidence 16 and agent-orchestrator 16, each "# fail 0";
+  - `pnpm build` exit=0, every package "Done";
+  - the content harness,
+    `pnpm exec playwright test -c e2e/playwright.content.config.ts --workers=2` from
+    `apps/extension`, exit=0, "222 passed (42.4s)".
+- Not verified: live browser behaviour, which `l-stage2d` observes.
 - Outcome: Accepted
 
 ## Open Questions

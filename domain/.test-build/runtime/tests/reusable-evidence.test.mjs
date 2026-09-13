@@ -9,6 +9,7 @@ import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES as AUTOMATION_STUDIO_L
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 
 // src/actions/types.ts
+var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
 var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.navigate",
@@ -30,6 +31,26 @@ var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.tab",
   "web.browser.download"
 ];
+var WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = {
+  "web.browser.navigate": "browser.navigate",
+  "web.dom.click": "dom.click",
+  "web.dom.type": "dom.type",
+  "web.dom.clear": "dom.clear",
+  "web.dom.select": "dom.select",
+  "web.dom.scroll": "dom.scroll",
+  "web.dom.keypress": "dom.keypress",
+  "web.dom.wait_for_selector": "dom.wait_for_selector",
+  "web.dom.wait_for_text": "dom.wait_for_text",
+  "web.dom.extract": "dom.extract",
+  "web.dom.capture_snapshot": "dom.capture_snapshot",
+  "web.dom.check": "dom.check",
+  "web.dom.assert": "dom.assert",
+  "web.dom.extract_list": "dom.extract_list",
+  "web.dom.upload": "dom.upload",
+  "web.dom.dialog": "dom.dialog",
+  "web.browser.tab": "browser.tab",
+  "web.browser.download": "browser.download"
+};
 
 // src/actions/safety.ts
 var WEB_AUTOMATION_ACTION_SAFETY = {
@@ -220,7 +241,8 @@ var tabSchema = {
     url: { type: "string", label: "URL" },
     active: { type: "boolean", label: "Activate" },
     tabId: { type: "integer", label: "Tab id" },
-    urlPattern: { type: "string", label: "URL contains" }
+    urlPattern: { type: "string", label: "URL contains" },
+    urlPath: { type: "string", label: "URL path" }
   }
 };
 var downloadSchema = {
@@ -507,7 +529,10 @@ var WEB_AUTOMATION_INPUT_IDS = {
   optionSelected: "web.user.option_selected",
   checkboxToggled: "web.user.checkbox_toggled",
   keyPressed: "web.user.key_pressed",
-  pageScrolled: "web.user.page_scrolled"
+  pageScrolled: "web.user.page_scrolled",
+  filesChosen: "web.user.files_chosen",
+  tabSwitched: "web.user.tab_switched",
+  tabClosed: "web.user.tab_closed"
 };
 var stateInputDefinitions = [
   { id: WEB_AUTOMATION_INPUT_IDS.browserState, title: "Browser state", description: "Current browser, tab, and compact DOM state available for policy conditions.", role: "state" },
@@ -521,7 +546,10 @@ var actionInputDefinitions = [
   [WEB_AUTOMATION_INPUT_IDS.optionSelected, "Option selected", "web.dom.select"],
   [WEB_AUTOMATION_INPUT_IDS.checkboxToggled, "Checkbox toggled", "web.dom.check"],
   [WEB_AUTOMATION_INPUT_IDS.keyPressed, "Key pressed", "web.dom.keypress"],
-  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"]
+  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"],
+  [WEB_AUTOMATION_INPUT_IDS.filesChosen, "Files chosen", "web.dom.upload"],
+  [WEB_AUTOMATION_INPUT_IDS.tabSwitched, "Tab switched", "web.browser.tab"],
+  [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"]
 ];
 var OUTPUT_FOR_ACTION_INPUT = new Map(
   actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
@@ -634,6 +662,14 @@ var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   UNSUPPORTED_TYPE: "web.action.unsupported_type",
   /** The verb is registered but not built yet, so a Flow that reaches one fails honestly. */
   NOT_IMPLEMENTED: "web.action.not_implemented",
+  /**
+   * A field the action requires arrived in a shape that cannot be read, so the
+   * command was refused before dispatch. `client/gateway-mapping.ts` decides it
+   * from what `client/gateway-action-parameters.ts` refused. The Flow's node is
+   * authored wrong and only an edit fixes it: a structural fault in the Flow,
+   * not a capability the client lacks.
+   */
+  INVALID_PARAMETER: "web.action.invalid_parameter",
   /** The action ran and failed for a reason no other code names. */
   ACTION_FAILED: "web.action.failed",
   /** Nothing said why the action failed. */
@@ -652,9 +688,33 @@ var WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS = Object.freeze({
   "web.intervention.required": { category: "user_intervention_required", retryable: false, stage: "execution" },
   "web.action.unsupported_type": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
   "web.action.not_implemented": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
+  "web.action.invalid_parameter": { category: "graph_validation_or_unknown_node", retryable: false, stage: "dispatch" },
   "web.action.failed": { category: "action_failed", retryable: true, stage: "execution" },
   "web.action.unknown": { category: "ambiguous_or_unknown", retryable: false, stage: "execution" }
 });
+function webAutomationFailureRecord(code, comparison = {}) {
+  const definition = WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[code];
+  const expected = boundedText(comparison.expected);
+  const actual = boundedText(comparison.actual);
+  const evidenceDigest = comparison.evidenceDigest !== void 0 && EVIDENCE_DIGEST_PATTERN.test(comparison.evidenceDigest) ? comparison.evidenceDigest : void 0;
+  return {
+    category: definition.category,
+    code,
+    retryable: definition.retryable,
+    stage: definition.stage,
+    ...expected === void 0 ? {} : { expected },
+    ...actual === void 0 ? {} : { actual },
+    ...evidenceDigest === void 0 ? {} : { evidenceDigest }
+  };
+}
+var EVIDENCE_DIGEST_PATTERN = /^[a-f0-9]{64}$/u;
+function boundedText(value) {
+  if (value === void 0) return void 0;
+  const collapsed = value.replace(/\s+/gu, " ").trim();
+  if (collapsed.length === 0) return void 0;
+  if (collapsed.length <= WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH) return collapsed;
+  return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
+}
 
 // src/runtime/llm-evidence/limits.ts
 import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES } from "fluxiq/automation-studio";
@@ -705,6 +765,18 @@ var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
   WEB_LLM_ACTION_RESULT_CODE,
   ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
 ]);
+
+// src/recording/web-state/evidence/project.ts
+var COLLECTION = { elementKind: "collection", comparable: false };
+var LIVE_COLLECTION = { ...COLLECTION, volatility: "rapid" };
+var SETTLED_COLLECTION = { ...COLLECTION, volatility: "slow" };
+
+// src/client/gateway-mapping.ts
+var UNSUPPORTED_ACTION_TYPE_FAILURE = Object.freeze(webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE));
+var CANONICAL_ACTION_TYPES = new Set(WEB_AUTOMATION_ACTION_TYPES);
+var LEGACY_ACTION_TYPE_ALIASES = new Map(
+  Object.entries(WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER).map(([canonical, legacy]) => [legacy, canonical])
+);
 
 // src/runtime/expectation/conditions.ts
 var ASSERT_KINDS = Object.freeze({
@@ -773,13 +845,13 @@ function normalizedElements(input, location) {
   const unique = /* @__PURE__ */ new Map();
   for (const element of input) {
     const tag = boundedToken(element.tag, 40);
-    const selector = boundedText2(element.selector, 500);
+    const selector = boundedText3(element.selector, 500);
     if (!tag || !selector || unshareableControl(element)) continue;
     const normalized = compact2({
       tag: tag.toLowerCase(),
       selectorDigest: digest(selector),
       role: boundedToken(element.role, 80)?.toLowerCase(),
-      name: boundedText2(element.name, 160),
+      name: boundedText3(element.name, 160),
       inputType: boundedToken(element.inputType, 40)?.toLowerCase(),
       controlType: boundedToken(element.controlType, 40)?.toLowerCase(),
       optionCount: Array.isArray(element.options) ? Math.min(element.options.length, 20) : void 0,
@@ -870,15 +942,15 @@ function enforceSourceItemLimit(actual, maximum, label) {
   if (actual > maximum) throw new Error(`Reusable web evidence ${label} count exceeds ${maximum}`);
 }
 function boundedTag(input, label) {
-  const value = boundedText2(input, 160);
+  const value = boundedText3(input, 160);
   if (!value || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,159}$/u.test(value)) throw new Error(`${label} is malformed`);
   return value;
 }
 function boundedToken(input, maximum) {
-  const value = boundedText2(input, maximum);
+  const value = boundedText3(input, maximum);
   return value && /^[A-Za-z0-9_.:-]+$/u.test(value) ? value : void 0;
 }
-function boundedText2(input, maximum) {
+function boundedText3(input, maximum) {
   if (typeof input !== "string") return void 0;
   const value = input.replace(/\s+/gu, " ").trim();
   return value ? value.slice(0, maximum) : void 0;

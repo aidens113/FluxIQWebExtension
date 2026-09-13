@@ -4105,3 +4105,37 @@ Search narrowly and read excerpts. Do not read the Week 1 plan beyond its Curren
 State.
 
 **Report:** `reports/i-week2-entry-points.md`, at most 250 lines.
+
+## d-arch-history — the architecture pages describe current design only (docs)
+
+Dispatched once `i-leftover-sizing` reported; its item 4. Docs only.
+
+**Owns:** in `docs/architecture/`: `web-capabilities.md`, `failure-taxonomy.md`,
+`sensitive-values.md`, `page-evidence.md`, `element-identity.md` and
+`repository-layout.md`.
+
+**Read:** `reports/i-leftover-sizing.md`, section 4.
+
+**Task.**
+1. Rewrite every history line section 4 lists in the present tense, saying what the
+   code does now. For each line you rewrite, check its claim against the code it
+   names. Correct a claim the code contradicts, and list it in the report.
+2. **`web-capabilities.md`:** drop the "Changed by (Phase 1.2)" column and its legend.
+   Fold what a partial row still lacks into "Why this state", and keep every row.
+3. **`repository-layout.md:95`:** keep "Never commit it" and its reason; drop the
+   dated narrative.
+4. Search the six pages for other history (dates, "until", "before", "used to",
+   "no longer", wave, phase, step, landed) and treat it the same way.
+
+No plan history and no working-document vocabulary (waves, phases, brief or worker
+names) on the pages.
+
+**Tests.**
+- The link checker over the six pages:
+  `node C:/Users/mrjoh/AppData/Local/Temp/claude/f---FluxIQWebExtension/4f264c80-323b-4673-a09a-bde5851669f3/scratchpad/dcd-check-links.mjs <pages>`.
+- A grep for `Wave [0-9]|Phase 1\.[0-9]|Step [0-9]+, landed|Before Phase|until Wave`
+  over `docs/architecture` finds nothing.
+- Do not run `pnpm check`, `pnpm test` or any build; the supervisor's root gates are
+  running.
+
+**Report:** `reports/d-arch-history.md`.

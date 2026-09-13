@@ -50,6 +50,14 @@ var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   UNSUPPORTED_TYPE: "web.action.unsupported_type",
   /** The verb is registered but not built yet, so a Flow that reaches one fails honestly. */
   NOT_IMPLEMENTED: "web.action.not_implemented",
+  /**
+   * A field the action requires arrived in a shape that cannot be read, so the
+   * command was refused before dispatch. `client/gateway-mapping.ts` decides it
+   * from what `client/gateway-action-parameters.ts` refused. The Flow's node is
+   * authored wrong and only an edit fixes it: a structural fault in the Flow,
+   * not a capability the client lacks.
+   */
+  INVALID_PARAMETER: "web.action.invalid_parameter",
   /** The action ran and failed for a reason no other code names. */
   ACTION_FAILED: "web.action.failed",
   /** Nothing said why the action failed. */
@@ -68,6 +76,7 @@ var WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS = Object.freeze({
   "web.intervention.required": { category: "user_intervention_required", retryable: false, stage: "execution" },
   "web.action.unsupported_type": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
   "web.action.not_implemented": { category: "blocked_by_capability_or_policy", retryable: false, stage: "dispatch" },
+  "web.action.invalid_parameter": { category: "graph_validation_or_unknown_node", retryable: false, stage: "dispatch" },
   "web.action.failed": { category: "action_failed", retryable: true, stage: "execution" },
   "web.action.unknown": { category: "ambiguous_or_unknown", retryable: false, stage: "execution" }
 });
@@ -112,6 +121,7 @@ var CODE_TABLE = [
   ["USER_INTERVENTION_REQUIRED", "web.intervention.required", "user_intervention_required", false, "execution"],
   ["UNSUPPORTED_TYPE", "web.action.unsupported_type", "blocked_by_capability_or_policy", false, "dispatch"],
   ["NOT_IMPLEMENTED", "web.action.not_implemented", "blocked_by_capability_or_policy", false, "dispatch"],
+  ["INVALID_PARAMETER", "web.action.invalid_parameter", "graph_validation_or_unknown_node", false, "dispatch"],
   ["ACTION_FAILED", "web.action.failed", "action_failed", true, "execution"],
   ["UNKNOWN", "web.action.unknown", "ambiguous_or_unknown", false, "execution"]
 ];
