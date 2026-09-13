@@ -1998,3 +1998,20 @@ Core type it mirrors.
   structure audit.
 
 **Report:** `reports/g-target-union-import.md`.
+
+---
+
+# Seventeenth dispatch — Lab Stage 2 starts before the last W19 piece
+
+**Amendment to `l-stage2`, at dispatch.** Dispatched before `w19-d1b` lands, to
+save wall-clock; everything else it measures is committed and built.
+- `<R>` is `7263534`, and `<C>` is Core `187f40d`.
+- Run everything in the brief except W19 `auth-gate --flow --variant expired`,
+  whose landing claim needs `w19-d1b`. Skip it in B.
+- When the supervisor names the `w19-d1b` commit: move the repository worktrees
+  to it, rebuild, prove the pin again, and run W19 `expired` ×3 under the same
+  two-instance load.
+- For part of the campaign, two workers build and test (domain and test-runner)
+  on this machine. Sample memory as `reports/i-lab-campaign.md` Part 3 says, and
+  pause the load instance whenever free memory falls below Part 3's floor. Record
+  any pause in the report.

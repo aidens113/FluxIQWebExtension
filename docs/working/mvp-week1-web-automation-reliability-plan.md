@@ -40,22 +40,24 @@ settled ledger entries are in parts one to twenty-four of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13, while workers run.**
-- **This repository:** `9cc1bfb`, 61 commits ahead of `origin/dev`, not pushed.
-- **Core:** `73a81e9`, 7 commits ahead of `origin/dev`, `fluxiq` 0.3.0. Its
-  packages were last built at `c0e0ce9`. The seven commits:
+- **This repository:** `7263534`, 64 commits ahead of `origin/dev`, not pushed.
+- **Core:** `187f40d`, 8 commits ahead of `origin/dev`, `fluxiq` 0.3.0, with its
+  packages built at `187f40d`. The eight commits:
   - `5d495eb`, trace withholding;
   - `267a2ca`, the late-message discard;
   - `6f172b9`, a rejected expected state fails the attempt;
   - `0e6d3ac`, the target gate and late domain events;
   - `c0e0ce9`, a mapper candidate's `expectedState` and the context `following`;
   - `5ca9981`, one expectation-rejected record, and an empty expectation is none;
-  - `73a81e9`, a client's recording start is ordered and acknowledged.
+  - `73a81e9`, a client's recording start is ordered and acknowledged;
+  - `187f40d`, a recorded entry keeps its source event id and source.
 - **Gates:** the supervisor reran per-package gates for every commit. Root gates,
   the content harness and Core's full suite have not run since this session began.
 
 **Settled this session** (ledger and archive):
 - **Core:** trace withholding; the late-message discard; W19 C1 and C2; the shared
-  expectation record; the ordered, acknowledged client start.
+  expectation record; the ordered, acknowledged client start; a recorded entry's
+  event identity.
 - **Evidence integrity:** the adapter guard; the second evidence producer;
   snapshot evidence (LR7, LR8); redaction attestation in every Lab run; discard
   audits; single-run evidence sizes, through one reader.
@@ -64,8 +66,9 @@ settled ledger entries are in parts one to twenty-four of
 - **Matching and recording:** resolver corroboration (CS1d, W26); recorder signals
   (B5); `invalid_parameter` (B3); a recording begins locally only after its start
   was sent, and starts once however Core's acknowledgement arrives; a page change
-  is recorded before the action after it; a run whose recording Core holds short
-  fails on both lanes.
+  is recorded before the action after it, and a wait is proposed before a click
+  whose target it produced (W25); a run whose recording Core holds short fails on
+  both lanes.
 - **W18:** the secret leg; every Flow run starts on the start page.
 - **The bench:** runs both lanes, with W29 and evidence sizes; three negative
   variants whose click must fail; delayed-ui pins both clicks; W24's unreachable
@@ -87,26 +90,26 @@ settled ledger entries are in parts one to twenty-four of
   row stays in the corpus.
 
 **In flight:**
-- **`g-core-action-entry-identity` (Core):** a recorded entry keeps the event id
-  and source it came from, so a live click can be linked to its landing.
-- **`w25-wait-mapper`:** a wait before a click whose target a page change produced.
+- **`w19-d1b`:** a linked click's action entry carries the landing claim, so
+  W19's claim reaches a live click.
+- **`g-target-union-import`:** the Flow lane imports Core's target-resolution
+  type in place of its copy.
+- **`l-stage2`:** Lab Stage 2 at `7263534` and Core `187f40d`. W19 `expired` waits
+  for `w19-d1b` (seventeenth dispatch).
 
 **Queued, in dependency order**
-1. **After the Core identity change:** Core `pnpm build`; the persisted-flow-run
-   union import.
-2. **After that and `w25-wait-mapper`:** `w19-d1b`, so a linked click's action
-   entry carries the claim; then `g-w19-docs`.
-3. **Lab Stage 2** (`l-stage2`, fourteenth dispatch), pinned to the fix commits.
-4. **Integration:**
+1. **After `w19-d1b`:** `g-w19-docs`, and W19 `expired` ×3 in Stage 2's
+   worktrees at that commit.
+2. **Integration:**
    - Core bumped to 0.4.0, with a migration note and `package:lint`;
    - root `pnpm check`, `pnpm test`, `pnpm build` and the content harness, one at
      a time;
    - regenerate `domain/.test-build`;
    - push both `dev` branches together.
-5. **Lab Stage 3:** run
+3. **Lab Stage 3:** run
    `FLUXIQ_TEST_ENV_FILES=none pnpm lab bench --corpus week1 --repeat 3 --target isolated`
    twice, then `demo:record` and `demo:run` provider-free.
-6. **Phase 1.6b:**
+4. **Phase 1.6b:**
    - rank blockers from both bench reports;
    - bring the architecture pages to the finished state;
    - record Week 2 entry points;
@@ -119,7 +122,7 @@ settled ledger entries are in parts one to twenty-four of
 | Actions reliable | Stage 1: W18 0 of 3, and recordings lose entries under load; fixes in flight | week1 W01-W19 through the bench, 3 of 3 |
 | Evidence useful | Sizes reach bench and single-run evaluations; the leak attestation runs in every Lab run | Lab run: the 16 items, packet budget, leak rows |
 | Deterministic fallback | Corroboration refuses an uncorroborated match (unit and harness) | W20-W23 recover and W26 disambiguates in the Lab |
-| Failures classified | Stage 1: W24 and W25 report the wrong category; W24 ruled out of Week 1, W25's recorder flush landed and its wait rule in flight | Negative variants report the expected category, at least 90% |
+| Failures classified | Stage 1: W24 and W25 report the wrong category; W24 ruled out of Week 1, W25's recorder flush and wait rule landed | Negative variants report the expected category, at least 90% |
 | Bench repeatable | Both lanes run; week1 ×3 never run | `--repeat 3` twice, agreeing within tolerance |
 | Blockers ranked | Not started | Phase 1.6b ledger entry |
 
