@@ -2766,3 +2766,182 @@ Moved verbatim to keep headroom under the plan limit: the lane consistency fix (
   - whether the over-8 MiB row's finding is `unscanned-store`, which that row
     cannot assert.
 - Outcome: Accepted
+
+## Part thirty-eight, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: the domain capability mapping (1316533), the extension capability work (857513e), and the architecture pages, committed alongside this move.
+
+### 2026-09-13 — f-domain-capability-gaps: a recorded file choice, tab switch or close, and child frame each map to a replayable node
+
+- Agent: worker `f-domain-capability-gaps`; verified by supervisor.
+- Changed, in `domain/src/`:
+  - **The wire names, compiled first** for the extension workers:
+    - the recorded payload's `tab: { operation, urlPath? }`;
+    - the inputs `web.user.files_chosen`, `web.user.tab_switched` and
+      `web.user.tab_closed`;
+    - `urlPath` on the tab switch request;
+    - `frameUrlPath` on `WebAutomationActionCommand`, lifted from
+      `browserFrameUrlPath`.
+  - **P5,** `io/input-model.ts` and new `output-nodes/upload-binding.ts`.
+    - A file input's change maps to `web.dom.upload`, whose `upload` is a
+      `web.upload.<key>` binding with no fallback.
+    - The node carries no file name, count or content.
+    - An emptied file input stays evidence.
+  - **P4.** A recorded switch that has a path maps to `web.browser.tab`, and so does
+    a close. Neither carries a tab id, origin or query. The recording-start marker
+    stays non-executable.
+  - **P6,** `output-nodes/payloads.ts`. A child-frame node also carries its frame's
+    URL path, and top-frame nodes are pinned byte for byte.
+  - **New `output-nodes/url-path.ts`:** `webAutomationUrlPath`, the one pathname
+    rule. It refuses a leading `//` or `/\`, and the extension now imports it.
+  - **New `output-nodes/recorded-element-key.ts`:** the element-key rule, moved out
+    of `secret-binding.ts` and renamed `webAutomationRecordedElementKey`. Nothing
+    outside `domain/src` used the old name.
+  - `client/`, `actions/` and the `web-panel-host.ts` labels; tests.
+- Decision: a file input recorded with `hasValue: false` must also stay evidence,
+  now that the recorder sends no file value. That is `g-runner-upload-input`'s
+  task 5.
+- Validation:
+  - **Supervisor:** `domain` `pnpm check` exit=0.
+  - **Supervisor:** `DOMAIN_TEST_BUILD_LABEL=sup47 pnpm test` printed "# tests
+    399", "# pass 398", "# fail 1". The one failure is the uncommitted W25 row
+    `core-gateway-recording-order.test.ts`, which needs a Core build and is not in
+    this commit.
+  - **Worker mutations:**
+    - 16 guards each failed a test;
+    - one guard is masked by the payload guard, and is caught only together with
+      it;
+    - all were restored and confirmed by SHA-256.
+- Not verified:
+  - the extension and test-runner compiling against the new exports, which the next
+    gates cover;
+  - the Lab rows W15, W17 and W28.
+- Outcome: Accepted
+
+### 2026-09-13 — f-tab-recording, f-frame-address and f-capability-confirmations: tab changes record and replay, child frames are found by path, and new actions confirm
+
+- Agents: workers `f-tab-recording`, `f-frame-address` and
+  `f-capability-confirmations`. The shared page-path helper, the switch to the
+  domain's path rule, and the verification are by the supervisor.
+- Changed, in `apps/extension/src/`:
+  - **P4, recording:** new `background/connection/tab-recorder.ts`.
+    - Switching to another page the recording can see records a `browser.tab`
+      event with `tab: { operation: "switch", urlPath }`. Closing the recording's
+      tab records `{ operation: "close" }`.
+    - Both enter through the facade's intake, so each is sent with its input id
+      and counted once.
+    - Browser and extension pages are not recorded, and neither are tab changes
+      made while a command runs.
+    - It is wired through `background/index.ts` (`tabs.onRemoved`),
+      `connection.ts`, `active-page.ts`, `gateway-payloads.ts` and
+      `shared/protocol.ts`, plus one barrel line.
+  - **P4, replay:**
+    - `runtime/browser-tab.ts` switches to the tab at exactly the recorded path,
+      and waits up to the command's timeout for one still opening.
+    - `runtime/automation-tab.ts` remembers the previous tab, so a close brings it
+      back.
+  - **P6:** new `runtime/frame-address.ts`.
+    - An action with `frameUrlPath` goes to the one child frame at that path.
+    - When several frames match, the recorded id breaks the tie. Otherwise the
+      action fails `target_ambiguous` or `target_not_found`, naming paths only.
+    - An action without a path is unchanged.
+  - **Recorder privacy:** `content/describe-element.ts` no longer reads a file
+    input's value, so a chosen file's local name never leaves the page.
+  - **Confirmations,** in `runtime-status.ts` and `server-command-channel.ts`:
+    - a succeeded upload confirms with `web.user.files_chosen`, and carries no
+      value;
+    - a succeeded tab switch or close confirms with its input id and `tab`. A
+      switch's `urlPath` is the pathname of the tab left in front;
+    - the caller's redundant failed-status check is gone.
+  - **By the supervisor:**
+    - **New `background/connection/recordable-page-address.ts`:** the one rule by
+      which the tab recorder and a tab confirmation name a page, under the domain's
+      `webAutomationUrlPath`. Before, the tab recorder accepted a pathname beginning
+      with `//`, which the confirmation refused.
+    - **`runtime/command-options.ts`** imports `webAutomationUrlPath` instead of its
+      own copy, which let a protocol-relative host through as a frame path.
+  - Tests throughout.
+- Decisions:
+  - **The tab worker's extra wiring is accepted:** `connection.ts`'s constructor and
+    the barrel line. Without them nothing called the recorder.
+  - **`chooseFrame` takes the frame list,** and the top frame never matches by path.
+    Both accepted.
+  - **Every confirmation's `url` still carries the full URL,** as a recorded event's
+    does. That predates this work, and is not changed here.
+- Validation:
+  - **Supervisor,** extension gate `sup50`, on diffs frozen after the last change:
+    - `pnpm check` exit=0;
+    - `EXTENSION_TEST_BUILD_LABEL=sup50 pnpm test` printed "# tests 462",
+      "# pass 462", "# fail 0";
+    - the structure audit passed.
+  - **Supervisor,** content harness: the `redaction`, `recorder-trust`, `identity`,
+    `upload-dialog`, `evidence`, `selection-redaction`, `frames` and `keyboard`
+    specs gave exit=0, "78 passed". That run came before the page-path helper,
+    which changes background files only.
+  - **Supervisor mutations:**
+    - with the old frame-path rule back in `command-options.ts`, its test failed
+      "not ok 2" (9 tests, 8 passed). Restored byte-identical, 9 of 9 passed.
+    - with `recordablePageAddress` missing the domain rule, "not ok 2" (2 tests,
+      1 passed). Restored byte-identical, 2 of 2 passed.
+  - **Worker mutations,** each failing its rows: eight for the tab recorder, four for
+    the frame lookup, and six plus seven for the confirmations.
+  - **An earlier supervisor gate, `sup43`,** failed 2 active-page tests, plus a type
+    error in `active-page.test.ts`, while the tab worker was mid-edit. `sup50` is
+    the gate on the finished files.
+- Not verified:
+  - **No browser or Lab run,** so none of these was seen live:
+    - Chrome's close-then-activate order;
+    - the path lookup against the real `chrome.webNavigation`;
+    - W15, W17 and W28.
+  - The runtime guard's timing on the existing and clone lanes.
+  - The `tabs.onRemoved` listener, which no unit test reaches.
+- Outcome: Accepted
+
+### 2026-09-13 — d-capability-docs: the architecture pages describe uploads, tab changes, child frames and confirmations
+
+- Agent: worker `d-capability-docs`; the failure-taxonomy line and the
+  verification by supervisor.
+- Changed, in `docs/architecture/`:
+  - **`web-capabilities.md`:**
+    - the switch-tab, close-tab and upload rows;
+    - a table of the eleven recorded action inputs and their ten outputs;
+    - how a file choice, a tab change and a checkbox toggle become actions;
+    - a new "Child Frames" section;
+    - a confirmation table covering every recorded verb.
+  - **`extension-client.md`:** `tab.urlPath`, `frameUrlPath`, the one path rule,
+    the three new inputs, and what the tab recorder counts.
+  - **`sensitive-values.md`:** a file input never sends its value, and upload
+    requests are kept apart from secret requests.
+  - **`failure-taxonomy.md`,** by the supervisor: `runtime/frame-address.ts` as a
+    producer of `TARGET_NOT_FOUND` and `TARGET_AMBIGUOUS`.
+  - **`apps/extension/e2e/content/tests/recorder-trust.spec.ts`,** by the
+    supervisor:
+    - a chosen file, set from disk, is recorded as a trusted change on a file input
+      with `hasValue: true` and no value;
+    - no message or snapshot carries Chrome's fake path or the file's name.
+- Decisions:
+  - **The corrected checkbox bullet is accepted:** the recorder now reports
+    `checked`.
+  - **A confirmation's `url` carries the full result URL,** and the page now says
+    so plainly.
+- Validation:
+  - **Supervisor:** the worker's link checker, read before running, over all four
+    pages: exit=0, "checked 78 relative links in 4 page(s), 0 unresolved".
+  - **Supervisor:** `node scripts/structure-audit.mjs` printed "passed (40
+    warning(s), 17 baselined)".
+  - **Supervisor, spot-checked against source:** an unanswered upload request is
+    refused before dispatch as `USER_INTERVENTION_REQUIRED`
+    (`domain/src/client/gateway-mapping.ts:151-155,366-369`).
+  - **Supervisor, content harness mutation for the recorder row** (`sup53`):
+    - before the mutation, "1 passed";
+    - with the file-input guard removed from `content/describe-element.ts`, "1
+      failed", on `not.toHaveProperty`;
+    - restored byte-identical, "1 passed".
+    - An earlier attempt (`sup51`) failed before the row ran, on a manifest the
+      stale shared contracts build rejected. It proved nothing, and was rerun once
+      the build was current.
+- Not verified:
+  - anchors are matched by the checker's own slug rule, not by a renderer;
+  - the `hasValue: false` rule rests on `g-runner-upload-input`'s uncommitted
+    change, so these pages are committed with it.
+- Outcome: Accepted

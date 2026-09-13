@@ -164,7 +164,12 @@ rows.push(
   },
   // An input the user emptied holds no files: no upload, and never a cleared field.
   { row: "9e dom.change, file input emptied", event: recorded("dom.change", { element: fileInput, inputValue: "" }), eventType: WEB_AUTOMATION_EVENTS.elementChanged },
-  { row: "9f dom.input, file input", event: recorded("dom.input", { element: fileInput, inputValue: "C:\\fakepath\\tax-return-2025.pdf" }), eventType: WEB_AUTOMATION_EVENTS.elementInputChanged, inputId: WEB_AUTOMATION_INPUT_IDS.filesChosen, outputId: "web.dom.upload" }
+  { row: "9f dom.input, file input", event: recorded("dom.input", { element: fileInput, inputValue: "C:\\fakepath\\tax-return-2025.pdf" }), eventType: WEB_AUTOMATION_EVENTS.elementInputChanged, inputId: WEB_AUTOMATION_INPUT_IDS.filesChosen, outputId: "web.dom.upload" },
+  // What the recorder sends since it withholds a file input's value: presence only.
+  { row: "9g dom.change, file input recorded holding files", event: recorded("dom.change", { element: { ...fileInput, hasValue: true } }), eventType: WEB_AUTOMATION_EVENTS.elementChanged, inputId: WEB_AUTOMATION_INPUT_IDS.filesChosen, outputId: "web.dom.upload" },
+  // A cancelled choice recorded the same way holds no files. As an upload, the runner would fill it.
+  { row: "9h dom.change, file input recorded holding no files", event: recorded("dom.change", { element: { ...fileInput, hasValue: false } }), eventType: WEB_AUTOMATION_EVENTS.elementChanged },
+  { row: "9i dom.input, file input recorded holding no files", event: recorded("dom.input", { element: { ...fileInput, hasValue: false } }), eventType: WEB_AUTOMATION_EVENTS.elementInputChanged }
 );
 
 const outputNodes = listWebAutomationOutputNodeDefinitions();

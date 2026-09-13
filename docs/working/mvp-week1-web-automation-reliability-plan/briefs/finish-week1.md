@@ -2959,7 +2959,19 @@ run directories. Nothing tracked.
 3. **`delayed-ui` (W25):**
    - `--flow` ×3: `candidateCount` 3, and click, wait, click all `succeeded`;
    - `--variant too-slow` ×3: `timeout`, with the wait `failed`.
-4. **`pnpm lab bench --corpus week1 --repeat 1 --target isolated`, once.**
+4. **W15 unarmed and `popup-blocked`, W17 and W28, on the Flow lane, ×3 each.**
+   - **W15:** the tab actions succeed, and `popup-blocked` still reports
+     `output_not_observed`.
+   - **W17:**
+     - `web.dom.upload` succeeds, then `web.dom.click` succeeds, with no
+       `web.dom.type`;
+     - Core's workspace is kept;
+     - a search of it, SQLite included, finds the supplied file's content and name
+       0 times.
+
+     The leak attestation does not look for upload content, so search directly.
+   - **W28:** both frame clicks succeed after the start-page load.
+5. **`pnpm lab bench --corpus week1 --repeat 1 --target isolated`, once.**
    - For each row whose verdict differs from Stage 2's 37 of 67, name the fix that
      explains it.
    - Name any row that regressed.
@@ -3355,6 +3367,44 @@ confirm the hash. The first run left the original `bridge.ts` on disk for
 minutes.
 
 **Report:** append an "Amendment" section to `reports/g-core-bridge-order.md`.
+
+## d-capability-docs — the architecture pages describe uploads, tabs, frames and confirmations (docs)
+
+The P4, P5 and P6 wire changes are substantial under AGENTS.md "Documentation
+Maintenance". The domain mapping is committed (`1316533`), and the extension work
+is done, though not yet committed.
+
+**Owns:**
+- `docs/architecture/web-capabilities.md`;
+- `docs/architecture/extension-client.md`;
+- any other page under `docs/architecture/` that describes recording, the
+  recorded payload or runtime confirmations. Name each one.
+
+**Read:**
+- `reports/f-domain-capability-gaps.md` and `reports/f-tab-recording.md`;
+- `reports/f-frame-address.md`;
+- `reports/f-capability-confirmations.md`, its Amendment included once it exists;
+- the source those reports cite.
+
+**Task.** Describe the current design only, with no plan history:
+1. **What is recorded and replayed.**
+   - A file choice records as an upload that asks for its files at run time. It
+     carries no file name, count or content, and a cancelled choice stays
+     evidence.
+   - A switch to another page, by path, and a close of the recording's tab record
+     as tab actions. They replay by exact path, and a close returns to the
+     previous tab.
+   - A child frame is addressed by its document's path, with the recorded id as a
+     tie-break.
+2. **The runtime confirmation for every recorded executable verb.** That includes
+   `check`, `upload`, and `tab` with its `tab` field.
+3. **The recorder sends no file input value.**
+4. **The wire contract:** the recorded payload's `tab`, the three new inputs, and
+   `urlPath` and `frameUrlPath`.
+
+**Tests.** The structure audit, and every relative link you add resolves.
+
+**Report:** `reports/d-capability-docs.md`.
 
 ## g-demo-attestation-limits — the demo leak check can scan Core's databases (test-runner)
 

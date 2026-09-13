@@ -36,22 +36,16 @@ flight. No exit criterion yet carries a quoted Lab observation. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
-settled ledger entries are in parts one to thirty-seven of
+settled ledger entries are in parts one to thirty-eight of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13, while workers run.**
-- **This repository:** `1316533`, 97 commits ahead of `origin/dev`, not pushed.
-- **Core:** `240c73e`, 10 commits ahead of `origin/dev`, `fluxiq` **0.4.0**, built at
-  `187f40d`; the tenth is a plan-only commit. The nine code commits:
-  - `5d495eb`, trace withholding;
-  - `267a2ca`, the late-message discard;
-  - `6f172b9`, a rejected expected state fails the attempt;
-  - `0e6d3ac`, the target gate and late domain events;
-  - `c0e0ce9`, a mapper candidate's `expectedState` and the context `following`;
-  - `5ca9981`, one expectation-rejected record, and an empty expectation is none;
-  - `73a81e9`, a client's recording start is ordered and acknowledged;
-  - `187f40d`, a recorded entry keeps its source event id and source;
-  - `5845f5d`, `fluxiq` 0.4.0, with a migration note for every change above.
+- **This repository:** `857513e`, 98 commits ahead of `origin/dev`, not pushed.
+- **Core:** `6621d66`, 12 commits ahead of `origin/dev`, `fluxiq` **0.4.0**, built at
+  `187f40d` until the next build. Its eleven code commits are listed in Core's plan.
+  The newest two are `949fbb4`, which stores a client's recording messages in
+  arrival order, and `6621d66`, which withholds run inputs and resolved values at
+  rest.
 - **Gates:** per-package gates rerun for every commit; root gates and Core's full suite not yet run.
 
 **Settled this session** (ledger and archive):
@@ -96,9 +90,9 @@ settled ledger entries are in parts one to thirty-seven of
   `g-core-withholding-execution`, then Core's withholding is committed.
 - **From the bench triage:** P1-P3, H1-H7, the expectation check and the lane
   consistency fix are committed.
-- **Recording gaps P4-P6:** the domain and extension work is committed;
-  `g-runner-upload-input` and `d-capability-docs` are running.
-- **W25's storage order:** `g-core-bridge-order` (its race amendment); `f-w25-core-order-row` waits for Core's build.
+- **Recording gaps P4-P6:** the domain and extension work is committed; the pages
+  are written and wait on `g-runner-upload-input`, which is running.
+- **W25's storage order:** the bridge fix and its race follow-ups are done; Core's gate, commit and build, then `f-w25-core-order-row`.
 
 **Queued, in dependency order**
 1. **After the three dispatches:** a Core build, then W18, W19, W25 and the rows the
@@ -646,130 +640,156 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 `2026-09-12-*` Wave 3 and live-validation files, and
 `2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-13 — f-domain-capability-gaps: a recorded file choice, tab switch or close, and child frame each map to a replayable node
+### 2026-09-13 — g-runner-upload-input: the Flow lane supplies the file a recorded upload asks for, and a cancelled file choice stays evidence
 
-- Agent: worker `f-domain-capability-gaps`; verified by supervisor.
-- Changed, in `domain/src/`:
-  - **The wire names, compiled first** for the extension workers:
-    - the recorded payload's `tab: { operation, urlPath? }`;
-    - the inputs `web.user.files_chosen`, `web.user.tab_switched` and
-      `web.user.tab_closed`;
-    - `urlPath` on the tab switch request;
-    - `frameUrlPath` on `WebAutomationActionCommand`, lifted from
-      `browserFrameUrlPath`.
-  - **P5,** `io/input-model.ts` and new `output-nodes/upload-binding.ts`.
-    - A file input's change maps to `web.dom.upload`, whose `upload` is a
-      `web.upload.<key>` binding with no fallback.
-    - The node carries no file name, count or content.
-    - An emptied file input stays evidence.
-  - **P4.** A recorded switch that has a path maps to `web.browser.tab`, and so does
-    a close. Neither carries a tab id, origin or query. The recording-start marker
-    stays non-executable.
-  - **P6,** `output-nodes/payloads.ts`. A child-frame node also carries its frame's
-    URL path, and top-frame nodes are pinned byte for byte.
-  - **New `output-nodes/url-path.ts`:** `webAutomationUrlPath`, the one pathname
-    rule. It refuses a leading `//` or `/\`, and the extension now imports it.
-  - **New `output-nodes/recorded-element-key.ts`:** the element-key rule, moved out
-    of `secret-binding.ts` and renamed `webAutomationRecordedElementKey`. Nothing
-    outside `domain/src` used the old name.
-  - `client/`, `actions/` and the `web-panel-host.ts` labels; tests.
-- Decision: a file input recorded with `hasValue: false` must also stay evidence,
-  now that the recorder sends no file value. That is `g-runner-upload-input`'s
-  task 5.
+- Agent: worker `g-runner-upload-input`; verification by supervisor.
+- Changed:
+  - **New `packages/test-runner/src/flow-lane/declared-uploads.ts`.** For each node
+    that asks for files, it checks the node's `web.upload.<key>` path against the
+    domain's key for that node's recorded control. It then supplies
+    `{ files: [{ name, mimeType, contentBase64 }] }`, with the same bytes the
+    recording lane uploads. The run fails before it starts if a path does not
+    match, or if the script's upload steps do not name exactly one file.
+  - **`flow-lane/run-flow-lane.ts`:** those inputs go beside the secret inputs.
+  - **`apps/scenario-lab/src/scenarios/file-transfer/manifest.ts`:** W17 pins
+    `web.dom.upload`, then `web.dom.click`.
+  - **`packages/test-contracts/src/recordable-actions.ts`:** `upload` yields
+    `web.dom.upload`, and `switchTab` and `closeTab` yield `web.browser.tab`.
+  - **`domain/src/io/input-model.ts`:** a file input recorded with
+    `hasValue: false` stays evidence, for `change` and `input` alike.
+  - Tests.
+- Found:
+  - **Core holds `[withheld]` for a supplied upload,** in its saved run inputs,
+    trace and command attempts. That was read from Core `6621d66`'s code, so a Lab
+    run gets it only after a Core build.
+  - **The Lab's leak attestation does not look for upload content.**
+- Decisions:
+  - **The supplied file declares `application/octet-stream`.** The fixture reads
+    only name and size.
+  - **Several upload files fail closed** until a second scenario needs them.
+  - **The Lab rerun searches Core's workspace for the upload content directly**
+    (`l-stage2c`, run 4).
 - Validation:
-  - **Supervisor:** `domain` `pnpm check` exit=0.
-  - **Supervisor:** `DOMAIN_TEST_BUILD_LABEL=sup47 pnpm test` printed "# tests
-    399", "# pass 398", "# fail 1". The one failure is the uncommitted W25 row
-    `core-gateway-recording-order.test.ts`, which needs a Core build and is not in
-    this commit.
-  - **Worker mutations:**
-    - 16 guards each failed a test;
-    - one guard is masked by the payload guard, and is caught only together with
-      it;
-    - all were restored and confirmed by SHA-256.
+  - **Supervisor, gate script `sup53`,** one command at a time, on the diff frozen
+    when the worker finished:
+    - shared scenario-lab build exit=0;
+    - `packages/test-contracts` `pnpm test` exit=0, "# tests 66", "# pass 66",
+      "# fail 0";
+    - scenario-lab `check` exit=0, and its private build printed "# tests 204",
+      "# pass 204";
+    - domain `check` exit=0. `DOMAIN_TEST_BUILD_LABEL=sup53 pnpm test` printed
+      "# tests 399", "# pass 398", "# fail 1"; the one failure is the uncommitted
+      W25 row, which needs a Core build;
+    - test-runner `check` exit=0, private `tsc` exit=0, "# tests 555",
+      "# pass 555", "# fail 0".
+  - **Worker mutations:** nine, each failing as quoted, then restored and confirmed
+    by `sha256sum -c`.
 - Not verified:
-  - the extension and test-runner compiling against the new exports, which the next
-    gates cover;
-  - the Lab rows W15, W17 and W28.
+  - no Lab W17 run;
+  - Core resolving the upload input over HTTP;
+  - Chrome sending `hasValue: false` for a cancelled choice.
 - Outcome: Accepted
 
-### 2026-09-13 — f-tab-recording, f-frame-address and f-capability-confirmations: tab changes record and replay, child frames are found by path, and new actions confirm
+### 2026-09-13 — Core withholding: run inputs and resolved values are withheld at rest, and what a run executes is unchanged (Core `6621d66`)
 
-- Agents: workers `f-tab-recording`, `f-frame-address` and
-  `f-capability-confirmations`. The shared page-path helper, the switch to the
-  domain's path rule, and the verification are by the supervisor.
-- Changed, in `apps/extension/src/`:
-  - **P4, recording:** new `background/connection/tab-recorder.ts`.
-    - Switching to another page the recording can see records a `browser.tab`
-      event with `tab: { operation: "switch", urlPath }`. Closing the recording's
-      tab records `{ operation: "close" }`.
-    - Both enter through the facade's intake, so each is sent with its input id
-      and counted once.
-    - Browser and extension pages are not recorded, and neither are tab changes
-      made while a command runs.
-    - It is wired through `background/index.ts` (`tabs.onRemoved`),
-      `connection.ts`, `active-page.ts`, `gateway-payloads.ts` and
-      `shared/protocol.ts`, plus one barrel line.
-  - **P4, replay:**
-    - `runtime/browser-tab.ts` switches to the tab at exactly the recorded path,
-      and waits up to the command's timeout for one still opening.
-    - `runtime/automation-tab.ts` remembers the previous tab, so a close brings it
-      back.
-  - **P6:** new `runtime/frame-address.ts`.
-    - An action with `frameUrlPath` goes to the one child frame at that path.
-    - When several frames match, the recorded id breaks the tie. Otherwise the
-      action fails `target_ambiguous` or `target_not_found`, naming paths only.
-    - An action without a path is unchanged.
-  - **Recorder privacy:** `content/describe-element.ts` no longer reads a file
-    input's value, so a chosen file's local name never leaves the page.
-  - **Confirmations,** in `runtime-status.ts` and `server-command-channel.ts`:
-    - a succeeded upload confirms with `web.user.files_chosen`, and carries no
-      value;
-    - a succeeded tab switch or close confirms with its input id and `tab`. A
-      switch's `urlPath` is the pathname of the tab left in front;
-    - the caller's redundant failed-status check is gone.
-  - **By the supervisor:**
-    - **New `background/connection/recordable-page-address.ts`:** the one rule by
-      which the tab recorder and a tab confirmation name a page, under the domain's
-      `webAutomationUrlPath`. Before, the tab recorder accepted a pathname beginning
-      with `//`, which the confirmation refused.
-    - **`runtime/command-options.ts`** imports `webAutomationUrlPath` instead of its
-      own copy, which let a protocol-relative host through as a frame path.
-  - Tests throughout.
+- Agents: workers `g-core-input-withholding`, `g-core-attempt-withholding` and
+  `g-core-withholding-execution`; decisions and verification by supervisor.
+  - `g-core-attempt-withholding` was blocked once on its brief's ownership.
+  - It was then redispatched to own the whole chain, and amended to cover inputs
+    that no node reads.
+- Changed, in Core `packages/fluxiq/src/`:
+  - **Run inputs at rest.** A run session's `metadata.inputs`, and each run-summary
+    envelope, keep every key and replace every value with `[withheld]`. A queued
+    session run by `runId` without inputs now runs with none.
+  - **Command attempts.**
+    - An attempt is built with the values resolved from state bindings withheld,
+      in `command.parameters`, `result.message`, `result.error` and
+      `attempt.message`. That holds in memory and on disk alike, and the adapter
+      still executes the real value.
+    - `FluxIQRuntimeDispatchContext` gains an optional `withheldValues`, carried
+      from the executor through `io-policy.ts`.
+    - The framework owns the marker, `FLUXIQ_RUNTIME_WITHHELD_VALUE`.
+  - **The trace.**
+    - Each supplied run input is withheld wherever it still holds the supplied
+      value. That is done by position: withholding by value broke a Call Flow
+      child's port defaults in a probe.
+    - A Call Flow parent also withholds what its child withheld.
+  - **Execution is unchanged.** A live-patch rerun takes the executed trace, and a
+    Call Flow parent builds its outputs from what its child executed.
+  - **One text rule,** `runtime/text-withholding.ts`
+    (`fluxiqRuntimeTextWithholding`). It is span-based, so an overlapping value
+    leaves no fragment and a marker is never rewritten.
+  - **Docs:** `runtime-kernel.md`, `automation-studio.md`,
+    `automation-studio-native-nodes.md`, the 0.4.0 migration notes in
+    `package-boundaries.md`, and both framework references.
 - Decisions:
-  - **The tab worker's extra wiring is accepted:** `connection.ts`'s constructor and
-    the barrel line. Without them nothing called the recorder.
-  - **`chooseFrame` takes the frame list,** and the top frame never matches by path.
-    Both accepted.
-  - **Every confirmation's `url` still carries the full URL,** as a recorded event's
-    does. That predates this work, and is not changed here.
+  - **Execution reads real values;** only saved or published copies are withheld.
+  - **A known gap for Week 1:** a node that copies an unbound input into another
+    key leaves it in clear at that copy. The Flow lane sends only bound
+    `web.secret.*` inputs.
+  - **Not withheld:** `command.metadata`, `result.payload`, `result.failure` and
+    `result.metadata`.
 - Validation:
-  - **Supervisor,** extension gate `sup50`, on diffs frozen after the last change:
-    - `pnpm check` exit=0;
-    - `EXTENSION_TEST_BUILD_LABEL=sup50 pnpm test` printed "# tests 462",
-      "# pass 462", "# fail 0";
-    - the structure audit passed.
-  - **Supervisor,** content harness: the `redaction`, `recorder-trust`, `identity`,
-    `upload-dialog`, `evidence`, `selection-redaction`, `frames` and `keyboard`
-    specs gave exit=0, "78 passed". That run came before the page-path helper,
-    which changes background files only.
-  - **Supervisor mutations:**
-    - with the old frame-path rule back in `command-options.ts`, its test failed
-      "not ok 2" (9 tests, 8 passed). Restored byte-identical, 9 of 9 passed.
-    - with `recordablePageAddress` missing the domain rule, "not ok 2" (2 tests,
-      1 passed). Restored byte-identical, 2 of 2 passed.
-  - **Worker mutations,** each failing its rows: eight for the tab recorder, four for
-    the frame lookup, and six plus seven for the confirmations.
-  - **An earlier supervisor gate, `sup43`,** failed 2 active-page tests, plus a type
-    error in `active-page.test.ts`, while the tab worker was mid-edit. `sup50` is
-    the gate on the finished files.
+  - **Supervisor,** Core gate `sup52`, on the tree holding both Core units, each
+    command run alone:
+    - `pnpm docs:reference` exit=0, "1577 public declarations";
+    - `pnpm docs:check` exit=0;
+    - `pnpm check` exit=0, "structure-audit: passed (122 warning(s), 256
+      baselined)";
+    - `packages/fluxiq` `npx vitest run --no-file-parallelism` exit=0, "Test Files
+      136 passed (136)";
+    - `@fluxiq/contracts`, `@fluxiq/client-gateway-websocket` and `@fluxiq/web`
+      tests each exit=0, with 1, 1 and 228 files passed.
+  - **Supervisor, earlier:** the input-withholding rows, `npx vitest run` over two
+    files, "Tests 15 passed".
+  - **Worker mutations,** each failing its row and restored byte-identical: 3 for
+    the inputs, 8 for the attempts, and 10 for the execution fix.
 - Not verified:
-  - **No browser or Lab run,** so none of these was seen live:
-    - Chrome's close-then-activate order;
-    - the path lookup against the real `chrome.webNavigation`;
-    - W15, W17 and W28.
-  - The runtime guard's timing on the existing and clone lanes.
-  - The `tabs.onRemoved` listener, which no unit test reaches.
+  - **No Core `pnpm build` yet.**
+  - **No Lab run.** An auth-gate `--flow` run with a kept workspace must show the
+    password typed, 0 declared-value hits, and no fragment.
+  - A real LLM live patch, and a Call Flow error binding.
+- Outcome: Accepted
+
+### 2026-09-13 — g-core-bridge-order: a client's recording messages are stored in arrival order, and a Stop never touches a recording opened during it (Core `949fbb4`)
+
+- Agent: worker `g-core-bridge-order`, with two amendments; decisions and
+  verification by supervisor.
+- Changed, in Core `packages/fluxiq/src/`:
+  - **New `programs/automation-studio/client-gateway/client-recording-write-order.ts`:**
+    one ordered chain per client for the five kinds of message that write to a
+    recording, joined before the bridge's first await. It also holds the snapshot
+    batch queue.
+  - **`client-gateway/bridge.ts`:**
+    - queued snapshots are written before any direct append, action results
+      included;
+    - both Stop paths wait for messages received before their drain ends;
+    - a Stop removes only the recording it stopped;
+    - a start waits for that client's earlier messages.
+  - **`client-gateway/service/inbound.ts`:** a client Stop clears
+    `activeRecordingId` only while it still names the recording that Stop stopped.
+  - **Tests:** `bridge.test.ts`, the new `bridge-restart.test.ts` and
+    `client-recording-write-order.test.ts`, and `client-gateway/tests/service.test.ts`.
+  - **`client-gateway.md`** states the order guarantee.
+- Decisions:
+  - **`0e4edea`'s rule is reversed.** That rule stored a recorded event without
+    writing queued snapshots first. The mapper's `following` needs storage order,
+    so a click's write now waits for one snapshot batch.
+  - **Both races the first pass left are fixed,** since the chain lengthened the
+    first of them.
+- Validation:
+  - **Supervisor:** Core gate `sup52` above, which held this unit.
+  - **Worker mutations,** each failing its own row, restored in a `finally` and
+    hash-checked: 6 for the chain and flush, 4 for the races, and 1 for the session
+    id.
+  - **One early script had no guard,** and left the original `bridge.ts` on disk
+    for minutes. The worker restored the file and hash-verified it.
+- Not verified:
+  - no Core build yet, so the domain row `f-w25-core-order-row` has not run against
+    the fix;
+  - W25 live;
+  - `stateLink` on a real recording;
+  - a Stop overlapping a start, live.
 - Outcome: Accepted
 
 ## Open Questions

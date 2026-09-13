@@ -45,7 +45,8 @@ export const fileTransferManifest = createScenarioManifest({
         { id: "no-upload-recorded", subject: "upload-result", predicate: "exists", value: false },
       ],
       recordingEvents: [{ type: "web.element.clicked", count: 1 }],
-      actions: [{ action: "web.dom.click", outcome: "succeeded" }],
+      // The file choice replays as an upload whose file the Flow lane supplies, before the click that submits it.
+      actions: [{ action: "web.dom.upload", outcome: "succeeded" }, { action: "web.dom.click", outcome: "succeeded" }],
       finalState: [{ id: "upload-echoed", subject: "upload-result", predicate: "text", value: `Uploaded ${UPLOAD_NAME}` }],
       allowedConsoleErrors: [],
     },

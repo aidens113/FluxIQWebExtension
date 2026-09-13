@@ -25,9 +25,15 @@ import type { ScenarioStepOperation } from "./scenario.js";
  * further page, and the extension records those clicks
  * (`scenario-steps/extract-records.ts`), so it yields what a click yields.
  *
- * Every other operation yields nothing. `waitForState`, `checkpoint`,
- * `switchTab`, `closeTab` and `waitForDownload` are the runner's own waits and
- * tab moves. `upload` has no recorded mapping.
+ * - `upload` sets a file input's files as trusted input. The extension records
+ *   the change, and the domain maps a file choice to `web.dom.upload`.
+ * - `switchTab` brings another open tab to the front and `closeTab` closes the
+ *   active one. The extension records either
+ *   (`apps/extension/src/background/connection/tab-recorder.ts`), and the
+ *   domain maps both to `web.browser.tab`.
+ *
+ * Every other operation yields nothing. `waitForState`, `checkpoint` and
+ * `waitForDownload` are the runner's own waits.
  *
  * Keyed by every operation, so a new operation does not compile until its row
  * says what a recording of it yields.
@@ -42,9 +48,9 @@ const ACTIONS_BY_OPERATION: Readonly<Record<ScenarioStepOperation, readonly stri
   checkpoint: [],
   press: ["web.dom.keypress", "web.dom.type", "web.dom.clear", "web.dom.select", "web.dom.check"],
   check: ["web.dom.check", "web.dom.click"],
-  upload: [],
-  switchTab: [],
-  closeTab: [],
+  upload: ["web.dom.upload"],
+  switchTab: ["web.browser.tab"],
+  closeTab: ["web.browser.tab"],
   waitForDownload: [],
   extract: [],
 };

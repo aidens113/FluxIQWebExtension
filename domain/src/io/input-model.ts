@@ -136,10 +136,11 @@ function recordedActionInputId(eventType: string, payload: JsonObject, metadata:
       // local file name, so as text entry it replayed that name into a control
       // with no text, and a cancelled choice cleared one. It replays as an
       // upload asking for the files at run time, or stays evidence; it never
-      // reaches the text branches below. A value recorded as `""` says the
-      // input was left holding no files, which no upload reproduces, so that
-      // one stays evidence; a recorder that withholds the value sends none.
-      if (stringValue(element?.inputType)?.toLowerCase() === "file") return payload.inputValue === "" ? undefined : WEB_AUTOMATION_INPUT_IDS.filesChosen;
+      // reaches the text branches below. An input left holding no files -- a
+      // value recorded as `""`, or `hasValue: false` from the recorder, which
+      // withholds a file input's value -- is a cancelled or emptied choice. No
+      // upload reproduces it, and the runner would fill one, so it stays evidence.
+      if (stringValue(element?.inputType)?.toLowerCase() === "file") return payload.inputValue === "" || element?.hasValue === false ? undefined : WEB_AUTOMATION_INPUT_IDS.filesChosen;
       if (stringValue(element?.tagName)?.toLowerCase() === "select") return WEB_AUTOMATION_INPUT_IDS.optionSelected;
       // A checkbox or radio is set, not typed into: its recorded value is the
       // control's `value` attribute ("on"), so replaying it as text entry

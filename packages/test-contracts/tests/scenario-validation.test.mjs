@@ -228,6 +228,29 @@ test("an expected action some step records is accepted, and a playback goal with
   assert.deepEqual(unpaginated.valid ? [] : unpaginated.issues.map(({ path }) => path), ["$.workflows[0].expected.actions[0].action"]);
 });
 
+/**
+ * A recorded file choice maps to `web.dom.upload`, and a recorded tab switch or
+ * close to `web.browser.tab`. W17 pins its upload before its click, so the
+ * validator must accept that pin, and still refuse an action neither step records.
+ */
+test("an upload step records web.dom.upload, and a tab switch or close records web.browser.tab", () => {
+  const workflow = (id, recordingScript, actions) => ({ id, description: `Workflow ${id}.`, recordingScript, expected: { actions } });
+  const choose = { id: "choose-file", operation: "upload", target: "testid:file", value: "notes.txt" };
+  const close = { id: "close-details", operation: "closeTab" };
+  const pinned = validateWebScenario({
+    ...validScenario,
+    workflows: [
+      workflow("upload", [choose, { id: "submit", operation: "click", target: "testid:submit" }], [{ action: "web.dom.upload", outcome: "succeeded" }, { action: "web.dom.click", outcome: "succeeded" }]),
+      workflow("switch", [{ id: "to-details", operation: "switchTab", path: "/details" }], [{ action: "web.browser.tab", outcome: "succeeded" }]),
+      workflow("close", [close], [{ action: "web.browser.tab", outcome: "succeeded" }]),
+    ],
+  });
+  assert.equal(pinned.valid, true, pinned.valid ? "" : JSON.stringify(pinned.issues));
+  // A file choice is never text entry, and closing a tab is never a click.
+  const unrecorded = validateWebScenario({ ...validScenario, workflows: [workflow("upload", [choose], [{ action: "web.dom.type" }]), workflow("close", [close], [{ action: "web.dom.click" }])] });
+  assert.deepEqual(unrecorded.valid ? [] : unrecorded.issues.map(({ path }) => path), ["$.workflows[0].expected.actions[0].action", "$.workflows[1].expected.actions[0].action"]);
+});
+
 test("rejects malformed workflows, variants, extraction, and step values", () => {
   const invalid = {
     ...catalogScenario,

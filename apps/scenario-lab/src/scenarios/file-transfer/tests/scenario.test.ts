@@ -53,6 +53,8 @@ test("upload workflow W17 uploads a named file, submits, and waits for the echo;
     ["waitForState", "testid:upload-result", null],
   ]);
   assert.deepEqual(upload.expected.finalState, [{ id: "upload-echoed", subject: "upload-result", predicate: "text", value: "Uploaded expense-receipts.csv" }]);
+  // The Flow replays the file choice as an upload, then the submitting click; a Flow that only clicks submits no file.
+  assert.deepEqual(upload.expected.actions, [{ action: "web.dom.upload", outcome: "succeeded" }, { action: "web.dom.click", outcome: "succeeded" }]);
   assert.equal(manifest.variants, undefined);
   assert.deepEqual(manifest.workflows?.map(({ variants }) => variants), [undefined]);
   assert.throws(() => resolveScenarioWorkflow(manifest, { variantId: "any" }), /has no variant any/);

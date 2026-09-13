@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ExpectedEvent, ResolvedScenarioWorkflow, ScenarioStep, WebScenario } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../../failure.js";
+import { deterministicUploadBytes } from "../../trusted-input/index.js";
 import type { DeclaredSecret } from "../declared-secrets.js";
 import { flowLaneSnapshot, runFlowLane, type FlowLaneControl, type FlowLaneEvidence } from "../run-flow-lane.js";
 
@@ -328,6 +329,31 @@ test("the approved Flow is read once for its action types and its requests for v
   assert.deepEqual(fake.flowReads, ["get-flow:flow.new", "list-flow-subflows:flow.new", "get-flow:flow.graph"]);
   // That one read answered the password request, so the run started with its value.
   assert.equal(fake.startedInputs[0]?.["web.secret.password"], SUPPLIED);
+});
+
+/**
+ * W17's shape: the file choice's node asks for its files under `web.upload.<key>`,
+ * keyed by its recorded control, and the lane answers with the file the
+ * recording lane chose. The file goes once, and nothing the lane records as
+ * evidence carries it.
+ */
+test("the run's inputs carry the recording lane's file once, under the path the upload node asks for, and the lane's evidence never does", async () => {
+  const uploadScript: ScenarioStep[] = [
+    { id: "choose-upload-file", operation: "upload", target: "testid:upload-file", value: "expense-receipts.csv" },
+    { id: "submit-upload", operation: "click", target: "testid:upload-submit" },
+  ];
+  const uploadNodes = [
+    { id: "node.upload", parameterValues: { outputId: "web.dom.upload", parameters: { selector: "#upload-file", upload: { $state: { path: "web.upload.upload-file" } }, element: { selector: "#upload-file", testId: "upload-file", inputType: "file" } } } },
+    { id: "node.submit", parameterValues: { outputId: "web.dom.click", parameters: { selector: "#upload-submit", element: { selector: "#upload-submit", testId: "upload-submit" } } } },
+  ];
+  const content = deterministicUploadBytes("expense-receipts.csv").toString("base64");
+  const fake = fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500, graphNodes: uploadNodes });
+  const evidence: FlowLaneEvidence[] = [];
+  await runLane(fake, evidence, { scenarioId: "file-transfer", recordingScript: uploadScript });
+  const expected = { "web.upload.upload-file": { files: [{ name: "expense-receipts.csv", mimeType: "application/octet-stream", contentBase64: content }] }, scenarioId: "file-transfer", facilityRunId: "run-test" };
+  assert.deepEqual({ started: fake.startedInputs, run: fake.runInputs }, { started: [expected], run: [expected] }, "the run is started and executed with the file once, under the node's path");
+  assert.equal(JSON.stringify(flowLaneSnapshot(evidence[0]!)).includes(content), false, "the flow-lane snapshot holds no file content");
+  assert.equal(JSON.stringify(evidence).includes(content), false, "nor does anything the lane hands the runner as evidence");
 });
 
 /** The evidence-size measure reaches `snapshots/flow-lane.json` through the lane, as sizes and flags only. */

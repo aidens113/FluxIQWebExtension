@@ -1,6 +1,7 @@
 import type { ExpectedEvent, ResolvedScenarioWorkflow, WebScenario } from "@fluxiq-web-extension/test-contracts";
 import type { FluxIQHttpOptions } from "../http-control.js";
 import { declaredSecretBindingInputs, flowSecretRequests, type DeclaredSecret } from "./declared-secrets.js";
+import { declaredUploadInputs, flowUploadRequests } from "./declared-uploads.js";
 import { assertFlowActions, assertFlowExtraction, assertFlowFailure, flowExtractionExpectation, type FlowExtractionExpectation } from "./expectations.js";
 import { awaitFinalizedRecording, type FinalizedRecording, type FinalizedRecordingWait } from "./finalized-recording.js";
 import { flowActionTypes, readFlowNodes } from "./flow-action-types.js";
@@ -123,6 +124,9 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
     steps: input.workflow.recordingScript,
     requests: flowSecretRequests(nodes),
   });
+  // A node on a file input asks for its files the same way, keyed by its recorded
+  // control. It gets the file the recording lane chose, or the run fails here.
+  const uploadInputs = declaredUploadInputs({ scenarioId: input.scenario.id, steps: input.workflow.recordingScript, requests: flowUploadRequests(nodes) });
   // Just before the first Flow action can reach Core, whose runtime confirmation Core audits against the finalized recording.
   input.flowDispatchStarting(Date.now());
   const run = await executeRecordedFlowRun(input.control, {
@@ -130,8 +134,8 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
     flowId: approved.flowId,
     facilityRunId: input.facilityRunId,
     actionTypes,
-    // Each declared value once, under the path a node reads: Core persists a run's inputs, so any further copy is a copy on disk.
-    inputs: { ...secretInputs, scenarioId: input.scenario.id, facilityRunId: input.facilityRunId },
+    // Each declared value and each supplied file once, under the path a node reads: Core persists a run's inputs, so any further copy is a copy on disk.
+    inputs: { ...secretInputs, ...uploadInputs, scenarioId: input.scenario.id, facilityRunId: input.facilityRunId },
   }, bounds);
   const expected = input.workflow.expected;
   // A Flow with no extract node cannot yield the records a recording's `extract` step checked, so that expectation is not judged here.
