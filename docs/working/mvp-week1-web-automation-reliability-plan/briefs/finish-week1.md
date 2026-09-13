@@ -1496,3 +1496,106 @@ intermediate step. Building one takes three changes and a measurement
 
 The W24 row stays in the week1 corpus and counts against criterion 4 as measured.
 It is ranked as a blocker at Phase 1.6b and carried into Week 2.
+
+---
+
+# Tenth dispatch — from `i-recording-loss`
+
+Verified by the supervisor on 2026-09-13 in Core's `client-gateway/bridge.ts`:
+- `startRecordingFromClient` sets `activeRecordings` only after
+  `await createRecording` (`:271-304`).
+- An entry or event arriving before then is audited with no recording id
+  (`:218-220`, `:341-348`).
+- A snapshot or state update is dropped silently (`:518`, `:555`).
+- Only `client-gateway/service/commands.ts:43` sends `server.start_recording`,
+  so the extension's 750 ms fallback always fires.
+
+Decided: the fix is in the bridge, not the WebSocket host. Core gets C1-C3, the
+extension E1, the test-runner T1-T3; the domain needs nothing. The user is
+alerted before the Core edit.
+
+## g-core-start-order — a client's start is ordered with what follows it (Core)
+
+**Owns** (in `F:\!FluxIQ\packages\fluxiq\src\programs\automation-studio\`):
+`client-gateway/bridge.ts` and `client-gateway/tests/bridge.test.ts`; also
+`F:\!FluxIQ\docs\architecture\automation-studio\client-gateway.md`. The "never
+edit Core" rule is lifted for these; follow `F:\!FluxIQ\AGENTS.md`. `w19-c2` edits
+other Core files meanwhile; touch none of them.
+
+**Read:** `reports/i-recording-loss.md` "The mechanism, in order" and Fix design
+C1-C3; `reports/g-core-late-event.md` for the held-finalization test pattern.
+
+**Task.**
+1. **C1.** Record a pending start per owner key before `startRecordingFromClient`'s
+   first await. Every `handleGatewayEvent` branch that reads `activeRecordings`
+   (entry, event, snapshot, state update, error, stop) awaits it first. A refused
+   or throwing start discards what waited, audited with the refused recording id.
+2. **C2.** After activation, acknowledge through `this.gateway.startRecording(...)`
+   (`client-gateway/service/commands.ts:39-44`) in place of `markActiveRecording`.
+   Say whether it does anything beyond marking and sending.
+3. **C3.** A discard audit carries the message's own `recordingId` when it has
+   one, and the snapshot and state-update drops are audited, not silent.
+
+Do not serialize the WebSocket host.
+
+**Tests.** The report's rows, with both mutations, quoting each failure;
+`npx vitest run <bridge test> --no-file-parallelism`; Core `pnpm check`;
+`pnpm docs:check`, plus `pnpm docs:reference` if a cited line moves. No Core
+`pnpm build`.
+
+**Report:** `reports/g-core-start-order.md`, with the compatibility effect on
+every gateway client.
+
+## f-recording-start-send — begin locally only after the start was sent (extension)
+
+**Owns:** `apps/extension/src/background/connection/recording-start/handshake.ts`
+and its test in `recording-start/tests/`; one existing test file of your choosing,
+for C2's acknowledgement row, if none covers it.
+
+**Read:** `reports/i-recording-loss.md` Fix design E1 and C2.
+
+**Task.**
+1. **E1.** Keep arming the acceptance window before the send, but let
+   `acceptWindowElapsed` begin locally only once the in-flight send has settled.
+2. With file:line, confirm two behaviours, and add a row for any that no test
+   covers:
+   - a `server.start_recording` for the pending id that arrives inside the window
+     ends the handshake as accepted and starts recording exactly once;
+   - one arriving after a local start changes nothing but a project link
+     (`active-recording.ts:184-190`).
+
+**Tests.** A send resolving after the window: `beginLocally` is not called before
+it resolves, with the mutation. Extension `check` and `test` under a private label;
+the structure audit.
+
+**Report:** `reports/f-recording-start-send.md`.
+
+## g-recording-completeness — a short recording fails the run on both lanes (test-runner)
+
+Dispatched once `f-flow-start-page` is committed, since this edits `run-scenario.ts`.
+
+**Owns:** a new `packages/test-runner/src/run-expectations/recording-completeness.ts`,
+its test and barrel entry; `flow-lane/recording-discards.ts` and
+`flow-lane/finalized-recording.ts`, each with its test; `run-scenario.ts`, only the
+calls these need.
+
+**Read:** `reports/i-recording-loss.md` Fix design T1-T3, and "The entries appended
+after Stop".
+
+**Task.**
+1. **T1.** On both lanes, compare the extension's executable-action count, read
+   before Stop, with Core's action count from the full session. A short count fails
+   as `recording.persistence`, naming the two counts and nothing recorded.
+2. **T2.** Also count discard entries without a `recordingId` whose `sessionId` is
+   the run's paired session, passed at both reads.
+3. **T3.** Rename `entriesAppendedAfterStop` for what it measures, and label the
+   `flow-lane.json` figure as the lane's second wait.
+
+**Tests.**
+- T1: equal, short and empty counts, with a mutation.
+- T2: a session-only discard is counted and another session's is not, with a
+  mutation.
+- Test-runner `check`, and `test` in a private `--outDir` at `dist`'s depth.
+- The structure audit.
+
+**Report:** `reports/g-recording-completeness.md`.
