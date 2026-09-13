@@ -45,7 +45,11 @@ export async function withPersistentDemoCore<T>(config: DemoWorkspaceConfigurati
   }
 
   const supervisor = new ProcessSupervisor();
-  try {
+  // Stop the Core tree, then remove the session. A failure after an earlier one
+  // is appended as a labelled line instead of replacing it: an EBUSY on the
+  // removal used to hide the lane's own error.
+  const cleanUp = () => runThenCleanUp(() => supervisor.cleanup(), () => removeDemoSession(sessionsDirectory, sessionDirectoryName), "Demo session removal also failed");
+  return runThenCleanUp(async () => {
     await supervisor.run({
       name: "demo-host-build",
       command: executable("node"),
@@ -96,16 +100,71 @@ export async function withPersistentDemoCore<T>(config: DemoWorkspaceConfigurati
     await fetch(`${config.origin}/api/client-gateway/snapshot`, { signal: AbortSignal.timeout(30_000) }).catch(() => undefined);
     await waitForTcpGateway(gatewayPort, 60_000);
     return await operation();
-  } finally {
-    try { await supervisor.cleanup(); }
-    finally {
-      const expected = path.join(sessionsDirectory, sessionDirectoryName);
-      if (path.resolve(sessionDirectory) !== path.resolve(expected) || path.dirname(path.resolve(sessionDirectory)) !== path.resolve(sessionsDirectory)) {
-        throw new Error("Refused to remove a demo session outside its workspace");
-      }
-      await rm(sessionDirectory, { recursive: true, force: true });
+  }, cleanUp);
+}
+
+/** The removal errors Windows raises while a just-stopped process tree still releases its handles. */
+const RETRIED_REMOVAL_CODES = new Set(["EBUSY", "EPERM", "ENOTEMPTY"]);
+
+/**
+ * Runs `operation`, then always `cleanUp`. When both fail, the operation's own
+ * error is thrown with the cleanup failure appended as a second line under
+ * `label`; when only the cleanup fails, its error is the failure.
+ */
+export async function runThenCleanUp<T>(operation: () => Promise<T>, cleanUp: () => Promise<void>, label = "Demo session cleanup also failed"): Promise<T> {
+  let value: T;
+  try {
+    value = await operation();
+  } catch (operationError) {
+    try { await cleanUp(); }
+    catch (cleanupError) { throw withFollowingFailure(operationError, cleanupError, label); }
+    throw operationError;
+  }
+  await cleanUp();
+  return value;
+}
+
+/**
+ * Removes one demo session directory, retrying what Windows refuses while the
+ * stopped Core tree still holds handles. `rm` unlinks a junction rather than
+ * descending into it, so the pinned Core the session's junctions point at is
+ * never touched; the junction row in `tests/core-process.test.ts` holds that.
+ */
+export async function removeDemoSession(sessionsDirectory: string, sessionDirectoryName: string, options: { remove?: (target: string) => Promise<void>; attempts?: number; retryDelayMs?: number } = {}): Promise<void> {
+  const sessionDirectory = path.resolve(sessionsDirectory, sessionDirectoryName);
+  if (path.dirname(sessionDirectory) !== path.resolve(sessionsDirectory)) {
+    throw new Error("Refused to remove a demo session outside its workspace");
+  }
+  const remove = options.remove ?? ((target: string) => rm(target, { recursive: true, force: true }));
+  const attempts = options.attempts ?? 8;
+  const retryDelayMs = options.retryDelayMs ?? 250;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await remove(sessionDirectory);
+      return;
+    } catch (error) {
+      const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+      if (attempt >= attempts || !RETRIED_REMOVAL_CODES.has(code)) throw error;
+      await new Promise(resolve => setTimeout(resolve, retryDelayMs * attempt));
     }
   }
+}
+
+function withFollowingFailure(first: unknown, following: unknown, label: string): unknown {
+  const line = `${label}: ${following instanceof Error ? following.message : String(following)}`;
+  if (!(first instanceof Error)) return new Error(`${String(first)}\n${line}`, { cause: first });
+  const message = first.message;
+  try {
+    first.message = `${message}\n${line}`;
+    const stack = first.stack;
+    const at = message.length > 0 && stack !== undefined ? stack.indexOf(message) : -1;
+    if (stack !== undefined && at >= 0 && !stack.includes(line)) {
+      first.stack = `${stack.slice(0, at + message.length)}\n${line}${stack.slice(at + message.length)}`;
+    }
+  } catch {
+    return new Error(`${message}\n${line}`, { cause: first });
+  }
+  return first;
 }
 
 export async function ensureDemoIdentity(config: DemoWorkspaceConfiguration): Promise<void> {
