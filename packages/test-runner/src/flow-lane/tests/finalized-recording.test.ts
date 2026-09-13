@@ -87,4 +87,6 @@ test("a recording already finished is confirmed in two reads, and the full sessi
   assert.equal(finalized.entryCount, 2);
   assert.equal(finalized.endedAt, 42);
   assert.equal(finalized.polls, 2);
+  // Counted from the wait's first poll, not from Stop: a recording already finished reads 0.
+  assert.equal(finalized.entriesAppendedWhileWaiting, 0);
 });

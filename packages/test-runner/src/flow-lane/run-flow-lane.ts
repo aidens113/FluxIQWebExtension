@@ -145,7 +145,10 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
  *
  * The recording's own entry count sits beside the candidate count on purpose:
  * a Flow short of an action shows here as fewer candidates than entries, which
- * is what nobody could see before. Each action carries Core's target
+ * is what nobody could see before. `secondWait` is the lane's own wait on the
+ * recording, which follows the runner's (`runtime.settle`): it counts entries
+ * from its own first poll, not from Stop, so it reads 0 once the runner's wait
+ * has seen the recording finished. Each action carries Core's target
  * resolution, when Core resolved one, because Core's store is deleted when the
  * run ends and this file is then the only record of how a target was found.
  * For the same reason each action carries the size and truncation flag of the
@@ -154,7 +157,7 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
  */
 export function flowLaneSnapshot(evidence: FlowLaneEvidence) {
   return {
-    recording: { recordingId: evidence.recording.recordingId, entryCount: evidence.recording.entryCount, entriesAppendedAfterStop: evidence.recording.entriesAppendedWhileWaiting, finalizationWaitMs: evidence.recording.waitedMs, polls: evidence.recording.polls },
+    recording: { recordingId: evidence.recording.recordingId, entryCount: evidence.recording.entryCount, secondWait: { entriesAppendedAfterFirstPoll: evidence.recording.entriesAppendedWhileWaiting, waitMs: evidence.recording.waitedMs, polls: evidence.recording.polls } },
     proposalId: evidence.proposal.proposalId, mapperId: evidence.proposal.mapperId, candidateCount: evidence.proposal.candidateCount, proposalIssues: [...evidence.proposal.issues],
     flowId: evidence.flowId, runtimeRunId: evidence.run.runId, status: evidence.run.status,
     harnessActivations: evidence.run.harnessActivations, failure: evidence.run.failure, extractionCount: evidence.run.extracted.length,

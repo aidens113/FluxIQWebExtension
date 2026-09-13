@@ -67,7 +67,7 @@ test("Core's audit of discarded recording messages is read after the round trip,
   assert.equal(source.match(/readRecordingDiscards\(/gu)?.length, 2, "once after the round trip, and once more before the topology closes");
   const at = {
     roundTrip: source.indexOf("const outcome = await assertCoreRoundTrip(topology, paired?.sessionId, recordingBaseline);"),
-    audited: source.indexOf("readRecordingDiscards(await topology.control.gatewaySnapshot(), outcome.newRecordingIds)"),
+    audited: source.indexOf("readRecordingDiscards(await topology.control.gatewaySnapshot(), discardScope)"),
     connection: source.indexOf("const connectionAfterStop = await runtimeMessage(extensionControl, { type: \"fluxiq.getStatus\" })"),
     settled: source.indexOf('"Core persisted the completed recording"'),
     failed: source.indexOf("if (discardAudit.failure) throw discardAudit.failure;"),
@@ -84,12 +84,12 @@ test("Core's audit of discarded recording messages is read after the round trip,
 test("Core's discard audit is read a second time, after the Flow lane and the browser close and before the topology closes, and unioned with the first", async () => {
   const source = await runnerSource();
   const at = {
-    firstRead: source.indexOf("const discardAudit = readRecordingDiscards(await topology.control.gatewaySnapshot(), outcome.newRecordingIds);"),
-    kept: source.indexOf("firstDiscardRead = { recordingIds: outcome.newRecordingIds, discards: discardAudit.discards };"),
+    firstRead: source.indexOf("const discardAudit = readRecordingDiscards(await topology.control.gatewaySnapshot(), discardScope);"),
+    kept: source.indexOf("firstDiscardRead = { scope: discardScope, discards: discardAudit.discards };"),
     firstFailed: source.indexOf("if (discardAudit.failure) throw discardAudit.failure;"),
     flowLane: source.indexOf("await runFlowLane({"),
     browserClosed: source.indexOf("await context?.close();"),
-    secondRead: source.indexOf("readRecordingDiscards(await topology.control.gatewaySnapshot().catch(() => undefined), firstDiscardRead.recordingIds, earlier)"),
+    secondRead: source.indexOf("readRecordingDiscards(await topology.control.gatewaySnapshot().catch(() => undefined), firstDiscardRead.scope, earlier)"),
     published: source.indexOf("\"Core's discard audit was read again before the topology closed\"), details: { recordingDiscards: secondRead.discards"),
     topologyClosed: source.indexOf("await topology?.close();"),
   };

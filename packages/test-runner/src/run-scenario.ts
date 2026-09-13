@@ -26,9 +26,9 @@ import { createRunOwnedCloneFlowId, createRunOwnedCloneProject, importClonePacka
 import { effectiveEvidencePolicy } from "./evidence-policy/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant, scenarioLabOriginProof } from "./lab-control/index.js";
-import { awaitFinalizedRecording, declaredSecretValues, flowLaneSnapshot, readRecordingDiscards, recordingLaneObservation, resolveDeclaredSecrets, runFlowLane, selectLaneObservation, type DeclaredSecret, type RecordingDiscard, type RunLaneObservation } from "./flow-lane/index.js";
+import { awaitFinalizedRecording, declaredSecretValues, flowLaneSnapshot, readRecordingDiscards, recordingLaneObservation, resolveDeclaredSecrets, runFlowLane, selectLaneObservation, type DeclaredSecret, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
 import { attestRunRedaction, runRedactionScopes, scenarioRedactionLiterals, type RunRedactionAttestation } from "./redaction-attestation/index.js";
-import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog } from "./run-expectations/index.js";
+import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog, readRecordingCompleteness } from "./run-expectations/index.js";
 import { singleRunEvaluation } from "./run-evaluation/index.js";
 import { automationFailureFromActionResult, createRunManifest, flowActionTimings, runActionStatus, type CloneRunState } from "./run-manifest/index.js";
 import { cssSelectorForTarget, parseScenarioTarget, ScenarioStepRunner } from "./scenario-steps/index.js";
@@ -98,9 +98,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
   let consoleErrors: ConsoleErrorWatch | undefined;
   let recordingBaseline: Set<string> | undefined;
   let recordedEvents: Record<string, number> | undefined;
+  // The extension's count of the executable actions it recorded, read before Stop and compared with Core's.
+  let extensionActionCount: unknown;
   let flowObservation: RunLaneObservation | undefined;
-  // The first read of Core's discard audit, which `finally` reads again and unions with it before the topology closes.
-  let firstDiscardRead: { recordingIds: readonly string[]; discards: RecordingDiscard[] } | undefined;
+  // The first read of Core's discard audit, which `finally` reads again, in the same scope, and unions with it before the topology closes.
+  let firstDiscardRead: { scope: RecordingDiscardScope; discards: RecordingDiscard[] } | undefined;
   // The fixture oracle's own verdict, published rather than inferred: a failure
   // category cannot tell "the fixture disagreed" from "the rig broke first".
   let oracleVerdict: "passed" | "failed" | null = null;
@@ -287,6 +289,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
       }
       // Read while still recording: the extension's log is what it recorded.
       recordedEvents = await assertRecordedEvents(() => readExtensionRecordingLog(message => runtimeMessage(extensionControl, message)), recordingWorkflow.expected.recordingEvents ?? []);
+      extensionActionCount = await runtimeMessage(extensionControl, { type: "fluxiq.getStatus" }).then((response: any) => response.status?.eventCount, () => undefined);
       scenarioPage = runner.activePage();
       try { await assertFinalState(scenarioPage, scenario, recordingWorkflow); oracleVerdict = "passed"; }
       catch (error) { oracleVerdict = "failed"; throw error; }
@@ -298,12 +301,17 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
       // Core audits a message that reached a finalized recording, tells the client
       // nothing, and since `267a2ca` no longer fails the connection for it: its audit
       // log and the extension's own state after Stop are where a short recording shows.
-      const discardAudit = readRecordingDiscards(await topology.control.gatewaySnapshot(), outcome.newRecordingIds);
-      firstDiscardRead = { recordingIds: outcome.newRecordingIds, discards: discardAudit.discards };
+      // A discard is this run's by its recording, or, naming none, by the session this run paired.
+      const discardScope: RecordingDiscardScope = { recordingIds: outcome.newRecordingIds, sessionId: paired?.sessionId };
+      const discardAudit = readRecordingDiscards(await topology.control.gatewaySnapshot(), discardScope);
+      firstDiscardRead = { scope: discardScope, discards: discardAudit.discards };
       const connectionAfterStop = await runtimeMessage(extensionControl, { type: "fluxiq.getStatus" }).then((response: any) => String(response.status?.connectionState ?? "unreported"), () => "unavailable");
+      // An action that never reached the recording shows in neither the audit nor an entry count, so Core's actions are counted against the extension's.
+      const completeness = await readRecordingCompleteness(topology.control, { projectId: topology.projectId, recordingIds: outcome.newRecordingIds, extensionActionCount });
       await capture.trigger({ ...event(runId, scenario.id, undefined, "gateway.action", "Core gateway retained the paired extension session"), details: { sessionCount: outcome.sessionCount } });
-      await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "Core persisted the completed recording"), details: { recordingCount: outcome.recordingCount, projectId: topology.projectId, recordedEvents, recordingDiscards: discardAudit.discards, extensionConnectionAfterStop: connectionAfterStop, recordings: outcome.finalized.map(item => ({ recordingId: item.recordingId, entryCount: item.entryCount, entriesAppendedAfterStop: item.entriesAppendedWhileWaiting, finalizationWaitMs: item.waitedMs })) } });
+      await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "Core persisted the completed recording"), details: { recordingCount: outcome.recordingCount, projectId: topology.projectId, recordedEvents, recordingDiscards: discardAudit.discards, extensionConnectionAfterStop: connectionAfterStop, recordedActions: { extension: completeness.extensionActions, core: completeness.coreActions }, recordings: outcome.finalized.map(item => ({ recordingId: item.recordingId, entryCount: item.entryCount, entriesAppendedAfterFirstPoll: item.entriesAppendedWhileWaiting, finalizationWaitMs: item.waitedMs })) } });
       if (discardAudit.failure) throw discardAudit.failure;
+      if (completeness.failure) throw completeness.failure;
       if (options.flow) {
         const control = topology.control;
         const activeTopology = topology;
@@ -396,7 +404,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
     // cannot get fails only a run that had passed.
     if (firstDiscardRead && topology?.control) {
       const earlier = firstDiscardRead.discards;
-      const secondRead = readRecordingDiscards(await topology.control.gatewaySnapshot().catch(() => undefined), firstDiscardRead.recordingIds, earlier);
+      const secondRead = readRecordingDiscards(await topology.control.gatewaySnapshot().catch(() => undefined), firstDiscardRead.scope, earlier);
       await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "Core's discard audit was read again before the topology closed"), details: { recordingDiscards: secondRead.discards, discardsAfterFirstRead: secondRead.discards.length - earlier.length } }).catch(() => undefined);
       const failure = secondRead.failure;
       if (failure && (failure.category === "recording.persistence" ? failureCategory !== "recording.persistence" : verdict === "passed")) {
@@ -597,21 +605,25 @@ async function findScenarioPageWithExpectedState(context: BrowserContext, fallba
 /**
  * Loads the fixture's own entry point, `scenario.startPath`. Every load of the
  * fixture the runner performs goes through it -- the unarmed load the
- * recording is made against, and the Flow lane's armed load -- because a Flow
- * generated from a recording that began at `startPath` begins there too.
+ * recording is made against, and the Flow lane's load before every Flow run,
+ * armed or not -- because a Flow generated from a recording that began at
+ * `startPath` begins there too.
  *
- * The Flow lane's post-arm load used to be `page.reload()`, which reloads
- * wherever the recording left the page rather than where the Flow starts. Most
- * fixtures end their recording on the page they opened on and could not tell
- * the difference; `auth-gate` ends on `/scenarios/auth-gate/account`, and once
- * the `expired` variant is armed that URL answers 302 to `/?expired=1`. So the
- * armed run began on a rendering the workflow never starts from: its page
- * facts were judged against the wrong page, the Flow's first action typed into
- * a `testid:username` that page does not carry, and the account GET recorded a
- * denial in the fixture state before the Flow had done anything. No scenario
- * wants the recording's last page here -- the Flow replays the recording from
- * its beginning, and `multi-tab`, the only other fixture whose recording
- * leaves this tab's URL in question, expects to be back on `startPath` anyway.
+ * The Flow lane's load used to be a `page.reload()` once a variant was armed,
+ * which reloads wherever the recording left the page rather than where the Flow
+ * starts, and an unarmed run had no load at all. Most fixtures end their
+ * recording on the page they opened on and could not tell the difference;
+ * `auth-gate` ends on `/scenarios/auth-gate/account`, and once the `expired`
+ * variant is armed that URL answers 302 to `/?expired=1`. So the armed run
+ * began on a rendering the workflow never starts from: its page facts were
+ * judged against the wrong page, the Flow's first action typed into a
+ * `testid:username` that page does not carry, and the account GET recorded a
+ * denial in the fixture state before the Flow had done anything. Unarmed, W18
+ * ran its Flow on that account page, where no password field exists. No
+ * scenario wants the recording's last page here -- the Flow replays the
+ * recording from its beginning, and `multi-tab`, the only other fixture whose
+ * recording leaves this tab's URL in question, expects to be back on
+ * `startPath` anyway.
  */
 export async function openScenarioStart(page: Pick<Page, "goto">, scenarioOrigin: string, scenario: Pick<WebScenario, "startPath">): Promise<void> {
   await page.goto(`${scenarioOrigin}${scenario.startPath}`);

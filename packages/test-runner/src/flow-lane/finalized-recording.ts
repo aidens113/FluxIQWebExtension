@@ -51,7 +51,12 @@ export type FinalizedRecording = {
   entryCount: number;
   waitedMs: number;
   polls: number;
-  /** Entries Core appended after this wait began — the size of the race that was lost before. */
+  /**
+   * Entries Core appended between this wait's first poll and its last. Not a
+   * count from Stop: the first poll follows `stopRecording`'s return and
+   * whatever the caller read before waiting, so entries appended before it are
+   * already in the first count. A second wait on a finished recording reads 0.
+   */
   entriesAppendedWhileWaiting: number;
 };
 

@@ -1,29 +1,37 @@
 import { RunnerFailure } from "../failure.js";
 
 /**
- * One discard Core audited against a recording this run produced: the entry's
- * type and id, the recording, Core's running counts for it, and how long after
+ * One discard Core audited against this run: the entry's type and id, the
+ * recording when the entry names one, Core's running counts, and how long after
  * finalization the message arrived. Nothing else of the entry travels. Its
- * `message`, client name and input id are not needed to see that a recording
- * reached Core short. `entryId` is Core's random audit id
+ * `message`, client name, session and input id are not needed to see that a
+ * recording reached Core short. `entryId` is Core's random audit id
  * (`ClientGatewayAuditLog.record`), carried so that two reads of the log are
- * unioned without counting an entry twice.
+ * unioned without counting an entry twice. `recordingId` is absent for an entry
+ * that named none and was counted by the run's session.
  */
 export type RecordingDiscard = {
   type: "recording.action_discarded" | "recording.event_discarded";
   entryId?: string;
-  recordingId: string;
+  recordingId?: string;
   discardedActions: number;
   discardedEvents: number;
   sinceFinalizedMs?: number;
 };
 
-/** The discards Core audited for this run's recordings, and the failure they amount to, if any. */
+/**
+ * What makes a discard this run's: the recordings it produced, and the session
+ * it paired. `sessionId` is required and may be `undefined`, so that no read can
+ * leave the session out by omission.
+ */
+export type RecordingDiscardScope = { recordingIds: Iterable<string>; sessionId: string | undefined };
+
+/** The discards Core audited for this run, and the failure they amount to, if any. */
 export type RecordingDiscardAudit = { discards: RecordingDiscard[]; failure: RunnerFailure | undefined };
 
 /**
  * Reads Core's gateway audit log, from the full `/api/client-gateway/snapshot`
- * response, for discards against the recordings this run produced.
+ * response, for discards against this run.
  *
  * Core audits a client message that reaches a recording after it was finalized
  * as `recording.action_discarded` or `recording.event_discarded`, and sends the
@@ -32,9 +40,14 @@ export type RecordingDiscardAudit = { discards: RecordingDiscard[]; failure: Run
  * So this audit is the only place a recording that reached Core short can be
  * seen, and a run that lost an action there must not exit 0.
  *
- * - Only entries whose `metadata.recordingId` is one of `recordingIds` count. A
- *   discard against another client's or an earlier run's recording is not this
- *   run's loss.
+ * - An entry whose `metadata.recordingId` is one of `scope.recordingIds` counts.
+ *   A discard against another client's or an earlier run's recording is not
+ *   this run's loss, even in this run's session.
+ * - An entry that names no recording counts when its `sessionId` is
+ *   `scope.sessionId`. Every audit entry keeps the session that sent the message
+ *   (`ClientGatewayAuditLog.record`), so a message Core attached to no recording
+ *   is still this run's loss when this run's session sent it. Another session's
+ *   is not, and with no paired session none is.
  * - Core audits a discard only when the late message arrives, so a single read
  *   can come too early. A later read passes an earlier read's discards as
  *   `earlier`, and the result is those followed by each entry of this read not
@@ -52,12 +65,12 @@ export type RecordingDiscardAudit = { discards: RecordingDiscard[]; failure: Run
  *   `earlier` already holds a lost action, which still fails as
  *   `recording.persistence`.
  */
-export function readRecordingDiscards(snapshot: unknown, recordingIds: Iterable<string>, earlier: readonly RecordingDiscard[] = []): RecordingDiscardAudit {
+export function readRecordingDiscards(snapshot: unknown, scope: RecordingDiscardScope, earlier: readonly RecordingDiscard[] = []): RecordingDiscardAudit {
   const auditLog = (snapshot as { payload?: { auditLog?: unknown } } | null | undefined)?.payload?.auditLog;
-  const wanted = new Set(recordingIds);
+  const wanted = new Set(scope.recordingIds);
   const discards = [...earlier];
   const seen = new Set(earlier.map(entryKey));
-  for (const discard of Array.isArray(auditLog) ? auditLog.flatMap(entry => discardOf(entry, wanted)) : []) {
+  for (const discard of Array.isArray(auditLog) ? auditLog.flatMap(entry => discardOf(entry, wanted, scope.sessionId)) : []) {
     const key = entryKey(discard);
     if (seen.has(key)) continue;
     seen.add(key);
@@ -69,32 +82,33 @@ export function readRecordingDiscards(snapshot: unknown, recordingIds: Iterable<
   return { discards, failure: undefined };
 }
 
-/** Per recording, the most actions any of its entries shows lost, as `N for <recordingId>`; undefined when none is. */
+/** Per recording, the most actions any of its entries shows lost, as `N for <recordingId>`, or `N with no recording id`; undefined when none is. */
 function lostActions(discards: readonly RecordingDiscard[]): string | undefined {
-  const lost = new Map<string, number>();
+  const lost = new Map<string | undefined, number>();
   for (const discard of discards) {
     if (discard.type !== "recording.action_discarded" && discard.discardedActions === 0) continue;
     lost.set(discard.recordingId, Math.max(lost.get(discard.recordingId) ?? 0, discard.discardedActions, 1));
   }
-  return lost.size ? [...lost].map(([recordingId, actions]) => `${actions} for ${recordingId}`).join(", ") : undefined;
+  return lost.size ? [...lost].map(([recordingId, actions]) => recordingId === undefined ? `${actions} with no recording id` : `${actions} for ${recordingId}`).join(", ") : undefined;
 }
 
 function entryKey(discard: RecordingDiscard): string {
-  return discard.entryId ?? JSON.stringify([discard.type, discard.recordingId, discard.discardedActions, discard.discardedEvents]);
+  return discard.entryId ?? JSON.stringify([discard.type, discard.recordingId ?? null, discard.discardedActions, discard.discardedEvents]);
 }
 
-function discardOf(entry: unknown, wanted: ReadonlySet<string>): RecordingDiscard[] {
+function discardOf(entry: unknown, wanted: ReadonlySet<string>, sessionId: string | undefined): RecordingDiscard[] {
   if (typeof entry !== "object" || entry === null) return [];
-  const { id, type, metadata } = entry as { id?: unknown; type?: unknown; metadata?: unknown };
+  const { id, type, sessionId: entrySessionId, metadata } = entry as { id?: unknown; type?: unknown; sessionId?: unknown; metadata?: unknown };
   if (type !== "recording.action_discarded" && type !== "recording.event_discarded") return [];
   const fields = typeof metadata === "object" && metadata !== null ? metadata as Record<string, unknown> : {};
-  const recordingId = fields.recordingId;
-  if (typeof recordingId !== "string" || !wanted.has(recordingId)) return [];
+  const recordingId = typeof fields.recordingId === "string" && fields.recordingId ? fields.recordingId : undefined;
+  const ours = recordingId === undefined ? sessionId !== undefined && entrySessionId === sessionId : wanted.has(recordingId);
+  if (!ours) return [];
   const sinceFinalizedMs = count(fields.sinceFinalizedMs);
   return [{
     type,
     ...(typeof id === "string" && id ? { entryId: id } : {}),
-    recordingId,
+    ...(recordingId === undefined ? {} : { recordingId }),
     discardedActions: count(fields.discardedActions) ?? 0,
     discardedEvents: count(fields.discardedEvents) ?? 0,
     ...(sinceFinalizedMs === undefined ? {} : { sinceFinalizedMs }),
