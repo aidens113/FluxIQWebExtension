@@ -10,16 +10,16 @@ source on 2026-09-13.
 ([`domain/src/sensitivity/signature.ts`](../../domain/src/sensitivity/signature.ts))
 is the rule. It reads three attributes and returns a verdict:
 
-- a control whose type is `password` (or the legacy `one-time-code` /
-  `credit-card` spellings a caller once used as types);
+- a control whose type is `password`, or `one-time-code` or `credit-card`
+  given as a type (both are `autocomplete` tokens rather than input types, and
+  the rule accepts them in either place);
 - `data-sensitive="true"`;
 - an `autocomplete` **token** that is `current-password`, `new-password`,
   `one-time-code`, or begins `cc-`.
 
 `autocomplete` is a space-separated token list, so every token is checked:
 `billing cc-number` is what a real card field carries, and matching the whole
-attribute instead of its tokens is how one copy of this rule missed it and a
-billing card number leaked in Wave 2.
+attribute instead of its tokens would miss it.
 
 **Signature, never value.** Nothing in the rule is given a control's contents,
 so a caller can ask before it reads.
@@ -27,8 +27,9 @@ so a caller can ask before it reads.
 It lives in the domain package because that is the only place every caller can
 reach: the structure audit forbids `domain/src` importing
 `apps/extension/src`, while the extension already depends on
-`@fluxiq-web-extension/domain/client`. Before Wave 3 the rule existed in four
-places and they disagreed. Two adapters sit over it and nothing else belongs
+`@fluxiq-web-extension/domain/client`. Every caller asks this one function
+rather than restating it, so no two callers can disagree about a control. Two
+adapters sit over it and nothing else belongs
 in the directory:
 
 - `sensitiveFieldSignatureOfDescriptor` / `isSensitiveElementDescriptor`
@@ -41,7 +42,7 @@ in the directory:
   element. It stays in the extension because the domain package must not
   depend on the browser.
 
-`apps/extension/src/shared/sensitive-field.ts` no longer holds a rule; it
+`apps/extension/src/shared/sensitive-field.ts` holds no rule of its own; it
 re-exports the domain's, so the extension's call sites keep one import path.
 
 ## Capture: The Value Never Leaves The Page
@@ -67,11 +68,12 @@ Withholding is unconditional and does not depend on a setting.
   `content/dom-snapshot.ts` withholds `selectedText` when the selection came
   out of, or reaches into, a sensitive control — the focused control, the
   anchor and focus nodes and their ancestors, and any sensitive control the
-  ranges intersect. This is a leak the value reader cannot close:
+  ranges intersect. This is a leak the value reader cannot close: Chromium's
   `getSelection().toString()` returns the text selected inside a focused
-  ordinary `<input>`, so a select-all in a card field used to put its value in
-  every snapshot. It was invisible only because Chromium returns nothing for
-  `type="password"`, which is a browser quirk rather than a control.
+  ordinary `<input>`, so without this guard a select-all in a card field puts
+  its value in every snapshot. Chromium returns nothing for
+  `type="password"`, which is a browser quirk rather than a control, so a
+  password field alone does not show the leak.
 - **Runtime confirmations.** `confirmedValue`
   (`background/connection/runtime-status.ts`) reads the value off the wire
   descriptor and withholds it for a sensitive control. Only the `type` and
@@ -79,7 +81,7 @@ Withholding is unconditional and does not depend on a setting.
   and `upload` confirmations carry none, and a tab confirmation carries only
   its operation and a pathname.
 
-What still travels is *presence*: `hasValue` on the descriptor and the form
+What travels is *presence*: `hasValue` on the descriptor and the form
 evidence, which carries nothing to redact.
 
 **`captureSettings` is not this boundary.** `inputValues` (default on) is a
@@ -93,8 +95,7 @@ what protects one.
 A verb proves its post-condition by comparing what it asked for with what the
 field ended up holding, and says both in `expected` and `actual`. Those
 strings reach the gateway on the result's `validation` and Core's failure
-record, so quoting a value there hands the secret to every consumer — the leak
-`web.dom.type` carried when it returned the typed text twice in one result.
+record, so quoting a value there hands the secret to every consumer.
 
 The producer's answer is not to drop the comparison but to stop quoting:
 `describeFieldValue` (`content/actions/value-redaction.ts`) replaces the value
@@ -125,19 +126,19 @@ Each replaces both comparison strings with one shared marker,
 `WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT`, unless the producer declared the
 strings already withheld. The marker is shared rather than phrased twice
 because a marker that reads differently at the two exits is one nobody can
-grep for, and grepping a serialized payload is how every leak in this plan was
-found. `status`, the code, the category, the retryable flag and the evidence
+grep for, and grepping a serialized payload is how a leak is found. `status`,
+the code, the category, the retryable flag and the evidence
 digest are unaffected, so a Flow still routes on the failure it was given.
 
 `isProducerRedactedComparison` **fails safe**: anything other than the boolean
 `true` reads as "not declared" and the caller withholds. An older client, a
-new verb nobody taught the flag, or a hand-written wire value is withheld
-exactly as before.
+new verb nobody taught the flag, or a hand-written wire value is withheld.
 
 A withheld comparison deliberately leaves carrying **no** flag. The flag means
-"the producer named a length rather than a value", not "this text is safe";
-stamping it at the extension-side guard was read downstream as the producer's
-declaration and disarmed the adapter's guard for every extension result.
+"the producer named a length rather than a value", not "this text is safe". A
+stamp at the extension-side guard would read downstream as the producer's
+declaration and disarm the adapter's guard for every extension result, so
+neither guard stamps one, and the adapter strips any flag it did not honour.
 
 ## Readers
 
@@ -234,9 +235,7 @@ pairing that fails stops the run before the Flow starts
   snapshot each action result carries, and so into Core's workspace, and no
   guard here or in Core withholds it. A display rule — dropping `visibleText`
   and `text`, not only the value, for an element marked `data-sensitive` — is
-  not built; whether to build it is ranked with the Week 1 blockers in the
-  [Week 1 plan](../working/mvp-week1-web-automation-reliability-plan.md). The
-  Lab's run leak check finds a declared secret shown this way
+  not built. The Lab's run leak check finds a declared secret shown this way
   ([testing facility](testing-facility.md)).
 - **Not shadow-DOM aware.** A selection inside a closed shadow root is not
   reachable, here or anywhere else in the recorder.

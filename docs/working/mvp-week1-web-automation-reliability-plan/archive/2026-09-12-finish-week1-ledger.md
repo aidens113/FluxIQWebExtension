@@ -3535,3 +3535,66 @@ The timeout forwarding and runner start guard entries, archived when Core's star
     only.
   - Root gates.
 - Outcome: Accepted
+
+## Part forty-six, archived 2026-09-13
+
+The Core start-node entry, archived when the architecture-page cleanup was recorded.
+
+### 2026-09-13 — g-core-start-node: a Flow with no declared start begins at its graph's root, and a compiled plan follows the same rule (Core)
+
+- Agent: worker `g-core-start-node`; the compiler version bump, the Migration Notes
+  merge and the verification by supervisor.
+- Changed, in Core under `packages/fluxiq/src/programs/automation-studio/runtime/`:
+  - **new `executor/start-node.ts`:** `chooseAutomationStudioStartNode` returns the one
+    Start node, or else the one node no edge from another node enters. An unwired End
+    node counts only when nothing else does. Several Start nodes, several roots or no
+    root refuse before any node runs, naming the case;
+  - `executor/graph-run.ts` uses it and fails with its message. `findStartNode` is
+    removed from `graph-navigation.ts`, and `executor/index.ts` exports the rule;
+  - **`compiled-plan.ts`:** `startNodeId` uses the same rule. By the supervisor,
+    `AUTOMATION_STUDIO_COMPILED_PLAN_COMPILER_VERSION` is `compiled-plan.v2`;
+  - tests: `executor/tests/start-node.test.ts` (13, new), four compiled-plan rows in
+    `runtime/tests/executor.test.ts`, a service row in
+    `recordings/tests/proposal-candidates.test.ts`, and the supervisor's version pins
+    in `storage/project/tests/compiled-plan-store.test.ts`;
+  - `automation-studio.md` "Where a run begins"; the 0.4.0 Migration Notes paragraph,
+    merged by the supervisor; both framework references.
+- Decisions:
+  - **No Start node is written at approval.** It would add an attempt before candidate
+    1 and fail `g-runner-start-guard` on every run. A chain generated into an empty
+    Subflow already has one root, its first candidate.
+  - **The compiler version is bumped.** `compileFlowRevision` reuses a stored `ready`
+    artifact for the same revision and compiler version. Without the bump, a plan
+    compiled before the fix keeps its old start.
+  - **An unwired End node is no start while another root exists.** Without this rule,
+    `service-adaptation-subflow.test.ts` saves an action and an End node with no edge,
+    and would refuse.
+- Found, for the Phase 1.6b ranking (`i-leftover-sizing` sizes both):
+  - a recording appended beside existing nodes gives a second root, so its run now
+    refuses instead of starting at the smallest id;
+  - among several edges on one route, the smallest edge id still wins.
+- Validation:
+  - **Supervisor mutations, `sup-start-node-mutations.mjs`,** over the start-node,
+    executor, proposal-candidates and service-adaptation-subflow tests:
+    - unmutated, "Tests 38 passed (38)";
+    - the root rule back to first-by-id, "Tests 11 failed | 27 passed (38)";
+    - a refusal falling back to the first listed node, "Tests 4 failed | 34 passed (38)";
+    - an unwired End counted as a root, "Tests 3 failed | 35 passed (38)";
+    - each file "restored identical=true".
+  - **Supervisor, the version pin:** compiled-plan-store "Tests 4 passed (4)"; with the
+    version back to v1, "Tests 2 failed | 2 passed (4)"; "restored identical=true".
+  - **Supervisor, Core gate `sup64`,** over this change and `g-web-timeout-forwarding`:
+    - `pnpm docs:reference` and `pnpm docs:check` exit=0, "Deterministic framework
+      reference is current.";
+    - `pnpm check` exit=0, "structure-audit: passed (123 warning(s), 256 baselined)";
+    - `packages/fluxiq` `npx vitest run --no-file-parallelism`: "Test Files 137
+      passed (137)", "Tests 955 passed (955)";
+    - `@fluxiq/web` "Test Files 228 passed (228)"; contracts and
+      client-gateway-websocket 1 file each.
+  - **Committed in Core:** `b54df69`, the timeout margin, then `20bb3b4`, this change.
+  - **Supervisor, Core build on `20bb3b4`:** `pnpm build` exit=0, "Compiled
+    successfully", on its first run; `pnpm package:lint` exit=0, with attw's
+    esm-only profile "node16 (from ESM): 🟢" and "bundler: 🟢" for each package.
+- Not verified: the Lab (`l-stage2d`); a stored artifact recompiling in a live host;
+  the web panel showing a refusal message.
+- Outcome: Accepted

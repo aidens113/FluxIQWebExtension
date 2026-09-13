@@ -36,14 +36,14 @@ has its full proof. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
-settled ledger entries are in parts one to forty-five of
+settled ledger entries are in parts one to forty-six of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13.**
-- **This repository:** `f840b75` and this record's commit, 109 commits ahead of
-  `origin/dev`; both `dev` branches are pushed next.
-- **Core:** `20bb3b4` and its plan commit, 16 commits ahead of `origin/dev`, `fluxiq`
-  **0.4.0**, built at `20bb3b4`. Its thirteen code commits are listed in Core's plan.
+- **This repository:** pushed; `origin/dev` holds the architecture-page commit
+  after `d639415`.
+- **Core:** `3cb8976`, pushed with this repository's `dev`; `fluxiq` **0.4.0**,
+  built at `20bb3b4`, its last code commit. Its thirteen code commits are listed in Core's plan.
   The newest two are `b54df69`, which waits a command's timeout plus a 3,000 ms
   answer margin, and `20bb3b4`, which begins a Flow with no Start node at its
   graph's root.
@@ -89,23 +89,21 @@ settled ledger entries are in parts one to forty-five of
   (P7, a new Core node outcome); both rows stay in the corpus.
 
 **In flight:**
-- **`d-arch-history` (docs):** takes plan history off six architecture pages, the
-  only Week 1 item in `i-leftover-sizing`'s ranking.
+- **`l-stage2d` (Lab):** the recheck of W15, W28, W25 `too-slow`, W17 and W05
+  `short-catalog`, then the week1 bench once, pinned to `d639415` and Core `3cb8976`.
+- **Done:** `d-arch-history`, six architecture pages without plan history, the only
+  Week 1 item in `i-leftover-sizing`'s ranking (ledger).
 - **Reported, read-only:** `i-leftover-sizing` and `i-week2-entry-points` (ledger).
   Changing a Flow while it runs is Week 2 work that needs a resume design.
 
 **Queued, in dependency order**
-1. **Push both `dev` branches together,** now that the root gates pass (ledger).
-2. **Lab recheck, `l-stage2d`:** W15 unarmed and `popup-blocked`, W28, W25
-   `too-slow`, W17 and W05 `short-catalog`, ×3 each. Then the week1 bench
-   `--repeat 1`.
-3. **Lab Stage 3:** run
+1. **Lab Stage 3,** after `l-stage2d`: run
    `FLUXIQ_TEST_ENV_FILES=none pnpm lab bench --corpus week1 --repeat 3 --target isolated`
    twice, then `demo:record` and `demo:run` provider-free.
-4. **Phase 1.6b:**
+2. **Phase 1.6b:**
+   - rule on W05 `short-catalog` and W28's scroll fix from `l-stage2d`;
    - rank blockers from both bench reports, starting from `i-leftover-sizing`'s
      table;
-   - commit `d-arch-history` once verified;
    - quote an observation for every criterion row.
 
 **Exit criteria as they stand**
@@ -635,65 +633,6 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 `2026-09-12-*` Wave 3 and live-validation files, and
 `2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-13 — g-core-start-node: a Flow with no declared start begins at its graph's root, and a compiled plan follows the same rule (Core)
-
-- Agent: worker `g-core-start-node`; the compiler version bump, the Migration Notes
-  merge and the verification by supervisor.
-- Changed, in Core under `packages/fluxiq/src/programs/automation-studio/runtime/`:
-  - **new `executor/start-node.ts`:** `chooseAutomationStudioStartNode` returns the one
-    Start node, or else the one node no edge from another node enters. An unwired End
-    node counts only when nothing else does. Several Start nodes, several roots or no
-    root refuse before any node runs, naming the case;
-  - `executor/graph-run.ts` uses it and fails with its message. `findStartNode` is
-    removed from `graph-navigation.ts`, and `executor/index.ts` exports the rule;
-  - **`compiled-plan.ts`:** `startNodeId` uses the same rule. By the supervisor,
-    `AUTOMATION_STUDIO_COMPILED_PLAN_COMPILER_VERSION` is `compiled-plan.v2`;
-  - tests: `executor/tests/start-node.test.ts` (13, new), four compiled-plan rows in
-    `runtime/tests/executor.test.ts`, a service row in
-    `recordings/tests/proposal-candidates.test.ts`, and the supervisor's version pins
-    in `storage/project/tests/compiled-plan-store.test.ts`;
-  - `automation-studio.md` "Where a run begins"; the 0.4.0 Migration Notes paragraph,
-    merged by the supervisor; both framework references.
-- Decisions:
-  - **No Start node is written at approval.** It would add an attempt before candidate
-    1 and fail `g-runner-start-guard` on every run. A chain generated into an empty
-    Subflow already has one root, its first candidate.
-  - **The compiler version is bumped.** `compileFlowRevision` reuses a stored `ready`
-    artifact for the same revision and compiler version. Without the bump, a plan
-    compiled before the fix keeps its old start.
-  - **An unwired End node is no start while another root exists.** Without this rule,
-    `service-adaptation-subflow.test.ts` saves an action and an End node with no edge,
-    and would refuse.
-- Found, for the Phase 1.6b ranking (`i-leftover-sizing` sizes both):
-  - a recording appended beside existing nodes gives a second root, so its run now
-    refuses instead of starting at the smallest id;
-  - among several edges on one route, the smallest edge id still wins.
-- Validation:
-  - **Supervisor mutations, `sup-start-node-mutations.mjs`,** over the start-node,
-    executor, proposal-candidates and service-adaptation-subflow tests:
-    - unmutated, "Tests 38 passed (38)";
-    - the root rule back to first-by-id, "Tests 11 failed | 27 passed (38)";
-    - a refusal falling back to the first listed node, "Tests 4 failed | 34 passed (38)";
-    - an unwired End counted as a root, "Tests 3 failed | 35 passed (38)";
-    - each file "restored identical=true".
-  - **Supervisor, the version pin:** compiled-plan-store "Tests 4 passed (4)"; with the
-    version back to v1, "Tests 2 failed | 2 passed (4)"; "restored identical=true".
-  - **Supervisor, Core gate `sup64`,** over this change and `g-web-timeout-forwarding`:
-    - `pnpm docs:reference` and `pnpm docs:check` exit=0, "Deterministic framework
-      reference is current.";
-    - `pnpm check` exit=0, "structure-audit: passed (123 warning(s), 256 baselined)";
-    - `packages/fluxiq` `npx vitest run --no-file-parallelism`: "Test Files 137
-      passed (137)", "Tests 955 passed (955)";
-    - `@fluxiq/web` "Test Files 228 passed (228)"; contracts and
-      client-gateway-websocket 1 file each.
-  - **Committed in Core:** `b54df69`, the timeout margin, then `20bb3b4`, this change.
-  - **Supervisor, Core build on `20bb3b4`:** `pnpm build` exit=0, "Compiled
-    successfully", on its first run; `pnpm package:lint` exit=0, with attw's
-    esm-only profile "node16 (from ESM): 🟢" and "bundler: 🟢" for each package.
-- Not verified: the Lab (`l-stage2d`); a stored artifact recompiling in a live host;
-  the web panel showing a refusal message.
-- Outcome: Accepted
-
 ### 2026-09-13 — i-leftover-sizing and i-week2-entry-points: the known leftovers ranked, and where Week 2 starts
 
 - Agent: workers `i-leftover-sizing` and `i-week2-entry-points`, both read-only; spot
@@ -755,6 +694,39 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
     `pnpm exec playwright test -c e2e/playwright.content.config.ts --workers=2` from
     `apps/extension`, exit=0, "222 passed (42.4s)".
 - Not verified: live browser behaviour, which `l-stage2d` observes.
+- Outcome: Accepted
+
+### 2026-09-13 — d-arch-history: six architecture pages describe the design as it is now
+
+- Agent: worker `d-arch-history`; decisions and verification by supervisor.
+- Changed, in `docs/architecture/`:
+  - **`web-capabilities.md`:** the "Changed by" column, its legend and the header's
+    history are gone. Each partial row's gap stays in "Why this state";
+  - `failure-taxonomy.md`, `sensitive-values.md`, `page-evidence.md`,
+    `element-identity.md` and `repository-layout.md`: history lines restated in the
+    present tense.
+- Found, and corrected on the pages:
+  - an accepted exact match does report a score: `vetoCandidate` returns
+    `{ measurement }` on accept, and `exactResolution` writes `bestScore` and
+    `confidence`;
+  - a scenario manifest names a failure by its code value, such as
+    `web.target.ambiguous`, not by its key.
+- Decisions:
+  - dated "verified against source" stamps and decision IDs stay on the pages. They
+    are freshness markers and cross-references, not plan history;
+  - wave and date history in source comments is ranked later.
+- Validation: supervisor:
+  - `dcd-check-links.mjs` over the six pages: "checked 72 relative links in 6
+    page(s), 0 unresolved";
+  - a grep for `Wave [0-9]|Phase 1\.[0-9]|Step [0-9]+, landed|Before Phase|until Wave`
+    over `docs/architecture`: 0 lines, where the worker found 34 before;
+  - a cell count over `web-capabilities.md`'s tables: the capability table is "table
+    of 26 lines, cells per line: {"6":26}", and every other table is uniform;
+  - the corrections against code: `veto.ts:202` returns `{ measurement }` on accept;
+    `resolve-target.ts:292` spreads `bestScore` and `confidence`;
+    `ambiguous-targets/manifest.ts:40` holds `code: "web.target.ambiguous"`; Core
+    `element-fingerprint.ts:282-283` holds −0.1 and −0.8, as the page states.
+- Not verified: the rendered Markdown.
 - Outcome: Accepted
 
 ## Open Questions

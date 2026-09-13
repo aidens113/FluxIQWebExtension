@@ -14,8 +14,9 @@ stage it always carries.
 ## The Closed Set
 
 `WEB_AUTOMATION_FAILURE_CODES` names fifteen codes. Read a code from that
-object rather than writing its string: the key is what the plan, the scenario
-manifests and the briefs call it, and the value is what Core stores.
+object rather than writing its string: the key is the name source code and
+this page use, and the value is the code Core stores and a scenario manifest's
+expected failure names.
 
 | Name | Code | Category | Retryable | Stage |
 | --- | --- | --- | --- | --- |
@@ -102,11 +103,9 @@ Four places make that narrowing bite:
   domain does not name becomes `UNKNOWN` carrying the unrecognised code in
   `actual` — visible drift rather than a quiet degrade to "the action failed".
 
-There is deliberately no `WebAutomationRuntimeError` class. One existed from
-Wave 1 for this job and no producer ever used it; it was removed on
-2026-09-12 in favour of the carried record, which says what was expected and
-what was seen, needs no shared class identity across bundles, and is
-compiler-checked at the throw.
+There is deliberately no shared error class for this. The carried record takes
+its place: it says what was expected and what was seen, needs no shared class
+identity across bundles, and is compiler-checked at the throw.
 
 ## Who Produces What
 

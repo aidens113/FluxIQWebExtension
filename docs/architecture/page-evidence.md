@@ -21,11 +21,10 @@ imports it through `apps/extension/src/content/evidence/types.ts`, which
 re-exports the same types under the extension's shorter local spellings and
 adds nothing.
 
-It was restated on both sides until Wave 3, and the two restatements came
-apart three times in one plan — a flag read from a field no producer ever
-wrote, five items read at top-level paths against a producer writing one
-nested object, and a state-path ratchet that passed vacuously over thirty
-paths. Each side was well tested against its own restatement.
+A contract restated on each side drifts with every gate green, because each
+side is tested against its own restatement: a reader can look for a field no
+producer writes, or at a path no producer writes to, and a ratchet over the
+reader's paths can pass over an empty set.
 
 Three mechanisms keep the two ends joined, and each closes a hole the previous
 one left:
@@ -68,11 +67,6 @@ with no dialogs should cost nothing to say so.
 | `regions` | `evidence/regions.ts` | landmark roles with labels, selectors and bounds |
 | `repeating` | `evidence/repeating.ts` | runs of sibling elements from one template: container, signature, item count, a representative item and its field test ids |
 | `forms` | `evidence/forms.ts` | forms with their controls: type, name, label, required, disabled, **whether** a value is present, the `autocomplete` tokens, and a `sensitive` marker |
-
-Five of these — dialogs, overlays, loading, regions and repeating structures —
-had no representation anywhere before Phase 1.4. The forms model, navigation
-state, element change, interaction recency and the truncation totals existed
-only inside the recorder, or not as fields anything downstream could read.
 
 Two flags are easy to misread and are worth stating plainly:
 
@@ -120,9 +114,9 @@ Merging is per item, not per snapshot:
 
 Both the merge and the per-frame restatement are written with `present<T>()`
 over every contract key, so a ninth key on the contract stops them compiling
-until each says what it does with it. Before that, a key added to the contract
-was produced per frame and then silently dropped in the merge — two documents
-carrying less evidence than one.
+until each says what it does with it. Without that, a key added to the
+contract would be produced per frame and silently dropped in the merge — two
+documents carrying less evidence than one.
 
 The action path does not merge. An action runs in one frame — the top frame,
 unless the command addresses a child frame, by its frame id or by the path of
@@ -132,9 +126,9 @@ frame's own snapshot.
 
 ## The Four Caps
 
-Three workers independently added a flag called `truncated` to this path in
-one wave, and a reader who found one could not tell which cap had bitten. The
-canonical statement, with the remedy for each, is in
+Four caps can cut evidence short on this path, each with its own remedy, and a
+flag that says only `truncated` does not say which cap bit. The canonical
+statement, with the remedy for each, is in
 [`domain/src/recording/web-state/evidence/input.ts`](../../domain/src/recording/web-state/evidence/input.ts).
 The rule: a bare `truncated` is legal only inside the structure whose own cap
 set it, beside that structure's counts; anywhere a flag would summarise more

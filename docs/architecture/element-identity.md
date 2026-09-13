@@ -23,8 +23,8 @@ returns the element **and** the measurement that chose it, and throws
   several times, enumerate the controls that could plausibly be the recorded
   one and ask Core's element matcher which of them it is.
 
-Level 1 keeps its precedence. What changed in Week 1 Phase 1.3 is that its
-answer is now gated, counted, and vetoed before it is acted on.
+Level 1 takes precedence, and its answer is gated, counted, and vetoed before
+it is acted on.
 
 ## Level 1: The Exact Strategies
 
@@ -69,12 +69,12 @@ ambiguous rather than taking the first in document order.
 ## The Level 1 Veto
 
 Level 1's queries are not equally strong. A class set and a line of text
-collide constantly, and until decision **D14** a match made on one was acted
-on with no score and no floor: a page whose Save button had been replaced by
-`<button class="btn btn-primary">Delete workspace</button>` was resolved by
-the class-set query and clicked, while Level 2 scored the same element below
-zero and refused it. Every safety property the resolver had guarded the
-cautious path only.
+collide constantly, and the floor, the margin and the ambiguity refusal guard
+Level 2 only. Unvetoed, a match made on a class set would be acted on with no
+score and no floor: on a page whose Save button is replaced by
+`<button class="btn btn-primary">Delete workspace</button>`, the class-set
+query resolves the impostor, while Level 2 scores the same element below zero
+and refuses it. Decision **D14** puts a veto in front of every exact match.
 
 `identity/veto.ts` scores an exact match against the recording with the same
 matcher Level 2 uses, and refuses it on either of two rules:
@@ -146,10 +146,12 @@ The confidence a resolution reports is Core's own measurement of the winning
 candidate, never a constant.
 
 **Why the floor is reachable at all.** Level 2 runs only when every exact
-strategy missed, which means the recorded id and test id are both gone — and
-Core used to charge a *missing* stable identifier nearly as heavily as a
-*contradicted* one, so no candidate could clear 0.35. Decision **D13** changed
-that constant in Core rather than working around it here. The measurements,
+strategy missed, which means the recorded id and test id are both gone. Core
+therefore charges a *missing* stable identifier far less than a
+*contradicted* one (`MISSING_STABLE_IDENTIFIER_SIMILARITY` is −0.1,
+`CONTRADICTED_STABLE_IDENTIFIER_SIMILARITY` −0.8), so a candidate whose
+identifiers were dropped can still clear 0.35. Decision **D13** puts that
+difference in Core rather than working around it here. The measurements,
 the alternatives rejected, and D13's interaction with D14 are in the
 [Week 1 plan](../working/mvp-week1-web-automation-reliability-plan.md).
 
@@ -158,17 +160,20 @@ the alternatives rejected, and D13's interaction with D14 are in the
 Every result carries `WebAutomationTargetResolution`
 ([`domain/src/actions/types.ts`](../../domain/src/actions/types.ts)): the
 `strategy` (`selector`, `coordinates`, `visual-target`, `fingerprint`,
-`active-element`, or `scored-candidate`), the `candidateCount`, and — for a
-scored win — `bestScore`, `runnerUpScore` and `confidence`.
+`active-element`, or `scored-candidate`), the `candidateCount`, and, when the
+element was scored, `bestScore` and `confidence`, with `runnerUpScore` for a
+scored win that had a runner-up.
 `webAutomationActionResultPayload` carries it on the wire. It is safe to carry
 unguarded because of what it is: a closed enum and four numbers, with nothing
 derived from page content.
 
-An exact resolution reports its strategy and its count and no scores. The veto
-does score every exact match, but it returns a measurement only when it
-refuses; reporting an accepted match's score would mean either scoring twice
-on the critical path or changing what `vetoCandidate` returns. That is the
-last piece of decision D1 still open.
+An exact resolution reports its strategy, its count, and the veto's
+measurement of the match it accepted, as `bestScore` and `confidence`
+(`exactResolution` in `resolve-target.ts`). The veto scores every exact match
+on the way past and returns that measurement whether it accepts or refuses, so
+the number costs no second scoring. There is no runner-up, because only one
+element was weighed, and both numbers are absent when the recording named
+nothing the veto could weigh the match by.
 
 A failed resolution throws `TargetResolutionError`, which carries both the
 failure record and the resolution:

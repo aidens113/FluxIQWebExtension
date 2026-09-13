@@ -4139,3 +4139,14 @@ names) on the pages.
   running.
 
 **Report:** `reports/d-arch-history.md`.
+
+## Amendment to `l-stage2d` — pins, and two more figures
+
+**Pins:** this repository `d639415` and Core `3cb8976`, both `origin/dev`. Core's last
+code commit is `20bb3b4`.
+
+**Also report:**
+- for every Flow-lane run, `startCandidateIndex` and `stoppedWithoutFailedAttempt`
+  from its `flow-lane.json` (`g-runner-start-guard`);
+- for any `recording.persistence` failure in the bench, whether its discards are
+  runtime confirmations, as kinds and counts only (`i-leftover-sizing`, item 7d).
