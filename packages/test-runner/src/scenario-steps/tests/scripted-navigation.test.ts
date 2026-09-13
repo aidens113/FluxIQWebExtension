@@ -1,260 +1,231 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { BrowserContext, CDPSession, Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { RunnerFailure } from "../../failure.js";
-import { runScriptedNavigation } from "../scripted-navigation.js";
+import { createScriptedNavigationDriver } from "../scripted-navigation.js";
 
 const url = "http://127.0.0.1:4100/scenarios/navigation/history";
-type Listener = (event: { frameId: string; loaderId: string; name: string }) => void;
-type HarnessOptions = {
-  commandError?: unknown;
-  commandPending?: boolean;
-  detachError?: unknown;
-  detachPending?: boolean;
-  errorText?: string | undefined;
-  loadBeforeCommandResponse?: boolean;
-  loaderId?: string | undefined;
-  sessionError?: unknown;
-  sessionPending?: boolean;
+const intentId = "intent-123";
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+
+type Message = { type: string; url?: string; intentId?: string };
+type Fixture = {
+  arm?: unknown | Promise<unknown>;
+  acknowledge?: unknown | Promise<unknown>;
+  cancel?: unknown | Promise<unknown>;
+  gotoError?: unknown;
+  gotoElapsedMs?: number;
 };
 
-function harness(options: HarnessOptions = {}) {
-  const calls: unknown[] = [];
-  const listeners = new Set<Listener>();
-  const timers = new Map<object, () => void>();
-  let resolveSession!: (session: CDPSession) => void;
-  const sessionGate = new Promise<CDPSession>((resolve) => { resolveSession = resolve; });
-  const session = {
-    on: (event: string, listener: Listener) => { calls.push(["on", event]); listeners.add(listener); return session; },
-    off: (event: string, listener: Listener) => { calls.push(["off", event]); listeners.delete(listener); return session; },
-    send: async (method: string, parameters?: unknown): Promise<Record<string, unknown>> => {
-      calls.push(["send", method, parameters]);
-      if (method !== "Page.navigate") return {};
-      if (options.commandError) throw options.commandError;
-      if (options.commandPending) return new Promise(() => undefined);
-      const response: Record<string, unknown> = { frameId: "frame", loaderId: options.loaderId ?? "loader" };
-      if ("errorText" in options) response.errorText = options.errorText;
-      if (options.loadBeforeCommandResponse) {
-        for (const listener of [...listeners]) listener({ frameId: "frame", loaderId: "loader", name: "load" });
-      }
-      return response;
-    },
-    detach: async () => {
-      calls.push(["detach"]);
-      if (options.detachError) throw options.detachError;
-      if (options.detachPending) return new Promise<void>(() => undefined);
-    },
-  } as unknown as CDPSession;
-  const context = {
-    newCDPSession: () => {
-      calls.push(["session"]);
-      if (options.sessionError) return Promise.reject(options.sessionError);
-      if (options.sessionPending) return sessionGate;
-      return Promise.resolve(session);
-    },
-  } as unknown as BrowserContext;
-  const page = { url: () => url } as unknown as Page;
-  const timerOptions = {
-    setTimer: (callback: () => void) => { const handle = {}; timers.set(handle, callback); return handle as ReturnType<typeof setTimeout>; },
-    clearTimer: (handle: ReturnType<typeof setTimeout>) => { timers.delete(handle as unknown as object); },
+function harness(fixture: Fixture = {}) {
+  const calls: Array<Message | { goto: string; options: unknown }> = [];
+  let clock = 1_000;
+  let nextTimer = 1;
+  const timers = new Map<number, { callback: () => void; delayMs: number }>();
+  const response = (message: Message): unknown | Promise<unknown> => {
+    if (message.type === "fluxiq.test.armScriptedNavigation") return fixture.arm ?? { ok: true, intentId };
+    if (message.type === "fluxiq.test.awaitScriptedNavigation") return fixture.acknowledge ?? { ok: true, intentId };
+    return fixture.cancel ?? { ok: true, cancelled: true };
   };
+  const control = {
+    evaluate: async (_callback: unknown, message: Message) => { calls.push(message); return response(message); },
+  } as unknown as Page;
+  const page = {
+    goto: async (destination: string, options: unknown) => {
+      calls.push({ goto: destination, options });
+      if (fixture.gotoError !== undefined) throw fixture.gotoError;
+      clock += fixture.gotoElapsedMs ?? 0;
+      return null;
+    },
+  } as unknown as Page;
+  const driver = createScriptedNavigationDriver(control, {
+    now: () => clock,
+    setTimer: (callback, delayMs) => { const id = nextTimer++; timers.set(id, { callback, delayMs }); return id as unknown as ReturnType<typeof setTimeout>; },
+    clearTimer: (id) => { timers.delete(id as unknown as number); },
+    cleanupTimeoutMs: 20,
+  });
   return {
-    calls,
-    context,
-    page,
-    resolveSession: () => resolveSession(session),
-    listenerCount: () => listeners.size,
+    calls, page, driver,
+    advance: (milliseconds: number) => { clock += milliseconds; },
+    expire: () => { const timer = timers.values().next().value as { callback: () => void; delayMs: number } | undefined; assert.ok(timer); timer.callback(); },
     timerCount: () => timers.size,
-    expire: () => { for (const callback of [...timers.values()]) callback(); },
-    load: (frameId = "frame", loaderId = "loader") => {
-      for (const listener of [...listeners]) listener({ frameId, loaderId, name: "load" });
-    },
-    timerOptions,
+    timerDelays: () => [...timers.values()].map(timer => timer.delayMs),
   };
 }
 
-async function reachNavigate(calls: unknown[]): Promise<void> {
-  for (let attempt = 0; attempt < 10 && !calls.some((call) => Array.isArray(call) && call[1] === "Page.navigate"); attempt += 1) await Promise.resolve();
-}
-
-async function reachDetach(calls: unknown[]): Promise<void> {
-  for (let attempt = 0; attempt < 10 && !calls.some((call) => Array.isArray(call) && call[0] === "detach"); attempt += 1) await Promise.resolve();
-}
-
-function options(h: ReturnType<typeof harness>, timeoutMs = 2_500) {
-  return { timeoutMs, ...h.timerOptions };
-}
-
-test("enables lifecycle events before sending the exact typed Page.navigate request", async () => {
+test("arms, loads, awaits post-send acknowledgement, and cancels in exact order", async () => {
   const h = harness();
-  const navigation = runScriptedNavigation(h.context, h.page, url, options(h));
-  await reachNavigate(h.calls);
-  assert.deepEqual(h.calls.slice(0, 5), [
-    ["session"],
-    ["on", "Page.lifecycleEvent"],
-    ["send", "Page.enable", undefined],
-    ["send", "Page.setLifecycleEventsEnabled", { enabled: true }],
-    ["send", "Page.navigate", { url, transitionType: "typed" }],
+  await h.driver(h.page, url, 500);
+  assert.deepEqual(h.calls, [
+    { type: "fluxiq.test.armScriptedNavigation", url },
+    { goto: url, options: { waitUntil: "load", timeout: 500 } },
+    { type: "fluxiq.test.awaitScriptedNavigation", intentId },
+    { type: "fluxiq.test.cancelScriptedNavigation", intentId },
   ]);
-  h.load();
-  await navigation;
-  assert.deepEqual(h.calls.slice(-2), [["off", "Page.lifecycleEvent"], ["detach"]]);
-  assert.equal(h.listenerCount(), 0);
   assert.equal(h.timerCount(), 0);
 });
 
-test("an already-current URL cannot satisfy the resulting new-document wait", async () => {
-  const h = harness();
+test("waits for acknowledgement after load and gives it only the absolute deadline remainder", async () => {
+  const acknowledgement = deferred<unknown>();
+  const h = harness({ acknowledge: acknowledgement.promise, gotoElapsedMs: 300 });
+  const navigation = h.driver(h.page, url, 500);
+  await until(() => h.calls.some(call => "type" in call && call.type === "fluxiq.test.awaitScriptedNavigation"));
+  assert.deepEqual(h.timerDelays(), [200]);
   let settled = false;
-  const navigation = runScriptedNavigation(h.context, h.page, url, options(h)).then(() => { settled = true; });
-  await reachNavigate(h.calls);
-  for (let turn = 0; turn < 5; turn += 1) await Promise.resolve();
-  assert.equal(settled, false, "the command response alone is not a new loaded document");
-  h.load();
+  void navigation.finally(() => { settled = true; }).catch(() => undefined);
+  await Promise.resolve();
+  assert.equal(settled, false);
+  acknowledgement.resolve({ ok: true, intentId });
   await navigation;
   assert.equal(settled, true);
+  assert.deepEqual(h.calls.at(-1), { type: "fluxiq.test.cancelScriptedNavigation", intentId });
 });
 
-test("a matching load emitted before the command response closes the fast-event race", async () => {
-  const h = harness({ loadBeforeCommandResponse: true });
-  await runScriptedNavigation(h.context, h.page, url, options(h));
-  assert.equal(h.listenerCount(), 0);
-});
-
-test("redirect lifecycle noise is ignored until the command's final document loads", async () => {
-  const h = harness();
-  let settled = false;
-  const navigation = runScriptedNavigation(h.context, h.page, url, options(h)).then(() => { settled = true; });
-  await reachNavigate(h.calls);
-  h.load("frame", "redirect-loader");
-  for (let turn = 0; turn < 10; turn += 1) await Promise.resolve();
-  assert.equal(settled, false);
-  assert.equal(h.calls.some((call) => Array.isArray(call) && call[0] === "detach"), false);
-  h.load("frame", "loader");
-  await navigation;
-});
-
-test("a pending CDP command is bounded and cleanup removes every owned resource", async () => {
-  const h = harness({ commandPending: true });
-  const navigation = runScriptedNavigation(h.context, h.page, url, options(h, 25));
-  await reachNavigate(h.calls);
-  h.expire();
-  await assert.rejects(
-    navigation,
-    (error: unknown) => error instanceof RunnerFailure && error.category === "runtime.behavior" && /command did not finish in time/u.test(error.message),
-  );
-  assert.deepEqual(h.calls.at(-1), ["detach"]);
-  assert.equal(h.listenerCount(), 0);
+test("an acknowledgement started with no deadline remaining is observed when it rejects late", async () => {
+  const acknowledgement = deferred<unknown>();
+  const h = harness({ acknowledge: acknowledgement.promise, gotoElapsedMs: 500 });
+  await assert.rejects(h.driver(h.page, url, 500), failure("recording.persistence", /did not acknowledge/u));
+  assert.deepEqual(h.calls.at(-1), { type: "fluxiq.test.cancelScriptedNavigation", intentId });
+  acknowledgement.reject(new Error("private late transport text"));
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(h.timerCount(), 0);
 });
 
-test("pending session acquisition is bounded and a late session is cleaned up", async () => {
-  const h = harness({ sessionPending: true });
-  const navigation = runScriptedNavigation(h.context, h.page, url, options(h, 25));
+test("arm time is subtracted from the goto and acknowledgement deadline", async () => {
+  const arm = deferred<unknown>();
+  const h = harness({ arm: arm.promise });
+  const navigation = h.driver(h.page, url, 500);
+  h.advance(200);
+  arm.resolve({ ok: true, intentId });
+  await navigation;
+  assert.deepEqual(h.calls[1], { goto: url, options: { waitUntil: "load", timeout: 300 } });
+});
+
+test("an arm timeout is authoritative and a late arm is cancelled once", async () => {
+  const arm = deferred<unknown>();
+  const h = harness({ arm: arm.promise });
+  const navigation = h.driver(h.page, url, 25);
   await Promise.resolve();
   h.expire();
-  await assert.rejects(
-    navigation,
-    (error: unknown) => error instanceof RunnerFailure && error.category === "runtime.behavior" && /session acquisition did not finish in time/u.test(error.message),
-  );
-  assert.equal(h.listenerCount(), 0);
-  assert.equal(h.timerCount(), 0);
-  h.resolveSession();
-  await reachDetach(h.calls);
-  for (let turn = 0; turn < 5; turn += 1) await Promise.resolve();
-  assert.deepEqual(h.calls.at(-1), ["detach"]);
+  await assert.rejects(navigation, failure("extension.worker", /did not arm/u));
+  arm.resolve({ ok: true, intentId });
+  await until(() => h.calls.filter(call => "type" in call && call.type === "fluxiq.test.cancelScriptedNavigation").length === 1 && h.timerCount() === 0);
+  assert.equal(h.calls.some(call => "goto" in call), false);
   assert.equal(h.timerCount(), 0);
 });
 
-test("pending detach is bounded after success and after a primary failure", async () => {
-  const success = harness({ detachPending: true });
-  const successfulNavigation = runScriptedNavigation(success.context, success.page, url, options(success));
-  await reachNavigate(success.calls);
-  success.load();
-  await reachDetach(success.calls);
-  success.expire();
-  await assert.rejects(
-    successfulNavigation,
-    (error: unknown) => error instanceof RunnerFailure && error.category === "environment.missing" && /cleanup did not finish in time/u.test(error.message),
-  );
-  assert.equal(success.timerCount(), 0);
-
-  const primary = harness({ commandError: new Error("command failed"), detachPending: true });
-  const failedNavigation = runScriptedNavigation(primary.context, primary.page, url, options(primary));
-  await reachDetach(primary.calls);
-  primary.expire();
-  await assert.rejects(
-    failedNavigation,
-    (error: unknown) => error instanceof RunnerFailure && error.category === "runtime.behavior" && /rejected the scripted navigation command/u.test(error.message),
-  );
-  assert.equal(primary.timerCount(), 0);
+test("navigation rejection cancels without awaiting and preserves the primary failure", async () => {
+  const h = harness({ gotoError: new Error("private page text"), cancel: Promise.reject(new Error("private cleanup text")) });
+  await assert.rejects(h.driver(h.page, url), (error: unknown) => {
+    assert.ok(error instanceof RunnerFailure);
+    assert.equal(error.category, "runtime.behavior");
+    assert.equal(error.message.includes("private"), false);
+    return true;
+  });
+  assert.equal(h.calls.some(call => "type" in call && call.type === "fluxiq.test.awaitScriptedNavigation"), false);
+  assert.deepEqual(h.calls.at(-1), { type: "fluxiq.test.cancelScriptedNavigation", intentId });
 });
 
-test("command and protocol rejection dispose a still-pending document waiter", async () => {
-  for (const [fixture, expected] of [
-    [{ commandError: new Error("command failed") }, /rejected the scripted navigation command/u],
-    [{ errorText: "navigation rejected" }, /could not navigate/u],
-  ] as const) {
+test("a primary navigation failure wins over a cleanup timeout", async () => {
+  const cancel = deferred<unknown>();
+  const h = harness({ gotoError: new Error("page failed"), cancel: cancel.promise });
+  const navigation = h.driver(h.page, url);
+  await until(() => h.calls.some(call => "type" in call && call.type === "fluxiq.test.cancelScriptedNavigation"));
+  h.expire();
+  await assert.rejects(navigation, failure("runtime.behavior", /did not complete scripted navigation/u));
+  assert.equal(h.timerCount(), 0);
+});
+
+test("missing or negative acknowledgement cancels once and maps only fixed codes", async () => {
+  const pending = deferred<unknown>();
+  const timeout = harness({ acknowledge: pending.promise, cancel: Promise.reject(new Error("private cleanup")) });
+  const navigation = timeout.driver(timeout.page, url, 25);
+  await until(() => timeout.calls.some(call => "type" in call && call.type === "fluxiq.test.awaitScriptedNavigation"));
+  timeout.expire();
+  await assert.rejects(navigation, failure("recording.persistence", /did not acknowledge/u));
+
+  const refused = harness({ acknowledge: { ok: false, code: "send_failed" } });
+  await assert.rejects(refused.driver(refused.page, url), (error: unknown) => {
+    assert.ok(error instanceof RunnerFailure);
+    assert.equal(error.category, "recording.persistence");
+    assert.deepEqual(error.details, { reasonCode: "send_failed" });
+    assert.equal(error.message.includes("send_failed"), false);
+    return true;
+  });
+});
+
+test("an acknowledgement transport rejection is fixed extension.worker and still cancels", async () => {
+  const h = harness({ acknowledge: Promise.reject(new Error("private acknowledgement transport text")) });
+  await assert.rejects(h.driver(h.page, url), (error: unknown) => {
+    assert.ok(error instanceof RunnerFailure);
+    assert.equal(error.category, "extension.worker");
+    assert.equal(error.message.includes("private"), false);
+    return true;
+  });
+  assert.deepEqual(h.calls.at(-1), { type: "fluxiq.test.cancelScriptedNavigation", intentId });
+});
+
+test("malformed IDs and acknowledgements never leak response text", async () => {
+  for (const fixture of [
+    { arm: { ok: true, intentId: "bad id", error: "private arm text" } },
+    { acknowledge: { ok: true, intentId: "different", error: "private ack text" } },
+  ]) {
     const h = harness(fixture);
-    await assert.rejects(
-      runScriptedNavigation(h.context, h.page, url, options(h)),
-      (error: unknown) => error instanceof RunnerFailure && error.category === "runtime.behavior" && expected.test(error.message),
-    );
-    assert.equal(h.listenerCount(), 0);
-    assert.equal(h.timerCount(), 0);
-    assert.deepEqual(h.calls.at(-1), ["detach"]);
+    await assert.rejects(h.driver(h.page, url), (error: unknown) => error instanceof RunnerFailure && error.category === "extension.worker" && !error.message.includes("private"));
   }
 });
 
-test("empty or undefined protocol error text is not a rejection", async () => {
-  for (const errorText of ["", undefined]) {
-    const h = harness({ errorText });
-    const navigation = runScriptedNavigation(h.context, h.page, url, options(h));
-    await reachNavigate(h.calls);
-    h.load();
-    await navigation;
+test("every response shape rejects extra own fields without exposing them", async () => {
+  const cases: Array<{ fixture: Fixture; category: RunnerFailure["category"] }> = [
+    { fixture: { arm: { ok: true, intentId, url: "private arm page" } }, category: "extension.worker" },
+    { fixture: { acknowledge: { ok: true, intentId, error: "private acknowledgement" } }, category: "extension.worker" },
+    { fixture: { acknowledge: { ok: false, code: "send_failed", error: "private send failure" } }, category: "extension.worker" },
+    { fixture: { cancel: { ok: true, cancelled: false, url: "private cleanup page" } }, category: "extension.worker" },
+  ];
+  for (const { fixture, category } of cases) {
+    const h = harness(fixture);
+    await assert.rejects(h.driver(h.page, url), (error: unknown) => {
+      assert.ok(error instanceof RunnerFailure);
+      assert.equal(error.category, category);
+      assert.equal(error.message.includes("private"), false);
+      return true;
+    });
   }
 });
 
-test("a same-document response without a loader is rejected and cleaned up", async () => {
-  const h = harness({ loaderId: "" });
-  await assert.rejects(
-    runScriptedNavigation(h.context, h.page, url, options(h)),
-    (error: unknown) => error instanceof RunnerFailure && error.category === "runtime.behavior" && /did not create a new document/u.test(error.message),
-  );
-  assert.equal(h.listenerCount(), 0);
+test("successful work requires bounded cleanup confirmation", async () => {
+  const cancel = deferred<unknown>();
+  const h = harness({ cancel: cancel.promise });
+  const navigation = h.driver(h.page, url);
+  await until(() => h.calls.some(call => "type" in call && call.type === "fluxiq.test.cancelScriptedNavigation"));
+  h.expire();
+  await assert.rejects(navigation, failure("extension.worker", /confirm scripted navigation cleanup/u));
   assert.equal(h.timerCount(), 0);
 });
 
-test("primary command, protocol, and load failures win over simultaneous detach failures", async () => {
-  for (const [fixture, expire] of [
-    [{ commandError: new Error("command failed"), detachError: new Error("detach failed") }, false],
-    [{ errorText: "navigation rejected", detachError: new Error("detach failed") }, false],
-    [{ commandPending: true, detachError: new Error("detach failed") }, true],
-    [{ detachError: new Error("detach failed") }, true],
-  ] as const) {
-    const h = harness(fixture);
-    const navigation = runScriptedNavigation(h.context, h.page, url, options(h));
-    await reachNavigate(h.calls);
-    if (expire) h.expire();
-    await assert.rejects(navigation, (error: unknown) => error instanceof RunnerFailure && error.category === "runtime.behavior" && !/cleanup/u.test(error.message));
-    assert.deepEqual(h.calls.at(-1), ["detach"]);
+test("unsafe destinations fail before messages or navigation", async () => {
+  for (const destination of [
+    "https://example.com/path", "http://user:pass@localhost/path",
+    "http://localhost/path?secret=yes", "http://localhost/path#fragment",
+    `http://localhost/${"x".repeat(2_100)}`,
+  ]) {
+    const h = harness();
+    await assert.rejects(h.driver(h.page, destination), failure("fixture.invalid", /safe loopback/u));
+    assert.deepEqual(h.calls, []);
   }
 });
 
-test("unsupported CDP and successful-navigation cleanup failures keep explicit categories", async () => {
-  const unsupported = harness({ sessionError: new Error("unsupported") });
-  await assert.rejects(
-    runScriptedNavigation(unsupported.context, unsupported.page, url, options(unsupported)),
-    (error: unknown) => error instanceof RunnerFailure && error.category === "environment.missing" && /requires a Chromium CDP session/u.test(error.message),
-  );
+function failure(category: RunnerFailure["category"], message: RegExp) {
+  return (error: unknown) => error instanceof RunnerFailure && error.category === category && message.test(error.message);
+}
 
-  const cleanup = harness({ detachError: new Error("detach failed") });
-  const navigation = runScriptedNavigation(cleanup.context, cleanup.page, url, options(cleanup));
-  await reachNavigate(cleanup.calls);
-  cleanup.load();
-  await assert.rejects(
-    navigation,
-    (error: unknown) => error instanceof RunnerFailure && error.category === "environment.missing" && /session cleanup failed/u.test(error.message),
-  );
-});
+async function until(predicate: () => boolean): Promise<void> {
+  for (let turn = 0; turn < 20; turn += 1) { if (predicate()) return; await Promise.resolve(); }
+  assert.fail("condition did not become true");
+}

@@ -18,6 +18,7 @@ import { NavigationRecorder, type NavigationOrigin, type NavigationVerdict } fro
 import { PointerClickFilter } from "../pointer-click-filter";
 import { RecordedEventIntake, type RecordedEventIntakeDeps } from "../recorded-event-intake";
 import type { RecordingEvidenceReporter } from "../recording-evidence";
+import { ScriptedNavigationIntent } from "../scripted-navigation-intent";
 
 type HarnessOptions = {
   // A real recorder, for the rows that exercise its policy end to end. Without
@@ -25,6 +26,8 @@ type HarnessOptions = {
   readonly navigation?: NavigationRecorder;
   // Send a derived event back into this intake, as the facade does.
   readonly reenter?: boolean;
+  readonly claimScriptedCommit?: (details: chrome.webNavigation.WebNavigationTransitionCallbackDetails, intake: RecordedEventIntake) => boolean;
+  readonly sendGate?: Promise<void>;
 };
 
 function harness(state: RecordingState = "recording", options: HarnessOptions = {}) {
@@ -61,7 +64,8 @@ function harness(state: RecordingState = "recording", options: HarnessOptions = 
     shouldRecord: (_tabId: number, url: string, _timestamp: number, origin: NavigationOrigin): NavigationVerdict => {
       classified.push([url, origin]);
       return { kind: "navigation" };
-    }
+    },
+    noteRecordedTab: () => undefined
   } as unknown as NavigationRecorder;
   const attachment = {
     setRecordingState: async (tabId: number, recordingOn: boolean, frameId?: number) => {
@@ -73,10 +77,14 @@ function harness(state: RecordingState = "recording", options: HarnessOptions = 
   const deps: RecordedEventIntakeDeps = {
     send: (async (type: string, payload: Record<string, unknown>) => {
       sent.push({ type, payload });
+      await options.sendGate;
     }) as RecordedEventIntakeDeps["send"],
     recording,
     page: { unsupported: () => undefined } as unknown as ActivePage,
     navigation,
+    scriptedNavigation: {
+      claimCommit: (details: chrome.webNavigation.WebNavigationTransitionCallbackDetails) => options.claimScriptedCommit?.(details, intake as RecordedEventIntake) ?? false
+    } as never,
     clicks: new PointerClickFilter(),
     sequence: new EventSequence(),
     evidence,
@@ -220,6 +228,51 @@ test("only a top frame's commit is scheduled: a link or submit as the page's own
     ["https://shop.test/bookmark", "other"],
     ["https://shop.test/spa", "other"]
   ]);
+});
+
+test("an owned commit has first refusal and re-enters once as typed, whatever its browser label", async () => {
+  for (const transitionType of ["typed", "link", "auto_bookmark", "reload"]) {
+    const h = harness("recording", {
+      reenter: true,
+      claimScriptedCommit: (details, intake) => {
+        void intake.recordScriptedNavigation(details.tabId, "http://127.0.0.1:4173/final", details.timeStamp);
+        return true;
+      }
+    });
+    h.intake.noteNavigationCommitted(commit("http://127.0.0.1:4173/final", transitionType, 20));
+    await settle();
+    assert.deepEqual(h.reentered.map((entry) => [entry.payload.kind, entry.payload.metadata, entry.tabId]), [
+      ["browser.navigation", { transition: "typed" }, 4]
+    ]);
+    assert.equal(h.counted(), 1);
+    assert.equal(h.sent.length, 1, `${transitionType} is not also classified by the ordinary path`);
+  }
+});
+
+test("the composed intent acknowledgement waits for the intake gateway send", async () => {
+  let releaseSend: () => void = () => undefined;
+  const sendGate = new Promise<void>(resolve => { releaseSend = resolve; });
+  const h = harness("recording", { reenter: true, sendGate });
+  let debounce: (() => void) | undefined;
+  const intent = new ScriptedNavigationIntent({
+    recordingState: () => "recording",
+    activeTabId: () => 4,
+    recordNavigation: (tabId, url, timestamp) => h.intake.recordScriptedNavigation(tabId, url, timestamp),
+    createId: () => "intent-composed",
+    setTimer: (callback, delayMs) => { if (delayMs === 250) debounce = callback; return delayMs as unknown as ReturnType<typeof setTimeout>; },
+    clearTimer: () => undefined
+  });
+  assert.deepEqual(intent.arm("http://127.0.0.1:4173/final"), { ok: true, intentId: "intent-composed" });
+  assert.equal(intent.claimCommit(commit("http://127.0.0.1:4173/final", "link", 20)), true);
+  debounce?.();
+  const acknowledgement = intent.await("intent-composed");
+  let settled = false;
+  void acknowledgement.then(() => { settled = true; });
+  await settle();
+  assert.equal(settled, false);
+  assert.equal(h.sent.at(-1)?.type, "client.recording_event");
+  releaseSend();
+  assert.deepEqual(await acknowledgement, { ok: true, intentId: "intent-composed" });
 });
 
 test("a typed navigation and a content-ready page re-enter through the facade's public path", async () => {

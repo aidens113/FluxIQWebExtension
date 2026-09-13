@@ -40,6 +40,21 @@ test("the two pairing waits identify whether timeout happened before or after ap
   assert.ok(source.includes("...(pairingWaitDetails ? { failureDetails: pairingWaitDetails } : {})"));
 });
 
+test("scripted navigation is bound only after recording is confirmed and each step waits for acknowledgement and cleanup", async () => {
+  const source = await runnerSource();
+  const confirmed = source.indexOf('await pollStatus(extensionControl, value => value.recordingState === "recording")');
+  const bound = source.indexOf("scriptedNavigation: createScriptedNavigationDriver(extensionControl)");
+  const loop = source.indexOf("for (const step of recordingWorkflow.recordingScript)", bound);
+  const run = source.indexOf("await runner.run(step)", loop);
+  const complete = source.indexOf('"step.complete"', run);
+  const stop = source.indexOf('type: "fluxiq.stopRecording"', loop);
+  for (const [name, index] of Object.entries({ confirmed, bound, loop, run, complete, stop })) assert.ok(index > 0, `${name} is in the runner`);
+  assert.ok(confirmed < bound && bound < loop, "no intent can arm before the extension reports recording");
+  assert.ok(loop < run && run < complete, "step.complete waits for the injected driver's acknowledgement and cleanup");
+  assert.ok(complete < stop, "recording stops only after every scripted step settles");
+  assert.equal(source.match(/createScriptedNavigationDriver\(/gu)?.length, 1, "one control-page-bound driver is created for the recording lane");
+});
+
 test("the evaluation is a hashed artifact of the bundle, written before it is sealed", async () => {
   const source = await runnerSource();
   const manifestWritten = source.indexOf('bundle.writeStructured("run.json", manifest)');

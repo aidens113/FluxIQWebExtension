@@ -26,7 +26,10 @@ var RUNTIME_MESSAGES = {
   contentEvent: "fluxiq.contentEvent",
   executeAction: "fluxiq.executeAction",
   captureSnapshot: "fluxiq.captureSnapshot",
-  statusChanged: "fluxiq.statusChanged"
+  statusChanged: "fluxiq.statusChanged",
+  testArmScriptedNavigation: "fluxiq.test.armScriptedNavigation",
+  testAwaitScriptedNavigation: "fluxiq.test.awaitScriptedNavigation",
+  testCancelScriptedNavigation: "fluxiq.test.cancelScriptedNavigation"
 };
 
 // src/shared/browser.ts
@@ -4078,6 +4081,7 @@ var ActiveRecording = class {
       ...projectId !== void 0 ? { projectId } : {},
       endedAt
     }) : void 0;
+    this.deps.scriptedNavigation.cancelAll("recording_stopped");
     this.recordingState = "idle";
     this.stoppedRecordingId = recordingId;
     this.deps.clicks.clear();
@@ -4162,6 +4166,7 @@ var ActiveRecording = class {
     if (projectId !== void 0) {
       await this.deps.persistSession(compactObject2({ ...this.deps.session(), projectId }));
     }
+    this.deps.scriptedNavigation.cancelAll("recording_stopped");
     this.resetLog();
     this.deps.navigation.clearRecordingTabs();
     this.recordingBlock = void 0;
@@ -4245,6 +4250,7 @@ var ActiveRecording = class {
   applyRefusal(refusal, attempts) {
     this.handshake.cancel();
     if (this.recordingState === "recording") {
+      this.deps.scriptedNavigation.cancelAll("recording_stopped");
       this.recordingState = "idle";
       this.deps.clicks.clear();
       void this.deps.attachment.broadcast({ type: "recording", recording: false, settings: this.deps.settings() }, false);
@@ -5150,6 +5156,142 @@ var NavigationRecorder = class {
   }
 };
 
+// src/background/connection/scripted-navigation-intent.ts
+var INTENT_LIFETIME_MS = 3e4;
+var REDIRECT_DEBOUNCE_MS = 250;
+var MAX_URL_LENGTH = 2048;
+var MAX_PATHNAME_LENGTH = 1024;
+function safeDestination(value, requireBare = true) {
+  if (typeof value !== "string" || value.length === 0 || value.length > MAX_URL_LENGTH) return void 0;
+  try {
+    const parsed = new URL(value);
+    if (!["http:", "https:"].includes(parsed.protocol)) return void 0;
+    if (!["127.0.0.1", "[::1]", "localhost"].includes(parsed.hostname)) return void 0;
+    if (parsed.username || parsed.password || requireBare && (parsed.search || parsed.hash)) return void 0;
+    if (parsed.pathname.length > MAX_PATHNAME_LENGTH) return void 0;
+    return { url: parsed.href, origin: parsed.origin, pathname: parsed.pathname };
+  } catch {
+    return void 0;
+  }
+}
+var ScriptedNavigationIntent = class {
+  constructor(deps) {
+    this.deps = deps;
+    this.createId = deps.createId ?? (() => crypto.randomUUID());
+    this.now = deps.now ?? Date.now;
+    this.setTimer = deps.setTimer ?? ((callback, delayMs) => setTimeout(callback, delayMs));
+    this.clearTimer = deps.clearTimer ?? ((timer) => clearTimeout(timer));
+  }
+  byId = /* @__PURE__ */ new Map();
+  byTab = /* @__PURE__ */ new Map();
+  createId;
+  now;
+  setTimer;
+  clearTimer;
+  arm(url) {
+    const destination = safeDestination(url);
+    if (!destination) return { ok: false, code: "invalid_request" };
+    if (this.deps.recordingState() !== "recording") return { ok: false, code: "not_recording" };
+    const tabId = this.deps.activeTabId();
+    if (tabId === void 0 || !Number.isSafeInteger(tabId) || tabId < 0) return { ok: false, code: "no_automation_tab" };
+    if (this.byTab.has(tabId)) return { ok: false, code: "busy" };
+    const id = this.createId();
+    let resolve = () => void 0;
+    const completion = new Promise((done) => {
+      resolve = done;
+    });
+    const intent = { id, tabId, ...destination, completion, resolve, deadlineAt: this.now() + INTENT_LIFETIME_MS, state: "armed", expiryTimer: void 0, debounceTimer: void 0, retentionTimer: void 0 };
+    intent.expiryTimer = this.setTimer(() => this.finish(intent, { ok: false, code: "expired" }), INTENT_LIFETIME_MS);
+    this.byId.set(id, intent);
+    this.byTab.set(tabId, id);
+    return { ok: true, intentId: id };
+  }
+  async await(intentId) {
+    if (typeof intentId !== "string" || intentId.length === 0 || intentId.length > 128) {
+      return { ok: false, code: "unknown_intent" };
+    }
+    const intent = this.byId.get(intentId);
+    if (!intent) return { ok: false, code: "unknown_intent" };
+    const result = await intent.completion;
+    this.remove(intent);
+    return result;
+  }
+  cancel(intentId) {
+    if (typeof intentId !== "string") return false;
+    const intent = this.byId.get(intentId);
+    if (!intent || intent.state === "terminal") return false;
+    this.finish(intent, { ok: false, code: "cancelled" });
+    return true;
+  }
+  cancelTab(tabId) {
+    const intent = this.intentForTab(tabId);
+    if (intent) this.finish(intent, { ok: false, code: "tab_closed" });
+  }
+  cancelAll(code) {
+    for (const intent of [...this.byId.values()]) {
+      if (intent.state !== "terminal") this.finish(intent, { ok: false, code });
+    }
+  }
+  claimCommit(details) {
+    if (details.frameId !== 0) return false;
+    const intent = this.intentForTab(details.tabId);
+    if (!intent) return false;
+    if (intent.state === "armed") {
+      this.clearTimer(intent.debounceTimer);
+      intent.debounceTimer = this.setTimer(() => {
+        intent.debounceTimer = void 0;
+        void this.settleCommit(intent.id, details.url, details.timeStamp);
+      }, REDIRECT_DEBOUNCE_MS);
+    }
+    return true;
+  }
+  async settleCommit(intentId, committedUrl, timestamp) {
+    const intent = this.byId.get(intentId);
+    if (!intent || intent.state !== "armed") return;
+    const committed = safeDestination(committedUrl, false);
+    if (!committed || committed.origin !== intent.origin || committed.pathname !== intent.pathname) {
+      this.finish(intent, { ok: false, code: "destination_mismatch" });
+      return;
+    }
+    intent.state = "sending";
+    try {
+      await this.deps.recordNavigation(intent.tabId, intent.url, timestamp);
+      this.finish(intent, { ok: true, intentId: intent.id });
+    } catch {
+      this.finish(intent, { ok: false, code: "send_failed" });
+    }
+  }
+  intentForTab(tabId) {
+    const id = this.byTab.get(tabId);
+    return id === void 0 ? void 0 : this.byId.get(id);
+  }
+  finish(intent, result) {
+    if (intent.state === "terminal") return;
+    intent.state = "terminal";
+    intent.result = result;
+    if (this.byTab.get(intent.tabId) === intent.id) this.byTab.delete(intent.tabId);
+    this.clearTimer(intent.expiryTimer);
+    this.clearTimer(intent.debounceTimer);
+    intent.expiryTimer = void 0;
+    intent.debounceTimer = void 0;
+    intent.resolve(result);
+    const remaining = intent.deadlineAt - this.now();
+    if (remaining > 0) intent.retentionTimer = this.setTimer(() => this.remove(intent), remaining);
+    else this.remove(intent);
+  }
+  remove(intent) {
+    if (this.byId.get(intent.id) !== intent) return;
+    this.byId.delete(intent.id);
+    if (this.byTab.get(intent.tabId) === intent.id) this.byTab.delete(intent.tabId);
+    this.clearTimer(intent.expiryTimer);
+    this.clearTimer(intent.debounceTimer);
+    this.clearTimer(intent.retentionTimer);
+    intent.expiryTimer = void 0;
+    intent.debounceTimer = void 0;
+    intent.retentionTimer = void 0;
+  }
+};
+
 // src/background/connection/pointer-click-filter.ts
 function frameKey(tabId, frameId) {
   return `${tabId ?? "tab"}|${frameId ?? "frame"}`;
@@ -5316,9 +5458,22 @@ var RecordedEventIntake = class {
     await this.deps.recordEvent(readyPayload, tabId, frameId);
   }
   noteNavigationCommitted(details) {
-    if (details.frameId !== 0 || details.transitionType === "reload") return;
+    if (details.frameId !== 0) return;
+    if (this.deps.scriptedNavigation.claimCommit(details)) return;
+    if (details.transitionType === "reload") return;
     const origin = details.transitionType === "link" || details.transitionType === "form_submit" ? "page" : details.transitionType === "typed" ? "typed" : "other";
     this.scheduleNavigation(details.tabId, details.url, details.timeStamp, origin);
+  }
+  async recordScriptedNavigation(tabId, url, timestamp) {
+    this.deps.navigation.noteRecordedTab(tabId, url, timestamp);
+    await this.deps.recordEvent({
+      kind: "browser.navigation",
+      sequence: this.deps.sequence.next(),
+      url,
+      title: "",
+      eventTimestampMs: timestamp,
+      metadata: { transition: "typed" }
+    }, tabId);
   }
   noteHistoryStateUpdated(details) {
     this.scheduleNavigation(details.tabId, details.url, details.timeStamp, "other");
@@ -6075,6 +6230,11 @@ var FluxIQConnection = class {
       this.lastError = message;
     };
     const recordEvent = (...args) => this.handleRecordingEvent(...args);
+    this.scriptedNavigation = new ScriptedNavigationIntent({
+      recordingState: () => this.recording.state(),
+      activeTabId: () => this.page.tabId(),
+      recordNavigation: (tabId, url, timestamp) => this.intake.recordScriptedNavigation(tabId, url, timestamp)
+    });
     this.gateway = new GatewaySession({
       settings: () => this.settings,
       session: () => this.session,
@@ -6175,6 +6335,7 @@ var FluxIQConnection = class {
       evidence: this.evidence,
       attachment: this.attachment,
       navigation: this.navigation,
+      scriptedNavigation: this.scriptedNavigation,
       clicks: this.clicks,
       sequence: this.sequence,
       activityLog: this.activityLog,
@@ -6190,6 +6351,7 @@ var FluxIQConnection = class {
       recording: this.recording,
       page: this.page,
       navigation: this.navigation,
+      scriptedNavigation: this.scriptedNavigation,
       clicks: this.clicks,
       sequence: this.sequence,
       evidence: this.evidence,
@@ -6225,6 +6387,7 @@ var FluxIQConnection = class {
   sequence = new EventSequence();
   runtimeStatus = new RuntimeStatusTracker();
   navigation = new NavigationRecorder();
+  scriptedNavigation;
   clicks = new PointerClickFilter();
   transport = { sendToTab, allTabFrames };
   gateway;
@@ -6286,6 +6449,7 @@ var FluxIQConnection = class {
     await this.gateway.connect();
   }
   disconnect() {
+    this.scriptedNavigation.cancelAll("cancelled");
     this.gateway.stopReconnecting();
     this.recording.cancelStart();
     this.gateway.closeClient();
@@ -6311,7 +6475,17 @@ var FluxIQConnection = class {
     return this.page.handleTabUpdate(tab);
   }
   handleTabRemoved(tabId) {
+    this.scriptedNavigation.cancelTab(tabId);
     return this.page.handleTabRemoved(tabId);
+  }
+  armScriptedNavigation(url) {
+    return this.scriptedNavigation.arm(url);
+  }
+  awaitScriptedNavigation(intentId) {
+    return this.scriptedNavigation.await(intentId);
+  }
+  cancelScriptedNavigation(intentId) {
+    return this.scriptedNavigation.cancel(intentId);
   }
   selectAutomationTab(tabId) {
     return this.page.select(tabId);
@@ -6339,6 +6513,24 @@ var FluxIQConnection = class {
     this.emitStatus();
   }
 };
+
+// src/background/scripted-navigation-control.ts
+function isControlPage(sender) {
+  if (sender.id !== chrome.runtime.id || sender.tab !== void 0 || typeof sender.url !== "string") return false;
+  return sender.url === chrome.runtime.getURL("sidepanel/index.html") || sender.url === chrome.runtime.getURL("popup/index.html");
+}
+async function handleScriptedNavigationControl(message, sender, manager) {
+  const arm = message.type === RUNTIME_MESSAGES.testArmScriptedNavigation;
+  const awaitIntent = message.type === RUNTIME_MESSAGES.testAwaitScriptedNavigation;
+  const cancel = message.type === RUNTIME_MESSAGES.testCancelScriptedNavigation;
+  if (!arm && !awaitIntent && !cancel) return { handled: false };
+  if (!isControlPage(sender)) {
+    return cancel ? { handled: true, response: { ok: true, cancelled: false } } : { handled: true, response: { ok: false, code: "forbidden" } };
+  }
+  if (arm) return { handled: true, response: manager.armScriptedNavigation(message.url) };
+  if (awaitIntent) return { handled: true, response: await manager.awaitScriptedNavigation(message.intentId) };
+  return { handled: true, response: { ok: true, cancelled: manager.cancelScriptedNavigation(message.intentId) } };
+}
 
 // src/background/index.ts
 var connection;
@@ -6403,6 +6595,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function handleRuntimeMessage(message, sender) {
   const manager = await getConnection();
   const typed = message;
+  const scriptedNavigation = await handleScriptedNavigationControl(typed, sender, manager);
+  if (scriptedNavigation.handled) return scriptedNavigation.response;
   if (typed.type === RUNTIME_MESSAGES.getStatus) {
     return { ok: true, status: await statusWithQueue(manager) };
   }

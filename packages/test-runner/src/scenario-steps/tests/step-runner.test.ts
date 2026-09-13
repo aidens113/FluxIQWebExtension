@@ -56,32 +56,20 @@ function harness() {
   const context = new EventEmitter();
   Object.assign(context, {
     pages: () => pages,
-    newCDPSession: async () => {
-      const cdp = new EventEmitter();
-      Object.assign(cdp, {
-        send: async (method: string, parameters?: { url?: string; transitionType?: string }) => {
-          if (method !== "Page.navigate") { log.push(`cdp ${method}`); return {}; }
-          log.push(`cdp ${method} ${parameters?.transitionType} ${parameters?.url}`);
-          cdp.emit("Page.lifecycleEvent", { frameId: "frame", loaderId: "loader", name: "load" });
-          return { frameId: "frame", loaderId: "loader" };
-        },
-        detach: async () => { log.push("cdp detach"); },
-      });
-      return cdp;
-    },
   });
   let clock = 1_000;
   return {
     log, first, pages, context: context as unknown as BrowserContext,
     now: () => (clock += 5),
+    scriptedNavigation: async (_page: Page, url: string, timeoutMs?: number) => { log.push(`navigate ${url} ${timeoutMs ?? "default"}`); },
   };
 }
 
 test("performs every operation on the active tab as trusted Playwright input and times each step", async () => {
   const uploads = await mkdtemp(path.join(os.tmpdir(), "fluxiq-steps-"));
   try {
-    const { log, first, pages, context, now } = harness();
-    const runner = new ScenarioStepRunner({ context, page: first, origin, isScenarioUrl: (url) => url.startsWith(`${origin}/`), uploadDirectory: uploads, now });
+    const { log, first, pages, context, now, scriptedNavigation } = harness();
+    const runner = new ScenarioStepRunner({ context, page: first, origin, isScenarioUrl: (url) => url.startsWith(`${origin}/`), uploadDirectory: uploads, scriptedNavigation, now });
     const steps: ScenarioStep[] = [
       { id: "name", operation: "type", target: "testid:name", value: "Ada" },
       { id: "plan", operation: "select", target: "testid:plan", value: "team" },
@@ -93,7 +81,7 @@ test("performs every operation on the active tab as trusted Playwright input and
       { id: "frame", operation: "click", target: "frame:Checkout/testid:pay" },
       { id: "ready", operation: "waitForState", target: "testid:result" },
       { id: "mark", operation: "checkpoint" },
-      { id: "go", operation: "navigate", path: "/scenarios/basic-form/" },
+      { id: "go", operation: "navigate", path: "/scenarios/basic-form/", timeoutMs: 321 },
     ];
     for (const step of steps) assert.deepEqual(await runner.run(step), {});
     assert.deepEqual(log, [
@@ -106,10 +94,7 @@ test("performs every operation on the active tab as trusted Playwright input and
       'upload [data-testid="file"] notes.txt',
       'click iframe[title="Checkout"] >> [data-testid="pay"]',
       'wait [data-testid="result"] visible',
-      "cdp Page.enable",
-      "cdp Page.setLifecycleEventsEnabled",
-      `cdp Page.navigate typed ${origin}/scenarios/basic-form/`,
-      "cdp detach",
+      `navigate ${origin}/scenarios/basic-form/ 321`,
     ]);
     assert.equal(await readFile(path.join(uploads, "notes.txt"), "utf8"), "FluxIQ deterministic upload\nfile: notes.txt\n");
     const timings = runner.timings();
@@ -123,8 +108,8 @@ test("performs every operation on the active tab as trusted Playwright input and
 });
 
 test("switchTab, closeTab, waitForDownload, and extract act on and read the active tab", async () => {
-  const { log, first, pages, context, now } = harness();
-  const runner = new ScenarioStepRunner({ context, page: first, origin, isScenarioUrl: (url) => url.startsWith(`${origin}/`), uploadDirectory: os.tmpdir(), now });
+  const { log, first, pages, context, now, scriptedNavigation } = harness();
+  const runner = new ScenarioStepRunner({ context, page: first, origin, isScenarioUrl: (url) => url.startsWith(`${origin}/`), uploadDirectory: os.tmpdir(), scriptedNavigation, now });
   const details = fakePage(`${origin}/scenarios/multi-tab/details`, log);
   pages.push(details);
   await runner.run({ id: "to-details", operation: "switchTab", path: "/scenarios/multi-tab/details" });
@@ -140,8 +125,8 @@ test("switchTab, closeTab, waitForDownload, and extract act on and read the acti
 });
 
 test("a failing step is timed as failed and rethrown; malformed steps are fixture errors", async () => {
-  const { first, context, now } = harness();
-  const runner = new ScenarioStepRunner({ context, page: first, origin, isScenarioUrl: () => true, uploadDirectory: os.tmpdir(), now });
+  const { first, context, now, scriptedNavigation } = harness();
+  const runner = new ScenarioStepRunner({ context, page: first, origin, isScenarioUrl: () => true, uploadDirectory: os.tmpdir(), scriptedNavigation, now });
   await assert.rejects(runner.run({ id: "gone", operation: "click", target: "testid:broken" }), /element not found/);
   assert.deepEqual(runner.timings().map((timing) => [timing.stepId, timing.outcome]), [["gone", "failed"]]);
   await assert.rejects(runner.run({ id: "no-target", operation: "click" }), (error: unknown) => error instanceof RunnerFailure && error.category === "fixture.invalid");

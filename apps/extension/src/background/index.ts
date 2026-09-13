@@ -5,6 +5,7 @@ import { FluxIQConnection } from "./connection";
 import { describeTab } from "./tabs";
 import { clearSession, readOrCreateClientId, readQueuedEvents, readSession, readSettings, writeSession, writeSettings } from "./storage";
 import { acceptActionEvidencePort } from "./action-evidence";
+import { handleScriptedNavigationControl } from "./scripted-navigation-control";
 
 let connection: FluxIQConnection | undefined;
 
@@ -83,6 +84,9 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
 async function handleRuntimeMessage(message: unknown, sender: chrome.runtime.MessageSender): Promise<unknown> {
   const manager = await getConnection();
   const typed = message as { type?: string; [key: string]: unknown };
+
+  const scriptedNavigation = await handleScriptedNavigationControl(typed, sender, manager);
+  if (scriptedNavigation.handled) return scriptedNavigation.response;
 
   if (typed.type === RUNTIME_MESSAGES.getStatus) {
     return { ok: true, status: await statusWithQueue(manager) };

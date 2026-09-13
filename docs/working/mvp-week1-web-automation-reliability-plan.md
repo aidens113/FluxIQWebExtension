@@ -13,10 +13,9 @@ Related: [30-Day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 
 ## Current State
 
-**Session objective, set by the user on 2026-09-12: COMPLETELY FINISH every
-Week 1 item, using as many subagents as needed to do it quickly AND properly,
-with EVERYTHING tested.** This is the objective of the session that resumes this
-document. Read it literally:
+**Session objective, set by the user on 2026-09-12: COMPLETELY FINISH every Week
+1 item, using subagents to do it quickly AND properly, with EVERYTHING tested.**
+This is the resumed session objective. Read it literally:
 
 - **Finished** means all six exit criteria in [Objective](#objective) carry a
   quoted observation from a real Testing Lab run in the Work Ledger, and every
@@ -29,9 +28,8 @@ document. Read it literally:
   every fix before its ledger entry, and single observations labelled as such,
   because this machine has faulty RAM.
 
-**Phase, as of 2026-09-13: repairing the last Stage 4 recording race.** W02's targeted
-loaded recheck passed 3/3 and exercised post-timeout recovery polling each time. W10
-primary passed 3/3, but `broken-link` retained two candidates only 1/3 times, proving
+**Phase, as of 2026-09-13: validating the last Stage 4 recording race.** W02 passed 3/3
+with recovery polling. W10 primary passed 3/3, but `broken-link` retained two candidates only 1/3 times, proving
 elapsed time cannot make Playwright navigation standalone. No exit criterion yet has
 its full proof. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
@@ -112,11 +110,13 @@ settled ledger entries are in parts one to fifty of
   `15974e7` and Core `19468b7` are pushed.
 - `l-final-recheck-w02` passed 3/3 with nine durable attempts per run; every dispatch-to-settle interval exceeded 30 seconds. W10 had zero leaks and six correct
   functional verdicts, but consecutive one-candidate variants reject the settle
-  barrier. Chromium `typed` navigation passed independent review, mutations, 626 package tests, and root check/test/build; live W10 proof remains.
+  barrier. CDP `typed` navigation also failed live (primary 1/3). Its replacement
+  intent/ack seam passed cross-review, package suites, and supervisor mutations;
+  live W10 proof is next.
 
 **Queued, in dependency order**
-1. Commit the explicit-transition candidate, recheck W10 live, push the accepted
-   pin, then restart both complete repeat-three benches concurrently.
+1. Integrate/test the acknowledged-intent seam, recheck W10 live, push the
+   accepted pin, then restart both complete repeat-three benches concurrently.
 2. **Phase 1.6b:** run the tracked comparison, complete `i-ranking-draft`, and
    write the six observed exit-criterion figures into the ledger.
 

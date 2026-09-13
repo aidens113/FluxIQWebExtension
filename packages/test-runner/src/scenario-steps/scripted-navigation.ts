@@ -1,174 +1,160 @@
-import type { BrowserContext, CDPSession, Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { RunnerFailure } from "../failure.js";
 
-const DEFAULT_NAVIGATION_TIMEOUT_MS = 30_000;
-const DETACH_TIMEOUT_MS = 5_000;
+const DEFAULT_TIMEOUT_MS = 30_000;
+const CLEANUP_TIMEOUT_MS = 5_000;
+const MAX_URL_LENGTH = 2_048;
+const MAX_PATH_LENGTH = 1_024;
+const INTENT_ID = /^[A-Za-z0-9._-]{1,128}$/u;
+const FAILURE_CODES = new Set([
+  "invalid_request", "forbidden", "not_recording", "no_automation_tab", "busy",
+  "expired", "cancelled", "recording_stopped", "tab_closed",
+  "destination_mismatch", "send_failed", "unknown_intent",
+]);
 
-type TimerHandle = ReturnType<typeof setTimeout>;
-type ScriptedNavigationOptions = {
-  timeoutMs?: number;
-  setTimer?: (callback: () => void, timeoutMs: number) => TimerHandle;
-  clearTimer?: (handle: TimerHandle) => void;
-};
-type NavigationPhase = "session" | "setup" | "command" | "load";
-type LifecycleEvent = { frameId: string; loaderId: string; name: string };
+type Timer = ReturnType<typeof setTimeout>;
+type SetTimer = (callback: () => void, delayMs: number) => Timer;
+type ClearTimer = (timer: Timer) => void;
+type DriverDependencies = { now?: () => number; setTimer?: SetTimer; clearTimer?: ClearTimer; cleanupTimeoutMs?: number };
+type RuntimeMessage = { type: string; url?: string; intentId?: string };
 
-/**
- * Navigates a Chromium scenario tab as an address-bar (`typed`) transition and
- * waits for the new main-frame document identified by the CDP command.
- */
-export async function runScriptedNavigation(
-  context: BrowserContext,
-  page: Page,
-  url: string,
-  options: ScriptedNavigationOptions = {},
-): Promise<void> {
-  const timeoutMs = options.timeoutMs ?? DEFAULT_NAVIGATION_TIMEOUT_MS;
-  const setTimer = options.setTimer ?? setTimeout;
-  const clearTimer = options.clearTimer ?? clearTimeout;
-  let phase: NavigationPhase = "session";
-  let deadlineFailure: RunnerFailure | undefined;
-  let rejectDeadline!: (error: RunnerFailure) => void;
-  const deadline = new Promise<never>((_resolve, reject) => { rejectDeadline = reject; });
-  const timer = setTimer(() => {
-    deadlineFailure = timeoutFailure(phase, timeoutMs);
-    rejectDeadline(deadlineFailure);
-  }, timeoutMs);
+/** Creates a scripted-navigation driver bound to the trusted extension control page. */
+export function createScriptedNavigationDriver(extensionControlPage: Page, dependencies: DriverDependencies = {}) {
+  const now = dependencies.now ?? Date.now;
+  const setTimer = dependencies.setTimer ?? setTimeout;
+  const clearTimer = dependencies.clearTimer ?? clearTimeout;
+  const cleanupTimeoutMs = dependencies.cleanupTimeoutMs ?? CLEANUP_TIMEOUT_MS;
 
-  let acquisition: Promise<CDPSession>;
-  try {
-    acquisition = context.newCDPSession(page);
-  } catch (cause) {
-    clearTimer(timer);
-    throw new RunnerFailure("environment.missing", "Scripted navigation requires a Chromium CDP session", { cause });
-  }
-  void acquisition.catch(() => undefined);
+  return async (scenarioPage: Page, requestedUrl: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<void> => {
+    const url = safeNavigationUrl(requestedUrl);
+    const deadline = now() + timeoutMs;
+    let intentId: string | undefined;
+    let primaryFailure: unknown;
+    try {
+      const armPromise = send(extensionControlPage, { type: "fluxiq.test.armScriptedNavigation", url });
+      let armResponse: unknown;
+      try {
+        armResponse = await beforeDeadline(armPromise, deadline, now, setTimer, clearTimer, "The extension did not arm scripted navigation in time");
+      } catch (error) {
+        if (isDeadlineFailure(error)) void cancelLateArm(armPromise, extensionControlPage, cleanupTimeoutMs, setTimer, clearTimer);
+        throw asArmFailure(error);
+      }
+      intentId = requireArmResponse(armResponse);
 
-  let session: CDPSession;
-  try {
-    session = await Promise.race([acquisition, deadline]);
-  } catch (cause) {
-    clearTimer(timer);
-    if (cause === deadlineFailure) {
-      void acquisition
-        .then(late => detachWithinBound(late, setTimer, clearTimer))
-        .catch(() => undefined);
-      throw cause;
+      const remaining = remainingMs(deadline, now, "The fixture page did not complete scripted navigation in time", "runtime.behavior");
+      try { await scenarioPage.goto(url, { waitUntil: "load", timeout: remaining }); }
+      catch { throw new RunnerFailure("runtime.behavior", "The fixture page did not complete scripted navigation"); }
+
+      let acknowledgement: unknown;
+      try {
+        acknowledgement = await beforeDeadline(
+          send(extensionControlPage, { type: "fluxiq.test.awaitScriptedNavigation", intentId }),
+          deadline, now, setTimer, clearTimer,
+          "The extension did not acknowledge scripted navigation recording in time",
+        );
+      } catch (error) {
+        if (isDeadlineFailure(error)) throw new RunnerFailure("recording.persistence", error.message);
+        throw new RunnerFailure("extension.worker", "The extension could not acknowledge scripted navigation recording");
+      }
+      requireAcknowledgement(acknowledgement, intentId);
+    } catch (error) {
+      primaryFailure = error;
+    } finally {
+      if (intentId) {
+        try { await cancel(extensionControlPage, intentId, cleanupTimeoutMs, setTimer, clearTimer); }
+        catch { if (primaryFailure === undefined) primaryFailure = new RunnerFailure("extension.worker", "The extension did not confirm scripted navigation cleanup"); }
+      }
     }
-    throw new RunnerFailure("environment.missing", "Scripted navigation requires a Chromium CDP session", { cause });
-  }
-
-  phase = "setup";
-  let expected: { frameId: string; loaderId: string } | undefined;
-  const loadedDocuments = new Set<string>();
-  let resolveLoad!: () => void;
-  const loaded = new Promise<void>((resolve) => { resolveLoad = resolve; });
-  const lifecycle = (event: LifecycleEvent): void => {
-    if (event.name !== "load") return;
-    loadedDocuments.add(documentKey(event.frameId, event.loaderId));
-    if (expected && matchesDocument(event, expected)) resolveLoad();
+    if (primaryFailure !== undefined) throw primaryFailure;
   };
-  session.on("Page.lifecycleEvent", lifecycle);
+}
 
-  let failed = false;
-  const operation = (async () => {
-    try {
-      await session.send("Page.enable");
-      await session.send("Page.setLifecycleEventsEnabled", { enabled: true });
-    } catch (cause) {
-      throw new RunnerFailure("runtime.behavior", "Chromium rejected scripted navigation setup", { cause });
-    }
+function safeNavigationUrl(value: string): string {
+  if (typeof value !== "string" || value.length > MAX_URL_LENGTH) throw invalidDestination();
+  let parsed: URL;
+  try { parsed = new URL(value); } catch { throw invalidDestination(); }
+  if ((parsed.protocol !== "http:" && parsed.protocol !== "https:")
+    || !["127.0.0.1", "[::1]", "localhost"].includes(parsed.hostname)
+    || parsed.username || parsed.password || parsed.search || parsed.hash
+    || parsed.pathname.length > MAX_PATH_LENGTH) throw invalidDestination();
+  return `${parsed.origin}${parsed.pathname}`;
+}
 
-    phase = "command";
-    let result: { frameId: string; loaderId?: string; errorText?: string };
-    try {
-      result = await session.send("Page.navigate", { url, transitionType: "typed" });
-    } catch (cause) {
-      throw new RunnerFailure("runtime.behavior", "Chromium rejected the scripted navigation command", { cause });
-    }
-    if (typeof result.errorText === "string" && result.errorText.length > 0) {
-      throw new RunnerFailure("runtime.behavior", "Chromium could not navigate the scripted scenario page", {
-        details: { reasonCode: "scripted_navigation.rejected" },
-      });
-    }
-    if (!result.loaderId) {
-      throw new RunnerFailure("runtime.behavior", "Scripted navigation did not create a new document", {
-        details: { reasonCode: "scripted_navigation.no_new_document" },
-      });
-    }
+function invalidDestination(): RunnerFailure {
+  return new RunnerFailure("fixture.invalid", "Scripted navigation requires a safe loopback destination");
+}
 
-    expected = { frameId: result.frameId, loaderId: result.loaderId };
-    if (loadedDocuments.has(documentKey(expected.frameId, expected.loaderId))) resolveLoad();
-    phase = "load";
-    await loaded;
-  })();
-  // A timeout can win while a CDP command remains pending. Detaching the
-  // session then rejects that command; observe it without replacing timeout.
-  void operation.catch(() => undefined);
+async function send(page: Page, message: RuntimeMessage): Promise<unknown> {
+  return page.evaluate(async (request) => {
+    const extensionGlobal = globalThis as typeof globalThis & { chrome: { runtime: { sendMessage(value: RuntimeMessage): Promise<unknown> } } };
+    return extensionGlobal.chrome.runtime.sendMessage(request);
+  }, message);
+}
 
-  try {
-    await Promise.race([operation, deadline]);
-  } catch (error) {
-    failed = true;
-    throw error;
-  } finally {
-    clearTimer(timer);
-    session.off("Page.lifecycleEvent", lifecycle);
-    try {
-      await detachWithinBound(session, setTimer, clearTimer);
-    } catch (cause) {
-      if (!failed) throw cause;
-    }
+function requireArmResponse(response: unknown): string {
+  if (isFailureResponse(response)) throw new RunnerFailure("extension.worker", "The extension refused to arm scripted navigation", { details: { reasonCode: response.code } });
+  if (!isRecord(response) || !hasExactOwnKeys(response, ["ok", "intentId"])
+    || response.ok !== true || typeof response.intentId !== "string" || !INTENT_ID.test(response.intentId)) {
+    throw new RunnerFailure("extension.worker", "The extension returned an invalid scripted navigation arm response");
+  }
+  return response.intentId;
+}
+
+function requireAcknowledgement(response: unknown, intentId: string): void {
+  if (isFailureResponse(response)) throw new RunnerFailure("recording.persistence", "The extension did not record scripted navigation", { details: { reasonCode: response.code } });
+  if (!isRecord(response) || !hasExactOwnKeys(response, ["ok", "intentId"])
+    || response.ok !== true || response.intentId !== intentId) {
+    throw new RunnerFailure("extension.worker", "The extension returned an invalid scripted navigation acknowledgement");
   }
 }
 
-async function detachWithinBound(
-  session: CDPSession,
-  setTimer: (callback: () => void, timeoutMs: number) => TimerHandle,
-  clearTimer: (handle: TimerHandle) => void,
-): Promise<void> {
-  let cleanupFailure: RunnerFailure | undefined;
-  let rejectDeadline!: (error: RunnerFailure) => void;
-  const deadline = new Promise<never>((_resolve, reject) => { rejectDeadline = reject; });
-  const timer = setTimer(() => {
-    cleanupFailure = new RunnerFailure("environment.missing", "Chromium CDP session cleanup did not finish in time", {
-      details: { timeoutMs: DETACH_TIMEOUT_MS },
-    });
-    rejectDeadline(cleanupFailure);
-  }, DETACH_TIMEOUT_MS);
-  let detach: Promise<void>;
+async function cancel(page: Page, intentId: string, timeoutMs: number, setTimer: SetTimer, clearTimer: ClearTimer): Promise<void> {
+  const response = await within(send(page, { type: "fluxiq.test.cancelScriptedNavigation", intentId }), timeoutMs, setTimer, clearTimer);
+  if (!isRecord(response) || !hasExactOwnKeys(response, ["ok", "cancelled"])
+    || response.ok !== true || typeof response.cancelled !== "boolean") throw new Error("cleanup response invalid");
+}
+
+async function cancelLateArm(arm: Promise<unknown>, page: Page, timeoutMs: number, setTimer: SetTimer, clearTimer: ClearTimer): Promise<void> {
   try {
-    detach = session.detach();
-  } catch (cause) {
-    clearTimer(timer);
-    throw new RunnerFailure("environment.missing", "Chromium CDP session cleanup failed", { cause });
-  }
-  void detach.catch(() => undefined);
-  try {
-    await Promise.race([detach, deadline]);
-  } catch (cause) {
-    if (cause === cleanupFailure) throw cause;
-    throw new RunnerFailure("environment.missing", "Chromium CDP session cleanup failed", { cause });
-  } finally {
-    clearTimer(timer);
-  }
+    const response = await arm;
+    if (isRecord(response) && response.ok === true && typeof response.intentId === "string" && INTENT_ID.test(response.intentId)) {
+      await cancel(page, response.intentId, timeoutMs, setTimer, clearTimer);
+    }
+  } catch { /* The original arm timeout remains authoritative. */ }
 }
 
-function documentKey(frameId: string, loaderId: string): string {
-  return `${frameId}\u0000${loaderId}`;
+async function beforeDeadline<T>(promise: Promise<T>, deadline: number, now: () => number, setTimer: SetTimer, clearTimer: ClearTimer, message: string): Promise<T> {
+  void promise.catch(() => undefined);
+  const remaining = deadline - now();
+  if (remaining <= 0) throw new DeadlineFailure(message);
+  return within(promise, remaining, setTimer, clearTimer, message);
 }
 
-function matchesDocument(event: LifecycleEvent, expected: { frameId: string; loaderId: string }): boolean {
-  return event.frameId === expected.frameId && event.loaderId === expected.loaderId;
+async function within<T>(promise: Promise<T>, timeoutMs: number, setTimer: SetTimer, clearTimer: ClearTimer, message = "Operation did not finish in time"): Promise<T> {
+  let timer: Timer | undefined;
+  const timeout = new Promise<never>((_, reject) => { timer = setTimer(() => reject(new DeadlineFailure(message)), timeoutMs); });
+  promise.catch(() => undefined);
+  try { return await Promise.race([promise, timeout]); }
+  finally { if (timer !== undefined) clearTimer(timer); }
 }
 
-function timeoutFailure(phase: NavigationPhase, timeoutMs: number): RunnerFailure {
-  const message = phase === "load"
-    ? "The scripted scenario page did not finish loading"
-    : phase === "command"
-      ? "Chromium scripted navigation command did not finish in time"
-      : phase === "setup"
-        ? "Chromium scripted navigation setup did not finish in time"
-        : "Chromium CDP session acquisition did not finish in time";
-  return new RunnerFailure("runtime.behavior", message, { details: { timeoutMs } });
+function remainingMs(deadline: number, now: () => number, message: string, category: "extension.worker" | "runtime.behavior"): number {
+  const remaining = deadline - now();
+  if (remaining <= 0) throw new RunnerFailure(category, message);
+  return remaining;
+}
+
+class DeadlineFailure extends Error {}
+function isDeadlineFailure(error: unknown): error is DeadlineFailure { return error instanceof DeadlineFailure; }
+function asArmFailure(error: unknown): RunnerFailure {
+  return isDeadlineFailure(error) ? new RunnerFailure("extension.worker", error.message) : new RunnerFailure("extension.worker", "The extension could not arm scripted navigation");
+}
+function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null; }
+function isFailureResponse(value: unknown): value is { ok: false; code: string } {
+  return isRecord(value) && hasExactOwnKeys(value, ["ok", "code"])
+    && value.ok === false && typeof value.code === "string" && FAILURE_CODES.has(value.code);
+}
+function hasExactOwnKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
+  const keys = Object.keys(value);
+  return keys.length === expected.length && expected.every(key => Object.hasOwn(value, key));
 }

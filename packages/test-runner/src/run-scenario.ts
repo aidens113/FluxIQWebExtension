@@ -32,7 +32,7 @@ import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensio
 import { singleRunEvaluation } from "./run-evaluation/index.js";
 import { automationFailureFromActionResult, createRunManifest, flowActionTimings, runActionStatus, type CloneRunState } from "./run-manifest/index.js";
 import { assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, selectCoreProbeStep } from "./lane-rules/index.js";
-import { ScenarioStepRunner } from "./scenario-steps/index.js";
+import { createScriptedNavigationDriver, ScenarioStepRunner } from "./scenario-steps/index.js";
 import { awaitPairingStatus, cleanupFailureOutcome, pairingStatusWaitFailureDetails } from "./run-lifecycle/index.js";
 
 /** `evidence` overrides the manifest's `evidencePolicy`; `workflowId` and `variantId` select what `resolveScenarioWorkflow` resolves. */
@@ -282,7 +282,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
           throw new RunnerFailure("recording.persistence", `The extension recording did not start (${describeRecordingStartDiagnostic(diagnostic.observed)})`, { cause, details: diagnostic });
         });
       }
-      const runner = stepRunner = new ScenarioStepRunner({ context, page, origin: topology.scenarioOrigin, isScenarioUrl, uploadDirectory: path.join(topology.allocation.runRoot, "scenario-uploads") });
+      const runner = stepRunner = new ScenarioStepRunner({ context, page, origin: topology.scenarioOrigin, isScenarioUrl, uploadDirectory: path.join(topology.allocation.runRoot, "scenario-uploads"), scriptedNavigation: createScriptedNavigationDriver(extensionControl) });
       for (const step of recordingWorkflow.recordingScript) {
         await stepCapture.trigger(event(runId, scenario.id, step.id, "step.start", `Start ${step.operation}`));
         const { extracted } = await runner.run(step);

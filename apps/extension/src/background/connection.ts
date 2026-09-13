@@ -51,6 +51,7 @@ import {
   RecordedEventIntake,
   RecordingEvidenceReporter,
   RuntimeStatusTracker,
+  ScriptedNavigationIntent,
   ServerCommandChannel,
   StateAssetStore,
   TabRecorder,
@@ -68,6 +69,7 @@ export class FluxIQConnection {
   private readonly sequence = new EventSequence();
   private readonly runtimeStatus = new RuntimeStatusTracker();
   private readonly navigation = new NavigationRecorder();
+  private readonly scriptedNavigation: ScriptedNavigationIntent;
   private readonly clicks = new PointerClickFilter();
   private readonly transport: TabSnapshotTransport = { sendToTab, allTabFrames };
   private readonly gateway: GatewaySession;
@@ -93,6 +95,12 @@ export class FluxIQConnection {
     // Forwards exactly the arguments it was given, so an override on the public
     // method sees the same call a direct `this.handleRecordingEvent(...)` made.
     const recordEvent = (...args: Parameters<FluxIQConnection["handleRecordingEvent"]>) => this.handleRecordingEvent(...args);
+
+    this.scriptedNavigation = new ScriptedNavigationIntent({
+      recordingState: () => this.recording.state(),
+      activeTabId: () => this.page.tabId(),
+      recordNavigation: (tabId, url, timestamp) => this.intake.recordScriptedNavigation(tabId, url, timestamp)
+    });
 
     this.gateway = new GatewaySession({
       settings: () => this.settings,
@@ -190,6 +198,7 @@ export class FluxIQConnection {
       evidence: this.evidence,
       attachment: this.attachment,
       navigation: this.navigation,
+      scriptedNavigation: this.scriptedNavigation,
       clicks: this.clicks,
       sequence: this.sequence,
       activityLog: this.activityLog,
@@ -205,6 +214,7 @@ export class FluxIQConnection {
       recording: this.recording,
       page: this.page,
       navigation: this.navigation,
+      scriptedNavigation: this.scriptedNavigation,
       clicks: this.clicks,
       sequence: this.sequence,
       evidence: this.evidence,
@@ -291,6 +301,7 @@ export class FluxIQConnection {
   }
 
   disconnect(): void {
+    this.scriptedNavigation.cancelAll("cancelled");
     this.gateway.stopReconnecting();
     this.recording.cancelStart();
     this.gateway.closeClient();
@@ -323,7 +334,20 @@ export class FluxIQConnection {
   }
 
   handleTabRemoved(tabId: number): Promise<void> {
+    this.scriptedNavigation.cancelTab(tabId);
     return this.page.handleTabRemoved(tabId);
+  }
+
+  armScriptedNavigation(url: unknown) {
+    return this.scriptedNavigation.arm(url);
+  }
+
+  awaitScriptedNavigation(intentId: unknown) {
+    return this.scriptedNavigation.await(intentId);
+  }
+
+  cancelScriptedNavigation(intentId: unknown): boolean {
+    return this.scriptedNavigation.cancel(intentId);
   }
 
   selectAutomationTab(tabId: number): Promise<void> {

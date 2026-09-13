@@ -27,6 +27,7 @@ import {
   isNavigationExplanation
 } from "./recorded-event";
 import type { RecordingEvidenceReporter } from "./recording-evidence";
+import type { ScriptedNavigationIntent } from "./scripted-navigation-intent";
 import { objectValue, stringValue } from "./value-readers";
 
 export type RecordedEventIntakeDeps = {
@@ -34,6 +35,7 @@ export type RecordedEventIntakeDeps = {
   readonly recording: ActiveRecording;
   readonly page: ActivePage;
   readonly navigation: NavigationRecorder;
+  readonly scriptedNavigation: ScriptedNavigationIntent;
   readonly clicks: PointerClickFilter;
   readonly sequence: EventSequence;
   readonly evidence: RecordingEvidenceReporter;
@@ -107,11 +109,25 @@ export class RecordedEventIntake {
     // which fires repeatedly for a single load (URL, title, and status changes).
     // Only the top frame's document is the tab's page, and a reload revisits a
     // page rather than reaching one.
-    if (details.frameId !== 0 || details.transitionType === "reload") return;
+    if (details.frameId !== 0) return;
+    if (this.deps.scriptedNavigation.claimCommit(details)) return;
+    if (details.transitionType === "reload") return;
     const origin: NavigationOrigin = details.transitionType === "link" || details.transitionType === "form_submit"
       ? "page"
       : details.transitionType === "typed" ? "typed" : "other";
     this.scheduleNavigation(details.tabId, details.url, details.timeStamp, origin);
+  }
+
+  async recordScriptedNavigation(tabId: number, url: string, timestamp: number): Promise<void> {
+    this.deps.navigation.noteRecordedTab(tabId, url, timestamp);
+    await this.deps.recordEvent({
+      kind: "browser.navigation",
+      sequence: this.deps.sequence.next(),
+      url,
+      title: "",
+      eventTimestampMs: timestamp,
+      metadata: { transition: "typed" }
+    }, tabId);
   }
 
   noteHistoryStateUpdated(details: chrome.webNavigation.WebNavigationFramedCallbackDetails): void {

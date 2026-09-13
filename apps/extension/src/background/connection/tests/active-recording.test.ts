@@ -99,6 +99,7 @@ function harness(options: {
   const snapshots: string[] = [];
   const broadcasts: unknown[] = [];
   const attached: number[] = [];
+  const scriptedNavigationCancellations: string[] = [];
   const tabs: TabDescriptor[] = [{ tabId: 7, url: "https://shop.test/cart" }];
 
   const page = {
@@ -149,6 +150,9 @@ function harness(options: {
     evidence,
     attachment,
     navigation: new NavigationRecorder(),
+    scriptedNavigation: {
+      cancelAll: (code: string) => { scriptedNavigationCancellations.push(code); }
+    } as never,
     clicks: new PointerClickFilter(),
     sequence: new EventSequence(),
     activityLog: new ActivityLog(),
@@ -176,6 +180,7 @@ function harness(options: {
     snapshots,
     broadcasts,
     attached,
+    scriptedNavigationCancellations,
     lastError: () => lastError,
     setLastError: deps.setLastError,
     session: () => session,
@@ -278,8 +283,9 @@ test("a transient refusal is re-sent with a fresh project lookup; a persistent o
   assert.equal((h.sent[1]?.payload.metadata as Record<string, unknown>).startAttempt, 1);
   assert.deepEqual(h.resolveReasons, ["recording_start", "recording_start_retry"]);
 
-  h.recording.noteStartRefusal(NO_PROJECT);
+  h.recording.noteStartRefusal(NO_PROJECT!);
   assert.equal(h.recording.state(), "idle");
+  assert.deepEqual(h.scriptedNavigationCancellations, [], "an idle refused start has no recording intent to cancel");
   assert.equal(timers.count(), 0, "a surfaced refusal leaves nothing armed");
   assert.deepEqual(h.recording.block(), {
     code: "recording.project_required",
@@ -297,7 +303,7 @@ test("a transient refusal is re-sent with a fresh project lookup; a persistent o
 test("dismissing a block leaves an unrelated error on the status line", () => {
   assert.ok(NO_PROJECT);
   const h = harness();
-  h.recording.noteStartRefusal(NO_PROJECT);
+  h.recording.noteStartRefusal(NO_PROJECT!);
   assert.ok(h.recording.block());
   h.setLastError("WebSocket connection failed.");
   h.recording.dismissBlock();
@@ -322,6 +328,7 @@ test("an acceptance while recording only re-links the project; stopping reports 
   h.recording.noteEvent();
   await h.recording.stop(true);
   assert.equal(h.recording.state(), "idle");
+  assert.equal(h.scriptedNavigationCancellations.at(-1), "recording_stopped");
   const stop = h.sent.at(-1);
   assert.equal(stop?.type, "client.stop_recording");
   assert.equal(stop?.payload.recordingId, "recording-1");
@@ -333,6 +340,14 @@ test("an acceptance while recording only re-links the project; stopping reports 
   const sentBefore = h.sent.length;
   await h.recording.stop(false);
   assert.equal(h.sent.length, sentBefore, "a stop FluxIQ asked for is not echoed back");
+});
+
+test("a refusal received while recording cancels scripted navigation before becoming idle", async () => {
+  const h = harness();
+  await h.recording.beginAccepted("recording-1", "project-1");
+  h.recording.noteStartRefusal(NO_PROJECT!);
+  assert.equal(h.recording.state(), "idle");
+  assert.equal(h.scriptedNavigationCancellations.at(-1), "recording_stopped");
 });
 
 // C2 in i-recording-loss: FluxIQ acknowledges a client's start with

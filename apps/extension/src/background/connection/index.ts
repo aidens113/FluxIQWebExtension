@@ -39,6 +39,7 @@ export {
   type GatewayStatusFields
 } from "./gateway-session";
 export { NavigationRecorder } from "./navigation-recorder";
+export { ScriptedNavigationIntent } from "./scripted-navigation-intent";
 export { PointerClickFilter } from "./pointer-click-filter";
 export { ProjectContext, type ProjectContextDeps } from "./project-context";
 export { RecordedEventIntake, type RecordedEventIntakeDeps } from "./recorded-event-intake";

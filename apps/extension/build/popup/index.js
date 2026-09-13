@@ -15,7 +15,10 @@ var RUNTIME_MESSAGES = {
   contentEvent: "fluxiq.contentEvent",
   executeAction: "fluxiq.executeAction",
   captureSnapshot: "fluxiq.captureSnapshot",
-  statusChanged: "fluxiq.statusChanged"
+  statusChanged: "fluxiq.statusChanged",
+  testArmScriptedNavigation: "fluxiq.test.armScriptedNavigation",
+  testAwaitScriptedNavigation: "fluxiq.test.awaitScriptedNavigation",
+  testCancelScriptedNavigation: "fluxiq.test.cancelScriptedNavigation"
 };
 
 // src/shared/browser.ts

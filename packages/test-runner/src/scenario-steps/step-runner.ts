@@ -7,7 +7,6 @@ import { extractRecords, type ExtractedRecord } from "./extract-records.js";
 import { locateTarget } from "./locate-target.js";
 import { parseScenarioTarget } from "./parse-target.js";
 import { ScenarioTabs } from "./scenario-tabs.js";
-import { runScriptedNavigation } from "./scripted-navigation.js";
 
 export type ScenarioStepRunnerOptions = {
   context: BrowserContext;
@@ -19,6 +18,8 @@ export type ScenarioStepRunnerOptions = {
   isScenarioUrl(url: string): boolean;
   /** Run-owned directory for `upload` files. */
   uploadDirectory: string;
+  /** Scripted navigation bound to the extension control page after recording starts. */
+  scriptedNavigation(page: Page, url: string, timeoutMs?: number): Promise<void>;
   now?: () => number;
 };
 
@@ -83,7 +84,7 @@ export class ScenarioStepRunner {
       case "select": await selectOptionByKeyboard(target(), String(step.value ?? ""), timeoutMs); return {};
       case "scroll": await page.mouse.wheel(0, Number(step.value ?? 500)); return {};
       case "navigate": {
-        await runScriptedNavigation(this.options.context, page, `${this.options.origin}${step.path ?? "/"}`, step.timeoutMs === undefined ? {} : { timeoutMs: step.timeoutMs });
+        await this.options.scriptedNavigation(page, `${this.options.origin}${step.path ?? "/"}`, step.timeoutMs);
         return {};
       }
       case "waitForState": await target().waitFor({ state: "visible", ...timeout }); return {};

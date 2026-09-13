@@ -34,6 +34,7 @@ import type { NavigationRecorder } from "./navigation-recorder";
 import type { PointerClickFilter } from "./pointer-click-filter";
 import type { ProjectContext } from "./project-context";
 import type { RecordingEvidenceReporter } from "./recording-evidence";
+import type { ScriptedNavigationIntent } from "./scripted-navigation-intent";
 import { recordingActionChannels, recordingEnvironment, recordingSources } from "./recording-manifest";
 import {
   isRecordingStartRefusalError,
@@ -63,6 +64,7 @@ export type ActiveRecordingDeps = {
   readonly evidence: RecordingEvidenceReporter;
   readonly attachment: ContentAttachment;
   readonly navigation: NavigationRecorder;
+  readonly scriptedNavigation: ScriptedNavigationIntent;
   readonly clicks: PointerClickFilter;
   readonly sequence: EventSequence;
   readonly activityLog: ActivityLog;
@@ -183,6 +185,7 @@ export class ActiveRecording {
           endedAt
         })
       : undefined;
+    this.deps.scriptedNavigation.cancelAll("recording_stopped");
     this.recordingState = "idle";
     this.stoppedRecordingId = recordingId;
     this.deps.clicks.clear();
@@ -273,6 +276,7 @@ export class ActiveRecording {
     if (projectId !== undefined) {
       await this.deps.persistSession(compactObject({ ...this.deps.session(), projectId }));
     }
+    this.deps.scriptedNavigation.cancelAll("recording_stopped");
     this.resetLog();
     this.deps.navigation.clearRecordingTabs();
     this.recordingBlock = undefined;
@@ -359,6 +363,7 @@ export class ActiveRecording {
   private applyRefusal(refusal: RecordingStartRefusal, attempts: number): void {
     this.handshake.cancel();
     if (this.recordingState === "recording") {
+      this.deps.scriptedNavigation.cancelAll("recording_stopped");
       this.recordingState = "idle";
       this.deps.clicks.clear();
       void this.deps.attachment.broadcast({ type: "recording", recording: false, settings: this.deps.settings() }, false);

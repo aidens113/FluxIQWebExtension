@@ -5171,3 +5171,144 @@ Also bound `session.detach()` so cleanup itself cannot hang the run; preserve
 an earlier primary failure over cleanup timeout/failure. Add deterministic
 pending-acquisition, late-acquisition cleanup, and pending-detach tests. Repeat
 the focused suite/check and update the same report before returning.
+
+## Lab Stage 4c — typed-navigation loaded acceptance
+
+**Candidate pins:** downstream local commit
+`8327ddd` and Core `19468b72c4472fd5cc58940737702d5e4d72c985`.
+
+`l-final-recheck-w10-typed` owns worktree `F:\fxlab\fxlab-16ff729-b`, a new
+run root `F:\fxlab-runs\final\recheck-w10-typed`, and
+`reports/l-final-recheck-w10-typed.md`. Check out the exact downstream local
+commit and exact shared Core pin, clean; build the required packages into the
+worktree's instance paths. No auth-gate value is needed.
+
+Run W10 `navigation` primary Flow lane three times, then `broken-link` three
+times, under one isolated instance with the Stage 4 memory guard. Require all
+six recordings to have two extension/Core actions and two proposal candidates.
+Primary must run click then navigation and pass reported/oracle/test verdicts.
+Variant must start at candidate zero, fail the click as expected with
+`navigation_unexpected` / `web.navigation.unexpected`, and pass its test
+verdict. Require harness activations 0 and leak findings 0 throughout; stop on
+any leak. Preserve accepted bundles and report bounded identifiers/counts/
+categories/timings plus exact cleanup and worktree state. No source/shared-doc
+edits, commits, pushes, or raw logs/page data.
+
+## Stage 4d investigation — explicit scripted-navigation intent
+
+Stage 4c rejected the CDP transition hypothesis: consecutive loaded primary
+runs completed `Page.navigate({ transitionType: "typed" })` but still produced
+only the click candidate. Investigate an extension-owned, test-control-only
+intent/acknowledgement without changing Core or source yet.
+
+### i-final-navigation-intent-extension
+
+Owns only `reports/i-final-navigation-intent-extension.md`. Read the extension
+background composition, runtime test-control message handling, navigation
+intake/recorder, and their closest tests. Specify the smallest exactly-once
+state machine: arm by tab and bounded destination, consume the next top-frame
+commit independent of browser transition label, preserve redirect debounce,
+record one existing `typed` navigation event, acknowledge only after its send,
+and cancel/expire/stop safely. Name exact source/test file ownership and
+security constraints. No edits, builds, Lab, Core, commit, or push.
+
+### i-final-navigation-intent-runner
+
+Owns only `reports/i-final-navigation-intent-runner.md`. Read runner-side
+extension-page/control-message wiring, `run-scenario` recording sequencing,
+and scripted-navigation/step-runner files. Specify how the runner arms, drives,
+awaits, and cancels an opaque intent with one deadline and no secret/page-data
+diagnostics; name exact source/test files and preserve honest step timing.
+Address navigation failure, missing acknowledgement, and cleanup precedence.
+No edits, builds, Lab, Core, commit, or push.
+
+## Stage 4e implementation — acknowledged scripted navigation
+
+The supervisor accepts the two Stage 4d designs. Both workers use this exact
+internal contract: arm `{ type, url }` returns `{ ok:true, intentId }`; await
+`{ type, intentId }` returns `{ ok:true, intentId }` only after the existing
+recording-event send; cancel `{ type, intentId }` always returns
+`{ ok:true, cancelled }`. Negative arm/await responses are `{ ok:false, code }`
+from the closed vocabulary in `i-final-navigation-intent-extension`; no response
+contains URLs, page data, caught text, tokens, or tab ids. The manager, not the
+caller, derives the active automation tab.
+
+### f-final-navigation-intent-extension
+
+**Owns:** the extension source/test partition in
+`reports/i-final-navigation-intent-extension.md`, plus
+`reports/f-final-navigation-intent-extension.md`. It may omit the optional
+navigation-recorder test when no recorder API changes.
+
+Implement the safe loopback URL validator, state machine, first-refusal commit
+ownership, existing debounce, exactly-one forced-typed event through public
+intake, post-send acknowledgement, expiry/terminal retention, sender guard,
+and cancel on stop/refusal/tab close/disconnect. Preserve every unarmed rule.
+Run extension check and focused private tests. Mutation A removes the owned
+commit early return and must expose a duplicate; mutation B acknowledges before
+the deferred send and must fail. Restore exactly. No runner/Core/shared-doc
+edits, Lab, commit, or push.
+
+### f-final-navigation-intent-runner
+
+**Owns:** the runner source/test partition in
+`reports/i-final-navigation-intent-runner.md`, plus
+`reports/f-final-navigation-intent-runner.md`.
+
+Replace the rejected CDP driver with the extension-control-page-bound factory.
+Implement local URL/response validation, one absolute arm/goto/await deadline,
+late-arm cancel, bounded idempotent cleanup, fixed failure mapping, and first-
+failure precedence. Inject it into `ScenarioStepRunner` and bind it only after
+recording is confirmed. Run test-runner check and focused private tests.
+Mutate away await and failure-path cancel; each targeted row must fail, then
+restore exactly. No extension/Core/shared-doc edits, Lab, commit, or push.
+
+## Stage 4f cross-review
+
+`i-final-navigation-intent-extension-review` reads only the Stage 4e extension
+diff, its tests/report, and the agreed contract; it writes the same-named report.
+`i-final-navigation-intent-runner-review` does the equivalent for the runner
+diff. Each checks protocol compatibility, exactly-once/post-send ordering,
+deadline/cleanup races, security/sanitization, lifecycle precedence, missing
+tests, and structure. Read-only except its own report; no build, Lab, Core,
+commit, push, or shared-document edit. Rank findings and give an accept/change
+verdict; the supervisor independently verifies both claims.
+
+## Stage 4g review corrections
+
+### f-final-navigation-intent-runner-review-fixes
+
+Owns the existing runner Stage 4e files/tests and updates its implementation
+report. Observe a promise immediately on entry to `beforeDeadline`, including
+when no time remains, so a late transport rejection cannot be unhandled.
+Enforce exact own-key sets for every arm/await/cancel success and closed failure
+shape; extra response fields are malformed and never exposed. Add deadline-edge
+late-rejection, acknowledgement remaining-budget, await transport rejection,
+and extra-key regressions. Run focused tests/check and mutate away the immediate
+observer to make its row fail. No extension/Core/shared-doc/Lab/commit/push.
+
+The extension review's corrections will be appended separately after its
+cross-review reports; no worker edits both halves concurrently.
+
+### f-final-navigation-intent-extension-review-fixes
+
+Owns the existing extension Stage 4e files/tests and updates its implementation
+report. Replace the shared `NavigationRecorder.schedule` dependency with an
+intent-owned 250 ms redirect debounce so an earlier ordinary click-landing
+callback and the scripted intent both survive exactly once. Do not add a runner
+sleep. Keep expiry/terminal retention within the original arm-time 30-second
+deadline rather than restarting it at completion. Add the pending ordinary
+landing + two intent commits regression, send rejection, production stop/
+refusal/tab-close/disconnect and sender-security rows, and a composed deferred-
+send acknowledgement assertion. Mutating back to shared scheduling must fail.
+Run extension check/focused suite; no runner/Core/shared-doc/Lab/commit/push.
+
+## Stage 4h final integration review
+
+The original extension author reviews the amended extension half and the
+original runner author reviews the amended runner half. Each updates its
+existing `i-final-navigation-intent-*-review.md` with a final disposition,
+checking the prior findings, the exact cross-half message shapes, timers,
+cleanup, lifecycle ordering, and tests. Read-only except that report; no
+source/build/Lab/Core/shared-doc/commit/push. Report only new P1/P2 blockers;
+otherwise explicitly accept for supervisor gates and live W10.
