@@ -10,7 +10,7 @@ import { WEB_AUTOMATION_DOMAIN_ID, WEB_AUTOMATION_EVENTS } from "..";
 import { createWebAutomationFluxIQ } from "..";
 import { webAutomationRecordingDomain } from "../recording/domain";
 import { createWebAutomationRecordingEvent } from "../client";
-import { WEB_AUTOMATION_INPUT_IDS, webAutomationInputIdForRecordedEvent, actionInputDefinitions } from "../io/input-model";
+import { WEB_AUTOMATION_INPUT_IDS } from "../io/input-model";
 import { webAutomationManifestInputs, webAutomationManifestOutputs } from "../io/manifest-definitions";
 import { webAutomationClientCapabilities } from "../actions/capabilities";
 import { WEB_AUTOMATION_ACTION_TYPES } from "../actions/types";
@@ -31,82 +31,8 @@ const validation = service.validateRecordingDomainEvent({
 });
 assert.equal(validation.ok, true);
 
-const recordingStartNavigation = mapWebRecordingObservation({
-  observationId: "observation.start",
-  recordingId: "recording.test",
-  domainId: WEB_AUTOMATION_DOMAIN_ID,
-  type: "domain_event",
-  timestamp: 1,
-  payload: { eventType: WEB_AUTOMATION_EVENTS.pageNavigated, payload: { url: "https://example.test" } },
-  metadata: { reason: "recording_start", transition: "typed" }
-});
-assert.equal(recordingStartNavigation, null);
-const deliberateNavigation = mapWebRecordingObservation({
-  observationId: "observation.navigate",
-  recordingId: "recording.test",
-  domainId: WEB_AUTOMATION_DOMAIN_ID,
-  type: "domain_event",
-  timestamp: 2,
-  payload: { eventType: WEB_AUTOMATION_EVENTS.pageNavigated, payload: { url: "https://example.test/next" } },
-  metadata: { transition: "typed" }
-});
-assert.equal(deliberateNavigation?.outputId, "web.browser.navigate");
-
-// The recording -> Subflow mapper and the live input path resolve through one
-// mapper: for every recorded row they agree on the output and its parameters.
-const recordedRows: Array<{ kind: string; element?: Record<string, string>; inputValue?: string; key?: string; scroll?: { x: number; y: number }; metadata?: Record<string, string> }> = [
-  { kind: "content.ready" },
-  { kind: "browser.tab" },
-  { kind: "browser.navigation", metadata: { transition: "typed" } },
-  { kind: "browser.navigation", metadata: { transition: "link" } },
-  { kind: "dom.click", element: { selector: "#save", tagName: "button", text: "Save", xpath: "/html/body/button" } },
-  { kind: "dom.input", element: { selector: "input[name=q]", tagName: "input" }, inputValue: "ada" },
-  { kind: "dom.input", element: { selector: "input[name=q]", tagName: "input" }, inputValue: "" },
-  { kind: "dom.change", element: { selector: "select#plan", tagName: "select" }, inputValue: "team" },
-  { kind: "dom.change", element: { selector: "input#terms", tagName: "input", inputType: "checkbox" }, inputValue: "on" },
-  { kind: "dom.submit", element: { selector: "form", tagName: "form" } },
-  { kind: "dom.keydown", element: { selector: "input[name=q]", tagName: "input" }, key: "Enter" },
-  { kind: "dom.scroll", scroll: { x: 0, y: 640 } },
-  { kind: "dom.wheel", scroll: { x: 0, y: 640 } },
-  { kind: "dom.mutation" },
-  { kind: "dom.focus", element: { selector: "input[name=q]", tagName: "input" } },
-  { kind: "dom.blur", element: { selector: "input[name=q]", tagName: "input" } },
-  { kind: "dom.snapshot" },
-  { kind: "action.result" },
-  { kind: "client.error" }
-];
-for (const [index, row] of recordedRows.entries()) {
-  const recordedPayload = {
-    kind: row.kind,
-    url: "https://example.test/form",
-    title: "Form",
-    sequence: index + 1,
-    ...(row.element ? { element: row.element } : {}),
-    ...(row.inputValue !== undefined ? { inputValue: row.inputValue } : {}),
-    ...(row.key ? { key: row.key } : {}),
-    ...(row.scroll ? { scroll: row.scroll } : {}),
-    ...(row.metadata ? { metadata: row.metadata } : {})
-  };
-  const liveInputId = webAutomationInputIdForRecordedEvent(recordedPayload);
-  const liveOutputId = actionInputDefinitions.find(([id]) => id === liveInputId)?.[2];
-  const wire = createWebAutomationRecordingEvent({ ...recordedPayload, eventTimestampMs: 100 + index });
-  const wirePayload = wire.payload ?? {};
-  const proposed = mapWebRecordingObservation({
-    observationId: `observation.row.${index + 1}`,
-    recordingId: "recording.test",
-    domainId: WEB_AUTOMATION_DOMAIN_ID,
-    type: "domain_event",
-    timestamp: 100 + index,
-    payload: { eventType: wire.eventType, payload: wirePayload },
-    metadata: wire.metadata ?? {}
-  });
-  const label = `${row.kind} (row entry ${index + 1})`;
-  assert.equal(proposed?.outputId, liveOutputId, `${label}: proposal and live output agree`);
-  assert.deepEqual(proposed?.sourceInputIds, liveInputId === undefined ? undefined : [liveInputId], `${label}: proposal cites the live input`);
-  if (liveOutputId !== undefined) {
-    assert.deepEqual(proposed?.parameters, webAutomationOutputPayload(liveOutputId, wirePayload), `${label}: proposal parameters equal the live output binding payload`);
-  }
-}
+// The rows mapping recorded events sent as domain events, the live input path's agreement among them, record through
+// Core in `tests/web-panel-host.test.ts`: Core shows a mapper such an event as two entries, which no hand-built row shows.
 
 // The proposal path keeps the element fingerprint and visual target (audit-recording Finding 7).
 const clickWire = createWebAutomationRecordingEvent({
@@ -136,25 +62,12 @@ assert.notEqual(clickWire.payload?.visualTarget, undefined);
 assert.deepEqual(proposedClick?.parameters?.visualTarget, clickWire.payload?.visualTarget);
 assert.equal((outputTargetFromPayload(proposedClick?.parameters ?? {})?.element as { xpath?: string } | undefined)?.xpath, "/html/body/button");
 
-// W19 (design D1): a recorded click claims the path it landed on. The landing is
-// the explained navigation that follows it and names the event id the click was
-// sent under; both are built by the domain's recording event builder.
+// W19 (design D1): a recorded click claims the path it landed on, the explained navigation after it naming the event id
+// the click was sent under. The D1b rows below build from this click and landing; the D1 rows, a click sent as a domain
+// event, record through Core in `tests/web-panel-host.test.ts`.
 const signInClick = createWebAutomationRecordingEvent({ kind: "dom.click", sequence: 3, url: "https://example.test/scenarios/auth-gate/sign-in", title: "Sign in", eventTimestampMs: 900, element: { selector: "#continue", tagName: "button", text: "Continue" } });
 assert.ok(signInClick.eventId, "the builder names every recording event");
 const signInLanding = createWebAutomationRecordingEvent({ kind: "browser.navigation", sequence: 4, url: "https://example.test/scenarios/auth-gate/account", title: "", eventTimestampMs: 1_150, metadata: { transition: "explained", explainedBy: 3, explainedByEventId: signInClick.eventId } });
-const recordedObservation = (observationId: string, wire: typeof signInClick) => ({ observationId, recordingId: "recording.test", domainId: WEB_AUTOMATION_DOMAIN_ID, type: "domain_event", timestamp: wire.timestamp ?? 0, payload: { eventType: wire.eventType, payload: wire.payload ?? {} }, metadata: wire.metadata ?? {} });
-const landingObservation = recordedObservation("observation.landing", signInLanding);
-const landedClick = mapWebRecordingObservation(recordedObservation("observation.sign-in", signInClick), { following: [landingObservation] });
-assert.equal(landedClick?.outputId, "web.dom.click");
-assert.deepEqual(landedClick?.expectedState, { conditions: [{ assert: { kind: "url", expected: "/scenarios/auth-gate/account" } }], mode: "all", timeoutMs: 5_000 }, "D1: a click proposes the path it landed on as its expected state");
-assert.equal(mapWebRecordingObservation(landingObservation, { following: [] }), null, "D1: the landing itself is evidence and proposes nothing");
-assert.equal("expectedState" in (mapWebRecordingObservation(recordedObservation("observation.sign-in", signInClick)) ?? {}), false, "D1: a click mapped with no following entries claims nothing");
-const enteredText = createWebAutomationRecordingEvent({ kind: "dom.input", sequence: 5, url: "https://example.test/scenarios/auth-gate/sign-in", title: "Sign in", eventTimestampMs: 1_000, element: { selector: "input[name=q]", tagName: "input" }, inputValue: "ada" });
-assert.ok(enteredText.eventId, "the builder names every recording event");
-const enteredTextLanding = createWebAutomationRecordingEvent({ kind: "browser.navigation", sequence: 6, url: "https://example.test/scenarios/auth-gate/account", title: "", eventTimestampMs: 1_200, metadata: { transition: "explained", explainedBy: 5, explainedByEventId: enteredText.eventId } });
-const enteredTextProposal = mapWebRecordingObservation(recordedObservation("observation.text", enteredText), { following: [recordedObservation("observation.text-landing", enteredTextLanding)] });
-assert.equal(enteredTextProposal?.outputId, "web.dom.type");
-assert.equal("expectedState" in (enteredTextProposal ?? {}), false, "D1: only a click claims a landing");
 
 // W25 (option 2 of `i-late-target-wait`): a DOM addition recorded before a click
 // proposes waiting for the click's target, from the mutation's own call. Both
@@ -203,19 +116,6 @@ try {
   await proposalService.close();
   await rm(proposalDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 25 });
 }
-
-// A recorded scroll proposes a scroll node; the never-emitted wheel event type proposes nothing.
-const scrollObservation = (eventType: string) => mapWebRecordingObservation({
-  observationId: `observation.${eventType}`,
-  recordingId: "recording.test",
-  domainId: WEB_AUTOMATION_DOMAIN_ID,
-  type: "domain_event",
-  timestamp: 500,
-  payload: { eventType, payload: { scroll: { x: 0, y: 640 } } },
-  metadata: {}
-});
-assert.deepEqual(scrollObservation(WEB_AUTOMATION_EVENTS.scrollChanged)?.parameters, { x: 0, y: 640 });
-assert.equal(scrollObservation(WEB_AUTOMATION_EVENTS.mouseWheel), null);
 
 const event = createWebAutomationRecordingEvent({
   kind: "dom.click",
