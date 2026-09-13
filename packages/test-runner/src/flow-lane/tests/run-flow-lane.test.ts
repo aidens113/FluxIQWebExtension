@@ -27,7 +27,8 @@ import { flowLaneSnapshot, runFlowLane, type FlowLaneControl, type FlowLaneEvide
  * Subflow's graph Flow, which is where recorded actions live. `lostCandidates`
  * is how many recorded entries Core's proposal leaves out even after the
  * recording is finished. `attempt` and `runStatus` shape the one action
- * attempt the run detail reports.
+ * attempt the run detail reports. `flowReads` lists every read of the approved
+ * Flow's structure, in order.
  */
 function fakeCore(options: { appendsAt: readonly number[]; finalizedAt?: number; graphNodes?: readonly unknown[]; lostCandidates?: number; attempt?: Record<string, unknown>; runStatus?: string }) {
   const clock = { value: 0 };
@@ -35,6 +36,7 @@ function fakeCore(options: { appendsAt: readonly number[]; finalizedAt?: number;
   const reviewedProposals: string[] = [];
   const startedInputs: Record<string, unknown>[] = [];
   const runInputs: Record<string, unknown>[] = [];
+  const flowReads: string[] = [];
   const visibleEntries = () => options.appendsAt.filter(at => at <= clock.value).length;
   const proposedCandidates = () => Math.max(0, visibleEntries() - (options.lostCandidates ?? 0));
   const proposal = (candidateCount: number) => ({
@@ -62,10 +64,14 @@ function fakeCore(options: { appendsAt: readonly number[]; finalizedAt?: number;
         return { proposal: { ...proposal(proposedCandidates()), status: "approved", review: { decision: "approved", destination: { kind: "flow", flowId: "flow.new", created: true } } }, flow: { flowId: "flow.new" } };
       }
       if (endpoint === "get-flow") {
+        flowReads.push(`get-flow:${String(payload.flowId)}`);
         if (payload.flowId === "flow.graph") return { flow: { nodes: options.graphNodes ?? [] } };
         return { flow: { nodes: [{ id: "node.one", parameterValues: { outputId: "web.dom.click" } }] } };
       }
-      if (endpoint === "list-flow-subflows") return { subflows: options.graphNodes ? [{ graphFlowId: "flow.graph" }] : [] };
+      if (endpoint === "list-flow-subflows") {
+        flowReads.push(`list-flow-subflows:${String(payload.flowId)}`);
+        return { subflows: options.graphNodes ? [{ graphFlowId: "flow.graph" }] : [] };
+      }
       if (endpoint === "get-flow-run-detail") {
         const attempt = { attemptId: "attempt.one", nodeId: "node.one", definitionId: "builtin.policy.action", order: 1, status: "succeeded", startedAt: 10, finishedAt: 20, ...options.attempt };
         return { runDetail: { summary: { runId: "run.one", status: options.runStatus ?? "succeeded" }, actionAttempts: [attempt], interventions: [] } };
@@ -82,6 +88,7 @@ function fakeCore(options: { appendsAt: readonly number[]; finalizedAt?: number;
     reviewedProposals,
     startedInputs,
     runInputs,
+    flowReads,
     now: () => clock.value,
     sleep: async (ms: number) => { clock.value += ms; },
   };
@@ -283,4 +290,32 @@ test("a request no declaration answers fails the run before it starts, naming th
   );
   assert.deepEqual(fake.startedInputs, [], "nothing was started with an unanswered request");
   assert.deepEqual(fake.runInputs, []);
+});
+
+/**
+ * What each node dispatches and what each node asks the run to supply come
+ * from the same nodes, so one read of the approved Flow answers both. The lane
+ * used to walk the parent Flow and every Subflow graph once per question.
+ */
+test("the approved Flow is read once for its action types and its requests for values supplied at run time", async () => {
+  const fake = fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500, graphNodes: authGateNodes });
+  await runLane(fake, [], { scenarioId: "auth-gate", secrets: [authGateSecret], recordingScript: authGateScript });
+  assert.deepEqual(fake.flowReads, ["get-flow:flow.new", "list-flow-subflows:flow.new", "get-flow:flow.graph"]);
+  // That one read answered the password request, so the run started with its value.
+  assert.equal(fake.startedInputs[0]?.["web.secret.password"], SUPPLIED);
+});
+
+/** The evidence-size measure reaches `snapshots/flow-lane.json` through the lane, as sizes and flags only. */
+test("each action's evidence packet sizes reach the flow-lane snapshot, and the packets themselves do not", async () => {
+  const summary = { schemaVersion: "web-llm-evidence.v1", title: "Account for private.person", elements: [{ selector: "#account-summary" }], truncated: true };
+  const stateRefs = { afterAction: { stateSnapshotId: "web.state.2", stateRef: "web.state.2@attempt.one:after_action", capturedAt: 15, summary } };
+  const fake = fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500, attempt: { metadata: { stateRefs } } });
+  const evidence: FlowLaneEvidence[] = [];
+  await runLane(fake, evidence);
+  const snapshot = flowLaneSnapshot(evidence[0]!);
+  assert.deepEqual(snapshot.actions, [
+    { actionType: "web.dom.click", status: "succeeded", evidencePackets: [{ point: "afterAction", bytes: Buffer.byteLength(JSON.stringify(summary), "utf8"), truncated: true }] },
+  ]);
+  const serialised = JSON.stringify(snapshot);
+  for (const content of ["private.person", "#account-summary", "web.state.2"]) assert.equal(serialised.includes(content), false, `${content} must not reach the snapshot`);
 });

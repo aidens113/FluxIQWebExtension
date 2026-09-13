@@ -1,9 +1,9 @@
 import type { ExpectedEvent, ResolvedScenarioWorkflow, WebScenario } from "@fluxiq-web-extension/test-contracts";
 import type { FluxIQHttpOptions } from "../http-control.js";
-import { declaredSecretBindingInputs, declaredSecretFlowInputs, readFlowSecretRequests, type DeclaredSecret } from "./declared-secrets.js";
+import { declaredSecretBindingInputs, declaredSecretFlowInputs, flowSecretRequests, type DeclaredSecret } from "./declared-secrets.js";
 import { assertFlowActions, assertFlowExtraction, assertFlowFailure } from "./expectations.js";
 import { awaitFinalizedRecording, type FinalizedRecording, type FinalizedRecordingWait } from "./finalized-recording.js";
-import { readFlowActionTypes } from "./flow-action-types.js";
+import { flowActionTypes, readFlowNodes } from "./flow-action-types.js";
 import { flowLaneObservation, type RunLaneObservation } from "./lane-observation.js";
 import { approveRecordingFlowProposal, assertProposalCoversRecording, createRecordingFlowProposal, type RecordingFlowProposal } from "./recording-flow-proposal.js";
 import { executeRecordedFlowRun, type PersistedFlowRunControl, type PersistedFlowRunOutcome } from "./persisted-flow-run.js";
@@ -91,9 +91,11 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
   }, bounds);
   await resetScenarioLab(input.scenarioOrigin, input.runToken);
   if (input.workflow.variant) await input.armVariant();
-  // Read before running: the map identifies each attempt, and a Flow whose
-  // nodes dispatch no output could not have run the recording at all.
-  const actionTypes = await readFlowActionTypes(input.control, { projectId: input.projectId, flowId: approved.flowId }, bounds);
+  // Read before running, and once: the same nodes answer both questions below.
+  const nodes = await readFlowNodes(input.control, { projectId: input.projectId, flowId: approved.flowId }, bounds);
+  // The map identifies each attempt, and a Flow whose nodes dispatch no output
+  // could not have run the recording at all.
+  const actionTypes = flowActionTypes(nodes, approved.flowId);
   // A node on a sensitive control asks for its value under a path rather than
   // carrying it. Each such request is answered by exactly one declared secret,
   // keyed by the path Core resolves, or the run fails here, before it starts.
@@ -101,7 +103,7 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
     scenarioId: input.scenario.id,
     secrets: input.secrets,
     steps: input.workflow.recordingScript,
-    requests: await readFlowSecretRequests(input.control, { projectId: input.projectId, flowId: approved.flowId }, bounds),
+    requests: flowSecretRequests(nodes),
   });
   const run = await executeRecordedFlowRun(input.control, {
     projectId: input.projectId,
@@ -139,6 +141,9 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
  * is what nobody could see before. Each action carries Core's target
  * resolution, when Core resolved one, because Core's store is deleted when the
  * run ends and this file is then the only record of how a target was found.
+ * For the same reason each action carries the size and truncation flag of the
+ * sanitized evidence packets Core captured around it -- measurements, never the
+ * packets.
  */
 export function flowLaneSnapshot(evidence: FlowLaneEvidence) {
   return {
@@ -151,6 +156,7 @@ export function flowLaneSnapshot(evidence: FlowLaneEvidence) {
       status: action.status,
       ...(action.failure ? { failure: action.failure } : {}),
       ...(action.targetResolution ? { targetResolution: action.targetResolution } : {}),
+      ...(action.evidencePackets ? { evidencePackets: action.evidencePackets } : {}),
     })),
   };
 }

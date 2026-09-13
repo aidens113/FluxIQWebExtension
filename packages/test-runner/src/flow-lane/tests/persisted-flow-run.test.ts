@@ -117,3 +117,49 @@ test("an attempt with no target resolution, or one Core does not write, carries 
     assert.equal(read.actions[0]?.targetResolution, undefined, JSON.stringify(targetResolution));
   }
 });
+
+/**
+ * The bench's evidence-size measure. Core captures a sanitized packet before
+ * and after each web action and serves both at the run detail's
+ * `metadata.stateRefs`; the packet is page content, so only its size and its
+ * truncation flag may leave Core's store.
+ */
+const utf8Bytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value), "utf8");
+
+test("each packet Core captured around an attempt travels as its UTF-8 size and truncation flag, never as content", async () => {
+  const before = { schemaVersion: "web-llm-evidence.v1", title: "Compte — démo", url: "http://127.0.0.1:4310/scenarios/account", elements: [{ selector: "#email-address", label: "Adresse électronique" }], truncated: false };
+  const after = { ...before, title: "Signed in as private.person", truncated: true };
+  const ref = (point: string, summary: Record<string, unknown>) => ({ stateSnapshotId: `web.state.${point}`, stateRef: `web.state.${point}@attempt.one:${point}`, capturedAt: 1_010, summary });
+  const { client } = control({}, { actionAttempts: [attempt({ metadata: { stateRefs: { beforeAction: ref("before_action", before), afterAction: ref("after_action", after), stateDiff: { changedPaths: ["title"] } } } })] });
+  const outcome = await executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
+  assert.deepEqual(outcome.actions[0]?.evidencePackets, [
+    { point: "beforeAction", bytes: utf8Bytes(before), truncated: false },
+    { point: "afterAction", bytes: utf8Bytes(after), truncated: true },
+  ]);
+  // Bytes, not characters: the non-ASCII title makes the two differ.
+  assert.notEqual(utf8Bytes(before), JSON.stringify(before).length);
+  const serialised = JSON.stringify(outcome);
+  for (const content of ["démo", "127.0.0.1", "#email-address", "Adresse", "private.person", "web.state.", "stateRef", "changedPaths"]) assert.equal(serialised.includes(content), false, `${content} must not travel`);
+});
+
+test("an attempt with no packet, or a summary that is not one, carries no evidence packets", async () => {
+  const { client: plain } = control();
+  const outcome = await executeRecordedFlowRun(plain, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
+  assert.equal(Object.hasOwn(outcome.actions[0] ?? {}, "evidencePackets"), false);
+  const invalid = [
+    { stateRefs: { beforeAction: { stateSnapshotId: "web.state.1" } } },
+    { stateRefs: { afterAction: { summary: { title: "no truncation flag" } } } },
+    { stateRefs: { beforeAction: { summary: { truncated: "false" } } } },
+    { stateRefs: { beforeAction: { summary: [{ truncated: false }] } } },
+    { stateRefs: [{ summary: { truncated: false } }] },
+  ];
+  for (const metadata of invalid) {
+    const { client } = control({}, { actionAttempts: [attempt({ metadata })] });
+    const read = await executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
+    assert.equal(read.actions[0]?.evidencePackets, undefined, JSON.stringify(metadata));
+  }
+  // A packet beside a summary that is not one: only the packet is measured.
+  const { client: mixed } = control({}, { actionAttempts: [attempt({ metadata: { stateRefs: { beforeAction: { summary: { title: "t" } }, afterAction: { summary: { truncated: false } } } } })] });
+  const read = await executeRecordedFlowRun(mixed, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
+  assert.deepEqual(read.actions[0]?.evidencePackets, [{ point: "afterAction", bytes: utf8Bytes({ truncated: false }), truncated: false }]);
+});

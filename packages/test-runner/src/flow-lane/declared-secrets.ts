@@ -3,6 +3,7 @@ import type { ScenarioSecret, ScenarioStep, WebScenario } from "@fluxiq-web-exte
 import { RunnerFailure } from "../failure.js";
 import type { FluxIQHttpOptions } from "../http-control.js";
 import { parseScenarioTarget, type ScenarioTarget } from "../scenario-steps/index.js";
+import { readFlowNodes, type FlowNodeRecord } from "./flow-action-types.js";
 import type { RecordingProposalControl } from "./recording-flow-proposal.js";
 
 export type DeclaredSecret = ScenarioSecret & { value: string };
@@ -86,29 +87,36 @@ export function declaredSecretValues(secrets: readonly DeclaredSecret[]): string
 }
 
 /**
- * Every value the approved Flow's nodes ask the run to supply, read from the
- * parent Flow and each Subflow graph, because approval writes recorded nodes
- * onto the primary Subflow's graph rather than the parent.
+ * Every value the approved Flow's nodes ask the run to supply, from the nodes
+ * `readFlowNodes` read -- the parent Flow and each Subflow graph, because
+ * approval writes recorded nodes onto the primary Subflow's graph rather than
+ * the parent. The lane derives these and the action types from one read of the
+ * Flow, so the nodes are an argument rather than a second walk.
  *
  * A recorded node keeps its output payload under `parameterValues.parameters`
  * (Core's `recordingProposalGraphFlow`), and a sensitive control's `text` there
  * is `{ $state: { path: "web.secret.<key>" } }` rather than a value
  * (`domain/src/output-nodes/secret-binding.ts`). The domain's own reader finds
  * those requests, so this module never restates what a request looks like.
- *
- * The traversal mirrors `readFlowActionTypes` in `flow-action-types.ts`, which
- * reads the same nodes and returns only their output ids.
  */
+export function flowSecretRequests(nodes: readonly FlowNodeRecord[]): FlowSecretRequest[] {
+  return nodes.flatMap((node) => {
+    const parameters = optionalRecord(node.parameterValues?.parameters);
+    if (!parameters) return [];
+    const element = optionalRecord(parameters.element);
+    const selector = typeof parameters.selector === "string" ? parameters.selector : undefined;
+    return webAutomationUnresolvedSecretParameters(parameters as Parameters<typeof webAutomationUnresolvedSecretParameters>[0])
+      .map(({ parameter, path }) => ({ nodeId: node.id, parameter, path, selector, element }));
+  });
+}
+
+/** `flowSecretRequests` over a fresh read, for a caller that needs nothing else from the Flow's nodes. */
 export async function readFlowSecretRequests(
   control: RecordingProposalControl,
   input: { projectId: string; flowId: string },
   bounds: FluxIQHttpOptions = {},
 ): Promise<FlowSecretRequest[]> {
-  const requests = await flowNodeSecretRequests(control, input.projectId, input.flowId, bounds);
-  for (const graphFlowId of await graphFlowIds(control, input.projectId, input.flowId, bounds)) {
-    if (graphFlowId !== input.flowId) requests.push(...await flowNodeSecretRequests(control, input.projectId, graphFlowId, bounds));
-  }
-  return requests;
+  return flowSecretRequests(await readFlowNodes(control, input, bounds));
 }
 
 /**
@@ -184,31 +192,6 @@ function targetMatchesRequest(target: ScenarioTarget, request: FlowSecretRequest
     case "css":
       return request.selector === target.selector || element.selector === target.selector;
   }
-}
-
-async function flowNodeSecretRequests(control: RecordingProposalControl, projectId: string, flowId: string, bounds: FluxIQHttpOptions): Promise<FlowSecretRequest[]> {
-  const payload = optionalRecord(await control.automationStudioCall("get-flow", { projectId, flowId }, bounds));
-  const flow = optionalRecord(payload?.flow);
-  return (Array.isArray(flow?.nodes) ? flow.nodes : []).flatMap((value) => {
-    const node = optionalRecord(value);
-    const parameters = optionalRecord(optionalRecord(node?.parameterValues)?.parameters);
-    if (typeof node?.id !== "string" || !parameters) return [];
-    const nodeId = node.id;
-    const element = optionalRecord(parameters.element);
-    const selector = typeof parameters.selector === "string" ? parameters.selector : undefined;
-    return webAutomationUnresolvedSecretParameters(parameters as Parameters<typeof webAutomationUnresolvedSecretParameters>[0])
-      .map(({ parameter, path }) => ({ nodeId, parameter, path, selector, element }));
-  });
-}
-
-async function graphFlowIds(control: RecordingProposalControl, projectId: string, flowId: string, bounds: FluxIQHttpOptions): Promise<string[]> {
-  const payload = optionalRecord(await control.automationStudioCall("list-flow-subflows", { projectId, flowId, limit: 100, offset: 0 }, bounds));
-  const page = optionalRecord(payload?.page);
-  const subflows = Array.isArray(payload?.subflows) ? payload.subflows : Array.isArray(page?.subflows) ? page.subflows : [];
-  return subflows.flatMap((value) => {
-    const graphFlowId = optionalRecord(value)?.graphFlowId;
-    return typeof graphFlowId === "string" && graphFlowId ? [graphFlowId] : [];
-  });
 }
 
 function unique(values: readonly string[]): string[] {

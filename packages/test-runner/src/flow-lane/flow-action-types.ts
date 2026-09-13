@@ -3,6 +3,33 @@ import type { FluxIQHttpOptions } from "../http-control.js";
 import type { RecordingProposalControl } from "./recording-flow-proposal.js";
 
 /**
+ * One node of an approved Flow as `get-flow` returns it: its id, and the
+ * parameter values approval wrote onto it. Everything the lane derives from the
+ * Flow's nodes -- which output each dispatches, which values it asks the run to
+ * supply -- is derived from one read of these.
+ */
+export type FlowNodeRecord = { id: string; parameterValues: Readonly<Record<string, unknown>> | undefined };
+
+/**
+ * Every node of the approved Flow, read once: the parent Flow first and every
+ * Subflow graph after it, because approval writes the recorded nodes onto the
+ * primary Subflow's graph Flow rather than the parent. A graph that points back
+ * at the parent is not read twice. A node without a string id is not one Core
+ * writes and is skipped.
+ */
+export async function readFlowNodes(
+  control: RecordingProposalControl,
+  input: { projectId: string; flowId: string },
+  bounds: FluxIQHttpOptions = {},
+): Promise<FlowNodeRecord[]> {
+  const nodes = await flowNodes(control, input.projectId, input.flowId, bounds);
+  for (const graphFlowId of await graphFlowIds(control, input.projectId, input.flowId, bounds)) {
+    if (graphFlowId !== input.flowId) nodes.push(...await flowNodes(control, input.projectId, graphFlowId, bounds));
+  }
+  return nodes;
+}
+
+/**
  * Maps each Flow node id to the domain output that node dispatches.
  *
  * A recorded action becomes a `builtin.policy.action` node whose
@@ -12,34 +39,35 @@ import type { RecordingProposalControl } from "./recording-flow-proposal.js";
  * node's inputs — so the attempt alone cannot say what ran. Its `nodeId` is
  * the only surviving link, and this map is how an expectation such as
  * `web.dom.type` is matched against it.
- *
- * Approval writes the nodes onto the primary Subflow's graph Flow rather than
- * the parent, so the parent is read first and every subflow graph after it.
  */
+export function flowActionTypes(nodes: readonly FlowNodeRecord[], flowId: string): Map<string, string> {
+  const actionTypes = new Map<string, string>();
+  for (const node of nodes) {
+    const outputId = node.parameterValues?.outputId;
+    if (typeof outputId === "string" && outputId) actionTypes.set(node.id, outputId);
+  }
+  if (!actionTypes.size) {
+    throw new RunnerFailure("recording.contract", "The approved Flow declares no output-dispatching node, so nothing it runs could be identified", { details: { flowId } });
+  }
+  return actionTypes;
+}
+
+/** `flowActionTypes` over a fresh read, for a caller that needs nothing else from the Flow's nodes. */
 export async function readFlowActionTypes(
   control: RecordingProposalControl,
   input: { projectId: string; flowId: string },
   bounds: FluxIQHttpOptions = {},
 ): Promise<Map<string, string>> {
-  const actionTypes = new Map<string, string>();
-  await collectFlowNodes(control, input.projectId, input.flowId, actionTypes, bounds);
-  for (const graphFlowId of await graphFlowIds(control, input.projectId, input.flowId, bounds)) {
-    if (graphFlowId !== input.flowId) await collectFlowNodes(control, input.projectId, graphFlowId, actionTypes, bounds);
-  }
-  if (!actionTypes.size) {
-    throw new RunnerFailure("recording.contract", "The approved Flow declares no output-dispatching node, so nothing it runs could be identified", { details: { flowId: input.flowId } });
-  }
-  return actionTypes;
+  return flowActionTypes(await readFlowNodes(control, input, bounds), input.flowId);
 }
 
-async function collectFlowNodes(control: RecordingProposalControl, projectId: string, flowId: string, into: Map<string, string>, bounds: FluxIQHttpOptions): Promise<void> {
+async function flowNodes(control: RecordingProposalControl, projectId: string, flowId: string, bounds: FluxIQHttpOptions): Promise<FlowNodeRecord[]> {
   const payload = asRecord(await control.automationStudioCall("get-flow", { projectId, flowId }, bounds), "get-flow payload");
   const flow = asRecord(payload.flow, "get-flow flow");
-  for (const value of Array.isArray(flow.nodes) ? flow.nodes : []) {
+  return (Array.isArray(flow.nodes) ? flow.nodes : []).flatMap((value) => {
     const node = optionalRecord(value);
-    const parameters = optionalRecord(node?.parameterValues);
-    if (typeof node?.id === "string" && typeof parameters?.outputId === "string" && parameters.outputId) into.set(node.id, parameters.outputId);
-  }
+    return typeof node?.id === "string" ? [{ id: node.id, parameterValues: optionalRecord(node.parameterValues) }] : [];
+  });
 }
 
 async function graphFlowIds(control: RecordingProposalControl, projectId: string, flowId: string, bounds: FluxIQHttpOptions): Promise<string[]> {

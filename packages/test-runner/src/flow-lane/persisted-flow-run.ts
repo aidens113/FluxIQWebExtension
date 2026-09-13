@@ -22,7 +22,30 @@ export type PersistedFlowAction = {
   extracted?: Array<Record<string, string>>;
   /** How Core resolved the attempt's element target before dispatching it; absent when the node dispatched none. */
   targetResolution?: PersistedTargetResolution;
+  /** The sanitized evidence packets Core captured around the attempt, measured; absent when it captured none. */
+  evidencePackets?: PersistedEvidencePacket[];
 };
+
+/**
+ * One sanitized page-evidence packet, measured rather than kept: its size and
+ * whether the domain had to trim it. Nothing of the packet's content travels.
+ *
+ * The packet is the `web-llm-evidence.v1` summary the domain's host runtime
+ * builds from the client's snapshot (`sanitizeWebLlmSnapshot`,
+ * `domain/src/runtime/host-runtime.ts`). Core captures one before and one after
+ * each web action attempt and stores them at `stateRefs.beforeAction` and
+ * `stateRefs.afterAction` (Core `executor/host-state.ts`), and the run detail
+ * copies `stateRefs` into the attempt's `metadata` (Core
+ * `service/summaries/conversions.ts`). It is the one packet a passing run
+ * produces as well as a failing one, which is what makes it the measure of
+ * evidence size.
+ *
+ * `bytes` is the UTF-8 length of the packet's JSON, the way the domain's own
+ * budget counts it (`serializedBytes`, `domain/src/runtime/llm-evidence/limits.ts`).
+ */
+export type PersistedEvidencePacket = { point: (typeof EVIDENCE_PACKET_POINTS)[number]; bytes: number; truncated: boolean };
+
+const EVIDENCE_PACKET_POINTS = ["beforeAction", "afterAction"] as const;
 
 /**
  * Core's own record of how it resolved an action's element target before
@@ -143,6 +166,7 @@ function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<s
   const extracted = extractedRecords(attempt);
   const nodeId = typeof attempt.nodeId === "string" ? attempt.nodeId : "";
   const targetResolution = targetResolutionOf(attempt);
+  const evidencePackets = evidencePacketsOf(attempt);
   return {
     actionType: actionTypes.get(nodeId) ?? (typeof attempt.definitionId === "string" ? attempt.definitionId : "unknown"),
     status: runActionStatus(attempt.status),
@@ -152,7 +176,29 @@ function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<s
     failure: parseAutomationStudioFailureRecord(attempt.failure) ?? null,
     ...(extracted ? { extracted } : {}),
     ...(targetResolution ? { targetResolution } : {}),
+    ...(evidencePackets.length ? { evidencePackets } : {}),
   };
+}
+
+/**
+ * Each packet under the attempt's `metadata.stateRefs`, measured in capture
+ * order. A summary without a boolean `truncated` is not a packet the domain
+ * writes, and is left unmeasured rather than counted as untrimmed.
+ */
+function evidencePacketsOf(attempt: Record<string, unknown>): PersistedEvidencePacket[] {
+  const stateRefs = optionalRecord(optionalRecord(attempt.metadata)?.stateRefs);
+  return EVIDENCE_PACKET_POINTS.flatMap((point) => {
+    const summary = optionalRecord(optionalRecord(stateRefs?.[point])?.summary);
+    return summary && typeof summary.truncated === "boolean" ? [{ point, bytes: serializedBytes(summary), truncated: summary.truncated }] : [];
+  });
+}
+
+function serializedBytes(value: unknown): number {
+  return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+}
+
+function optionalRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
 /**
