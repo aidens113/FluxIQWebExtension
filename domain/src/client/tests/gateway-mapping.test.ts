@@ -501,4 +501,49 @@ assert.equal(
   "web.action.unsupported_type"
 );
 
+// -- A required field that cannot be read is refused, never half-dispatched ---
+// `web.dom.assert` requires `assert`. One the parameter reader refused would
+// otherwise reach the verb as an action with nothing it can check. It is refused
+// before dispatch instead, as a node authored wrong: category
+// `graph_validation_or_unknown_node`, which Core answers with a structural fix
+// rather than a retry. The text names the action and the field, never what was
+// sent in it.
+
+const unreadableSentinel = "SENTINEL-INSIDE-AN-UNREADABLE-PARAMETER";
+const invalidParameterFailure = {
+  category: "graph_validation_or_unknown_node",
+  code: "web.action.invalid_parameter",
+  retryable: false,
+  stage: "dispatch",
+  expected: "web.dom.assert with a well-formed assert",
+  actual: "assert could not be read, so the action was not dispatched"
+};
+const unreadable = webAutomationActionFromGatewayCommand({
+  commandId: "command.unreadable",
+  actionType: "web.dom.assert",
+  target: { selector: "#banner" },
+  parameters: { selector: "#banner", assert: { kind: "contains", expected: unreadableSentinel } }
+});
+assert.deepEqual(unreadable, {
+  commandId: "command.unreadable",
+  status: "rejected",
+  actionType: "web.dom.assert",
+  message: "Not dispatched: web.dom.assert requires assert, and what was sent could not be read.",
+  failure: invalidParameterFailure
+});
+assert.deepEqual(parseAutomationStudioFailureRecord("failure" in unreadable ? unreadable.failure : undefined), invalidParameterFailure, "Core's parser keeps the record whole");
+assert.equal(JSON.stringify(unreadable).includes(unreadableSentinel), false, "the refusal names the action and the field, never what was sent in it");
+
+// The same refusal on an optional field only leaves that field unapplied.
+assert.equal(
+  "status" in webAutomationActionFromGatewayCommand({ commandId: "command.optional", actionType: "web.dom.scroll", parameters: { scroll: { mode: "down" } } }),
+  false,
+  "an optional field the reader refused does not refuse the command"
+);
+// The checks run in a fixed order: an unmet secret request is reported before an unreadable field.
+assert.equal(
+  (webAutomationActionFromGatewayCommand({ commandId: "command.both", actionType: "web.dom.assert", parameters: { assert: { kind: "contains" }, text: { $state: { path: "web.secret.password" } } } }) as { failure?: { code?: string } }).failure?.code,
+  "web.intervention.required"
+);
+
 console.log("Web automation gateway mapping tests passed.");

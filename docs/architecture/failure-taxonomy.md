@@ -13,7 +13,7 @@ stage it always carries.
 
 ## The Closed Set
 
-`WEB_AUTOMATION_FAILURE_CODES` names fourteen codes. Read a code from that
+`WEB_AUTOMATION_FAILURE_CODES` names fifteen codes. Read a code from that
 object rather than writing its string: the key is what the plan, the scenario
 manifests and the briefs call it, and the value is what Core stores.
 
@@ -31,6 +31,7 @@ manifests and the briefs call it, and the value is what Core stores.
 | `USER_INTERVENTION_REQUIRED` | `web.intervention.required` | `user_intervention_required` | no | `execution` |
 | `UNSUPPORTED_TYPE` | `web.action.unsupported_type` | `blocked_by_capability_or_policy` | no | `dispatch` |
 | `NOT_IMPLEMENTED` | `web.action.not_implemented` | `blocked_by_capability_or_policy` | no | `dispatch` |
+| `INVALID_PARAMETER` | `web.action.invalid_parameter` | `graph_validation_or_unknown_node` | no | `dispatch` |
 | `ACTION_FAILED` | `web.action.failed` | `action_failed` | yes | `execution` |
 | `UNKNOWN` | `web.action.unknown` | `ambiguous_or_unknown` | no | `execution` |
 
@@ -121,8 +122,14 @@ compiler-checked at the throw.
   explains the failure better than the verb — a target that matched nothing on
   a document that is a sign-in gate — and `UNKNOWN` as the last resort.
 - **Dispatch** (`domain/src/client/gateway-mapping.ts`, answered by
-  `background/connection/gateway-session.ts`): `UNSUPPORTED_TYPE`, decided
-  before anything reaches the page.
+  `background/connection/gateway-session.ts`), decided before anything reaches
+  the page: `UNSUPPORTED_TYPE` for an action type the client does not know, and
+  `INVALID_PARAMETER` for a field the action's schema requires that arrived in
+  a shape the parameter reader (`client/gateway-action-parameters.ts`) refused.
+  A refused optional field is only left unapplied. `INVALID_PARAMETER` names
+  the action and the fields, never what was sent in them, and its category is
+  `graph_validation_or_unknown_node` because the node is authored wrong: Core
+  answers that with a structural edit, not a retry or a policy change.
 - **The worker-side verbs**: `runtime/browser-tab.ts`
   (`TARGET_NOT_FOUND`, `ACTION_REJECTED`, `ACTION_FAILED`),
   `runtime/browser-download.ts` (`ACTION_REJECTED`, `TIMEOUT`),

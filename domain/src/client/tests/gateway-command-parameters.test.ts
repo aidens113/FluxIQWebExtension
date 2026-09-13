@@ -1,17 +1,20 @@
 // T1 coverage of the Wave 2 parameter lift: every structured parameter the
 // action schemas define arrives on the field of `WebAutomationActionCommand`
-// that the verb running it reads, and a malformed one is refused rather than
-// coerced into a request the page would then act on.
+// that the verb running it reads. A malformed one is refused rather than
+// coerced into a request the page would then act on: an optional field is left
+// absent, and a field the action requires refuses the whole command.
 
 import assert from "node:assert/strict";
 import type { JsonObject } from "fluxiq/core";
 import {
+  WEB_AUTOMATION_ACTION_TYPES,
   WEB_AUTOMATION_EXTRACT_MAX_PAGES,
   WEB_AUTOMATION_UPLOAD_MAX_FILE_BYTES,
   type WebAutomationActionCommand,
   type WebAutomationActionType
 } from "../../actions/types";
-import { webAutomationActionFromGatewayCommand } from "../gateway-mapping";
+import { WEB_AUTOMATION_FAILURE_CODES } from "../../runtime/failure";
+import { webAutomationActionFromGatewayCommand, type WebAutomationActionRejection } from "../gateway-mapping";
 
 /** The mapped command, with the rejection branch ruled out so a field read below cannot be silently undefined. */
 function mapped(actionType: WebAutomationActionType, parameters: JsonObject, extra: { target?: JsonObject; timeoutMs?: number } = {}): WebAutomationActionCommand {
@@ -24,6 +27,19 @@ function mapped(actionType: WebAutomationActionType, parameters: JsonObject, ext
   });
   assert.equal("status" in command, false, `${actionType} was rejected`);
   return command as WebAutomationActionCommand;
+}
+
+/**
+ * The command is refused whole because a field its action requires could not
+ * be read: the closed set's `INVALID_PARAMETER`, with a message that names the
+ * action and the fields and nothing that was sent in them.
+ */
+function refusedWhole(actionType: WebAutomationActionType, parameters: JsonObject, fields: string[], why: string): void {
+  const command = webAutomationActionFromGatewayCommand({ commandId: `command.${actionType}`, actionType, parameters });
+  assert.equal("status" in command, true, `${actionType} was dispatched: ${why}`);
+  const rejection = command as WebAutomationActionRejection;
+  assert.equal(rejection.failure.code, WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER, why);
+  assert.equal(rejection.message, `Not dispatched: ${actionType} requires ${fields.join(", ")}, and what was sent could not be read.`, why);
 }
 
 /** Base64 whose decoded size is exactly `bytes`, without building the bytes themselves. Multiples of 3 need no padding. */
@@ -62,8 +78,8 @@ assert.deepEqual(mapped("web.dom.assert", { assert: { kind: "visible" } }).asser
 for (const kind of ["exists", "absent", "text", "url", "visible", "enabled"]) {
   assert.deepEqual(mapped("web.dom.assert", { assert: { kind } }).assert, { kind }, kind);
 }
-assert.equal(mapped("web.dom.assert", { assert: { kind: "contains" } }).assert, undefined, "an unknown kind is no assertion");
-assert.equal(mapped("web.dom.assert", { assert: { expected: "Saved" } }).assert, undefined, "an assertion with no kind claims nothing");
+refusedWhole("web.dom.assert", { assert: { kind: "contains" } }, ["assert"], "an unknown kind is no assertion");
+refusedWhole("web.dom.assert", { assert: { expected: "Saved" } }, ["assert"], "an assertion with no kind claims nothing");
 assert.equal(mapped("web.dom.assert", { assert: { kind: "text", expected: "Saved", timeoutMs: 0 } }).assert?.timeoutMs, undefined, "a zero timeout is not a timeout");
 
 // -- `web.dom.extract_list`: item, fields, pagination, maxItems ---------------
@@ -73,34 +89,34 @@ assert.deepEqual(mapped("web.dom.extract_list", {
 assert.deepEqual(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" } } }).extractList, { item: "li", fields: { title: "h3" } });
 // The domain's own page bound, the same one the page-side reader applies.
 assert.equal(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, paginate: { next: "a.next", maxPages: 5_000 } } }).extractList?.paginate?.maxPages, WEB_AUTOMATION_EXTRACT_MAX_PAGES);
-assert.equal(mapped("web.dom.extract_list", { extractList: { item: "li", fields: {} } }).extractList, undefined, "no fields extracts nothing");
-assert.equal(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "" } } }).extractList, undefined, "a field naming no selector would extract a column of nothing");
-assert.equal(mapped("web.dom.extract_list", { extractList: { fields: { title: "h3" } } }).extractList, undefined, "no item selector selects no records");
+refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: {} } }, ["extractList"], "no fields extracts nothing");
+refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "" } } }, ["extractList"], "a field naming no selector would extract a column of nothing");
+refusedWhole("web.dom.extract_list", { extractList: { fields: { title: "h3" } } }, ["extractList"], "no item selector selects no records");
 // A paginate that is present but unusable refuses the whole request rather than
 // quietly reading page one of a request that asked for several.
-assert.equal(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, paginate: { maxPages: 3 } } }).extractList, undefined);
+refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, paginate: { maxPages: 3 } } }, ["extractList"], "a paginate with no next link");
 
 // -- `web.dom.upload`: name, MIME type, bounded base64 ------------------------
 assert.deepEqual(mapped("web.dom.upload", { selector: "input[type=file]", upload: { files: [{ name: "a.txt", mimeType: "text/plain", contentBase64: "aGk=" }] } }).upload, {
   files: [{ name: "a.txt", mimeType: "text/plain", contentBase64: "aGk=" }]
 });
-assert.equal(mapped("web.dom.upload", { selector: "#f", upload: { files: [] } }).upload, undefined);
-assert.equal(mapped("web.dom.upload", { selector: "#f", upload: { files: [{ name: "a.txt", mimeType: "text/plain" }] } }).upload, undefined, "a file with no content is not a file");
-assert.equal(mapped("web.dom.upload", { selector: "#f", upload: { files: [{ name: "a.txt", mimeType: "text/plain", contentBase64: "not base64!" }] } }).upload, undefined);
+refusedWhole("web.dom.upload", { selector: "#f", upload: { files: [] } }, ["upload"], "an upload of no files");
+refusedWhole("web.dom.upload", { selector: "#f", upload: { files: [{ name: "a.txt", mimeType: "text/plain" }] } }, ["upload"], "a file with no content is not a file");
+refusedWhole("web.dom.upload", { selector: "#f", upload: { files: [{ name: "a.txt", mimeType: "text/plain", contentBase64: "not base64!" }] } }, ["upload"], "content that is not base64");
 // One oversized file refuses the whole upload: dropping just that file would
 // put a different set of files on the page than the Flow asked for.
 const oversized = base64OfBytes(WEB_AUTOMATION_UPLOAD_MAX_FILE_BYTES + 2);
-assert.equal(mapped("web.dom.upload", { selector: "#f", upload: { files: [{ name: "big.bin", mimeType: "application/octet-stream", contentBase64: oversized }] } }).upload, undefined);
+refusedWhole("web.dom.upload", { selector: "#f", upload: { files: [{ name: "big.bin", mimeType: "application/octet-stream", contentBase64: oversized }] } }, ["upload"], "a file past the per-file bound");
 const nearLimit = { name: "part.bin", mimeType: "application/octet-stream", contentBase64: base64OfBytes(1_048_575) };
 assert.equal(mapped("web.dom.upload", { selector: "#f", upload: { files: [nearLimit] } }).upload?.files.length, 1, "a file inside the per-file bound is carried");
-assert.equal(mapped("web.dom.upload", { selector: "#f", upload: { files: [nearLimit, nearLimit, nearLimit, nearLimit, nearLimit] } }).upload, undefined, "five near-limit files exceed the total bound");
+refusedWhole("web.dom.upload", { selector: "#f", upload: { files: [nearLimit, nearLimit, nearLimit, nearLimit, nearLimit] } }, ["upload"], "five near-limit files exceed the total bound");
 
 // -- `web.dom.dialog`: accept, dismiss, prompt text ---------------------------
 assert.deepEqual(mapped("web.dom.dialog", { dialog: { response: "accept", promptText: "Ada" } }).dialog, { response: "accept", promptText: "Ada" });
 assert.deepEqual(mapped("web.dom.dialog", { dialog: { response: "dismiss" } }).dialog, { response: "dismiss" });
 assert.deepEqual(mapped("web.dom.dialog", { dialog: { response: "dismiss", promptText: "Ada" } }).dialog, { response: "dismiss" }, "a dismissal answers nothing, so it carries no reply");
-assert.equal(mapped("web.dom.dialog", { dialog: { response: "ignore" } }).dialog, undefined);
-assert.equal(mapped("web.dom.dialog", {}).dialog, undefined);
+refusedWhole("web.dom.dialog", { dialog: { response: "ignore" } }, ["dialog"], "a response that is neither accept nor dismiss");
+assert.equal(mapped("web.dom.dialog", {}).dialog, undefined, "an absent field is not a refused one: the verb still decides what an empty request means");
 
 // -- `web.browser.tab`: open, switch, close -----------------------------------
 assert.deepEqual(mapped("web.browser.tab", { tab: { operation: "open", url: "https://example.test/report", active: true } }).tab, { operation: "open", url: "https://example.test/report", active: true });
@@ -109,7 +125,7 @@ assert.deepEqual(mapped("web.browser.tab", { tab: { operation: "switch", tabId: 
 assert.deepEqual(mapped("web.browser.tab", { tab: { operation: "close", tabId: 9 } }).tab, { operation: "close", tabId: 9 });
 // Each operation carries only its own fields, so a switch cannot arrive holding a URL to open.
 assert.deepEqual(mapped("web.browser.tab", { tab: { operation: "close", url: "https://example.test", active: true, tabId: 4 } }).tab, { operation: "close", tabId: 4 });
-assert.equal(mapped("web.browser.tab", { tab: { operation: "reload" } }).tab, undefined);
+refusedWhole("web.browser.tab", { tab: { operation: "reload" } }, ["tab"], "an operation that is not open, switch or close");
 // The tab an operation acts on stays inside `tab`; it is not the tab the action runs in.
 assert.equal(mapped("web.browser.tab", { tab: { operation: "close", tabId: 9 } }).tabId, undefined);
 
@@ -142,10 +158,10 @@ assert.deepEqual(mapped("web.dom.keypress", { key: "Enter", modifiers: { alt: tr
 
 // -- What the lift must not disturb ------------------------------------------
 // The raw parameters still travel in `options`: the background readers fall
-// back to them, and a refused value has to remain visible to the verb.
-const withBadAssert = mapped("web.dom.assert", { assert: { kind: "contains", expected: "x" } });
-assert.equal(withBadAssert.assert, undefined);
-assert.deepEqual(withBadAssert.options, { assert: { kind: "contains", expected: "x" } }, "a refused value stays in options rather than vanishing");
+// back to them, and a refused optional value has to remain visible to the verb.
+const withBadScroll = mapped("web.dom.scroll", { scroll: { mode: "down" } });
+assert.equal(withBadScroll.scroll, undefined);
+assert.deepEqual(withBadScroll.options, { scroll: { mode: "down" } }, "a refused optional value stays in options rather than vanishing");
 
 // The flat fields the mapping already lifted are unchanged, and a legacy dotted
 // type still resolves, so nothing above changed the pre-Wave-2 contract.
@@ -162,5 +178,16 @@ assert.deepEqual(webAutomationActionFromGatewayCommand({ commandId: "command.sna
   actionType: "web.dom.capture_snapshot",
   options: {}
 });
+
+// -- Which refusals refuse the whole command ---------------------------------
+// A refused field refuses the command only when the action's schema requires
+// it. Every parameter name the lift reads is sent unreadable to every action
+// type, and the pairs refused whole must be exactly these five, so a schema
+// that starts or stops requiring a lifted field shows up here, not on a page.
+const LIFTED_PARAMETER_NAMES = ["browserTabId", "tabId", "browserFrameId", "frameId", "newTab", "option", "scroll", "wait", "modifiers", "checked", "assert", "extractList", "upload", "dialog", "tab", "download"];
+const refusedPairs = WEB_AUTOMATION_ACTION_TYPES.flatMap((actionType) => LIFTED_PARAMETER_NAMES
+  .filter((name) => "status" in webAutomationActionFromGatewayCommand({ commandId: "command.matrix", actionType, parameters: { [name]: "unreadable" } }))
+  .map((name) => `${actionType} ${name}`));
+assert.deepEqual(refusedPairs.sort(), ["web.browser.tab tab", "web.dom.assert assert", "web.dom.dialog dialog", "web.dom.extract_list extractList", "web.dom.upload upload"]);
 
 console.log("Web automation gateway command parameter tests passed.");

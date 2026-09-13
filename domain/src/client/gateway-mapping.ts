@@ -14,10 +14,11 @@ import {
   type WebAutomationActionValidation,
   type WebAutomationElementFingerprint
 } from "../actions/types";
+import { webAutomationActionDefinitions } from "../actions/schemas";
 import { elementFingerprint, webAutomationUnresolvedSecretParameters } from "../output-nodes";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "../runtime/failure";
 import { WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, isProducerRedactedComparison, isSensitiveElementDescriptor } from "../sensitivity";
-import { webAutomationLiftedActionParameters } from "./gateway-action-parameters";
+import { webAutomationReadActionParameters } from "./gateway-action-parameters";
 
 export type WebAutomationRecordedPayload = {
   kind: string;
@@ -38,7 +39,8 @@ export type WebAutomationRecordedPayload = {
 
 /**
  * A gateway command nothing is dispatched for: its action type is not a web
- * automation action, or it still asks for a value the run never supplied.
+ * automation action, it still asks for a value the run never supplied, or a
+ * field its action requires was sent in a shape that cannot be read.
  */
 export type WebAutomationActionRejection = {
   commandId: string;
@@ -114,8 +116,10 @@ export function createWebAutomationStateUpdate(input: { activeContextId?: string
 
 /**
  * Maps a gateway action command to the browser command the extension runs, or
- * to a rejection carrying Core's failure record when its action type is
- * unknown. An unknown type is never rewritten into some other action.
+ * to a rejection carrying Core's failure record. Three things refuse a command,
+ * checked in this order: an unknown action type, which is never rewritten into
+ * some other action; a value the run never supplied; and a field the action
+ * requires that was sent in a shape nothing can read.
  *
  * The flat fields below come from the command's target and envelope. Every
  * structured parameter is read by `gateway-action-parameters.ts` onto the
@@ -135,6 +139,14 @@ export function webAutomationActionFromGatewayCommand(command: ClientGatewayActi
   if (unmet.length > 0) {
     return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: unsuppliedValueMessage(unmet), failure: unsuppliedValueFailure(unmet) };
   }
+  // A required field the reader refused would reach the verb as half a request.
+  // Refused whole instead, naming the action and the fields, never their values.
+  const { lifted, refused } = webAutomationReadActionParameters(parameters);
+  const required = requiredParameters(normalized.actionType);
+  const unreadable = refused.filter((field) => required.includes(field));
+  if (unreadable.length > 0) {
+    return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: unreadableFieldMessage(normalized.actionType, unreadable), failure: unreadableFieldFailure(normalized.actionType, unreadable) };
+  }
   const target = command.target ?? {};
   return compactJsonObject({
     commandId: command.commandId,
@@ -148,7 +160,7 @@ export function webAutomationActionFromGatewayCommand(command: ClientGatewayActi
     coordinates: pointValue(target.coordinates ?? parameters.coordinates),
     visualTarget: jsonObject(target.visualTarget ?? parameters.visualTarget) as unknown as WebAutomationActionVisualTarget | undefined,
     element: commandElementFingerprint(target, parameters),
-    ...webAutomationLiftedActionParameters(parameters),
+    ...lifted,
     options: parameters
   }) as unknown as WebAutomationActionCommand;
 }
@@ -344,6 +356,30 @@ function unsuppliedValueFailure(unmet: readonly { parameter: string; path: strin
 
 function unsuppliedValueMessage(unmet: readonly { parameter: string; path: string }[]): string {
   return `Not dispatched: these parameters need values supplied at run time that this run did not supply: ${unmet.map((entry) => `${entry.parameter} (${entry.path})`).join(", ")}`;
+}
+
+/**
+ * The refusal of a command whose action requires a field that arrived in a
+ * shape nothing can read. The node is authored wrong: retrying it unchanged
+ * cannot succeed, and Core answers `graph_validation_or_unknown_node` with a
+ * structural edit rather than a policy change. The text names the action and
+ * the fields, never what was sent in them.
+ */
+function unreadableFieldFailure(actionType: WebAutomationActionType, fields: readonly string[]): AutomationStudioFailureRecord {
+  return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER, {
+    expected: `${actionType} with a well-formed ${fields.join(", ")}`,
+    actual: `${fields.join(", ")} could not be read, so the action was not dispatched`
+  });
+}
+
+function unreadableFieldMessage(actionType: WebAutomationActionType, fields: readonly string[]): string {
+  return `Not dispatched: ${actionType} requires ${fields.join(", ")}, and what was sent could not be read.`;
+}
+
+/** The parameters an action's schema requires, read from the one schema table the way `io/input-model.ts` reads it. */
+function requiredParameters(actionType: WebAutomationActionType): string[] {
+  const schema = webAutomationActionDefinitions.find((definition) => definition.actionType === actionType)?.parameterSchema;
+  return Array.isArray(schema?.required) ? schema.required.filter((key): key is string => typeof key === "string") : [];
 }
 
 const CANONICAL_ACTION_TYPES: ReadonlySet<string> = new Set(WEB_AUTOMATION_ACTION_TYPES);

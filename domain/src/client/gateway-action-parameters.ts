@@ -9,12 +9,15 @@
 // field over their raw-parameter fallback. So this is a validated copy, not a
 // reshape, and one shape crosses the wire.
 //
-// Nothing here coerces. A value of the wrong shape is refused, which leaves the
-// command field absent and the raw parameter still visible in `options`: the
-// verb then refuses the command with its own message instead of acting on a
-// half-formed request, and a reader that still understands the legacy flat form
-// can use what arrived. A request is either well formed or it is not this
-// action's request.
+// Nothing here coerces. A value of the wrong shape is refused: the command field
+// stays absent, the raw parameter stays visible in `options`, and the field's
+// name is reported in `refused`. What that costs depends on the action's schema.
+// A refused optional field is simply not applied, and a reader that still
+// understands the legacy flat form can use what arrived. A refused required
+// field means the node asked for something this action cannot do as written, so
+// `webAutomationActionFromGatewayCommand` refuses the whole command with
+// `INVALID_PARAMETER` instead of letting the verb meet a half-formed request. A
+// request is either well formed or it is not this action's request.
 
 import type { JsonObject } from "fluxiq/core";
 import {
@@ -45,13 +48,25 @@ export type WebAutomationLiftedActionParameters = Pick<
 >;
 
 /**
+ * What a command's parameters yielded: the fields that could be read, and the
+ * names of the fields whose parameter was sent but could not be. `refused`
+ * holds names only, never what was sent, so a refusal may quote it.
+ */
+export type WebAutomationActionParameterReading = {
+  lifted: WebAutomationLiftedActionParameters;
+  refused: (keyof WebAutomationLiftedActionParameters)[];
+};
+
+/**
  * Every parameter is read for every action type. The per-action schema already
  * governs what a Flow may author, and a verb reads only the field it runs on,
  * so keying this by action type would add a second place for the vocabulary to
- * drift from `actions/types.ts` without changing any outcome.
+ * drift from `actions/types.ts` without changing any outcome. Whether a refused
+ * field matters is the schema's question too, so the caller that knows the
+ * action answers it.
  */
-export function webAutomationLiftedActionParameters(parameters: JsonObject): WebAutomationLiftedActionParameters {
-  return {
+export function webAutomationReadActionParameters(parameters: JsonObject): WebAutomationActionParameterReading {
+  const lifted: WebAutomationLiftedActionParameters = {
     // Which tab and frame the action runs in, as opposed to the tab a
     // `web.browser.tab` operation acts on, which travels inside `tab`.
     tabId: nonNegativeInteger(parameters.browserTabId ?? parameters.tabId),
@@ -69,6 +84,20 @@ export function webAutomationLiftedActionParameters(parameters: JsonObject): Web
     tab: tabRequestValue(parameters.tab),
     download: downloadRequestValue(parameters.download)
   };
+  const refused = (Object.keys(lifted) as (keyof WebAutomationLiftedActionParameters)[])
+    .filter((field) => lifted[field] === undefined && suppliedParameter(parameters, field) !== undefined);
+  return { lifted, refused };
+}
+
+/**
+ * The raw value a field is read from, under the same names and precedence the
+ * reader uses, so a parameter sent but unreadable is never mistaken for one
+ * that was never sent.
+ */
+function suppliedParameter(parameters: JsonObject, field: keyof WebAutomationLiftedActionParameters): unknown {
+  if (field === "tabId") return parameters.browserTabId ?? parameters.tabId;
+  if (field === "frameId") return parameters.browserFrameId ?? parameters.frameId;
+  return parameters[field];
 }
 
 /** `by` decides which field names the option, so a request naming none of them selects nothing. */
