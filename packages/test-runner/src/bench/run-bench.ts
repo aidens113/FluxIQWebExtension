@@ -9,6 +9,7 @@ import type { BenchCorpus } from "./corpus/index.js";
 import { describeError } from "./describe-error.js";
 import { FLOW_LANE_SOURCES, RECORDING_LANE_SOURCES, evaluateFailedAttempt, evaluateFlowRun, evaluateRecordingRun, type RunEvaluationIdentity } from "./evaluate-run.js";
 import { benchExecutionCoverage } from "./execution-coverage.js";
+import { benchFailureCauses, describeBenchFailureCause } from "./failure-cause.js";
 import { expandCorpus, type BenchPlanEntry } from "./expand-corpus.js";
 import { readRunBundle } from "./read-run-bundle.js";
 import { renderBenchMarkdown } from "./render-markdown.js";
@@ -55,6 +56,17 @@ export type RunBenchOutcome = {
   notExecuted: number;
   /** Actions FluxIQ executed across every evaluated run. */
   actionsExecuted: number;
+  /**
+   * The distinct one-line causes of this bench's failed runs, most frequent
+   * first, each prefixed with the run count that shares it. Absent when no run
+   * failed.
+   *
+   * It is on the outcome because the outcome is the line a person sees in the
+   * terminal. A bench whose every run died on one missing module used to print
+   * `0 passed` and nothing else, and the cause had to be dug out of a run's
+   * event log.
+   */
+  failureCauses?: string[];
 };
 
 type Attempt = { entry: BenchPlanEntry; repeatIndex: number; attemptId: string; directory: string };
@@ -112,11 +124,13 @@ export async function runBench(options: RunBenchOptions): Promise<RunBenchOutcom
   const coverage = benchExecutionCoverage(results);
   const markdown = await writeBenchMarkdown(directory, renderBenchMarkdown(file, report, coverage));
   const passed = evaluated.filter(({ evaluation }) => evaluation.verdict === "passed").length;
+  const causes = benchFailureCauses(file.runs);
   return {
     status: evaluated.length > 0 && passed === evaluated.length ? "passed" : "failed",
     benchId, directory, report: reportPath, markdown,
     results: results.length, runs: evaluated.length, passed, skipped: file.runs.length - evaluated.length,
     notExecuted: coverage.notExecutedRuns, actionsExecuted: coverage.actions,
+    ...(causes.length === 0 ? {} : { failureCauses: causes.map(describeBenchFailureCause) }),
   };
 }
 
@@ -142,7 +156,7 @@ async function runOnce(options: RunBenchOptions, attempt: Attempt): Promise<{ ev
     });
   } catch (error) {
     const evaluation = evaluateFailedAttempt({ ...identity, lane: entry.lane, attemptId: attempt.attemptId, error, wallClockMs: Date.now() - started });
-    return recordRun(attempt, evaluation, [`runner: ${describeError(error)}`]);
+    return recordRun(attempt, evaluation, { problems: [`runner: ${describeError(error)}`], cause: describeError(error) });
   }
   const wallClockMs = Date.now() - started;
   const problems: string[] = [];
@@ -151,10 +165,12 @@ async function runOnce(options: RunBenchOptions, attempt: Attempt): Promise<{ ev
   problems.push(...bundle.problems);
   const observed = { ...identity, result, manifest: bundle.manifest, metrics: bundle.metrics, finalSequence: bundle.finalSequence, errorSequence: bundle.errorSequence, wallClockMs };
   const evaluation = entry.lane === "flow" ? evaluateFlowRun(observed) : evaluateRecordingRun(observed);
-  return recordRun(attempt, evaluation, problems);
+  // The run's own `error` event is the only place the message behind a failed
+  // run exists; the runner's result carries a category and no text.
+  return recordRun(attempt, evaluation, { problems, ...(bundle.recordedFailure ? { cause: bundle.recordedFailure.message } : {}) });
 }
 
-async function recordRun(attempt: Attempt, evaluation: RunEvaluation, problems: string[]): Promise<{ evaluation: RunEvaluation; record: BenchRunRecord }> {
+async function recordRun(attempt: Attempt, evaluation: RunEvaluation, observed: { problems: string[]; cause?: string }): Promise<{ evaluation: RunEvaluation; record: BenchRunRecord }> {
   const evaluationPath = await writeRunEvaluation(attempt.directory, evaluation);
   return {
     evaluation,
@@ -163,7 +179,8 @@ async function recordRun(attempt: Attempt, evaluation: RunEvaluation, problems: 
       runId: evaluation.runId, evaluation: evaluationPath, verdict: evaluation.verdict,
       ...(evaluation.failureCategory === undefined ? {} : { failureCategory: evaluation.failureCategory }),
       actionsExecuted: actionsExecuted(evaluation),
-      ...(problems.length ? { problems } : {}),
+      ...(evaluation.verdict !== "passed" && observed.cause ? { failureCause: observed.cause } : {}),
+      ...(observed.problems.length ? { problems: observed.problems } : {}),
     },
   };
 }

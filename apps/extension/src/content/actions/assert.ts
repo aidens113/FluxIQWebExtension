@@ -63,7 +63,7 @@
 // it. (Until 2026-09-11 the dispatcher returned this promise unawaited, and
 // this catch was the only thing that stopped the rejection escaping.)
 
-import type { BrowserActionCommand, BrowserActionResult } from "../types";
+import type { BrowserActionCommand, BrowserActionResult, BrowserActionTargetResolution } from "../types";
 import type { AssertionOutcome, AssertionTarget } from "../action-runtime";
 import type { ContentActionDependencies } from "./types";
 
@@ -72,11 +72,12 @@ export async function assertAction(action: BrowserActionCommand, deps: ContentAc
     const request = action.assert;
     if (!request) throw new Error("web.dom.assert requires assert parameters naming the kind of claim.");
 
-    const target = assertionTarget(action, deps);
+    const { target, resolution } = assertionTarget(action, deps);
     const outcome = await deps.evaluateAssertion(request, target);
     const evidence = {
       ...(target.element ? { element: deps.describeElement(target.element) } : {}),
-      snapshot: deps.captureSnapshot()
+      snapshot: deps.captureSnapshot(),
+      ...(resolution ? { resolution } : {})
     };
 
     const validation = outcome.held
@@ -99,19 +100,31 @@ export async function assertAction(action: BrowserActionCommand, deps: ContentAc
   }
 }
 
+/** What the claim is judged against, and the measurement behind it when one was made. */
+type ResolvedAssertionTarget = {
+  target: AssertionTarget;
+  resolution?: BrowserActionTargetResolution | undefined;
+};
+
 /**
  * A selector is handed over unresolved, because `exists` and `absent` are
  * claims about whether anything matches it and `deps.resolveTarget` throws when
  * nothing does. Without one, the target is resolved however the action names it
  * -- coordinates, visual bounds, fingerprint -- and a miss leaves an empty
  * target the capability reports as "nothing matched" rather than a throw.
+ *
+ * The measurement comes back with the element and only with it, which is why
+ * this verb reports a resolution on some results and not others: a claim about
+ * a selector resolved nothing, and a claim whose target could not be resolved
+ * measured nothing worth reporting either.
  */
-function assertionTarget(action: BrowserActionCommand, deps: ContentActionDependencies): AssertionTarget {
-  if (action.selector) return { selector: action.selector };
+function assertionTarget(action: BrowserActionCommand, deps: ContentActionDependencies): ResolvedAssertionTarget {
+  if (action.selector) return { target: { selector: action.selector } };
   try {
-    return { element: deps.resolveTarget(action) };
+    const resolved = deps.resolveTarget(action);
+    return { target: { element: resolved.element }, resolution: resolved.resolution };
   } catch {
-    return {};
+    return { target: {} };
   }
 }
 

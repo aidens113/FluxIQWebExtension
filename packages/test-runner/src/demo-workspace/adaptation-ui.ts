@@ -4,7 +4,7 @@ import type { Page } from "@playwright/test";
 import { BrowserEvidenceRecorder } from "../browser-evidence.js";
 import { type ExistingFlowAdaptation, ExistingFluxIQControlClient, type ExistingRunDetail, type ExistingRunEvent, type ExistingRunIntervention } from "../existing-fluxiq-control.js";
 import { RunnerFailure } from "../failure.js";
-import { exactVirtualizedHierarchyObject } from "../demo-llm-create-ui.js";
+import { exactVirtualizedHierarchyObject } from "../demo-llm-create-ui/index.js";
 import { explorationAdaptationRunIsComplete } from "../demo-llm-exploration-adaptation-wait.js";
 import { isTerminalRuntimeStatus, waitForRoutedRunDetail } from "./control-waits.js";
 import { selectFlowInCurrentProject } from "./panel-navigation.js";

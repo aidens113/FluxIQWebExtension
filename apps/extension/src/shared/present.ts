@@ -46,12 +46,41 @@
 // The check only happens when the literal has a contextual type the compiler
 // did not read off the literal itself. `present({ ... })` with `T` inferred
 // would infer `T` *from* the argument and check nothing -- the same silence in a
-// new costume. `NoInfer<T>` stops the inference, and `object extends T ? never`
-// turns a call with no type argument into a hard error rather than a call that
-// quietly returns `object`. So a call site either names the contract type it is
-// writing or it does not compile.
+// new costume. `NoInfer<T>` stops that inference, so a call naming no type
+// argument falls back to `T`'s **default**, and the default is a private brand
+// no contract type can be: `ContractTypeNotGiven`. Its branch is `never`, so the
+// call is a hard error rather than one that quietly returns `object`.
 //
-// The same reason applies to `apps/extension/src/background/connection/`'s
+// Naming a type that carries no keys -- `present<object>` or `present<{}>` -- is
+// the same opt-out wearing a type argument, because a literal is excess-checked
+// against neither. `[keyof T] extends [never]` is `never` too, for that reason
+// and no other.
+//
+// ### Do not restore `object extends T ? never`
+//
+// That was this guard until `x-present-hole`, and it was wrong in a way only a
+// probe showed. `object` is assignable to any **weak** type -- one whose keys
+// are all optional -- so the condition held for every all-optional type as well
+// as for the un-named case, and the helper could not be applied to such a type
+// at all: `TS2345: ... not assignable to parameter of type 'never'`, which reads
+// like a mistake in the caller and is not one.
+//
+// The page-evidence contract hid it. All fifteen types written through `present`
+// today have at least one required key, so nothing here ever tripped it.
+// `shared/protocol.ts`'s `DomElementContext` is all-optional and is precisely
+// the shape the guard locked out -- it is still built by `compactObject` over a
+// spread in `content/identity/context.ts`, which is the pattern this file exists
+// to replace, and which could not have been converted while that guard stood.
+// The domain's sibling, `domain/src/runtime/llm-evidence/present.ts`, hit the
+// same wall on four packet types and reached this same default-based guard
+// independently.
+//
+// The new guard is narrower on purpose and gives up nothing worth having. The
+// old condition rejected three things: the un-named case, keyless types, and
+// all-optional types. The first two are still rejected, one clause each. The
+// third was never a rejection anyone wanted.
+//
+// The same reasoning separates this from `background/connection/`'s
 // `compactObject`, whose runtime behaviour is identical: it infers `T` from its
 // argument, so it compacts correctly and checks nothing. It is not a substitute,
 // and neither is it wrong -- its callers assign the result to a typed target.
@@ -63,6 +92,16 @@
 // different facts everywhere in this contract: a page with no dialog is not a
 // page with an empty dialog, and `truncated: false` is not the same evidence as
 // no truncation report at all. `false`, `0` and `""` are values and are kept.
+
+/**
+ * What `T` becomes when a caller names no type argument, and nothing else.
+ *
+ * The `unique symbol` key is what makes it unforgeable: no contract type can be
+ * assignable to it by accident, so the guard fires when and only when the type
+ * argument was omitted.
+ */
+declare const CONTRACT_TYPE_NOT_GIVEN: unique symbol;
+type ContractTypeNotGiven = { [CONTRACT_TYPE_NOT_GIVEN]: true };
 
 /** Keys of `T` a caller may leave out. */
 type OptionalKeys<T> = { [K in keyof T]-?: object extends Pick<T, K> ? K : never }[keyof T];
@@ -88,8 +127,19 @@ type RequiredFields<T> = { [K in RequiredKeys<T>]-?: Exclude<T[K], undefined> };
  */
 type OptionalFields<T> = { [K in OptionalKeys<T>]-?: T[K] | undefined };
 
-/** Every key of `T` and no other, written out. */
-type EvidenceFields<T> = object extends T ? never : NoInfer<RequiredFields<T> & OptionalFields<T>>;
+/**
+ * Every key of `T` and no other, written out.
+ *
+ * The two `never` branches are the guard, and each rejects one way of opting out
+ * of the check: naming no contract type, and naming one no literal can be
+ * checked against. Neither is a test for "all optional", which is a legal
+ * contract shape this must be able to write.
+ */
+type EvidenceFields<T> = [T] extends [ContractTypeNotGiven]
+  ? never
+  : [keyof T] extends [never]
+    ? never
+    : NoInfer<RequiredFields<T> & OptionalFields<T>>;
 
 /**
  * One evidence value, built from a literal the compiler checks against the
@@ -98,7 +148,7 @@ type EvidenceFields<T> = object extends T ? never : NoInfer<RequiredFields<T> & 
  * Key order is the literal's, so the JSON is byte-identical to what the
  * conditional spreads produced.
  */
-export function present<T extends object>(fields: EvidenceFields<T>): T {
+export function present<T extends object = ContractTypeNotGiven>(fields: EvidenceFields<T>): T {
   const source = fields as Record<string, unknown>;
   const written: Record<string, unknown> = {};
   for (const key of Object.keys(source)) {

@@ -4,11 +4,17 @@ This page is current-state design. It records what each browser capability
 does in the working tree today, not what the plan intends, and it is updated
 at the close of every Week 1 phase. It began as the capability matrix in the
 [Week 1 action audit](../working/mvp-week1-web-automation-reliability-plan/reports/audit-actions.md)
-(repository at `d848536`) and was last rewritten against source on 2026-09-11,
-after Wave 2 of Phase 1.2 of the
-[Week 1 plan](../working/mvp-week1-web-automation-reliability-plan.md). The
-wire protocol and the recording path are described in the
-[extension client architecture](extension-client.md).
+(repository at `d848536`), was rewritten against source on 2026-09-11 after
+Wave 2 of Phase 1.2 of the
+[Week 1 plan](../working/mvp-week1-web-automation-reliability-plan.md), and
+its cross-cutting claims were re-verified against source on 2026-09-12 after
+Wave 3. The wire protocol and the recording path are in the
+[extension client architecture](extension-client.md). What each row does not
+repeat has a page of its own: how a target becomes an element in
+[element identity](element-identity.md), what a capture says about the page in
+[page evidence](page-evidence.md), how a failure is named in
+[the failure taxonomy](failure-taxonomy.md), and what is withheld from both in
+[sensitive values](sensitive-values.md).
 
 ## Reading The Matrix
 
@@ -125,9 +131,9 @@ connection's last observation. The six observe-only verbs are exempt.
 | Downloads | Partially supported | Yes | `web.browser.download` (parameter `download`) | `runtime/browser-download.ts`, `apps/extension/manifest.chrome.json`, `manifest.firefox.json`, `manifest.e2e.json` | Step 3, landed; starting a download and reading the file remain | Waits for a download to complete — optionally the one with a given file name, matched on the base name and accepting the browser's `name (1).ext` form — through `chrome.downloads`, with a 30 s default bounded to 1–120 s and a 15 s lookback so a download that finished between the click and the wait still counts. A timeout is `timed_out` with Core's `timeout` category. The `downloads` permission is declared in all three manifests, and a build without it fails as a capability refusal rather than hanging. The action only observes: it cannot start a download, choose a destination, or assert anything about the file beyond its name. The wait loop has never run in a browser. |
 | Basic file uploads | Fully supported | Yes | `web.dom.upload` (parameter `upload`) | `content/actions/upload.ts`, `content/action-runtime/file-input.ts`, `domain/src/client/gateway-action-parameters.ts` | Step 3, landed | Files travel inline as base64 because the page, not the worker, owns the input; they are built into a `DataTransfer`, assigned to the input, and followed by `input` and `change`. The names the input ended up holding are read back off the element and compared with what was asked for, so an upload that put nothing anywhere reports `failed`. A target that is not a file input, a single-file input given several files, and malformed or oversized content are all refused before anything is dispatched; the 1 MiB per-file and 4 MiB total bounds are enforced by the domain on the way in and again in the page. File contents never appear in a result, a message, or a log. Multi-file uploads are coded but untested. |
 | Form interaction | Partially supported | Yes | composed from `web.dom.check`, click, type, clear, select, and Enter; `dom.submit` remains a recording event kind only | `content/actions/check.ts`, `content/action-runtime/checkable-state.ts`, `content/action-runtime/keyboard/implicit-submission.ts`, `domain/src/io/input-model.ts` | Step 3, landed; a submit action and validation-error observation remain | A checkbox or radio can now be set to a state rather than toggled, which is what makes a replayed step idempotent, and `checked` is read back after the control's own events run, so a handler that reverted the change reports `failed`. A control that is not checkable, one that is `:disabled` or `aria-disabled` — a disabled `<fieldset>`'s descendants included — and unchecking a radio, which no user gesture can do, are each ACTION_REJECTED rather than faked. `web.dom.check` does not use the actionability gate: it has its own disabled check and does not hit-test, so a control covered by an overlay is still set. There is still no submit action — a form is submitted by Enter in a field or by clicking its button — a recorded submit maps to no input, and validation errors are not observed. |
-| Dynamic elements | Partially supported | Yes | the two wait actions, `web.dom.assert`, and the actionability gate | `content/action-runtime/wait-conditions.ts`, `content/action-runtime/actionability.ts`, `content/action-runtime/resolve-target.ts` | Step 2, landed; waiting inside the acting verbs remains | The gate scrolls a target into view and refuses one that is not yet visible or not yet enabled, with a code saying which, so an action against a half-rendered page fails for a stated reason instead of appearing to work; `web.dom.assert` re-queries its selector until its claim holds or the timeout passes. But no acting verb waits first: `resolveTarget` throws at once when nothing matches, and nothing in the action path retries, so a Flow against a page that renders late must still author a wait before the action. |
+| Dynamic elements | Partially supported | Yes | the two wait actions, `web.dom.assert`, and the actionability gate | `content/action-runtime/wait-conditions.ts`, `content/action-runtime/actionability.ts`, `content/action-runtime/resolve-target.ts` | Step 2, landed; waiting inside the acting verbs remains | The gate scrolls a target into view and refuses one that is not yet visible or not yet enabled, with a code saying which, so an action against a half-rendered page fails for a stated reason instead of appearing to work; `web.dom.assert` re-queries its selector until its claim holds or the timeout passes. But no acting verb waits first: `resolveTarget` tries its strategies and then scores the page's candidates once and throws, and nothing in the action path polls or retries, so a Flow against a page that renders late must still author a wait before the action. |
 | Modal/dialog interaction | Partially supported | Yes | `web.dom.dialog` (parameter `dialog`); DOM modals are ordinary elements | `content/actions/dialog.ts`, `content/action-runtime/dialog-control.ts`, `page-world/dialog-override.ts`, `shared/dialog-channel.ts` | Step 3, landed; `beforeunload` and older Firefox remain | A native dialog blocks the page's script, so the answer is armed before the dialog opens: `alert`, `confirm`, and `prompt` are replaced in the page's own world at `document_start`, ahead of any page script, and the verb arms the next dialog's response — accept, dismiss, or accept with `promptText` — through a synchronous DOM handshake. Arming that is not acknowledged means the override is not installed, and the verb fails at once as `dialog_override_missing` rather than arming something nothing will answer. An unarmed dialog is left alone: the page behaves as it would without the extension, and what was answered is recorded as evidence the next action reports. Two gaps: `beforeunload` is in the observed-dialog union but is not a function that can be replaced, so it is unhandled; and `world: "MAIN"` is honoured only from Chrome 111 and Firefox 128, while the Firefox manifest still admits 109, so on Firefox 109–127 the override lands in the isolated world and every dialog action fails honestly instead of working. |
-| URL checks | Fully supported | Yes | `web.dom.assert` with `kind: "url"`; also the `url` wait condition and navigate's landed-URL comparison | `content/actions/assert.ts`, `content/action-runtime/assertion-evaluation.ts`, `runtime/navigation-outcome.ts` | Step 3, landed | An authored claim about the address, retried until it holds or the timeout passes (5 s by default, `timeoutMs: 0` for a single immediate check). The landed URL counts as the requested one when it equals it, contains it, or resolves to it against the document's base. A claim that does not hold is STATE_MISMATCH — Core's `expected_state_missing`, retryable, at the `verification` stage — not `output_not_observed`, because the difference between a wrong expectation and an action that did not take is how a Flow recovers. |
+| URL checks | Fully supported | Yes | `web.dom.assert` with `kind: "url"`; also the `url` wait condition and navigate's landed-URL comparison | `content/actions/assert.ts`, `content/action-runtime/assertion-evaluation.ts`, `runtime/navigation-outcome.ts` | Step 3, landed | An authored claim about the address, retried until it holds or the timeout passes (5 s by default, `timeoutMs: 0` for a single immediate check). The landed URL counts as the requested one when it equals it, contains it, or resolves to it against the document's base. A claim that does not hold is STATE_MISMATCH — Core's `unexpected_state`, not retryable, at the `verification` stage — not `output_not_observed`, because the difference between a wrong expectation and an action that did not take is how a Flow recovers. A claim whose subject never appeared at all has not been judged against the page but has run out of time waiting for it, and is `timed_out`. |
 | Element existence checks | Fully supported | Yes | `web.dom.assert` with `kind` `exists`, `visible`, or `enabled` | `content/actions/assert.ts`, `content/action-runtime/assertion-evaluation.ts` | Step 3, landed | The claim is judged immediately and then polled every 50 ms until the deadline, so an element that arrives late satisfies it and a wrong claim fails fast instead of costing a full wait timeout. The selector is re-queried on every attempt rather than resolved once; an element handed over without a selector must still be connected. `exists` with neither a selector nor an element is reported as such rather than guessed at, and an assertion's target may come from coordinates, visual bounds, or a fingerprint, in which case a miss leaves an empty target reported as "nothing matched" rather than a throw. |
 | Element nonexistence checks | Fully supported | Yes | `web.dom.assert` with `kind: "absent"`; also the `absent` wait condition | `content/actions/assert.ts`, `content/action-runtime/wait-conditions.ts` | Steps 2 and 3, landed | Absence is now a first-class outcome on both paths: the assertion holds when nothing matches the selector, or when the element handed to it has detached, and the wait condition satisfies when the selector matches nothing or the text has gone. A spinner disappearing is therefore expressible both as a claim that fails fast and as a wait that reports `timed_out` if it never goes. |
 
@@ -274,9 +280,10 @@ yet, so a replayed check produces no recording event. The `type` and `select`
 confirmations carry the value the field was left holding, read from the result's
 element descriptor, which the content script fills only while input-value
 capture is on. A field that matches the recorder's sensitivity rule carries no
-value; `clear` carries `""`. The recorder's own events and a result's
-`element.value` are not yet redacted; see
-[Recording Evidence](extension-client.md#recording-evidence).
+value; `clear` carries `""`. A sensitive control's value reaches none of these
+paths — not the descriptor, not the recorded event, not the confirmation — and
+a validation that has to describe one names its length instead of quoting it;
+see [sensitive values](sensitive-values.md).
 
 ### Results And Failures
 
@@ -294,13 +301,18 @@ tested directly:
   `output_not_observed`, retryable, at the `verification` stage, carrying the
   two values that disagreed;
 - a target that was disabled, hidden, or covered is ACTION_REJECTED —
-  `blocked_by_capability_or_policy` with the capability's own code as
-  `web.action.<code>`, never retryable;
+  `web.action.rejected`, category `blocked_by_capability_or_policy`, never
+  retryable, with the capability's own reason in the record's `actual`;
 - a wait or an action that ran out of time is `timed_out` with Core's `timeout`
   category, never flattened to `failed`;
 - an authored assertion that does not hold is STATE_MISMATCH
-  (`expected_state_missing`), which is a different thing from an action whose
-  effect did not appear.
+  (`web.validation.state_mismatch`, category `unexpected_state`), which is a
+  different thing from an action whose effect did not appear.
+
+Every code these builders name comes from the closed set in
+`domain/src/runtime/failure/codes.ts`, which also fixes each code's category,
+retryable flag and stage; the whole set and the compile-time rule that keeps
+it closed are in [the failure taxonomy](failure-taxonomy.md).
 
 Validation text is whitespace-collapsed, never empty, and bounded to 1 024
 characters on both sides of the wire, because Core's parser drops an
@@ -311,3 +323,53 @@ the `error`, and `dispatchWebAutomationOutput`
 (`domain/src/io/gateway-output-dispatcher.ts`) passes the command's own status
 through, so Core sees `timed_out` rather than a bare failure. `cancelled` is
 still declared in the status union and nothing produces it.
+
+### Expected State, And The Expectation Seam
+
+`web.dom.assert` is not only a verb a Flow can author. Its condition
+vocabulary is also how Core asks the host whether a Flow's expectations hold.
+
+Every web output node declares an `expectedState` parameter
+(`domain/src/output-nodes/definitions.ts`), shaped
+`{ conditions: [{ kind, selector?, expected?, timeoutMs? }], mode?, timeoutMs? }`
+with `kind` one of the six `WebAutomationAssertKind` values and `mode` `all` or
+`any`. Nothing else in this repository writes that path, and without it Core's
+transition comparison falls back to counting keys of an object that is never
+there.
+
+Core reads it from two places -- the `builtin.policy.expectation` node and the
+transition comparison that follows a successful attempt -- and hands the
+conditions to the host boundary's `expectationEvaluator`. This repository binds
+that evaluator in `domain/src/runtime/expectation/`, on the same boundary
+object as the host runtime's state snapshot and diff
+(`domain/src/runtime/host-runtime.ts`, bound by
+`bindWebAutomationHostRuntime`), so a host that binds a runtime gets the
+evaluator with it and there is nothing to forget.
+
+The judgement happens in the browser. Each condition is dispatched as a
+`web.dom.assert` action, because that verb already knows how to wait for a
+claim, re-query its selector on every attempt, and report what it saw instead.
+Re-implementing `exists` or `visible` in the domain would mean a second
+definition of the same words, judged against a stale snapshot.
+
+Three rules keep the seam honest:
+
+- **It never throws.** Core's expectation node awaits the evaluator with no
+  catch of its own, so a throw would become a node execution error and a false
+  red. An evaluator that breaks reports Core's default pass with nothing
+  checked, and says why.
+- **A condition that could not be judged is not a condition that failed.** An
+  unreadable shape, a client that never answered, a cancelled run, or any
+  dispatch status other than `failed` and `timed_out` is left out of
+  `checkedConditionCount` and cannot reject the expectation. With nothing
+  judged the verdict is an unconditional pass, with a message saying so.
+- **No code is written here.** `STATE_MISMATCH` and `TIMEOUT` come from the
+  closed set, and a client that reported a code from that same set keeps its
+  own record: it stood nearest the page.
+
+Two condition shapes are accepted, because two producers write them: the flat
+`{ kind, expected, selector }` a Flow author writes, and the
+`{ selector, assert: { kind, expected } }` an authored or recorded
+`web.dom.assert` node carries. The kind table is exhaustive by construction, so
+a seventh assert kind stops `conditions.ts` compiling rather than being
+silently dropped as unreadable.

@@ -1,6 +1,7 @@
-import { EVALUATION_SCHEMA_VERSION, assertRunEvaluation, failureCategories, type EvaluationLane, type ExpectedFailure, type FailureCategory, type RunEvaluation, type RunManifest } from "@fluxiq-web-extension/test-contracts";
+import { failureCategories, type EvaluationLane, type FailureCategory, type RunEvaluation, type RunManifest } from "@fluxiq-web-extension/test-contracts";
 import { classifyRunnerFailure } from "../failure.js";
 import type { RunLaneObservation } from "../flow-lane/index.js";
+import { evaluateObservedRun, runOutcome, type RunEvaluationIdentity, type RunOutcome } from "../run-evaluation/index.js";
 
 /**
  * Where each recording-lane measurement comes from. The bench writes these
@@ -40,15 +41,8 @@ export const FLOW_LANE_SOURCES = {
 
 const RUNNER_VERDICT = "runner-verdict";
 
-/** Which run of the corpus an evaluation describes. */
-export type RunEvaluationIdentity = {
-  scenarioId: string;
-  workflowId: string | null;
-  variantId: string | null;
-  repeatIndex: number;
-  /** The resolved workflow's `expected.failure`. */
-  expectedFailure: ExpectedFailure | null;
-};
+/** Which run of the corpus an evaluation describes; owned by `run-evaluation`, which both producers share. */
+export type { RunEvaluationIdentity } from "../run-evaluation/index.js";
 
 export type RecordingRunInput = RunEvaluationIdentity & {
   result: { runId: string; verdict: "passed" | "failed"; failureCategory?: string };
@@ -67,23 +61,9 @@ export type FlowRunInput = Omit<RecordingRunInput, "result"> & {
   result: RecordingRunInput["result"] & { observation?: RunLaneObservation };
 };
 
-type RunOutcome = Pick<RunEvaluation, "runId" | "verdict" | "invariants" | "metrics" | "lane" | "flowCreated" | "oracleVerdict" | "reportedVerdict" | "automationFailureReported" | "harnessActivations" | "durationMs" | "actions"> & { failureCategory?: FailureCategory };
-
 /** A recording-lane run's `RunEvaluation`, validated, from its runner result and bundle. */
 export function evaluateRecordingRun(input: RecordingRunInput): RunEvaluation {
-  const passed = input.result.verdict === "passed";
-  const category = passed ? undefined : testRigCategory(input.result.failureCategory);
-  const reported = reportedOutcome(input.manifest);
-  return assemble(input, {
-    ...common(input, passed, category),
-    lane: "recording",
-    flowCreated: null,
-    oracleVerdict: passed ? "passed" : category === "runtime.behavior" ? "failed" : null,
-    reportedVerdict: reported.verdict,
-    automationFailureReported: reported.failure,
-    harnessActivations: 0,
-    actions: (input.manifest?.actions ?? []).flatMap((action) => action.durationMs === undefined ? [] : [{ actionType: action.actionType, durationMs: action.durationMs }]),
-  });
+  return evaluateObservedRun({ identity: input, outcome: outcomeOf(input), observation: benchRecordingObservation(input) });
 }
 
 /**
@@ -94,93 +74,105 @@ export function evaluateRecordingRun(input: RecordingRunInput): RunEvaluation {
  *
  * A run planned on this lane that failed before the Flow lane was reached
  * publishes a recording-lane observation, or none at all. It is still reported
- * as a Flow-lane run — `flowCreated: false`, nothing executed — because that
+ * as a Flow-lane run -- `flowCreated: false`, nothing executed -- because that
  * is what happened: Flow creation is precisely what did not occur, and
  * `flowCreationSuccess` must count it as a miss rather than lose it.
  */
 export function evaluateFlowRun(input: FlowRunInput): RunEvaluation {
-  const passed = input.result.verdict === "passed";
-  const category = passed ? undefined : testRigCategory(input.result.failureCategory);
   const observed = input.result.observation?.lane === "flow" ? input.result.observation : undefined;
-  return assemble(input, {
-    ...common(input, passed, category),
-    lane: "flow",
-    flowCreated: observed?.flowCreated ?? false,
-    oracleVerdict: observed?.oracleVerdict ?? null,
-    reportedVerdict: observed?.reportedVerdict ?? null,
-    automationFailureReported: observed?.automationFailureReported ?? null,
-    harnessActivations: observed?.harnessActivations ?? 0,
-    actions: observed ? [...observed.actions] : [],
+  return evaluateObservedRun({
+    identity: input,
+    outcome: outcomeOf(input),
+    observation: {
+      lane: "flow",
+      flowCreated: observed?.flowCreated ?? false,
+      oracleVerdict: observed?.oracleVerdict ?? null,
+      reportedVerdict: observed?.reportedVerdict ?? null,
+      automationFailureReported: observed?.automationFailureReported ?? null,
+      automationFailureExpected: input.expectedFailure,
+      harnessActivations: observed?.harnessActivations ?? 0,
+      actions: observed ? [...observed.actions] : [],
+    },
   });
 }
 
 /** An attempt whose runner threw before finalizing a bundle: inconclusive, since nothing about the automation was observed. */
 export function evaluateFailedAttempt(input: RunEvaluationIdentity & { lane: EvaluationLane; attemptId: string; error: unknown; wallClockMs: number }): RunEvaluation {
   const category = classifyRunnerFailure(input.error);
-  return assemble(input, {
-    runId: input.attemptId,
-    verdict: "inconclusive",
-    failureCategory: category,
-    invariants: [{ id: RUNNER_VERDICT, passed: false, expected: "passed", actual: `runner threw before finalizing a bundle: ${category}`, evidenceSequences: [] }],
-    metrics: {},
-    lane: input.lane,
-    flowCreated: input.lane === "flow" ? false : null,
-    oracleVerdict: null,
-    reportedVerdict: null,
-    automationFailureReported: null,
-    harnessActivations: 0,
-    durationMs: input.wallClockMs,
-    actions: [],
+  return evaluateObservedRun({
+    identity: input,
+    outcome: {
+      runId: input.attemptId,
+      verdict: "inconclusive",
+      failureCategory: category,
+      invariants: [{ id: RUNNER_VERDICT, passed: false, expected: "passed", actual: `runner threw before finalizing a bundle: ${category}`, evidenceSequences: [] }],
+      metrics: {},
+      durationMs: input.wallClockMs,
+    },
+    observation: {
+      lane: input.lane,
+      flowCreated: input.lane === "flow" ? false : null,
+      oracleVerdict: null,
+      reportedVerdict: null,
+      automationFailureReported: null,
+      automationFailureExpected: input.expectedFailure,
+      harnessActivations: 0,
+      actions: [],
+    },
   });
 }
 
-/** The run-as-a-test half both lanes share: the runner's verdict, its test-rig category, and the evidence event that closed it. */
-function common(input: RecordingRunInput, passed: boolean, category: FailureCategory | undefined): Pick<RunOutcome, "runId" | "verdict" | "failureCategory" | "invariants" | "metrics" | "durationMs"> {
-  const closing = passed ? input.finalSequence : input.errorSequence;
-  return {
-    runId: input.result.runId,
-    verdict: input.result.verdict,
-    ...(category === undefined ? {} : { failureCategory: category }),
-    invariants: [{ id: RUNNER_VERDICT, passed, expected: "passed", actual: passed ? "passed" : `failed: ${category}`, evidenceSequences: closing === undefined ? [] : [closing] }],
-    metrics: { ...input.metrics },
-    durationMs: runDurationMs(input.manifest) ?? input.wallClockMs,
-  };
-}
+/** The run-as-a-test half, judged by the rule a single `lab run` also uses. */
+const outcomeOf = (input: RecordingRunInput): RunOutcome => runOutcome({
+  runId: input.result.runId,
+  verdict: input.result.verdict,
+  failureCategory: input.result.failureCategory,
+  metrics: input.metrics,
+  manifest: input.manifest,
+  wallClockMs: input.wallClockMs,
+  finalSequence: input.finalSequence,
+  errorSequence: input.errorSequence,
+});
 
-function assemble(identity: RunEvaluationIdentity, outcome: RunOutcome): RunEvaluation {
-  const evaluation: RunEvaluation = {
-    schemaVersion: EVALUATION_SCHEMA_VERSION,
-    runId: outcome.runId,
-    verdict: outcome.verdict,
-    ...(outcome.failureCategory === undefined ? {} : { failureCategory: outcome.failureCategory }),
-    invariants: outcome.invariants,
-    metrics: outcome.metrics,
-    scenarioId: identity.scenarioId,
-    workflowId: identity.workflowId,
-    variantId: identity.variantId,
-    repeatIndex: identity.repeatIndex,
-    lane: outcome.lane,
-    flowCreated: outcome.flowCreated,
-    oracleVerdict: outcome.oracleVerdict,
-    reportedVerdict: outcome.reportedVerdict,
-    automationFailureReported: outcome.automationFailureReported,
-    // The corpus plan's resolved `expected.failure`, not the lane's copy of
-    // it: what the bench planned to require is what classification accuracy is
-    // scored against.
-    automationFailureExpected: identity.expectedFailure,
-    harnessActivations: outcome.harnessActivations,
-    durationMs: outcome.durationMs,
-    actions: outcome.actions,
-    evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 },
-    llm: { mode: "disabled", profileId: null, calls: 0 },
-    harnessRecovery: null,
-    adaptationCost: null,
-    adaptationValidation: null,
-    adaptationPersistence: null,
-    adaptationReuse: null,
+/**
+ * The recording-lane observation **the bench uses**: derived from the
+ * persisted run manifest rather than taken from the observation `runScenario`
+ * publishes. This is the single place the two producers of a `RunEvaluation`
+ * differ, and it is deliberate.
+ *
+ * Two of its three observed fields agree with the lane by construction.
+ * `reportedVerdict` and `automationFailureReported` are read from the same
+ * actions and the same `automationFailure` the lane saw, after a round trip
+ * through `run.json`.
+ *
+ * `oracleVerdict` does not agree. The bench infers it from the runner's
+ * verdict and its test-rig category, and that inference cannot tell a fixture
+ * that disagreed from a rig that broke after the oracle had already passed: a
+ * disallowed console error, a network-policy violation, and the Core probe's
+ * page-state check all raise `runtime.behavior` after `assertFinalState`
+ * succeeded, and all are read here as an oracle failure. The lane publishes
+ * the oracle's real verdict and would say `passed`.
+ *
+ * The inference stays because eight bench reports on disk were measured with
+ * it and have to remain comparable; correcting it moves `falseFailure` and
+ * `falseSuccess`, which is a deliberate bench change rather than a refactor.
+ * Until it is made, a single `lab run` is the more honest of the two, and
+ * `run-evaluation/tests/bench-parity.test.ts` pins exactly where they part.
+ */
+function benchRecordingObservation(input: RecordingRunInput): RunLaneObservation {
+  const passed = input.result.verdict === "passed";
+  const category = passed ? undefined : testRigCategory(input.result.failureCategory);
+  const reported = reportedOutcome(input.manifest);
+  return {
+    lane: "recording",
+    flowCreated: null,
+    oracleVerdict: passed ? "passed" : category === "runtime.behavior" ? "failed" : null,
+    reportedVerdict: reported.verdict,
+    automationFailureReported: reported.failure,
+    automationFailureExpected: input.expectedFailure,
+    harnessActivations: 0,
+    actions: (input.manifest?.actions ?? []).flatMap((action) => action.durationMs === undefined ? [] : [{ actionType: action.actionType, durationMs: action.durationMs }]),
   };
-  assertRunEvaluation(evaluation);
-  return evaluation;
 }
 
 /**
@@ -204,25 +196,13 @@ function reportedOutcome(manifest: RunManifest | undefined): { verdict: RunEvalu
   return { verdict: "failed", failure: { category: "ambiguous_or_unknown" } };
 }
 
-function runDurationMs(manifest: RunManifest | undefined): number | undefined {
-  if (!manifest?.finishedAt) return undefined;
-  const duration = Date.parse(manifest.finishedAt) - Date.parse(manifest.startedAt);
-  return Number.isFinite(duration) && duration >= 0 ? duration : undefined;
-}
-
 /**
- * `RunEvaluation.failureCategory` is the test-rig taxonomy: why the facility
- * could not produce a trustworthy run. Its only producer is
- * `classifyRunnerFailure`, which already returns a `FailureCategory`, so a
- * value outside the list means the runner grew a category the evaluation
- * contract does not carry and `unknown` is the honest reading of it.
- *
- * This is not the axis the automation fails on, and the coercion must not be
- * widened to admit that one. A web-automation failure code from
- * `domain/src/runtime/failure/codes.ts` (`web.target.not_found`) and the Core
- * `AutomationStudioAdaptiveFailureClass` it carries (`target_not_found`) both
- * belong on `automationFailureReported`; arriving here, either is correctly
- * read as `unknown`, because neither says anything about the facility.
+ * The test-rig coercion, kept here only to reproduce the oracle-verdict
+ * inference above. `runOutcome` applies the same rule to
+ * `RunEvaluation.failureCategory`; this copy exists because the inference
+ * needs the coerced category before the outcome is built, and it is the one
+ * thing that must not follow if that rule ever changes -- the inference has to
+ * keep reading exactly what the eight historical reports were measured with.
  */
 function testRigCategory(value: string | undefined): FailureCategory {
   return value !== undefined && (failureCategories as readonly string[]).includes(value) ? value as FailureCategory : "unknown";

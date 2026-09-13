@@ -24,3 +24,10 @@ test-results/
 domain/.test-build-scratch/
 apps/extension/e2e/content/.harness-build/
 apps/extension/.test-build-scratch/
+
+# Per-instance Lab build output and the lock that serializes the build phase.
+# An instance's output sits under the package that produced it, so this matches
+# at any depth. scripts/lab/lab-instance.mjs owns these paths; see
+# docs/architecture/repository-layout.md.
+.lab-instances/
+.lab-locks/

@@ -26,11 +26,19 @@
 // The type used throughout is `DialogEvidenceItem`, deliberately: `dialogs.ts`'s
 // `label` is the exact field `v-wire-contract` renamed to `title` to prove the
 // hole was open, and this is where that mutation is now nailed down.
+//
+// The exception is the last section, which uses `DomElementContext` because it
+// is the one **all-optional** contract type on this wire. Until `x-present-hole`
+// the guard rejected every such type -- `object` is assignable to a type whose
+// keys are all optional, so `object extends T ? never` caught far more than the
+// un-named call it was aimed at -- and `present` could not be applied to one at
+// all. Those rows are what stop that from being reintroduced.
 
 import assert from "node:assert/strict";
 import test from "node:test";
 import { present } from "../present";
 import type { DialogEvidenceItem, FormControlEvidence, NavigationEvidence } from "../../content/evidence";
+import type { DomElementContext } from "../protocol";
 import type { WebAutomationEvidenceRect as EvidenceRect } from "@fluxiq-web-extension/domain";
 
 const BOUNDS: EvidenceRect = { x: 10, y: 20, width: 300, height: 200 };
@@ -206,6 +214,17 @@ function theCompilerMustRejectEachOfThese(): void {
   // A wrong value type on an optional field.
   // @ts-expect-error - 'number' is not assignable to 'string'
   present<DialogEvidenceItem>({ selector: "#invite", role: "dialog", modal: true, native: false, label: 7, bounds: undefined });
+
+  // Naming a type the compiler cannot check a literal against. `present<{}>` and
+  // `present<object>` are the un-named call wearing a type argument: excess
+  // properties are not checked against either, so both would take any literal at
+  // all and report nothing. The second guard clause is these two rows and
+  // nothing else -- it is NOT a test for "all optional", which is a legal
+  // contract shape the section below writes.
+  // @ts-expect-error - a keyless type argument checks nothing
+  present<{}>({ selector: "#invite", anything: "at all" });
+  // @ts-expect-error - a keyless type argument checks nothing
+  present<object>({ selector: "#invite", anything: "at all" });
 }
 
 function theCompilerMustAcceptThis(): DialogEvidenceItem {
@@ -227,4 +246,91 @@ function theCompilerMustAcceptThis(): DialogEvidenceItem {
 test("the compile-time rows above are type-level, and are checked by `pnpm check`", () => {
   assert.equal(typeof theCompilerMustRejectEachOfThese, "function");
   assert.deepEqual(Object.keys(theCompilerMustAcceptThis()), ["selector", "role", "modal", "native"]);
+});
+
+// ---------------------------------------------------------------------------
+// An all-optional contract type, which the guard used to lock out entirely.
+//
+// `DomElementContext` is the one wire type on this contract whose keys are all
+// optional. `object` is assignable to such a type, so the old
+// `object extends T ? never` guard resolved it to `never` and every call was
+// `TS2345: ... not assignable to parameter of type 'never'` -- a failure that
+// reads like a bug in the caller. The helper's whole claim, that a producer
+// which renames or drops a contract field fails to compile, was therefore
+// unavailable for exactly the shape most in need of it: a type with no required
+// key has nothing else holding its field names in place.
+//
+// `elementContext` in `content/identity/context.ts` still builds this value with
+// `compactObject` over a spread, so the hole is open there today. These rows do
+// not close it -- that is a call-site change in a file this worker does not own
+// -- but they prove the tool for closing it now works, and they fail the build
+// if the guard is ever narrowed back.
+// ---------------------------------------------------------------------------
+
+test("an all-optional contract type is writable, and absent stays absent", () => {
+  const empty = present<DomElementContext>({
+    formId: undefined,
+    formName: undefined,
+    formAction: undefined,
+    fieldsetLegend: undefined,
+    landmark: undefined,
+    heading: undefined,
+    listPosition: undefined,
+    tablePosition: undefined
+  });
+  assert.deepEqual(empty, {}, "a context with nothing worth reporting is an empty object, not a bag of undefineds");
+  assert.deepEqual(Object.keys(empty), []);
+
+  const placed = present<DomElementContext>({
+    formId: undefined,
+    formName: "checkout",
+    formAction: undefined,
+    fieldsetLegend: undefined,
+    landmark: "main",
+    heading: "Payment",
+    listPosition: undefined,
+    tablePosition: { row: 2, column: 3, columnHeader: "Amount" }
+  });
+  assert.deepEqual(Object.keys(placed), ["formName", "landmark", "heading", "tablePosition"]);
+  assert.equal(placed.landmark, "main");
+});
+
+function theCompilerMustRejectEachOfTheseToo(): void {
+  // Renaming a field of an all-optional type. This is the row that could not
+  // exist before the guard was fixed: the call did not fail because `landmarc`
+  // is not a field, it failed because the parameter was `never`, so the rename
+  // and the correct spelling were rejected alike and neither told the truth.
+  //
+  // The directive sits on the property rather than on the call because that is
+  // where TypeScript reports an excess property. A missing one is reported on
+  // the argument, which is why the row below guards the call instead.
+  present<DomElementContext>({
+    formId: undefined,
+    formName: undefined,
+    formAction: undefined,
+    fieldsetLegend: undefined,
+    // @ts-expect-error - 'landmarc' is not a field of the contract
+    landmarc: "main",
+    heading: undefined,
+    listPosition: undefined,
+    tablePosition: undefined
+  });
+
+  // Deleting a field of an all-optional type. Nothing else on such a type can
+  // catch this: every key is optional, so the value stays assignable however
+  // many of them the producer forgets.
+  // @ts-expect-error - 'tablePosition' is missing
+  present<DomElementContext>({
+    formId: undefined,
+    formName: undefined,
+    formAction: undefined,
+    fieldsetLegend: undefined,
+    landmark: undefined,
+    heading: undefined,
+    listPosition: undefined
+  });
+}
+
+test("an all-optional type's fields are held in place by the compiler", () => {
+  assert.equal(typeof theCompilerMustRejectEachOfTheseToo, "function");
 });

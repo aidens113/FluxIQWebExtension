@@ -17,14 +17,14 @@ import type { BrowserActionCommand, BrowserActionResult } from "../types";
 import type { ContentActionDependencies } from "./types";
 
 export function checkAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): BrowserActionResult {
-  const element = deps.resolveTarget(action);
+  const { element, resolution } = deps.resolveTarget(action);
   // Absent `checked`, the request is to check: that is what a recorded check step means.
   const requested = action.checked ?? true;
   deps.scrollElementIntoView(element);
 
   const outcome = deps.setCheckedState(element, requested);
   // Described after the attempt, so the evidence shows the state the page was left in.
-  const evidence = { element: deps.describeElement(element), snapshot: deps.captureSnapshot() };
+  const evidence = { element: deps.describeElement(element), snapshot: deps.captureSnapshot(), resolution };
   const expected = `the control is ${stateWord(requested)}`;
   if (!outcome.ok) {
     const code = outcome.code === "disabled" ? "disabled" : "not_checkable";

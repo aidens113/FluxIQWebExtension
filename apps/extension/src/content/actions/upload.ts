@@ -14,8 +14,8 @@ import type { ContentActionDependencies } from "./types";
 
 export function uploadAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): BrowserActionResult {
   const files = action.upload?.files ?? [];
-  const element = deps.resolveTarget(action);
-  const evidence = { element: deps.describeElement(element), snapshot: deps.captureSnapshot() };
+  const { element, resolution } = deps.resolveTarget(action);
+  const evidence = { element: deps.describeElement(element), snapshot: deps.captureSnapshot(), resolution };
   const expected = fileNameList(files.map((file) => file.name));
 
   const outcome = deps.setInputFiles(element, files);

@@ -72,7 +72,7 @@ export async function createRunManifest(input: RunManifestInput): Promise<RunMan
     repositories: { facility: await revision(input.repositoryRoot), core: await revision(input.fluxiqRepositoryRoot) },
     compatibility: [],
     lockfiles: await lockfiles(input.repositoryRoot, input.fluxiqRepositoryRoot),
-    extension: { version: extensionManifest.version, sha256: await hashDirectory(input.extensionPath), path: "apps/extension/dist/e2e-chromium" },
+    extension: { version: extensionManifest.version, sha256: await hashDirectory(input.extensionPath), path: manifestRelativePath(input.repositoryRoot, input.extensionPath) },
     environment: { os: os.platform(), architecture: os.arch(), browserName: "chromium", browserVersion: input.browserVersion, locale: "en-US", timezone: "UTC", viewport: { width: 1280, height: 720 } },
     ports: topology ? { scenario: topology.allocation.scenarioPort, ...(ownsCorePorts ? { web: topology.allocation.webPort, gateway: topology.allocation.gatewayPort } : {}) } : {},
     processExits: topology?.processExitCodes() ?? {},
@@ -86,6 +86,19 @@ export async function createRunManifest(input: RunManifestInput): Promise<RunMan
     steps: input.steps,
     actions: input.actions,
   };
+}
+
+/**
+ * The extension build this run loaded, as the manifest records it: a repository-relative
+ * POSIX path, so a concurrent Lab instance's manifest names its own build rather than
+ * a constant that was true only while every run shared one `dist/`.
+ */
+function manifestRelativePath(repositoryRoot: string, target: string): string {
+  const relative = path.relative(path.resolve(repositoryRoot), path.resolve(target)).split(path.sep).join("/");
+  if (relative === "" || relative.startsWith("../") || path.posix.isAbsolute(relative)) {
+    throw new Error(`The extension build must sit inside the repository to be recorded in a run manifest: ${target}`);
+  }
+  return relative;
 }
 
 function cloneRemappingSummary(clonePackage: ClonePackage) {

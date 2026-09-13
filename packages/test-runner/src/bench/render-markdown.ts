@@ -1,7 +1,8 @@
 import { benchRateMetrics, type BenchDistribution, type BenchReport } from "@fluxiq-web-extension/test-contracts";
 import { BENCH_RATE_DEFINITIONS } from "./aggregate-report.js";
 import type { BenchExecutionCoverage } from "./execution-coverage.js";
-import type { BenchRunsFile } from "./report-store.js";
+import { benchFailureCauses, type BenchFailureCause } from "./failure-cause.js";
+import type { BenchRunRecord, BenchRunsFile } from "./report-store.js";
 
 /**
  * `report.md`: results, skipped results with their reasons, every run's
@@ -27,6 +28,7 @@ export function renderBenchMarkdown(runs: BenchRunsFile, report: BenchReport | u
     "",
     `${evaluated.length} runs evaluated: ${passed} passed, ${evaluated.length - passed} did not. ${skipped.length} results skipped (${skippedRuns.length} runs); a skipped run is never counted as a pass.`,
     "",
+    ...failureLines(benchFailureCauses(runs.runs), evaluated.length),
     ...(coverage ? executionLines(coverage) : []),
     "## Results",
     "",
@@ -38,7 +40,7 @@ export function renderBenchMarkdown(runs: BenchRunsFile, report: BenchReport | u
     "",
     "## Runs",
     "",
-    evaluated.length ? table(["Row", "Workflow", "Variant", "Lane", "Repeat", "Run", "Verdict", "Actions FluxIQ executed", "Failure category", "Problems"], evaluated.map((run) => [run.corpusRowId, run.workflowId ?? "primary", run.variantId ?? "unarmed", run.lane, String(run.repeatIndex), run.runId ?? "", run.verdict ?? "", String(run.actionsExecuted ?? 0), run.failureCategory ?? "", (run.problems ?? []).join("; ")])) : "None.",
+    evaluated.length ? table(["Row", "Workflow", "Variant", "Lane", "Repeat", "Run", "Verdict", "Actions FluxIQ executed", "Failure category", "Cause and problems"], evaluated.map((run) => [run.corpusRowId, run.workflowId ?? "primary", run.variantId ?? "unarmed", run.lane, String(run.repeatIndex), run.runId ?? "", run.verdict ?? "", String(run.actionsExecuted ?? 0), run.failureCategory ?? "", causeAndProblems(run)])) : "None.",
     "",
     ...(report && coverage ? metricLines(report, coverage) : []),
     "## Measurement sources",
@@ -46,6 +48,40 @@ export function renderBenchMarkdown(runs: BenchRunsFile, report: BenchReport | u
     ...sourceLines("Recording lane", runs.sources),
     ...(runs.flowSources ? sourceLines("Flow lane", runs.flowSources) : []),
   ].join("\n");
+}
+
+/**
+ * Why the failed runs failed, stated immediately under the run counts.
+ *
+ * A bench that lost every run to one fault is the case this section is for. It
+ * has happened twice: once when a FluxIQ Core rebuild in the sibling checkout
+ * deleted a module mid-run, and once when a concurrent Lab instance could not
+ * resolve a workspace package. Both times all four runs carried the same
+ * one-line message, both times the report said `unknown` and showed an empty
+ * Problems column, and both times the message was sitting in `events.ndjson`.
+ * A reader must not have to open a run's event log to learn that the bench
+ * never started.
+ */
+function failureLines(causes: readonly BenchFailureCause[], evaluatedRuns: number): string[] {
+  if (causes.length === 0) return [];
+  const dominant = causes[0];
+  const everyRun = dominant !== undefined && dominant.runs === evaluatedRuns && causes.length === 1;
+  return [
+    "## Why the failed runs failed",
+    "",
+    ...(everyRun ? [`**Every one of the ${evaluatedRuns} evaluated runs failed for the same reason**, so this bench measures that reason and nothing else. No number below says anything about FluxIQ.`, ""] : []),
+    table(["Runs", "Failure category", "Cause"], causes.map((cause) => [String(cause.runs), cause.category, cause.message === "" ? "no cause recorded" : cause.message])),
+    "",
+    "The category is the test-rig taxonomy — why the facility could not produce a trustworthy run — and never how the automation failed. The cause is the runner's thrown error, or the summary the run recorded on its last `error` evidence event.",
+    "",
+  ];
+}
+
+/** A run's own failure first, then any bundle file the bench could not read; the cause is not repeated when a problem already carries it. */
+function causeAndProblems(run: BenchRunRecord): string {
+  const problems = run.problems ?? [];
+  const cause = run.failureCause;
+  return [...(cause !== undefined && !problems.some((problem) => problem.includes(cause)) ? [cause] : []), ...problems].join("; ");
 }
 
 /** What FluxIQ actually did, stated before any pass rate a reader might mistake for it. */

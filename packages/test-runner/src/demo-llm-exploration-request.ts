@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { randomBytes } from "node:crypto";
 import { readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { EVIDENCE_GUIDED_CREATION_LIMITS } from "./demo-llm-create-ui.js";
+import { EVIDENCE_GUIDED_CREATION_LIMITS } from "./demo-llm-create-ui/index.js";
 import { BLANK_LLM_INSTRUCTION_BODY } from "./demo-llm-blank-workspace.js";
 import { hardenWindowsPrivatePath } from "./windows-acl.js";
 import { loadScenarioManifest } from "./scenarios.js";

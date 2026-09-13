@@ -160,7 +160,10 @@ dispatching anything to the page: a `failed` `client.action_result` whose
 "blocked_by_capability_or_policy"`, `code: "web.action.unsupported_type"`,
 `retryable: false`, `stage: "dispatch"` — with the requested type in
 `metadata`. The current state of every capability, and whether its outcome is
-validated, is in [web capabilities](web-capabilities.md).
+validated, is in [web capabilities](web-capabilities.md); the closed set that
+`code` is drawn from is in [the failure taxonomy](failure-taxonomy.md), and
+how a command's target becomes an element is in
+[element identity](element-identity.md).
 
 Action commands, recorded action events, and action results may also carry a
 `visualTarget` object. This object is the editor-facing reference to the state
@@ -240,11 +243,27 @@ events such as `web.element.clicked`, `web.element.input_changed`,
 `RecordingDomainDefinition` before deriving normalized timelines, signal
 registries, task models, or policies.
 
-When Core refuses a start because the approving Automation Studio context has
-expired, it answers `recording.project_required`. The extension cancels its
-pending start on that answer, so the 750 ms local-start fallback never fires and
-the recorder returns to idle with no retry and no reason shown to the operator.
-Classifying and surfacing that refusal is Week 1 Phase 1.5 work.
+A `client.start_recording` waits 750 ms for FluxIQ to answer; on silence the
+recorder starts locally so no user action is lost. A refusal is an answer, so
+it cancels that window — and it is classified rather than treated as a
+connection failure. `classifyRecordingStartRefusal`
+([`background/connection/recording-start/refusal.ts`](../../apps/extension/src/background/connection/recording-start/refusal.ts))
+reads Core's `server.error` and separates three cases that arrive under two
+wire codes:
+
+- `recording.project_required` **with** an `activeProjectId` in the metadata —
+  a project is open and its Automation Studio context has merely gone stale.
+  Transient, so the handshake re-sends the same start after 400 ms, 1.2 s and
+  2.4 s before giving up.
+- `recording.project_required` with no active project — nobody has chosen one.
+  Persistent; retrying would only hide the message that asks the operator to.
+- `recording.project_context_mismatch` — Core has a fresh project and it is
+  not the one that was asked for. Persistent for the same reason.
+
+A refusal the handshake has stopped fighting becomes a `recordingBlock` on the
+status: a title, what to do about it, and how many retries were spent. The
+socket is left alone throughout, because a refused recording is scoped to the
+recording and not to a session that is working.
 
 Recording sessions start with a FluxIQ `StateSnapshot` rather than an empty
 state object. DOM snapshots are converted into compact, factual state paths
@@ -253,29 +272,39 @@ position, focused target, selected text, and a capped set of interactive
 elements.
 
 Element state is intentionally filtered. The extension does not record every
-DOM element. It keeps only interactive elements that have meaningful text,
-label, value, href, or stable public identifiers such as `data-testid`,
-`aria-label`, `name`, or `id`, and caps each snapshot to 40 captured elements.
-This gives FluxIQ enough factual target data for mining without bloating
-recordings with anonymous DOM structure.
+DOM element. An element is kept only when it is rendered and says something
+about itself — meaningful text, an accessible name, a value, media, or, for an
+interactable control, one of those or a stable public identifier such as
+`data-testid`, `aria-label`, `name`, or `id`. Controls the user has touched
+rank first, then primary controls, then other interactables, then semantic
+text. The generic sweep walks at most 50,000 nodes, a capture returns at most
+2,000 descriptors, and the state projection then keeps at most 1,500 of them. Each cap reports itself, and which flag names which is in
+[page evidence](page-evidence.md#the-four-caps). This gives FluxIQ enough
+factual target data for mining without bloating recordings with anonymous DOM
+structure.
 
-Sensitive values are not yet redacted when they are captured. The
-`captureInputValues` setting defaults to on
-([`shared/browser.ts`](../../apps/extension/src/shared/browser.ts)) and
-reaches the content script with every recording message. While it is on, an
-element descriptor carries the value of any input, textarea, select, or
-`contenteditable`, password fields included, and the recorder sends the same
-value as the event's `inputValue`. The sensitivity rule is one function,
-`isSensitiveFieldSignature` in
-[`shared/sensitive-field.ts`](../../apps/extension/src/shared/sensitive-field.ts),
-used by the content script and the background worker alike: a password input,
-`data-sensitive="true"`, or any `autocomplete` token that is
-`current-password`, `new-password`, `one-time-code`, or `cc-*` (every token is
-checked, so `billing cc-number` counts). It withholds only a `<select>`'s
-`selectedValue`, the `hasValue` flag, and the value on a `type` or `select`
-runtime confirmation. The domain marks `elements.*.value` and `forms.*` as
-sensitive state, which labels the value downstream but does not remove it.
-Redaction at capture is Week 1 Phase 1.4 work.
+Beside the elements, a snapshot carries page-level evidence: the dialogs in
+front of the page, what is painted over its controls, whether it is still
+loading, its landmarks, its repeating structures, its forms, and how it was
+navigated to. The wire contract for all of it is
+[`domain/src/page-evidence/`](../../domain/src/page-evidence/types.ts), and
+the background worker merges one capture per frame into a single tab snapshot
+— see [page evidence](page-evidence.md).
+
+Sensitive values are withheld at capture, unconditionally. A password input,
+a one-time code, a card field, or anything marked `data-sensitive` yields no
+value to an element descriptor, to a recorded event, to the page selection, or
+to a runtime confirmation; only value *presence* travels, as the descriptor's
+`hasValue`. The `captureInputValues` setting
+([`shared/browser.ts`](../../apps/extension/src/shared/browser.ts)), which
+defaults to on and reaches the content script with every recording message, is
+a preference about ordinary controls — turning it on cannot re-enable a
+sensitive value, and turning it off is not what protects one. The rule is one
+function in `domain/src/sensitivity/`, re-exported for the extension by
+[`shared/sensitive-field.ts`](../../apps/extension/src/shared/sensitive-field.ts)
+and asked again by every domain reader. Where it is asked, what the wire
+guards cover, and what they are not a boundary against are in
+[sensitive values](sensitive-values.md).
 
 Primary user actions are not sent as a separate message type. Each one that
 maps to a registered action input goes out as a `client.recording_event`

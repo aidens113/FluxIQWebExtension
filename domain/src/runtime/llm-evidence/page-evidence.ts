@@ -88,6 +88,7 @@ import type {
 import { pageEvidenceWire } from "../../page-evidence";
 import { WEB_LLM_EVIDENCE_BOUNDS } from "./limits";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
+import { present } from "./present";
 import { boundedCount, boundedText, isJsonRecord, trueFlag } from "./untrusted-json";
 
 const READY_STATES = ["loading", "interactive", "complete"];
@@ -133,14 +134,19 @@ export function webLlmPageContext(snapshot: Record<string, unknown>, childFrameI
   const dialogs = evidenceDialogs(pageEvidenceWire<WebAutomationDialogEvidence>(evidence?.dialogs));
   const blockedBy = evidenceBlocker(pageEvidenceWire<WebAutomationOverlayEvidence>(evidence?.overlays));
   const selectedText = boundedText(snapshot.selectedText, WEB_LLM_EVIDENCE_BOUNDS.text);
-  return {
-    ...(frame ? { frame } : {}),
-    ...(loading ? { loading } : {}),
-    ...(navigation ? { navigation } : {}),
-    ...(dialogs ? { dialogs } : {}),
-    ...(blockedBy ? { blockedBy } : {}),
-    ...(selectedText ? { selectedText } : {})
-  };
+  return present<WebLlmPageContext>({
+    frame,
+    loading,
+    navigation,
+    dialogs,
+    blockedBy,
+    selectedText: selectedText || undefined,
+    // The one page-context field this reader does not read. It is the element
+    // funnel's number, so `sanitize.ts` supplies it beside the elements it
+    // counted. Named here rather than left out, because leaving a field out is
+    // exactly what this seam exists to make impossible.
+    elementTotal: undefined
+  });
 }
 
 /**
@@ -199,10 +205,10 @@ function evidenceFrame(input: unknown, childFrameIds: number[]): WebLlmEvidenceF
   const declared = isJsonRecord(input) ? input : undefined;
   const isTop = typeof declared?.isTop === "boolean" ? declared.isTop : undefined;
   if (isTop === undefined && !childFrameIds.length) return undefined;
-  return {
+  return present<WebLlmEvidenceFrame>({
     isTop: isTop ?? true,
-    ...(childFrameIds.length ? { childFrameIds } : {})
-  };
+    childFrameIds: childFrameIds.length ? childFrameIds : undefined
+  });
 }
 
 function evidenceLoading(input: PageEvidenceWire<WebAutomationLoadingEvidence> | undefined): WebLlmPageContext["loading"] {
@@ -212,12 +218,12 @@ function evidenceLoading(input: PageEvidenceWire<WebAutomationLoadingEvidence> |
   const spinner = items(input.indicators)
     .map((indicator) => pageEvidenceWire<WebAutomationLoadingIndicator>(indicator))
     .some((indicator) => indicator?.kind === "spinner");
-  const loading = {
-    ...(readyState && readyState !== "complete" ? { readyState } : {}),
-    ...(trueFlag(input.busy) ? { busy: true as const } : {}),
-    ...(spinner ? { spinner: true as const } : {}),
-    ...(trueFlag(input.pendingNavigation) ? { pendingNavigation: true as const } : {})
-  };
+  const loading = present<NonNullable<WebLlmPageContext["loading"]>>({
+    readyState: readyState && readyState !== "complete" ? readyState : undefined,
+    busy: trueFlag(input.busy),
+    spinner: spinner ? true : undefined,
+    pendingNavigation: trueFlag(input.pendingNavigation)
+  });
   return Object.keys(loading).length ? loading : undefined;
 }
 
@@ -225,20 +231,27 @@ function evidenceNavigation(input: PageEvidenceWire<WebAutomationNavigationEvide
   if (!input) return undefined;
   const type = boundedText(input.type, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
   const redirects = boundedCount(input.redirects, MAX_REDIRECTS);
-  const navigation = {
-    ...(type && type !== ORDINARY_NAVIGATION_TYPE ? { type } : {}),
-    ...(redirects ? { redirects } : {}),
-    ...safeLocationField("referrer", input.referrer)
-  };
+  const navigation = present<NonNullable<WebLlmPageContext["navigation"]>>({
+    type: type && type !== ORDINARY_NAVIGATION_TYPE ? type : undefined,
+    redirects: redirects || undefined,
+    referrer: safeLocation(input.referrer)
+  });
   return Object.keys(navigation).length ? navigation : undefined;
 }
 
-/** A URL the page reported, reduced to origin and path, or nothing at all when it is not a safe HTTP(S) URL. */
-function safeLocationField(key: "referrer", input: unknown): Record<string, string> {
+/**
+ * A URL the page reported, reduced to origin and path, or `undefined` when it
+ * is not a safe HTTP(S) URL.
+ *
+ * It used to return `{ [key]: ... }` or `{}` for its caller to spread, which
+ * put the field's name in a second place and out of the compiler's reach. The
+ * caller names the field now.
+ */
+function safeLocation(input: unknown): string | undefined {
   try {
-    return { [key]: evidenceLocation(safeEvidenceUrl(input)) };
+    return evidenceLocation(safeEvidenceUrl(input));
   } catch {
-    return {};
+    return undefined;
   }
 }
 
@@ -253,12 +266,12 @@ function evidenceDialogs(input: PageEvidenceWire<WebAutomationDialogEvidence> | 
     const selector = boundedText(raw.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
     const modal = trueFlag(raw.modal);
     if (!role && !name && !selector && !modal) continue;
-    dialogs.push({
-      ...(role ? { role } : {}),
-      ...(name ? { name } : {}),
-      ...(modal ? { modal } : {}),
-      ...(selector ? { selector } : {})
-    });
+    dialogs.push(present<WebLlmEvidenceDialog>({
+      role: role || undefined,
+      name: name || undefined,
+      modal,
+      selector: selector || undefined
+    }));
   }
   return dialogs.length ? dialogs : undefined;
 }
@@ -279,10 +292,10 @@ function evidenceBlocker(input: PageEvidenceWire<WebAutomationOverlayEvidence> |
   const role = boundedText(blocker.role, WEB_LLM_EVIDENCE_BOUNDS.role);
   const name = boundedText(blocker.label, WEB_LLM_EVIDENCE_BOUNDS.text);
   const blocks = boundedCount(blocker.blocks, MAX_BLOCKED_CONTROLS);
-  return {
+  return present<NonNullable<WebLlmPageContext["blockedBy"]>>({
     selector,
-    ...(role ? { role } : {}),
-    ...(name ? { name } : {}),
-    ...(blocks ? { blocks } : {})
-  };
+    role: role || undefined,
+    name: name || undefined,
+    blocks: blocks || undefined
+  });
 }

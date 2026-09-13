@@ -8,11 +8,12 @@ import type { BrowserActionCommand, BrowserActionResult } from "../types";
 import type { ContentActionDependencies } from "./types";
 
 export function extractAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): BrowserActionResult {
-  const element = deps.resolveTarget(action);
+  const { element, resolution } = deps.resolveTarget(action);
   const extracted = deps.extractElement(element, action.options);
   return deps.success(action, startedAt, "Value extracted.", { status: "none", reason: "evidence-only" }, {
     element: deps.describeElement(element),
     snapshot: deps.captureSnapshot(),
-    extracted
+    extracted,
+    resolution
   });
 }

@@ -29,7 +29,18 @@ export type BenchRunRecord = {
    */
   actionsExecuted?: number;
   skipReason?: string;
-  /** Bundle files the bench could not read or verify. */
+  /**
+   * Why this run failed, in one line: the runner's thrown error, or the
+   * summary the run itself recorded on its last `error` evidence event.
+   * Present for a failed run whenever either exists.
+   *
+   * A failed run used to publish only `failureCategory`, and a category of
+   * `unknown` therefore said nothing at all -- which is exactly what a whole
+   * bench killed by a missing FluxIQ Core module reported. The message was in
+   * `events.ndjson` the entire time.
+   */
+  failureCause?: string;
+  /** Bundle files the bench could not read or verify; not the run's own failure, which is `failureCause`. */
   problems?: string[];
 };
 

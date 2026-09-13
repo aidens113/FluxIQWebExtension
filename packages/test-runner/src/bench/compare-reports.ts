@@ -2,8 +2,52 @@ import { compareBenchReports, type BenchComparison, type BenchComparisonOutcome,
 import { aggregateBenchReport, type BenchResultRuns } from "./aggregate-report.js";
 import { loadBenchReport, loadBenchResults } from "./load-report.js";
 
-/** A candidate report against a baseline, with an overall outcome: `regressed` if any metric regressed, else `improved` if any improved, else `equivalent`. */
-export type BenchCompareOutput = BenchComparison & { candidateReportId: string; outcome: BenchComparisonOutcome };
+/**
+ * A candidate report against a baseline. `outcome` is `regressed` if any
+ * **gating** metric regressed, else `improved` if any improved, else
+ * `equivalent`; `advisory` names the compared metrics that were left out of
+ * that verdict and must be read rather than gated on.
+ */
+export type BenchCompareOutput = BenchComparison & { candidateReportId: string; outcome: BenchComparisonOutcome; advisory: string[] };
+
+const RUN_DURATION_P95 = "run-duration-p95";
+
+/**
+ * Nearest-rank p95 (`benchDistribution`) returns the **maximum** observation
+ * until a distribution has 20 samples: its index is `ceil(0.95n) - 1`, and
+ * `ceil(0.95n) < n` first holds at `n = 20`. Below that, "p95" is one worst
+ * run, not a percentile.
+ */
+const P95_MINIMUM_SAMPLES = 20;
+
+/**
+ * Metrics this comparison measured, reported, and refused to gate on.
+ *
+ * Only `run-duration-p95`, and only below `P95_MINIMUM_SAMPLES`. The eight
+ * historical `smoke` reports on disk, four runs each, settle it: their
+ * `run-duration-p95` values are 44364, 56431, 57213, 61395, 62678, 67894,
+ * 73898 and 91457 ms -- a 2.06x range, in which **24 of the 56 ordered
+ * baseline pairs (43%) breach the contract's own +/-25% tolerance against each
+ * other**, before any candidate exists. A gate that calls 43% of its own
+ * history a regression fires on machine load, and a gate that fires on noise
+ * teaches people to ignore gates.
+ *
+ * The same tolerance on the same eight reports discriminates perfectly for the
+ * per-action latencies, which stay gating: `web.browser.navigate` spans
+ * 1654-1798 ms (1.09x) and `web.dom.type` 1397-1626 ms (1.16x), and **0 of 56
+ * pairs breach for either**. The difference is what each number contains. A
+ * run's duration is browser launch, Turbopack compile, Core boot, the scenario
+ * and teardown on a machine shared with other Lab instances; one action's
+ * latency is dispatch to settle. Only the second is about the product.
+ *
+ * This narrows the verdict, never the measurement: the metric is still
+ * compared, still carries its own `outcome`, and still appears in `metrics`,
+ * so a reader who wants it has it and the eight baselines stay comparable.
+ */
+function advisoryMetrics(baseline: BenchReport, candidate: BenchReport): Set<string> {
+  const samples = Math.min(baseline.metrics.runDurationMs.samples, candidate.metrics.runDurationMs.samples);
+  return samples >= P95_MINIMUM_SAMPLES ? new Set() : new Set([RUN_DURATION_P95]);
+}
 
 /** Two report references, or one whose repeats are split into halves. */
 export type CompareBenchRequest = { runsDirectory: string; cwd: string } & ({ baseline: string; candidate: string } | { halvesOf: string });
@@ -12,9 +56,11 @@ export type CompareBenchRequest = { runsDirectory: string; cwd: string } & ({ ba
 export function summarizeBenchComparison(baseline: BenchReport, candidate: BenchReport): BenchCompareOutput {
   const comparison = compareBenchReports(baseline, candidate);
   if (comparison.metrics.length === 0) throw new Error(`Bench reports ${baseline.reportId} and ${candidate.reportId} share no measured metric`);
-  const outcomes = new Set(comparison.metrics.map((metric) => metric.outcome));
+  const excluded = advisoryMetrics(baseline, candidate);
+  const advisory = comparison.metrics.filter((metric) => excluded.has(metric.metric)).map((metric) => metric.metric);
+  const outcomes = new Set(comparison.metrics.filter((metric) => !excluded.has(metric.metric)).map((metric) => metric.outcome));
   const outcome: BenchComparisonOutcome = outcomes.has("regressed") ? "regressed" : outcomes.has("improved") ? "improved" : "equivalent";
-  return { baselineReportId: comparison.baselineReportId, candidateReportId: candidate.reportId, outcome, metrics: comparison.metrics };
+  return { baselineReportId: comparison.baselineReportId, candidateReportId: candidate.reportId, outcome, advisory, metrics: comparison.metrics };
 }
 
 /**

@@ -665,7 +665,40 @@ A manifest contains:
   and `variants` of the primary script or of a workflow, each armed by one
   fixture mutation, whose expected fields replace the workflow's and inherit
   the rest (`resolveScenarioWorkflow` resolves the pair a run uses); and
+- optional `secrets`, naming the recording-script steps whose recorded value
+  must never be what replays; and
 - screenshot, trace, video, sampling, and review policy.
+
+### Declared replay secrets
+
+The recorder withholds a sensitive control's value at the source, by the one
+rule in `domain/src/sensitivity`, so the recording of a typed password holds no
+password and a Flow generated from it has nothing to type into that field. A
+fixture that must sign in therefore declares the step whose value is missing:
+
+```ts
+secrets: [{ id: "auth-gate-password", step: "enter-password" }],
+```
+
+The Flow lane resolves each declaration from an environment variable named
+`FLUXIQ_TEST_SECRET_<ID>` — the id upper-cased with hyphens as underscores —
+and supplies the value to the Flow run. Nothing falls back to the recording: a
+declared secret whose variable is unset fails the run closed with
+`environment.missing` naming the variable. Only the Flow lane resolves
+declarations, so a recording-lane run of the same fixture needs no
+configuration.
+
+| Variable | Meaning |
+| --- | --- |
+| `FLUXIQ_TEST_SECRET_AUTH_GATE_PASSWORD` | The password a Flow-lane run of `auth-gate` (corpus row W19) types into the sign-in form. It must carry the credential the fixture accepts, which its sign-in page states in plain sight. |
+
+**These are fixture credentials, not real ones.** Every scenario is a
+deterministic loopback fixture whose accepted credential is printed on its own
+page; the value opens nothing, protects nothing, and belongs in a local
+`.env.local` rather than in a secret store. It is carried in a variable, and
+kept out of the manifest, only so that no recorded artifact and no generated
+Flow contains a literal that reads like a password. A resolved value also joins
+the run's evidence redaction list.
 
 The Scenario Lab registers 22 deterministic fixtures. Each lives in
 `apps/scenario-lab/src/scenarios/<id>/` behind an `index.ts` barrel, which is
@@ -702,7 +735,7 @@ mutation.
 | `multi-tab` | Purchase-order list whose details open in a new tab, by a `target="_blank"` link or `window.open`, where they are extracted before the tab closes and the list confirms the review. | W15 primary, variant `popup-blocked` (expected failure `output_not_observed`). |
 | `file-transfer` | Attachment download of a seeded CSV report, and a labelled file-upload form that echoes the uploaded name. | W16 primary (download); W17 `upload`. |
 | `auth-gate` | Sign-in form with fixture-only demo credentials in front of an account page that redirects to sign-in, with an expiry notice, once the session expires. | W18 primary; W19 variant `expired` (expected failure `auth_required`). |
-| `identity-drift` | Settings form whose Save action drifts by mode: selectors only, visible text and name only, moved below the fold, or wrapped with an `aria-labelledby` name. | Variants `selector-only` W20, `text-only` W21, `moved` W22, and `wrapped-aria` W23, each expected to succeed; the primary has no row. |
+| `identity-drift` | Settings form whose Save action drifts by mode: selectors only, visible text and name only, moved below the fold, wrapped with an `aria-labelledby` name, or — in `reworded-aria` — id, class, test id and text all at once, leaving only an `aria-label`. | Variants `selector-only` W20, `text-only` W21, `moved` W22, and `wrapped-aria` W23, each expected to succeed; the primary has no row, and `reworded-aria` is the fifth variant, which reaches [the scored fallback](element-identity.md#level-2-candidates-and-scoring) rather than an exact lookup and has no Week 1 corpus row. |
 | `intermediate-state` | Claim form whose submission shows a fixed-delay "Processing" interstitial before the result; an armed mode adds a confirmation step the recording never saw. | W24 primary, variant `unannounced` (expected failure `output_not_observed`). |
 
 Direct Node tests cover manifest validation, loopback-only policy, uniqueness,

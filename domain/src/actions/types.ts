@@ -36,6 +36,31 @@ export type WebAutomationActionType =
 export type WebAutomationPoint = { x: number; y: number };
 
 /**
+ * Where the recorded element sat on the page, so two otherwise identical
+ * controls can be told apart (Phase 1.3).
+ *
+ * The extension declares the same shape as `DomElementContext`
+ * (`shared/protocol.ts`) and this is deliberately a second declaration rather
+ * than an import: `domain/src` may not import `apps/extension/src`, so the two
+ * ends of the wire are joined by the tests that push a recorded descriptor
+ * through `elementFingerprint`, not by a shared file. Every field is optional
+ * — a producer emits only what the element actually has, and an element inside
+ * no form, list or table yields no context at all.
+ */
+export type WebAutomationElementContext = {
+  formId?: string | undefined;
+  formName?: string | undefined;
+  formAction?: string | undefined;
+  fieldsetLegend?: string | undefined;
+  /** The nearest landmark role, for example `main`, `navigation`, `search`. */
+  landmark?: string | undefined;
+  /** The nearest preceding heading's text. */
+  heading?: string | undefined;
+  listPosition?: { index: number; total: number } | undefined;
+  tablePosition?: { row: number; column: number; columnHeader?: string | undefined } | undefined;
+};
+
+/**
  * Who the recorded element was, in the vocabulary Core's element matcher scores
  * against runtime candidates (`fingerprinting/element-fingerprint.ts`).
  *
@@ -43,10 +68,11 @@ export type WebAutomationPoint = { x: number; y: number };
  * domain already puts on the wire — it is not a third element-descriptor shape.
  * `output-nodes/targets.ts` `elementFingerprint` is the one producer, and its
  * output is exactly this: Core's signals plus `text`, `value`, `name`, `href`,
- * `inputType` and `implicitRole`. Core's matcher ignores the extras; the page
- * does not, so declaring only Core's half would hide fields the content script
- * already reads (`content/element-finder.ts` matches on `name`, and
- * `resolve-target.ts` falls back to `implicitRole` for the candidate family).
+ * `inputType`, `implicitRole` and `context`. Core's matcher ignores the extras;
+ * the page does not, so declaring only Core's half would hide fields the
+ * content script already reads (`content/element-finder.ts` matches on `name`,
+ * and `resolve-target.ts` falls back to `implicitRole` for the candidate
+ * family).
  */
 export type WebAutomationElementFingerprint = ElementFingerprint & {
   /** The element's own text, as the recorder trimmed it. Core weighs `visibleText`, not this. */
@@ -59,6 +85,14 @@ export type WebAutomationElementFingerprint = ElementFingerprint & {
   inputType?: string | undefined;
   /** The role the markup implies when no `role` attribute was authored. */
   implicitRole?: string | undefined;
+  /**
+   * Where the element sat on the page. Core's matcher has no positional or
+   * form signal and ignores this, but it crosses the wire on the recorded
+   * descriptor and is the only thing that separates two controls a page
+   * describes identically, so dropping it here is what made it unreachable to
+   * every consumer downstream of the Flow node.
+   */
+  context?: WebAutomationElementContext | undefined;
 };
 
 export type WebAutomationActionVisualTarget = {
@@ -264,6 +298,29 @@ export type WebAutomationTargetStrategy =
   | "active-element"
   | "scored-candidate";
 
+/**
+ * The measurement itself, on every result that resolved a target -- a success
+ * as much as a failure. That is D1's wording and, until 2026-09-12, only half
+ * true: the content script measured a successful resolution and then discarded
+ * it, because the function the verbs called was typed to return a bare
+ * `Element`. So a Flow could read why a target was refused but not whether an
+ * accepted one was matched outright or recovered by a margin, which is the
+ * difference D13 made visible by letting scored resolutions succeed at all.
+ *
+ * The scores are absent where nothing measured them: an exact strategy that
+ * looked the element up reports its `strategy` and `candidateCount` and no
+ * more, because a confidence is Core's measurement of the candidate that won
+ * and never a constant.
+ *
+ * Every field here is a closed enum or a number, deliberately. Nothing is
+ * derived from the page, which is what lets `client/gateway-mapping.ts` carry
+ * the whole shape on the wire with no redaction guard, and what makes adding a
+ * string here a decision rather than a detail: a candidate's label or an
+ * element's text would put page content on a success path that nothing
+ * redacts. Such text belongs on the failure record, where it is bounded and
+ * filtered, and a test in `client/tests/gateway-mapping.test.ts` pins that this
+ * shape has not grown any.
+ */
 export type WebAutomationTargetResolution = {
   strategy: WebAutomationTargetStrategy;
   /** How many candidates were considered. Exact strategies that matched at once report 1. */

@@ -224,7 +224,18 @@ var webAutomationActionDefinitions = [
     actionType: "web.dom.type",
     label: "Type Text",
     description: "Enter text into an editable DOM element.",
-    parameterSchema: { type: "object", required: ["selector"], properties: { ...elementProperties, text: { type: "string" }, value: { type: "string" } } }
+    // `text` is required. It was not, and that is why a recorded password step
+    // replayed as a field typed empty: `payloads.ts` filled `text` with `""`
+    // when the recorder had withheld the value, `hasExecutableParameters`
+    // (`io/input-model.ts`) checks only the parameters this list names, so the
+    // node validated, survived, ran, and reported success having typed
+    // nothing. An entry the user emptied is `web.dom.clear`, never this, so a
+    // type action with no text is always a value that went missing.
+    //
+    // A withheld value is supplied at run time instead of carried: `text` may
+    // therefore also be the secret request `output-nodes/secret-binding.ts`
+    // builds, which names the run input the value arrives in and never a value.
+    parameterSchema: { type: "object", required: ["selector", "text"], properties: { ...elementProperties, text: { type: "string", label: "Text, or the secret request it is supplied through" }, value: { type: "string" } } }
   },
   { actionType: "web.dom.clear", label: "Clear Field", description: "Clear an editable DOM element.", parameterSchema: selectorSchema },
   {
@@ -483,7 +494,7 @@ function selectedTargetCandidate(target) {
 function elementFingerprint(value) {
   const element = objectValue(value);
   if (!element) return void 0;
-  const attributes = objectValue(element.attributes);
+  const attributes = elementAttributes(element.attributes);
   return compact({
     selector: stringValue(element.selector),
     xpath: stringValue(element.xpath),
@@ -501,8 +512,63 @@ function elementFingerprint(value) {
     testId: elementTestId(element, attributes),
     accessibleName: stringValue(element.accessibleName) ?? stringValue(attributes?.["aria-label"]),
     label: stringValue(element.label),
-    attributes
+    attributes,
+    context: elementContext(element.context),
+    // Core's remaining fingerprint signals, named so their absence is a
+    // decision and so a signal Core adds stops this producer compiling. A
+    // browser recording has no source for any of them: the first four are a
+    // host application's own identifiers and a Core state path, `url` names
+    // the page rather than the control, `bounds` are the capture's viewport
+    // and not this instant's (which is why `content/identity/score.ts` refuses
+    // to compare them), and `metadata` is Core's own passthrough slot, which
+    // this normalizer must not start writing into behind the declared fields.
+    automationId: void 0,
+    entityId: void 0,
+    entityKind: void 0,
+    statePath: void 0,
+    queryPath: void 0,
+    url: void 0,
+    bounds: void 0,
+    metadata: void 0
   });
+}
+function elementContext(value) {
+  const context = objectValue(value);
+  if (!context) return void 0;
+  const fields = compact({
+    formId: stringValue(context.formId),
+    formName: stringValue(context.formName),
+    formAction: stringValue(context.formAction),
+    fieldsetLegend: stringValue(context.fieldsetLegend),
+    landmark: stringValue(context.landmark),
+    heading: stringValue(context.heading),
+    listPosition: listPosition(context.listPosition),
+    tablePosition: tablePosition(context.tablePosition)
+  });
+  return Object.keys(fields).length > 0 ? fields : void 0;
+}
+function listPosition(value) {
+  const position = objectValue(value);
+  const index = numberValue(position?.index);
+  const total = numberValue(position?.total);
+  return index === void 0 || total === void 0 ? void 0 : { index, total };
+}
+function tablePosition(value) {
+  const position = objectValue(value);
+  const row = numberValue(position?.row);
+  const column = numberValue(position?.column);
+  if (row === void 0 || column === void 0) return void 0;
+  const columnHeader = stringValue(position?.columnHeader);
+  return columnHeader === void 0 ? { row, column } : { row, column, columnHeader };
+}
+function elementAttributes(value) {
+  const attributes = objectValue(value);
+  if (!attributes) return void 0;
+  const strings = {};
+  for (const [name, item] of Object.entries(attributes)) {
+    if (typeof item === "string") strings[name] = item;
+  }
+  return strings;
 }
 function elementTestId(element, attributes) {
   return stringValue(element.testId) ?? stringValue(attributes?.["data-testid"]) ?? stringValue(attributes?.["data-test"]) ?? stringValue(attributes?.["data-cy"]);
@@ -515,6 +581,9 @@ function objectValue(value) {
 }
 function stringValue(value) {
   return typeof value === "string" ? value : void 0;
+}
+function numberValue(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
 }
 
 // src/io/gateway-output-dispatcher.ts

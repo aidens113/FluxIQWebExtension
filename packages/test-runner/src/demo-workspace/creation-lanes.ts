@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import type { RuntimeStatus } from "../existing-fluxiq-control.js";
 import { RunnerFailure } from "../failure.js";
 import { assertGenuinelyBlankFlow, assertRecordingSetUnchanged, BLANK_LLM_FLOW_NAME, BLANK_LLM_SCENARIO_PATH, loadBlankLlmPreparationState } from "../demo-llm-blank-workspace.js";
-import { assertProviderFreeGenerationReadiness, buildApproveApplyCreationViaUi, configureFirstLiveCreationViaUi, type ProviderFreeGenerationReadiness, rejectStalePendingCreationAdaptation } from "../demo-llm-create-ui.js";
+import { assertProviderFreeGenerationReadiness, buildApproveApplyCreationViaUi, configureFirstLiveCreationViaUi, type ProviderFreeGenerationReadiness, rejectStalePendingCreationAdaptation } from "../demo-llm-create-ui/index.js";
 import { type DemoLlmCreationResult, evaluateDemoLlmCreation, persistDemoLlmCreationResult } from "../demo-llm-creation.js";
 import { assertDemoBlankStateSecrets } from "./blank-preparation.js";
 import { connectExtension, extensionStatus, withDemoBrowser } from "./browser-session.js";

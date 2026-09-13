@@ -56,31 +56,32 @@ import {
   PointerClickFilter,
   ProjectContext,
   RecordingEvidenceReporter,
+  RecordingStartHandshake,
   RuntimeStatusTracker,
   StateAssetStore,
   stringValue,
   unsupportedPageForUrl,
   activityDetail,
   activityLabel,
+  classifyRecordingStartRefusal,
   clickEventSignature,
   eventSourceId,
   isExecutableRecordedAction,
   isNavigationExplanation,
+  isRecordingStartRefusalError,
   recordingActionChannels,
   recordingEnvironment,
   recordingSources,
+  recordingStartRefusalBlock,
   runtimeActionLabel,
   runtimeConfirmationForActionResult,
   runtimeResultTarget,
   type CoreApiCredentials,
+  type RecordingStartRefusal,
   type TabSnapshotTransport
 } from "./connection/index";
 
 type StatusListener = (status: ExtensionStatus) => void;
-
-// How long the extension waits for FluxIQ to accept a locally started recording
-// before beginning one anyway.
-const RECORDING_START_ACCEPT_TIMEOUT_MS = 750;
 
 export class FluxIQConnection {
   private recordingState: RecordingState = "idle";
@@ -90,7 +91,6 @@ export class FluxIQConnection {
   private eventCount = 0;
   private recordingStartedAt: number | undefined;
   private activeRecordingId: string | undefined;
-  private pendingRecordingStart: { recordingId: string; timer: ReturnType<typeof setTimeout> } | undefined;
   private recordingBlock: RecordingBlockState | undefined;
   private unsupportedPage: UnsupportedPageState | undefined;
   private readonly listeners = new Set<StatusListener>();
@@ -102,6 +102,7 @@ export class FluxIQConnection {
   private readonly clicks = new PointerClickFilter();
   private readonly transport: TabSnapshotTransport = { sendToTab, allTabFrames };
   private readonly gateway: GatewaySession;
+  private readonly recordingStart: RecordingStartHandshake;
   private readonly projects: ProjectContext;
   private readonly attachment: ContentAttachment;
   private readonly evidence: RecordingEvidenceReporter;
@@ -174,6 +175,42 @@ export class FluxIQConnection {
         coreApiUrl: this.settings.coreApiUrl
       })
     });
+    this.recordingStart = new RecordingStartHandshake({
+      // Each attempt resolves the project again rather than reusing the first
+      // answer: a retry exists because FluxIQ's context moved, and the
+      // extension's own view of it may have moved with it.
+      send: async (attempt) => {
+        const projectId = await this.projects.resolve(attempt.attempt === 0 ? "recording_start" : "recording_start_retry");
+        await this.gateway.send("client.start_recording", {
+          recordingId: attempt.recordingId,
+          ...(projectId ? { projectId } : {}),
+          startedAt: attempt.startedAt,
+          domainId: WEB_AUTOMATION_DOMAIN_ID,
+          initialState: attempt.initialState,
+          environment: recordingEnvironment(this.session.clientId, this.activeTabUrl),
+          sources: recordingSources(this.session.clientId),
+          actionChannels: recordingActionChannels(this.session.clientId),
+          metadata: {
+            domainId: WEB_AUTOMATION_DOMAIN_ID,
+            requestedBy: "extension-record-button",
+            projectId: projectId ?? null,
+            activeTabUrl: this.activeTabUrl ?? null,
+            startAttempt: attempt.attempt
+          }
+        });
+      },
+      beginLocally: (recordingId) => this.beginRecordingWithoutAcceptance(recordingId),
+      surfaceRefusal: (refusal, attempts) => this.applyRecordingRefusal(refusal, attempts),
+      noteRetry: (refusal, attempt, of, delayMs) => {
+        this.addActivity(
+          "recording",
+          "Recording start delayed",
+          `${refusal.detail} Retrying in ${delayMs} ms (${attempt} of ${of}).`,
+          "warning"
+        );
+        this.emitStatus();
+      }
+    });
   }
 
   status(): ExtensionStatus {
@@ -228,14 +265,14 @@ export class FluxIQConnection {
 
   disconnect(): void {
     this.gateway.stopReconnecting();
-    this.clearPendingRecordingStart();
+    this.recordingStart.cancel();
     this.gateway.closeClient();
     if (this.recordingState === "recording") this.addActivity("connection", "Disconnected during recording", "Events will queue until reconnect.", "warning");
     this.gateway.markDisconnected();
   }
 
   async startRecording(): Promise<void> {
-    if (this.pendingRecordingStart) {
+    if (this.recordingStart.isPending()) {
       this.addActivity("recording", "Recording is starting", "Waiting for FluxIQ project acceptance.", "warning");
       return;
     }
@@ -255,29 +292,12 @@ export class FluxIQConnection {
     this.recordingBlock = undefined;
     const recordingId = `client.${this.session.clientId}.${Date.now()}`;
     const startedAt = Date.now();
-    const projectId = await this.projects.resolve("recording_start");
     const initialState = await this.evidence.buildInitialRecordingState(startedAt);
-    await this.gateway.send("client.start_recording", {
-      recordingId,
-      ...(projectId ? { projectId } : {}),
-      startedAt,
-      domainId: WEB_AUTOMATION_DOMAIN_ID,
-      initialState: initialState as unknown as JsonObject,
-      environment: recordingEnvironment(this.session.clientId, this.activeTabUrl),
-      sources: recordingSources(this.session.clientId),
-      actionChannels: recordingActionChannels(this.session.clientId),
-      metadata: {
-        domainId: WEB_AUTOMATION_DOMAIN_ID,
-        requestedBy: "extension-record-button",
-        projectId: projectId ?? null,
-        activeTabUrl: this.activeTabUrl ?? null
-      }
-    });
-    this.addActivity("recording", "Starting recording", projectId ? "Waiting for FluxIQ project acceptance." : "Waiting for FluxIQ project context.", "warning");
-    this.pendingRecordingStart = {
-      recordingId,
-      timer: setTimeout(() => void this.handleRecordingStartTimeout(recordingId), RECORDING_START_ACCEPT_TIMEOUT_MS)
-    };
+    // Wording only, so it reads what is already known rather than paying for a
+    // second Core lookup: the send resolves the project authoritatively, once
+    // per attempt.
+    this.addActivity("recording", "Starting recording", this.projects.current() ? "Waiting for FluxIQ project acceptance." : "Waiting for FluxIQ project context.", "warning");
+    await this.recordingStart.begin({ recordingId, startedAt, initialState: initialState as unknown as JsonObject });
     this.emitStatus();
   }
 
@@ -307,7 +327,7 @@ export class FluxIQConnection {
 
   dismissRecordingBlock(): void {
     this.recordingBlock = undefined;
-    if (this.lastError === "Open a FluxIQ project before recording.") this.lastError = undefined;
+    if (isRecordingStartRefusalError(this.lastError)) this.lastError = undefined;
     this.emitStatus();
   }
 
@@ -446,8 +466,12 @@ export class FluxIQConnection {
 
     if (message.type === "server.error") {
       this.lastError = message.payload.message;
-      if (message.payload.code === "recording.project_required") {
-        this.handleRecordingProjectRequired(message.payload.message);
+      // A refused recording start is scoped to the recording, not to the
+      // connection: the socket is healthy and marking it failed would tear
+      // down a session that is working.
+      const refusal = classifyRecordingStartRefusal(message.payload);
+      if (refusal) {
+        this.recordingStart.noteRefusal(refusal);
         return;
       }
       this.gateway.markFailed();
@@ -545,7 +569,7 @@ export class FluxIQConnection {
   }
 
   private async beginAcceptedRecording(recordingId: string, projectId?: string | null): Promise<void> {
-    this.clearPendingRecordingStart();
+    this.recordingStart.noteAccepted();
     if (projectId !== undefined) {
       await this.persistSession(compactObject({ ...this.session, projectId }));
     }
@@ -585,8 +609,12 @@ export class FluxIQConnection {
     await this.evidence.captureActiveSnapshot("Initial snapshot captured");
   }
 
-  private handleRecordingProjectRequired(message: string): void {
-    this.clearPendingRecordingStart();
+  // A refusal the handshake has stopped fighting -- persistent from the first
+  // answer, or transient and out of retries. Either way the recorder must not
+  // be left silently idle: the block says what happened, `lastError` says it
+  // on the status line, and the activity log keeps the trail.
+  private applyRecordingRefusal(refusal: RecordingStartRefusal, attempts: number): void {
+    this.recordingStart.cancel();
     if (this.recordingState === "recording") {
       this.recordingState = "idle";
       this.clicks.clear();
@@ -595,26 +623,17 @@ export class FluxIQConnection {
     this.recordingStartedAt = undefined;
     this.activeRecordingId = undefined;
     this.projects.setActiveRecordingProject(undefined);
-    this.recordingBlock = {
-      code: "recording.project_required",
-      title: "Project Required",
-      message: message || "Open a FluxIQ project in the web panel before starting a recording."
-    };
-    this.lastError = "Open a FluxIQ project before recording.";
-    this.addActivity("recording", "Recording locked", "Open a FluxIQ project in the web panel.", "warning");
+    this.recordingBlock = recordingStartRefusalBlock(refusal, attempts);
+    this.lastError = refusal.lastError;
+    this.addActivity("recording", "Recording locked", refusal.detail, "warning");
     this.emitStatus();
   }
 
-  private clearPendingRecordingStart(): void {
-    if (!this.pendingRecordingStart) return;
-    clearTimeout(this.pendingRecordingStart.timer);
-    this.pendingRecordingStart = undefined;
-  }
-
-  // FluxIQ did not accept the start in time. Recording begins locally so no user
-  // action is lost; the project link attaches later if one arrives.
-  private async handleRecordingStartTimeout(recordingId: string): Promise<void> {
-    if (!this.pendingRecordingStart || this.pendingRecordingStart.recordingId !== recordingId) return;
+  // FluxIQ did not answer the start in time. Recording begins locally so no
+  // user action is lost; the project link attaches later if one arrives. A
+  // refusal is not silence and never reaches here -- it goes to
+  // `applyRecordingRefusal`, through a bounded retry when waiting can help.
+  private async beginRecordingWithoutAcceptance(recordingId: string): Promise<void> {
     const projectId = await this.projects.resolve("recording_start_timeout");
     await this.beginAcceptedRecording(recordingId, projectId ?? null);
     if (!projectId) {

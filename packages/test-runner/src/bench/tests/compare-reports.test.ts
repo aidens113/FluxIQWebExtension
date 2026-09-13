@@ -36,7 +36,7 @@ async function writeBench(runsDirectory: string, benchId: string, repeatCount: n
   return report;
 }
 
-test("matching reports are equivalent; a rate off by more than one workflow regresses; a p95 more than 25% lower improves", () => {
+test("matching reports are equivalent; a rate off by more than one workflow regresses; run duration is measured but does not set the verdict at four samples", () => {
   const baseline = bench("bench-base", 1, corpusRuns(1));
   const same = summarizeBenchComparison(baseline, bench("bench-same", 1, corpusRuns(1)));
   assert.deepEqual([same.baselineReportId, same.candidateReportId, same.outcome], ["bench-base", "bench-same", "equivalent"]);
@@ -46,9 +46,42 @@ test("matching reports are equivalent; a rate off by more than one workflow regr
   const twoFailed = summarizeBenchComparison(baseline, bench("bench-two-worse", 1, corpusRuns(1, (scenarioId) => scenarioId === "basic-form" || scenarioId === "navigation" ? failedFields : {})));
   assert.equal(twoFailed.outcome, "regressed");
   assert.deepEqual(twoFailed.metrics.find((metric) => metric.metric === "rate:initialExecutionSuccess"), { metric: "rate:initialExecutionSuccess", baseline: 1, candidate: 0.5, tolerance: 0.25, outcome: "regressed" });
+  // Four run-duration samples: still compared and still reported as improved,
+  // but advisory, so it does not move the comparison's own verdict.
   const faster = summarizeBenchComparison(baseline, bench("bench-fast", 1, corpusRuns(1, () => ({ durationMs: 28_000 }))));
-  assert.equal(faster.outcome, "improved");
   assert.deepEqual(faster.metrics.find((metric) => metric.metric === "run-duration-p95"), { metric: "run-duration-p95", baseline: 40_000, candidate: 28_000, tolerance: 10_000, outcome: "improved" });
+  assert.deepEqual([faster.outcome, faster.advisory], ["equivalent", ["run-duration-p95"]]);
+});
+
+/**
+ * The gate that fired on noise. `run-duration-p95` is nearest-rank p95, which
+ * is the maximum observation until 20 samples, and the eight historical smoke
+ * reports (four runs each) breach the contract's +/-25% tolerance against each
+ * other in 24 of their 56 ordered pairs. Below 20 samples it is measured and
+ * reported; it gates nothing. At 20 it gates again, and the per-action
+ * latencies -- 0 of those same 56 pairs breach -- gate throughout.
+ */
+test("run duration gates only from 20 samples up, and never silences the action latencies", () => {
+  const slow = (): Partial<RunEvaluation> => ({ durationMs: 90_000 });
+  const fourSamples = summarizeBenchComparison(bench("bench-base", 1, corpusRuns(1)), bench("bench-slow", 1, corpusRuns(1, slow)));
+  assert.equal(fourSamples.metrics.find((metric) => metric.metric === "run-duration-p95")?.outcome, "regressed");
+  assert.deepEqual([fourSamples.outcome, fourSamples.advisory], ["equivalent", ["run-duration-p95"]]);
+
+  // 4 scenarios x 5 repeats = 20 run-duration samples on each side.
+  const twentySamples = summarizeBenchComparison(bench("bench-base-20", 5, corpusRuns(5)), bench("bench-slow-20", 5, corpusRuns(5, slow)));
+  assert.deepEqual([twentySamples.outcome, twentySamples.advisory], ["regressed", []]);
+
+  // One side short of 20 is still not enough to gate on.
+  const mixed = summarizeBenchComparison(bench("bench-base-20b", 5, corpusRuns(5)), bench("bench-slow-4", 1, corpusRuns(1, slow)));
+  assert.deepEqual([mixed.outcome, mixed.advisory], ["equivalent", ["run-duration-p95"]]);
+
+  // An action that got slower still regresses at four samples: only run
+  // duration was set aside, and only because it cannot discriminate there.
+  const slowAction = (): Partial<RunEvaluation> => ({ actions: [{ actionType: "web.dom.type", durationMs: 9_000 }] });
+  const baseAction = (): Partial<RunEvaluation> => ({ actions: [{ actionType: "web.dom.type", durationMs: 1_500 }] });
+  const latency = summarizeBenchComparison(bench("bench-base-a", 1, corpusRuns(1, baseAction)), bench("bench-slow-a", 1, corpusRuns(1, slowAction)));
+  assert.equal(latency.metrics.find((metric) => metric.metric === "action-latency-p95:web.dom.type")?.outcome, "regressed");
+  assert.deepEqual([latency.outcome, latency.advisory], ["regressed", ["run-duration-p95"]]);
 });
 
 test("a two-repeat bench's halves compare as equivalent; reports load by bench id, report path, or bench directory", async () => {

@@ -15,4 +15,5 @@ export type { DialogControl, ObservedDialog } from "./dialog-control";
 export type { FileInputOutcome } from "./file-input";
 export type { KeyboardCapability, KeyPressOutcome } from "./keyboard";
 export type { ExtractedListRecord, ListExtractionOutcome } from "./list-extraction";
+export type { ResolvedTarget } from "./resolve-target";
 export type { WaitConditionOutcome, WaitConditionRequest } from "./wait-conditions";

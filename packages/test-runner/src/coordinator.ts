@@ -23,6 +23,10 @@ export type TopologyOptions = {
   signal?: AbortSignal;
   bootstrapIdentity?: boolean;
   target?: FluxIQTargetConfiguration;
+  /** One Lab instance's compiled scenario lab server; defaults to the repository's own. */
+  scenarioEntrypoint?: string;
+  /** One Lab instance's copy of the web panel host; defaults to the path domain/package.json declares. */
+  hostModulePath?: string;
 };
 
 export type RunningTopology = {
@@ -73,8 +77,8 @@ export async function startTopology(options: TopologyOptions, supervisor = new P
         credentials = await bootstrapIdentity(allocation.fluxiqRoot);
       }
     }
-    const hostModulePath = webPanelHostModulePath(repositoryRoot);
-    const scenarioEntrypoint = path.join(repositoryRoot, "apps", "scenario-lab", "dist", "server.js");
+    const hostModulePath = options.hostModulePath ?? webPanelHostModulePath(repositoryRoot);
+    const scenarioEntrypoint = options.scenarioEntrypoint ?? path.join(repositoryRoot, "apps", "scenario-lab", "dist", "server.js");
     const webPackage = path.join(fluxiqRepositoryRoot, "apps", "web", "package.json");
     await requirePaths([scenarioEntrypoint, webPackage], options.prepareHost === false ? [hostModulePath] : []);
     if (options.prepareHost !== false) {
@@ -159,7 +163,7 @@ function closeTopology(supervisor: ProcessSupervisor, workspaceLock?: WorkspaceO
 async function startExistingTopology(options: TopologyOptions, target: ExistingTargetConfiguration, allocation: RunAllocation, repositoryRoot: string, supervisor: ProcessSupervisor, dependencies: TopologyDependencies): Promise<RunningTopology> {
   try {
     if (options.credentials || options.bootstrapIdentity || options.prepareHost !== undefined) throw new RunnerFailure("environment.missing", "existing target cannot use isolated Core bootstrap, credentials, or host preparation options");
-    const scenarioEntrypoint = path.join(repositoryRoot, "apps", "scenario-lab", "dist", "server.js");
+    const scenarioEntrypoint = options.scenarioEntrypoint ?? path.join(repositoryRoot, "apps", "scenario-lab", "dist", "server.js");
     await requirePaths([scenarioEntrypoint]);
     await dependencies.waitForHttp(target.baseUrl, {
       ...(options.startupTimeoutMs === undefined ? {} : { timeoutMs: options.startupTimeoutMs }),

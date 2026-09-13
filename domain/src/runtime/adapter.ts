@@ -211,7 +211,7 @@ function commandFailure(
  *
  * A code this domain does not name is not a classification, whatever the sender
  * believed, so it becomes UNKNOWN carrying the code it used. That is what
- * `classifyWebAutomationFailure` already does with a runtime error's
+ * `carriedWebAutomationFailure` already does with a thrown record's
  * unrecognized code, and the same drift deserves the same answer whichever way
  * it arrives.
  *
@@ -256,8 +256,27 @@ function secretSafeComparisonText(text: string | undefined, withholdComparison: 
  * WebSocket: this module's whole reason for re-establishing the failure record
  * rather than trusting it is that what crossed a process boundary is validated
  * here. The same argument covers the payload the record came with. A client one
- * version behind, or one that is not this extension at all, gets the same
- * answer.
+ * version behind, or a verb nobody taught the flag, is withheld exactly as it
+ * was before the flag existed, because an absent declaration means withhold.
+ *
+ * A *false* declaration is another matter, and this guard does not survive one.
+ * `withholdComparison` at the caller is `isSensitiveElementDescriptor(element)`
+ * and `!isProducerRedactedComparison(validation)`, and both halves read what the
+ * client sent: one boolean disarms this payload withholding and
+ * `clientReportedFailure`'s record withholding together, and omitting `element`
+ * disarms them just as completely -- a limit the sibling guard's row in
+ * `client/tests/gateway-mapping.test.ts` already pins. Honouring the flag is
+ * deliberate, because only the producer knows whether it wrote a length or a
+ * value, and refusing it costs that phrasing on every sensitive-control failure
+ * (`sensitivity/redaction.ts` argues the trade). What follows is that this is
+ * defence in depth against *our own* producers -- a verb that forgets to redact
+ * and so also forgets to declare -- and not a boundary against a client that
+ * lies. Nothing reachable here would make it one: the dispatcher only sends to
+ * a session whose `clientType` is `"extension"` and which advertises
+ * `web.actions` (`io/gateway-output-dispatcher.ts`), but Core takes both of
+ * those from the client's own `client.hello`, so gating the flag on either
+ * would gate a client-supplied claim on another. The operator's pairing
+ * approval is what stands behind it, not a check this domain can make.
  *
  * This runs only when the caller found no `redacted` declaration on the
  * validation, so a producer that withheld the values itself keeps its phrasing

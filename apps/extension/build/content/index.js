@@ -2066,17 +2066,29 @@
 
   // src/content/identity/veto.ts
   var TARGET_VETO_FLOOR = 0;
-  function vetoExactMatch(target, element) {
-    if (!recordedLabel(target)) return void 0;
-    const score = scoreTargetCandidate(target, { element, fingerprint: candidateFingerprint(element, 0) });
-    if (!score || score.normalizedScore >= TARGET_VETO_FLOOR) return void 0;
-    return {
-      score: score.normalizedScore,
-      summary: `refused ${candidateLabel(element)} scoring ${score.normalizedScore.toFixed(2)}`
-    };
+  function vetoCandidate(target, candidate) {
+    if (!recordedDistinguisher(target)) return void 0;
+    const score = scoreTargetCandidate(target, candidate);
+    if (!score) return void 0;
+    const measured = score.normalizedScore;
+    if (measured < TARGET_VETO_FLOOR) return { score: measured, reason: "contradicted" };
+    return corroborated(score) ? void 0 : { score: measured, reason: "uncorroborated" };
   }
-  function recordedLabel(target) {
-    return Boolean(target.visibleText?.trim() || target.accessibleName?.trim() || target.label?.trim());
+  function vetoExactMatch(target, element) {
+    if (!recordedDistinguisher(target)) return void 0;
+    const decision = vetoCandidate(target, { element, fingerprint: candidateFingerprint(element, 0) });
+    if (!decision) return void 0;
+    const because = decision.reason === "uncorroborated" ? " with nothing the recording named agreeing" : "";
+    return { ...decision, summary: `refused ${candidateLabel(element)} scoring ${decision.score.toFixed(2)}${because}` };
+  }
+  var CORROBORATING_SIGNALS = ["visibleText", "accessibleName", "label", "id", "testId"];
+  function corroborated(score) {
+    return score.positiveContributions.some((contribution) => CORROBORATING_SIGNALS.includes(contribution.signalPath));
+  }
+  function recordedDistinguisher(target) {
+    return Boolean(
+      target.visibleText?.trim() || target.accessibleName?.trim() || target.label?.trim() || target.id?.trim() || target.testId?.trim() || target.attributes?.["data-testid"]?.trim()
+    );
   }
 
   // src/content/describe-element.ts

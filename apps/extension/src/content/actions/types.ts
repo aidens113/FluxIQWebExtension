@@ -17,6 +17,7 @@ import type {
   FileInputOutcome,
   KeyboardCapability,
   ListExtractionOutcome,
+  ResolvedTarget,
   WaitConditionOutcome,
   WaitConditionRequest
 } from "../action-runtime";
@@ -36,7 +37,17 @@ import type {
 
 export type ContentActionDependencies = {
   captureSnapshot(): DomSnapshot;
-  resolveTarget(action: BrowserActionCommand): Element;
+  /**
+   * The element an action acts on, with the measurement that chose it.
+   *
+   * Both halves are the verb's to pass on: the element to act on, and the
+   * resolution to put in the evidence it hands a result builder, which is how a
+   * successful resolution's strategy, candidate count and scores reach a Flow
+   * (D1). This returned a bare `Element` until 2026-09-12, and that signature
+   * -- not a decision anyone wrote down -- is why every success reported nothing
+   * about how sure the resolver was.
+   */
+  resolveTarget(action: BrowserActionCommand): ResolvedTarget;
   describeElement(element: Element): DomElementDescriptor;
   extractElement(element: Element, options?: JsonObject): JsonValue;
   scrollElementIntoView(element: Element): void;

@@ -397,21 +397,48 @@ assert.equal(
   "with no element descriptor the wire payload is only as safe as the producer -- the limit is real, not a claim"
 );
 
-// -- The neighbour field, and why it is safe to carry when someone does -------
-// `resolution` is the other thing this function could carry and does not.
-// Checked rather than assumed: `WebAutomationTargetResolution` is a closed
-// six-value `strategy` and four numbers, so unlike `validation` it holds no
-// page-derived text and needs no guard. This row pins that it is still dropped
-// — whoever adds it should read this and confirm the shape has not grown a
-// string in the meantime. The candidate *labels* a TARGET_AMBIGUOUS failure
-// names are page text, but they ride on the failure record, not here.
-assert.equal(
-  "resolution" in webAutomationActionResultPayload({
-    ...failedValidationResult,
-    resolution: { strategy: "scored-candidate", candidateCount: 3, bestScore: 0.51, runnerUpScore: 0.28, confidence: 0.51 }
-  }),
-  false,
-  "resolution is still dropped by the result mapping"
+// -- The neighbour field, now carried, and the condition that lets it be ------
+// `resolution` was dropped here until 2026-09-12, on the correct ground that
+// nothing produced it on a successful action. The producer now exists --
+// `content/action-runtime/resolve-target.ts` returns the measurement with the
+// element and every verb passes it into its evidence -- so the field is carried,
+// which is what D1 promised: strategy, candidate count, best and runner-up score
+// and confidence in every action result, not only in the ones that failed.
+//
+// The condition the previous row stated for adding it was that the shape must
+// not have grown a string, and it has not. `WebAutomationTargetResolution` is a
+// closed six-value `strategy` enum plus four numbers, so unlike `validation` it
+// carries nothing derived from the page and needs no redaction guard. The two
+// assertions below are that condition, pinned rather than asserted once: the
+// first that the measurement arrives whole, the second that the only string in
+// it is the strategy. The candidate *labels* a TARGET_AMBIGUOUS failure names
+// are page text, and they still ride on the failure record, not here.
+const measured = { strategy: "scored-candidate", candidateCount: 3, bestScore: 0.51, runnerUpScore: 0.28, confidence: 0.51 } as const;
+const carried = webAutomationActionResultPayload({ ...failedValidationResult, resolution: measured });
+assert.deepEqual(carried.resolution, measured, "the result mapping carries the resolution measurement");
+
+const resolutionStrings = Object.entries(measured).filter(([, value]) => typeof value === "string").map(([key]) => key);
+assert.deepEqual(
+  resolutionStrings,
+  ["strategy"],
+  "resolution stays free of page text -- a new string field here needs a redaction guard before it is carried"
 );
+
+// A success carries it too, which is the whole point of the change: the shape
+// below is what an exact Level 1 match reports, and a Flow can tell it from the
+// scored one above by the scores it does not have.
+assert.deepEqual(
+  webAutomationActionResultPayload({
+    ...failedValidationResult,
+    status: "succeeded",
+    validation: { status: "passed", expected: "the click lands on the target", actual: "it did" },
+    resolution: { strategy: "selector", candidateCount: 1 }
+  }).resolution,
+  { strategy: "selector", candidateCount: 1 }
+);
+
+// And a result that resolved nothing -- a scroll to a position, a keypress with
+// no named target -- gains no empty measurement.
+assert.equal("resolution" in webAutomationActionResultPayload(failedValidationResult), false);
 
 console.log("Web automation gateway mapping tests passed.");

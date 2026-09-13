@@ -186,3 +186,66 @@ test("the element ordering does not decide the selector or the emptiness guard",
   assert.equal(outputTargetFromPayload({ element: recordedElement })?.selector, "#save-settings", "an element-only payload still resolves its selector from the element");
   assert.equal(outputTargetFromPayload({ element: { tagName: "button", text: "Save" } }), undefined, "no selector and no visual target is still no target");
 });
+
+// --- Where the element sat ---------------------------------------------------
+//
+// `context` reached the wire on 2026-09-12 and died here: this normalizer had
+// no `context` key, so the signal was captured, carried across the boundary
+// that had been blocking it, and thrown away one layer later -- looking fixed
+// from both ends. The rows below pin that it survives, and that it survives as
+// a closed vocabulary rather than as whatever JSON arrived.
+
+const recordedContext = {
+  formId: "settings-form",
+  formName: "settings",
+  formAction: "/workspace/settings",
+  fieldsetLegend: "General",
+  landmark: "main",
+  heading: "Workspace settings",
+  listPosition: { index: 3, total: 24 },
+  tablePosition: { row: 2, column: 4, columnHeader: "Total" }
+} as const;
+
+test("where the element sat survives into the fingerprint, field by field", () => {
+  const fingerprint = elementFingerprint({ selector: "#save", tagName: "button", context: recordedContext });
+  assert.deepEqual(fingerprint?.context, recordedContext);
+});
+
+test("and into the dispatched target, which is the layer it used to die at", () => {
+  const target = outputTargetFromPayload({
+    selector: "#save",
+    element: { selector: "#save", tagName: "button", context: { formName: "settings", fieldsetLegend: "General" } }
+  });
+  assert.deepEqual((target?.element as { context?: unknown }).context, { formName: "settings", fieldsetLegend: "General" });
+});
+
+test("a context key the normalizer does not know does not reach the page", () => {
+  const fingerprint = elementFingerprint({
+    selector: "#save",
+    context: { formName: "settings", formIdentifier: "settings-form", landmark: 7 }
+  });
+  assert.deepEqual(fingerprint?.context, { formName: "settings" }, "an unknown key and a mistyped one are both dropped");
+});
+
+test("a position is only a position when it is complete", () => {
+  const partial = elementFingerprint({
+    selector: "#cell",
+    context: { listPosition: { index: 3 }, tablePosition: { row: 2, column: 4 } }
+  });
+  assert.deepEqual(partial?.context, { tablePosition: { row: 2, column: 4 } }, "an index with no total says how far along nothing");
+});
+
+test("an element inside no form, list or table carries no context at all", () => {
+  assert.equal("context" in (elementFingerprint({ selector: "#plain", tagName: "div" }) ?? {}), false);
+  assert.equal("context" in (elementFingerprint({ selector: "#plain", context: {} }) ?? {}), false, "an empty context is absent, not an empty object");
+  assert.equal("context" in (elementFingerprint({ selector: "#plain", context: "main" }) ?? {}), false, "a context that is not an object is absent");
+});
+
+test("the attribute map is narrowed to the strings Core compares", () => {
+  const fingerprint = elementFingerprint({
+    selector: "#save",
+    attributes: { "data-testid": "save", "aria-hidden": true, "data-config": { nested: 1 } }
+  });
+  assert.deepEqual(fingerprint?.attributes, { "data-testid": "save" });
+  assert.deepEqual(elementFingerprint({ selector: "#save", attributes: {} })?.attributes, {}, "an element that carried an empty map still carries one");
+});

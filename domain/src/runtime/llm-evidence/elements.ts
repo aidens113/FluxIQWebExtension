@@ -16,6 +16,7 @@
 import { isSensitiveElementDescriptor } from "../../sensitivity";
 import { WEB_LLM_EVIDENCE_BOUNDS } from "./limits";
 import { sameOriginHref } from "./location";
+import { present } from "./present";
 import { boundedCount, boundedText, isJsonRecord, trueFlag } from "./untrusted-json";
 
 /**
@@ -102,27 +103,31 @@ export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementC
   const placement = elementPlacement(raw.context, { name, text });
   const focused = context.focusedSelector !== undefined && context.focusedSelector === addressed.selector ? true : undefined;
 
-  return {
+  return present<WebLlmEvidenceElement>({
     target: context.target,
     tag,
     selector: addressed.selector,
-    ...(addressed.frameId === undefined ? {} : { frameId: addressed.frameId }),
-    ...(role ? { role } : {}),
-    ...(name ? { name } : {}),
-    ...(text ? { text } : {}),
-    ...(inputType ? { inputType } : {}),
-    ...(controlType ? { controlType } : {}),
-    ...(hasValue === undefined ? {} : { hasValue }),
-    ...(selectedValue ? { selectedValue } : {}),
-    ...(href ? { href } : {}),
-    ...(options?.length ? { options } : {}),
-    ...(revealKind ? { revealKind } : {}),
-    ...(expanded === undefined ? {} : { expanded }),
-    ...(focused ? { focused } : {}),
-    ...(trueFlag(raw.recentlyInteracted) ? { recent: true as const } : {}),
-    ...(trueFlag(raw.changed) ? { changed: true as const } : {}),
-    ...placement
-  };
+    frameId: addressed.frameId,
+    role: role || undefined,
+    name: name || undefined,
+    text: text || undefined,
+    inputType: inputType || undefined,
+    controlType: controlType || undefined,
+    hasValue,
+    selectedValue: selectedValue || undefined,
+    href: href || undefined,
+    options: options?.length ? options : undefined,
+    revealKind,
+    expanded,
+    focused,
+    recent: trueFlag(raw.recentlyInteracted),
+    changed: trueFlag(raw.changed),
+    form: placement.form,
+    landmark: placement.landmark,
+    heading: placement.heading,
+    item: placement.item,
+    cell: placement.cell
+  });
 }
 
 /** A tag whose value the page would let an automation type into. */
@@ -174,41 +179,55 @@ function stampedFrameId(raw: Record<string, unknown>): number | undefined {
 }
 
 /**
+ * The five placement fields, every one of them named, `undefined` where the
+ * page said nothing.
+ *
+ * Written as a projection of the element type rather than as its own shape, so
+ * renaming `heading` on the contract fails here too. It is not `Partial<...>`,
+ * which is what this used to be: a partial lets a clause be deleted and the
+ * field simply stops arriving, which is the whole defect this directory is
+ * being closed against.
+ */
+type EvidenceElementPlacement = { [K in "form" | "landmark" | "heading" | "item" | "cell"]: WebLlmEvidenceElement[K] };
+
+/**
  * Where the element sits: the form, landmark, heading, list or table position
  * `describeElement` already derives. This is how the packet carries regions,
  * forms and repeating structure without a second page-level list -- the
  * placement rides on the element it describes, so trimming an element for
  * budget cannot leave a dangling reference behind.
  */
-function elementPlacement(input: unknown, named: { name?: string | undefined; text?: string | undefined }): Partial<WebLlmEvidenceElement> {
-  if (!isJsonRecord(input)) return {};
-  const form = boundedText(input.formId ?? input.formName, WEB_LLM_EVIDENCE_BOUNDS.placement);
-  const landmark = boundedText(input.landmark, WEB_LLM_EVIDENCE_BOUNDS.tag);
-  const rawHeading = boundedText(input.heading, WEB_LLM_EVIDENCE_BOUNDS.placement);
+function elementPlacement(input: unknown, named: { name?: string | undefined; text?: string | undefined }): EvidenceElementPlacement {
+  // A missing or malformed context reads as an empty record rather than an
+  // early return, so every one of the five fields is still named below.
+  const described: Record<string, unknown> = isJsonRecord(input) ? input : {};
+  const form = boundedText(described.formId ?? described.formName, WEB_LLM_EVIDENCE_BOUNDS.placement);
+  const landmark = boundedText(described.landmark, WEB_LLM_EVIDENCE_BOUNDS.tag);
+  const rawHeading = boundedText(described.heading, WEB_LLM_EVIDENCE_BOUNDS.placement);
   const heading = rawHeading === named.name || rawHeading === named.text ? undefined : rawHeading;
   return {
-    ...(form ? { form } : {}),
-    ...(landmark ? { landmark } : {}),
-    ...(heading ? { heading } : {}),
-    ...listPlacement(input.listPosition),
-    ...tablePlacement(input.tablePosition)
+    form: form || undefined,
+    landmark: landmark || undefined,
+    heading: heading || undefined,
+    item: listPlacement(described.listPosition),
+    cell: tablePlacement(described.tablePosition)
   };
 }
 
-function listPlacement(input: unknown): Partial<WebLlmEvidenceElement> {
-  if (!isJsonRecord(input)) return {};
+function listPlacement(input: unknown): WebLlmEvidenceElement["item"] {
+  if (!isJsonRecord(input)) return undefined;
   const index = boundedCount(input.index, 100_000);
   const total = boundedCount(input.total, 100_000);
-  return index === undefined || total === undefined ? {} : { item: { index, total } };
+  return index === undefined || total === undefined ? undefined : { index, total };
 }
 
-function tablePlacement(input: unknown): Partial<WebLlmEvidenceElement> {
-  if (!isJsonRecord(input)) return {};
+function tablePlacement(input: unknown): WebLlmEvidenceElement["cell"] {
+  if (!isJsonRecord(input)) return undefined;
   const row = boundedCount(input.row, 100_000);
   const column = boundedCount(input.column, 100_000);
-  if (row === undefined || column === undefined) return {};
+  if (row === undefined || column === undefined) return undefined;
   const header = boundedText(input.columnHeader, WEB_LLM_EVIDENCE_BOUNDS.placement);
-  return { cell: { row, column, ...(header ? { header } : {}) } };
+  return present<NonNullable<WebLlmEvidenceElement["cell"]>>({ row, column, header: header || undefined });
 }
 
 function sanitizedOptions(input: unknown): Array<{ value: string; label: string }> | undefined {

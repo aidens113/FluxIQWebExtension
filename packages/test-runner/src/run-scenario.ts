@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { chromium, type BrowserContext, type Page } from "@playwright/test";
-import { assertClonePackage, assertRunManifest, canonicalClonePackageJson, resolveScenarioWorkflow, scenarioPageFactSchedule, type ResolvedScenarioWorkflow, type RunActionTiming, type RunAutomationFailure, type ScenarioArming, type WebScenario } from "@fluxiq-web-extension/test-contracts";
+import { assertClonePackage, assertRunManifest, canonicalClonePackageJson, resolveScenarioWorkflow, scenarioPageFactSchedule, type ResolvedScenarioWorkflow, type RunActionTiming, type RunAutomationFailure, type RunEvaluation, type ScenarioArming, type WebScenario } from "@fluxiq-web-extension/test-contracts";
 import { createCorrelationId, EvidenceBundle, EvidenceCaptureController, sha256 } from "@fluxiq-web-extension/test-evidence";
 import type { EvidenceMode } from "./commands.js";
 import { removeRunOwnedTopologyState, startTopology, type RunningTopology } from "./coordinator.js";
@@ -24,20 +24,29 @@ import {
 } from "./clone-policy.js";
 import { createRunOwnedCloneFlowId, createRunOwnedCloneProject, importClonePackageIntoIsolatedDestination } from "./isolated-flow-importer.js";
 import { effectiveEvidencePolicy } from "./evidence-policy/index.js";
+import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant, scenarioLabOriginProof } from "./lab-control/index.js";
-import { declaredSecretValues, recordingLaneObservation, resolveDeclaredSecrets, runFlowLane, type DeclaredSecret, type RunLaneObservation } from "./flow-lane/index.js";
+import { awaitFinalizedRecording, declaredSecretValues, recordingLaneObservation, resolveDeclaredSecrets, runFlowLane, type DeclaredSecret, type RunLaneObservation } from "./flow-lane/index.js";
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog } from "./run-expectations/index.js";
+import { singleRunEvaluation } from "./run-evaluation/index.js";
 import { automationFailureFromActionResult, createRunManifest, flowActionTimings, runActionStatus, type CloneRunState } from "./run-manifest/index.js";
 import { cssSelectorForTarget, parseScenarioTarget, ScenarioStepRunner } from "./scenario-steps/index.js";
 
 /** `evidence` overrides the manifest's `evidencePolicy`; `workflowId` and `variantId` select what `resolveScenarioWorkflow` resolves. */
 export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flow?: boolean; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration };
-/** `observation` carries the `RunEvaluation` fields only the lane that ran can know; absent on the existing and clone targets, which run a pre-existing Flow. */
-export type RunScenarioResult = { runId: string; verdict: "passed" | "failed"; path: string; failureCategory?: string; observation?: RunLaneObservation };
+/**
+ * `observation` carries the `RunEvaluation` fields only the lane that ran can
+ * know, and `evaluation` is the run's own `RunEvaluation` built from it — the
+ * same judgement the bench records per corpus row, also persisted in the
+ * bundle as `evaluation.json`. Both are absent on the existing and clone
+ * targets, which run a pre-existing Flow on no evaluation lane.
+ */
+export type RunScenarioResult = { runId: string; verdict: "passed" | "failed"; path: string; failureCategory?: string; observation?: RunLaneObservation; evaluation?: RunEvaluation };
 
 export async function runScenario(options: RunScenarioOptions): Promise<RunScenarioResult> {
   const runId = `run-${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
-  const scenario = await loadScenarioManifest(options.repositoryRoot, options.scenarioId);
+  const labPaths = resolveLabPaths(options.repositoryRoot, options.environment);
+  const scenario = await loadScenarioManifest(options.repositoryRoot, options.scenarioId, labPaths.scenarioLabDist);
   const target = options.target ?? { mode: "isolated" as const };
   const workflow = resolveWorkflow(scenario, options, target);
   // A variant never changes the recording: on the Flow lane the script runs
@@ -90,7 +99,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
   let automationFailure: RunAutomationFailure | null | undefined = target.mode === "existing" || target.mode === "clone" ? undefined : null;
   const cloneState: CloneRunState = { sourceSessionIdentityVerified: false, sourceHashVerifiedAfterRun: false, cleanupOutcome: "pending" };
   let topologyStateRemoved = false;
-  const extensionPath = path.join(options.repositoryRoot, "apps", "extension", "dist", "e2e-chromium");
+  const extensionPath = labPaths.extensionPath;
   try {
     await requireExtension(extensionPath);
     if (target.mode === "clone") {
@@ -109,7 +118,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
       ? options.runsDirectory
       : path.join(options.runsDirectory, ".work");
     const ownsIsolatedCore = topologyTarget.mode === "isolated" || topologyTarget.mode === "persistent-isolated";
-    topology = await startTopology({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, runsDirectory: topologyRunsDirectory, runId, seed, target: topologyTarget, ...(ownsIsolatedCore ? { bootstrapIdentity: target.mode === "clone" || scenarioRequiresCore({ ...scenario, expected: recordingWorkflow.expected }), ...(credentials ? { credentials } : {}) } : {}) });
+    topology = await startTopology({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, runsDirectory: topologyRunsDirectory, runId, seed, target: topologyTarget, scenarioEntrypoint: labPaths.scenarioEntrypoint, hostModulePath: labPaths.hostModulePath, ...(ownsIsolatedCore && labPaths.hostPrebuilt ? { prepareHost: false } : {}), ...(ownsIsolatedCore ? { bootstrapIdentity: target.mode === "clone" || scenarioRequiresCore({ ...scenario, expected: recordingWorkflow.expected }), ...(credentials ? { credentials } : {}) } : {}) });
     let existingControl: ExistingFluxIQControlClient | undefined;
     if (target.mode === "existing") {
       existingControl = new ExistingFluxIQControlClient(target.baseUrl);
@@ -277,7 +286,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
       recordingStarted = false;
       const outcome = await assertCoreRoundTrip(topology, paired?.sessionId, recordingBaseline);
       await capture.trigger({ ...event(runId, scenario.id, undefined, "gateway.action", "Core gateway retained the paired extension session"), details: { sessionCount: outcome.sessionCount } });
-      await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "Core persisted the completed recording"), details: { recordingCount: outcome.recordingCount, projectId: topology.projectId, recordedEvents } });
+      await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "Core persisted the completed recording"), details: { recordingCount: outcome.recordingCount, projectId: topology.projectId, recordedEvents, recordings: outcome.finalized.map(item => ({ recordingId: item.recordingId, entryCount: item.entryCount, entriesAppendedAfterStop: item.entriesAppendedWhileWaiting, finalizationWaitMs: item.waitedMs })) } });
       if (options.flow) {
         const control = topology.control;
         const activeTopology = topology;
@@ -306,7 +315,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
           recordEvidence: async (evidence) => {
             actions.push(...evidence.run.actions.map(action => ({ actionType: action.actionType, startedAt: action.startedAt, ...(action.durationMs === undefined ? {} : { durationMs: action.durationMs }), status: action.status })));
             await bundle.writeStructured("snapshots/flow-lane.json", {
-              proposalId: evidence.proposal.proposalId, mapperId: evidence.proposal.mapperId, candidateCount: evidence.proposal.candidateCount,
+              // The recording's own entry count sits beside the candidate count
+              // on purpose: a Flow short of an action shows here as fewer
+              // candidates than entries, which is what nobody could see before.
+              recording: { recordingId: evidence.recording.recordingId, entryCount: evidence.recording.entryCount, entriesAppendedAfterStop: evidence.recording.entriesAppendedWhileWaiting, finalizationWaitMs: evidence.recording.waitedMs, polls: evidence.recording.polls },
+              proposalId: evidence.proposal.proposalId, mapperId: evidence.proposal.mapperId, candidateCount: evidence.proposal.candidateCount, proposalIssues: [...evidence.proposal.issues],
               flowId: evidence.flowId, runtimeRunId: evidence.run.runId, status: evidence.run.status,
               harnessActivations: evidence.run.harnessActivations, failure: evidence.run.failure, extractionCount: evidence.run.extracted.length,
               actions: evidence.run.actions.map(action => ({ actionType: action.actionType, status: action.status, ...(action.failure ? { failure: action.failure } : {}) })),
@@ -386,8 +399,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
     const manifest = await createRunManifest({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, target: options.target, scenario, runId, seed, startedAt, verdict, browserVersion, extensionPath, topology, existingPreflight, existingExecution, panelVerification, cloneState, workflowId: workflow.workflowId, variantId: workflow.variant?.id, automationFailure, steps: stepRunner?.timings() ?? [], actions });
     assertRunManifest(manifest);
     await bundle.writeStructured("run.json", manifest);
-    bundle.registerEvidencePolicy(evidence.capture);
-    const finalized = await bundle.finalize({ verdict, metrics: { steps: workflow.recordingScript.length } });
+    const metrics = { steps: workflow.recordingScript.length };
     const observation = flowObservation ?? (target.mode === "isolated" || target.mode === "persistent-isolated"
       ? recordingLaneObservation({
           oracleVerdict, ...probeOutcome(actions, automationFailure),
@@ -395,7 +407,20 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
           actions: actions.flatMap(action => action.durationMs === undefined ? [] : [{ actionType: action.actionType, durationMs: action.durationMs }]),
         })
       : undefined);
-    return { runId, verdict, path: finalized.path, ...(observation ? { observation } : {}), ...(failureCategory ? { failureCategory } : {}) };
+    // The run's own `RunEvaluation`, built from the observation the lane just
+    // published: the same judgement `lab bench` records per corpus row, so one
+    // run can be read on its own instead of only as a corpus rate. It is
+    // written into the bundle before finalization, which makes it a hashed
+    // artifact `lab inspect` verifies, and returned so `lab run` prints it.
+    // The existing and clone targets run a pre-existing Flow on no evaluation
+    // lane, publish no observation, and so get no evaluation.
+    const evaluation = observation
+      ? singleRunEvaluation({ runId, verdict, failureCategory, scenarioId: scenario.id, workflowId: workflow.workflowId, variantId: workflow.variant?.id, observation, manifest, metrics, events: bundle.getEvents(), wallClockMs: Date.now() - Date.parse(startedAt) })
+      : undefined;
+    if (evaluation) await bundle.writeStructured("evaluation.json", evaluation);
+    bundle.registerEvidencePolicy(evidence.capture);
+    const finalized = await bundle.finalize({ verdict, metrics });
+    return { runId, verdict, path: finalized.path, ...(observation ? { observation } : {}), ...(evaluation ? { evaluation } : {}), ...(failureCategory ? { failureCategory } : {}) };
   } finally {
     if (topology && !topologyStateRemoved) await removeRunOwnedTopologyState(topology).catch(() => undefined);
   }
@@ -456,6 +481,16 @@ async function activateScenarioTab(extensionPage: Page, scenarioOrigin: string):
   }, scenarioOrigin);
   await pollStatus(extensionPage, value => value.activeTabId === tabId && typeof value.activeTabUrl === "string" && value.activeTabUrl.startsWith(scenarioOrigin));
 }
+/**
+ * The recording a run produced, once Core has actually finished writing it.
+ *
+ * A recording *id* exists from `client.start_recording`, so the wait for one
+ * to appear has always returned immediately -- and the caller then read a
+ * recording Core was still appending to. `awaitFinalizedRecording` waits for
+ * Core's own `endedAt`, which it stamps only after the stop drain and the
+ * entry flush, so "Core persisted the completed recording" is true when this
+ * says so rather than merely likely.
+ */
 async function assertCoreRoundTrip(topology: RunningTopology, expectedSessionId?: string, recordingBaseline?: Set<string>) {
   const snapshot = await topology.control!.gatewaySnapshot() as any;
   const sessions = snapshot?.payload?.sessions;
@@ -465,7 +500,16 @@ async function assertCoreRoundTrip(topology: RunningTopology, expectedSessionId?
     const response = await topology.control!.listRecordings(topology.projectId!) as any;
     const ids = recordingIds(response);
     const newRecordingIds = recordingBaseline ? [...ids].filter(id => !recordingBaseline.has(id)) : [...ids];
-    if (newRecordingIds.length) return { sessionCount: sessions.length, recordingCount: ids.size, newRecordingCount: newRecordingIds.length, newRecordingIds };
+    if (newRecordingIds.length) {
+      // Only a baselined call knows which recordings this run produced; without
+      // a baseline every recording in the project is "new", and an unrelated
+      // open one must not fail the run. The Flow lane holds the same wait on
+      // the exact recording it builds from, so the guarantee is not lost there.
+      const finalized = recordingBaseline
+        ? await Promise.all(newRecordingIds.map(recordingId => awaitFinalizedRecording(topology.control!, { projectId: topology.projectId!, recordingId })))
+        : [];
+      return { sessionCount: sessions.length, recordingCount: ids.size, newRecordingCount: newRecordingIds.length, newRecordingIds, finalized };
+    }
     await new Promise(resolve => setTimeout(resolve, 100));
   }
   throw new RunnerFailure("recording.persistence", recordingBaseline ? "Core did not persist a new recording for the completed scenario run" : "Core did not persist a recording for the completed scenario");

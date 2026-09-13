@@ -79,5 +79,25 @@ export const authGateManifest = createScenarioManifest({
       failure: { category: "auth_required" },
     },
   }],
+  /**
+   * The one value a Flow built from this recording cannot recover. The
+   * recorder withholds a sensitive control's value at the source, so the
+   * recording of `enter-password` carries no password at all and the Flow
+   * generated from it would type an empty string into the password field.
+   * Declaring the step here makes the Flow lane supply the value instead,
+   * resolved from `FLUXIQ_TEST_SECRET_AUTH_GATE_PASSWORD` (the id upper-cased,
+   * hyphens as underscores, in `flow-lane/declared-secrets.ts`) and never from
+   * the recording. The resolved value also joins the run's evidence redaction
+   * list.
+   *
+   * The variable must carry the credential this fixture accepts, which the
+   * sign-in page states in plain sight: it is a loopback fixture constant, not
+   * a real credential, and it opens nothing. Unset, a Flow run of this
+   * scenario fails closed with `environment.missing` rather than falling back
+   * to whatever the recording captured -- the fallback is the whole reason the
+   * declaration exists. Only the Flow lane resolves declared secrets, so a
+   * recording-lane run needs no configuration.
+   */
+  secrets: [{ id: "auth-gate-password", step: "enter-password" }],
   evidencePolicy: { screenshots: "events", trace: "failure", video: "failure", sampleFps: 0, reviewRequired: true },
 });

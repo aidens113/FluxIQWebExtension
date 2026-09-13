@@ -85,3 +85,33 @@ test("an unexecutable event stays empty rather than becoming a command carrying 
   assert.deepEqual(webAutomationOutputPayload("web.dom.assert", { element: checkbox, browserFrameId: 3 }), {});
   assert.deepEqual(webAutomationOutputPayload("web.dom.capture_snapshot", { browserFrameId: 3 }), {});
 });
+
+// -- A value the recorder withheld --------------------------------------------
+// The request itself, and Core's handling of it, are covered in
+// `secret-binding.test.ts`. What belongs here is the branch this file owns:
+// which recorded entries ask for a value, and which still carry one.
+
+test("only a control the sensitivity rule marks asks for a withheld value", () => {
+  // The rule in `domain/src/sensitivity` is the single authority over which
+  // controls hold a secret. A missing value on any other control is a recorder
+  // fault, not a secret nobody declared, and inventing a request for it would
+  // put a node into a Flow asking the operator for something no manifest names.
+  const plain = { selector: "input#nickname", tagName: "input", inputType: "text", id: "nickname" };
+  assert.equal(webAutomationOutputPayload("web.dom.type", { element: plain }).text, "");
+  const marked = { ...plain, inputType: "password" };
+  assert.notEqual(webAutomationOutputPayload("web.dom.type", { element: marked }).text, "");
+});
+
+test("a withheld value is asked for by every route the rule recognizes, not only by input type", () => {
+  // `autocomplete` is a token list, and a card field is spelled `billing
+  // cc-number` in the wild -- the case a duplicated copy of this rule once
+  // missed, leaking a card number. The rule is asked, never restated.
+  for (const element of [
+    { selector: "#pw", attributes: { type: "password" } },
+    { selector: "#otp", attributes: { autocomplete: "one-time-code" } },
+    { selector: "#card", attributes: { autocomplete: "billing cc-number" } },
+    { selector: "#custom", attributes: { "data-sensitive": "true" } }
+  ]) {
+    assert.notEqual(webAutomationOutputPayload("web.dom.type", { element }).text, "", element.selector);
+  }
+});

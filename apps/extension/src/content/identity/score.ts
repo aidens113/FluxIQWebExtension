@@ -200,7 +200,15 @@ function comparableFingerprint(target: RecordedIdentity): ElementFingerprint {
   };
 }
 
-/** The signals that say *which* control this is, as opposed to what kind of control it is. */
+/**
+ * The signals that say *which* control this is, as opposed to what kind of
+ * control it is.
+ *
+ * `veto.ts` keeps a narrower list of the same kind, and the difference is
+ * deliberate: this one asks whether the recording offers anything worth scoring
+ * and so counts the selector and the class names, while the veto asks what
+ * *corroborates* a match a weak query already made on those two.
+ */
 const IDENTITY_SIGNALS = ["visibleText", "accessibleName", "label", "id", "testId", "selector", "classNames"] as const;
 
 /**

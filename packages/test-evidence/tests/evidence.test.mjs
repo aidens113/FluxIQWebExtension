@@ -10,6 +10,7 @@ import {
   validateEvidencePolicy,
 } from "@fluxiq-web-extension/test-contracts";
 import {
+  CIRCULAR_REFERENCE_MARKER,
   DEFAULT_EVIDENCE_POLICY,
   EvidenceBundle,
   EvidenceCaptureController,
@@ -46,10 +47,70 @@ test("redacts nested denylisted fields and configured secrets without mutating i
   assert.throws(() => assertNoSensitiveText("Authorization: Bearer abc.def"), RedactionFailure);
 });
 
-test("fails closed for circular structured data and unverified visual captures", async (t) => {
-  const circular = {};
-  circular.self = circular;
-  assert.throws(() => redactStructured(circular), RedactionFailure);
+test("substitutes the back-edge of a true cycle instead of destroying the evidence", () => {
+  // Self-reference, and a cycle closed through a chain. Both must terminate,
+  // neither may throw, and the result must be JSON-serializable -- the whole
+  // point is that the surrounding evidence still reaches disk.
+  const selfReferencing = { password: "hunter2" };
+  selfReferencing.self = selfReferencing;
+  const direct = redactStructured(selfReferencing);
+  assert.equal(direct.self, CIRCULAR_REFERENCE_MARKER);
+  assert.equal(direct.password, "[REDACTED]");
+  assert.doesNotThrow(() => JSON.stringify(direct));
+
+  const run = { level: "run", authorization: "Bearer abc.def" };
+  run.detail = { note: "token is private-value", parent: run };
+  const chained = redactStructured(run, { secrets: ["private-value"] });
+  assert.equal(chained.detail.parent, CIRCULAR_REFERENCE_MARKER);
+  assert.equal(chained.authorization, "[REDACTED]");
+  assert.equal(chained.detail.note, "token is [REDACTED]");
+  assert.doesNotThrow(() => JSON.stringify(chained));
+
+  // A cycle through an array, which takes the other branch of the walk.
+  const entries = [{ cookie: "sid=secret" }];
+  entries.push(entries);
+  const viaArray = redactStructured({ entries });
+  assert.equal(viaArray.entries[0].cookie, "[REDACTED]");
+  assert.equal(viaArray.entries[1], CIRCULAR_REFERENCE_MARKER);
+});
+
+test("redacts a repeated object reference at every occurrence rather than calling it a cycle", () => {
+  // `flow-lane.json`'s exact shape: `persisted-flow-run.ts` sets the run-level
+  // `failure` to the same object as the first failing action's `failure`, and
+  // `run-scenario.ts` writes both. This is a shared child, not a cycle, and it
+  // used to throw and file the run as `unknown`.
+  const failure = { code: "web.target.not_found", password: "hunter2", detail: "token is private-value" };
+  const flowLane = {
+    status: "failed",
+    failure,
+    actions: [{ actionType: "web.dom.type", status: "succeeded" }, { actionType: "web.dom.click", status: "failed", failure }],
+  };
+  assert.doesNotThrow(() => JSON.stringify(flowLane), "the fixture itself must not be cyclic");
+
+  const redacted = redactStructured(flowLane, { secrets: ["private-value"] });
+  // Both occurrences survive...
+  assert.equal(redacted.failure.code, "web.target.not_found");
+  assert.equal(redacted.actions[1].failure.code, "web.target.not_found");
+  // ...and both are redacted. A memo cache or an unwound-too-early path set
+  // would show up here as an unredacted second occurrence.
+  for (const occurrence of [redacted.failure, redacted.actions[1].failure]) {
+    assert.equal(occurrence.password, "[REDACTED]");
+    assert.equal(occurrence.detail, "token is [REDACTED]");
+  }
+  assert.equal(redacted.failure.password, redacted.actions[1].failure.password);
+  assert.doesNotThrow(() => assertNoSensitiveText(JSON.stringify(redacted), ["private-value"]));
+
+  // Sibling reuse at the same depth, and reuse at different depths: the path
+  // set must unwind on the way back out, not accumulate.
+  const shared = { secret: "s3cr3t", label: "plain" };
+  const reused = redactStructured({ a: shared, b: shared, deep: { deeper: { shared } }, list: [shared, shared] }, {});
+  for (const occurrence of [reused.a, reused.b, reused.deep.deeper.shared, reused.list[0], reused.list[1]]) {
+    assert.equal(occurrence.secret, "[REDACTED]");
+    assert.equal(occurrence.label, "plain");
+  }
+});
+
+test("fails closed for unverified visual captures", async (t) => {
   const root = await temporaryRoot(t);
   const bundle = new EvidenceBundle({ rootDirectory: root, runId: "run-1", scenarioId: "sensitive-input", redaction: { secrets: ["unsafe-secret"] } });
   await bundle.initialize();

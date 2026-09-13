@@ -86,7 +86,7 @@ async function scrollToPosition(
 }
 
 function scrollToElement(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): BrowserActionResult {
-  const element = deps.resolveTarget(action);
+  const { element, resolution } = deps.resolveTarget(action);
   deps.scrollElementIntoView(element);
   const rect = element.getBoundingClientRect();
   const inView = rect.bottom > 0 && rect.top < window.innerHeight && rect.right > 0 && rect.left < window.innerWidth;
@@ -94,7 +94,7 @@ function scrollToElement(action: BrowserActionCommand, deps: ContentActionDepend
     status: inView ? "passed" : "failed",
     expected: "the target within the viewport",
     actual: `the target is at ${Math.round(rect.left)},${Math.round(rect.top)} in a ${window.innerWidth}x${window.innerHeight} viewport`
-  }, { element: deps.describeElement(element), snapshot: deps.captureSnapshot() });
+  }, { element: deps.describeElement(element), snapshot: deps.captureSnapshot(), resolution });
 }
 
 /**

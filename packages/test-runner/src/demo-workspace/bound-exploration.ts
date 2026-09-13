@@ -4,7 +4,7 @@ import { RunnerFailure } from "../failure.js";
 import { loadScenarioManifest } from "../scenarios.js";
 import { assertExpectedFacts, playwrightScenarioFactProbe } from "../scenario-assertions.js";
 import { assertRecordingSetUnchanged } from "../demo-llm-blank-workspace.js";
-import { approveApplyExistingEvidenceGuidedCreationViaUi, inspectAppliedCreation } from "../demo-llm-create-ui.js";
+import { approveApplyExistingEvidenceGuidedCreationViaUi, inspectAppliedCreation } from "../demo-llm-create-ui/index.js";
 import { locateBoundAppliedEvidenceGuidedCreation, locateBoundPendingEvidenceGuidedCreation } from "../demo-llm-exploration-apply.js";
 import { assertDemoLlmExplorationBindingScenario, loadDemoLlmExplorationRequestBinding, validateBoundExplorationRun } from "../demo-llm-exploration-request.js";
 import { connectExtension, extensionStatus, withDemoBrowser, withDemoPanelBrowser } from "./browser-session.js";

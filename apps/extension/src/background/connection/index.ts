@@ -51,6 +51,13 @@ export {
 } from "./recorded-event";
 export { RecordingEvidenceReporter, type RecordingEvidenceDeps } from "./recording-evidence";
 export {
+  classifyRecordingStartRefusal,
+  isRecordingStartRefusalError,
+  recordingStartRefusalBlock,
+  RecordingStartHandshake,
+  type RecordingStartRefusal
+} from "./recording-start/index";
+export {
   eventSourceId,
   observationSourceId,
   recordingActionChannels,

@@ -24,6 +24,15 @@
 // packet from it (Phase 1.5 step 4) and a snapshot taken later, at diagnosis
 // time, describes a page that has since moved on.
 //
+// Two codes are decided from the page rather than from the verb, and both sit
+// here because this is the single point every result passes through.
+// `authGateFailure` reports AUTH_REQUIRED when the target matched nothing and
+// what is on the page is a sign-in wall. `blockedByModal` reports
+// USER_INTERVENTION_REQUIRED when a target was refused as covered or inert and
+// a modal dialog is standing over the page -- the condition that code was named
+// for, which nothing in the browser path produced until now, and which the
+// plan's own corpus row W14 requires.
+//
 // What a validation implies for the status is decided in
 // `validation-outcome.ts`; this module assembles it with what the page can
 // tell us.
@@ -50,7 +59,18 @@ import { boundValidation, statusForValidation } from "./validation-outcome";
 
 type FailureRecord = NonNullable<BrowserActionResult["failure"]>;
 
-/** What an action observed while it ran, all optional and all independent of whether it passed. */
+/**
+ * What an action observed while it ran, all optional and all independent of
+ * whether it passed.
+ *
+ * `resolution` is the measurement that chose the target, and every verb that
+ * resolves one now passes it: `resolveTarget` returns it beside the element, so
+ * a *successful* resolution reports its strategy, its candidate count and --
+ * when scoring decided it -- its scores, which is what D1 promised for every
+ * action result and what a bare `Element` return type quietly withheld. It is
+ * absent only where nothing was resolved: a keypress with no named target, an
+ * assertion about a selector, a scroll to a position.
+ */
 export type ActionResultEvidence = {
   element?: DomElementDescriptor | undefined;
   snapshot?: DomSnapshot | undefined;
@@ -65,12 +85,18 @@ export type ActionResultEvidence = {
  * A thrower that already classified itself wins: `resolve-target.ts` raises a
  * `TargetResolutionError` carrying a TARGET_NOT_FOUND or TARGET_AMBIGUOUS
  * record and the resolution that produced it, and both ride onto the result
- * rather than being flattened into a sentence -- which is what happened before
- * this seam existed, and why a Flow could not tell an ambiguous target from a
- * missing one. The record is read structurally rather than by class, because
- * the code is what has to be trusted and the class may be a bundled copy; a
- * code outside the closed set is not trusted at all. Failing that, the domain's
- * classifier honours a `WebAutomationRuntimeError`, and anything else is an
+ * this function returns rather than being flattened into a sentence -- which is
+ * what happened before this seam existed, and why a Flow could not tell an
+ * ambiguous target from a missing one. Both then leave the browser, by
+ * different doors: `runtime/result-mapping.ts` puts the record on the gateway
+ * result's own `failure` field, and `webAutomationActionResultPayload` carries
+ * the measurement inside the payload as `resolution`. So the scores a Flow
+ * reads are fields, not only the prose the record's `expected` and `actual`
+ * spell out. The record is read structurally rather than by class, because the
+ * code is what has to be trusted and the class may be a bundled copy; a code
+ * outside the closed set is not trusted at all.
+ * Failing that, the domain's classifier reads the same attachment itself, so
+ * this lift is a shortcut rather than a second mechanism; anything else is an
  * action that ran and failed for a reason no code names.
  */
 export function actionFailure(action: BrowserActionCommand, error: unknown, startedAt = Date.now()): BrowserActionResult {
@@ -141,6 +167,11 @@ export function success(
  * its code. ACTION_REJECTED is one code, not one per reason: a reason invented
  * at a call site would be outside the closed set, and Core routes on the
  * category, which is the same for every refusal.
+ *
+ * One refusal is not that failure at all, and it is the second place a code is
+ * decided from the page rather than from the verb: a target the page will not
+ * let anything touch *because a modal dialog is waiting for an answer*. See
+ * `blockedByModal` for the rule and what it deliberately does not claim.
  */
 export function actionRejected(
   action: BrowserActionCommand,
@@ -152,6 +183,18 @@ export function actionRejected(
 ): BrowserActionResult {
   const validation = boundValidation({ status: "failed", expected, actual });
   const observed = validation.status === "failed" ? validation.actual : actual;
+  const modal = blockedByModal(reason);
+  if (modal) {
+    return buildResult(action, startedAt, {
+      status: "failed",
+      validation,
+      message: `Action blocked: ${observed}; ${modal}`,
+      failure: webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.USER_INTERVENTION_REQUIRED, {
+        expected,
+        actual: `${reason}: ${observed}; ${modal}`
+      })
+    }, evidence);
+  }
   return buildResult(action, startedAt, {
     status: "failed",
     validation,
@@ -213,9 +256,16 @@ function unobservedOutputCode(action: BrowserActionCommand): WebAutomationFailur
  * selector cannot be judged this way at all, so it is left as it was. Nothing
  * here reads a field's value; only whether a password control is on the page.
  *
- * This is the one place a code is decided from the page rather than from the
- * verb, which is why it sits at the single point every result passes through
- * rather than in one producer.
+ * This is one of two places a code is decided from the page rather than from
+ * the verb, which is why it sits at the single point every result passes
+ * through rather than in one producer. The other is `blockedByModal` above,
+ * and the two are ordered: a refusal met by a modal is settled before the
+ * result is built, and this hook then runs over the record either branch
+ * produced. AUTH_REQUIRED winning is deliberate -- a page that has become a
+ * sign-in gate needs a person to sign in, which is more specific than "a person
+ * must act" -- though the two cannot meet in practice, since a target that
+ * resolved well enough to be refused is a target this hook's first condition
+ * (nothing matches the selector) rules out.
  */
 function authGateFailure(action: BrowserActionCommand, failure: FailureRecord): FailureRecord | undefined {
   if (!action.selector || !selectorMatchesNothing(action.selector) || !signInGatePresent()) return undefined;
@@ -223,6 +273,78 @@ function authGateFailure(action: BrowserActionCommand, failure: FailureRecord): 
     expected: failure.expected ?? `an element matching ${action.selector}`,
     actual: `${failure.actual ?? "nothing matched the target"}; the document is a sign-in gate, so the session has probably expired`
   });
+}
+
+/**
+ * The two actionability refusals a modal dialog explains. `covered` is the
+ * overlay-and-backdrop shape: the hit test landed on the scrim in front of the
+ * target. `hidden` is the `inert` shape, which is the one a correct modal
+ * actually produces -- both `dialog.showModal()` and the ARIA pattern mark the
+ * rest of the document inert, and `actionability.ts` reports an inert target as
+ * hidden, because there is no point on screen that belongs to it.
+ *
+ * `disabled` is not here, and neither is any verb's own word (`upload_rejected`,
+ * `unsupported_key`, `not_checkable`): those describe the target, and a dialog
+ * standing somewhere else on the page does not make them untrue.
+ */
+const MODAL_BLOCKED_REFUSALS: ReadonlySet<string> = new Set(["covered", "hidden"]);
+
+/**
+ * USER_INTERVENTION_REQUIRED, when the page is not refusing the action so much
+ * as waiting for a person: a modal dialog is up, and the target is behind it.
+ *
+ * This is the page-side condition the code was named for -- Core's category is
+ * "a person must act before the run can continue" -- and until now nothing in
+ * the browser path produced it at all. It was reported as ACTION_REJECTED,
+ * which tells an orchestrator the opposite of the truth: `blocked_by_capability_or_policy`
+ * means a gate refused the action and no retry can change that, so a run met by
+ * an unrecorded cookie wall or upsell interstitial stopped as if the *step* were
+ * wrong. The plan's own corpus says otherwise: W14
+ * (`modal-flows/interstitial/armed`) requires `user_intervention_required`, and
+ * before this hook no producer could have satisfied it.
+ *
+ * Both halves are required, because either alone is ordinary -- the same rule
+ * `authGateFailure` follows below. A rendered modal on a page whose target is
+ * actionable is just a page with a dialog on it, and a covered or inert target
+ * with no modal is an overlay, a sticky footer, or a genuinely hidden control:
+ * `modal-flows`' cookie banner covers the primary action and is *not* modal, so
+ * a refusal there stays ACTION_REJECTED, which is right.
+ *
+ * "Modal" is taken from the page's own declaration rather than guessed from
+ * geometry: `aria-modal="true"`, which is the ARIA contract that the rest of
+ * the document is not interactive, or `:modal`, which matches a `<dialog>` that
+ * was opened with `showModal()` and nothing else. A dialog that is present but
+ * not rendered does not count -- `modal-flows` keeps its invite dialog in the
+ * markup behind `hidden` at all times, and treating that as blocking would make
+ * every refusal on that fixture an intervention.
+ *
+ * **What it does not claim.** It does not check that the modal is the thing
+ * covering *this* target, because the refusal arrives here as a reason and a
+ * sentence, not as an element and a hit point. A target inside the modal that
+ * is itself covered by something else would be reported as an intervention. A
+ * captcha is not detected either: no fixture ships one, and a vendor-iframe
+ * heuristic proved against nothing is a guess with a code attached.
+ */
+function blockedByModal(reason: string): string | undefined {
+  if (!MODAL_BLOCKED_REFUSALS.has(reason) || !renderedModalPresent()) return undefined;
+  return "a modal dialog is open over the page, so a person has to answer it before the run can continue";
+}
+
+/** A dialog the page declares modal and the browser is actually painting. */
+function renderedModalPresent(): boolean {
+  return rendered('[aria-modal="true"]') || rendered("dialog:modal");
+}
+
+/** Whether anything matching the selector has a box on screen. An unsupported selector is no answer, so it says false. */
+function rendered(selector: string): boolean {
+  try {
+    for (const element of document.querySelectorAll(selector)) {
+      if (element.getClientRects().length > 0) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 /** True when nothing in this document matches the selector. An unparseable selector is no answer at all, so it says false. */

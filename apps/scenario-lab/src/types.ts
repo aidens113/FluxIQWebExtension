@@ -4,6 +4,9 @@ export const scenarioIds = [
   "llm-target-drift", "instruction-only-form",
   "product-catalog", "data-table", "infinite-feed", "modal-flows", "multi-tab",
   "file-transfer", "auth-gate", "identity-drift", "intermediate-state", "keyboard-forms",
+  "storefront-checkout",
+  "admin-console",
+  "member-directory",
 ] as const;
 
 export type ScenarioId = (typeof scenarioIds)[number];

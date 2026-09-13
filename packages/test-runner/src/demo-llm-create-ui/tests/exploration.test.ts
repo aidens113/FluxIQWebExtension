@@ -1,0 +1,95 @@
+// The proposal-only half of the `demo-llm-create-ui` module: the
+// evidence-guided exploration checkpoint. Every row here belongs to a run that
+// must stop at a *proposed* adaptation -- the parser refuses one that has
+// already been applied, the launcher and the UI driver carry no approve/apply
+// seam at all, and the terminal classifier stops at the high-token
+// confirmation instead of paying for the build behind it.
+
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import test from "node:test";
+import { EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS, EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS, EVIDENCE_GUIDED_CREATION_LIMITS, LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD, classifyExplorationUiTerminal, creationSettingsFields, parseEvidenceGuidedCreationProposal, proposeEvidenceGuidedCreationViaUi } from "../index.js";
+import { readCreateUiSource } from "./module-source.js";
+
+const root = path.resolve(import.meta.dirname, "..", "..", "..", "..", "..");
+
+test("evidence-guided proposal parser retains only bounded proposal accounting", () => {
+  const response = { ok: true, payload: { adaptation: { projectId: "project.one", flowId: "flow.one", adaptationId: "adaptation.one", status: "proposed", accounting: { provider: "deepseek", model: "deepseek-chat", inputTokens: 30_000, outputTokens: 4_000, totalTokens: 34_000, estimatedCostUsd: 0.4, raw: "discard-me" }, topology: { raw: "discard-me" } } } };
+  assert.deepEqual(parseEvidenceGuidedCreationProposal(response, "project.one", "flow.one"), { adaptationId: "adaptation.one", status: "proposed", provider: "deepseek", model: "deepseek-chat", inputTokens: 30_000, outputTokens: 4_000, totalTokens: 34_000, estimatedCostUsd: 0.4 });
+  assert.equal(EVIDENCE_GUIDED_CREATION_LIMITS.maxCalls, 4);
+  assert.throws(() => parseEvidenceGuidedCreationProposal({ ...response, payload: { adaptation: { ...response.payload.adaptation, status: "applied" } } }, "project.one", "flow.one"), /escaped its checkpoint scope/u);
+  assert.throws(() => parseEvidenceGuidedCreationProposal({ ...response, payload: { adaptation: { ...response.payload.adaptation, accounting: { ...response.payload.adaptation.accounting, inputTokens: 48_000, outputTokens: 1, totalTokens: 48_001 } } } }, "project.one", "flow.one"), /aggregate bounds/u);
+});
+
+test("proposal-only exploration launcher and UI driver stop before review mutation", async () => {
+  const manifest = JSON.parse(await readFile(path.join(root, "package.json"), "utf8")) as { scripts?: Record<string, string> };
+  assert.equal(manifest.scripts?.["demo:llm:explore"], "node scripts/run-demo-llm-exploration.mjs");
+  const launcher = await readFile(path.join(root, "scripts", "run-demo-llm-exploration.mjs"), "utf8");
+  assert.match(launcher, /runDemoLlmExplorationCheckpoint/u);
+  assert.match(launcher, /reviewOutcome: "pending"/u);
+  assert.match(launcher, /applyOutcome: "not_attempted"/u);
+  assert.match(launcher, /replayOutcome: "not_attempted"/u);
+  assert.doesNotMatch(launcher, /DEEPSEEK_API_KEY|approveFlowAdaptation|applyFlowAdaptation|runPersistedFlow/u);
+  const driver = proposeEvidenceGuidedCreationViaUi.toString();
+  assert.match(driver, /Website task/u);
+  assert.match(driver, /Explore and create proposal/u);
+  assert.match(driver, /targetPage\.bringToFront/u);
+  assert.ok(driver.indexOf("targetPage.bringToFront") < driver.indexOf("waitForExplorationTerminal"));
+  assert.match(driver, /listFlowAdaptations/u);
+  assert.doesNotMatch(driver, /Approve Adaptation|Apply Adaptation|authorizationPin/u);
+  assert.deepEqual(EVIDENCE_GUIDED_CREATION_LIMITS, { provider: "deepseek", model: "deepseek-chat", maxInputTokens: 8_000, maxOutputTokens: 4_000, maxTotalTokens: 12_000, maxCalls: 4, maxUses: 4, timeoutSeconds: 45, maxEstimatedCostUsd: 0.25, maxTotalEstimatedCostUsd: 1, providerRetries: 0 });
+  assert.deepEqual(EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS, { provider: "deepseek", model: "deepseek-chat", maxInputTokens: 8_000, maxOutputTokens: 4_000, maxTotalTokens: 12_000, maxCalls: 4, timeoutSeconds: 25, maxEstimatedCostUsd: 0.25, providerRetries: 0 });
+  assert.deepEqual(creationSettingsFields(EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS).find(([label]) => label === "Timeout (seconds)"), ["Timeout (seconds)", "25"]);
+  assert.equal(EVIDENCE_GUIDED_CREATION_LIMITS.timeoutSeconds, 45);
+  assert.equal(EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS, 195_000);
+  assert.equal(EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokens * EVIDENCE_GUIDED_CREATION_LIMITS.maxCalls, 48_000);
+  assert.equal(LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD, 100_000);
+  const workspace = await readFile(path.join(root, "packages", "test-runner", "src", "demo-workspace", "exploration-checkpoints.ts"), "utf8");
+  assert.match(workspace, /configureEvidenceGuidedCreationViaUi\(panelPage, fixture\.flowTreeItemId, flowName/u);
+  assert.match(workspace, /targetPage: scenarioPage/u);
+  const uiSource = await readCreateUiSource();
+  assert.match(uiSource, /configureCreationLimitsViaUi\(page, flowTreeItemId, pin, evidence, EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS, flowName\)/u);
+  assert.match(uiSource, /name: "Explore and create proposal", exact: true/u);
+  assert.match(uiSource, /create-settings-flow-search/u);
+  assert.match(uiSource, /getByText\(exactFlowName, \{ exact: true \}\)/u);
+  assert.match(uiSource, /`\$\{exactFlowName\} actions`/u);
+  assert.match(uiSource, /getByRole\("menuitem", \{ name: "Open settings", exact: true \}\)/u);
+  const exactBranch = uiSource.slice(uiSource.indexOf("if (exactFlowName)"), uiSource.indexOf("} else {", uiSource.indexOf("if (exactFlowName)")));
+  assert.doesNotMatch(exactBranch, /search\.fill\("Settings"\)|data-tree-parent-id/u);
+  assert.match(uiSource, /exactVirtualizedHierarchyObject\(page, hierarchy, `\$\{flowTreeItemId\}-runtime-debug`/u);
+  assert.match(uiSource, /data-tree-item-id/u);
+  assert.match(uiSource, /element\.scrollTop = next/u);
+  assert.match(uiSource, /waitForExplorationTerminal/u);
+  assert.match(uiSource, /authoring\.getByRole\("alert"\)/u);
+  assert.match(uiSource, /Confirm high-token Flow Build/u);
+  assert.match(uiSource, /confirmationAttempted: false/u);
+  assert.doesNotMatch(driver, /Continue high-token build/u);
+  assert.match(uiSource, /control\.listFlowAdaptations\(projectId, flowId, "proposed"\)/u);
+  assert.match(uiSource, /Date\.now\(\) \+ EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS/u);
+  assert.match(uiSource, /context\.on\("request", observeRequest\)/u);
+  assert.match(uiSource, /context\.on\("response", observe\)/u);
+  assert.match(uiSource, /context\.on\("requestfinished", observeFinished\)/u);
+  assert.match(uiSource, /request\.response\(\)/u);
+  assert.match(uiSource, /context\.off\("requestfinished", observeFinished\)/u);
+  assert.match(uiSource, /apiRequestObserved: terminal\.requestObserved/u);
+  assert.match(uiSource, /generationBody as Record<string, unknown>\)\.ok !== true/u);
+  assert.doesNotMatch(uiSource, /waitForEndpoint\(page, "generate-flow-bootstrap-adaptation", \(\) => explore\.click\(\), 190_000\)/u);
+});
+
+test("exploration UI terminal classifier stops at high-token confirmation without treating it as an alert", () => {
+  assert.deepEqual(classifyExplorationUiTerminal({ highTokenConfirmationVisible: true, alertVisible: false, requestObserved: false }), {
+    kind: "high_token_confirmation",
+    requestObserved: false,
+  });
+  assert.deepEqual(classifyExplorationUiTerminal({ highTokenConfirmationVisible: true, alertVisible: true, requestObserved: true }), {
+    kind: "high_token_confirmation",
+    requestObserved: true,
+  });
+  assert.deepEqual(classifyExplorationUiTerminal({ highTokenConfirmationVisible: false, alertVisible: true, requestObserved: true }), {
+    kind: "ui_failure",
+    requestObserved: true,
+  });
+  assert.equal(classifyExplorationUiTerminal({ highTokenConfirmationVisible: false, alertVisible: false, requestObserved: false }), undefined);
+  assert.equal(EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokens * EVIDENCE_GUIDED_CREATION_LIMITS.maxCalls > LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD, false);
+});

@@ -237,6 +237,62 @@ export type DomElementContext = {
   tablePosition?: { row: number; column: number; columnHeader?: string | undefined } | undefined;
 };
 
+/**
+ * The five identity signals `DomElementDescriptor` groups above, named as a
+ * union so both ends of the wire are joined to them by type rather than by
+ * memory (Phase 1.3).
+ *
+ * They existed on the descriptor for a week without reaching the page: the
+ * background worker's element projection was a hand-written key list, nobody
+ * added them to it, and both sides' suites stayed green because a projection
+ * that forgets a field compiles perfectly. The union and the two aliases below
+ * are what make that failure a compile error instead.
+ */
+export type DomElementIdentitySignal = "testId" | "accessibleName" | "label" | "implicitRole" | "context";
+
+/**
+ * Descriptor fields the client-gateway element target deliberately does not
+ * carry, each for a reason that survives being asked.
+ *
+ * - `hasValue`, `selectedValue` and `options` describe what a control *holds*.
+ *   The recorded value travels as the event's own `inputValue`, which the
+ *   sensitivity rule already governs, and a second copy of a control's contents
+ *   on the target is a second place for a secret to escape from.
+ * - `changed` and `recentlyInteracted` are snapshot-scoped (Phase 1.4): they
+ *   say how one capture of a frame differs from the one before it, which is not
+ *   a fact about the element a recorded event names.
+ *
+ * Nothing else may be left out silently. `WireElementTarget` is the descriptor
+ * minus exactly this list, and the producer writes it through `present<T>()`,
+ * so a field added to the descriptor stops the producer compiling until it is
+ * either carried or named here.
+ */
+type UnwiredElementField = "hasValue" | "selectedValue" | "options" | "changed" | "recentlyInteracted";
+
+/**
+ * The recorded element's identity as it crosses the client gateway.
+ *
+ * This is the shape `background/connection/gateway-payloads.ts` sends and the
+ * shape Core stores on a recording timeline entry, from which
+ * `domain/src/output-nodes/targets.ts` `elementFingerprint` builds the element
+ * every generated Flow replays against. A signal absent here is absent from
+ * every replay, whatever the recorder captured.
+ */
+export type WireElementTarget = Omit<DomElementDescriptor, UnwiredElementField>;
+
+/** A type that is only satisfiable when the argument is `never`. */
+type Nothing<T extends never> = T;
+
+/**
+ * Compile-time proof that every identity signal crosses the wire: reclassify
+ * one as `UnwiredElementField` and this alias stops compiling.
+ *
+ * A type rather than a test on purpose. The test beside the producer proves the
+ * values arrive; this proves the *contract* cannot quietly stop asking for
+ * them, which is the half a green suite has twice failed to notice.
+ */
+export type WiredIdentitySignals = Nothing<Exclude<DomElementIdentitySignal, keyof WireElementTarget>>;
+
 /** The domain's visual target, named as the extension has always called it. */
 export type ActionVisualTarget = WebAutomationActionVisualTarget;
 

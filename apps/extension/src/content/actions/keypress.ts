@@ -20,14 +20,23 @@
 // names nothing to refuse, and the browser's own focus rules already keep a
 // disabled element from holding focus.
 
+import type { ActionResultEvidence } from "../action-runtime";
 import type { BrowserActionCommand, BrowserActionResult } from "../types";
 import type { ContentActionDependencies } from "./types";
 
 export function keypressAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): BrowserActionResult {
   const named = Boolean(action.selector);
-  const target = named ? deps.resolveTarget(action) : document.activeElement ?? document.body;
+  // The one verb whose evidence carries a resolution only sometimes: with no
+  // selector the key goes wherever focus already is, so nothing was resolved and
+  // there is no measurement to report rather than a measurement worth nothing.
+  const resolved = named ? deps.resolveTarget(action) : undefined;
+  const target = resolved?.element ?? document.activeElement ?? document.body;
   const key = action.key ?? action.text ?? "";
-  const evidence = () => ({ element: deps.describeElement(target), snapshot: deps.captureSnapshot() });
+  const evidence = (): ActionResultEvidence => ({
+    element: deps.describeElement(target),
+    snapshot: deps.captureSnapshot(),
+    ...(resolved ? { resolution: resolved.resolution } : {})
+  });
 
   if (named) {
     const report = deps.checkActionability(target);

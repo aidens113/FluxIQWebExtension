@@ -232,3 +232,77 @@ test("refuses a target that runs a pre-existing Flow before running anything", a
     await rm(root, { recursive: true, force: true });
   }
 });
+
+/**
+ * The incident this test exists for. A FluxIQ Core rebuild in the sibling
+ * checkout deleted a module mid-run, all four runs of a bench died in under a
+ * second on the same one-line error, and `report.json` and `report.md` said
+ * `failureCategory: unknown` with an empty Problems column. The message was in
+ * every run's `events.ndjson` the whole time. `runScenario` catches that error
+ * itself, writes the event, and returns a verdict and a category with no text,
+ * which is why the bench has to read the event back.
+ */
+test("a bench killed by a missing dependency reports the cause, in runs.json, in the outcome, and at the top of report.md", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-run-"));
+  // The message verbatim, from the run that died. `String.raw` because every
+  // separator in it is a Windows backslash.
+  const missing = String.raw`Cannot find module 'F:\!FluxIQ\packages\fluxiq\node_modules\@fluxiq\contracts\dist\automation-studio.js' imported from F:\!FluxIQ\packages\fluxiq\dist\programs\automation-studio\runtime\llm\harness\context-packet.js`;
+  try {
+    let index = 0;
+    const outcome = await runBench(options(root, {
+      // A startup death: the bundle is finalized, no action ran, and the only
+      // record of why is the run's own `error` event.
+      runScenario: async (run): Promise<RunScenarioResult> => {
+        const runId = `run-unit-${index++}`;
+        const runPath = path.join(run.runsDirectory, runId);
+        await mkdir(runPath, { recursive: true });
+        const manifest = { ...runManifest(runId, run.scenarioId, "failed"), finishedAt: "2026-09-11T10:00:00.822Z", actions: [] };
+        await writeFile(path.join(runPath, "run.json"), JSON.stringify(manifest));
+        await writeFile(path.join(runPath, "summary.json"), JSON.stringify({ verdict: "failed", metrics: {} }));
+        await writeFile(path.join(runPath, "events.ndjson"), `${JSON.stringify({ sequence: 1, trigger: "error", summary: missing, details: { failureCategory: "environment.missing" } })}\n`);
+        return { runId, verdict: "failed", path: runPath, failureCategory: "environment.missing" };
+      },
+    }));
+
+    assert.deepEqual([outcome.status, outcome.runs, outcome.passed, outcome.actionsExecuted], ["failed", 6, 0, 0]);
+    assert.deepEqual(outcome.failureCauses, [`6 runs — environment.missing: ${missing}`]);
+
+    const evaluated = (await readRuns(outcome.directory)).runs.filter((run) => run.status === "evaluated");
+    assert.equal(evaluated.length, 6);
+    for (const record of evaluated) {
+      assert.deepEqual([record.verdict, record.failureCategory, record.failureCause], ["failed", "environment.missing", missing]);
+    }
+
+    const markdown = await readFile(outcome.markdown, "utf8");
+    assert.match(markdown, /## Why the failed runs failed/);
+    assert.match(markdown, /\*\*Every one of the 6 evaluated runs failed for the same reason\*\*/);
+    assert.ok(markdown.includes(missing), "report.md must carry the message a reader would otherwise have to find in events.ndjson");
+    assert.match(markdown, /\| Cause and problems \|/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+/** A passing bench says nothing about failure causes, and a bundle-read problem stays a problem rather than becoming a cause. */
+test("no failed run means no cause section, and a run's own cause never displaces its bundle problems", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-run-"));
+  try {
+    const clean = await runBench(options(root, { repeatCount: 1 }));
+    assert.equal(clean.failureCauses, undefined);
+    assert.doesNotMatch(await readFile(clean.markdown, "utf8"), /Why the failed runs failed/);
+
+    // The runner threw, so there is no bundle at all: the cause and the
+    // problem say the same thing, and the report prints it once.
+    const threw = await runBench(options(root, {
+      repeatCount: 1,
+      runScenario: async () => { throw new RunnerFailure("environment.missing", "Scenario Lab build is missing"); },
+    }));
+    const evaluated = (await readRuns(threw.directory)).runs.filter((run) => run.status === "evaluated");
+    assert.deepEqual(evaluated.map((run) => [run.verdict, run.failureCause, run.problems]), Array.from({ length: 3 }, () => ["inconclusive", "Scenario Lab build is missing", ["runner: Scenario Lab build is missing"]]));
+    const markdown = await readFile(threw.markdown, "utf8");
+    assert.equal(markdown.split("runner: Scenario Lab build is missing").length - 1, 3, "one cell per run, the cause not repeated beside the problem that already carries it");
+    assert.deepEqual(threw.failureCauses, ["3 runs — environment.missing: Scenario Lab build is missing"]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

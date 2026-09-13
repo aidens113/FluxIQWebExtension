@@ -17,13 +17,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { sanitizeWebLlmSnapshot } from "..";
 
-const page = (evidence: Record<string, unknown>, extra: Record<string, unknown> = {}): Record<string, unknown> => ({
-  url: "https://example.test/checkout",
-  title: "Checkout",
-  interactiveElements: [{ tagName: "button", selector: "#place-order", visibleText: "Place order" }],
-  ...extra,
-  ...(Object.keys(evidence).length ? { evidence } : {})
-});
+const page = (evidence: Record<string, unknown>, extra: Record<string, unknown> = {}): Record<string, unknown> => {
+  const snapshot: Record<string, unknown> = {
+    url: "https://example.test/checkout",
+    title: "Checkout",
+    interactiveElements: [{ tagName: "button", selector: "#place-order", visibleText: "Place order" }],
+    ...extra
+  };
+  // A fixture that passes no evidence must carry no `evidence` key at all --
+  // an empty object is a different snapshot from one the producer never wrote.
+  if (Object.keys(evidence).length) snapshot.evidence = evidence;
+  return snapshot;
+};
 
 test("reports the open dialogs the producer lists, by the producer's own field names", () => {
   const evidence = sanitizeWebLlmSnapshot(page({

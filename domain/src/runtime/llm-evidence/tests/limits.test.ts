@@ -10,7 +10,7 @@ import { sanitizeWebLlmSnapshot, WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_EVIDENCE_BYTE_
 
 const bytes = (value: unknown): number => new TextEncoder().encode(JSON.stringify(value)).byteLength;
 
-const largePage = (count: number): Record<string, unknown> => ({
+const largePage = (count: number, extra: Record<string, unknown> = {}): Record<string, unknown> => ({
   url: "https://example.test/large",
   title: "Large fixture",
   interactiveElements: Array.from({ length: count }, (_, index) => ({
@@ -18,6 +18,7 @@ const largePage = (count: number): Record<string, unknown> => ({
     selector: `[data-index="${index}"]`,
     visibleText: `Item ${index} ${"x".repeat(120)}`,
   })),
+  ...extra,
 });
 
 test("the failure budget is Core's own gate, and the exploration budget sits under the shared ceiling", () => {
@@ -87,7 +88,7 @@ test("names which limit truncated the packet, one row per limit", () => {
   assert.equal(bound.captureTruncated, undefined);
   assert.equal(bound.truncated, true);
 
-  const capture = sanitizeWebLlmSnapshot({ ...largePage(2), truncated: true }, { maxEvidenceBytes: WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling });
+  const capture = sanitizeWebLlmSnapshot(largePage(2, { truncated: true }), { maxEvidenceBytes: WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling });
   assert.equal(capture.captureTruncated, true, "the browser cut before sending: narrowing the capture is the remedy");
   assert.equal(capture.elementsTruncated, undefined);
   assert.equal(capture.budgetTruncated, undefined);
@@ -99,7 +100,7 @@ test("names which limit truncated the packet, one row per limit", () => {
 });
 
 test("all three limits can fire at once, and each stays separately readable", () => {
-  const page = { ...largePage(WEB_LLM_EVIDENCE_BOUNDS.elements + 5), truncated: true };
+  const page = largePage(WEB_LLM_EVIDENCE_BOUNDS.elements + 5, { truncated: true });
   const evidence = sanitizeWebLlmSnapshot(page, { budget: "failure" });
   assert.equal(evidence.captureTruncated, true);
   assert.equal(evidence.elementsTruncated, true);

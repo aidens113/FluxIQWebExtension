@@ -3,7 +3,7 @@
 import type { Page } from "@playwright/test";
 import { BrowserEvidenceRecorder } from "../browser-evidence.js";
 import { RunnerFailure } from "../failure.js";
-import { exactVirtualizedHierarchyObject } from "../demo-llm-create-ui.js";
+import { exactVirtualizedHierarchyObject } from "../demo-llm-create-ui/index.js";
 import { stableHierarchyNodeId } from "./selectors.js";
 import { ensureNodesEditorVisible } from "./subflow-authoring.js";
 import type { DemoWorkspaceState } from "./workspace-state.js";

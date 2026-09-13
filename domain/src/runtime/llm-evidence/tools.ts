@@ -17,11 +17,13 @@ import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
 import { WEB_LLM_EVIDENCE_BOUNDS } from "./limits";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
+import { present } from "./present";
 import { currentElementForReturnedTarget, safeRevealElement } from "./reveal";
 import {
   sanitizeWebLlmSnapshotWithBindings,
   WEB_LLM_EVIDENCE_SCHEMA_VERSION,
   type WebLlmPageEvidence,
+  type WebLlmSanitizeOptions,
   type WebLlmSnapshotBinding
 } from "./sanitize";
 import { validateWebRuntimeTargetOverrideEvidence } from "./target-override";
@@ -193,10 +195,11 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       assertActive(input.signal);
       if (result.status !== "succeeded") throw new Error("web failure evidence snapshot capture failed");
       const payload = jsonRecord(result.payload, "web failure evidence action payload");
-      return sanitizeWebLlmSnapshotWithBindings(payload.snapshot, {
+      return sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({
         budget: "failure",
-        ...(input.maxEvidenceBytes === undefined ? {} : { maxEvidenceBytes: input.maxEvidenceBytes }),
-      }).evidence;
+        maxEvidenceBytes: input.maxEvidenceBytes,
+        expectedOrigin: undefined,
+      })).evidence;
     },
     validateTargetOverrideEvidence(evidence, target, failedAction) {
       if (evidence.schemaVersion !== WEB_LLM_EVIDENCE_SCHEMA_VERSION || !Array.isArray(evidence.elements)) return { status: "absent" };
@@ -228,11 +231,11 @@ async function inspect(
   assertActive(signal);
   if (result.status !== "succeeded") throw new Error("web evidence snapshot capture failed");
   const payload = jsonRecord(result.payload, "web evidence action payload");
-  return sanitizeWebLlmSnapshotWithBindings(payload.snapshot, {
+  return sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({
     budget: "exploration",
-    ...(request.maxEvidenceBytes === undefined ? {} : { maxEvidenceBytes: request.maxEvidenceBytes }),
-    ...(expectedOrigin === undefined ? {} : { expectedOrigin }),
-  });
+    maxEvidenceBytes: request.maxEvidenceBytes,
+    expectedOrigin,
+  }));
 }
 
 async function executeAndInspect(

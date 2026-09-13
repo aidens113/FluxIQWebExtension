@@ -140,7 +140,7 @@ test("a client record naming a code this domain does not own becomes UNKNOWN, ca
   // is what the client emitted before Wave 3 closed the set and is nobody's
   // code now; until this check it reached Core's attempt trace unaltered, where
   // nothing downstream can act on a code no allowlist names. This is the same
-  // answer `classifyWebAutomationFailure` gives a runtime error whose code is
+  // answer `carriedWebAutomationFailure` gives a thrown record whose code is
   // outside the set, because it is the same drift arriving another way.
   const failure: AutomationStudioFailureRecord = { category: "output_not_observed", code: "web.action.output_not_observed", retryable: true, actual: "the field is empty" };
   const result = await runCommand({ commandId: "client.command.six.b", status: "failed", message: "Value not observed.", failure });

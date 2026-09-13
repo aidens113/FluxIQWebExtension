@@ -22,6 +22,38 @@ function createWebAutomationInitialState(timestamp = Date.now()) {
   };
 }
 
+// src/sensitivity/signature.ts
+var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
+var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
+var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
+function isSensitiveFieldSignature(signature) {
+  if (isSensitiveControlType(signature.inputType) || isSensitiveControlType(signature.controlType)) return true;
+  if (signature.dataSensitive?.trim().toLowerCase() === "true") return true;
+  return (signature.autocomplete ?? "").toLowerCase().split(/\s+/u).some((token) => Boolean(token) && (SENSITIVE_AUTOCOMPLETE_TOKENS.has(token) || token.startsWith(SENSITIVE_AUTOCOMPLETE_PREFIX)));
+}
+function isSensitiveControlType(type) {
+  return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
+}
+
+// src/sensitivity/descriptor.ts
+function sensitiveFieldSignatureOfDescriptor(descriptor) {
+  if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
+  const record = descriptor;
+  const attributes = record.attributes && typeof record.attributes === "object" && !Array.isArray(record.attributes) ? record.attributes : {};
+  return {
+    inputType: stringField(record.inputType),
+    controlType: stringField(attributes.type),
+    autocomplete: stringField(attributes.autocomplete),
+    dataSensitive: stringField(attributes["data-sensitive"])
+  };
+}
+function isSensitiveElementDescriptor(descriptor) {
+  return isSensitiveFieldSignature(sensitiveFieldSignatureOfDescriptor(descriptor));
+}
+function stringField(value) {
+  return typeof value === "string" ? value : void 0;
+}
+
 // src/recording/web-state/compact-json-object.ts
 function compactJsonObject(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
@@ -359,25 +391,41 @@ function elementLayerLabel(element) {
 
 // src/recording/web-state/action-target.ts
 function webAutomationActionTargetFromElement(element) {
+  const secret = isSensitiveElementDescriptor(element);
+  const visibleText = secret ? void 0 : element.visibleText;
+  const text2 = secret ? void 0 : element.text;
+  const value = secret ? void 0 : element.value;
   return compactJsonObject({
     type: element.role ?? element.inputType ?? element.tagName,
     id: stableAttribute(element, "data-testid") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name"),
-    label: element.name ?? element.visibleText ?? element.text ?? element.value,
+    label: element.name ?? visibleText ?? text2 ?? value,
     selector: element.selector,
     bounds: element.bounds,
+    // Neither is this producer's to fill: a relative position belongs to a
+    // click that carried one, and both `visualTarget` and `elementTarget` are
+    // written by the callers that have them
+    // (`client/gateway-mapping.ts`, and Core's own dispatch preparation).
+    relativePosition: void 0,
+    visualTarget: void 0,
+    elementTarget: void 0,
     metadata: compactJsonObject({
       tagName: element.tagName,
       xpath: element.xpath,
       id: element.id,
       classNames: element.classNames,
-      visibleText: element.visibleText,
+      visibleText,
       role: element.role,
       href: element.href,
       inputType: element.inputType,
       documentBounds: stateBounds(element.documentBounds),
       isVisibleOnViewport: element.isVisibleOnViewport ?? Boolean(stateBounds(element.bounds)),
       hasClickHandler: element.hasClickHandler,
-      attributes: element.attributes
+      attributes: element.attributes,
+      testId: element.testId,
+      accessibleName: secret ? void 0 : element.accessibleName,
+      label: element.label,
+      implicitRole: element.implicitRole,
+      context: element.context
     })
   });
 }
@@ -425,38 +473,6 @@ function pageEvidenceOfSnapshot(snapshot) {
 }
 function pageEvidenceTruncatedElements(evidence) {
   return pageEvidenceWire(evidence?.elements)?.truncated === true;
-}
-
-// src/sensitivity/signature.ts
-var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
-var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
-var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
-function isSensitiveFieldSignature(signature) {
-  if (isSensitiveControlType(signature.inputType) || isSensitiveControlType(signature.controlType)) return true;
-  if (signature.dataSensitive?.trim().toLowerCase() === "true") return true;
-  return (signature.autocomplete ?? "").toLowerCase().split(/\s+/u).some((token) => Boolean(token) && (SENSITIVE_AUTOCOMPLETE_TOKENS.has(token) || token.startsWith(SENSITIVE_AUTOCOMPLETE_PREFIX)));
-}
-function isSensitiveControlType(type) {
-  return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
-}
-
-// src/sensitivity/descriptor.ts
-function sensitiveFieldSignatureOfDescriptor(descriptor) {
-  if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
-  const record = descriptor;
-  const attributes = record.attributes && typeof record.attributes === "object" && !Array.isArray(record.attributes) ? record.attributes : {};
-  return {
-    inputType: stringField(record.inputType),
-    controlType: stringField(attributes.type),
-    autocomplete: stringField(attributes.autocomplete),
-    dataSensitive: stringField(attributes["data-sensitive"])
-  };
-}
-function isSensitiveElementDescriptor(descriptor) {
-  return isSensitiveFieldSignature(sensitiveFieldSignatureOfDescriptor(descriptor));
-}
-function stringField(value) {
-  return typeof value === "string" ? value : void 0;
 }
 
 // src/recording/web-state/state-values.ts

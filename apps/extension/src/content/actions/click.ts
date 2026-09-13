@@ -20,16 +20,18 @@
 // The events carry the element's own window as their `view`, so a click inside
 // a child frame is dispatched in that frame rather than in the top one.
 
+import type { ActionResultEvidence } from "../action-runtime";
 import type { BrowserActionCommand, BrowserActionResult, BrowserActionValidation } from "../types";
 import type { ContentActionDependencies } from "./types";
 
 type Point = { x: number; y: number };
 
 export function clickAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): BrowserActionResult {
-  const element = deps.resolveTarget(action);
-  const evidence = (): { element: BrowserActionResult["element"]; snapshot: BrowserActionResult["snapshot"] } => ({
+  const { element, resolution } = deps.resolveTarget(action);
+  const evidence = (): ActionResultEvidence => ({
     element: deps.describeElement(element),
-    snapshot: deps.captureSnapshot()
+    snapshot: deps.captureSnapshot(),
+    resolution
   });
 
   const report = deps.checkActionability(element);

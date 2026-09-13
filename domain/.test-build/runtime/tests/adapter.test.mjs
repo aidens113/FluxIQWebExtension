@@ -255,7 +255,18 @@ var webAutomationActionDefinitions = [
     actionType: "web.dom.type",
     label: "Type Text",
     description: "Enter text into an editable DOM element.",
-    parameterSchema: { type: "object", required: ["selector"], properties: { ...elementProperties, text: { type: "string" }, value: { type: "string" } } }
+    // `text` is required. It was not, and that is why a recorded password step
+    // replayed as a field typed empty: `payloads.ts` filled `text` with `""`
+    // when the recorder had withheld the value, `hasExecutableParameters`
+    // (`io/input-model.ts`) checks only the parameters this list names, so the
+    // node validated, survived, ran, and reported success having typed
+    // nothing. An entry the user emptied is `web.dom.clear`, never this, so a
+    // type action with no text is always a value that went missing.
+    //
+    // A withheld value is supplied at run time instead of carried: `text` may
+    // therefore also be the secret request `output-nodes/secret-binding.ts`
+    // builds, which names the run input the value arrives in and never a value.
+    parameterSchema: { type: "object", required: ["selector", "text"], properties: { ...elementProperties, text: { type: "string", label: "Text, or the secret request it is supplied through" }, value: { type: "string" } } }
   },
   { actionType: "web.dom.clear", label: "Clear Field", description: "Clear an editable DOM element.", parameterSchema: selectorSchema },
   {
@@ -480,6 +491,45 @@ function iconForOutput(outputId) {
   return "square-dot";
 }
 
+// src/sensitivity/signature.ts
+var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
+var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
+var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
+function isSensitiveFieldSignature(signature) {
+  if (isSensitiveControlType(signature.inputType) || isSensitiveControlType(signature.controlType)) return true;
+  if (signature.dataSensitive?.trim().toLowerCase() === "true") return true;
+  return (signature.autocomplete ?? "").toLowerCase().split(/\s+/u).some((token) => Boolean(token) && (SENSITIVE_AUTOCOMPLETE_TOKENS.has(token) || token.startsWith(SENSITIVE_AUTOCOMPLETE_PREFIX)));
+}
+function isSensitiveControlType(type) {
+  return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
+}
+
+// src/sensitivity/descriptor.ts
+function sensitiveFieldSignatureOfDescriptor(descriptor) {
+  if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
+  const record = descriptor;
+  const attributes = record.attributes && typeof record.attributes === "object" && !Array.isArray(record.attributes) ? record.attributes : {};
+  return {
+    inputType: stringField(record.inputType),
+    controlType: stringField(attributes.type),
+    autocomplete: stringField(attributes.autocomplete),
+    dataSensitive: stringField(attributes["data-sensitive"])
+  };
+}
+function isSensitiveElementDescriptor(descriptor) {
+  return isSensitiveFieldSignature(sensitiveFieldSignatureOfDescriptor(descriptor));
+}
+function stringField(value) {
+  return typeof value === "string" ? value : void 0;
+}
+
+// src/sensitivity/redaction.ts
+var WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT = "(withheld: the action ran on a control that holds a secret)";
+function isProducerRedactedComparison(validation) {
+  if (!validation || typeof validation !== "object" || Array.isArray(validation)) return false;
+  return validation.redacted === true;
+}
+
 // src/output-nodes/targets.ts
 function outputTargetFromPayload(payload) {
   const adaptedTarget = objectValue(payload.target);
@@ -514,7 +564,7 @@ function selectedTargetCandidate(target) {
 function elementFingerprint(value) {
   const element = objectValue(value);
   if (!element) return void 0;
-  const attributes = objectValue(element.attributes);
+  const attributes = elementAttributes(element.attributes);
   return compact({
     selector: stringValue(element.selector),
     xpath: stringValue(element.xpath),
@@ -532,8 +582,63 @@ function elementFingerprint(value) {
     testId: elementTestId(element, attributes),
     accessibleName: stringValue(element.accessibleName) ?? stringValue(attributes?.["aria-label"]),
     label: stringValue(element.label),
-    attributes
+    attributes,
+    context: elementContext(element.context),
+    // Core's remaining fingerprint signals, named so their absence is a
+    // decision and so a signal Core adds stops this producer compiling. A
+    // browser recording has no source for any of them: the first four are a
+    // host application's own identifiers and a Core state path, `url` names
+    // the page rather than the control, `bounds` are the capture's viewport
+    // and not this instant's (which is why `content/identity/score.ts` refuses
+    // to compare them), and `metadata` is Core's own passthrough slot, which
+    // this normalizer must not start writing into behind the declared fields.
+    automationId: void 0,
+    entityId: void 0,
+    entityKind: void 0,
+    statePath: void 0,
+    queryPath: void 0,
+    url: void 0,
+    bounds: void 0,
+    metadata: void 0
   });
+}
+function elementContext(value) {
+  const context = objectValue(value);
+  if (!context) return void 0;
+  const fields = compact({
+    formId: stringValue(context.formId),
+    formName: stringValue(context.formName),
+    formAction: stringValue(context.formAction),
+    fieldsetLegend: stringValue(context.fieldsetLegend),
+    landmark: stringValue(context.landmark),
+    heading: stringValue(context.heading),
+    listPosition: listPosition(context.listPosition),
+    tablePosition: tablePosition(context.tablePosition)
+  });
+  return Object.keys(fields).length > 0 ? fields : void 0;
+}
+function listPosition(value) {
+  const position = objectValue(value);
+  const index = numberValue(position?.index);
+  const total = numberValue(position?.total);
+  return index === void 0 || total === void 0 ? void 0 : { index, total };
+}
+function tablePosition(value) {
+  const position = objectValue(value);
+  const row = numberValue(position?.row);
+  const column = numberValue(position?.column);
+  if (row === void 0 || column === void 0) return void 0;
+  const columnHeader = stringValue(position?.columnHeader);
+  return columnHeader === void 0 ? { row, column } : { row, column, columnHeader };
+}
+function elementAttributes(value) {
+  const attributes = objectValue(value);
+  if (!attributes) return void 0;
+  const strings = {};
+  for (const [name, item] of Object.entries(attributes)) {
+    if (typeof item === "string") strings[name] = item;
+  }
+  return strings;
 }
 function elementTestId(element, attributes) {
   return stringValue(element.testId) ?? stringValue(attributes?.["data-testid"]) ?? stringValue(attributes?.["data-test"]) ?? stringValue(attributes?.["data-cy"]);
@@ -546,6 +651,9 @@ function objectValue(value) {
 }
 function stringValue(value) {
   return typeof value === "string" ? value : void 0;
+}
+function numberValue(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
 }
 
 // src/io/gateway-output-dispatcher.ts
@@ -598,45 +706,6 @@ function compact2(value) {
 }
 function stringValue2(value) {
   return typeof value === "string" ? value : void 0;
-}
-
-// src/sensitivity/signature.ts
-var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
-var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
-var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
-function isSensitiveFieldSignature(signature) {
-  if (isSensitiveControlType(signature.inputType) || isSensitiveControlType(signature.controlType)) return true;
-  if (signature.dataSensitive?.trim().toLowerCase() === "true") return true;
-  return (signature.autocomplete ?? "").toLowerCase().split(/\s+/u).some((token) => Boolean(token) && (SENSITIVE_AUTOCOMPLETE_TOKENS.has(token) || token.startsWith(SENSITIVE_AUTOCOMPLETE_PREFIX)));
-}
-function isSensitiveControlType(type) {
-  return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
-}
-
-// src/sensitivity/descriptor.ts
-function sensitiveFieldSignatureOfDescriptor(descriptor) {
-  if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
-  const record = descriptor;
-  const attributes = record.attributes && typeof record.attributes === "object" && !Array.isArray(record.attributes) ? record.attributes : {};
-  return {
-    inputType: stringField(record.inputType),
-    controlType: stringField(attributes.type),
-    autocomplete: stringField(attributes.autocomplete),
-    dataSensitive: stringField(attributes["data-sensitive"])
-  };
-}
-function isSensitiveElementDescriptor(descriptor) {
-  return isSensitiveFieldSignature(sensitiveFieldSignatureOfDescriptor(descriptor));
-}
-function stringField(value) {
-  return typeof value === "string" ? value : void 0;
-}
-
-// src/sensitivity/redaction.ts
-var WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT = "(withheld: the action ran on a control that holds a secret)";
-function isProducerRedactedComparison(validation) {
-  if (!validation || typeof validation !== "object" || Array.isArray(validation)) return false;
-  return validation.redacted === true;
 }
 
 // src/io/input-model.ts
@@ -751,13 +820,27 @@ var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   STATE_MISMATCH: "web.validation.state_mismatch",
   /** The browser landed somewhere other than the requested URL, or never left where it was. */
   NAVIGATION_UNEXPECTED: "web.navigation.unexpected",
-  /** The document was replaced between resolving the target and running the action. */
+  /**
+   * The document was replaced, or routed away, while the action was running.
+   * Produced by `apps/extension/src/content/actions/page-identity.ts`, which
+   * remembers the page an action started on and supersedes the verb's own code
+   * when it finished somewhere else.
+   */
   PAGE_CHANGED: "web.page.changed",
   /** A wait, or an action, ran out of time. */
   TIMEOUT: "web.action.timeout",
   /** The host wants a sign-in before the action can continue. */
   AUTH_REQUIRED: "web.auth.required",
-  /** A person must act first: a captcha, or a native dialog waiting for an answer. */
+  /**
+   * A person must act before the run can continue -- Core's category, stated no
+   * more narrowly here than Core states it. Two producers, and they are not the
+   * same shape of "act": `content/action-runtime/results.ts` reports it when a
+   * modal dialog is standing over the page and the target is behind it, and
+   * `runtime/adapter.ts` when no single paired client could be selected, which
+   * only the operator can fix. The narrower gloss this carried before -- "a
+   * captcha, or a native dialog waiting for an answer" -- described neither,
+   * and reading it as the definition made both look wrong.
+   */
   USER_INTERVENTION_REQUIRED: "web.intervention.required",
   /** The client does not implement the requested action type at all. */
   UNSUPPORTED_TYPE: "web.action.unsupported_type",
@@ -924,6 +1007,17 @@ function sameOriginHref(input, base) {
   }
 }
 
+// src/runtime/llm-evidence/present.ts
+function present(fields) {
+  const source = fields;
+  const written = {};
+  for (const key of Object.keys(source)) {
+    const value = source[key];
+    if (value !== void 0) written[key] = value;
+  }
+  return written;
+}
+
 // src/runtime/llm-evidence/untrusted-json.ts
 function isJsonRecord(input) {
   return Boolean(input) && typeof input === "object" && !Array.isArray(input);
@@ -970,27 +1064,31 @@ function sanitizedEvidenceElement(raw, context) {
   const expanded = revealKind === "disclosure" ? semanticExpandedState(attributes) : void 0;
   const placement = elementPlacement(raw.context, { name, text: text2 });
   const focused = context.focusedSelector !== void 0 && context.focusedSelector === addressed.selector ? true : void 0;
-  return {
+  return present({
     target: context.target,
     tag,
     selector: addressed.selector,
-    ...addressed.frameId === void 0 ? {} : { frameId: addressed.frameId },
-    ...role ? { role } : {},
-    ...name ? { name } : {},
-    ...text2 ? { text: text2 } : {},
-    ...inputType ? { inputType } : {},
-    ...controlType ? { controlType } : {},
-    ...hasValue === void 0 ? {} : { hasValue },
-    ...selectedValue ? { selectedValue } : {},
-    ...href ? { href } : {},
-    ...options?.length ? { options } : {},
-    ...revealKind ? { revealKind } : {},
-    ...expanded === void 0 ? {} : { expanded },
-    ...focused ? { focused } : {},
-    ...trueFlag(raw.recentlyInteracted) ? { recent: true } : {},
-    ...trueFlag(raw.changed) ? { changed: true } : {},
-    ...placement
-  };
+    frameId: addressed.frameId,
+    role: role || void 0,
+    name: name || void 0,
+    text: text2 || void 0,
+    inputType: inputType || void 0,
+    controlType: controlType || void 0,
+    hasValue,
+    selectedValue: selectedValue || void 0,
+    href: href || void 0,
+    options: options?.length ? options : void 0,
+    revealKind,
+    expanded,
+    focused,
+    recent: trueFlag(raw.recentlyInteracted),
+    changed: trueFlag(raw.changed),
+    form: placement.form,
+    landmark: placement.landmark,
+    heading: placement.heading,
+    item: placement.item,
+    cell: placement.cell
+  });
 }
 function safeFillTag(tag, inputType) {
   return tag === "textarea" || tag === "input" && (!inputType || ["text", "search", "email", "tel", "url", "number"].includes(inputType));
@@ -1021,32 +1119,32 @@ function stampedFrameId(raw) {
   return stamped === void 0 ? void 0 : boundedCount(Number(stamped), 999999);
 }
 function elementPlacement(input, named) {
-  if (!isJsonRecord(input)) return {};
-  const form = boundedText2(input.formId ?? input.formName, WEB_LLM_EVIDENCE_BOUNDS.placement);
-  const landmark = boundedText2(input.landmark, WEB_LLM_EVIDENCE_BOUNDS.tag);
-  const rawHeading = boundedText2(input.heading, WEB_LLM_EVIDENCE_BOUNDS.placement);
+  const described = isJsonRecord(input) ? input : {};
+  const form = boundedText2(described.formId ?? described.formName, WEB_LLM_EVIDENCE_BOUNDS.placement);
+  const landmark = boundedText2(described.landmark, WEB_LLM_EVIDENCE_BOUNDS.tag);
+  const rawHeading = boundedText2(described.heading, WEB_LLM_EVIDENCE_BOUNDS.placement);
   const heading = rawHeading === named.name || rawHeading === named.text ? void 0 : rawHeading;
   return {
-    ...form ? { form } : {},
-    ...landmark ? { landmark } : {},
-    ...heading ? { heading } : {},
-    ...listPlacement(input.listPosition),
-    ...tablePlacement(input.tablePosition)
+    form: form || void 0,
+    landmark: landmark || void 0,
+    heading: heading || void 0,
+    item: listPlacement(described.listPosition),
+    cell: tablePlacement(described.tablePosition)
   };
 }
 function listPlacement(input) {
-  if (!isJsonRecord(input)) return {};
+  if (!isJsonRecord(input)) return void 0;
   const index = boundedCount(input.index, 1e5);
   const total = boundedCount(input.total, 1e5);
-  return index === void 0 || total === void 0 ? {} : { item: { index, total } };
+  return index === void 0 || total === void 0 ? void 0 : { index, total };
 }
 function tablePlacement(input) {
-  if (!isJsonRecord(input)) return {};
+  if (!isJsonRecord(input)) return void 0;
   const row = boundedCount(input.row, 1e5);
   const column = boundedCount(input.column, 1e5);
-  if (row === void 0 || column === void 0) return {};
+  if (row === void 0 || column === void 0) return void 0;
   const header = boundedText2(input.columnHeader, WEB_LLM_EVIDENCE_BOUNDS.placement);
-  return { cell: { row, column, ...header ? { header } : {} } };
+  return present({ row, column, header: header || void 0 });
 }
 function sanitizedOptions(input) {
   if (!Array.isArray(input)) return void 0;
@@ -1082,14 +1180,19 @@ function webLlmPageContext(snapshot, childFrameIds) {
   const dialogs = evidenceDialogs(pageEvidenceWire(evidence?.dialogs));
   const blockedBy = evidenceBlocker(pageEvidenceWire(evidence?.overlays));
   const selectedText = boundedText2(snapshot.selectedText, WEB_LLM_EVIDENCE_BOUNDS.text);
-  return {
-    ...frame ? { frame } : {},
-    ...loading ? { loading } : {},
-    ...navigation ? { navigation } : {},
-    ...dialogs ? { dialogs } : {},
-    ...blockedBy ? { blockedBy } : {},
-    ...selectedText ? { selectedText } : {}
-  };
+  return present({
+    frame,
+    loading,
+    navigation,
+    dialogs,
+    blockedBy,
+    selectedText: selectedText || void 0,
+    // The one page-context field this reader does not read. It is the element
+    // funnel's number, so `sanitize.ts` supplies it beside the elements it
+    // counted. Named here rather than left out, because leaving a field out is
+    // exactly what this seam exists to make impossible.
+    elementTotal: void 0
+  });
 }
 function evidenceElementTotal(snapshot, carried) {
   const declared = boundedCount(snapshot.elementTotal, 1e7) ?? boundedCount(captureElementTotals(snapshot)?.matched, 1e7);
@@ -1114,40 +1217,40 @@ function evidenceFrame(input, childFrameIds) {
   const declared = isJsonRecord(input) ? input : void 0;
   const isTop = typeof declared?.isTop === "boolean" ? declared.isTop : void 0;
   if (isTop === void 0 && !childFrameIds.length) return void 0;
-  return {
+  return present({
     isTop: isTop ?? true,
-    ...childFrameIds.length ? { childFrameIds } : {}
-  };
+    childFrameIds: childFrameIds.length ? childFrameIds : void 0
+  });
 }
 function evidenceLoading(input) {
   if (!input) return void 0;
   const documentState = boundedText2(input.documentState, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
   const readyState = documentState && READY_STATES.includes(documentState) ? documentState : void 0;
   const spinner = items(input.indicators).map((indicator) => pageEvidenceWire(indicator)).some((indicator) => indicator?.kind === "spinner");
-  const loading = {
-    ...readyState && readyState !== "complete" ? { readyState } : {},
-    ...trueFlag(input.busy) ? { busy: true } : {},
-    ...spinner ? { spinner: true } : {},
-    ...trueFlag(input.pendingNavigation) ? { pendingNavigation: true } : {}
-  };
+  const loading = present({
+    readyState: readyState && readyState !== "complete" ? readyState : void 0,
+    busy: trueFlag(input.busy),
+    spinner: spinner ? true : void 0,
+    pendingNavigation: trueFlag(input.pendingNavigation)
+  });
   return Object.keys(loading).length ? loading : void 0;
 }
 function evidenceNavigation(input) {
   if (!input) return void 0;
   const type = boundedText2(input.type, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
   const redirects = boundedCount(input.redirects, MAX_REDIRECTS);
-  const navigation = {
-    ...type && type !== ORDINARY_NAVIGATION_TYPE ? { type } : {},
-    ...redirects ? { redirects } : {},
-    ...safeLocationField("referrer", input.referrer)
-  };
+  const navigation = present({
+    type: type && type !== ORDINARY_NAVIGATION_TYPE ? type : void 0,
+    redirects: redirects || void 0,
+    referrer: safeLocation(input.referrer)
+  });
   return Object.keys(navigation).length ? navigation : void 0;
 }
-function safeLocationField(key, input) {
+function safeLocation(input) {
   try {
-    return { [key]: evidenceLocation(safeEvidenceUrl(input)) };
+    return evidenceLocation(safeEvidenceUrl(input));
   } catch {
-    return {};
+    return void 0;
   }
 }
 function evidenceDialogs(input) {
@@ -1161,12 +1264,12 @@ function evidenceDialogs(input) {
     const selector = boundedText2(raw.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
     const modal = trueFlag(raw.modal);
     if (!role && !name && !selector && !modal) continue;
-    dialogs.push({
-      ...role ? { role } : {},
-      ...name ? { name } : {},
-      ...modal ? { modal } : {},
-      ...selector ? { selector } : {}
-    });
+    dialogs.push(present({
+      role: role || void 0,
+      name: name || void 0,
+      modal,
+      selector: selector || void 0
+    }));
   }
   return dialogs.length ? dialogs : void 0;
 }
@@ -1178,12 +1281,12 @@ function evidenceBlocker(input) {
   const role = boundedText2(blocker.role, WEB_LLM_EVIDENCE_BOUNDS.role);
   const name = boundedText2(blocker.label, WEB_LLM_EVIDENCE_BOUNDS.text);
   const blocks = boundedCount(blocker.blocks, MAX_BLOCKED_CONTROLS);
-  return {
+  return present({
     selector,
-    ...role ? { role } : {},
-    ...name ? { name } : {},
-    ...blocks ? { blocks } : {}
-  };
+    role: role || void 0,
+    name: name || void 0,
+    blocks: blocks || void 0
+  });
 }
 
 // src/runtime/llm-evidence/sanitize.ts
@@ -1212,18 +1315,30 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
   const title = boundedText2(snapshot.title, WEB_LLM_EVIDENCE_BOUNDS.text);
   const captureTruncated = capturedTruncated(snapshot);
   const elementsTruncated = snapshot.interactiveElements.length > WEB_LLM_EVIDENCE_BOUNDS.elements;
-  const evidence = {
+  const context = webLlmPageContext(snapshot, childFrameIds);
+  const evidence = present({
     schemaVersion: WEB_LLM_EVIDENCE_SCHEMA_VERSION,
     trust: "untrusted-page-evidence",
     location: evidenceLocation(url),
-    ...title ? { title } : {},
-    ...webLlmPageContext(snapshot, childFrameIds),
-    ...elementTotal === void 0 ? {} : { elementTotal },
+    title: title || void 0,
+    // The page context is carried field by field rather than spread, so a
+    // packet field renamed or dropped in `page-evidence.ts` fails here instead
+    // of quietly leaving the packet.
+    frame: context.frame,
+    loading: context.loading,
+    navigation: context.navigation,
+    dialogs: context.dialogs,
+    blockedBy: context.blockedBy,
+    selectedText: context.selectedText,
+    elementTotal,
     elements,
     truncated: captureTruncated || elementsTruncated,
-    ...captureTruncated ? { captureTruncated: true } : {},
-    ...elementsTruncated ? { elementsTruncated: true } : {}
-  };
+    captureTruncated: captureTruncated ? true : void 0,
+    elementsTruncated: elementsTruncated ? true : void 0,
+    // Not written here: `trimToBudget` below sets it if and only if a removal
+    // was needed. Mentioned so the packet's key set stays exhaustive.
+    budgetTruncated: void 0
+  });
   trimToBudget(evidence, selectors, maxEvidenceBytes);
   return { evidence, selectors };
 }
@@ -1440,7 +1555,7 @@ function failureDiagnostics(status, payload) {
   const evidence = sanitizedFailureEvidence(actionResult.snapshot);
   const evidenceDigest = evidence === void 0 ? void 0 : createHash("sha256").update(JSON.stringify(evidence)).digest("hex");
   const report = compact3({
-    url: safeLocation(actionResult.url),
+    url: safeLocation2(actionResult.url),
     title: boundedTitle(actionResult.title),
     selector: boundedSelector(jsonObject(actionResult.element)?.selector),
     evidenceDigest
@@ -1460,7 +1575,7 @@ function dispatchPayloadMessage(payload) {
   const message = payload?.message;
   return typeof message === "string" && message.length > 0 ? message : void 0;
 }
-function safeLocation(value) {
+function safeLocation2(value) {
   if (typeof value !== "string" || value.length === 0 || value.length > 2e3) return void 0;
   try {
     const url = new URL(value);

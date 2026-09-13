@@ -24,6 +24,7 @@ import { sanitizedEvidenceElement, type WebLlmEvidenceElement } from "./elements
 import { evidenceByteLimit, serializedBytes, WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_EVIDENCE_BYTE_BUDGETS } from "./limits";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
 import { capturedTruncated, evidenceElementTotal, webLlmPageContext, type WebLlmPageContext } from "./page-evidence";
+import { present } from "./present";
 import { boundedText, jsonRecord } from "./untrusted-json";
 
 export const WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v1" as const;
@@ -93,18 +94,30 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
   const title = boundedText(snapshot.title, WEB_LLM_EVIDENCE_BOUNDS.text);
   const captureTruncated = capturedTruncated(snapshot);
   const elementsTruncated = snapshot.interactiveElements.length > WEB_LLM_EVIDENCE_BOUNDS.elements;
-  const evidence: WebLlmPageEvidence = {
+  const context = webLlmPageContext(snapshot, childFrameIds);
+  const evidence = present<WebLlmPageEvidence>({
     schemaVersion: WEB_LLM_EVIDENCE_SCHEMA_VERSION,
     trust: "untrusted-page-evidence",
     location: evidenceLocation(url),
-    ...(title ? { title } : {}),
-    ...webLlmPageContext(snapshot, childFrameIds),
-    ...(elementTotal === undefined ? {} : { elementTotal }),
+    title: title || undefined,
+    // The page context is carried field by field rather than spread, so a
+    // packet field renamed or dropped in `page-evidence.ts` fails here instead
+    // of quietly leaving the packet.
+    frame: context.frame,
+    loading: context.loading,
+    navigation: context.navigation,
+    dialogs: context.dialogs,
+    blockedBy: context.blockedBy,
+    selectedText: context.selectedText,
+    elementTotal,
     elements,
     truncated: captureTruncated || elementsTruncated,
-    ...(captureTruncated ? { captureTruncated: true as const } : {}),
-    ...(elementsTruncated ? { elementsTruncated: true as const } : {})
-  };
+    captureTruncated: captureTruncated ? true : undefined,
+    elementsTruncated: elementsTruncated ? true : undefined,
+    // Not written here: `trimToBudget` below sets it if and only if a removal
+    // was needed. Mentioned so the packet's key set stays exhaustive.
+    budgetTruncated: undefined
+  });
   trimToBudget(evidence, selectors, maxEvidenceBytes);
   return { evidence, selectors };
 }

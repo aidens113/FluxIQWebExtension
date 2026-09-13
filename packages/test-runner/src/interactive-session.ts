@@ -10,6 +10,7 @@ import { ExistingFluxIQControlClient } from "./existing-fluxiq-control.js";
 import { WebPanelAuthSessionCache } from "./auth-session.js";
 import { installDeterministicNetworkGuard, scenarioNetworkOrigins } from "./network-guard.js";
 import { fluxIQSessionCookieDescriptor } from "./panel-verification.js";
+import { resolveLabPaths } from "./lab-instance/index.js";
 import { loadScenarioManifest } from "./scenarios.js";
 import type { FluxIQTargetConfiguration } from "./target-config.js";
 import { selectOptionByKeyboard } from "./trusted-input/index.js";
@@ -178,8 +179,9 @@ export async function runInteractiveSession(options: InteractiveSessionOptions):
   const input = options.input ?? process.stdin;
   const output = options.output ?? process.stdout;
   const environment = options.environment ?? process.env;
-  const scenario = await loadScenarioManifest(options.repositoryRoot, options.scenarioId);
-  const extensionPath = path.join(options.repositoryRoot, "apps", "extension", "dist", "e2e-chromium");
+  const labPaths = resolveLabPaths(options.repositoryRoot, environment);
+  const scenario = await loadScenarioManifest(options.repositoryRoot, options.scenarioId, labPaths.scenarioLabDist);
+  const extensionPath = labPaths.extensionPath;
   await access(extensionPath);
   const runId = `interactive-${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
   const artifactsDirectory = path.join(options.runsDirectory, "interactive-sessions", runId);
@@ -194,6 +196,8 @@ export async function runInteractiveSession(options: InteractiveSessionOptions):
       runId,
       seed: options.seed ?? scenario.seed,
       target: options.target,
+      scenarioEntrypoint: labPaths.scenarioEntrypoint,
+      hostModulePath: labPaths.hostModulePath,
       ...(options.target.mode === "existing" ? {} : {
         prepareHost: false,
         bootstrapIdentity: true,

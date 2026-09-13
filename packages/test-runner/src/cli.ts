@@ -8,6 +8,7 @@ import { parseLabCommand, expandMatrix } from "./commands.js";
 import { classifyRunnerFailure } from "./failure.js";
 
 import { inspectRun } from "./inspect.js";
+import { resolveLabPaths } from "./lab-instance/index.js";
 import { runInteractiveSession } from "./interactive-session.js";
 import { runScenario } from "./run-scenario.js";
 import { loadScenarioManifests } from "./scenarios.js";
@@ -18,7 +19,8 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
   try {
     const resolvedEnvironment = await loadTestEnvironment(repositoryRoot, env);
     const fluxiqRepositoryRoot = path.resolve(resolvedEnvironment.FLUXIQ_CORE_ROOT ?? path.join(repositoryRoot, "..", "!FluxIQ"));
-    const runsDirectory = path.resolve(resolvedEnvironment.FLUXIQ_TEST_RUNS_DIR ?? path.join(repositoryRoot, "test-runs"));
+    const labPaths = resolveLabPaths(repositoryRoot, resolvedEnvironment);
+    const runsDirectory = labPaths.runsDirectory;
     const command = parseLabCommand(argv);
     if (command.command === "interactive") {
       const target = resolveInteractiveTargetConfiguration({ ...(command.target ? { cliTarget: command.target } : {}), ...(command.workspace ? { cliWorkspace: command.workspace } : {}), ...(command.freshLogin ? { cliFreshLogin: true } : {}), env: resolvedEnvironment });
@@ -46,7 +48,7 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
     if (command.command === "bench") {
       const corpus = findBenchCorpus(command.corpusId);
       const target = resolveTargetConfiguration({ ...(command.target ? { cliTarget: command.target } : {}), ...(command.workspace ? { cliWorkspace: command.workspace } : {}), env: resolvedEnvironment });
-      const outcome = await runBench({ corpus, repeatCount: command.repeat, target, manifests: await loadScenarioManifests(repositoryRoot), repositoryRoot, fluxiqRepositoryRoot, runsDirectory, environment: resolvedEnvironment, ...(command.evidence ? { evidence: command.evidence } : {}), runScenario, inspectRun });
+      const outcome = await runBench({ corpus, repeatCount: command.repeat, target, manifests: await loadScenarioManifests(repositoryRoot, labPaths.scenarioLabDist), repositoryRoot, fluxiqRepositoryRoot, runsDirectory, environment: resolvedEnvironment, ...(command.evidence ? { evidence: command.evidence } : {}), runScenario, inspectRun });
       process.stdout.write(`${JSON.stringify(outcome)}\n`); return outcome.status === "passed" ? 0 : 1;
     }
     if ((command.command === "run" || command.command === "matrix") && command.llm?.mode === "live") throw new Error("Live LLM execution is fail-closed until the Phase 1 provider runner is enabled");
@@ -56,7 +58,7 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
       process.stdout.write(`${JSON.stringify(result)}\n`); return result.verdict === "passed" ? 0 : 1;
     }
     const target = resolveTargetConfiguration({ ...(command.target ? { cliTarget: command.target } : {}), ...(command.flowId ? { cliFlowId: command.flowId } : {}), ...(command.workspace ? { cliWorkspace: command.workspace } : {}), ...(command.freshLogin ? { cliFreshLogin: true } : {}), env: resolvedEnvironment });
-    const manifests = await loadScenarioManifests(repositoryRoot);
+    const manifests = await loadScenarioManifests(repositoryRoot, labPaths.scenarioLabDist);
     const results = [];
     for (const job of expandMatrix(command, manifests.map(item => item.id))) results.push(await runScenario({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: job.scenarioId, ...(command.evidence ? { evidence: command.evidence } : {}), environment: resolvedEnvironment, target }));
     const passed = results.every(result => result.verdict === "passed");

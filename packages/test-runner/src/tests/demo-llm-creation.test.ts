@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { FIRST_LIVE_CREATION_LIMITS } from "../demo-llm-create-ui.js";
+import { FIRST_LIVE_CREATION_LIMITS } from "../demo-llm-create-ui/index.js";
 import { FIRST_LIVE_CREATION_PROFILE, evaluateDemoLlmCreation, persistDemoLlmCreationResult } from "../demo-llm-creation.js";
 import { DEFAULT_DEMO_LLM_CREATION_PROFILE } from "../demo-llm-profile.js";
 

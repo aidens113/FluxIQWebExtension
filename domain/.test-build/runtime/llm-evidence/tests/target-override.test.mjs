@@ -83,6 +83,17 @@ function sameOriginHref(input, base) {
   }
 }
 
+// src/runtime/llm-evidence/present.ts
+function present(fields) {
+  const source = fields;
+  const written = {};
+  for (const key of Object.keys(source)) {
+    const value = source[key];
+    if (value !== void 0) written[key] = value;
+  }
+  return written;
+}
+
 // src/runtime/llm-evidence/untrusted-json.ts
 function isJsonRecord(input) {
   return Boolean(input) && typeof input === "object" && !Array.isArray(input);
@@ -129,27 +140,31 @@ function sanitizedEvidenceElement(raw, context) {
   const expanded = revealKind === "disclosure" ? semanticExpandedState(attributes) : void 0;
   const placement = elementPlacement(raw.context, { name, text });
   const focused = context.focusedSelector !== void 0 && context.focusedSelector === addressed.selector ? true : void 0;
-  return {
+  return present({
     target: context.target,
     tag,
     selector: addressed.selector,
-    ...addressed.frameId === void 0 ? {} : { frameId: addressed.frameId },
-    ...role ? { role } : {},
-    ...name ? { name } : {},
-    ...text ? { text } : {},
-    ...inputType ? { inputType } : {},
-    ...controlType ? { controlType } : {},
-    ...hasValue === void 0 ? {} : { hasValue },
-    ...selectedValue ? { selectedValue } : {},
-    ...href ? { href } : {},
-    ...options?.length ? { options } : {},
-    ...revealKind ? { revealKind } : {},
-    ...expanded === void 0 ? {} : { expanded },
-    ...focused ? { focused } : {},
-    ...trueFlag(raw.recentlyInteracted) ? { recent: true } : {},
-    ...trueFlag(raw.changed) ? { changed: true } : {},
-    ...placement
-  };
+    frameId: addressed.frameId,
+    role: role || void 0,
+    name: name || void 0,
+    text: text || void 0,
+    inputType: inputType || void 0,
+    controlType: controlType || void 0,
+    hasValue,
+    selectedValue: selectedValue || void 0,
+    href: href || void 0,
+    options: options?.length ? options : void 0,
+    revealKind,
+    expanded,
+    focused,
+    recent: trueFlag(raw.recentlyInteracted),
+    changed: trueFlag(raw.changed),
+    form: placement.form,
+    landmark: placement.landmark,
+    heading: placement.heading,
+    item: placement.item,
+    cell: placement.cell
+  });
 }
 function safeFillTag(tag, inputType) {
   return tag === "textarea" || tag === "input" && (!inputType || ["text", "search", "email", "tel", "url", "number"].includes(inputType));
@@ -185,32 +200,32 @@ function stampedFrameId(raw) {
   return stamped === void 0 ? void 0 : boundedCount(Number(stamped), 999999);
 }
 function elementPlacement(input, named) {
-  if (!isJsonRecord(input)) return {};
-  const form = boundedText(input.formId ?? input.formName, WEB_LLM_EVIDENCE_BOUNDS.placement);
-  const landmark = boundedText(input.landmark, WEB_LLM_EVIDENCE_BOUNDS.tag);
-  const rawHeading = boundedText(input.heading, WEB_LLM_EVIDENCE_BOUNDS.placement);
+  const described = isJsonRecord(input) ? input : {};
+  const form = boundedText(described.formId ?? described.formName, WEB_LLM_EVIDENCE_BOUNDS.placement);
+  const landmark = boundedText(described.landmark, WEB_LLM_EVIDENCE_BOUNDS.tag);
+  const rawHeading = boundedText(described.heading, WEB_LLM_EVIDENCE_BOUNDS.placement);
   const heading = rawHeading === named.name || rawHeading === named.text ? void 0 : rawHeading;
   return {
-    ...form ? { form } : {},
-    ...landmark ? { landmark } : {},
-    ...heading ? { heading } : {},
-    ...listPlacement(input.listPosition),
-    ...tablePlacement(input.tablePosition)
+    form: form || void 0,
+    landmark: landmark || void 0,
+    heading: heading || void 0,
+    item: listPlacement(described.listPosition),
+    cell: tablePlacement(described.tablePosition)
   };
 }
 function listPlacement(input) {
-  if (!isJsonRecord(input)) return {};
+  if (!isJsonRecord(input)) return void 0;
   const index = boundedCount(input.index, 1e5);
   const total = boundedCount(input.total, 1e5);
-  return index === void 0 || total === void 0 ? {} : { item: { index, total } };
+  return index === void 0 || total === void 0 ? void 0 : { index, total };
 }
 function tablePlacement(input) {
-  if (!isJsonRecord(input)) return {};
+  if (!isJsonRecord(input)) return void 0;
   const row = boundedCount(input.row, 1e5);
   const column = boundedCount(input.column, 1e5);
-  if (row === void 0 || column === void 0) return {};
+  if (row === void 0 || column === void 0) return void 0;
   const header = boundedText(input.columnHeader, WEB_LLM_EVIDENCE_BOUNDS.placement);
-  return { cell: { row, column, ...header ? { header } : {} } };
+  return present({ row, column, header: header || void 0 });
 }
 function sanitizedOptions(input) {
   if (!Array.isArray(input)) return void 0;
@@ -246,14 +261,19 @@ function webLlmPageContext(snapshot, childFrameIds) {
   const dialogs = evidenceDialogs(pageEvidenceWire(evidence?.dialogs));
   const blockedBy = evidenceBlocker(pageEvidenceWire(evidence?.overlays));
   const selectedText = boundedText(snapshot.selectedText, WEB_LLM_EVIDENCE_BOUNDS.text);
-  return {
-    ...frame ? { frame } : {},
-    ...loading ? { loading } : {},
-    ...navigation ? { navigation } : {},
-    ...dialogs ? { dialogs } : {},
-    ...blockedBy ? { blockedBy } : {},
-    ...selectedText ? { selectedText } : {}
-  };
+  return present({
+    frame,
+    loading,
+    navigation,
+    dialogs,
+    blockedBy,
+    selectedText: selectedText || void 0,
+    // The one page-context field this reader does not read. It is the element
+    // funnel's number, so `sanitize.ts` supplies it beside the elements it
+    // counted. Named here rather than left out, because leaving a field out is
+    // exactly what this seam exists to make impossible.
+    elementTotal: void 0
+  });
 }
 function evidenceElementTotal(snapshot, carried) {
   const declared = boundedCount(snapshot.elementTotal, 1e7) ?? boundedCount(captureElementTotals(snapshot)?.matched, 1e7);
@@ -278,40 +298,40 @@ function evidenceFrame(input, childFrameIds) {
   const declared = isJsonRecord(input) ? input : void 0;
   const isTop = typeof declared?.isTop === "boolean" ? declared.isTop : void 0;
   if (isTop === void 0 && !childFrameIds.length) return void 0;
-  return {
+  return present({
     isTop: isTop ?? true,
-    ...childFrameIds.length ? { childFrameIds } : {}
-  };
+    childFrameIds: childFrameIds.length ? childFrameIds : void 0
+  });
 }
 function evidenceLoading(input) {
   if (!input) return void 0;
   const documentState = boundedText(input.documentState, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
   const readyState = documentState && READY_STATES.includes(documentState) ? documentState : void 0;
   const spinner = items(input.indicators).map((indicator) => pageEvidenceWire(indicator)).some((indicator) => indicator?.kind === "spinner");
-  const loading = {
-    ...readyState && readyState !== "complete" ? { readyState } : {},
-    ...trueFlag(input.busy) ? { busy: true } : {},
-    ...spinner ? { spinner: true } : {},
-    ...trueFlag(input.pendingNavigation) ? { pendingNavigation: true } : {}
-  };
+  const loading = present({
+    readyState: readyState && readyState !== "complete" ? readyState : void 0,
+    busy: trueFlag(input.busy),
+    spinner: spinner ? true : void 0,
+    pendingNavigation: trueFlag(input.pendingNavigation)
+  });
   return Object.keys(loading).length ? loading : void 0;
 }
 function evidenceNavigation(input) {
   if (!input) return void 0;
   const type = boundedText(input.type, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
   const redirects = boundedCount(input.redirects, MAX_REDIRECTS);
-  const navigation = {
-    ...type && type !== ORDINARY_NAVIGATION_TYPE ? { type } : {},
-    ...redirects ? { redirects } : {},
-    ...safeLocationField("referrer", input.referrer)
-  };
+  const navigation = present({
+    type: type && type !== ORDINARY_NAVIGATION_TYPE ? type : void 0,
+    redirects: redirects || void 0,
+    referrer: safeLocation(input.referrer)
+  });
   return Object.keys(navigation).length ? navigation : void 0;
 }
-function safeLocationField(key, input) {
+function safeLocation(input) {
   try {
-    return { [key]: evidenceLocation(safeEvidenceUrl(input)) };
+    return evidenceLocation(safeEvidenceUrl(input));
   } catch {
-    return {};
+    return void 0;
   }
 }
 function evidenceDialogs(input) {
@@ -325,12 +345,12 @@ function evidenceDialogs(input) {
     const selector = boundedText(raw.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
     const modal = trueFlag(raw.modal);
     if (!role && !name && !selector && !modal) continue;
-    dialogs.push({
-      ...role ? { role } : {},
-      ...name ? { name } : {},
-      ...modal ? { modal } : {},
-      ...selector ? { selector } : {}
-    });
+    dialogs.push(present({
+      role: role || void 0,
+      name: name || void 0,
+      modal,
+      selector: selector || void 0
+    }));
   }
   return dialogs.length ? dialogs : void 0;
 }
@@ -342,12 +362,12 @@ function evidenceBlocker(input) {
   const role = boundedText(blocker.role, WEB_LLM_EVIDENCE_BOUNDS.role);
   const name = boundedText(blocker.label, WEB_LLM_EVIDENCE_BOUNDS.text);
   const blocks = boundedCount(blocker.blocks, MAX_BLOCKED_CONTROLS);
-  return {
+  return present({
     selector,
-    ...role ? { role } : {},
-    ...name ? { name } : {},
-    ...blocks ? { blocks } : {}
-  };
+    role: role || void 0,
+    name: name || void 0,
+    blocks: blocks || void 0
+  });
 }
 
 // src/runtime/llm-evidence/sanitize.ts
@@ -376,18 +396,30 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
   const title = boundedText(snapshot.title, WEB_LLM_EVIDENCE_BOUNDS.text);
   const captureTruncated = capturedTruncated(snapshot);
   const elementsTruncated = snapshot.interactiveElements.length > WEB_LLM_EVIDENCE_BOUNDS.elements;
-  const evidence = {
+  const context = webLlmPageContext(snapshot, childFrameIds);
+  const evidence = present({
     schemaVersion: WEB_LLM_EVIDENCE_SCHEMA_VERSION,
     trust: "untrusted-page-evidence",
     location: evidenceLocation(url),
-    ...title ? { title } : {},
-    ...webLlmPageContext(snapshot, childFrameIds),
-    ...elementTotal === void 0 ? {} : { elementTotal },
+    title: title || void 0,
+    // The page context is carried field by field rather than spread, so a
+    // packet field renamed or dropped in `page-evidence.ts` fails here instead
+    // of quietly leaving the packet.
+    frame: context.frame,
+    loading: context.loading,
+    navigation: context.navigation,
+    dialogs: context.dialogs,
+    blockedBy: context.blockedBy,
+    selectedText: context.selectedText,
+    elementTotal,
     elements,
     truncated: captureTruncated || elementsTruncated,
-    ...captureTruncated ? { captureTruncated: true } : {},
-    ...elementsTruncated ? { elementsTruncated: true } : {}
-  };
+    captureTruncated: captureTruncated ? true : void 0,
+    elementsTruncated: elementsTruncated ? true : void 0,
+    // Not written here: `trimToBudget` below sets it if and only if a removal
+    // was needed. Mentioned so the packet's key set stays exhaustive.
+    budgetTruncated: void 0
+  });
   trimToBudget(evidence, selectors, maxEvidenceBytes);
   return { evidence, selectors };
 }

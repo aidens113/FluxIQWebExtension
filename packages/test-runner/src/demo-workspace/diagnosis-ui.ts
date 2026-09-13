@@ -4,7 +4,7 @@ import type { Locator, Page } from "@playwright/test";
 import { BrowserEvidenceRecorder } from "../browser-evidence.js";
 import { RunnerFailure } from "../failure.js";
 import { TESTING_LAB_DEEPSEEK_KEY_NAME } from "../secret-keys-ui.js";
-import { exactVirtualizedHierarchyObject } from "../demo-llm-create-ui.js";
+import { exactVirtualizedHierarchyObject } from "../demo-llm-create-ui/index.js";
 import { FIRST_LIVE_ADAPTATION_PROFILE } from "../demo-llm-adaptation.js";
 import { required } from "./configuration.js";
 import { assertLlmDiagnosisRecordingDerivedFlow } from "./flow-document.js";

@@ -6,7 +6,15 @@ export type RecordingProposalControl = {
   automationStudioCall(endpoint: string, payload: Record<string, unknown>, bounds?: FluxIQHttpOptions, domainId?: string): Promise<unknown>;
 };
 
-export type RecordingFlowProposal = { proposalId: string; recordingId: string; mapperId: string; status: string; candidateCount: number };
+/**
+ * `issues` is Core's own account of what it could not map. It used to be read
+ * and then dropped on the success path, surfacing only when the proposal was
+ * empty -- so a proposal that was merely *short* arrived with no explanation
+ * at all, which is a large part of why `L-dropped-action` survived undiagnosed
+ * from Wave 2. It is carried out of here on every path now, and written into
+ * the run bundle whether the lane passes or fails.
+ */
+export type RecordingFlowProposal = { proposalId: string; recordingId: string; mapperId: string; status: string; candidateCount: number; issues: readonly string[] };
 export type ApprovedRecordingFlow = { flowId: string; proposalId: string; created: boolean };
 
 /**
@@ -39,6 +47,7 @@ export async function createRecordingFlowProposal(
     mapperId: textOf(asRecord(newest.mapper, "proposal.mapper").id, "proposal.mapper.id"),
     status: textOf(newest.status, "proposal.status"),
     candidateCount: candidates.length,
+    issues,
   };
 }
 

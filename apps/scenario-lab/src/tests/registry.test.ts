@@ -8,8 +8,11 @@ import { createScenarioManifest, defineScenario, scenarioIds } from "../types.js
 test("every registered fixture exposes a valid versioned WebScenario manifest", () => {
   const definitions = listScenarios();
   const manifests = listScenarioManifests();
-  assert.equal(definitions.length, 22);
-  assert.equal(manifests.length, 22);
+  // Counted against the id list rather than a literal: the corpus grows a
+  // fixture at a time, and a hard-coded number turns every addition into an
+  // edit of this line.
+  assert.equal(definitions.length, scenarioIds.length);
+  assert.equal(manifests.length, scenarioIds.length);
   assert.deepEqual(definitions.map(({ id }) => id), [...scenarioIds]);
 
   for (const definition of definitions) {

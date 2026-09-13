@@ -36,7 +36,7 @@ function selectedTargetCandidate(target) {
 function elementFingerprint(value) {
   const element = objectValue(value);
   if (!element) return void 0;
-  const attributes = objectValue(element.attributes);
+  const attributes = elementAttributes(element.attributes);
   return compact({
     selector: stringValue(element.selector),
     xpath: stringValue(element.xpath),
@@ -54,8 +54,63 @@ function elementFingerprint(value) {
     testId: elementTestId(element, attributes),
     accessibleName: stringValue(element.accessibleName) ?? stringValue(attributes?.["aria-label"]),
     label: stringValue(element.label),
-    attributes
+    attributes,
+    context: elementContext(element.context),
+    // Core's remaining fingerprint signals, named so their absence is a
+    // decision and so a signal Core adds stops this producer compiling. A
+    // browser recording has no source for any of them: the first four are a
+    // host application's own identifiers and a Core state path, `url` names
+    // the page rather than the control, `bounds` are the capture's viewport
+    // and not this instant's (which is why `content/identity/score.ts` refuses
+    // to compare them), and `metadata` is Core's own passthrough slot, which
+    // this normalizer must not start writing into behind the declared fields.
+    automationId: void 0,
+    entityId: void 0,
+    entityKind: void 0,
+    statePath: void 0,
+    queryPath: void 0,
+    url: void 0,
+    bounds: void 0,
+    metadata: void 0
   });
+}
+function elementContext(value) {
+  const context = objectValue(value);
+  if (!context) return void 0;
+  const fields = compact({
+    formId: stringValue(context.formId),
+    formName: stringValue(context.formName),
+    formAction: stringValue(context.formAction),
+    fieldsetLegend: stringValue(context.fieldsetLegend),
+    landmark: stringValue(context.landmark),
+    heading: stringValue(context.heading),
+    listPosition: listPosition(context.listPosition),
+    tablePosition: tablePosition(context.tablePosition)
+  });
+  return Object.keys(fields).length > 0 ? fields : void 0;
+}
+function listPosition(value) {
+  const position = objectValue(value);
+  const index = numberValue(position?.index);
+  const total = numberValue(position?.total);
+  return index === void 0 || total === void 0 ? void 0 : { index, total };
+}
+function tablePosition(value) {
+  const position = objectValue(value);
+  const row = numberValue(position?.row);
+  const column = numberValue(position?.column);
+  if (row === void 0 || column === void 0) return void 0;
+  const columnHeader = stringValue(position?.columnHeader);
+  return columnHeader === void 0 ? { row, column } : { row, column, columnHeader };
+}
+function elementAttributes(value) {
+  const attributes = objectValue(value);
+  if (!attributes) return void 0;
+  const strings = {};
+  for (const [name, item] of Object.entries(attributes)) {
+    if (typeof item === "string") strings[name] = item;
+  }
+  return strings;
 }
 function elementTestId(element, attributes) {
   return stringValue(element.testId) ?? stringValue(attributes?.["data-testid"]) ?? stringValue(attributes?.["data-test"]) ?? stringValue(attributes?.["data-cy"]);
@@ -68,6 +123,9 @@ function objectValue(value) {
 }
 function stringValue(value) {
   return typeof value === "string" ? value : void 0;
+}
+function numberValue(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
 }
 
 // src/output-nodes/tests/targets.test.ts
@@ -203,4 +261,52 @@ test("the element ordering does not decide the selector or the emptiness guard",
   })?.selector, "#adapted");
   assert.equal(outputTargetFromPayload({ element: recordedElement })?.selector, "#save-settings", "an element-only payload still resolves its selector from the element");
   assert.equal(outputTargetFromPayload({ element: { tagName: "button", text: "Save" } }), void 0, "no selector and no visual target is still no target");
+});
+var recordedContext = {
+  formId: "settings-form",
+  formName: "settings",
+  formAction: "/workspace/settings",
+  fieldsetLegend: "General",
+  landmark: "main",
+  heading: "Workspace settings",
+  listPosition: { index: 3, total: 24 },
+  tablePosition: { row: 2, column: 4, columnHeader: "Total" }
+};
+test("where the element sat survives into the fingerprint, field by field", () => {
+  const fingerprint = elementFingerprint({ selector: "#save", tagName: "button", context: recordedContext });
+  assert.deepEqual(fingerprint?.context, recordedContext);
+});
+test("and into the dispatched target, which is the layer it used to die at", () => {
+  const target = outputTargetFromPayload({
+    selector: "#save",
+    element: { selector: "#save", tagName: "button", context: { formName: "settings", fieldsetLegend: "General" } }
+  });
+  assert.deepEqual((target?.element).context, { formName: "settings", fieldsetLegend: "General" });
+});
+test("a context key the normalizer does not know does not reach the page", () => {
+  const fingerprint = elementFingerprint({
+    selector: "#save",
+    context: { formName: "settings", formIdentifier: "settings-form", landmark: 7 }
+  });
+  assert.deepEqual(fingerprint?.context, { formName: "settings" }, "an unknown key and a mistyped one are both dropped");
+});
+test("a position is only a position when it is complete", () => {
+  const partial = elementFingerprint({
+    selector: "#cell",
+    context: { listPosition: { index: 3 }, tablePosition: { row: 2, column: 4 } }
+  });
+  assert.deepEqual(partial?.context, { tablePosition: { row: 2, column: 4 } }, "an index with no total says how far along nothing");
+});
+test("an element inside no form, list or table carries no context at all", () => {
+  assert.equal("context" in (elementFingerprint({ selector: "#plain", tagName: "div" }) ?? {}), false);
+  assert.equal("context" in (elementFingerprint({ selector: "#plain", context: {} }) ?? {}), false, "an empty context is absent, not an empty object");
+  assert.equal("context" in (elementFingerprint({ selector: "#plain", context: "main" }) ?? {}), false, "a context that is not an object is absent");
+});
+test("the attribute map is narrowed to the strings Core compares", () => {
+  const fingerprint = elementFingerprint({
+    selector: "#save",
+    attributes: { "data-testid": "save", "aria-hidden": true, "data-config": { nested: 1 } }
+  });
+  assert.deepEqual(fingerprint?.attributes, { "data-testid": "save" });
+  assert.deepEqual(elementFingerprint({ selector: "#save", attributes: {} })?.attributes, {}, "an element that carried an empty map still carries one");
 });

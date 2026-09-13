@@ -10,8 +10,14 @@ const fluxiqRoot = path.resolve(repoRoot, "..", "!FluxIQ");
 const fluxiqClientGatewayContracts = path.join(fluxiqRoot, "packages", "fluxiq", "src", "client-gateway", "contracts.ts");
 const fluxiqFingerprinting = path.join(fluxiqRoot, "packages", "fluxiq", "src", "programs", "automation-studio", "fingerprinting", "index.ts");
 const webAutomationDomainClient = path.join(repoRoot, "domain", "src", "client", "index.ts");
-const buildDir = path.join(root, "build");
-const distDir = path.join(root, "dist");
+// FLUXIQ_LAB_EXTENSION_BUILD_ROOT sends `build/` and `dist/` somewhere this
+// build owns, so a concurrent Lab instance cannot delete the unpacked
+// extension a running browser is loading. scripts/lab/lab-instance.mjs is the
+// only writer of that variable; unset, the paths are the package's own and the
+// build behaves exactly as it always has, refreshing the tracked `build/`.
+const buildRoot = resolveBuildRoot(process.env.FLUXIQ_LAB_EXTENSION_BUILD_ROOT);
+const buildDir = path.join(buildRoot, "build");
+const distDir = path.join(buildRoot, "dist");
 const placeholderPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAI" +
   "AAAACACAYAAADDPmHLAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAA" +
   "AadJREFUeNrs3cENwjAQRUEj/Rd2gBqogZqogcqogXqohRFhh5QYe77cuZkOAAAAAAAAAAA" +
@@ -24,6 +30,18 @@ const placeholderPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAI" +
   "QAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAA" +
   "QAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAAQAA" +
   "QAAQAAQAAQAAQAAQAAQAAQAAQAASDU/HAD5WUMR2QAAAABJRU5ErkJggg==";
+
+// `distDir` is deleted on every build, so a build root outside the repository
+// is refused rather than trusted.
+function resolveBuildRoot(declared) {
+  if (!declared || declared.trim() === "") return root;
+  const resolved = path.resolve(declared);
+  const relative = path.relative(repoRoot, resolved);
+  if (relative === "" || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error(`FLUXIQ_LAB_EXTENSION_BUILD_ROOT must name a directory inside ${repoRoot}; received ${resolved}`);
+  }
+  return resolved;
+}
 
 // Every bundle the extension is assembled from, in build order. Keyed so a
 // caller outside this script can name one entry: the content-script test

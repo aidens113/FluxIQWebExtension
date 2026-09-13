@@ -1051,3 +1051,301 @@ reports had claimed something narrower or wider than what the tree actually did.
   playwright test -c e2e/playwright.content.config.ts --workers=4` from
   `apps/extension`), that one carries the reason the pipe-versus-redirect rule
   caught it.
+- [OPEN — needs a Core decision] **A client's declared type and capabilities are
+  self-asserted and unverified, so nothing gating on them is a boundary.** Found
+  2026-09-12 by L-doc-truth while correcting a comment, and confirmed by the
+  supervisor by reading Core: `packages/fluxiq/src/client-gateway/service/
+  lifecycle.ts` lines 85-88 assign `session.clientType` and
+  `session.capabilities` straight from the `hello` frame, unconditionally, and
+  the token binds only `clientId`.
+  The consequence reaches further than the comment that exposed it. The domain's
+  redaction guards honour a client-supplied `redacted: true` and withhold
+  nothing when they see it. The obvious hardening — trust the flag only from a
+  client that declared the extension capability — **cannot work**, because
+  `clientType: "extension"`, `web.actions` and `redacted: true` all have exactly
+  the same provenance: a field the client wrote. Gating one on the others asks a
+  lying client for two more values it already controls. By the same argument the
+  dispatcher's existing extension-only filter is not an authentication either.
+  A second door is open beside it: omitting `element` from a result bypasses the
+  redaction guard entirely, since the guard needs a descriptor to judge. That
+  one is already pinned as a known limit by a test row.
+  The honest description, now in `adapter.ts`'s comment, is that these guards
+  are defence in depth against **our own producers** — a verb that forgets to
+  redact, a new code path nobody taught — and were never a boundary against a
+  hostile client. That is a legitimate and useful thing for them to be. What is
+  not legitimate is a comment implying otherwise, which is how this surfaced.
+  An enforceable boundary belongs at pairing time, where a token could bind the
+  client's type and granted capabilities, not at result-parse time where every
+  input is the claimant's own word. That is a Core change and a Week 2+
+  decision; it is recorded here because Week 1's redaction work rests on knowing
+  which of the two these guards are. Owner: senior supervisor agent, for the
+  Core document.
+- [OPEN — invalidates a class of measurement] **Every Flow-lane structured
+  failure has been deleted from the recorded history, so any claim about how
+  failures classify is unsound.** Found 2026-09-12 by x-evidence-crash while
+  fixing a serialiser bug, and the survivorship analysis matters more than the
+  bug.
+  `packages/test-evidence/src/redaction.ts` held a `WeakSet` that was added to
+  and never unwound, so it answered "have I ever touched this object?" rather
+  than "am I inside it right now?". A legitimately **shared** reference read as
+  a cycle and threw. The shape that trips it is deliberate:
+  `flow-lane/persisted-flow-run.ts:70` sets the run-level failure to the same
+  object as the first failing action's failure, and `run-scenario.ts:317` writes
+  both positions.
+  So a Flow-lane run crashed while writing its evidence **exactly when it had a
+  structured failure to report** — the well-classified failures this plan exists
+  to produce are the ones that lost their record.
+  Two consequences, and the second is the one that reaches the plan:
+  **The misreport looks like a measurement.** The affected runs record
+  `automationFailureReported: {"category": "ambiguous_or_unknown"}` — a
+  legitimate enum member, not an error sentinel. A precise `target_not_found`
+  was not merely lost; it was replaced by a plausible value a reader cannot tell
+  from a real one.
+  **The surviving population is filtered.** Of 33 surviving `flow-lane.json`
+  files across 160 retained bundles, the status histogram is
+  `{"succeeded": 33}`, and the count carrying any structured failure is
+  **zero**. Any statement about Flow-lane failure classification computed from
+  run bundles was computed over a population with every structured failure
+  removed from it. That bears directly on the Week 1 exit criterion "failures
+  are meaningfully classified", whose stated proof is a rate measured over
+  negative workflows: on this evidence that rate has never been measurable.
+  The crash is fixed and the redaction proved unchanged by differential testing
+  (120,000 comparisons on previously-accepted inputs, plus 11,632 shared-versus-
+  deep-cloned pairs, `diverged=0` in both). A true cycle now substitutes
+  `[CIRCULAR]` rather than throwing, so evidence still reaches disk.
+  **What remains open is the measurement, not the code.** Nothing in the
+  retained history can be used to claim a classification rate. The criterion
+  needs a fresh Flow-lane campaign over the negative variants, after the
+  recording-proposal race fix lands, and the earlier bundles should be treated
+  as evidence of nothing on this question. Owner: senior supervisor agent.
+- [OPEN — needs a product decision] **Redaction is signature-based, so a
+  sensitive field the page fails to mark is captured and replayed.** Found
+  2026-09-12 by r-checkout while building a realistic storefront fixture.
+  The canonical rule in `domain/src/sensitivity/` recognises `type="password"`,
+  the `autocomplete` token set (including the multi-token `billing cc-number`
+  spelling that has leaked twice), and `data-sensitive`. A field carrying none
+  of those is not sensitive as far as the product is concerned, whatever it
+  actually holds.
+  The fixture makes the consequence concrete: its card security code carries no
+  `autocomplete` at all — `name="csc"`, `inputmode="numeric"` — which is how real
+  checkouts frequently ship it. The scenario's `secrets` block **cannot declare
+  it**, because declaring a replay secret presupposes the recorder withheld the
+  value, and nothing withholds an unmarked field. So the value is captured, and
+  a Flow replays whatever was typed into it.
+  **Every obvious widening has already been rejected on evidence, and for good
+  reasons.** `inputmode="numeric"` is what ordinary quantity fields carry, so
+  matching it would redact real data (w3-redaction-followup). Scanning a value
+  for something card-shaped both misses and misfires, and was rejected twice
+  (v-redaction-seam, v-validation-leak). Matching a `name` attribute against a
+  pattern is a heuristic over an author-controlled string, which the sensitivity
+  consolidation ruled out as the same class of error that produced five copies
+  of the rule.
+  So the honest options are narrow, and the choice is the user's rather than a
+  worker's:
+  1. **Accept and document it.** Redaction protects fields the page marks. State
+     that plainly in the architecture documentation, so nobody reads "sensitive
+     values are redacted" as a guarantee it does not make.
+  2. **Warn rather than redact.** When the recorder captures a value from a field
+     that is payment-adjacent by weak signals, record a warning on the recording
+     rather than withholding the value. That surfaces the risk without
+     misfiring on quantity fields, and turns a silent capture into a visible one.
+  3. **Let the operator mark it.** A per-project or per-recording list of
+     selectors to treat as sensitive, which is explicit, auditable, and does not
+     guess.
+  Option 1 alone leaves a real capture path open. Option 2 is the smallest change
+  that stops it being silent, which is this plan's recurring standard. Owner:
+  senior supervisor agent, pending the user's decision.
+- [OPEN — a decision the supervisor took on an incorrect premise] **D13 moves
+  candidates across Core's `destructive` gate, which the accepting note denied.**
+  Found 2026-09-12 by p-core-version while versioning the change.
+  When the supervisor accepted D13, the recorded justification said the loosening
+  crossed only the `safe` and default rungs and that "`review`, `privileged` and
+  `destructive` still refuse it". That is true of the one seam candidate measured
+  at the time and **false generally**. Re-derived from Core's compiled
+  `element-fingerprint.js` against an old-weight copy: a candidate agreeing
+  exactly on every other recorded signal while missing a single identifier moves
+  `statePath` 0.883 → 0.917, `entityId` 0.873 → 0.910 and `id` 0.862 → 0.902,
+  against a `destructive` rung of 0.9. So a destructive action can now dispatch
+  against a candidate that previously would have been refused.
+  Two further facts the same measurement produced, neither previously recorded:
+  the **selected candidate can change**, not merely its score
+  (`bestElementFingerprintCandidate` returns a different element where 18.3 → 42.6
+  overtakes a flat 27.6); and `matchedSignals`/`failedSignals` are unchanged, so
+  the whole change is **invisible to a diagnostic** and only moves numbers.
+  Whether to accept this is a real decision rather than a correction. The case is
+  a strong match — everything the recording named agrees, and only an identifier
+  is absent rather than contradicted, which is exactly the distinction D13 exists
+  to draw. Against that, `destructive` is the rung guarding irreversible actions,
+  and it was loosened as a side effect of a change made for drift recovery, in a
+  case nobody measured until after it shipped.
+  Options: accept and document it as intended; raise the `destructive` rung to
+  restore the previous effective threshold; or require a second agreeing signal
+  before an identifier-missing candidate may clear `destructive`. The supervisor
+  has not taken this decision and is surfacing it to the user rather than
+  settling it quietly, because the earlier acceptance rested on a claim now known
+  to be wrong.
+  Recorded alongside: Core went to **0.3.0** rather than 0.2.2 for this change,
+  argued from Core's own policy — migration notes attach to the minor rung, so a
+  change needing a note has no home at patch, and under a caret range a patch
+  would move a `destructive` gate with no host code changing. Owner: senior
+  supervisor agent, pending the user.
+- [OPEN — three product defects found by the first realistic fixture] The
+  `admin-console` CRM fixture, built 2026-09-12 by r-admin at the user's
+  prompting that the existing scenarios "dont look like any real website", found
+  three defects on its first outing. Ranked by consequence, and none is fixed.
+  **1. Extraction over a virtualised list silently under-reads.** Fifteen rows
+  are mounted; the data holds 240. `extractRecords` resolves items with a
+  `document` query, so the step **succeeds**, returns records that are each
+  individually correct, and is wrong about the collection by a factor of sixteen
+  with no signal. The `short-book` variant is the control — twelve customers,
+  all mounted, all returned, expectations matched exactly — so this is the
+  mechanism, not a coincidence. Silently-incomplete data that looks correct is
+  the worst failure shape in this plan's vocabulary, and virtualised lists are
+  ordinary on real admin surfaces.
+  **2. An open shadow root is invisible to the resolver, and the point strategy
+  answers the host.** Recording works, because `eventTargetElement` uses
+  `composedPath()`. Every resolution strategy is a `document` query, and
+  `document.elementFromPoint` returns `<fx-toggle>` — a real, connected element
+  standing exactly where the recorded control was. So the outcome is either an
+  honest `target_not_found` or **a click on the host that reports success and
+  does nothing**, depending on whether `vetoExactMatch` refuses it. That is
+  unsettled and needs the extension to answer.
+  The compounding finding: **Playwright pierces open shadow roots**, so the
+  recording lane and the page-fact probe both see the real control. The harness
+  cannot see the defect it is measuring, which means no amount of harness work
+  would have surfaced this. The plan records shadow DOM as "recorded but not
+  replayable"; that claim is now measured, and the failure mode is worse than
+  "not replayable".
+  **3. The scroll verb cannot move a scroll container that is not the document.**
+  `page.mouse.wheel(0, N)` fires at (0,0) with no prior pointer move, so a list
+  scrolling in its own pane does not move. Moving the pointer over the pane first
+  makes the identical wheel work.
+  The fixture deliberately leaves two manifest expectations unmet and is **not**
+  in the week1 corpus; adding it would turn the corpus red, which is a decision
+  rather than an oversight. Owner: senior supervisor agent, for the wave after
+  the current one lands.
+- [OPEN — the headline safety finding; needs the user's decision] **On the
+  recordings production actually generates, the resolver clicks a plausibly
+  wrong control and reports success.** Measured 2026-09-12 by x-identifierless
+  on the real matcher, in real Chromium, reproduced twice.
+  The probe was validated before it was trusted: on an *authored* recording it
+  reproduces the published figures exactly — drift 0.389, near-miss 0.088 — so
+  the model is faithful and the new numbers are comparable.
+  On an **identifier-less** recording of the same two cases, which is what a
+  production build leaves behind when it strips test ids:
+  | Case | Authored recording | Identifier-less recording |
+  | --- | --- | --- |
+  | drift (`reworded-aria`), the case we want | 0.389 resolved | **0.690** resolved |
+  | near-miss ("Save changes and exit"), a different action | 0.088 refused | **0.633 resolved** |
+  The near-miss **resolves**, clearing the 0.35 floor by 0.283. The separation the
+  floor sits inside collapses from **0.301 to 0.057**. Two earlier analyses
+  predicted ≈0.57 and 0.359-0.398; the measurement is worse than both.
+  The mechanism is arithmetic and complete: with no id and no test id in the
+  recording, the near-miss has nothing left to *contradict*, so it loses the
+  −0.8 × 54 penalty and 54 of the denominator **together**. Absence of a signal
+  the recording never carried cannot count against a candidate, and the scale
+  shrinks to match.
+  **The danger needs a thin candidate pool, and that is the counter-intuitive
+  part.** On realistic markup the margin rule saves it: `storefront-checkout`'s
+  three near-identical "Continue to…" buttons drop to a 0.077-0.103 margin and
+  the outcome is `ambiguous` — a refusal. `admin-console`'s fifteen identical
+  "Row actions" buttons tie at 0.801 and are ambiguous under every policy. So a
+  crowded page is *safer* than a sparse one, because ambiguity protection
+  engages. The exposure is a page with few similar controls, one plausible
+  wrong answer, and a recording carrying no stable identifier.
+  **And the benchmark cannot see any of it.** Every manifest fact resolves by
+  `[data-testid=…]` (`scenario-assertions.ts:62`) and every bench recording step
+  targets `testid:…`. An identifier-less rendering therefore **cannot be
+  expressed as a bench variant at all** — it is reachable only from the content
+  harness and a probe. The corpus is structurally incapable of measuring the
+  configuration that ships. That is the same defect as the fixtures being
+  uniformly well-labelled, one level down in the tooling.
+  This is not a bug to be patched by a worker. The floor, the margin, the veto
+  and Core's weights are four settled decisions taken today, each with its own
+  measurements, and two of them have already been corrected once. Changing one
+  on this evidence without re-running the others is how a safety property gets
+  quietly undone. Owner: senior supervisor agent, surfaced to the user.
+- [OPEN — real-page viability, not correctness] **Snapshot and evidence capture
+  cost seconds on a realistic page, and that is the dominant latency in the
+  product.** Measured 2026-09-12 by x-scan-cap in real Chromium while
+  instrumenting something else.
+  On a 5,000-element page a failed action costs **3.5-5.3 seconds**, and **none
+  of it is target resolution**. `web.dom.extract` by an exact selector — no
+  enumeration at all — costs **3,503 ms**, and a bare `captureSnapshot` costs
+  **4,058 ms**, against 31-68 ms on the existing fixtures. The cost is in
+  `content/dom-snapshot.ts` and `content/evidence/`.
+  This is a hundredfold difference between the pages Week 1 measured on and a
+  page of ordinary size, and it was invisible for the same reason everything
+  else was: every fixture is small. Phase 1.4 added eleven evidence items to the
+  snapshot and each was measured on a page with a dozen elements.
+  Why it matters beyond speed: a snapshot is captured around every action, so
+  this is not a one-off cost on a slow page — it is four seconds repeatedly
+  through a Flow. At that rate a ten-step automation spends most of its life in
+  evidence capture, and a page that changes underneath a four-second capture
+  makes the evidence itself less trustworthy, which is the opposite of what the
+  evidence is for.
+  Nothing here is wrong; it is a design that has only ever run on toy pages.
+  Establish where the time goes before optimising — the eleven items each walk
+  the DOM, and one of them may dominate. Also worth asking whether every action
+  needs a full capture, or whether a failure path and an exploration path want
+  different budgets, which the byte budgets already distinguish.
+  Owner: senior supervisor agent, for the wave after the current one lands.
+- [OPEN — scale findings from the first genuinely large fixture] The
+  `member-directory` console (4,484 elements, depth 14, 510 focusable controls,
+  **0 authored class names**, one build-hash class on 244 elements at once, 240
+  identical row-action buttons) was built 2026-09-12 by r-dashboard. Three
+  findings, none of them a bug in the fixture.
+  **1. A realistic page crosses the snapshot candidate cap.** It produces
+  **2,480 candidates against the 2,000 cap** at `content/dom-snapshot.ts:46`. No
+  existing fixture comes near it, so truncation has never engaged in anger, and
+  the cap was chosen when the largest page in the repository had a few dozen
+  elements. Combined with the separately measured 4-second capture cost on a
+  5,000-element page, snapshot capture is the part of this system least prepared
+  for real pages.
+  **2. The harness's auto-scroll is masking a real click-interception bug.**
+  `position: sticky` inside an `overflow-x: auto` wrapper silently does nothing —
+  a common and easily-made CSS mistake — and Playwright centres an element before
+  clicking it, so the sticky header never intercepts a click during a test. A
+  real user's browser has no such courtesy. This is the second case today where
+  the harness is *more capable than the product* and therefore blind to a defect
+  (the first: Playwright pierces open shadow roots, which the resolver cannot).
+  That pattern deserves a name and a standing check: **anywhere Playwright is
+  more permissive than a real page, the harness cannot see the failure.**
+  **3. The tooling forces identifiers back onto pages whose point is that they
+  are scarce.** A page fact can only name a `data-testid`
+  (`scenario-assertions.ts:62`), and every bench recording step targets
+  `testid:…`. So the fixture built to prove behaviour without identifiers must
+  reintroduce them to be asserted on at all — the same wall x-identifierless hit
+  from the other side when it found an identifier-less rendering cannot be a
+  bench variant. The corpus and the fact vocabulary both assume the property the
+  realistic fixtures exist to remove.
+  Also recorded: the 240 row buttons are separable only by `context`, and within
+  it only by `tablePosition.row` — a positional index this page's own filtering
+  and sorting invalidate. So the one signal that distinguishes them is the one
+  least stable across a session. Owner: senior supervisor agent.
+- [OPEN — two facts that constrain any fix to the identifier-less exposure]
+  Measured 2026-09-12 by x-identifierless alongside the 0.633 near-miss result.
+  **1. No single constant separates the two regimes, so the floor cannot be
+  tuned to fix this.** With identifiers, the wanted case and the dangerous one
+  sit **0.301** apart (0.389 vs 0.088) and the 0.35 floor sits inside that gap.
+  Without them they sit **0.057** apart (0.690 vs 0.633) and the floor is below
+  both. Any floor that admits the drift recovery also admits the wrong action,
+  and any floor that refuses the wrong action also refuses legitimate work. This
+  is not a calibration problem and must not be answered by moving a number.
+  **2. Whether automation works depends on a build setting no recording can
+  see.** On `member-directory`'s search input, the same drift resolves at
+  **0.777** when the recorded `id` is *absent* from the candidate, and is refused
+  at **0.306** when the candidate carries a *generated* one — a gap of 0.471
+  decided entirely by whether the framework emits an id attribute. A recording
+  cannot know which build it will replay against, so the same Flow succeeds or
+  fails on a deployment detail invisible at authoring time. That is the
+  missing-versus-contradicted distinction D13 drew, seen from the outside, and it
+  is the strongest argument that the distinction is real — and also that acting
+  on it alone is not enough.
+  Also recorded: **`MAX_CANDIDATES = 60` now binds for the first time in this
+  corpus** — `member-directory` examines 147 and keeps 60, truncated. Every
+  capacity bound in the resolution path was chosen when the largest fixture had
+  a few dozen elements, and this is the first to be reached by a realistic page.
+  The probe behind all of these validated itself first, reproducing `score.ts`'s
+  published 0.389 and 0.088 to three decimals on an authored recording.
+  Owner: senior supervisor agent, surfaced to the user with the 0.633 finding.

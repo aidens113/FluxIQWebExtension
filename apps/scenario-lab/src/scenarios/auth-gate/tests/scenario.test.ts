@@ -48,6 +48,25 @@ test("manifest is valid and resolves W18 (primary) and W19 (expired)", () => {
 });
 
 /**
+ * The password is the one value a Flow built from this recording cannot
+ * recover: the recorder withholds a sensitive control's value at the source,
+ * so the recording of `enter-password` holds no password. The manifest
+ * declares that step instead, and the Flow lane resolves the value from
+ * `FLUXIQ_TEST_SECRET_AUTH_GATE_PASSWORD` (the id upper-cased, hyphens as
+ * underscores) rather than from anything the run recorded. What the variable
+ * must carry is the credential this fixture accepts, which the sign-in page
+ * states in plain sight.
+ */
+test("the manifest declares the password step as a replay secret rather than relying on the recording", () => {
+  const manifest = authGateScenario.manifest;
+  assert.deepEqual(manifest.secrets, [{ id: "auth-gate-password", step: "enter-password" }]);
+  const declared = manifest.recordingScript.filter(step => step.id === manifest.secrets?.[0]?.step);
+  assert.equal(declared.length, 1, "the declaration names exactly one recorded step");
+  assert.equal(declared[0]?.target, "testid:password", "and that step is the one typing into the password control");
+  assert.equal(declared[0]?.value, credentials.password, "whose recorded value is the credential the fixture accepts");
+});
+
+/**
  * Page facts are the one expectation a variant does not inherit, because they
  * describe a rendering rather than the run, and an armed run has two. W19 says
  * the same three things about its armed rendering as W18 does about its

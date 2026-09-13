@@ -1,4 +1,4 @@
-import { createServer } from "node:net";
+import { createServer, type Server } from "node:net";
 import { lstat, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
@@ -30,14 +30,8 @@ const WINDOWS_DEVICE_NAME = /^(?:con|prn|aux|nul|clock\$|com[1-9]|lpt[1-9])(?:\.
 const RESERVED_WORKSPACE_NAMES = new Set(["persistent-isolated", "sessions"]);
 
 export async function allocateLoopbackPort(): Promise<number> {
-  const server = createServer();
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => resolve());
-  });
-  const address = server.address();
-  if (!address || typeof address === "string") throw new Error("Failed to allocate a loopback port");
-  const port = address.port;
+  const server = await listenOnLoopback();
+  const port = portOf(server);
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   return port;
 }
@@ -162,8 +156,34 @@ async function ensureOwnedDirectory(directory: string): Promise<void> {
   }
 }
 
+/**
+ * Every probe socket is held open until all of them have a port, so the kernel
+ * itself guarantees the run's ports differ. Between the last close here and the
+ * moment a child binds, a concurrent Lab instance could in principle be handed
+ * the same ephemeral port; the OS hands them out on a rotating cursor, so that
+ * is rare, and it surfaces as a startup failure rather than silent overlap.
+ */
 async function allocateDistinctPorts(count: number): Promise<number[]> {
-  const ports = new Set<number>();
-  while (ports.size < count) ports.add(await allocateLoopbackPort());
-  return [...ports];
+  const servers: Server[] = [];
+  try {
+    for (let index = 0; index < count; index += 1) servers.push(await listenOnLoopback());
+    return servers.map(server => portOf(server));
+  } finally {
+    await Promise.all(servers.map(server => new Promise<void>(resolve => server.close(() => resolve()))));
+  }
+}
+
+async function listenOnLoopback(): Promise<Server> {
+  const server = createServer();
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => resolve());
+  });
+  return server;
+}
+
+function portOf(server: Server): number {
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Failed to allocate a loopback port");
+  return address.port;
 }

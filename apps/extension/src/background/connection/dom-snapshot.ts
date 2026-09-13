@@ -2,8 +2,9 @@
 // worker collects one per frame and merges them into a single tab snapshot.
 //
 // Merging is per item, not per snapshot. The elements of every frame become one
-// list, and so does every page-level evidence item that is additive: a dialog
-// in a child frame is a dialog on the page, a covered control is covered
+// list -- bounded like every collection beside it, which until 2026-09-12 it
+// was not -- and so does every page-level evidence item that is additive: a
+// dialog in a child frame is a dialog on the page, a covered control is covered
 // whichever document paints over it, and the element totals only mean anything
 // if they count the same frames the element list spans. The items that describe
 // one document -- the navigation that reached it, its `readyState` -- are the
@@ -73,6 +74,12 @@ const MAX_MERGED_LOADING_INDICATORS = 16;
 const MAX_MERGED_REGIONS = 40;
 const MAX_MERGED_REPEATING = 12;
 const MAX_MERGED_FORMS = 16;
+// The element list is the largest of them and was the one taking `...elements`
+// from every frame with no budget at all. Invisible on the two-frame Lab
+// fixture, whose frames hold six elements each; a page of ad, chat and payment
+// frames can contribute `MAX_SNAPSHOT_CANDIDATES` (2,000,
+// `content/dom-snapshot.ts`) each. Twice the per-frame cap, as above.
+const MAX_MERGED_ELEMENTS = 4_000;
 
 // A frame that never answers must not hold up an event: every per-frame call
 // falls back instead of waiting.
@@ -148,11 +155,17 @@ export async function captureMergedTabSnapshot(
   if (!frameSnapshots.length) return fallback;
   const topSnapshot = frameSnapshots.find((entry) => entry.frameId === 0 || entry.snapshot.frame?.isTop)?.snapshot ?? topFallback;
   if (!topSnapshot) return undefined;
-  const mergedElements: NonNullable<RecordingEventPayload["element"]>[] = [];
+  const collectedElements: NonNullable<RecordingEventPayload["element"]>[] = [];
   // The top frame's evidence leads the merged collections: within one document
   // the content script reports dialogs and blockers top-most first, and no
   // stacking order exists across documents, so the page's own comes first and
   // the frames follow in the order they answered.
+  //
+  // The *elements* keep the order the frames answered in, seed frame first,
+  // which `tests/recording-evidence.test.ts` pins deliberately: the frame the
+  // interaction happened in leads. That order decides more than it did, because
+  // the list below is capped and a cap drops a tail -- see the open question in
+  // `reports/x-scan-cap.md`.
   let topEvidence: PageEvidence | undefined;
   const frameEvidence: PageEvidence[] = [];
   for (const entry of frameSnapshots) {
@@ -160,19 +173,21 @@ export async function captureMergedTabSnapshot(
     const elements = isTopEntry
       ? entry.snapshot.interactiveElements
       : translateFrameElements(entry.snapshot, topSnapshot, entry.frameId);
-    mergedElements.push(...elements);
+    collectedElements.push(...elements);
     const evidence = pageEvidenceOf(entry.snapshot);
     if (!evidence) continue;
     if (isTopEntry) topEvidence ??= evidence;
     else frameEvidence.push(frameEvidenceInTopFrameTerms(evidence, entry.snapshot, topSnapshot, entry.frameId));
   }
+  const mergedElements = collectedElements.slice(0, MAX_MERGED_ELEMENTS);
   const merged: DomSnapshotPayloadWithEvidence = {
     ...topSnapshot,
     interactiveElements: mergedElements
   };
   const evidence = mergePageEvidence(
     topEvidence ? [topEvidence, ...frameEvidence] : frameEvidence,
-    topEvidence ?? pageEvidenceOf(topSnapshot)
+    topEvidence ?? pageEvidenceOf(topSnapshot),
+    collectedElements.length - mergedElements.length
   );
   if (evidence) merged.evidence = evidence;
   return merged;
@@ -295,6 +310,12 @@ function frameBoundsOnTopDocument(
  * - **Element totals** are summed, and `truncated` is true when any frame
  *   truncated. Merging the element lists without merging their counts is what
  *   made `elements.returned` read low against a merged snapshot.
+ *   `droppedElements` is what `MAX_MERGED_ELEMENTS` cut, subtracted from
+ *   `returned` and folded into `truncated` -- the same flag the per-frame
+ *   element cap sets, because it is the same fact, and the one the truncation
+ *   rule in `domain/src/recording/web-state/evidence/input.ts` assigns to a
+ *   capture's element cap. `matched` stays the pre-cap total, so the size of
+ *   the drop is still readable as `matched - returned`.
  * - **Dialogs, overlays, regions, repeating structures and forms** are
  *   concatenated: each is a statement about a document, and every document on
  *   the page contributes. `modal` and the arming flag are true when any frame
@@ -310,7 +331,7 @@ function frameBoundsOnTopDocument(
  *   history length are not the page's, and reporting an ad iframe's origin as
  *   the page's origin would be worse than reporting nothing.
  */
-function mergePageEvidence(contributions: readonly PageEvidence[], base: PageEvidence | undefined): PageEvidence | undefined {
+function mergePageEvidence(contributions: readonly PageEvidence[], base: PageEvidence | undefined, droppedElements = 0): PageEvidence | undefined {
   if (!contributions.length) return base;
   const anchor = base ?? contributions[0];
   if (!anchor) return undefined;
@@ -327,8 +348,8 @@ function mergePageEvidence(contributions: readonly PageEvidence[], base: PageEvi
       scanned: sumOf(contributions, (evidence) => evidence.elements.scanned),
       candidates: sumOf(contributions, (evidence) => evidence.elements.candidates),
       matched: sumOf(contributions, (evidence) => evidence.elements.matched),
-      returned: sumOf(contributions, (evidence) => evidence.elements.returned),
-      truncated: contributions.some((evidence) => evidence.elements.truncated),
+      returned: Math.max(0, sumOf(contributions, (evidence) => evidence.elements.returned) - droppedElements),
+      truncated: droppedElements > 0 || contributions.some((evidence) => evidence.elements.truncated),
       changed: sumOf(contributions, (evidence) => evidence.elements.changed),
       recentlyInteracted: sumOf(contributions, (evidence) => evidence.elements.recentlyInteracted)
     }),

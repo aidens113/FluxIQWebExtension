@@ -6,6 +6,7 @@ export * from "./describe-error.js";
 export * from "./distribution.js";
 export * from "./evaluate-run.js";
 export * from "./execution-coverage.js";
+export * from "./failure-cause.js";
 export * from "./expand-corpus.js";
 export * from "./load-report.js";
 export * from "./read-run-bundle.js";

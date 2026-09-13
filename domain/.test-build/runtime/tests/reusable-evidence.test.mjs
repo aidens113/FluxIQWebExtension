@@ -247,7 +247,18 @@ var webAutomationActionDefinitions = [
     actionType: "web.dom.type",
     label: "Type Text",
     description: "Enter text into an editable DOM element.",
-    parameterSchema: { type: "object", required: ["selector"], properties: { ...elementProperties, text: { type: "string" }, value: { type: "string" } } }
+    // `text` is required. It was not, and that is why a recorded password step
+    // replayed as a field typed empty: `payloads.ts` filled `text` with `""`
+    // when the recorder had withheld the value, `hasExecutableParameters`
+    // (`io/input-model.ts`) checks only the parameters this list names, so the
+    // node validated, survived, ran, and reported success having typed
+    // nothing. An entry the user emptied is `web.dom.clear`, never this, so a
+    // type action with no text is always a value that went missing.
+    //
+    // A withheld value is supplied at run time instead of carried: `text` may
+    // therefore also be the secret request `output-nodes/secret-binding.ts`
+    // builds, which names the run input the value arrives in and never a value.
+    parameterSchema: { type: "object", required: ["selector", "text"], properties: { ...elementProperties, text: { type: "string", label: "Text, or the secret request it is supplied through" }, value: { type: "string" } } }
   },
   { actionType: "web.dom.clear", label: "Clear Field", description: "Clear an editable DOM element.", parameterSchema: selectorSchema },
   {
@@ -597,13 +608,27 @@ var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   STATE_MISMATCH: "web.validation.state_mismatch",
   /** The browser landed somewhere other than the requested URL, or never left where it was. */
   NAVIGATION_UNEXPECTED: "web.navigation.unexpected",
-  /** The document was replaced between resolving the target and running the action. */
+  /**
+   * The document was replaced, or routed away, while the action was running.
+   * Produced by `apps/extension/src/content/actions/page-identity.ts`, which
+   * remembers the page an action started on and supersedes the verb's own code
+   * when it finished somewhere else.
+   */
   PAGE_CHANGED: "web.page.changed",
   /** A wait, or an action, ran out of time. */
   TIMEOUT: "web.action.timeout",
   /** The host wants a sign-in before the action can continue. */
   AUTH_REQUIRED: "web.auth.required",
-  /** A person must act first: a captcha, or a native dialog waiting for an answer. */
+  /**
+   * A person must act before the run can continue -- Core's category, stated no
+   * more narrowly here than Core states it. Two producers, and they are not the
+   * same shape of "act": `content/action-runtime/results.ts` reports it when a
+   * modal dialog is standing over the page and the target is behind it, and
+   * `runtime/adapter.ts` when no single paired client could be selected, which
+   * only the operator can fix. The narrower gloss this carried before -- "a
+   * captcha, or a native dialog waiting for an answer" -- described neither,
+   * and reading it as the definition made both look wrong.
+   */
   USER_INTERVENTION_REQUIRED: "web.intervention.required",
   /** The client does not implement the requested action type at all. */
   UNSUPPORTED_TYPE: "web.action.unsupported_type",

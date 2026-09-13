@@ -144,3 +144,14 @@ test("the original eleven gained the parameters D6 added to them", () => {
     );
   }
 });
+
+test("web.dom.type requires the text, so an action with nothing to type is not a valid one", () => {
+  // `hasExecutableParameters` (`io/input-model.ts`) checks exactly the
+  // parameters named here. While `text` was absent from the list, a recorded
+  // password step -- whose value the recorder withholds at the source --
+  // became a node carrying `text: ""`, which replayed as a password field
+  // typed empty and an action reporting success. An entry the user emptied is
+  // `web.dom.clear`, so a type action with no text is always a lost value.
+  assert.deepEqual(requiredOf("web.dom.type"), ["selector", "text"]);
+  assert.equal((propertiesOf("web.dom.type").text as JsonObject).type, "string");
+});

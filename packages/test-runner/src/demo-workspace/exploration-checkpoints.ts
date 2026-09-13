@@ -6,7 +6,7 @@ import { type ExistingFlowSummary, ExistingFluxIQControlClient } from "../existi
 import { RunnerFailure } from "../failure.js";
 import { loadScenarioManifest } from "../scenarios.js";
 import { assertGenuinelyBlankFlow, assertRecordingSetUnchanged, BLANK_LLM_SCENARIO_PATH, isGenuinelyBlankFlowMismatch, loadBlankLlmPreparationState, prepareBlankLlmFlowViaUi } from "../demo-llm-blank-workspace.js";
-import { approveApplyExistingEvidenceGuidedCreationViaUi, configureEvidenceGuidedCreationViaUi, type EvidenceGuidedCreationCheckpoint, inspectAppliedCreation, proposeEvidenceGuidedCreationViaUi } from "../demo-llm-create-ui.js";
+import { approveApplyExistingEvidenceGuidedCreationViaUi, configureEvidenceGuidedCreationViaUi, type EvidenceGuidedCreationCheckpoint, inspectAppliedCreation, proposeEvidenceGuidedCreationViaUi } from "../demo-llm-create-ui/index.js";
 import { findPendingEvidenceGuidedCreationForFlow, locateExactPendingEvidenceGuidedCreation, locateLatestAppliedEvidenceGuidedCreation } from "../demo-llm-exploration-apply.js";
 import { locateExactAppliedEvidenceGuidedCreation, requireExplorationBaselineDriftExplanation } from "../demo-llm-exploration-adaptation-readiness.js";
 import { createDemoLlmExplorationRequestBinding, DEFAULT_DEMO_LLM_EXPLORATION_SCENARIO_ID, type DemoLlmExplorationRequest, resolveDemoLlmExplorationRequest, saveDemoLlmExplorationRequestBinding } from "../demo-llm-exploration-request.js";

@@ -285,7 +285,18 @@ var webAutomationActionDefinitions = [
     actionType: "web.dom.type",
     label: "Type Text",
     description: "Enter text into an editable DOM element.",
-    parameterSchema: { type: "object", required: ["selector"], properties: { ...elementProperties, text: { type: "string" }, value: { type: "string" } } }
+    // `text` is required. It was not, and that is why a recorded password step
+    // replayed as a field typed empty: `payloads.ts` filled `text` with `""`
+    // when the recorder had withheld the value, `hasExecutableParameters`
+    // (`io/input-model.ts`) checks only the parameters this list names, so the
+    // node validated, survived, ran, and reported success having typed
+    // nothing. An entry the user emptied is `web.dom.clear`, never this, so a
+    // type action with no text is always a value that went missing.
+    //
+    // A withheld value is supplied at run time instead of carried: `text` may
+    // therefore also be the secret request `output-nodes/secret-binding.ts`
+    // builds, which names the run input the value arrives in and never a value.
+    parameterSchema: { type: "object", required: ["selector", "text"], properties: { ...elementProperties, text: { type: "string", label: "Text, or the secret request it is supplied through" }, value: { type: "string" } } }
   },
   { actionType: "web.dom.clear", label: "Clear Field", description: "Clear an editable DOM element.", parameterSchema: selectorSchema },
   {
@@ -510,127 +521,6 @@ function iconForOutput(outputId) {
   return "square-dot";
 }
 
-// src/output-nodes/targets.ts
-function outputTargetFromPayload(payload) {
-  const adaptedTarget2 = objectValue(payload.target);
-  const adaptedFingerprint = objectValue(adaptedTarget2?.fingerprint);
-  const selectedCandidate = selectedTargetCandidate(adaptedTarget2);
-  const explicitVisualTarget = objectValue(adaptedTarget2?.visualTarget) ?? objectValue(payload.visualTarget);
-  const element = firstElementFingerprint(elementFingerprintSources(payload, adaptedTarget2, adaptedFingerprint, selectedCandidate));
-  const selector = stringValue(selectedCandidate?.selector) ?? stringValue(adaptedFingerprint?.selector) ?? stringValue(adaptedTarget2?.selector) ?? stringValue(payload.selector) ?? stringValue(element?.selector) ?? stringValue(explicitVisualTarget?.selector);
-  if (!selector && !explicitVisualTarget) return void 0;
-  return compact({
-    selector,
-    ...element ? { element } : {},
-    ...explicitVisualTarget ? { visualTarget: explicitVisualTarget } : {}
-  });
-}
-function elementFingerprintSources(payload, adaptedTarget2, adaptedFingerprint, selectedCandidate) {
-  const adapted = [adaptedTarget2?.element, selectedCandidate, adaptedFingerprint];
-  return adaptedTarget2?.selectedCandidate !== void 0 ? [...adapted, payload.element] : [payload.element, ...adapted];
-}
-function firstElementFingerprint(sources) {
-  for (const source of sources) {
-    const fingerprint = elementFingerprint(source);
-    if (fingerprint && Object.keys(fingerprint).length > 0) return fingerprint;
-  }
-  return void 0;
-}
-function selectedTargetCandidate(target) {
-  const selectedCandidateId = stringValue(objectValue(target?.selectedCandidate)?.candidateId);
-  if (!selectedCandidateId || !Array.isArray(target?.candidates)) return void 0;
-  return target.candidates.map(objectValue).find((candidate) => stringValue(candidate?.candidateId) === selectedCandidateId);
-}
-function elementFingerprint(value) {
-  const element = objectValue(value);
-  if (!element) return void 0;
-  const attributes = objectValue(element.attributes);
-  return compact({
-    selector: stringValue(element.selector),
-    xpath: stringValue(element.xpath),
-    id: stringValue(element.id),
-    classNames: Array.isArray(element.classNames) ? element.classNames.filter((item) => typeof item === "string") : void 0,
-    visibleText: stringValue(element.visibleText),
-    tagName: stringValue(element.tagName),
-    text: stringValue(element.text),
-    value: stringValue(element.value),
-    role: stringValue(element.role),
-    implicitRole: stringValue(element.implicitRole),
-    name: stringValue(element.name),
-    href: stringValue(element.href),
-    inputType: stringValue(element.inputType),
-    testId: elementTestId(element, attributes),
-    accessibleName: stringValue(element.accessibleName) ?? stringValue(attributes?.["aria-label"]),
-    label: stringValue(element.label),
-    attributes
-  });
-}
-function elementTestId(element, attributes) {
-  return stringValue(element.testId) ?? stringValue(attributes?.["data-testid"]) ?? stringValue(attributes?.["data-test"]) ?? stringValue(attributes?.["data-cy"]);
-}
-function compact(value) {
-  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== void 0));
-}
-function objectValue(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
-}
-function stringValue(value) {
-  return typeof value === "string" ? value : void 0;
-}
-function numberValue(value) {
-  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
-}
-
-// src/output-nodes/payloads.ts
-function webAutomationOutputPayload(outputId, payload) {
-  return withRecordedFrame(outputId, payload, recordedOutputParameters(outputId, payload));
-}
-function withRecordedFrame(outputId, payload, parameters) {
-  const browserFrameId = frameIdValue(payload.browserFrameId);
-  if (browserFrameId === void 0 || !outputId.startsWith("web.dom.")) return parameters;
-  return Object.keys(parameters).length === 0 ? parameters : { ...parameters, browserFrameId };
-}
-function frameIdValue(value) {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
-}
-function recordedOutputParameters(outputId, payload) {
-  const element = elementFingerprint(payload.element);
-  const selector = stringValue(element?.selector);
-  const visualTarget = objectValue(payload.visualTarget);
-  const target = compact({ ...element ? { element } : {}, ...visualTarget ? { visualTarget } : {} });
-  const hasTarget = Object.keys(target).length > 0;
-  if (outputId === "web.browser.navigate") return compact({ url: stringValue(payload.url) });
-  if (outputId === "web.dom.click" || outputId === "web.dom.clear") return compact({ selector, ...hasTarget ? target : {} });
-  if (outputId === "web.dom.type") return compact({ selector, text: stringValue(payload.inputValue) ?? "", ...hasTarget ? target : {} });
-  if (outputId === "web.dom.select") return compact({ selector, value: stringValue(payload.inputValue) ?? "", ...hasTarget ? target : {} });
-  if (outputId === "web.dom.keypress") return compact({ selector, key: stringValue(payload.key) ?? "", ...hasTarget ? target : {} });
-  if (outputId === "web.dom.scroll") {
-    const scroll = objectValue(payload.scroll);
-    return compact({ x: numberValue(scroll?.x), y: numberValue(scroll?.y) });
-  }
-  if (outputId === "web.dom.check") {
-    const checked = recordedCheckedState(payload);
-    return compact({ selector, checked, ...hasTarget ? target : {} });
-  }
-  if (outputId === "web.dom.wait_for_selector") return compact({ selector, ...hasTarget ? target : {} });
-  if (outputId === "web.dom.wait_for_text") return compact({ text: stringValue(payload.inputValue) ?? stringValue(payload.title) });
-  if (outputId === "web.dom.extract") return compact({ selector, ...hasTarget ? target : {} });
-  if (outputId === "web.dom.capture_snapshot") return {};
-  return {};
-}
-function recordedCheckedState(payload) {
-  const element = objectValue(payload.element);
-  if (!element) return void 0;
-  if (typeof element.checked === "boolean") return element.checked;
-  const ariaChecked = stringValue(objectValue(element.attributes)?.["aria-checked"]);
-  if (ariaChecked === "true") return true;
-  if (ariaChecked === "false") return false;
-  return isRadioElement(element) ? true : void 0;
-}
-function isRadioElement(element) {
-  return stringValue(element.inputType)?.toLowerCase() === "radio" || stringValue(element.role)?.toLowerCase() === "radio";
-}
-
 // src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
 var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
@@ -668,6 +558,210 @@ var WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT = "(withheld: the action ran on a co
 function isProducerRedactedComparison(validation) {
   if (!validation || typeof validation !== "object" || Array.isArray(validation)) return false;
   return validation.redacted === true;
+}
+
+// src/output-nodes/targets.ts
+function outputTargetFromPayload(payload) {
+  const adaptedTarget2 = objectValue(payload.target);
+  const adaptedFingerprint = objectValue(adaptedTarget2?.fingerprint);
+  const selectedCandidate = selectedTargetCandidate(adaptedTarget2);
+  const explicitVisualTarget = objectValue(adaptedTarget2?.visualTarget) ?? objectValue(payload.visualTarget);
+  const element = firstElementFingerprint(elementFingerprintSources(payload, adaptedTarget2, adaptedFingerprint, selectedCandidate));
+  const selector = stringValue(selectedCandidate?.selector) ?? stringValue(adaptedFingerprint?.selector) ?? stringValue(adaptedTarget2?.selector) ?? stringValue(payload.selector) ?? stringValue(element?.selector) ?? stringValue(explicitVisualTarget?.selector);
+  if (!selector && !explicitVisualTarget) return void 0;
+  return compact({
+    selector,
+    ...element ? { element } : {},
+    ...explicitVisualTarget ? { visualTarget: explicitVisualTarget } : {}
+  });
+}
+function elementFingerprintSources(payload, adaptedTarget2, adaptedFingerprint, selectedCandidate) {
+  const adapted = [adaptedTarget2?.element, selectedCandidate, adaptedFingerprint];
+  return adaptedTarget2?.selectedCandidate !== void 0 ? [...adapted, payload.element] : [payload.element, ...adapted];
+}
+function firstElementFingerprint(sources) {
+  for (const source of sources) {
+    const fingerprint = elementFingerprint(source);
+    if (fingerprint && Object.keys(fingerprint).length > 0) return fingerprint;
+  }
+  return void 0;
+}
+function selectedTargetCandidate(target) {
+  const selectedCandidateId = stringValue(objectValue(target?.selectedCandidate)?.candidateId);
+  if (!selectedCandidateId || !Array.isArray(target?.candidates)) return void 0;
+  return target.candidates.map(objectValue).find((candidate) => stringValue(candidate?.candidateId) === selectedCandidateId);
+}
+function elementFingerprint(value) {
+  const element = objectValue(value);
+  if (!element) return void 0;
+  const attributes = elementAttributes(element.attributes);
+  return compact({
+    selector: stringValue(element.selector),
+    xpath: stringValue(element.xpath),
+    id: stringValue(element.id),
+    classNames: Array.isArray(element.classNames) ? element.classNames.filter((item) => typeof item === "string") : void 0,
+    visibleText: stringValue(element.visibleText),
+    tagName: stringValue(element.tagName),
+    text: stringValue(element.text),
+    value: stringValue(element.value),
+    role: stringValue(element.role),
+    implicitRole: stringValue(element.implicitRole),
+    name: stringValue(element.name),
+    href: stringValue(element.href),
+    inputType: stringValue(element.inputType),
+    testId: elementTestId(element, attributes),
+    accessibleName: stringValue(element.accessibleName) ?? stringValue(attributes?.["aria-label"]),
+    label: stringValue(element.label),
+    attributes,
+    context: elementContext(element.context),
+    // Core's remaining fingerprint signals, named so their absence is a
+    // decision and so a signal Core adds stops this producer compiling. A
+    // browser recording has no source for any of them: the first four are a
+    // host application's own identifiers and a Core state path, `url` names
+    // the page rather than the control, `bounds` are the capture's viewport
+    // and not this instant's (which is why `content/identity/score.ts` refuses
+    // to compare them), and `metadata` is Core's own passthrough slot, which
+    // this normalizer must not start writing into behind the declared fields.
+    automationId: void 0,
+    entityId: void 0,
+    entityKind: void 0,
+    statePath: void 0,
+    queryPath: void 0,
+    url: void 0,
+    bounds: void 0,
+    metadata: void 0
+  });
+}
+function elementContext(value) {
+  const context = objectValue(value);
+  if (!context) return void 0;
+  const fields = compact({
+    formId: stringValue(context.formId),
+    formName: stringValue(context.formName),
+    formAction: stringValue(context.formAction),
+    fieldsetLegend: stringValue(context.fieldsetLegend),
+    landmark: stringValue(context.landmark),
+    heading: stringValue(context.heading),
+    listPosition: listPosition(context.listPosition),
+    tablePosition: tablePosition(context.tablePosition)
+  });
+  return Object.keys(fields).length > 0 ? fields : void 0;
+}
+function listPosition(value) {
+  const position = objectValue(value);
+  const index = numberValue(position?.index);
+  const total = numberValue(position?.total);
+  return index === void 0 || total === void 0 ? void 0 : { index, total };
+}
+function tablePosition(value) {
+  const position = objectValue(value);
+  const row = numberValue(position?.row);
+  const column = numberValue(position?.column);
+  if (row === void 0 || column === void 0) return void 0;
+  const columnHeader = stringValue(position?.columnHeader);
+  return columnHeader === void 0 ? { row, column } : { row, column, columnHeader };
+}
+function elementAttributes(value) {
+  const attributes = objectValue(value);
+  if (!attributes) return void 0;
+  const strings = {};
+  for (const [name, item] of Object.entries(attributes)) {
+    if (typeof item === "string") strings[name] = item;
+  }
+  return strings;
+}
+function elementTestId(element, attributes) {
+  return stringValue(element.testId) ?? stringValue(attributes?.["data-testid"]) ?? stringValue(attributes?.["data-test"]) ?? stringValue(attributes?.["data-cy"]);
+}
+function compact(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== void 0));
+}
+function objectValue(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+function stringValue(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function numberValue(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+
+// src/output-nodes/secret-binding.ts
+var WEB_AUTOMATION_SECRET_STATE_PREFIX = "web.secret.";
+function webAutomationSecretStatePath(key) {
+  return `${WEB_AUTOMATION_SECRET_STATE_PREFIX}${key}`;
+}
+function webAutomationSecretBinding(key) {
+  return { $state: { path: webAutomationSecretStatePath(key) } };
+}
+function webAutomationSecretKeyForRecordedElement(payload) {
+  const element = objectValue(payload.element);
+  const attributes = objectValue(element?.attributes);
+  const statePath = stringValue(objectValue(payload.visualTarget)?.statePath);
+  const fromStatePath = statePath?.startsWith("web.elements.") ? statePath.slice("web.elements.".length) : void 0;
+  const identity = fromStatePath ?? stringValue(element?.testId) ?? stringValue(attributes?.["data-testid"]) ?? stringValue(attributes?.["data-test"]) ?? stringValue(attributes?.["data-cy"]) ?? stringValue(element?.id) ?? stringValue(attributes?.id) ?? stringValue(element?.name) ?? stringValue(attributes?.name) ?? stringValue(element?.selector) ?? stringValue(payload.selector);
+  const key = sanitizeSecretKey(identity ?? "");
+  return key.length ? key : void 0;
+}
+function sanitizeSecretKey(value) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 120);
+}
+
+// src/output-nodes/payloads.ts
+function webAutomationOutputPayload(outputId, payload) {
+  return withRecordedFrame(outputId, payload, recordedOutputParameters(outputId, payload));
+}
+function withRecordedFrame(outputId, payload, parameters) {
+  const browserFrameId = frameIdValue(payload.browserFrameId);
+  if (browserFrameId === void 0 || !outputId.startsWith("web.dom.")) return parameters;
+  return Object.keys(parameters).length === 0 ? parameters : { ...parameters, browserFrameId };
+}
+function frameIdValue(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
+}
+function recordedOutputParameters(outputId, payload) {
+  const element = elementFingerprint(payload.element);
+  const selector = stringValue(element?.selector);
+  const visualTarget = objectValue(payload.visualTarget);
+  const target = compact({ ...element ? { element } : {}, ...visualTarget ? { visualTarget } : {} });
+  const hasTarget = Object.keys(target).length > 0;
+  if (outputId === "web.browser.navigate") return compact({ url: stringValue(payload.url) });
+  if (outputId === "web.dom.click" || outputId === "web.dom.clear") return compact({ selector, ...hasTarget ? target : {} });
+  if (outputId === "web.dom.type") return compact({ selector, text: recordedTypedText(payload), ...hasTarget ? target : {} });
+  if (outputId === "web.dom.select") return compact({ selector, value: stringValue(payload.inputValue) ?? "", ...hasTarget ? target : {} });
+  if (outputId === "web.dom.keypress") return compact({ selector, key: stringValue(payload.key) ?? "", ...hasTarget ? target : {} });
+  if (outputId === "web.dom.scroll") {
+    const scroll = objectValue(payload.scroll);
+    return compact({ x: numberValue(scroll?.x), y: numberValue(scroll?.y) });
+  }
+  if (outputId === "web.dom.check") {
+    const checked = recordedCheckedState(payload);
+    return compact({ selector, checked, ...hasTarget ? target : {} });
+  }
+  if (outputId === "web.dom.wait_for_selector") return compact({ selector, ...hasTarget ? target : {} });
+  if (outputId === "web.dom.wait_for_text") return compact({ text: stringValue(payload.inputValue) ?? stringValue(payload.title) });
+  if (outputId === "web.dom.extract") return compact({ selector, ...hasTarget ? target : {} });
+  if (outputId === "web.dom.capture_snapshot") return {};
+  return {};
+}
+function recordedTypedText(payload) {
+  const recorded = stringValue(payload.inputValue);
+  if (recorded !== void 0) return recorded;
+  if (!isSensitiveElementDescriptor(payload.element)) return "";
+  const key = webAutomationSecretKeyForRecordedElement(payload);
+  return key === void 0 ? "" : webAutomationSecretBinding(key);
+}
+function recordedCheckedState(payload) {
+  const element = objectValue(payload.element);
+  if (!element) return void 0;
+  if (typeof element.checked === "boolean") return element.checked;
+  const ariaChecked = stringValue(objectValue(element.attributes)?.["aria-checked"]);
+  if (ariaChecked === "true") return true;
+  if (ariaChecked === "false") return false;
+  return isRadioElement(element) ? true : void 0;
+}
+function isRadioElement(element) {
+  return stringValue(element.inputType)?.toLowerCase() === "radio" || stringValue(element.role)?.toLowerCase() === "radio";
 }
 
 // src/io/input-model.ts
@@ -777,25 +871,41 @@ function safeLayerId(value, fallbackIndex) {
 
 // src/recording/web-state/action-target.ts
 function webAutomationActionTargetFromElement(element) {
+  const secret = isSensitiveElementDescriptor(element);
+  const visibleText = secret ? void 0 : element.visibleText;
+  const text2 = secret ? void 0 : element.text;
+  const value = secret ? void 0 : element.value;
   return compactJsonObject({
     type: element.role ?? element.inputType ?? element.tagName,
     id: stableAttribute(element, "data-testid") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name"),
-    label: element.name ?? element.visibleText ?? element.text ?? element.value,
+    label: element.name ?? visibleText ?? text2 ?? value,
     selector: element.selector,
     bounds: element.bounds,
+    // Neither is this producer's to fill: a relative position belongs to a
+    // click that carried one, and both `visualTarget` and `elementTarget` are
+    // written by the callers that have them
+    // (`client/gateway-mapping.ts`, and Core's own dispatch preparation).
+    relativePosition: void 0,
+    visualTarget: void 0,
+    elementTarget: void 0,
     metadata: compactJsonObject({
       tagName: element.tagName,
       xpath: element.xpath,
       id: element.id,
       classNames: element.classNames,
-      visibleText: element.visibleText,
+      visibleText,
       role: element.role,
       href: element.href,
       inputType: element.inputType,
       documentBounds: stateBounds(element.documentBounds),
       isVisibleOnViewport: element.isVisibleOnViewport ?? Boolean(stateBounds(element.bounds)),
       hasClickHandler: element.hasClickHandler,
-      attributes: element.attributes
+      attributes: element.attributes,
+      testId: element.testId,
+      accessibleName: secret ? void 0 : element.accessibleName,
+      label: element.label,
+      implicitRole: element.implicitRole,
+      context: element.context
     })
   });
 }
@@ -852,13 +962,27 @@ var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   STATE_MISMATCH: "web.validation.state_mismatch",
   /** The browser landed somewhere other than the requested URL, or never left where it was. */
   NAVIGATION_UNEXPECTED: "web.navigation.unexpected",
-  /** The document was replaced between resolving the target and running the action. */
+  /**
+   * The document was replaced, or routed away, while the action was running.
+   * Produced by `apps/extension/src/content/actions/page-identity.ts`, which
+   * remembers the page an action started on and supersedes the verb's own code
+   * when it finished somewhere else.
+   */
   PAGE_CHANGED: "web.page.changed",
   /** A wait, or an action, ran out of time. */
   TIMEOUT: "web.action.timeout",
   /** The host wants a sign-in before the action can continue. */
   AUTH_REQUIRED: "web.auth.required",
-  /** A person must act first: a captcha, or a native dialog waiting for an answer. */
+  /**
+   * A person must act before the run can continue -- Core's category, stated no
+   * more narrowly here than Core states it. Two producers, and they are not the
+   * same shape of "act": `content/action-runtime/results.ts` reports it when a
+   * modal dialog is standing over the page and the target is behind it, and
+   * `runtime/adapter.ts` when no single paired client could be selected, which
+   * only the operator can fix. The narrower gloss this carried before -- "a
+   * captcha, or a native dialog waiting for an answer" -- described neither,
+   * and reading it as the definition made both look wrong.
+   */
   USER_INTERVENTION_REQUIRED: "web.intervention.required",
   /** The client does not implement the requested action type at all. */
   UNSUPPORTED_TYPE: "web.action.unsupported_type",
@@ -1180,6 +1304,7 @@ function webAutomationActionResultPayload(result) {
     visualTarget: result.visualTarget,
     snapshot: result.snapshot,
     extracted: result.extracted,
+    resolution: result.resolution,
     startedAt: result.startedAt,
     finishedAt: result.finishedAt
   });
@@ -1504,12 +1629,23 @@ assert.equal(
   true,
   "with no element descriptor the wire payload is only as safe as the producer -- the limit is real, not a claim"
 );
-assert.equal(
-  "resolution" in webAutomationActionResultPayload({
-    ...failedValidationResult,
-    resolution: { strategy: "scored-candidate", candidateCount: 3, bestScore: 0.51, runnerUpScore: 0.28, confidence: 0.51 }
-  }),
-  false,
-  "resolution is still dropped by the result mapping"
+var measured = { strategy: "scored-candidate", candidateCount: 3, bestScore: 0.51, runnerUpScore: 0.28, confidence: 0.51 };
+var carried = webAutomationActionResultPayload({ ...failedValidationResult, resolution: measured });
+assert.deepEqual(carried.resolution, measured, "the result mapping carries the resolution measurement");
+var resolutionStrings = Object.entries(measured).filter(([, value]) => typeof value === "string").map(([key]) => key);
+assert.deepEqual(
+  resolutionStrings,
+  ["strategy"],
+  "resolution stays free of page text -- a new string field here needs a redaction guard before it is carried"
 );
+assert.deepEqual(
+  webAutomationActionResultPayload({
+    ...failedValidationResult,
+    status: "succeeded",
+    validation: { status: "passed", expected: "the click lands on the target", actual: "it did" },
+    resolution: { strategy: "selector", candidateCount: 1 }
+  }).resolution,
+  { strategy: "selector", candidateCount: 1 }
+);
+assert.equal("resolution" in webAutomationActionResultPayload(failedValidationResult), false);
 console.log("Web automation gateway mapping tests passed.");

@@ -7,8 +7,19 @@
 // Every lookup is bounded. The context is computed for every described
 // element, and a snapshot describes up to two thousand of them, so no rule
 // here may walk the whole document.
+//
+// The value is written through `present<DomElementContext>` rather than
+// assembled by spreads, and that matters more here than anywhere else this
+// helper is used: every key of `DomElementContext` is optional, so the contract
+// type alone holds none of these names in place. Drop a clause and the field
+// leaves the wire; the reader still compiles, because absence is what optional
+// means. `present` requires the literal to mention all eight keys and drops the
+// `undefined` ones afterwards, so a deleted field is a compile error here and a
+// renamed one is an excess property. `shared/present.ts` states the general
+// case; this type is the one it could not be applied to until the helper's
+// guard was fixed.
 
-import { compactObject } from "../compact-object";
+import { present } from "../../shared/present";
 import type { DomElementContext } from "../types";
 import { boundedText } from "./bounded-text";
 
@@ -34,8 +45,15 @@ const LANDMARK_TAG_ROLES: Record<string, string> = {
 
 /** The element's surroundings, or `undefined` when it has none worth reporting. */
 export function elementContext(element: Element): DomElementContext | undefined {
-  const context = compactObject({
-    ...formContext(element),
+  const form = owningForm(element);
+  // Every key of the contract, written out. The three form fields are read
+  // here rather than returned as a group and spread in: a spread source is its
+  // own literal, contextually typed by nothing, which is exactly the check
+  // `present` exists to restore.
+  const context = present<DomElementContext>({
+    formId: formAttribute(form, "id"),
+    formName: formAttribute(form, "name"),
+    formAction: formAttribute(form, "action"),
     fieldsetLegend: fieldsetLegend(element),
     landmark: nearestLandmark(element),
     heading: nearestHeading(element),
@@ -46,15 +64,14 @@ export function elementContext(element: Element): DomElementContext | undefined 
 }
 
 /** The owning form, including one claimed through a control's `form="id"` attribute. */
-function formContext(element: Element): { formId?: string | undefined; formName?: string | undefined; formAction?: string | undefined } {
+function owningForm(element: Element): Element | null {
   const owned = (element as Element & { form?: HTMLFormElement | null }).form;
-  const form = owned ?? element.closest("form");
-  if (!form) return {};
-  return {
-    formId: boundedText(form.getAttribute("id"), MAX_CONTEXT_TEXT),
-    formName: boundedText(form.getAttribute("name"), MAX_CONTEXT_TEXT),
-    formAction: boundedText(form.getAttribute("action"), MAX_CONTEXT_TEXT)
-  };
+  return owned ?? element.closest("form");
+}
+
+/** One bounded attribute of the owning form, or `undefined` when there is no form. */
+function formAttribute(form: Element | null, name: string): string | undefined {
+  return form ? boundedText(form.getAttribute(name), MAX_CONTEXT_TEXT) : undefined;
 }
 
 function fieldsetLegend(element: Element): string | undefined {
@@ -129,7 +146,7 @@ function nearestHeading(element: Element): string | undefined {
 }
 
 /** One-based position among the sibling list items, so `{ index: 1, total: 12 }` reads as "1 of 12". */
-function listPosition(element: Element): { index: number; total: number } | undefined {
+function listPosition(element: Element): DomElementContext["listPosition"] {
   const item = element.closest(LIST_ITEM_SELECTOR);
   const parent = item?.parentElement;
   if (!item || !parent) return undefined;
@@ -139,12 +156,12 @@ function listPosition(element: Element): { index: number; total: number } | unde
 }
 
 /** One-based row and column within the table, with the header row's text for that column. */
-function tablePosition(element: Element): { row: number; column: number; columnHeader?: string | undefined } | undefined {
+function tablePosition(element: Element): DomElementContext["tablePosition"] {
   const cell = element.closest("td,th");
   if (!(cell instanceof HTMLTableCellElement)) return undefined;
   const row = cell.closest("tr");
   if (!(row instanceof HTMLTableRowElement) || row.rowIndex < 0 || cell.cellIndex < 0) return undefined;
-  return compactObject({
+  return present<NonNullable<DomElementContext["tablePosition"]>>({
     row: row.rowIndex + 1,
     column: cell.cellIndex + 1,
     columnHeader: columnHeader(row, cell)

@@ -68,6 +68,17 @@ function sameOriginHref(input, base) {
   }
 }
 
+// src/runtime/llm-evidence/present.ts
+function present(fields) {
+  const source = fields;
+  const written = {};
+  for (const key of Object.keys(source)) {
+    const value = source[key];
+    if (value !== void 0) written[key] = value;
+  }
+  return written;
+}
+
 // src/runtime/llm-evidence/untrusted-json.ts
 function isJsonRecord(input) {
   return Boolean(input) && typeof input === "object" && !Array.isArray(input);
@@ -110,27 +121,31 @@ function sanitizedEvidenceElement(raw, context) {
   const expanded = revealKind === "disclosure" ? semanticExpandedState(attributes) : void 0;
   const placement = elementPlacement(raw.context, { name, text });
   const focused = context.focusedSelector !== void 0 && context.focusedSelector === addressed.selector ? true : void 0;
-  return {
+  return present({
     target: context.target,
     tag,
     selector: addressed.selector,
-    ...addressed.frameId === void 0 ? {} : { frameId: addressed.frameId },
-    ...role ? { role } : {},
-    ...name ? { name } : {},
-    ...text ? { text } : {},
-    ...inputType ? { inputType } : {},
-    ...controlType ? { controlType } : {},
-    ...hasValue === void 0 ? {} : { hasValue },
-    ...selectedValue ? { selectedValue } : {},
-    ...href ? { href } : {},
-    ...options?.length ? { options } : {},
-    ...revealKind ? { revealKind } : {},
-    ...expanded === void 0 ? {} : { expanded },
-    ...focused ? { focused } : {},
-    ...trueFlag(raw.recentlyInteracted) ? { recent: true } : {},
-    ...trueFlag(raw.changed) ? { changed: true } : {},
-    ...placement
-  };
+    frameId: addressed.frameId,
+    role: role || void 0,
+    name: name || void 0,
+    text: text || void 0,
+    inputType: inputType || void 0,
+    controlType: controlType || void 0,
+    hasValue,
+    selectedValue: selectedValue || void 0,
+    href: href || void 0,
+    options: options?.length ? options : void 0,
+    revealKind,
+    expanded,
+    focused,
+    recent: trueFlag(raw.recentlyInteracted),
+    changed: trueFlag(raw.changed),
+    form: placement.form,
+    landmark: placement.landmark,
+    heading: placement.heading,
+    item: placement.item,
+    cell: placement.cell
+  });
 }
 function safeFillTag(tag, inputType) {
   return tag === "textarea" || tag === "input" && (!inputType || ["text", "search", "email", "tel", "url", "number"].includes(inputType));
@@ -161,32 +176,32 @@ function stampedFrameId(raw) {
   return stamped === void 0 ? void 0 : boundedCount(Number(stamped), 999999);
 }
 function elementPlacement(input, named) {
-  if (!isJsonRecord(input)) return {};
-  const form = boundedText(input.formId ?? input.formName, WEB_LLM_EVIDENCE_BOUNDS.placement);
-  const landmark = boundedText(input.landmark, WEB_LLM_EVIDENCE_BOUNDS.tag);
-  const rawHeading = boundedText(input.heading, WEB_LLM_EVIDENCE_BOUNDS.placement);
+  const described2 = isJsonRecord(input) ? input : {};
+  const form = boundedText(described2.formId ?? described2.formName, WEB_LLM_EVIDENCE_BOUNDS.placement);
+  const landmark = boundedText(described2.landmark, WEB_LLM_EVIDENCE_BOUNDS.tag);
+  const rawHeading = boundedText(described2.heading, WEB_LLM_EVIDENCE_BOUNDS.placement);
   const heading = rawHeading === named.name || rawHeading === named.text ? void 0 : rawHeading;
   return {
-    ...form ? { form } : {},
-    ...landmark ? { landmark } : {},
-    ...heading ? { heading } : {},
-    ...listPlacement(input.listPosition),
-    ...tablePlacement(input.tablePosition)
+    form: form || void 0,
+    landmark: landmark || void 0,
+    heading: heading || void 0,
+    item: listPlacement(described2.listPosition),
+    cell: tablePlacement(described2.tablePosition)
   };
 }
 function listPlacement(input) {
-  if (!isJsonRecord(input)) return {};
+  if (!isJsonRecord(input)) return void 0;
   const index = boundedCount(input.index, 1e5);
   const total = boundedCount(input.total, 1e5);
-  return index === void 0 || total === void 0 ? {} : { item: { index, total } };
+  return index === void 0 || total === void 0 ? void 0 : { index, total };
 }
 function tablePlacement(input) {
-  if (!isJsonRecord(input)) return {};
+  if (!isJsonRecord(input)) return void 0;
   const row = boundedCount(input.row, 1e5);
   const column = boundedCount(input.column, 1e5);
-  if (row === void 0 || column === void 0) return {};
+  if (row === void 0 || column === void 0) return void 0;
   const header = boundedText(input.columnHeader, WEB_LLM_EVIDENCE_BOUNDS.placement);
-  return { cell: { row, column, ...header ? { header } : {} } };
+  return present({ row, column, header: header || void 0 });
 }
 function sanitizedOptions(input) {
   if (!Array.isArray(input)) return void 0;

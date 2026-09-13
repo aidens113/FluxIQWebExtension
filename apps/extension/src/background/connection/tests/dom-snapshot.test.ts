@@ -258,3 +258,85 @@ test("an item no frame reported is absent from the merged page, not present and 
   assert.equal("label" in (withDialog.dialogs?.open[0] ?? {}), false);
   assert.equal("armPending" in (withDialog.dialogs ?? {}), false);
 });
+
+// The merged element list is bounded, and says so when the bound bites.
+//
+// Every other collection the merge produces has had a cross-frame budget since
+// the merge was written; the element list -- the largest of them -- had none.
+// The Lab's only multi-frame fixture holds six elements per frame, so nothing
+// in the corpus could show it: a real page carrying a dozen ad, chat and
+// payment frames can offer `MAX_SNAPSHOT_CANDIDATES` (2,000) from each, to a
+// payload rebuilt on every recorded event.
+//
+// What is pinned here is the bound, where the bound cuts, and that the cut is
+// reported through the flag the per-frame element cap already sets rather than
+// through a new one -- `evidence.elements.truncated`, with `matched` left at
+// the pre-cap total so `matched - returned` still says how many went missing.
+
+/** `MAX_MERGED_ELEMENTS` in the module under test. */
+const MERGED_ELEMENT_BOUND = 4_000;
+
+function crowdedFrame(frameId: number, count: number): FrameFixture {
+  const isTop = frameId === 0;
+  return {
+    frameId,
+    snapshot: {
+      url: isTop ? "https://shop.example/checkout" : `https://widget-${frameId}.example/embed`,
+      title: isTop ? "Checkout" : `Widget ${frameId}`,
+      viewport: { width: 1280, height: 800, scrollX: 0, scrollY: 0 },
+      frame: isTop ? { isTop: true } : { isTop: false, viewportOffset: CHILD_VIEWPORT_OFFSET },
+      interactiveElements: Array.from({ length: count }, (_unused, index) => ({
+        tagName: "BUTTON",
+        selector: `#f${frameId}-e${index}`,
+        documentBounds: { x: 0, y: index, width: 10, height: 10 }
+      })),
+      evidence: {
+        elements: elementsTotals(count),
+        loading: { documentState: "complete", busy: false, busyRegions: [], indicators: [], pendingNavigation: false },
+        navigation: {
+          url: isTop ? "https://shop.example/checkout" : `https://widget-${frameId}.example/embed`,
+          origin: isTop ? "https://shop.example" : `https://widget-${frameId}.example`,
+          path: isTop ? "/checkout" : "/embed",
+          historyLength: 1,
+          visibility: "visible"
+        }
+      }
+    }
+  };
+}
+
+test("the merged element list is bounded across frames, as every collection beside it is", async () => {
+  // 1,000 from the page and 1,500 from each of three frames: 5,500 offered.
+  const frames = [crowdedFrame(0, 1_000), crowdedFrame(1, 1_500), crowdedFrame(2, 1_500), crowdedFrame(3, 1_500)];
+  const merged = await mergeOf(frames);
+
+  assert.equal(merged.interactiveElements.length, MERGED_ELEMENT_BOUND, "the merged element list is unbounded");
+  // The cap takes a prefix, so what survives is what answered first and what is
+  // dropped is the tail -- here the whole of the last frame. Order across
+  // frames is the merge's existing rule (seed frame first, then answer order),
+  // not something this cap chose; it only decides who the cap reaches.
+  assert.equal(merged.interactiveElements[0]?.selector, "#f0-e0");
+  assert.equal(
+    merged.interactiveElements.some((element) => element.selector?.startsWith("frame[3]")),
+    false,
+    "the cap must drop the tail of the merged list, not thin it out"
+  );
+});
+
+test("what the merged cap dropped is reported, not silently absent", async () => {
+  const frames = [crowdedFrame(0, 1_000), crowdedFrame(1, 1_500), crowdedFrame(2, 1_500), crowdedFrame(3, 1_500)];
+  const evidence = await mergedEvidence(frames);
+
+  assert.equal(evidence.elements.returned, MERGED_ELEMENT_BOUND, "returned must count the elements the payload carries");
+  assert.equal(evidence.elements.matched, 5_500, "matched stays the pre-cap total, so the drop is readable");
+  assert.equal(evidence.elements.truncated, true, "the capture's own truncation flag is what a merged drop sets");
+});
+
+test("a merge under the bound is untouched by it", async () => {
+  const frames = [crowdedFrame(0, 10), crowdedFrame(1, 10)];
+  const merged = await mergeOf(frames);
+
+  assert.equal(merged.interactiveElements.length, 20);
+  assert.equal(merged.evidence?.elements.returned, 20);
+  assert.equal(merged.evidence?.elements.truncated, false);
+});

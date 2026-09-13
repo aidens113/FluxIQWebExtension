@@ -13,23 +13,47 @@ Related: [30-Day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 
 ## Current State
 
-**Phase: Waves 1–3 complete and pushed; Phase 1.6 and live validation remain.**
-Briefs are under [briefs/](./mvp-week1-web-automation-reliability-plan/briefs/);
-planning's ledger is archived at
-[archive/2026-09-11-planning-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-11-planning-ledger.md).
+**Phase: Waves 1-3 pushed. Live validation ran on 2026-09-12 and falsified a
+great deal of what the green gates implied.** Roughly seventy workers ran that
+day, first preparing for live validation and then reacting to what it found. The
+work is substantial and the conclusion is uncomfortable: **every signal Week 1
+had been reading was measuring something narrower than it appeared.**
 
-**Headline numbers from the opening audit**, kept as the baseline the work is
-measured against rather than as current state — see the Wave 3 section below for
-what has since moved, and note that of the element-matcher finding only the
-*signals* half is closed (detail in
-[reports/README.md](./mvp-week1-web-automation-reliability-plan/reports/README.md)):
-actions 1/10/3/10 of 24 (fully/partial/unreliable/unsupported), **outcome
-validation 0/24**; Core's element matcher never receives candidates and
-its top signals are zero for web targets; evidence 8/16 present with **no
-expected-vs-actual comparison anywhere** and sensitive values captured by
-default; no failure taxonomy on the browser path, 5 of 11 categories
-unproduced; the Testing Lab covers 4 of 18 FluxBench categories, has no
-metrics, and cannot run a Flow on `isolated`.
+The five that matter, each measured rather than argued, each with a report under
+[reports/](./mvp-week1-web-automation-reliability-plan/reports/):
+
+- **FluxBench reported 100% while scoring runs that executed nothing.** The
+  success predicate accepted any run whose verdict was not `failed`, and an
+  unexecuted run reports `null`. Sixteen of twenty-three rows were in that state.
+  Honest figure: **30%**. Fixed, with the not-executed count now reported beside
+  every rate.
+- **A week of element-identity work never reached the browser.** A 17-key
+  allowlist in the gateway payload carried none of the five signals Phase 1.3
+  captured; two survived only by accidental re-derivation. The allowlist had no
+  reason to exist — no size cap, no redaction boundary, just accretion from a
+  five-key draft.
+- **The fixtures guaranteed their own safety margins.** 286 test ids across 22
+  scenarios, 81% of buttons carrying an identifier *and* text. Core's matcher
+  divides by the weight the recording carried, so a fixture recording hands every
+  comparison 38% of the scale for free.
+- **The failure history had its failures deleted.** A serialiser treated a shared
+  object reference as a cycle, so a Flow-lane run crashed writing evidence
+  exactly when it had a structured failure to report — and recorded
+  `ambiguous_or_unknown`, a legitimate enum member indistinguishable from a real
+  measurement. Of 33 surviving records, **zero** carry a structured failure.
+- **On production-shaped recordings the resolver clicks a different action and
+  reports success**, at 0.633 against a 0.35 floor. And no floor can fix it: with
+  identifiers the good and bad cases sit 0.301 apart, without them 0.057.
+
+**What this means for the exit criteria.** The classification criterion has never
+been measurable — its evidence was being deleted before it could be counted.
+Target matching is proven on pages that guarantee the result. Every criterion
+whose proof was a bench number needs re-reading against the corrected metric.
+
+**Live validation did confirm things too**, and they should not be lost in the
+above: the smoke corpus is clean against eight historical baselines with every
+difference explained; the real unpacked extension loads and is driven, MV3 worker
+restart included; the Lab now runs concurrent instances, one per worker.
 
 **Waves 1 and 2 are settled.** Their outcomes — the domain test runner and its
 parallel-run isolation, the scenario contract and Scenario Lab consolidation, the
@@ -38,33 +62,6 @@ vocabulary, and FluxBench's `pnpm lab bench` with its `week1` and `smoke` corpor
 — are recorded in
 [archive/2026-09-12-waves-1-2-outcomes.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-waves-1-2-outcomes.md)
 and their ledgers alongside it.
-
-**Wave 3 is complete, integrated, verified and pushed.** Seventeen workers ran
-across Phases 1.3, 1.4 and 1.5; every report is under
-[reports/](./mvp-week1-web-automation-reliability-plan/reports/). Seven of the
-seventeen were dispatched mid-wave to close gaps earlier workers found outside
-their own briefs, which is the wave's main lesson: the briefs were partitioned by
-file and the defects lived across them.
-
-**Gates, run one at a time on a still tree (2026-09-12).** This repository: root
-`pnpm check` exit 0 with the structure audit clean, root `pnpm test` exit 0,
-extension 215/215, domain 245/245, content harness **186 passed** at
-`--workers=4`. Core: `pnpm check`, `pnpm docs:check`, `pnpm package:lint` and
-`pnpm build` each exit 0, `packages/fluxiq` **129 of 129** test files green under
-`--no-file-parallelism`.
-
-**Target matching, in short.** Core's matcher is published for a browser through
-a `fluxiq/automation-studio/fingerprinting` subpath, at a cost of 18,974 bytes
-of content bundle (8.5%), attributed by esbuild metafile. Level 2 scoring could
-not succeed until **D13** changed how Core charges a *missing* identifier
-against a *contradicted* one; the drift case now resolves at 0.389 where it
-scored 0.218 against a 0.35 floor. **D14** then closed the larger exposure the
-investigation uncovered: Level 1 was resolving and clicking by class alone, with
-no score and no floor, so a page whose Save button had become
-`<button class="btn btn-primary">Delete workspace</button>` was clicked. Level 1
-now selects and the scorer vetoes. Both decisions carry their measurements, the
-alternatives rejected, and the interaction between them — D13 shrank D14's
-safety margin sixfold, and one test now guards both.
 
 **Findings that change later work** are archived at
 [archive/2026-09-12-wave-1-3-findings.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-wave-1-3-findings.md).
@@ -182,31 +179,79 @@ downstream approximation.
   Level 2 refused a 0.218 near-certainty. Every safety property built this week
   guarded only the path that was already cautious.
   A Level 1 match is now scored and refused if the candidate contradicts the
-  recording. **The veto threshold is 0, not the 0.35 selection floor**, and the
-  two answer different questions: the floor asks "is this good enough to choose
+  recording, **and refused again if nothing the recording named agrees on it**.
+  Two rules, because one was not enough; the second was added on 2026-09-12
+  after the first proof was found to cover only half the question.
+  **Rule 1, the threshold, is 0 and not the 0.35 selection floor.** The two
+  answer different questions: the floor asks "is this good enough to choose
   among several", the veto asks "is this so wrong that acting is dangerous".
   Zero is a statement rather than a fitted value — `normalizedScore` is agreeing
   weight minus disagreeing weight, so below zero the page contradicts more than
   it confirms.
-  Verified exhaustively over every profile a weak Level 1 query can land on
-  (1,488 class-reachable, 240 text-reachable): no profile whose label
-  contradicts the recording reaches 0, on either scoring scale. All four
-  `identity-drift` modes still resolve; the tightest, `selector-only` at 0.149,
-  is precisely what a veto set at the floor would have destroyed. No strategy is
-  exempt, and that was measured rather than conceded — an id exemption saves
-  nothing and would admit 339 profiles where an identifier survived onto a
-  relabelled control.
+  **What rule 1 was actually proved over, and what it was not.** The original
+  enumeration varied the *candidate* — every profile a weak Level 1 query can
+  land on, 1,488 class-reachable and 240 text-reachable — and found none whose
+  label contradicts the recording reaching 0, on either scoring scale. That is
+  exhaustive over the candidate axis and it holds. It is **not** exhaustive over
+  the *recording* axis, which it held fixed at a descriptor carrying both an id
+  and a test id; those two supply most of an impostor's negative weight, and
+  `normalizedScore` divides by the weight of the signals the recording carried,
+  so a thinner recording loses that weight from numerator and denominator at
+  once. Re-run across 16 recording classes (id, test id, visible text and
+  accessible name each present or absent), rule 1 alone separates for **3** —
+  the three carrying a stable identifier *and* both text signals. In the other
+  13 an impostor is acted on, the worst at **+0.563**. The ordinary case is the
+  plain one: a control with no id and no test id, recorded with its text and its
+  name, is landed on by a nameless icon button wearing the recorded class set at
+  **+0.010**, and clicked.
+  **Rule 2, corroboration, closes 12 of those 13.** If the recording named
+  anything distinguishing — visible text, accessible name, label, id, test id —
+  at least one of them must agree on the candidate at any of Core's positive
+  rungs. Measured over the same enumeration it refuses 240 impostor profiles,
+  **none** of which Level 2 then re-resolves (the highest scores 0.302 against a
+  floor of 0.35), and **not one** profile whose label agrees or partly agrees —
+  free by construction, since an agreeing label is itself the corroboration.
+  All four `identity-drift` modes still resolve; the tightest, `selector-only`
+  at 0.149, is precisely what a veto set at the floor would have destroyed. No
+  strategy is exempt, and that was measured rather than conceded — an id
+  exemption saves nothing and would admit 339 profiles where an identifier
+  survived onto a relabelled control.
+  **The alternative was measured and rejected.** Refusing a class-set or
+  bare-text match outright whenever the recording carries no stable identifier
+  costs 306 legitimate resolutions across the four identifier-less recording
+  classes — 115 whose label agrees exactly — to stop 84 impostors, 16 of which
+  return through Level 2 anyway. A common failure traded for a rare wrong click.
   **An interaction with D13 to watch.** The Core weighting change moved the worst
   impostor from −0.203 to −0.032, so headroom below the veto line is now 0.032
   rather than 0.203 — the safety margin shrank sixfold as a side effect of a
   change made for a different reason. It is still on the right side, and
-  `veto.test.ts` asserts the *separation* rather than any absolute value, so a
-  further weight change in either repository fails the build rather than
-  silently eroding it. Treat that test as the guard on D13, not only on D14.
-  **Two limits remain open**, both narrower than what closed and both measured:
-  a recording that captured no visible text is barely protected (0.641 and
-  0.145, both still acted on), and an impostor carrying the recorded label
-  passes by construction.
+  `veto.test.ts` asserts the *separation* rather than any absolute value, on
+  both axes, so a further weight change in either repository fails the build
+  rather than silently eroding it. Treat that test as the guard on D13, not only
+  on D14.
+  **Two limits remain open**, both measured, and one of them is the 13th
+  recording class. A recording that names **nothing** — no text, no accessible
+  name, no id, no test id, only a class set and a structural path — cannot be
+  protected: it asked no question a candidate could answer, so refusing would
+  only be the class-set strategy disagreeing with itself. An impostor reaches
+  **+0.563** there and Level 2 would resolve it too. And an impostor that
+  carries the recorded label passes by construction, because the label is
+  exactly what corroborates.
+  **The wider precondition was queried and measured, and it stands.** An
+  identifier counts and not only a label, so the veto also runs on the
+  `coordinates` and `visual-target` strategies. Over those, narrowing it back
+  would act on **120 more profiles and not one carrying any signal the
+  recording named**: a point runs only after the recorded selector missed, and
+  for a single-identifier recording that selector *is* the identifier. The
+  feared fresh-point-beside-stale-descriptor case has no producer: `coordinates`
+  is declared by no web action, and a `visual-target` is derived from the
+  recorded element, so its point is as stale as the descriptor. The cost is
+  narrow and real: **29 of 587** live fixture descriptors (4.9%) carry an
+  identifier and no text, name or label, and for those a changed identifier
+  fails `TARGET_NOT_FOUND` rather than clicking whatever holds the recorded
+  position — buying 96 class- and 120 point-reachable impostors, worst +0.302.
+  Measurements: `reports/v-level1-veto.md`, `reports/L-veto-recordings.md` and
+  `reports/p-veto-coords.md` (point strategies, and the descriptor census).
 
 - **D12 — Three Wave 2 worker judgments, ratified by the supervisor.** Each was
   raised by its worker as needing ratification, and each stands. Tripping the

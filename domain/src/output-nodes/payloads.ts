@@ -1,4 +1,6 @@
-import type { JsonObject } from "fluxiq/core";
+import type { JsonObject, JsonValue } from "fluxiq/core";
+import { isSensitiveElementDescriptor } from "../sensitivity";
+import { webAutomationSecretBinding, webAutomationSecretKeyForRecordedElement } from "./secret-binding";
 import { compact, elementFingerprint, numberValue, objectValue, stringValue } from "./targets";
 
 /**
@@ -42,7 +44,7 @@ function recordedOutputParameters(outputId: string, payload: JsonObject): JsonOb
   const hasTarget = Object.keys(target).length > 0;
   if (outputId === "web.browser.navigate") return compact({ url: stringValue(payload.url) });
   if (outputId === "web.dom.click" || outputId === "web.dom.clear") return compact({ selector, ...(hasTarget ? target : {}) });
-  if (outputId === "web.dom.type") return compact({ selector, text: stringValue(payload.inputValue) ?? "", ...(hasTarget ? target : {}) });
+  if (outputId === "web.dom.type") return compact({ selector, text: recordedTypedText(payload), ...(hasTarget ? target : {}) });
   if (outputId === "web.dom.select") return compact({ selector, value: stringValue(payload.inputValue) ?? "", ...(hasTarget ? target : {}) });
   if (outputId === "web.dom.keypress") return compact({ selector, key: stringValue(payload.key) ?? "", ...(hasTarget ? target : {}) });
   if (outputId === "web.dom.scroll") {
@@ -61,6 +63,35 @@ function recordedOutputParameters(outputId: string, payload: JsonObject): JsonOb
   // and download — are dispatch-only: no recorded user event maps to one, so
   // there is no recorded payload to normalize into their parameters.
   return {};
+}
+
+/**
+ * The text a recorded entry replays, which is not always a string.
+ *
+ * A recorded value is replayed as itself. **No recorded value at all means the
+ * recorder withheld it**, and on a control the one sensitivity rule marks that
+ * is the only way it can happen: `readElementValue` returns nothing for such a
+ * control, and every other path yields a string -- an entry the user emptied
+ * arrives as `""` and is mapped to `web.dom.clear`, not here
+ * (`io/input-model.ts`, `recordedActionInputId`).
+ *
+ * So the node asks for the value instead of carrying one: see
+ * `secret-binding.ts` for the request's shape and for why it has no fallback.
+ * What it must never do is what this line did until now -- substitute `""`,
+ * which replays as a password field typed empty and an action reporting
+ * success.
+ *
+ * A withheld value on a control the rule does *not* mark keeps the old `""`.
+ * That combination should not occur, and asking for a secret on a control
+ * nothing calls sensitive would invent a request no manifest declares; the
+ * sensitivity rule stays the single authority over which controls hold one.
+ */
+function recordedTypedText(payload: JsonObject): JsonValue {
+  const recorded = stringValue(payload.inputValue);
+  if (recorded !== undefined) return recorded;
+  if (!isSensitiveElementDescriptor(payload.element)) return "";
+  const key = webAutomationSecretKeyForRecordedElement(payload);
+  return key === undefined ? "" : webAutomationSecretBinding(key);
 }
 
 /**

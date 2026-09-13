@@ -21,7 +21,10 @@
 // workspace" was resolved by the class-set query and clicked, measured, while
 // Level 2 scored the same element -0.237 and refused it. `identity/veto.ts`
 // closes that: it scores the match against the recording with the same matcher
-// Level 2 uses and refuses one the page contradicts. A veto is a miss, not an
+// Level 2 uses and refuses one the page contradicts, or one that answers
+// nothing the recording named -- the second rule being what protects a
+// recording carrying no stable identifier, whose thin denominator lets an
+// impostor drift above zero rather than below it. A veto is a miss, not an
 // abort, so the strategies after it and then scoring still run -- which is how
 // a control that merely moved into another slot is recovered rather than only
 // not clicked.
@@ -29,12 +32,27 @@
 // A failure carries Core's structured record rather than only a sentence:
 // TARGET_AMBIGUOUS naming the candidates that tied, TARGET_NOT_FOUND naming the
 // strategies that were attempted. The codes come from the domain's closed set,
-// never from a string written here, and `results.ts` lifts the record and the
-// measurement off the thrown error onto the result the Flow receives. A
-// resolution that *succeeded* carries the same measurement, but only as far as
-// `resolveTargetWithDiagnostics`: the verbs take `resolveTarget`, whose
-// contract is the element alone, so nothing puts `resolution` on a successful
-// result yet.
+// never from a string written here, and `results.ts` lifts both the record and
+// the measurement off the thrown error onto the `BrowserActionResult`.
+//
+// A resolution that *succeeded* now reports its measurement too, and that is
+// the half of D1 nobody ever decided against -- it fell out of this function
+// returning a bare `Element`. `resolveTarget` returns the element and the
+// resolution together, each verb passes the resolution into the evidence it
+// already builds, and `results.ts` puts it on the result. Until D13 the gap
+// cost little, because Level 2 scoring could not succeed and every success was
+// an exact match with nothing interesting to report; now that a scored
+// resolution resolves at a measured confidence, a Flow that cannot read it
+// cannot tell a control recovered by a hair from one matched outright, and
+// neither can anyone debugging a replay that clicked the wrong thing.
+//
+// Both then leave the browser. `webAutomationActionResultPayload`
+// (`domain/src/client/gateway-mapping.ts`) carries `resolution` on the result
+// payload and its own test pins that it does. It is safe to carry because of
+// what it is: a closed strategy enum and four numbers, no page-derived text and
+// so no redaction guard. The candidate *labels* an ambiguous failure names are
+// page text, and they ride on the failure record, bounded by
+// `identity/reportable-text.ts` -- never in these fields.
 //
 // Level 2 is scoring, and it runs at the two points where an exact answer is
 // not one: when a strategy matched several elements and the gate could not
@@ -44,8 +62,19 @@
 // `fluxiq/automation-studio/fingerprinting`. A candidate wins by clearing the
 // floor and beating the runner-up by a margin; otherwise the tie is reported
 // rather than broken by document order. The confidence on a scored resolution
-// is Core's measurement of the candidate that won, never a constant, and it is
-// absent from an exact resolution because nothing was measured there.
+// is Core's measurement of the candidate that won, never a constant.
+//
+// An exact resolution reports its strategy, its candidate count and the score
+// the veto took of it -- which closes the last piece of D1. `identity/veto.ts`
+// has always scored every exact match before it is acted on; until 2026-09-12
+// it returned that measurement only when it refused and dropped it when it
+// accepted, so a successful exact match arrived here with nothing to report.
+// The alternative was scoring the element a second time on every action's
+// critical path, for a number already computed a call below. It is Core's
+// measurement either way, never a constant, and it is absent -- rather than
+// filled with a stand-in -- when the recording named nothing the veto could
+// weigh the match by. There is no runner-up score on an exact match, because
+// only one element was weighed.
 //
 // Scoring cannot rescue every drift, and it is not meant to. A control whose
 // text, id, class and test id have *all* changed scores below the floor against
@@ -53,8 +82,12 @@
 // button along; the resolver refuses rather than clicking the least-wrong thing.
 // The measured numbers are in reports/w3-matcher-packaging.md.
 
-import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
-import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "@fluxiq-web-extension/domain/client";
+import {
+  WEB_AUTOMATION_FAILURE_CODES,
+  webAutomationFailureRecord,
+  type WebAutomationFailureCarrier,
+  type WebAutomationFailureRecord
+} from "@fluxiq-web-extension/domain/client";
 import { findClosestFingerprint, type ElementFingerprint } from "../element-finder";
 import {
   candidateFingerprint,
@@ -63,7 +96,9 @@ import {
   scoreTargetCandidates,
   vetoExactMatch,
   type CandidateSelection,
-  type TargetCandidate
+  type TargetCandidate,
+  type TargetCandidatePool,
+  type TargetMeasurement
 } from "../identity";
 import type { BrowserActionCommand, BrowserActionTargetResolution, BrowserActionTargetStrategy, RectDescriptor } from "../types";
 
@@ -105,17 +140,30 @@ const MAX_NAMED_CANDIDATES = 5;
  * A target that could not be resolved, carrying Core's failure record and the
  * measurement that produced it.
  *
- * Both ride onto the result: `results.ts` reads `failure` and `resolution` off
- * a thrown value structurally, so a Flow receives TARGET_AMBIGUOUS or
- * TARGET_NOT_FOUND with the strategy that was tried rather than a sentence it
- * would have to parse. The record is built from the closed code set, so it
- * cannot contradict a Core consistency rule and be dropped by its parser.
+ * Both ride onto the `BrowserActionResult`: `results.ts` reads `failure` and
+ * `resolution` off a thrown value structurally, so the result names
+ * TARGET_AMBIGUOUS or TARGET_NOT_FOUND as a code rather than as a sentence a
+ * reader would have to parse, and both then travel on to a Flow -- the record
+ * as `failure`, the measurement as `resolution`, which the result payload
+ * carries as of this change. The record is built from the closed code set, so
+ * it cannot contradict a Core consistency rule and be dropped by its parser.
+ *
+ * `implements WebAutomationFailureCarrier` is what makes that last sentence a
+ * compiler check rather than a habit, and it is why the field is
+ * `WebAutomationFailureRecord` and not Core's `AutomationStudioFailureRecord`.
+ * `runtime/failure/carrier.ts` names this class as its worked example of the
+ * convention, and until now this class was the one that did not follow it:
+ * Core types a record's `code` as a bare `string`, because Core does not own
+ * the codes, so an invented code compiled here and was demoted to UNKNOWN at
+ * the far end. Narrowed to the domain's record, the closed set is enforced at
+ * the throw. All three builders below already go through
+ * `webAutomationFailureRecord`, so nothing about what is thrown changed.
  */
-export class TargetResolutionError extends Error {
-  readonly failure: AutomationStudioFailureRecord;
+export class TargetResolutionError extends Error implements WebAutomationFailureCarrier {
+  readonly failure: WebAutomationFailureRecord;
   readonly resolution: BrowserActionTargetResolution;
 
-  constructor(message: string, failure: AutomationStudioFailureRecord, resolution: BrowserActionTargetResolution) {
+  constructor(message: string, failure: WebAutomationFailureRecord, resolution: BrowserActionTargetResolution) {
     super(message);
     this.name = "TargetResolutionError";
     this.failure = failure;
@@ -123,17 +171,21 @@ export class TargetResolutionError extends Error {
   }
 }
 
-/** The element an action acts on. Throws `TargetResolutionError` when none can be chosen. */
-export function resolveTarget(action: BrowserActionCommand): Element {
-  return resolveTargetWithDiagnostics(action).element;
-}
-
 /**
- * The element an action acts on, with how it was found. Verbs take the element
- * alone through `resolveTarget`; a caller that reports a result wants the
- * measurement too, and passes it on as the result's `resolution`.
+ * The element an action acts on, with the measurement that chose it. Throws
+ * `TargetResolutionError` when none can be chosen.
+ *
+ * Both halves of the return are used, which is the change that closed D1's
+ * other half. Verbs destructure the element to act on and pass the resolution
+ * into the evidence they already hand `results.ts`, so a *successful*
+ * resolution's measurement reaches the result and then the wire. It used to
+ * reach nothing: this function returned a bare `Element` and a second
+ * `resolveTargetWithDiagnostics` beside it returned both, and since the verbs
+ * took the first, every success threw its measurement away one call below where
+ * the failure path's copy was kept. The two are now one function, because a
+ * measurement no caller can see is a measurement nobody will keep correct.
  */
-export function resolveTargetWithDiagnostics(action: BrowserActionCommand): ResolvedTarget {
+export function resolveTarget(action: BrowserActionCommand): ResolvedTarget {
   const target = recordedTarget(action);
   const misses: string[] = [];
 
@@ -146,15 +198,21 @@ export function resolveTargetWithDiagnostics(action: BrowserActionCommand): Reso
     const only = pool.length === 1 ? pool[0] : undefined;
     if (only) {
       // One answer, unweighed until now. `identity/veto.ts` scores it against
-      // the recording and refuses a match the page contradicts; a refusal
+      // the recording and refuses a match the page contradicts, or one that
+      // corroborates nothing the recording named; a refusal
       // demotes the strategy to a miss rather than ending the resolution, so
       // the strategies after it and then Level 2 still get their turn -- which
       // is how a page that moved the control into another slot is recovered
       // instead of merely not clicked.
-      const veto = target ? vetoExactMatch(target, only) : undefined;
-      if (!veto) return { element: only, resolution: { strategy: attempt.strategy, candidateCount: attempt.matches.length } };
-      misses.push(`${attempt.description} (${veto.summary})`);
-      continue;
+      const verdict = target ? vetoExactMatch(target, only) : undefined;
+      if (verdict?.refusedBecause) {
+        misses.push(`${attempt.description} (${verdict.summary})`);
+        continue;
+      }
+      // And when it accepts, its measurement is what the resolution reports.
+      // The veto weighed this element on the way past; carrying the number out
+      // is free, where scoring it again here would not be.
+      return { element: only, resolution: exactResolution(attempt, verdict?.measurement) };
     }
     // Several survived the gate. Scoring is the difference between "these two
     // tied" and "these two tied, and one of them is the recorded control".
@@ -166,17 +224,37 @@ export function resolveTargetWithDiagnostics(action: BrowserActionCommand): Reso
   if (!misses.length) {
     const active = document.activeElement;
     if (active) return { element: active, resolution: { strategy: "active-element", candidateCount: 1 } };
-    throw notFound("No selector, coordinates, or active element was available.", [], 0);
+    throw notFound("No selector, coordinates, or active element was available.", [], NO_POOL);
   }
 
   // Nothing answered exactly. The page may still hold the control under a new
   // name, so the same-family candidates are enumerated once and scored: the
   // enumeration is what a not-found failure reports either way.
-  const nearby = target ? collectTargetCandidates(candidateFamily(target)) : [];
-  const decided = target ? scoreTargetCandidates(target, nearby) : undefined;
-  if (decided?.outcome === "resolved") return scoredTarget(decided, nearby.length);
+  const nearby = target ? collectTargetCandidates(candidateFamily(target)) : NO_POOL;
+  const decided = target ? scoreTargetCandidates(target, nearby.candidates) : undefined;
+  if (decided?.outcome === "resolved") return scoredTarget(decided, nearby.candidates.length);
   if (decided?.outcome === "ambiguous") throw scoredAmbiguous(decided, misses);
-  throw notFound(`No target resolved from ${misses.join(", ")}.`, misses, nearby.length, decided);
+  throw notFound(`No target resolved from ${misses.join(", ")}.`, misses, nearby, decided);
+}
+
+/** No enumeration was run at all: nothing was looked at, so nothing was cut short. */
+const NO_POOL: TargetCandidatePool = { candidates: [], examined: 0, truncated: false };
+
+/**
+ * An exact strategy's win, with the measurement the veto took on the way past.
+ *
+ * There is no runner-up: an exact strategy resolved one element, so the only
+ * thing that was weighed is that element. `bestScore` and `confidence` are
+ * Core's, never a constant, and they are absent when the recording named
+ * nothing the veto could weigh the match by -- which is a truthful "not
+ * measured" rather than a stand-in.
+ */
+function exactResolution(attempt: StrategyAttempt, measurement: TargetMeasurement | undefined): BrowserActionTargetResolution {
+  return {
+    strategy: attempt.strategy,
+    candidateCount: attempt.matches.length,
+    ...(measurement ? { bestScore: measurement.score, confidence: measurement.confidence } : {})
+  };
 }
 
 /** A scored win, with Core's own measurement of it. */
@@ -365,20 +443,46 @@ function scoredAmbiguous(decided: Extract<CandidateSelection, { outcome: "ambigu
  * a best candidate deep in the negatives means it is gone and the step needs
  * rewriting. `scoredAmbiguous` beside this already reports the same three
  * fields, so a refusal now carries them whichever way it refused.
+ *
+ * The count of same-family controls is a measurement of the *enumeration*, not
+ * of the page, and until 2026-09-12 it was reported as though the two were one
+ * thing. They are not, on a page big enough for the enumeration's cap to bite:
+ * the scan stopped after the first N interactive elements, and if the target's
+ * family began after them the failure read "0 control(s) of the same family are
+ * on the page" -- which says *this control does not exist here* to a reader
+ * whose actual problem is *we stopped looking*. Those call for opposite
+ * responses, and the first sends a person hunting for a fault in a selector
+ * that was right. `familySeen` is what tells them apart.
  */
-function notFound(message: string, misses: string[], nearbyCount: number, decided?: CandidateSelection): TargetResolutionError {
+function notFound(message: string, misses: string[], pool: TargetCandidatePool, decided?: CandidateSelection): TargetResolutionError {
   const best = decided?.ranked[0];
   const runnerUp = decided?.ranked[1];
   const failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.TARGET_NOT_FOUND, {
     expected: misses.length ? `an element matching ${misses.join(", ")}` : "a selector, coordinates, or a focused element",
-    actual: `nothing matched; ${nearbyCount} control(s) of the same family are on the page${best ? `; best scored ${best.score.normalizedScore.toFixed(2)}` : ""}`
+    actual: `nothing matched; ${familySeen(pool)}${best ? `; best scored ${best.score.normalizedScore.toFixed(2)}` : ""}`
   });
   return new TargetResolutionError(message, failure, {
     strategy: strategyOf(misses),
-    candidateCount: nearbyCount,
+    candidateCount: pool.candidates.length,
     ...(best ? { bestScore: best.score.normalizedScore, confidence: best.score.confidence } : {}),
     ...(runnerUp ? { runnerUpScore: runnerUp.score.normalizedScore } : {})
   });
+}
+
+/**
+ * What the enumeration found, and whether that is the whole of what the page
+ * offered.
+ *
+ * A complete scan reports the count as a fact about the page, which is the
+ * sentence this module has always produced. A scan a cap cut short reports the
+ * same count as a floor and says where it stopped, because the number is then a
+ * fact about the enumeration, and a Flow reading it as a fact about the page
+ * would widen or rewrite the wrong thing.
+ */
+function familySeen(pool: TargetCandidatePool): string {
+  const found = `${pool.candidates.length} control(s) of the same family`;
+  if (!pool.truncated) return `${found} are on the page`;
+  return `${found} in the first ${pool.examined} interactive element(s); the scan was cut short there, so the page may hold more`;
 }
 
 /** The score each tied element got, when scoring ran at all. */

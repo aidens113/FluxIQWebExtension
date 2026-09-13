@@ -22,8 +22,11 @@
 // `veto.ts` points the same scorer back at Level 1. An exact strategy chooses
 // by one signal -- a class set, a line of text -- and used to act on it
 // unweighed; the veto scores what it chose against the recording and refuses a
-// match the page contradicts. Level 1 keeps its speed and its precedence and
-// loses only the ability to act on evidence Level 2 would reject outright.
+// match the page contradicts, or one that corroborates nothing the recording
+// named. Level 1 keeps its speed and its precedence and loses only the ability
+// to act on evidence Level 2 would reject outright. It hands back what Core
+// measured either way, which is what lets an accepted exact match report a
+// confidence it did not have to be scored twice for.
 
 export { accessibleNameFor, authoredNameAttribute } from "./accessible-name";
 export { boundedText } from "./bounded-text";
@@ -33,8 +36,8 @@ export { implicitRole } from "./implicit-role";
 export { associatedLabel, labelText } from "./label";
 export { reportableText } from "./reportable-text";
 export { TARGET_SCORE_FLOOR, TARGET_SCORE_MARGIN, scoreTargetCandidate, scoreTargetCandidates } from "./score";
-export { TARGET_VETO_FLOOR, vetoExactMatch } from "./veto";
+export { TARGET_VETO_FLOOR, vetoCandidate, vetoExactMatch } from "./veto";
 
-export type { CandidateFamily, TargetCandidate } from "./candidates";
+export type { CandidateFamily, TargetCandidate, TargetCandidatePool } from "./candidates";
 export type { CandidateSelection, RecordedIdentity, ScoredCandidate } from "./score";
-export type { TargetVeto } from "./veto";
+export type { ExactMatchVerdict, TargetMeasurement, TargetVerdict, TargetVetoReason } from "./veto";

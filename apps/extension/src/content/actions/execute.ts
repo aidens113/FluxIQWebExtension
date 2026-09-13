@@ -40,10 +40,26 @@
 // carries the record rather than leaving it to be inferred from a bare `Error`
 // -- the same seam `resolve-target.ts` uses for its own codes, which
 // `results.ts` lifts off the thrown value in `reportedFailure`.
+//
+// One thing here is not routing. This is the only point that sees an action
+// begin and end, so it is where the page the action started on is remembered
+// and compared with the page it finished on: `page-identity.ts` turns a failed
+// result into PAGE_CHANGED when the document was replaced or routed away while
+// the verb ran. That code was in the closed set with no producer anywhere,
+// which is a vocabulary promising a consumer something it never delivers, and
+// the condition it names is exactly the one the rest of the target work does
+// not check -- the resolver refuses a candidate the recording contradicts, and
+// nothing asks whether the page is still the page.
 
-import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord, type WebAutomationFailureRecord } from "@fluxiq-web-extension/domain/client";
+import {
+  WEB_AUTOMATION_FAILURE_CODES,
+  webAutomationFailureRecord,
+  type WebAutomationFailureCarrier,
+  type WebAutomationFailureRecord
+} from "@fluxiq-web-extension/domain/client";
 import type { BrowserActionCommand, BrowserActionResult } from "../types";
 import type { ContentActionDependencies } from "./types";
+import { observePageIdentity, reportPageChange } from "./page-identity";
 import { captureSnapshotAction } from "./capture-snapshot";
 import { waitForSelectorAction } from "./wait-for-selector";
 import { waitForTextAction } from "./wait-for-text";
@@ -72,7 +88,7 @@ import { dialogAction } from "./dialog";
  * set names, so the record is built by `webAutomationFailureRecord` from that
  * set -- the wire string is never written here.
  */
-class UnsupportedActionTypeError extends Error {
+class UnsupportedActionTypeError extends Error implements WebAutomationFailureCarrier {
   readonly failure: WebAutomationFailureRecord;
 
   constructor(actionType: string) {
@@ -85,8 +101,30 @@ class UnsupportedActionTypeError extends Error {
   }
 }
 
+/**
+ * Runs one action and reports what happened, against the page it started on.
+ *
+ * The page identity is read here rather than inside a verb because this is the
+ * only point that sees an action begin *and* end. Every verb resolves a target
+ * and then acts, and several wait in between; if the document is replaced or
+ * routed away during that, the verb's own answer names a cause that belongs to
+ * a page nobody asked about. `page-identity.ts` says when that happened and
+ * which codes PAGE_CHANGED supersedes -- it had no producer at all until this
+ * one, which made the member of the closed set a promise nothing kept.
+ */
 export async function executeContentAction(action: BrowserActionCommand, deps: ContentActionDependencies): Promise<BrowserActionResult> {
   const startedAt = Date.now();
+  const startedOn = observePageIdentity();
+  return reportPageChange(await routeContentAction(action, deps, startedAt), startedOn);
+}
+
+/**
+ * The routing itself, and the guarantee that every branch is awaited inside the
+ * try block. Split from `executeContentAction` only so the page-identity read
+ * brackets it; the `catch` below is still the one thing between a verb's
+ * rejection and a hung command.
+ */
+async function routeContentAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): Promise<BrowserActionResult> {
   try {
     if (action.actionType === "web.dom.capture_snapshot") {
       return await captureSnapshotAction(action, deps, startedAt);

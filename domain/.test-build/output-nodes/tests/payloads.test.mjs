@@ -2,11 +2,43 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+// src/sensitivity/signature.ts
+var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
+var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
+var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
+function isSensitiveFieldSignature(signature) {
+  if (isSensitiveControlType(signature.inputType) || isSensitiveControlType(signature.controlType)) return true;
+  if (signature.dataSensitive?.trim().toLowerCase() === "true") return true;
+  return (signature.autocomplete ?? "").toLowerCase().split(/\s+/u).some((token) => Boolean(token) && (SENSITIVE_AUTOCOMPLETE_TOKENS.has(token) || token.startsWith(SENSITIVE_AUTOCOMPLETE_PREFIX)));
+}
+function isSensitiveControlType(type) {
+  return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
+}
+
+// src/sensitivity/descriptor.ts
+function sensitiveFieldSignatureOfDescriptor(descriptor) {
+  if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
+  const record = descriptor;
+  const attributes = record.attributes && typeof record.attributes === "object" && !Array.isArray(record.attributes) ? record.attributes : {};
+  return {
+    inputType: stringField(record.inputType),
+    controlType: stringField(attributes.type),
+    autocomplete: stringField(attributes.autocomplete),
+    dataSensitive: stringField(attributes["data-sensitive"])
+  };
+}
+function isSensitiveElementDescriptor(descriptor) {
+  return isSensitiveFieldSignature(sensitiveFieldSignatureOfDescriptor(descriptor));
+}
+function stringField(value) {
+  return typeof value === "string" ? value : void 0;
+}
+
 // src/output-nodes/targets.ts
 function elementFingerprint(value) {
   const element = objectValue(value);
   if (!element) return void 0;
-  const attributes = objectValue(element.attributes);
+  const attributes = elementAttributes(element.attributes);
   return compact({
     selector: stringValue(element.selector),
     xpath: stringValue(element.xpath),
@@ -24,8 +56,63 @@ function elementFingerprint(value) {
     testId: elementTestId(element, attributes),
     accessibleName: stringValue(element.accessibleName) ?? stringValue(attributes?.["aria-label"]),
     label: stringValue(element.label),
-    attributes
+    attributes,
+    context: elementContext(element.context),
+    // Core's remaining fingerprint signals, named so their absence is a
+    // decision and so a signal Core adds stops this producer compiling. A
+    // browser recording has no source for any of them: the first four are a
+    // host application's own identifiers and a Core state path, `url` names
+    // the page rather than the control, `bounds` are the capture's viewport
+    // and not this instant's (which is why `content/identity/score.ts` refuses
+    // to compare them), and `metadata` is Core's own passthrough slot, which
+    // this normalizer must not start writing into behind the declared fields.
+    automationId: void 0,
+    entityId: void 0,
+    entityKind: void 0,
+    statePath: void 0,
+    queryPath: void 0,
+    url: void 0,
+    bounds: void 0,
+    metadata: void 0
   });
+}
+function elementContext(value) {
+  const context = objectValue(value);
+  if (!context) return void 0;
+  const fields = compact({
+    formId: stringValue(context.formId),
+    formName: stringValue(context.formName),
+    formAction: stringValue(context.formAction),
+    fieldsetLegend: stringValue(context.fieldsetLegend),
+    landmark: stringValue(context.landmark),
+    heading: stringValue(context.heading),
+    listPosition: listPosition(context.listPosition),
+    tablePosition: tablePosition(context.tablePosition)
+  });
+  return Object.keys(fields).length > 0 ? fields : void 0;
+}
+function listPosition(value) {
+  const position = objectValue(value);
+  const index = numberValue(position?.index);
+  const total = numberValue(position?.total);
+  return index === void 0 || total === void 0 ? void 0 : { index, total };
+}
+function tablePosition(value) {
+  const position = objectValue(value);
+  const row = numberValue(position?.row);
+  const column = numberValue(position?.column);
+  if (row === void 0 || column === void 0) return void 0;
+  const columnHeader = stringValue(position?.columnHeader);
+  return columnHeader === void 0 ? { row, column } : { row, column, columnHeader };
+}
+function elementAttributes(value) {
+  const attributes = objectValue(value);
+  if (!attributes) return void 0;
+  const strings = {};
+  for (const [name, item] of Object.entries(attributes)) {
+    if (typeof item === "string") strings[name] = item;
+  }
+  return strings;
 }
 function elementTestId(element, attributes) {
   return stringValue(element.testId) ?? stringValue(attributes?.["data-testid"]) ?? stringValue(attributes?.["data-test"]) ?? stringValue(attributes?.["data-cy"]);
@@ -41,6 +128,27 @@ function stringValue(value) {
 }
 function numberValue(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+
+// src/output-nodes/secret-binding.ts
+var WEB_AUTOMATION_SECRET_STATE_PREFIX = "web.secret.";
+function webAutomationSecretStatePath(key) {
+  return `${WEB_AUTOMATION_SECRET_STATE_PREFIX}${key}`;
+}
+function webAutomationSecretBinding(key) {
+  return { $state: { path: webAutomationSecretStatePath(key) } };
+}
+function webAutomationSecretKeyForRecordedElement(payload) {
+  const element = objectValue(payload.element);
+  const attributes = objectValue(element?.attributes);
+  const statePath = stringValue(objectValue(payload.visualTarget)?.statePath);
+  const fromStatePath = statePath?.startsWith("web.elements.") ? statePath.slice("web.elements.".length) : void 0;
+  const identity = fromStatePath ?? stringValue(element?.testId) ?? stringValue(attributes?.["data-testid"]) ?? stringValue(attributes?.["data-test"]) ?? stringValue(attributes?.["data-cy"]) ?? stringValue(element?.id) ?? stringValue(attributes?.id) ?? stringValue(element?.name) ?? stringValue(attributes?.name) ?? stringValue(element?.selector) ?? stringValue(payload.selector);
+  const key = sanitizeSecretKey(identity ?? "");
+  return key.length ? key : void 0;
+}
+function sanitizeSecretKey(value) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 120);
 }
 
 // src/output-nodes/payloads.ts
@@ -63,7 +171,7 @@ function recordedOutputParameters(outputId, payload) {
   const hasTarget = Object.keys(target).length > 0;
   if (outputId === "web.browser.navigate") return compact({ url: stringValue(payload.url) });
   if (outputId === "web.dom.click" || outputId === "web.dom.clear") return compact({ selector, ...hasTarget ? target : {} });
-  if (outputId === "web.dom.type") return compact({ selector, text: stringValue(payload.inputValue) ?? "", ...hasTarget ? target : {} });
+  if (outputId === "web.dom.type") return compact({ selector, text: recordedTypedText(payload), ...hasTarget ? target : {} });
   if (outputId === "web.dom.select") return compact({ selector, value: stringValue(payload.inputValue) ?? "", ...hasTarget ? target : {} });
   if (outputId === "web.dom.keypress") return compact({ selector, key: stringValue(payload.key) ?? "", ...hasTarget ? target : {} });
   if (outputId === "web.dom.scroll") {
@@ -79,6 +187,13 @@ function recordedOutputParameters(outputId, payload) {
   if (outputId === "web.dom.extract") return compact({ selector, ...hasTarget ? target : {} });
   if (outputId === "web.dom.capture_snapshot") return {};
   return {};
+}
+function recordedTypedText(payload) {
+  const recorded = stringValue(payload.inputValue);
+  if (recorded !== void 0) return recorded;
+  if (!isSensitiveElementDescriptor(payload.element)) return "";
+  const key = webAutomationSecretKeyForRecordedElement(payload);
+  return key === void 0 ? "" : webAutomationSecretBinding(key);
 }
 function recordedCheckedState(payload) {
   const element = objectValue(payload.element);
@@ -147,4 +262,20 @@ test("a browser-scoped action acts on the tab, so it takes no frame", () => {
 test("an unexecutable event stays empty rather than becoming a command carrying only a frame", () => {
   assert.deepEqual(webAutomationOutputPayload("web.dom.assert", { element: checkbox, browserFrameId: 3 }), {});
   assert.deepEqual(webAutomationOutputPayload("web.dom.capture_snapshot", { browserFrameId: 3 }), {});
+});
+test("only a control the sensitivity rule marks asks for a withheld value", () => {
+  const plain = { selector: "input#nickname", tagName: "input", inputType: "text", id: "nickname" };
+  assert.equal(webAutomationOutputPayload("web.dom.type", { element: plain }).text, "");
+  const marked = { ...plain, inputType: "password" };
+  assert.notEqual(webAutomationOutputPayload("web.dom.type", { element: marked }).text, "");
+});
+test("a withheld value is asked for by every route the rule recognizes, not only by input type", () => {
+  for (const element of [
+    { selector: "#pw", attributes: { type: "password" } },
+    { selector: "#otp", attributes: { autocomplete: "one-time-code" } },
+    { selector: "#card", attributes: { autocomplete: "billing cc-number" } },
+    { selector: "#custom", attributes: { "data-sensitive": "true" } }
+  ]) {
+    assert.notEqual(webAutomationOutputPayload("web.dom.type", { element }).text, "", element.selector);
+  }
 });

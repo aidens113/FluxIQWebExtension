@@ -38,10 +38,10 @@ import type { ContentActionDependencies } from "./types";
 import { describeFieldValue } from "./value-redaction";
 
 export function typeAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): BrowserActionResult {
-  const element = deps.resolveTarget(action);
+  const { element, resolution } = deps.resolveTarget(action);
   const text = action.text ?? action.value ?? "";
   const withheld = isSensitiveFormControl(element);
-  const evidence = () => ({ element: deps.describeElement(element), snapshot: deps.captureSnapshot() });
+  const evidence = () => ({ element: deps.describeElement(element), snapshot: deps.captureSnapshot(), resolution });
 
   const report = deps.checkActionability(element);
   if (!report.actionable) {

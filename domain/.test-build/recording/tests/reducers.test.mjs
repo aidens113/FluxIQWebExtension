@@ -428,25 +428,41 @@ function elementLayerLabel(element) {
 
 // src/recording/web-state/action-target.ts
 function webAutomationActionTargetFromElement(element) {
+  const secret = isSensitiveElementDescriptor(element);
+  const visibleText = secret ? void 0 : element.visibleText;
+  const text2 = secret ? void 0 : element.text;
+  const value = secret ? void 0 : element.value;
   return compactJsonObject({
     type: element.role ?? element.inputType ?? element.tagName,
     id: stableAttribute(element, "data-testid") ?? stableAttribute(element, "id") ?? stableAttribute(element, "name"),
-    label: element.name ?? element.visibleText ?? element.text ?? element.value,
+    label: element.name ?? visibleText ?? text2 ?? value,
     selector: element.selector,
     bounds: element.bounds,
+    // Neither is this producer's to fill: a relative position belongs to a
+    // click that carried one, and both `visualTarget` and `elementTarget` are
+    // written by the callers that have them
+    // (`client/gateway-mapping.ts`, and Core's own dispatch preparation).
+    relativePosition: void 0,
+    visualTarget: void 0,
+    elementTarget: void 0,
     metadata: compactJsonObject({
       tagName: element.tagName,
       xpath: element.xpath,
       id: element.id,
       classNames: element.classNames,
-      visibleText: element.visibleText,
+      visibleText,
       role: element.role,
       href: element.href,
       inputType: element.inputType,
       documentBounds: stateBounds(element.documentBounds),
       isVisibleOnViewport: element.isVisibleOnViewport ?? Boolean(stateBounds(element.bounds)),
       hasClickHandler: element.hasClickHandler,
-      attributes: element.attributes
+      attributes: element.attributes,
+      testId: element.testId,
+      accessibleName: secret ? void 0 : element.accessibleName,
+      label: element.label,
+      implicitRole: element.implicitRole,
+      context: element.context
     })
   });
 }

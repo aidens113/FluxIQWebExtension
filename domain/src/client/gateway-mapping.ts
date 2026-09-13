@@ -213,6 +213,22 @@ function elementFingerprintSources(target: JsonObject, parameters: JsonObject): 
  * below asks the one sensitivity rule about the descriptor riding on the result
  * and withholds both comparison strings when it says yes. Nothing in this
  * function logs a validation value.
+ *
+ * `resolution` travels beside it, and the two are opposites in the one respect
+ * that matters here. A validation is prose a verb built out of the control's
+ * own value, so it needs the guard above; `WebAutomationTargetResolution` is a
+ * closed six-value `strategy` enum and four numbers, holds nothing derived from
+ * the page, and so needs none. It was dropped here until 2026-09-12, correctly,
+ * because nothing produced it on a successful action and carrying a field
+ * nothing fills is the defect this plan has spent a wave removing. What changed
+ * is the producer: `content/action-runtime/resolve-target.ts` now returns the
+ * measurement with the element and every verb passes it on, so a Flow can tell
+ * a target matched outright from one a scored candidate won by a margin -- D1's
+ * promise, and the half of it that a signature returning a bare `Element` had
+ * quietly withheld. The candidate *labels* an ambiguous failure names are page
+ * text; they ride on the failure record, which `result-mapping.ts` puts on the
+ * gateway result rather than in this payload, and they are bounded and filtered
+ * where they are built.
  */
 export function webAutomationActionResultPayload(result: WebAutomationActionResult): JsonObject {
   return compactJsonObject({
@@ -227,6 +243,7 @@ export function webAutomationActionResultPayload(result: WebAutomationActionResu
     visualTarget: result.visualTarget,
     snapshot: result.snapshot,
     extracted: result.extracted,
+    resolution: result.resolution,
     startedAt: result.startedAt,
     finishedAt: result.finishedAt
   });
