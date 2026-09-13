@@ -1321,3 +1321,47 @@ Week 2: do not add one.
 `pnpm test`.
 
 **Report:** `reports/g-core-late-event.md`, in this repository.
+
+---
+
+# Eighth dispatch — W19's domain mapper
+
+Written while `w19-c2` runs. All rules above still hold.
+
+## w19-d1 — the mapper claims where a recorded click landed (domain)
+
+Dispatched once `w19-c2` is committed and the supervisor has run Core's
+`pnpm build`, so `following` and the candidate's `expectedState` are in Core's
+types; the dispatch names the Core commit.
+
+**Owns:** one new builder in `domain/src/runtime/expectation/` (name it) and
+`runtime/expectation/index.ts`; `domain/src/web-panel-host.ts`, the mapper
+(about `:115-138`) and `candidate(...)` only; a new test file in
+`runtime/expectation/tests/`; `domain/src/tests/domain.test.ts`, new rows only;
+`domain/src/io/tests/input-model.test.ts`, one row.
+
+**Read:** `reports/i-w19-expectation.md` section 2 and design D1;
+`reports/w19-e1.md` open questions 1-2 and "A gap the mapper must close";
+`reports/w19-c2.md` for the exact `following` shape.
+
+**Task.** Design D1, no landing marker. For a `web.dom.click` observation, look in
+`following` for explained `web.page.navigated` entries naming this click and take
+the **last** one. A landing names the click when its
+`metadata.explainedByEventId` equals the click's own event id, rebuilt through the
+domain's builder (`createWebAutomationRecordingEvent`,
+`client/gateway-mapping.ts:66`) from `payload.sequence` and the entry's
+`timestampMs`, never spelled out again. When a landing has no
+`explainedByEventId`, it names the nearest preceding click in the same `sourceId`
+whose `payload.sequence` equals `explainedBy`. Emit exactly
+`{ conditions: [{ assert: { kind: "url", expected: <path> } }], mode: "all", timeoutMs: 5000 }`,
+path only; emit nothing on the four cases section 2 lists. The explained
+observation itself still maps to `null`. Reach the builder through the barrel.
+
+**Tests.** Section 2's rows plus: two clicks sharing a sequence each get their own
+landing; two landings for one click give the last. Mutation: drop the
+`expectedState` from `candidate(...)`, then separately break the event-id match,
+each failing a named row, restored byte-identical. Domain `check` and `test` under
+a private label; the structure audit. Put the paragraph the recording
+architecture page needs in the report.
+
+**Report:** `reports/w19-d1.md`.
