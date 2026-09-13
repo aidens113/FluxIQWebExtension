@@ -7,6 +7,10 @@
 // the block that stops a new one beginning -- and the handshake that negotiates
 // a start with FluxIQ. Turning a browser happening into a recorded event is not
 // its job; it hands those to the caller's event path.
+//
+// A recording starts once. FluxIQ's acknowledgement can race the local start,
+// arrive twice, name another recording, or cross this client's own Stop on the
+// wire; `beginAccepted` and `beginOnce` decide each of those.
 
 import { WEB_AUTOMATION_DOMAIN_ID } from "@fluxiq-web-extension/domain/client";
 import type {
@@ -40,6 +44,14 @@ import {
 } from "./recording-start/index";
 import { compactObject } from "./value-readers";
 
+// How long a start waits on its project lookup before going on without a
+// project. The lookup reads FluxIQ's gateway snapshot over HTTP with no timeout
+// of its own (`core-api.ts`), and the local fallback waits for the start's send,
+// which waits for the lookup: unbounded, one stalled lookup would hold that
+// fallback off for good. Twice the acceptance window, so a slow FluxIQ still
+// answers while a user who pressed Record is still watching.
+export const RECORDING_START_PROJECT_LOOKUP_BOUND_MS = 1_500;
+
 export type ActiveRecordingDeps = {
   readonly send: GatewayMessageSender;
   readonly gatewayState: () => ConnectionState;
@@ -66,12 +78,25 @@ export type ActiveRecordingDeps = {
   readonly setLastError: (message: string | undefined) => void;
 };
 
+type StartUnderWay = {
+  readonly recordingId: string;
+  // Settles, and never rejects, once the start has finished or failed.
+  readonly finished: Promise<void>;
+};
+
 export class ActiveRecording {
   private recordingState: RecordingState = "idle";
   private recordingStartedAt: number | undefined;
   private activeRecordingId: string | undefined;
   private recordingBlock: RecordingBlockState | undefined;
   private events = 0;
+  // A start already decided that has not yet reached `recording`.
+  private starting: StartUnderWay | undefined;
+  // The recording this client last stopped: FluxIQ's acknowledgement of it can
+  // still be on the wire.
+  private stoppedRecordingId: string | undefined;
+  // The recording whose start last gave up on its project lookup at the bound.
+  private lookupBoundReachedFor: string | undefined;
   private readonly handshake: RecordingStartHandshake;
 
   constructor(private readonly deps: ActiveRecordingDeps) {
@@ -159,6 +184,7 @@ export class ActiveRecording {
         })
       : undefined;
     this.recordingState = "idle";
+    this.stoppedRecordingId = recordingId;
     this.deps.clicks.clear();
     this.activeRecordingId = undefined;
     this.deps.projects.setActiveRecordingProject(undefined);
@@ -176,17 +202,76 @@ export class ActiveRecording {
     this.deps.emitStatus();
   }
 
+  // FluxIQ's `server.start_recording`: its acknowledgement of this client's
+  // start, or a start FluxIQ asked for itself, from the web panel.
   async beginAccepted(recordingId: string, projectId?: string | null): Promise<void> {
+    if (!this.expectsStart(recordingId)) {
+      this.deps.onActivity("recording", "Recording start ignored", "FluxIQ named a recording this client is not starting or running, or has already stopped.", "warning");
+      return;
+    }
     this.handshake.noteAccepted();
+    await this.beginOnce(recordingId, async () => projectId);
+  }
+
+  // FluxIQ refused a start. The handshake decides whether that is retried or
+  // surfaced; a refusal with no start of ours in flight is surfaced at once.
+  noteStartRefusal(refusal: RecordingStartRefusal): void {
+    this.handshake.noteRefusal(refusal);
+  }
+
+  // Abandons a start still waiting on FluxIQ, with its timers.
+  cancelStart(): void {
+    this.handshake.cancel();
+  }
+
+  // A `server.start_recording` names the recording FluxIQ opened. One naming the
+  // recording this client stopped crossed that Stop on the wire, and restarting
+  // would record into a recording FluxIQ has closed. While a start is pending or
+  // under way, or a recording is running, one naming any other recording
+  // answers none of them. With none of those, it is FluxIQ's own start.
+  private expectsStart(recordingId: string): boolean {
+    if (recordingId === this.stoppedRecordingId) return false;
+    const own = [
+      this.handshake.pendingRecordingId(),
+      this.starting?.recordingId,
+      this.recordingState === "recording" ? this.activeRecordingId : undefined
+    ].filter((id) => id !== undefined);
+    return own.length === 0 || own.includes(recordingId);
+  }
+
+  // Every way into a recording comes through here, so it starts once. A start
+  // is marked the moment it is decided, before its first await. Another that
+  // arrives meanwhile waits for it, then finds the recording running and only
+  // links its project, so the two apply in the order they arrived: a local
+  // start's missing project never overwrites the one FluxIQ named while it ran.
+  private async beginOnce(recordingId: string, project: () => Promise<string | null | undefined>): Promise<void> {
+    while (this.starting) await this.starting.finished;
+    if (this.recordingState === "recording") {
+      await this.linkProject(await project());
+      return;
+    }
+    let finish: () => void = () => undefined;
+    const starting: StartUnderWay = { recordingId, finished: new Promise<void>((resolve) => { finish = resolve; }) };
+    this.starting = starting;
+    try {
+      await this.startRecording(recordingId, await project());
+    } finally {
+      if (this.starting === starting) this.starting = undefined;
+      finish();
+    }
+  }
+
+  private async linkProject(projectId: string | null | undefined): Promise<void> {
+    if (projectId === undefined) return;
+    await this.deps.persistSession(compactObject({ ...this.deps.session(), projectId }));
+    if (this.recordingState !== "recording" || this.deps.projects.activeRecordingProject() === projectId) return;
+    this.deps.projects.setActiveRecordingProject(projectId);
+    await this.deps.evidence.captureActiveSnapshot("Project-linked snapshot captured");
+  }
+
+  private async startRecording(recordingId: string, projectId: string | null | undefined): Promise<void> {
     if (projectId !== undefined) {
       await this.deps.persistSession(compactObject({ ...this.deps.session(), projectId }));
-    }
-    if (this.recordingState === "recording") {
-      if (projectId !== undefined && this.deps.projects.activeRecordingProject() !== projectId) {
-        this.deps.projects.setActiveRecordingProject(projectId);
-        await this.deps.evidence.captureActiveSnapshot("Project-linked snapshot captured");
-      }
-      return;
     }
     this.resetLog();
     this.deps.navigation.clearRecordingTabs();
@@ -218,22 +303,11 @@ export class ActiveRecording {
     await this.deps.evidence.captureActiveSnapshot("Initial snapshot captured");
   }
 
-  // FluxIQ refused a start. The handshake decides whether that is retried or
-  // surfaced; a refusal with no start of ours in flight is surfaced at once.
-  noteStartRefusal(refusal: RecordingStartRefusal): void {
-    this.handshake.noteRefusal(refusal);
-  }
-
-  // Abandons a start still waiting on FluxIQ, with its timers.
-  cancelStart(): void {
-    this.handshake.cancel();
-  }
-
   // Each attempt resolves the project again rather than reusing the first
   // answer: a retry exists because FluxIQ's context moved, and the extension's
   // own view of it may have moved with it.
   private async sendStart(attempt: RecordingStartAttempt): Promise<void> {
-    const projectId = await this.deps.projects.resolve(attempt.attempt === 0 ? "recording_start" : "recording_start_retry");
+    const projectId = await this.lookUpProject(attempt.recordingId, attempt.attempt === 0 ? "recording_start" : "recording_start_retry");
     await this.deps.send("client.start_recording", {
       recordingId: attempt.recordingId,
       ...(projectId ? { projectId } : {}),
@@ -251,6 +325,31 @@ export class ActiveRecording {
         startAttempt: attempt.attempt
       }
     });
+  }
+
+  // A start's project, waited on for at most the bound. At the bound the start
+  // goes on as it does when no project is known: the send carries none, for
+  // FluxIQ to accept or refuse, and a local start records unlinked until an
+  // acknowledgement names a project. The lookup is left to finish on its own.
+  private async lookUpProject(recordingId: string, reason: string): Promise<string | undefined> {
+    let boundReached = false;
+    let bound: ReturnType<typeof setTimeout> | undefined;
+    const giveUp = new Promise<undefined>((resolve) => {
+      bound = setTimeout(() => {
+        boundReached = true;
+        resolve(undefined);
+      }, RECORDING_START_PROJECT_LOOKUP_BOUND_MS);
+    });
+    try {
+      const projectId = await Promise.race([this.deps.projects.resolve(reason), giveUp]);
+      this.lookupBoundReachedFor = boundReached ? recordingId : undefined;
+      if (boundReached) {
+        this.deps.onActivity("recording", "Project lookup timed out", `No project from FluxIQ within ${RECORDING_START_PROJECT_LOOKUP_BOUND_MS} ms; starting without one.`, "warning");
+      }
+      return projectId;
+    } finally {
+      clearTimeout(bound);
+    }
   }
 
   // A refusal the handshake has stopped fighting -- persistent from the first
@@ -276,10 +375,17 @@ export class ActiveRecording {
   // FluxIQ did not answer the start in time. Recording begins locally so no
   // user action is lost; the project link attaches later if one arrives. A
   // refusal is not silence and never reaches here -- it goes to
-  // `applyRefusal`, through a bounded retry when waiting can help.
+  // `applyRefusal`, through a bounded retry when waiting can help. When this
+  // start's send already gave up on the lookup at the bound, the local start
+  // does not wait on it a second time: it goes on with what is known.
   private async beginWithoutAcceptance(recordingId: string): Promise<void> {
-    const projectId = await this.deps.projects.resolve("recording_start_timeout");
-    await this.beginAccepted(recordingId, projectId ?? null);
+    let projectId: string | undefined;
+    await this.beginOnce(recordingId, async () => {
+      projectId = this.lookupBoundReachedFor === recordingId
+        ? this.deps.projects.current()
+        : await this.lookUpProject(recordingId, "recording_start_timeout");
+      return projectId ?? null;
+    });
     if (!projectId) {
       this.deps.onActivity("recording", "Project context pending", "Structured state will record; screenshots attach after FluxIQ links a project.", "warning");
       this.deps.emitStatus();

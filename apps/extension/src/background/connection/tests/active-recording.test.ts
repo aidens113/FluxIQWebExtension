@@ -16,7 +16,7 @@ import type {
   UnsupportedPageState
 } from "../../../shared/protocol";
 import type { ActivePage } from "../active-page";
-import { ActiveRecording, type ActiveRecordingDeps } from "../active-recording";
+import { ActiveRecording, RECORDING_START_PROJECT_LOOKUP_BOUND_MS, type ActiveRecordingDeps } from "../active-recording";
 import { ActivityLog } from "../activity-log";
 import type { ContentAttachment } from "../content-attachment";
 import { EventSequence } from "../event-sequence";
@@ -24,7 +24,7 @@ import { NavigationRecorder } from "../navigation-recorder";
 import { PointerClickFilter } from "../pointer-click-filter";
 import type { ProjectContext } from "../project-context";
 import type { RecordingEvidenceReporter } from "../recording-evidence";
-import { classifyRecordingStartRefusal } from "../recording-start/index";
+import { classifyRecordingStartRefusal, RECORDING_START_ACCEPT_TIMEOUT_MS } from "../recording-start/index";
 
 // Hand-driven timers, on the pattern handshake.test.ts uses.
 function fakeTimers(t: TestContext) {
@@ -42,6 +42,11 @@ function fakeTimers(t: TestContext) {
   return {
     delays: () => [...pending.values()].map((timer) => timer.delay),
     count: () => pending.size,
+    fire: (delay: number) => {
+      const due = [...pending].filter(([, timer]) => timer.delay === delay);
+      for (const [id] of due) pending.delete(id);
+      for (const [, timer] of due) timer.callback();
+    },
     fireAll: () => {
       const due = [...pending.values()];
       pending.clear();
@@ -80,6 +85,8 @@ function harness(options: {
   gatewayState?: ConnectionState;
   unsupported?: UnsupportedPageState;
   projectId?: string;
+  // Replaces the project lookup's answer, so a row can hold it open.
+  lookup?: () => Promise<string | undefined>;
 } = {}) {
   const settings = { gatewayUrl: "ws://gateway.test" } as FluxIQSettings;
   let session = { clientId: "client-1" } as FluxIQSession;
@@ -104,7 +111,7 @@ function harness(options: {
   const projects = {
     resolve: async (reason: string) => {
       resolveReasons.push(reason);
-      return options.projectId;
+      return options.lookup ? options.lookup() : options.projectId;
     },
     current: () => options.projectId,
     activeRecordingProject: () => activeProject,
@@ -305,9 +312,9 @@ test("an acceptance while recording only re-links the project; stopping reports 
   assert.equal(h.session().projectId, "project-1", "the accepted project is persisted");
   assert.equal(h.recorded.length, 1);
 
-  await h.recording.beginAccepted("recording-2", "project-2");
+  await h.recording.beginAccepted("recording-1", "project-2");
   assert.equal(h.recording.recordingId(), "recording-1", "a running recording keeps its id");
-  assert.equal(h.activeProject(), "project-2");
+  assert.equal(h.activeProject(), "project-2", "FluxIQ's project for the same recording is linked");
   assert.deepEqual(h.snapshots, ["Initial snapshot captured", "Project-linked snapshot captured"]);
   assert.equal(h.recorded.length, 1, "no second start event");
 
@@ -383,4 +390,127 @@ test("an acknowledgement after a local start changes nothing but the project lin
 
   await h.recording.beginAccepted(recordingId, "project-1");
   assert.equal(h.snapshots.length, 2, "the same acknowledgement again changes nothing");
+});
+
+// The race `f-recording-start-send` probed: FluxIQ's acknowledgement lands while
+// the local start is still looking its project up.
+test("an acknowledgement while the local start is under way starts the recording once, then links its project", async (t) => {
+  stubManifest(t);
+  const timers = fakeTimers(t);
+  const h = harness();
+
+  await h.recording.start();
+  await settle();
+  const recordingId = String(h.sent[0]?.payload.recordingId);
+  timers.fireAll();
+  assert.deepEqual(h.resolveReasons, ["recording_start", "recording_start_timeout"], "the local start is under way");
+  await h.recording.beginAccepted(recordingId, "project-1");
+  await settle();
+
+  assert.equal(h.recording.state(), "recording");
+  assert.equal(h.recording.recordingId(), recordingId);
+  assert.equal(h.recorded.length, 1, "one start event");
+  assert.equal(h.labels().filter((label) => label === "Recording started").length, 1);
+  assert.deepEqual(h.attached, [7], "the tab is attached once");
+  assert.deepEqual(h.snapshots, ["Initial snapshot captured", "Project-linked snapshot captured"]);
+  assert.equal(h.activeProject(), "project-1", "the local start's missing project does not replace FluxIQ's");
+  assert.equal(h.session().projectId, "project-1");
+});
+
+test("a repeated acknowledgement while the first is still starting the recording starts it once", async () => {
+  const h = harness();
+  const first = h.recording.beginAccepted("recording-1", "project-1");
+  const second = h.recording.beginAccepted("recording-1", "project-1");
+  await Promise.all([first, second]);
+  assert.equal(h.recorded.length, 1, "one start event");
+  assert.deepEqual(h.attached, [7]);
+  assert.deepEqual(h.snapshots, ["Initial snapshot captured"], "the same project needs no second link");
+});
+
+test("an acknowledgement naming another recording is ignored while a start is pending, under way or running", async (t) => {
+  stubManifest(t);
+  const timers = fakeTimers(t);
+  const h = harness();
+
+  await h.recording.start();
+  await settle();
+  const recordingId = String(h.sent[0]?.payload.recordingId);
+  await h.recording.beginAccepted("recording-other", "project-2");
+  assert.equal(h.recording.state(), "idle", "it does not answer the pending start");
+  assert.equal(timers.count(), 1, "the acceptance window is still open");
+  assert.equal(h.session().projectId, undefined, "and its project is not persisted");
+  assert.equal(h.labels().at(-1), "Recording start ignored");
+
+  timers.fireAll();
+  await h.recording.beginAccepted("recording-other", "project-2");
+  await settle();
+  assert.equal(h.recording.recordingId(), recordingId, "nor the start under way");
+  assert.equal(h.recorded.length, 1);
+
+  await h.recording.beginAccepted("recording-other", "project-2");
+  assert.equal(h.recording.recordingId(), recordingId, "nor the running recording");
+  assert.equal(h.activeProject(), null, "whose project link is untouched");
+  assert.deepEqual(h.snapshots, ["Initial snapshot captured"]);
+});
+
+// g-core-start-order: FluxIQ sends no acknowledgement once a Stop has reached
+// it, but one already on the wire can still cross the client's Stop.
+test("an acknowledgement that crosses the client's own Stop does not restart the recording", async (t) => {
+  stubManifest(t);
+  const timers = fakeTimers(t);
+  const h = harness();
+
+  await h.recording.start();
+  await settle();
+  const recordingId = String(h.sent[0]?.payload.recordingId);
+  timers.fireAll();
+  await settle();
+  assert.equal(h.recording.state(), "recording");
+
+  const stopping = h.recording.stop(true);
+  await h.recording.beginAccepted(recordingId, "project-1");
+  await stopping;
+  assert.equal(h.recording.state(), "idle", "an acknowledgement while the stop is being sent does not restart it");
+  await h.recording.beginAccepted(recordingId, "project-1");
+  await settle();
+  assert.equal(h.recording.state(), "idle", "nor one arriving after the stop was sent");
+  assert.equal(h.recorded.length, 1, "the only start event is the local start's");
+  assert.deepEqual(h.attached, [7]);
+  assert.equal(h.sent.at(-1)?.type, "client.stop_recording", "and nothing follows the stop");
+  assert.equal(h.labels().at(-1), "Recording start ignored");
+});
+
+test("a stalled project lookup holds a start for its bound, then the local fallback begins without a project", async (t) => {
+  stubManifest(t);
+  const timers = fakeTimers(t);
+  let stalled = true;
+  const h = harness({ lookup: () => (stalled ? new Promise<undefined>(() => undefined) : Promise.resolve(undefined)) });
+
+  const pressed = h.recording.start();
+  await settle();
+  assert.equal(h.sent.length, 0, "the lookup holds the send");
+  assert.deepEqual(timers.delays(), [RECORDING_START_ACCEPT_TIMEOUT_MS, RECORDING_START_PROJECT_LOOKUP_BOUND_MS]);
+
+  timers.fire(RECORDING_START_ACCEPT_TIMEOUT_MS);
+  await settle();
+  assert.equal(h.recording.state(), "idle", "the window elapsed, but nothing records ahead of the unsent start");
+
+  timers.fire(RECORDING_START_PROJECT_LOOKUP_BOUND_MS);
+  await settle();
+  assert.equal(h.sent.length, 1, "at the bound the start is sent without a project");
+  assert.equal(h.sent[0]?.payload.projectId, undefined);
+  assert.equal((h.sent[0]?.payload.metadata as Record<string, unknown>).projectId, null);
+  assert.equal(h.recording.state(), "recording", "and the local fallback begins");
+  assert.equal(h.recording.recordingId(), h.sent[0]?.payload.recordingId);
+  assert.deepEqual(h.resolveReasons, ["recording_start"], "without waiting on the stalled lookup a second time");
+  assert.equal(h.activeProject(), null);
+  assert.ok(h.labels().includes("Project lookup timed out"));
+  assert.equal(timers.count(), 0, "nothing is left armed");
+
+  // A lookup that gave up once is not skipped for good: the next start looks again.
+  stalled = false;
+  await h.recording.stop(false);
+  await h.recording.start();
+  await settle();
+  assert.deepEqual(h.resolveReasons, ["recording_start", "recording_start"]);
 });
