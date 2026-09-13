@@ -22,6 +22,7 @@ Core's matching index is at `F:\!FluxIQ\docs\working\README.md`.
 | [llm-production-automation-plan.md](./llm-production-automation-plan.md) | root coordination agent | 1577 ⚠ | Production-capable, provider-neutral LLM automation through the real web panel, production extension, and Testing Lab (instruction-only blank-Flow creation, evidence-guided exploration, runtime failure diagnosis/adaptation, reusable sanitized evidence); generic behavior lives in Core (`F:\!FluxIQ`), browser/DOM/selector/Testing Lab concerns live in this repository. | none |
 | [module-size-governance-plan.md](./module-size-governance-plan.md) | Senior supervisor agent | 312 | Applying the shared file and class size policy to this repository, and decomposing the files here that already exceed it. | `module-size-governance-plan.md` |
 | [mvp-week1-web-automation-reliability-plan.md](./mvp-week1-web-automation-reliability-plan.md) | Senior supervisor agent | 772 | Week 1 of the 30-day MVP (Phases 1.1–1.6): browser action vocabulary, element identity, browser state/evidence, failure taxonomy, and FluxBench, with automated verification through the Testing Lab as the primary proof for every phase. Weeks 2–4 are out of scope except where Week 1 must leave a seam for them. | `mvp-week1-web-automation-reliability-plan.md` — Core owns the failure-taxonomy contracts (C1, C2, pulled ahead of Wave 2 by D11) and the expectation-evaluator seam (C3)` |
+| [repository-state-audit.md](./repository-state-audit.md) | Senior supervisor agent | 121 | Read-only audit of FluxIQWebExtension and FluxIQ Core at their current dev heads, with confirmed findings and prioritized follow-up. | `repository-state-audit.md` |
 
 ## Complete
 
@@ -31,5 +32,5 @@ Core's matching index is at `F:\!FluxIQ\docs\working\README.md`.
 | [extension-runtime-capabilities-plan.md](./extension-runtime-capabilities-plan.md) | Extension runtime | 1165 ⚠ | Building the extension into a first-class FluxIQ runtime client that executes Automation Studio flows and domain-owned web output nodes. | `runtime-kernel-plan.md` |
 | [extension-ui-rebuild-plan.md](./extension-ui-rebuild-plan.md) | Extension UI | 254 | Replacing the card-heavy popup/side-panel UI with one coherent application shell, persistent accessible tabs, and predictable scrolling. | none |
 
-⚠ marks documents over the 800-line compaction threshold (3 of 9 here).
+⚠ marks documents over the 800-line compaction threshold (3 of 10 here).
 Compact them the next time work touches them; do not schedule a bulk rewrite.
