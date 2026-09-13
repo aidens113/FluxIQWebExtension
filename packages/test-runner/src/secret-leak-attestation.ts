@@ -8,9 +8,15 @@ export const SECRET_LEAK_ATTESTATION_DEFAULT_LIMITS = Object.freeze({
   maxFiles: 2_000, maxFileBytes: 1_048_576, maxTotalBytes: 16_777_216, maxDepth: 16, maxApprovedPaths: 32,
 });
 export type SecretLeakAttestationLimits = { maxFiles: number; maxFileBytes: number; maxTotalBytes: number; maxDepth: number; maxApprovedPaths: number };
-const ABSOLUTE_LIMITS: Readonly<SecretLeakAttestationLimits> = Object.freeze({
-  maxFiles: 10_000, maxFileBytes: 8_388_608, maxTotalBytes: 67_108_864, maxDepth: 32, maxApprovedPaths: 128,
-});
+/**
+ * The ceilings a Lab run's scans use, and the demo setup scan with them. A run
+ * bundle, an isolated workspace and Core's SQLite databases outgrow the defaults,
+ * which are sized for one result file. `maxApprovedPaths` stays at its default.
+ */
+export const SECRET_LEAK_ATTESTATION_RUN_LIMITS = Object.freeze({
+  maxFiles: 10_000, maxFileBytes: 8_388_608, maxTotalBytes: 67_108_864, maxDepth: 32,
+}) satisfies Partial<SecretLeakAttestationLimits>;
+const ABSOLUTE_LIMITS: Readonly<SecretLeakAttestationLimits> = Object.freeze({ ...SECRET_LEAK_ATTESTATION_RUN_LIMITS, maxApprovedPaths: 128 });
 
 export type SecretLeakFindingCategory =
   | "secret-literal" | "credential-field" | "credential-assignment" | "authorization-material"

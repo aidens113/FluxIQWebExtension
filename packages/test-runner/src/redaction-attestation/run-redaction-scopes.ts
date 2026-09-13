@@ -12,15 +12,20 @@ import type { RunRedactionScope } from "./attest-run-redaction.js";
  *   persisted recordings -- `recording.json`, `timeline.jsonl` and
  *   `snapshots/*.json` under `artifacts/automation-studio/projects/<project>/recordings/<recording>/`
  *   -- the Flow run traces, and Core's SQLite stores with their `-wal` and `-shm`
- *   files, which the scan searches byte for byte for each literal in UTF-8 and
- *   UTF-16 rather than skipping as binary. Absent when the run owns no FluxIQ
- *   workspace: the existing target, or a topology that never started.
+ *   files. The scan searches each store file byte for byte for each literal in
+ *   UTF-8 and UTF-16 rather than skipping it as binary, and also reads every text
+ *   and blob cell of the database the file belongs to, from a copy with its `-wal`
+ *   and `-journal`, so a literal SQLite split across pages is found too. Absent
+ *   when the run owns no FluxIQ workspace: the existing target, or a topology
+ *   that never started.
  *
  * `workspaceWrittenSince` is for a workspace that outlives the run, the
  * `persistent-isolated` target's: the workspace scope then carries it as
  * `writtenSince`, and only what was written from that instant on is scanned. A
  * SQLite store is one file every run writes into, so a store this run wrote to
- * is scanned whole, rows an earlier run left included. An isolated workspace is
+ * is scanned whole, rows an earlier run left included, and so is the database
+ * behind a `-wal` or `-journal` this run wrote, even when the database file
+ * itself was not written since. An isolated workspace is
  * created by the run, so it is passed without one and scanned whole.
  *
  * Each scope is rooted at the directory's parent with the directory as its one

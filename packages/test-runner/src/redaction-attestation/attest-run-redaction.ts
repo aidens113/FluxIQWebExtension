@@ -1,6 +1,6 @@
 import { lstat, readdir } from "node:fs/promises";
 import path from "node:path";
-import { attestWorkspaceSecretAbsence, type SecretLeakAttestationLimits, type SecretLeakFindingCategory } from "../secret-leak-attestation.js";
+import { attestWorkspaceSecretAbsence, SECRET_LEAK_ATTESTATION_RUN_LIMITS, type SecretLeakFindingCategory } from "../secret-leak-attestation.js";
 
 /**
  * One tree the attestation scans: each entry of `paths` is a named entry under
@@ -30,8 +30,10 @@ export type RunRedactionScopeSummary = { name: string; scannedFiles: number; sca
  *   held one or left anything unread.
  * - `failed`: a scope held a declared literal, or the scan could not read all of
  *   what it was given (an unreadable, oversize, reparse-point or over-limit
- *   entry). The second is a failure too, because an attestation that could not
- *   look has not attested absence.
+ *   entry, or an `unscanned-store`: a SQLite store file or database it could not
+ *   copy or read in full, one over a ceiling, or a `-wal` or `-journal` with no
+ *   database beside it). The second is a failure too, because an attestation
+ *   that could not look has not attested absence.
  *
  * `findings` are what fail the run, as `security.redaction`. `advisories` are the
  * scanner's credential-syntax categories (`credential-field`,
@@ -56,13 +58,17 @@ export type RunRedactionAttestationInput = { literals: readonly string[]; scopes
  * an isolated workspace carries every recording and run trace, so the defaults
  * sized for one demo result file would fail a healthy run closed on size alone.
  */
-const RUN_LIMITS = Object.freeze({ maxFiles: 10_000, maxFileBytes: 8_388_608, maxTotalBytes: 67_108_864, maxDepth: 32 }) satisfies Partial<SecretLeakAttestationLimits>;
+const RUN_LIMITS = SECRET_LEAK_ATTESTATION_RUN_LIMITS;
 
 /**
  * How many entries one scan of a bounded scope is given: few enough that that
  * many files at the per-file ceiling still fit the total ceiling, and under the
- * scanner's 32 approved paths. So no scan's count or total ceiling trips on how
- * much the run wrote; a single file over the per-file ceiling still fails closed.
+ * scanner's 32 approved paths. So no scan's count or byte-search total trips on
+ * how much the run wrote; a single file over the per-file ceiling still fails
+ * closed. The copies of the databases the scan reads cell by cell count against
+ * the same total, and an entry that is a `-wal` or `-journal` also copies the
+ * database it belongs to, which may not be an entry: those copies can still
+ * reach the total, as an `unscanned-store` finding.
  */
 const ENTRIES_PER_BOUNDED_SCAN = Math.floor(RUN_LIMITS.maxTotalBytes / RUN_LIMITS.maxFileBytes);
 

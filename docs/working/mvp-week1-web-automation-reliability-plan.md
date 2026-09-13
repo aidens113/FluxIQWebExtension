@@ -40,7 +40,7 @@ settled ledger entries are in parts one to thirty-six of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13, while workers run.**
-- **This repository:** `ededbb4`, 94 commits ahead of `origin/dev`, not pushed.
+- **This repository:** `0a8606c`, 95 commits ahead of `origin/dev`, not pushed.
 - **Core:** `240c73e`, 10 commits ahead of `origin/dev`, `fluxiq` **0.4.0**, built at
   `187f40d`; the tenth is a plan-only commit. The nine code commits:
   - `5d495eb`, trace withholding;
@@ -92,8 +92,8 @@ settled ledger entries are in parts one to thirty-six of
   (P7, a new Core node outcome); both rows stay in the corpus.
 
 **In flight:**
-- **The auth-gate leak:** the leak check is committed; `g-demo-attestation-limits`;
-  in Core, `g-core-withholding-execution`, then Core's withholding is committed.
+- **The auth-gate leak:** the leak check and its demo limits are committed; in Core,
+  `g-core-withholding-execution`, then Core's withholding is committed.
 - **From the bench triage:** P1-P3, H1-H7, the expectation check and the lane
   consistency fix are committed.
 - **Recording gaps P4-P6:** `f-domain-capability-gaps`, `f-tab-recording` and
@@ -689,6 +689,44 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   - no Lab run;
   - the `fixture.invalid` path through the CLI;
   - a Lab instance that resolves its own copy of the contracts package.
+- Outcome: Accepted
+
+### 2026-09-13 — g-demo-attestation-limits: the demo leak check scans Core's databases up to the Lab run's limits
+
+- Agent: worker `g-demo-attestation-limits`; the shared constant and the
+  verification by supervisor.
+- Changed, in `packages/test-runner/src/`:
+  - **`secret-leak-attestation.ts`,** by the supervisor: exports
+    `SECRET_LEAK_ATTESTATION_RUN_LIMITS`, which is 10,000 files, 8 MiB per file,
+    64 MiB per scan and depth 32. The scanner's absolute ceilings spread it and add
+    128 approved paths.
+  - **`demo-llm-attestation.ts`:** the demo setup scan uses those limits.
+    - Before, it used the defaults.
+    - Under those, a Core database or `-wal` over 1 MiB failed setup on size alone,
+      and so would a workspace of more than 2,000 files.
+  - **`redaction-attestation/attest-run-redaction.ts`,** by the supervisor: the run
+    attestation uses the same constant instead of its own copy.
+  - **Comments in `run-redaction-scopes.ts` and `attest-run-redaction.ts`** now
+    describe the SQLite reading, including that database copies count against a
+    scan's total.
+  - **`tests/demo-llm-attestation.test.ts`:**
+    - a setup whose databases are each between 1 and 8 MiB, and together over
+      16 MiB, passes;
+    - one with a database over 8 MiB fails.
+- Validation:
+  - **Supervisor,** the test-runner gate under label `sup46`, run after the constant
+    was shared:
+    - `check` exit=0; private `tsc` exit=0;
+    - `node --test` printed "# tests 550", "# pass 550", "# fail 0";
+    - the structure audit passed.
+  - **Worker mutations,** made before the constant was shared: removing the limits,
+    and restoring only the 16 MiB total. Each failed the 1-8 MiB row (`not ok 3`).
+    Both were restored and confirmed by `sha256sum -c`.
+- Not verified:
+  - no Lab or demo run;
+  - real demo store sizes;
+  - whether the over-8 MiB row's finding is `unscanned-store`, which that row
+    cannot assert.
 - Outcome: Accepted
 
 ## Open Questions

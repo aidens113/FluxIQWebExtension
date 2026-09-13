@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { RunnerFailure } from "../failure.js";
 import { certifyDemoLlmSetupArtifacts } from "../demo-llm-attestation.js";
+import { createSqliteDatabases } from "../sqlite-store-reader/tests/sqlite-fixtures.js";
 
 const sentinel = "synthetic-deepseek-setup-sentinel-123456";
 
@@ -39,6 +40,42 @@ test("blocks setup success when an approved persistent artifact contains the sec
     error => error instanceof RunnerFailure
       && error.message === "DeepSeek setup artifact attestation failed"
       && !error.message.includes(sentinel)
+      && !error.message.includes(root),
+  );
+});
+
+const MIB = 1_048_576;
+const BLOB_TABLE = "CREATE TABLE blobs(body BLOB)";
+
+test("scans Core databases and a -wal over the default 1 MiB, and over the default 16 MiB together, up to the Lab run's ceilings", async t => {
+  const root = await demoWorkspace(t);
+  const store = path.join(root, "fluxiq-root", ".fluxiq");
+  createSqliteDatabases([
+    { file: path.join(store, "project.sqlite"), statements: [BLOB_TABLE, "INSERT INTO blobs VALUES (zeroblob(7500000))"], rows: [{ sql: "INSERT INTO blobs VALUES (zeroblob(2000000))", cells: [] }], journal: "wal" },
+    { file: path.join(store, "global.sqlite"), statements: [BLOB_TABLE, "INSERT INTO blobs VALUES (zeroblob(7500000))"] },
+  ]);
+  const sizes = await Promise.all(["project.sqlite", "project.sqlite-wal", "global.sqlite"].map(async name => (await stat(path.join(store, name))).size));
+  const storeBytes = sizes.reduce((sum, size) => sum + size, 0);
+  assert.ok(sizes.every(size => size > MIB && size < 8 * MIB), `each store file is over 1 MiB and under 8 MiB: ${sizes.join(", ")}`);
+  assert.ok(storeBytes > 16 * MIB && storeBytes < 64 * MIB, `the store files together are over 16 MiB and under 64 MiB: ${storeBytes}`);
+
+  const result = await certifyDemoLlmSetupArtifacts({ workspaceRoot: root, secretLiteral: sentinel });
+  assert.equal(result.findingCount, 0);
+  assert.ok(result.scannedBytes >= storeBytes, `every store byte was searched: ${result.scannedBytes} of at least ${storeBytes}`);
+  assert.ok(result.scannedFiles >= 7);
+  assert.equal(JSON.stringify(result).includes(root), false);
+  assert.equal(JSON.stringify(result).includes(sentinel), false);
+});
+
+test("still fails setup on a Core database over the Lab run's 8 MiB per-file ceiling, which the scan cannot read", async t => {
+  const root = await demoWorkspace(t);
+  const database = path.join(root, "fluxiq-root", ".fluxiq", "project.sqlite");
+  createSqliteDatabases([{ file: database, statements: [BLOB_TABLE, "INSERT INTO blobs VALUES (zeroblob(8500000))"] }]);
+  assert.ok((await stat(database)).size > 8 * MIB);
+  await assert.rejects(
+    certifyDemoLlmSetupArtifacts({ workspaceRoot: root, secretLiteral: sentinel }),
+    error => error instanceof RunnerFailure
+      && error.message === "DeepSeek setup artifact attestation failed"
       && !error.message.includes(root),
   );
 });
