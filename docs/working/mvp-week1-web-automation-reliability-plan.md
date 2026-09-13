@@ -712,39 +712,6 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   the timeline order of the explained event after its click; every Lab row.
 - Outcome: Revised
 
-### 2026-09-13 — g-flow-lane-followups: one Flow read and measured evidence packets; D4 is not Week 1
-
-- Agent: worker `g-flow-lane-followups`; verified and decided by supervisor. The
-  bench-lanes (`8325107`) and redaction-wiring (`3c396b0`) entries are archived
-  verbatim to part six of `archive/2026-09-12-finish-week1-ledger.md`.
-- Changed: `packages/test-runner/src/flow-lane/flow-action-types.ts`
-  (`readFlowNodes`, and a pure `flowActionTypes`), `declared-secrets.ts` (a pure
-  `flowSecretRequests`), `run-flow-lane.ts` (one read feeds both),
-  `persisted-flow-run.ts` (`evidencePackets`: each packet's UTF-8 byte size and
-  `truncated` flag, read from the run detail's `stateRefs.beforeAction` and
-  `afterAction` summaries), and their tests.
-- Decisions:
-  - **D4 is not Week 1.** Core's `actionCount` comes only from the paged
-    `list-recordings` and counts entries that are not recorded actions, so a
-    comparison could hide one lost action. The extension's tally exists only
-    inside `run-scenario.ts`. B1 already fails a proposal short of the
-    recording's pinned executable events, which covers every pinned row,
-    including step 4b's `basic-form`.
-  - `readFlowSecretRequests` survives with no production caller, kept only so a
-    test row stayed unchanged. Its removal is added to `g-run-scenario-followups`.
-  - Item 3 of `g-bench-coverage`, the bench's evidence-size consumer, can now be
-    built on `evidencePackets`, and joins the integration pass.
-- Validation: supervisor read the source diff: packets are measured by
-  `serializedBytes` and never copied. Test-runner built into a private
-  `dist-sup5` beside `dist`, `node --test` -> `# tests 483`, `# pass 483`,
-  `# fail 0`. Worker: four mutations each failed their target rows, restored by
-  hash; its earlier failing runs were all in `g-redaction-wiring`'s in-progress
-  files, and its final run passed.
-- Not verified: Core serving `stateRefs` summaries in a live run detail, which is
-  read from source only; a Lab `flow-lane.json` showing `evidencePackets` as
-  sizes and flags; W18 still pairing after the single read.
-- Outcome: Accepted
-
 ## Open Questions
 
 Open questions live in [open-questions.md](./mvp-week1-web-automation-reliability-plan/open-questions.md).

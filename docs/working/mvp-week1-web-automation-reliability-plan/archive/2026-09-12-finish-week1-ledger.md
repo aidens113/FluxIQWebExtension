@@ -685,3 +685,117 @@ and their open follow-ups are briefed as `g-w29-row` and
   state after Stop; the `existing`, `clone` and `persistent-isolated` targets.
 - Outcome: Accepted
 
+
+## Part seven, archived 2026-09-13
+
+Moved verbatim when the plan reached 750 lines: the Flow-lane follow-ups
+(`1c4e56c`), with D4 ruled out of Week 1.
+
+### 2026-09-13 — g-flow-lane-followups: one Flow read and measured evidence packets; D4 is not Week 1
+
+- Agent: worker `g-flow-lane-followups`; verified and decided by supervisor. The
+  bench-lanes (`8325107`) and redaction-wiring (`3c396b0`) entries are archived
+  verbatim to part six of `archive/2026-09-12-finish-week1-ledger.md`.
+- Changed: `packages/test-runner/src/flow-lane/flow-action-types.ts`
+  (`readFlowNodes`, and a pure `flowActionTypes`), `declared-secrets.ts` (a pure
+  `flowSecretRequests`), `run-flow-lane.ts` (one read feeds both),
+  `persisted-flow-run.ts` (`evidencePackets`: each packet's UTF-8 byte size and
+  `truncated` flag, read from the run detail's `stateRefs.beforeAction` and
+  `afterAction` summaries), and their tests.
+- Decisions:
+  - **D4 is not Week 1.** Core's `actionCount` comes only from the paged
+    `list-recordings` and counts entries that are not recorded actions, so a
+    comparison could hide one lost action. The extension's tally exists only
+    inside `run-scenario.ts`. B1 already fails a proposal short of the
+    recording's pinned executable events, which covers every pinned row,
+    including step 4b's `basic-form`.
+  - `readFlowSecretRequests` survives with no production caller, kept only so a
+    test row stayed unchanged. Its removal is added to `g-run-scenario-followups`.
+  - Item 3 of `g-bench-coverage`, the bench's evidence-size consumer, can now be
+    built on `evidencePackets`, and joins the integration pass.
+- Validation: supervisor read the source diff: packets are measured by
+  `serializedBytes` and never copied. Test-runner built into a private
+  `dist-sup5` beside `dist`, `node --test` -> `# tests 483`, `# pass 483`,
+  `# fail 0`. Worker: four mutations each failed their target rows, restored by
+  hash; its earlier failing runs were all in `g-redaction-wiring`'s in-progress
+  files, and its final run passed.
+- Not verified: Core serving `stateRefs` summaries in a live run detail, which is
+  read from source only; a Lab `flow-lane.json` showing `evidencePackets` as
+  sizes and flags; W18 still pairing after the single read.
+- Outcome: Accepted
+
+
+## Part eight, archived 2026-09-13
+
+Moved verbatim when the plan reached 783 lines: the resolver corroboration
+(`ba4a17b`) with the identity-spec fix (`1cca5a2`), and the assert resend
+(`1acea4c`). All are committed. The standing rule from the first: a change to
+the element descriptor or its context is verified against the whole `identity-`
+content family.
+
+### 2026-09-13 — g-resolver-corroboration lands, and a red identity row B5 left behind is fixed
+
+- Agent: worker `g-resolver-corroboration`; supervisor for the verification, the
+  identity-spec fix and the decisions. The Flow-lane follow-ups entry
+  (`1c4e56c`) is archived verbatim to part seven of the ledger archive.
+- Changed: `ba4a17b`, in `apps/extension/src/content/`: a new
+  `identity/corroboration.ts` (at least one distinguishing signal the recording
+  carried agrees at Core's exact rung: text similarity of 0.92 or more on
+  visible text, accessible name or label, or an equal id or test id);
+  `identity/score.ts` (Level 2 returns `unmatched` when the winner fails it);
+  `identity/veto.ts` (rule 2 uses the same predicate); `action-runtime/resolve-target.ts`
+  (CS1d: a positional strategy enumerates its candidate family and reports
+  ambiguity); their tests; near-miss rows in `e2e/content/tests/identity-resolution.spec.ts`.
+  Then the supervisor's own commit: `identity.spec.ts`, the ambiguous-targets row.
+- Found and fixed: the worker's full content-harness run failed
+  `identity.spec.ts:112`, and it still failed alone. The row asserted the two
+  duplicate buttons share their whole context; since `5911011` (B5) the context
+  also carries the landmark's name, `"Primary"` against `"Secondary"`. B5 is
+  right and the row's premise was stale, but the supervisor's B5 verification
+  ran only the two identity specs B5 edited, so the red row reached a commit.
+  From here on, a change to the element descriptor or its context is verified
+  against the whole `identity-` content family, not only the specs it touches.
+- Decisions:
+  - The measured stop condition was not met, so design A lands: W20-W23 resolve
+    the right control with unchanged scores (0.149, 0.259, 0.777, 0.783), and
+    W26 `no-context` now reports `web.target.ambiguous`.
+  - The accepted costs are refusals rather than wrong clicks: the right Save
+    shortened to "Save" with nothing exact left, Level 2 on a recording that
+    names nothing, and a point-only replay onto identical buttons.
+  - Brief defect: `e2e/content/tests/` was at its 25-file limit, so the near-miss
+    rows went into `identity-resolution.spec.ts` (now 501 lines, an advisory
+    warning) instead of a new spec. Accepted.
+- Validation: supervisor, `EXTENSION_TEST_BUILD_LABEL=sup-rc pnpm --filter
+  @fluxiq-web-extension/extension check` -> exit 0; `... test` -> `# tests 357`,
+  `# pass 357`, `# fail 0`; content `identity-resolution identity-signals
+  identity-wire-chain large-page-resolution resolve-target` -> `41 passed`.
+  `identity.spec.ts:112` alone -> `1 failed`, `- "landmarkName": "Secondary"` /
+  `+ "landmarkName": "Primary"`; after the fix, content `identity-
+  large-page-resolution resolve-target` -> `50 passed`. Worker: design A's rule
+  weakened -> 14 unit and 6 content rows fail; CS1d disabled -> 2 unit and 1
+  content row fail; both restored byte-identical.
+- Not verified: the Lab rows (W20-W23 recover and W26 reports
+  `web.target.ambiguous`, 3 of 3; W29 refuses); the full content harness since
+  both commits, which runs at integration.
+- Outcome: Accepted
+
+### 2026-09-13 — w19-e3: an assert that meets a navigating tab is sent once more
+
+- Agent: worker `w19-e3`; verified by supervisor.
+- Changed: `apps/extension/src/runtime/action-runner.ts` (`sendAction`: on Chrome's
+  no-receiver or closed-channel error, a `web.dom.assert` alone waits for
+  `waitForTabReady` and is sent exactly once more) and its test.
+- Decisions: nothing records that a second send happened, so a Lab run cannot tell
+  a race absorbed from no race; that and Firefox's closed-channel wording are not
+  Week 1, since W18's proof is its outcome.
+- Validation: supervisor read the diff. `EXTENSION_TEST_BUILD_LABEL=sup-e3 ...
+  extension check` -> exit 0; `... test` -> `# tests 357`, `# pass 356`,
+  `# fail 1`, 21 resend rows passing. The one failure, `not ok 83`, is at
+  `background/connection/tests/recorded-event-intake.test.mjs:1660`, in files
+  `w19-e1` was editing and had not committed; `w19-e3` touched only
+  `runtime/`, and its commit's guard refused any `background/` file. Test 83
+  must pass again in `w19-e1`'s verification. Worker: three mutations each
+  failed 4 rows, restored by hash.
+- Not verified: Lab W18 3 of 3 with no `web.action.failed` on the landing assert.
+- Outcome: Accepted
+
