@@ -638,102 +638,6 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 `2026-09-12-*` Wave 3 and live-validation files, and
 `2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-13 — f-flow-start-page: every Flow run starts on the scenario's start page
-
-- Agent: worker `f-flow-start-page`; verified by supervisor.
-- Changed: `flow-lane/run-flow-lane.ts` calls `prepareFlowPage` (renamed from
-  `armVariant`) on every run, after the reset. `run-scenario.ts`'s callback arms
-  only for a variant and always loads the start page. There is a new row in
-  `flow-lane/tests/run-flow-lane.test.ts`.
-- Found, from the worker reading fixture code only: 20 of the 23 unarmed week1
-  Flow-lane rows now start differently. W10 and W18 change URL, 18 change page
-  content only, and W04, W05 and W08 are unchanged. All 20 need re-measuring in
-  Stage 2.
-- Validation: supervisor read the diff. From `packages/test-runner`:
-  - `pnpm check` -> exit 0;
-  - `tsc --outDir dist-sup9` -> exit 0;
-  - `node --test "dist-sup9/**/*.test.js"` -> `# tests 502`, `# pass 502`,
-    `# fail 0`, with `ok 121 - every Flow run, armed or not, prepares its page
-    once, after the reset and before the Flow is read or started`.
-  - The tree also held the reader merge's and the small fixes' uncommitted edits.
-  - Worker: restoring the variant guard failed that row, restored byte-identical.
-- Not verified: W18 in the Lab starting on `/scenarios/auth-gate/`.
-- Outcome: Accepted
-
-### 2026-09-13 — g-evidence-reader-merge: one Flow-lane evidence-size reader
-
-- Agent: worker `g-evidence-reader-merge`; verified by supervisor.
-- Changed: a new `run-evaluation/flow-lane-evidence-sizes.ts` and its test,
-  exported through `run-evaluation/index.ts`. `single-run-evaluation.ts` and
-  `bench/evaluate-run.ts` both import it, and both copies and the rows pinning
-  them together are gone.
-- Found: one single-run row still compares a Flow-lane single run with its bench
-  row. It belongs in `bench-parity.test.ts`, which the worker did not own. It
-  stays in place, as the only check that the two producers agree.
-- Validation: supervisor read the new module. From `packages/test-runner`:
-  - `pnpm check` -> exit 0;
-  - `tsc --outDir dist-sup10` -> exit 0;
-  - `node --test "dist-sup10/**/*.test.js"` -> `# tests 502`, `# pass 502`,
-    `# fail 0`, with 16 evidence-size rows ok.
-  - Worker: three breaks in the module, and removing each caller's call, each
-    failed their rows; all restored, `sha256sum -c` OK. The moved reader differs
-    from both old copies only by `export`.
-- Not verified: a real bundle read by either producer.
-- Outcome: Accepted
-
-### 2026-09-13 — f-recording-start-send: a recording begins locally only after its start was sent
-
-- Agent: worker `f-recording-start-send`; verified by supervisor.
-- Changed: `recording-start/handshake.ts`. The acceptance window still opens
-  before the send, but when it elapses with the send unsettled, recording begins
-  locally only once that attempt's send settles. There are new rows in
-  `recording-start/tests/handshake.test.ts`, and acknowledgement rows in
-  `connection/tests/active-recording.test.ts`.
-- Found:
-  - A worker probe showed a Core acknowledgement arriving during a local start
-    (before `active-recording.ts:200`) starts recording twice and leaves the
-    project link null.
-  - `beginAccepted` never compares the acknowledged `recordingId` with the
-    pending one.
-  - A send that never settles now never falls back, and the project lookup
-    (`core-api.ts:34`) is unbounded.
-- Decisions: all three go to `f-recording-start-guard`, twelfth dispatch.
-- Validation: supervisor read the diff;
-  `EXTENSION_TEST_BUILD_LABEL=sup11 ... extension check` -> exit 0;
-  `... extension test` -> `# tests 395`, `# pass 395`, `# fail 0`, 21 handshake
-  rows ok. Worker: making the window begin locally at once failed 3 rows (first
-  `handshake.test.ts:196`); three more mutations were each caught; all restored
-  byte-identical.
-- Not verified: Core's acknowledgement live; the Lab.
-- Outcome: Accepted
-
-### 2026-09-13 — g-integration-small-fixes: stale comments, casts and the content-harness script
-
-- Agent: worker `g-integration-small-fixes`; verified by supervisor, who also
-  corrected one stale sentence in `observed-run-evaluation.ts` outside the
-  worker's lines.
-- Changed:
-  - comments in extension, domain and test-runner source, with only comment lines
-    changed in every source file;
-  - `failure-taxonomy.md` and `web-capabilities.md` name `runtime/click-landing.ts`;
-  - one cast removed from `recording/tests/domain.test.ts`, whose fixture's
-    `armPending` now matches the type;
-  - the bench report's truncation sentence;
-  - `apps/extension/package.json`'s `test:content` strips the forwarded `--`.
-- Found: two casts must stay, or the tests do not compile (`project.test.ts:47`,
-  `forms.test.ts:151`). The taxonomy's `AUTH_REQUIRED` and Dispatch bullets are
-  still stale; they went to `g-w19-docs`.
-- Validation: supervisor, with private labels `sup11`:
-  - extension `check` -> exit 0, `test` -> `# pass 395`, `# fail 0`;
-  - domain `check` -> exit 0, `test` -> `# tests 352`, `# pass 352`, `# fail 0`;
-  - test-runner `check` -> exit 0, private build `# tests 502`, `# pass 502`;
-  - content harness `--list` -> `Total: 218 tests in 24 files`;
-  - `pnpm --filter @fluxiq-web-extension/extension test:content -- e2e/content/tests/identity-veto.spec.ts`
-    -> `4 passed`;
-  - the structure audit -> passed.
-- Not verified: the full content harness through the script; root gates.
-- Outcome: Accepted
-
 ### 2026-09-13 — i-late-target-wait: a wait rule must read the evidence observation, and the recorder must send page changes first
 
 - Agent: worker `i-late-target-wait` (read-only, plus one manifest pin); decisions
@@ -768,6 +672,93 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   - Worker: with the pin removed, 1 failed (the new test); restored identical.
 - Not verified: which W25 run 3 entry Core compacted (inferred); W28's wait frame
   targeting; the Lab.
+- Outcome: Revised
+
+### 2026-09-13 — g-core-expectation-record: one expectation-rejected record in Core, and no empty expectation
+
+- Agent: worker `g-core-expectation-record` (Core); verified by supervisor. Core's
+  ledger has the paired entry.
+- Changed (Core):
+  - the `expected_state_missing` record is exported once, from `nodes/policy/`,
+    and the executor's copy is deleted;
+  - an `expectedState` with no keys is neither lifted from a mapper candidate nor
+    sent to the host;
+  - the supervisor updated two architecture sentences.
+- Found: no import cycle. `{ conditions: [] }` still reaches the host, and `{}`
+  still appears in the trace; neither changes a verdict.
+- Validation: supervisor, Core `packages/fluxiq`:
+  - the four changed and neighbouring test files -> `Tests 29 passed (29)`;
+  - `service.test.ts` -> `Tests 108 passed (108)`;
+  - Core `pnpm check` -> exit 0;
+  - `pnpm docs:check` -> exit 0.
+  - Worker: four mutations each failed their rows, restored identical.
+- Not verified: Core `pnpm build`; root `pnpm test`; the Lab.
+- Outcome: Accepted
+
+### 2026-09-13 — g-core-start-order: Core orders a client's recording start with what follows it, and acknowledges it
+
+- Agent: worker `g-core-start-order` (Core); verified by supervisor. Core's ledger
+  has the paired entry.
+- Changed (Core): `client-gateway/bridge.ts` and its test; the client-gateway
+  architecture page. The supervisor also updated
+  `docs/integrations/client-gateway-websocket.md`.
+  - Later messages from a client wait for its pending start.
+  - `server.start_recording` is sent once the recording is open, but not after a
+    Stop for it.
+  - A refused start's waiting messages, dropped snapshots and dropped state
+    updates are audited under the recording id they name.
+- Found:
+  - An acknowledgement can still cross the extension's own Stop on the wire. That
+    guard was added to the running `f-recording-start-guard`.
+  - `bridge.ts` is 796 of 800 lines.
+- Validation: supervisor, Core `packages/fluxiq`:
+  - bridge test -> `Tests 20 passed (20)`;
+  - with both Core changes in the tree, `pnpm check` -> exit 0 and
+    `pnpm docs:check` -> exit 0.
+  - Worker: seven mutations each failed their target tests, restored
+    byte-identical.
+- Not verified: the WebSocket host; the extension receiving the acknowledgement
+  live; the Lab proof, which is step 4b at 24 of 24 under two-instance load.
+- Outcome: Accepted
+
+### 2026-09-13 — w19-d1: the domain mapper builds a click's landing claim, which a live click does not yet reach
+
+- Agent: worker `w19-d1`; verified by supervisor.
+- Changed:
+  - New `domain/src/runtime/expectation/click-landing.ts` and its test, exported
+    through the directory's barrel.
+  - `web-panel-host.ts`'s mapper takes Core's optional context, and a click's
+    `candidate(...)` gets the claim
+    `{ conditions: [{ assert: { kind: "url", expected: <path> } }], mode: "all", timeoutMs: 5000 }`.
+    The path comes from the last explained landing naming the click by event id;
+    without an event id, from the nearest preceding click in the same tab with
+    that sequence.
+  - New rows in `tests/domain.test.ts`, and one in `io/tests/input-model.test.ts`.
+- Found: live, the claim is inert.
+  - Core stores a recorded click as an `action` entry (`io-bridge.ts:31-49`). Its
+    metadata carries no event id, sequence or source id: the envelope metadata
+    built at `bridge.ts:649-655` is not copied (`io-bridge.ts:24-29`).
+  - The mapper returns `null` for that entry, so Core proposes the click through
+    `recordingActionEntryCandidate` (`service.ts:2411`, `:5726-5749`), with no
+    `expectedState`.
+  - The landing itself does reach the mapper intact, as a `domain_event`.
+- Decisions:
+  - Committed as the builder and the domain-event path, labelled inert live.
+  - `g-core-action-entry-identity` keeps the recorded event's id and source on the
+    entry.
+  - `w19-d1b` then proposes a linked click from its action entry. Every unlinked
+    click keeps Core's fallback.
+  - `g-w19-docs` waits for `w19-d1b`.
+- Validation: supervisor read Core `bridge.ts:631-657`, `io-bridge.ts:20-64`,
+  `service.ts:2396-2417` and `:5726-5749`.
+  - `DOMAIN_TEST_BUILD_LABEL=sup13 ... domain check` -> exit 0.
+  - `... test` -> `# tests 364`, `# pass 364`, `# fail 0`, with rows 167-178 ok,
+    from `a click whose landing names its event id claims exactly the landing's
+    path` to `a landing with no event id and no tab to compare claims nothing`.
+  - Worker: dropping `expectedState` from `candidate(...)` failed "D1: a click
+    proposes the path it landed on…"; breaking the event-id match failed rows 169
+    and 175. Both restored, hashes matching.
+- Not verified: the claim in a live proposal; the Lab.
 - Outcome: Revised
 
 ## Open Questions

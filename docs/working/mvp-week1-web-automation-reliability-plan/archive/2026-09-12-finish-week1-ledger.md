@@ -1288,3 +1288,106 @@ field (Core `c0e0ce9`, whose own ledger holds the full entry), committed.
   types.
 - Outcome: Accepted
 
+
+## Part twenty-one, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: the start-page fix
+(`c1c2557`), the evidence-reader merge (`fe6409a`), the start-send change
+(`895d68b`) and the small fixes (`36163dc`), all committed.
+
+### 2026-09-13 — f-flow-start-page: every Flow run starts on the scenario's start page
+
+- Agent: worker `f-flow-start-page`; verified by supervisor.
+- Changed: `flow-lane/run-flow-lane.ts` calls `prepareFlowPage` (renamed from
+  `armVariant`) on every run, after the reset. `run-scenario.ts`'s callback arms
+  only for a variant and always loads the start page. There is a new row in
+  `flow-lane/tests/run-flow-lane.test.ts`.
+- Found, from the worker reading fixture code only: 20 of the 23 unarmed week1
+  Flow-lane rows now start differently. W10 and W18 change URL, 18 change page
+  content only, and W04, W05 and W08 are unchanged. All 20 need re-measuring in
+  Stage 2.
+- Validation: supervisor read the diff. From `packages/test-runner`:
+  - `pnpm check` -> exit 0;
+  - `tsc --outDir dist-sup9` -> exit 0;
+  - `node --test "dist-sup9/**/*.test.js"` -> `# tests 502`, `# pass 502`,
+    `# fail 0`, with `ok 121 - every Flow run, armed or not, prepares its page
+    once, after the reset and before the Flow is read or started`.
+  - The tree also held the reader merge's and the small fixes' uncommitted edits.
+  - Worker: restoring the variant guard failed that row, restored byte-identical.
+- Not verified: W18 in the Lab starting on `/scenarios/auth-gate/`.
+- Outcome: Accepted
+
+### 2026-09-13 — g-evidence-reader-merge: one Flow-lane evidence-size reader
+
+- Agent: worker `g-evidence-reader-merge`; verified by supervisor.
+- Changed: a new `run-evaluation/flow-lane-evidence-sizes.ts` and its test,
+  exported through `run-evaluation/index.ts`. `single-run-evaluation.ts` and
+  `bench/evaluate-run.ts` both import it, and both copies and the rows pinning
+  them together are gone.
+- Found: one single-run row still compares a Flow-lane single run with its bench
+  row. It belongs in `bench-parity.test.ts`, which the worker did not own. It
+  stays in place, as the only check that the two producers agree.
+- Validation: supervisor read the new module. From `packages/test-runner`:
+  - `pnpm check` -> exit 0;
+  - `tsc --outDir dist-sup10` -> exit 0;
+  - `node --test "dist-sup10/**/*.test.js"` -> `# tests 502`, `# pass 502`,
+    `# fail 0`, with 16 evidence-size rows ok.
+  - Worker: three breaks in the module, and removing each caller's call, each
+    failed their rows; all restored, `sha256sum -c` OK. The moved reader differs
+    from both old copies only by `export`.
+- Not verified: a real bundle read by either producer.
+- Outcome: Accepted
+
+### 2026-09-13 — f-recording-start-send: a recording begins locally only after its start was sent
+
+- Agent: worker `f-recording-start-send`; verified by supervisor.
+- Changed: `recording-start/handshake.ts`. The acceptance window still opens
+  before the send, but when it elapses with the send unsettled, recording begins
+  locally only once that attempt's send settles. There are new rows in
+  `recording-start/tests/handshake.test.ts`, and acknowledgement rows in
+  `connection/tests/active-recording.test.ts`.
+- Found:
+  - A worker probe showed a Core acknowledgement arriving during a local start
+    (before `active-recording.ts:200`) starts recording twice and leaves the
+    project link null.
+  - `beginAccepted` never compares the acknowledged `recordingId` with the
+    pending one.
+  - A send that never settles now never falls back, and the project lookup
+    (`core-api.ts:34`) is unbounded.
+- Decisions: all three go to `f-recording-start-guard`, twelfth dispatch.
+- Validation: supervisor read the diff;
+  `EXTENSION_TEST_BUILD_LABEL=sup11 ... extension check` -> exit 0;
+  `... extension test` -> `# tests 395`, `# pass 395`, `# fail 0`, 21 handshake
+  rows ok. Worker: making the window begin locally at once failed 3 rows (first
+  `handshake.test.ts:196`); three more mutations were each caught; all restored
+  byte-identical.
+- Not verified: Core's acknowledgement live; the Lab.
+- Outcome: Accepted
+
+### 2026-09-13 — g-integration-small-fixes: stale comments, casts and the content-harness script
+
+- Agent: worker `g-integration-small-fixes`; verified by supervisor, who also
+  corrected one stale sentence in `observed-run-evaluation.ts` outside the
+  worker's lines.
+- Changed:
+  - comments in extension, domain and test-runner source, with only comment lines
+    changed in every source file;
+  - `failure-taxonomy.md` and `web-capabilities.md` name `runtime/click-landing.ts`;
+  - one cast removed from `recording/tests/domain.test.ts`, whose fixture's
+    `armPending` now matches the type;
+  - the bench report's truncation sentence;
+  - `apps/extension/package.json`'s `test:content` strips the forwarded `--`.
+- Found: two casts must stay, or the tests do not compile (`project.test.ts:47`,
+  `forms.test.ts:151`). The taxonomy's `AUTH_REQUIRED` and Dispatch bullets are
+  still stale; they went to `g-w19-docs`.
+- Validation: supervisor, with private labels `sup11`:
+  - extension `check` -> exit 0, `test` -> `# pass 395`, `# fail 0`;
+  - domain `check` -> exit 0, `test` -> `# tests 352`, `# pass 352`, `# fail 0`;
+  - test-runner `check` -> exit 0, private build `# tests 502`, `# pass 502`;
+  - content harness `--list` -> `Total: 218 tests in 24 files`;
+  - `pnpm --filter @fluxiq-web-extension/extension test:content -- e2e/content/tests/identity-veto.spec.ts`
+    -> `4 passed`;
+  - the structure audit -> passed.
+- Not verified: the full content harness through the script; root gates.
+- Outcome: Accepted
+

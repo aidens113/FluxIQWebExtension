@@ -1692,6 +1692,10 @@ start's project lookup is bounded (`core-api.ts:34` or its caller; name it).
 2. Bound the project lookup a start now waits on, so a stalled lookup cannot hold
    off the local fallback indefinitely. Say what the start does when the bound is
    reached.
+3. Added once `g-core-start-order` reported, and sent to the running worker: an
+   acknowledgement for recording R that arrives after the extension stopped R,
+   or while it is stopping R, must not restart recording. Core sends none once
+   the Stop has reached it, but the two can cross on the wire.
 
 **Tests.**
 - A row reproducing the double start that fails before the fix (quote the
@@ -1847,3 +1851,109 @@ dispatch names this repository's commit `<R>` and Core's `<C>`.
 
 Quote, do not summarise. Label every single observation, and rerun a uniform or
 impossible failure once, alone, before reporting it.
+
+---
+
+# Fifteenth dispatch — from `w19-d1`
+
+Verified by the supervisor on 2026-09-13, in Core:
+- `recordGatewayInput` builds the envelope metadata at
+  `client-gateway/bridge.ts:649-655`.
+- `runtime/io-bridge.ts:24-49` writes an action entry whose metadata is only
+  `domainId`, `inputId`, `inputRole`, `envelopeId` and `policyEligible`.
+- `service.ts:2411` proposes an `action` entry through
+  `recordingActionEntryCandidate` (`:5726-5749`) whenever the mapper returns
+  nothing.
+
+A live click therefore never reaches `w19-d1`'s claim.
+
+Decided:
+- Core keeps the recorded event's identity on the entry.
+- The domain mapper proposes a linked click from its action entry; every unlinked
+  click keeps Core's fallback.
+- `w25-wait-mapper` is dispatched now, and `w19-d1b` follows it, since both edit
+  `web-panel-host.ts`.
+- `g-w19-docs` waits for `w19-d1b`.
+
+**Amendment to `w25-wait-mapper`.** It also owns `domain/src/io/input-model.ts`,
+the checkbox comment at about `:181-184` only. `g-integration-small-fixes` left
+that comment for after D1, and the correct wording is in the reports that brief
+names.
+
+## g-core-action-entry-identity — a recorded entry keeps the event it came from (Core)
+
+**Owns** (in `F:\!FluxIQ\packages\fluxiq\src\programs\automation-studio\`):
+- `client-gateway/bridge.ts`, the `recordGatewayInput` call sites and envelope
+  metadata only, with no net line growth (it is 796 of 800);
+- `runtime/io-bridge.ts`;
+- their tests;
+- the Core architecture page that describes a recording entry's metadata (name it).
+
+Follow `F:\!FluxIQ\AGENTS.md`.
+
+**Read:** `reports/w19-d1.md` open questions 1 and 2; `reports/w19-e1.md`, "A gap
+the mapper must close".
+
+**Task.**
+- When a gateway recording event becomes a recorded input and carries an
+  `eventId`, that id joins the envelope metadata.
+- `io-bridge.ts` copies the envelope's `eventId` and `sourceId`, strings only,
+  onto the entry's metadata, for action and observation entries alike. Copy
+  nothing else from the envelope.
+- Say whether anything reads entry metadata in a way these keys could disturb.
+
+**Tests.** Each row below needs a mutation.
+- A recorded click's action entry carries its `eventId` and `sourceId`.
+- An event with no `eventId` yields none.
+- A non-string value is not copied.
+
+Run `npx vitest run <files> --no-file-parallelism`, Core `pnpm check`, and
+`pnpm docs:check`, plus `pnpm docs:reference` if a cited line moves. No Core
+`pnpm build`.
+
+**Report:** `reports/g-core-action-entry-identity.md`, with the compatibility
+effect.
+
+## w19-d1b — a linked click's action entry carries the landing claim (domain)
+
+Dispatched once `g-core-action-entry-identity` and `w25-wait-mapper` are committed
+and Core is built.
+
+**Owns:** `domain/src/runtime/expectation/click-landing.ts` and its test;
+`domain/src/web-panel-host.ts`, the mapper only; `domain/src/tests/domain.test.ts`,
+new rows only.
+
+**Read:**
+- `reports/w19-d1.md`, open questions 1-3;
+- `reports/g-core-action-entry-identity.md`, for the metadata keys;
+- Core `runtime/service.ts` `recordingActionEntryCandidate`, and
+  `runtime/service/recordings/proposal-candidates.ts`, for what an `action`
+  observation's payload holds.
+
+**Task.**
+- Take an `action` observation whose output is `web.dom.click`, with a linked
+  explained landing in `following`. Match by the entry's stored `eventId`, or by
+  the tab of its `sourceId` when the landing has no event id.
+- Return one candidate carrying the claim. It must propose what Core's fallback
+  proposes for that entry: the same output, parameters, source input and
+  confirmation. Name any field the mapper cannot see.
+- Every other `action` entry still maps to `null`, so Core's fallback is unchanged
+  for it.
+
+**Tests.**
+- A linked click's action entry gives the fallback's candidate plus the claim.
+- An unlinked one gives `null`.
+- Rows are built from the observation shape Core produces, with a mutation.
+- Domain `check` and `test` under a private label; the structure audit.
+
+**Report:** `reports/w19-d1b.md`.
+
+**Amendment to `g-recording-completeness`, sent while it runs.** Its first report
+left two items open:
+- `src/tests/runner-wiring.test.ts` pins the old discard-read call text, so rows
+  `:70` and `:90` fail;
+- the `flow-lane.json` label is written in `flow-lane/run-flow-lane.ts:157`.
+
+It now also owns the four pinning strings in `runner-wiring.test.ts` and that one
+label, to finish its own change. Evidence: the mutation proof on the runner, and
+a whole-suite rerun with 0 failures.
