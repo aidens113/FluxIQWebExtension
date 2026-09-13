@@ -5365,3 +5365,17 @@ Move `connection/scripted-navigation-intent.ts` to the smallest cohesive
 barrel and update imports without behavior changes. The parent barrel exports
 through the child barrel. Run structure audit, extension check, and the moved
 focused test. Do not alter behavior, runner/Core/shared docs/Lab, commit, or push.
+
+## Lab Stage 4l — sender-corrected W10 acceptance
+
+**Candidate pins:** downstream local commit `6b379a9` and Core
+`19468b72c4472fd5cc58940737702d5e4d72c985`.
+
+`l-final-recheck-w10-intent2` owns `F:\fxlab\fxlab-16ff729-b`, new run root
+`F:\fxlab-runs\final\recheck-w10-intent2`, and
+`reports/l-final-recheck-w10-intent2.md`. Repeat the complete Stage 4i protocol
+on the new clean pins: primary three times, then `broken-link` three times in
+one isolated instance, with two extension/Core actions and two candidates in
+all six. Apply the same verdict/category/start-index/harness/leak/persistence/
+discard/memory/cleanup requirements. Stop on a leak; otherwise finish all six.
+No secrets, source/shared-doc edits, commits, pushes, or raw page data.

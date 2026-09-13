@@ -121,3 +121,71 @@ This is static boundary/security acceptance, not independent functional
 verification. The supervisor must still rely on its observed package gates and
 the committed W10 live report for runtime acceptance, inspect the final clean
 tree, and push only if those gates remain green.
+
+---
+
+## Stage 4j/k delta disposition — 2026-09-13
+
+Read-only delta audit of tip `6b379a909973158e397f85490d866852816a024c`
+against the previously accepted `db3cc17` scope.
+
+**Accept. No P1 or P2 boundary/security finding.** Stage 4j admits the exact
+tab-hosted extension control document used by the Lab runner without admitting
+web/content senders. Stage 4k is a behavior-neutral structure move. The tracked
+background bundle and source map match the final source, and neither domain nor
+Core contract changed.
+
+### Sender guard
+
+- The only executable security change removes the blanket
+  `sender.tab !== undefined` refusal. The guard still requires both
+  `sender.id === chrome.runtime.id` and exact equality of `sender.url` with
+  this extension's `sidepanel/index.html` or `popup/index.html`. A content
+  script has this extension's id and a tab but retains its web frame URL, so it
+  remains forbidden; another extension fails the id check; another own
+  extension document fails the exact URL check.
+- The focused test now models the production runner shape — exact side-panel
+  URL plus a tab — as allowed. Its content-sender row now correctly uses a web
+  URL plus a tab and remains forbidden with no manager call. The prior audit's
+  statement that “no `sender.tab`” is required is superseded by this section;
+  exact extension-document identity, not hosting surface, is the boundary.
+- Request shapes, fixed negative responses, idempotent unauthorized cancel,
+  manager-derived tab identity, loopback URL validation, and diagnostic
+  withholding are unchanged.
+
+### Structure move
+
+- Git identifies the implementation move from
+  `connection/scripted-navigation-intent.ts` to
+  `connection/scripted-navigation/intent.ts` at 100% similarity. The moved
+  test is 99% similar because only its subject import changed.
+- The new child barrel exports `ScriptedNavigationIntent` from `./intent`; the
+  parent barrel, `active-recording.ts`, `recorded-event-intake.ts`, and the
+  intake test all point through that child seam. Search finds no old
+  `scripted-navigation-intent` source/test import. The parent connection
+  directory therefore loses the extra direct file while preserving its public
+  export and composition.
+- The barrel modules and type-only collaborator imports emit no new runtime
+  behavior. Intent validation, state transitions, timers, commit ownership,
+  send acknowledgement, and lifecycle cancellation are byte-equivalent to the
+  accepted implementation.
+
+### Generated parity and repository boundary
+
+- The tracked background JavaScript diff removes only the generated
+  `sender.tab !== void 0` guard term. It retains the runtime-id and two exact
+  control-page URL checks. The bundle contains the new
+  `scripted-navigation/intent.ts` source-map identity and no old
+  `scripted-navigation-intent.ts` identity.
+- The final source map's normalized `sourcesContent` equals disk source for
+  every runtime-bearing Stage 4j/k file present in the bundle:
+  `scripted-navigation-control.ts`, moved `scripted-navigation/intent.ts`,
+  `active-recording.ts`, and `recorded-event-intake.ts`. The new/parent barrels
+  are correctly tree-shaken, and test files do not ship.
+- `db3cc17..6b379a9` changes no `domain/` file and introduces no gateway,
+  protocol, package, or Core import/export. The intent remains private
+  downstream browser-test infrastructure reusing the existing recording
+  event. No FluxIQ Core edit or compatibility action is needed.
+
+This delta audit ran no test, build, Lab, or Core command and changed only this
+report. Functional and live acceptance remain the supervisor's gate evidence.

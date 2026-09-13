@@ -112,11 +112,11 @@ settled ledger entries are in parts one to fifty of
   functional verdicts, but consecutive one-candidate variants reject the settle
   barrier. CDP `typed` navigation also failed live (primary 1/3). Its replacement
   intent/ack seam passed cross-review, package suites, and supervisor mutations,
-  but live W10 rejected its sender guard 0/6; its guard and intent placement are being corrected.
+  but live W10 rejected its first sender guard 0/6. The corrected, structured
+  pin `6b379a9` passed both 3/3 with two actions/candidates and zero harness, leaks, persistence failures, or discards.
 
 **Queued, in dependency order**
-1. Integrate/test the acknowledged-intent seam, recheck W10 live, push the
-   accepted pin, then restart both complete repeat-three benches concurrently.
+1. Push the W10-accepted pin, then restart both complete repeat-three benches concurrently.
 2. **Phase 1.6b:** run the tracked comparison, complete `i-ranking-draft`, and
    write the six observed exit-criterion figures into the ledger.
 
