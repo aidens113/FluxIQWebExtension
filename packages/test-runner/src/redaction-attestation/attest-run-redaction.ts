@@ -1,11 +1,19 @@
+import { lstat, readdir } from "node:fs/promises";
+import path from "node:path";
 import { attestWorkspaceSecretAbsence, type SecretLeakAttestationLimits, type SecretLeakFindingCategory } from "../secret-leak-attestation.js";
 
 /**
  * One tree the attestation scans: each entry of `paths` is a named entry under
  * `root`, scanned in full. `name` labels the scope in the result, and is the
  * only part of the scope the result repeats.
+ *
+ * `writtenSince`, an epoch-millisecond instant, bounds a tree that outlives the
+ * run to what was written from then on. A `persistent-isolated` workspace keeps
+ * every run's recordings and traces: scanned whole, it would fail a clean run for
+ * an earlier run's leak, and would grow until the scan's ceilings failed every
+ * run closed. `writtenEntries` says what the bound keeps.
  */
-export type RunRedactionScope = { name: string; root: string; paths: readonly string[] };
+export type RunRedactionScope = { name: string; root: string; paths: readonly string[]; writtenSince?: number };
 
 /** A file in which the scan found something: its scope and its relative path, with every declared literal redacted out of the path. Never content. */
 export type RunRedactionFinding = { scope: string; path: string; categories: SecretLeakFindingCategory[] };
@@ -48,7 +56,22 @@ export type RunRedactionAttestationInput = { literals: readonly string[]; scopes
  * an isolated workspace carries every recording and run trace, so the defaults
  * sized for one demo result file would fail a healthy run closed on size alone.
  */
-const RUN_LIMITS: Partial<SecretLeakAttestationLimits> = Object.freeze({ maxFiles: 10_000, maxFileBytes: 8_388_608, maxTotalBytes: 67_108_864, maxDepth: 32 });
+const RUN_LIMITS = Object.freeze({ maxFiles: 10_000, maxFileBytes: 8_388_608, maxTotalBytes: 67_108_864, maxDepth: 32 }) satisfies Partial<SecretLeakAttestationLimits>;
+
+/**
+ * How many entries one scan of a bounded scope is given: few enough that that
+ * many files at the per-file ceiling still fit the total ceiling, and under the
+ * scanner's 32 approved paths. So no scan's count or total ceiling trips on how
+ * much the run wrote; a single file over the per-file ceiling still fails closed.
+ */
+const ENTRIES_PER_BOUNDED_SCAN = Math.floor(RUN_LIMITS.maxTotalBytes / RUN_LIMITS.maxFileBytes);
+
+/**
+ * How far before `writtenSince` a file's time still counts as written since: a
+ * filesystem that stores times coarsely (FAT's two seconds is the coarsest in
+ * use) can round a write made just after the run started to before it.
+ */
+const TIMESTAMP_SLACK_MS = 2_000;
 
 const CREDENTIAL_SYNTAX: ReadonlySet<SecretLeakFindingCategory> = new Set<SecretLeakFindingCategory>(["credential-field", "credential-assignment", "authorization-material"]);
 
@@ -60,6 +83,11 @@ type FindingsByScope = Map<string, Map<string, Set<SecretLeakFindingCategory>>>;
  * result that holds no literal: the scanner redacts only the literal it was
  * scanning for from a finding's path, so a path spelling a second literal is
  * redacted again here against all of them.
+ *
+ * A scope with `writtenSince` is scanned as the entries `writtenEntries` finds,
+ * `ENTRIES_PER_BOUNDED_SCAN` at a time, and its summary adds those scans up; one
+ * with nothing written since scans nothing. Every other scope is one scan of its
+ * `paths`.
  *
  * It runs before the scopes are cleaned and while nothing still writes to them,
  * which is the caller's responsibility. A scope with no entries, or a relative
@@ -74,20 +102,73 @@ export async function attestRunRedaction(input: RunRedactionAttestationInput): P
   const scopes: RunRedactionScopeSummary[] = [];
   for (const scope of input.scopes) {
     const summary: RunRedactionScopeSummary = { name: scope.name, scannedFiles: 0, scannedBytes: 0, skippedBinaryFiles: 0 };
+    const scans = scope.writtenSince === undefined ? [scope.paths] : chunks(await writtenEntries(scope.root, scope.paths, scope.writtenSince), ENTRIES_PER_BOUNDED_SCAN);
     for (const literal of literals) {
-      const report = await attestWorkspaceSecretAbsence({ workspaceRoot: scope.root, secretLiteral: literal, approvedRelativePaths: scope.paths, limits: RUN_LIMITS });
-      summary.scannedFiles = Math.max(summary.scannedFiles, report.scannedFiles);
-      summary.scannedBytes = Math.max(summary.scannedBytes, report.scannedBytes);
-      summary.skippedBinaryFiles = Math.max(summary.skippedBinaryFiles, report.skippedBinaryFiles);
-      for (const finding of report.findings) {
-        const safePath = redactLiterals(finding.path, literals);
-        for (const category of finding.categories) record(CREDENTIAL_SYNTAX.has(category) ? advisory : failing, scope.name, safePath, category);
+      const read = { scannedFiles: 0, scannedBytes: 0, skippedBinaryFiles: 0 };
+      for (const paths of scans) {
+        const report = await attestWorkspaceSecretAbsence({ workspaceRoot: scope.root, secretLiteral: literal, approvedRelativePaths: paths, limits: RUN_LIMITS });
+        read.scannedFiles += report.scannedFiles;
+        read.scannedBytes += report.scannedBytes;
+        read.skippedBinaryFiles += report.skippedBinaryFiles;
+        for (const finding of report.findings) {
+          const safePath = redactLiterals(finding.path, literals);
+          for (const category of finding.categories) record(CREDENTIAL_SYNTAX.has(category) ? advisory : failing, scope.name, safePath, category);
+        }
       }
+      summary.scannedFiles = Math.max(summary.scannedFiles, read.scannedFiles);
+      summary.scannedBytes = Math.max(summary.scannedBytes, read.scannedBytes);
+      summary.skippedBinaryFiles = Math.max(summary.skippedBinaryFiles, read.skippedBinaryFiles);
     }
     scopes.push(summary);
   }
   const findings = flatten(failing);
   return Object.freeze({ status: findings.length ? "failed" : "passed", literalCount: literals.length, scopes, findingCount: findings.length, findings, advisories: flatten(advisory) });
+}
+
+/**
+ * The entries of a bounded scope the scan is given, found by a walk that reads
+ * metadata only and follows no link:
+ *
+ * - every file whose modification or creation time is at or after `since`, less
+ *   `TIMESTAMP_SLACK_MS`. A write moves the modification time, and a copy that
+ *   keeps it (Windows `CopyFile` does) still gives the new file a new creation
+ *   time. The change time is not read: allocating a persistent run re-applies an
+ *   inheritable ACL to the workspace's directories (`allocatePersistentRun`),
+ *   which can move the change time of every file beneath and lose the bound.
+ * - every entry the walk cannot judge, whatever its age: a link, an entry it
+ *   cannot stat, a directory it cannot list. The scan fails closed on each
+ *   (`unsafe-reparse`, `unreadable-text`), so what this run wrote behind one is
+ *   never passed over silently.
+ *
+ * Directories themselves are not entries: what a directory holds is judged file
+ * by file. The bound assumes nothing sets a file's times back, which Core does not.
+ */
+async function writtenEntries(root: string, paths: readonly string[], since: number): Promise<string[]> {
+  if (!path.isAbsolute(root)) throw new Error("A bounded redaction scope needs an absolute root");
+  const entries: string[] = [];
+  const visit = async (relative: string): Promise<void> => {
+    const absolute = path.join(root, ...relative.split("/"));
+    let metadata;
+    try { metadata = await lstat(absolute); }
+    catch { entries.push(relative); return; }
+    if (metadata.isSymbolicLink()) { entries.push(relative); return; }
+    if (metadata.isDirectory()) {
+      let names: string[];
+      try { names = await readdir(absolute); }
+      catch { entries.push(relative); return; }
+      for (const name of names.sort()) await visit(`${relative}/${name}`);
+      return;
+    }
+    if (metadata.isFile() && Math.max(metadata.mtimeMs, metadata.birthtimeMs) >= since - TIMESTAMP_SLACK_MS) entries.push(relative);
+  };
+  for (const entry of paths) await visit(entry);
+  return entries;
+}
+
+function chunks(values: readonly string[], size: number): string[][] {
+  const result: string[][] = [];
+  for (let index = 0; index < values.length; index += size) result.push(values.slice(index, index + size));
+  return result;
 }
 
 function record(target: FindingsByScope, scope: string, findingPath: string, category: SecretLeakFindingCategory): void {

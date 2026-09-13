@@ -14,6 +14,12 @@ import type { RunRedactionScope } from "./attest-run-redaction.js";
  *   -- and the Flow run traces. Absent when the run owns no FluxIQ workspace:
  *   the existing target, or a topology that never started.
  *
+ * `workspaceWrittenSince` is for a workspace that outlives the run, the
+ * `persistent-isolated` target's: the workspace scope then carries it as
+ * `writtenSince`, and only what was written from that instant on is scanned. An
+ * isolated workspace is created by the run, so it is passed without one and
+ * scanned whole.
+ *
  * Each scope is rooted at the directory's parent with the directory as its one
  * entry, because the scan accepts only named entries under its root.
  *
@@ -21,10 +27,10 @@ import type { RunRedactionScope } from "./attest-run-redaction.js";
  * is LevelDB, whose binary `.log` files the text scan cannot read and would fail
  * closed on every run.
  */
-export function runRedactionScopes(input: { bundleStagingPath: string; workspaceStorageDir?: string | undefined }): RunRedactionScope[] {
-  const scope = (name: string, directory: string): RunRedactionScope => {
+export function runRedactionScopes(input: { bundleStagingPath: string; workspaceStorageDir?: string | undefined; workspaceWrittenSince?: number | undefined }): RunRedactionScope[] {
+  const scope = (name: string, directory: string, writtenSince?: number): RunRedactionScope => {
     const absolute = path.resolve(directory);
-    return { name, root: path.dirname(absolute), paths: [path.basename(absolute)] };
+    return { name, root: path.dirname(absolute), paths: [path.basename(absolute)], ...(writtenSince === undefined ? {} : { writtenSince }) };
   };
-  return [scope("bundle", input.bundleStagingPath), ...(input.workspaceStorageDir === undefined ? [] : [scope("workspace", input.workspaceStorageDir)])];
+  return [scope("bundle", input.bundleStagingPath), ...(input.workspaceStorageDir === undefined ? [] : [scope("workspace", input.workspaceStorageDir, input.workspaceWrittenSince)])];
 }

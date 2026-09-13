@@ -56,11 +56,15 @@ test("the redaction attestation scans once Core has stopped and its logs are in 
   assert.match(source, /await createRunManifest\(\{[^}]*\bredaction\b[^}]*\}\)/u, "the manifest derives redactionState from the attestation");
   assert.ok(source.includes('bundle.writeStructured("snapshots/redaction-attestation.json", redaction)'), "the result is a bundle artifact");
   assert.ok(source.includes('failureCategory = "security.redaction"'), "a finding fails the run as security.redaction");
+  assert.ok(
+    source.includes('runRedactionScopes({ bundleStagingPath: bundle.stagingPath, workspaceStorageDir: topology?.allocation.storageDir, workspaceWrittenSince: target.mode === "persistent-isolated" ? Date.parse(startedAt) : undefined })'),
+    "a persistent-isolated workspace is bounded to what this run wrote since it started, and every other target's workspace is scanned whole",
+  );
 });
 
 test("Core's audit of discarded recording messages is read after the round trip, published, and fails the run before the Flow lane", async () => {
   const source = await runnerSource();
-  assert.equal(source.match(/readRecordingDiscards\(/gu)?.length, 1);
+  assert.equal(source.match(/readRecordingDiscards\(/gu)?.length, 2, "once after the round trip, and once more before the topology closes");
   const at = {
     roundTrip: source.indexOf("const outcome = await assertCoreRoundTrip(topology, paired?.sessionId, recordingBaseline);"),
     audited: source.indexOf("readRecordingDiscards(await topology.control.gatewaySnapshot(), outcome.newRecordingIds)"),
@@ -75,6 +79,29 @@ test("Core's audit of discarded recording messages is read after the round trip,
   assert.ok(at.settled < at.failed, "the discards are in the bundle before the run fails on them");
   assert.ok(at.failed < at.flowLane, "a recording that reached Core short never becomes a Flow");
   assert.match(source, /"Core persisted the completed recording"\), details: \{[^}]*recordingDiscards: discardAudit\.discards, extensionConnectionAfterStop: connectionAfterStop/u);
+});
+
+test("Core's discard audit is read a second time, after the Flow lane and the browser close and before the topology closes, and unioned with the first", async () => {
+  const source = await runnerSource();
+  const at = {
+    firstRead: source.indexOf("const discardAudit = readRecordingDiscards(await topology.control.gatewaySnapshot(), outcome.newRecordingIds);"),
+    kept: source.indexOf("firstDiscardRead = { recordingIds: outcome.newRecordingIds, discards: discardAudit.discards };"),
+    firstFailed: source.indexOf("if (discardAudit.failure) throw discardAudit.failure;"),
+    flowLane: source.indexOf("await runFlowLane({"),
+    browserClosed: source.indexOf("await context?.close();"),
+    secondRead: source.indexOf("readRecordingDiscards(await topology.control.gatewaySnapshot().catch(() => undefined), firstDiscardRead.recordingIds, earlier)"),
+    published: source.indexOf("\"Core's discard audit was read again before the topology closed\"), details: { recordingDiscards: secondRead.discards"),
+    topologyClosed: source.indexOf("await topology?.close();"),
+  };
+  for (const [name, index] of Object.entries(at)) assert.ok(index > 0, `${name} is in the runner`);
+  assert.ok(at.firstRead < at.kept && at.kept < at.firstFailed, "the first read is kept before it can throw, so a run it fails is still read again");
+  assert.ok(at.flowLane < at.secondRead, "after the Flow lane finishes");
+  assert.ok(at.browserClosed < at.secondRead, "once the browser has closed, so no message is still to come");
+  assert.ok(at.secondRead < at.published && at.published < at.topologyClosed, "read and published while Core, whose audit is in memory, is still running");
+  assert.ok(
+    source.includes('failure.category === "recording.persistence" ? failureCategory !== "recording.persistence" : verdict === "passed"'),
+    "an action either read finds discarded fails the run as recording.persistence; an audit the second read cannot get fails only a run that had passed",
+  );
 });
 
 test("the evaluation reaches the caller, so lab run reports it without a bench", async () => {

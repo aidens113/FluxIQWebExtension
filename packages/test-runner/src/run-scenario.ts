@@ -26,7 +26,7 @@ import { createRunOwnedCloneFlowId, createRunOwnedCloneProject, importClonePacka
 import { effectiveEvidencePolicy } from "./evidence-policy/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant, scenarioLabOriginProof } from "./lab-control/index.js";
-import { awaitFinalizedRecording, declaredSecretValues, flowLaneSnapshot, readRecordingDiscards, recordingLaneObservation, resolveDeclaredSecrets, runFlowLane, selectLaneObservation, type DeclaredSecret, type RunLaneObservation } from "./flow-lane/index.js";
+import { awaitFinalizedRecording, declaredSecretValues, flowLaneSnapshot, readRecordingDiscards, recordingLaneObservation, resolveDeclaredSecrets, runFlowLane, selectLaneObservation, type DeclaredSecret, type RecordingDiscard, type RunLaneObservation } from "./flow-lane/index.js";
 import { attestRunRedaction, runRedactionScopes, scenarioRedactionLiterals, type RunRedactionAttestation } from "./redaction-attestation/index.js";
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog } from "./run-expectations/index.js";
 import { singleRunEvaluation } from "./run-evaluation/index.js";
@@ -99,6 +99,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
   let recordingBaseline: Set<string> | undefined;
   let recordedEvents: Record<string, number> | undefined;
   let flowObservation: RunLaneObservation | undefined;
+  // The first read of Core's discard audit, which `finally` reads again and unions with it before the topology closes.
+  let firstDiscardRead: { recordingIds: readonly string[]; discards: RecordingDiscard[] } | undefined;
   // The fixture oracle's own verdict, published rather than inferred: a failure
   // category cannot tell "the fixture disagreed" from "the rig broke first".
   let oracleVerdict: "passed" | "failed" | null = null;
@@ -297,6 +299,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
       // nothing, and since `267a2ca` no longer fails the connection for it: its audit
       // log and the extension's own state after Stop are where a short recording shows.
       const discardAudit = readRecordingDiscards(await topology.control.gatewaySnapshot(), outcome.newRecordingIds);
+      firstDiscardRead = { recordingIds: outcome.newRecordingIds, discards: discardAudit.discards };
       const connectionAfterStop = await runtimeMessage(extensionControl, { type: "fluxiq.getStatus" }).then((response: any) => String(response.status?.connectionState ?? "unreported"), () => "unavailable");
       await capture.trigger({ ...event(runId, scenario.id, undefined, "gateway.action", "Core gateway retained the paired extension session"), details: { sessionCount: outcome.sessionCount } });
       await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "Core persisted the completed recording"), details: { recordingCount: outcome.recordingCount, projectId: topology.projectId, recordedEvents, recordingDiscards: discardAudit.discards, extensionConnectionAfterStop: connectionAfterStop, recordings: outcome.finalized.map(item => ({ recordingId: item.recordingId, entryCount: item.entryCount, entriesAppendedAfterStop: item.entriesAppendedWhileWaiting, finalizationWaitMs: item.waitedMs })) } });
@@ -386,6 +389,22 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
     }
     try { await context?.close(); }
     catch (error) { verdict = "failed"; failureCategory = "process.startup"; failureMessage = `Browser cleanup failed: ${String(error)}`; }
+    // The second read of Core's discard audit. Core audits a discard only when the late
+    // message arrives, which can be after the first read; the browser has closed, so no
+    // message is still to come, and Core, whose audit is in memory, has not. A discarded
+    // action outranks what the run concluded from the short recording; an audit this read
+    // cannot get fails only a run that had passed.
+    if (firstDiscardRead && topology?.control) {
+      const earlier = firstDiscardRead.discards;
+      const secondRead = readRecordingDiscards(await topology.control.gatewaySnapshot().catch(() => undefined), firstDiscardRead.recordingIds, earlier);
+      await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "Core's discard audit was read again before the topology closed"), details: { recordingDiscards: secondRead.discards, discardsAfterFirstRead: secondRead.discards.length - earlier.length } }).catch(() => undefined);
+      const failure = secondRead.failure;
+      if (failure && (failure.category === "recording.persistence" ? failureCategory !== "recording.persistence" : verdict === "passed")) {
+        const superseded = failureCategory;
+        verdict = "failed"; failureCategory = failure.category; failureMessage = failure.message;
+        await capture.trigger({ ...event(runId, scenario.id, undefined, "error", failure.message), details: { failureCategory: failure.category, recordingDiscards: secondRead.discards, ...(superseded ? { supersededFailureCategory: superseded } : {}) } }).catch(() => undefined);
+      }
+    }
     try { await topology?.close(); }
     catch (error) { verdict = "failed"; failureCategory = "process.startup"; failureMessage = `Process cleanup failed: ${String(error)}`; }
     if (failureMessage && !bundle.getEvents().some(item => item.trigger === "error" && item.summary === failureMessage)) {
@@ -394,14 +413,15 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
     if (topology) await copyProcessLogs(bundle, topology.allocation.logsDir);
     // Core has stopped and its logs are in the bundle; the clone cleanup below
     // deletes the workspace, and `finalize` renames the staging directory. This is
-    // the one point where both trees are complete and still exist.
+    // the one point where both trees are complete and still exist. A persistent-isolated
+    // workspace outlives the run, so only what this run wrote there is scanned.
     if (redactionLiterals) {
       const failRedaction = async (message: string, details: Record<string, unknown>) => {
         if (verdict === "passed") { failureCategory = "security.redaction"; failureMessage = message; }
         verdict = "failed";
         await capture.trigger({ ...event(runId, scenario.id, undefined, "error", message), details: { failureCategory: "security.redaction", ...details } }).catch(() => undefined);
       };
-      try { redaction = await attestRunRedaction({ literals: redactionLiterals, scopes: runRedactionScopes({ bundleStagingPath: bundle.stagingPath, workspaceStorageDir: topology?.allocation.storageDir }) }); }
+      try { redaction = await attestRunRedaction({ literals: redactionLiterals, scopes: runRedactionScopes({ bundleStagingPath: bundle.stagingPath, workspaceStorageDir: topology?.allocation.storageDir, workspaceWrittenSince: target.mode === "persistent-isolated" ? Date.parse(startedAt) : undefined }) }); }
       catch (error) { await failRedaction(`Redaction attestation could not run: ${redactionLiterals.reduce((text, literal) => text.replaceAll(literal, "[redacted]"), error instanceof Error ? error.message : String(error))}`, {}); }
       if (redaction?.status === "failed") await failRedaction(`Redaction attestation found ${redaction.findingCount} file(s) holding a declared literal or left unread`, { findings: redaction.findings });
       if (redaction) await bundle.writeStructured("snapshots/redaction-attestation.json", redaction).catch(() => undefined);

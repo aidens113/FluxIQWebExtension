@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -104,6 +104,69 @@ test("a scenario that declares no literal is not applicable, scans nothing, and 
   assert.equal(runRedactionState(undefined), "pending");
 });
 
+/**
+ * A run on a workspace that outlives it: every file `runLayout` wrote, and a
+ * literal an earlier run left in its own recording, predate the run. A test's
+ * files are all created now, so this run starts a minute from now, and each
+ * file it writes through `write` is dated after that.
+ */
+async function persistentRun(t: test.TestContext) {
+  const run = await runLayout(t);
+  const startedAt = Date.now() + 60_000;
+  const earlierRecording = path.join(run.recordingDirectory, "..", "recording_earlier");
+  await mkdir(earlierRecording);
+  await writeFile(path.join(earlierRecording, "timeline.jsonl"), JSON.stringify({ type: "web.element.input_changed", value: password }) + "\n");
+  const write = async (relative: string, contents: string | Uint8Array) => {
+    const file = path.join(run.workspaceStorageDir, ...relative.split("/"));
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, contents);
+    const writtenAt = new Date(startedAt + 1_000);
+    await utimes(file, writtenAt, writtenAt);
+  };
+  return { ...run, write, scopes: runRedactionScopes({ bundleStagingPath: run.bundleStagingPath, workspaceStorageDir: run.workspaceStorageDir, workspaceWrittenSince: startedAt }) };
+}
+
+test("a workspace that outlives the run is scanned only for what this run wrote, and fails closed on what it wrote and cannot read", async t => {
+  const run = await persistentRun(t);
+  const runTimeline = "artifacts/automation-studio/projects/project_one/recordings/recording_run/timeline.jsonl";
+  await run.write(runTimeline, JSON.stringify({ type: "web.element.input_changed", valueWithheld: true }) + "\n");
+
+  const clean = await attestRunRedaction({ literals: [password], scopes: run.scopes });
+
+  // The earlier run's leak is outside the bound; this run's recording is read.
+  assert.equal(clean.status, "passed");
+  assert.deepEqual(clean.findings, []);
+  assert.deepEqual(clean.scopes.map(scope => [scope.name, scope.scannedFiles]), [["bundle", 1], ["workspace", 1]]);
+
+  await run.write(runTimeline, JSON.stringify({ type: "web.element.input_changed", value: password }) + "\n");
+  await run.write("artifacts/automation-studio/projects/project_one/flows/flow_run.json", new Uint8Array([0x7b, 0x00, 0x7d]));
+  const leaked = await attestRunRedaction({ literals: [password], scopes: run.scopes });
+
+  assert.equal(leaked.status, "failed");
+  assert.deepEqual(leaked.findings, [
+    { scope: "workspace", path: ".fluxiq/artifacts/automation-studio/projects/project_one/flows/flow_run.json", categories: ["unreadable-text"] },
+    { scope: "workspace", path: `.fluxiq/${runTimeline}`, categories: ["secret-literal"] },
+  ]);
+  assert.equal(JSON.stringify(leaked).includes(password), false);
+});
+
+test("a bounded scope reads every file the run wrote however many there are, and hands the scan every link whatever its age", async t => {
+  const run = await persistentRun(t);
+  for (let index = 0; index < 40; index += 1) await run.write(`flows/flow-${String(index).padStart(2, "0")}.json`, index === 39 ? JSON.stringify({ typed: password }) : "{}");
+  // A link that predates the run. The walk does not follow it, so it cannot say
+  // what lies behind it; the scan must be given it, and refuses it.
+  await symlink(run.recordingDirectory, path.join(run.workspaceStorageDir, "linked-recordings"), "junction");
+
+  const attestation = await attestRunRedaction({ literals: [password], scopes: run.scopes });
+
+  assert.deepEqual(attestation.findings, [
+    { scope: "workspace", path: ".fluxiq/flows/flow-39.json", categories: ["secret-literal"] },
+    { scope: "workspace", path: ".fluxiq/linked-recordings", categories: ["unsafe-reparse"] },
+  ]);
+  // Forty files, more than one scan's 32 approved paths, all read.
+  assert.deepEqual(attestation.scopes.map(scope => [scope.name, scope.scannedFiles]), [["bundle", 1], ["workspace", 40]]);
+});
+
 test("only the workspace's own storage directory and the staging bundle are scoped", () => {
   const bundleStagingPath = path.resolve("runs", ".staging-run-x");
   const workspaceStorageDir = path.resolve("runs", ".work", "run-x", "fluxiq-root", ".fluxiq");
@@ -112,4 +175,9 @@ test("only the workspace's own storage directory and the staging bundle are scop
     { name: "workspace", root: path.resolve("runs", ".work", "run-x", "fluxiq-root"), paths: [".fluxiq"] },
   ]);
   assert.deepEqual(runRedactionScopes({ bundleStagingPath }), [{ name: "bundle", root: path.resolve("runs"), paths: [".staging-run-x"] }]);
+  // Only a workspace that outlives the run carries a bound, and the bundle never does.
+  assert.deepEqual(runRedactionScopes({ bundleStagingPath, workspaceStorageDir, workspaceWrittenSince: 1_000 }), [
+    { name: "bundle", root: path.resolve("runs"), paths: [".staging-run-x"] },
+    { name: "workspace", root: path.resolve("runs", ".work", "run-x", "fluxiq-root"), paths: [".fluxiq"], writtenSince: 1_000 },
+  ]);
 });

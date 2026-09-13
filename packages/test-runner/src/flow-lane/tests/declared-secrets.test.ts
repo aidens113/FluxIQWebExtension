@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ScenarioStep } from "@fluxiq-web-extension/test-contracts";
-import { declaredSecretBindingInputs, declaredSecretEnvironmentName, declaredSecretFlowInputs, declaredSecretValues, readFlowSecretRequests, resolveDeclaredSecrets, type FlowSecretRequest, type SecretDeclaringScenario } from "../declared-secrets.js";
+import { declaredSecretBindingInputs, declaredSecretEnvironmentName, declaredSecretFlowInputs, declaredSecretValues, flowSecretRequests, resolveDeclaredSecrets, type FlowSecretRequest, type SecretDeclaringScenario } from "../declared-secrets.js";
+import { readFlowNodes } from "../flow-action-types.js";
 import { RunnerFailure } from "../../failure.js";
 import type { RecordingProposalControl } from "../recording-flow-proposal.js";
 
@@ -164,7 +165,8 @@ test("requests are read off the parent Flow and every Subflow graph, and a liter
       throw new Error(`unexpected endpoint ${endpoint}`);
     },
   };
-  assert.deepEqual(await readFlowSecretRequests(control, { projectId: "project.web", flowId: "flow.parent" }), [
+  // The lane's single read of the Flow, then the requests derived from its nodes.
+  assert.deepEqual(flowSecretRequests(await readFlowNodes(control, { projectId: "project.web", flowId: "flow.parent" })), [
     { nodeId: "node.password", parameter: "text", path: "web.secret.password", selector: "#password", element: { testId: "password" } },
   ]);
 });

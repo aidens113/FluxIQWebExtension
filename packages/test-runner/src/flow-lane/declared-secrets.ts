@@ -1,10 +1,8 @@
 import { webAutomationUnresolvedSecretParameters } from "@fluxiq-web-extension/domain/node";
 import type { ScenarioSecret, ScenarioStep, WebScenario } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../failure.js";
-import type { FluxIQHttpOptions } from "../http-control.js";
 import { parseScenarioTarget, type ScenarioTarget } from "../scenario-steps/index.js";
-import { readFlowNodes, type FlowNodeRecord } from "./flow-action-types.js";
-import type { RecordingProposalControl } from "./recording-flow-proposal.js";
+import type { FlowNodeRecord } from "./flow-action-types.js";
 
 export type DeclaredSecret = ScenarioSecret & { value: string };
 
@@ -108,15 +106,6 @@ export function flowSecretRequests(nodes: readonly FlowNodeRecord[]): FlowSecret
     return webAutomationUnresolvedSecretParameters(parameters as Parameters<typeof webAutomationUnresolvedSecretParameters>[0])
       .map(({ parameter, path }) => ({ nodeId: node.id, parameter, path, selector, element }));
   });
-}
-
-/** `flowSecretRequests` over a fresh read, for a caller that needs nothing else from the Flow's nodes. */
-export async function readFlowSecretRequests(
-  control: RecordingProposalControl,
-  input: { projectId: string; flowId: string },
-  bounds: FluxIQHttpOptions = {},
-): Promise<FlowSecretRequest[]> {
-  return flowSecretRequests(await readFlowNodes(control, input, bounds));
 }
 
 /**

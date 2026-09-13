@@ -11,12 +11,12 @@ import { readRecordingDiscards } from "../recording-discards.js";
 function snapshot(auditLog: unknown[]) {
   return { ok: true, payload: { sessions: [{ sessionId: "session.one", status: "ready" }], auditLog } };
 }
-function discard(type: string, metadata: Record<string, unknown>) {
-  return { id: `audit.${type}`, timestamp: 1, sessionId: "session.one", type, message: "A recording event arrived 12 ms after its recording was finalized", metadata: { source: "automation-studio", clientId: "client.one", clientName: "Chromium", projectId: "project.web", eventType: "client.recording_event", inputId: "element-pressed", executable: type === "recording.action_discarded", ...metadata } };
+function discard(type: string, metadata: Record<string, unknown>, id = `audit.${type}`) {
+  return { id, timestamp: 1, sessionId: "session.one", type, message: "A recording event arrived 12 ms after its recording was finalized", metadata: { source: "automation-studio", clientId: "client.one", clientName: "Chromium", projectId: "project.web", eventType: "client.recording_event", inputId: "element-pressed", executable: type === "recording.action_discarded", ...metadata } };
 }
 const pairing = { id: "audit.pairing", timestamp: 0, type: "pairing.approved", message: "Pairing approved", metadata: { clientId: "client.one" } };
 
-test("a discarded action on the run's own recording fails as recording.persistence, and only type, recording, counts and timing travel", () => {
+test("a discarded action on the run's own recording fails as recording.persistence, and only type, entry id, recording, counts and timing travel", () => {
   const audit = readRecordingDiscards(snapshot([
     pairing,
     discard("recording.event_discarded", { recordingId: "recording.run", discardedEvents: 1, discardedActions: 0, sinceFinalizedMs: 4 }),
@@ -24,8 +24,8 @@ test("a discarded action on the run's own recording fails as recording.persisten
   ]), ["recording.run"]);
 
   assert.deepEqual(audit.discards, [
-    { type: "recording.event_discarded", recordingId: "recording.run", discardedActions: 0, discardedEvents: 1, sinceFinalizedMs: 4 },
-    { type: "recording.action_discarded", recordingId: "recording.run", discardedActions: 1, discardedEvents: 3, sinceFinalizedMs: 12 },
+    { type: "recording.event_discarded", entryId: "audit.recording.event_discarded", recordingId: "recording.run", discardedActions: 0, discardedEvents: 1, sinceFinalizedMs: 4 },
+    { type: "recording.action_discarded", entryId: "audit.recording.action_discarded", recordingId: "recording.run", discardedActions: 1, discardedEvents: 3, sinceFinalizedMs: 12 },
   ]);
   assert.ok(audit.failure instanceof RunnerFailure);
   assert.equal(audit.failure.category, "recording.persistence");
@@ -50,7 +50,7 @@ test("discarded evidence alone is recorded but does not fail the run", () => {
     discard("recording.event_discarded", { recordingId: "recording.run", discardedEvents: 5, discardedActions: 0 }),
   ]), new Set(["recording.run"]));
 
-  assert.deepEqual(audit.discards, [{ type: "recording.event_discarded", recordingId: "recording.run", discardedActions: 0, discardedEvents: 5 }]);
+  assert.deepEqual(audit.discards, [{ type: "recording.event_discarded", entryId: "audit.recording.event_discarded", recordingId: "recording.run", discardedActions: 0, discardedEvents: 5 }]);
   assert.equal(audit.failure, undefined);
 });
 
@@ -71,4 +71,55 @@ test("a clean audit yields nothing, and a response with no audit log fails close
     assert.deepEqual(audit.discards, []);
     assert.equal(audit.failure?.category, "gateway.connection");
   }
+});
+
+// -- The second read, before the topology closes ------------------------------
+// Core audits a discard only when the late message arrives, so the runner reads
+// the log again and unions that read with the first.
+
+const runRecordings = ["recording.run"];
+
+test("a second read is unioned with the first by audit entry: an entry both reads return is counted once, and an action discarded after the first read fails the run", () => {
+  const lateEvidence = discard("recording.event_discarded", { recordingId: "recording.run", discardedEvents: 1, discardedActions: 0, sinceFinalizedMs: 4 }, "audit.first");
+  const first = readRecordingDiscards(snapshot([pairing, lateEvidence]), runRecordings);
+  assert.equal(first.failure, undefined);
+
+  const lateAction = discard("recording.action_discarded", { recordingId: "recording.run", discardedEvents: 2, discardedActions: 1, sinceFinalizedMs: 900 }, "audit.second");
+  const second = readRecordingDiscards(snapshot([pairing, lateEvidence, lateAction]), runRecordings, first.discards);
+
+  assert.deepEqual(second.discards, [
+    { type: "recording.event_discarded", entryId: "audit.first", recordingId: "recording.run", discardedActions: 0, discardedEvents: 1, sinceFinalizedMs: 4 },
+    { type: "recording.action_discarded", entryId: "audit.second", recordingId: "recording.run", discardedActions: 1, discardedEvents: 2, sinceFinalizedMs: 900 },
+  ]);
+  assert.equal(second.failure?.category, "recording.persistence");
+  assert.match(second.failure?.message ?? "", /Core discarded recorded actions .*\(1 for recording\.run\)/u);
+  // The first read's result is not changed by the second.
+  assert.equal(first.discards.length, 1);
+});
+
+test("a loss only the first read saw still fails the second, and an unreadable second read keeps the first read's discards", () => {
+  // The action's entry has left the 100-entry window by the second read.
+  const lostEarly = discard("recording.action_discarded", { recordingId: "recording.run", discardedEvents: 1, discardedActions: 1 }, "audit.early");
+  const first = readRecordingDiscards(snapshot([lostEarly]), runRecordings);
+  const second = readRecordingDiscards(snapshot([pairing]), runRecordings, first.discards);
+  assert.deepEqual(second.discards, first.discards);
+  assert.equal(second.failure?.category, "recording.persistence");
+  // A known loss outranks an audit the second read could not get.
+  assert.equal(readRecordingDiscards({ ok: true }, runRecordings, first.discards).failure?.category, "recording.persistence");
+
+  const evidenceOnly = readRecordingDiscards(snapshot([discard("recording.event_discarded", { recordingId: "recording.run", discardedEvents: 1, discardedActions: 0 }, "audit.evidence")]), runRecordings);
+  const unreadable = readRecordingDiscards(undefined, runRecordings, evidenceOnly.discards);
+  assert.deepEqual(unreadable.discards, evidenceOnly.discards);
+  assert.equal(unreadable.failure?.category, "gateway.connection");
+});
+
+test("an audit entry without an id is matched by its type, recording and running counts", () => {
+  const entry = { type: "recording.event_discarded", metadata: { recordingId: "recording.run", discardedEvents: 3, discardedActions: 0 } };
+  const next = { type: "recording.event_discarded", metadata: { recordingId: "recording.run", discardedEvents: 4, discardedActions: 0 } };
+  const first = readRecordingDiscards(snapshot([entry]), runRecordings);
+  const second = readRecordingDiscards(snapshot([entry, next]), runRecordings, first.discards);
+
+  assert.deepEqual(second.discards.map(item => item.discardedEvents), [3, 4]);
+  assert.equal(second.discards.some(item => "entryId" in item), false);
+  assert.equal(second.failure, undefined);
 });
