@@ -42,9 +42,12 @@ test("manifest is valid and resolves W18 (primary) and W19 (expired)", () => {
   assert.deepEqual(expired.expected.failure, { category: "auth_required" });
   assert.deepEqual(expired.expected.extracted, []);
   assert.deepEqual(expired.expected.finalState?.map(fact => fact.id), ["back-on-sign-in", "expiry-notice-visible", "expiry-notice-says-expired", "protected-content-absent"]);
-  for (const inherited of ["recordingEvents", "actions", "allowedConsoleErrors"] as const) {
+  for (const inherited of ["recordingEvents", "allowedConsoleErrors"] as const) {
     assert.deepEqual(expired.expected[inherited], primary.expected[inherited], inherited);
   }
+  // W18's sign-in click succeeds; W19's lands on the gate, so that attempt fails.
+  assert.deepEqual(primary.expected.actions, [{ action: "web.dom.type", outcome: "succeeded" }, { action: "web.dom.click", outcome: "succeeded" }]);
+  assert.deepEqual(expired.expected.actions, [{ action: "web.dom.type", outcome: "succeeded" }, { action: "web.dom.click", outcome: "failed" }]);
 });
 
 /**

@@ -109,7 +109,8 @@ export const failureSurfacesManifest = createScenarioManifest({
           { id: "recorded-target-enabled", subject: "detach-target", predicate: "enabled", value: true },
           { id: "disabled", subject: "disabled-target", predicate: "enabled", value: false },
         ],
-        actions: [{ action: "web.dom.click" }],
+        // The click is the attempt that lands on the interstitial, so it fails.
+        actions: [{ action: "web.dom.click", outcome: "failed" }],
         finalState: [
           { id: "blocked-location", subject: "document", predicate: "path", value: BLOCKED_URL_PATH },
           { id: "blocked-notice", subject: "access-blocked", predicate: "visible", value: true },

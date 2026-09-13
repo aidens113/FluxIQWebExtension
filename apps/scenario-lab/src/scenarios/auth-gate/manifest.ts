@@ -69,6 +69,10 @@ export const authGateManifest = createScenarioManifest({
     expected: {
       // The armed rendering, declared rather than inherited: see SIGN_IN_PAGE_FACTS.
       pageFacts: SIGN_IN_PAGE_FACTS,
+      // The sign-in click is the attempt that lands on the gate, so it is the one
+      // that fails. A variant's `actions` replaces the workflow's, so the typing,
+      // which still succeeds, is restated.
+      actions: [{ action: "web.dom.type", outcome: "succeeded" }, { action: "web.dom.click", outcome: "failed" }],
       finalState: [
         { id: "back-on-sign-in", subject: "document", predicate: "path", value: "/scenarios/auth-gate/" },
         { id: "expiry-notice-visible", subject: "session-expired", predicate: "visible", value: true },

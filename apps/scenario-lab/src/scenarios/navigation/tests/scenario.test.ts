@@ -23,6 +23,9 @@ test("the manifest is valid and resolves its primary workflow and broken-link va
   // A variant never changes the recording: the run replays what was recorded.
   assert.deepEqual(broken.recordingScript, primary.recordingScript);
   assert.deepEqual(broken.expected.recordingEvents, primary.expected.recordingEvents);
+  // The recorded link lands on the retired notice, so the click attempt fails.
+  assert.deepEqual(primary.expected.actions, [{ action: "web.browser.navigate", outcome: "succeeded" }]);
+  assert.deepEqual(broken.expected.actions, [{ action: "web.dom.click", outcome: "failed" }]);
 });
 
 test("state is deterministic from the seed and arming resets what the recording visited", () => {

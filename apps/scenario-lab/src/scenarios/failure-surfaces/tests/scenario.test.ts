@@ -55,6 +55,9 @@ test("the manifest is valid and resolves one variant per surface, each with its 
     const resolved = resolveScenarioWorkflow(scenario.manifest, { variantId });
     assert.deepEqual(resolved.variant?.arm, { operation: "set-mode", payload: { mode: variantId } }, variantId);
     assert.deepEqual(resolved.expected.failure, failure, variantId);
+    // Every armed surface fails the recorded click, including `blocked-url`,
+    // whose click is made but lands on the guard's interstitial.
+    assert.deepEqual(resolved.expected.actions, [{ action: "web.dom.click", outcome: "failed" }], variantId);
     assert.deepEqual(resolved.recordingScript, primary.recordingScript, variantId);
   }
   // Three surfaces, three distinct categories: a run that reports the wrong one

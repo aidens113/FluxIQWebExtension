@@ -45,7 +45,8 @@ export const navigationScenario = defineScenario<NavigationState>({
       description: "The second page has been retired: the recorded link still points at it, the site answers with a redirect to a 404 notice, and the run lands on a URL it never asked for.",
       arm: { operation: "set-mode", payload: { mode: "broken-link" } },
       expected: {
-        actions: [{ action: "web.dom.click" }],
+        // The click is the attempt that lands on the notice, so it fails.
+        actions: [{ action: "web.dom.click", outcome: "failed" }],
         finalState: [
           { id: "retired-location", subject: "document", predicate: "path", value: RETIRED_LINK_PATH },
           { id: "retired-notice", subject: "link-retired", predicate: "visible", value: true },
