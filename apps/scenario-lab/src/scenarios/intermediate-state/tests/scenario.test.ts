@@ -23,6 +23,8 @@ test("the manifest is valid, loopback-only, and resolves its primary workflow an
     "enter-employee:type", "enter-amount:type", "submit-claim:click", "await-result:waitForState", "result-shown:checkpoint",
   ]);
   assert.equal(primary.expected.failure, undefined);
+  // No wait: a generated wait can precede a click, and nothing is recorded after this one.
+  assert.deepEqual(primary.expected.actions, [{ action: "web.dom.type", outcome: "succeeded" }, { action: "web.dom.click", outcome: "succeeded" }]);
 
   const unannounced = resolveScenarioWorkflow(manifest, { variantId: "unannounced" });
   assert.deepEqual(unannounced.variant?.arm, { operation: "set-mode", payload: { mode: "unannounced" } });

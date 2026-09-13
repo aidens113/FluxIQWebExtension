@@ -42,7 +42,6 @@ export const intermediateStateScenario = defineScenario<IntermediateStateState>(
       actions: [
         { action: "web.dom.type", outcome: "succeeded" },
         { action: "web.dom.click", outcome: "succeeded" },
-        { action: "web.dom.wait_for_selector", outcome: "succeeded" },
       ],
       finalState: [
         { id: "claim-status", subject: "result-status", predicate: "text", value: "Submitted for review" },

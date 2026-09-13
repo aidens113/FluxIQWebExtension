@@ -6,7 +6,9 @@
 //
 // Typing is debounced into a single `dom.input` per field rather than one
 // event per keystroke, and DOM mutations are batched into one `dom.mutation`
-// per quiet period, so a busy page cannot flood the gateway.
+// per quiet period, so a busy page cannot flood the gateway. A batch still
+// pending when an executable kind is sent goes out first, so a DOM change made
+// before an action is never recorded after it.
 
 import { CONTENT_EVENT, CONTENT_READY } from "./messages";
 import { isActiveContentInstance } from "./instance";
@@ -17,6 +19,9 @@ import { describeElement, readElementValue } from "./describe-element";
 import { shouldAttachStateSnapshot } from "./snapshots";
 import type { RecordingEventKind, RecordingEventPayload } from "./types";
 
+/** The kinds a recorded event can become an executable action from. */
+const EXECUTABLE_KINDS: ReadonlySet<RecordingEventKind> = new Set(["dom.click", "dom.input", "dom.change", "dom.submit", "dom.keydown"]);
+
 let recording = false;
 let sequence = 0;
 let mutationTimer: ReturnType<typeof setTimeout> | undefined;
@@ -26,17 +31,9 @@ let pendingMutation = { added: 0, removed: 0, attributes: 0, text: 0 };
 
 const observer = new MutationObserver((mutations) => {
   if (!captureSettings.mutations || !recording) return;
-  for (const mutation of mutations) {
-    pendingMutation.added += mutation.addedNodes.length;
-    pendingMutation.removed += mutation.removedNodes.length;
-    if (mutation.type === "attributes") pendingMutation.attributes += 1;
-    if (mutation.type === "characterData") pendingMutation.text += 1;
-  }
+  tallyMutations(mutations);
   if (mutationTimer) clearTimeout(mutationTimer);
-  mutationTimer = setTimeout(() => {
-    emit("dom.mutation", { mutation: pendingMutation });
-    pendingMutation = { added: 0, removed: 0, attributes: 0, text: 0 };
-  }, 500);
+  mutationTimer = setTimeout(() => flushPendingMutation(), 500);
 });
 
 export function isRecording(): boolean {
@@ -55,6 +52,7 @@ export function sendReady(): void {
 export function emit(kind: RecordingEventKind, details: Partial<RecordingEventPayload>): void {
   if (!isActiveContentInstance()) return;
   if (!recording && kind !== "content.ready") return;
+  if (EXECUTABLE_KINDS.has(kind)) flushPendingMutation();
   const payload = basePayload(kind, details);
   void chrome.runtime.sendMessage({ type: CONTENT_EVENT, payload });
 }
@@ -103,6 +101,30 @@ export function emitInputEvent(element: Element | null): void {
     element: element ? describeElement(element) : undefined,
     inputValue: captureSettings.inputValues ? readElementValue(element) : undefined
   }));
+}
+
+/**
+ * Sends the pending mutation batch now and clears its quiet-period timer. The
+ * records the observer has queued but not yet delivered are counted too, so a
+ * change made in the same task as the event that follows is not left behind.
+ */
+function flushPendingMutation(): void {
+  if (captureSettings.mutations && recording) tallyMutations(observer.takeRecords());
+  if (mutationTimer) clearTimeout(mutationTimer);
+  mutationTimer = undefined;
+  const mutation = pendingMutation;
+  pendingMutation = { added: 0, removed: 0, attributes: 0, text: 0 };
+  if (mutation.added + mutation.removed + mutation.attributes + mutation.text === 0) return;
+  emit("dom.mutation", { mutation });
+}
+
+function tallyMutations(mutations: readonly MutationRecord[]): void {
+  for (const mutation of mutations) {
+    pendingMutation.added += mutation.addedNodes.length;
+    pendingMutation.removed += mutation.removedNodes.length;
+    if (mutation.type === "attributes") pendingMutation.attributes += 1;
+    if (mutation.type === "characterData") pendingMutation.text += 1;
+  }
 }
 
 function basePayload(kind: RecordingEventKind, details: Partial<RecordingEventPayload>): RecordingEventPayload {
