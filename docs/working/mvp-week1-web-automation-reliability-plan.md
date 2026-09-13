@@ -40,7 +40,7 @@ settled ledger entries are in parts one to twenty-seven of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13, while workers run.**
-- **This repository:** `9c198d2`, 78 commits ahead of `origin/dev`, not pushed.
+- **This repository:** `17c5bae`, 80 commits ahead of `origin/dev`, not pushed.
 - **Core:** `240c73e`, 10 commits ahead of `origin/dev`, `fluxiq` **0.4.0**, built at
   `187f40d`; the tenth is a plan-only commit. The nine code commits:
   - `5d495eb`, trace withholding;
@@ -93,16 +93,14 @@ settled ledger entries are in parts one to twenty-seven of
   row stays in the corpus.
 
 **In flight:**
-- **`g-mapper-stored-payload`:** the mapper reads a Core-stored domain event's
-  payload where Core puts it (twentieth dispatch).
 - **`l-stage2`:** blocked at `7263534`, since every run failed the runner's own
   discard check; an instrumented run confirmed the cause. Its worktrees are kept.
 - **`g-discard-window-evidence`:** each discard read publishes its window and
   what it excluded, and the failure text matches the window.
 
 **Queued, in dependency order**
-1. **After `g-discard-window-evidence` and `g-mapper-stored-payload`:** Lab
-   Stage 2 redispatched at a commit holding both, W19 `expired` included.
+1. **After `g-discard-window-evidence`:** Lab Stage 2 redispatched at its commit,
+   W19 `expired` included (twenty-second dispatch).
 2. **Integration:**
    - Core `package:lint` and `pnpm build` on the 0.4.0 tree (the bump and its
      migration note landed in `5845f5d`);
@@ -751,6 +749,45 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
     byte-identical.
 - Not verified: the Lab.
 - Outcome: Accepted
+
+### 2026-09-13 — g-mapper-stored-payload: the mapper already reads Core's stored domain events correctly
+
+- Agent: worker `g-mapper-stored-payload`; decisions by supervisor.
+- Changed: a new `domain/src/tests/web-panel-host.test.ts`, with five rows that run
+  a recording through Core. The hand-built domain-event rows moved out of
+  `domain/src/tests/domain.test.ts`. `domain/src/web-panel-host.ts` is unchanged.
+- Found:
+  - The brief's premise, taken from `reports/w19-d1b.md` open question 1, was
+    wrong. Core stores each domain event twice: as a `domain_event` entry whose
+    own payload sits inside `{ target?, payload }` (`model/recording-domain.ts:187`),
+    and as an `observation` from the domain's `observationExtractor`, with the
+    payload one level up (`:228-237`).
+  - The mapper reads that observation copy. On a real recording, D1's
+    domain-event click claim, W25's between-evidence URL check and a navigation
+    proposal therefore already work, once each. Reading the entry as well
+    proposes every executable domain event twice (mutation M1: 4 rows fail).
+- Decisions:
+  - Task 1 is withdrawn, and the reader stays as it is; the Core-run rows are
+    kept.
+  - This corrects the `w19-d1b` and `g-w19-docs` entries in archive parts
+    twenty-six and twenty-seven, which said the domain-event path claims
+    nothing on a real recording. The architecture pages never said so.
+  - Stage 2's redispatch now waits only for `g-discard-window-evidence`
+    (twenty-second dispatch).
+- Validation: supervisor confirmed `recording-domain.ts:187` and `:228-237`, and
+  that `web-panel-host.ts` is unchanged against HEAD. With
+  `DOMAIN_TEST_BUILD_LABEL=sup21`:
+  - `domain check` -> exit 0;
+  - `test` -> `# tests 380`, `# pass 380`, `# fail 0`, including `ok 376 - Core
+    shows a mapper a domain event twice, and the mapper reads it from the
+    observation alone` and `ok 377 - D1: a click sent as a domain event is
+    proposed once, claiming the path it landed on`;
+  - the structure audit passed, and `domain.test.ts` is 300 lines.
+  - Worker: M1, the brief's fix, failed 4 rows; M2, which stops reading an
+    observation's payload, failed 5. HEAD was restored after each.
+- Not verified: the Core rows copy the gateway's routing rather than running
+  `ClientGatewayBridge`; the Lab.
+- Outcome: Revised
 
 ## Open Questions
 

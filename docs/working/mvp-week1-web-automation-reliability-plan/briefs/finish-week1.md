@@ -2240,3 +2240,39 @@ note.
 - The structure audit.
 
 **Report:** `reports/g-discard-window-evidence.md`.
+
+---
+
+# Twenty-second dispatch — correction from `g-mapper-stored-payload`
+
+`g-mapper-stored-payload` found that its brief's premise was wrong. The supervisor
+confirmed it in Core's code: `model/recording-domain.ts` stores each domain event
+twice.
+- **As a `domain_event` entry** (`:187`), whose own payload sits inside
+  `{ target?, payload }`.
+- **As an `observation` entry**, through the domain's `observationExtractor`
+  (`:228-237`), with the payload one level up.
+
+The mapper already reads the observation copy. So on a real recording three
+things already work, once each:
+- D1's domain-event click claim;
+- W25's URL check on the evidence between an addition and its click;
+- a navigation proposal.
+
+Reading the entry as well proposes every executable domain event twice. The
+worker's mutation M1 shows it: 4 rows fail.
+
+Decided:
+- **Task 1 is withdrawn,** and the mapper's reader stays as it is. The worker's
+  Core-run rows and the moved domain-event rows are kept, in
+  `domain/src/tests/web-panel-host.test.ts`.
+- **The records built on the wrong premise are corrected.** They are:
+  - `reports/w19-d1b.md` open question 1;
+  - the twentieth dispatch's "read-depth defect";
+  - the `w19-d1b` and `g-w19-docs` ledger entries, now in the archive.
+
+  The ledger records the correction. The architecture pages never stated the
+  premise; a search of `docs/architecture/` for it finds nothing.
+- **`l-stage2`'s redispatch no longer waits for a mapper change.** It waits for
+  `g-discard-window-evidence`. The message names the first commit that holds both
+  that change and this test change.
