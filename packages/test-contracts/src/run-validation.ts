@@ -45,7 +45,7 @@ export function validateRunManifest(input: unknown): ValidationResult<RunManifes
   validateEnvironment(value.environment, issues); validateNumericRecord(value.ports, "$.ports", issues, 1, 65535, false); validateNumericRecord(value.processExits, "$.processExits", issues, -2147483648, 2147483647, true);
   array(value.artifacts, "$.artifacts", issues, artifact);
   if (Array.isArray(value.artifacts)) uniqueStrings(value.artifacts.filter(objectValue).map(entry => entry.path), "$.artifacts", issues, "artifact paths");
-  enumeration(value.redactionState, ["pending", "verified", "failed"], "$.redactionState", issues);
+  enumeration(value.redactionState, ["pending", "verified", "failed", "not_applicable"], "$.redactionState", issues);
   if (value.verdict !== undefined) enumeration(value.verdict, verdicts, "$.verdict", issues);
   if (value.fluxiqExecution !== undefined) validateFluxIQExecution(value.fluxiqExecution, issues);
   for (const key of ["workflowId", "variantId"] as const) if (value[key] !== undefined) kebabId(value[key], `$.${key}`, issues);

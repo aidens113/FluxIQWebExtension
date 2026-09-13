@@ -34,6 +34,49 @@ test("the evaluation is a hashed artifact of the bundle, written before it is se
   assert.ok(written < finalized, "evaluation.json is written before the bundle is finalized, so it enters the artifact index");
 });
 
+test("the redaction attestation scans once Core has stopped and its logs are in the bundle, before cleanup, the manifest and finalization", async () => {
+  const source = await runnerSource();
+  assert.equal(source.match(/attestRunRedaction\(/gu)?.length, 1, "one attestation per run, in one place");
+  const at = {
+    closed: source.indexOf("await topology?.close();"),
+    logsCopied: source.indexOf("await copyProcessLogs(bundle, "),
+    attested: source.indexOf("redaction = await attestRunRedaction("),
+    cloneCleanup: source.indexOf("await removeRunOwnedTopologyState(topology);"),
+    manifest: source.indexOf("await createRunManifest({"),
+    finalized: source.indexOf("await bundle.finalize("),
+    isolatedCleanup: source.indexOf("await removeRunOwnedTopologyState(topology).catch("),
+  };
+  for (const [name, index] of Object.entries(at)) assert.ok(index > 0, `${name} is in the runner`);
+  assert.ok(at.closed < at.attested, "Core has stopped, so nothing still appends to the recording or trace being scanned");
+  assert.ok(at.logsCopied < at.attested, "the copied Core and gateway logs are inside the bundle being scanned");
+  assert.ok(at.attested < at.cloneCleanup, "the clone cleanup deletes the workspace the scan reads");
+  assert.ok(at.attested < at.isolatedCleanup, "so does the isolated cleanup");
+  assert.ok(at.attested < at.manifest, "the manifest's verdict and redactionState read the result");
+  assert.ok(at.attested < at.finalized, "finalize renames the staging directory the scan reads");
+  assert.match(source, /await createRunManifest\(\{[^}]*\bredaction\b[^}]*\}\)/u, "the manifest derives redactionState from the attestation");
+  assert.ok(source.includes('bundle.writeStructured("snapshots/redaction-attestation.json", redaction)'), "the result is a bundle artifact");
+  assert.ok(source.includes('failureCategory = "security.redaction"'), "a finding fails the run as security.redaction");
+});
+
+test("Core's audit of discarded recording messages is read after the round trip, published, and fails the run before the Flow lane", async () => {
+  const source = await runnerSource();
+  assert.equal(source.match(/readRecordingDiscards\(/gu)?.length, 1);
+  const at = {
+    roundTrip: source.indexOf("const outcome = await assertCoreRoundTrip(topology, paired?.sessionId, recordingBaseline);"),
+    audited: source.indexOf("readRecordingDiscards(await topology.control.gatewaySnapshot(), outcome.newRecordingIds)"),
+    connection: source.indexOf("const connectionAfterStop = await runtimeMessage(extensionControl, { type: \"fluxiq.getStatus\" })"),
+    settled: source.indexOf('"Core persisted the completed recording"'),
+    failed: source.indexOf("if (discardAudit.failure) throw discardAudit.failure;"),
+    flowLane: source.indexOf("await runFlowLane({"),
+  };
+  for (const [name, index] of Object.entries(at)) assert.ok(index > 0, `${name} is in the runner`);
+  assert.ok(at.roundTrip < at.audited && at.roundTrip < at.connection, "read once Core has finalized the recording");
+  assert.ok(at.audited < at.settled && at.connection < at.settled, "both are read before the settle event that publishes them");
+  assert.ok(at.settled < at.failed, "the discards are in the bundle before the run fails on them");
+  assert.ok(at.failed < at.flowLane, "a recording that reached Core short never becomes a Flow");
+  assert.match(source, /"Core persisted the completed recording"\), details: \{[^}]*recordingDiscards: discardAudit\.discards, extensionConnectionAfterStop: connectionAfterStop/u);
+});
+
 test("the evaluation reaches the caller, so lab run reports it without a bench", async () => {
   const source = await runnerSource();
   assert.match(source, /export type RunScenarioResult = \{[^{}]*evaluation\?: RunEvaluation[^{}]*\};/u);

@@ -81,6 +81,13 @@ test("the automation failure uses the scenario taxonomy, not the test-rig catego
   assert.doesNotThrow(() => assertRunManifest(manifest({ automationFailure: { category: "ambiguous_or_unknown" } })));
 });
 
+test("a run with no declared literal to scan records not_applicable, and no other spelling of it is accepted", () => {
+  assert.deepEqual(issuePaths(manifest({ redactionState: "not_applicable" })), []);
+  assert.deepEqual(issuePaths(manifest({ redactionState: "not_applicable", status: "failed", verdict: "failed" })), []);
+  assert.ok(issuePaths(manifest({ redactionState: "not-applicable" })).includes("$.redactionState"));
+  assert.ok(issuePaths(manifest({ redactionState: "skipped" })).includes("$.redactionState"));
+});
+
 test("step and action timings must be arrays of objects", () => {
   const paths = issuePaths(manifest({ steps: {}, actions: ["x"] }));
   assert.ok(paths.includes("$.steps"));

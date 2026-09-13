@@ -53,9 +53,9 @@ async function manifestFor(t: test.TestContext, verdict: "passed" | "failed", re
   return manifest;
 }
 
-test("a run no attestation vouched for records its redaction as pending, never verified", async t => {
+test("a run no attestation vouched for records pending, and one with nothing to scan not_applicable, never verified", async t => {
   assert.equal((await manifestFor(t, "passed", undefined)).redactionState, "pending");
-  assert.equal((await manifestFor(t, "passed", attestation("not-applicable"))).redactionState, "pending");
+  assert.equal((await manifestFor(t, "passed", attestation("not-applicable"))).redactionState, "not_applicable");
 });
 
 test("a passed attestation records verified, and a failed one records failed on a failed run", async t => {

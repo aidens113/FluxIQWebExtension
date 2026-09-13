@@ -26,7 +26,8 @@ import { createRunOwnedCloneFlowId, createRunOwnedCloneProject, importClonePacka
 import { effectiveEvidencePolicy } from "./evidence-policy/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant, scenarioLabOriginProof } from "./lab-control/index.js";
-import { awaitFinalizedRecording, declaredSecretValues, flowLaneSnapshot, recordingLaneObservation, resolveDeclaredSecrets, runFlowLane, selectLaneObservation, type DeclaredSecret, type RunLaneObservation } from "./flow-lane/index.js";
+import { awaitFinalizedRecording, declaredSecretValues, flowLaneSnapshot, readRecordingDiscards, recordingLaneObservation, resolveDeclaredSecrets, runFlowLane, selectLaneObservation, type DeclaredSecret, type RunLaneObservation } from "./flow-lane/index.js";
+import { attestRunRedaction, runRedactionScopes, scenarioRedactionLiterals, type RunRedactionAttestation } from "./redaction-attestation/index.js";
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog } from "./run-expectations/index.js";
 import { singleRunEvaluation } from "./run-evaluation/index.js";
 import { automationFailureFromActionResult, createRunManifest, flowActionTimings, runActionStatus, type CloneRunState } from "./run-manifest/index.js";
@@ -68,6 +69,13 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
   // of the same scenario does not require them to be configured.
   const declaredSecrets: DeclaredSecret[] = options.flow ? resolveDeclaredSecrets(scenario, environment) : [];
   const secrets = [environment.FLUXIQ_TEST_PASSWORD, environment.FLUXIQ_TEST_PIN, environment.FLUXIQ_TEST_TOTP, ...declaredSecretValues(declaredSecrets)].filter((value): value is string => Boolean(value));
+  // What the redaction attestation scans for once Core has stopped, read here so a
+  // bad declaration fails before the bundle. Never added to `secrets`: the bundle's
+  // redactor would scrub them on write and hide the leak the bundle scan looks for.
+  // The existing target's FluxIQ is remote and cannot be scanned, so a scenario
+  // declaring literals there stays unattested (`pending`) instead of verified.
+  const redactionLiterals = target.mode === "existing" && scenario.secrets?.length ? undefined : scenarioRedactionLiterals(scenario);
+  let redaction: RunRedactionAttestation | undefined;
   const evidence = effectiveEvidencePolicy(scenario.evidencePolicy, options.evidence);
   const bundle = new EvidenceBundle({ rootDirectory: options.runsDirectory, runId, scenarioId: scenario.id, redaction: { secrets }, evidencePolicy: evidence.capture });
   await bundle.initialize();
@@ -285,8 +293,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
       await runtimeMessage(extensionPage, { type: "fluxiq.stopRecording" });
       recordingStarted = false;
       const outcome = await assertCoreRoundTrip(topology, paired?.sessionId, recordingBaseline);
+      // Core audits a message that reached a finalized recording, tells the client
+      // nothing, and since `267a2ca` no longer fails the connection for it: its audit
+      // log and the extension's own state after Stop are where a short recording shows.
+      const discardAudit = readRecordingDiscards(await topology.control.gatewaySnapshot(), outcome.newRecordingIds);
+      const connectionAfterStop = await runtimeMessage(extensionControl, { type: "fluxiq.getStatus" }).then((response: any) => String(response.status?.connectionState ?? "unreported"), () => "unavailable");
       await capture.trigger({ ...event(runId, scenario.id, undefined, "gateway.action", "Core gateway retained the paired extension session"), details: { sessionCount: outcome.sessionCount } });
-      await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "Core persisted the completed recording"), details: { recordingCount: outcome.recordingCount, projectId: topology.projectId, recordedEvents, recordings: outcome.finalized.map(item => ({ recordingId: item.recordingId, entryCount: item.entryCount, entriesAppendedAfterStop: item.entriesAppendedWhileWaiting, finalizationWaitMs: item.waitedMs })) } });
+      await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "Core persisted the completed recording"), details: { recordingCount: outcome.recordingCount, projectId: topology.projectId, recordedEvents, recordingDiscards: discardAudit.discards, extensionConnectionAfterStop: connectionAfterStop, recordings: outcome.finalized.map(item => ({ recordingId: item.recordingId, entryCount: item.entryCount, entriesAppendedAfterStop: item.entriesAppendedWhileWaiting, finalizationWaitMs: item.waitedMs })) } });
+      if (discardAudit.failure) throw discardAudit.failure;
       if (options.flow) {
         const control = topology.control;
         const activeTopology = topology;
@@ -378,6 +392,20 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
       await capture.trigger({ ...event(runId, scenario.id, undefined, "error", failureMessage), details: { failureCategory } }).catch(() => undefined);
     }
     if (topology) await copyProcessLogs(bundle, topology.allocation.logsDir);
+    // Core has stopped and its logs are in the bundle; the clone cleanup below
+    // deletes the workspace, and `finalize` renames the staging directory. This is
+    // the one point where both trees are complete and still exist.
+    if (redactionLiterals) {
+      const failRedaction = async (message: string, details: Record<string, unknown>) => {
+        if (verdict === "passed") { failureCategory = "security.redaction"; failureMessage = message; }
+        verdict = "failed";
+        await capture.trigger({ ...event(runId, scenario.id, undefined, "error", message), details: { failureCategory: "security.redaction", ...details } }).catch(() => undefined);
+      };
+      try { redaction = await attestRunRedaction({ literals: redactionLiterals, scopes: runRedactionScopes({ bundleStagingPath: bundle.stagingPath, workspaceStorageDir: topology?.allocation.storageDir }) }); }
+      catch (error) { await failRedaction(`Redaction attestation could not run: ${redactionLiterals.reduce((text, literal) => text.replaceAll(literal, "[redacted]"), error instanceof Error ? error.message : String(error))}`, {}); }
+      if (redaction?.status === "failed") await failRedaction(`Redaction attestation found ${redaction.findingCount} file(s) holding a declared literal or left unread`, { findings: redaction.findings });
+      if (redaction) await bundle.writeStructured("snapshots/redaction-attestation.json", redaction).catch(() => undefined);
+    }
     if (target.mode === "clone" && topology) {
       try {
         await removeRunOwnedTopologyState(topology);
@@ -394,7 +422,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
     if (target.mode === "clone" && !topology) cloneState.cleanupOutcome = "completed";
   }
   try {
-    const manifest = await createRunManifest({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, target: options.target, scenario, runId, seed, startedAt, verdict, browserVersion, extensionPath, topology, existingPreflight, existingExecution, panelVerification, cloneState, workflowId: workflow.workflowId, variantId: workflow.variant?.id, automationFailure, steps: stepRunner?.timings() ?? [], actions });
+    const manifest = await createRunManifest({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, target: options.target, scenario, runId, seed, startedAt, verdict, browserVersion, extensionPath, topology, existingPreflight, existingExecution, panelVerification, cloneState, workflowId: workflow.workflowId, variantId: workflow.variant?.id, automationFailure, steps: stepRunner?.timings() ?? [], actions, redaction });
     assertRunManifest(manifest);
     await bundle.writeStructured("run.json", manifest);
     const metrics = { steps: workflow.recordingScript.length };

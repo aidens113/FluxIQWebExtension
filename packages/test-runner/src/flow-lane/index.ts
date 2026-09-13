@@ -6,6 +6,7 @@ export * from "./finalized-recording.js";
 export * from "./flow-action-types.js";
 export * from "./lane-observation.js";
 export * from "./persisted-flow-run.js";
+export * from "./recording-discards.js";
 export * from "./recording-flow-proposal.js";
 export * from "./reset-scenario-lab.js";
 export * from "./run-flow-lane.js";

@@ -112,7 +112,13 @@ export type RunManifest = {
   ports: Record<string, number>;
   processExits: Record<string, number | null>;
   artifacts: RunArtifact[];
-  redactionState: "pending" | "verified" | "failed";
+  /**
+   * What the Lab's redaction attestation observed: `verified` when it scanned for
+   * the scenario's declared literals and found none, `failed` when it found one or
+   * could not look, `not_applicable` when the scenario declares no literal so
+   * nothing was scanned, and `pending` when no attestation ran.
+   */
+  redactionState: "pending" | "verified" | "failed" | "not_applicable";
   verdict?: "passed" | "failed" | "inconclusive";
   /** Sanitized execution provenance only. Credentials and raw gateway data are forbidden. */
   fluxiqExecution?: FluxIQExecutionMetadata;

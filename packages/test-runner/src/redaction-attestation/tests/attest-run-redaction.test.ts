@@ -100,7 +100,7 @@ test("a scenario that declares no literal is not applicable, scans nothing, and 
   const attestation = await attestRunRedaction({ literals: [], scopes: run.scopes });
 
   assert.deepEqual(attestation, { status: "not-applicable", literalCount: 0, scopes: [], findingCount: 0, findings: [], advisories: [] });
-  assert.equal(runRedactionState(attestation), "pending");
+  assert.equal(runRedactionState(attestation), "not_applicable");
   assert.equal(runRedactionState(undefined), "pending");
 });
 
