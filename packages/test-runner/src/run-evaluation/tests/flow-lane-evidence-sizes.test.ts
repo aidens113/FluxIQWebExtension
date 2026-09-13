@@ -3,8 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test, { type TestContext } from "node:test";
-import type { RunEvidenceSizes } from "@fluxiq-web-extension/test-contracts";
-import { flowLaneEvidenceSizes } from "../flow-lane-evidence-sizes.js";
+import { flowLaneEvidenceSizes, type FlowLaneEvidence } from "../flow-lane-evidence-sizes.js";
 
 // The one reader both Flow-lane producers share: the bench's `evaluateFlowRun`
 // and a single `lab run`'s `singleRunEvaluation`. These rows replace the ones
@@ -23,7 +22,7 @@ function bundleWith(t: TestContext, snapshot: unknown): string {
   writeFileSync(path.join(directory, "snapshots", "flow-lane.json"), typeof snapshot === "string" ? snapshot : `${JSON.stringify(snapshot, null, 2)}\n`);
   return directory;
 }
-const NO_EVIDENCE: RunEvidenceSizes = { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 };
+const NO_EVIDENCE: FlowLaneEvidence = { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0, packets: [] };
 
 test("every measured packet's bytes, in action order and then capture order, and a count of the trimmed ones", (t) => {
   const snapshot = {
@@ -36,7 +35,13 @@ test("every measured packet's bytes, in action order and then capture order, and
       { actionType: "web.dom.click", status: "succeeded", evidencePackets: [{ point: "beforeAction", bytes: 0, truncated: false }, { point: "afterAction", bytes: 4_096, truncated: true }] },
     ],
   };
-  assert.deepEqual(flowLaneEvidenceSizes(bundleWith(t, snapshot)), { sanitizedPacketBytes: [2_048, 1_024, 0, 4_096], rawSnapshotBytes: [], truncationCount: 2 });
+  assert.deepEqual(flowLaneEvidenceSizes(bundleWith(t, snapshot)), {
+    sanitizedPacketBytes: [2_048, 1_024, 0, 4_096], rawSnapshotBytes: [], truncationCount: 2,
+    packets: [
+      { actionPosition: 1, point: "beforeAction", bytes: 2_048, truncated: false }, { actionPosition: 1, point: "afterAction", bytes: 1_024, truncated: true },
+      { actionPosition: 3, point: "beforeAction", bytes: 0, truncated: false }, { actionPosition: 3, point: "afterAction", bytes: 4_096, truncated: true },
+    ],
+  });
 });
 
 test("a snapshot that is absent, unreadable, unparseable, or has no list of actions yields no sizes and never throws", (t) => {
@@ -71,5 +76,23 @@ test("only an entry in the shape the lane writes is measured: a size the evaluat
       { evidencePackets: [{ point: "beforeAction", bytes: 0, truncated: false }] },
     ],
   };
-  assert.deepEqual(flowLaneEvidenceSizes(bundleWith(t, snapshot)), { sanitizedPacketBytes: [512, 0], rawSnapshotBytes: [], truncationCount: 1 });
+  assert.deepEqual(flowLaneEvidenceSizes(bundleWith(t, snapshot)), {
+    sanitizedPacketBytes: [512, 0], rawSnapshotBytes: [], truncationCount: 1,
+    // A position counts every entry of `actions`, so the last packet's action is the file's seventh entry.
+    packets: [{ actionPosition: 1, point: "afterAction", bytes: 512, truncated: true }, { actionPosition: 7, point: "beforeAction", bytes: 0, truncated: false }],
+  });
+});
+
+test("a packet's point is one the lane writes or null: a measured entry naming anything else is still sized, and its text is not carried", (t) => {
+  const snapshot = {
+    actions: [{ evidencePackets: [{ point: "Signed in as private.person", bytes: 64, truncated: false }, { bytes: 32, truncated: true }, { point: "afterAction", bytes: 16, truncated: false }] }],
+  };
+  const evidence = flowLaneEvidenceSizes(bundleWith(t, snapshot));
+  assert.deepEqual(evidence.packets, [
+    { actionPosition: 1, point: null, bytes: 64, truncated: false },
+    { actionPosition: 1, point: null, bytes: 32, truncated: true },
+    { actionPosition: 1, point: "afterAction", bytes: 16, truncated: false },
+  ]);
+  assert.deepEqual(evidence.sanitizedPacketBytes, [64, 32, 16]);
+  assert.equal(JSON.stringify(evidence).includes("private.person"), false);
 });

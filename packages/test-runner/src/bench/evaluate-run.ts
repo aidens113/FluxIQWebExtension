@@ -35,7 +35,7 @@ export const FLOW_LANE_SOURCES = {
   harnessActivations: "the persisted Core run's harness activations",
   durationMs: "run.json finishedAt minus startedAt; the bench's wall clock when run.json is unreadable",
   actionLatency: "the persisted Core run's actions[].durationMs; an unfinished action has none and is left out",
-  evidenceSizes: "the run bundle's snapshots/flow-lane.json actions[].evidencePackets: sanitizedPacketBytes holds the UTF-8 size of each state-snapshot packet Core captured before and after a web action attempt, one entry per measured packet, and truncationCount counts those the domain trimmed. The failure packet is not in Core's run detail and is not measured. Both are empty and 0 when that file is absent, which is a run in which no Flow ran, and also when it is unreadable. rawSnapshotBytes is empty: no producer measures raw snapshots, and they are not a Week 1 metric",
+  evidenceSizes: "the run bundle's snapshots/flow-lane.json actions[].evidencePackets: sanitizedPacketBytes holds the UTF-8 size of each state-snapshot packet Core captured before and after a web action attempt, one entry per measured packet, and truncationCount counts those the domain trimmed. The failure packet is not in Core's run detail and is not measured. Both are empty and 0 when that file is absent, which is a run in which no Flow ran, and also when it is unreadable. rawSnapshotBytes is empty: no producer measures raw snapshots, and they are not a Week 1 metric. A measured packet over the domain's exploration budget fails the run's evidence-packet-budget invariant",
   llm: "disabled: Week 1 benches run provider-free",
 } as const;
 

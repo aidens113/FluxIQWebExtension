@@ -888,7 +888,10 @@ Every isolated or persistent-isolated run also writes `evaluation.json`, its own
 `RunEvaluation`: the same judgement [the bench](#the-bench) records for a corpus
 row. A Flow-lane run's evidence sizes are read from `snapshots/flow-lane.json`
 by one reader, `run-evaluation/flow-lane-evidence-sizes.ts`, which a single run
-and its bench row both use, so the two record the same packets.
+and its bench row both use, so the two record the same packets. The same reader
+feeds the `evidence-packet-budget` invariant: a measured packet over the
+domain's exploration budget, 6,000 bytes, fails a run the runner had passed, as
+`performance.budget`. A run with no packets gets no such invariant.
 `rawSnapshotBytes` stays empty, because no producer measures raw snapshots.
 
 ### Declared replay secrets

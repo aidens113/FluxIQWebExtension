@@ -1,5 +1,7 @@
-import { EVALUATION_SCHEMA_VERSION, assertRunEvaluation, type ExpectedFailure, type RunEvaluation, type RunEvidenceSizes } from "@fluxiq-web-extension/test-contracts";
+import { EVALUATION_SCHEMA_VERSION, assertRunEvaluation, type ExpectedFailure, type InvariantResult, type RunEvaluation } from "@fluxiq-web-extension/test-contracts";
 import type { RunLaneObservation } from "../flow-lane/index.js";
+import { evidenceBudgetInvariant } from "./evidence-budget-invariant.js";
+import type { FlowLaneEvidence } from "./flow-lane-evidence-sizes.js";
 import type { RunOutcome } from "./run-outcome.js";
 
 /** Which run an evaluation describes, and the failure it was planned to expect. */
@@ -29,14 +31,15 @@ export type ObservedRun = {
    */
   observation: RunLaneObservation;
   /**
-   * The sizes of the evidence the run's lane measured, when it measured any.
-   * Both Flow-lane producers pass them, read by `flowLaneEvidenceSizes` from
-   * the bundle's `snapshots/flow-lane.json`: the bench's
-   * (`bench/evaluate-run.ts`) and a single `lab run` (`single-run-evaluation.ts`).
-   * A recording-lane run contributes none: absent, both lists are empty and the
-   * truncation count is 0.
+   * The sizes of the evidence the run's lane measured, when it measured any,
+   * with the located packets they came from. Both Flow-lane producers pass
+   * them, read by `flowLaneEvidenceSizes` from the bundle's
+   * `snapshots/flow-lane.json`: the bench's (`bench/evaluate-run.ts`) and a
+   * single `lab run` (`single-run-evaluation.ts`). A recording-lane run
+   * contributes none: absent, both lists are empty, the truncation count is 0,
+   * and no budget invariant is added.
    */
-  evidence?: RunEvidenceSizes;
+  evidence?: FlowLaneEvidence;
 };
 
 /**
@@ -52,15 +55,20 @@ export type ObservedRun = {
  * that way. The evidence sizes do not differ: both producers' Flow lanes read
  * them from the run bundle through `flowLaneEvidenceSizes`. See
  * `bench/evaluate-run.ts`.
+ *
+ * Measured packets are also judged against their budget here
+ * (`evidenceBudgetInvariant`), so a packet over it fails the run and its bench
+ * row alike.
  */
 export function evaluateObservedRun(input: ObservedRun): RunEvaluation {
   const { identity, outcome, observation, evidence } = input;
+  const judged = withEvidenceBudget(outcome, evidence ? evidenceBudgetInvariant(evidence.packets) : undefined);
   const evaluation: RunEvaluation = {
     schemaVersion: EVALUATION_SCHEMA_VERSION,
     runId: outcome.runId,
-    verdict: outcome.verdict,
-    ...(outcome.failureCategory === undefined ? {} : { failureCategory: outcome.failureCategory }),
-    invariants: outcome.invariants,
+    verdict: judged.verdict,
+    ...(judged.failureCategory === undefined ? {} : { failureCategory: judged.failureCategory }),
+    invariants: judged.invariants,
     metrics: outcome.metrics,
     scenarioId: identity.scenarioId,
     workflowId: identity.workflowId,
@@ -78,7 +86,7 @@ export function evaluateObservedRun(input: ObservedRun): RunEvaluation {
     // A recording-lane run contributes no evidence sizes: it runs no Flow, so
     // Core captured no sanitized packet, and it passes none. `rawSnapshotBytes`
     // is empty on every lane, because no producer measures raw snapshots and
-    // they are not a Week 1 metric.
+    // they are not a Week 1 metric. Only the contract's fields are copied.
     evidence: evidence
       ? { sanitizedPacketBytes: [...evidence.sanitizedPacketBytes], rawSnapshotBytes: [...evidence.rawSnapshotBytes], truncationCount: evidence.truncationCount }
       : { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 },
@@ -91,4 +99,18 @@ export function evaluateObservedRun(input: ObservedRun): RunEvaluation {
   };
   assertRunEvaluation(evaluation);
   return evaluation;
+}
+
+/**
+ * The run-as-a-test judgement with the evidence budget's invariant added, when
+ * there is one. A breach fails a run the runner passed, as `performance.budget`,
+ * because the contract refuses a passed verdict beside a failed invariant. A run
+ * the runner already failed, or could not judge, keeps its verdict and category
+ * and still records the breach.
+ */
+function withEvidenceBudget(outcome: RunOutcome, budget: InvariantResult | undefined): Pick<RunOutcome, "verdict" | "failureCategory" | "invariants"> {
+  if (budget === undefined) return outcome;
+  const invariants = [...outcome.invariants, budget];
+  if (budget.passed || outcome.verdict !== "passed") return { ...outcome, invariants };
+  return { verdict: "failed", failureCategory: "performance.budget", invariants };
 }
