@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import test, { type TestContext } from "node:test";
 import type { RunManifest } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../../failure.js";
+import type { RunLaneObservation } from "../../flow-lane/index.js";
 import { evaluateFailedAttempt, evaluateFlowRun, evaluateRecordingRun, type FlowRunInput, type RecordingRunInput } from "../evaluate-run.js";
 
 type ActionStatus = NonNullable<RunManifest["actions"]>[number]["status"];
@@ -10,8 +14,33 @@ const identity = { scenarioId: "basic-form", workflowId: null, variantId: null, 
 const manifest = (fields: Partial<RunManifest> = {}): RunManifest => ({ startedAt: "2026-09-11T10:00:00.000Z", finishedAt: "2026-09-11T10:00:42.500Z", automationFailure: null, actions: [], ...fields }) as RunManifest;
 const action = (actionType: string, durationMs: number | undefined, status: ActionStatus = "succeeded") => ({ actionType, startedAt: "2026-09-11T10:00:10.000Z", ...(durationMs === undefined ? {} : { durationMs }), status });
 const input = (fields: Partial<RecordingRunInput> = {}): RecordingRunInput => ({ ...identity, result: { runId: "run-a", verdict: "passed" }, manifest: manifest(), metrics: { steps: 5 }, finalSequence: 17, errorSequence: undefined, wallClockMs: 50_000, ...fields });
+/** A bundle directory that does not exist, so a Flow-lane evaluation that reads it finds no snapshot. */
+const NO_BUNDLE = path.join(tmpdir(), `fluxbench-no-bundle-${process.pid}-${Date.now()}`);
 /** The manifest holds the recording lane's probe action, so a Flow-lane evaluation reading it instead of the observation would be visible. */
-const flowInput = (fields: Partial<FlowRunInput> = {}): FlowRunInput => ({ ...input(), manifest: manifest({ actions: [action("web.browser.navigate", 1_911)] }), ...fields });
+const flowInput = (fields: Partial<FlowRunInput> = {}): FlowRunInput => ({ ...input(), result: { runId: "run-a", verdict: "passed", path: NO_BUNDLE }, manifest: manifest({ actions: [action("web.browser.navigate", 1_911)] }), ...fields });
+const createdFlow: RunLaneObservation = {
+  lane: "flow", flowCreated: true, oracleVerdict: "passed", reportedVerdict: "passed",
+  automationFailureReported: null, automationFailureExpected: null, harnessActivations: 0, actions: [{ actionType: "web.dom.click", durationMs: 120 }],
+};
+
+/** A finalized bundle holding only `snapshots/flow-lane.json`: `snapshot` as written by `flowLaneSnapshot`, or raw text. */
+function bundleWith(t: TestContext, snapshot: unknown): string {
+  const directory = mkdtempSync(path.join(tmpdir(), "fluxbench-evidence-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  mkdirSync(path.join(directory, "snapshots"));
+  writeFileSync(path.join(directory, "snapshots", "flow-lane.json"), typeof snapshot === "string" ? snapshot : `${JSON.stringify(snapshot, null, 2)}\n`);
+  return directory;
+}
+
+/** Two measured packets on two actions, one of them trimmed, and an action Core captured nothing around. */
+const TWO_PACKETS = {
+  flowId: "flow.basic", runtimeRunId: "runtime-1", status: "succeeded", harnessActivations: 0, failure: null, extractionCount: 0,
+  actions: [
+    { actionType: "web.dom.type", status: "succeeded", evidencePackets: [{ point: "beforeAction", bytes: 2_048, truncated: false }] },
+    { actionType: "web.browser.wait", status: "succeeded" },
+    { actionType: "web.dom.click", status: "succeeded", evidencePackets: [{ point: "afterAction", bytes: 4_096, truncated: true }] },
+  ],
+};
 
 test("a passing recording-lane run: oracle passed, FluxIQ's probe succeeded, finished actions timed, provider-free", () => {
   const evaluation = evaluateRecordingRun(input({ manifest: manifest({ actions: [action("web.browser.navigate", 1911), action("web.dom.type", 1553), action("web.dom.click", undefined, "running")] }) }));
@@ -84,7 +113,7 @@ test("an expected failure travels with the run; a runner that throws is inconclu
 test("a Flow-lane run reports the lane's own observation, not an inference over the manifest", () => {
   const evaluation = evaluateFlowRun(flowInput({
     variantId: "selector-only", result: {
-      runId: "run-flow", verdict: "passed",
+      runId: "run-flow", verdict: "passed", path: NO_BUNDLE,
       observation: {
         lane: "flow", flowCreated: true, oracleVerdict: "passed", reportedVerdict: "passed",
         automationFailureReported: null, automationFailureExpected: null, harnessActivations: 2,
@@ -101,14 +130,14 @@ test("a Flow-lane run reports the lane's own observation, not an inference over 
 test("a Flow-lane run that never reached the Flow lane is flowCreated false with nothing executed", () => {
   const recorded = evaluateFlowRun(flowInput({
     result: {
-      runId: "run-early", verdict: "failed", failureCategory: "recording.persistence",
+      runId: "run-early", verdict: "failed", failureCategory: "recording.persistence", path: NO_BUNDLE,
       // What runScenario publishes when a --flow run fails before the Flow lane: the recording lane's observation.
       observation: { lane: "recording", flowCreated: null, oracleVerdict: null, reportedVerdict: null, automationFailureReported: null, automationFailureExpected: null, harnessActivations: 0, actions: [] },
     },
     errorSequence: 4,
   }));
   assert.deepEqual([recorded.lane, recorded.flowCreated, recorded.oracleVerdict, recorded.reportedVerdict, recorded.actions.length], ["flow", false, null, null, 0]);
-  const none = evaluateFlowRun(flowInput({ result: { runId: "run-none", verdict: "failed", failureCategory: "gateway.pairing" }, errorSequence: 2 }));
+  const none = evaluateFlowRun(flowInput({ result: { runId: "run-none", verdict: "failed", failureCategory: "gateway.pairing", path: NO_BUNDLE }, errorSequence: 2 }));
   assert.deepEqual([none.lane, none.flowCreated, none.reportedVerdict], ["flow", false, null]);
 });
 
@@ -116,7 +145,7 @@ test("a Flow that was created but failed carries the reported category and the c
   const evaluation = evaluateFlowRun(flowInput({
     variantId: "expired", expectedFailure: { category: "auth_required" },
     result: {
-      runId: "run-neg", verdict: "passed",
+      runId: "run-neg", verdict: "passed", path: NO_BUNDLE,
       observation: {
         lane: "flow", flowCreated: true, oracleVerdict: "passed", reportedVerdict: "failed",
         automationFailureReported: { category: "auth_required", code: "web.auth.required" },
@@ -126,4 +155,30 @@ test("a Flow that was created but failed carries the reported category and the c
   }));
   assert.deepEqual([evaluation.reportedVerdict, evaluation.automationFailureReported], ["failed", { category: "auth_required", code: "web.auth.required" }]);
   assert.deepEqual(evaluation.automationFailureExpected, { category: "auth_required" });
+});
+
+test("a Flow-lane bundle's measured packets are its evidence sizes: every packet's bytes, and a count of the trimmed ones", (t) => {
+  const evaluation = evaluateFlowRun(flowInput({ result: { runId: "run-evidence", verdict: "passed", path: bundleWith(t, TWO_PACKETS), observation: createdFlow } }));
+  assert.deepEqual(evaluation.evidence, { sanitizedPacketBytes: [2_048, 4_096], rawSnapshotBytes: [], truncationCount: 1 });
+});
+
+test("a recording-lane bundle adds no evidence sizes, even when its directory holds Flow-lane packets", (t) => {
+  // runScenario's result carries the bundle path on either lane; only the Flow lane's evaluation reads it.
+  const result = { runId: "run-recording", verdict: "passed" as const, path: bundleWith(t, TWO_PACKETS) };
+  assert.deepEqual(evaluateRecordingRun(input({ result })).evidence, { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 });
+});
+
+test("a Flow-lane bundle with no snapshot, an unparseable one, or entries that are not packets adds nothing and never throws", (t) => {
+  const empty = { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 };
+  const notPackets = {
+    actions: [
+      { actionType: "web.dom.click", evidencePackets: [{ point: "beforeAction", bytes: -1, truncated: false }, { point: "afterAction", bytes: 1.5, truncated: true }, { point: "afterAction", bytes: 10, truncated: "true" }, "packet", null] },
+      "not an action",
+      { actionType: "web.dom.type", evidencePackets: { point: "beforeAction", bytes: 10, truncated: true } },
+    ],
+  };
+  for (const bundle of [NO_BUNDLE, bundleWith(t, "{ \"actions\": [ not json"), bundleWith(t, { actions: "none" }), bundleWith(t, [TWO_PACKETS]), bundleWith(t, notPackets)]) {
+    const evaluation = evaluateFlowRun(flowInput({ result: { runId: "run-unmeasured", verdict: "passed", path: bundle, observation: createdFlow } }));
+    assert.deepEqual(evaluation.evidence, empty, bundle);
+  }
 });
