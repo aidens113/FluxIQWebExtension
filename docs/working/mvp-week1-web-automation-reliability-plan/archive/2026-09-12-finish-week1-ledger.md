@@ -1120,3 +1120,95 @@ failures `i-stage1-failures` and `i-recording-loss` have since explained.
   writes.
 - Outcome: Revised
 
+
+## Part eighteen, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: the pointer to parts
+one to fifteen, the Stage 1 failure diagnosis (its fixes are dispatched), and
+the single-run evidence fix (`f85ddad`), committed.
+
+### 2026-09-13 — Finish-Week-1 session: fifteen settled entries archived
+
+- Agent: supervisor.
+- Changed: fifteen ledger entries moved verbatim to
+  `archive/2026-09-12-finish-week1-ledger.md`. Part one: the first dispatch,
+  `f-test-runner-ratchet`, `f-evidence-producers`, `f-adapter-guard`,
+  `c-remaining`, `i-flow-lane-errors`, `f-w18-secret-leg`,
+  `f-connection-split`, `i-lab-campaign`. Part two: `i-resolver-safety`, which
+  amends D14; the `g-recorder-signals` and `g-identity-drift-mode` brief
+  defects; `g-snapshot-evidence`; `g-small-fixes`; `l-stage0`.
+- Why: this document passed its 800-line limit twice, at 913 and 855 lines.
+  Every moved entry is settled, and its work is committed locally in
+  `b43a46a`, `957c831`, `147fdb4`, `f255c2f`, `4c53354` and `81d7186`, with
+  Core `5d495eb`. Decisions that stand: Firefox, CS1b, B4, B7, C5, C7, PB10b
+  and raw snapshot bytes are not Week 1; CS1b′ is; under the amended D14 a
+  match that no distinguishing signal agrees with exactly is refused; the Core
+  element-target floor stays inert for web, and B.3 is Week 2; the bench plans
+  every unarmed row on both lanes and reports each rate per lane; Lab proof
+  runs need Core source edits stopped, not only Core builds.
+- Validation: `sed -n` guards -> part two began at the `i-resolver-safety`
+  heading and ended before `g-bench-coverage`, and the old summary ended at its
+  Outcome line; `wc -l` on this document after the move -> 705.
+- Outcome: Accepted
+
+### 2026-09-13 — i-stage1-failures: W18 ran on the wrong page, and nothing generates a wait or a result check
+
+- Agent: worker `i-stage1-failures` (read-only); decisions by supervisor.
+- Changed: `reports/i-stage1-failures.md` only; ninth-dispatch briefs.
+- Found:
+  - **W18 runs 2-3.** The Flow lane reloads the start page only for an armed
+    variant (`run-flow-lane.ts:93`), so W18's unarmed Flow began on the account
+    page the recording ended on, which has no inputs. The failure screenshot is
+    byte-identical to the recording's account-page capture. The password node
+    carried a selector, a point and a fingerprint; nothing was withheld.
+  - **W25 `too-slow`.** Nothing maps a recording to `web.dom.wait_for_selector`,
+    and replayed resolution does not wait (`resolve-target.ts:188`), so the late
+    click fails at once as `target_not_found`. The unarmed W24 and W25 Flow rows
+    expect the same wait node, so they cannot pass either.
+  - **W24 `unannounced`.** Nothing can report `output_not_observed`. Core's output
+    confirmation is met by the replayed click's own input, the mapper sets no
+    claim, and a recorded mutation carries only counts.
+  - In every partial loss the earliest recorded action is the one missing (W18
+    runs 2-3, W24 runs 1 and 3, W25 run 3); the lead went to `i-recording-loss`.
+    B1 at HEAD would stop W18 runs 2-3 before their Flows, hiding the wrong page;
+    W25 pins no click count, so B1 misses its loss.
+- Decisions:
+  - F1, every Flow run starts on the start page, follows `g-single-run-evidence`.
+  - F2, a wait before a click whose target appeared late, is measured first by
+    `i-late-target-wait`, since a selector-only wait could time out ahead of the
+    scored resolver on the drift rows. That brief also pins delayed-ui's clicks.
+  - **W24 `unannounced` is not Week 1.** Its producer needs a recorded-payload
+    contract change, a claim builder, an evaluator rule and a corpus-wide pass.
+    The row stays in the corpus, counts against criterion 4 as measured, and is
+    ranked at Phase 1.6b.
+- Validation: supervisor read `run-flow-lane.ts:75-114` (`:93` is
+  `if (input.workflow.variant) await input.armVariant();`), `run-scenario.ts:320-333`
+  (the callback always calls `openScenarioStart`), and both manifests
+  (`delayed-ui/scenario.ts:40` pins only `web.dom.mutated`). Stage 1 bundles: W24
+  `run-mtzhu41z-76f6a4fc` `flow-lane.json` -> `"status":"succeeded","failure":null,"candidateCount":3`,
+  type, type, click all `succeeded`; W25 `run-mtzi1vgu-d40300bd` -> `"status":"failed"`,
+  `"category":"target_not_found"`, `"candidateCount":1`. Each a single Lab observation.
+- Not verified: the password node resolving on the sign-in page; the cause of the
+  first-entry loss; F1's effect on unarmed rows now passing on leftover pages.
+- Outcome: Revised
+
+### 2026-09-13 — g-single-run-evidence: a lone Flow-lane run records the evidence sizes its bench row reads
+
+- Agent: worker `g-single-run-evidence`; verified by supervisor.
+- Changed: `run-evaluation/single-run-evaluation.ts` and its test; the evaluation
+  call in `run-scenario.ts`. A Flow-lane run's `evaluation.json` reads
+  `evidencePackets` from the staging bundle's `snapshots/flow-lane.json`, the file
+  the bench reads once `finalize` renames the directory. A recording-lane run
+  reads none, and a missing or malformed file yields none without throwing.
+- Decisions: the reader copied from `bench/evaluate-run.ts` does not stay;
+  `g-evidence-reader-merge` moves it into one module. `bundlePath` is optional only
+  because `bench-parity.test.ts` omits it, and a call-site row guards the runner.
+- Validation: supervisor read the diff; from `packages/test-runner`, `pnpm check`
+  -> exit 0; `pnpm exec tsc -p tsconfig.json --outDir dist-sup8` -> exit 0;
+  `node --test "dist-sup8/**/*.test.js"` -> `# tests 500`, `# pass 500`,
+  `# fail 0`; private build removed. Worker: five mutations each failed only their
+  row, restored with `sha256sum -c` OK.
+- Not verified: a Lab run whose `evaluation.json` sizes equal its `flow-lane.json`
+  packets and its bench row.
+- Outcome: Accepted
+

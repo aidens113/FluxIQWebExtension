@@ -1577,7 +1577,10 @@ Dispatched once `f-flow-start-page` is committed, since this edits `run-scenario
 **Owns:** a new `packages/test-runner/src/run-expectations/recording-completeness.ts`,
 its test and barrel entry; `flow-lane/recording-discards.ts` and
 `flow-lane/finalized-recording.ts`, each with its test; `run-scenario.ts`, only the
-calls these need.
+calls these need. Added once `f-flow-start-page` reported: `run-scenario.ts`, the
+`openScenarioStart` comment at about `:597-615`, and the messages in
+`src/tests/scenario-assertions.test.ts`, which still describe the Flow lane's
+load as armed only (`reports/f-flow-start-page.md`); wording only.
 
 **Read:** `reports/i-recording-loss.md` Fix design T1-T3, and "The entries appended
 after Stop".
@@ -1599,3 +1602,60 @@ after Stop".
 - The structure audit.
 
 **Report:** `reports/g-recording-completeness.md`.
+
+---
+
+# Eleventh dispatch — from `w19-c2`
+
+Decided on `reports/w19-c2.md`'s open questions:
+1. The one-line export in `runtime/service/recordings/index.ts` stands. From now
+   on, a brief that creates a module in a barrelled directory owns that
+   directory's `index.ts`.
+2. The shared record goes to `g-core-expectation-record`, below.
+3. The test's location stands.
+4. Approving a proposal as a node definition, which drops `expectedState`, is
+   Week 2, since the Lab and the product path approve into a Flow.
+5. An empty `{}` expectation is treated as none, by `g-core-expectation-record`.
+6. Shared observations within one mapper's calls stand as documented.
+
+**Amendment to `w19-d1`, from Core as `w19-c2` left it.**
+- A mapper is called `(observation, context)`, and `context.following` is the
+  next 32 timeline observations, in order. Each has the same shape as the
+  observation: `type`, `timestamp`, `payload`, `metadata`.
+- Give `mapWebRecordingObservation` an optional second parameter, so the domain
+  tests that call it with one argument still compile.
+- Rebuild the click's event id from `observation.timestamp`.
+
+## g-core-expectation-record — one expectation-rejected record, and no empty expectation (Core)
+
+Dispatched once `w19-c2` is committed. `g-core-start-order` runs beside it and
+shares no file.
+
+**Owns** (in `F:\!FluxIQ\packages\fluxiq\src\programs\automation-studio\`):
+- `nodes/policy/expectation.ts` and `nodes/policy/index.ts`;
+- `runtime/executor/transition-comparison.ts` and
+  `runtime/executor/tests/transition-comparison.test.ts`;
+- `runtime/service/recordings/proposal-candidates.ts` and
+  `runtime/service/recordings/tests/proposal-candidates.test.ts`.
+
+Do not touch `client-gateway/`.
+
+**Read:** `reports/w19-c2.md` open questions 2 and 5.
+
+**Task.**
+1. Export the `expected_state_missing` record once, from `expectation.ts` through
+   `nodes/policy/index.ts`. Import it in `transition-comparison.ts` and delete the
+   copy. Before editing, check whether importing that barrel into the executor
+   creates an import cycle; if it does, stop and report the cycle.
+2. An `expectedState` with no own keys counts as absent in two places:
+   - `liftedExpectedState` drops it;
+   - the transition comparison does not ask the host about it.
+
+**Tests.**
+- Rows for the empty expectation, in both files, each with a mutation.
+- The executor tests (`node-execution`, `transition-comparison`) stay green.
+- `npx vitest run <files> --no-file-parallelism`; Core `pnpm check`;
+  `pnpm docs:check`, plus `pnpm docs:reference` if a cited line moves.
+- No Core `pnpm build`.
+
+**Report:** `reports/g-core-expectation-record.md`.
