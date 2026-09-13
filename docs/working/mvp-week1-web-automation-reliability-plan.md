@@ -36,11 +36,11 @@ flight. No exit criterion yet carries a quoted Lab observation. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
-settled ledger entries are in parts one to twenty-seven of
+settled ledger entries are in parts one to twenty-eight of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13, while workers run.**
-- **This repository:** `17c5bae`, 80 commits ahead of `origin/dev`, not pushed.
+- **This repository:** `6c22e22`, 82 commits ahead of `origin/dev`, not pushed.
 - **Core:** `240c73e`, 10 commits ahead of `origin/dev`, `fluxiq` **0.4.0**, built at
   `187f40d`; the tenth is a plan-only commit. The nine code commits:
   - `5d495eb`, trace withholding;
@@ -93,14 +93,11 @@ settled ledger entries are in parts one to twenty-seven of
   row stays in the corpus.
 
 **In flight:**
-- **`l-stage2`:** blocked at `7263534`, since every run failed the runner's own
-  discard check; an instrumented run confirmed the cause. Its worktrees are kept.
-- **`g-discard-window-evidence`:** each discard read publishes its window and
-  what it excluded, and the failure text matches the window.
+- **`l-stage2`:** second attempt due at `6c22e22` with Core `5845f5d`; the first was
+  blocked by the runner's own discard check (twenty-second dispatch).
 
 **Queued, in dependency order**
-1. **After `g-discard-window-evidence`:** Lab Stage 2 redispatched at its commit,
-   W19 `expired` included (twenty-second dispatch).
+1. **After Lab Stage 2:** its ledger entry, with every pass condition quoted.
 2. **Integration:**
    - Core `package:lint` and `pnpm build` on the 0.4.0 tree (the bump and its
      migration note landed in `5845f5d`);
@@ -712,44 +709,6 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   - W19 `expired`.
 - Outcome: Revised
 
-### 2026-09-13 — g-discard-window: a discard counts only inside the recording's window
-
-- Agent: worker `g-discard-window`; verified by supervisor.
-- Changed:
-  - `flow-lane/recording-discards.ts`: `RecordingDiscardScope` gains `from` and an
-    optional `until`. An audit entry Core stamped outside them is not read,
-    whether it names a recording or only the session. An entry with no readable
-    timestamp is read.
-  - `run-scenario.ts` takes `from` just before asking the extension to start
-    recording, after the Core action probe, and passes `until` to the second read.
-  - `flow-lane/run-flow-lane.ts` reports the time just before it dispatches the
-    Flow.
-  - Their tests, and `runner-wiring.test.ts`.
-- Found:
-  - The failure text still says "after their recording was finalized", and the
-    bundle cannot show the window or what it excluded. Both go to
-    `g-discard-window-evidence` before Stage 2 runs again.
-  - The worker added three wiring pins beyond the strings its brief named: the
-    `from` placement, the scope construction and the `until` source. They are
-    accepted.
-- Validation: supervisor read the diff. From `packages/test-runner`:
-  - `pnpm check` -> exit 0;
-  - `tsc --outDir dist-sup20` -> exit 0;
-  - `node --test "dist-sup20/**/*.test.js"` -> `# tests 514`, `# pass 514`,
-    `# fail 0`, including:
-    - `ok 110 - a discard Core audited inside the window counts, from the moment
-      the extension was asked to start recording`;
-    - `ok 111 - once the Flow lane began dispatching, a discard naming the
-      recording is ignored, and a late one Core audited before that counts`;
-    - `ok 112 - an entry with no readable timestamp counts, so the window fails
-      closed`;
-  - the structure audit passed.
-  - Worker: the rows use the diagnosis run's six real discards and one genuine
-    late loss. Three mutated builds failed 6, 3 and 3 rows, and were restored
-    byte-identical.
-- Not verified: the Lab.
-- Outcome: Accepted
-
 ### 2026-09-13 — g-mapper-stored-payload: the mapper already reads Core's stored domain events correctly
 
 - Agent: worker `g-mapper-stored-payload`; decisions by supervisor.
@@ -788,6 +747,43 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 - Not verified: the Core rows copy the gateway's routing rather than running
   `ClientGatewayBridge`; the Lab.
 - Outcome: Revised
+
+### 2026-09-13 — g-discard-window-evidence: each discard read shows what its window excluded
+
+- Agent: worker `g-discard-window-evidence`; verified by supervisor.
+- Changed:
+  - `flow-lane/recording-discards.ts` returns a `window` beside each read's
+    discards: `from` (or `null`), and `until` when set.
+  - Per audit type, the window also counts the excluded entries, by whether each
+    names this run's recording, no recording, or another. No entry's id, message,
+    session, recording id, label or input id travels.
+  - Both discard reads' `runtime.settle` events in `run-scenario.ts` publish it as
+    `recordingDiscardWindow`.
+  - The failure text names lost actions "inside this run's recording window",
+    per recording or "with no recording id". It adds "after finalization" only
+    when every entry showing that loss carries `sinceFinalizedMs`.
+  - A bound that is not a finite number now excludes nothing.
+  - Tests, and two moved wiring pins.
+- Found:
+  - The "no recording" count includes other sessions' entries, and counts are per
+    read, not unioned.
+  - The `l-stage2` entry quotes the old failure text as it appeared then.
+- Validation: supervisor read the diff. From `packages/test-runner`:
+  - `pnpm check` -> exit 0;
+  - `tsc --outDir dist-sup22` -> exit 0;
+  - `node --test "dist-sup22/**/*.test.js"` -> `# tests 517`, `# pass 517`,
+    `# fail 0`, including `ok 113 - each read publishes its bounds, until only
+    when set, and counts what the window excluded by audit type and by the
+    recording each entry names` and `ok 115 - the failure names lost actions
+    inside this run's recording window, ...`;
+  - the structure audit passed.
+  - Worker: 17 mutations each failed a test with a real diff, and both files were
+    restored byte-identical.
+- Not verified: the Lab. `basic-form --flow` should show two things:
+  - the first read excluding 2 action discards naming no recording;
+  - the second read adding `until`, and excluding 4 naming this run's recording
+    and 2 naming none, with `discardsAfterFirstRead` 0.
+- Outcome: Accepted
 
 ## Open Questions
 

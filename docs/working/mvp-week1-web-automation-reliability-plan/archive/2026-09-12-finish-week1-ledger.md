@@ -1818,3 +1818,47 @@ pages (`d775b5e`), committed.
 - Not verified: rendered Markdown; the Lab.
 - Outcome: Accepted
 
+
+## Part twenty-eight, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: the discard window fix
+(`9c198d2`), committed.
+
+### 2026-09-13 — g-discard-window: a discard counts only inside the recording's window
+
+- Agent: worker `g-discard-window`; verified by supervisor.
+- Changed:
+  - `flow-lane/recording-discards.ts`: `RecordingDiscardScope` gains `from` and an
+    optional `until`. An audit entry Core stamped outside them is not read,
+    whether it names a recording or only the session. An entry with no readable
+    timestamp is read.
+  - `run-scenario.ts` takes `from` just before asking the extension to start
+    recording, after the Core action probe, and passes `until` to the second read.
+  - `flow-lane/run-flow-lane.ts` reports the time just before it dispatches the
+    Flow.
+  - Their tests, and `runner-wiring.test.ts`.
+- Found:
+  - The failure text still says "after their recording was finalized", and the
+    bundle cannot show the window or what it excluded. Both go to
+    `g-discard-window-evidence` before Stage 2 runs again.
+  - The worker added three wiring pins beyond the strings its brief named: the
+    `from` placement, the scope construction and the `until` source. They are
+    accepted.
+- Validation: supervisor read the diff. From `packages/test-runner`:
+  - `pnpm check` -> exit 0;
+  - `tsc --outDir dist-sup20` -> exit 0;
+  - `node --test "dist-sup20/**/*.test.js"` -> `# tests 514`, `# pass 514`,
+    `# fail 0`, including:
+    - `ok 110 - a discard Core audited inside the window counts, from the moment
+      the extension was asked to start recording`;
+    - `ok 111 - once the Flow lane began dispatching, a discard naming the
+      recording is ignored, and a late one Core audited before that counts`;
+    - `ok 112 - an entry with no readable timestamp counts, so the window fails
+      closed`;
+  - the structure audit passed.
+  - Worker: the rows use the diagnosis run's six real discards and one genuine
+    late loss. Three mutated builds failed 6, 3 and 3 rows, and were restored
+    byte-identical.
+- Not verified: the Lab.
+- Outcome: Accepted
+
