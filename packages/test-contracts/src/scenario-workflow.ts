@@ -12,10 +12,9 @@ import type { ExpectedFact, ScenarioExpected, ScenarioStep, ScenarioVariant, Web
  * `scenarioPageFactSchedule` instead. It survives only because `expected` is
  * typed as `ScenarioExpected`, the authored manifest shape, where `pageFacts`
  * is a legitimate field an author writes: dropping it from the resolved value
- * means giving the resolved value a type of its own, and three fixture
- * assertions still read the merge (`product-catalog.spec.ts`, and the
- * `intermediate-state` and `multi-tab` unit tests, which assert that a variant
- * inherits it). Read it for nothing, and write no new reader.
+ * means giving the resolved value a type of its own, and one fixture
+ * assertion still reads it for a variant (`product-catalog.spec.ts`). Read it
+ * for nothing, and write no new reader.
  */
 export type ResolvedScenarioWorkflow = {
   workflowId: string | undefined;

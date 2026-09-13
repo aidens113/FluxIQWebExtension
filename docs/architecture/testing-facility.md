@@ -669,6 +669,18 @@ A manifest contains:
   must never be what replays; and
 - screenshot, trace, video, sampling, and review policy.
 
+`expected.actions` lists the action attempts FluxIQ must report, each an action
+type with an optional `outcome`. The lanes that run a Flow (the Flow lane's
+`assertFlowActions`, and `executeExistingPersistedFlow` for the existing and
+clone lanes) pass an entry when at least one attempt of that type finished with
+that outcome; order and extra attempts are not checked, and an omitted outcome
+means `succeeded`. An outcome is `succeeded` or `failed`
+(`expectedActionOutcomes`), the two a finished attempt reaches. There is no
+`rejected`: no lane can report one, so an expectation spelled that way would
+fail on itself, and manifest validation refuses it. A client refusal is
+declared as `failed`, with `expected.failure` naming the refusal: category
+`blocked_by_capability_or_policy`, code `web.action.rejected`.
+
 ### Declared replay secrets
 
 The recorder withholds a sensitive control's value at the source, by the one

@@ -38,20 +38,19 @@ test("an action whose post-condition did not hold did not succeed", () => {
 test("the module exports no failure builder, which is what keeps the closed set closed", () => {
   // The surface is pinned rather than described, because the risk is additive:
   // a builder reintroduced here would be the only place in the content bundle
-  // that writes a `code` outside the domain's table, and it would pass every
-  // other gate -- including the type checker.
+  // that writes a category, retryable flag and stage beside a `code` by hand,
+  // and a wrong one would pass every other gate -- including the type checker.
   //
   // That last part is the reason this row is not redundant with the compiler,
-  // and it was measured rather than assumed. `webAutomationFailureRecord`
-  // narrows its `code` parameter, so a *call* naming an out-of-set string is
-  // `TS2345`. A record written out as a literal is not: the type it lands in is
-  // Core's `AutomationStudioFailureRecord`, whose `code` is a bare `string`
-  // because Core owns the categories and each producer owns its own codes. A
-  // hand-built `{ category, code: "web.assert.state_mismatch", retryable,
-  // stage }` compiles at exit 0 today. Narrowing `BrowserActionResult`'s
-  // `failure` would turn that into `TS2322`, and it needs the domain builder's
-  // *return* type narrowed in the same change or every honest producer breaks;
-  // when that lands, this row can go.
+  // and it was measured rather than assumed. The narrowing this row once waited
+  // for has landed: `BrowserActionResult`'s `failure` is the domain's
+  // `WebAutomationFailureRecord`, so a hand-built `{ category, code:
+  // "web.assert.state_mismatch", retryable, stage }` is `TS2322`, as a *call*
+  // naming that string already was `TS2345`. What still compiles is a real code
+  // beside another row's values: `{ category: "auth_required", code:
+  // "web.validation.state_mismatch", retryable: true, stage: "dispatch" }` is
+  // accepted, because the type does not tie a code to its row and only
+  // `webAutomationFailureRecord` does. That is what keeps this row.
   //
   // A value that did not come from source is a different question, and it is
   // already answered elsewhere: `results.ts`'s `reportedFailure` runs

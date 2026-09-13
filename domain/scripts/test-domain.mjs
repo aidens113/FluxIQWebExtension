@@ -51,7 +51,23 @@ await build({
   logLevel: "silent"
 });
 
+// An entry that throws while it loads -- a failed import, a top-level
+// statement -- is reported with its error and the loop moves on, so one broken
+// file cannot hide every entry sorted after it. Any such entry exits 1; a
+// failing `test()` still sets the exit code through node:test.
+const failedToLoad = [];
 for (const entry of entryPoints) {
+  const relative = path.relative(root, entry).split(path.sep).join("/");
   const bundle = path.join(outdir, path.relative(sourceRoot, entry).replace(/\.ts$/, ".mjs"));
-  await import(pathToFileURL(bundle).href);
+  try {
+    await import(pathToFileURL(bundle).href);
+  } catch (error) {
+    failedToLoad.push(relative);
+    process.exitCode = 1;
+    console.error(`Domain test entry failed to load: ${relative}`);
+    console.error(error);
+  }
+}
+if (failedToLoad.length > 0) {
+  console.error(`${failedToLoad.length} of ${entryPoints.length} domain test entries failed to load:\n${failedToLoad.map((relative) => `  ${relative}`).join("\n")}`);
 }

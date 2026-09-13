@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveScenarioWorkflow, validateWebScenario } from "@fluxiq-web-extension/test-contracts";
+import { resolveScenarioWorkflow, scenarioPageFactSchedule, validateWebScenario } from "@fluxiq-web-extension/test-contracts";
 import { intermediateStateScenario as scenario, type IntermediateStateState } from "../scenario.js";
 
 const context = { runToken: "unit-test-run-token-0001", seed: 122 };
@@ -29,8 +29,10 @@ test("the manifest is valid, loopback-only, and resolves its primary workflow an
   assert.deepEqual(unannounced.expected.failure, { category: "output_not_observed" });
   assert.deepEqual(unannounced.expected.finalState?.map(({ id }) => id), ["confirmation-step-shown", "claim-result-absent"]);
   // Recording happens before arming, so what the recording must show is inherited.
-  assert.deepEqual(unannounced.expected.pageFacts, primary.expected.pageFacts);
   assert.deepEqual(unannounced.expected.recordingEvents, primary.expected.recordingEvents);
+  // Page facts are not: the workflow's describe the unarmed form, and the variant declares none about its armed page.
+  assert.deepEqual(scenarioPageFactSchedule(manifest, { variantId: "unannounced" }, "arms-after-loading"), { atLoad: manifest.expected.pageFacts, afterArm: [] });
+  assert.deepEqual(scenarioPageFactSchedule(manifest, { variantId: "unannounced" }, "arms-before-loading"), { atLoad: [], afterArm: [] });
   assert.deepEqual(unannounced.expected.allowedConsoleErrors, []);
   assert.deepEqual(unannounced.recordingScript, primary.recordingScript);
 });

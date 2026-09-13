@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveScenarioWorkflow, validateWebScenario } from "@fluxiq-web-extension/test-contracts";
+import { resolveScenarioWorkflow, scenarioPageFactSchedule, validateWebScenario } from "@fluxiq-web-extension/test-contracts";
 import type { ScenarioRouteResponse } from "../../../types.js";
 import { multiTabScenario as scenario } from "../scenario.js";
 import type { MultiTabState } from "../transitions.js";
@@ -75,7 +75,9 @@ test("popup-blocked is armed by block-popups and expects output_not_observed wit
   assert.deepEqual(blocked.expected.failure, { category: "output_not_observed" });
   assert.deepEqual(blocked.expected.extracted, []);
   assert.deepEqual(blocked.expected.actions, [{ action: "web.dom.click" }]);
-  assert.deepEqual(blocked.expected.pageFacts, primary.expected.pageFacts);
+  // A variant never inherits page facts: the list's describe the unarmed page, and popup-blocked declares none of its own.
+  assert.deepEqual(scenarioPageFactSchedule(scenario.manifest, { variantId: "popup-blocked" }, "arms-after-loading"), { atLoad: scenario.manifest.expected.pageFacts, afterArm: [] });
+  assert.deepEqual(scenarioPageFactSchedule(scenario.manifest, { variantId: "popup-blocked" }, "arms-before-loading"), { atLoad: [], afterArm: [] });
   assert.deepEqual(blocked.expected.finalState?.map((fact) => [fact.subject, fact.predicate, fact.value]), [
     ["document", "path", "/scenarios/multi-tab/"],
     ["open-notice", "contains", "Pop-up blocked: PO-4472 did not open."],

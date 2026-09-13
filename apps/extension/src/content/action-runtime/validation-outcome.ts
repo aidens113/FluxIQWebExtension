@@ -19,15 +19,16 @@
 // that binding or contradict it, and a contradiction is dropped whole by Core's
 // parser -- losing the failure instead of reporting it.
 //
-// Deletion, not the type system, is what keeps them gone, and that is worth
-// knowing before anyone reinstates one as a convenience. `webAutomationFailureRecord`
-// narrows its `code` *parameter*, but the record type a builder returns --
-// Core's `AutomationStudioFailureRecord`, reached here through
-// `BrowserActionResult["failure"]` -- types `code` as a bare `string`, because
-// Core owns the categories and every producer owns its own codes. So a record
-// written out as a literal still compiles with any string at all; only the
-// builders' absence stops one being written. `tests/validation-outcome.test.ts`
-// pins the exported surface for exactly that reason.
+// Deletion is not the only guard, and it is worth knowing which part of the
+// rule it still carries before anyone reinstates a builder as a convenience.
+// `BrowserActionResult` is the domain's `WebAutomationActionResult`, whose
+// `failure` is a `WebAutomationFailureRecord`: its `code` is the closed set, so
+// a record written out as a literal with a code the set does not name is
+// `TS2322`. What the type does not bind is a code to its row -- a real code
+// beside another row's category, retryable flag or stage still compiles, and
+// only `webAutomationFailureRecord` reads those from the table. The builders'
+// absence is defence in depth for the set and the remaining guard for the
+// binding; `tests/validation-outcome.test.ts` pins the exported surface for that.
 //
 // The text bound stays here because `results.ts` bounds a *validation*, which
 // an operator reads, and the domain bounds only the *record*.
