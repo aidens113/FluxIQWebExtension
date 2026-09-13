@@ -1817,8 +1817,9 @@ dispatch names this repository's commit `<R>` and Core's `<C>`.
    worktree, for the whole of A and B.
    - **A:** step 4b, `basic-form --flow --target isolated` ×24. Every run must show:
      - `exit=0` and `candidateCount` 4;
-     - one `runtime.settle` entry count across all runs (recount the no-loss
-       figure at `<R>`);
+     - `runtime.settle` `recordedActions` for the extension equal to Core's. Entry
+       counts legitimately differ between runs (15 and 16 in the first attempt),
+       so they are reported, not required to match;
      - the action-count check holding;
      - zero discard audit entries for the run's session;
      - `extensionConnectionAfterStop` not `error`.
@@ -2062,3 +2063,71 @@ step 7.
 
 Label every single observation, and rerun a uniform or impossible failure once,
 alone, before reporting it.
+
+---
+
+# Nineteenth dispatch — Lab Stage 2 is blocked by the runner's discard check
+
+Found by `l-stage2`, and confirmed by the supervisor on 2026-09-13 from the code:
+- The runner's Core action probe (`run-scenario.ts:261`) runs before it starts
+  recording (`:273`).
+- After any Core-dispatched action succeeds, the extension sends its runtime
+  confirmation as a `client.recording_event` with `metadata.runtimeConfirmation:
+  true`, whatever the recording state (`server-command-channel.ts:209-237`).
+  Core's output confirmation waits for it, so it must be sent.
+- With no recording open, Core's bridge discards it and audits an executable
+  `recording.action_discarded` naming no recording id (`bridge.ts:479-499`).
+  After a recording finalizes, the same echo names that recording.
+- `g-recording-completeness` counts a discard from the run's session that names
+  no recording as a loss (`flow-lane/recording-discards.ts`). So every Stage 2 run
+  failed `recording.persistence` with "2 with no recording id" before measuring
+  anything.
+
+Decided: the runner's check is wrong; Core and the extension are not.
+- A discard is this run's recording loss only when Core audited it inside the
+  window in which this recording could lose a message: from just before the
+  runner asks the extension to start recording, until the Flow lane starts
+  dispatching. With no Flow lane, the window is open-ended.
+- Core's audit wording, which calls a runtime confirmation a lost recorded
+  action, is recorded for the Phase 1.6b ranking. Core cannot key on a web-domain
+  metadata flag.
+
+## g-discard-window — a discard counts only inside the recording's window (test-runner)
+
+**Owns:**
+- `packages/test-runner/src/flow-lane/recording-discards.ts` and its test;
+- `flow-lane/run-flow-lane.ts` and its test, only to report when the lane starts
+  dispatching the Flow;
+- `src/run-scenario.ts`, only the recording-start timestamp and the two discard
+  reads;
+- `run-evaluation/tests/runner-wiring.test.ts`, only the strings that pin those
+  reads.
+
+**Read:**
+- `reports/l-stage2.md`, its Notes and its "Blocker diagnosis" section once
+  present;
+- `reports/g-recording-completeness.md`, T2;
+- Core `client-gateway/service/audit-log.ts:14-20`, for each entry's `timestamp`;
+- Core `client-gateway/bridge.ts:479-499`.
+
+**Task.**
+1. Give `RecordingDiscardScope` a window: `from`, taken just before the runner
+   asks the extension to start recording, and an optional `until`.
+   - Ignore any discard entry timestamped outside the window, whether it names a
+     recording or only the session.
+   - An entry with no readable timestamp counts, so the check fails closed.
+2. `run-flow-lane.ts` reports the time just before it dispatches the Flow run,
+   and `run-scenario.ts` passes that as `until` to the second read.
+3. Keep everything else that T2 and the completeness check do.
+
+**Tests.** Each case needs a mutation proof.
+- A pre-recording action discard naming no recording is ignored.
+- One inside the window counts.
+- A discard naming the recording, timestamped after the Flow lane began
+  dispatching, is ignored; one timestamped before that counts.
+- An entry with no timestamp counts.
+
+Then run test-runner `check`, `test` in a private `--outDir` at `dist`'s depth,
+and the structure audit.
+
+**Report:** `reports/g-discard-window.md`.

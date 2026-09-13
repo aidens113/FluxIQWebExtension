@@ -1598,3 +1598,100 @@ committed.
   `recordedActions`, and smoke W01's empty recording must now fail.
 - Outcome: Accepted
 
+
+## Part twenty-five, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: Core's entry identity
+(Core `187f40d`), the W25 wait rule (`5c1872d`) and the target resolution type
+import (`6db2ff8`), all committed.
+
+### 2026-09-13 — g-core-action-entry-identity: a recorded click's Core entry keeps its event id
+
+- Agent: worker `g-core-action-entry-identity` (Core); verified by supervisor.
+  Core's ledger has the paired entry.
+- Changed (Core):
+  - `bridge.ts`, one line, still 796: the event's own `eventId` reaches the
+    recorded input's envelope metadata.
+  - `io-bridge.ts`: action and observation entries copy that `eventId` and the
+    `sourceId`, non-blank strings only.
+  - Their tests, and the client-gateway architecture page.
+- Found: a landing's `sourceId` is a top-level field mappers are not shown, so
+  `w19-d1b` now matches by event id only (brief amended). A `sourceId` in the
+  extension's metadata is client-declared and is now stored.
+- Validation: supervisor, Core `packages/fluxiq`:
+  - io-bridge and bridge tests -> `Tests 33 passed (33)`;
+  - Core `pnpm check` -> exit 0;
+  - `pnpm docs:check` -> exit 0.
+  - Worker: seven mutations each failed named rows.
+- Not verified: Core `pnpm build`; the Lab, where a W19 click's action entry must
+  carry `metadata.eventId` equal to its landing's `explainedByEventId`.
+- Outcome: Accepted
+
+### 2026-09-13 — w25-wait-mapper: a wait before a click whose target a page change produced
+
+- Agent: worker `w25-wait-mapper`; verified by supervisor.
+- Changed:
+  - New `domain/src/recording/proposals/late-target-wait.ts`, with its barrel and
+    test. `web-panel-host.ts`'s mapper returns its candidate for an observation
+    that maps to no action. There are new rows in `tests/domain.test.ts`, and the
+    checkbox comment in `io/input-model.ts` is updated.
+  - The rule starts from an `input.event` observation whose `latestEvidence` is a
+    `dom.mutation` that added nodes, and the first executable entry in `following`
+    decides. It proposes
+    `web.dom.wait_for_selector { selector, wait: { condition: "present" } }`, with
+    no timeout, source input or confirmation, when that entry is a
+    `web.dom.click` with a CSS selector, in the top frame, with no other document
+    named in between.
+  - A click's own `action` entry still maps to `null`, so Core's fallback click
+    stands.
+  - `delayed-ui`'s expectations are unchanged, since `flow-lane/expectations.ts`
+    only requires a matching attempt to exist.
+- Found:
+  - An `action` entry carries no URL. "Same document" is therefore inferred from
+    the top frame and the absence of any other URL in between, and a child-frame
+    mutation can still add an extra wait.
+  - The wait matches by CSS selector only, so a drifted selector that the
+    fingerprint would still resolve could time out. Stage 2's bench now checks the
+    drift, W26, modal and iframe rows for an added wait.
+- Validation: supervisor read the module and the mapper diff.
+  - `DOMAIN_TEST_BUILD_LABEL=sup17 ... domain check` -> exit 0.
+  - `... test` -> `# tests 373`, `# pass 373`, `# fail 0`, with `ok 96 - a
+    mutation that added nodes, then a click in the same document, proposes
+    waiting for the click's selector` and `ok 97 - the wait carries no timeout,
+    source input or confirmation`.
+  - The structure audit's only finding was the working-docs index, stale from
+    the uncommitted ledger.
+  - Worker: six mutations each failed a named row, restored hash-identical: no
+    builder call, `added >= 0`, no selector guard, no click-URL check, no
+    between-evidence check, and no frame check.
+- Not verified: the Lab. `delayed-ui --flow` must show click, wait, click 3 of 3;
+  `too-slow` must fail as `timeout`; and the rows above must stay unchanged.
+- Outcome: Accepted
+
+### 2026-09-13 — g-target-union-import: the Flow lane takes its target resolution shape from Core's type
+
+- Agent: worker `g-target-union-import`; verified by supervisor.
+- Changed: `flow-lane/persisted-flow-run.ts` only.
+  - `AutomationNodeTargetResolution` is imported from Core's public
+    `fluxiq/automation-studio/nodes` export, and the local copy of the union is
+    gone.
+  - The persisted type narrows each variant to named fields that cannot carry
+    page content.
+  - The scored statuses are a record keyed by Core's own, so the type check fails
+    when Core's union gains or loses one.
+- Found: the persisted fields are still named by hand, so if Core renamed
+  `confidence` or `normalizedScore`, only a test would catch it (report, open
+  question 1).
+- Validation: supervisor read the diff, and confirmed
+  `./automation-studio/nodes` is in Core's `package.json` `exports` with `types`
+  and `import` entries. From `packages/test-runner`:
+  - `pnpm check` -> exit 0;
+  - `tsc --outDir dist-sup18` -> exit 0;
+  - `node --test "dist-sup18/**/*.test.js"` -> `# tests 509`, `# pass 509`,
+    `# fail 0`.
+  - Worker: faking a new scored status or variant in Core, and dropping
+    `no_match` from the reader, each failed `tsc` with TS2741. Breaking the status
+    guard failed test 8. The file was restored byte-identical.
+- Not verified: root gates; the Lab (no change expected).
+- Outcome: Accepted
+

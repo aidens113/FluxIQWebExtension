@@ -36,7 +36,7 @@ flight. No exit criterion yet carries a quoted Lab observation. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
-settled ledger entries are in parts one to twenty-four of
+settled ledger entries are in parts one to twenty-five of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13, while workers run.**
@@ -94,8 +94,10 @@ settled ledger entries are in parts one to twenty-four of
 **In flight:**
 - **`w19-d1b`:** a linked click's action entry carries the landing claim, so
   W19's claim reaches a live click.
-- **`l-stage2`:** Lab Stage 2 at `7263534` and Core `187f40d`. W19 `expired` waits
-  for `w19-d1b` (seventeenth dispatch).
+- **`l-stage2`:** blocked at `7263534`, since every run failed the runner's own
+  discard check. One instrumented diagnostic run is in progress.
+- **`g-discard-window`:** the check counts only discards inside the recording's
+  window (nineteenth dispatch); Stage 2 is redispatched at its commit.
 
 **Queued, in dependency order**
 1. **After `w19-d1b`:** `g-w19-docs`, and W19 `expired` ×3 in Stage 2's
@@ -683,95 +685,62 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 - Not verified: the claim in a live proposal; the Lab.
 - Outcome: Revised
 
-### 2026-09-13 — g-core-action-entry-identity: a recorded click's Core entry keeps its event id
+### 2026-09-13 — l-stage2: every run failed the runner's own discard check before measuring anything
 
-- Agent: worker `g-core-action-entry-identity` (Core); verified by supervisor.
-  Core's ledger has the paired entry.
-- Changed (Core):
-  - `bridge.ts`, one line, still 796: the event's own `eventId` reaches the
-    recorded input's envelope metadata.
-  - `io-bridge.ts`: action and observation entries copy that `eventId` and the
-    `sourceId`, non-blank strings only.
-  - Their tests, and the client-gateway architecture page.
-- Found: a landing's `sourceId` is a top-level field mappers are not shown, so
-  `w19-d1b` now matches by event id only (brief amended). A `sourceId` in the
-  extension's metadata is client-declared and is now stored.
-- Validation: supervisor, Core `packages/fluxiq`:
-  - io-bridge and bridge tests -> `Tests 33 passed (33)`;
-  - Core `pnpm check` -> exit 0;
-  - `pnpm docs:check` -> exit 0.
-  - Worker: seven mutations each failed named rows.
-- Not verified: Core `pnpm build`; the Lab, where a W19 click's action entry must
-  carry `metadata.eventId` equal to its landing's `explainedByEventId`.
-- Outcome: Accepted
-
-### 2026-09-13 — w25-wait-mapper: a wait before a click whose target a page change produced
-
-- Agent: worker `w25-wait-mapper`; verified by supervisor.
-- Changed:
-  - New `domain/src/recording/proposals/late-target-wait.ts`, with its barrel and
-    test. `web-panel-host.ts`'s mapper returns its candidate for an observation
-    that maps to no action. There are new rows in `tests/domain.test.ts`, and the
-    checkbox comment in `io/input-model.ts` is updated.
-  - The rule starts from an `input.event` observation whose `latestEvidence` is a
-    `dom.mutation` that added nodes, and the first executable entry in `following`
-    decides. It proposes
-    `web.dom.wait_for_selector { selector, wait: { condition: "present" } }`, with
-    no timeout, source input or confirmation, when that entry is a
-    `web.dom.click` with a CSS selector, in the top frame, with no other document
-    named in between.
-  - A click's own `action` entry still maps to `null`, so Core's fallback click
-    stands.
-  - `delayed-ui`'s expectations are unchanged, since `flow-lane/expectations.ts`
-    only requires a matching attempt to exist.
+- Agent: worker `l-stage2` (Lab); decisions by supervisor.
+- Changed: no tracked file.
+  - Worktrees `F:\fxlab\fxlab-7263534` and `-load` at `7263534`, and
+    `F:\fxlab\!FluxIQ` at Core `187f40d`, rebuilt.
+  - Runs under `F:\fxlab-runs\stage2\`; `reports/l-stage2.md`.
 - Found:
-  - An `action` entry carries no URL. "Same document" is therefore inferred from
-    the top frame and the absence of any other URL in between, and a child-frame
-    mutation can still add an extra wait.
-  - The wait matches by CSS selector only, so a drifted selector that the
-    fingerprint would still resolve could time out. Stage 2's bench now checks the
-    drift, W26, modal and iframe rows for an added wait.
-- Validation: supervisor read the module and the mapper diff.
-  - `DOMAIN_TEST_BUILD_LABEL=sup17 ... domain check` -> exit 0.
-  - `... test` -> `# tests 373`, `# pass 373`, `# fail 0`, with `ok 96 - a
-    mutation that added nodes, then a click in the same document, proposes
-    waiting for the click's selector` and `ok 97 - the wait carries no timeout,
-    source input or confirmation`.
-  - The structure audit's only finding was the working-docs index, stale from
-    the uncommitted ledger.
-  - Worker: six mutations each failed a named row, restored hash-identical: no
-    builder call, `added >= 0`, no selector guard, no click-URL check, no
-    between-evidence check, and no frame check.
-- Not verified: the Lab. `delayed-ui --flow` must show click, wait, click 3 of 3;
-  `too-slow` must fail as `timeout`; and the rows above must stay unchanged.
-- Outcome: Accepted
-
-### 2026-09-13 — g-target-union-import: the Flow lane takes its target resolution shape from Core's type
-
-- Agent: worker `g-target-union-import`; verified by supervisor.
-- Changed: `flow-lane/persisted-flow-run.ts` only.
-  - `AutomationNodeTargetResolution` is imported from Core's public
-    `fluxiq/automation-studio/nodes` export, and the local copy of the union is
-    gone.
-  - The persisted type narrows each variant to named fields that cannot carry
-    page content.
-  - The scored statuses are a record keyed by Core's own, so the type check fails
-    when Core's union gains or loses one.
-- Found: the persisted fields are still named by hand, so if Core renamed
-  `confidence` or `normalizedScore`, only a test would catch it (report, open
-  question 1).
-- Validation: supervisor read the diff, and confirmed
-  `./automation-studio/nodes` is in Core's `package.json` `exports` with `types`
-  and `import` entries. From `packages/test-runner`:
-  - `pnpm check` -> exit 0;
-  - `tsc --outDir dist-sup18` -> exit 0;
-  - `node --test "dist-sup18/**/*.test.js"` -> `# tests 509`, `# pass 509`,
-    `# fail 0`.
-  - Worker: faking a new scored status or variant in Core, and dropping
-    `no_match` from the reader, each failed `tsc` with TS2741. Breaking the status
-    guard failed test 8. The file was restored byte-identical.
-- Not verified: root gates; the Lab (no change expected).
-- Outcome: Accepted
+  - All 12 runs exited 1 as `recording.persistence`: "Core discarded recorded
+    actions that arrived after their recording was finalized (2 with no recording
+    id)". That was step 4b 0 of 6 (4 under load, 2 alone), the load loop 0 of 5,
+    and `sensitive-input` 0 of 1.
+  - Every recording itself was complete. `recordedActions` for the extension
+    equalled Core's (4 and 4, or 3 and 3), the connection stayed `connected`, and
+    the second discard read added 0.
+  - `sensitive-input`'s leak attestation passed: `findingCount 0`, and 0
+    declared-value hits in 13 files.
+  - The cause, confirmed in code by the supervisor:
+    - the runner's Core action probe (`run-scenario.ts:261`) runs before recording
+      starts (`:273`);
+    - after a Core-dispatched action succeeds, the extension sends a runtime
+      confirmation as a `client.recording_event` with
+      `metadata.runtimeConfirmation: true`, whatever the recording state
+      (`server-command-channel.ts:209-237`);
+    - with no recording open, Core's bridge audits it as an executable
+      `recording.action_discarded` naming no recording id (`bridge.ts:479-499`);
+    - `g-recording-completeness` counts such a session-scoped discard as a loss.
+  - Entry counts were 15 in 9 runs and 16 in 2, so the brief's "one entry count
+    across all runs" is not a valid pass condition as written.
+- Decisions:
+  - The runner's check is what is wrong. `g-discard-window` limits it to discards
+    audited between the recording's start request and the Flow lane's dispatch.
+  - Core's audit wording for a runtime confirmation goes to the Phase 1.6b
+    ranking.
+  - Stage 2 is redispatched at the fix commit.
+  - Meanwhile the Lab worker runs one instrumented `basic-form --flow` in its
+    worktree, timing both reads, including any Flow-lane echoes after
+    finalization.
+  - Step 4b's entry-count condition gives way to per-run action equality, which
+    the completeness check enforces.
+- Validation:
+  - Worker: pin proof `exit=0 unpinned=0` on both worktrees; all 12 `run.json`
+    name facility `7263534` and Core `187f40d` with `dirty=false`; lowest free
+    memory 9.88 GB, with no pause.
+  - Supervisor read `bridge.ts:479-499`, `audit-log.ts:14-17`
+    (`timestamp: this.now()`), `run-scenario.ts:261-275` and
+    `server-command-channel.ts:196-237`.
+  - Each run count above is a single Lab observation.
+- Not verified:
+  - which two messages were discarded, and when (the diagnostic is running);
+  - step 4b runs 7-24;
+  - W18, W25, W10, W27 and W24;
+  - smoke gate 5.0;
+  - the week1 bench;
+  - W19 `expired`.
+- Outcome: Revised
 
 ## Open Questions
 
