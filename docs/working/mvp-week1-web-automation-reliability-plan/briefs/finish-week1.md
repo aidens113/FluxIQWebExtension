@@ -5334,3 +5334,34 @@ verdict. Require harness activations, leaks, persistence failures, and discards
 all zero; stop immediately for any leak. Preserve accepted bundles and report
 bounded ids/counts/categories/timings plus exact cleanup and worktree state.
 No source/shared-doc edits, commits, pushes, or raw logs/page data.
+
+## Stage 4j — allow the exact Lab extension-page sender
+
+Stage 4i rejected `db3cc17` 0/6 because every arm returned `forbidden`.
+`i-final-navigation-live-refusal` confirmed Chromium supplies `sender.tab` when
+the exact side-panel extension URL is loaded through `context.newPage()`. The
+existing unit test incorrectly called that shape a content sender.
+
+`f-final-navigation-sender-guard` owns only
+`apps/extension/src/background/scripted-navigation-control.ts`, its existing
+test, and `reports/f-final-navigation-sender-guard.md`. Remove only the blanket
+`sender.tab` prohibition. Continue to require this extension's exact runtime id
+and exact sidepanel/popup URL; a web/content sender with a tab remains forbidden.
+Add the runner-shaped exact sidepanel URL + tab acceptance row and amend the
+content-sender rejection row to use a web URL + tab. Mutate the tab prohibition
+back in and prove the runner-shaped row fails, then restore. Run extension check
+and focused tests. No runner/Core/shared-doc/Lab edits, commit, or push.
+
+## Stage 4k — structure-compliant intent placement
+
+After Stage 4j, the tracked source count exposes the hard 25-file connection
+directory limit. `f-final-navigation-intent-structure` owns the intent module,
+its test, all direct extension source/test imports of it, a new focused child
+barrel, and `reports/f-final-navigation-intent-structure.md`.
+
+Move `connection/scripted-navigation-intent.ts` to the smallest cohesive
+`connection/scripted-navigation/intent.ts` child and its test to
+`connection/scripted-navigation/tests/intent.test.ts`; add that directory's
+barrel and update imports without behavior changes. The parent barrel exports
+through the child barrel. Run structure audit, extension check, and the moved
+focused test. Do not alter behavior, runner/Core/shared docs/Lab, commit, or push.

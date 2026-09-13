@@ -5156,7 +5156,7 @@ var NavigationRecorder = class {
   }
 };
 
-// src/background/connection/scripted-navigation-intent.ts
+// src/background/connection/scripted-navigation/intent.ts
 var INTENT_LIFETIME_MS = 3e4;
 var REDIRECT_DEBOUNCE_MS = 250;
 var MAX_URL_LENGTH = 2048;
@@ -6516,7 +6516,7 @@ var FluxIQConnection = class {
 
 // src/background/scripted-navigation-control.ts
 function isControlPage(sender) {
-  if (sender.id !== chrome.runtime.id || sender.tab !== void 0 || typeof sender.url !== "string") return false;
+  if (sender.id !== chrome.runtime.id || typeof sender.url !== "string") return false;
   return sender.url === chrome.runtime.getURL("sidepanel/index.html") || sender.url === chrome.runtime.getURL("popup/index.html");
 }
 async function handleScriptedNavigationControl(message, sender, manager) {

@@ -111,8 +111,8 @@ settled ledger entries are in parts one to fifty of
 - `l-final-recheck-w02` passed 3/3 with nine durable attempts per run; every dispatch-to-settle interval exceeded 30 seconds. W10 had zero leaks and six correct
   functional verdicts, but consecutive one-candidate variants reject the settle
   barrier. CDP `typed` navigation also failed live (primary 1/3). Its replacement
-  intent/ack seam passed cross-review, package suites, and supervisor mutations;
-  live W10 proof is next.
+  intent/ack seam passed cross-review, package suites, and supervisor mutations,
+  but live W10 rejected its sender guard 0/6; its guard and intent placement are being corrected.
 
 **Queued, in dependency order**
 1. Integrate/test the acknowledged-intent seam, recheck W10 live, push the

@@ -18,7 +18,7 @@ import { NavigationRecorder, type NavigationOrigin, type NavigationVerdict } fro
 import { PointerClickFilter } from "../pointer-click-filter";
 import { RecordedEventIntake, type RecordedEventIntakeDeps } from "../recorded-event-intake";
 import type { RecordingEvidenceReporter } from "../recording-evidence";
-import { ScriptedNavigationIntent } from "../scripted-navigation-intent";
+import { ScriptedNavigationIntent } from "../scripted-navigation/index";
 
 type HarnessOptions = {
   // A real recorder, for the rows that exercise its policy end to end. Without

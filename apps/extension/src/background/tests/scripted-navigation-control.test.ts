@@ -27,6 +27,19 @@ function manager() {
 const sidepanel = { id: "extension-id", url: "chrome-extension://extension-id/sidepanel/index.html" } as chrome.runtime.MessageSender;
 const popup = { id: "extension-id", url: "chrome-extension://extension-id/popup/index.html" } as chrome.runtime.MessageSender;
 
+test("the runner's tab-hosted exact sidepanel page may arm scripted navigation", async () => {
+  installChrome();
+  const h = manager();
+  const runnerSidepanel = { ...sidepanel, tab: { id: 7 } } as chrome.runtime.MessageSender;
+  assert.deepEqual(await handleScriptedNavigationControl({
+    type: "fluxiq.test.armScriptedNavigation",
+    url: "http://localhost/final"
+  }, runnerSidepanel, h.value), {
+    handled: true, response: { ok: true, intentId: "intent-1" }
+  });
+  assert.deepEqual(h.calls, [["arm", "http://localhost/final"]]);
+});
+
 test("the two extension control pages may arm, await, and idempotently cancel", async () => {
   installChrome();
   const h = manager();
@@ -47,7 +60,7 @@ test("the two extension control pages may arm, await, and idempotently cancel", 
 test("content, wrong-extension, and unrecognised messages cannot reach the manager", async () => {
   installChrome();
   for (const sender of [
-    { ...sidepanel, tab: { id: 7 } },
+    { id: "extension-id", url: "http://127.0.0.1/scenario", tab: { id: 7 } },
     { ...sidepanel, id: "other-extension" },
     { ...sidepanel, url: "chrome-extension://extension-id/other.html" }
   ] as chrome.runtime.MessageSender[]) {

@@ -4,7 +4,7 @@ import type { FluxIQConnection } from "./connection";
 type ControlResult = { readonly handled: false } | { readonly handled: true; readonly response: unknown };
 
 function isControlPage(sender: chrome.runtime.MessageSender): boolean {
-  if (sender.id !== chrome.runtime.id || sender.tab !== undefined || typeof sender.url !== "string") return false;
+  if (sender.id !== chrome.runtime.id || typeof sender.url !== "string") return false;
   return sender.url === chrome.runtime.getURL("sidepanel/index.html")
     || sender.url === chrome.runtime.getURL("popup/index.html");
 }

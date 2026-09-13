@@ -34,7 +34,7 @@ import type { NavigationRecorder } from "./navigation-recorder";
 import type { PointerClickFilter } from "./pointer-click-filter";
 import type { ProjectContext } from "./project-context";
 import type { RecordingEvidenceReporter } from "./recording-evidence";
-import type { ScriptedNavigationIntent } from "./scripted-navigation-intent";
+import type { ScriptedNavigationIntent } from "./scripted-navigation/index";
 import { recordingActionChannels, recordingEnvironment, recordingSources } from "./recording-manifest";
 import {
   isRecordingStartRefusalError,

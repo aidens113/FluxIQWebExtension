@@ -27,7 +27,7 @@ import {
   isNavigationExplanation
 } from "./recorded-event";
 import type { RecordingEvidenceReporter } from "./recording-evidence";
-import type { ScriptedNavigationIntent } from "./scripted-navigation-intent";
+import type { ScriptedNavigationIntent } from "./scripted-navigation/index";
 import { objectValue, stringValue } from "./value-readers";
 
 export type RecordedEventIntakeDeps = {
