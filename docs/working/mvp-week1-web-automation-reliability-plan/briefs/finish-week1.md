@@ -499,6 +499,14 @@ mutation. Domain `check` and `test`.
 
 **Report:** `reports/g-domain-mapping.md`.
 
+**Amended after the first attempt stopped Blocked.** B6 is withdrawn: the
+navigation is lost in the extension recorder, not in `input-model.ts`, and W19
+needs a design decision (see the ledger). B3 resumes, owning also
+`domain/src/runtime/failure/tests/codes.test.ts` (the pinned code list) and
+`docs/architecture/failure-taxonomy.md`, with the design the report proposes:
+`web.action.invalid_parameter`, category `graph_validation_or_unknown_node`, not
+retryable, stage `dispatch`.
+
 ## l-stage0 — prove the Lab runs from a worktree (Lab owner)
 
 **Owns:** no tracked file in either repository. A worktree `F:\fxlab-147fdb4` at
@@ -632,6 +640,12 @@ B.2: derive the recording mapper's target from `parameters.element` when present
 map `implicitRole` to `role`, and never promote `parameters.text` to
 `visibleText` when an element is supplied. First grep this repository for
 readers of the status union, and name any. B.3 is Week 2: do not wire it.
+3. Added from `reports/g-core-late-event.md` open question 4:
+`appendRecordingDomainEvent` in `runtime/service.ts` never checks `endedAt`, so
+a late event with no registered input is written into an already-finalized
+recording. Refuse it as the other appends are refused, so the bridge's
+`appendOrDiscard` audits it as discarded; a probe row that fails before the fix,
+with a mutation. You own that function in `service.ts` as well.
 
 **Tests.** Design B's Core unit rows (no unapplied floor claimed; a type node's
 target holds no typed text and carries the element's identity), with the
@@ -642,6 +656,85 @@ mutation restoring `?? safeString(value.text)`; `npx vitest run <file>
 the recorded identity, and its type node no typed text.
 
 **Report:** `reports/g-core-target-gate.md`.
+
+## i-w19-expectation — design W19's fix: check where a recorded click landed (read-only)
+
+**Owns:** `reports/i-w19-expectation.md` only. Read-only in both repositories;
+scratch probes outside the tree; no Lab command.
+
+**Read:** `reports/g-domain-mapping.md` "B6 findings", especially "What W19
+needs"; row PB10b; `domain/src/runtime/expectation/evaluate.ts`;
+`apps/extension/src/content/actions/assert.ts` and its test; in Core, the
+expectation-evaluator seam in `runtime/executor/transition-comparison.ts` and
+`node-execution.ts`.
+
+**Decided:** W19 is fixed by Option A. The recorded click carries the state its
+recording landed on, checked after the replayed click, so an expired session
+fails as `auth_required`. A Flow-lane-injected assertion (B) and a navigate verb
+that reclassifies redirects (C) are rejected.
+
+**Task.** Design A end to end at HEAD, with file:line for every link, proven by
+probe where you can:
+1. **Recorder.** How the navigation that a click explains is attached to that
+   click's recorded event instead of dropped (`recorded-event-intake.ts:86`,
+   `navigation-recorder.ts:48`) without anything executing it a second time on
+   replay; which extension tests pin today's split. `g-recorder-signals` is
+   editing `gateway-payloads.ts` and `identity/context.ts`: say whether A needs
+   either.
+2. **Domain.** Which expectation the recording mapper should emit for such a
+   click: a condition that holds on the recorded landing page, and whose failure
+   on a sign-in page the assert path reports as `AUTH_REQUIRED`. Where in
+   `mapWebRecordingObservation` it goes. It must emit nothing for a click that
+   explained no navigation, and never carry a value.
+3. **Core.** The additive candidate field and its lift in
+   `appendRecordingProposalToFlow`; confirm that the executor evaluates the
+   resulting node's expectation through the host after the action, and which
+   category the attempt then reports.
+4. **Blast radius.** Every week1 corpus row whose recorded clicks would gain an
+   expectation, and whether any passing row would start failing.
+
+**Done when** the report ends with a fix design partitioned by file (extension,
+domain, Core), the unit, content-harness and Lab proof each change needs, and
+the order the pieces must land in.
+
+## l-stage1 — Lab Stage 1 against a pinned Core (Lab owner)
+
+Dispatched once Core's late-event fix is committed; the dispatch names this
+repository's commit `<R>` and Core's commit `<C>`.
+
+**Owns:** no tracked file in either repository. A Lab root `F:\fxlab\` holding
+two worktrees, `F:\fxlab\!FluxIQ` at Core `<C>` and `F:\fxlab\fxlab-<R7>` at
+`<R>`; run artifacts under `F:\fxlab-runs\stage1\`; memory samples in your
+scratch directory. The "no `pnpm lab`" rule is lifted for the runs below only.
+
+**Read:** `reports/i-lab-campaign.md` Parts 2 and 3; `reports/l-stage0.md`;
+`live-validation-plan.md` step 4b (corrected 2026-09-13) and the false-failure
+shapes; the plan's `Current State` operating rules.
+
+**Task.**
+1. **Pin Core.** The Core links are relative (`link:../../!FluxIQ/...`), so a
+   worktree beside a Core worktree inside `F:\fxlab\` resolves to that Core, not
+   to `F:\!FluxIQ`. Install both offline; build only the Core packages this
+   repository imports through `dist` (not `@fluxiq/web`). **Prove the pin before
+   any run:** resolve `fluxiq` from the worktree's `domain`, `apps/extension`
+   and `packages/test-runner` to real paths under `F:\fxlab\!FluxIQ`, quoted. If
+   it cannot be pinned, stop and report; do not fall back to the live Core.
+2. **Runs**, at most 2 instances, memory sampled as Part 3 says, every exit
+   captured by redirect:
+   - A: step 4b, 24 runs of `basic-form --flow`, judged by its pass condition
+     (exactly 4 candidates per run from `snapshots/flow-lane.json`).
+   - B: W18 (`auth-gate`, Flow lane, its declared secret supplied) ×3, then
+     `reconnect`, W24 and W25 ×3 each as `i-lab-campaign` names them, then smoke
+     gate 5.0.
+   - Separately, step 4's end-to-end run in its own worktree.
+
+**Report** (`reports/l-stage1.md`): the pin proof; for every run, the exit, the
+bundle path, and from `run.json` both commits and `dirty` flags; for step 4b
+the per-run `candidateCount`, `proposalIssues`, `entriesAppendedAfterStop` and
+`finalizationWaitMs`; for W18 the password node's presence, the absence of the
+declared value from `run.json`, `evaluation.json`, `events.ndjson` and
+`snapshots/`, and the oracle verdict; the lowest free memory. Quote, do not
+summarise; label every single observation.
 
 ## g-core-late-event — CS1b′, a late recording event kills the connection (Core)
 

@@ -694,6 +694,68 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   "$.workflows[1]: repeats another result's scenario, workflow, and variant"`, a
   Flow-lane result alone valid.
 - Outcome: Revised
+
+### 2026-09-13 — g-domain-mapping: W19's navigation is lost in the recorder, and W19 takes Option A
+
+- Agent: worker `g-domain-mapping` (stopped, no file changed); decisions by
+  supervisor.
+- Changed: `reports/g-domain-mapping.md`; `briefs/finish-week1.md` (B6
+  withdrawn, B3 resumed owning `codes.test.ts` and `failure-taxonomy.md`; new
+  `i-w19-expectation`).
+- Found: auth-gate's sign-in reaches `/account` by `location.assign` after the
+  recorded click, and the extension recorder drops that navigation twice: at
+  `recorded-event-intake.ts:86` (a script navigation reports as `link`, read
+  from Chrome's behaviour, not observed) and at `navigation-recorder.ts:48` (any
+  untyped navigation within 5 s of a click). `input-model.ts` never sees it.
+  Even a navigate step would report `navigation_unexpected`
+  (`action-runner.ts:145-148`), because `authGateFailure` runs only for
+  content-script actions. A new failure code breaks
+  `runtime/failure/tests/codes.test.ts:47`, outside B3's Owns.
+  `RECORDING_START_REASON` is stamped by nothing in either repository, so the
+  rows guarding it pass by construction.
+- Decisions:
+  - **W19 takes Option A**: the recorded click carries the state its recording
+    landed on, checked after replay, and the assert path already reports a
+    missing selector on a sign-in gate as `AUTH_REQUIRED` (`assert.ts:36`).
+    Option B, a Flow-lane-injected assertion, is rejected: the bench would
+    measure the harness, not the recording. Option C, a navigate verb
+    reclassifying redirects, is rejected: most files, least faithful, and a
+    double navigation.
+  - **PB10b moves into Week 1.** Its stated exception, a post-condition-less
+    recorded step passing wrongly, is W19 exactly. Its Core lift shares
+    `runtime/service.ts` with `g-core-late-event` and `g-core-target-gate`, so it
+    lands serially after both, from `i-w19-expectation`'s design.
+  - **B3 accepted as proposed**: `web.action.invalid_parameter`,
+    `graph_validation_or_unknown_node`, not retryable, stage `dispatch`.
+- Validation: worker grep and git reads only, each cited file:line; no gate run
+  because nothing changed. Supervisor read "B6 findings" whole before deciding.
+- Outcome: Revised
+
+### 2026-09-13 — g-core-late-event: a late recording message no longer fails the connection (CS1b′)
+
+- Agent: worker `g-core-late-event` (Core); verified by supervisor.
+- Changed: Core `client-gateway/bridge.ts` and its test, Core
+  `docs/architecture/automation-studio/client-gateway.md`, both generated
+  framework references. Recorded in full in Core's ledger.
+- Found: the throw is raised in `recordGatewayInput` for the extension's
+  `client.recording_event`, not only in the flush as `i-flow-lane-errors` (c)
+  read it; the timer flush lost entries to an unhandled rejection. Core
+  `appendRecordingDomainEvent` writes a late event into a finalized recording:
+  added to `g-core-target-gate` as its item 3.
+- Validation: supervisor, from `F:\!FluxIQ`: bridge `vitest` -> `Tests 15 passed
+  (15)`; `pnpm check` -> exit 0, `structure-audit: passed`; `pnpm
+  docs:reference` -> a one-line diff per copy; `pnpm docs:check` -> exit 0.
+  Supervisor read the bridge diff: the discard applies only when a re-read shows
+  `endedAt` set, and every other error propagates. Worker: `3 failed | 13 passed`
+  before the fix, four mutations caught.
+- Decisions: Lab Stage 1 runs against a Core worktree pinned beside a repository
+  worktree under `F:\fxlab\` (`l-stage1`), because the Core links are relative
+  and the live Core tree keeps changing; it defers the `--repeat 1` discovery
+  bench until `g-flow-lane-observation` lands, and `sensitive-input` until
+  `g-redaction-attestation` does.
+- Not verified: the 24-run campaign's `gateway.receive_failed` count, which is
+  Lab-only.
+- Outcome: Accepted
 - Validation: supervisor read the grouped-by-file list and every Open row;
   the second dispatch's Owns lists share no file with each other or with a
   running brief. Worker: git and search only, no gate run, so each Settled row
