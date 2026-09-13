@@ -1365,3 +1365,134 @@ a private label; the structure audit. Put the paragraph the recording
 architecture page needs in the report.
 
 **Report:** `reports/w19-d1.md`.
+
+## g-w19-docs — the architecture pages W19's changes left unwritten
+
+Dispatched once `w19-d1` has reported and `g-integration-small-fixes` has
+released `failure-taxonomy.md`. On 2026-09-13 a search of `docs/architecture/`
+for `explainedBy`, "sign-in gate" and `auth_required` found none of E1, E2, E3 or
+D1 described.
+
+**Owns:** `docs/architecture/extension-client.md`, the recording and action
+execution sections only; `docs/architecture/failure-taxonomy.md`, the producer
+paragraphs only.
+
+**Read:** `reports/w19-e1.md` open question 5 (its paragraph) and the follow-up's
+`explainedByEventId`; `reports/w19-e2.md`, `w19-e3.md`, `w19-d1.md`, each
+report's documentation note; the two pages as they stand.
+
+**Task.** Describe what the code now does, checking each claim against the file
+the report names at HEAD: a click's explained landing and the event id naming it
+(E1); the URL claim D1 gives a recorded click, and what it never carries (D1); a
+failed URL claim on a sign-in gate reporting `auth_required` (E2); an assert sent
+once more when its tab was navigating, and no other verb (E3). No code changes.
+
+**Tests.** The structure audit; `pnpm docs:check` if this repository has one,
+otherwise say so; every file:line you cite opened at HEAD.
+
+**Report:** `reports/g-w19-docs.md`.
+
+---
+
+# Ninth dispatch — from `i-stage1-failures` and `g-single-run-evidence`
+
+Verified by the supervisor on 2026-09-13:
+- `run-flow-lane.ts:93` reads `if (input.workflow.variant) await input.armVariant();`, and `run-scenario.ts:320-333` is the only reload.
+- W24 run 2's `flow-lane.json` has `candidateCount 3`, every action `succeeded`, `failure: null`.
+- W25 run 3's has `candidateCount 1` and one click `failed` with `target_not_found`.
+- `delayed-ui/scenario.ts:40` pins no click count.
+
+Decided: F1 is dispatched; F2 is measured before it is built; F3 is not Week 1 (below). All rules above still hold.
+
+**Amendment to `g-integration-small-fixes`, sent while it runs.** It also owns
+`packages/test-runner/src/run-evaluation/observed-run-evaluation.ts`, the comment
+at about `:32-36`, which still says a single `lab run` passes no evidence. The
+wording is in `reports/g-single-run-evidence.md`.
+
+## f-flow-start-page — every Flow run starts on the scenario's start page (F1)
+
+Dispatched once `g-single-run-evidence` is committed.
+
+**Owns:** `packages/test-runner/src/flow-lane/run-flow-lane.ts` and
+`flow-lane/tests/run-flow-lane.test.ts`; `packages/test-runner/src/run-scenario.ts`,
+the page-preparation callback only (about `:320-333`).
+
+**Read:** `reports/i-stage1-failures.md` finding (a) and F1.
+
+**Task.** Design F1. Call the callback on every Flow run, in this order: reset,
+prepare, read nodes, run. Rename the callback for what it now does.
+
+**Tests.** F1's row with its mutation (restore the variant guard); rerun
+`src/tests/scenario-assertions.test.ts`; test-runner `check`, and `test` in a
+private `--outDir` at `dist`'s depth; the structure audit. From the manifests,
+list every unarmed week1 Flow-lane row whose starting page changes, for the Lab
+to re-measure.
+
+**Report:** `reports/f-flow-start-page.md`.
+
+## g-evidence-reader-merge — one Flow-lane evidence reader, not two
+
+Dispatched once `g-single-run-evidence` is committed. `f-flow-start-page` runs
+beside it and shares no file.
+
+**Owns:** one new module in `packages/test-runner/src/run-evaluation/` (name it)
+and that directory's `index.ts`; `run-evaluation/single-run-evaluation.ts` and its
+test; `packages/test-runner/src/bench/evaluate-run.ts` and its test.
+
+**Read:** `reports/g-single-run-evidence.md`, the note on the copied reader.
+
+**Task.** `g-single-run-evidence` copied the bench's `snapshots/flow-lane.json`
+evidence-size reader into `single-run-evaluation.ts`, because importing the bench
+would form a cycle. Move the one reader into the new module, import it from both
+callers, and delete both copies. Behaviour must not change.
+
+**Tests.** The rows that pin the two copies together become rows on the new
+module, malformed input included, with a mutation. Test-runner `check`, and `test`
+in a private `--outDir` at `dist`'s depth. The structure audit, with no new
+baseline entry.
+
+**Report:** `reports/g-evidence-reader-merge.md`.
+
+## i-late-target-wait — measure F2 before it is built (read-only, plus one pin)
+
+**Owns:** `reports/i-late-target-wait.md`;
+`apps/scenario-lab/src/scenarios/delayed-ui/scenario.ts`, the `recordingEvents`
+line only, and that scenario's test.
+
+**Read:** `reports/i-stage1-failures.md` finding (c) and F2;
+`reports/i-w19-expectation.md` section 4, as the model for a corpus pass;
+`reports/w19-c2.md` for `following`, once it exists.
+
+**Task.**
+1. Pin `{ type: "web.element.clicked", count: 2 }` in delayed-ui's
+   `recordingEvents`, so a proposal that lost "Load content" fails as
+   `recording.contract`.
+2. With file:line in Core's `runtime/service/recordings/timeline.ts` and the Stage 1
+   bundles, establish whether the mapper sees a `web.dom.mutated` entry at all
+   after Core compacts the timeline (W25 run 3: "Compacted 1").
+3. For every week1 row, say whether F2's rule would add a wait node, and what
+   that does to the row's expected actions and category. F2's rule is a mutation
+   with `added > 0` followed by a click with a CSS selector. Cover W11, the modal
+   rows W12-W14, and the drift rows W20-W23, W26 and W29 especially.
+4. Recommend one of three options, with the proof each needs:
+   - F2 as designed;
+   - a narrower rule the mapper can evaluate from what it sees;
+   - amending the W24/W25 expectations (unarmed and `too-slow`) instead.
+
+**Tests.** Scenario-lab `check` and `test` for the pin, with a mutation. No Lab
+command.
+
+**Report:** `reports/i-late-target-wait.md`.
+
+## F3 — W24 `unannounced` is not Week 1
+
+W24 needs a producer that reports `output_not_observed` after an unannounced
+intermediate step. Building one takes three changes and a measurement
+(`reports/i-stage1-failures.md` F3):
+- a recorded-payload contract change: a bounded identity for added elements;
+- a new domain claim builder;
+- an evaluator category rule;
+- then a blast-radius pass over the whole corpus.
+
+The W24 row stays in the week1 corpus and counts against criterion 4 as measured.
+It is ranked as a blocker at Phase 1.6b and carried into Week 2.
