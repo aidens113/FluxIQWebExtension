@@ -55,27 +55,26 @@ const EVIDENCE_PACKET_POINTS = ["beforeAction", "afterAction"] as const;
  * run bundle kept none of it, and Core's store is deleted when the run ends,
  * so a finished run could not say how any target was resolved.
  *
- * Kept by name, and only the fields that cannot carry page content: the
- * closed `status` and four numbers. `candidateId` is left behind because Core
- * takes it from a candidate's own `id` or `testId` attribute, and the two
- * signal lists because they name the fingerprint's paths; neither is a value,
- * but neither is needed to read the resolution, and a bundle has no redaction
- * rule for them.
+ * Kept by variant, as Core's union defines each, and only the fields that
+ * cannot carry page content: the closed `status` and its numbers. A
+ * no-candidates record keeps only its count, because Core applied no
+ * confidence floor to it and records none. A scored record keeps its floor,
+ * and its confidence and normalized score when Core wrote them. `candidateId`
+ * is left behind because Core takes it from a candidate's own `id` or `testId`
+ * attribute, and the two signal lists because they name the fingerprint's
+ * paths; neither is a value, but neither is needed to read the resolution, and
+ * a bundle has no redaction rule for them.
  *
  * This is Core's resolution, not the browser's. The browser's
  * `WebAutomationTargetResolution` reaches Core inside the dispatched result,
  * which Core stores on the attempt's `outputs`; the run detail drops `outputs`,
  * so no endpoint this lane reads can return it.
  */
-export type PersistedTargetResolution = {
-  status: (typeof TARGET_RESOLUTION_STATUSES)[number];
-  candidateCount: number;
-  minimumConfidence: number;
-  confidence?: number;
-  normalizedScore?: number;
-};
+export type PersistedTargetResolution =
+  | { status: "unresolved_no_candidates"; candidateCount: 0 }
+  | { status: (typeof SCORED_TARGET_RESOLUTION_STATUSES)[number]; candidateCount: number; minimumConfidence: number; confidence?: number; normalizedScore?: number };
 
-const TARGET_RESOLUTION_STATUSES = ["matched", "unresolved_no_candidates", "no_match", "below_confidence"] as const;
+const SCORED_TARGET_RESOLUTION_STATUSES = ["matched", "no_match", "below_confidence"] as const;
 
 export type PersistedFlowRunOutcome = {
   runId: string;
@@ -202,17 +201,17 @@ function optionalRecord(value: unknown): Record<string, unknown> | undefined {
 }
 
 /**
- * Core's `metadata.targetResolution`, rebuilt field by field from the closed
- * ones rather than copied, so a field Core adds later is not carried into the
- * bundle unexamined. A record with an unknown status or without its counts is
- * not one Core writes, and is treated as absent rather than half-read.
+ * Core's `metadata.targetResolution`, rebuilt field by field for its variant
+ * rather than copied, so a field Core adds later is not carried into the
+ * bundle unexamined. A record with an unknown status, or without the fields
+ * its variant requires, is not one Core writes, and is treated as absent
+ * rather than half-read.
  */
 function targetResolutionOf(attempt: Record<string, unknown>): PersistedTargetResolution | undefined {
-  const metadata = attempt.metadata && typeof attempt.metadata === "object" && !Array.isArray(attempt.metadata) ? attempt.metadata as Record<string, unknown> : undefined;
-  const value = metadata?.targetResolution;
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-  const record = value as Record<string, unknown>;
-  const status = TARGET_RESOLUTION_STATUSES.find((candidate) => candidate === record.status);
+  const record = optionalRecord(optionalRecord(attempt.metadata)?.targetResolution);
+  if (!record) return undefined;
+  if (record.status === "unresolved_no_candidates") return record.candidateCount === 0 ? { status: "unresolved_no_candidates", candidateCount: 0 } : undefined;
+  const status = SCORED_TARGET_RESOLUTION_STATUSES.find((candidate) => candidate === record.status);
   const { candidateCount, minimumConfidence, confidence, normalizedScore } = record;
   if (!status || !isFiniteNumber(candidateCount) || !isFiniteNumber(minimumConfidence)) return undefined;
   return {
