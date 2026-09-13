@@ -78,7 +78,7 @@ test("Core's audit of discarded recording messages is read after the round trip,
   assert.ok(at.audited < at.settled && at.connection < at.settled, "both are read before the settle event that publishes them");
   assert.ok(at.settled < at.failed, "the discards are in the bundle before the run fails on them");
   assert.ok(at.failed < at.flowLane, "a recording that reached Core short never becomes a Flow");
-  assert.match(source, /"Core persisted the completed recording"\), details: \{[^}]*recordingDiscards: discardAudit\.discards, extensionConnectionAfterStop: connectionAfterStop/u);
+  assert.match(source, /"Core persisted the completed recording"\), details: \{[^}]*recordingDiscards: discardAudit\.discards, recordingDiscardWindow: discardAudit\.window, extensionConnectionAfterStop: connectionAfterStop/u, "the first read's discards are published with the window it judged them in");
   assert.match(source, /discardWindowFrom = Date\.now\(\);\s*const startResponse = await runtimeMessage\(extensionControl, \{ type: "fluxiq\.startRecording" \}\)/u, "the window opens just before the extension is asked to start recording, after the Core action probe");
   assert.ok(source.includes("const discardScope: RecordingDiscardScope = { recordingIds: outcome.newRecordingIds, sessionId: paired?.sessionId, from: discardWindowFrom };"), "both reads are bounded by that window");
 });
@@ -92,7 +92,7 @@ test("Core's discard audit is read a second time, after the Flow lane and the br
     flowLane: source.indexOf("await runFlowLane({"),
     browserClosed: source.indexOf("await context?.close();"),
     secondRead: source.indexOf("readRecordingDiscards(await topology.control.gatewaySnapshot().catch(() => undefined), { ...firstDiscardRead.scope, until: discardWindowUntil }, earlier)"),
-    published: source.indexOf("\"Core's discard audit was read again before the topology closed\"), details: { recordingDiscards: secondRead.discards"),
+    published: source.indexOf("\"Core's discard audit was read again before the topology closed\"), details: { recordingDiscards: secondRead.discards, recordingDiscardWindow: secondRead.window, discardsAfterFirstRead: "),
     topologyClosed: source.indexOf("await topology?.close();"),
   };
   for (const [name, index] of Object.entries(at)) assert.ok(index > 0, `${name} is in the runner`);

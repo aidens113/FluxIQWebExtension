@@ -316,7 +316,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
       // An action that never reached the recording shows in neither the audit nor an entry count, so Core's actions are counted against the extension's.
       const completeness = await readRecordingCompleteness(topology.control, { projectId: topology.projectId, recordingIds: outcome.newRecordingIds, extensionActionCount });
       await capture.trigger({ ...event(runId, scenario.id, undefined, "gateway.action", "Core gateway retained the paired extension session"), details: { sessionCount: outcome.sessionCount } });
-      await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "Core persisted the completed recording"), details: { recordingCount: outcome.recordingCount, projectId: topology.projectId, recordedEvents, recordingDiscards: discardAudit.discards, extensionConnectionAfterStop: connectionAfterStop, recordedActions: { extension: completeness.extensionActions, core: completeness.coreActions }, recordings: outcome.finalized.map(item => ({ recordingId: item.recordingId, entryCount: item.entryCount, entriesAppendedAfterFirstPoll: item.entriesAppendedWhileWaiting, finalizationWaitMs: item.waitedMs })) } });
+      await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "Core persisted the completed recording"), details: { recordingCount: outcome.recordingCount, projectId: topology.projectId, recordedEvents, recordingDiscards: discardAudit.discards, recordingDiscardWindow: discardAudit.window, extensionConnectionAfterStop: connectionAfterStop, recordedActions: { extension: completeness.extensionActions, core: completeness.coreActions }, recordings: outcome.finalized.map(item => ({ recordingId: item.recordingId, entryCount: item.entryCount, entriesAppendedAfterFirstPoll: item.entriesAppendedWhileWaiting, finalizationWaitMs: item.waitedMs })) } });
       if (discardAudit.failure) throw discardAudit.failure;
       if (completeness.failure) throw completeness.failure;
       if (options.flow) {
@@ -414,7 +414,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
     if (firstDiscardRead && topology?.control) {
       const earlier = firstDiscardRead.discards;
       const secondRead = readRecordingDiscards(await topology.control.gatewaySnapshot().catch(() => undefined), { ...firstDiscardRead.scope, until: discardWindowUntil }, earlier);
-      await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "Core's discard audit was read again before the topology closed"), details: { recordingDiscards: secondRead.discards, discardsAfterFirstRead: secondRead.discards.length - earlier.length } }).catch(() => undefined);
+      await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "Core's discard audit was read again before the topology closed"), details: { recordingDiscards: secondRead.discards, recordingDiscardWindow: secondRead.window, discardsAfterFirstRead: secondRead.discards.length - earlier.length } }).catch(() => undefined);
       const failure = secondRead.failure;
       if (failure && (failure.category === "recording.persistence" ? failureCategory !== "recording.persistence" : verdict === "passed")) {
         const superseded = failureCategory;
