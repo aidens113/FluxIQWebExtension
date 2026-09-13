@@ -5,6 +5,7 @@
 // and `element/` decides what an element is and what it is called.
 
 import type { WebAutomationElementContext } from "../../actions/types";
+import type { WebAutomationPageEvidence } from "../../page-evidence";
 
 export type WebAutomationRect = { x: number; y: number; width: number; height: number };
 
@@ -67,6 +68,15 @@ export type WebAutomationDomSnapshotInput = {
   focusedElement?: WebAutomationElementStateInput | undefined;
   selectedText?: string | undefined;
   interactiveElements: WebAutomationElementStateInput[];
+  /**
+   * The page-level evidence the capture gathered (Phase 1.4), in the shared
+   * contract's own type. The extension's cross-frame merge and this
+   * projection's reader both reach the key through this declaration, so
+   * renaming it here stops both compiling. Declared, not trusted: it comes off
+   * a wire from a page, so `evidence/input.ts` still reads every value through
+   * `evidence/read.ts`.
+   */
+  evidence?: WebAutomationPageEvidence | undefined;
 };
 
 export type WebAutomationScreenImageSize = {

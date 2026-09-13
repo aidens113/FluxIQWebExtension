@@ -159,26 +159,46 @@ extension rather than the gateway.
 **This goes ahead of everything else that needs the Lab**, and it is the reason
 the live sequence exists at all.
 
-In one `basic-form` run of four during Wave 2, a click was recorded correctly —
-`web.element.clicked`, one event — and then only four of five candidates were
-proposed, so the Flow lost the action and nothing reported it. The rerun passed.
-It has never been diagnosed, and nothing in Waves 2 or 3 touches it.
+**Corrected 2026-09-13 from `reports/i-flow-lane-errors.md` (a).** The earlier
+text said "recording lane", "roughly one in four" and "four of five candidates";
+all three were stale.
 
-It is the only known defect where the product loses a user's action and reports
-success. Every other failure in this plan announces itself; this one does not.
-A benchmark run over a recording lane that can silently drop a step measures a
-number it cannot explain, so this must be understood before step 7 means
-anything.
+The defect lives only in the **Flow lane**. `L-dropped-action` measured it in
+**12 of 24** `basic-form --flow` runs: a recorded action went missing from the
+proposal, and the run still exited 0. `L-race-fix` made the lane wait for the
+recording to finalize before proposing. That fix is unit-proven and has never
+run live. This step is its live proof, and it is still the only known defect
+where the product loses a user's action and reports success.
 
-Approach: run the `basic-form` recording lane repeatedly on `isolated` — the
-observed rate is roughly one in four, so budget at least twenty runs — capturing
-the recorded event stream and the proposed candidate set for every run, and diff
-them on the failing one. The question to answer is not "does it still happen"
-but **where the action is lost**: recorded and not proposed, or proposed and not
-persisted. Those are different bugs in different modules.
+**Command.** 24 runs of
+`FLUXIQ_TEST_ENV_FILES=none pnpm lab run basic-form --flow --target isolated`
+(under `FLUXIQ_LAB_INSTANCE=<label>` when concurrent), each exit status captured
+by redirect. The single-instance form with one build is in the report.
 
-If twenty runs do not reproduce it, that is a result worth recording, not a
-clean bill of health — say what rate the sample rules out.
+**Pass condition, for every one of the 24 runs:**
+1. `exit=0`.
+2. `snapshots/flow-lane.json` has `candidateCount` **exactly 4**, the baseline
+   `web.dom.type, web.dom.select, web.dom.type, web.dom.click`. Exit status is
+   not enough: `assertFlowActions` matches with `some`, so a Flow that lost the
+   second `web.dom.type` exits 0. Once `g-flow-lane-observation` lands (B1), the
+   run itself fails `recording.contract` on a short proposal.
+3. No `proposalIssues` entry contains `has not been finalized`.
+4. No run fails `recording.persistence` with "still being written" at the bound;
+   if one does, the bound is the finding.
+5. Report the distribution of `recording.entriesAppendedAfterStop` and
+   `finalizationWaitMs` from `runtime.settle`, which shows the wait was exercised.
+
+**Strength.** Zero failures in 24 rules out a true rate above about 12% at 95%
+confidence; against the measured 50%, 24 clean runs with nothing fixed has odds
+of about 6 in 100 million. The defect was load-correlated, so run this beside
+other Lab instances or record the load. Under the faulty-RAM rule, a run with
+`candidateCount < 4` is a real failure; only a uniform or impossible failure
+earns a rerun.
+
+**What it cannot show.** An action Core discards after finalization appears only
+in the gateway audit log, which the runner never reads, so a run can still pass
+having lost one. Fix D3 (reading that audit log into `runtime.settle`) closes the
+gap, together with Core's `g-core-late-event`.
 
 ### Step 5 — one isolated element-targeted replay (serial, ~5 min)
 

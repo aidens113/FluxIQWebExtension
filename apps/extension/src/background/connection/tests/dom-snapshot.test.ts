@@ -11,12 +11,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   captureMergedTabSnapshot,
-  type DomSnapshotPayloadWithEvidence,
+  type DomSnapshotPayload,
   type TabSnapshotTransport
 } from "../dom-snapshot";
 import type { PageEvidence, RectDescriptor } from "../../../shared/protocol";
 
-type FrameFixture = { frameId: number; snapshot: DomSnapshotPayloadWithEvidence };
+type FrameFixture = { frameId: number; snapshot: DomSnapshotPayload };
 
 const CHILD_FRAME_ID = 2;
 // The iframe's box in the top frame's viewport, and the top frame's own scroll,
@@ -24,11 +24,12 @@ const CHILD_FRAME_ID = 2;
 const CHILD_VIEWPORT_OFFSET: RectDescriptor = { x: 100, y: 50, width: 400, height: 300 };
 const TOP_SCROLL_Y = 20;
 
-function transportFor(frames: readonly FrameFixture[]): TabSnapshotTransport {
+/** Every frame answers when asked; `listed` is what the frame list names, which is every frame unless a test says otherwise. */
+function transportFor(frames: readonly FrameFixture[], listed: readonly number[] = frames.map((frame) => frame.frameId)): TabSnapshotTransport {
   return {
     sendToTab: async <TResponse = unknown>(_tabId: number, _message: unknown, frameId?: number): Promise<TResponse> =>
       frames.find((frame) => frame.frameId === (frameId ?? 0))?.snapshot as TResponse,
-    allTabFrames: async () => frames.map((frame) => ({ frameId: frame.frameId }) as chrome.webNavigation.GetAllFrameResultDetails)
+    allTabFrames: async () => listed.map((frameId) => ({ frameId }) as chrome.webNavigation.GetAllFrameResultDetails)
   };
 }
 
@@ -45,7 +46,7 @@ function elementsTotals(returned: number, overrides: Partial<PageEvidence["eleme
   };
 }
 
-function topSnapshot(): DomSnapshotPayloadWithEvidence {
+function topSnapshot(): DomSnapshotPayload {
   return {
     url: "https://shop.example/checkout",
     title: "Checkout",
@@ -67,7 +68,7 @@ function topSnapshot(): DomSnapshotPayloadWithEvidence {
   };
 }
 
-function childSnapshot(): DomSnapshotPayloadWithEvidence {
+function childSnapshot(): DomSnapshotPayload {
   return {
     url: "https://pay.example/card",
     title: "Card details",
@@ -118,7 +119,7 @@ function childSnapshot(): DomSnapshotPayloadWithEvidence {
   };
 }
 
-async function mergeOf(frames: readonly FrameFixture[]): Promise<DomSnapshotPayloadWithEvidence> {
+async function mergeOf(frames: readonly FrameFixture[]): Promise<DomSnapshotPayload> {
   const merged = await captureMergedTabSnapshot(transportFor(frames), 7);
   assert.ok(merged, "the merge produced no snapshot");
   return merged;
@@ -340,3 +341,45 @@ test("a merge under the bound is untouched by it", async () => {
   assert.equal(merged.evidence?.elements.returned, 20);
   assert.equal(merged.evidence?.elements.truncated, false);
 });
+
+// The fallback path: the top frame is read once on its own before the frame
+// list is asked for, and that reading stands in for the top frame when no
+// listed frame is it -- the list omitted frame 0, or frame 0 did not answer its
+// second read in time. The page is still made of the same documents, so the
+// merge must say the same thing about it as when every frame was listed.
+
+test("a top frame the frame list omits still contributes its elements and its evidence", async () => {
+  const merged = await mergeOfListed(bothFrames, [CHILD_FRAME_ID]);
+  const evidence = merged.evidence;
+  assert.ok(evidence, "the merged snapshot carried no evidence");
+
+  assert.deepEqual(evidence.regions?.map((region) => region.role), ["main", "form"], "the top frame's regions were dropped from the page");
+  assert.equal(evidence.elements.changed, 1, "the top frame's element totals were dropped from the page");
+  assert.deepEqual(
+    merged.interactiveElements.map((element) => element.selector),
+    ["#pay", `frame[${CHILD_FRAME_ID}] >> #card`, `frame[${CHILD_FRAME_ID}] >> #confirm`],
+    "the top frame's own elements were dropped from the page"
+  );
+  assert.equal(evidence.elements.returned, merged.interactiveElements.length, "the element totals must count the frames the element list spans");
+  assert.deepEqual(evidence.navigation, topSnapshot().evidence?.navigation);
+  assert.equal(evidence.loading.documentState, "complete");
+});
+
+test("a seeded merge whose frame list never arrived keeps the seed first and the top frame's evidence first", async () => {
+  const merged = await captureMergedTabSnapshot(transportFor(bothFrames, []), 7, childSnapshot(), CHILD_FRAME_ID);
+  assert.ok(merged, "the merge produced no snapshot");
+
+  assert.deepEqual(
+    merged.interactiveElements.map((element) => element.selector),
+    [`frame[${CHILD_FRAME_ID}] >> #card`, `frame[${CHILD_FRAME_ID}] >> #confirm`, "#pay"],
+    "the frame the event came from leads the element list, and the top frame's elements follow it"
+  );
+  assert.deepEqual(merged.evidence?.regions?.map((region) => region.role), ["main", "form"], "the top frame's evidence leads the merged collections");
+  assert.equal(merged.evidence?.elements.returned, 3);
+});
+
+async function mergeOfListed(frames: readonly FrameFixture[], listed: readonly number[]): Promise<DomSnapshotPayload> {
+  const merged = await captureMergedTabSnapshot(transportFor(frames, listed), 7);
+  assert.ok(merged, "the merge produced no snapshot");
+  return merged;
+}

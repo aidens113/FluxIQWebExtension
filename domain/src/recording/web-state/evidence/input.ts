@@ -35,6 +35,7 @@
 // unchanged, which is the first row read at its source.
 
 import type { WebAutomationPageEvidence, WebAutomationSnapshotElementTotals } from "../../../page-evidence";
+import type { WebAutomationDomSnapshotInput } from "../types";
 import { record } from "./read";
 
 /**
@@ -51,19 +52,16 @@ import { record } from "./read";
  */
 export type WebAutomationPageEvidenceInput = { [K in keyof WebAutomationPageEvidence]?: unknown };
 
-/** Just enough of a snapshot to find the evidence on it, in the contract's own spelling. */
-type SnapshotCarryingEvidence = { evidence?: WebAutomationPageEvidence | undefined };
-
 /**
  * The page evidence on a DOM snapshot, or `undefined` when it carries none.
  *
- * `WebAutomationDomSnapshotInput` declares only the six fields the projection
- * read before this directory existed, so the field is reached through a narrow
- * read rather than through the declared type -- but the key it reads is the
- * contract's, not a string this file chose.
+ * The key is `WebAutomationDomSnapshotInput`'s own, so renaming it there stops
+ * this compiling. The value is not trusted to be what that type says: it comes
+ * off a wire from a page, so it is narrowed to the contract's key set here and
+ * every value is read through `read.ts`.
  */
-export function pageEvidenceOfSnapshot(snapshot: unknown): WebAutomationPageEvidenceInput | undefined {
-  return record<WebAutomationPageEvidence>(record<SnapshotCarryingEvidence>(snapshot)?.evidence);
+export function pageEvidenceOfSnapshot(snapshot: WebAutomationDomSnapshotInput): WebAutomationPageEvidenceInput | undefined {
+  return record<WebAutomationPageEvidence>(snapshot.evidence);
 }
 
 /**

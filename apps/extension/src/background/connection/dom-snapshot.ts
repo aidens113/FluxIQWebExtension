@@ -53,15 +53,6 @@ import { translateFrameElements } from "./frame-geometry";
 
 export type DomSnapshotPayload = Parameters<typeof createWebAutomationStateFromSnapshot>[0];
 
-/**
- * The payload as the content script actually sends it. `DomSnapshotPayload` is
- * the domain's *input* type, which declares only what the state projection
- * reads, so it says nothing about the page evidence Phase 1.4 added. The
- * evidence still travels -- the wire is JSON and every hop copies the object
- * whole -- so reading or writing it here needs the wider shape.
- */
-export type DomSnapshotPayloadWithEvidence = DomSnapshotPayload & { evidence?: PageEvidence | undefined };
-
 // A merged snapshot spans every frame, so each collection needs a budget of its
 // own: the per-frame modules in `content/evidence/` cap themselves, but ten
 // frames would otherwise contribute ten times the cap to one payload that is
@@ -141,7 +132,7 @@ export async function captureMergedTabSnapshot(
   tabId: number,
   seedSnapshot?: DomSnapshotPayload,
   seedFrameId?: number
-): Promise<DomSnapshotPayloadWithEvidence | undefined> {
+): Promise<DomSnapshotPayload | undefined> {
   const topFallback = await captureSingleFrameSnapshot(transport, tabId, 0);
   const fallback = topFallback ?? seedSnapshot;
   const frames = await withTimeout(transport.allTabFrames(tabId), FRAME_SNAPSHOT_TIMEOUT_MS, []);
@@ -153,8 +144,15 @@ export async function captureMergedTabSnapshot(
     if (snapshot) frameSnapshots.push({ frameId: frame.frameId, snapshot });
   })), FRAME_SNAPSHOT_TIMEOUT_MS, []);
   if (!frameSnapshots.length) return fallback;
-  const topSnapshot = frameSnapshots.find((entry) => entry.frameId === 0 || entry.snapshot.frame?.isTop)?.snapshot ?? topFallback;
+  const listedTop = frameSnapshots.find((entry) => entry.frameId === 0 || entry.snapshot.frame?.isTop);
+  const topSnapshot = listedTop?.snapshot ?? topFallback;
   if (!topSnapshot) return undefined;
+  // A top frame known only from `topFallback` -- the frame list omitted frame 0,
+  // or frame 0 missed its second read -- is still one of the page's documents.
+  // Left out of the loop below it lent the merge its URL and `readyState` and
+  // dropped its elements, element totals and additive evidence. It goes where it
+  // answered: after the seed, before the frames read in parallel.
+  if (!listedTop) frameSnapshots.splice(seedSnapshot && seedFrameId !== undefined ? 1 : 0, 0, { frameId: 0, snapshot: topSnapshot });
   const collectedElements: NonNullable<RecordingEventPayload["element"]>[] = [];
   // The top frame's evidence leads the merged collections: within one document
   // the content script reports dialogs and blockers top-most first, and no
@@ -180,7 +178,7 @@ export async function captureMergedTabSnapshot(
     else frameEvidence.push(frameEvidenceInTopFrameTerms(evidence, entry.snapshot, topSnapshot, entry.frameId));
   }
   const mergedElements = collectedElements.slice(0, MAX_MERGED_ELEMENTS);
-  const merged: DomSnapshotPayloadWithEvidence = {
+  const merged: DomSnapshotPayload = {
     ...topSnapshot,
     interactiveElements: mergedElements
   };
@@ -193,9 +191,9 @@ export async function captureMergedTabSnapshot(
   return merged;
 }
 
-/** The page evidence on a snapshot, which the domain's input type does not declare. */
+/** The page evidence on a snapshot, when what arrived under the domain input's `evidence` key is an object. */
 export function pageEvidenceOf(snapshot: DomSnapshotPayload): PageEvidence | undefined {
-  const evidence = (snapshot as DomSnapshotPayloadWithEvidence).evidence;
+  const evidence = snapshot.evidence;
   return objectValue(evidence) ? evidence : undefined;
 }
 
