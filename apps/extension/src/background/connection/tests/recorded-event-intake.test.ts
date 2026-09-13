@@ -135,6 +135,7 @@ async function settle(): Promise<void> {
 }
 
 type SentRecordingEvent = {
+  readonly eventId?: string;
   readonly eventType?: string;
   readonly recordingId?: string;
   readonly payload?: { readonly url?: string };
@@ -238,17 +239,52 @@ test("a click's landing goes out as a non-executable recording event naming the 
   await settle();
 
   assert.deepEqual(h.sent.map((message) => message.type), ["client.recording_event", "client.recording_event"], "the click, then its landing");
+  const clicked = h.sent[0]?.payload as SentRecordingEvent;
   const landing = h.sent[1]?.payload as SentRecordingEvent;
   assert.equal(landing.eventType, WEB_AUTOMATION_EVENTS.pageNavigated);
   assert.equal(landing.payload?.url, "https://shop.test/account");
   assert.equal(landing.metadata?.transition, "explained");
   assert.equal(landing.metadata?.explainedBy, 7, "the click's sequence, not the submit's");
+  assert.equal(clicked.eventId, "web.7.1007");
+  assert.equal(landing.metadata?.explainedByEventId, clicked.eventId, "the event id the click itself was sent under");
   assert.equal("inputId" in (landing.metadata ?? {}), false, "never executable");
   assert.equal(landing.recordingId, "recording-1");
   assert.equal(JSON.stringify(h.sent).includes("secret-token"), false, "the query never crosses");
   assert.equal(JSON.stringify(h.sent).includes("welcome"), false, "the hash never crosses");
   assert.equal(h.counted(), 1, "only the click is an executable action");
   assert.deepEqual(h.evidenceKinds, ["dom.click", "dom.submit", "browser.navigation"]);
+});
+
+// The page a landing reached has its own content script, counting from zero, so
+// its first click can carry the same sequence as the click that led there.
+test("two clicks that share a sequence are told apart by the event id each landing names", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const h = harness("recording", { navigation: new NavigationRecorder(), reenter: true });
+  await h.intake.accept(click("pointerdown", 7), 4, 0);
+  h.intake.noteNavigationCommitted(commit("https://shop.test/account", "link", 1_500));
+  t.mock.timers.tick(250);
+  await settle();
+  await h.intake.accept({
+    ...click("pointerdown", 7),
+    url: "https://shop.test/account",
+    eventTimestampMs: 9_007,
+    element: { selector: "#orders", tagName: "a", text: "Orders" }
+  } as RecordingEventPayload, 4, 0);
+  h.intake.noteNavigationCommitted(commit("https://shop.test/orders", "link", 9_500));
+  t.mock.timers.tick(250);
+  await settle();
+
+  const events = h.sent.map((message) => message.payload as SentRecordingEvent);
+  assert.deepEqual(events.map((event) => event.eventType), [
+    WEB_AUTOMATION_EVENTS.elementClicked,
+    WEB_AUTOMATION_EVENTS.pageNavigated,
+    WEB_AUTOMATION_EVENTS.elementClicked,
+    WEB_AUTOMATION_EVENTS.pageNavigated
+  ]);
+  assert.deepEqual([events[1]?.metadata?.explainedBy, events[3]?.metadata?.explainedBy], [7, 7], "the sequence alone cannot tell the clicks apart");
+  assert.notEqual(events[0]?.eventId, events[2]?.eventId);
+  assert.equal(events[1]?.metadata?.explainedByEventId, events[0]?.eventId, "the first landing names the first click");
+  assert.equal(events[3]?.metadata?.explainedByEventId, events[2]?.eventId, "the second landing names the second click");
 });
 
 test("an iframe loading on the landing page does not displace the landing", async (t) => {

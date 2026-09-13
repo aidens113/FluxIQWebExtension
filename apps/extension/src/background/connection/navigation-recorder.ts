@@ -24,24 +24,32 @@ const EXPLANATORY_ACTION_WINDOW_MS = 5_000;
 export type NavigationOrigin = "typed" | "page" | "other";
 
 /**
- * What can explain a navigation. A click is named by its sequence when it is
- * executable and by nothing when it cannot be replayed; a form submit is
+ * An executable click as the recording knows it. `sequence` is the content
+ * script's counter, which restarts in every document, so two clicks in one
+ * recording can share it; `eventId` is the recording event id the click was
+ * sent under, which names exactly one.
+ */
+export type RecordedClick = { readonly sequence: number; readonly eventId: string };
+
+/**
+ * What can explain a navigation. A click is named by how it was recorded when
+ * it is executable and by nothing when it cannot be replayed; a form submit is
  * evidence, never a candidate, so it names nothing of its own.
  */
 export type NavigationExplainer =
-  | { readonly kind: "click"; readonly sequence: number | undefined }
+  | { readonly kind: "click"; readonly recorded: RecordedClick | undefined }
   | { readonly kind: "submit" };
 
 /**
  * What a debounced navigation becomes: nothing, a navigation in its own right,
- * or the landing of the executable click whose sequence `explainedBy` names.
+ * or the landing of the executable click it names.
  */
 export type NavigationVerdict =
   | { readonly kind: "drop" }
   | { readonly kind: "navigation" }
-  | { readonly kind: "explained"; readonly explainedBy: number };
+  | { readonly kind: "explained"; readonly click: RecordedClick };
 
-type ExplanatoryAction = { readonly timestamp: number; readonly clickSequence: number | undefined };
+type ExplanatoryAction = { readonly timestamp: number; readonly click: RecordedClick | undefined };
 
 const DROP: NavigationVerdict = { kind: "drop" };
 const NAVIGATION: NavigationVerdict = { kind: "navigation" };
@@ -62,10 +70,10 @@ export class NavigationRecorder {
   // that is itself outside the submit's window explained nothing.
   noteExplanatoryAction(tabId: number, timestamp: number, explainer: NavigationExplainer): void {
     const previous = this.explanatoryActions.get(tabId);
-    const clickSequence = explainer.kind === "click"
-      ? explainer.sequence
-      : previous !== undefined && withinExplanatoryWindow(previous.timestamp, timestamp) ? previous.clickSequence : undefined;
-    this.explanatoryActions.set(tabId, { timestamp, clickSequence });
+    const click = explainer.kind === "click"
+      ? explainer.recorded
+      : previous !== undefined && withinExplanatoryWindow(previous.timestamp, timestamp) ? previous.click : undefined;
+    this.explanatoryActions.set(tabId, { timestamp, click });
   }
 
   // Collapses the burst of URL, title, and status updates a single load emits
@@ -96,7 +104,7 @@ export class NavigationRecorder {
     const action = this.explanatoryActions.get(tabId);
     const explanation = action !== undefined && withinExplanatoryWindow(action.timestamp, timestamp) ? action : undefined;
     if (origin === "page") {
-      return explanation?.clickSequence === undefined ? DROP : { kind: "explained", explainedBy: explanation.clickSequence };
+      return explanation?.click === undefined ? DROP : { kind: "explained", click: explanation.click };
     }
     // Let the click message arrive before classifying the URL update. A typed
     // omnibox navigation remains intentional even if it follows a click.

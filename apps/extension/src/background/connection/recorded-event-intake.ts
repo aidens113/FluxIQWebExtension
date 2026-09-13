@@ -17,7 +17,7 @@ import { isDomSnapshotPayload } from "./dom-snapshot";
 import type { EventSequence } from "./event-sequence";
 import { gatewayRecordingEventFromPayload } from "./gateway-payloads";
 import type { GatewayMessageSender } from "./gateway-session";
-import type { NavigationOrigin, NavigationRecorder } from "./navigation-recorder";
+import type { NavigationOrigin, NavigationRecorder, RecordedClick } from "./navigation-recorder";
 import type { PointerClickFilter } from "./pointer-click-filter";
 import {
   activityDetail,
@@ -51,6 +51,14 @@ const EXPLAINED_TRANSITION = "explained";
 
 function isExplainedNavigation(payload: RecordingEventPayload): boolean {
   return payload.kind === "browser.navigation" && payload.metadata?.transition === EXPLAINED_TRANSITION;
+}
+
+// An executable click as the recording knows it. The event id is read off the
+// recording event the domain builds for this click rather than respelled here,
+// so a landing names the id the click itself is sent under.
+function recordedClick(payload: RecordingEventPayload, tabId: number, frameId: number | undefined, recordingId: string | undefined): RecordedClick | undefined {
+  const eventId = gatewayRecordingEventFromPayload(payload, tabId, frameId, recordingId).eventId;
+  return eventId === undefined ? undefined : { sequence: payload.sequence, eventId };
 }
 
 // Where a click landed, as origin and path. A query string or fragment is where
@@ -135,7 +143,10 @@ export class RecordedEventIntake {
         url: location,
         title: "",
         eventTimestampMs: timestamp,
-        metadata: { transition: EXPLAINED_TRANSITION, explainedBy: verdict.explainedBy }
+        // `explainedBy` is the click's sequence, which restarts in every
+        // document; `explainedByEventId` is the recording event id the click
+        // was sent under, which names exactly one click in the recording.
+        metadata: { transition: EXPLAINED_TRANSITION, explainedBy: verdict.click.sequence, explainedByEventId: verdict.click.eventId }
       }, tabId);
       return;
     }
@@ -155,7 +166,7 @@ export class RecordedEventIntake {
     if (tabId !== undefined && isNavigationExplanation(payload)) {
       this.deps.navigation.noteExplanatoryAction(tabId, payload.eventTimestampMs, payload.kind === "dom.submit"
         ? { kind: "submit" }
-        : { kind: "click", sequence: executable ? payload.sequence : undefined });
+        : { kind: "click", recorded: executable ? recordedClick(payload, tabId, frameId, this.deps.recording.recordingId()) : undefined });
     }
     if (executable) {
       this.deps.recording.noteEvent();

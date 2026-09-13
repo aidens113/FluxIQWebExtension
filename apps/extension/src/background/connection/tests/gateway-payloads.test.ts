@@ -66,7 +66,7 @@ test("a passive event carries no input id and keeps the recorder's metadata", ()
 });
 
 test("a click's landing crosses as a navigation that names the click and carries no input id", () => {
-  const landing = recorded("browser.navigation", { url: "https://example.test/account", title: "", metadata: { transition: "explained", explainedBy: 3 } });
+  const landing = recorded("browser.navigation", { url: "https://example.test/account", title: "", metadata: { transition: "explained", explainedBy: 3, explainedByEventId: "web.3.900" } });
   const event = gatewayRecordingEventFromPayload(landing, 7, undefined, "rec-1");
   assert.equal(event.eventType, WEB_AUTOMATION_EVENTS.pageNavigated);
   assert.equal(event.recordingId, "rec-1");
@@ -74,6 +74,7 @@ test("a click's landing crosses as a navigation that names the click and carries
   assert.equal(event.metadata?.clientKind, "browser.navigation");
   assert.equal(event.metadata?.transition, "explained");
   assert.equal(event.metadata?.explainedBy, 3);
+  assert.equal(event.metadata?.explainedByEventId, "web.3.900", "the click's own event id crosses untouched");
   assert.equal("inputId" in (event.metadata ?? {}), false, "nothing can execute it");
   assert.equal(event.metadata?.visualTarget, undefined);
   assert.equal(event.payload?.url, "https://example.test/account");
