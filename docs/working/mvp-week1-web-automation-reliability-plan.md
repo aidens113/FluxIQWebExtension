@@ -101,8 +101,8 @@ settled ledger entries are in parts one to twenty-five of
   window (nineteenth dispatch); Stage 2 is redispatched at its commit.
 
 **Queued, in dependency order**
-1. **After `g-discard-window`:** Lab Stage 2 redispatched at the fix commit,
-   W19 `expired` included.
+1. **After `g-discard-window` and `g-mapper-stored-payload`:** Lab Stage 2
+   redispatched at a commit holding both fixes, W19 `expired` included.
 2. **Integration:**
    - Core `package:lint` and `pnpm build` on the 0.4.0 tree (the bump and its
      migration note landed in `5845f5d`);
