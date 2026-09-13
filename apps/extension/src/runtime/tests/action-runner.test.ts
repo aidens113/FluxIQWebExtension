@@ -15,7 +15,8 @@
 // injection reaches the frame Chrome was told to inject into.
 //
 // The rest of the runner's decisions are covered where they live --
-// command-options, navigation-outcome, and unsupported-page.
+// command-options, navigation-outcome, unsupported-page, and click-landing,
+// whose one call here the last row proves.
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -110,17 +111,28 @@ const FRAME_REPLY: BrowserActionResult = {
  *
  * `refusals` are the errors successive action sends meet, in order; a send past
  * the list is answered. `timeline` puts each `waitForTabReady` among the sends.
+ *
+ * `landing` is where an action's send takes the tab: its top frame commits
+ * there, served with that status, before the frame replies. Without it nothing
+ * navigates, and a click returns once `click-landing.ts`'s start grace ends.
  */
 function installChromeStub(
   frames: number[] | undefined,
   silent: number[] = [],
   uninjectable: number[] = [],
-  refusals: string[] = []
+  refusals: string[] = [],
+  landing?: { status: number; url: string }
 ): ChromeCalls {
   const calls: ChromeCalls = { sent: [], pinged: [], injected: [], timeline: [] };
   const injectedInto = new Set<number>();
   const pendingRefusals = [...refusals];
   const runtime: { lastError?: { message: string } } = {};
+  type NavigationListener = (details: Record<string, unknown>) => void;
+  const navigation = { before: new Set<NavigationListener>(), committed: new Set<NavigationListener>(), error: new Set<NavigationListener>() };
+  const navigationEvent = (listeners: Set<NavigationListener>) => ({
+    addListener: (listener: NavigationListener) => void listeners.add(listener),
+    removeListener: (listener: NavigationListener) => void listeners.delete(listener)
+  });
   const stub = {
     runtime,
     tabs: {
@@ -144,6 +156,10 @@ function installChromeStub(
         }
         calls.sent.push({ tabId, message: message as Record<string, unknown>, frameId });
         calls.timeline.push("send");
+        if (landing !== undefined) {
+          for (const listener of navigation.before) listener({ tabId, frameId: 0, url: landing.url });
+          for (const listener of navigation.committed) listener({ tabId, frameId: 0, url: landing.url, documentId: "doc-landed" });
+        }
         const refusal = pendingRefusals.shift();
         if (refusal !== undefined) {
           runtime.lastError = { message: refusal };
@@ -155,19 +171,25 @@ function installChromeStub(
       }
     },
     scripting: {
-      executeScript: (details: { target: { tabId: number; frameIds: number[] }; files: string[] }) => {
-        calls.injected.push([...details.target.frameIds]);
-        if (details.target.frameIds.some((frameId) => uninjectable.includes(frameId))) {
+      executeScript: (details: { target: { tabId: number; frameIds?: number[] }; files?: string[]; func?: () => unknown }) => {
+        // A `func` injection is click-landing reading the landed document's status.
+        if (details.func !== undefined) return Promise.resolve([{ frameId: 0, result: landing?.status }]);
+        const frameIds = details.target.frameIds ?? [];
+        calls.injected.push([...frameIds]);
+        if (frameIds.some((frameId) => uninjectable.includes(frameId))) {
           return Promise.reject(new Error("Cannot access contents of the page."));
         }
-        for (const frameId of details.target.frameIds) injectedInto.add(frameId);
+        for (const frameId of frameIds) injectedInto.add(frameId);
         return Promise.resolve([]);
       }
     },
     webNavigation: {
       getAllFrames: (_details: { tabId: number }, callback: (found: Array<{ frameId: number }> | undefined) => void) => {
         callback(frames?.map((frameId) => ({ frameId })));
-      }
+      },
+      onBeforeNavigate: navigationEvent(navigation.before),
+      onCommitted: navigationEvent(navigation.committed),
+      onErrorOccurred: navigationEvent(navigation.error)
     }
   };
   (globalThis as { chrome?: unknown }).chrome = stub;
@@ -422,4 +444,31 @@ test("an assert refused on both sends is sent exactly twice, and the second refu
   assert.deepEqual(timeline, ["wait", "send", "wait", "send"]);
   assert.ok(outcome instanceof Error);
   assert.equal(outcome.message, CONNECTION_ERROR);
+});
+
+test("a click whose tab lands on a page served 404 fails as navigation_unexpected, not as the frame's success", async () => {
+  const calls = installChromeStub([0], [], [], [], { status: 404, url: "http://127.0.0.1:4000/scenarios/navigation/link-retired?from=recording" });
+  let run: Awaited<ReturnType<typeof runBrowserActionCommand>>;
+  try {
+    run = await runBrowserActionCommand({
+      action: { commandId: "c-retired", actionType: "web.dom.click", selector: "#second", tabId: TAB_ID },
+      attachTabForRecording: () => Promise.resolve()
+    });
+  } finally {
+    delete (globalThis as { chrome?: unknown }).chrome;
+  }
+  // Sent once, answered `succeeded` by the frame, and then judged by where the tab went.
+  assert.equal(calls.sent.length, 1);
+  assert.equal(run.result.status, "failed");
+  assert.equal(run.result.commandId, FRAME_REPLY.commandId);
+  assert.deepEqual(run.result.failure, {
+    category: "navigation_unexpected",
+    code: "web.navigation.unexpected",
+    retryable: false,
+    stage: "confirmation",
+    expected: "the page the click leads to loads",
+    actual: "the server answered HTTP 404 for /scenarios/navigation/link-retired"
+  });
+  assert.equal(run.tabId, TAB_ID);
+  assert.equal(run.frameId, 0);
 });

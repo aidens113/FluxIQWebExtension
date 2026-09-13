@@ -16,6 +16,7 @@ import {
 } from "./automation-tab";
 import { runBrowserDownloadAction } from "./browser-download";
 import { runBrowserTabAction } from "./browser-tab";
+import { sendClickCheckingLanding } from "./click-landing";
 import { frameIdForAction, opensNewTab, tabIdForAction } from "./command-options";
 import { compareNavigatedUrl } from "./navigation-outcome";
 import { unsupportedAutomationPageReason } from "./unsupported-page";
@@ -183,7 +184,8 @@ function unsupportedPageFailure(action: BrowserActionCommand, startedAt: number,
  * still send it.
  *
  * An action that names no frame runs in the top frame, which is the frame a
- * Flow means when it says nothing.
+ * Flow means when it says nothing. A click is also judged by where its tab
+ * landed: one the server refused fails it (`click-landing.ts`).
  *
  * A child frame is checked twice before anything is sent: that the tab still
  * has it, and that something in it is listening. The second check is not
@@ -212,7 +214,8 @@ async function runActionInFrame(
     }
   }
   const message = { type: "executeAction", action, frameId: targetFrameId, topFrameOnly: frameId === undefined };
-  return withTarget(await sendAction(action, tabId, message, targetFrameId), tabId, targetFrameId);
+  const send = () => sendAction(action, tabId, message, targetFrameId);
+  return withTarget(await sendClickCheckingLanding(action, tabId, send), tabId, targetFrameId);
 }
 
 /**
