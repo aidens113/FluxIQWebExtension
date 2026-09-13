@@ -1391,3 +1391,67 @@ Moved verbatim to keep headroom under the plan limit: the start-page fix
 - Not verified: the full content harness through the script; root gates.
 - Outcome: Accepted
 
+
+## Part twenty-two, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: the wait-rule
+measurement (`2ca97f5`; its option 2 is dispatched) and the shared Core
+expectation record (Core `5ca9981`), both committed.
+
+### 2026-09-13 — i-late-target-wait: a wait rule must read the evidence observation, and the recorder must send page changes first
+
+- Agent: worker `i-late-target-wait` (read-only, plus one manifest pin); decisions
+  by supervisor.
+- Changed: `apps/scenario-lab/src/scenarios/delayed-ui/scenario.ts` pins
+  `{ type: "web.element.clicked", count: 2 }`, with a test;
+  `reports/i-late-target-wait.md`.
+- Found:
+  - The mapper never receives `web.dom.mutated`. A recorded `dom.mutation` reaches
+    Core as an event-role input and is kept as an `input.event` observation
+    carrying `latestEvidence`, which compaction keeps.
+  - The recorder sends its mutation batch 500 ms after the last change. In all
+    three Stage 1 W25 recordings the late click was therefore sent first, so a
+    rule that reads a mutation before a click never fires on its own target.
+  - Option 3 would remove the corpus's only `timeout` row, and its unarmed pass
+    would be a latency race.
+  - No rule can put a wait after W24's last click, so W24's unarmed expected wait
+    is unreachable.
+- Decisions: option 2.
+  - `f-recorder-mutation-flush`: the recorder sends pending page changes before
+    any executable event, and W24's unarmed expected wait is dropped.
+  - `w25-wait-mapper`, after `w19-d1`: the domain emits a wait from the mutation
+    observation's own call when a same-document CSS click follows.
+- Validation: supervisor read the code.
+  - `content/recorder.ts:35-39` sends the batch only from its timer, and `emit` at
+    `:55-60` does not flush it.
+  - Core `runtime/io-bridge.ts:53-62` appends a non-action input as
+    `type: "observation"`, `observationType: "input.${role}"`.
+  - The supervisor also read the pin diff.
+  - `pnpm --filter @fluxiq-web-extension/scenario-lab check` -> exit 0; `... test`
+    -> `# tests 203`, `# pass 203`, `# fail 0`.
+  - Worker: with the pin removed, 1 failed (the new test); restored identical.
+- Not verified: which W25 run 3 entry Core compacted (inferred); W28's wait frame
+  targeting; the Lab.
+- Outcome: Revised
+
+### 2026-09-13 — g-core-expectation-record: one expectation-rejected record in Core, and no empty expectation
+
+- Agent: worker `g-core-expectation-record` (Core); verified by supervisor. Core's
+  ledger has the paired entry.
+- Changed (Core):
+  - the `expected_state_missing` record is exported once, from `nodes/policy/`,
+    and the executor's copy is deleted;
+  - an `expectedState` with no keys is neither lifted from a mapper candidate nor
+    sent to the host;
+  - the supervisor updated two architecture sentences.
+- Found: no import cycle. `{ conditions: [] }` still reaches the host, and `{}`
+  still appears in the trace; neither changes a verdict.
+- Validation: supervisor, Core `packages/fluxiq`:
+  - the four changed and neighbouring test files -> `Tests 29 passed (29)`;
+  - `service.test.ts` -> `Tests 108 passed (108)`;
+  - Core `pnpm check` -> exit 0;
+  - `pnpm docs:check` -> exit 0.
+  - Worker: four mutations each failed their rows, restored identical.
+- Not verified: Core `pnpm build`; root `pnpm test`; the Lab.
+- Outcome: Accepted
+
