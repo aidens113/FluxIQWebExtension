@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { ExpectedAction } from "@fluxiq-web-extension/test-contracts";
 import { executeExistingPersistedFlow, existingFlowCancellationReport, preflightExistingFluxIQ } from "../existing-flow-run.js";
 import { RunnerFailure } from "../failure.js";
+import { assertFlowActions } from "../flow-lane/index.js";
 import type { ExistingTargetConfiguration } from "../target-config.js";
 
 const target: ExistingTargetConfiguration = {
@@ -56,7 +58,35 @@ test("runs the stored Flow deterministically and requires successful durable act
   assert.equal(value.actions[0]?.status, "succeeded");
   await assert.rejects(() => executeExistingPersistedFlow(client({ listRunActions: async () => [] }), target, "facility.two"), /no durable action/);
   await assert.rejects(() => executeExistingPersistedFlow(client({ runPersistedFlow: async () => ({ session: { runId: "run.one", projectId: "project.web", flowId: "flow.main", targetKind: "flow", targetId: "flow.main", status: "failed" } }) }), target, "facility.three"), /status failed/);
-  await assert.rejects(() => executeExistingPersistedFlow(client(), target, "facility.four", {}, [{ action: "web.dom.click", outcome: "succeeded" }]), /did not produce expected/);
+  await assert.rejects(() => executeExistingPersistedFlow(client(), target, "facility.four", {}, [{ action: "web.dom.click", outcome: "succeeded" }]), /did not produce a web\.dom\.click action with outcome succeeded/);
+});
+
+test("the existing and clone lanes judge an expected action by the Flow lane's own rule", async () => {
+  // The same attempt as the Flow lane holds it. This lane must throw exactly
+  // what `assertFlowActions` throws, or not throw, for every expectation.
+  const flowLaneAttempts = [{ actionType: "web.dom.type", startedAt: new Date(2).toISOString(), durationMs: 1, status: "succeeded" as const, failure: null }];
+  const verdictOf = (error: unknown) => error instanceof RunnerFailure ? { category: error.category, message: error.message, details: error.details } : error;
+  const cases: ExpectedAction[][] = [
+    [{ action: "web.dom.type" }],
+    [{ action: "web.dom.type", outcome: "succeeded" }],
+    [{ action: "web.dom.click" }],
+    [{ action: "web.dom.click", outcome: "succeeded" }],
+    [{ action: "web.dom.type", outcome: "failed" }],
+  ];
+  for (const [index, expected] of cases.entries()) {
+    let flowLane: unknown;
+    try { assertFlowActions(expected, flowLaneAttempts); } catch (error) { flowLane = error; }
+    const existingLane = await executeExistingPersistedFlow(client(), target, `facility.rule-${index}`, {}, expected).then(() => undefined, (error: unknown) => error);
+    assert.deepEqual(verdictOf(existingLane), verdictOf(flowLane), `expectation ${JSON.stringify(expected)}`);
+  }
+
+  // A missing entry with no outcome claims none, which is H4's wording.
+  await assert.rejects(
+    () => executeExistingPersistedFlow(client(), target, "facility.no-outcome", {}, [{ action: "web.dom.click" }]),
+    (error: unknown) => error instanceof RunnerFailure && error.category === "action.dispatch"
+      && error.message === "The Flow did not produce a web.dom.click action; it produced web.dom.type:succeeded"
+      && error.details?.expectedOutcome === undefined,
+  );
 });
 
 test("an expected action is matched through the node id, not the shared definition id", async () => {
@@ -69,7 +99,7 @@ test("an expected action is matched through the node id, not the shared definiti
   // must not -- the node dispatches web.dom.type, not the policy definition.
   await assert.rejects(
     () => executeExistingPersistedFlow(client(), target, "facility.join-negative", {}, [{ action: "builtin.policy.action", outcome: "succeeded" }]),
-    (error: unknown) => error instanceof RunnerFailure && /did not produce expected/.test(error.message) && /web\.dom\.type:succeeded/.test(error.message),
+    (error: unknown) => error instanceof RunnerFailure && /did not produce a builtin\.policy\.action action/.test(error.message) && /web\.dom\.type:succeeded/.test(error.message),
   );
 
   // A node the Flow does not declare keeps the definition id as its fallback.

@@ -2527,3 +2527,155 @@ Moved verbatim to keep headroom under the plan limit: the recording-capability d
   - **Worker mutation:** pointing the placeholder at the password failed 2 rows.
 - Not verified: no Lab run, and no run of the scenario-lab e2e spec.
 - Outcome: Accepted
+
+## Part thirty-six, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: the runner harness fixes (7a6a8e7), the expectation check (80171a8), and the SQLite leak check (ededbb4), all committed.
+
+### 2026-09-13 — g-runner-harness-fixes: every Flow-lane run has Core and must build a Flow, the probe types only on the start page, a negative run skips goal facts, and the recording lane follows pagination
+
+- Agent: worker `g-runner-harness-fixes`; decisions and verification by supervisor.
+- Changed, in `packages/test-runner/src/`:
+  - **New `lane-rules/`,** with tests:
+    - `core-identity.ts` (H2): a Flow-lane or clone run always bootstraps a Core
+      identity.
+    - `built-flow.ts` (H2): a Flow-lane run on an isolated target that published no
+      `flowCreated` fails `environment.missing`.
+    - `probe-step.ts` (H3): the probe types into the first CSS `type` step visible on
+      the start page within 1 s. Otherwise it is skipped, and its reason and step
+      ids are published.
+    - `final-state-facts.ts` (H5): a run whose resolved `expected.failure` is set is
+      not judged on playback-goal facts.
+  - **`run-scenario.ts`** calls those rules. **`scenarios.ts`** loses
+    `scenarioRequiresCore`, which nothing else used.
+  - **`scenario-steps/extract-records.ts` (H1).** An extract step with `pagination`
+    clicks `next` as trusted input, and waits until the page it read is replaced.
+    It reads every page up to `maxPages`, and the recording lane now asserts
+    paginated extraction.
+  - **`run-evaluation/tests/runner-wiring.test.ts`:** one new test pins the rule
+    calls.
+- Decisions:
+  - **Accept `lane-rules/`.** `src/` and `src/tests/` are at their file-count limits.
+  - **H1 is fixed in the runner, not the manifest.**
+    - The fixture's own e2e spec pages through.
+    - W05's Flow lane can now build a Flow, with two Next clicks.
+    - This reverses "the Flow follows pagination".
+  - **W05 `short-catalog` is expected to fail on the Flow lane.** A recorded Flow
+    replays Next clicks that the armed page lacks. The Lab rerun records the
+    outcome before the row's judgement is decided.
+  - **The two comments H1 made stale go to `g-expected-action-guard`:**
+    `flow-lane/expectations.ts:78-83` and `test-contracts/src/scenario.ts:22-24`.
+- Validation:
+  - **Supervisor,** the test-runner gate under label `sup39`:
+    - `check` exit=0; private `tsc` exit=0;
+    - `node --test` printed "# tests 540", "# pass 540", "# fail 0";
+    - the structure audit passed;
+    - the run included other workers' uncommitted test-runner and test-contracts
+      edits.
+  - **Worker mutations:** five, each failing its row, then restored and confirmed
+    by `sha256sum -c`.
+- Not verified: no Lab or browser run, so none of these was seen live:
+  - real Next clicks, and the wait for the page to be replaced;
+  - the start-page visibility probe;
+  - the W04-W08, W12 and W29 outcomes.
+- Outcome: Accepted
+
+### 2026-09-13 — g-expected-action-guard: a manifest that expects an action no recording can produce does not load
+
+- Agent: worker `g-expected-action-guard`; decisions and verification by supervisor.
+- Changed:
+  - **New `packages/test-contracts/src/recordable-actions.ts`:** the action types a
+    recording of each step operation can yield. A paginated `extract` yields what a
+    click yields.
+  - **`test-contracts/src/validation.ts`:**
+    - every `expected.actions` entry, in a workflow and in its variants, must be
+      recordable from that workflow's script;
+    - a script with no steps is not judged;
+    - a manifest is checked when it is built and again when the runner loads it.
+  - **`admin-console/manifest.ts`:** its unreachable `web.dom.extract` entry is
+    gone. A scan of all 25 manifests then flagged none.
+  - **Comments H1 made stale:** `test-contracts/src/scenario.ts:21-28` and
+    `flow-lane/expectations.ts`. Plus a doc comment on `ExpectedAction`'s missing
+    outcome.
+  - Tests.
+- Decisions:
+  - **The validator is the check's home,** because it covers every lane and a
+    defective manifest cannot load.
+  - **The table's `upload`, `switchTab` and `closeTab` rows change** with P5 and P4,
+    in `g-runner-upload-input`.
+  - **The existing and clone lanes' outcome rule, and a rejected manifest's
+    category,** go to `g-lane-consistency`.
+- Validation:
+  - **Supervisor, `packages/test-contracts` `pnpm test`,** which rebuilds the shared
+    `dist`: exit=0, "# tests 65", "# pass 65", "# fail 0".
+  - **Supervisor, scenario-lab built into `dist-sup40`:** `check` exit=0, "# tests
+    204", "# pass 204", "# fail 0".
+  - **Supervisor, test-runner gate `sup40`: 8 tests failed.**
+    - The failing tests were week1-corpus 35-37 and demo-llm-exploration-request
+      391-395.
+    - Each was a `ContractValidationError` naming `web.dom.extract`, thrown from the
+      stale shared `apps/scenario-lab/dist`. That build dated from 05:58, before
+      `413dcb3`.
+  - **Supervisor, test-runner gate `sup41`,** after that `dist` was rebuilt
+    (exit=0):
+    - `check` exit=0; private `tsc` exit=0;
+    - `node --test` printed "# tests 545", "# pass 545", "# fail 0";
+    - the structure audit passed.
+  - **Worker mutations:** removing the check, restoring admin-console's entry, and
+    removing the pagination rule each failed a test. Each file was restored and
+    confirmed byte-identical by `cmp`.
+- Not verified:
+  - no Lab run;
+  - the paginated-extract, upload and navigate rows rest on code reading;
+  - the Flow lane with a zero-action recording.
+- Outcome: Accepted
+
+### 2026-09-13 — g-attestation-sqlite and g-attestation-sqlite-reader: the leak check reads SQLite databases, as bytes and cell by cell
+
+- Agents: workers `g-attestation-sqlite` and `g-attestation-sqlite-reader`;
+  verified by supervisor.
+- Changed, in `packages/test-runner/src/`:
+  - **`secret-leak-attestation.ts`:**
+    - A workspace scope scans each SQLite database, with its `-wal`, `-shm` and
+      `-journal` files, for every literal as UTF-8, UTF-16LE and UTF-16BE. Before,
+      it counted them as skipped binary.
+    - A file it cannot scan is an `unscanned-store` finding.
+    - Each database is also copied, with its `-wal` and `-journal`, to a temporary
+      folder and read cell by cell. That finds a literal SQLite split across pages.
+  - **New `sqlite-store-reader/`,** the reader:
+    - it runs Node's `node:sqlite` in a child process started with
+      `--experimental-sqlite`, and takes the literal on stdin;
+    - it skips virtual tables, and reads the ordinary tables that store their
+      contents;
+    - no dependency was added.
+  - `redaction-attestation/run-redaction-scopes.ts`: a doc comment. Tests.
+- Found:
+  - **A byte search misses split literals.** It missed 36 of 303 split positions in
+    each encoding, and the cell reader found all 303.
+  - **Node's SQLite has no FTS5 or R*Tree,** and Core's project database uses both.
+  - **Not every target gets a fresh workspace.** The default `isolated` target and
+    `clone` give each run a new one. `persistent-isolated` reuses its workspace, so
+    an earlier run's leak fails every later run until the workspace is reset.
+- Decisions:
+  - **A literal split across pages SQLite has already freed is still missed.**
+    Core now withholds values before it writes them, so this is recorded as a
+    known limit for the Phase 1.6b ranking, not fixed with `secure_delete`.
+  - **A small follow-up gets the rest:** the demo check's default database size
+    limit, and two stale comments in `run-redaction-scopes.ts` and
+    `attest-run-redaction.ts`.
+- Validation:
+  - **Supervisor,** test-runner gate `sup42`, on diffs frozen when the reader worker
+    finished:
+    - `check` exit=0; private `tsc` exit=0;
+    - `node --test` printed "# tests 545", "# pass 545", "# fail 0".
+  - **Worker mutations,** each restored byte-identical afterwards:
+    - restoring the binary skip failed the 3 new byte rows;
+    - turning the reader off, or removing the virtual-table skip, failed 4 tests.
+- Not verified:
+  - **No Lab run.** Auth-gate's recording lane must show findings before Core's
+    withholding lands, and 0 on both lanes after.
+  - Reading Core's live databases.
+  - Node after 22.11.
+  - The reader's timeout and output-limit paths.
+  - The demo attestations under their default limit.
+- Outcome: Accepted

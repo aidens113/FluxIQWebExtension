@@ -89,11 +89,10 @@ export const expectedActionOutcomes = ["succeeded", "failed"] as const;
  * rejects any other as a scenario defect, because no run could meet it.
  *
  * With `outcome`, an attempt of that type must have reached that status. With
- * no `outcome`, the Flow lane judges the entry on the attempt's presence alone,
- * whatever its status (`flow-lane/expectations.ts`). A negative variant pins its
- * action that way and names the failure in `expected.failure`. The existing and
- * clone lanes still read a missing outcome as `succeeded`
- * (`existing-flow-run.ts`).
+ * no `outcome`, every lane judges the entry on the attempt's presence alone,
+ * whatever its status (`flow-lane/expectations.ts`, which the existing and clone
+ * lanes call too). A negative variant pins its action that way and names the
+ * failure in `expected.failure`.
  */
 export type ExpectedAction = { action: string; outcome?: (typeof expectedActionOutcomes)[number] };
 /**

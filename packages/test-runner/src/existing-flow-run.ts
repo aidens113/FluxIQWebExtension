@@ -11,7 +11,8 @@ import type {
   ExistingRunDetail,
   ExistingRunEvent,
 } from "./existing-fluxiq-control.js";
-import { readFlowActionTypes } from "./flow-lane/index.js";
+import { assertFlowActions, readFlowActionTypes, type PersistedFlowAction } from "./flow-lane/index.js";
+import { flowActionTimings } from "./run-manifest/index.js";
 import { requireSecureGatewayUrl, type ExistingTargetConfiguration } from "./target-config.js";
 
 export type PersistedFlowSelection = Pick<ExistingTargetConfiguration, "projectId" | "flowId">;
@@ -103,14 +104,10 @@ export async function executeExistingPersistedFlow(
       // `nodeId` is the surviving link, and the Flow's own nodes carry the
       // output each dispatches -- the join the Flow lane makes.
       actionTypes = await readFlowActionTypes(control, target, httpBounds);
-      for (const expected of expectedActions) {
-        const expectedStatus = expected.outcome ?? "succeeded";
-        const matched = actions.some(action => actionTypeOf(action, actionTypes) === expected.action && action.status === expectedStatus);
-        if (!matched) {
-          const observed = actions.map(action => `${safeId(actionTypeOf(action, actionTypes))}:${action.status}`).join(", ") || "no attempts";
-          throw new RunnerFailure("action.dispatch", `Persisted FluxIQ Flow did not produce expected ${safeId(expected.action)} action outcome ${expectedStatus}; it produced ${observed}`);
-        }
-      }
+      // The Flow lane's rule, called rather than copied, so every lane reads an
+      // expected action alike: an entry with no `outcome` is judged on the
+      // attempt's presence alone, never as `succeeded`.
+      assertFlowActions(expectedActions, expectationAttempts(actions, actionTypes));
     }
     return { runId, status: "succeeded", detail, actions, events, actionTypes };
   } catch (error) {
@@ -125,12 +122,14 @@ export async function executeExistingPersistedFlow(
 function safeId(value: string): string { return /^[A-Za-z0-9._:-]+$/.test(value) ? value : "[invalid-id]"; }
 
 /**
- * What an attempt actually ran: the output its Flow node dispatches, falling
- * back to the definition id for a node the Flow does not declare -- a native
- * node whose definition id is its action.
+ * The attempts as `assertFlowActions` reads them, through `flowActionTimings`,
+ * the conversion `run.json` records. The type is the output the attempt's Flow
+ * node dispatches, or the definition id for a node the Flow does not declare.
+ * The status is in the run vocabulary the Flow lane judges. The check reads no
+ * `failure`. The type is sanitized, as every id this module names in a message is.
  */
-function actionTypeOf(action: ExistingRunAction, actionTypes: ReadonlyMap<string, string>): string {
-  return actionTypes.get(action.nodeId) ?? action.definitionId;
+function expectationAttempts(actions: readonly ExistingRunAction[], actionTypes: ReadonlyMap<string, string>): PersistedFlowAction[] {
+  return flowActionTimings(actions, actionTypes).map(timing => ({ ...timing, actionType: safeId(timing.actionType), failure: null }));
 }
 async function attemptCancellation(control: ExistingFluxIQControlClient, projectId: string, runId: string, timeoutMs = 5_000): Promise<ExistingFlowCancellationReport["cancellation"]> {
   try {

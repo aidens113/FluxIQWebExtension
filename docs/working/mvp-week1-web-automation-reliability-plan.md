@@ -36,11 +36,11 @@ flight. No exit criterion yet carries a quoted Lab observation. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
-settled ledger entries are in parts one to thirty-five of
+settled ledger entries are in parts one to thirty-six of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13, while workers run.**
-- **This repository:** `7a6a8e7`, 92 commits ahead of `origin/dev`, not pushed.
+- **This repository:** `ededbb4`, 94 commits ahead of `origin/dev`, not pushed.
 - **Core:** `240c73e`, 10 commits ahead of `origin/dev`, `fluxiq` **0.4.0**, built at
   `187f40d`; the tenth is a plan-only commit. The nine code commits:
   - `5d495eb`, trace withholding;
@@ -92,13 +92,13 @@ settled ledger entries are in parts one to thirty-five of
   (P7, a new Core node outcome); both rows stay in the corpus.
 
 **In flight:**
-- **The auth-gate leak:** `g-attestation-sqlite-reader`; in Core,
-  `g-core-withholding-execution`, then Core's withholding work is committed.
-- **From the bench triage:** `g-expected-action-guard` (verifying) and
-  `g-lane-consistency`; P1-P3 and H1-H7 are committed.
-- **Recording gaps P4-P6:** `f-domain-capability-gaps`, `f-tab-recording`,
-  `f-frame-address` and `f-capability-confirmations`; then the runner's upload input.
-- **W25's storage order:** `g-core-bridge-order` in Core; `f-w25-core-order-row` waits for its build.
+- **The auth-gate leak:** the leak check is committed; `g-demo-attestation-limits`;
+  in Core, `g-core-withholding-execution`, then Core's withholding is committed.
+- **From the bench triage:** P1-P3, H1-H7, the expectation check and the lane
+  consistency fix are committed.
+- **Recording gaps P4-P6:** `f-domain-capability-gaps`, `f-tab-recording` and
+  `f-frame-address`; confirmations verifying; then the upload input.
+- **W25's storage order:** `g-core-bridge-order` (its race amendment); `f-w25-core-order-row` waits for Core's build.
 
 **Queued, in dependency order**
 1. **After the three dispatches:** a Core build, then W18, W19, W25 and the rows the
@@ -646,152 +646,49 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 `2026-09-12-*` Wave 3 and live-validation files, and
 `2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-13 — g-runner-harness-fixes: every Flow-lane run has Core and must build a Flow, the probe types only on the start page, a negative run skips goal facts, and the recording lane follows pagination
+### 2026-09-13 — g-lane-consistency: every lane judges an expected action alike, and a manifest the validator rejects is fixture.invalid
 
-- Agent: worker `g-runner-harness-fixes`; decisions and verification by supervisor.
+- Agent: worker `g-lane-consistency`; the test-contracts comment and the
+  verification by supervisor.
 - Changed, in `packages/test-runner/src/`:
-  - **New `lane-rules/`,** with tests:
-    - `core-identity.ts` (H2): a Flow-lane or clone run always bootstraps a Core
-      identity.
-    - `built-flow.ts` (H2): a Flow-lane run on an isolated target that published no
-      `flowCreated` fails `environment.missing`.
-    - `probe-step.ts` (H3): the probe types into the first CSS `type` step visible on
-      the start page within 1 s. Otherwise it is skipped, and its reason and step
-      ids are published.
-    - `final-state-facts.ts` (H5): a run whose resolved `expected.failure` is set is
-      not judged on playback-goal facts.
-  - **`run-scenario.ts`** calls those rules. **`scenarios.ts`** loses
-    `scenarioRequiresCore`, which nothing else used.
-  - **`scenario-steps/extract-records.ts` (H1).** An extract step with `pagination`
-    clicks `next` as trusted input, and waits until the page it read is replaced.
-    It reads every page up to `maxPages`, and the recording lane now asserts
-    paginated extraction.
-  - **`run-evaluation/tests/runner-wiring.test.ts`:** one new test pins the rule
-    calls.
-- Decisions:
-  - **Accept `lane-rules/`.** `src/` and `src/tests/` are at their file-count limits.
-  - **H1 is fixed in the runner, not the manifest.**
-    - The fixture's own e2e spec pages through.
-    - W05's Flow lane can now build a Flow, with two Next clicks.
-    - This reverses "the Flow follows pagination".
-  - **W05 `short-catalog` is expected to fail on the Flow lane.** A recorded Flow
-    replays Next clicks that the armed page lacks. The Lab rerun records the
-    outcome before the row's judgement is decided.
-  - **The two comments H1 made stale go to `g-expected-action-guard`:**
-    `flow-lane/expectations.ts:78-83` and `test-contracts/src/scenario.ts:22-24`.
+  - **`existing-flow-run.ts`:** the existing and clone lanes call the Flow lane's
+    `assertFlowActions` instead of keeping their own copy. An entry with no
+    `outcome` is therefore judged on presence alone there too, and attempt types
+    are still sanitized.
+  - **`scenarios.ts`:** a contract rejection fails as `fixture.invalid`, whether the
+    registry throws it while being imported or the runner's own check does. The
+    message names issue paths and the validator's wording only. Any other load
+    failure keeps its category.
+  - Tests: `tests/existing-flow-run.test.ts` and `tests/prerequisites.test.ts`.
+  - **`packages/test-contracts/src/scenario.ts`,** by the supervisor: the
+    `ExpectedAction` comment no longer says the existing and clone lanes read a
+    missing outcome as `succeeded`.
+- Found:
+  - **Negative variants cannot pass on the existing and clone lanes.** Those lanes
+    fail any attempt or run that did not succeed before the expected-action check
+    (`existing-flow-run.ts:89-98`), and they never judge `expected.failure`
+    (`run-scenario.ts:229,255`). The Week 1 bench runs isolated targets, so this
+    stays as it is.
+  - **A `fixture.invalid` load failure has no run bundle.** It happens before one
+    exists, so it reaches only the CLI's stderr line, and one bad manifest fails a
+    whole bench.
+  - **A recording with zero actions fails the Flow lane.** Admin-console's
+    `extract-customer-list` fails at the proposal step as `recording.contract`.
+    This was read from code.
 - Validation:
-  - **Supervisor,** the test-runner gate under label `sup39`:
+  - **Supervisor,** the test-runner gate under label `sup44`:
     - `check` exit=0; private `tsc` exit=0;
-    - `node --test` printed "# tests 540", "# pass 540", "# fail 0";
+    - `node --test` printed "# tests 550", "# pass 550", "# fail 0";
     - the structure audit passed;
-    - the run included other workers' uncommitted test-runner and test-contracts
-      edits.
-  - **Worker mutations:** five, each failing its row, then restored and confirmed
-    by `sha256sum -c`.
-- Not verified: no Lab or browser run, so none of these was seen live:
-  - real Next clicks, and the wait for the page to be replaced;
-  - the start-page visibility probe;
-  - the W04-W08, W12 and W29 outcomes.
-- Outcome: Accepted
-
-### 2026-09-13 — g-expected-action-guard: a manifest that expects an action no recording can produce does not load
-
-- Agent: worker `g-expected-action-guard`; decisions and verification by supervisor.
-- Changed:
-  - **New `packages/test-contracts/src/recordable-actions.ts`:** the action types a
-    recording of each step operation can yield. A paginated `extract` yields what a
-    click yields.
-  - **`test-contracts/src/validation.ts`:**
-    - every `expected.actions` entry, in a workflow and in its variants, must be
-      recordable from that workflow's script;
-    - a script with no steps is not judged;
-    - a manifest is checked when it is built and again when the runner loads it.
-  - **`admin-console/manifest.ts`:** its unreachable `web.dom.extract` entry is
-    gone. A scan of all 25 manifests then flagged none.
-  - **Comments H1 made stale:** `test-contracts/src/scenario.ts:21-28` and
-    `flow-lane/expectations.ts`. Plus a doc comment on `ExpectedAction`'s missing
-    outcome.
-  - Tests.
-- Decisions:
-  - **The validator is the check's home,** because it covers every lane and a
-    defective manifest cannot load.
-  - **The table's `upload`, `switchTab` and `closeTab` rows change** with P5 and P4,
-    in `g-runner-upload-input`.
-  - **The existing and clone lanes' outcome rule, and a rejected manifest's
-    category,** go to `g-lane-consistency`.
-- Validation:
-  - **Supervisor, `packages/test-contracts` `pnpm test`,** which rebuilds the shared
-    `dist`: exit=0, "# tests 65", "# pass 65", "# fail 0".
-  - **Supervisor, scenario-lab built into `dist-sup40`:** `check` exit=0, "# tests
-    204", "# pass 204", "# fail 0".
-  - **Supervisor, test-runner gate `sup40`: 8 tests failed.**
-    - The failing tests were week1-corpus 35-37 and demo-llm-exploration-request
-      391-395.
-    - Each was a `ContractValidationError` naming `web.dom.extract`, thrown from the
-      stale shared `apps/scenario-lab/dist`. That build dated from 05:58, before
-      `413dcb3`.
-  - **Supervisor, test-runner gate `sup41`,** after that `dist` was rebuilt
-    (exit=0):
-    - `check` exit=0; private `tsc` exit=0;
-    - `node --test` printed "# tests 545", "# pass 545", "# fail 0";
-    - the structure audit passed.
-  - **Worker mutations:** removing the check, restoring admin-console's entry, and
-    removing the pagination rule each failed a test. Each file was restored and
+    - the run included `g-demo-attestation-limits`'s uncommitted edits.
+  - **Supervisor,** `packages/test-contracts` `pnpm check` after the comment fix:
+    exit=0.
+  - **Worker mutations:** four, each failing its test. Both files were restored and
     confirmed byte-identical by `cmp`.
 - Not verified:
   - no Lab run;
-  - the paginated-extract, upload and navigate rows rest on code reading;
-  - the Flow lane with a zero-action recording.
-- Outcome: Accepted
-
-### 2026-09-13 — g-attestation-sqlite and g-attestation-sqlite-reader: the leak check reads SQLite databases, as bytes and cell by cell
-
-- Agents: workers `g-attestation-sqlite` and `g-attestation-sqlite-reader`;
-  verified by supervisor.
-- Changed, in `packages/test-runner/src/`:
-  - **`secret-leak-attestation.ts`:**
-    - A workspace scope scans each SQLite database, with its `-wal`, `-shm` and
-      `-journal` files, for every literal as UTF-8, UTF-16LE and UTF-16BE. Before,
-      it counted them as skipped binary.
-    - A file it cannot scan is an `unscanned-store` finding.
-    - Each database is also copied, with its `-wal` and `-journal`, to a temporary
-      folder and read cell by cell. That finds a literal SQLite split across pages.
-  - **New `sqlite-store-reader/`,** the reader:
-    - it runs Node's `node:sqlite` in a child process started with
-      `--experimental-sqlite`, and takes the literal on stdin;
-    - it skips virtual tables, and reads the ordinary tables that store their
-      contents;
-    - no dependency was added.
-  - `redaction-attestation/run-redaction-scopes.ts`: a doc comment. Tests.
-- Found:
-  - **A byte search misses split literals.** It missed 36 of 303 split positions in
-    each encoding, and the cell reader found all 303.
-  - **Node's SQLite has no FTS5 or R*Tree,** and Core's project database uses both.
-  - **Not every target gets a fresh workspace.** The default `isolated` target and
-    `clone` give each run a new one. `persistent-isolated` reuses its workspace, so
-    an earlier run's leak fails every later run until the workspace is reset.
-- Decisions:
-  - **A literal split across pages SQLite has already freed is still missed.**
-    Core now withholds values before it writes them, so this is recorded as a
-    known limit for the Phase 1.6b ranking, not fixed with `secure_delete`.
-  - **A small follow-up gets the rest:** the demo check's default database size
-    limit, and two stale comments in `run-redaction-scopes.ts` and
-    `attest-run-redaction.ts`.
-- Validation:
-  - **Supervisor,** test-runner gate `sup42`, on diffs frozen when the reader worker
-    finished:
-    - `check` exit=0; private `tsc` exit=0;
-    - `node --test` printed "# tests 545", "# pass 545", "# fail 0".
-  - **Worker mutations,** each restored byte-identical afterwards:
-    - restoring the binary skip failed the 3 new byte rows;
-    - turning the reader off, or removing the virtual-table skip, failed 4 tests.
-- Not verified:
-  - **No Lab run.** Auth-gate's recording lane must show findings before Core's
-    withholding lands, and 0 on both lanes after.
-  - Reading Core's live databases.
-  - Node after 22.11.
-  - The reader's timeout and output-limit paths.
-  - The demo attestations under their default limit.
+  - the `fixture.invalid` path through the CLI;
+  - a Lab instance that resolves its own copy of the contracts package.
 - Outcome: Accepted
 
 ## Open Questions
