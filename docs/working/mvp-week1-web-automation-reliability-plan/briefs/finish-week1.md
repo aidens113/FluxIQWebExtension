@@ -2184,3 +2184,23 @@ Dispatched once `w19-d1b` is committed, since both edit `web-panel-host.ts`.
 - Run domain `check` and `test` under a private label, and the structure audit.
 
 **Report:** `reports/g-mapper-stored-payload.md`.
+
+---
+
+# Twenty-first dispatch — Lab Stage 2 again, written ahead of the fix commits
+
+**Amendment to `l-stage2`, for its redispatch.** Sent to the same Lab worker once
+`g-discard-window` and `g-mapper-stored-payload` are both committed. The message
+names `<R2>`, the first commit holding both.
+- **Pin.** `<R2>` for this repository, and Core `5845f5d`. That adds only the
+  0.4.0 version and migration note to the `187f40d` Stage 2 used. Move both
+  repository worktrees to `<R2>`, rebuild, and prove the pin again before any
+  run.
+- **Runs.** Everything in the brief as amended, W19 `expired` included, with
+  step 4b judged per run: `exit=0`, `candidateCount` 4, equal `recordedActions`,
+  zero windowed discards, and entry counts reported rather than compared.
+- **The discard check is windowed now.** A probe or Flow-lane confirmation must
+  not fail a run. If one does, stop and report it with the audit entries' types,
+  labels, recording ids and timestamps. Never skip or patch the check again.
+- **Report.** Append to `reports/l-stage2.md` under a new heading, "Second
+  attempt". Keep the first attempt and the blocker diagnosis above it unchanged.
