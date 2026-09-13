@@ -670,96 +670,47 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   Outcome line; `wc -l` on this document after the move -> 705.
 - Outcome: Accepted
 
-### 2026-09-13 — g-bench-coverage stopped on a brief defect; lanes decided
+### 2026-09-13 — g-flow-lane-observation and g-identity-drift-mode land; W26 is CS1d
 
-- Agent: supervisor.
-- Changed: `briefs/finish-week1.md` (amended to item 1); worker resumed.
-- Why: planning an unarmed row on both lanes yields two results with the same
-  scenario, workflow and variant, and nothing records the lane, so
-  `groupBenchResults` throws on its run count, or the report contract's
-  duplicate check rejects it. Owning only the planner would have crashed every
-  week1 bench after its last run and written no report. Resumed owning the
-  report contract, its validation, `aggregate-report.ts` and
-  `render-markdown.ts`.
-- Decisions: every bench rate is per lane, never combined, because the recording
-  lane executes no workflow and a combined rate counts each unarmed row twice;
-  every unarmed row runs on both lanes, W24-W28 included. Sanitized packet size
-  moves to the Flow-lane follow-up, read from Core's run detail `stateRefs`
-  summary in `flow-lane/`. Raw snapshot bytes are not Week 1: no exit criterion
-  names them, and they would need a new extension producer. Brief nit: design
-  item 3 named `long-document`, which is in no corpus.
-- Validation: worker test-runner `test` -> `tests 446 pass 446 fail 0`,
-  `runnable: 43 (23 recording, 20 flow)`; scratch proof over `dist` -> both lanes
-  in one group `THREW "has 2 runs, not the bench's 1"`, grouped apart `THREW
-  "$.workflows[1]: repeats another result's scenario, workflow, and variant"`, a
-  Flow-lane result alone valid.
-- Outcome: Revised
-
-### 2026-09-13 — g-domain-mapping: W19's navigation is lost in the recorder, and W19 takes Option A
-
-- Agent: worker `g-domain-mapping` (stopped, no file changed); decisions by
-  supervisor.
-- Changed: `reports/g-domain-mapping.md`; `briefs/finish-week1.md` (B6
-  withdrawn, B3 resumed owning `codes.test.ts` and `failure-taxonomy.md`; new
-  `i-w19-expectation`).
-- Found: auth-gate's sign-in reaches `/account` by `location.assign` after the
-  recorded click, and the extension recorder drops that navigation twice: at
-  `recorded-event-intake.ts:86` (a script navigation reports as `link`, read
-  from Chrome's behaviour, not observed) and at `navigation-recorder.ts:48` (any
-  untyped navigation within 5 s of a click). `input-model.ts` never sees it.
-  Even a navigate step would report `navigation_unexpected`
-  (`action-runner.ts:145-148`), because `authGateFailure` runs only for
-  content-script actions. A new failure code breaks
-  `runtime/failure/tests/codes.test.ts:47`, outside B3's Owns.
-  `RECORDING_START_REASON` is stamped by nothing in either repository, so the
-  rows guarding it pass by construction.
+- Agent: workers `g-flow-lane-observation` and `g-identity-drift-mode`; verified
+  and decided by supervisor. Five more committed entries (Core late-event,
+  fixture secrets, bench lanes, W19 and B3, redaction attestation) are archived
+  verbatim to parts three and four of `archive/2026-09-12-finish-week1-ledger.md`.
+- Changed: `a4564c5`, in `packages/test-runner/src/`: `run-flow-lane.ts` (oracle
+  and observation published before the asserts; `flowLaneSnapshot`),
+  `lane-observation.ts` (`selectLaneObservation`: a Flow-lane run that never
+  published is a Flow run with `flowCreated: false`, never a recording-lane run),
+  `recording-flow-proposal.ts` (`assertProposalCoversRecording`, B1),
+  `persisted-flow-run.ts` (each action keeps Core's `targetResolution`),
+  `run-scenario.ts`, and tests. `082c2c0`: identity-drift's `save-and-exit` mode,
+  R7's lone identifier-less button, expecting `target_not_found`.
 - Decisions:
-  - **W19 takes Option A**: the recorded click carries the state its recording
-    landed on, checked after replay, and the assert path already reports a
-    missing selector on a sign-in gate as `AUTH_REQUIRED` (`assert.ts:36`).
-    Option B, a Flow-lane-injected assertion, is rejected: the bench would
-    measure the harness, not the recording. Option C, a navigate verb
-    reclassifying redirects, is rejected: most files, least faithful, and a
-    double navigation.
-  - **PB10b moves into Week 1.** Its stated exception, a post-condition-less
-    recorded step passing wrongly, is W19 exactly. Its Core lift shares
-    `runtime/service.ts` with `g-core-late-event` and `g-core-target-gate`, so it
-    lands serially after both, from `i-w19-expectation`'s design.
-  - **B3 accepted as proposed**: `web.action.invalid_parameter`,
-    `graph_validation_or_unknown_node`, not retryable, stage `dispatch`.
-- Validation: worker grep and git reads only, each cited file:line; no gate run
-  because nothing changed. Supervisor read "B6 findings" whole before deciding.
-- Outcome: Revised
-
-### 2026-09-13 — g-core-late-event: a late recording message no longer fails the connection (CS1b′)
-
-- Agent: worker `g-core-late-event` (Core); verified by supervisor.
-- Changed: Core `client-gateway/bridge.ts` and its test, Core
-  `docs/architecture/automation-studio/client-gateway.md`, both generated
-  framework references. Recorded in full in Core's ledger.
-- Found: the throw is raised in `recordGatewayInput` for the extension's
-  `client.recording_event`, not only in the flush as `i-flow-lane-errors` (c)
-  read it; the timer flush lost entries to an unhandled rejection. Core
-  `appendRecordingDomainEvent` writes a late event into a finalized recording:
-  added to `g-core-target-gate` as its item 3.
-- Validation: supervisor, from `F:\!FluxIQ`: bridge `vitest` -> `Tests 15 passed
-  (15)`; `pnpm check` -> exit 0, `structure-audit: passed`; `pnpm
-  docs:reference` -> a one-line diff per copy; `pnpm docs:check` -> exit 0.
-  Supervisor read the bridge diff: the discard applies only when a re-read shows
-  `endedAt` set, and every other error propagates. Worker: `3 failed | 13 passed`
-  before the fix, four mutations caught.
-- Decisions: Lab Stage 1 runs against a Core worktree pinned beside a repository
-  worktree under `F:\fxlab\` (`l-stage1`), because the Core links are relative
-  and the live Core tree keeps changing; it defers the `--repeat 1` discovery
-  bench until `g-flow-lane-observation` lands, and `sensitive-input` until
-  `g-redaction-attestation` does.
-- Not verified: the 24-run campaign's `gateway.receive_failed` count, which is
-  Lab-only.
-- Outcome: Accepted
-- Validation: supervisor read the grouped-by-file list and every Open row;
-  the second dispatch's Owns lists share no file with each other or with a
-  running brief. Worker: git and search only, no gate run, so each Settled row
-  rests on reading the code at HEAD.
+  - **CS1f, partly deferred.** `flow-lane.json` now carries Core's own
+    `targetResolution` record, which for web is Core's inert gate. The browser
+    resolver's `confidence` and `bestScore` are on no record Core serves
+    (`conversions.ts` drops attempt outputs). Criterion 3's pass conditions are
+    outcomes (drift rows recover, W26 refuses, W29 refuses), so serving those
+    numbers is a Core change made only if a criterion 3 row fails live and needs
+    them for diagnosis.
+  - **W26 is CS1d.** `week1.ts:51` is `ambiguous-targets` `no-context`: the
+    identical twins resolved by position, which `g-resolver-corroboration`
+    fixes. It needs no Core landmark or context signal in Week 1, whatever
+    `g-recorder-signals` found about W26 needing one.
+  - Dispatched on the committed base: `g-redaction-wiring` (the attestation's
+    call site, `not_applicable`, and D3's discard audit) and
+    `g-flow-lane-followups` (D4, one Flow read, the packet size).
+- Validation: supervisor, `a4564c5`: test-runner built into a private `dist-sup2`
+  beside `dist`, `node --test` -> `# tests 471`, `# pass 471`, `# fail 0`; read
+  the `run-scenario.ts`, `run-flow-lane.ts`, `lane-observation.ts` and
+  `recording-flow-proposal.ts` diff. `082c2c0`: `scenario-lab check` -> exit 0;
+  `scenario-lab test` -> `# tests 202`, `# pass 202`; `pnpm exec playwright test
+  -c e2e/playwright.config.ts identity-drift.spec.ts` -> `9 passed`. Workers: five
+  mutations for the Flow lane (D1, D2, CS1f, B1 count, B1 wiring); two for the
+  mode (a removed case, a mode that records a save), each restored by SHA-256.
+- Not verified: D2's Lab invariant (`flow-lane.json` present implies `lane
+  "flow"`, `flowCreated true`); B1 false failures on real recordings; W29's
+  refusal, which needs `g-resolver-corroboration`; the W29 corpus row, which
+  waits for `g-bench-coverage`.
 - Outcome: Accepted
 
 ## Open Questions

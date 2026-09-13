@@ -356,3 +356,161 @@ Moved verbatim when the plan reached 855 lines.
   at HEAD; the three spec lines were cited from source, not a failing run.
 - Outcome: Revised
 
+
+## Part three, archived 2026-09-13
+
+Moved verbatim when the plan reached 791 lines: the Core late-event fix, and
+the fixture secrets with the wire-chain row, both committed.
+
+### 2026-09-13 — g-core-late-event: a late recording message no longer fails the connection (CS1b′)
+
+- Agent: worker `g-core-late-event` (Core); verified by supervisor.
+- Changed: Core `client-gateway/bridge.ts` and its test, Core
+  `docs/architecture/automation-studio/client-gateway.md`, both generated
+  framework references. Recorded in full in Core's ledger.
+- Found: the throw is raised in `recordGatewayInput` for the extension's
+  `client.recording_event`, not only in the flush as `i-flow-lane-errors` (c)
+  read it; the timer flush lost entries to an unhandled rejection. Core
+  `appendRecordingDomainEvent` writes a late event into a finalized recording:
+  added to `g-core-target-gate` as its item 3.
+- Validation: supervisor, from `F:\!FluxIQ`: bridge `vitest` -> `Tests 15 passed
+  (15)`; `pnpm check` -> exit 0, `structure-audit: passed`; `pnpm
+  docs:reference` -> a one-line diff per copy; `pnpm docs:check` -> exit 0.
+  Supervisor read the bridge diff: the discard applies only when a re-read shows
+  `endedAt` set, and every other error propagates. Worker: `3 failed | 13 passed`
+  before the fix, four mutations caught.
+- Decisions: Lab Stage 1 runs against a Core worktree pinned beside a repository
+  worktree under `F:\fxlab\` (`l-stage1`), because the Core links are relative
+  and the live Core tree keeps changing; it defers the `--repeat 1` discovery
+  bench until `g-flow-lane-observation` lands, and `sensitive-input` until
+  `g-redaction-attestation` does.
+- Not verified: the 24-run campaign's `gateway.receive_failed` count, which is
+  Lab-only.
+- Outcome: Accepted
+
+### 2026-09-13 — g-scenario-secrets and g-identity-wire-chain
+
+- Agent: workers `g-scenario-secrets` and `g-identity-wire-chain`; verified by
+  supervisor.
+- Changed: `storefront-checkout/manifest.ts` and its test (the cardholder name
+  and expiry declared: 5 of 5 marked controls, where HEAD had 3);
+  `sensitive-input/scenario.ts` (two secrets, and the password step targeting
+  `testid:password`, since the recorder gives a password field no role) and a
+  new test; `apps/extension/e2e/content/tests/identity-wire-chain.spec.ts` (new)
+  and the header of `identity-fixtures.ts`. Brief defect on the first attempt:
+  `sensitive-input` has no `manifest.ts`.
+- Validation: supervisor read the `sensitive-input` diff;
+  `pnpm --filter @fluxiq-web-extension/scenario-lab test` -> `# tests 202`,
+  `# pass 202`, `# fail 0`, including `g-identity-drift-mode`'s in-flight tests;
+  `EXTENSION_TEST_BUILD_LABEL=sup-wire pnpm exec playwright test -c
+  e2e/playwright.content.config.ts --workers=2 identity-wire-chain` -> `2
+  passed`. Workers: the real pairing function -> storefront 5 of 5 and
+  sensitive-input 2 of 2 PAIRED, the old role target THREW; each test broken
+  both ways and restored by hash; the wire-chain row with `1b6f5df`'s 17 keys
+  -> `bestScore 0.197`, `confidence 0.173`, restored.
+- Not verified: Lab pairing, which needs the `FLUXIQ_TEST_SECRET_*` values for
+  all seven declarations.
+- Outcome: Accepted
+- Validation: supervisor read the grouped-by-file list and every Open row;
+  the second dispatch's Owns lists share no file with each other or with a
+  running brief. Worker: git and search only, no gate run, so each Settled row
+  rests on reading the code at HEAD.
+- Outcome: Accepted
+
+
+## Part four, archived 2026-09-13
+
+Moved verbatim when the plan reached 765 lines: the bench lane decision, the
+W19 design decision with B3, and the redaction attestation. All three are
+committed, and their decisions are carried in the briefs that act on them.
+
+### 2026-09-13 — g-bench-coverage stopped on a brief defect; lanes decided
+
+- Agent: supervisor.
+- Changed: `briefs/finish-week1.md` (amended to item 1); worker resumed.
+- Why: planning an unarmed row on both lanes yields two results with the same
+  scenario, workflow and variant, and nothing records the lane, so
+  `groupBenchResults` throws on its run count, or the report contract's
+  duplicate check rejects it. Owning only the planner would have crashed every
+  week1 bench after its last run and written no report. Resumed owning the
+  report contract, its validation, `aggregate-report.ts` and
+  `render-markdown.ts`.
+- Decisions: every bench rate is per lane, never combined, because the recording
+  lane executes no workflow and a combined rate counts each unarmed row twice;
+  every unarmed row runs on both lanes, W24-W28 included. Sanitized packet size
+  moves to the Flow-lane follow-up, read from Core's run detail `stateRefs`
+  summary in `flow-lane/`. Raw snapshot bytes are not Week 1: no exit criterion
+  names them, and they would need a new extension producer. Brief nit: design
+  item 3 named `long-document`, which is in no corpus.
+- Validation: worker test-runner `test` -> `tests 446 pass 446 fail 0`,
+  `runnable: 43 (23 recording, 20 flow)`; scratch proof over `dist` -> both lanes
+  in one group `THREW "has 2 runs, not the bench's 1"`, grouped apart `THREW
+  "$.workflows[1]: repeats another result's scenario, workflow, and variant"`, a
+  Flow-lane result alone valid.
+- Outcome: Revised
+
+### 2026-09-13 — g-domain-mapping: W19's navigation is lost in the recorder, and W19 takes Option A
+
+- Agent: worker `g-domain-mapping` (stopped, no file changed); decisions by
+  supervisor.
+- Changed: `reports/g-domain-mapping.md`; `briefs/finish-week1.md` (B6
+  withdrawn, B3 resumed owning `codes.test.ts` and `failure-taxonomy.md`; new
+  `i-w19-expectation`).
+- Found: auth-gate's sign-in reaches `/account` by `location.assign` after the
+  recorded click, and the extension recorder drops that navigation twice: at
+  `recorded-event-intake.ts:86` (a script navigation reports as `link`, read
+  from Chrome's behaviour, not observed) and at `navigation-recorder.ts:48` (any
+  untyped navigation within 5 s of a click). `input-model.ts` never sees it.
+  Even a navigate step would report `navigation_unexpected`
+  (`action-runner.ts:145-148`), because `authGateFailure` runs only for
+  content-script actions. A new failure code breaks
+  `runtime/failure/tests/codes.test.ts:47`, outside B3's Owns.
+  `RECORDING_START_REASON` is stamped by nothing in either repository, so the
+  rows guarding it pass by construction.
+- Decisions:
+  - **W19 takes Option A**: the recorded click carries the state its recording
+    landed on, checked after replay, and the assert path already reports a
+    missing selector on a sign-in gate as `AUTH_REQUIRED` (`assert.ts:36`).
+    Option B, a Flow-lane-injected assertion, is rejected: the bench would
+    measure the harness, not the recording. Option C, a navigate verb
+    reclassifying redirects, is rejected: most files, least faithful, and a
+    double navigation.
+  - **PB10b moves into Week 1.** Its stated exception, a post-condition-less
+    recorded step passing wrongly, is W19 exactly. Its Core lift shares
+    `runtime/service.ts` with `g-core-late-event` and `g-core-target-gate`, so it
+    lands serially after both, from `i-w19-expectation`'s design.
+  - **B3 accepted as proposed**: `web.action.invalid_parameter`,
+    `graph_validation_or_unknown_node`, not retryable, stage `dispatch`.
+- Validation: worker grep and git reads only, each cited file:line; no gate run
+  because nothing changed. Supervisor read "B6 findings" whole before deciding.
+- Outcome: Revised
+
+### 2026-09-13 — g-redaction-attestation: criterion 2's Lab-side leak check exists
+
+- Agent: worker `g-redaction-attestation`; verified by supervisor. The Core
+  late-event and fixture-secrets entries are archived verbatim to part three of
+  `archive/2026-09-12-finish-week1-ledger.md`.
+- Changed: new `packages/test-runner/src/redaction-attestation/` (the declared
+  literals of each `secrets[]` step, scanned in the run bundle and the isolated
+  workspace's `.fluxiq`, failing closed, reporting paths only);
+  `run-manifest/create-run-manifest.ts` (`redactionState` derived, where it was
+  a hard-coded `"verified"` for every run) and a new test.
+- Decisions: a scenario declaring no secrets records `"not_applicable"`, a new
+  contract value, rather than `"verified"` over nothing scanned or a permanent
+  `"pending"`; generic credential-pattern hits stay advisories, since only a
+  declared literal is evidence. Both are in `g-redaction-wiring`, which also
+  wires the call into `run-scenario.ts` once `g-flow-lane-observation` lands.
+  Until then `run.json` reads `"pending"`; no reader of the field exists outside
+  the contract's validation.
+- Validation: supervisor built the test-runner into a private `dist-sup` beside
+  `dist` and ran `node --test "dist-sup/**/*.test.js"` -> `# tests 471`,
+  `# pass 471`, `# fail 0`, 19 redaction rows. A first private build one level
+  deeper failed 8 tests on path errors alone (`ENOENT ...\packages\package.json`),
+  because those tests locate the repository from `dist`'s depth; not a defect.
+  Worker: skipping the scan fails 5 of 13, restoring the `"verified"` literal
+  fails 2, restored by SHA-256.
+- Not verified: the wiring and any Lab run; a declared value that is also on the
+  bundle's redaction list is scrubbed on write, so only the workspace scan can
+  see it (auth-gate's password).
+- Outcome: Accepted
+

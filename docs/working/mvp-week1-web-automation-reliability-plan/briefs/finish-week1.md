@@ -697,6 +697,93 @@ probe where you can:
 domain, Core), the unit, content-harness and Lab proof each change needs, and
 the order the pieces must land in.
 
+## g-redaction-wiring — run the redaction attestation in every Lab run
+
+Dispatched once `g-flow-lane-observation` lands, because both edit
+`run-scenario.ts`.
+
+**Owns:** `packages/test-runner/src/run-scenario.ts`, the attestation's call
+site only; `packages/test-runner/src/redaction-attestation/run-redaction-state.ts`
+and its test; the `redactionState` union in the run-manifest contract under
+`packages/test-contracts/src/`, its validation, and their tests (name each file
+in the report); `run-evaluation/tests/runner-wiring.test.ts`.
+
+**Read:** `reports/g-redaction-attestation.md` "Where the wiring goes" and its
+decisions; `reports/g-flow-lane-observation.md` Outcome, for what it changed in
+`run-scenario.ts`.
+
+**Task.** Wire `attestRunRedaction` where the report says: after Core is stopped
+and its logs are copied into the bundle, before the clone cleanup that deletes
+the workspace, the manifest build, and bundle finalization. A finding fails the
+run as `security.redaction` and writes `snapshots/redaction-attestation.json`.
+Decisions:
+- A scenario that declares no secrets records `redactionState:
+  "not_applicable"`, a new contract value. Never `verified` when nothing was
+  scanned, and never a permanent `pending`.
+- Generic credential-pattern hits stay advisories; only a declared literal fails
+  a run.
+
+**Tests.** A `runner-wiring.test.ts` row pinning the call's order against close,
+cleanup and manifest, with a mutation that moves it after cleanup; a contract
+row for `not_applicable`; test-contracts and test-runner `check` and `test`.
+Build the test-runner into a private `--outDir` at the same depth as `dist`
+(for example `dist-<brief>`), since other workers build `dist`, and delete it
+afterwards. Under `Not verified`, name the Lab proof: `pnpm lab run
+sensitive-input --target isolated` passes with `findingCount: 0`, files scanned
+in both scopes, and `redactionState: "verified"`.
+
+**Report:** `reports/g-redaction-wiring.md`.
+
+**Also D3** from `reports/i-flow-lane-errors.md` "Fix design", since it edits
+the same file. Owns also a new `packages/test-runner/src/flow-lane/recording-discards.ts`
+and its test. After `assertCoreRoundTrip`, read Core's gateway snapshot audit
+log through the route the design names, and write the run recording's
+`recording.action_discarded` and `recording.event_discarded` entries (type,
+recording id, counts, `sinceFinalizedMs` only) into the `runtime.settle`
+details. Fail with `recording.persistence` on any `action_discarded` for that
+recording, and record the extension's connection state after Stop. Core
+`267a2ca` now audits a late message as discarded instead of failing the
+connection, so this is what makes that visible. The audit filter is a pure
+function in the new module, with a test and a mutation that drops the recording
+filter.
+
+## g-flow-lane-followups — D4, one Flow read, and the packet size
+
+Dispatched with `g-redaction-wiring`, after `g-flow-lane-observation` is
+committed.
+
+**Owns:** in `packages/test-runner/src/`: `flow-lane/persisted-flow-run.ts`,
+`flow-lane/finalized-recording.ts`, `flow-lane/flow-action-types.ts`,
+`flow-lane/declared-secrets.ts`, `flow-lane/run-flow-lane.ts`,
+`run-expectations/recorded-events.ts`, and the test of each. **Not**
+`run-scenario.ts` or `flow-lane/recording-discards.ts` (`g-redaction-wiring`),
+nor `bench/` (`g-bench-coverage`).
+
+**Read:** `reports/i-flow-lane-errors.md` "Fix design" D4;
+`reports/f-w18-secret-leg.md` on the duplicated Flow read;
+`reports/g-bench-coverage.md` item 3's finding on `stateRefs`;
+`reports/g-flow-lane-observation.md` Outcome.
+
+**Task.**
+1. **D4.** Compare the extension's executable-event count with Core's action
+   count for the recording, and fail `recording.persistence` when Core has fewer.
+   First verify that Core's recording summary carries `actionCount`. If the
+   extension's tally can only reach the lane through `run-scenario.ts`, stop D4
+   at a design that names the exact line to pass, and report it.
+2. **One Flow read.** `readFlowSecretRequests` repeats `readFlowActionTypes`'
+   walk of the approved Flow. Make one walk yield both, behaviour unchanged.
+3. **Packet size.** Read each web action attempt's sanitized packet size and
+   `truncated` flag from Core's run detail `stateRefs` summary into
+   `PersistedFlowAction` and `snapshots/flow-lane.json`: sizes and flags only,
+   never content. First confirm that Core serves that summary. The bench's
+   consumer lands after `g-bench-coverage`.
+
+**Tests.** A unit test and a mutation for items 1 and 3; for item 2, the existing
+secret-request and action-type rows unchanged and green; test-runner `check`
+and `test`, built into a private `--outDir` at `dist`'s depth.
+
+**Report:** `reports/g-flow-lane-followups.md`.
+
 ## l-stage1 — Lab Stage 1 against a pinned Core (Lab owner)
 
 Dispatched once Core's late-event fix is committed; the dispatch names this
