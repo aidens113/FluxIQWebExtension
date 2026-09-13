@@ -1,5 +1,5 @@
 import type { FluxIQ } from "fluxiq";
-import { AutomationStudioNativeNodeRuntime, type AutomationStudioRecordingMapperCandidate, type AutomationStudioRecordingMapperObservation } from "fluxiq/automation-studio";
+import { AutomationStudioNativeNodeRuntime, type AutomationStudioRecordingMapperCandidate, type AutomationStudioRecordingMapperContext, type AutomationStudioRecordingMapperObservation } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_ACTION_TYPES } from "./actions/types";
 import { WEB_AUTOMATION_DOMAIN_ID } from "./constants";
@@ -20,6 +20,7 @@ import { webAutomationRecordingDomain } from "./recording/domain";
 import { WEB_AUTOMATION_STATE_NAMESPACE } from "./recording/state";
 import { WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID } from "./recording/web-state";
 import { webAutomationOutputPayload } from "./web-panel/output-nodes";
+import { webAutomationClickLandingExpectation } from "./runtime/expectation";
 import { registerWebAutomationRuntime } from "./runtime/service";
 
 const RECORDING_MAPPER_ID = "web-recording-actions";
@@ -111,12 +112,25 @@ const CANDIDATE_LABELS: Partial<Record<string, string>> = {
  * `webAutomationRecordedAction` the live gateway input path uses, so a
  * proposed node carries the parameters a live recording would have: the
  * selector together with the element fingerprint and visual target.
+ *
+ * A click also proposes where it landed as its `expectedState`, read off the
+ * explained navigation among the entries Core shows the mapper after it
+ * (`context.following`). The context is optional so a caller holding one
+ * observation can still map it; without it a click claims nothing.
  */
-export function mapWebRecordingObservation(observation: AutomationStudioRecordingMapperObservation): AutomationStudioRecordingMapperCandidate | null {
+export function mapWebRecordingObservation(observation: AutomationStudioRecordingMapperObservation, context?: Pick<AutomationStudioRecordingMapperContext, "following">): AutomationStudioRecordingMapperCandidate | null {
+  const step = recordedStep(observation);
+  const action = webAutomationRecordedAction(step.eventType, step.payload, step.metadata);
+  if (!action) return null;
+  const expectedState = action.outputId === "web.dom.click" ? webAutomationClickLandingExpectation(step, (context?.following ?? []).map(recordedStep)) : undefined;
+  return candidate(action.outputId, action.parameters, action.inputId, CANDIDATE_LABELS[action.outputId] ?? action.outputId, expectedState);
+}
+
+/** An observation as the recorded event it carries: its event type, its own payload, and its metadata over the payload's. */
+function recordedStep(observation: AutomationStudioRecordingMapperObservation): { eventType: string; timestamp: number; payload: JsonObject; metadata: JsonObject } {
   const payload = recordedEventPayload(observation);
   const metadata = { ...(readObject(payload.metadata) ?? {}), ...observation.metadata } as JsonObject;
-  const action = webAutomationRecordedAction(recordedEventType(observation), payload, metadata);
-  return action ? candidate(action.outputId, action.parameters, action.inputId, CANDIDATE_LABELS[action.outputId] ?? action.outputId) : null;
+  return { eventType: recordedEventType(observation), timestamp: observation.timestamp, payload, metadata };
 }
 
 /** Timeline mapper observations retain the entry kind, with domain events nested in their payload. */
@@ -133,8 +147,8 @@ function recordedEventPayload(observation: AutomationStudioRecordingMapperObserv
   return observation.payload;
 }
 
-function candidate(outputId: string, parameters: JsonObject, sourceInputId: string, label: string): AutomationStudioRecordingMapperCandidate {
-  return { outputId, parameters: compact(parameters), sourceInputIds: [sourceInputId], expectedConfirmation: { inputId: sourceInputId, timeoutMs: 5_000 }, confidence: 0.9, label };
+function candidate(outputId: string, parameters: JsonObject, sourceInputId: string, label: string, expectedState?: JsonObject): AutomationStudioRecordingMapperCandidate {
+  return { outputId, parameters: compact(parameters), sourceInputIds: [sourceInputId], expectedConfirmation: { inputId: sourceInputId, timeoutMs: 5_000 }, ...(expectedState === undefined ? {} : { expectedState }), confidence: 0.9, label };
 }
 
 function compact(value: Record<string, unknown>): JsonObject {

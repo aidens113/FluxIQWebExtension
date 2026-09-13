@@ -49,6 +49,7 @@ const rows: Row[] = [
     outputId: "web.browser.navigate"
   },
   { row: "4 browser.navigation, not typed", event: recorded("browser.navigation", { metadata: { transition: "link" } }), eventType: WEB_AUTOMATION_EVENTS.pageNavigated },
+  { row: "4a browser.navigation, explained: a click's landing is evidence", event: recorded("browser.navigation", { metadata: { transition: "explained", explainedBy: 1, explainedByEventId: "web.1.100" } }), eventType: WEB_AUTOMATION_EVENTS.pageNavigated },
   {
     row: "5 dom.click",
     event: recorded("dom.click", { element: button }),

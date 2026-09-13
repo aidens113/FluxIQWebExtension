@@ -131,6 +131,26 @@ assert.notEqual(clickWire.payload?.visualTarget, undefined);
 assert.deepEqual(proposedClick?.parameters?.visualTarget, clickWire.payload?.visualTarget);
 assert.equal((outputTargetFromPayload(proposedClick?.parameters ?? {})?.element as { xpath?: string } | undefined)?.xpath, "/html/body/button");
 
+// W19 (design D1): a recorded click claims the path it landed on. The landing is
+// the explained navigation that follows it and names the event id the click was
+// sent under; both are built by the domain's recording event builder.
+const signInClick = createWebAutomationRecordingEvent({ kind: "dom.click", sequence: 3, url: "https://example.test/scenarios/auth-gate/sign-in", title: "Sign in", eventTimestampMs: 900, element: { selector: "#continue", tagName: "button", text: "Continue" } });
+assert.ok(signInClick.eventId, "the builder names every recording event");
+const signInLanding = createWebAutomationRecordingEvent({ kind: "browser.navigation", sequence: 4, url: "https://example.test/scenarios/auth-gate/account", title: "", eventTimestampMs: 1_150, metadata: { transition: "explained", explainedBy: 3, explainedByEventId: signInClick.eventId } });
+const recordedObservation = (observationId: string, wire: typeof signInClick) => ({ observationId, recordingId: "recording.test", domainId: WEB_AUTOMATION_DOMAIN_ID, type: "domain_event", timestamp: wire.timestamp ?? 0, payload: { eventType: wire.eventType, payload: wire.payload ?? {} }, metadata: wire.metadata ?? {} });
+const landingObservation = recordedObservation("observation.landing", signInLanding);
+const landedClick = mapWebRecordingObservation(recordedObservation("observation.sign-in", signInClick), { following: [landingObservation] });
+assert.equal(landedClick?.outputId, "web.dom.click");
+assert.deepEqual(landedClick?.expectedState, { conditions: [{ assert: { kind: "url", expected: "/scenarios/auth-gate/account" } }], mode: "all", timeoutMs: 5_000 }, "D1: a click proposes the path it landed on as its expected state");
+assert.equal(mapWebRecordingObservation(landingObservation, { following: [] }), null, "D1: the landing itself is evidence and proposes nothing");
+assert.equal("expectedState" in (mapWebRecordingObservation(recordedObservation("observation.sign-in", signInClick)) ?? {}), false, "D1: a click mapped with no following entries claims nothing");
+const enteredText = createWebAutomationRecordingEvent({ kind: "dom.input", sequence: 5, url: "https://example.test/scenarios/auth-gate/sign-in", title: "Sign in", eventTimestampMs: 1_000, element: { selector: "input[name=q]", tagName: "input" }, inputValue: "ada" });
+assert.ok(enteredText.eventId, "the builder names every recording event");
+const enteredTextLanding = createWebAutomationRecordingEvent({ kind: "browser.navigation", sequence: 6, url: "https://example.test/scenarios/auth-gate/account", title: "", eventTimestampMs: 1_200, metadata: { transition: "explained", explainedBy: 5, explainedByEventId: enteredText.eventId } });
+const enteredTextProposal = mapWebRecordingObservation(recordedObservation("observation.text", enteredText), { following: [recordedObservation("observation.text-landing", enteredTextLanding)] });
+assert.equal(enteredTextProposal?.outputId, "web.dom.type");
+assert.equal("expectedState" in (enteredTextProposal ?? {}), false, "D1: only a click claims a landing");
+
 // A recorded scroll proposes a scroll node; the never-emitted wheel event type proposes nothing.
 const scrollObservation = (eventType: string) => mapWebRecordingObservation({
   observationId: `observation.${eventType}`,
