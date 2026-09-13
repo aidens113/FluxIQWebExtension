@@ -36,14 +36,14 @@ has its full proof. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
-settled ledger entries are in parts one to forty-six of
+settled ledger entries are in parts one to forty-seven of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13.**
 - **This repository:** pushed; `origin/dev` holds the architecture-page commit
   after `d639415`.
-- **Core:** `3cb8976`, pushed with this repository's `dev`; `fluxiq` **0.4.0**,
-  built at `20bb3b4`, its last code commit. Its thirteen code commits are listed in Core's plan.
+- **Core:** `f22f401`, pushed; a docs commit after the Lab pin `3cb8976`. `fluxiq`
+  **0.4.0**, built at `20bb3b4`, its last code commit.
   The newest two are `b54df69`, which waits a command's timeout plus a 3,000 ms
   answer margin, and `20bb3b4`, which begins a Flow with no Start node at its
   graph's root.
@@ -87,35 +87,36 @@ settled ledger entries are in parts one to forty-six of
 - approving a recording proposal as a node definition, which drops `expectedState`;
 - W24 `unannounced` (a recorded-payload contract change) and W13 `banner-absent`
   (P7, a new Core node outcome); both rows stay in the corpus.
+- W05 `short-catalog`: no "Next present" output and no loop mapper; its Lab failure
+  matched the prediction (`l-stage2d`).
 
 **In flight:**
-- **`l-stage2d` (Lab):** the recheck of W15, W28, W25 `too-slow`, W17 and W05
-  `short-catalog`, then the week1 bench once, pinned to `d639415` and Core `3cb8976`.
-- **Done:** `d-arch-history`, six architecture pages without plan history, the only
-  Week 1 item in `i-leftover-sizing`'s ranking (ledger).
-- **Reported, read-only:** `i-leftover-sizing` and `i-week2-entry-points` (ledger).
-  Changing a Flow while it runs is Week 2 work that needs a resume design.
+- **Lab Stage 3, concurrently at `d639415` and Core `3cb8976`:** `l-stage3a` and
+  `l-stage3b`, the week1 bench `--repeat 3`; `l-stage3-demo`; and `l-evidence`, the
+  `sensitive-input` leak check and the 16 items.
+- **`i-w04-w08-no-proposal` (read-only):** why W04's and W08's Flow rows get no Flow
+  proposal. They are criterion 1 workflows.
+- **`i-bench-compare-prep`:** a ready A-against-B comparison script.
+- **Done (ledger):** `l-stage2d`; `i-ranking-draft`, whose Q1-Q4 are ruled; Core's
+  LLM page (`f22f401`).
 
 **Queued, in dependency order**
-1. **Lab Stage 3,** after `l-stage2d`: run
-   `FLUXIQ_TEST_ENV_FILES=none pnpm lab bench --corpus week1 --repeat 3 --target isolated`
-   twice, then `demo:record` and `demo:run` provider-free.
-2. **Phase 1.6b:**
-   - rule on W05 `short-catalog` and W28's scroll fix from `l-stage2d`;
-   - rank blockers from both bench reports, starting from `i-leftover-sizing`'s
-     table;
-   - quote an observation for every criterion row.
+1. **Compare** bench A with bench B, and fill `i-ranking-draft`'s placeholders.
+2. **Fix W04 and W08** if `i-w04-w08-no-proposal` finds a defect, and rerun those
+   rows.
+3. **Phase 1.6b:** the ranking ledger entry, quoting an observation for every
+   criterion row.
 
 **Exit criteria as they stand**
 
 | Criterion | State | Proof still to observe |
 | --- | --- | --- |
-| Actions reliable | `l-stage2c`, single runs: W18 3 of 3 on each lane, W19, W25 and W17 3 of 3; W28 2 of 3; W15 0 of 6 (fixes in flight) | week1 W01-W19 through the bench, 3 of 3 |
-| Evidence useful | `l-stage2c`: the auth-gate secret is in Core's workspace 0 times, SQLite included (Stage 2: 13 objects and 4 rows); W17's file name is still in a saved attempt (fix in flight) | Lab run: the 16 items, packet budget, leak rows |
+| Actions reliable | `l-stage2d`, ×3 each: W15 unarmed, W28 and W17 `upload` pass, each Flow starting at its first action. In the stopped bench, W04's and W08's Flow rows fail with no Flow proposal (`i-w04-w08-no-proposal`) | The unarmed W01-W19 workflows through both benches, 3 of 3 on each lane |
+| Evidence useful | `l-stage2d`: W17's file name and content in Core's workspace 0 times, SQLite included. `l-stage2c`: the auth-gate secret 0 times | `l-evidence`: the `sensitive-input` leak check and the 16 items; both benches: packet budget and leak rows |
 | Deterministic fallback | Corroboration refuses an uncorroborated match (unit and harness) | W20-W23 recover and W26 disambiguates in the Lab |
-| Failures classified | Stage 2: W10 and W27 `navigation_unexpected` 3 of 3. `l-stage2c`: W19 `auth_required` 3 of 3; W25 `too-slow` right category, wrong code (Core's deadline, fix in flight); W15 `popup-blocked` `timeout`, not `output_not_observed`; W24 ruled out | Negative variants report the expected category, at least 90% |
-| Bench repeatable | Stage 2: week1 `--repeat 1` passed 37 of 67. `l-stage2c`'s bench stopped after 5 of 67 rows when the sessions were killed; `--repeat 3` never run | `--repeat 3` twice, agreeing within tolerance |
-| Blockers ranked | Known leftovers sized (`i-leftover-sizing`): none blocks a criterion; one Week 1 close-out item (`d-arch-history`) | Phase 1.6b ranking from both bench reports |
+| Failures classified | `l-stage2d`, ×3: W15 `popup-blocked` reports `output_not_observed`, and W25 `too-slow` reports `web.action.timeout`. Stage 2: W10 and W27 `navigation_unexpected`. `l-stage2c`: W19 `auth_required` | Both benches: the W14, W19 and W27 negative variants at least 90%, plus the rate over every negative variant |
+| Bench repeatable | `l-stage3a` and `l-stage3b` are running concurrently at the `l-stage2d` pins | Every Metrics tolerance, A against B, through `bench-compare.mjs` |
+| Blockers ranked | `i-ranking-draft` has drafted the ranking, and its counting questions are ruled; the known leftovers are sized (`i-leftover-sizing`) | The Phase 1.6b ledger entry, with both benches' figures |
 
 **Everything is tested: the operating rules.**
 - **Three tiers per change:** unit tests in `tests/` beside the subject, the
@@ -633,100 +634,106 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 `2026-09-12-*` Wave 3 and live-validation files, and
 `2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-13 — i-leftover-sizing and i-week2-entry-points: the known leftovers ranked, and where Week 2 starts
+### 2026-09-13 — l-stage2d: the fixes for W15, W25 `too-slow`, W17 and W28 hold live, and W05 `short-catalog` fails as predicted
 
-- Agent: workers `i-leftover-sizing` and `i-week2-entry-points`, both read-only; spot
-  checks by supervisor.
-- Found, the leftovers (table in `reports/i-leftover-sizing.md`):
-  - **Week 1 close-out:** plan history on six architecture pages, dispatched as
-    `d-arch-history`.
-  - **Week 2 entry:** a stored event's `url` keeps the full URL, query included, on
-    runtime confirmations, content-recorded events and unexplained navigations.
-    Criterion 2 is unaffected: the leak check scans Core's whole workspace for each
-    declared secret, wherever it is stored.
-  - **Later:** a node's timeout overrides an output's `parameters.timeoutMs`; the
-    byte search misses a literal split across freed SQLite pages; an appended
-    recording's second root; duplicate edges on one route; and Core's `hello`
-    identity, `failureRoute`, node-definition `expectedState` and `dataDir` items.
-  - **Decided by the bench:** Core audits a runtime confirmation that reached no open
-    recording as a lost action. It is a Week 1 blocker only if a
-    `recording.persistence` failure's discards are runtime confirmations.
-- Found, Week 2 (`reports/i-week2-entry-points.md`):
-  - typed instructions, bounded same-site AI exploration and a reviewed Flow build
-    exist in Core today;
-  - changing a Flow while it runs does not. The shipped app binds no AI provider
-    without an explicit grant, the retry after an automatic patch is skipped for
-    explicit AI runs, and that retry reruns from the start, so Week 2's resume needs
-    a design;
-  - Core's `automation-studio.md` describes live patch testing and automatic
-    promotion as current without saying the shipped app cannot reach them.
-- Validation: supervisor reads:
-  - `domain/src/client/gateway-mapping.ts:175` reads
-    `timeoutMs: numberValue(command.timeoutMs ?? parameters.timeoutMs)`;
-  - `server-command-channel.ts:199` and `:221` set
-    `url: result.url ?? this.deps.page.url() ?? ""`;
-  - `flow-lane/recording-flow-proposal.ts:116` approves with
-    `destination: { kind: "flow", name: input.name }`, with no `flowId`;
-  - Core `programs/_shared/runtime.ts:74-83` resolves a provider only when
-    `input.executionGrant` is set, and otherwise `undefined`;
-  - Core `automation-studio/runtime/service.ts:3540` and `:3594` skip
-    `retryRuntimeSessionAfterAutoAppliedPatch` when `input.llmExecution` is set, and
-    the file names no `startNodeId`.
-- Not verified: nothing was executed; whether replay reads a URL's query; item 7d,
-  until the bench runs.
-- Outcome: Accepted
-
-### 2026-09-13 — Integration: root gates pass here against Core built at `20bb3b4`
-
-- Agent: supervisor.
-- Changed: `apps/extension/build/` and `domain/.test-build/`, regenerated by the root
-  build and tests.
-- Validation: supervisor gate `sup65` on `f840b75`, each step alone:
-  - `pnpm check` exit=0, "structure-audit: passed (41 warning(s), 17 baselined)";
-  - `pnpm test` exit=0:
-    - domain "# pass 401", "# fail 0";
-    - test-runner "# tests 562", "# pass 562";
-    - extension "# tests 468", "# pass 468";
-    - scenario-lab "# tests 204", "# pass 204";
-    - test-matrix 17, test-evidence 16 and agent-orchestrator 16, each "# fail 0";
-  - `pnpm build` exit=0, every package "Done";
-  - the content harness,
-    `pnpm exec playwright test -c e2e/playwright.content.config.ts --workers=2` from
-    `apps/extension`, exit=0, "222 passed (42.4s)".
-- Not verified: live browser behaviour, which `l-stage2d` observes.
-- Outcome: Accepted
-
-### 2026-09-13 — d-arch-history: six architecture pages describe the design as it is now
-
-- Agent: worker `d-arch-history`; decisions and verification by supervisor.
-- Changed, in `docs/architecture/`:
-  - **`web-capabilities.md`:** the "Changed by" column, its legend and the header's
-    history are gone. Each partial row's gap stays in "Why this state";
-  - `failure-taxonomy.md`, `sensitive-values.md`, `page-evidence.md`,
-    `element-identity.md` and `repository-layout.md`: history lines restated in the
-    present tense.
-- Found, and corrected on the pages:
-  - an accepted exact match does report a score: `vetoCandidate` returns
-    `{ measurement }` on accept, and `exactResolution` writes `bestScore` and
-    `confidence`;
-  - a scenario manifest names a failure by its code value, such as
-    `web.target.ambiguous`, not by its key.
+- Agent: worker `l-stage2d` (Lab owner); verification by supervisor.
+- Pins: this repository `d639415` and Core `3cb8976`, both `dirty=false` in every
+  `run.json`; Core built once at 09:51.
+- Observed, each row ×3; every run is a single observation:
+  - **W15 `multi-tab`:** unarmed passes, click → tab ×3 → click. `popup-blocked`
+    passes, reporting `output_not_observed`. In `l-stage2c` it was 0 of 6;
+  - **W28 `iframe-checkout`:** passes, and both frame clicks succeed. Runs 1 and 2
+    each recorded one trailing scroll, in frame 4 at `x=0, y=29`, after both clicks;
+  - **W25 `too-slow`:** reports `web.action.timeout` and passes. In `l-stage2c` it
+    reported `output_dispatch.timed_out`;
+  - **W17 `upload`:** passes. The file's name and content are in Core's kept
+    workspace 0 times, SQLite included; `l-stage2c` found the name twice per run;
+  - **W05 `short-catalog`:** the first node, page 1's Next click, fails
+    `target_not_found` / `web.target.not_found`. Run 3 hit a startup timeout, and
+    its rerun, alone, did not;
+  - **All 18 Flow runs:** `startCandidateIndex` 0, `stoppedWithoutFailedAttempt` null,
+    and no `recording.persistence` failure. Lowest free memory 7.55 GB.
+- Found:
+  - **W04's and W08's Flow rows fail `recording.contract`** ("Core produced no
+    recording Flow proposal", 0 recorded actions) in the bench, which was stopped at
+    29 of 67 rows. Dispatched as `i-w04-w08-no-proposal`;
+  - W05 run 1: Core held 4 actions to the extension's 3. This is a single
+    observation, and the completeness check does not fail it;
+  - a trailing page scroll becomes a Flow node in W28, W05 and W07. The nodes
+    succeed;
+  - item 7d cannot be read from a bundle: whether a discard was a runtime
+    confirmation stays in Core's in-memory audit log.
 - Decisions:
-  - dated "verified against source" stamps and decision IDs stay on the pages. They
-    are freshness markers and cross-references, not plan history;
-  - wave and date history in source comments is ranked later.
+  - **W05 `short-catalog` is ruled out of Week 1,** as `i-w05-short-catalog` decided
+    once the Lab showed its failure. Core has no "Next present" output, and no
+    mapper builds a loop.
+  - **W28's scroll fix is not Week 1.** No verdict changes; the trailing scroll is
+    ranked with recorder fidelity as a Week 2 entry.
+- Validation:
+  - **Supervisor, the bundles:** a reader over the 19 `run.json` files under
+    `F:\fxlab-runs\stage2d\` `a`, `b` and `c` printed:
+    - W15 unarmed, W28 and W17, ×3 each: `fail=null | ver=passed | start=0 | early=null`;
+    - W15 `popup-blocked` ×3:
+      `fail={"category":"output_not_observed","code":"web.validation.output_not_observed"} | ver=passed | start=0`;
+    - W25 `too-slow` ×3: `fail={"category":"timeout","code":"web.action.timeout"} | ver=passed | start=0`;
+    - W05 `short-catalog` ×3:
+      `fail={"category":"target_not_found","code":"web.target.not_found"} | ver=failed | start=0`,
+      plus one run with no `flow-lane.json`.
+  - **Supervisor, W17's kept workspace** `run-mu02kwj1-8104b227`: `l-stage2c-search.mjs` over `fluxiq-root`
+    printed "files scanned=33", "sqliteDatabases=3 sqliteDatabasesUnreadable=0", and
+    `total needle=upload-name files=0 utf8=0 utf16le=0 sqliteCells=0`, with the same
+    zeros for the content and its first line. Its control needle printed
+    `total needle=control files=13 utf8=121 utf16le=0 sqliteCells=6`, so the search
+    reads the stores where the name would sit.
+- Not verified: the full bench, which was stopped; what causes the trailing scrolls;
+  which action Core held extra in W05 run 1.
+- Outcome: Accepted
+
+### 2026-09-13 — Rulings on how the criteria count, and Lab Stage 3 split across concurrent workers
+
+- Agent: supervisor, on `i-ranking-draft` Q1-Q4, and on the user's question why only
+  one worker was running.
+- Decisions:
+  - **Criterion 1** counts the unarmed workflows W01-W19, 3 of 3 on each lane.
+    Variant rows are reported outside it.
+  - **Criterion 4** is judged on the W14, W19 and W27 negative variants, at least
+    90%. The rate over every negative variant, W24 included, is reported beside it,
+    and every miss is ranked.
+  - **Criterion 5:** `l-stage3a` and `l-stage3b` run concurrently at the same pins and
+    count as the two consecutive runs. A metric outside tolerance sends a third bench,
+    alone, before the criterion is called failed.
+  - **Criterion 2** needs Lab observations that no run made, so `l-evidence` runs
+    `sensitive-input` and reads the 16 items.
+  - **Lab Stage 3 runs as three concurrent workers** in their own worktrees, each
+    waiting while free memory is under 3 GB. The "one Lab instance at a time" line in
+    `l-stage2d`'s brief was the supervisor's own, not a limit of the Lab.
+- Validation: not validated, because these are decisions. Free memory read 11.1 GB
+  with four Lab workers running.
+- Outcome: Accepted
+
+### 2026-09-13 — d-core-llm-reachability: Core's LLM page says what the shipped app reaches (Core `f22f401`)
+
+- Agent: worker `d-core-llm-reachability`; verification and commit by supervisor.
+- Changed: Core `docs/architecture/automation-studio.md`. It now gives each grant
+  purpose's task kinds as the production resolver binds them, and adds "What the
+  shipped app reaches".
 - Validation: supervisor:
-  - `dcd-check-links.mjs` over the six pages: "checked 72 relative links in 6
-    page(s), 0 unresolved";
-  - a grep for `Wave [0-9]|Phase 1\.[0-9]|Step [0-9]+, landed|Before Phase|until Wave`
-    over `docs/architecture`: 0 lines, where the worker found 34 before;
-  - a cell count over `web-capabilities.md`'s tables: the capability table is "table
-    of 26 lines, cells per line: {"6":26}", and every other table is uniform;
-  - the corrections against code: `veto.ts:202` returns `{ measurement }` on accept;
-    `resolve-target.ts:292` spreads `bestScore` and `confidence`;
-    `ambiguous-targets/manifest.ts:40` holds `code: "web.target.ambiguous"`; Core
-    `element-fingerprint.ts:282-283` holds −0.1 and −0.8, as the page states.
-- Not verified: the rendered Markdown.
+  - Core `pnpm docs:check` exit=0, "Deterministic framework reference is current.";
+  - each claim read against Core's code:
+    - `_shared/runtime.ts:74-83` binds `build_and_adapt` to `flow_bootstrap` and
+      `evidence_tool_decision`, and `diagnose_and_adapt` to `runtime_diagnosis` and
+      `runtime_patch`;
+    - `execution-grants.ts:504-510` matches a build grant to six request kinds and
+      change proposals;
+    - `service.ts:3110` makes a `diagnose_and_adapt` target override proposal-only,
+      and `service.ts:3362` accepts only `diagnosis_only` and `diagnose_and_adapt` on
+      a run;
+    - the promotion gate in `training-modes.ts` sends high-risk adaptations to manual
+      review;
+    - `harness/run.ts:99` records `llm.provider_missing`;
+    - `live-patch.ts:178` starts a patch clone at the failed node;
+  - pushed, Core `3cb8976..f22f401`.
+- Not verified: the new in-page anchor link, which the checker skips.
 - Outcome: Accepted
 
 ## Open Questions

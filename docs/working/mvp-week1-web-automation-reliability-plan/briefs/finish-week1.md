@@ -4150,3 +4150,225 @@ code commit is `20bb3b4`.
   from its `flow-lane.json` (`g-runner-start-guard`);
 - for any `recording.persistence` failure in the bench, whether its discards are
   runtime confirmations, as kinds and counts only (`i-leftover-sizing`, item 7d).
+
+**Second amendment:** skip Run 6, the bench. Lab Stage 3 runs concurrently, and its
+two benches replace it.
+
+## Amendment to `l-stage3` — three concurrent workers at the `l-stage2d` pins
+
+This replaces Task 2's "one at a time, with no other Lab instance running", and the
+order of steps 2 and 4.
+
+**Pins:** this repository `d639415`, Core `3cb8976`. Core is built in
+`F:\fxlab\!FluxIQ`; use it read-only, and never build, check out or clean it.
+
+| Worker | Worktree, moved to `d639415` | Runs under | Task | Report |
+| --- | --- | --- | --- | --- |
+| `l-stage3a` | `F:\fxlab\fxlab-7263534-load` | `F:\fxlab-runs\stage3\a\` | Bench A | `reports/l-stage3a.md` |
+| `l-stage3b` | `F:\fxlab\fxlab-16ff729-b` | `F:\fxlab-runs\stage3\b\` | Bench B | `reports/l-stage3b.md` |
+| `l-stage3-demo` | `F:\fxlab\fxlab-16ff729-step4` | `F:\fxlab-runs\stage3\demo\` | Step 4, the demo | `reports/l-stage3-demo.md` |
+
+**Each worker:**
+- touches only its own worktree and run directory. `l-stage2d` holds
+  `F:\fxlab\fxlab-7263534`;
+- sets its worktree up as `reports/l-stage2d.md` "Setup" did: rebuild `domain/dist`,
+  `packages/test-contracts/dist` and `apps/scenario-lab/dist` there. The lockfile
+  matches, so install only if `node_modules` is missing;
+- reads free memory before each Lab command, waits in 2-minute steps while it is
+  under 3 GB, and reports the lowest value seen;
+- runs under concurrent load: a timing-only failure is a single observation. Rerun it
+  once while free memory is above 6 GB before calling it real.
+
+**`l-stage3-demo` first:** list the worktree's modified tracked files, as paths only.
+Restore them with `git checkout --` only if every one is generated output, such as
+`apps/extension/build/`; otherwise stop and report.
+
+**Each bench report** quotes the brief's list, except the comparison:
+- headline rates per lane;
+- for every exit criterion, the row counts and rates it is judged on;
+- each row's verdict, and `startCandidateIndex` for Flow-lane rows;
+- for any `recording.persistence` failure, its discard kinds and counts.
+
+The supervisor compares A with B once both report.
+
+**Unchanged:** headed runs as `v-bench-honesty` requires, `FLUXIQ_TEST_ENV_FILES=none`,
+the stop on a leak above 0, and quoting rather than summarising.
+
+## d-core-llm-reachability — Core's LLM page says what the shipped app can reach (Core docs)
+
+**Owns:** in `F:\!FluxIQ`, only `docs/architecture/automation-studio.md`'s
+"LLM-Assisted Deterministic Automation" section and the sections under it.
+
+**Read:** `reports/i-week2-entry-points.md`, open questions 1, 2 and 4; Core's
+`AGENTS.md`.
+
+**Task.**
+1. Where the page says production allows the build grant only for `flow_bootstrap`,
+   state what `packages/fluxiq/src/programs/_shared/runtime.ts:74-83` allows for
+   each grant purpose.
+2. Where it describes live patch testing, automatic promotion, the retry after an
+   applied patch, or training modes as current, say which the shipped app reaches:
+   - which grant purpose gives each one a provider;
+   - that an explicit AI run skips the retry (`automation-studio/runtime/service.ts`
+     `:3540`, `:3594`);
+   - that the retry begins where the Flow begins, not at the failed node.
+3. Check each sentence you write against the code it names. Describe current design
+   only, with no plan history.
+
+**Tests:** `pnpm docs:check` in `F:\!FluxIQ`. No builds and no test suites.
+
+**Report:** `reports/d-core-llm-reachability.md`, in this repository.
+
+## i-bench-compare-prep — a ready comparison of bench A and bench B (read-only, plus one script)
+
+Dispatched while Lab Stage 3 runs, so the comparison takes minutes once both
+benches report.
+
+**Owns:** `reports/i-bench-compare-prep.md`, and one script in the supervisor's
+scratchpad, `bench-compare.mjs`. Nothing tracked.
+
+**Read:**
+- the plan's Metrics section, and `How Week 1 Is Proven`;
+- `reports/v-bench-honesty.md`;
+- the bench report writer in `packages/test-runner/src/bench/`, for the report's
+  file names and fields;
+- one finished week1 bench report under `F:\fxlab-runs\`, from Stage 2 or
+  `l-stage2c`, as a real input.
+
+**Task.**
+1. Write `bench-compare.mjs <reportDirA> <reportDirB>`. For every metric the Metrics
+   section defines, it prints A's value, B's value, the stated tolerance, and
+   within or outside.
+2. It also prints:
+   - the rows whose verdict differs between A and B;
+   - for each exit criterion, the row counts and rates it is judged on, per run;
+   - any `recording.persistence` failure's discard kinds and counts.
+3. Run it against the finished report, given as both A and B, and against a copy
+   with one row's verdict flipped. Show that the flip is caught.
+4. Where the Metrics section names a metric the bench report does not carry, or
+   gives no tolerance, say so. Do not invent one.
+
+Print no recorded page data or secret values: field names, counts, rates and row
+ids only. Run no Lab command, and touch no Lab worktree.
+
+**Report:** `reports/i-bench-compare-prep.md`: the script's usage, its output on the
+real report, the flip test, and every gap from task 4.
+
+## i-ranking-draft — the Phase 1.6b blocker ranking, drafted before the benches report (read-only)
+
+Dispatched while Lab Stage 3 runs, so the ranking needs only its figures once the
+benches report.
+
+**Owns:** `reports/i-ranking-draft.md`. Nothing tracked.
+
+**Read:**
+- the plan's Current State, Objective, `How Week 1 Is Proven` and Metrics;
+- `open-questions.md`;
+- `reports/i-leftover-sizing.md`;
+- `reports/i-week2-entry-points.md`, task 1 only;
+- the archive, only for the ledger headings that record why an item was ruled out
+  of Week 1.
+
+**Task.**
+1. **Ranked list.** Draft every known reliability blocker and leftover. For each,
+   give:
+   - what fails;
+   - the exit criterion or Lab row it touches;
+   - its rank: Week 1 blocker, Week 1 close-out, Week 2 entry, or later;
+   - the observation that would change that rank.
+2. **Ruled-out items.** Include each one with its recorded reason, citing the ledger
+   or archive heading. Include every open question that bears on a criterion.
+3. **Criterion rows.** For each of the six exit criteria, say what observation closes
+   it: from which report (`l-stage2d`, `l-stage3a`, `l-stage3b` or `l-stage3-demo`)
+   and which field.
+4. **Placeholders.** Leave one only for a figure a bench or Lab report will supply,
+   and name the field that fills it.
+
+Quote no recorded page data or secret values. Run nothing, and touch no Lab worktree
+or run directory.
+
+**Report:** `reports/i-ranking-draft.md`, at most 200 lines.
+
+## Rulings on how the criteria count, from `i-ranking-draft` Q1-Q4
+
+- **Criterion 1** counts the unarmed corpus workflows W01-W19, 3 of 3 on each lane,
+  as the Objective says. Variant rows are reported, but outside criterion 1.
+- **Criterion 4** is judged on the Objective's set, the W14, W19 and W27 negative
+  variants, at least 90%. The rate over every negative variant, W24 `unannounced`
+  included, is reported beside it, and every miss is ranked.
+- **Ruled-out rows** (W05 `short-catalog`, W13 `banner-absent`, W24 `unannounced`)
+  still run and are reported by name.
+- **Criterion 5:** `l-stage3a` and `l-stage3b` are two complete runs at the same
+  pins, neither selected nor discarded, under the same load, so they count as the
+  two consecutive runs. If any metric falls outside tolerance, a third bench run
+  alone decides before the criterion is called failed.
+- **Criterion 2** needs Lab observations no dispatched run makes, so `l-evidence`
+  runs them.
+
+## l-evidence — criterion 2's Lab proofs: the 16 evidence items and `sensitive-input`'s leak check (Lab owner)
+
+Dispatched while Lab Stage 3 runs, at its pins.
+
+**Owns:** no tracked file. Worktree `F:\fxlab\fxlab-16ff729`, moved to `d639415`; runs
+under `F:\fxlab-runs\evidence\`; report `reports/l-evidence.md`.
+
+**Read:**
+- the plan's Objective row "Browser evidence is useful", Phase 1.4 and `How Week 1
+  Is Proven`, for what "the 16 items" are;
+- `docs/architecture/page-evidence.md`;
+- `reports/l-stage2d.md`, "Setup" and "How the campaign runs", for the commands.
+
+**Setup:** follow the `l-stage3` amendment's "Each worker" rules, including the memory
+guard and the read-only Core worktree.
+
+**Runs.**
+1. **`sensitive-input`, ×3 on each lane the Lab runs it on,** with the run leak
+   attestation. Report findings per run as counts, and the declared-secret search
+   over Core's workspace, SQLite included.
+2. **The 16 items,** from one passing Flow-lane run's sanitized evidence packet:
+   - each item the plan names, present or absent, by key;
+   - the packet's bytes against its budget, and whether `truncated` is visible;
+   - if the plan's items and the packet's keys do not match one to one, both lists.
+3. **The fixture assertions:** name the tests that assert the 16 items and the
+   `sensitive-input` leak, and whether they ran in the root gate at `f840b75` (plan
+   ledger, "Integration: root gates pass"). Do not rerun the suites.
+
+Stop on a leak above 0. Report paths, keys, kinds and counts only.
+
+**Report:** `reports/l-evidence.md`.
+
+## i-w04-w08-no-proposal — why W04's and W08's Flow rows get no recording Flow proposal (read-only)
+
+Dispatched on `l-stage2d`'s open question 1, while Lab Stage 3 runs. W04 and W08 are
+criterion 1 workflows, so this blocks Week 1 until explained.
+
+**Owns:** `reports/i-w04-w08-no-proposal.md`. Nothing tracked.
+
+**Read:**
+- `reports/l-stage2d.md`: "Run 6", and open question 1;
+- the archive's H2 entry (Flow-lane rows that passed with no Flow built), and the
+  entries that decided which week1 rows run the Flow lane (`g-bench-coverage`,
+  `g-flow-lane-expectations`);
+- `packages/test-runner/src/bench/corpus/week1.ts`, rows W04 and W08, and those two
+  scenarios' manifests in `apps/scenario-lab/src/scenarios/`.
+
+**Evidence, read-only:** the W04 and W08 bundles, both lanes, of the stopped bench
+under `F:\fxlab-runs\stage2d\d\`, and `l-stage2c`'s W04 Flow bundles. Report keys,
+kinds and counts only. Do not open anything under `F:\fxlab-runs\stage3\`.
+
+**Task.**
+1. What each recording holds: entry kinds and counts. Does each workflow's script
+   perform an action a recording can map, or does it only read and extract?
+2. Why the same Flow rows passed in Stage 2, citing the archive and Stage 2's bundle
+   fields if they still exist.
+3. Which is true, with code and bundle citations:
+   - (a) the workflow has no recordable action, so no Flow can be proposed, and the
+     corpus or runner should state that the lane does not apply, with the reason;
+   - (b) the workflow does act, and the recorder, mapper or Core lost the action;
+   - (c) something else.
+4. The smallest correct fix: owning files, the tests it needs, and whether it
+   changes criterion 1's W01-W19 set.
+
+No Lab runs and no edits. Quote no recorded page data.
+
+**Report:** `reports/i-w04-w08-no-proposal.md`.
