@@ -1659,3 +1659,45 @@ Do not touch `client-gateway/`.
 - No Core `pnpm build`.
 
 **Report:** `reports/g-core-expectation-record.md`.
+
+---
+
+# Twelfth dispatch — from `g-integration-small-fixes` and `f-recording-start-send`
+
+**Amendment to `g-w19-docs`.** In `docs/architecture/failure-taxonomy.md` it also
+owns the `AUTH_REQUIRED` bullet (about `:121-123`) and the Dispatch bullet (about
+`:124-132`). `reports/g-integration-small-fixes.md` found both stale, outside that
+worker's lines.
+
+## f-recording-start-guard — one recording start when Core's acknowledgement races the local fallback (extension)
+
+Dispatched once `f-recording-start-send` is committed.
+
+**Owns:** `apps/extension/src/background/connection/active-recording.ts` and
+`connection/tests/active-recording.test.ts`. Also the one file where a recording
+start's project lookup is bounded (`core-api.ts:34` or its caller; name it).
+
+**Read:** `reports/f-recording-start-send.md`, its Notes and Not verified;
+`reports/i-recording-loss.md` Fix design C2.
+
+**Task.**
+1. The worker's probe showed a double start. A `server.start_recording` that
+   arrives while a local start is still running (before `active-recording.ts:200`)
+   starts recording a second time and leaves the project link null. Core now sends
+   that acknowledgement (`g-core-start-order`), so the race is likely. Make it:
+   - start nothing twice;
+   - link the project once the start finishes;
+   - ignore an acknowledgement whose `recordingId` is neither the pending nor the
+     active recording's.
+2. Bound the project lookup a start now waits on, so a stalled lookup cannot hold
+   off the local fallback indefinitely. Say what the start does when the bound is
+   reached.
+
+**Tests.**
+- A row reproducing the double start that fails before the fix (quote the
+  failure), with its mutation.
+- A mismatched `recordingId` is ignored.
+- A stalled lookup reaches the local fallback within its bound.
+- Extension `check` and `test` under a private label; the structure audit.
+
+**Report:** `reports/f-recording-start-guard.md`.

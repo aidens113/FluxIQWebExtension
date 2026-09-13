@@ -1212,3 +1212,45 @@ the single-run evidence fix (`f85ddad`), committed.
   packets and its bench row.
 - Outcome: Accepted
 
+
+## Part nineteen, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: the recording-loss
+diagnosis, whose Core, extension and runner fixes are dispatched.
+
+### 2026-09-13 — i-recording-loss: Core drops what a client sends before its recording is open
+
+- Agent: worker `i-recording-loss` (read-only); decisions by supervisor.
+- Changed: `reports/i-recording-loss.md` only; tenth-dispatch briefs.
+- Found:
+  - Core opens a client-started recording only after `createRecording` returns,
+    and entries, events, snapshots and state updates arriving before then are
+    dropped; some are audited, none with a recording id.
+  - Core never acknowledges a client start, so the extension's 750 ms local
+    fallback fires in every run, not only under load.
+  - Load lengthens the start, so the loss grows from the opening messages to the
+    first actions to everything: counts fall at 13, 10, 6, 5 or 0.
+  - The "appended after Stop" contradiction is two waits: the runner's after
+    Stop, and the Flow lane's second wait on a finished recording, always 0.
+  - Smoke gate 5.0's "4 of 4" included two W01 recording-lane runs that stored
+    0 entries, and HEAD's discard reader, filtering by recording id, sees none.
+- Decisions: the fix is in Core's bridge (an ordered start, an acknowledgement,
+  audited drops), not a serialized WebSocket host. The extension begins locally
+  only after its start was sent. The runner compares action counts on both lanes
+  and counts session-scoped discards. Core is crossed again; the user was alerted.
+  Dispatched `g-core-start-order` and `f-recording-start-send`; queued behind
+  `f-flow-start-page`, `g-recording-completeness`.
+- Validation: supervisor read Core `bridge.ts:196-356` and `:505-565`:
+  `activeRecordings.set` at `:304` follows `await ... createRecording` at `:271`;
+  `:218-220` and `:341-348` audit with no recording id; `:518` and `:555` are
+  `if (!active) return;`. A grep of `F:\!FluxIQ\packages` for `start_recording`
+  finds one sender, `client-gateway/service/commands.ts:43`; extension
+  `handshake.ts:28` is `RECORDING_START_ACCEPT_TIMEOUT_MS = 750`. Worker probe on
+  the pinned Core's built bridge with fake collaborators, a single observation
+  each: concurrent start delays of 50, 450 and 1000 ms kept 8, 3 and 0 of 8
+  entries; handled in order at 1000 ms, 8 of 8.
+- Not verified: the host's concurrent handling (`apps/web/.../client-gateway-websocket.ts:179`,
+  not found by the supervisor's search); Core's start latency in the bundles,
+  which timestamp no open; the extension hazard E1, inferred from code.
+- Outcome: Revised
+

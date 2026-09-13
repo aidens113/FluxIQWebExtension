@@ -643,42 +643,6 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 `2026-09-12-*` Wave 3 and live-validation files, and
 `2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-13 — i-recording-loss: Core drops what a client sends before its recording is open
-
-- Agent: worker `i-recording-loss` (read-only); decisions by supervisor.
-- Changed: `reports/i-recording-loss.md` only; tenth-dispatch briefs.
-- Found:
-  - Core opens a client-started recording only after `createRecording` returns,
-    and entries, events, snapshots and state updates arriving before then are
-    dropped; some are audited, none with a recording id.
-  - Core never acknowledges a client start, so the extension's 750 ms local
-    fallback fires in every run, not only under load.
-  - Load lengthens the start, so the loss grows from the opening messages to the
-    first actions to everything: counts fall at 13, 10, 6, 5 or 0.
-  - The "appended after Stop" contradiction is two waits: the runner's after
-    Stop, and the Flow lane's second wait on a finished recording, always 0.
-  - Smoke gate 5.0's "4 of 4" included two W01 recording-lane runs that stored
-    0 entries, and HEAD's discard reader, filtering by recording id, sees none.
-- Decisions: the fix is in Core's bridge (an ordered start, an acknowledgement,
-  audited drops), not a serialized WebSocket host. The extension begins locally
-  only after its start was sent. The runner compares action counts on both lanes
-  and counts session-scoped discards. Core is crossed again; the user was alerted.
-  Dispatched `g-core-start-order` and `f-recording-start-send`; queued behind
-  `f-flow-start-page`, `g-recording-completeness`.
-- Validation: supervisor read Core `bridge.ts:196-356` and `:505-565`:
-  `activeRecordings.set` at `:304` follows `await ... createRecording` at `:271`;
-  `:218-220` and `:341-348` audit with no recording id; `:518` and `:555` are
-  `if (!active) return;`. A grep of `F:\!FluxIQ\packages` for `start_recording`
-  finds one sender, `client-gateway/service/commands.ts:43`; extension
-  `handshake.ts:28` is `RECORDING_START_ACCEPT_TIMEOUT_MS = 750`. Worker probe on
-  the pinned Core's built bridge with fake collaborators, a single observation
-  each: concurrent start delays of 50, 450 and 1000 ms kept 8, 3 and 0 of 8
-  entries; handled in order at 1000 ms, 8 of 8.
-- Not verified: the host's concurrent handling (`apps/web/.../client-gateway-websocket.ts:179`,
-  not found by the supervisor's search); Core's start latency in the bundles,
-  which timestamp no open; the extension hazard E1, inferred from code.
-- Outcome: Revised
-
 ### 2026-09-13 — w19-c2: Core carries a mapper's expected state into the Flow, and shows the mapper what followed
 
 - Agent: worker `w19-c2` (Core); verified by supervisor. Core's ledger has the
@@ -748,6 +712,59 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
     failed their rows; all restored, `sha256sum -c` OK. The moved reader differs
     from both old copies only by `export`.
 - Not verified: a real bundle read by either producer.
+- Outcome: Accepted
+
+### 2026-09-13 — f-recording-start-send: a recording begins locally only after its start was sent
+
+- Agent: worker `f-recording-start-send`; verified by supervisor.
+- Changed: `recording-start/handshake.ts`. The acceptance window still opens
+  before the send, but when it elapses with the send unsettled, recording begins
+  locally only once that attempt's send settles. There are new rows in
+  `recording-start/tests/handshake.test.ts`, and acknowledgement rows in
+  `connection/tests/active-recording.test.ts`.
+- Found:
+  - A worker probe showed a Core acknowledgement arriving during a local start
+    (before `active-recording.ts:200`) starts recording twice and leaves the
+    project link null.
+  - `beginAccepted` never compares the acknowledged `recordingId` with the
+    pending one.
+  - A send that never settles now never falls back, and the project lookup
+    (`core-api.ts:34`) is unbounded.
+- Decisions: all three go to `f-recording-start-guard`, twelfth dispatch.
+- Validation: supervisor read the diff;
+  `EXTENSION_TEST_BUILD_LABEL=sup11 ... extension check` -> exit 0;
+  `... extension test` -> `# tests 395`, `# pass 395`, `# fail 0`, 21 handshake
+  rows ok. Worker: making the window begin locally at once failed 3 rows (first
+  `handshake.test.ts:196`); three more mutations were each caught; all restored
+  byte-identical.
+- Not verified: Core's acknowledgement live; the Lab.
+- Outcome: Accepted
+
+### 2026-09-13 — g-integration-small-fixes: stale comments, casts and the content-harness script
+
+- Agent: worker `g-integration-small-fixes`; verified by supervisor, who also
+  corrected one stale sentence in `observed-run-evaluation.ts` outside the
+  worker's lines.
+- Changed:
+  - comments in extension, domain and test-runner source, with only comment lines
+    changed in every source file;
+  - `failure-taxonomy.md` and `web-capabilities.md` name `runtime/click-landing.ts`;
+  - one cast removed from `recording/tests/domain.test.ts`, whose fixture's
+    `armPending` now matches the type;
+  - the bench report's truncation sentence;
+  - `apps/extension/package.json`'s `test:content` strips the forwarded `--`.
+- Found: two casts must stay, or the tests do not compile (`project.test.ts:47`,
+  `forms.test.ts:151`). The taxonomy's `AUTH_REQUIRED` and Dispatch bullets are
+  still stale; they went to `g-w19-docs`.
+- Validation: supervisor, with private labels `sup11`:
+  - extension `check` -> exit 0, `test` -> `# pass 395`, `# fail 0`;
+  - domain `check` -> exit 0, `test` -> `# tests 352`, `# pass 352`, `# fail 0`;
+  - test-runner `check` -> exit 0, private build `# tests 502`, `# pass 502`;
+  - content harness `--list` -> `Total: 218 tests in 24 files`;
+  - `pnpm --filter @fluxiq-web-extension/extension test:content -- e2e/content/tests/identity-veto.spec.ts`
+    -> `4 passed`;
+  - the structure audit -> passed.
+- Not verified: the full content harness through the script; root gates.
 - Outcome: Accepted
 
 ## Open Questions
