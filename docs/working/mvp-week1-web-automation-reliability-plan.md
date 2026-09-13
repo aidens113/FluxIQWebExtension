@@ -40,9 +40,9 @@ settled ledger entries are in parts one to twenty-four of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13, while workers run.**
-- **This repository:** `7263534`, 64 commits ahead of `origin/dev`, not pushed.
-- **Core:** `187f40d`, 8 commits ahead of `origin/dev`, `fluxiq` 0.3.0, with its
-  packages built at `187f40d`. The eight commits:
+- **This repository:** `4c8f30c`, 65 commits ahead of `origin/dev`, not pushed.
+- **Core:** `5845f5d`, 9 commits ahead of `origin/dev`, `fluxiq` **0.4.0**, with its
+  packages built at `187f40d`. The nine commits:
   - `5d495eb`, trace withholding;
   - `267a2ca`, the late-message discard;
   - `6f172b9`, a rejected expected state fails the attempt;
@@ -50,7 +50,8 @@ settled ledger entries are in parts one to twenty-four of
   - `c0e0ce9`, a mapper candidate's `expectedState` and the context `following`;
   - `5ca9981`, one expectation-rejected record, and an empty expectation is none;
   - `73a81e9`, a client's recording start is ordered and acknowledged;
-  - `187f40d`, a recorded entry keeps its source event id and source.
+  - `187f40d`, a recorded entry keeps its source event id and source;
+  - `5845f5d`, `fluxiq` 0.4.0, with a migration note for every change above.
 - **Gates:** the supervisor reran per-package gates for every commit. Root gates,
   the content harness and Core's full suite have not run since this session began.
 
@@ -101,7 +102,8 @@ settled ledger entries are in parts one to twenty-four of
 1. **After `w19-d1b`:** `g-w19-docs`, and W19 `expired` ×3 in Stage 2's
    worktrees at that commit.
 2. **Integration:**
-   - Core bumped to 0.4.0, with a migration note and `package:lint`;
+   - Core `package:lint` and `pnpm build` on the 0.4.0 tree (the bump and its
+     migration note landed in `5845f5d`);
    - root `pnpm check`, `pnpm test`, `pnpm build` and the content harness, one at
      a time;
    - regenerate `domain/.test-build`;
