@@ -1,10 +1,11 @@
 import type { ExpectedEvent, ResolvedScenarioWorkflow, WebScenario } from "@fluxiq-web-extension/test-contracts";
+import { RunnerFailure } from "../failure.js";
 import type { FluxIQHttpOptions } from "../http-control.js";
 import { declaredSecretBindingInputs, flowSecretRequests, type DeclaredSecret } from "./declared-secrets.js";
 import { declaredUploadInputs, flowUploadRequests } from "./declared-uploads.js";
 import { assertFlowActions, assertFlowExtraction, assertFlowFailure, flowExtractionExpectation, type FlowExtractionExpectation } from "./expectations.js";
 import { awaitFinalizedRecording, type FinalizedRecording, type FinalizedRecordingWait } from "./finalized-recording.js";
-import { flowActionTypes, readFlowNodes } from "./flow-action-types.js";
+import { flowActionTypes, readFlowNodes, type FlowNodeRecord } from "./flow-action-types.js";
 import { flowLaneObservation, type RunLaneObservation } from "./lane-observation.js";
 import { approveRecordingFlowProposal, assertProposalCoversRecording, createRecordingFlowProposal, type RecordingFlowProposal } from "./recording-flow-proposal.js";
 import { executeRecordedFlowRun, type PersistedFlowRunControl, type PersistedFlowRunOutcome } from "./persisted-flow-run.js";
@@ -67,8 +68,13 @@ export type FlowLaneInput = {
  * `extraction` says whether the workflow's extraction expectation applied to
  * this Flow, and so whether it is judged.
  */
-export type FlowLaneEvidence = { recording: FinalizedRecording; proposal: RecordingFlowProposal; flowId: string; run: PersistedFlowRunOutcome; observation: RunLaneObservation; extraction: FlowExtractionExpectation };
+export type FlowLaneEvidence = { recording: FinalizedRecording; proposal: RecordingFlowProposal; flowId: string; run: PersistedFlowRunOutcome; observation: RunLaneObservation; extraction: FlowExtractionExpectation; startCandidateIndex: number | null };
 
+/**
+ * `startCandidateIndex` is where the run started in the recording's candidate
+ * order: 0 for the recording's first action, or null when no attempt landed on
+ * an action node.
+ */
 export type FlowLaneOutcome = {
   recording: FinalizedRecording;
   proposal: RecordingFlowProposal;
@@ -76,6 +82,7 @@ export type FlowLaneOutcome = {
   run: PersistedFlowRunOutcome;
   observation: RunLaneObservation;
   extraction: FlowExtractionExpectation;
+  startCandidateIndex: number | null;
 };
 
 /**
@@ -110,11 +117,16 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
   // Flow started wherever the recording left the tab (W18, on auth-gate's
   // account page, where no password field exists).
   await input.prepareFlowPage();
-  // Read before running, and once: the same nodes answer both questions below.
+  // Read before running, and once: the same nodes answer every question below.
   const nodes = await readFlowNodes(input.control, { projectId: input.projectId, flowId: approved.flowId }, bounds);
   // The map identifies each attempt, and a Flow whose nodes dispatch no output
   // could not have run the recording at all.
   const actionTypes = flowActionTypes(nodes, approved.flowId);
+  // Each action node's place in the recording's order, so the run's start is
+  // judged against the recording rather than against Core's start rule. An
+  // action node linked to no candidate of this proposal fails here, before the
+  // run starts.
+  const candidateOrder = recordedCandidateOrder(nodes, actionTypes, proposal, approved.flowId);
   // A node on a sensitive control asks for its value under a path rather than
   // carrying it. Each such request is answered by exactly one declared secret,
   // keyed by the path Core resolves, or the run fails here, before it starts.
@@ -134,6 +146,7 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
     flowId: approved.flowId,
     facilityRunId: input.facilityRunId,
     actionTypes,
+    candidateOrder,
     // Each declared value and each supplied file once, under the path a node reads: Core persists a run's inputs, so any further copy is a copy on disk.
     inputs: { ...secretInputs, ...uploadInputs, scenarioId: input.scenario.id, facilityRunId: input.facilityRunId },
   }, bounds);
@@ -152,11 +165,74 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
     run,
     automationFailureExpected: expected.failure ?? null,
   });
-  await input.recordEvidence({ recording, proposal, flowId: approved.flowId, run, observation, extraction });
+  // Where the run started, in the recording's order: 0 is the recording's first
+  // action. Null when no attempt landed on an action node.
+  const startCandidateIndex = run.startCandidateIndex ?? null;
+  await input.recordEvidence({ recording, proposal, flowId: approved.flowId, run, observation, extraction, startCandidateIndex });
+  // Before the expectations, which would otherwise blame whichever later action
+  // they name ("did not produce a web.dom.click action", W28 run 2). The start
+  // comes first: a run that began at a later action also stops short of the
+  // actions before it, and the start is the cause.
+  assertFlowStartedAtFirstAction(startCandidateIndex, proposal.candidateIds.length);
+  assertFlowDidNotStopEarly(run);
   assertFlowFailure(expected.failure, run.failure);
   assertFlowActions(expected.actions, run.actions);
   assertFlowExtraction(expected.extracted, run.extracted, actionTypes);
-  return { recording, proposal, flowId: approved.flowId, run, observation, extraction };
+  return { recording, proposal, flowId: approved.flowId, run, observation, extraction, startCandidateIndex };
+}
+
+/**
+ * Each action node's position in the proposal's candidate order, which is the
+ * recording's order, through the candidate id approval wrote onto the node.
+ * Only action nodes need one, since they are the nodes a run's first action
+ * attempt can land on. An action node with no link, or with a link to a
+ * candidate this proposal does not hold, leaves the lane unable to say where
+ * the recording begins, so the run is refused before it starts.
+ */
+function recordedCandidateOrder(nodes: readonly FlowNodeRecord[], actionTypes: ReadonlyMap<string, string>, proposal: RecordingFlowProposal, flowId: string): Map<string, number> {
+  const positions = new Map(proposal.candidateIds.map((candidateId, index) => [candidateId, index] as const));
+  const order = new Map<string, number>();
+  let unlinkedActionNodes = 0;
+  for (const node of nodes) {
+    if (!actionTypes.has(node.id)) continue;
+    const position = node.recordingCandidateId === undefined ? undefined : positions.get(node.recordingCandidateId);
+    if (position === undefined) unlinkedActionNodes += 1;
+    else order.set(node.id, position);
+  }
+  if (unlinkedActionNodes) {
+    throw new RunnerFailure("recording.contract", "The approved Flow has action nodes linked to no candidate of the recording's proposal, so where the recording begins cannot be identified", { details: { flowId, unlinkedActionNodes, candidateCount: proposal.candidateIds.length } });
+  }
+  return order;
+}
+
+/**
+ * A run whose first action attempt is not the recording's first action ran the
+ * recording from the wrong place: W15 started at its tab close 7 of 7 times, and
+ * W28's run 2 at its last scroll (`i-w15-w28-flow-order`). It fails as exactly
+ * that, by the candidate's position. Node ids and Core's start rule are not part
+ * of the judgement, so it holds whatever start rule Core uses.
+ */
+function assertFlowStartedAtFirstAction(startCandidateIndex: number | null, candidateCount: number): void {
+  if (startCandidateIndex === 0) return;
+  if (startCandidateIndex === null) {
+    throw new RunnerFailure("action.dispatch", "The Flow's attempts name none of its action nodes, so the run cannot be shown to start at the recording's first action", { details: { candidateCount } });
+  }
+  throw new RunnerFailure("action.dispatch", `The Flow started at recorded action ${startCandidateIndex + 1} of ${candidateCount}, not at the recording's first action`, { details: { startCandidateIndex, candidateCount } });
+}
+
+/**
+ * A run Core failed while every attempt succeeded and some recorded action was
+ * never attempted is a stop, not an action failure. It fails as exactly that,
+ * by counts: node ids and Core's message are not part of it.
+ */
+function assertFlowDidNotStopEarly(run: PersistedFlowRunOutcome): void {
+  const stop = run.stoppedWithoutFailedAttempt;
+  if (!stop) return;
+  throw new RunnerFailure(
+    "action.dispatch",
+    `The Flow stopped with ${stop.unvisitedActions} recorded action(s) never attempted and no failed attempt, after ${stop.attemptedActions} action(s) succeeded`,
+    { details: { attemptedActions: stop.attemptedActions, unvisitedActions: stop.unvisitedActions } },
+  );
 }
 
 /**
@@ -175,14 +251,18 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
  * sanitized evidence packets Core captured around it -- measurements, never the
  * packets. `extractionExpectation` says whether the workflow's extraction was
  * judged against this Flow, and each action carries Core's transition
- * comparison status when Core reported one.
+ * comparison status when Core reported one. `stoppedWithoutFailedAttempt` is
+ * the run's early stop, by counts, or null when it did not stop that way.
  */
 export function flowLaneSnapshot(evidence: FlowLaneEvidence) {
   return {
     recording: { recordingId: evidence.recording.recordingId, entryCount: evidence.recording.entryCount, secondWait: { entriesAppendedAfterFirstPoll: evidence.recording.entriesAppendedWhileWaiting, waitMs: evidence.recording.waitedMs, polls: evidence.recording.polls } },
     proposalId: evidence.proposal.proposalId, mapperId: evidence.proposal.mapperId, candidateCount: evidence.proposal.candidateCount, proposalIssues: [...evidence.proposal.issues],
     flowId: evidence.flowId, runtimeRunId: evidence.run.runId, status: evidence.run.status,
-    harnessActivations: evidence.run.harnessActivations, failure: evidence.run.failure, extractionCount: evidence.run.extracted.length, extractionExpectation: evidence.extraction,
+    harnessActivations: evidence.run.harnessActivations, failure: evidence.run.failure, stoppedWithoutFailedAttempt: evidence.run.stoppedWithoutFailedAttempt ?? null,
+    // Where the run started in the recording's candidate order: 0 for its first action, null when no attempt landed on an action node.
+    startCandidateIndex: evidence.startCandidateIndex ?? null,
+    extractionCount: evidence.run.extracted.length, extractionExpectation: evidence.extraction,
     actions: evidence.run.actions.map((action) => ({
       actionType: action.actionType,
       status: action.status,

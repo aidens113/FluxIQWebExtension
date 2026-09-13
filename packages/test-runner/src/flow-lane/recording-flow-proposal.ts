@@ -14,8 +14,14 @@ export type RecordingProposalControl = {
  * at all, which is a large part of why `L-dropped-action` survived undiagnosed
  * from Wave 2. It is carried out of here on every path now, and written into
  * the run bundle whether the lane passes or fails.
+ *
+ * `candidateIds` are the candidates' ids in Core's order, which is the
+ * recording's order: Core maps the timeline as stored and approval chains one
+ * node per candidate in this order, writing each candidate's id onto its node's
+ * `metadata.recordingCandidateId` (Core `recordings/proposal-candidates.ts`).
+ * The first id is the recording's first action, whatever start rule Core uses.
  */
-export type RecordingFlowProposal = { proposalId: string; recordingId: string; mapperId: string; status: string; candidateCount: number; issues: readonly string[] };
+export type RecordingFlowProposal = { proposalId: string; recordingId: string; mapperId: string; status: string; candidateCount: number; candidateIds: readonly string[]; issues: readonly string[] };
 export type ApprovedRecordingFlow = { flowId: string; proposalId: string; created: boolean };
 
 /**
@@ -48,6 +54,7 @@ export async function createRecordingFlowProposal(
     mapperId: textOf(asRecord(newest.mapper, "proposal.mapper").id, "proposal.mapper.id"),
     status: textOf(newest.status, "proposal.status"),
     candidateCount: candidates.length,
+    candidateIds: candidates.map((value, index) => textOf(asRecord(value, `proposal.candidates[${index}]`).candidateId, `proposal.candidates[${index}].candidateId`)),
     issues,
   };
 }

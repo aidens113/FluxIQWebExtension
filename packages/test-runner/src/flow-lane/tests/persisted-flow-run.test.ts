@@ -195,3 +195,64 @@ test("an attempt with no packet, or a summary that is not one, carries no eviden
   const read = await executeRecordedFlowRun(mixed, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
   assert.deepEqual(read.actions[0]?.evidencePackets, [{ point: "afterAction", bytes: utf8Bytes({ truncated: false }), truncated: false }]);
 });
+
+/**
+ * `i-w15-w28-flow-order`, W28 run 2: Core started the Flow at its last scroll,
+ * which succeeded with no outgoing edge, and failed the run with three nodes
+ * unvisited. No attempt failed, so nothing in the run said it had stopped.
+ */
+test("a failed run whose every attempt succeeded, with action nodes never attempted, is recorded as a stop, by counts", async () => {
+  const run = { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" };
+  const actionTypes = new Map([["recorded.click.one", "web.dom.click"], ["recorded.click.two", "web.dom.click"], ["recorded.scroll.one", "web.dom.scroll"], ["recorded.scroll.two", "web.dom.scroll"]]);
+  const failedRun = { summary: { runId: "run.one", status: "failed" }, metadata: { currentNodeId: "recorded.scroll.two", terminalFailureReason: "Node recorded.scroll.two completed without an outgoing edge before the Flow visited every node." } };
+  const { client } = control({}, { ...failedRun, actionAttempts: [attempt({ nodeId: "recorded.scroll.two" })] });
+  const outcome = await executeRecordedFlowRun(client, { ...run, actionTypes });
+  assert.deepEqual(outcome.stoppedWithoutFailedAttempt, { attemptedActions: 1, unvisitedActions: 3 });
+  assert.equal(outcome.failure, null);
+  for (const left of ["recorded.scroll.two", "outgoing edge"]) assert.equal(JSON.stringify(outcome).includes(left), false, `${left} must not travel`);
+  const { client: retried } = control({}, { ...failedRun, actionAttempts: [attempt({ nodeId: "recorded.click.one" }), attempt({ attemptId: "attempt.two", nodeId: "recorded.click.one", order: 1 })] });
+  assert.deepEqual((await executeRecordedFlowRun(retried, { ...run, actionTypes })).stoppedWithoutFailedAttempt, { attemptedActions: 1, unvisitedActions: 3 }, "a node attempted twice is one action");
+
+  const notAStop: Array<[string, Record<string, unknown>, ReadonlyMap<string, string> | undefined]> = [
+    ["an attempt that failed", { ...failedRun, actionAttempts: [attempt({ nodeId: "recorded.click.one", status: "failed", failure: { category: "target_not_found", code: "web.target.not_found", retryable: true } })] }, actionTypes],
+    ["an attempt that timed out", { ...failedRun, actionAttempts: [attempt({ nodeId: "recorded.click.one", status: "timed_out" })] }, actionTypes],
+    ["an attempt that was cancelled", { ...failedRun, actionAttempts: [attempt({ nodeId: "recorded.click.one", status: "cancelled" })] }, actionTypes],
+    ["every action node attempted", { ...failedRun, actionAttempts: [...actionTypes.keys()].map((nodeId, order) => attempt({ attemptId: `attempt.${order}`, nodeId, order })) }, actionTypes],
+    ["a run Core did not fail", { actionAttempts: [attempt({ nodeId: "recorded.scroll.two" })] }, actionTypes],
+    ["no action map", { ...failedRun, actionAttempts: [attempt({ nodeId: "recorded.scroll.two" })] }, undefined],
+  ];
+  for (const [shape, detail, types] of notAStop) {
+    const { client: other } = control({}, detail);
+    const read = await executeRecordedFlowRun(other, { ...run, ...(types ? { actionTypes: types } : {}) });
+    assert.equal(Object.hasOwn(read, "stoppedWithoutFailedAttempt"), false, shape);
+  }
+});
+
+/**
+ * `g-runner-start-guard`: where a run started is the recording position of its
+ * first attempt, in Core's `order`, on a node the candidate order names. An
+ * attempt on another node, or one that names no node, is passed over, a retried
+ * start is still the start, and the position travels without the node's id.
+ */
+test("the run's start is the recording position of its first attempt on a recorded node, and is absent without an order or such an attempt", async () => {
+  const run = { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" };
+  const candidateOrder = new Map([["recorded.click.one", 0], ["recorded.close", 2]]);
+  // Listed out of order on purpose: Core's `order` decides.
+  const attempts = [
+    attempt({ attemptId: "attempt.close", nodeId: "recorded.close", order: 2 }),
+    attempt({ attemptId: "attempt.control", nodeId: "builtin.start", order: 0 }),
+    attempt({ attemptId: "attempt.close.retry", nodeId: "recorded.close", order: 3 }),
+    attempt({ attemptId: "attempt.click", nodeId: "recorded.click.one", order: 4 }),
+    attempt({ attemptId: "attempt.unnamed", nodeId: undefined, order: 1 }),
+  ];
+  const { client } = control({}, { actionAttempts: attempts });
+  const outcome = await executeRecordedFlowRun(client, { ...run, candidateOrder });
+  assert.equal(outcome.startCandidateIndex, 2);
+  assert.equal(JSON.stringify(outcome).includes("recorded.close"), false, "a position, never a node id");
+  const { client: first } = control({}, { actionAttempts: [attempt({ nodeId: "recorded.click.one" })] });
+  assert.equal((await executeRecordedFlowRun(first, { ...run, candidateOrder })).startCandidateIndex, 0, "position 0 is a start, not an absence");
+  const { client: unordered } = control({}, { actionAttempts: attempts });
+  assert.equal(Object.hasOwn(await executeRecordedFlowRun(unordered, run), "startCandidateIndex"), false, "no order");
+  const { client: controlOnly } = control({}, { actionAttempts: [attempt({ nodeId: "builtin.start" })] });
+  assert.equal(Object.hasOwn(await executeRecordedFlowRun(controlOnly, { ...run, candidateOrder }), "startCandidateIndex"), false, "no attempt on a recorded node");
+});

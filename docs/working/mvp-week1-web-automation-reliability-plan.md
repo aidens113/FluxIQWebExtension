@@ -36,11 +36,11 @@ has its full proof. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
-settled ledger entries are in parts one to forty-three of
+settled ledger entries are in parts one to forty-four of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13.**
-- **This repository:** `5bad6c3`, 102 commits ahead of `origin/dev`, not pushed.
+- **This repository:** `f41072e`, 106 commits ahead of `origin/dev`, not pushed.
 - **Core:** `604d0d3`, 13 commits ahead of `origin/dev`, `fluxiq` **0.4.0**; its
   packages are built at `6621d66`, the last code commit. Its eleven code commits are
   listed in Core's plan. The newest two are `949fbb4`, which stores a client's
@@ -90,7 +90,7 @@ settled ledger entries are in parts one to forty-three of
 **In flight** (the thirty-sixth dispatch):
 - `g-core-start-node` (Core): a Flow without a declared start begins at its graph's
   root, not at the first node by id (W15, W28).
-- `g-runner-start-guard`: a Flow-lane run that did not start at its first action fails.
+- Committed: `g-runner-start-guard`, so a wrong start or an early stop fails by name.
 - Held for them: Core's half of `g-web-timeout-forwarding` (verified), then Core's
   gate, commits and build.
 
@@ -639,54 +639,6 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 `2026-09-12-*` Wave 3 and live-validation files, and
 `2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-13 — the architecture pages match the code at HEAD (four docs workers, from `i-arch-pages-audit`)
-
-- Agents: workers `d-testing-facility-page`, `d-extension-client-page`,
-  `d-identity-evidence-sensitive-pages` and `d-capabilities-layout-taxonomy-pages`.
-  Two links and the verification are by the supervisor.
-- Changed, in `docs/architecture/`:
-  - **`testing-facility.md`.**
-    - It no longer says the sign-in page prints its password, that a missing
-      outcome means `succeeded`, or that isolated runs never build a Flow.
-    - It gains sections on the recording and Flow lanes, the lane rules, the
-      recording checks, the run leak check with SQLite, declared secrets and
-      uploads, and the bench.
-    - It lists 25 fixtures, and describes the content-script harness.
-  - **`extension-client.md`:** the start-once rule, the page-change flush, and a new
-    section, "A Wait Before A Late Target".
-  - **`element-identity.md`:** the 5,000-element scan bound, and the late-target
-    wait, linked to that new section.
-  - **`sensitive-values.md`:** the upload name rule, and how Core withholds a
-    declared secret sent as a run input.
-  - **`page-evidence.md`, `web-capabilities.md`, `repository-layout.md` and
-    `failure-taxonomy.md`:** smaller corrections, and the content-harness commands.
-    Both command forms ran.
-  - **`packages/test-runner/src/run-scenario.ts`:** a comment no longer repeats the
-    10 s window or the "stays idle" claim.
-  - **`briefs/finish-week1.md`:** the binding rule no longer says the `test:content`
-    filter form finds no tests.
-- Incident: one worker's search printed the auth-gate fixture password into its own
-  tool output. No file holds it: the supervisor's scan counted 0.
-- Validation:
-  - **Supervisor, `dcd-check-links.mjs` over all eight pages:** exit=0, "checked 137
-    relative links in 8 page(s), 0 unresolved".
-  - **Supervisor, `node scripts/structure-audit.mjs`:** "passed (41 warning(s), 17
-    baselined)".
-  - **Supervisor, spot checks in `testing-facility.md`:**
-    - an entry with no `outcome` "is judged on the attempt's presence alone"
-      (`:684`);
-    - a contract rejection is `fixture.invalid` (`:704`);
-    - the auth-gate row "shows a placeholder where the password would be" (`:745`).
-  - **Supervisor, `secret-count.mjs`** over every architecture page and the
-    testing-facility report: "hits=0".
-  - **Worker:** `test:content`, and the direct Playwright form, each ran 12 tests on
-    `select.spec.ts`.
-- Not verified:
-  - rendering in a Markdown viewer;
-  - plan-history wording older than the audit, which was left in place;
-  - the Flow lane's new early-stop check, which `g-runner-start-guard` adds.
-- Outcome: Accepted
-
 ### 2026-09-13 — g-web-timeout-forwarding: the extension is sent the node's timeout, and Core waits that timeout plus a 3,000 ms margin
 
 - Agent: worker `g-web-timeout-forwarding`; one comment and the verification by
@@ -733,6 +685,58 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
     `g-core-start-node`'s;
   - the two sides together, which needs a Core build;
   - W25 `too-slow` in the Lab.
+- Outcome: Accepted
+
+### 2026-09-13 — g-runner-start-guard: a Flow-lane run that did not start at the recording's first action, or stopped with actions never tried, fails by name
+
+- Agent: worker `g-runner-start-guard`, blocked once on ownership and then widened;
+  decisions and verification by supervisor.
+- Changed, in `packages/test-runner/src/flow-lane/`:
+  - **`recording-flow-proposal.ts`:** the proposal keeps its candidates' ids, in
+    Core's order.
+  - **`flow-action-types.ts`:** each Flow node keeps its
+    `metadata.recordingCandidateId`, carried in the lane's one read of the Flow.
+  - **`run-flow-lane.ts` and `persisted-flow-run.ts`:**
+    - an action node with no candidate link fails `recording.contract`, before
+      anything is sent;
+    - `startCandidateIndex` is published in `flow-lane.json`. It is the recorded
+      position the first attempt landed on. Only a position leaves the run reader,
+      never a node id;
+    - a run that did not start at index 0 fails `action.dispatch`: "The Flow started
+      at recorded action N of M, not at the recording's first action". This happens
+      after the run's evidence is written and before the other checks;
+    - a run that Core failed while every attempt succeeded, leaving actions never
+      tried, fails `action.dispatch` with both counts. `stoppedWithoutFailedAttempt`
+      is published.
+  - Tests.
+- Decisions:
+  - The start is judged against the recording's order, not Core's start rule, so the
+    check holds whatever rule Core uses.
+  - The Flow is not read a second time, and node ids are not parsed.
+- Validation:
+  - **Supervisor, test-runner gate `sup63`:**
+    - `check` exit=0; private `tsc` exit=0;
+    - `node --test` printed "# tests 562", "# pass 562", "# fail 0";
+    - the structure audit passed.
+  - **Supervisor, the candidate link the guard depends on:**
+    - **Core `604d0d3` writes it.** `recordings/proposal-candidates.ts:111` sets
+      `recordingCandidateId: candidate.candidateId`, and `graph-store.ts`'s
+      `nodeFromRow` maps `metadata: objectJson(row.metadata_json)`.
+    - **Live Core data holds it.** `count-candidate-link.mjs` over `l-stage2c`'s
+      kept workspaces found 85 occurrences, in 19 of 542 files.
+  - **Worker mutations,** all restored byte-identical:
+    - disabling the start check made W15's shape fail as "unexpected
+      target_not_found" again;
+    - sorting the candidate ids put `entry.13` before `entry.4`, which failed the
+      order row;
+    - breaking the early-stop guard, two ways, failed its rows.
+- Not verified:
+  - **No Lab run.** W15 should fail "started at recorded action N of 5" before
+    Core's start-node fix, and every row should show `startCandidateIndex` 0 after
+    it.
+  - **Core's `get-flow` response carrying node metadata,** which was read from code
+    only.
+  - Root gates.
 - Outcome: Accepted
 
 ## Open Questions

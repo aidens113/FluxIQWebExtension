@@ -31,6 +31,23 @@ test("a recording becomes a proposal through Core's public endpoint, newest firs
   assert.deepEqual(client.calls[0], { endpoint: "create-recording-flow-proposals", payload: { projectId: "project.web", recordingId: "recording.one", force: true } });
 });
 
+/** `g-runner-start-guard`: the recording's first action is the first candidate, so the candidates' ids travel in Core's order. */
+test("the proposal keeps its candidates' ids in Core's order, never sorted, and a candidate without an id is refused", async () => {
+  const ordered = [{ candidateId: "candidate.entry.4.a", outputId: "web.dom.click" }, { candidateId: "candidate.entry.13.b", outputId: "web.browser.tab" }, { candidateId: "candidate.entry.8.c", outputId: "web.browser.tab" }];
+  const client = control({ "create-recording-flow-proposals": { proposals: [proposal({ candidates: ordered })], issues: [] } });
+  const result = await createRecordingFlowProposal(client, { projectId: "project.web", recordingId: "recording.one" });
+  assert.deepEqual(result.candidateIds, ["candidate.entry.4.a", "candidate.entry.13.b", "candidate.entry.8.c"]);
+  assert.equal(result.candidateCount, 3);
+  for (const candidateId of [undefined, "", 7]) {
+    const unnamed = control({ "create-recording-flow-proposals": { proposals: [proposal({ candidates: [candidate, { candidateId, outputId: "web.dom.click" }] })], issues: [] } });
+    await assert.rejects(
+      () => createRecordingFlowProposal(unnamed, { projectId: "project.web", recordingId: "recording.one" }),
+      (error: unknown) => error instanceof RunnerFailure && error.category === "recording.contract" && error.message.includes("proposal.candidates[1].candidateId"),
+      String(candidateId),
+    );
+  }
+});
+
 test("a proposal for another recording, or none at all, is a recording-contract failure carrying Core's issues", async () => {
   const client = control({ "create-recording-flow-proposals": { proposals: [proposal({ recordingId: "recording.other" })], issues: ["No mapper-visible entries remained"] } });
   await assert.rejects(
@@ -64,7 +81,7 @@ test("an unapproved proposal or a mismatched destination is refused", async () =
  * declarations below are copied from the real manifests (`basic-form`'s
  * `scenario.ts`, `auth-gate`'s `manifest.ts`) as they stand.
  */
-const withCandidates = (candidateCount: number): RecordingFlowProposal => ({ proposalId: "proposal.one", recordingId: "recording.one", mapperId: "web-recording-actions", status: "proposed", candidateCount, issues: ["mapped the recording as it stood"] });
+const withCandidates = (candidateCount: number): RecordingFlowProposal => ({ proposalId: "proposal.one", recordingId: "recording.one", mapperId: "web-recording-actions", status: "proposed", candidateCount, candidateIds: Array.from({ length: candidateCount }, (_value, index) => `candidate.${index}`), issues: ["mapped the recording as it stood"] });
 const basicForm: ExpectedEvent[] = [{ type: "web.element.input_changed", count: 2 }, { type: "web.element.changed", count: 1 }, { type: "web.element.clicked", count: 1 }];
 const authGate: ExpectedEvent[] = [{ type: "web.element.input_changed", count: 2 }, { type: "web.element.clicked", count: 1 }];
 

@@ -3927,6 +3927,74 @@ a changed start node and plan digest.
 
 **Report:** `reports/g-runner-start-guard.md`.
 
+**Amendment, 2026-09-13.** Task 2 is done. Task 1 was blocked on ownership: the lane
+drops the data it needs before `run-flow-lane.ts` sees it.
+- `flow-lane/flow-action-types.ts` (`readFlowNodes`) keeps only each node's id and
+  parameters.
+- `flow-lane/recording-flow-proposal.ts` keeps only the candidate count.
+
+Decided: the first action comes from the recording's candidate order, not the graph's
+root, so the check holds whatever start rule Core uses. The worker now also owns those
+two files and their tests. The one-read design stays: carry the order through the
+reads the lane already makes, rather than reading the Flow again or parsing Core's
+node ids.
+
+---
+
+# Thirty-seventh dispatch — the Lab recheck (drafted; dispatched once both repositories are pushed)
+
+## l-stage2d — W15, W28, W25 `too-slow`, W17 and W05 `short-catalog`, then the week1 bench once
+
+The supervisor names both pins at dispatch.
+
+**Owns:**
+- `reports/l-stage2d.md`;
+- the Lab worktrees under `F:\fxlab\`;
+- ignored run directories under `F:\fxlab-runs\stage2d\`.
+
+Nothing tracked.
+
+**Read:**
+- `reports/l-stage2c.md`: its setup, campaign scripts, and its method for keeping and
+  searching Core's workspace, which you may reuse from the scratchpad;
+- `reports/i-w15-w28-flow-order.md`;
+- `reports/i-w05-short-catalog.md`.
+
+**Setup.**
+- Confirm that no other Lab or run process is alive, and that no other agent is
+  running this brief.
+- Move both worktrees to the named pins, and build Core in its worktree.
+- Rebuild `domain/dist`, `packages/test-contracts/dist` and `apps/scenario-lab/dist`
+  in the Lab worktree. Install only if the lockfile changed. Record each exit code.
+- Run with `FLUXIQ_TEST_ENV_FILES=none`, one Lab instance at a time.
+
+**Runs.** Each row is a single observation unless it repeats.
+1. **W15 `multi-tab`, Flow lane, unarmed and `popup-blocked`, ×3 each.**
+   - The Flow's first attempt is its first recorded action.
+   - Unarmed passes, with its tab actions succeeding.
+   - `popup-blocked` reports `output_not_observed`.
+   - Report the order of attempts.
+2. **W28 `iframe-checkout`, Flow lane, ×3, with Core's workspace kept.**
+   - Both frame clicks succeed.
+   - For any recorded scroll, report its frame and position from the kept recording:
+     kinds, frame ids, paths and counts only.
+3. **W25 `delayed-ui` `too-slow`, Flow lane, ×3.** The failure reports
+   `web.action.timeout`, not `output_dispatch.timed_out`, and the run passes.
+4. **W17 `file-transfer` `upload`, Flow lane, ×3, with Core's workspace kept.** The
+   uploaded file's name and its content are each found 0 times, SQLite included.
+5. **W05 `product-catalog` `short-catalog`, Flow lane, ×3.** Report the failing node
+   and its category, for the supervisor's ruling.
+6. **The week1 bench, `--repeat 1`, once.**
+   - Compare every row with Stage 2's 37 of 67, and with `l-stage2c` runs 1-4.
+   - Name the fix that explains each change, and any row that regressed.
+   - Report `recordedActions`, extension against Core, and
+     `discardsAfterFirstRead`.
+
+**Stop** if a run shows a leak above 0, and report it.
+
+**Report:** `reports/l-stage2d.md`: the pins, commands, observed figures, and single
+observations labelled as such.
+
 ## Amendment to `f-capability-confirmations` — a tab confirmation carries its tab (extension)
 
 Dispatched once `f-tab-recording` has reported.

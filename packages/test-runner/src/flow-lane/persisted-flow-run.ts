@@ -108,7 +108,32 @@ export type PersistedFlowRunOutcome = {
   harnessActivations: number;
   /** Records every extract attempt yielded, in attempt order. Proves paginated extraction. */
   extracted: Array<Array<Record<string, string>>>;
+  /**
+   * Set only when Core failed the run, every attempt succeeded, and at least one
+   * of the Flow's action nodes was never attempted: the run stopped early rather
+   * than failing an action. Absent otherwise, and absent when no action map was
+   * given, because then the Flow's action nodes are unknown.
+   */
+  stoppedWithoutFailedAttempt?: FlowStopWithoutFailedAttempt;
+  /**
+   * Where the run started, as a position in the recording's candidate order:
+   * the position `candidateOrder` gives the node of the run's first attempt, in
+   * Core's attempt order, that the order names. 0 is the recording's first
+   * action, and an attempt on a node the order does not name is passed over. A
+   * position, never a node id. Absent when no order was given, or when no
+   * attempt landed on a node it names.
+   */
+  startCandidateIndex?: number;
 };
+
+/**
+ * A run Core failed with no failed attempt, counted over the Flow's action
+ * nodes. W28's shape in `i-w15-w28-flow-order`: the run started at the chain's
+ * last scroll, which succeeded and had no outgoing edge, and Core failed the run
+ * with three nodes unvisited. No attempt failed, so the run had no failure
+ * record. Counts only: node ids and Core's message stay behind.
+ */
+export type FlowStopWithoutFailedAttempt = { attemptedActions: number; unvisitedActions: number };
 
 /**
  * Runs a persisted Flow and reports what happened, including failure.
@@ -120,7 +145,7 @@ export type PersistedFlowRunOutcome = {
  */
 export async function executeRecordedFlowRun(
   control: PersistedFlowRunControl,
-  input: { projectId: string; flowId: string; facilityRunId: string; inputs?: Record<string, unknown>; actionTypes?: ReadonlyMap<string, string> },
+  input: { projectId: string; flowId: string; facilityRunId: string; inputs?: Record<string, unknown>; actionTypes?: ReadonlyMap<string, string>; candidateOrder?: ReadonlyMap<string, number> },
   bounds: FluxIQHttpOptions = {},
 ): Promise<PersistedFlowRunOutcome> {
   await control.selectExistingContext(input.projectId, undefined, bounds, input.flowId);
@@ -145,6 +170,10 @@ export async function executeRecordedFlowRun(
   if (!actions.length) throw new RunnerFailure("action.dispatch", "The approved Flow produced no durable action attempt");
   const failure = actions.map((action) => action.failure).find((record): record is AutomationStudioFailureRecord => record !== null) ?? null;
   const status = runStatus(detail.summaryStatus ?? sessionStatus);
+  const stop = stopWithoutFailedAttempt(status, actions, new Set(detail.attemptNodeIds), input.actionTypes);
+  // The attempts are in Core's `order`, so the first one on a node the recording's order names is where the run started.
+  const startNodeId = detail.attemptNodeIds.find((nodeId) => input.candidateOrder?.has(nodeId) === true);
+  const startCandidateIndex = startNodeId === undefined ? undefined : input.candidateOrder?.get(startNodeId);
   return {
     runId,
     status,
@@ -152,7 +181,28 @@ export async function executeRecordedFlowRun(
     failure,
     harnessActivations: detail.harnessActivations,
     extracted: actions.flatMap((action) => (action.extracted ? [action.extracted] : [])),
+    ...(stop ? { stoppedWithoutFailedAttempt: stop } : {}),
+    ...(startCandidateIndex === undefined ? {} : { startCandidateIndex }),
   };
+}
+
+/**
+ * `FlowStopWithoutFailedAttempt` for a failed run whose every attempt
+ * succeeded, over the action nodes `actionTypes` names. An attempt in any other
+ * status, `cancelled` or `unknown` included, is not a clean stop, so this
+ * claims nothing for it.
+ */
+function stopWithoutFailedAttempt(
+  status: PersistedFlowRunOutcome["status"],
+  actions: readonly PersistedFlowAction[],
+  attemptedNodeIds: ReadonlySet<string>,
+  actionTypes: ReadonlyMap<string, string> | undefined,
+): FlowStopWithoutFailedAttempt | undefined {
+  if (status !== "failed" || !actionTypes?.size || !actions.every((action) => action.status === "succeeded")) return undefined;
+  const actionNodeIds = [...actionTypes.keys()];
+  const attemptedActions = actionNodeIds.filter((nodeId) => attemptedNodeIds.has(nodeId)).length;
+  const unvisitedActions = actionNodeIds.length - attemptedActions;
+  return unvisitedActions > 0 ? { attemptedActions, unvisitedActions } : undefined;
 }
 
 async function readRunDetail(
@@ -161,18 +211,19 @@ async function readRunDetail(
   runId: string,
   bounds: FluxIQHttpOptions,
   actionTypes: ReadonlyMap<string, string>,
-): Promise<{ summaryStatus: string | undefined; actions: PersistedFlowAction[]; harnessActivations: number }> {
+): Promise<{ summaryStatus: string | undefined; actions: PersistedFlowAction[]; attemptNodeIds: readonly string[]; harnessActivations: number }> {
   const payload = asRecord(await control.automationStudioCall("get-flow-run-detail", { projectId, runId }, bounds), "run detail payload");
   const detail = asRecord(payload.runDetail, "runDetail");
   const summary = asRecord(detail.summary, "runDetail.summary");
   if (summary.runId !== runId) throw new RunnerFailure("runtime.behavior", "Core returned a run detail for a different run");
-  const attempts = Array.isArray(detail.actionAttempts) ? detail.actionAttempts : [];
-  const interventions = Array.isArray(detail.interventions) ? detail.interventions : [];
-  const actions = attempts
+  const attempts = (Array.isArray(detail.actionAttempts) ? detail.actionAttempts : [])
     .map((value, index) => asRecord(value, `runDetail.actionAttempts[${index}]`))
-    .sort((left, right) => numberOf(left.order) - numberOf(right.order))
-    .map((attempt) => flowAction(attempt, actionTypes));
-  return { summaryStatus: typeof summary.status === "string" ? summary.status : undefined, actions, harnessActivations: interventions.length };
+    .sort((left, right) => numberOf(left.order) - numberOf(right.order));
+  const interventions = Array.isArray(detail.interventions) ? detail.interventions : [];
+  const actions = attempts.map((attempt) => flowAction(attempt, actionTypes));
+  // In attempt order, one entry per attempt that names a node, so a retried node appears once per attempt.
+  const attemptNodeIds = attempts.flatMap((attempt) => (typeof attempt.nodeId === "string" ? [attempt.nodeId] : []));
+  return { summaryStatus: typeof summary.status === "string" ? summary.status : undefined, actions, attemptNodeIds, harnessActivations: interventions.length };
 }
 
 /**

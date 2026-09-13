@@ -3,12 +3,19 @@ import type { FluxIQHttpOptions } from "../http-control.js";
 import type { RecordingProposalControl } from "./recording-flow-proposal.js";
 
 /**
- * One node of an approved Flow as `get-flow` returns it: its id, and the
- * parameter values approval wrote onto it. Everything the lane derives from the
- * Flow's nodes -- which output each dispatches, which values it asks the run to
- * supply -- is derived from one read of these.
+ * One node of an approved Flow as `get-flow` returns it: its id, the parameter
+ * values approval wrote onto it, and the recorded candidate it came from.
+ * Everything the lane derives from the Flow's nodes -- which output each
+ * dispatches, which values it asks the run to supply, which recorded action it
+ * is -- is derived from one read of these.
+ *
+ * `recordingCandidateId` is the node's `metadata.recordingCandidateId`, which
+ * approval writes onto every recorded node (Core
+ * `recordings/proposal-candidates.ts`) and the graph index keeps. It places the
+ * node in the proposal's candidate order without reading anything into the
+ * node's id. Absent on a node no recording produced.
  */
-export type FlowNodeRecord = { id: string; parameterValues: Readonly<Record<string, unknown>> | undefined };
+export type FlowNodeRecord = { id: string; parameterValues: Readonly<Record<string, unknown>> | undefined; recordingCandidateId?: string };
 
 /**
  * Every node of the approved Flow, read once: the parent Flow first and every
@@ -66,7 +73,9 @@ async function flowNodes(control: RecordingProposalControl, projectId: string, f
   const flow = asRecord(payload.flow, "get-flow flow");
   return (Array.isArray(flow.nodes) ? flow.nodes : []).flatMap((value) => {
     const node = optionalRecord(value);
-    return typeof node?.id === "string" ? [{ id: node.id, parameterValues: optionalRecord(node.parameterValues) }] : [];
+    if (typeof node?.id !== "string") return [];
+    const recordingCandidateId = optionalRecord(node.metadata)?.recordingCandidateId;
+    return [{ id: node.id, parameterValues: optionalRecord(node.parameterValues), ...(typeof recordingCandidateId === "string" && recordingCandidateId ? { recordingCandidateId } : {}) }];
   });
 }
 

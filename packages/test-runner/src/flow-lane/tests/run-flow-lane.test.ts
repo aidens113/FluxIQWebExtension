@@ -69,8 +69,12 @@ function fakeCore(options: { appendsAt: readonly number[]; finalizedAt?: number;
       if (endpoint === "get-flow") {
         flowReads.push(`get-flow:${String(payload.flowId)}`);
         sequence.push(`get-flow:${String(payload.flowId)}`);
-        if (payload.flowId === "flow.graph") return { flow: { nodes: options.graphNodes ?? [] } };
-        return { flow: { nodes: [{ id: "node.one", parameterValues: { outputId: "web.dom.click" } }] } };
+        // Approval links each recorded node to its candidate, in candidate order:
+        // `node.one` is `candidate.0` and the graph's nodes follow it. A node
+        // given its own `metadata` keeps it.
+        const linked = (node: unknown, index: number) => (node && typeof node === "object" && "metadata" in node ? node : { ...(node as object), metadata: { recordingCandidateId: `candidate.${index}` } });
+        if (payload.flowId === "flow.graph") return { flow: { nodes: (options.graphNodes ?? []).map((node, index) => linked(node, index + 1)) } };
+        return { flow: { nodes: [linked({ id: "node.one", parameterValues: { outputId: "web.dom.click" } }, 0)] } };
       }
       if (endpoint === "list-flow-subflows") {
         flowReads.push(`list-flow-subflows:${String(payload.flowId)}`);
@@ -413,6 +417,62 @@ test("a Flow with no extract node is not judged on the workflow's extraction, an
   const undeclared: FlowLaneEvidence[] = [];
   await runLane(fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500 }), undeclared);
   assert.equal(undeclared[0]?.extraction, "not_expected");
+});
+
+/**
+ * `i-w15-w28-flow-order`, W28 run 2: the Flow started at its last scroll, which
+ * succeeded, and Core failed the run with the other actions unvisited. The lane
+ * reported that as an expectation about a later action; it now fails as a stop,
+ * after publishing the run.
+ */
+test("a Flow that stops with recorded actions never attempted and no failed attempt fails as exactly that, after its evidence is published", async () => {
+  const graphNodes = [{ id: "node.two", parameterValues: { outputId: "web.dom.click" } }, { id: "node.three", parameterValues: { outputId: "web.dom.scroll" } }];
+  const evidence: FlowLaneEvidence[] = [];
+  await assert.rejects(
+    () => runLane(fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500, graphNodes, runStatus: "failed" }), evidence, { expected: { actions: [{ action: "web.dom.scroll" }] } }),
+    (error: unknown) => error instanceof RunnerFailure && error.category === "action.dispatch" && error.message === "The Flow stopped with 2 recorded action(s) never attempted and no failed attempt, after 1 action(s) succeeded",
+  );
+  assert.equal(evidence.length, 1, "the run is published before the stop is judged");
+  assert.deepEqual(flowLaneSnapshot(evidence[0]!).stoppedWithoutFailedAttempt, { attemptedActions: 1, unvisitedActions: 2 });
+  const ranEveryAction: FlowLaneEvidence[] = [];
+  await runLane(fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500 }), ranEveryAction);
+  assert.equal(flowLaneSnapshot(ranEveryAction[0]!).stoppedWithoutFailedAttempt, null);
+});
+
+/**
+ * `i-w15-w28-flow-order`, W15: Core started the Flow at the recording's tab close,
+ * a later candidate, and the close failed with no tab to act on. The lane judges
+ * the start against the recording's candidate order, not Core's start rule, and
+ * fails the run as a wrong start after publishing it.
+ */
+test("a Flow whose first attempt is not the recording's first action fails as a wrong start, by candidate position, after its evidence is published", async () => {
+  const graphNodes = [{ id: "node.switch", parameterValues: { outputId: "web.browser.tab" } }, { id: "node.close", parameterValues: { outputId: "web.browser.tab" } }];
+  const notFound = { category: "target_not_found", code: "web.target.not_found", retryable: true };
+  const wrongStart = (error: unknown) => error instanceof RunnerFailure && error.category === "action.dispatch" && error.message === "The Flow started at recorded action 3 of 4, not at the recording's first action";
+  const evidence: FlowLaneEvidence[] = [];
+  await assert.rejects(() => runLane(fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500, graphNodes, runStatus: "failed", attempt: { nodeId: "node.close", status: "failed", failure: notFound } }), evidence), wrongStart);
+  assert.equal(evidence.length, 1, "the run is published before its start is judged");
+  assert.equal(evidence[0]?.startCandidateIndex, 2);
+  assert.equal(flowLaneSnapshot(evidence[0]!).startCandidateIndex, 2);
+  // W28 run 2: started at a later action that succeeded, then stopped. The start is the cause, so it is what is named.
+  await assert.rejects(() => runLane(fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500, graphNodes, runStatus: "failed", attempt: { nodeId: "node.close" } }), []), wrongStart);
+  const started: FlowLaneEvidence[] = [];
+  await runLane(fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500, graphNodes }), started);
+  assert.equal(flowLaneSnapshot(started[0]!).startCandidateIndex, 0, "a run that started at the recording's first action says so");
+});
+
+test("an action node linked to no candidate of the recording's proposal fails the run before it starts", async () => {
+  for (const metadata of [{}, { recordingCandidateId: "candidate.from-another-proposal" }]) {
+    const fake = fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500, graphNodes: [{ id: "node.unlinked", parameterValues: { outputId: "web.dom.click" }, metadata }] });
+    const reported: number[] = [];
+    await assert.rejects(
+      () => runLane(fake, [], { flowDispatchStarting: at => { reported.push(at); } }),
+      (error: unknown) => error instanceof RunnerFailure && error.category === "recording.contract" && (error.details as { unlinkedActionNodes?: unknown }).unlinkedActionNodes === 1,
+      JSON.stringify(metadata),
+    );
+    assert.deepEqual(fake.startedInputs, [], "nothing was started");
+    assert.deepEqual(reported, [], "and no dispatch was reported");
+  }
 });
 
 /** Lab Stage 2, W19: Core's comparison status for the click reaches `snapshots/flow-lane.json`, so a run can quote `blocked`. */

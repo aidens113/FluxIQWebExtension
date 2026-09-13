@@ -3379,3 +3379,55 @@ Moved verbatim on arrival to keep headroom under the plan limit: the W15 and W28
 - Not verified: the probe step's 1 s bound, and what `frames.spec.ts` proves about
   child frames.
 - Outcome: Revised
+
+## Part forty-four, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: the architecture pages pass, committed in 696e8a8.
+
+### 2026-09-13 — the architecture pages match the code at HEAD (four docs workers, from `i-arch-pages-audit`)
+
+- Agents: workers `d-testing-facility-page`, `d-extension-client-page`,
+  `d-identity-evidence-sensitive-pages` and `d-capabilities-layout-taxonomy-pages`.
+  Two links and the verification are by the supervisor.
+- Changed, in `docs/architecture/`:
+  - **`testing-facility.md`.**
+    - It no longer says the sign-in page prints its password, that a missing
+      outcome means `succeeded`, or that isolated runs never build a Flow.
+    - It gains sections on the recording and Flow lanes, the lane rules, the
+      recording checks, the run leak check with SQLite, declared secrets and
+      uploads, and the bench.
+    - It lists 25 fixtures, and describes the content-script harness.
+  - **`extension-client.md`:** the start-once rule, the page-change flush, and a new
+    section, "A Wait Before A Late Target".
+  - **`element-identity.md`:** the 5,000-element scan bound, and the late-target
+    wait, linked to that new section.
+  - **`sensitive-values.md`:** the upload name rule, and how Core withholds a
+    declared secret sent as a run input.
+  - **`page-evidence.md`, `web-capabilities.md`, `repository-layout.md` and
+    `failure-taxonomy.md`:** smaller corrections, and the content-harness commands.
+    Both command forms ran.
+  - **`packages/test-runner/src/run-scenario.ts`:** a comment no longer repeats the
+    10 s window or the "stays idle" claim.
+  - **`briefs/finish-week1.md`:** the binding rule no longer says the `test:content`
+    filter form finds no tests.
+- Incident: one worker's search printed the auth-gate fixture password into its own
+  tool output. No file holds it: the supervisor's scan counted 0.
+- Validation:
+  - **Supervisor, `dcd-check-links.mjs` over all eight pages:** exit=0, "checked 137
+    relative links in 8 page(s), 0 unresolved".
+  - **Supervisor, `node scripts/structure-audit.mjs`:** "passed (41 warning(s), 17
+    baselined)".
+  - **Supervisor, spot checks in `testing-facility.md`:**
+    - an entry with no `outcome` "is judged on the attempt's presence alone"
+      (`:684`);
+    - a contract rejection is `fixture.invalid` (`:704`);
+    - the auth-gate row "shows a placeholder where the password would be" (`:745`).
+  - **Supervisor, `secret-count.mjs`** over every architecture page and the
+    testing-facility report: "hits=0".
+  - **Worker:** `test:content`, and the direct Playwright form, each ran 12 tests on
+    `select.spec.ts`.
+- Not verified:
+  - rendering in a Markdown viewer;
+  - plan-history wording older than the audit, which was left in place;
+  - the Flow lane's new early-stop check, which `g-runner-start-guard` adds.
+- Outcome: Accepted

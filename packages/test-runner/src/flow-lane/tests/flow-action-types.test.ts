@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { RunnerFailure } from "../../failure.js";
-import { readFlowActionTypes } from "../flow-action-types.js";
+import { readFlowActionTypes, readFlowNodes } from "../flow-action-types.js";
 
 const recordedNode = (id: string, outputId: string) => ({ id, definitionId: "builtin.policy.action", parameterValues: { outputId, parameters: {} } });
 
@@ -52,4 +52,28 @@ test("a Flow that dispatches no output is refused, since its run could never be 
     () => readFlowActionTypes(client, { projectId: "project.web", flowId: "flow.parent" }),
     (error: unknown) => error instanceof RunnerFailure && error.category === "recording.contract",
   );
+});
+
+/**
+ * `g-runner-start-guard`: the lane places a run's start in the recording's order
+ * through the candidate id approval writes onto each recorded node. It arrives
+ * with the one read the lane already makes, and is never read out of a node id.
+ */
+test("each node carries the recorded candidate its metadata names, and a node with none, or a malformed one, carries none", async () => {
+  const withMetadata = (id: string, metadata: unknown) => ({ ...recordedNode(id, "web.dom.click"), metadata });
+  const client = control({
+    "flow.parent": [],
+    "flow.graph": [
+      // The id says entry 10 and the metadata says entry 9: the metadata is what is read.
+      withMetadata("recorded.candidate.entry.10.one", { recordingCandidateId: "candidate.entry.9.one", mapperId: "web-recording-actions" }),
+      recordedNode("recorded.plain", "web.dom.click"),
+      withMetadata("recorded.empty", { recordingCandidateId: "" }),
+      withMetadata("recorded.number", { recordingCandidateId: 7 }),
+      withMetadata("recorded.list", ["candidate.list"]),
+    ],
+  }, [{ subflowId: "subflow.primary", graphFlowId: "flow.graph" }]);
+  const nodes = await readFlowNodes(client, { projectId: "project.web", flowId: "flow.parent" });
+  assert.deepEqual(nodes.map((node) => node.recordingCandidateId), ["candidate.entry.9.one", undefined, undefined, undefined, undefined]);
+  assert.deepEqual(nodes.filter((node) => Object.hasOwn(node, "recordingCandidateId")).map((node) => node.id), ["recorded.candidate.entry.10.one"]);
+  assert.deepEqual(client.calls, ["get-flow:flow.parent", "list-flow-subflows:flow.parent", "get-flow:flow.graph"], "carried by the one read");
 });
