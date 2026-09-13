@@ -151,7 +151,7 @@ function metricLines(report: BenchReport, coverage: BenchMarkdownCoverage): stri
     "",
     table(["Lane", "Metric", "Samples", "p50", "p95"], distributions.map(([name, distribution]) => [ALL_LANES, name, String(distribution.samples), distribution.p50 === null ? "n/a" : String(distribution.p50), distribution.p95 === null ? "n/a" : String(distribution.p95)])),
     "",
-    `Truncation count, ${ALL_LANES}: ${metrics.truncationCount}. Week 2 metrics (harness recovery; adaptation cost, validation, persistence, and reuse) are null.`,
+    `Truncation count, ${ALL_LANES}: ${metrics.truncationCount}. Sanitized packet bytes and the truncation count come from Flow-lane runs only: a recording-lane run runs no Flow, so Core captures no sanitized packet for it. Raw snapshot bytes has no samples on any lane: no producer measures raw snapshots, and they are not a Week 1 metric. Week 2 metrics (harness recovery; adaptation cost, validation, persistence, and reuse) are null.`,
     "",
   ];
 }

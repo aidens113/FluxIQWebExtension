@@ -7,7 +7,7 @@
     "build": "tsc -p tsconfig.json --noEmit && node scripts/build-extension.mjs",
     "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
     "test": "node scripts/smoke-test.mjs && node scripts/test-extension.mjs",
-    "test:content": "pnpm --filter @fluxiq-web-extension/test-contracts build && playwright test -c e2e/playwright.content.config.ts",
+    "test:content": "pnpm --filter @fluxiq-web-extension/test-contracts build && node -e \"const args=process.argv.slice(1);if(args[0]==='--')args.shift();const run=require('node:child_process').spawnSync(process.execPath,[require.resolve('@playwright/test/cli'),'test','-c','e2e/playwright.content.config.ts',...args],{stdio:'inherit'});process.exit(run.status??1)\" --",
     "test:e2e:build": "pnpm build",
     "test:e2e": "pnpm test:e2e:build && playwright test -c e2e/playwright.config.ts",
     "test:e2e:report": "playwright show-report e2e/test-results/report"

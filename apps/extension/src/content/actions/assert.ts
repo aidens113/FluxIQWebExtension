@@ -33,14 +33,15 @@
 //
 // The duplicate was not merely redundant; it was lossy. `results.ts` runs one
 // hook after the code is chosen: `authGateFailure` replaces the record with
-// AUTH_REQUIRED when the action's selector matches nothing and the document is
-// a sign-in gate. Overwriting the builder's record discarded that, and the two
+// AUTH_REQUIRED when the document is a sign-in gate and either the action's
+// selector matches nothing or the action is a `url` claim that names a URL and
+// did not hold. Overwriting the builder's record discarded that, and the two
 // codes tell an operator to do opposite things -- AUTH_REQUIRED says sign in
-// again, STATE_MISMATCH says the page is not in the state the Flow claimed. The
-// edge is narrow (a `url` claim carrying a stale selector on a page that has
-// become a gate, since a selector matching nothing now routes to `timedOut`),
-// but it is the case where naming the right one matters most: reported as a
-// state mismatch, an expired session sends a person looking at the page.
+// again, STATE_MISMATCH says the page is not in the state the Flow claimed. For
+// this verb that is not a narrow edge: every failed URL claim made on a sign-in
+// gate takes that hook, and it is the case where naming the right one matters
+// most: reported as a state mismatch, an expired session sends a person looking
+// at the page.
 //
 // So both branches return the builder's result untouched, and the only choice
 // left here is which builder to call.

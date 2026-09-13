@@ -40,17 +40,17 @@ export function outputTargetFromPayload(payload: JsonObject): WebAutomationOutpu
  *   been renamed. Discarding it in favour of a stale `payload.element` would
  *   silently undo the correction.
  * - **Core matched nothing**, which is every dispatch today, because nothing
- *   populates `candidates` yet. `normalizeFingerprint` reads only the
- *   parameters' own top-level keys and never looks inside `parameters.element`,
- *   so `adaptedTarget.fingerprint` comes back as `{ selector, statePath }` and
- *   `adaptedTarget.element` does not come back at all. That is a lossy
- *   re-derivation of the same recorded element, not a newer one, so the
- *   recording wins. Measured on the executed path against the `identity-drift`
+ *   populates `candidates` yet. Core's `normalizeAutomationStudioElementTarget`
+ *   now reads `parameters.element` beside the parameters' own keys, so
+ *   `adaptedTarget.fingerprint` carries the recorded signals Core's fingerprint
+ *   names. It has no `context`, `checked`, `name`, `href`, `inputType` or
+ *   `value`, it folds `implicitRole` into `role`, and `adaptedTarget.element`
+ *   does not come back at all. That is a lossy re-derivation of the same
+ *   recorded element, not a newer one, so the recording wins. Before Core read
+ *   the element, measured on the executed path against the `identity-drift`
  *   Save button: 11 identity signals on the recorded element (the twelfth,
  *   `label`, is one a `<button>` does not have), 1 on the adapted target, 11
- *   after this ordering. An earlier revision of this comment claimed 12/1/12;
- *   it was written before the live replay measured the executed path and found
- *   the wire itself dropping five of the signals.
+ *   after this ordering.
  *
  * The rule is the one `client/gateway-mapping.ts` `elementFingerprintSources`
  * already applies to the declared `command.element`, deliberately stated the

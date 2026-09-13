@@ -30,10 +30,11 @@ export type ObservedRun = {
   observation: RunLaneObservation;
   /**
    * The sizes of the evidence the run's lane measured, when it measured any.
-   * Only the bench's Flow lane passes them, read from the bundle's
-   * `snapshots/flow-lane.json` (`bench/evaluate-run.ts`). A recording-lane run
-   * contributes none, and neither yet does a single `lab run`: absent, both
-   * lists are empty and the truncation count is 0.
+   * Both Flow-lane producers pass them, read by `flowLaneEvidenceSizes` from
+   * the bundle's `snapshots/flow-lane.json`: the bench's
+   * (`bench/evaluate-run.ts`) and a single `lab run` (`single-run-evaluation.ts`).
+   * A recording-lane run contributes none: absent, both lists are empty and the
+   * truncation count is 0.
    */
   evidence?: RunEvidenceSizes;
 };
@@ -48,8 +49,9 @@ export type ObservedRun = {
  * evidence sizes they hand it. `lab run` passes the observation the lane
  * published. The bench's recording lane passes a substitute derived from the
  * persisted run manifest, because its eight historical reports were measured
- * that way; and only the bench's Flow lane reads evidence sizes, from the run
- * bundle. See `bench/evaluate-run.ts`.
+ * that way. The evidence sizes do not differ: both producers' Flow lanes read
+ * them from the run bundle through `flowLaneEvidenceSizes`. See
+ * `bench/evaluate-run.ts`.
  */
 export function evaluateObservedRun(input: ObservedRun): RunEvaluation {
   const { identity, outcome, observation, evidence } = input;

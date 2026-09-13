@@ -3,7 +3,7 @@
 // The reporter's merge is the expensive thing in the recording path: one
 // `captureSnapshot` round trip per frame, each a full content-script DOM sweep
 // that Phase 1.4 made seven passes heavier, on every click, input, change,
-// submit and keydown. `connection.ts` now puts the merged snapshot on the
+// submit and keydown. `RecordedEventIntake` now puts the merged snapshot on the
 // recording event as well as projecting state from it, and the whole point of
 // `captureEventSnapshot` is that doing both costs one merge rather than two.
 //
@@ -115,7 +115,7 @@ async function quietly<TResult>(run: () => Promise<TResult>): Promise<TResult> {
   }
 }
 
-/** Exactly what `connection.ts` does for one executable recorded action. */
+/** What `RecordedEventIntake` does for one executable recorded action, returning the event it would send. */
 async function recordOneEvent(harness: Harness, payload: RecordingEventPayload, frameId: number): Promise<RecordingEventPayload> {
   return quietly(async () => {
     const captured = await harness.reporter.captureEventSnapshot(payload, TAB_ID, frameId);

@@ -44,7 +44,7 @@ const SCREENSHOT_SKIP_LOG_INTERVAL_MS = 2_000;
  * input, change, submit and keydown, so anything that runs the merge twice per
  * event doubles that cost.
  *
- * `connection.ts` needs the merged snapshot for the recording event itself and
+ * `RecordedEventIntake` needs the merged snapshot for the recording event itself and
  * this reporter needs it for the state projection, so the capture is run once
  * and the result passed between them in this wrapper. The wrapper is what
  * carries the meaning, not the snapshot inside it: holding one says the capture
@@ -86,7 +86,7 @@ export class RecordingEvidenceReporter {
    * The merged tab snapshot for a recorded event, for a caller that has to put
    * it on the event before sending it.
    *
-   * `connection.ts` sends `client.recording_event` first and the evidence that
+   * `RecordedEventIntake` sends `client.recording_event` first and the evidence that
    * belongs with it a line later. Both want the same tab-wide snapshot -- the
    * event should describe the page, not the one frame the interaction happened
    * in, and the state projected beside it should describe the same instant --

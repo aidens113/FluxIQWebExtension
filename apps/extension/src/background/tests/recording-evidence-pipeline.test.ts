@@ -1,4 +1,4 @@
-// The recording evidence pipeline `connection.ts` runs, end to end in one
+// The recording evidence pipeline `RecordedEventIntake` runs, end to end in one
 // process: the snapshot a content script produces, the background worker's
 // cross-frame merge of it, and the domain's state projection of the result.
 //

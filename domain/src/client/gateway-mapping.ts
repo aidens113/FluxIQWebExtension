@@ -199,14 +199,14 @@ function commandElementFingerprint(target: JsonObject, parameters: JsonObject): 
  *   target then describes the element the page really has, and it wins over the
  *   recorded one, which may be stale.
  * - **It matched nothing**, which is every dispatch today, because nothing
- *   populates `candidates` yet. Core's normalization reads only the parameters'
- *   own top-level keys and never looks inside `parameters.element`, so the
- *   fingerprint it writes back is `{ selector, statePath }` and the wire target
- *   is a lossy copy of the same recorded element. Measured on the real path: 11
- *   identity signals before Core prepares the target, 1 after. Taking the
- *   target first there would hand the page a selector and nothing else — worse
- *   than the untyped `options.element` beside it, which is the whole reason a
- *   declared field is worth having.
+ *   populates `candidates` yet. Core's normalization now reads
+ *   `parameters.element` too, but into Core's fingerprint, which has no
+ *   `context`, `checked`, `name`, `href`, `inputType` or `value`, so the target
+ *   it writes back is still a lossy copy of the same recorded element (before
+ *   that, `{ selector, statePath }`: 11 identity signals measured before Core
+ *   prepared the target, 1 after). Taking the target first there would hand the
+ *   page less than the untyped `options.element` beside it, which is the whole
+ *   reason a declared field is worth having.
  */
 function elementFingerprintSources(target: JsonObject, parameters: JsonObject): unknown[] {
   const adaptedTarget = jsonObject(parameters.target);

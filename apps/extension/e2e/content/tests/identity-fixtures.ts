@@ -1,13 +1,15 @@
-// What the three identity specs beside this file share: the fixture selectors
-// they aim at, the two failure records they assert, and the four helpers that
-// put a recorded descriptor on a replayed command.
+// What the six specs that import this file share: the fixture selectors they
+// aim at, the two failure records they assert, and the four helpers that put a
+// recorded descriptor on a replayed command.
 //
 // It exists because one spec grew past 700 lines carrying three subjects --
 // which signal resolves a drifted control, what happens when two controls
 // answer to one description, and when a fast answer is refused before it is
 // acted on. Those are now `identity-resolution.spec.ts`,
 // `identity-ambiguity.spec.ts` and `identity-veto.spec.ts`; this is the part
-// none of them owns alone.
+// none of them owns alone. `identity-signals.spec.ts`,
+// `identity-wire-chain.spec.ts` and `large-page-resolution.spec.ts` import it
+// as well.
 //
 // Scope, precisely: these rows hand the descriptor to the content script the
 // way the background worker does, in `options.element`, and prove what the

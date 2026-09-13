@@ -12,6 +12,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { RecordingDomainEventReducerContext, StateSnapshot } from "fluxiq/automation-studio";
+import type { WebAutomationPageEvidence } from "../../page-evidence";
 import { webAutomationRecordingDomain } from "../domain";
 import { webAutomationStateReducer } from "../reducers";
 import { createWebAutomationInitialState } from "../state";
@@ -51,7 +52,7 @@ function producedPaths(snapshot: StateSnapshot): string[] {
  * here, or the ratchet goes quiet about it again. The shape is
  * `PageEvidence` in `apps/extension/src/content/evidence/types.ts`.
  */
-const pageEvidence = {
+const pageEvidence: WebAutomationPageEvidence = {
   elements: { scanned: 620, candidates: 180, matched: 44, returned: 2, truncated: true, changed: 1, recentlyInteracted: 1 },
   loading: {
     documentState: "interactive",
@@ -73,7 +74,7 @@ const pageEvidence = {
   dialogs: {
     open: [{ selector: "#terms", role: "dialog", modal: true, native: false, label: "Terms" }],
     modal: true,
-    armPending: false,
+    armPending: true,
     lastNative: { kind: "confirm", message: "Leave this page?", response: "dismiss", at: 9 }
   },
   overlays: {
@@ -96,12 +97,8 @@ const snapshotState = createWebAutomationStateFromSnapshot({
     { tagName: "button", selector: "button.pay", text: "Pay", bounds: { x: 20, y: 40, width: 90, height: 36 } },
     { tagName: "input", selector: "input#coupon", attributes: { name: "coupon" }, bounds: { x: 20, y: 100, width: 200, height: 32 } }
   ],
-  // Reached through a cast for the same reason the projection reaches it
-  // through a narrow read: `WebAutomationDomSnapshotInput` declares only the
-  // fields that predate `web-state/evidence/`, and widening it is that
-  // directory's decision, not this test's.
   evidence: pageEvidence
-} as unknown as Parameters<typeof createWebAutomationStateFromSnapshot>[0], { timestamp: 10, sourceId: "tab:1" });
+}, { timestamp: 10, sourceId: "tab:1" });
 
 const tabState = createWebAutomationStateFromTabs(
   { tabId: 7, url: "https://example.test", title: "Example", active: true },

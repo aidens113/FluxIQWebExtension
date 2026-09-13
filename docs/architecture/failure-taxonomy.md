@@ -134,20 +134,29 @@ compiler-checked at the throw.
   (`TARGET_NOT_FOUND`, `ACTION_REJECTED`, `ACTION_FAILED`),
   `runtime/browser-download.ts` (`ACTION_REJECTED`, `TIMEOUT`),
   `runtime/action-runner.ts` (`ACTION_REJECTED` for an unsupported page,
-  `TARGET_NOT_FOUND` for a tab that is gone), and
-  `runtime/action-results.ts` (`NAVIGATION_UNEXPECTED`).
+  `TARGET_NOT_FOUND` for a tab that is gone), `runtime/click-landing.ts`
+  (`NAVIGATION_UNEXPECTED` for a replayed click whose own tab landed on a page
+  the server answered with 400 or above), and `runtime/action-results.ts`
+  (`NAVIGATION_UNEXPECTED`, the record every worker-side navigation check
+  builds).
 - **The expectation seam** (`domain/src/runtime/expectation/evaluate.ts`):
   `STATE_MISMATCH` and `TIMEOUT`, except where the client reported a code from
   the same set — it stood nearest the page and keeps its own record.
 
-Two rows of the table are not produced by any of them today.
-`USER_INTERVENTION_REQUIRED` has one producer, and it is not the captcha or
-the standing native dialog the code was named for: `domain/src/runtime/
-adapter.ts` uses it when no single paired web-automation client can be chosen
-for a state capture. `PAGE_CHANGED` has no producer at all — nothing detects
-the document being replaced between resolving a target and acting on it. Both
-are named here rather than removed, and both are covered only by the code
-table's own tests.
+Two rows of the table have producers the list above does not name.
+`USER_INTERVENTION_REQUIRED` has three: `content/action-runtime/results.ts`
+(`blockedByModal`), for a target refused as covered or inert while a page's
+modal dialog stands over it, which is the condition the code was named for;
+`domain/src/client/gateway-mapping.ts`, for a command still asking for a value
+the run never supplied, refused before dispatch; and
+`domain/src/runtime/adapter.ts`, when no single paired web-automation client
+can be chosen for a state capture. `PAGE_CHANGED` has one:
+`content/actions/page-identity.ts`, for a verb that failed while the document
+it started against was replaced or routed away under it. Beyond the code
+table's own tests they are covered by
+`e2e/content/tests/modal-intervention.spec.ts`,
+`client/tests/gateway-mapping.test.ts` and
+`content/actions/tests/page-identity.test.ts`.
 
 `ACTION_REJECTED` is one code, not a family: the capability's own reason
 (`disabled`, `hidden`, `covered`, and the rest) is carried in the record's

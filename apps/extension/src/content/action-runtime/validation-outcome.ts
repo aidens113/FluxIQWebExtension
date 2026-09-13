@@ -16,8 +16,11 @@
 // the content bundle to mint a code the set does not name. They are gone rather
 // than converted: `webAutomationFailureRecord` already binds each code to its
 // category, retryable flag and stage, so a second builder could only restate
-// that binding or contradict it, and a contradiction is dropped whole by Core's
-// parser -- losing the failure instead of reporting it.
+// that binding or contradict it. Core's parser drops a record whole only for a
+// contradiction it can see, such as a retryable record in one of the six
+// categories Core forbids from retrying, losing the failure; it cannot see the
+// binding, so a real code beside another row's category passes it and reports
+// the wrong failure.
 //
 // Deletion is not the only guard, and it is worth knowing which part of the
 // rule it still carries before anyone reinstates a builder as a convenience.
