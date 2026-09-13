@@ -40,7 +40,7 @@ settled ledger entries are in parts one to twenty-six of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13, while workers run.**
-- **This repository:** `32b4324`, 71 commits ahead of `origin/dev`, not pushed.
+- **This repository:** `d775b5e`, 76 commits ahead of `origin/dev`, not pushed.
 - **Core:** `5845f5d`, 9 commits ahead of `origin/dev`, `fluxiq` **0.4.0**, with its
   packages built at `187f40d`. The nine commits:
   - `5d495eb`, trace withholding;
@@ -81,7 +81,8 @@ settled ledger entries are in parts one to twenty-six of
   - E3, an assert is resent once to a navigating tab;
   - E4, a click landing on a refused page fails as `navigation_unexpected`;
   - D1, the domain builds a click's landing claim, and a live click's action
-    entry now carries it (`32b4324`).
+    entry now carries it (`32b4324`);
+  - the architecture pages for E1-E3, D1 and D1b (`d775b5e`).
 
 **Ruled out of Week 1, reasons in the ledger:**
 - Firefox; CS1b, a late recording event sent to the client as an error frame;
@@ -94,7 +95,6 @@ settled ledger entries are in parts one to twenty-six of
 **In flight:**
 - **`g-mapper-stored-payload`:** the mapper reads a Core-stored domain event's
   payload where Core puts it (twentieth dispatch).
-- **`g-w19-docs`:** the architecture pages for E1-E3, D1 and D1b.
 - **`l-stage2`:** blocked at `7263534`, since every run failed the runner's own
   discard check; an instrumented run confirmed the cause. Its worktrees are kept.
 - **`g-discard-window`:** the check counts only discards inside the recording's
@@ -713,6 +713,41 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   - the week1 bench;
   - W19 `expired`.
 - Outcome: Revised
+
+### 2026-09-13 — g-w19-docs: the architecture pages describe W19's changes
+
+- Agent: worker `g-w19-docs`; verified by supervisor, who corrected one
+  sentence.
+- Changed:
+  - `docs/architecture/extension-client.md`. Action Surface gains the assert sent
+    once more to a navigating tab (E3) and `auth_required` for a failed URL claim
+    on a sign-in gate (E2). Recording Evidence gains the navigation recording
+    rules, the explained landing (E1), and both ways a click's landing claim is
+    built (D1, D1b).
+  - `docs/architecture/failure-taxonomy.md`, the whole "Who Produces What"
+    section, which is wider than the brief's producer paragraphs.
+    `AUTH_REQUIRED` gains its two shapes, the Dispatch refusals are listed, and
+    `ACTION_FAILED` from `runtime/command-router.ts` is named.
+- Found:
+  - The domain-event click path the page describes claims nothing on a real
+    recording until `g-mapper-stored-payload` lands. The action-entry path is
+    true at HEAD.
+  - The worker wrote that Core's bridge puts `sourceId` on neither entry. That
+    is wrong for an action entry since Core `187f40d`. The supervisor rewrote it:
+    a domain-event entry keeps `sourceId` as a top-level field, which mappers
+    are not shown.
+- Validation: supervisor read the full diff and spot-checked the claims beyond
+  the brief at HEAD.
+  - `gateway-mapping.ts` builds `UNSUPPORTED_TYPE` (`:342`),
+    `USER_INTERVENTION_REQUIRED` (`:351`) and `INVALID_PARAMETER` (`:369`), in
+    that file order. The check order the page states is the worker's reading.
+  - `command-router.ts:33` answers a thrown send with `browserActionFailure`.
+  - `runtime/result-mapping.ts` exists.
+  - Supervisor: `node scripts/structure-audit.mjs` -> exit 0 before commit.
+  - Worker: every linked file and both anchors exist, and every cited file:line
+    was opened at HEAD. This repository has no `pnpm docs:check`.
+- Not verified: rendered Markdown; the Lab.
+- Outcome: Accepted
 
 ## Open Questions
 
