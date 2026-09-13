@@ -21,7 +21,3 @@ export async function loadScenarioManifest(repositoryRoot: string, scenarioId: s
   if (!manifest) throw new RunnerFailure("fixture.invalid", `Unknown scenario: ${scenarioId}`);
   return manifest;
 }
-
-export function scenarioRequiresCore(scenario: WebScenario): boolean {
-  return Boolean(scenario.expected.recordingEvents?.length || scenario.expected.actions?.length || scenario.playbackGoal);
-}

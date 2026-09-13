@@ -1,4 +1,4 @@
-import type { Locator } from "@playwright/test";
+import type { ElementHandle, Locator } from "@playwright/test";
 import type { ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../failure.js";
 import { locateTarget, type TargetScope } from "./locate-target.js";
@@ -18,6 +18,10 @@ export type ExtractField =
 
 const ATTRIBUTE_NAME = /^[A-Za-z_][-A-Za-z0-9_:.]*$/u;
 
+/** How long a followed `next` may take to replace the page it was clicked on, when the step names no `timeoutMs`. */
+const PAGE_ADVANCE_TIMEOUT_MS = 15_000;
+const PAGE_ADVANCE_POLL_MS = 50;
+
 export function parseExtractField(spec: string): ExtractField {
   if (spec.startsWith("column:")) {
     const header = normalizeText(spec.slice("column:".length));
@@ -36,25 +40,74 @@ export function parseExtractField(spec: string): ExtractField {
 }
 
 /**
- * Reads the records an extract step names from the current page only. It never
- * clicks, since a click would be recorded; following `pagination` is the Flow's
- * job, not the recording lane's. A field whose element is absent is left out of
- * its record rather than read as empty text.
+ * Reads the records an extract step names. A field whose element is absent is
+ * left out of its record rather than read as empty text.
+ *
+ * Without `pagination` it reads the current page and never clicks. With it, the
+ * step pages the way a user does: it reads a page, clicks `pagination.next` as
+ * trusted input, waits until the page it read has been replaced, and reads
+ * again, until `next` is absent or `maxPages` pages, the first included, were
+ * read. The extension records those clicks, so the recording holds the
+ * navigation a paginated workflow's final state describes, and a Flow built
+ * from it replays that navigation. This reader used to stop at the first page
+ * and leave following `next` to the Flow, but a recording's extract step yields
+ * no extract node, so nothing followed it: W05's and W07's final state, page 3
+ * of 3, failed on both lanes before any Flow existed.
  */
 export async function extractRecords(scope: TargetScope, step: ScenarioStep): Promise<ExtractedRecord[]> {
   const fields = Object.entries(step.fields ?? {}).map(([name, spec]) => [name, parseExtractField(spec)] as const);
   if (!fields.length) throw new RunnerFailure("fixture.invalid", `Extract step ${step.id} names no fields`);
-  const items = await locateTarget(scope, parseScenarioTarget(step.target)).all();
+  const itemTarget = parseScenarioTarget(step.target);
+  const pagination = step.pagination;
+  const nextTarget = pagination ? parseScenarioTarget(pagination.next) : undefined;
   const records: ExtractedRecord[] = [];
-  for (const item of items) {
-    const record: ExtractedRecord = {};
-    for (const [name, field] of fields) {
-      const value = await readField(item, field);
-      if (value !== undefined) record[name] = value;
-    }
-    records.push(record);
+  for (let page = 1; ; page += 1) {
+    const items = await locateTarget(scope, itemTarget).all();
+    for (const item of items) records.push(await readRecord(item, fields));
+    if (!pagination || !nextTarget || page >= pagination.maxPages) return records;
+    const next = locateTarget(scope, nextTarget);
+    if (await next.count() === 0) return records;
+    await followNext(next, items[0] ?? next, step, page);
   }
-  return records;
+}
+
+async function readRecord(item: Locator, fields: ReadonlyArray<readonly [string, ExtractField]>): Promise<ExtractedRecord> {
+  const record: ExtractedRecord = {};
+  for (const [name, field] of fields) {
+    const value = await readField(item, field);
+    if (value !== undefined) record[name] = value;
+  }
+  return record;
+}
+
+/**
+ * Clicks `next`, then waits until `marker` -- the first item read on this page,
+ * or `next` itself when the page had none -- has left the document. Reading
+ * before then reads the page just read a second time: product-catalog keeps
+ * its old results on screen for a fixed latency after Next for that reason.
+ */
+async function followNext(next: Locator, marker: Locator, step: ScenarioStep, page: number): Promise<void> {
+  const timeoutMs = step.timeoutMs ?? PAGE_ADVANCE_TIMEOUT_MS;
+  const handle = await marker.elementHandle({ timeout: timeoutMs });
+  // Without a hold on the page just read, its replacement cannot be told from a second read of it.
+  if (!handle) throw new RunnerFailure("runtime.behavior", `Extract step ${step.id} could not hold page ${page} before following next`, { details: { stepId: step.id, page } });
+  try {
+    await next.click({ timeout: timeoutMs });
+    const deadline = Date.now() + timeoutMs;
+    while (await stillAttached(handle)) {
+      if (Date.now() >= deadline) {
+        throw new RunnerFailure("runtime.behavior", `Extract step ${step.id} followed next from page ${page}, and that page was not replaced within ${timeoutMs} ms`, { details: { stepId: step.id, page, timeoutMs } });
+      }
+      await new Promise((resolve) => setTimeout(resolve, PAGE_ADVANCE_POLL_MS));
+    }
+  } finally {
+    await handle.dispose().catch(() => undefined);
+  }
+}
+
+/** A document that navigated away took the element with it, so an element whose context is gone has been replaced too. */
+async function stillAttached(handle: ElementHandle<SVGElement | HTMLElement>): Promise<boolean> {
+  return handle.evaluate((element) => element.isConnected).catch(() => false);
 }
 
 async function readField(item: Locator, field: ExtractField): Promise<string | undefined> {

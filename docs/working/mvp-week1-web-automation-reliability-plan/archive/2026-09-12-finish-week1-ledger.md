@@ -2410,3 +2410,120 @@ Moved verbatim to keep headroom under the plan limit: the bench expectation fixe
     and W18's Flow row must show its own message;
   - the evaluation still cites the last `error` event's sequence.
 - Outcome: Accepted
+
+## Part thirty-five, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: the recording-capability design, whose workers are dispatched; the three recorder fixes, committed in 9efd8c2; and the auth-gate cleanups, committed in 1d1e756.
+
+### 2026-09-13 — i-recording-capability-gaps: uploads, tabs and child frames are Week 1; an optional dismissal is Week 2
+
+- Agent: worker `i-recording-capability-gaps` (read-only); decisions by supervisor.
+- Changed: `reports/i-recording-capability-gaps.md` only.
+- Found: every root cause below rests on code reading and one bench run per row.
+  - **P5, W17.** The domain maps every change that is not a select or checkbox to
+    typing (`domain/src/io/input-model.ts:122-130`). Nothing can build an upload
+    from a recording, because `web.dom.upload` needs inline content.
+  - **P4, W15.**
+    - No tab-close listener exists (`background/index.ts:48-68`).
+    - Activating a tab records nothing (`active-page.ts:90-112`).
+    - No action input maps to `web.browser.tab`.
+    - The switch verb matches a URL substring (`runtime/browser-tab.ts:81-89`).
+  - **P6, W28.** Only the numeric frame id is carried (`payloads.ts:28-31`), and
+    Chrome renumbers frames when the Flow lane reloads the start page.
+  - **P7, W13 `banner-absent`.** Core follows a failure edge on any failure, and
+    nothing can mark a node optional.
+- Decisions (the twenty-eighth dispatch):
+  - P5, P4 and P6 are built now: one serial domain worker and two extension
+    workers, against wire names the brief fixes.
+  - Confirmations and the runner's upload input are briefed once their files
+    are free.
+  - The recorder stops sending a file input's value.
+  - **P7 is ruled out of Week 1.** It needs a new Core node outcome on the
+    deferred `failureRoute` seam, and a loose rule would let W12 skip its invite
+    and still report success.
+- Validation: the supervisor read the report in full, and checked it against the
+  code already verified for P2 (`runtime-status.ts:93-107`). Worker: a
+  declared-value scan of the report found 0 hits.
+- Not verified:
+  - how a background-raised event reaches the path that counts actions;
+  - whether Chrome fires `tabs.onActivated` for Playwright's pages;
+  - Core's handling of a large run input;
+  - every design, which is unbuilt.
+- Outcome: Revised
+
+### 2026-09-13 — f-recorder-key-order-and-check-confirmation and f-pointer-click-pairing: typed text precedes the key that acts on it, a check confirms, and a quick second click is kept
+
+- Agents: workers `f-recorder-key-order-and-check-confirmation` (P1, P2) and
+  `f-pointer-click-pairing` (P3); verified by supervisor.
+- Changed:
+  - **P1, `apps/extension/src/content/dom-events.ts`.** A key that acts on the
+    text sends the pending debounced `dom.input` first: Enter, Tab, Escape or an
+    arrow. A key that continues typing does not: a character, a deletion, a bare
+    modifier, or a key an input method reports while composing. The brief said
+    "before any keydown". The worker narrowed it, because every keystroke is a
+    keydown and one pending input would split per key.
+  - **P2, `background/connection/runtime-status.ts`.** A succeeded `web.dom.check`
+    confirms as `dom.change` with `checkboxToggled`, carrying no value. An action
+    that did not succeed confirms nothing.
+  - **Task 3:** no other recorded verb waits for a confirmation it never gets.
+  - **P3, `pointer-click-filter.ts` and `recorded-event-intake.ts`.** A `click` is
+    paired with the last `pointerdown` in its tab and frame, with no time window.
+    - A second press on the same unmoved control is a second action.
+    - A keyboard click is always recorded.
+    - A double-click records two clicks.
+    - A long press is one action.
+  - Tests, including `e2e/content/tests/recorder-trust.spec.ts`.
+  - A stale comment in `recording-start/tests/handshake.test.ts`, by the
+    supervisor.
+  - `docs/architecture/extension-client.md` and `web-capabilities.md`.
+- Validation:
+  - **Supervisor,** extension `pnpm check` exit=0, and
+    `EXTENSION_TEST_BUILD_LABEL=sup35 pnpm test` exit=0 with "# tests 413", "# pass
+    413", "# fail 0". That run began as the P1/P2 worker finished.
+  - **Supervisor,** content harness
+    `pnpm exec playwright test -c e2e/playwright.content.config.ts --workers=2 keyboard.spec.ts recorder-trust.spec.ts`:
+    exit=0, "19 passed".
+  - Both diffs were frozen as patches and committed from them. The P3 diff
+    compared byte-identical (`cmp`) to its first saved copy.
+  - **Worker mutations:**
+    - P1/P2: removing the key flush reproduced W02's and W03's orders; five
+      mutations each failed their rows.
+    - P3: three mutations each failed their rows.
+- Not verified:
+  - no Lab run: W02, W03 and W14 unarmed must pass on both lanes, and W14
+    `armed` must stay `user_intervention_required`;
+  - a live browser for double-click, touch cancel and input methods;
+  - the content harness does not drive the background filter;
+  - one residual drop: a press that never produces a click, then a keyboard click
+    on the same selector, size and position in that tab and frame.
+- Outcome: Accepted
+
+### 2026-09-13 — f-authgate-followups: the password placeholder is one constant, and no comment says the page shows the password
+
+- Agents: worker `f-authgate-followups` (scenario-lab); the content-harness rows by
+  supervisor.
+- Changed:
+  - `apps/scenario-lab/src/scenarios/auth-gate/constants.ts` exports
+    `authGatePasswordPlaceholder`.
+    - `pages.ts` and `tests/scenario.test.ts` use it.
+    - A new row fails if the placeholder ever contains the password.
+  - `constants.ts:9` and `manifest.ts:28-30,97-98` no longer say the page shows the
+    password.
+  - The two auth-gate rows in `apps/extension/e2e/content/tests/failures.spec.ts`,
+    by the supervisor: the variable is now the page's password row, commented as a
+    placeholder. The rows still assert that the failure record quotes no page text.
+- Decision: those rows do not import the constant.
+  - No extension e2e spec imports scenario-lab source.
+  - The page no longer shows the password, so the rows cannot meet it.
+  - The guard that can is scenario-lab's own row: no rendering contains the
+    password constant.
+- Validation:
+  - **Supervisor,** scenario-lab built into `dist-sup37`:
+    - `check` exit=0; private build exit=0;
+    - `node --test` printed "# tests 204", "# pass 204", "# fail 0";
+    - the diff compared byte-identical to the copy saved when the worker finished.
+  - **Supervisor,** content harness `failures.spec.ts -g "on auth-gate"`: exit=0,
+    "4 passed".
+  - **Worker mutation:** pointing the placeholder at the password failed 2 rows.
+- Not verified: no Lab run, and no run of the scenario-lab e2e spec.
+- Outcome: Accepted

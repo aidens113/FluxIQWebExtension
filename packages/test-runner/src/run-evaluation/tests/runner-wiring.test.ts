@@ -114,6 +114,29 @@ test("Core's discard audit is read a second time, after the Flow lane and the br
   assert.ok(source.includes("discardsAfterFirstRead: secondRead.discards.length - earlier.length, snapshotFetches }"), "the number of fetches is published beside the read");
 });
 
+/**
+ * The four harness fixes from `i-bench-triage` are rules in `lane-rules/` and a
+ * change to the extract reader, each tested there; what no unit can show is that
+ * the runner consults them, so the call sites are pinned here.
+ */
+test("the runner consults the lane rules: a Core identity and a built Flow on the Flow lane, the probe's start-page step, and the final-state facts", async () => {
+  const source = await runnerSource();
+  assert.match(source, /import \{ assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, selectCoreProbeStep \} from "\.\/lane-rules\/index\.js";/u);
+  assert.ok(source.includes('bootstrapIdentity: coreIdentityRequired({ clone: target.mode === "clone", flowLane: options.flow === true, scenario, recorded: recordingWorkflow.expected })'), "H2: every Flow-lane run bootstraps a Core identity");
+  const at = {
+    flowLane: source.indexOf("await runFlowLane({"),
+    built: source.indexOf('assertFlowLaneBuiltFlow({ flowLane: options.flow === true, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation });'),
+    passed: source.indexOf('verdict = "passed";'),
+  };
+  for (const [name, index] of Object.entries(at)) assert.ok(index > 0, `${name} is in the runner`);
+  assert.ok(at.flowLane < at.built && at.built < at.passed, "H2: a Flow-lane run is checked for a built Flow after the lane and before it can pass");
+  assert.ok(source.includes("const choice = await selectCoreProbeStep(workflow.recordingScript, "), "H3: the probe types only into a step on the start page");
+  assert.ok(source.includes('"The Core action probe was skipped"), details: { reason: choice.reason, stepIds: choice.stepIds } });'), "H3: a skipped probe is published with its reason");
+  assert.ok(source.includes("await assertExpectedFacts(finalStateFacts(scenario, workflow), playwrightScenarioFactProbe(page));"), "H5: the final state is judged on the facts the rule chooses");
+  assert.equal(/successFacts/u.test(source), false, "H5: the runner holds no second playback-goal rule");
+  assert.ok(source.includes("if (extracted) assertExtraction(recordingWorkflow.expected.extracted, step.id, extracted);"), "H1: a paginated extract step follows next, so the recording lane asserts every extract step");
+});
+
 test("the evaluation reaches the caller, so lab run reports it without a bench", async () => {
   const source = await runnerSource();
   assert.match(source, /export type RunScenarioResult = \{[^{}]*evaluation\?: RunEvaluation[^{}]*\};/u);

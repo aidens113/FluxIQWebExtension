@@ -2962,6 +2962,14 @@ run directories. Nothing tracked.
    - Report `recordedActions`, extension against Core, and
      `discardsAfterFirstRead`.
 
+**Expected changes the report must still record,** not treat as regressions:
+- **W05 and W07 recordings now hold Next clicks,** because `g-runner-harness-fixes`
+  made the recording lane follow pagination.
+- **W05 `short-catalog` may fail `target_not_found` on the Flow lane.**
+  - The armed catalog shows no Next, and a recorded Flow replays fixed clicks.
+  - Report the failed node and its category. The supervisor then decides how the
+    row is judged.
+
 **Stop** after run 1 if any leak count is above 0, and report it.
 
 **Report:** `reports/l-stage2c.md`: the pins, commands, observed figures, and
@@ -3141,6 +3149,46 @@ one from P3. Keep them exactly.
 - The structure audit.
 
 **Report:** `reports/f-capability-confirmations.md`.
+
+## g-runner-upload-input — the Flow lane supplies the file a recorded upload asks for (test-runner, scenario-lab)
+
+Dispatched once two workers have reported:
+- `g-runner-harness-fixes`, which may edit `run-flow-lane.ts`;
+- `f-domain-capability-gaps`, which exports the upload binding and the recorded
+  element key.
+
+**Owns:**
+- new `packages/test-runner/src/flow-lane/declared-uploads.ts`;
+- `flow-lane/run-flow-lane.ts`, the run's `inputs` only;
+- `apps/scenario-lab/src/scenarios/file-transfer/manifest.ts`, W17's
+  `expected.actions` only;
+- their tests.
+
+**Read:** `reports/i-recording-capability-gaps.md`, P5's "Test-runner" part;
+`reports/f-domain-capability-gaps.md`.
+
+**Task.**
+1. For each `upload` step in the workflow's recording script, build the input
+   `web.upload.<key>` as `{ files: [{ name, mimeType, contentBase64 }] }`.
+   - The key must be the one the domain derives from the recorded element. Call
+     the domain's export; never copy the rule.
+   - The content is the same deterministic file the recording lane uploads.
+2. Spread these inputs beside the secret inputs.
+   - No file content reaches a log, an event or an evidence file.
+   - Say whether Core's persisted run inputs now hold it, or hold `[withheld]`.
+3. W17 pins `web.dom.upload` before its click.
+4. The test-runner resolves the domain through `domain/dist`. If you need a
+   rebuild, build the domain once, privately, and say so. Never commit or leave a
+   changed tracked build.
+
+**Tests.**
+- The input built from the manifest's upload step, and the key equal to the
+  domain's key for the recorded element, each with a mutation.
+- Test-runner `check`, and `test` in a private `--outDir`.
+- Scenario-lab `check`, and `test` in a private output directory.
+- The structure audit.
+
+**Report:** `reports/g-runner-upload-input.md`.
 
 ## f-authgate-followups — the rest of the password text (scenario-lab, extension)
 

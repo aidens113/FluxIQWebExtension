@@ -14,7 +14,7 @@ import { executeExistingPersistedFlow, preflightExistingFluxIQ, type ExistingFlo
 import { installDeterministicNetworkGuard, scenarioNetworkOrigins, type DeterministicNetworkGuard } from "./network-guard.js";
 import { verifyAuthenticatedFluxIQPanel, type FluxIQPanelVerificationOutcome } from "./panel-verification.js";
 import { assertExpectedFacts, playwrightScenarioFactProbe } from "./scenario-assertions.js";
-import { loadScenarioManifest, scenarioRequiresCore } from "./scenarios.js";
+import { loadScenarioManifest } from "./scenarios.js";
 import type { FluxIQTargetConfiguration } from "./target-config.js";
 import { ClonePackageCache } from "./clone-cache.js";
 import { exportClonePackage, exportCloneSource } from "./clone-source-exporter.js";
@@ -31,7 +31,8 @@ import { attestRunRedaction, runRedactionScopes, scenarioRedactionLiterals, type
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog, readRecordingCompleteness } from "./run-expectations/index.js";
 import { singleRunEvaluation } from "./run-evaluation/index.js";
 import { automationFailureFromActionResult, createRunManifest, flowActionTimings, runActionStatus, type CloneRunState } from "./run-manifest/index.js";
-import { cssSelectorForTarget, parseScenarioTarget, ScenarioStepRunner } from "./scenario-steps/index.js";
+import { assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, selectCoreProbeStep } from "./lane-rules/index.js";
+import { ScenarioStepRunner } from "./scenario-steps/index.js";
 
 /** `evidence` overrides the manifest's `evidencePolicy`; `workflowId` and `variantId` select what `resolveScenarioWorkflow` resolves. */
 export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flow?: boolean; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration };
@@ -135,7 +136,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
       ? options.runsDirectory
       : path.join(options.runsDirectory, ".work");
     const ownsIsolatedCore = topologyTarget.mode === "isolated" || topologyTarget.mode === "persistent-isolated";
-    topology = await startTopology({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, runsDirectory: topologyRunsDirectory, runId, seed, target: topologyTarget, scenarioEntrypoint: labPaths.scenarioEntrypoint, hostModulePath: labPaths.hostModulePath, ...(ownsIsolatedCore && labPaths.hostPrebuilt ? { prepareHost: false } : {}), ...(ownsIsolatedCore ? { bootstrapIdentity: target.mode === "clone" || scenarioRequiresCore({ ...scenario, expected: recordingWorkflow.expected }), ...(credentials ? { credentials } : {}) } : {}) });
+    topology = await startTopology({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, runsDirectory: topologyRunsDirectory, runId, seed, target: topologyTarget, scenarioEntrypoint: labPaths.scenarioEntrypoint, hostModulePath: labPaths.hostModulePath, ...(ownsIsolatedCore && labPaths.hostPrebuilt ? { prepareHost: false } : {}), ...(ownsIsolatedCore ? { bootstrapIdentity: coreIdentityRequired({ clone: target.mode === "clone", flowLane: options.flow === true, scenario, recorded: recordingWorkflow.expected }), ...(credentials ? { credentials } : {}) } : {}) });
     let existingControl: ExistingFluxIQControlClient | undefined;
     if (target.mode === "existing") {
       existingControl = new ExistingFluxIQControlClient(target.baseUrl);
@@ -290,8 +291,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
       for (const step of recordingWorkflow.recordingScript) {
         await stepCapture.trigger(event(runId, scenario.id, step.id, "step.start", `Start ${step.operation}`));
         const { extracted } = await runner.run(step);
-        // Only an extract step without pagination is asserted here: this lane reads the current page and never follows `next`.
-        if (extracted && !step.pagination) assertExtraction(recordingWorkflow.expected.extracted, step.id, extracted);
+        // Every extract step is asserted here: one with `pagination` has followed `next` as recorded input and read each page (`extractRecords`).
+        if (extracted) assertExtraction(recordingWorkflow.expected.extracted, step.id, extracted);
         await stepCapture.trigger({ ...event(runId, scenario.id, step.id, step.operation === "checkpoint" ? "checkpoint" : "step.complete", `Complete ${step.operation}`), ...(extracted ? { details: { recordCount: extracted.length } } : {}) });
       }
       // Read while still recording: the extension's log is what it recorded.
@@ -367,6 +368,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
         await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The generated Flow ran and met the workflow's expectations"), details: { runtimeRunId: lane.run.runId, actionCount: lane.run.actions.length, harnessActivations: lane.run.harnessActivations } });
       }
     }
+    // A Flow-lane run that never reached the lane built no Flow, and does not pass on the recording's checks alone.
+    assertFlowLaneBuiltFlow({ flowLane: options.flow === true, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation });
     consoleWatch.assertOnlyAllowed(workflow.expected.allowedConsoleErrors);
     networkGuard.assertNoViolations();
     await capture.trigger(event(runId, scenario.id, undefined, "final", "Scenario completed"));
@@ -519,11 +522,20 @@ async function pairExtension(page: Page, topology: RunningTopology) {
   await topology.control!.approvePairing(String(status.pairingReferenceCode));
   return pollStatus(page, value => value.connectionState === "connected" && typeof value.sessionId === "string");
 }
-/** Proves one Core-issued action reaches the page, using the first `type` step whose target is a CSS selector; each action is reported to `record`. */
+/** How long the start page is given to show a probe candidate's target before that step is passed over. */
+const PROBE_TARGET_VISIBLE_MS = 1_000;
+/**
+ * Proves one Core-issued action reaches the page, typing into the step `selectCoreProbeStep` chooses: a `type` step whose
+ * target is visible on `page`, still the start page the recording is about to begin on. A skipped probe is published with its
+ * reason. Each action is reported to `record`.
+ */
 async function proveCoreActionRoundTrip(page: Page, topology: RunningTopology, sessionId: string, scenarioId: string, workflow: ResolvedScenarioWorkflow, capture: EvidenceCaptureController, runId: string, record: (timing: RunActionTiming, result: unknown) => void) {
-  const probe = workflow.recordingScript.filter(candidate => candidate.operation === "type" && candidate.target).map(step => ({ step, css: cssSelectorForTarget(parseScenarioTarget(step.target)) })).find(candidate => candidate.css);
-  if (!probe?.css) return;
-  const { step, css: target } = probe; const correlationId = createCorrelationId("command"); const text = "FluxIQ Core probe";
+  const choice = await selectCoreProbeStep(workflow.recordingScript, selector => page.locator(selector).first().waitFor({ state: "visible", timeout: PROBE_TARGET_VISIBLE_MS }).then(() => true, () => false));
+  if (choice.kind === "skipped") {
+    await capture.trigger({ ...event(runId, scenarioId, undefined, "runtime.settle", "The Core action probe was skipped"), details: { reason: choice.reason, stepIds: choice.stepIds } });
+    return;
+  }
+  const { step, selector: target } = choice; const correlationId = createCorrelationId("command"); const text = "FluxIQ Core probe";
   const navigationCorrelationId = createCorrelationId("command");
   const automationPagePromise = page.context().waitForEvent("page", { timeout: 10_000 });
   await capture.trigger({ ...event(runId, scenarioId, step.id, "runtime.dispatch", "Initialize the extension automation tab through Core"), details: { correlationId: navigationCorrelationId, actionType: "web.browser.navigate", url: page.url() } });
@@ -615,8 +627,8 @@ function describeRecordingStartDiagnostic(diagnostic: Record<string, unknown> | 
   if (!diagnostic) return "the extension reported no status";
   return `connectionState=${String(diagnostic.connectionState)} recordingState=${String(diagnostic.recordingState)} lastError=${String(diagnostic.lastError ?? "none")} unsupportedPage=${String(diagnostic.unsupportedPageReason ?? "none")} recordingBlock=${String(diagnostic.recordingBlockCode ?? "none")}`;
 }
-/** Final-state facts, then the primary workflow's playback-goal success facts. */
-async function assertFinalState(page: Page, scenario: WebScenario, workflow: ResolvedScenarioWorkflow) { const probe = playwrightScenarioFactProbe(page); await assertExpectedFacts(workflow.expected.finalState ?? [], probe); if (workflow.workflowId === undefined) await assertExpectedFacts(scenario.playbackGoal?.successFacts ?? [], probe); }
+/** The facts `finalStateFacts` chooses: the final state, then a positive primary run's playback-goal facts. */
+async function assertFinalState(page: Page, scenario: WebScenario, workflow: ResolvedScenarioWorkflow) { await assertExpectedFacts(finalStateFacts(scenario, workflow), playwrightScenarioFactProbe(page)); }
 async function findScenarioPageWithExpectedState(context: BrowserContext, fallback: Page, origin: string, scenario: WebScenario, workflow: ResolvedScenarioWorkflow): Promise<Page> { for (const candidate of context.pages().filter(item => !item.isClosed() && item.url().startsWith(`${origin}/`)).reverse()) { try { await assertFinalState(candidate, scenario, workflow); return candidate; } catch {} } await assertFinalState(fallback, scenario, workflow); return fallback; }
 /**
  * Loads the fixture's own entry point, `scenario.startPath`. Every load of the
