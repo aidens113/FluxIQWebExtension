@@ -1,7 +1,10 @@
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { isSensitiveElementDescriptor } from "../sensitivity";
-import { webAutomationSecretBinding, webAutomationSecretKeyForRecordedElement } from "./secret-binding";
+import { webAutomationRecordedElementKey } from "./recorded-element-key";
+import { webAutomationSecretBinding } from "./secret-binding";
 import { compact, elementFingerprint, numberValue, objectValue, stringValue } from "./targets";
+import { webAutomationUploadBinding } from "./upload-binding";
+import { webAutomationUrlPath } from "./url-path";
 
 /**
  * Shared output-node payload normalization. Keep the full fingerprint
@@ -24,16 +27,39 @@ export function webAutomationOutputPayload(outputId: string, payload: JsonObject
  * download act on the tab. A dispatch-only action has no recorded parameters
  * at all and stays empty rather than gaining a lone frame, which would turn an
  * unexecutable event into a command carrying nothing to execute.
+ *
+ * A child frame also carries `browserFrameUrlPath`, its document's pathname,
+ * which the lift puts on `action.frameUrlPath`. Chrome renumbers a frame when it
+ * navigates, and a Flow loads its start page before it runs, so the recorded id
+ * can name no frame on replay; the path finds the same document again, and the
+ * id becomes a tie-break. The pathname alone: an origin differs run to run (a
+ * cross-origin frame is served from another loopback port) and a query may
+ * carry tokens. Frame 0, and a frame whose document is not http(s) such as
+ * `about:blank` or `srcdoc`, gains no path, so every top-frame node is
+ * byte-identical to what it was before the path existed.
  */
 function withRecordedFrame(outputId: string, payload: JsonObject, parameters: JsonObject): JsonObject {
   const browserFrameId = frameIdValue(payload.browserFrameId);
   if (browserFrameId === undefined || !outputId.startsWith("web.dom.")) return parameters;
-  return Object.keys(parameters).length === 0 ? parameters : { ...parameters, browserFrameId };
+  if (Object.keys(parameters).length === 0) return parameters;
+  const browserFrameUrlPath = browserFrameId > 0 ? httpUrlPath(payload.url) : undefined;
+  return { ...parameters, browserFrameId, ...(browserFrameUrlPath !== undefined ? { browserFrameUrlPath } : {}) };
 }
 
 /** Frame 0 is the top document, so `0` is a frame rather than an absent one; a negative or fractional id names none. */
 function frameIdValue(value: unknown): number | undefined {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+}
+
+/** The pathname of an http(s) URL, and nothing else of it. Any other scheme, or a string that is no URL, names no path. */
+function httpUrlPath(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.pathname : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function recordedOutputParameters(outputId: string, payload: JsonObject): JsonObject {
@@ -58,11 +84,52 @@ function recordedOutputParameters(outputId: string, payload: JsonObject): JsonOb
   if (outputId === "web.dom.wait_for_selector") return compact({ selector, ...(hasTarget ? target : {}) });
   if (outputId === "web.dom.wait_for_text") return compact({ text: stringValue(payload.inputValue) ?? stringValue(payload.title) });
   if (outputId === "web.dom.extract") return compact({ selector, ...(hasTarget ? target : {}) });
+  if (outputId === "web.dom.upload") return recordedUploadParameters(payload, selector, target);
+  if (outputId === "web.browser.tab") return recordedTabParameters(payload);
   if (outputId === "web.dom.capture_snapshot") return {};
-  // The remaining Week 1 outputs — assert, extract_list, upload, dialog, tab
-  // and download — are dispatch-only: no recorded user event maps to one, so
-  // there is no recorded payload to normalize into their parameters.
+  // The remaining Week 1 outputs — assert, extract_list, dialog and download —
+  // are dispatch-only: no recorded user event maps to one, so there is no
+  // recorded payload to normalize into their parameters.
   return {};
+}
+
+/**
+ * A file choice replays as an upload that asks for its files at run time:
+ * `upload-binding.ts` has the request's shape and why it has no fallback.
+ *
+ * Nothing about the files is written, because the recording holds nothing of
+ * them that may travel: no name, no count, no content. The descriptor's `value`
+ * is dropped from the fingerprint for the same reason. On a file input it is
+ * Chrome's `C:\fakepath\<name>`, the user's local file name, and it is no
+ * identity signal either, since the same control holds a different name on
+ * every run. With no identity to key a request on there is nothing to ask for;
+ * the node then has no `upload` and stays evidence.
+ */
+function recordedUploadParameters(payload: JsonObject, selector: string | undefined, target: JsonObject): JsonObject {
+  const key = webAutomationRecordedElementKey(payload);
+  if (key === undefined) return {};
+  const element = objectValue(target.element);
+  const fileTarget = element === undefined ? target : { ...target, element: Object.fromEntries(Object.entries(element).filter(([name]) => name !== "value")) as JsonObject };
+  return compact({ selector, upload: webAutomationUploadBinding(key), ...fileTarget });
+}
+
+/**
+ * A recorded tab change replays through `web.browser.tab`, carrying only what
+ * replay needs: the operation, and for a switch the exact path of the tab it
+ * went to. Never a tab id, which does not survive to a replay, and never a
+ * URL's origin or query.
+ *
+ * A path that is not a bare pathname is not trimmed into one. The switch is
+ * built without it, and `io/input-model.ts` `hasExecutableParameters` keeps a
+ * switch that names no tab as evidence. An entry with no `tab` at all, which is
+ * what the recording-start marker is, builds nothing.
+ */
+function recordedTabParameters(payload: JsonObject): JsonObject {
+  const tab = objectValue(payload.tab);
+  if (tab?.operation === "close") return { tab: { operation: "close" } };
+  if (tab?.operation !== "switch") return {};
+  const urlPath = webAutomationUrlPath(tab.urlPath);
+  return { tab: { operation: "switch", ...(urlPath !== undefined ? { urlPath } : {}) } };
 }
 
 /**
@@ -90,7 +157,7 @@ function recordedTypedText(payload: JsonObject): JsonValue {
   const recorded = stringValue(payload.inputValue);
   if (recorded !== undefined) return recorded;
   if (!isSensitiveElementDescriptor(payload.element)) return "";
-  const key = webAutomationSecretKeyForRecordedElement(payload);
+  const key = webAutomationRecordedElementKey(payload);
   return key === undefined ? "" : webAutomationSecretBinding(key);
 }
 

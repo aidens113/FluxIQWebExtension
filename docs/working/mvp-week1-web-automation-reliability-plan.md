@@ -729,6 +729,53 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
     cannot assert.
 - Outcome: Accepted
 
+### 2026-09-13 — f-domain-capability-gaps: a recorded file choice, tab switch or close, and child frame each map to a replayable node
+
+- Agent: worker `f-domain-capability-gaps`; verified by supervisor.
+- Changed, in `domain/src/`:
+  - **The wire names, compiled first** for the extension workers:
+    - the recorded payload's `tab: { operation, urlPath? }`;
+    - the inputs `web.user.files_chosen`, `web.user.tab_switched` and
+      `web.user.tab_closed`;
+    - `urlPath` on the tab switch request;
+    - `frameUrlPath` on `WebAutomationActionCommand`, lifted from
+      `browserFrameUrlPath`.
+  - **P5,** `io/input-model.ts` and new `output-nodes/upload-binding.ts`.
+    - A file input's change maps to `web.dom.upload`, whose `upload` is a
+      `web.upload.<key>` binding with no fallback.
+    - The node carries no file name, count or content.
+    - An emptied file input stays evidence.
+  - **P4.** A recorded switch that has a path maps to `web.browser.tab`, and so does
+    a close. Neither carries a tab id, origin or query. The recording-start marker
+    stays non-executable.
+  - **P6,** `output-nodes/payloads.ts`. A child-frame node also carries its frame's
+    URL path, and top-frame nodes are pinned byte for byte.
+  - **New `output-nodes/url-path.ts`:** `webAutomationUrlPath`, the one pathname
+    rule. It refuses a leading `//` or `/\`, and the extension now imports it.
+  - **New `output-nodes/recorded-element-key.ts`:** the element-key rule, moved out
+    of `secret-binding.ts` and renamed `webAutomationRecordedElementKey`. Nothing
+    outside `domain/src` used the old name.
+  - `client/`, `actions/` and the `web-panel-host.ts` labels; tests.
+- Decision: a file input recorded with `hasValue: false` must also stay evidence,
+  now that the recorder sends no file value. That is `g-runner-upload-input`'s
+  task 5.
+- Validation:
+  - **Supervisor:** `domain` `pnpm check` exit=0.
+  - **Supervisor:** `DOMAIN_TEST_BUILD_LABEL=sup47 pnpm test` printed "# tests
+    399", "# pass 398", "# fail 1". The one failure is the uncommitted W25 row
+    `core-gateway-recording-order.test.ts`, which needs a Core build and is not in
+    this commit.
+  - **Worker mutations:**
+    - 16 guards each failed a test;
+    - one guard is masked by the payload guard, and is caught only together with
+      it;
+    - all were restored and confirmed by SHA-256.
+- Not verified:
+  - the extension and test-runner compiling against the new exports, which the next
+    gates cover;
+  - the Lab rows W15, W17 and W28.
+- Outcome: Accepted
+
 ## Open Questions
 
 Open questions live in [open-questions.md](./mvp-week1-web-automation-reliability-plan/open-questions.md).

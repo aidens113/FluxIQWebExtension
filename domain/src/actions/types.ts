@@ -186,10 +186,15 @@ export type WebAutomationDialogRequest = {
   promptText?: string | undefined;
 };
 
-/** `web.browser.tab`. A switch names the tab by id, or by the URL substring its address must contain. */
+/**
+ * `web.browser.tab`. A switch names the tab by id, by the URL substring its
+ * address must contain, or by `urlPath`, the exact pathname a recorded switch
+ * carries: tab ids do not survive to a replay, origins differ run to run, and a
+ * query may carry tokens, so a recording names a tab by its path alone.
+ */
 export type WebAutomationTabRequest =
   | { operation: "open"; url?: string | undefined; active?: boolean | undefined }
-  | { operation: "switch"; tabId?: number | undefined; urlPattern?: string | undefined }
+  | { operation: "switch"; tabId?: number | undefined; urlPattern?: string | undefined; urlPath?: string | undefined }
   | { operation: "close"; tabId?: number | undefined };
 
 /** `web.browser.download`: wait for a download, optionally the one with this file name, to complete. */
@@ -203,6 +208,14 @@ export type WebAutomationActionCommand = {
   actionType: WebAutomationActionType;
   tabId?: number | undefined;
   frameId?: number | undefined;
+  /**
+   * The pathname of the child-frame document the action was recorded in,
+   * lifted from the node parameter `browserFrameUrlPath`. Chrome renumbers a
+   * frame when it navigates, so a recorded `frameId` can name no frame on
+   * replay; the path finds the same document again and the id is only a
+   * tie-break. Absent for the top frame, whose id never changes.
+   */
+  frameUrlPath?: string | undefined;
   selector?: string | undefined;
   text?: string | undefined;
   value?: string | undefined;

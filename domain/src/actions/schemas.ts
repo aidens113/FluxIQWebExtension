@@ -196,7 +196,7 @@ const dialogSchema = {
   }
 } satisfies JsonObject;
 
-/** `WebAutomationTabRequest`. A switch names the tab by id, or by the substring its URL must contain. */
+/** `WebAutomationTabRequest`. A switch names the tab by id, by the substring its URL must contain, or by its exact URL path. */
 const tabSchema = {
   type: "object",
   label: "Tab",
@@ -206,7 +206,8 @@ const tabSchema = {
     url: { type: "string", label: "URL" },
     active: { type: "boolean", label: "Activate" },
     tabId: { type: "integer", label: "Tab id" },
-    urlPattern: { type: "string", label: "URL contains" }
+    urlPattern: { type: "string", label: "URL contains" },
+    urlPath: { type: "string", label: "URL path" }
   }
 } satisfies JsonObject;
 

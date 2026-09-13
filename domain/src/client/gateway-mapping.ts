@@ -15,7 +15,7 @@ import {
   type WebAutomationElementFingerprint
 } from "../actions/types";
 import { webAutomationActionDefinitions } from "../actions/schemas";
-import { elementFingerprint, webAutomationUnresolvedSecretParameters } from "../output-nodes";
+import { elementFingerprint, webAutomationUnresolvedSecretParameters, webAutomationUploadBindingPath } from "../output-nodes";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "../runtime/failure";
 import { WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, isProducerRedactedComparison, isSensitiveElementDescriptor } from "../sensitivity";
 import { webAutomationReadActionParameters } from "./gateway-action-parameters";
@@ -34,8 +34,18 @@ export type WebAutomationRecordedPayload = {
   scroll?: JsonObject | undefined;
   mutation?: JsonObject | undefined;
   actionResult?: JsonObject | undefined;
+  /** Only on a recorded tab switch or close. The recording-start marker carries none, which is what keeps it evidence. */
+  tab?: WebAutomationRecordedTab | undefined;
   metadata?: JsonObject | undefined;
 };
+
+/**
+ * A tab change the user made while recording. A switch names the tab it went
+ * to by the exact pathname of its URL: tab ids do not survive to a replay,
+ * origins differ run to run, and a query may carry tokens. A close names
+ * nothing, because replay closes the tab it is driving.
+ */
+export type WebAutomationRecordedTab = { operation: "switch" | "close"; urlPath?: string | undefined };
 
 /**
  * A gateway command nothing is dispatched for: its action type is not a web
@@ -91,6 +101,9 @@ export function createWebAutomationRecordingEvent(payload: WebAutomationRecorded
       mutation: payload.mutation,
       snapshot: payload.snapshot,
       actionResult: payload.actionResult,
+      // Only the two declared fields are copied, so nothing else a caller put on
+      // the tab change -- a tab id, a full URL -- reaches the stored recording.
+      tab: payload.tab === undefined ? undefined : { operation: payload.tab.operation, ...(payload.tab.urlPath !== undefined ? { urlPath: payload.tab.urlPath } : {}) },
       ...(payload.metadata?.recordingState !== undefined ? { recordingState: payload.metadata.recordingState } : {})
     }),
     metadata: compactJsonObject({
@@ -135,7 +148,10 @@ export function webAutomationActionFromGatewayCommand(command: ClientGatewayActi
   const parameters = command.parameters ?? {};
   // A request the run never answered would otherwise read as absent text and
   // type nothing, reporting success. Refused instead, by name and path only.
-  const unmet = webAutomationUnresolvedSecretParameters(parameters);
+  // An unanswered upload request is named the same way: read as an upload it is
+  // no file list, and would be refused as an unreadable parameter instead.
+  const uploadPath = webAutomationUploadBindingPath(parameters.upload);
+  const unmet = [...webAutomationUnresolvedSecretParameters(parameters), ...(uploadPath !== undefined ? [{ parameter: "upload", path: uploadPath }] : [])];
   if (unmet.length > 0) {
     return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: unsuppliedValueMessage(unmet), failure: unsuppliedValueFailure(unmet) };
   }

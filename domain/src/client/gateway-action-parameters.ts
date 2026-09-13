@@ -40,11 +40,12 @@ import {
   type WebAutomationWaitCondition,
   type WebAutomationWaitRequest
 } from "../actions/types";
+import { webAutomationUrlPath } from "../output-nodes";
 
 /** The command fields that come from a gateway command's `parameters` rather than from its target or envelope. */
 export type WebAutomationLiftedActionParameters = Pick<
   WebAutomationActionCommand,
-  "tabId" | "frameId" | "newTab" | "option" | "scroll" | "wait" | "modifiers" | "checked" | "assert" | "extractList" | "upload" | "dialog" | "tab" | "download"
+  "tabId" | "frameId" | "frameUrlPath" | "newTab" | "option" | "scroll" | "wait" | "modifiers" | "checked" | "assert" | "extractList" | "upload" | "dialog" | "tab" | "download"
 >;
 
 /**
@@ -71,6 +72,9 @@ export function webAutomationReadActionParameters(parameters: JsonObject): WebAu
     // `web.browser.tab` operation acts on, which travels inside `tab`.
     tabId: nonNegativeInteger(parameters.browserTabId ?? parameters.tabId),
     frameId: nonNegativeInteger(parameters.browserFrameId ?? parameters.frameId),
+    // The child frame's document path, which finds the frame again after Chrome
+    // renumbers it. Only the recorded node's name is read.
+    frameUrlPath: webAutomationUrlPath(parameters.browserFrameUrlPath),
     newTab: booleanValue(parameters.newTab),
     option: optionSelectorValue(parameters.option),
     scroll: scrollRequestValue(parameters.scroll),
@@ -97,6 +101,7 @@ export function webAutomationReadActionParameters(parameters: JsonObject): WebAu
 function suppliedParameter(parameters: JsonObject, field: keyof WebAutomationLiftedActionParameters): unknown {
   if (field === "tabId") return parameters.browserTabId ?? parameters.tabId;
   if (field === "frameId") return parameters.browserFrameId ?? parameters.frameId;
+  if (field === "frameUrlPath") return parameters.browserFrameUrlPath;
   return parameters[field];
 }
 
@@ -253,7 +258,11 @@ function tabRequestValue(value: unknown): WebAutomationTabRequest | undefined {
   }
   if (operation === "switch") {
     const urlPattern = nonEmptyString(request.urlPattern);
-    return { operation, ...(tabId !== undefined ? { tabId } : {}), ...(urlPattern !== undefined ? { urlPattern } : {}) };
+    // A path sent but unreadable refuses the whole switch: dropped, the switch
+    // would go to whichever tab the remaining fields name, or to none at all.
+    const urlPath = webAutomationUrlPath(request.urlPath);
+    if (request.urlPath !== undefined && urlPath === undefined) return undefined;
+    return { operation, ...(tabId !== undefined ? { tabId } : {}), ...(urlPattern !== undefined ? { urlPattern } : {}), ...(urlPath !== undefined ? { urlPath } : {}) };
   }
   return { operation, ...(tabId !== undefined ? { tabId } : {}) };
 }

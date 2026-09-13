@@ -132,6 +132,40 @@ assert.equal(
   "an event recorded with no frame claims none"
 );
 
+// A child frame's document path, end to end: recorded event -> parameters -> command.
+const childFrameEvent = createWebAutomationRecordingEvent(
+  { kind: "dom.click", sequence: 10, url: "http://127.0.0.1:5174/scenarios/iframe-checkout/payment?session=tok-123", title: "Payment", eventTimestampMs: 100, element: { selector: "#pay", tagName: "button" } },
+  { tabId: 12, frameId: 4 }
+);
+const childFrameCommand = webAutomationActionFromGatewayCommand({ commandId: "command.child-frame", actionType: "web.dom.click", target: { selector: "#pay" }, parameters: webAutomationOutputPayload("web.dom.click", childFrameEvent.payload ?? {}) });
+assert.equal("status" in childFrameCommand ? undefined : childFrameCommand.frameUrlPath, "/scenarios/iframe-checkout/payment");
+assert.equal("status" in childFrameCommand ? undefined : childFrameCommand.frameId, 4);
+
+// -- A recorded tab change ----------------------------------------------------
+// The stored payload keeps only the two declared fields, so a tab id or a full
+// URL a caller put beside them never reaches the recording.
+const tabChange = { operation: "switch" as const, urlPath: "/scenarios/multi-tab/details", tabId: 41, url: "http://127.0.0.1:4173/scenarios/multi-tab/details?session=tok-123" };
+const tabEvent = createWebAutomationRecordingEvent({ kind: "browser.tab", sequence: 7, url: "http://127.0.0.1:4173/scenarios/multi-tab/details", title: "Details", eventTimestampMs: 70, tab: tabChange });
+assert.equal(tabEvent.eventType, WEB_AUTOMATION_EVENTS.tabStateChanged);
+assert.deepEqual(tabEvent.payload?.tab, { operation: "switch", urlPath: "/scenarios/multi-tab/details" });
+assert.deepEqual(createWebAutomationRecordingEvent({ kind: "browser.tab", sequence: 8, url: "https://example.test", title: "Example", eventTimestampMs: 80, tab: { operation: "close" } }).payload?.tab, { operation: "close" });
+assert.equal(
+  "tab" in (createWebAutomationRecordingEvent({ kind: "browser.tab", sequence: 9, url: "https://example.test", title: "Example", eventTimestampMs: 90, metadata: { recordingState: "started" } }).payload ?? {}),
+  false,
+  "the recording-start marker carries no tab"
+);
+const tabCommand = webAutomationActionFromGatewayCommand({ commandId: "command.tab", actionType: "web.browser.tab", parameters: webAutomationOutputPayload("web.browser.tab", tabEvent.payload ?? {}) });
+assert.deepEqual("status" in tabCommand ? undefined : tabCommand.tab, { operation: "switch", urlPath: "/scenarios/multi-tab/details" }, "a recorded switch reaches the command as its path alone");
+
+// -- A run-time request nobody answered ---------------------------------------
+// An unanswered upload request is refused the way an unanswered secret is: a
+// user-intervention refusal naming the parameter and path, not an unreadable
+// file list.
+const unansweredUpload = webAutomationActionFromGatewayCommand({ commandId: "command.upload", actionType: "web.dom.upload", parameters: { selector: "#attachment", upload: { $state: { path: "web.upload.attachment" } } } });
+const unansweredSecret = webAutomationActionFromGatewayCommand({ commandId: "command.secret", actionType: "web.dom.type", parameters: { selector: "#password", text: { $state: { path: "web.secret.password" } } } });
+assert.equal("status" in unansweredUpload ? unansweredUpload.message : undefined, "Not dispatched: these parameters need values supplied at run time that this run did not supply: upload (web.upload.attachment)");
+assert.equal("status" in unansweredUpload ? unansweredUpload.failure.code : undefined, "status" in unansweredSecret ? unansweredSecret.failure.code : "(secret dispatched)");
+
 // The whole chain: recorded event -> replayable parameters -> action command.
 const framedParameters = webAutomationOutputPayload("web.dom.click", framedEvent.payload ?? {});
 const framedCommand = webAutomationActionFromGatewayCommand({

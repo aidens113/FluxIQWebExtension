@@ -134,6 +134,26 @@ assert.deepEqual(mapped("web.browser.download", { download: { filename: "report.
 assert.deepEqual(mapped("web.browser.download", { download: {} }).download, {}, "waiting for whichever download finishes next is a request");
 assert.equal(mapped("web.browser.download", {}).download, undefined);
 
+// -- A recorded tab switch's `urlPath`, and a child frame's `frameUrlPath` ----
+// A recording names a tab and a child frame by exact pathname: ids do not
+// survive to a replay, origins differ run to run, and a query may carry tokens.
+// So a full URL is refused, never trimmed into a path.
+assert.deepEqual(mapped("web.browser.tab", { tab: { operation: "switch", urlPath: "/scenarios/multi-tab/list" } }).tab, { operation: "switch", urlPath: "/scenarios/multi-tab/list" });
+for (const urlPath of ["http://127.0.0.1:4173/scenarios/multi-tab/list", "/list?session=tok", "/list#top", "list", "", 7, null]) {
+  refusedWhole("web.browser.tab", { tab: { operation: "switch", urlPath } }, ["tab"], `a switch path that is not a bare pathname: ${JSON.stringify(urlPath)}`);
+}
+assert.deepEqual(mapped("web.browser.tab", { tab: { operation: "close", urlPath: "/list" } }).tab, { operation: "close" }, "a close names no tab, so it carries no path");
+const childFrameClick = mapped("web.dom.click", { browserFrameId: 4, browserFrameUrlPath: "/scenarios/iframe-checkout/payment", selector: "#pay" });
+assert.equal(childFrameClick.frameUrlPath, "/scenarios/iframe-checkout/payment");
+assert.equal(childFrameClick.frameId, 4, "the id still travels, as the tie-break");
+assert.equal(mapped("web.dom.click", { browserFrameId: 0, selector: "#pay" }).frameUrlPath, undefined, "a top-frame command names no path");
+assert.equal(mapped("web.dom.click", { frameUrlPath: "/payment", selector: "#pay" }).frameUrlPath, undefined, "only the recorded node's name is read");
+for (const browserFrameUrlPath of ["", "http://127.0.0.1:5174/payment", "/payment?session=tok", "payment", 4, null]) {
+  const command = mapped("web.dom.click", { browserFrameId: 4, browserFrameUrlPath, selector: "#pay" });
+  assert.equal(command.frameUrlPath, undefined, `refused: ${JSON.stringify(browserFrameUrlPath)}`);
+  assert.equal(command.frameId, 4, "a refused path does not take the frame id with it");
+}
+
 // -- The parameters the eleven older actions gained ---------------------------
 assert.deepEqual(mapped("web.dom.select", { selector: "#country", option: { by: "label", label: "Ireland" } }).option, { by: "label", label: "Ireland" });
 assert.deepEqual(mapped("web.dom.select", { selector: "#country", option: { by: "index", index: 0 } }).option, { by: "index", index: 0 }, "the first option is index 0");
@@ -184,7 +204,7 @@ assert.deepEqual(webAutomationActionFromGatewayCommand({ commandId: "command.sna
 // it. Every parameter name the lift reads is sent unreadable to every action
 // type, and the pairs refused whole must be exactly these five, so a schema
 // that starts or stops requiring a lifted field shows up here, not on a page.
-const LIFTED_PARAMETER_NAMES = ["browserTabId", "tabId", "browserFrameId", "frameId", "newTab", "option", "scroll", "wait", "modifiers", "checked", "assert", "extractList", "upload", "dialog", "tab", "download"];
+const LIFTED_PARAMETER_NAMES = ["browserTabId", "tabId", "browserFrameId", "frameId", "browserFrameUrlPath", "newTab", "option", "scroll", "wait", "modifiers", "checked", "assert", "extractList", "upload", "dialog", "tab", "download"];
 const refusedPairs = WEB_AUTOMATION_ACTION_TYPES.flatMap((actionType) => LIFTED_PARAMETER_NAMES
   .filter((name) => "status" in webAutomationActionFromGatewayCommand({ commandId: "command.matrix", actionType, parameters: { [name]: "unreadable" } }))
   .map((name) => `${actionType} ${name}`));

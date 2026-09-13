@@ -12,6 +12,8 @@
 // No credential appears here. The values supplied are sentinels, and they are
 // two different ones, so a resolver that returned some constant -- or the
 // recording's own value -- could not pass.
+//
+// The key a request is made under is covered in `recorded-element-key.test.ts`.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -22,7 +24,6 @@ import {
   WEB_AUTOMATION_SECRET_STATE_PREFIX,
   webAutomationSecretBinding,
   webAutomationSecretBindingPath,
-  webAutomationSecretKeyForRecordedElement,
   webAutomationSecretStatePath,
   webAutomationUnresolvedSecretParameters
 } from "../secret-binding";
@@ -71,23 +72,9 @@ test("a recorded value still replays as itself", () => {
 
 test("only a request on the secret namespace is one", () => {
   assert.equal(webAutomationSecretStatePath("password").startsWith(WEB_AUTOMATION_SECRET_STATE_PREFIX), true);
-  for (const value of ["password", "", 0, null, undefined, { $state: {} }, { $state: { path: "web.elements.password" } }]) {
+  for (const value of ["password", "", 0, null, undefined, { $state: {} }, { $state: { path: "web.elements.password" } }, { $state: { path: "web.upload.password" } }]) {
     assert.equal(webAutomationSecretBindingPath(value), undefined, JSON.stringify(value) ?? "undefined");
   }
-});
-
-test("the key comes from identity the node already carries, richest first", () => {
-  const key = (payload: Record<string, unknown>) => webAutomationSecretKeyForRecordedElement(payload as never);
-  // The assigned state path wins: it is the only identity already made unique
-  // across the page's controls, suffix included.
-  assert.equal(key(withheldPasswordEntry), "password");
-  assert.equal(key({ ...withheldPasswordEntry, visualTarget: { statePath: "web.elements.password.2" } }), "password-2");
-  // Then the author-written identifier, then the selector.
-  assert.equal(key({ element: withheldPasswordEntry.element }), "password");
-  assert.equal(key({ element: { selector: "form > input:nth-child(2)" } }), "form-input-nth-child-2");
-  // Nothing at all is no request; such a payload has no selector either, so it
-  // never becomes an executable action.
-  assert.equal(key({}), undefined);
 });
 
 // -- What Core does with the request ------------------------------------------

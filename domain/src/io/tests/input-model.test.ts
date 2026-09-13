@@ -125,6 +125,48 @@ const rows: Row[] = [
   { row: "19 client.error, never emitted", event: recorded("client.error"), eventType: WEB_AUTOMATION_EVENTS.clientError }
 ];
 
+// The rows the twenty-eighth dispatch added: a tab switch or close (P4) and a
+// file choice (P5). Row 2 above, a `browser.tab` with no `tab`, stays evidence.
+const fileInput = { selector: "#attachment", tagName: "input", inputType: "file", id: "attachment" };
+rows.push(
+  {
+    row: "2a browser.tab, a switch with a path",
+    event: recorded("browser.tab", { tab: { operation: "switch", urlPath: "/scenarios/multi-tab/details" } }),
+    eventType: WEB_AUTOMATION_EVENTS.tabStateChanged,
+    inputId: WEB_AUTOMATION_INPUT_IDS.tabSwitched,
+    outputId: "web.browser.tab"
+  },
+  {
+    row: "2b browser.tab, a close",
+    event: recorded("browser.tab", { tab: { operation: "close" } }),
+    eventType: WEB_AUTOMATION_EVENTS.tabStateChanged,
+    inputId: WEB_AUTOMATION_INPUT_IDS.tabClosed,
+    outputId: "web.browser.tab"
+  },
+  // A switch naming no tab would go to whichever tab happened to be in front.
+  { row: "2c browser.tab, a switch without a path", event: recorded("browser.tab", { tab: { operation: "switch" } }), eventType: WEB_AUTOMATION_EVENTS.tabStateChanged },
+  { row: "2d browser.tab, a switch whose path is a full URL", event: recorded("browser.tab", { tab: { operation: "switch", urlPath: "https://example.test/details?session=tok" } }), eventType: WEB_AUTOMATION_EVENTS.tabStateChanged },
+  { row: "2e browser.tab, the recording-start marker", event: recorded("browser.tab", { metadata: { recordingState: "started" } }), eventType: WEB_AUTOMATION_EVENTS.tabStateChanged },
+  {
+    row: "9c dom.change, file input",
+    event: recorded("dom.change", { element: fileInput, inputValue: "C:\\fakepath\\tax-return-2025.pdf" }),
+    eventType: WEB_AUTOMATION_EVENTS.elementChanged,
+    inputId: WEB_AUTOMATION_INPUT_IDS.filesChosen,
+    outputId: "web.dom.upload"
+  },
+  {
+    // What the recorder sends once it stops reading a file input's value.
+    row: "9d dom.change, file input with no recorded value",
+    event: recorded("dom.change", { element: fileInput }),
+    eventType: WEB_AUTOMATION_EVENTS.elementChanged,
+    inputId: WEB_AUTOMATION_INPUT_IDS.filesChosen,
+    outputId: "web.dom.upload"
+  },
+  // An input the user emptied holds no files: no upload, and never a cleared field.
+  { row: "9e dom.change, file input emptied", event: recorded("dom.change", { element: fileInput, inputValue: "" }), eventType: WEB_AUTOMATION_EVENTS.elementChanged },
+  { row: "9f dom.input, file input", event: recorded("dom.input", { element: fileInput, inputValue: "C:\\fakepath\\tax-return-2025.pdf" }), eventType: WEB_AUTOMATION_EVENTS.elementInputChanged, inputId: WEB_AUTOMATION_INPUT_IDS.filesChosen, outputId: "web.dom.upload" }
+);
+
 const outputNodes = listWebAutomationOutputNodeDefinitions();
 
 for (const { row, event, eventType, inputId, outputId } of rows) {
@@ -171,17 +213,31 @@ assert.equal(webAutomationInputIdForRecordedEvent(recorded("dom.scroll")), undef
 assert.equal(webAutomationInputIdForRecordedEvent(recorded("dom.scroll", { scroll: { y: 0 } })), WEB_AUTOMATION_INPUT_IDS.pageScrolled, "scrolling back to the top is a coordinate");
 
 // Outputs with no recording input: dispatch-only, never produced from a user action.
-const recordableOutputs: string[] = actionInputDefinitions.map(([, , outputId]) => outputId);
+const inputOutputs: string[] = actionInputDefinitions.map(([, , outputId]) => outputId);
+const recordableOutputs: string[] = [...new Set(inputOutputs)];
 const dispatchOnlyOutputs = [
   "web.dom.wait_for_selector", "web.dom.wait_for_text", "web.dom.extract", "web.dom.capture_snapshot",
   // Added in Week 1 (decision D6). `web.dom.check` is recordable, from a
-  // checkbox or radio change; the other six are authored or driven by a Flow
-  // and no recorded user event produces one.
-  "web.dom.assert", "web.dom.extract_list", "web.dom.upload", "web.dom.dialog",
-  "web.browser.tab", "web.browser.download"
+  // checkbox or radio change; `web.dom.upload` from a file choice; and
+  // `web.browser.tab` from a tab switch or close. The other four are authored
+  // or driven by a Flow and no recorded user event produces one.
+  "web.dom.assert", "web.dom.extract_list", "web.dom.dialog", "web.browser.download"
 ];
-assert.equal(new Set(recordableOutputs).size, recordableOutputs.length, "each action input maps to its own output");
+// Every action input names one output. Only the tab switch and the tab close
+// share theirs: both are `web.browser.tab`, told apart by the operation the node carries.
+assert.deepEqual(inputOutputs.filter((outputId, index) => inputOutputs.indexOf(outputId) !== index), ["web.browser.tab"], "only the tab operations share an output");
 assert.deepEqual([...recordableOutputs, ...dispatchOnlyOutputs].sort(), [...WEB_AUTOMATION_ACTION_TYPES].sort(), "every output is recordable or dispatch-only");
+
+// The recording-start marker stays non-executable however it arrives: stored,
+// its `recordingState` is on the payload, and it never carries a `tab`.
+assert.equal(webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.tabStateChanged, { url: "https://example.test/start", title: "Start", sequence: 1, recordingState: "started" }), undefined);
+assert.equal(webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.tabStateChanged, { url: "https://example.test/start", recordingState: "started" }, { recordingState: "started", clientKind: "browser.tab" }), undefined);
+// A recorded tab node names its tab by path and carries no tab id, origin or query.
+assert.deepEqual(webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.tabStateChanged, { url: "http://127.0.0.1:4173/details?session=tok", tab: { operation: "switch", urlPath: "/details" } })?.parameters, { tab: { operation: "switch", urlPath: "/details" } });
+// A file choice's node asks for the files, and holds no file name.
+const chosen = webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.elementChanged, { element: { ...fileInput, value: "C:\\fakepath\\tax-return-2025.pdf" }, inputValue: "C:\\fakepath\\tax-return-2025.pdf" });
+assert.deepEqual(chosen?.parameters.upload, { $state: { path: "web.upload.attachment" } });
+assert.equal(JSON.stringify(chosen?.parameters).includes("tax-return"), false, "the recorded file name is nowhere in the node");
 for (const outputId of dispatchOnlyOutputs) {
   assert.equal(recordableOutputs.includes(outputId), false, `${outputId} is dispatch-only`);
 }

@@ -105,7 +105,9 @@ const CANDIDATE_LABELS: Partial<Record<string, string>> = {
   "web.dom.clear": "Clear field",
   "web.dom.select": "Select option",
   "web.dom.keypress": "Press key",
-  "web.dom.scroll": "Scroll"
+  "web.dom.scroll": "Scroll",
+  "web.dom.upload": "Upload files",
+  "web.browser.tab": "Browser tab"
 };
 
 /**

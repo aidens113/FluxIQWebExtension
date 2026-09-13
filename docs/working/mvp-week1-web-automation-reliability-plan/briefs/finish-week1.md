@@ -3192,6 +3192,23 @@ Dispatched once two workers have reported:
 4. The test-runner resolves the domain through `domain/dist`. If you need a
    rebuild, build the domain once, privately, and say so. Never commit or leave a
    changed tracked build.
+5. **A cancelled choice stays evidence** (`domain/src/io/input-model.ts`, its
+   file-input branch only).
+   - Since `f-frame-address`, a recorded file input carries `hasValue`, but no
+     value.
+   - So a file input recorded with `hasValue: false` must stay evidence, as an
+     emptied one already does. Otherwise a cancelled choice would become an upload
+     that the runner fills.
+   - Add a row with its mutation, and run the domain `check` and `test` under a
+     private label.
+6. **What Core persists of a supplied upload.** Say where a `web.upload.<key>`
+   input's file name and content end up in Core's workspace:
+   - the session record;
+   - trace values;
+   - command-attempt parameters.
+
+   Answer from the Core code at `F:\!FluxIQ`, and from a unit probe if needed.
+   Other workers are editing Core's runtime there, so do not edit it.
 
 **Tests.**
 - The input built from the manifest's upload step, and the key equal to the
@@ -3338,6 +3355,59 @@ confirm the hash. The first run left the original `bridge.ts` on disk for
 minutes.
 
 **Report:** append an "Amendment" section to `reports/g-core-bridge-order.md`.
+
+## g-demo-attestation-limits — the demo leak check can scan Core's databases (test-runner)
+
+`g-attestation-sqlite-reader` found a problem with limits. The demo attestations
+use `SECRET_LEAK_ATTESTATION_DEFAULT_LIMITS`, whose `maxFileBytes` is 1 MiB.
+- A Core database, or its `-wal`, larger than that is now an `unscanned-store`
+  finding.
+- Lab Stage 3's `demo:record` and `demo:run` could therefore fail on size alone.
+
+**Owns:**
+- `packages/test-runner/src/demo-llm-attestation.ts`, its limits only;
+- `redaction-attestation/run-redaction-scopes.ts` and `attest-run-redaction.ts`,
+  their comments only;
+- their tests.
+
+**Read:** `reports/g-attestation-sqlite-reader.md`.
+
+**Task.**
+1. The demo attestations scan a Core database, and its `-wal`, up to the Lab run's
+   limits (8 MiB per file, 64 MiB per scan). Anything larger stays
+   `unscanned-store`, and the demo fails.
+2. Correct the two comments that no longer describe the check.
+
+**Tests.**
+- A demo attestation row with a database over 1 MiB and under 8 MiB, which is
+  scanned. Add a mutation that restores the default.
+- Test-runner `check`, and `test` in a private `--outDir`.
+- The structure audit.
+
+**Report:** `reports/g-demo-attestation-limits.md`.
+
+## Amendment to `f-capability-confirmations` — a tab confirmation carries its tab (extension)
+
+Dispatched once `f-tab-recording` has reported.
+
+The worker's open decision: the domain maps a tab event to an input only from
+`payload.tab.operation`. A replayed tab change that confirms without `tab` could
+therefore never be mapped the way a recorded one is.
+
+**Decided:** a tab confirmation carries
+`tab: { operation, urlPath }`, with the same shape as the recorded payload.
+- `urlPath` is the pathname of the tab the action left in front, never an origin
+  or a query.
+- A close carries no path.
+
+**Owns:** `runtime-status.ts` and `server-command-channel.ts`, and their tests.
+
+**Tests.**
+- The switch and close confirmations each carry `tab`, and neither holds an
+  origin or a query. Add a mutation.
+- Extension gates, and the structure audit.
+
+**Report:** append an "Amendment" section to `reports/f-capability-confirmations.md`.
 
 ## f-authgate-followups — the rest of the password text (scenario-lab, extension)
 

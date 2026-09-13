@@ -2,7 +2,7 @@ import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_EVENTS, type WebAutomationEventType } from "../constants";
 import { webAutomationActionDefinitions } from "../actions/schemas";
 import type { WebAutomationActionType } from "../actions/types";
-import { webAutomationOutputPayload, webAutomationSecretBindingPath } from "../output-nodes";
+import { webAutomationOutputPayload, webAutomationSecretBindingPath, webAutomationUploadBindingPath } from "../output-nodes";
 
 export const WEB_AUTOMATION_INPUT_IDS = {
   browserState: "web.browser.state",
@@ -14,7 +14,10 @@ export const WEB_AUTOMATION_INPUT_IDS = {
   optionSelected: "web.user.option_selected",
   checkboxToggled: "web.user.checkbox_toggled",
   keyPressed: "web.user.key_pressed",
-  pageScrolled: "web.user.page_scrolled"
+  pageScrolled: "web.user.page_scrolled",
+  filesChosen: "web.user.files_chosen",
+  tabSwitched: "web.user.tab_switched",
+  tabClosed: "web.user.tab_closed"
 } as const;
 
 export type WebAutomationInputId = typeof WEB_AUTOMATION_INPUT_IDS[keyof typeof WEB_AUTOMATION_INPUT_IDS];
@@ -28,6 +31,8 @@ export type WebAutomationRecordedInputPayload = {
   inputValue?: string;
   key?: string;
   scroll?: JsonObject;
+  /** A recorded tab switch or close, as `client/gateway-mapping.ts` `WebAutomationRecordedTab` puts it on the wire. */
+  tab?: JsonObject;
   metadata?: JsonObject;
 };
 
@@ -95,7 +100,10 @@ export const actionInputDefinitions = [
   [WEB_AUTOMATION_INPUT_IDS.optionSelected, "Option selected", "web.dom.select"],
   [WEB_AUTOMATION_INPUT_IDS.checkboxToggled, "Checkbox toggled", "web.dom.check"],
   [WEB_AUTOMATION_INPUT_IDS.keyPressed, "Key pressed", "web.dom.keypress"],
-  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"]
+  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"],
+  [WEB_AUTOMATION_INPUT_IDS.filesChosen, "Files chosen", "web.dom.upload"],
+  [WEB_AUTOMATION_INPUT_IDS.tabSwitched, "Tab switched", "web.browser.tab"],
+  [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"]
 ] as const;
 
 const OUTPUT_FOR_ACTION_INPUT = new Map<WebAutomationInputId, WebAutomationActionType>(
@@ -119,9 +127,19 @@ function recordedActionInputId(eventType: string, payload: JsonObject, metadata:
     // `dom.wheel` is never emitted, so its event type maps to no input.
     case WEB_AUTOMATION_EVENTS.scrollChanged:
       return WEB_AUTOMATION_INPUT_IDS.pageScrolled;
+    case WEB_AUTOMATION_EVENTS.tabStateChanged:
+      return recordedTabInputId(payload);
     case WEB_AUTOMATION_EVENTS.elementInputChanged:
     case WEB_AUTOMATION_EVENTS.elementChanged: {
       const element = objectValue(payload.element);
+      // A file input holds files, not text. Its recorded value is the user's
+      // local file name, so as text entry it replayed that name into a control
+      // with no text, and a cancelled choice cleared one. It replays as an
+      // upload asking for the files at run time, or stays evidence; it never
+      // reaches the text branches below. A value recorded as `""` says the
+      // input was left holding no files, which no upload reproduces, so that
+      // one stays evidence; a recorder that withholds the value sends none.
+      if (stringValue(element?.inputType)?.toLowerCase() === "file") return payload.inputValue === "" ? undefined : WEB_AUTOMATION_INPUT_IDS.filesChosen;
       if (stringValue(element?.tagName)?.toLowerCase() === "select") return WEB_AUTOMATION_INPUT_IDS.optionSelected;
       // A checkbox or radio is set, not typed into: its recorded value is the
       // control's `value` attribute ("on"), so replaying it as text entry
@@ -175,7 +193,7 @@ function isSelectValueChangeKeyPress(payload: JsonObject): boolean {
 function hasExecutableParameters(outputId: WebAutomationActionType, parameters: JsonObject): boolean {
   const schema = webAutomationActionDefinitions.find((definition) => definition.actionType === outputId)?.parameterSchema;
   const required = Array.isArray(schema?.required) ? schema.required.filter((key): key is string => typeof key === "string") : [];
-  if (!required.every((key) => isNonEmptyString(parameters[key]) || webAutomationSecretBindingPath(parameters[key]) !== undefined)) return false;
+  if (!required.every((key) => isExecutableRequiredParameter(key, parameters[key]))) return false;
   if (outputId === "web.dom.keypress") return isNonEmptyString(parameters.key);
   if (outputId === "web.dom.scroll") return typeof parameters.x === "number" || typeof parameters.y === "number";
   // A check whose state is unknown would have to guess between checking and
@@ -184,6 +202,37 @@ function hasExecutableParameters(outputId: WebAutomationActionType, parameters: 
   // it, so that toggle stays evidence.
   if (outputId === "web.dom.check") return typeof parameters.checked === "boolean";
   return true;
+}
+
+/**
+ * A required parameter is present as a non-empty string or a secret request,
+ * with two structured exceptions a recording can produce:
+ *
+ * - `upload` only as the upload request `payloads.ts` writes for a file choice.
+ *   A recording never holds a file, so any other value in it would be files
+ *   the recording invented, and a secret request is not a file list.
+ * - `tab` as a close, or as a switch naming its tab by path. A switch naming
+ *   nothing would go to whichever tab happened to be in front.
+ */
+function isExecutableRequiredParameter(key: string, value: unknown): boolean {
+  if (key === "upload") return webAutomationUploadBindingPath(value) !== undefined;
+  if (key === "tab") {
+    const tab = objectValue(value);
+    return tab?.operation === "close" || (tab?.operation === "switch" && isNonEmptyString(tab.urlPath));
+  }
+  return isNonEmptyString(value) || webAutomationSecretBindingPath(value) !== undefined;
+}
+
+/**
+ * A tab switch or close the user made. Only an entry carrying `tab` is one: the
+ * recording-start marker is stored under the same event type with no `tab`,
+ * and must stay evidence.
+ */
+function recordedTabInputId(payload: JsonObject): WebAutomationInputId | undefined {
+  const operation = objectValue(payload.tab)?.operation;
+  if (operation === "switch") return WEB_AUTOMATION_INPUT_IDS.tabSwitched;
+  if (operation === "close") return WEB_AUTOMATION_INPUT_IDS.tabClosed;
+  return undefined;
 }
 
 function isNonEmptyString(value: unknown): boolean {
