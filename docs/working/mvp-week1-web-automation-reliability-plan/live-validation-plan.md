@@ -185,8 +185,13 @@ by redirect. The single-instance form with one build is in the report.
 3. No `proposalIssues` entry contains `has not been finalized`.
 4. No run fails `recording.persistence` with "still being written" at the bound;
    if one does, the bound is the finding.
-5. Report the distribution of `recording.entriesAppendedAfterStop` and
-   `finalizationWaitMs` from `runtime.settle`, which shows the wait was exercised.
+5. `runtime.settle` `recordedActions` shows `extension` equal to `core`. Since
+   `g-recording-completeness`, a Core count below the extension's fails the run
+   as `recording.persistence`, naming both counts.
+6. Report the distribution of `recordings[].entriesAppendedAfterFirstPoll` and
+   `finalizationWaitMs` from `runtime.settle` (named `entriesAppendedAfterStop`
+   before that change), and of `recording.secondWait` from
+   `snapshots/flow-lane.json`. Together they show both waits were exercised.
 
 **Strength.** Zero failures in 24 rules out a true rate above about 12% at 95%
 confidence; against the measured 50%, 24 clean runs with nothing fixed has odds

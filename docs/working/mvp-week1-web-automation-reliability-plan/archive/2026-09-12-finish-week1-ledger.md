@@ -1455,3 +1455,69 @@ expectation record (Core `5ca9981`), both committed.
 - Not verified: Core `pnpm build`; root `pnpm test`; the Lab.
 - Outcome: Accepted
 
+
+## Part twenty-three, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: Core's ordered and
+acknowledged client start (Core `73a81e9`) and the recorder flush
+(`a840001`), both committed.
+
+### 2026-09-13 — g-core-start-order: Core orders a client's recording start with what follows it, and acknowledges it
+
+- Agent: worker `g-core-start-order` (Core); verified by supervisor. Core's ledger
+  has the paired entry.
+- Changed (Core): `client-gateway/bridge.ts` and its test; the client-gateway
+  architecture page. The supervisor also updated
+  `docs/integrations/client-gateway-websocket.md`.
+  - Later messages from a client wait for its pending start.
+  - `server.start_recording` is sent once the recording is open, but not after a
+    Stop for it.
+  - A refused start's waiting messages, dropped snapshots and dropped state
+    updates are audited under the recording id they name.
+- Found:
+  - An acknowledgement can still cross the extension's own Stop on the wire. That
+    guard was added to the running `f-recording-start-guard`.
+  - `bridge.ts` is 796 of 800 lines.
+- Validation: supervisor, Core `packages/fluxiq`:
+  - bridge test -> `Tests 20 passed (20)`;
+  - with both Core changes in the tree, `pnpm check` -> exit 0 and
+    `pnpm docs:check` -> exit 0.
+  - Worker: seven mutations each failed their target tests, restored
+    byte-identical.
+- Not verified: the WebSocket host; the extension receiving the acknowledgement
+  live; the Lab proof, which is step 4b at 24 of 24 under two-instance load.
+- Outcome: Accepted
+
+### 2026-09-13 — f-recorder-mutation-flush: a page change is recorded before the action that follows it
+
+- Agent: worker `f-recorder-mutation-flush`; verified by supervisor.
+- Changed:
+  - `content/recorder.ts` sends its pending mutation batch before it emits any
+    executable kind. The batch includes records the observer has queued but not
+    delivered (`takeRecords()`, one line beyond the brief, kept).
+  - A new `content/tests/recorder.test.ts`.
+  - W24's unarmed `expected.actions` in `intermediate-state/scenario.ts` drops
+    `web.dom.wait_for_selector: succeeded`, and its test changes to match.
+- Found:
+  - `flow-lane/expectations.ts:7-19` only requires a matching attempt to exist,
+    and ignores order, count and extra attempts.
+  - A debounced `dom.input` can follow a mutation its own typing caused, so the
+    W25 rule stays click-only. That note went to `w25-wait-mapper`.
+- Validation: supervisor ran:
+  - `EXTENSION_TEST_BUILD_LABEL=sup14 ... extension check` -> exit 0;
+  - `... test` -> `# tests 405`, `# pass 405`, `# fail 0`, with rows 288-292 ok
+    (`a click after a DOM addition sends the dom.mutation first, and the quiet
+    period does not send it again`, and `every kind that can be executable
+    flushes the batch first; ...`);
+  - scenario-lab `check` -> exit 0, `test` -> `# pass 203`, `# fail 0`;
+  - content harness `recorder-trust.spec.ts` -> `4 passed`.
+  - The tree also held `f-recording-start-guard`'s uncommitted tests.
+  - Worker: removing the flush failed rows 283, 284 and 286
+    (`actual ['dom.click'], expected ['dom.mutation','dom.click']`), and the file
+    was restored.
+  - Worker: `failures.spec.ts` gave 11 passed, with one teardown timeout and no
+    assertion diff. Rerun alone it gave 12 passed, a single observation.
+- Not verified: the Lab, where W25's mutation must be recorded before the late
+  click 3 of 3, and W24 unarmed must pass.
+- Outcome: Accepted
+

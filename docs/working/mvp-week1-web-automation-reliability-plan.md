@@ -641,32 +641,6 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 `2026-09-12-*` Wave 3 and live-validation files, and
 `2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-13 — g-core-start-order: Core orders a client's recording start with what follows it, and acknowledges it
-
-- Agent: worker `g-core-start-order` (Core); verified by supervisor. Core's ledger
-  has the paired entry.
-- Changed (Core): `client-gateway/bridge.ts` and its test; the client-gateway
-  architecture page. The supervisor also updated
-  `docs/integrations/client-gateway-websocket.md`.
-  - Later messages from a client wait for its pending start.
-  - `server.start_recording` is sent once the recording is open, but not after a
-    Stop for it.
-  - A refused start's waiting messages, dropped snapshots and dropped state
-    updates are audited under the recording id they name.
-- Found:
-  - An acknowledgement can still cross the extension's own Stop on the wire. That
-    guard was added to the running `f-recording-start-guard`.
-  - `bridge.ts` is 796 of 800 lines.
-- Validation: supervisor, Core `packages/fluxiq`:
-  - bridge test -> `Tests 20 passed (20)`;
-  - with both Core changes in the tree, `pnpm check` -> exit 0 and
-    `pnpm docs:check` -> exit 0.
-  - Worker: seven mutations each failed their target tests, restored
-    byte-identical.
-- Not verified: the WebSocket host; the extension receiving the acknowledgement
-  live; the Lab proof, which is step 4b at 24 of 24 under two-instance load.
-- Outcome: Accepted
-
 ### 2026-09-13 — w19-d1: the domain mapper builds a click's landing claim, which a live click does not yet reach
 
 - Agent: worker `w19-d1`; verified by supervisor.
@@ -707,39 +681,6 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 - Not verified: the claim in a live proposal; the Lab.
 - Outcome: Revised
 
-### 2026-09-13 — f-recorder-mutation-flush: a page change is recorded before the action that follows it
-
-- Agent: worker `f-recorder-mutation-flush`; verified by supervisor.
-- Changed:
-  - `content/recorder.ts` sends its pending mutation batch before it emits any
-    executable kind. The batch includes records the observer has queued but not
-    delivered (`takeRecords()`, one line beyond the brief, kept).
-  - A new `content/tests/recorder.test.ts`.
-  - W24's unarmed `expected.actions` in `intermediate-state/scenario.ts` drops
-    `web.dom.wait_for_selector: succeeded`, and its test changes to match.
-- Found:
-  - `flow-lane/expectations.ts:7-19` only requires a matching attempt to exist,
-    and ignores order, count and extra attempts.
-  - A debounced `dom.input` can follow a mutation its own typing caused, so the
-    W25 rule stays click-only. That note went to `w25-wait-mapper`.
-- Validation: supervisor ran:
-  - `EXTENSION_TEST_BUILD_LABEL=sup14 ... extension check` -> exit 0;
-  - `... test` -> `# tests 405`, `# pass 405`, `# fail 0`, with rows 288-292 ok
-    (`a click after a DOM addition sends the dom.mutation first, and the quiet
-    period does not send it again`, and `every kind that can be executable
-    flushes the batch first; ...`);
-  - scenario-lab `check` -> exit 0, `test` -> `# pass 203`, `# fail 0`;
-  - content harness `recorder-trust.spec.ts` -> `4 passed`.
-  - The tree also held `f-recording-start-guard`'s uncommitted tests.
-  - Worker: removing the flush failed rows 283, 284 and 286
-    (`actual ['dom.click'], expected ['dom.mutation','dom.click']`), and the file
-    was restored.
-  - Worker: `failures.spec.ts` gave 11 passed, with one teardown timeout and no
-    assertion diff. Rerun alone it gave 12 passed, a single observation.
-- Not verified: the Lab, where W25's mutation must be recorded before the late
-  click 3 of 3, and W24 unarmed must pass.
-- Outcome: Accepted
-
 ### 2026-09-13 — f-recording-start-guard: a recording starts once, whichever way Core's acknowledgement arrives
 
 - Agent: worker `f-recording-start-guard`; verified by supervisor.
@@ -771,6 +712,43 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 - Not verified: Core's acknowledgement live; a real stalled `fetch`; the Lab,
   which must show one "started" `browser.tab` event per recording and a linked
   project.
+- Outcome: Accepted
+
+### 2026-09-13 — g-recording-completeness: a run whose recording Core holds short fails, on both lanes
+
+- Agent: worker `g-recording-completeness`, resumed once to finish two leftover
+  files; verified by supervisor.
+- Changed:
+  - New `run-expectations/recording-completeness.ts` and its test. The runner
+    reads the extension's `status.eventCount` before Stop, and Core's action count
+    from each recording's full session (`get-recording`). A Core count below the
+    extension's fails as `recording.persistence`, naming both counts, and an
+    unreadable count fails closed.
+  - `flow-lane/recording-discards.ts` also counts a discard naming no recording
+    when this run's paired session sent it.
+  - `runtime.settle` reports `recordedActions` and `entriesAppendedAfterFirstPoll`,
+    and `flow-lane.json`'s `recording` labels the lane's own wait `secondWait`.
+  - `runner-wiring.test.ts` pins the new discard-read text, and
+    `scenario-assertions.test.ts`' messages match the start-page change.
+  - The supervisor updated step 4b's pass conditions in `live-validation-plan.md`
+    to the new fields.
+- Found: a paired-session discard naming a recording Core never created stays
+  open (report, open question 3).
+- Validation: supervisor read the new module and the runner and discard diffs.
+  - A search found no code reading the old field names.
+  - From `packages/test-runner`, `pnpm check` -> exit 0, and
+    `tsc --outDir dist-sup16` -> exit 0.
+  - `node --test "dist-sup16/**/*.test.js"` -> `# tests 509`, `# pass 509`,
+    `# fail 0`, including `ok 196 - a short count fails as recording.persistence,
+    naming the two counts and nothing recorded` and `ok 104 - a discard that
+    names no recording is counted when the run's paired session sent it, and
+    another session's is not`.
+  - The structure audit passed.
+  - Worker: the T1 and T2 mutations failed 3 and 2 tests. A runner mutation
+    dropping the discard scope failed the two wiring rows. Both were restored
+    byte-identical.
+- Not verified: the Lab. A clean `basic-form` run must show equal
+  `recordedActions`, and smoke W01's empty recording must now fail.
 - Outcome: Accepted
 
 ## Open Questions
