@@ -228,3 +228,414 @@ if any. Then establish whether a Lab run can execute from a git worktree at
 what `pnpm install` and the Lab build need, where run artifacts land), and
 produce a concurrency schedule bounded by this machine's RAM. Settle from the
 30-day plan's text whether Week 1 requires Firefox.
+
+---
+
+# Second dispatch, from the `c-remaining` inventory
+
+Written after `b43a46a`. Row IDs (LR7, B5, CS1f, ...) are rows of the table in
+`reports/c-remaining.md` "The inventory"; read your rows there first, and
+re-verify them at HEAD. The binding rules above still hold, plus:
+
+- These files belong to a worker still running; do not edit them:
+  `apps/extension/src/background/connection.ts`, `connection/index.ts` and any
+  `connection/` file created since `b43a46a` (`f-connection-split`).
+- `f-w18-secret-leg`'s changes to `input-model.ts`, `gateway-mapping.ts`,
+  `run-flow-lane.ts`, `declared-secrets.ts` and their tests are verified but
+  may still be uncommitted: build on them, never revert them.
+- `apps/extension/e2e/content/tests/actions.spec.ts` is supervisor-only (C4).
+
+## g-snapshot-evidence — LR7 and LR8
+
+**Owns:** `apps/extension/src/background/connection/dom-snapshot.ts` and
+`connection/tests/dom-snapshot.test.ts`; `domain/src/recording/web-state/types.ts`;
+`domain/src/recording/web-state/evidence/input.ts`; test fixtures under
+`domain/src/recording/` or `connection/tests/` that cast to the two local types
+LR8 deletes (list each in the report). **Not** `apps/extension/src/shared/protocol.ts`,
+which `g-recorder-signals` owns: if LR8 needs it, stop and report.
+
+**Task.** LR7: the fallback merge path drops the top frame's additive evidence;
+apply the table's smallest change. LR8: join the page-evidence contract at its
+top-level key, as the table says, and delete the two local restatements and
+their casts.
+
+**Tests.** LR7: a test in which the frame list omits frame 0, shown failing
+before the fix, with a mutation proof. LR8: after the change, renaming
+`evidence` on the domain type breaks the compile in both former restatement
+sites (quote both errors, then restore). Extension and domain `check` and `test`.
+
+**Report:** `reports/g-snapshot-evidence.md`.
+
+## g-recorder-signals — B5, a checkbox's state and a landmark's name
+
+**Owns:** `apps/extension/src/shared/protocol.ts`;
+`apps/extension/src/content/describe-element.ts`;
+`apps/extension/src/content/identity/context.ts`;
+`apps/extension/src/background/connection/gateway-payloads.ts`;
+`domain/src/output-nodes/targets.ts`; the tests of each under its directory's
+`tests/`.
+
+**Read:** row B5; `reports/p-openq-triage.md` B5 and Part 4 Group 2;
+`reports/x-identity-wire.md` Outcome, because the last identity signals added
+never crossed the wire.
+
+**Task.** Record `checked` for checkbox and radio controls, and a landmark's
+accessible name (`aria-label`, then `aria-labelledby`) in the element context,
+then carry both to the domain target at every hop: descriptor, protocol, gateway
+payload, domain target. Both are state, not a value, so no sensitive-control
+value may ride with them. Core scores neither signal; do not edit Core, and
+say exactly what W26 still needs from it.
+
+**Tests.** A unit test per hop, and one test that proves the domain target
+receives both from a described element. Mutation: drop each field at
+`gateway-payloads.ts` and quote the failing test. Extension and domain `check`
+and `test`; the content harness `identity-resolution.spec.ts`, run but not
+edited.
+
+**Report:** `reports/g-recorder-signals.md`.
+
+**Amended after the first attempt stopped Blocked** (a brief defect: ownership
+drawn around files, not the change). Owns also `domain/src/actions/types.ts`,
+`apps/extension/src/shared/tests/present.test.ts`, and a new
+`apps/extension/e2e/content/tests/identity-signals.spec.ts` for the
+described-element half. Decision: a sensitive checkbox or radio withholds
+`checked` both when recorded and on the gateway, because its checked state is
+its contents; prove that with a row and a mutation.
+
+## g-small-fixes — C1, A3, A4, LR9, C3
+
+**Owns:** `apps/extension/src/content/action-runtime/validation-outcome.ts` and
+its `tests/validation-outcome.test.ts` (comments only);
+`domain/scripts/test-domain.mjs`; `apps/extension/e2e/playwright.content.config.ts`;
+`packages/test-contracts/src/scenario-workflow.ts`;
+`apps/scenario-lab/src/scenarios/intermediate-state/tests/scenario.test.ts`;
+`apps/scenario-lab/src/scenarios/multi-tab/tests/scenario.test.ts`;
+`docs/architecture/testing-facility.md`, the "Scenario lab and contract" section
+only.
+
+**Task.** Each row as its table entry says. C1: rewrite the false paragraph.
+A3: the runner reports every failing entry and continues, exiting 1. A4: pin
+`workers` to 4 so the bare `pnpm exec playwright test -c
+e2e/playwright.content.config.ts` is correct. LR9: point both assertions at
+`scenarioPageFactSchedule(...)` and trim the doc's parenthetical. C3: one
+paragraph on `expected.actions`.
+
+**Tests.** A3: prove it with a scratch entry that throws on import, outside the
+tracked tree or deleted afterwards, quoting the runner's output and exit code.
+LR9: a mutation to the page-fact schedule that each re-pointed test catches.
+`check` and `test` for every package touched; the bare content-harness command
+lists every spec (`--list`).
+
+**Report:** `reports/g-small-fixes.md`.
+
+## g-flow-lane-observation — CS1f, B1, and fixes D1-D2 from `i-flow-lane-errors`
+
+Replaces the withdrawn `g-lab-resolution` brief: CS1f, B1, D1 and D2 share
+`run-scenario.ts` and `run-flow-lane.ts`, so they are one worker's.
+
+**Owns:** in `packages/test-runner/src/`: `run-scenario.ts`;
+`flow-lane/run-flow-lane.ts`, `flow-lane/persisted-flow-run.ts`,
+`flow-lane/lane-observation.ts`, `flow-lane/recording-flow-proposal.ts`, and the
+test of each under `flow-lane/tests/`.
+
+**Read:** `reports/i-flow-lane-errors.md` "(b) Cause 2" and "Fix design" rows
+D1 and D2; rows CS1f and B1; `reports/f-w18-secret-leg.md` Outcome, whose
+uncommitted change to `run-flow-lane.ts` you build on.
+
+**Task.**
+1. D1: publish the Flow-lane observation through `recordEvidence` before the
+   expectation asserts. Decision on the design's oracle choice: consult
+   `checkFinalState` before the asserts, so a failing run still carries a real
+   `oracleVerdict`.
+2. D2: exactly as the design row says, including the selector in
+   `lane-observation.ts` and the reported category and code in the error
+   event's `details` (Core vocabulary only, no page data).
+3. CS1f: carry `resolution` from Core's persisted action record into
+   `PersistedFlowAction` and `snapshots/flow-lane.json`. Confirm the field's name
+   and shape in Core source without editing it, and check it cannot carry a
+   sensitive control's value (`reports/v-matcher-calibration.md` on
+   `candidateLabel`). `run.json` is out of scope.
+4. B1: fail `recording.contract` when `proposal.candidateCount` is below the
+   workflow's expected executable actions, so a lost second `web.dom.type` fails
+   the run rather than passing on exit status. Say which declaration you count
+   from and why.
+
+**Tests.** The unit proofs and mutations the design gives for D1 and D2; a unit
+test and a mutation for CS1f and for B1; test-runner `check` and `test`. Under
+`Not verified`, state D2's Lab invariant: whenever `flow-lane.json` exists,
+`evaluation.json` says `lane "flow"` and `flowCreated true`.
+
+**Report:** `reports/g-flow-lane-observation.md`.
+
+## g-scenario-secrets — realistic fixtures that type into sensitive controls
+
+**Owns:** `apps/scenario-lab/src/scenarios/storefront-checkout/manifest.ts`,
+`apps/scenario-lab/src/scenarios/sensitive-input/manifest.ts`, and the tests
+under each scenario's `tests/`.
+
+**Read:** `reports/f-w18-secret-leg.md`, the pairing rule and "Other scenarios";
+`packages/test-runner/src/flow-lane/declared-secrets.ts`
+`declaredSecretBindingInputs` and `targetMatchesRequest` (read only).
+
+**Task.** Since W18, a Flow-lane run fails `fixture.invalid` unless every request
+for a run-time value in the approved Flow pairs one-to-one with a declared
+secret. Establish from the domain's sensitivity rules which steps of each
+scenario the recorder turns into requests, then declare exactly one secret for
+each, with a target that pairing matches. Weaken neither pairing nor
+sensitivity.
+
+**Tests.** A unit test per scenario that its declared secrets cover exactly the
+steps that act on a sensitive control; scenario-lab `check` and `test`. Name
+the Lab Flow-lane command that must now get past pairing.
+
+**Report:** `reports/g-scenario-secrets.md`.
+
+---
+
+# Third dispatch, from `i-lab-campaign`
+
+Written after `147fdb4`, which holds every first-dispatch fix. "Design item N"
+is item N of `reports/i-lab-campaign.md` "Fix design, partitioned by file". The
+binding rules and the second-dispatch rules above still hold, except that
+`f-connection-split` is finished, so its files are free. `run-scenario.ts` and
+`flow-lane/` belong to `g-flow-lane-observation`, which is still running.
+
+## g-bench-coverage — the bench executes W01-W18, and measures evidence size
+
+**Owns:** in `packages/test-runner/src/bench/`: `expand-corpus.ts`,
+`run-bench.ts`, `evaluate-run.ts`, `corpus/bench-corpus.ts`, `corpus/week1.ts`,
+and `tests/week1-corpus.test.ts`, `tests/run-bench.test.ts`,
+`tests/evaluate-run.test.ts`; `packages/test-runner/src/run-evaluation/observed-run-evaluation.ts`
+and its test.
+
+**Read:** `reports/i-lab-campaign.md` Part 1 criteria 1, 2 and 5, and design
+items 1 and 3; `reports/v-bench-honesty.md` Defect 3.
+
+**Task.** 1. Design item 1, decided: week1 plans a row without a variant on the
+Flow lane as well as the recording lane, so one bench report covers criteria 1
+and 5. Keep the recording-lane results. 2. Design item 3: fill the bench's
+evidence-size fields from what a run bundle records. Do its precondition first:
+find where, if anywhere, a bundle records sanitized packet bytes and truncation.
+If that needs an extension-side producer, stop at the finding and report the
+files it would take.
+
+**Tests.** Item 1: the count test from the design (66 runnable results per
+repeat, unless HEAD's corpus says otherwise, and then say why), with the
+mutation reverting `laneForResult`. Item 3: two packets yield their sizes, with
+a mutation. Test-runner `check` and `test`.
+
+**Report:** `reports/g-bench-coverage.md`.
+
+## g-redaction-attestation — criterion 2's Lab-side leak check
+
+**Owns:** a new `packages/test-runner/src/redaction-attestation/` (barrel,
+module, `tests/`); `packages/test-runner/src/run-manifest/create-run-manifest.ts`
+and its test.
+
+**Read:** design item 2; `packages/test-runner/src/secret-leak-attestation.ts`
+(read only); the plan's Phase 1.4 T3 (grep `T3` in the plan).
+
+**Task.** Build the attestation design item 2 describes: after a run of a
+scenario that declares sensitive fixtures, scan the run bundle and the isolated
+workspace's persisted recording events for the fixture's synthetic literals,
+through `attestWorkspaceSecretAbsence`, and report findings as
+`security.redaction`. Derive the manifest's `redactionState` from its result,
+after confirming the literal at `create-run-manifest.ts:80` is unconditional.
+Its call site is `run-scenario.ts`, which you do not own: write the exact wiring
+into your report, including where it must run relative to workspace cleanup.
+The supervisor wires it once `g-flow-lane-observation` lands.
+
+**Tests.** A literal planted in a temporary workspace yields a finding, and a
+clean one none, with a mutation that skips the scan; test-runner `check` and
+`test`.
+
+**Report:** `reports/g-redaction-attestation.md`.
+
+## g-domain-mapping — W19's navigation (B6) and an unusable parameter (B3)
+
+**Owns:** `domain/src/io/input-model.ts` and `domain/src/io/tests/input-model.test.ts`;
+`domain/src/client/gateway-action-parameters.ts`,
+`domain/src/client/gateway-mapping.ts`, `domain/src/runtime/failure/codes.ts`,
+and `domain/src/client/tests/gateway-command-parameters.test.ts` and
+`gateway-mapping.test.ts`. If a new code must also reach an allowlist outside
+these files, stop and report the file.
+
+**Read:** rows B6 and B3; `reports/i-lab-campaign.md` design item 4;
+`reports/v-flow-reload.md` Outcome, for the current reload sequencing;
+`reports/f-w18-secret-leg.md` Outcome (`957c831` touched both mapping files).
+
+**Task.** B6: `auth-gate --variant expired` must report `auth_required`, and
+cannot, because the recorder's client-side navigation yields no Flow step. Check
+the recorder's transition vocabulary first, then map that navigation to an
+executable step outside `RECORDING_START_REASON`, without re-admitting the
+reload the sequencing excludes. B3: have the parameter reader report the fields
+it refused, and have `webAutomationActionFromGatewayCommand` return a rejection
+with a new closed-set code when a required field was refused. Say which Core
+category the code maps to and why.
+
+**Tests.** B6: a recorded navigation to `/account` maps to an executable step,
+and a recording-start reload still does not, each with a mutation. B3: a refused
+required field is rejected with the new code and no value in its text, with a
+mutation. Domain `check` and `test`.
+
+**Report:** `reports/g-domain-mapping.md`.
+
+## l-stage0 — prove the Lab runs from a worktree (Lab owner)
+
+**Owns:** no tracked file in either repository. A worktree `F:\fxlab-147fdb4` at
+`147fdb4`; a run-artifacts directory `F:\fxlab-runs\stage0` outside every
+worktree; memory samples in your scratch directory. This brief lifts the "no
+`pnpm lab`" rule for the commands below only.
+
+**Read:** `reports/i-lab-campaign.md` Part 2 and Part 3; the false-failure
+shapes in `live-validation-plan.md`; the plan's `Current State` operating rules.
+
+**Task.** Create the worktree as Part 2 describes and install offline. With
+memory sampled every 15 seconds (Part 3's loop), run once:
+`FLUXIQ_TEST_ENV_FILES=none pnpm lab run basic-form --target isolated`, with a
+label unique to you and `FLUXIQ_TEST_RUNS_DIR` pointed at the artifacts
+directory. Do not run a Core build. Another worker is editing Core's
+`client-gateway/bridge.ts`; if the run fails where the gateway is implicated,
+rerun once and say so. Keep the worktree for Stage 1.
+
+**Report** (`reports/l-stage0.md`): exit status; from `evaluation.json` the lane,
+verdicts and failure fields; the bundle path; wall time; the lowest free memory
+and highest Chrome plus Node working set; the manifest's commit and `dirty` flag.
+Quote, do not summarise.
+
+---
+
+# Fourth dispatch, from `i-resolver-safety`
+
+"Design A/B/C" are the sets in `reports/i-resolver-safety.md` "Fix design,
+partitioned by file"; R1-R9 are its probe rows. All rules above still hold.
+`identity/context.ts` and `background/connection/gateway-payloads.ts` belong to
+`g-recorder-signals`; `bench/corpus/week1.ts` to `g-bench-coverage`.
+
+## g-resolver-corroboration — refuse a match nothing agrees with exactly (A, CS1d)
+
+**Owns:** in `apps/extension/src/content/`: `identity/corroboration.ts` (new),
+`identity/index.ts`, `identity/score.ts`, `identity/veto.ts`,
+`action-runtime/resolve-target.ts`, and the `tests/` file of each; in
+`apps/extension/e2e/content/tests/`: `identity-near-miss.spec.ts` (new) and
+`identity-resolution.spec.ts`.
+
+**Read:** `reports/i-resolver-safety.md` "(a)", "D14" and design A; row CS1d;
+D14 in `archive/2026-09-12-decisions-d13-d14.md`.
+
+**Task.**
+1. **Measure first**, as design A's "Measurement before landing" says, with the
+   predicate applied in a scratch copy: the legitimate profiles lost per
+   recording class, and the three realistic fixtures under both identifier
+   policies. If a W20-W23 drift mode or W26 would be refused, stop and report
+   before landing anything.
+2. Land design A's extension table: one predicate that reads Core's
+   contributions and is never a second scorer, used by `score.ts` and by veto
+   rule 2. The floor and margin are unchanged.
+3. CS1d: a positional strategy (`coordinates`, `visual-target`) enumerates its
+   candidate family before accepting a lone element, and throws `scoredAmbiguous`
+   when scoring says ambiguous. Measure its cost the same way.
+
+**Tests.** Design A's T1 rows and mutation; T2 `identity-near-miss.spec.ts` (R1-R4
+and R7-R8 refused, nothing clicked, `saveCount 0`); for CS1d a unit row, a
+`no-context` content row and a mutation; the whole `identity-*.spec.ts` family
+and `large-page-resolution.spec.ts` green; extension `check` and `test`. Lab,
+under `Not verified`: W20-W23 recover and W26 disambiguates, 3 of 3.
+
+**Report:** `reports/g-resolver-corroboration.md`.
+
+## g-identity-drift-mode — the R7 shape as a Scenario Lab negative variant
+
+**Owns:** the mode, render and manifest files under
+`apps/scenario-lab/src/scenarios/identity-drift/`, and its `tests/`.
+
+**Read:** design A "Scenario Lab and bench"; "(a)" rows R7-R9.
+
+**Task.** Add a mode that renders Save's slot as a lone, identifier-less "Save
+changes and exit" whose click records its own action in the fixture state,
+distinct from Save, while the recording stays on the authored baseline. Declare
+its variant expecting `failure.category: "target_not_found"`. Write the exact
+`bench/corpus/week1.ts` row into your report; the supervisor adds it.
+
+**Tests.** A unit test that the mode renders the R7 shape and that its fixture
+state tells the wrong action from Save; scenario-lab `check` and `test`.
+
+**Report:** `reports/g-identity-drift-mode.md`.
+
+## g-identity-wire-chain — `reworded-aria`'s wire fix as a permanent row (C)
+
+**Owns:** `apps/extension/e2e/content/tests/identity-fixtures.ts`, the stale
+sentence at about `:19-23` only; `identity-wire-chain.spec.ts` (new), same
+folder.
+
+**Read:** `reports/i-resolver-safety.md` "(c)" and design C.
+
+**Task.** A permanent content-harness row for R5 and R6: the recorded descriptor
+through HEAD's wire projection and the real `elementFingerprint`, asserting
+`reworded-aria` resolves. Call the projection function itself, not a copied
+key list, because `g-recorder-signals` is adding keys to it. Correct the stale
+sentence.
+
+**Tests.** The spec, and a mutation projecting with `1b6f5df`'s 17 keys that
+fails at 0.197; the import path passes the structure audit through a scratch
+`GIT_INDEX_FILE`; the `identity-*.spec.ts` family stays green.
+
+**Report:** `reports/g-identity-wire-chain.md`.
+
+## g-core-target-gate — a truthful trace and the right fingerprint (B.1, B.2; Core)
+
+Dispatched only after `g-core-late-event` lands, because both touch Core's
+`runtime/service.ts`.
+
+**Owns** (in `F:\!FluxIQ\packages\fluxiq\src\programs\automation-studio\`):
+`runtime/io-policy.ts`; `nodes/contracts.ts`, the status union at about `:117`;
+`runtime/service.ts`, the mapper-target region at about `:5769-5774` only;
+`model/action-element-target.ts`; the test of each in its `tests/` folder; any
+Core architecture page describing the element-target status. The "never edit
+Core" rule is lifted for these files; follow `F:\!FluxIQ\AGENTS.md`.
+
+**Read:** `reports/i-resolver-safety.md` "(b)" and design B.
+
+**Task.** B.1: when no candidates are supplied, the trace stops presenting
+`minimumConfidence` as applied, through a delegated status or by omitting it.
+B.2: derive the recording mapper's target from `parameters.element` when present,
+map `implicitRole` to `role`, and never promote `parameters.text` to
+`visibleText` when an element is supplied. First grep this repository for
+readers of the status union, and name any. B.3 is Week 2: do not wire it.
+
+**Tests.** Design B's Core unit rows (no unapplied floor claimed; a type node's
+target holds no typed text and carries the element's identity), with the
+mutation restoring `?? safeString(value.text)`; `npx vitest run <file>
+--no-file-parallelism` per file; Core `pnpm check` and `pnpm docs:check`, with
+`pnpm docs:reference` if a public export changes. No Core `pnpm build`, no root
+`pnpm test`. Lab, under `Not verified`: a generated Flow's click node carries
+the recorded identity, and its type node no typed text.
+
+**Report:** `reports/g-core-target-gate.md`.
+
+## g-core-late-event — CS1b′, a late recording event kills the connection (Core)
+
+**Owns:** `F:\!FluxIQ\packages\fluxiq\src\programs\automation-studio\client-gateway\bridge.ts`
+and `client-gateway/tests/bridge.test.ts`. The "never edit Core" rule is lifted
+for these two files only; follow `F:\!FluxIQ\AGENTS.md` "Code Structure".
+
+**Read:** rows CS1b and CS1b′; `reports/L-core-discard.md` "The contract change
+I did not make".
+
+**Task.** An event arriving between a recording's finalization and
+`activeRecordings.delete` makes `appendRecordingEvents` throw "Finalized
+recordings are immutable." inside `flushRecordingEntries`, whose `try/finally`
+has no `catch`. First trace, with file:line, how that throw reaches the
+WebSocket host and what the extension observes. Then catch that error there and
+route the batch through `noteDiscardedClientMessage`, as a discard already is.
+Match the error by something sturdier than its message if Core offers one, and
+say if it does not. Sending the client an error frame is CS1b and ruled into
+Week 2: do not add one.
+
+**Tests.** From `F:\!FluxIQ`: `npx vitest run <bridge test path>
+--no-file-parallelism`. A test reproducing the race that fails before the fix
+(quote the failure), with a mutation proof, and Core `pnpm check`. No Core
+`pnpm build`, since this repository imports Core through `dist`, and no root
+`pnpm test`.
+
+**Report:** `reports/g-core-late-event.md`, in this repository.

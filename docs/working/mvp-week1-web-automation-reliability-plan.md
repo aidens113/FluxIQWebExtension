@@ -601,7 +601,7 @@ carry `expected.failure.category`.
 | W11 | infinite-feed | scroll until 40 items, extract | infinite scrolling | `end-early` (feed ends at 25, success) |
 | W12 | modal-flows | open modal, fill, confirm | modals | — |
 | W13 | modal-flows | dismiss consent banner, then click | blocking overlay | `banner-absent` |
-| W14 | modal-flows | armed interstitial after first click | unexpected popup | `armed` (USER_INTERVENTION_REQUIRED or recovered by dismiss) |
+| W14 | modal-flows | armed interstitial after first click | unexpected popup | `armed` (`user_intervention_required` only: the manifest declares one category, so a run that recovers by dismissing scores as a miss) |
 | W15 | multi-tab | open in new tab, switch, extract, close | multiple tabs | `popup-blocked` |
 | W16 | file-transfer | download report, observe completion | downloads | — |
 | W17 | file-transfer | upload file, server echoes name | uploads, forms | — |
@@ -614,7 +614,7 @@ carry `expected.failure.category`.
 | W24 | intermediate-state | submit → processing interstitial → result | unexpected intermediate state | `unannounced` (extra step; OUTPUT_NOT_OBSERVED vs wait) |
 | W25 | delayed-ui | late target appears | dynamic interfaces | `too-slow` (TIMEOUT) |
 | W26 | ambiguous-targets | two identical buttons, choose by context | targeting | `no-context` (TARGET_AMBIGUOUS) |
-| W27 | failure-surfaces | disabled, detached, blocked URL | failure taxonomy | each surface (ACTION_REJECTED / TARGET_NOT_FOUND / NAVIGATION_UNEXPECTED) |
+| W27 | failure-surfaces | disabled, detached, blocked URL | failure taxonomy | each surface by category: `blocked_by_capability_or_policy` (`web.action.rejected`) / `target_not_found` / `navigation_unexpected` |
 | W28 | iframe-checkout | click inside same- and cross-origin frames | frame targeting | — |
 
 `llm-target-drift`, `instruction-only-form`, `reconnect`, `sensitive-input`,
@@ -646,70 +646,93 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 `2026-09-12-*` Wave 3 and live-validation files, and
 `2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-12 — Finish-Week-1 session: first dispatch
+### 2026-09-12 — Finish-Week-1 session: nine entries archived
 
-- Agent: supervisor
-- Changed: new `briefs/finish-week1.md`; this ledger.
-- Why: Next steps 1-2. No other Claude session was running, so Core's
-  uncommitted trace withholding was taken over (Core ledger). Nine workers,
-  partitioned by file: five fixes, the read-only `c-remaining` inventory, and
-  three read-only investigations so later briefs need not wait on it.
-- Validation: `git status -sb` in both trees -> `## dev...origin/dev`. Grep for
-  `webAutomationSecretBindingPath` outside `output-nodes/` -> no use in
-  `input-model.ts` or `gateway-mapping.ts`: W18 edits 1-3 had not landed.
-- Outcome: In progress
-- Follow-up: verify each report before accepting it.
-
-### 2026-09-12 — f-test-runner-ratchet: already settled at HEAD
-
-- Agent: worker `f-test-runner-ratchet`; verified by supervisor.
-- Changed: its report only; `ab736a1` had moved the feature into
-  `src/demo-llm-create-ui/` with its own `tests/`.
-- Validation: `git ls-files packages/test-runner/src/tests` -> 50 files, none
-  `demo-llm-create-ui`; `.structure-baseline.json:21` -> 50.
-- Found: this document had passed 800 lines; the previous session's ledger
-  entries moved verbatim to `archive/2026-09-12-handoff-ledger.md`, and D13-D14
-  to `archive/2026-09-12-decisions-d13-d14.md`.
+- Agent: supervisor.
+- Changed: nine ledger entries moved verbatim to
+  `archive/2026-09-12-finish-week1-ledger.md`: the first dispatch,
+  `f-test-runner-ratchet`, `f-evidence-producers`, `f-adapter-guard`,
+  `c-remaining`, `i-flow-lane-errors`, `f-w18-secret-leg`,
+  `f-connection-split` and `i-lab-campaign`.
+- Why: this document reached 913 lines against the 800 limit. Each moved entry
+  is settled and committed: `b43a46a` (adapter guard, inventory), `957c831`
+  (W18), `147fdb4` (connection split); Core `5d495eb` (trace withholding) is
+  committed locally. Their decisions stand: Firefox, CS1b, B4, B7, C5, C7 and
+  PB10b are not Week 1; CS1b′ is; the bench plans W01-W18 on the Flow lane too;
+  Lab Stage 1 waits for Core to go quiet.
+- Validation: `sed -n` guards -> line 649 was the first-dispatch heading, line
+  841 the `i-resolver-safety` heading, line 648 blank; `wc -l` on this document
+  after the move -> 740.
 - Outcome: Accepted
 
-### 2026-09-12 — f-evidence-producers: already settled at HEAD
+### 2026-09-12 — i-resolver-safety: why the resolver acts wrongly, and D14 amended
 
-- Agent: worker `f-evidence-producers`; verified by supervisor.
-- Changed: `domain/src/page-evidence/types.ts`, a comment naming the old
-  `content/evidence/present.ts` path (5 lines, same count); its report.
-  `1b6f5df` had already removed the second producer's conditional spreads and
-  moved `present` to `apps/extension/src/shared/present.ts`. Open work item 4's
-  second-producer and merge-safety parts are settled.
-- Validation: `grep -cE '\.\.\.\('` on `connection/dom-snapshot.ts` -> 1, and
-  that one is in the header comment; `dom-snapshot.ts:33` imports
-  `../../shared/present`; `git log -S'shared/present'` -> `1b6f5df`. Worker:
-  extension `test` -> 294 of 294; three compile mutations in `dom-snapshot.ts`
-  -> TS2353/TS2339/TS2345, restored byte-identical.
-- Not verified: the Lab two-frame evidence packet.
+- Agent: worker `i-resolver-safety` (read-only); decisions by supervisor.
+- Changed: `reports/i-resolver-safety.md` only; fourth-dispatch briefs.
+- Found, each reproduced in the real resolver or Core's compiled gate:
+  - (c) `reworded-aria` at 0.173 is settled at HEAD: `1b6f5df`'s
+    `gateway-payloads.ts` projection dropped `accessibleName` and
+    `implicitRole`, which `ab736a1` restored; the old projection reproduces
+    0.197/0.173 exactly, and HEAD's resolves at 0.389.
+  - (b) Core's element-target floor is a wiring defect, not calibration: no
+    candidates are supplied, the mapper builds the target from top-level keys and
+    promotes typed text to `visibleText`, the floor is never sent, and
+    confidence is never checked. Wired as it stands, it would refuse the correct
+    `reworded-aria` control at every tier.
+  - (a) the wrong action cannot be separated by any floor or margin: Core's text
+    comparison scores "Save" and "Save changes and exit" the same, 0.359 on an
+    authored recording and 0.633/0.640 on an identifier-less one.
+- Decisions:
+  - **D14 amended.** Its numbers stand, but its scope was too broad: the veto
+    margin was tested against one fully labelled recording, rule 2 accepts any
+    partial label match, and limit 2 covers any label that reaches Core's 0.35
+    similarity, not only the recorded one. A match that no distinguishing signal
+    agrees with exactly is now refused (design A, `g-resolver-corroboration`).
+    The known cost is a label shortened with nothing exact left: that row
+    refuses instead of recovering. Refusing beats clicking the wrong control,
+    and the cost is measured before landing.
+  - CS2c: for web, Week 1's floor is the browser's `TARGET_SCORE_FLOOR`. Core's
+    floor stays inert, with its trace made truthful and its fingerprint correct
+    (B.1, B.2, `g-core-target-gate`, after `g-core-late-event`). B.3, a
+    tier-aware floor applied in the browser, is Week 2.
+  - Core similarity metadata (design A's optional Core row) is not Week 1: the
+    predicate reads Core's contributions as they are.
+  - CS2b becomes a Lab confirmation; C's permanent row is
+    `g-identity-wire-chain`.
+- Validation: worker, extension 313/313 and domain 349/349; scratch Chromium
+  probes of the real `resolveTarget` -> 8, 8 and 11 passed, identical across
+  runs; Core gate probes exit 0. Supervisor read design sets A-C against the
+  running briefs' Owns: no shared file except Core `service.ts`, which is why
+  `g-core-target-gate` waits.
+- Not verified: no Lab run; R7-R9 observed once; A's cost unmeasured.
 - Outcome: Accepted
 
-### 2026-09-12 — f-adapter-guard: the failure-record guard re-armed
+### 2026-09-12 — g-recorder-signals stopped on a brief defect; fourth dispatch
 
-- Agent: worker `f-adapter-guard`; verified by supervisor.
-- Changed: `domain/src/runtime/adapter.ts` (399 lines): `producerDeclaredRedaction`
-  refuses `redacted: true` beside the domain's withheld marker, which only a
-  layer writes, and `secretSafeDispatchPayload` strips any received stamp
-  instead of passing it on; `runtime/tests/adapter-redaction.test.ts` (the
-  three-state probe, for a current and a pre-`1b6f5df` stamping client);
-  `e2e/content/tests/redaction.spec.ts` (the `test.fixme` adapter row now runs).
-- Why: open work item 4. At HEAD the extension no longer stamped, but the adapter
-  still read any stamp as a producer declaration, so a stamping client leaked a
-  sensitive control's `expected`/`actual`.
-- Validation: supervisor `DOMAIN_TEST_BUILD_LABEL=supervisor-guard pnpm --filter
-  @fluxiq-web-extension/domain test` -> `# tests 349`, `# pass 349`, `# fail 0`;
-  content harness `redaction.spec.ts --workers=2` -> `Running 14 tests`,
-  `14 passed`, none skipped. Grep for readers of `redacted` in both
-  repositories -> only `sensitivity/redaction.ts:60`, which runs before the
-  strip; Core has none. Worker: old conjunction restored -> domain 2 fail, spec
-  1 fail, restored byte-identical. The worker's "19 passed" for the spec does
-  not match the 14 rows the file declares.
-- Not verified: the supervisor's own mutation rerun, deferred while
-  `f-w18-secret-leg` compiles the domain package from the same tree; Lab.
+- Agent: supervisor.
+- Changed: `briefs/finish-week1.md` (`g-recorder-signals` amended; fourth
+  dispatch); `reports/g-recorder-signals.md` (the worker's Blocked report).
+- Why: `g-recorder-signals` stopped without editing, correctly. Its Owns omitted
+  `domain/src/actions/types.ts`, which `output-nodes/targets.ts` checks both
+  field lists against with `satisfies`, and `shared/tests/present.test.ts`,
+  whose `present<DomElementContext>` literals a new context key breaks. Both
+  fields would otherwise have reached the wire and been dropped one layer later,
+  as `x-identity-wire` found. The worker was resumed with both files and a new
+  `identity-signals.spec.ts`. Decision on its question: a sensitive checkbox or
+  radio withholds `checked`, recorded and on the gateway, since its checked
+  state is its contents. Dispatched from `i-resolver-safety`:
+  `g-resolver-corroboration`, `g-identity-drift-mode`, `g-identity-wire-chain`;
+  `g-core-target-gate` waits for `g-core-late-event`.
+- Validation: supervisor checked each named blocker against the brief's Owns and
+  the running briefs: neither file is owned by any running worker. The worker's
+  compile probes failed on setup (a C:/F: path split), so both blockers rest on
+  reading `targets.ts:158,206`, `actions/types.ts:50-96` and
+  `present.test.ts:271-331`, not a compile.
+- Outcome: Revised
+- Validation: supervisor read the grouped-by-file list and every Open row;
+  the second dispatch's Owns lists share no file with each other or with a
+  running brief. Worker: git and search only, no gate run, so each Settled row
+  rests on reading the code at HEAD.
 - Outcome: Accepted
 
 ## Open Questions
