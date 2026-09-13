@@ -1,9 +1,9 @@
 # MVP Week 1 — Web Automation Reliability Plan
 
 Status: Active
-Status detail: Waves 1-3 and the 2026-09-12 live-validation work committed and pushed; four of six exit criteria have never had a valid proof and Phase 1.6b has not started. Session objective, set by the user: completely finish Week 1, with everything tested.
+Status detail: Lab Stage 1 ran against a pinned Core; its recording loss and its W18 and W25 failures are explained and their fixes are in flight, and no exit criterion yet has a quoted Lab observation. Session objective, set by the user: completely finish Week 1, with everything tested.
 Created: 2026-09-11
-Last updated: 2026-09-12
+Last updated: 2026-09-13
 Owner: Senior supervisor agent
 Scope: Week 1 of the 30-day MVP (Phases 1.1–1.6): browser action vocabulary, element identity, browser state/evidence, failure taxonomy, and FluxBench, with automated verification through the Testing Lab as the primary proof for every phase. Weeks 2–4 are out of scope except where Week 1 must leave a seam for them.
 Paired document: `F:\!FluxIQ\docs\working\mvp-week1-web-automation-reliability-plan.md` — Core owns the failure-taxonomy contracts (C1, C2, pulled ahead of Wave 2 by D11) and the expectation-evaluator seam (C3)
@@ -29,135 +29,131 @@ document. Read it literally:
   every fix before its ledger entry, and single observations labelled as such,
   because this machine has faulty RAM.
 
-**Phase: Waves 1-3 and the 2026-09-12 live-validation work are committed and
-pushed. Four of the six exit criteria have never had a valid proof, and Phase
-1.6b has not started.** Reports named in backticks are under
-[reports/](./mvp-week1-web-automation-reliability-plan/reports/).
+**Phase, as of 2026-09-13: building the fixes Lab Stage 1 exposed.** Stage 1 ran
+against a pinned Core and found that recording entries go missing under load, and
+that W18, W24 and W25 fail. Both findings are explained and their fixes are in
+flight. No exit criterion yet carries a quoted Lab observation. Reports named in
+backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
+every dispatch and amendment is in
+[briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
+settled ledger entries are in parts one to seventeen of
+[archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
-**True at handoff.** This repository: `HEAD 498b6f0`, even with `origin/dev`,
-clean tree; root `pnpm check` exit 0 with the structure audit passing, root
-`pnpm test` exit 0 (extension 294/294, domain 343/343, test-runner 439/439,
-scenario-lab 197/197). The content harness, the Lab and Core were not re-run at
-handoff. Core: `368b3c9` on `origin/dev`, `fluxiq` 0.3.0.
+**True on 2026-09-13, while workers run.**
+- **This repository:** `31a921c`, 42 commits ahead of `origin/dev`, not pushed.
+- **Core:** `0e6d3ac`, 4 commits ahead of `origin/dev`, `fluxiq` 0.3.0, with
+  `w19-c2`'s work uncommitted. The four commits:
+  - `5d495eb`, trace withholding;
+  - `267a2ca`, the late-message discard;
+  - `6f172b9`, a rejected expected state fails the attempt;
+  - `0e6d3ac`, the target gate and late domain events.
+- **Gates:** the supervisor reran per-package gates for every commit. Root gates,
+  the content harness and Core's full suite have not run since this session began.
 
-**Uncommitted in Core, unverified, and recorded nowhere.** Eight files in
-`F:\!FluxIQ` withhold state-bound values from the run trace:
-`runtime/executor/graph-run.ts`, `executor/index.ts`, `executor/node-execution.ts`,
-`flow-bootstrap/plan/validation.ts` and its test, a new
-`executor/tests/trace-withholding.test.ts`, and two architecture pages. This is
-the Core leg `p-secret-binding` named and did not own; no ledger entry in either
-repository describes it, and it was most likely written by session `fluxiq-df`.
-Settle it before anything else touches Core: verify and commit it with a Core
-ledger entry, or ask the user before discarding it.
+**Settled this session** (ledger and archive):
+- **Core:** trace withholding; the late-message discard. **W18:** the secret leg.
+- **Evidence integrity:** the adapter guard; the second evidence producer;
+  snapshot evidence (LR7, LR8); redaction attestation in every Lab run; discard
+  audits; single-run evidence sizes.
+- **Structure:** the `connection.ts` split; the test-runner ratchet.
+- **Matching and recording:** resolver corroboration (CS1d, W26); recorder signals
+  (B5); `invalid_parameter` (B3).
+- **The bench:** runs both lanes, with W29 and evidence sizes; three negative
+  variants whose click must fail.
+- **W19:**
+  - E1, the recorder links a click to its landing;
+  - E2, a URL claim on a sign-in gate reports `auth_required`;
+  - E3, an assert is resent once to a navigating tab;
+  - E4, a click landing on a refused page fails as `navigation_unexpected`;
+  - Core C1, a rejected expected state fails the attempt.
 
-**What live validation established.**
-- **Confirmed:** the smoke corpus is clean against eight baselines (`L-smoke`);
-  the real unpacked extension loads and is driven, MV3 worker restart included;
-  the Lab runs concurrent instances.
-- **Corrected and fixed:** FluxBench scored runs that executed nothing, reading
-  100% where the honest figure was 30% (`v-bench-honesty`); the five Phase 1.3
-  identity signals never crossed the wire (`x-identity-wire`, `x-identity-chain`);
-  a serialiser deleted every structured failure from run history
-  (`x-evidence-crash`); fixtures handed the matcher its margins, so three
-  realistic ones now exist (`admin-console`, `storefront-checkout`,
-  `member-directory`). Seven redaction leaks are closed.
-- **Still open:** on production-shaped recordings the resolver picks a different
-  action and reports success, 0.633 against a 0.35 floor (`L-review` finding 1,
-  `L-veto-recordings`); live, `reworded-aria` refuses at confidence 0.173 and the
-  element-target floor sees `unresolved_no_candidates`, `candidateCount 0`, on
-  every dispatch (`L-replay`); Firefox installs but cannot reach the gateway
-  (its background may not open `ws://`) and has no side panel (`p-firefox`).
+**Ruled out of Week 1, reasons in the ledger:**
+- Firefox; CS1b, a late recording event sent to the client as an error frame;
+- B4, B7, C5, C7 and D4; raw snapshot bytes; per-lane distributions;
+- the landing marker for a wrong landing served 200; honouring `failureRoute` (Core);
+- W24 `unannounced`, whose producer needs a recorded-payload contract change; the
+  row stays in the corpus.
+
+**In flight:**
+- **`w19-c2` (Core):** reported Partial; the supervisor is verifying it.
+- **`g-core-start-order` (Core) and `f-recording-start-send` (extension):** the
+  recording-loss fix, which orders a client's start with what follows it.
+- **`f-flow-start-page`:** every Flow run starts on the start page, for W18.
+- **`g-evidence-reader-merge`:** one evidence-size reader instead of two.
+- **`i-late-target-wait`:** measures a generated wait step before it is built,
+  for W25.
+- **`g-integration-small-fixes`:** stale comments, casts, and the `test:content`
+  script.
+
+**Queued, in dependency order**
+1. **After `w19-c2`:** Core `pnpm build`, then `w19-d1` (the mapper's URL claim),
+   then `g-w19-docs`.
+2. **After `f-flow-start-page`:** `g-recording-completeness`, so a short recording
+   fails the run on both lanes.
+3. **After `i-late-target-wait`:** its recommended wait rule, or amended W25
+   expectations.
+4. **Leftovers held back from `g-integration-small-fixes`:** the persisted-flow-run
+   union import, after the Core build; `input-model.ts`'s checkbox comment, after
+   D1.
+5. **Lab Stage 2, pinned to the fix commits:**
+   - step 4b at 24 of 24 under two-instance load, with equal action counts and
+     zero discards;
+   - W18, W19, W10, W27, W25 and `sensitive-input`, each ×3;
+   - the week1 discovery bench;
+   - the smoke comparison, rerun alone.
+6. **Integration:**
+   - Core `pnpm build`, bumped to 0.4.0, with a migration note and `package:lint`;
+   - root `pnpm check`, `pnpm test`, `pnpm build` and the content harness, one at
+     a time;
+   - regenerate `domain/.test-build`;
+   - push both `dev` branches together.
+7. **Lab Stage 3:** run
+   `FLUXIQ_TEST_ENV_FILES=none pnpm lab bench --corpus week1 --repeat 3 --target isolated`
+   twice, then `demo:record` and `demo:run` provider-free.
+8. **Phase 1.6b:**
+   - rank blockers from both bench reports;
+   - bring the architecture pages to the finished state;
+   - record Week 2 entry points;
+   - quote an observation for every criterion row.
 
 **Exit criteria as they stand**
 
 | Criterion | State | Proof still to observe |
 | --- | --- | --- |
-| Actions reliable | Harness green; replays never run | week1 W01-W19 through the bench, 3 of 3 |
-| Evidence useful | Harness and unit only | Lab run: the 16 items, packet budget, leak rows |
-| Deterministic fallback | Refusal proven on fixtures; wrong action on production-shaped recordings | W20-W23 recover and W26 disambiguates, realistic fixtures included |
-| Failures classified | Never measured | Negative variants (W14, W19, W27) report the expected category, at least 90% |
-| Bench repeatable | Honesty fixed; week1 x3 never run | `--repeat 3` twice, agreeing within tolerance |
+| Actions reliable | Stage 1: W18 0 of 3, and recordings lose entries under load; fixes in flight | week1 W01-W19 through the bench, 3 of 3 |
+| Evidence useful | Sizes reach bench and single-run evaluations; the leak attestation runs in every Lab run | Lab run: the 16 items, packet budget, leak rows |
+| Deterministic fallback | Corroboration refuses an uncorroborated match (unit and harness) | W20-W23 recover and W26 disambiguates in the Lab |
+| Failures classified | Stage 1: W24 and W25 report the wrong category; W24 ruled out of Week 1, W25 under measurement | Negative variants report the expected category, at least 90% |
+| Bench repeatable | Both lanes run; week1 ×3 never run | `--repeat 3` twice, agreeing within tolerance |
 | Blockers ranked | Not started | Phase 1.6b ledger entry |
 
-The bench now declares both lanes (`bench/corpus/week1.ts:19`), so variants arm
-and 43 results run. `v-bench-honesty` predicts `--corpus week1 --repeat 3` exits
-1, because ten Flow-lane variants expect failures that lane has never been seen
-to report, and takes 130-205 minutes headed. That exit is a measurement to
-diagnose, not a reason to revert the lanes.
-
-**Open work, ranked by the criterion it blocks.** Each item is as of its report;
-re-verify at HEAD before briefing, because settled items were briefed twice on
-2026-09-12.
-1. **Flow-lane correctness (blocks 1, 3, 4, 5).** A recorded action went missing
-   in 12 of 24 runs; the fix is unit-proven, the 24-run reproduction not repeated
-   (`L-dropped-action`, `L-race-fix`). Core logs a late event but does not tell
-   the client, a contract decision handed back (`L-core-discard`). A failing
-   Flow-lane run became an unexplained runner error (`L-replay` defects).
-2. **Resolver safety and calibration (blocks 3).** The veto margin belongs to the
-   fixture's recording and D14 overstates it (`L-review` 1, `p-openq-triage`
-   Group 1); calibration does not transfer live and the floor receives no
-   candidates (`L-replay` 3-4). Scoring changes belong in Core
-   (`v-matcher-calibration`, D13).
-3. **W18 auth-gate replay (blocks 1, 4).** The secret binding's last leg
-   (`p-secret-binding`, `p-declared-secrets`) and Core's uncommitted change above.
-4. **Failure evidence integrity (blocks 4).** The runtime adapter's failure-record
-   guard is disarmed for every extension result, one-line fix measured
-   (`v-redaction-producer` item 5); a second evidence producer keeps the
-   conditional-spread hole (`v-producer-safety`); one merge-safety gate is a line
-   outside its owner's files (`v-merge-safety`).
-5. **Gate hygiene.** `connection.ts` is 764 of 800 lines and its split was blocked
-   on a collision that has since cleared (`p-connection-split`); recording-latch
-   work waits on it. The `packages/test-runner/src/tests/` ratchet has no headroom
-   for `p-test-split`. `p-openq-triage` Band A: the domain runner aborts on the
-   first throw, two test-command traps, stale tracked `domain/.test-build/`.
-6. **Scope, to settle from the 30-day plan's text rather than by asking:** whether
-   Week 1 requires Firefox, and whether a late recording event reaches the client
-   as an error frame.
-7. **Doc truth.** `L-review` findings 2-9 and `p-openq-triage` Parts 3-4; the three
-   architecture pages Phase 1.6b step 4 names must match the finished state.
-
-**Next steps, in order**
-1. `/resume` this document; declare `Mode: Execute Plan With Workers`, then
-   `Testing And Live Validation`. Confirm both trees against `origin/dev` and
-   settle Core's uncommitted change.
-2. Dispatch together: one read-only inventory worker writing
-   `reports/c-remaining.md` (every item above, `L-review` 1-9, `p-openq-triage`
-   Part 3, every Partial or Blocked report, each marked settled or open at HEAD
-   with file:line), plus the fixes that need no inventory: the adapter guard, the
-   second producer, the `connection.ts` split, the test-runner ratchet, and the
-   W18 binding's last leg.
-3. From the inventory, brief the rest partitioned by file: resolver calibration
-   (Core, user alerted first), the Flow-lane error path, drift rows on realistic
-   fixtures, doc truth.
-4. Live campaign from
-   [live-validation-plan.md](./mvp-week1-web-automation-reliability-plan/live-validation-plan.md),
-   one Lab instance per worker: step 4, step 4b (24 runs against the race fix),
-   steps 5, 6 and 8, then step 7
-   (`FLUXIQ_TEST_ENV_FILES=none pnpm lab bench --corpus week1 --repeat 3 --target isolated`)
-   twice.
-5. Phase 1.6b: rank blockers from both bench reports, confirm `demo:record` then
-   `demo:run` provider-free, update the architecture pages, record Week 2 entry
-   points.
-6. Close: an observation quoted for every criterion row; root `pnpm check`,
-   `pnpm test`, `pnpm build`, the content harness and Core run one at a time;
-   push both `dev` branches.
-
 **Everything is tested: the operating rules.**
-- Three tiers per change: unit (`tests/` beside the subject), content harness,
-  Lab. A guard is done only when a mutation shows its test failing.
-- Commands that work here: content harness
-  `pnpm exec playwright test -c e2e/playwright.content.config.ts --workers=4` from
-  `apps/extension` (the `pnpm --filter ... test:content --` form finds no tests);
-  Core tests `npx vitest run --no-file-parallelism`; isolated Lab commands need
-  `FLUXIQ_TEST_ENV_FILES=none`.
-- Faulty RAM: a rare, uniform or impossible failure is rerun once, alone, before
-  it is chased; heavy gates run one at a time; the false-failure shapes are in
+- **Three tiers per change:** unit tests in `tests/` beside the subject, the
+  content harness, and the Lab. A guard is done only when a mutation shows its
+  test failing.
+- **Before any ledger entry, the supervisor reruns the gates:**
+  - each package's gates under a private label (`EXTENSION_TEST_BUILD_LABEL`,
+    `DOMAIN_TEST_BUILD_LABEL`);
+  - the test-runner built into a private `--outDir` at `dist`'s depth.
+- **Commands that work here:**
+  - the content harness:
+    `pnpm exec playwright test -c e2e/playwright.content.config.ts --workers=2 <spec>`,
+    run from `apps/extension`;
+  - Core tests: `npx vitest run <files> --no-file-parallelism`;
+  - isolated Lab commands need `FLUXIQ_TEST_ENV_FILES=none`;
+  - a Lab worktree pins Core only when it sits beside a Core worktree under
+    `F:\fxlab\`.
+- **Faulty RAM:** rerun a rare, uniform or impossible failure once, alone, before
+  chasing it, and run heavy gates one at a time. The false-failure shapes are in
   `live-validation-plan.md`.
-- One supervisor session per repository. On 2026-09-12 two sessions committed
-  each other's in-flight work, once capturing a tree mid-mutation. Workers never
-  commit.
+- **Commits:** one supervisor session per repository, and workers never commit.
+  A descriptor or context change is verified against the whole `identity-`
+  content-harness family.
+- **Plan size:** the plan stays at or under 800 lines. Settled entries move
+  verbatim to the archive, and the index is regenerated with the structure
+  baseline backed up.
 
-**Blockers:** none needing the user. The first action is Core's uncommitted change.
+**Blockers:** none needing the user.
 
 ---
 
