@@ -1036,7 +1036,35 @@ header's spec count; `domain/src/output-nodes/targets.ts` (about `:42-53`) and
 Core ignores `parameters.element`, which Core's target gate changed;
 `apps/extension/src/content/actions/assert.ts`, the header at about `:34-43`,
 which still calls a failed claim on a sign-in gate a narrow case although
-`w19-e2` gave URL claims that branch too. Once W19's domain mapper has landed, also
+`w19-e2` gave URL claims that branch too; `packages/test-runner/src/bench/render-markdown.ts`
+near `:154`, the sentence `reports/g-bench-evidence-size.md` proposes saying raw
+snapshot bytes are not measured in Week 1. After the supervisor's Core
+`pnpm build` only: `packages/test-runner/src/flow-lane/persisted-flow-run.ts`,
+replacing the local copy of Core's target-resolution union
+(`reports/g-target-resolution-union.md`) with an import of Core's own type, and
+its test.
+
+## g-single-run-evidence — a lone `lab run --flow` records the evidence the bench reads
+
+Dispatched once `g-run-scenario-followups` lands, since both edit `run-scenario.ts`.
+
+**Owns:** `packages/test-runner/src/run-scenario.ts`, the evaluation call only;
+`packages/test-runner/src/run-evaluation/single-run-evaluation.ts` and its test.
+
+**Read:** `reports/g-bench-evidence-size.md`, the note on single runs and the fix
+it describes.
+
+**Task.** A bench row now reads `evidencePackets` from `snapshots/flow-lane.json`,
+but a single `lab run --flow` still records empty evidence in its own
+`evaluation.json`, so the two disagree about the same run. Feed the single-run
+evaluation the same packets the bench reads, from the same source, so one run and
+its bench row agree.
+
+**Tests.** A single-run evaluation of a Flow-lane run with two packets carries both
+sizes and its truncation count, with a mutation; test-runner `check` and `test`,
+built into a private `--outDir` at `dist`'s depth.
+
+**Report:** `reports/g-single-run-evidence.md`. Once W19's domain mapper has landed, also
 `domain/src/io/input-model.ts`, the checkbox comment at about `:181-184` only.
 
 **Read:** the "Found" or "Notes" lines naming each item in

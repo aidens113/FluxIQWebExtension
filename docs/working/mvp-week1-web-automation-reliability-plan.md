@@ -752,23 +752,25 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   writes.
 - Outcome: Revised
 
-### 2026-09-13 — w19-e2 and the E1 event id land
+### 2026-09-13 — g-bench-evidence-size and g-target-resolution-union land
 
-- Agent: workers `w19-e2` and `w19-e1` (resumed); verified by supervisor.
-- Changed: `85a7e21`, `content/action-runtime/results.ts`: a failed URL claim that
-  names a URL, on a sign-in gate, reports `web.auth.required`, naming the claim
-  and never the page's address. `4d88d65`: the explained landing also carries
-  `explainedByEventId`, the click's `web.<sequence>.<timestamp>` from the domain's
-  builder.
-- Decisions: a failed URL claim on a sign-up or change-password form also reads
-  as `auth_required`, the same heuristic the selector branch uses; Week 2. Core
-  stores a click's sequence and timestamp but not its event id, so D1 rebuilds the
-  id with that same domain builder; Core needs no change.
-- Validation: supervisor read the `results.ts` diff; `EXTENSION_TEST_BUILD_LABEL=sup-e2
-  ... extension check` -> exit 0, `... test` -> `# tests 372`, `# pass 372`, the
-  E1 follow-up's rows included; content `failures.spec.ts check-assert.spec.ts`
-  -> `26 passed`. Workers: E2's three mutations and E1's dropped id each failed
-  their rows, restored by hash.
+- Agent: workers `g-bench-evidence-size` and `g-target-resolution-union`; verified
+  by supervisor.
+- Changed: `bench/evaluate-run.ts` and `run-evaluation/observed-run-evaluation.ts`
+  (a Flow-lane row's `sanitizedPacketBytes` and `truncationCount` from
+  `flow-lane.json` `evidencePackets`; none for the recording lane;
+  `rawSnapshotBytes` empty, not Week 1); `flow-lane/persisted-flow-run.ts` (Core's
+  status-keyed resolution union kept, no-candidates included).
+- Decisions: a single `lab run --flow` still records empty evidence, so a lone
+  run and its bench row disagree; briefed as `g-single-run-evidence` after
+  `g-run-scenario-followups`. The union copies Core's source type because Core's
+  `dist` predates `0e6d3ac`; it becomes an import after the Core build
+  (integration).
+- Validation: supervisor read the evidence-size diff (sizes and flags only).
+  Test-runner built into a private `dist-sup7` beside `dist`, `node --test` ->
+  `# tests 496`, `# pass 496`, `# fail 0`, 33 evidence rows, with
+  `g-run-scenario-followups`' in-flight edits in the tree. Workers: four and three
+  mutations each failed their rows, restored byte-identical.
 - Outcome: Accepted
 
 ## Open Questions

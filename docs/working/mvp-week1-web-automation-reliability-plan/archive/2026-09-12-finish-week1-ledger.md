@@ -931,3 +931,28 @@ are carried in the sixth-dispatch briefs that act on them.
   the bench scores a matched category followed by a thrown actions check.
 - Outcome: Accepted
 
+
+## Part thirteen, archived 2026-09-13
+
+Moved verbatim to keep the plan under its limit: E2 (`85a7e21`) and the click
+event id on its landing (`4d88d65`), both committed.
+
+### 2026-09-13 — w19-e2 and the E1 event id land
+
+- Agent: workers `w19-e2` and `w19-e1` (resumed); verified by supervisor.
+- Changed: `85a7e21`, `content/action-runtime/results.ts`: a failed URL claim that
+  names a URL, on a sign-in gate, reports `web.auth.required`, naming the claim
+  and never the page's address. `4d88d65`: the explained landing also carries
+  `explainedByEventId`, the click's `web.<sequence>.<timestamp>` from the domain's
+  builder.
+- Decisions: a failed URL claim on a sign-up or change-password form also reads
+  as `auth_required`, the same heuristic the selector branch uses; Week 2. Core
+  stores a click's sequence and timestamp but not its event id, so D1 rebuilds the
+  id with that same domain builder; Core needs no change.
+- Validation: supervisor read the `results.ts` diff; `EXTENSION_TEST_BUILD_LABEL=sup-e2
+  ... extension check` -> exit 0, `... test` -> `# tests 372`, `# pass 372`, the
+  E1 follow-up's rows included; content `failures.spec.ts check-assert.spec.ts`
+  -> `26 passed`. Workers: E2's three mutations and E1's dropped id each failed
+  their rows, restored by hash.
+- Outcome: Accepted
+
