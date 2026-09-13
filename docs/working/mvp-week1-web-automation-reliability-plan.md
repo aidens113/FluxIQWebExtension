@@ -643,34 +643,6 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 `2026-09-12-*` Wave 3 and live-validation files, and
 `2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-13 — w19-c2: Core carries a mapper's expected state into the Flow, and shows the mapper what followed
-
-- Agent: worker `w19-c2` (Core); verified by supervisor. Core's ledger has the
-  paired entry.
-- Changed (Core):
-  - an optional `expectedState` on the recording mapper candidate, kept only as a
-    plain-object clone and written into the approved Flow node;
-  - a mapper context `following`, the next 32 observations;
-  - construction moved from `service.ts` into
-    `runtime/service/recordings/proposal-candidates.ts`, with its test;
-  - importer SDK and `automation-studio.md` pages, and `w19-c1`'s paragraphs;
-  - two Core baseline entries lowered.
-- Decisions: the six open questions are settled in the eleventh dispatch. Node
-  definitions dropping `expectedState` is Week 2. `g-core-expectation-record`
-  shares the record and treats `{}` as no expectation. `w19-d1` gets the
-  `following` shape.
-- Validation: supervisor, Core `packages/fluxiq`:
-  - new test -> `Tests 4 passed (4)`;
-  - `service.test.ts` -> `Tests 108 passed (108)`;
-  - executor tests -> `Tests 19 passed (19)`;
-  - Core `pnpm check` -> exit 0, `2 baseline entries can be lowered`; after
-    lowering both, the audit -> `passed` with nothing left to lower;
-  - `pnpm docs:check` -> exit 0.
-  - Worker: five mutations each failed their row, restored byte-identical.
-- Not verified: Core `pnpm build` and root `pnpm test`; the domain against the new
-  types.
-- Outcome: Accepted
-
 ### 2026-09-13 — f-flow-start-page: every Flow run starts on the scenario's start page
 
 - Agent: worker `f-flow-start-page`; verified by supervisor.
@@ -766,6 +738,42 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   - the structure audit -> passed.
 - Not verified: the full content harness through the script; root gates.
 - Outcome: Accepted
+
+### 2026-09-13 — i-late-target-wait: a wait rule must read the evidence observation, and the recorder must send page changes first
+
+- Agent: worker `i-late-target-wait` (read-only, plus one manifest pin); decisions
+  by supervisor.
+- Changed: `apps/scenario-lab/src/scenarios/delayed-ui/scenario.ts` pins
+  `{ type: "web.element.clicked", count: 2 }`, with a test;
+  `reports/i-late-target-wait.md`.
+- Found:
+  - The mapper never receives `web.dom.mutated`. A recorded `dom.mutation` reaches
+    Core as an event-role input and is kept as an `input.event` observation
+    carrying `latestEvidence`, which compaction keeps.
+  - The recorder sends its mutation batch 500 ms after the last change. In all
+    three Stage 1 W25 recordings the late click was therefore sent first, so a
+    rule that reads a mutation before a click never fires on its own target.
+  - Option 3 would remove the corpus's only `timeout` row, and its unarmed pass
+    would be a latency race.
+  - No rule can put a wait after W24's last click, so W24's unarmed expected wait
+    is unreachable.
+- Decisions: option 2.
+  - `f-recorder-mutation-flush`: the recorder sends pending page changes before
+    any executable event, and W24's unarmed expected wait is dropped.
+  - `w25-wait-mapper`, after `w19-d1`: the domain emits a wait from the mutation
+    observation's own call when a same-document CSS click follows.
+- Validation: supervisor read the code.
+  - `content/recorder.ts:35-39` sends the batch only from its timer, and `emit` at
+    `:55-60` does not flush it.
+  - Core `runtime/io-bridge.ts:53-62` appends a non-action input as
+    `type: "observation"`, `observationType: "input.${role}"`.
+  - The supervisor also read the pin diff.
+  - `pnpm --filter @fluxiq-web-extension/scenario-lab check` -> exit 0; `... test`
+    -> `# tests 203`, `# pass 203`, `# fail 0`.
+  - Worker: with the pin removed, 1 failed (the new test); restored identical.
+- Not verified: which W25 run 3 entry Core compacted (inferred); W28's wait frame
+  targeting; the Lab.
+- Outcome: Revised
 
 ## Open Questions
 

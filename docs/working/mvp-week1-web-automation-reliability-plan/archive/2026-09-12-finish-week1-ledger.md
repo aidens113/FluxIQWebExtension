@@ -1254,3 +1254,37 @@ diagnosis, whose Core, extension and runner fixes are dispatched.
   which timestamp no open; the extension hazard E1, inferred from code.
 - Outcome: Revised
 
+
+## Part twenty, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: the W19 Core candidate
+field (Core `c0e0ce9`, whose own ledger holds the full entry), committed.
+
+### 2026-09-13 — w19-c2: Core carries a mapper's expected state into the Flow, and shows the mapper what followed
+
+- Agent: worker `w19-c2` (Core); verified by supervisor. Core's ledger has the
+  paired entry.
+- Changed (Core):
+  - an optional `expectedState` on the recording mapper candidate, kept only as a
+    plain-object clone and written into the approved Flow node;
+  - a mapper context `following`, the next 32 observations;
+  - construction moved from `service.ts` into
+    `runtime/service/recordings/proposal-candidates.ts`, with its test;
+  - importer SDK and `automation-studio.md` pages, and `w19-c1`'s paragraphs;
+  - two Core baseline entries lowered.
+- Decisions: the six open questions are settled in the eleventh dispatch. Node
+  definitions dropping `expectedState` is Week 2. `g-core-expectation-record`
+  shares the record and treats `{}` as no expectation. `w19-d1` gets the
+  `following` shape.
+- Validation: supervisor, Core `packages/fluxiq`:
+  - new test -> `Tests 4 passed (4)`;
+  - `service.test.ts` -> `Tests 108 passed (108)`;
+  - executor tests -> `Tests 19 passed (19)`;
+  - Core `pnpm check` -> exit 0, `2 baseline entries can be lowered`; after
+    lowering both, the audit -> `passed` with nothing left to lower;
+  - `pnpm docs:check` -> exit 0.
+  - Worker: five mutations each failed their row, restored byte-identical.
+- Not verified: Core `pnpm build` and root `pnpm test`; the domain against the new
+  types.
+- Outcome: Accepted
+

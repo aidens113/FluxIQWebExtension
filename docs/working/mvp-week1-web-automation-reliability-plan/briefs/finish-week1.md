@@ -1701,3 +1701,81 @@ start's project lookup is bounded (`core-api.ts:34` or its caller; name it).
 - Extension `check` and `test` under a private label; the structure audit.
 
 **Report:** `reports/f-recording-start-guard.md`.
+
+---
+
+# Thirteenth dispatch — from `i-late-target-wait`
+
+Verified by the supervisor on 2026-09-13:
+- `content/recorder.ts:35-39` sends the mutation batch only from a 500 ms timer,
+  and `emit` (`:55-60`) does not flush it.
+- Core `runtime/io-bridge.ts:53-62` appends a non-action input as
+  `type: "observation"`, `observationType: "input.<role>"`, so a mutation reaches
+  the mapper as `input.event` with `latestEvidence`, never as `web.dom.mutated`.
+
+Decided: option 2 of `reports/i-late-target-wait.md` Task 4, plus its W24
+correction. Option 1 never fires on its own target. Option 3 removes the corpus's
+only `timeout` row, and would pass the unarmed row on a latency race.
+
+## f-recorder-mutation-flush — a DOM addition is recorded before the action after it (extension, and W24's manifest)
+
+**Owns:**
+- `apps/extension/src/content/recorder.ts`, plus a test for it: a unit test, or
+  a content-harness row if no unit seam exists (name it);
+- `apps/scenario-lab/src/scenarios/intermediate-state/scenario.ts`, the unarmed
+  `expected.actions` only, and that scenario's test.
+
+**Read:** `reports/i-late-target-wait.md` Task 2, Task 4 option 2, and "Needed
+under every option".
+
+**Task.**
+1. Before the recorder emits any kind that can be executable (`dom.click`,
+   `dom.input`, `dom.change`, `dom.submit`, `dom.keydown`), send the pending
+   mutation batch and clear its timer. No payload field changes, and no page data
+   is added.
+2. Drop `web.dom.wait_for_selector: succeeded` from W24's unarmed
+   `expected.actions`, since no rule can put a wait after the last recorded click.
+   Say how `packages/test-runner/src/flow-lane/expectations.ts:7-19` matches
+   actions, and what the row asserts now.
+
+**Tests.**
+- A click after a DOM addition sends `dom.mutation` before `dom.click`, with the
+  mutation proof (remove the flush).
+- The recording-lane pins on `web.dom.mutated` still hold (`delayed-ui`,
+  `intermediate-state`, `dynamic-list`, `reconnect`).
+- Extension `check` and `test` under a private label; any content-harness spec
+  that records mutations; scenario-lab `check` and `test`; the structure audit.
+
+**Report:** `reports/f-recorder-mutation-flush.md`.
+
+## w25-wait-mapper — a wait before a click whose target a DOM addition produced (domain)
+
+Dispatched once `w19-d1` is committed, since both edit `web-panel-host.ts`.
+
+**Owns:**
+- one new builder in `domain/src/` (name it), with its directory's `index.ts`,
+  and the builder's test;
+- `domain/src/web-panel-host.ts`, the mapper only;
+- `domain/src/tests/domain.test.ts`, new rows only;
+- `apps/scenario-lab/src/scenarios/delayed-ui/scenario.ts`'s `expected.actions`
+  and its test, but only if `flow-lane/expectations.ts` needs the three generated
+  actions listed.
+
+**Read:** `reports/i-late-target-wait.md` Task 2, and Task 4 option 2 with its
+design constraints.
+
+**Task.** Option 2's domain half:
+- Start from an `input.event` observation whose `latestEvidence.kind` is
+  `dom.mutation`, with `mutation.added > 0`.
+- In `context.following`, find the next executable entry, skipping evidence.
+- If that entry is a `web.dom.click` with a CSS `selector`, in the same document,
+  return `{ candidates: [web.dom.wait_for_selector { selector, wait: { condition: "present" } }] }`.
+  Give it no `timeoutMs`, no `sourceInputIds` and no `expectedConfirmation`.
+- Emit from the mutation's own call, never from the click's, which would replace
+  Core's fallback click.
+
+**Tests.**
+- Option 2's seven rows, with the mutation proof (drop the builder call).
+- Domain `check` and `test` under a private label; the structure audit.
+
+**Report:** `reports/w25-wait-mapper.md`.
