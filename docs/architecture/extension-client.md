@@ -149,6 +149,33 @@ The extension maps those commands into browser operations and returns
 `client.action_result` with status, message, target evidence, payload evidence,
 and start/completion timestamps.
 
+A command can name a tab or a child frame by its path, because an id does not
+survive to a replay, an origin differs from run to run, and a query may carry a
+token. Two fields carry a path:
+
+- **`tab.urlPath`**, on a `web.browser.tab` switch. It is the exact pathname of
+  the tab to switch to, as `WebAutomationTabRequest`
+  ([`domain/src/actions/types.ts`](../../domain/src/actions/types.ts)) and the
+  `tab` parameter schema declare it. A malformed one refuses the whole tab
+  request, so the command fails as `INVALID_PARAMETER`. Dropping only the path
+  would send the switch to whichever tab the request's other fields name.
+- **`frameUrlPath`**, the pathname of the child-frame document the action was
+  recorded in. The parameter reader
+  ([`domain/src/client/gateway-action-parameters.ts`](../../domain/src/client/gateway-action-parameters.ts))
+  lifts it only from the node parameter `browserFrameUrlPath`. It is optional,
+  so a malformed one is left off and the action is addressed by its frame id
+  alone.
+
+Both are held to one rule, `webAutomationUrlPath`
+([`domain/src/output-nodes/url-path.ts`](../../domain/src/output-nodes/url-path.ts)),
+which the extension imports from `@fluxiq-web-extension/domain/client` rather
+than copies. A path starts with `/`, its second character is not `/` or `\`,
+and it holds no `?` or `#`, so a full URL, a protocol-relative host, a query and
+a fragment are each refused. How a switch finds its tab is in the switch row of
+the [capability matrix](web-capabilities.md#capability-matrix), and how a
+command finds its frame is under
+[child frames](web-capabilities.md#child-frames).
+
 The domain resolves a command's action type once, in
 `normalizeWebAutomationActionType`
 ([`domain/src/client/gateway-mapping.ts`](../../domain/src/client/gateway-mapping.ts)):
@@ -168,7 +195,10 @@ how a command's target becomes an element is in
 An in-page action goes to its frame's content script as one `executeAction`
 message, built once in `runActionInFrame`
 ([`runtime/action-runner.ts`](../../apps/extension/src/runtime/action-runner.ts))
-and sent by `sendAction`. It is sent once, with one exception, a
+and sent by `sendAction`. When the command also names its child frame by path,
+`runActionInFrame` first chooses the frame now at that path
+([`runtime/frame-address.ts`](../../apps/extension/src/runtime/frame-address.ts)),
+and the message goes to that frame. The message is sent once, with one exception, a
 `web.dom.assert` whose send Chrome refuses as a navigating page would: no
 receiving end, or a message port or channel that closed before a response.
 That assert waits for the tab to settle (`waitForTabReady`) and is sent to the
@@ -234,10 +264,24 @@ fallbacks.
 
 The domain registers browser state and passive recording evidence as unmapped
 inputs. They can be used as observations and policy conditions only. The
-extension classifies an operator click, text entry, clear, select, key press,
-scroll, or navigation into a distinct action input. Each action input carries
-`metadata.inputId` and has exactly one registered output binding. FluxIQ uses
-that binding to persist the output ID and mapped payload in a policy action.
+extension classifies an operator navigation, click, text entry, clear, select,
+check, key press, scroll, file choice, tab switch, or tab close into a distinct
+action input. Each action input carries `metadata.inputId` and has exactly one
+registered output binding. FluxIQ uses that binding to persist the output ID
+and mapped payload in a policy action.
+
+Three of the eleven action inputs come from a file choice or a tab change:
+
+| Input | Output | Mapped from |
+| --- | --- | --- |
+| `web.user.files_chosen` | `web.dom.upload` | an `input` or `change` on a file input |
+| `web.user.tab_switched` | `web.browser.tab` | a `browser.tab` event whose `tab.operation` is `switch` |
+| `web.user.tab_closed` | `web.browser.tab` | a `browser.tab` event whose `tab.operation` is `close` |
+
+The two tab inputs share one output, so an input is never derived from
+`web.browser.tab` alone: it comes from the event's `tab.operation`. All eleven
+inputs and their outputs are listed in
+[web capabilities](web-capabilities.md#recorded-actions).
 
 The extension never sends a generic executable action entry. Inputs without an
 output mapping remain non-executable even when they were captured during a
@@ -254,7 +298,7 @@ required parameter stays evidence.
 The content script and the background worker emit browser evidence:
 
 - content ready, from the content script;
-- tab and navigation changes, from the background worker;
+- tab switches, tab closes and navigation changes, from the background worker;
 - click, input, change, and submit;
 - keydown and scroll;
 - batched DOM mutation counts;
@@ -333,6 +377,35 @@ executes, and it is not counted as a recorded action. It is also sent as
 evidence. Core stores it as a domain event on the recording's timeline, where
 the recording mapper finds it beside the click it names (see below).
 
+The background worker also records a tab change as an action
+([`background/connection/tab-recorder.ts`](../../apps/extension/src/background/connection/tab-recorder.ts)).
+`active-page.ts` hands it each tab Chrome activates or updates, and each tab
+Chrome removes. The rules are these:
+- **A switch** is recorded when a page a recording can see comes to the front
+  and is not the page the recording is already in. The first page a recording
+  sees in front is where it already is, so it is no switch. The `browser.tab`
+  event carries:
+  - `tab: { operation: "switch", urlPath }`, the pathname alone;
+  - a `url` cut to origin and path;
+  - the page's title;
+  - the id of the tab switched to, so evidence is read from that page.
+- **A new tab with no page yet**, whose URL is empty or `about:blank`, is
+  waited for. The switch is recorded when the tab's first URL commits, if that
+  happens within 10 s. A later commit records no switch, but the recorder
+  follows the tab.
+- **A close** is recorded only for the tab the recording is in, because replay
+  closes the tab it is driving. Its event carries `tab: { operation: "close" }`
+  and the tab's last origin and path. It carries no tab id, since no page is
+  left to snapshot.
+- **Never recorded:** passing through a page a recording cannot see, such as a
+  browser page, the extension's own control page or a web store; and a tab
+  change made while FluxIQ is running a command. That change enters the
+  recording once, as the command's runtime confirmation.
+
+A tab event goes through the same intake as a click, so it is sent once with its
+input id and counted once. The recording-start marker is a `browser.tab` event
+too. It carries no `tab`, which is what keeps it evidence.
+
 A `client.start_recording` waits 750 ms for FluxIQ to answer; on silence the
 recorder starts locally so no user action is lost. A refusal is an answer, so
 it cancels that window — and it is classified rather than treated as a
@@ -396,6 +469,15 @@ and asked again by every domain reader. Where it is asked, what the wire
 guards cover, and what they are not a boundary against are in
 [sensitive values](sensitive-values.md).
 
+A file input yields no value either, sensitive or not, and whatever
+`captureInputValues` says, because its value is the chosen file's local name.
+`readElementValue`
+([`content/describe-element.ts`](../../apps/extension/src/content/describe-element.ts))
+returns nothing for one. Its descriptor carries `inputType: "file"` and
+`hasValue`, and its `input` and `change` events carry no `inputValue`. The
+domain replays the choice as an upload that asks for its files at run time
+([web capabilities](web-capabilities.md#recorded-actions)).
+
 Primary user actions are not sent as a separate message type. Each one that
 maps to a registered action input goes out as a `client.recording_event`
 whose `metadata.inputId` names that input, and FluxIQ's gateway bridge
@@ -403,6 +485,33 @@ records an event carrying a registered input ID as that input. That is how
 Automation Studio timelines distinguish operator actions from passive state
 observations. Raw snapshots and state updates remain available as recording
 observations through the client gateway bridge.
+
+A recorded event's payload is `RecordingEventPayload`
+([`shared/protocol.ts`](../../apps/extension/src/shared/protocol.ts)), which the
+domain's `createWebAutomationRecordingEvent`
+([`domain/src/client/gateway-mapping.ts`](../../domain/src/client/gateway-mapping.ts))
+turns into the gateway event. A tab switch or close carries one field more,
+`tab`. Reduced to the two fields that decide it, a switch reads:
+
+```json
+{ "kind": "browser.tab", "tab": { "operation": "switch", "urlPath": "/orders/details" } }
+```
+
+`tab` is the domain's `WebAutomationRecordedTab`,
+`{ operation: "switch" | "close"; urlPath?: string }`, which the extension
+imports rather than copies. A close carries no `urlPath`. A `browser.tab` event
+is stored as `web.tab.state_changed`. The builder copies only `operation` and
+`urlPath` into the stored `tab`, so a tab id or a full URL a caller adds to `tab`
+never reaches the recording. The event's own `url` is a separate field: a tab
+event the recorder sends cuts it to origin and path, and a runtime confirmation
+sets it from the action result as it is.
+
+A succeeded runtime action is confirmed on the same message: a
+`client.recording_event` carrying `metadata.inputId` and
+`metadata.runtimeConfirmation: true`, sent after its `client.action_result`. A
+tab confirmation carries `tab` in the shape above. Which verbs confirm, and what
+each carries, is in
+[web capabilities](web-capabilities.md#recorder-trust-and-runtime-confirmations).
 
 A recorded click proposes the page it landed on as its expected state. When
 Core turns a recording into a proposal, it shows the web recording mapper

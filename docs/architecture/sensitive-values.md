@@ -53,9 +53,12 @@ Withholding is unconditional and does not depend on a setting.
   returns nothing for a sensitive control, so no descriptor carries its value.
   A sensitive `<select>` yields neither its `selectedValue` nor its option
   list — the options are the value space, and publishing them narrows the
-  secret. The attribute allowlist deliberately excludes `value`.
+  secret. The attribute allowlist deliberately excludes `value`. A file input
+  yields no value either, sensitive or not: its value is the chosen file's
+  local name, which belongs to the person's machine rather than the page. Only
+  `hasValue` says whether it holds files.
 - **Recorded events.** The `change` listener's `inputValue` comes from the
-  same reader, and `recordableKey`
+  same reader, so a file input's `change` carries none, and `recordableKey`
   ([`content/dom-events.ts`](../../apps/extension/src/content/dom-events.ts))
   drops the key itself: a printable key pressed in a sensitive control *is*
   that control's value, one character at a time, and never goes through a
@@ -71,7 +74,10 @@ Withholding is unconditional and does not depend on a setting.
   `type="password"`, which is a browser quirk rather than a control.
 - **Runtime confirmations.** `confirmedValue`
   (`background/connection/runtime-status.ts`) reads the value off the wire
-  descriptor and withholds it for a sensitive control.
+  descriptor and withholds it for a sensitive control. Only the `type` and
+  `select` confirmations read a value, and `clear` carries `""`. The `check`
+  and `upload` confirmations carry none, and a tab confirmation carries only
+  its operation and a pathname.
 
 What still travels is *presence*: `hasValue` on the descriptor and the form
 evidence, which carries nothing to redact.
@@ -137,6 +143,13 @@ declaration and disarmed the adapter's guard for every extension result.
   from the packet entirely. No packet element carries a `value` field at all;
   a select's `selectedValue` is carried only when it matches one of the
   options already listed.
+- **Recorded uploads.** A recorded file choice becomes a `web.dom.upload` node
+  that asks for its files at run time, under `web.upload.<key>`, and holds no
+  file name, count or content. Its element fingerprint drops `value`
+  (`domain/src/output-nodes/payloads.ts`). The request has a namespace of its
+  own, apart from `web.secret.`, so an upload request is never read as a secret
+  request, nor a secret request as an upload
+  ([`domain/src/output-nodes/upload-binding.ts`](../../domain/src/output-nodes/upload-binding.ts)).
 - **Page evidence.** Form controls report `hasValue`, the raw `autocomplete`
   tokens, and a `sensitive` marker — see [page evidence](page-evidence.md).
   The tokens are carried on purpose, so a consumer can ask the rule itself

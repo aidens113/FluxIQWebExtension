@@ -81,7 +81,8 @@ A gateway-issued action then runs as follows:
    ([`domain/src/client/gateway-mapping.ts`](../../domain/src/client/gateway-mapping.ts)).
    Every structured parameter — `option`, `scroll`, `wait`, `modifiers`,
    `checked`, `assert`, `extractList`, `upload`, `dialog`, `tab`, `download`,
-   and the `browserTabId`/`browserFrameId` an action runs in — is read onto the
+   the `browserTabId`/`browserFrameId` an action runs in, and a child frame's
+   `browserFrameUrlPath`, read as `frameUrlPath` — is read onto the
    command field the verb reads by `domain/src/client/gateway-action-parameters.ts`,
    which refuses a malformed value rather than coercing it. The raw parameters
    still travel in `options`.
@@ -94,7 +95,9 @@ A gateway-issued action then runs as follows:
    (`runtime/automation-tab.ts`). Every other action is sent to the tab's
    content script, in the frame the command named and otherwise in frame 0 with
    `topFrameOnly`, so a page of iframes cannot answer from whichever frame
-   replies first.
+   replies first. A command recorded in a child frame also names that frame by
+   its document's path, and goes to the frame now at that path
+   ([Child Frames](#child-frames)).
 3. The content script's `executeAction`
    (`content/action-runtime/execute-action.ts`) wires every page-side capability
    and passes the command to `executeContentAction`
@@ -126,10 +129,10 @@ connection's last observation. The six observe-only verbs are exempt.
 | Repeating/list elements | Fully supported | Yes | `web.dom.extract_list` | `content/action-runtime/list-extraction.ts` | Step 3, landed | `querySelectorAll` over the item selector returns the whole collection, bounded by `maxItems`, and each record is read independently. The single-element verbs still resolve exactly one target (`content/action-runtime/resolve-target.ts`); acting on each item of a list is a Flow over an extraction, not one action. |
 | Pagination | Fully supported | Yes | `web.dom.extract_list` with `paginate` and `maxItems` | `content/action-runtime/list-extraction.ts`, `domain/src/client/gateway-action-parameters.ts` | Step 3, landed | The `next` control is clicked and the read repeats until it is absent or `maxPages` pages have been read — bounded at `WEB_AUTOMATION_EXTRACT_MAX_PAGES` (50) on both sides of the wire. After each page the verb waits up to 10 s for the list to actually change (detached first item, a different first item, or a different count) rather than for a fixed delay, and a `next` that was followed without the list ever changing fails the action instead of ending the read quietly. Stopping at the cap with a `next` still present is reported as `truncated`; an absent `next` is the list ending. Append-style pagination is implemented but unexercised; an infinite feed is `scroll` with `untilStable`. |
 | Open tab | Fully supported | Yes | `web.browser.tab` with `operation: "open"`; also `web.browser.navigate` with `newTab` | `runtime/browser-tab.ts`, `runtime/automation-tab.ts` | Steps 3 and 4, landed | Opens a tab, optionally at a URL and optionally in the background, and points the automation tab at it so the next action runs there. With a URL it waits for the tab to settle and compares where it landed, through the same tolerant comparison navigate uses; without one it reports the tab id and address it opened at. Never exercised in a browser: `chrome.tabs` does not exist in the unit runner and no harness covers the background worker. |
-| Switch tab | Fully supported | Yes | `web.browser.tab` with `operation: "switch"`; the gateway server command `set_active_tab` still exists | `runtime/browser-tab.ts`, `runtime/command-options.ts` | Step 3, landed | Selects the tab with the given id, or the first whose URL contains the given substring, activates it, and re-points the automation tab; "any tab" is refused rather than picked arbitrarily, and nothing matching is `target_not_found`. A command's own `tabId` and `frameId` are separate from this and now reach the runner — `browserTabId`/`browserFrameId` are read onto the command and the runner addresses that frame — so a content action is no longer confined to frame 0 of one tab. Never exercised in a browser. |
-| Close tab | Fully supported | Yes | `web.browser.tab` with `operation: "close"` | `runtime/browser-tab.ts`, `runtime/automation-tab.ts` | Step 3, landed | Closes the named tab, or the automation tab when none is named, forgets it, and confirms the close by re-reading the tab: one that is still open reports `failed`, not success. Closing with no tab named and none open is refused as ACTION_REJECTED, with the reason in the record’s `actual`. Never exercised in a browser. |
+| Switch tab | Fully supported | Yes | `web.browser.tab` with `operation: "switch"` and a `tabId`, `urlPattern` or `urlPath`; input `web.user.tab_switched`; the gateway server command `set_active_tab` still exists | `runtime/browser-tab.ts`, `runtime/automation-tab.ts`, `runtime/command-options.ts`, `background/connection/tab-recorder.ts` | Step 3, landed | Selects the tab with the given id; else, for a `urlPath`, the newest tab whose URL path is exactly that path; else the first whose URL contains the given substring. A path match ignores the origin and never takes a browser or extension page, and it waits for a tab that is still opening, looking again every 100 ms until the command's timeout, or 10 s when it names none. An id or a substring does not wait. "Any tab" is refused rather than picked arbitrarily, and nothing matching is `target_not_found`, expecting `a tab at path "<path>" active` for a path. The switch activates the tab and re-points the automation tab at it. It also remembers the tab the Flow was on, which is the page in front, or the tab that opened the target when the browser has already fronted it, so a later close returns there. A recorded switch replays by its path ([Recorded Actions](#recorded-actions)). A command's own `tabId` and `frameId` are separate from this and reach the runner — `browserTabId`/`browserFrameId` are read onto the command and the runner addresses that frame — so a content action is not confined to frame 0 of one tab. Never exercised in a browser. |
+| Close tab | Fully supported | Yes | `web.browser.tab` with `operation: "close"`; input `web.user.tab_closed` | `runtime/browser-tab.ts`, `runtime/automation-tab.ts`, `background/connection/tab-recorder.ts` | Step 3, landed | Closes the named tab, or the automation tab when none is named, forgets it, and confirms the close by re-reading the tab: one that is still open reports `failed`, not success. Closing the automation tab then fronts the most recently driven tab that is still open, from a history of the last 8 driven tabs, and that tab is the automation tab again. So the actions after a close run where the person who recorded it landed. Closing a named tab that is not the automation tab fronts nothing. Closing with no tab named and none open is refused as ACTION_REJECTED, with the reason in the record’s `actual`. Never exercised in a browser. |
 | Downloads | Partially supported | Yes | `web.browser.download` (parameter `download`) | `runtime/browser-download.ts`, `apps/extension/manifest.chrome.json`, `manifest.firefox.json`, `manifest.e2e.json` | Step 3, landed; starting a download and reading the file remain | Waits for a download to complete — optionally the one with a given file name, matched on the base name and accepting the browser's `name (1).ext` form — through `chrome.downloads`, with a 30 s default bounded to 1–120 s and a 15 s lookback so a download that finished between the click and the wait still counts. A timeout is `timed_out` with Core's `timeout` category. The `downloads` permission is declared in all three manifests, and a build without it fails as a capability refusal rather than hanging. The action only observes: it cannot start a download, choose a destination, or assert anything about the file beyond its name. The wait loop has never run in a browser. |
-| Basic file uploads | Fully supported | Yes | `web.dom.upload` (parameter `upload`) | `content/actions/upload.ts`, `content/action-runtime/file-input.ts`, `domain/src/client/gateway-action-parameters.ts` | Step 3, landed | Files travel inline as base64 because the page, not the worker, owns the input; they are built into a `DataTransfer`, assigned to the input, and followed by `input` and `change`. The names the input ended up holding are read back off the element and compared with what was asked for, so an upload that put nothing anywhere reports `failed`. A target that is not a file input, a single-file input given several files, and malformed or oversized content are all refused before anything is dispatched; the 1 MiB per-file and 4 MiB total bounds are enforced by the domain on the way in and again in the page. File contents never appear in a result, a message, or a log. Multi-file uploads are coded but untested. |
+| Basic file uploads | Fully supported | Yes | `web.dom.upload` (parameter `upload`); input `web.user.files_chosen` | `content/actions/upload.ts`, `content/action-runtime/file-input.ts`, `domain/src/client/gateway-action-parameters.ts`, `domain/src/output-nodes/upload-binding.ts` | Step 3, landed | Files travel inline as base64 because the page, not the worker, owns the input; they are built into a `DataTransfer`, assigned to the input, and followed by `input` and `change`. The names the input ended up holding are read back off the element and compared with what was asked for, so an upload that put nothing anywhere reports `failed`. A target that is not a file input, a single-file input given several files, and malformed or oversized content are all refused before anything is dispatched; the 1 MiB per-file and 4 MiB total bounds are enforced by the domain on the way in and again in the page. File contents never appear in a result, a message, or a log. Multi-file uploads are coded but untested. A recorded file choice replays as this action, asking for its files at run time rather than carrying any, and a command whose request the run did not answer is refused before dispatch ([Recorded Actions](#recorded-actions)). |
 | Form interaction | Partially supported | Yes | composed from `web.dom.check`, click, type, clear, select, and Enter; `dom.submit` remains a recording event kind only | `content/actions/check.ts`, `content/action-runtime/checkable-state.ts`, `content/action-runtime/keyboard/implicit-submission.ts`, `domain/src/io/input-model.ts` | Step 3, landed; a submit action and validation-error observation remain | A checkbox or radio can now be set to a state rather than toggled, which is what makes a replayed step idempotent, and `checked` is read back after the control's own events run, so a handler that reverted the change reports `failed`. A control that is not checkable, one that is `:disabled` or `aria-disabled` — a disabled `<fieldset>`'s descendants included — and unchecking a radio, which no user gesture can do, are each ACTION_REJECTED rather than faked. `web.dom.check` does not use the actionability gate: it has its own disabled check and does not hit-test, so a control covered by an overlay is still set. There is still no submit action — a form is submitted by Enter in a field or by clicking its button — a recorded submit maps to no input, and validation errors are not observed. |
 | Dynamic elements | Partially supported | Yes | the two wait actions, `web.dom.assert`, and the actionability gate | `content/action-runtime/wait-conditions.ts`, `content/action-runtime/actionability.ts`, `content/action-runtime/resolve-target.ts` | Step 2, landed; waiting inside the acting verbs remains | The gate scrolls a target into view and refuses one that is not yet visible or not yet enabled, with a code saying which, so an action against a half-rendered page fails for a stated reason instead of appearing to work; `web.dom.assert` re-queries its selector until its claim holds or the timeout passes. But no acting verb waits first: `resolveTarget` tries its strategies and then scores the page's candidates once and throws, and nothing in the action path polls or retries, so a Flow against a page that renders late must still author a wait before the action. |
 | Modal/dialog interaction | Partially supported | Yes | `web.dom.dialog` (parameter `dialog`); DOM modals are ordinary elements | `content/actions/dialog.ts`, `content/action-runtime/dialog-control.ts`, `page-world/dialog-override.ts`, `shared/dialog-channel.ts` | Step 3, landed; `beforeunload` and older Firefox remain | A native dialog blocks the page's script, so the answer is armed before the dialog opens: `alert`, `confirm`, and `prompt` are replaced in the page's own world at `document_start`, ahead of any page script, and the verb arms the next dialog's response — accept, dismiss, or accept with `promptText` — through a synchronous DOM handshake. Arming that is not acknowledged means the override is not installed, and the verb fails at once as `dialog_override_missing` rather than arming something nothing will answer. An unarmed dialog is left alone: the page behaves as it would without the extension, and what was answered is recorded as evidence the next action reports. Two gaps: `beforeunload` is in the observed-dialog union but is not a function that can be replaced, so it is unhandled; and `world: "MAIN"` is honoured only from Chrome 111 and Firefox 128, while the Firefox manifest still admits 109, so on Firefox 109–127 the override lands in the isolated world and every dialog action fails honestly instead of working. |
@@ -215,13 +218,30 @@ output's `safety.level` and `requiresApproval`
 
 ### Recorded Actions
 
-Eight outputs have a recorded action input, each bound to exactly one output
+Eleven recorded action inputs are bound to ten outputs
 (`actionInputDefinitions` in
-[`domain/src/io/input-model.ts`](../../domain/src/io/input-model.ts)):
-navigate, click, type, clear, select, check, keypress, and scroll. Assert,
-extract_list, upload, dialog, tab, download, the waits, extract, and
-capture_snapshot are dispatch-only — no recorded user event maps to one, so
-their recorded payload is empty by construction.
+[`domain/src/io/input-model.ts`](../../domain/src/io/input-model.ts)). Each
+input has exactly one output, and the two tab inputs share one:
+
+| Input | Output |
+| --- | --- |
+| `web.user.navigation_requested` | `web.browser.navigate` |
+| `web.user.element_clicked` | `web.dom.click` |
+| `web.user.text_entered` | `web.dom.type` |
+| `web.user.field_cleared` | `web.dom.clear` |
+| `web.user.option_selected` | `web.dom.select` |
+| `web.user.checkbox_toggled` | `web.dom.check` |
+| `web.user.key_pressed` | `web.dom.keypress` |
+| `web.user.page_scrolled` | `web.dom.scroll` |
+| `web.user.files_chosen` | `web.dom.upload` |
+| `web.user.tab_switched` | `web.browser.tab` |
+| `web.user.tab_closed` | `web.browser.tab` |
+
+Because two inputs share `web.browser.tab`, nothing derives an input from that
+output alone: the input comes from the event's `tab.operation`. Assert,
+extract_list, dialog, download, the waits, extract, and capture_snapshot are
+dispatch-only. No recorded user event maps to one, so their recorded payload is
+empty by construction.
 
 One function, `webAutomationRecordedAction`, maps a recorded event to its
 input, output, and parameters. The live gateway path
@@ -230,27 +250,69 @@ mapper (`mapWebRecordingObservation` in `domain/src/web-panel-host.ts`) both
 call it. An event is therefore executable on one path exactly when it is on
 the other, with the same parameters, including the element fingerprint and
 visual target that replay falls back on. An event is executable only when
-every parameter its output's schema requires is a non-empty string, a key
-press has a key, a scroll has a coordinate, and a check has a known state;
-otherwise it stays evidence.
+every parameter its output's schema requires is present; otherwise it stays
+evidence. Present means a non-empty string or a request for a withheld secret,
+with two exceptions: `upload` must be an upload request, and `tab` must be a
+close or a switch that names a path. Beyond the schema, a key press needs a
+key, a scroll a coordinate, and a check a known state.
 
 - A navigation is an action only when it was typed, and never the navigation
   that marks where a recording began.
 - Scroll is keyed on the `dom.scroll` event the recorder emits. `dom.wheel` is
   never emitted and maps to nothing.
-- An input or change on a `<select>` becomes select, a checkbox or radio
-  becomes check, an empty value becomes clear, and any other value becomes
-  type.
-- **A recorded checkbox toggle is still evidence, not an action.** `web.dom.check`
-  needs the state the control was left in, and nothing produces it: the element
-  descriptor (`content/describe-element.ts`) carries no `checked` field and its
-  attribute allowlist has no `aria-checked`, so `recordedCheckedState`
-  (`domain/src/output-nodes/payloads.ts`) finds nothing to read. A radio is the
-  exception — its `change` can only mean "now selected", so it maps to
-  `checked: true` and is executable.
+- An input or change on a file input becomes upload, on a `<select>` select,
+  and on a checkbox or radio check. On any other control an empty value becomes
+  clear and any other value becomes type. The file input is tested first, so a
+  file choice never becomes typing or clearing.
+- **A checkbox toggle is an action only when its state is known.**
+  `web.dom.check` needs the state the control was left in.
+  `recordedCheckedState` (`domain/src/output-nodes/payloads.ts`) reads the
+  descriptor's `checked`, which `content/describe-element.ts` reports for a
+  checkbox or radio input. A sensitive checkbox withholds it, so its toggle
+  stays evidence. A radio needs no recorded state: its `change` can only mean
+  "now selected", so it maps to `checked: true`.
 - A key press on a `<select>` whose only effect is the value change — an arrow,
   Home, End, Page Up/Down, or any single character — is evidence, because the
   recorder already reports that change as its own event.
+- **A file choice replays as an upload that asks for its files at run time.**
+  - The node's `upload` is Core's state binding
+    `{ "$state": { "path": "web.upload.<key>" } }`, with no `fallback`
+    ([`domain/src/output-nodes/upload-binding.ts`](../../domain/src/output-nodes/upload-binding.ts)),
+    so an unsupplied upload fails instead of uploading nothing.
+  - The key comes from `webAutomationRecordedElementKey`
+    (`domain/src/output-nodes/recorded-element-key.ts`), the rule a withheld
+    secret's request is keyed by: the visual target's state id, else the
+    authored test id, `id` or `name`, else the selector.
+  - The node carries no file name, count or content, and its element
+    fingerprint drops `value`.
+  - A run supplies the files as the input `web.upload.<key>`, shaped
+    `{ files: [{ name, mimeType, contentBase64 }] }`. A command whose request
+    the run left unanswered is refused before dispatch as
+    `USER_INTERVENTION_REQUIRED`, naming the parameter and its path only.
+- **A cancelled or emptied file choice stays evidence.** A file input recorded
+  with `hasValue: false`, or with an `inputValue` of `""`, was left holding no
+  files, and no upload reproduces that. A control with nothing to key a request
+  on builds no request, and stays evidence too.
+- **A tab switch or close replays through `web.browser.tab`.**
+  - The recorded payload's `tab` decides the input: `switch` maps to
+    `web.user.tab_switched`, `close` to `web.user.tab_closed`, and an entry
+    with no `tab` to nothing. The recording-start marker is a `browser.tab`
+    event with no `tab`, so it stays evidence.
+  - A close builds `{ tab: { operation: "close" } }`.
+  - A switch builds `{ tab: { operation: "switch", urlPath } }` and is
+    executable only with its path. A path that is not a bare pathname is left
+    off rather than trimmed, so that switch stays evidence.
+  - No tab id, origin or query is ever written.
+
+  What the recorder counts as a switch or a close is in
+  [the extension client architecture](extension-client.md#recording-evidence).
+- **An action recorded in a child frame also carries its frame's path.** Beside
+  `browserFrameId`, the node gains `browserFrameUrlPath`, the pathname of the
+  `url` recorded with the event, which the content script in that frame reports
+  as its own document's address. Only a `web.dom.*` node with parameters,
+  recorded in a frame above 0 at an http(s) URL, gains one. A top-frame node,
+  and a node from an `about:`, `srcdoc` or `blob:` document, never carries a
+  path. Replay is under [Child Frames](#child-frames).
 - Submit, mutation, snapshot, and the never-emitted focus and blur map to no
   input.
 
@@ -271,19 +333,91 @@ ignores untrusted `pointerdown`, `click`, `input`, `change`, `keydown`, and
 and a replayed `type`, `clear`, or `select` is recorded once, as its runtime
 confirmation, not a second time from the synthetic `input` and `change` it
 dispatches. `submit` and window `scroll` are recorded without a trust check.
+The tab recorder likewise records no tab change made while FluxIQ is running a
+command, so a replayed switch or close is recorded once, as its confirmation.
+
+The recorder sends no file input value. `readElementValue`
+([`content/describe-element.ts`](../../apps/extension/src/content/describe-element.ts))
+returns nothing for a file input, because its value is the chosen file's local
+name. So the input's descriptor carries no `value`, its `input` and `change`
+carry no `inputValue`, and the snapshot ranks it without one. Its descriptor
+still carries `inputType: "file"` and `hasValue`.
 
 A succeeded runtime action that has a recorded counterpart is also sent as a
 recording event carrying its input ID (`runtimeConfirmationForActionResult` in
 [`background/connection/runtime-status.ts`](../../apps/extension/src/background/connection/runtime-status.ts)).
-Each of the eight action inputs has a confirmation. An action that did not
-succeed confirms nothing, and a `check` confirmation carries no value. The `type` and `select`
-confirmations carry the value the field was left holding, read from the result's
+Every recorded executable verb has a confirmation:
+
+| Output | Event kind | Input | Also carries |
+| --- | --- | --- | --- |
+| `web.browser.navigate` | `browser.navigation` | `web.user.navigation_requested` | — |
+| `web.dom.click` | `dom.click` | `web.user.element_clicked` | — |
+| `web.dom.type` | `dom.input` | `web.user.text_entered` | the value the field was left holding |
+| `web.dom.clear` | `dom.input` | `web.user.field_cleared` | `inputValue: ""` |
+| `web.dom.select` | `dom.change` | `web.user.option_selected` | the value the field was left holding |
+| `web.dom.check` | `dom.change` | `web.user.checkbox_toggled` | no value |
+| `web.dom.keypress` | `dom.keydown` | `web.user.key_pressed` | — |
+| `web.dom.scroll` | `dom.scroll` | `web.user.page_scrolled` | — |
+| `web.dom.upload` | `dom.change` | `web.user.files_chosen` | no value |
+| `web.browser.tab`, a switch | `browser.tab` | `web.user.tab_switched` | `tab: { operation: "switch", urlPath }` |
+| `web.browser.tab`, a close | `browser.tab` | `web.user.tab_closed` | `tab: { operation: "close" }` |
+
+Each is a `client.recording_event` sent after the action's
+`client.action_result`, with `metadata.runtimeConfirmation: true` and the
+result's element, visual target and snapshot. An action that did not succeed
+confirms nothing, and neither does a tab `open`.
+
+A tab confirmation's input depends on the operation the command asked for,
+which the result does not carry. `RuntimeStatusTracker.startAction` keeps the
+command's `tab` request, and `tabRequestFor` hands it back only for that
+command's id. The confirmation's `tab` has the recorded payload's shape, so the
+domain maps a replayed tab change as it maps a recorded one:
+- a switch's `urlPath` is the pathname of the page the switch left in front,
+  never its origin or query;
+- that path is absent when the result has no readable URL, when the page is one
+  a recording cannot see or has an opaque origin such as a `file:` page, or when
+  the path rule refuses its path, and the domain then keeps the switch as
+  evidence;
+- a close carries no path.
+
+The `type` and `select` confirmations carry the value read from the result's
 element descriptor, which the content script fills only while input-value
 capture is on. A field that matches the recorder's sensitivity rule carries no
-value; `clear` carries `""`. A sensitive control's value reaches none of these
-paths — not the descriptor, not the recorded event, not the confirmation — and
-a validation that has to describe one names its length instead of quoting it;
-see [sensitive values](sensitive-values.md).
+value. A sensitive control's value reaches none of these paths — not the
+descriptor, not the recorded event, not the confirmation — and a validation
+that has to describe one names its length instead of quoting it; see
+[sensitive values](sensitive-values.md).
+
+### Child Frames
+
+A frame id belongs to one tab, and Chrome gives a frame a new one each time it
+navigates. A Flow loads its start page before it runs, so the id a recording
+captured can name no frame on replay. A command recorded in a child frame
+therefore also names the frame by its document's path, `frameUrlPath`, lifted
+from the node's `browserFrameUrlPath`. The path is the address, and the
+recorded id only breaks a tie.
+
+`runActionInFrame`
+([`runtime/action-runner.ts`](../../apps/extension/src/runtime/action-runner.ts))
+reads the path through `frameUrlPathForAction` (`runtime/command-options.ts`),
+lists the tab's frames, and sends the action where `chooseFrame`
+([`runtime/frame-address.ts`](../../apps/extension/src/runtime/frame-address.ts))
+says:
+
+| When | The action goes to |
+| --- | --- |
+| the command carries no path | the recorded id, and no frames are listed |
+| the browser lists no frames, because it would not say | the recorded id |
+| one child frame is at the path | that frame, whatever the recorded id |
+| several child frames are at the path | the recorded id when it is one of them; otherwise nowhere, failing as `TARGET_AMBIGUOUS`, not retryable, with the count |
+| no child frame is at the path | nowhere, failing as `TARGET_NOT_FOUND`, retryable because a frame the page is still creating may appear, naming the path and each child frame's path |
+
+Only the pathname of an http(s) document is compared. The origin differs from
+run to run, and a query may carry a token. An `about:`, `data:` or `srcdoc`
+frame never matches. The top frame is never a candidate, because the domain
+gives a path only to a node recorded in a child frame. A refusal names paths
+only, never a full URL, and is reported against the recorded id. Otherwise the
+frame chosen is the one then checked, pinged, addressed and reported.
 
 ### Results And Failures
 

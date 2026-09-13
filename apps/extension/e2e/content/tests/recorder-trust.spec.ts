@@ -5,12 +5,38 @@
 // stopped before every assertion, because stopping flushes the debounced
 // `dom.input`: nothing can still be pending when the log is read.
 
+import { writeFile } from "node:fs/promises";
 import { expect, test } from "../index.js";
 
 const NAME = '[data-testid="name"]';
 const PLAN = '[data-testid="plan"]';
 const NOTES = '[data-testid="notes"]';
+const UPLOAD_FILE = '[data-testid="upload-file"]';
 const QUIET = { captureMutations: false, captureInputValues: true, captureSnapshots: false };
+
+// A chosen file's local name is page data: a file input's value is Chrome's
+// `C:\fakepath\<name>`. The recorder describes the control, never its value,
+// even with input-value capture on. The file is set from disk, so Chromium sets
+// it itself and the change is trusted, as a user's choice is.
+test("a chosen file is recorded as a trusted change on a file input that carries no file name or value", async ({ openHarness, page }) => {
+  const harness = await openHarness("file-transfer");
+  const chosen = test.info().outputPath("local-receipt.csv");
+  await writeFile(chosen, "a,b\n1,2\n", "utf8");
+  await harness.setRecording(true, { captureMutations: false, captureInputValues: true, captureSnapshots: true });
+  await page.locator(UPLOAD_FILE).setInputFiles(chosen);
+  await harness.setRecording(false);
+  const changes = await harness.recordedEvents("dom.change");
+  expect(changes.length).toBeGreaterThan(0);
+  for (const change of changes) {
+    expect(change).toMatchObject({ element: { inputType: "file", hasValue: true } });
+    expect(change).not.toHaveProperty("inputValue");
+  }
+  const wire = JSON.stringify(await harness.messages());
+  expect(wire.includes("fakepath"), "no message carries Chrome's fake path").toBe(false);
+  expect(wire.includes("local-receipt.csv"), "no message carries the chosen file's name").toBe(false);
+  const snapshot = JSON.stringify(await harness.capture());
+  expect(snapshot.includes("fakepath"), "the snapshot carries no file input value").toBe(false);
+});
 
 test("untrusted input and change events are not recorded, while a real key press is", async ({ openHarness, page }) => {
   const harness = await openHarness("basic-form");

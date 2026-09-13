@@ -151,7 +151,10 @@ compiler-checked at the throw.
   (`TARGET_NOT_FOUND`, `ACTION_REJECTED`, `ACTION_FAILED`),
   `runtime/browser-download.ts` (`ACTION_REJECTED`, `TIMEOUT`),
   `runtime/action-runner.ts` (`ACTION_REJECTED` for an unsupported page,
-  `TARGET_NOT_FOUND` for a tab that is gone), `runtime/command-router.ts`
+  `TARGET_NOT_FOUND` for a tab that is gone), `runtime/frame-address.ts`
+  (`TARGET_NOT_FOUND` for a command whose child-frame path matches no frame, and
+  `TARGET_AMBIGUOUS` when several frames match and none has the recorded id),
+  `runtime/command-router.ts`
   (`ACTION_FAILED`, through `browserActionFailure`, for an action whose send to
   the page threw; a `web.dom.assert` whose first send met a navigating page is
   sent once more before that, so only its second refusal is reported),
