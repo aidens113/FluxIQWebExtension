@@ -5312,3 +5312,25 @@ checking the prior findings, the exact cross-half message shapes, timers,
 cleanup, lifecycle ordering, and tests. Read-only except that report; no
 source/build/Lab/Core/shared-doc/commit/push. Report only new P1/P2 blockers;
 otherwise explicitly accept for supervisor gates and live W10.
+
+## Lab Stage 4i — acknowledged-intent W10 acceptance
+
+**Candidate pins:** downstream local commit `db3cc17` and Core
+`19468b72c4472fd5cc58940737702d5e4d72c985`.
+
+`l-final-recheck-w10-intent` owns worktree `F:\fxlab\fxlab-16ff729-b`, a new
+run root `F:\fxlab-runs\final\recheck-w10-intent`, and
+`reports/l-final-recheck-w10-intent.md`. Check out the exact pins clean and
+build required packages into the worktree instance paths. No auth secret is
+needed. Do not reuse Stage 4c bundles as acceptance evidence.
+
+Run W10 `navigation` primary Flow lane three times, then `broken-link` three
+times under one isolated instance with the Stage 4 memory guard. Require every
+recording to retain two extension/Core actions and two proposal candidates.
+Primary must execute click then navigation and pass reported/oracle/test
+verdicts. Variant must start at candidate zero, fail its first click as expected
+with `navigation_unexpected` / `web.navigation.unexpected`, and pass its test
+verdict. Require harness activations, leaks, persistence failures, and discards
+all zero; stop immediately for any leak. Preserve accepted bundles and report
+bounded ids/counts/categories/timings plus exact cleanup and worktree state.
+No source/shared-doc edits, commits, pushes, or raw logs/page data.
