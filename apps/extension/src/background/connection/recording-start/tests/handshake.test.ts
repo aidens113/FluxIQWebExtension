@@ -9,9 +9,9 @@ import type { JsonObject } from "../../../../shared/protocol";
 import { RecordingStartHandshake, type RecordingStartAttempt } from "../handshake";
 import type { RecordingStartRefusal } from "../refusal";
 
-// A hand-driven stand-in for the handshake's timers, on the pattern
-// pointer-click-filter.test.ts uses: node:test's MockTimers would do, but on
-// Node 22 it prints an ExperimentalWarning into every run. The handshake arms
+// A hand-driven stand-in for the handshake's timers: node:test's MockTimers
+// would do, but on Node 22 it prints an ExperimentalWarning into every run. The
+// handshake arms
 // at most one timer at a time -- a refusal cancels the acceptance window
 // before arming a retry, and a retry re-arms the window -- so "fire the one
 // that is pending" is unambiguous.

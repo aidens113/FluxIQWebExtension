@@ -1,12 +1,13 @@
 // Coverage of recorded-event-intake.ts: the funnel every recorded event passes
-// through. A pointerdown and its click are one action; an executable action is
+// through. A pointerdown and its click are one action, and a second press of the
+// same control is a second, however soon it comes; an executable action is
 // counted and sent with the recording's id; passive evidence is not; an event
 // this module derives -- a navigation, a content-ready page -- re-enters
 // through the facade's public path; and the navigation a click caused goes out
 // as a non-executable recording event naming that click.
 
 import assert from "node:assert/strict";
-import { test, type TestContext } from "node:test";
+import { test } from "node:test";
 import { WEB_AUTOMATION_EVENTS } from "@fluxiq-web-extension/domain/client";
 import type { ActivityEntry, RecordingEventPayload, RecordingState } from "../../../shared/protocol";
 import type { ActivePage } from "../active-page";
@@ -17,12 +18,6 @@ import { NavigationRecorder, type NavigationOrigin, type NavigationVerdict } fro
 import { PointerClickFilter } from "../pointer-click-filter";
 import { RecordedEventIntake, type RecordedEventIntakeDeps } from "../recorded-event-intake";
 import type { RecordingEvidenceReporter } from "../recording-evidence";
-
-// The click filter clears a suppression on a timer; keep it off the real clock.
-function holdTimers(t: TestContext): void {
-  t.mock.method(globalThis, "setTimeout", () => 0);
-  t.mock.method(globalThis, "clearTimeout", () => undefined);
-}
 
 type HarnessOptions = {
   // A real recorder, for the rows that exercise its policy end to end. Without
@@ -113,13 +108,13 @@ function harness(state: RecordingState = "recording", options: HarnessOptions = 
   };
 }
 
-function click(sourceEvent: string, sequence: number): RecordingEventPayload {
+function click(sourceEvent: string, sequence: number, eventTimestampMs = 1_000 + sequence): RecordingEventPayload {
   return {
     kind: "dom.click",
     sequence,
     url: "https://shop.test/",
     title: "Shop",
-    eventTimestampMs: 1_000 + sequence,
+    eventTimestampMs,
     element: { selector: "#buy", tagName: "button", text: "Buy" },
     metadata: { sourceEvent }
   } as RecordingEventPayload;
@@ -150,20 +145,45 @@ test("nothing is taken in while no recording is running", async () => {
   assert.equal(h.counted(), 0);
 });
 
-test("a pointerdown is recorded once, and the click that follows it is dropped", async (t) => {
-  holdTimers(t);
+// --- A press and the click it produces (P3) ----------------------------------
+
+function sentEventIds(h: ReturnType<typeof harness>): Array<string | undefined> {
+  return h.sent.map((message) => (message.payload as SentRecordingEvent).eventId);
+}
+
+test("a pointerdown and its click record one action, the press", async () => {
   const h = harness();
   await h.intake.accept(click("pointerdown", 1), 1, 0);
   await h.intake.accept(click("click", 2), 1, 0);
   assert.deepEqual(h.sent.map((message) => message.type), ["client.recording_event"]);
+  assert.deepEqual(sentEventIds(h), ["web.1.1001"]);
   assert.equal(h.counted(), 1);
 
   await h.intake.accept(click("click", 3), 2, 0);
   assert.equal(h.sent.length, 2, "the same element in another tab is a different action");
 });
 
-test("an executable action is counted and carries the recording id; passive evidence is not", async (t) => {
-  holdTimers(t);
+// W14's shape: Add section pressed twice, 253 ms apart on the Flow lane. The
+// timestamps are 250 ms apart and no clock is mocked, so a filter that held a
+// signature for a fixed window would still be holding it.
+test("two pointerdown-click pairs on the same unmoved control 250 ms apart record two actions", async () => {
+  const h = harness();
+  await h.intake.accept(click("pointerdown", 1, 37_451), 4, 0);
+  await h.intake.accept(click("click", 2, 37_530), 4, 0);
+  await h.intake.accept(click("pointerdown", 3, 37_701), 4, 0);
+  await h.intake.accept(click("click", 4, 37_780), 4, 0);
+  assert.equal(h.counted(), 2);
+  assert.deepEqual(sentEventIds(h), ["web.1.37451", "web.3.37701"], "each press, and neither click");
+});
+
+test("a click with no pointerdown records one action", async () => {
+  const h = harness();
+  await h.intake.accept(click("click", 1), 4, 0);
+  assert.equal(h.counted(), 1);
+  assert.deepEqual(sentEventIds(h), ["web.1.1001"]);
+});
+
+test("an executable action is counted and carries the recording id; passive evidence is not", async () => {
   const h = harness();
   await h.intake.accept(click("click", 1), 1, 0);
   assert.equal(h.counted(), 1);

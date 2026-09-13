@@ -1,6 +1,6 @@
 // The one funnel every recorded event passes through, whatever produced it: a
 // content script, a browser navigation, a runtime action, or a recording
-// starting. It applies the pointer-click de-duplication, decides whether an
+// starting. It pairs a click with the press that produced it, decides whether an
 // event is an executable action or passive evidence, and sends each to the
 // gateway with the snapshot captured beside it.
 //
@@ -82,15 +82,8 @@ export class RecordedEventIntake {
     if (payload.kind === "dom.click") {
       const sourceEvent = stringValue(objectValue(payload.metadata)?.sourceEvent);
       const signature = clickEventSignature(payload, tabId, frameId);
-      if (sourceEvent === "pointerdown" && signature) {
-        if (this.deps.clicks.isSuppressed(signature)) return;
-        this.deps.clicks.suppressNext(signature);
-        await this.processEvent(payload, tabId, frameId);
-        return;
-      }
-      if (sourceEvent === "click" && signature && this.deps.clicks.isSuppressed(signature)) {
-        return;
-      }
+      if (sourceEvent === "pointerdown") this.deps.clicks.notePress(tabId, frameId, signature, payload.sequence);
+      if (sourceEvent === "click" && this.deps.clicks.isClickOfPress(tabId, frameId, signature, payload.sequence)) return;
     }
     await this.processEvent(payload, tabId, frameId);
   }

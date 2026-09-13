@@ -1,57 +1,56 @@
-// T1 coverage of pointer-click-filter.ts: a pointerdown and the click that
-// follows it are one user action, recorded once.
+// T1 coverage of pointer-click-filter.ts: a click is paired with the pointerdown
+// that produced it by event order in its frame, not by time.
 
 import assert from "node:assert/strict";
-import { test, type TestContext } from "node:test";
+import { test } from "node:test";
 import { PointerClickFilter } from "../pointer-click-filter";
 
-// A hand-driven stand-in for the filter's timers. node:test's MockTimers would
-// do, but on Node 22 it prints an ExperimentalWarning into every test run.
-function fakeTimers(t: TestContext) {
-  const pending = new Map<number, { callback: () => void; delay: number }>();
-  let nextId = 1;
-  t.mock.method(globalThis, "setTimeout", (callback: () => void, delay = 0) => {
-    const id = nextId;
-    nextId += 1;
-    pending.set(id, { callback, delay });
-    return id;
-  });
-  t.mock.method(globalThis, "clearTimeout", (id: number) => {
-    pending.delete(id);
-  });
-  return {
-    delays: () => [...pending.values()].map((timer) => timer.delay),
-    fireAll: () => {
-      const due = [...pending.values()];
-      pending.clear();
-      for (const timer of due) timer.callback();
-    }
-  };
-}
+const BUY = "7|0|#buy|10|20|80|30";
+const OTHER = "7|0|#other|10|60|80|30";
 
-test("the first of a pointerdown and its click claims the signature for 750 ms", (t) => {
-  const timers = fakeTimers(t);
+test("a click on the pressed control, sent after the press, is that press's click", () => {
   const filter = new PointerClickFilter();
-  filter.suppressNext("7|0|#buy");
-  assert.equal(filter.isSuppressed("7|0|#buy"), true);
-  assert.equal(filter.isSuppressed("7|0|#other"), false);
-  assert.deepEqual(timers.delays(), [750]);
-
-  filter.suppressNext("7|0|#buy");
-  assert.deepEqual(timers.delays(), [750], "a repeat claim neither restarts nor extends the window");
-
-  timers.fireAll();
-  assert.equal(filter.isSuppressed("7|0|#buy"), false);
+  filter.notePress(7, 0, BUY, 1);
+  assert.equal(filter.isClickOfPress(7, 0, BUY, 2), true);
 });
 
-test("clear drops every claimed signature and cancels its timer", (t) => {
-  const timers = fakeTimers(t);
+test("a press pairs with one click, so each press of the same control pairs with its own", () => {
   const filter = new PointerClickFilter();
-  filter.suppressNext("a");
-  filter.suppressNext("b");
-  assert.deepEqual(timers.delays(), [750, 750]);
+  filter.notePress(7, 0, BUY, 1);
+  assert.equal(filter.isClickOfPress(7, 0, BUY, 2), true);
+  assert.equal(filter.isClickOfPress(7, 0, BUY, 3), false, "a keyboard click after the pair is its own action");
+  filter.notePress(7, 0, BUY, 4);
+  assert.equal(filter.isClickOfPress(7, 0, BUY, 5), true);
+});
+
+test("a click pairs with nothing when there is no press, or the press is another frame's, tab's or control's", () => {
+  const filter = new PointerClickFilter();
+  assert.equal(filter.isClickOfPress(7, 0, BUY, 1), false, "no press");
+  filter.notePress(7, 0, BUY, 5);
+  assert.equal(filter.isClickOfPress(7, 1, BUY, 6), false, "another frame");
+  assert.equal(filter.isClickOfPress(8, 0, BUY, 6), false, "another tab");
+  assert.equal(filter.isClickOfPress(7, 0, OTHER, 6), false, "a release off the control clicks a common ancestor");
+  assert.equal(filter.isClickOfPress(7, 0, BUY, 7), false, "and that click spent the press");
+});
+
+test("a click sent before the press it would pair with belongs to an earlier document", () => {
+  const filter = new PointerClickFilter();
+  filter.notePress(7, 0, BUY, 5);
+  assert.equal(filter.isClickOfPress(7, 0, BUY, 2), false);
+});
+
+test("a later press replaces one whose click never came", () => {
+  const filter = new PointerClickFilter();
+  filter.notePress(7, 0, OTHER, 1);
+  filter.notePress(7, 0, BUY, 3);
+  assert.equal(filter.isClickOfPress(7, 0, BUY, 4), true);
+});
+
+test("clear forgets every press", () => {
+  const filter = new PointerClickFilter();
+  filter.notePress(7, 0, BUY, 1);
+  filter.notePress(7, 2, BUY, 1);
   filter.clear();
-  assert.equal(filter.isSuppressed("a"), false);
-  assert.equal(filter.isSuppressed("b"), false);
-  assert.deepEqual(timers.delays(), []);
+  assert.equal(filter.isClickOfPress(7, 0, BUY, 2), false);
+  assert.equal(filter.isClickOfPress(7, 2, BUY, 2), false);
 });

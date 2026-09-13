@@ -275,8 +275,8 @@ dispatches. `submit` and window `scroll` are recorded without a trust check.
 A succeeded runtime action that has a recorded counterpart is also sent as a
 recording event carrying its input ID (`runtimeConfirmationForActionResult` in
 [`background/connection/runtime-status.ts`](../../apps/extension/src/background/connection/runtime-status.ts)).
-Seven of the eight action inputs have a confirmation; `web.dom.check` has none
-yet, so a replayed check produces no recording event. The `type` and `select`
+Each of the eight action inputs has a confirmation. An action that did not
+succeed confirms nothing, and a `check` confirmation carries no value. The `type` and `select`
 confirmations carry the value the field was left holding, read from the result's
 element descriptor, which the content script fills only while input-value
 capture is on. A field that matches the recorder's sensitivity rule carries no

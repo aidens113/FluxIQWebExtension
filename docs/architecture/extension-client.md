@@ -255,7 +255,7 @@ The content script and the background worker emit browser evidence:
 
 - content ready, from the content script;
 - tab and navigation changes, from the background worker;
-- click (recorded on `pointerdown` and on `click`), input, change, and submit;
+- click, input, change, and submit;
 - keydown and scroll;
 - batched DOM mutation counts;
 - DOM snapshots.
@@ -270,6 +270,24 @@ therefore not recorded as the user's, and a replayed `type`, `clear`, or
 `select` is recorded once, as its runtime confirmation, not a second time from
 the synthetic `input` and `change` events it dispatches. Submit and window
 scroll are recorded without a trust check.
+
+A click is recorded from its `pointerdown`. The `click` that the press produces is
+the same action, so it is dropped when it lands on the pressed control in the
+same tab and frame. Every `click` ends that pairing, and no time window applies.
+So a second press on the same control is a second action, however soon it
+follows. A `click` with no press before it, such as a keyboard activation, is
+recorded on its own
+([`background/connection/pointer-click-filter.ts`](../../apps/extension/src/background/connection/pointer-click-filter.ts)).
+
+Typed text is debounced into one pending input event. Three things send it
+first, so no action is recorded ahead of the text typed just before it:
+- a pointer press;
+- a text field's `change`;
+- a key that acts on the text rather than typing it: Enter, Tab, Escape, or an
+  arrow.
+
+A character, a deletion, a bare modifier, or a key an input method reports while
+composing does not send it, so one run of typing stays one event.
 
 The background process maps this raw evidence into `web-automation` domain
 events such as `web.element.clicked`, `web.element.input_changed`,

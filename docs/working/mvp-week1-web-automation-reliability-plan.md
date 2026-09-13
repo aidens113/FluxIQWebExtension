@@ -36,11 +36,11 @@ flight. No exit criterion yet carries a quoted Lab observation. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
-settled ledger entries are in parts one to thirty-two of
+settled ledger entries are in parts one to thirty-four of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13, while workers run.**
-- **This repository:** `413dcb3`, 88 commits ahead of `origin/dev`, not pushed.
+- **This repository:** `dd9b9f9`, 89 commits ahead of `origin/dev`, not pushed.
 - **Core:** `240c73e`, 10 commits ahead of `origin/dev`, `fluxiq` **0.4.0**, built at
   `187f40d`; the tenth is a plan-only commit. The nine code commits:
   - `5d495eb`, trace withholding;
@@ -89,16 +89,18 @@ settled ledger entries are in parts one to thirty-two of
 - B4, B7, C5, C7 and D4; raw snapshot bytes; per-lane distributions;
 - the landing marker for a wrong landing served 200; honouring `failureRoute` (Core);
 - approving a recording proposal as a node definition, which drops `expectedState`;
-- W24 `unannounced`, whose producer needs a recorded-payload contract change; the
-  row stays in the corpus.
+- W24 `unannounced` (a recorded-payload contract change) and W13 `banner-absent`
+  (P7, a new Core node outcome); both rows stay in the corpus.
 
 **In flight:**
 - **The auth-gate leak:** `g-attestation-sqlite`, to be committed with its follow-up
   `g-attestation-sqlite-reader`; `f-authgate-followups`; in Core,
   `g-core-attempt-withholding`, redispatched to own the whole chain.
-- **From the bench triage:** three fix workers for P1-P3, H1-H3 and H5,
-  `g-expected-action-guard`, and the read-only `i-recording-capability-gaps`.
-- **W25's storage order:** `g-core-bridge-order` in Core and `f-w25-core-order-row`.
+- **From the bench triage:** `g-runner-harness-fixes` (H1-H3, H5) and
+  `g-expected-action-guard`. P1-P3 are committed.
+- **Recording gaps P4-P6:** `f-domain-capability-gaps`, `f-tab-recording`,
+  `f-frame-address` and `f-capability-confirmations`; then the runner's upload input.
+- **W25's storage order:** `g-core-bridge-order` in Core; `f-w25-core-order-row` waits for its build.
 
 **Queued, in dependency order**
 1. **After the three dispatches:** a Core build, then W18, W19, W25 and the rows the
@@ -646,141 +648,87 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 `2026-09-12-*` Wave 3 and live-validation files, and
 `2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-13 — g-core-attempt-withholding: blocked on its brief's ownership, and redispatched to own the whole chain
+### 2026-09-13 — i-recording-capability-gaps: uploads, tabs and child frames are Week 1; an optional dismissal is Week 2
 
-- Agent: worker `g-core-attempt-withholding` (Core); decisions by supervisor.
-- Changed: nothing in Core; `reports/g-core-attempt-withholding.md`.
-- Found: a resolved value reaches the saved attempt through three files the brief
-  did not own.
-  - `executor/contracts.ts:163`: the dispatcher context is `{ signal }` only.
-  - `io-policy.ts:76,88-100`: forwards only the signal and preferred client.
-  - `runtime/contracts.ts:145-148`: the dispatch context has no field for it.
-  - An edit to the owned ends alone would have compiled, passed, and done nothing.
-    The worker said so instead of shipping it.
-- Decisions: the twenty-fifth dispatch's redispatch.
-  - Build the report's design.
-  - Withhold when the attempt is built, so the attempt in memory and on disk agree.
-  - Withhold `result.message`, `result.error` and `attempt.message`.
-  - The framework owns the marker, and Automation Studio aliases it.
-- Validation: worker, in Core: `git status --short` printed nothing at `240c73e`.
-  No code changed, so the supervisor had nothing to rerun.
-- Not verified: the chain in code, by the supervisor. The redispatch's end-to-end
-  row proves it.
+- Agent: worker `i-recording-capability-gaps` (read-only); decisions by supervisor.
+- Changed: `reports/i-recording-capability-gaps.md` only.
+- Found: every root cause below rests on code reading and one bench run per row.
+  - **P5, W17.** The domain maps every change that is not a select or checkbox to
+    typing (`domain/src/io/input-model.ts:122-130`). Nothing can build an upload
+    from a recording, because `web.dom.upload` needs inline content.
+  - **P4, W15.**
+    - No tab-close listener exists (`background/index.ts:48-68`).
+    - Activating a tab records nothing (`active-page.ts:90-112`).
+    - No action input maps to `web.browser.tab`.
+    - The switch verb matches a URL substring (`runtime/browser-tab.ts:81-89`).
+  - **P6, W28.** Only the numeric frame id is carried (`payloads.ts:28-31`), and
+    Chrome renumbers frames when the Flow lane reloads the start page.
+  - **P7, W13 `banner-absent`.** Core follows a failure edge on any failure, and
+    nothing can mark a node optional.
+- Decisions (the twenty-eighth dispatch):
+  - P5, P4 and P6 are built now: one serial domain worker and two extension
+    workers, against wire names the brief fixes.
+  - Confirmations and the runner's upload input are briefed once their files
+    are free.
+  - The recorder stops sending a file input's value.
+  - **P7 is ruled out of Week 1.** It needs a new Core node outcome on the
+    deferred `failureRoute` seam, and a loose rule would let W12 skip its invite
+    and still report success.
+- Validation: the supervisor read the report in full, and checked it against the
+  code already verified for P2 (`runtime-status.ts:93-107`). Worker: a
+  declared-value scan of the report found 0 hits.
+- Not verified:
+  - how a background-raised event reaches the path that counts actions;
+  - whether Chrome fires `tabs.onActivated` for Playwright's pages;
+  - Core's handling of a large run input;
+  - every design, which is unbuilt.
 - Outcome: Revised
 
-### 2026-09-13 — i-w25-live-wait: W25 fails because Core's bridge stores the late click before the page change that revealed it
+### 2026-09-13 — f-recorder-key-order-and-check-confirmation and f-pointer-click-pairing: typed text precedes the key that acts on it, a check confirms, and a quick second click is kept
 
-- Agent: worker `i-w25-live-wait` (read-only); decisions by supervisor.
-- Changed: `reports/i-w25-live-wait.md` only; its probes are in the scratchpad.
-- Found: a probe ran Core's real gateway, bridge and service with the domain's
-  mapper.
-  - **Delivered in order:** 8 entries, "Compacted 3", and the candidates click,
-    wait, click.
-  - **Delivered back to back, as Core's WebSocket host delivers:** the late click
-    was stored first in 5 of 5 runs, with 2 candidates. That matches all 8 live
-    Stage 2b `delayed-ui` recordings.
-  - **The cause:** the host starts handling each of a client's messages without
-    awaiting the last (`apps/web/src/server/client-gateway-websocket.ts:172-181`).
-    The bridge flushes queued state snapshots before a state update (`bridge.ts:605`)
-    but appends a recorded event at once (`:390-402`).
-  - **A prototype** combined one ordered chain per recording with a flush before
-    every direct append. It gave click, wait, click in 21 of 21 runs.
-  - **A contradiction:** `i-late-target-wait` said Core appends in arrival order.
-    That holds for the model, not for the bridge.
-- Decisions: the twenty-sixth dispatch.
-  - The fix goes in Core's bridge, and a Core-run row in the domain.
-  - The wait rule, the recorder flush and the manifest stay unchanged.
-  - The user was told this crosses into Core.
-- Validation: the supervisor read Core's `bridge.ts` at `240c73e`.
-  - The recorded-event path calls `recordGatewayInput` with no flush (`:392-402`).
-  - The state-update path awaits `flushRecordingEntries` first (`:605`).
-- Not verified:
-  - Core's live stored order, which is inferred from the fingerprint;
-  - the extension's send order;
-  - Stop and a pending start under the fix;
-  - whether proposal state links change.
-- Outcome: Revised
-
-### 2026-09-13 — f-authgate-fixture: the auth-gate sign-in page stops showing its password
-
-- Agent: worker `f-authgate-fixture`; verified by supervisor.
+- Agents: workers `f-recorder-key-order-and-check-confirmation` (P1, P2) and
+  `f-pointer-click-pairing` (P3); verified by supervisor.
 - Changed:
-  - `apps/scenario-lab/src/scenarios/auth-gate/pages.ts`: the password row shows a
-    fixed placeholder;
-  - its `tests/scenario.test.ts`: no rendering, and no served sign-in page, contains
-    the constant;
-  - `apps/scenario-lab/e2e/auth-gate.spec.ts`.
-- Why: every state snapshot captures an element's visible text. A page that showed
-  the declared secret put it into Core's workspace, however well typing was
-  withheld (`i-secret-in-workspace` fix 1).
+  - **P1, `apps/extension/src/content/dom-events.ts`.** A key that acts on the
+    text sends the pending debounced `dom.input` first: Enter, Tab, Escape or an
+    arrow. A key that continues typing does not: a character, a deletion, a bare
+    modifier, or a key an input method reports while composing. The brief said
+    "before any keydown". The worker narrowed it, because every keystroke is a
+    keydown and one pending input would split per key.
+  - **P2, `background/connection/runtime-status.ts`.** A succeeded `web.dom.check`
+    confirms as `dom.change` with `checkboxToggled`, carrying no value. An action
+    that did not succeed confirms nothing.
+  - **Task 3:** no other recorded verb waits for a confirmation it never gets.
+  - **P3, `pointer-click-filter.ts` and `recorded-event-intake.ts`.** A `click` is
+    paired with the last `pointerdown` in its tab and frame, with no time window.
+    - A second press on the same unmoved control is a second action.
+    - A keyboard click is always recorded.
+    - A double-click records two clicks.
+    - A long press is one action.
+  - Tests, including `e2e/content/tests/recorder-trust.spec.ts`.
+  - A stale comment in `recording-start/tests/handshake.test.ts`, by the
+    supervisor.
+  - `docs/architecture/extension-client.md` and `web-capabilities.md`.
 - Validation:
-  - **Supervisor**, scenario-lab built into the private directory `dist-sup32`:
-    - `check` exit=0; private build exit=0;
-    - `node --test` printed "# tests 204", "# pass 204", "# fail 0";
-    - the auth-gate diff was byte-identical to the one reviewed.
-  - **Worker:**
-    - the mutation restoring the password `<dd>` failed 3 of 13 auth-gate rows;
-    - the e2e spec gave `6 passed`;
-    - content harness `failures.spec.ts -g "on auth-gate"` gave `4 passed`.
+  - **Supervisor,** extension `pnpm check` exit=0, and
+    `EXTENSION_TEST_BUILD_LABEL=sup35 pnpm test` exit=0 with "# tests 413", "# pass
+    413", "# fail 0". The run started as the P1/P2 worker reported.
+  - **Supervisor,** content harness
+    `pnpm exec playwright test -c e2e/playwright.content.config.ts --workers=2 keyboard.spec.ts recorder-trust.spec.ts`:
+    exit=0, "19 passed".
+  - Both diffs were frozen as patches and committed from them. The P3 diff was
+    byte-identical to the one saved when it reported.
+  - **Worker mutations:**
+    - P1/P2: removing the key flush reproduced W02's and W03's orders; five
+      mutations each failed their rows.
+    - P3: three mutations each failed their rows.
 - Not verified:
-  - no Lab run;
-  - the supervisor did not rerun the e2e spec or the content harness;
-  - two content-harness rows and three comments still describe the old page. That
-    work is `f-authgate-followups`.
-- Outcome: Accepted
-
-### 2026-09-13 — g-manifest-extract-entries: W11 and W15 stop expecting an extract no recording produces
-
-- Agent: worker `g-manifest-extract-entries`; decisions and verification by
-  supervisor.
-- Changed: `expected.actions` only, in `scenario-lab` `infinite-feed/scenario.ts`
-  and `multi-tab/manifest.ts`, and their tests.
-- **The Flow lane now requires** `web.dom.scroll` (W11) and `web.dom.click` (W15).
-  - It still judges final state.
-  - The recording lane still checks extraction: 40 or 25 records for W11, and
-    `PO-4472` for W15.
-- Decision: `admin-console/manifest.ts:143` holds the same unreachable entry, and a
-  written rule did not prevent it. A check replaces the rule (`g-expected-action-guard`,
-  after `g-bench-expectation-fixes`).
-- Validation:
-  - Supervisor: the `sup32` scenario-lab run above, 204 of 204, included both
-    scenarios' diffs.
-  - Worker mutation: restoring both entries failed the W11 and W15 manifest rows.
-- Not verified:
-  - no Lab run;
-  - W15 still fails first on P4;
-  - the existing and clone target modes.
-- Outcome: Accepted
-
-### 2026-09-13 — g-bench-expectation-fixes: an action pinned with no outcome is judged on presence, and a bench row shows its own category's message
-
-- Agent: worker `g-bench-expectation-fixes`; verified by supervisor.
-- Changed:
-  - `packages/test-runner/src/flow-lane/expectations.ts` (H4): an `expected.actions`
-    entry with no `outcome` matches any attempt of its type. A declared outcome is
-    still checked.
-  - `bench/read-run-bundle.ts` and `bench/run-bench.ts` (H7): a row's cause is the
-    last `error` event written under the category the runner returned. When no
-    event records that category, the row shows no cause and a problem line.
-  - Their tests.
-- Scope, per the worker: only three rows pin an action with no outcome. They are
-  W15 `popup-blocked`, W26 `no-context` and W24 `unannounced`, and each also
-  declares its expected failure. No positive workflow changes.
-- Validation:
-  - **Supervisor**, the test-runner gate under label `sup34`:
-    - `check` exit=0; private `tsc` exit=0;
-    - `node --test` printed "# tests 526", "# pass 526", "# fail 0";
-    - the structure audit passed;
-    - the run included other workers' uncommitted test-runner edits.
-  - **Worker mutations,** each failing its row, then restored byte-identical:
-    - restoring the `succeeded` default;
-    - taking the last `error` event again, which gave all three rows the redaction
-      message;
-    - not passing the category from `run-bench.ts`.
-- Not verified:
-  - no Lab run: W15 `popup-blocked` and W26 `no-context` must pass on the Flow lane,
-    and W18's Flow row must show its own message;
-  - the evaluation still cites the last `error` event's sequence.
+  - no Lab run: W02, W03 and W14 unarmed must pass on both lanes, and W14
+    `armed` must stay `user_intervention_required`;
+  - a live browser for double-click, touch cancel and input methods;
+  - the content harness does not drive the background filter;
+  - one residual drop: a press that never produces a click, then a keyboard click
+    on the same selector, size and position in that tab and frame.
 - Outcome: Accepted
 
 ## Open Questions

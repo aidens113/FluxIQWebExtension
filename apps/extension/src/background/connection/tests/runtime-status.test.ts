@@ -41,10 +41,9 @@ const confirmations: Record<BrowserActionType, Confirmation> = {
   "web.dom.wait_for_text": undefined,
   "web.dom.extract": undefined,
   "web.dom.capture_snapshot": undefined,
-  // Added in Week 1 (decision D6). None confirms a recorded user action yet:
-  // `w2-domain-vocabulary` gives `web.dom.check` its recording input, and this
-  // row becomes a confirmation then.
-  "web.dom.check": undefined,
+  // The recorder reports a checkbox or radio as `dom.change`, which the domain
+  // maps to the checkbox input (`input-model.ts`), so a check node waits for it.
+  "web.dom.check": { kind: "dom.change", inputId: WEB_AUTOMATION_INPUT_IDS.checkboxToggled },
   "web.dom.assert": undefined,
   "web.dom.extract_list": undefined,
   "web.dom.upload": undefined,
@@ -83,6 +82,33 @@ test("the confirmation table covers exactly the domain's action types", () => {
 test("a succeeded action confirms the recording event and input its type maps to", () => {
   for (const actionType of WEB_AUTOMATION_ACTION_TYPES) {
     assert.deepEqual(runtimeConfirmationForActionResult(actionResult(actionType, { element: field() })), confirmations[actionType], actionType);
+  }
+});
+
+test("an action that did not succeed confirms nothing, a check included", () => {
+  for (const actionType of WEB_AUTOMATION_ACTION_TYPES) {
+    for (const status of ["failed", "timed_out"] as const) {
+      assert.equal(runtimeConfirmationForActionResult(actionResult(actionType, { status, element: field() })), undefined, `${actionType}, ${status}`);
+    }
+  }
+  const failedCheck = actionResult("web.dom.check", {
+    status: "failed",
+    element: field({ inputType: "checkbox", checked: false }),
+    validation: { status: "failed", expected: "the control is checked", actual: "the checkbox is unchecked" }
+  });
+  assert.equal(runtimeConfirmationForActionResult(failedCheck), undefined, "a check whose control did not keep its state");
+});
+
+test("a check confirmation carries nothing from the control it set, a sensitive one included", () => {
+  const checkables: Array<[label: string, element: DomElementDescriptor]> = [
+    ["a checkbox", field({ inputType: "checkbox", checked: true })],
+    ["a radio", field({ inputType: "radio", checked: true })],
+    ...sensitiveFields.map(([label, element]): [string, DomElementDescriptor] => [label, { ...element, inputType: element.inputType ?? "checkbox" }])
+  ];
+  for (const [label, element] of checkables) {
+    const confirmation = runtimeConfirmationForActionResult(actionResult("web.dom.check", { element: { ...element, value: "hunter2-secret" } }));
+    // Strict deep equality also proves no inputValue member is present at all.
+    assert.deepEqual(confirmation, { kind: "dom.change", inputId: WEB_AUTOMATION_INPUT_IDS.checkboxToggled }, label);
   }
 });
 

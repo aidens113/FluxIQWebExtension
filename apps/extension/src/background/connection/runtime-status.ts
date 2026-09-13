@@ -87,9 +87,12 @@ export function runtimeResultTarget(result: BrowserActionResult): string | undef
 }
 
 // A succeeded runtime action is also a recorded action: this is the recording
-// event it confirms, and the registered input that event maps to. A `type` or
-// `select` confirmation carries the value the field was left holding, as the
-// recorder would have captured it from a user; a sensitive field never does.
+// event it confirms, and the registered input that event maps to. An action that
+// did not succeed confirms nothing. A `type` or `select` confirmation carries the
+// value the field was left holding, as the recorder would have captured it from
+// a user; a sensitive field never does. A `check` confirmation carries no value:
+// the state it set is the descriptor's `checked`, which the content script
+// withholds for a sensitive control.
 export function runtimeConfirmationForActionResult(result: BrowserActionResult): {
   kind: RecordingEventPayload["kind"];
   inputId: string;
@@ -97,11 +100,13 @@ export function runtimeConfirmationForActionResult(result: BrowserActionResult):
   key?: string;
   scroll?: { x: number; y: number };
 } | undefined {
+  if (result.status !== "succeeded") return undefined;
   if (result.actionType === "web.browser.navigate") return { kind: "browser.navigation", inputId: WEB_AUTOMATION_INPUT_IDS.navigationRequested };
   if (result.actionType === "web.dom.click") return { kind: "dom.click", inputId: WEB_AUTOMATION_INPUT_IDS.elementClicked };
   if (result.actionType === "web.dom.type") return { kind: "dom.input", inputId: WEB_AUTOMATION_INPUT_IDS.textEntered, ...confirmedValue(result) };
   if (result.actionType === "web.dom.clear") return { kind: "dom.input", inputId: WEB_AUTOMATION_INPUT_IDS.fieldCleared, inputValue: "" };
   if (result.actionType === "web.dom.select") return { kind: "dom.change", inputId: WEB_AUTOMATION_INPUT_IDS.optionSelected, ...confirmedValue(result) };
+  if (result.actionType === "web.dom.check") return { kind: "dom.change", inputId: WEB_AUTOMATION_INPUT_IDS.checkboxToggled };
   if (result.actionType === "web.dom.keypress") return { kind: "dom.keydown", inputId: WEB_AUTOMATION_INPUT_IDS.keyPressed };
   if (result.actionType === "web.dom.scroll") return { kind: "dom.scroll", inputId: WEB_AUTOMATION_INPUT_IDS.pageScrolled };
   return undefined;

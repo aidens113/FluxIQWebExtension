@@ -2922,6 +2922,226 @@ written rule did not stop the defect, so a check should.
 
 **Report:** `reports/g-expected-action-guard.md`.
 
+---
+
+# Twenty-seventh dispatch — the Lab rerun after the fixes (drafted; dispatched after the Core build)
+
+The supervisor names both pins at dispatch. The pins are this repository's commit
+and Core's commit, built with every fix from the twenty-fourth to twenty-sixth
+dispatches committed.
+
+## l-stage2c — W18, W19 and W25 three times each, then the week1 bench once
+
+**Owns:** `reports/l-stage2c.md`, the Lab worktrees under `F:\fxlab\`, and ignored
+run directories. Nothing tracked.
+
+**Read:** `reports/l-stage2.md`, the "Second attempt" setup and outcome;
+`reports/i-secret-in-workspace.md`, how Core's workspace was kept and searched.
+
+**Setup.** Move both worktrees to the named pins, then:
+- build Core in its worktree;
+- install only if the lockfile changed;
+- run everything with `FLUXIQ_TEST_ENV_FILES=none`.
+
+**Runs.** Each row is a single observation unless it repeats.
+1. **`auth-gate` primary (W18), both lanes, ×3, with Core's workspace kept.**
+   - The leak attestation reports `findingCount` 0 on both lanes, with no
+     `unscanned-store` finding.
+   - The password node reports `web.dom.type:succeeded`.
+   - A search of the kept workspace, SQLite included, finds the declared value 0
+     times. Report paths and counts only.
+2. **`auth-gate` `expired` (W19), both lanes, ×3:** the expected verdicts, and
+   `auth_required` where the manifest says so.
+3. **`delayed-ui` (W25):**
+   - `--flow` ×3: `candidateCount` 3, and click, wait, click all `succeeded`;
+   - `--variant too-slow` ×3: `timeout`, with the wait `failed`.
+4. **`pnpm lab bench --corpus week1 --repeat 1 --target isolated`, once.**
+   - For each row whose verdict differs from Stage 2's 37 of 67, name the fix that
+     explains it.
+   - Name any row that regressed.
+   - Report `recordedActions`, extension against Core, and
+     `discardsAfterFirstRead`.
+
+**Stop** after run 1 if any leak count is above 0, and report it.
+
+**Report:** `reports/l-stage2c.md`: the pins, commands, observed figures, and
+single observations labelled as such.
+
+---
+
+# Twenty-eighth dispatch — from `i-recording-capability-gaps`
+
+Decided by the supervisor on 2026-09-13:
+- **P5 (W17), P4 (W15) and P6 (W28) are Week 1,** in that order of value.
+  - W15 and W17 are in criterion 1's set.
+  - P6 is small and needs no Core change.
+- **P7 (W13 `banner-absent`) is ruled out of Week 1:**
+  - it needs a new Core node outcome, which is a public trace change, on the
+    `failureRoute` seam already deferred;
+  - a loose dismissal rule would let W12 skip sending its invite and still report
+    success.
+- **The recorder stops sending a file input's value** (open question 2).
+- **W17 will pin `web.dom.upload`** (open question 3), in the runner upload worker.
+- **Two workers are briefed once their files are free:**
+  - after `f-recorder-key-order-and-check-confirmation` reports, the upload and tab
+    confirmations in `runtime-status.ts`. Its task 3 answer decides whether they
+    join one table fix (open question 1).
+  - after `g-runner-harness-fixes` reports, the runner's upload input.
+- **The architecture pages are updated in one pass once these land.**
+- **The twenty-seventh dispatch's Lab rerun waits for this dispatch too.** It adds
+  W15 unarmed and `popup-blocked`, W17, and W28, three times each.
+
+**The wire names, fixed here so the parallel workers agree:**
+- the recorded payload's `tab: { operation: "switch" | "close"; urlPath?: string }`;
+- the inputs `web.user.tab_switched`, `web.user.tab_closed` and
+  `web.user.files_chosen`;
+- `urlPath` on the tab switch request, as an exact pathname;
+- `frameUrlPath` on `WebAutomationActionCommand`, lifted from the node parameter
+  `browserFrameUrlPath`.
+
+## f-domain-capability-gaps — upload, tab and frame mapping (domain, serial)
+
+**Owns** (in `domain/src/`):
+- `io/input-model.ts`;
+- `output-nodes/payloads.ts`, `output-nodes/index.ts`, and new
+  `output-nodes/upload-binding.ts` and `output-nodes/recorded-element-key.ts`;
+- `output-nodes/secret-binding.ts`, only to extract the element key into that new
+  file;
+- `actions/types.ts` and `actions/schemas.ts`;
+- `client/gateway-action-parameters.ts` and `client/gateway-mapping.ts`;
+- `web-panel-host.ts`, the candidate labels only;
+- their tests.
+
+**Read:** `reports/i-recording-capability-gaps.md`: "Shared files", then the Domain
+parts of P5, P4 and P6.
+
+**Task.**
+1. **First, the wire names above,** with their types, schema and lift. Two
+   extension workers compile against them. Say in your report when this step
+   compiled.
+2. **P5.** A file input's change maps to `web.dom.upload`, whose `upload` is a
+   `web.upload.` binding with no fallback. It is never typing or clearing.
+3. **P4.**
+   - A recorded switch that has a path maps to `web.browser.tab`, and so does a
+     close.
+   - The recording-start marker stays non-executable.
+4. **P6.**
+   - A child-frame node also carries its frame's URL path.
+   - Every top-frame node stays byte-identical.
+5. **No node parameter carries** an origin, query, tab id, file name or file
+   content.
+
+**Tests.**
+- The report's domain rows for P5, P4 and P6, each with its mutation.
+- A row pinning that top-frame node parameters are unchanged.
+- Domain `check`, and `test` under a private `DOMAIN_TEST_BUILD_LABEL`.
+- The structure audit.
+- Never regenerate the tracked `domain/.test-build`.
+
+**Report:** `reports/f-domain-capability-gaps.md`.
+
+## f-tab-recording — record and replay a tab switch or close (extension)
+
+**Owns** (in `apps/extension/src/`):
+- `background/index.ts`;
+- `background/connection.ts`, the `handleTabRemoved` facade method only;
+- new `background/connection/tab-recorder.ts`;
+- `background/connection/active-page.ts` and `gateway-payloads.ts`;
+- `background/connection/recorded-event-intake.ts`, only for the send path;
+- `shared/protocol.ts`, `RecordingEventPayload` only;
+- `runtime/browser-tab.ts` and `runtime/automation-tab.ts`;
+- their tests.
+
+Not `runtime-status.ts`: the tab confirmation comes later.
+
+**Read:** the report's P4 section in full, "Not verified" included.
+
+**Task.**
+1. **Build P4's extension design against the wire names above.**
+   `f-domain-capability-gaps` adds them to the domain first. If they are absent
+   when you need them, wait and retry. Never define a second copy.
+2. **A recorded tab action reaches the path that sends its input id and counts
+   it, exactly once.** Answer the report's first P4 "Not verified" item.
+3. **Replay.**
+   - A switch matches an exact path, and waits for a tab that is still opening.
+   - A close re-points the automation tab to the one driven before it.
+4. **Say whether the runner records anything** when it brings a page to the front
+   or closes its control page.
+
+**Tests.**
+- The report's tab-recorder and browser-tab rows, each with its mutation.
+- Extension `check`, and `test` under a private `EXTENSION_TEST_BUILD_LABEL`.
+- The structure audit.
+
+**Report:** `reports/f-tab-recording.md`.
+
+## f-frame-address — find a child frame by its path (extension)
+
+**Owns** (in `apps/extension/src/`):
+- `runtime/command-options.ts`;
+- new `runtime/frame-address.ts`;
+- `runtime/action-runner.ts`, `runActionInFrame` only;
+- `content/describe-element.ts`, a file input's value only;
+- their tests.
+
+**Read:** the report's P6 section in full; P5's "Optional hardening"; open
+question 2.
+
+**Task.**
+1. **Build P6's extension design.** `f-domain-capability-gaps` adds `frameUrlPath`
+   first. Wait for it, and never define a copy.
+2. **The recorder stops reading a file input's `value`.** Say what a recorded file
+   input's element now carries.
+
+**Tests.**
+- The report's action-runner rows, with the mutation.
+- A describe-element row, with a mutation.
+- Extension `check`, and `test` under a private label.
+- The content-harness specs that read an element's value; name them.
+- The structure audit.
+
+**Report:** `reports/f-frame-address.md`.
+
+## f-capability-confirmations — an upload and a tab change confirm like any recorded action (extension)
+
+`f-recorder-key-order-and-check-confirmation` has reported. Its task 3 answer: no
+other existing verb waits for a confirmation it never gets. So the two new verbs
+get table entries, and no Core or domain rule changes (open question 1).
+
+**Owns:**
+- `apps/extension/src/background/connection/runtime-status.ts`;
+- `background/connection/server-command-channel.ts`, `sendRuntimeConfirmation`
+  and its failed-status check only;
+- their tests.
+
+Both files carry uncommitted diffs from P2, and `recorded-event-intake.ts` carries
+one from P3. Keep them exactly.
+
+**Read:**
+- `reports/i-recording-capability-gaps.md`: the `runtime-status.ts` items under
+  P5 and P4;
+- `reports/f-recorder-key-order-and-check-confirmation.md`.
+
+**Task.**
+1. A succeeded `web.dom.upload` confirms as `dom.change` with
+   `web.user.files_chosen`, and carries no value.
+2. A succeeded `web.browser.tab` confirms as `browser.tab`, with
+   `web.user.tab_switched` or `web.user.tab_closed` chosen by the command's
+   operation. `sendRuntimeConfirmation` hands the tracker the command's `tab`
+   request.
+3. Remove the caller's failed-status check that P2's worker made redundant, if
+   the tests prove it redundant.
+4. The input ids come from `f-domain-capability-gaps`'s task 1. Wait for them, and
+   never define a copy.
+
+**Tests.**
+- Succeeded and failed rows for upload, switch and close, each confirmation with
+  no value, and a mutation.
+- Extension `check`, and `test` under a private label.
+- The structure audit.
+
+**Report:** `reports/f-capability-confirmations.md`.
+
 ## f-authgate-followups — the rest of the password text (scenario-lab, extension)
 
 Dispatched once `g-manifest-extract-entries` has reported, because scenario-lab's

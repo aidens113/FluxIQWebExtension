@@ -12,6 +12,11 @@
 // before click so an action taken during the press is captured with the state
 // that preceded it.
 //
+// Typed text is debounced into one pending `dom.input` (`recorder.ts`). A
+// pointer press, a text field's `change` and a key that acts on the text rather
+// than typing it (`continuesTyping`) send it first, so no action is recorded
+// ahead of the text typed just before it.
+//
 // Sensitive controls (Phase 1.4): the `change` listener's `inputValue` comes
 // from `readElementValue`, which withholds a sensitive control's value at the
 // source, so nothing here has to remember to redact it. The keydown path is the
@@ -118,6 +123,7 @@ export function installRecordingEventListeners(): void {
     if (!event.isTrusted) return;
     rememberEventPathElements(event);
     const keyTarget = event.target instanceof Element ? event.target : null;
+    if (!continuesTyping(event, keyTarget)) flushPendingInput();
     emit("dom.keydown", compactObject({
       key: recordableKey(event.key, keyTarget),
       element: keyTarget ? describeElement(keyTarget) : undefined,
@@ -175,6 +181,31 @@ export function installRecordingEventListeners(): void {
 function recordableKey(key: string, target: Element | null): string | undefined {
   if (!target || [...key].length !== 1) return key;
   return isSensitiveFormControl(target) ? undefined : key;
+}
+
+/**
+ * The keys besides a character that are part of typing into a text field: a
+ * deletion, a bare modifier (Shift for a capital), and what a dead key or an
+ * input method reports while it composes a character.
+ */
+const TYPING_KEYS: ReadonlySet<string> = new Set([
+  "Backspace", "Delete", "Shift", "Control", "Alt", "AltGraph", "Meta", "CapsLock", "Dead", "Process", "Unidentified"
+]);
+
+/**
+ * Whether a key press continues the typing whose `dom.input` may still be
+ * pending, rather than acting on what was typed.
+ *
+ * A key that acts -- Enter, Tab, Escape, an arrow -- sends the pending text
+ * first, as a pointer press and a text field's `change` already do. Before it
+ * did, a key pressed inside the debounce window was recorded ahead of the text
+ * typed just before it, and the replay pressed Enter or ArrowDown on a field
+ * that did not hold the text yet (P1, W02 and W03). A key that is part of typing
+ * does not flush: it would split one debounced `dom.input` into one per key.
+ */
+function continuesTyping(event: KeyboardEvent, target: Element | null): boolean {
+  if (!target || !isTextEntryElement(target)) return false;
+  return event.isComposing || [...event.key].length === 1 || TYPING_KEYS.has(event.key);
 }
 
 function pointerMetadata(event: MouseEvent): JsonObject {

@@ -47,6 +47,42 @@ test("real typing is recorded as one debounced dom.input and a dom.keydown per k
   expect(events[3]).toMatchObject({ kind: "dom.input", inputValue: "Ada", element: { selector: NAME } });
 });
 
+// P1: typed text is debounced, so a key pressed right after it was recorded
+// first and the replay pressed the key on a field that did not hold the text.
+test("W02 and W03: text typed just before an acting key is recorded before that key", async ({ openHarness, page }) => {
+  const harness = await openHarness("keyboard-forms");
+  await harness.setRecording(true, QUIET);
+  await page.locator('[data-testid="display-name"]').focus();
+  await page.keyboard.type("Ada");
+  await page.keyboard.press("Enter");
+  await page.locator('[data-testid="country"]').focus();
+  await page.keyboard.type("Ne");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await harness.setRecording(false);
+  const keyOrder = (await harness.recordedEvents())
+    .filter((event) => event.kind === "dom.keydown" || event.kind === "dom.input")
+    .map((event) => (event.kind === "dom.input" ? `input:${event.inputValue}` : `key:${event.key}`));
+  expect(keyOrder).toEqual(["key:A", "key:d", "key:a", "input:Ada", "key:Enter", "key:N", "key:e", "input:Ne", "key:ArrowDown", "key:ArrowDown"]);
+});
+
+test("Shift and Backspace are part of typing, so the text stays one debounced dom.input", async ({ openHarness, page }) => {
+  const harness = await openHarness("basic-form");
+  await harness.setRecording(true, QUIET);
+  await page.locator(NAME).focus();
+  await page.keyboard.type("Ad");
+  await page.keyboard.down("Shift");
+  await page.keyboard.press("KeyX");
+  await page.keyboard.up("Shift");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.type("a");
+  await harness.setRecording(false);
+  await expect(page.locator(NAME)).toHaveValue("Ada");
+  const events = await harness.recordedEvents();
+  expect(events.map((event) => event.kind === "dom.input" ? `input:${event.inputValue}` : `${event.kind}:${event.key}`))
+    .toEqual(["dom.keydown:A", "dom.keydown:d", "dom.keydown:Shift", "dom.keydown:X", "dom.keydown:Backspace", "dom.keydown:a", "input:Ada"]);
+});
+
 test("a real keyboard change on a select is recorded as dom.change", async ({ openHarness, page }) => {
   const harness = await openHarness("basic-form");
   await harness.setRecording(true, QUIET);
