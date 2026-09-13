@@ -45,6 +45,79 @@ test("a declared literal persisted in the workspace's recording is a finding, na
   assert.equal(JSON.stringify(attestation).includes(password), false);
 });
 
+/**
+ * A one-table SQLite database laid out byte for byte as the file format
+ * specifies (sqlite.org/fileformat2.html), because the test-runner has no SQLite
+ * dependency: page 1 holds the schema row for `t(v TEXT)`, page 2 the one row
+ * whose `v` is `text`, and both store text in the database's `encoding`.
+ */
+function sqliteDatabase(text: string, encoding: "utf8" | "utf16le"): Buffer {
+  const pageSize = 4096;
+  const file = Buffer.alloc(pageSize * 2);
+  file.write("SQLite format 3\0", 0, "latin1");
+  file.writeUInt16BE(pageSize, 16);
+  file.set([1, 1, 0, 64, 32, 32], 18); // legacy file format, no reserved bytes, fixed payload fractions
+  file.writeUInt32BE(1, 24); // change counter, matched at 92 so the page count at 28 is trusted
+  file.writeUInt32BE(2, 28);
+  file.writeUInt32BE(1, 40); // schema cookie
+  file.writeUInt32BE(4, 44); // schema format
+  file.writeUInt32BE(encoding === "utf8" ? 1 : 2, 56);
+  file.writeUInt32BE(1, 92);
+  file.writeUInt32BE(3_046_001, 96);
+  const encoded = (value: string) => Buffer.from(value, encoding);
+  const varint = (value: number) => Buffer.from(value < 0x80 ? [value] : [0x80 | (value >> 7), value & 0x7f]);
+  const leafTablePage = (pageStart: number, values: ReadonlyArray<Buffer | number>) => {
+    const types = Buffer.concat(values.map(value => varint(typeof value === "number" ? 1 : 13 + 2 * value.length)));
+    const payload = Buffer.concat([varint(types.length + 1), types, ...values.map(value => typeof value === "number" ? Buffer.from([value]) : value)]);
+    const cell = Buffer.concat([varint(payload.length), varint(1), payload]);
+    const cellOffset = pageSize - cell.length;
+    const header = pageStart === 0 ? 100 : pageStart;
+    cell.copy(file, pageStart + cellOffset);
+    file.writeUInt8(0x0d, header); // leaf table b-tree page, no freeblock, one cell
+    file.writeUInt16BE(1, header + 3);
+    file.writeUInt16BE(cellOffset, header + 5);
+    file.writeUInt16BE(cellOffset, header + 8);
+  };
+  leafTablePage(0, [encoded("table"), encoded("t"), encoded("t"), 2, encoded("CREATE TABLE t(v TEXT)")]);
+  leafTablePage(pageSize, [encoded(text)]);
+  return file;
+}
+
+/** A write-ahead log holding `page` as page 2 in one frame. Checksums and salts are zero: the scan reads bytes, not frames. */
+function writeAheadLog(page: Buffer): Buffer {
+  const log = Buffer.alloc(32 + 24 + page.length);
+  log.writeUInt32BE(0x377f0682, 0);
+  log.writeUInt32BE(3_007_000, 4);
+  log.writeUInt32BE(page.length, 8);
+  log.writeUInt32BE(2, 32);
+  log.writeUInt32BE(2, 36);
+  page.copy(log, 56);
+  return log;
+}
+
+test("a declared literal a workspace's SQLite store holds is a finding, in the database or its write-ahead log, in either text encoding", async t => {
+  const run = await runLayout(t);
+  const projectDirectory = path.join(run.recordingDirectory, "..", "..");
+  await writeFile(path.join(run.workspaceStorageDir, "global.sqlite"), sqliteDatabase(JSON.stringify({ visibleText: password }), "utf8"));
+  await writeFile(path.join(projectDirectory, "project.sqlite"), sqliteDatabase(JSON.stringify({ valueWithheld: true }), "utf16le"));
+  await writeFile(path.join(projectDirectory, "project.sqlite-wal"), writeAheadLog(sqliteDatabase(card, "utf16le").subarray(4096)));
+  await writeFile(path.join(projectDirectory, "project.sqlite-shm"), Buffer.alloc(32_768));
+
+  const attestation = await attestRunRedaction({ literals: [password, card], scopes: run.scopes });
+
+  assert.equal(attestation.status, "failed");
+  assert.deepEqual(attestation.findings, [
+    { scope: "workspace", path: ".fluxiq/artifacts/automation-studio/projects/project_one/project.sqlite-wal", categories: ["secret-literal"] },
+    { scope: "workspace", path: ".fluxiq/global.sqlite", categories: ["secret-literal"] },
+  ]);
+  // Four stores read, beside the recording's two files, and none passed over as binary.
+  assert.deepEqual(attestation.scopes.map(scope => [scope.name, scope.scannedFiles, scope.skippedBinaryFiles]), [["bundle", 1, 0], ["workspace", 6, 0]]);
+  assert.equal(runRedactionState(attestation), "failed");
+  const serialized = JSON.stringify(attestation);
+  assert.equal(serialized.includes(password), false);
+  assert.equal(serialized.includes(card), false);
+});
+
 test("a clean run scans both trees for every literal and yields no finding", async t => {
   const run = await runLayout(t);
 

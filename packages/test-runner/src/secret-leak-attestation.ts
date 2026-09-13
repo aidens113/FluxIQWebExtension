@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
-import { lstat, readdir, readFile, realpath } from "node:fs/promises";
+import { lstat, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
+import { readSqliteStores } from "./sqlite-store-reader/index.js";
 
 export const SECRET_LEAK_ATTESTATION_DEFAULT_LIMITS = Object.freeze({
   maxFiles: 2_000, maxFileBytes: 1_048_576, maxTotalBytes: 16_777_216, maxDepth: 16, maxApprovedPaths: 32,
@@ -13,7 +15,7 @@ const ABSOLUTE_LIMITS: Readonly<SecretLeakAttestationLimits> = Object.freeze({
 export type SecretLeakFindingCategory =
   | "secret-literal" | "credential-field" | "credential-assignment" | "authorization-material"
   | "unreadable-text" | "oversize-text" | "unsafe-reparse" | "path-escape"
-  | "file-limit" | "byte-limit" | "depth-limit";
+  | "file-limit" | "byte-limit" | "depth-limit" | "unscanned-store";
 export type SecretLeakFinding = { path: string; categories: SecretLeakFindingCategory[] };
 export type SecretLeakAttestationReport = {
   status: "passed" | "failed"; scannedFiles: number; scannedBytes: number;
@@ -25,10 +27,25 @@ export type SecretLeakAttestationInput = {
 };
 
 const binaryExtensions = new Set([
-  ".7z", ".avi", ".bin", ".bmp", ".br", ".db", ".dll", ".exe", ".gif", ".gz",
-  ".ico", ".jpeg", ".jpg", ".mp3", ".mp4", ".pdf", ".png", ".sqlite", ".sqlite3",
+  ".7z", ".avi", ".bin", ".bmp", ".br", ".dll", ".exe", ".gif", ".gz",
+  ".ico", ".jpeg", ".jpg", ".mp3", ".mp4", ".pdf", ".png",
   ".tar", ".webm", ".webp", ".woff", ".woff2", ".zip",
 ]);
+// A SQLite store keeps TEXT as raw UTF-8 or UTF-16 bytes in its pages, its
+// write-ahead log and its rollback journal, so it is searched for the literal
+// byte for byte, never skipped as binary; that search also covers freed pages
+// and log frames no query returns. It cannot see a literal SQLite has split
+// across overflow pages, which are not adjacent in the file, so the database
+// each store file belongs to is also read cell by cell (`stageDatabase`). A store
+// the scan cannot read in full, or a database the reader cannot read, is an
+// `unscanned-store` finding. Known by name, or by the header of a database, WAL
+// or journal file.
+const sqliteStoreName = /\.(?:db|sqlite3?)(?:-(?:wal|shm|journal))?$/iu;
+const sqliteSidecar = /-(?:wal|shm|journal)$/iu;
+const sqliteHeaders = [
+  Buffer.from("SQLite format 3\0", "latin1"), Buffer.from([0x37, 0x7f, 0x06, 0x82]), Buffer.from([0x37, 0x7f, 0x06, 0x83]),
+  Buffer.from([0xd9, 0xd5, 0x05, 0xf9, 0x20, 0xa1, 0x63, 0xd7]),
+];
 const textExtensions = new Set([
   "", ".csv", ".env", ".html", ".ini", ".json", ".jsonl", ".log", ".md",
   ".ndjson", ".toml", ".txt", ".xml", ".yaml", ".yml",
@@ -40,9 +57,13 @@ const authorizationMaterial = /(?:^|\n)\s*(?:authorization|cookie|set-cookie)\s*
 export async function attestWorkspaceSecretAbsence(input: SecretLeakAttestationInput): Promise<SecretLeakAttestationReport> {
   validateInput(input);
   const limits = resolveLimits(input.limits);
+  const storedLiteral = storeEncodings(input.secretLiteral);
   const root = path.resolve(input.workspaceRoot);
   const findings = new Map<string, Set<SecretLeakFindingCategory>>();
   let scannedFiles = 0; let scannedBytes = 0; let skippedBinaryFiles = 0; let visitedEntries = 0;
+  const databases: Array<{ relative: string; copy: string }> = [];
+  const judgedDatabases = new Set<string>();
+  let stagingDirectory: string | undefined; let stagedBytes = 0;
 
   const addFinding = (relativePath: string, category: SecretLeakFindingCategory): void => {
     const safePath = sanitizePath(relativePath, input.secretLiteral);
@@ -62,12 +83,17 @@ export async function attestWorkspaceSecretAbsence(input: SecretLeakAttestationI
 
   const approved = [...new Set(input.approvedRelativePaths)].sort();
   if (approved.length > limits.maxApprovedPaths) addFinding(".", "file-limit");
-  for (const relative of approved.slice(0, limits.maxApprovedPaths)) {
-    const normalized = normalizeApprovedPath(relative);
-    if (normalized === undefined) { addFinding(".", "path-escape"); continue; }
-    const absolute = path.resolve(canonicalRoot, ...normalized.split("/"));
-    if (!isInside(canonicalRoot, absolute)) { addFinding(normalized, "path-escape"); continue; }
-    await visit(absolute, normalized, 0);
+  try {
+    for (const relative of approved.slice(0, limits.maxApprovedPaths)) {
+      const normalized = normalizeApprovedPath(relative);
+      if (normalized === undefined) { addFinding(".", "path-escape"); continue; }
+      const absolute = path.resolve(canonicalRoot, ...normalized.split("/"));
+      if (!isInside(canonicalRoot, absolute)) { addFinding(normalized, "path-escape"); continue; }
+      await visit(absolute, normalized, 0);
+    }
+    await readDatabases();
+  } finally {
+    if (stagingDirectory !== undefined) await rm(stagingDirectory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
   return report();
 
@@ -101,16 +127,21 @@ export async function attestWorkspaceSecretAbsence(input: SecretLeakAttestationI
 
     const extension = path.extname(absolute).toLowerCase();
     if (binaryExtensions.has(extension)) { skippedBinaryFiles += 1; return; }
-    if (scannedFiles >= limits.maxFiles) { addFinding(relative, "file-limit"); return; }
-    if (metadata.size > limits.maxFileBytes) {
-      addFinding(relative, "oversize-text");
-      return;
-    }
-    if (scannedBytes + metadata.size > limits.maxTotalBytes) { addFinding(relative, "byte-limit"); return; }
+    const namedStore = sqliteStoreName.test(path.basename(absolute));
+    const unscanned = (category: SecretLeakFindingCategory): void => addFinding(relative, namedStore ? "unscanned-store" : category);
+    if (scannedFiles >= limits.maxFiles) { unscanned("file-limit"); return; }
+    if (metadata.size > limits.maxFileBytes) { unscanned("oversize-text"); return; }
+    if (scannedBytes + metadata.size > limits.maxTotalBytes) { unscanned("byte-limit"); return; }
 
     let bytes: Buffer;
     try { bytes = await readFile(absolute); }
-    catch { addFinding(relative, "unreadable-text"); return; }
+    catch { unscanned("unreadable-text"); return; }
+    if (namedStore || sqliteHeaders.some(header => bytes.subarray(0, header.length).equals(header))) {
+      scannedFiles += 1; scannedBytes += bytes.byteLength;
+      if (storedLiteral.some(encoded => bytes.includes(encoded))) addFinding(relative, "secret-literal");
+      await stageDatabase(absolute, relative, bytes.byteLength);
+      return;
+    }
     if (bytes.includes(0)) {
       if (textExtensions.has(extension)) addFinding(relative, "unreadable-text"); else skippedBinaryFiles += 1;
       return;
@@ -125,6 +156,65 @@ export async function attestWorkspaceSecretAbsence(input: SecretLeakAttestationI
 
     scannedFiles += 1; scannedBytes += bytes.byteLength;
     for (const category of detectViolations(contents, input.secretLiteral)) addFinding(relative, category);
+  }
+
+  /**
+   * Copies the database a store file belongs to, with its `-wal` and `-journal`,
+   * into one private directory under the OS temporary directory, once per
+   * database, for `readDatabases`. The reader applies the log it opens, so it is
+   * given a copy: a live store is never opened, and the scanned tree is left as
+   * it was. The staging directory is removed before the scan returns.
+   *
+   * The database is the file itself, or the one a `-wal`, `-shm` or `-journal`
+   * suffix names, even when that one is not among the approved paths: a bounded
+   * scan given only the log a run wrote still reads the rows in it. A `-wal` or
+   * `-journal` holding bytes with no database beside it cannot be read as rows.
+   * That, and a database with a file that is a link, over the per-file ceiling,
+   * over the total ceiling or unreadable, is an `unscanned-store` finding.
+   */
+  async function stageDatabase(absolute: string, relative: string, size: number): Promise<void> {
+    const suffix = sqliteSidecar.exec(path.basename(absolute))?.[0] ?? "";
+    const database = absolute.slice(0, absolute.length - suffix.length);
+    const databaseRelative = relative.slice(0, relative.length - suffix.length);
+    const key = process.platform === "win32" ? database.toLowerCase() : database;
+    if (judgedDatabases.has(key)) return;
+    const parts: string[] = [];
+    let bytes = 0;
+    for (const part of ["", "-wal", "-journal"]) {
+      let metadata;
+      try { metadata = await lstat(database + part); }
+      catch (error) {
+        const missing = (error as NodeJS.ErrnoException).code === "ENOENT";
+        if (missing && part !== "") continue;
+        if (missing && suffix !== "") {
+          if (size > 0 && suffix.toLowerCase() !== "-shm") addFinding(relative, "unscanned-store");
+          return;
+        }
+        judgedDatabases.add(key); addFinding(databaseRelative, "unscanned-store"); return;
+      }
+      if (metadata.isSymbolicLink() || !metadata.isFile() || metadata.size > limits.maxFileBytes) {
+        judgedDatabases.add(key); addFinding(databaseRelative, "unscanned-store"); return;
+      }
+      parts.push(part); bytes += metadata.size;
+    }
+    judgedDatabases.add(key);
+    if (stagedBytes + bytes > limits.maxTotalBytes) { addFinding(databaseRelative, "unscanned-store"); return; }
+    stagedBytes += bytes;
+    try {
+      stagingDirectory ??= await mkdtemp(path.join(os.tmpdir(), "fluxiq-store-read-"));
+      const copy = path.join(stagingDirectory, `${databases.length}.sqlite`);
+      for (const part of parts) await writeFile(copy + part, await readFile(database + part));
+      databases.push({ relative: databaseRelative, copy });
+    } catch { addFinding(databaseRelative, "unscanned-store"); }
+  }
+
+  /** Reads every staged database's cells: one holding the literal is a `secret-literal` finding, and one the reader could not read is `unscanned-store`. */
+  async function readDatabases(): Promise<void> {
+    const outcomes = await readSqliteStores({ databaseFiles: databases.map(database => database.copy), literal: input.secretLiteral });
+    databases.forEach((database, index) => {
+      const outcome = outcomes[index] ?? "unreadable";
+      if (outcome !== "clean") addFinding(database.relative, outcome === "holds-literal" ? "secret-literal" : "unscanned-store");
+    });
   }
 
   function report(): SecretLeakAttestationReport {
@@ -148,6 +238,11 @@ function detectViolations(contents: string, secret: string): SecretLeakFindingCa
   if (authorizationMaterial.test(contents)) categories.add("authorization-material");
   authorizationMaterial.lastIndex = 0;
   return [...categories];
+}
+/** The literal as a SQLite store can hold it: in each of its text encodings, UTF-8, UTF-16LE and UTF-16BE. */
+function storeEncodings(secret: string): Buffer[] {
+  const utf16le = Buffer.from(secret, "utf16le");
+  return [Buffer.from(secret, "utf8"), utf16le, Buffer.from(utf16le).swap16()];
 }
 function validateInput(input: SecretLeakAttestationInput): void {
   if (!path.isAbsolute(input.workspaceRoot)) throw new Error("Secret attestation requires an absolute workspace root");

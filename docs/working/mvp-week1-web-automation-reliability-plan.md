@@ -744,6 +744,56 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   - the Flow lane with a zero-action recording.
 - Outcome: Accepted
 
+### 2026-09-13 — g-attestation-sqlite and g-attestation-sqlite-reader: the leak check reads SQLite databases, as bytes and cell by cell
+
+- Agents: workers `g-attestation-sqlite` and `g-attestation-sqlite-reader`;
+  verified by supervisor.
+- Changed, in `packages/test-runner/src/`:
+  - **`secret-leak-attestation.ts`:**
+    - A workspace scope scans each SQLite database, with its `-wal`, `-shm` and
+      `-journal` files, for every literal as UTF-8, UTF-16LE and UTF-16BE. Before,
+      it counted them as skipped binary.
+    - A file it cannot scan is an `unscanned-store` finding.
+    - Each database is also copied, with its `-wal` and `-journal`, to a temporary
+      folder and read cell by cell. That finds a literal SQLite split across pages.
+  - **New `sqlite-store-reader/`,** the reader:
+    - it runs Node's `node:sqlite` in a child process started with
+      `--experimental-sqlite`, and takes the literal on stdin;
+    - it skips virtual tables, and reads the ordinary tables that store their
+      contents;
+    - no dependency was added.
+  - `redaction-attestation/run-redaction-scopes.ts`: a doc comment. Tests.
+- Found:
+  - **A byte search misses split literals.** It missed 36 of 303 split positions in
+    each encoding, and the cell reader found all 303.
+  - **Node's SQLite has no FTS5 or R*Tree,** and Core's project database uses both.
+  - **Not every target gets a fresh workspace.** The default `isolated` target and
+    `clone` give each run a new one. `persistent-isolated` reuses its workspace, so
+    an earlier run's leak fails every later run until the workspace is reset.
+- Decisions:
+  - **A literal split across pages SQLite has already freed is still missed.**
+    Core now withholds values before it writes them, so this is recorded as a
+    known limit for the Phase 1.6b ranking, not fixed with `secure_delete`.
+  - **A small follow-up gets the rest:** the demo check's default database size
+    limit, and two stale comments in `run-redaction-scopes.ts` and
+    `attest-run-redaction.ts`.
+- Validation:
+  - **Supervisor,** test-runner gate `sup42`, on diffs frozen when the reader worker
+    finished:
+    - `check` exit=0; private `tsc` exit=0;
+    - `node --test` printed "# tests 545", "# pass 545", "# fail 0".
+  - **Worker mutations,** each restored byte-identical afterwards:
+    - restoring the binary skip failed the 3 new byte rows;
+    - turning the reader off, or removing the virtual-table skip, failed 4 tests.
+- Not verified:
+  - **No Lab run.** Auth-gate's recording lane must show findings before Core's
+    withholding lands, and 0 on both lanes after.
+  - Reading Core's live databases.
+  - Node after 22.11.
+  - The reader's timeout and output-limit paths.
+  - The demo attestations under their default limit.
+- Outcome: Accepted
+
 ## Open Questions
 
 Open questions live in [open-questions.md](./mvp-week1-web-automation-reliability-plan/open-questions.md).

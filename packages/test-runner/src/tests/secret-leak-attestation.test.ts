@@ -1,15 +1,16 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { attestWorkspaceSecretAbsence } from "../secret-leak-attestation.js";
+import { createSqliteDatabases, type SqliteFixture } from "../sqlite-store-reader/tests/sqlite-fixtures.js";
 
 const sentinel = "synthetic-deepseek-sentinel-123456789";
 
 async function workspace(t: test.TestContext): Promise<string> {
   const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-secret-attestation-"));
-  t.after(() => rm(root, { recursive: true, force: true }));
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
   return root;
 }
 
@@ -56,6 +57,101 @@ test("finds a synthetic literal and credential syntax without returning content 
   assert.equal(serialized.includes(sentinel), false);
   assert.equal(serialized.includes(matchingContent), false);
   assert.equal("content" in (report.findings[0] ?? {}), false);
+});
+
+const notesTable = "CREATE TABLE notes(id INTEGER PRIMARY KEY, body TEXT)";
+const note = (body: string) => ({ sql: "INSERT INTO notes(body) VALUES (?)", cells: [body] });
+
+test("searches a SQLite store and its sidecars for the literal in each text encoding, and reads the rows its write-ahead log holds", async t => {
+  const root = await workspace(t);
+  const store = path.join(root, "store");
+  await mkdir(store, { recursive: true });
+  createSqliteDatabases([
+    { file: path.join(store, "global.sqlite"), statements: [notesTable], rows: [note(sentinel)] },
+    // Clean in the database file: the literal is only in the uncheckpointed log beside it.
+    { file: path.join(store, "project.sqlite"), encoding: "UTF-16le", journal: "wal", statements: [notesTable, `INSERT INTO notes(body) VALUES ('${JSON.stringify({ password: "withheld" })}')`], rows: [note(sentinel)] },
+    { file: path.join(store, "legacy.sqlite3"), encoding: "UTF-16be", statements: [notesTable], rows: [note(sentinel)] },
+    // A store with no store name is known by its database header.
+    { file: path.join(store, "cache.dat"), encoding: "UTF-16le", statements: [notesTable], rows: [note(sentinel)] },
+  ]);
+  await writeFile(path.join(store, "project.sqlite-shm"), Buffer.alloc(128));
+  assert.equal((await readFile(path.join(store, "project.sqlite"))).includes(Buffer.from(sentinel, "utf16le")), false);
+
+  const report = await attestWorkspaceSecretAbsence({ workspaceRoot: root, secretLiteral: sentinel, approvedRelativePaths: ["store"] });
+
+  // Only the literal is searched for in a store: credential syntax in page bytes is not a finding.
+  assert.deepEqual(report.findings, [
+    { path: "store/cache.dat", categories: ["secret-literal"] },
+    { path: "store/global.sqlite", categories: ["secret-literal"] },
+    { path: "store/legacy.sqlite3", categories: ["secret-literal"] },
+    { path: "store/project.sqlite", categories: ["secret-literal"] },
+    { path: "store/project.sqlite-wal", categories: ["secret-literal"] },
+  ]);
+  assert.equal(report.status, "failed");
+  assert.equal(report.scannedFiles, 6);
+  assert.equal(report.skippedBinaryFiles, 0);
+  assert.equal(JSON.stringify(report).includes(sentinel), false);
+});
+
+test("a store the scan cannot read in full, or whose rows cannot be read, is an unscanned-store finding, not only a count", async t => {
+  const root = await workspace(t);
+  const store = path.join(root, "store");
+  await mkdir(store, { recursive: true });
+  createSqliteDatabases([{ file: path.join(store, "a-read.sqlite"), pageSize: 512, statements: ["CREATE TABLE notes(body TEXT)", "INSERT INTO notes VALUES ('clean')"] }]);
+  const readable = (await stat(path.join(store, "a-read.sqlite"))).size;
+  const notADatabase = Buffer.from("not a database, only text", "utf8");
+  const orphanLog = Buffer.alloc(64, 1);
+  await writeFile(path.join(store, "b-oversize.sqlite"), Buffer.alloc(readable + 176));
+  await writeFile(path.join(store, "c-over-budget.sqlite-wal"), Buffer.alloc(300));
+  await writeFile(path.join(store, "d-not-a-database.sqlite"), notADatabase);
+  // A write-ahead log whose database is gone holds bytes no reader can turn into rows.
+  await writeFile(path.join(store, "e-orphan.sqlite-wal"), orphanLog);
+
+  const report = await attestWorkspaceSecretAbsence({
+    workspaceRoot: root, secretLiteral: sentinel, approvedRelativePaths: ["store"], limits: { maxFileBytes: readable + 76, maxTotalBytes: readable + 276 },
+  });
+
+  assert.deepEqual(report, {
+    status: "failed", scannedFiles: 3, scannedBytes: readable + notADatabase.byteLength + orphanLog.byteLength, skippedBinaryFiles: 0, findingCount: 4,
+    findings: [
+      { path: "store/b-oversize.sqlite", categories: ["unscanned-store"] },
+      { path: "store/c-over-budget.sqlite-wal", categories: ["unscanned-store"] },
+      { path: "store/d-not-a-database.sqlite", categories: ["unscanned-store"] },
+      { path: "store/e-orphan.sqlite-wal", categories: ["unscanned-store"] },
+    ],
+  });
+});
+
+test("a literal SQLite has split across overflow pages, which no byte search can see, is found by reading the store's cells", async t => {
+  const root = await workspace(t);
+  await mkdir(path.join(root, "split"), { recursive: true });
+  // A 10,000-character row keeps its first 1,816 characters on its b-tree page and continues on overflow pages,
+  // in each encoding at 4,096-byte pages. Starts 1,760 to 1,860 put the literal across that first boundary.
+  const offsets = Array.from({ length: 101 }, (_, index) => 1_760 + index);
+  const encodings = [["UTF-8", Buffer.from(sentinel, "utf8")], ["UTF-16le", Buffer.from(sentinel, "utf16le")], ["UTF-16be", Buffer.from(sentinel, "utf16le").swap16()]] as const;
+  const fixtures: SqliteFixture[] = encodings.flatMap(([encoding]) => offsets.map(offset => ({
+    file: path.join(root, "split", `${encoding}-${offset}.sqlite`), encoding, statements: [notesTable],
+    rows: [note("x".repeat(offset) + sentinel + "y".repeat(10_000 - offset - sentinel.length))],
+  })));
+  createSqliteDatabases(fixtures);
+
+  // The sweep really crosses a page boundary: at every start where the literal straddles it, no byte search finds it.
+  for (const [encoding, encoded] of encodings) {
+    const missedByBytes: number[] = [];
+    for (const offset of offsets) {
+      if (!(await readFile(path.join(root, "split", `${encoding}-${offset}.sqlite`))).includes(encoded)) missedByBytes.push(offset);
+    }
+    assert.equal(missedByBytes.length, sentinel.length - 1, `${encoding} starts a byte search misses`);
+  }
+
+  const report = await attestWorkspaceSecretAbsence({ workspaceRoot: root, secretLiteral: sentinel, approvedRelativePaths: ["split"] });
+
+  const found = new Set(report.findings.filter(finding => finding.categories.includes("secret-literal")).map(finding => finding.path));
+  assert.deepEqual(fixtures.map(fixture => "split/" + path.basename(fixture.file)).filter(relative => !found.has(relative)), []);
+  assert.equal(report.findingCount, fixtures.length);
+  assert.equal(report.findings.every(finding => finding.categories.length === 1), true);
+  assert.equal(report.scannedFiles, fixtures.length);
+  assert.equal(JSON.stringify(report).includes(sentinel), false);
 });
 
 test("fails closed on missing, escaping, oversized, and excessive approved paths", async t => {
