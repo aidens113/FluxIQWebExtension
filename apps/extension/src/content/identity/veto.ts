@@ -61,15 +61,19 @@
 // Level 1 match must be corroborated by something the recording named.** If the
 // recording asked a distinguishing question -- its visible text, its accessible
 // name, its label, its id, its test id -- at least one of those must be
-// answered by the candidate, at any of Core's positive rungs. A candidate that
-// answers none of them is wearing the recorded class set and nothing else, and
-// the strategy that chose it is agreeing with itself.
+// answered by the candidate **exactly**, by the predicate `corroboration.ts`
+// shares with Level 2. A candidate that answers none of them is wearing the
+// recorded class set and nothing else, and the strategy that chose it is
+// agreeing with itself.
 //
-// **Measured, that rule is free.** Over the whole enumeration it refuses 240
-// impostor profiles and **not one** profile whose label agrees or partly agrees
-// -- by construction, since a label that agrees is itself the corroboration.
-// None of the 240 is recovered by Level 2 afterwards either: the highest scores
-// 0.302, against a floor of 0.35.
+// **The first version of that rule was free, and too weak.** It took any of
+// Core's positive rungs, and over the enumeration it refused 240 impostor
+// profiles and not one whose label agrees or partly agrees. But that
+// enumeration counted a partial agreement as legitimate by definition, and the
+// production wrong action is a partial agreement: a Level 1 match on "Save
+// changes and exit", recorded as "Save changes", scored 0.633 and was clicked
+// (`reports/i-resolver-safety.md`, R3). Requiring an exact agreement refuses it;
+// what else that refuses is measured in reports/g-resolver-corroboration.md.
 //
 // **The alternative was measured and rejected.** Refusing a class-set or
 // bare-text match outright whenever the recording carries no stable identifier
@@ -88,9 +92,10 @@
 // **+0.563** there, and Level 2 would resolve it too. It is one of the 16
 // recording classes and it is named in D14 rather than closed.
 //
-// **An impostor that carries the recorded label passes.** Inherent: the veto
-// asks whether the label corroborates, and it does. Nothing in a fingerprint
-// can distinguish two controls a page has made identical.
+// **An impostor that carries the recorded label exactly passes**, and so does
+// one carrying a recorded identifier. Inherent: the veto asks whether the label
+// corroborates, and it does. Nothing in a fingerprint can distinguish two
+// controls a page has made identical.
 //
 // ## What the veto reports back, and why an accept now reports it too
 //
@@ -114,8 +119,8 @@
 // saving, and would let through the profiles where an identifier survives on a
 // control the page has relabelled.
 
-import type { ElementFingerprintScore } from "fluxiq/automation-studio/fingerprinting";
 import { candidateFingerprint, candidateLabel, type TargetCandidate } from "./candidates";
+import { corroboratesExactly } from "./corroboration";
 import { scoreTargetCandidate, type RecordedIdentity } from "./score";
 
 /**
@@ -128,7 +133,7 @@ export const TARGET_VETO_FLOOR = 0;
 export type TargetVetoReason =
   /** Rule 1: Core weighed more contradiction than agreement. */
   | "contradicted"
-  /** Rule 2: nothing the recording named agreed, whatever the score was. */
+  /** Rule 2: nothing the recording named agreed exactly, whatever the score was. */
   | "uncorroborated";
 
 /**
@@ -194,7 +199,7 @@ export function vetoCandidate(target: RecordedIdentity, candidate: TargetCandida
   if (!score) return {};
   const measurement: TargetMeasurement = { score: score.normalizedScore, confidence: score.confidence };
   if (measurement.score < TARGET_VETO_FLOOR) return { measurement, refusedBecause: "contradicted" };
-  return corroborated(score) ? { measurement } : { measurement, refusedBecause: "uncorroborated" };
+  return corroboratesExactly(score) ? { measurement } : { measurement, refusedBecause: "uncorroborated" };
 }
 
 /**
@@ -204,7 +209,7 @@ export function vetoCandidate(target: RecordedIdentity, candidate: TargetCandida
  *
  * No `refusedBecause` means act: either the recording named nothing that could
  * be checked, or Core weighed the element, found it no worse than even, and
- * found at least one thing the recording named agreeing on it.
+ * found at least one thing the recording named agreeing on it exactly.
  */
 export function vetoExactMatch(target: RecordedIdentity, element: Element): ExactMatchVerdict {
   // The precondition is asked here as well as inside `vetoCandidate`, and not
@@ -216,43 +221,15 @@ export function vetoExactMatch(target: RecordedIdentity, element: Element): Exac
   if (!verdict.refusedBecause) return verdict;
   // `candidateLabel` reads the page, so it is built on the refusal path only --
   // the accepted path returns numbers and never a string.
-  const because = verdict.refusedBecause === "uncorroborated" ? " with nothing the recording named agreeing" : "";
+  const because = verdict.refusedBecause === "uncorroborated" ? " with nothing the recording named agreeing exactly" : "";
   return { ...verdict, summary: `refused ${candidateLabel(element)} scoring ${verdict.measurement.score.toFixed(2)}${because}` };
-}
-
-/**
- * The signals whose agreement corroborates a weak match: the ones that say
- * *which* control this is rather than what kind of control it is, and that a
- * strategy could not have matched on structure alone.
- *
- * Deliberately narrower than `score.ts`'s `IDENTITY_SIGNALS`, which asks
- * whether the recording offers anything worth scoring at all and so counts the
- * selector and the class names. Those two are exactly what a weak query already
- * matched on, so counting them here would let the strategy corroborate itself.
- */
-const CORROBORATING_SIGNALS: readonly string[] = ["visibleText", "accessibleName", "label", "id", "testId"];
-
-/**
- * Whether at least one distinguishing signal the recording carried agreed on
- * the candidate.
- *
- * Core sorts each comparison into a positive or a negative contribution, and
- * for all five of these the split is exactly the one wanted: a text signal is
- * positive only from Core's 0.35 similarity rung upwards, and an identifier
- * only when it matches. So a partial agreement -- a relabelled button whose new
- * words still overlap the recorded ones -- corroborates, while a missing or
- * contradicted signal does not. Reading Core's own verdict rather than
- * recomputing it is what keeps this rule from becoming a second scorer.
- */
-function corroborated(score: ElementFingerprintScore): boolean {
-  return score.positiveContributions.some((contribution) => CORROBORATING_SIGNALS.includes(contribution.signalPath));
 }
 
 /**
  * Whether the recording asked a question a candidate could answer.
  *
- * This is the precondition on both rules, and it is the same list the
- * corroboration rule checks: with none of these, the recording named nothing
+ * This is the precondition on both rules, and it is the same list
+ * `corroboration.ts` checks: with none of these, the recording named nothing
  * distinguishing, the score would reduce to the structural signals the strategy
  * already matched on, and vetoing by it would only be the strategy disagreeing
  * with itself.

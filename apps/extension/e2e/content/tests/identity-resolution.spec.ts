@@ -52,7 +52,9 @@
 // scored recovery at 0.389, and a refusal. The status alone cannot tell the
 // middle two apart.
 
+import type { Page } from "@playwright/test";
 import { expect, test } from "../index.js";
+import type { ContentHarness } from "../index.js";
 import {
   BELOW_FOLD,
   DISPLAY_NAME,
@@ -174,6 +176,27 @@ test.describe("scored selection: Core's matcher decides what an exact strategy c
     expect(reply.message).toContain('button[data-testid="choice-secondary"] "Continue" (1.00)');
     await expect(page.getByTestId("result")).toHaveText("None");
     expect((await harness.finalState()).state).toEqual({ selected: null });
+  });
+
+  // CS1d. A point lands on one element, so a twin never shows in its count: the
+  // Flow lane's recorded bounds clicked the first of no-context's two identical
+  // Continue buttons and reported success (`L-replay` Defect 1). The family is
+  // now scored before a point is acted on, and a tie is reported as one.
+  test("no-context: recorded bounds on one of two identical twins fail TARGET_AMBIGUOUS, not a click", async ({ openHarness, page }) => {
+    const harness = await openHarness("ambiguous-targets");
+    const recorded = await describe(harness, PRIMARY);
+    const documentBounds = await documentRect(harness, PRIMARY);
+    const headers = { authorization: `Bearer ${harness.lab.runToken}`, "content-type": "application/json" };
+    expect((await fetch(`${harness.lab.origin}/api/ambiguous-targets/set-mode`, { method: "POST", headers, body: '{"mode":"no-context"}' })).ok).toBe(true);
+    await page.goto(harness.url);
+    await expect.poll(async () => (await harness.messages()).some((message) => message.type === "fluxiq.contentReady")).toBe(true);
+
+    const reply = await harness.runAction({ commandId: "cs1d-no-context", actionType: "web.dom.click", selector: PRIMARY, visualTarget: visualTarget({ documentBounds }), options: recordedElement(recorded) });
+
+    // Scoring decided, over a point that did land: the failure names the point among what was tried.
+    expect(reply).toMatchObject({ status: "failed", failure: { ...TARGET_AMBIGUOUS, expected: expect.stringContaining("visual target") }, resolution: { strategy: "scored-candidate", candidateCount: 2 } });
+    await expect(page.getByTestId("result")).toHaveText("None");
+    expect((await harness.finalState()).state).toMatchObject({ selected: null, mode: "no-context" });
   });
 
   test("a control whose every recorded signal has drifted is refused, not approximated", async ({ openHarness, page }) => {
@@ -371,5 +394,108 @@ test.describe("a successful resolution says how sure it was", () => {
 
     expect(reply.status, reply.message).toBe("succeeded");
     expect(reply.resolution).toBeUndefined();
+  });
+});
+
+// The near-miss: a different action whose label contains the recorded one
+// (design A, reports/i-resolver-safety.md "(a)", rows R1-R4 and R7-R8). Save is
+// recorded, then the page puts "Save changes and exit" where a replay looks for
+// it. Core gives that label the rung it gives "Save changes" shortened, so these
+// pages had the resolver click the wrong action and report success: through
+// Level 2 at 0.633 on a recording with no identifiers, through the Level 1 veto
+// on the same recording, and at 0.359 on an authored one once the wrong action
+// carried no identifiers of its own. `identity/corroboration.ts` now requires
+// something that says which control this is to agree exactly.
+//
+// Each row replays as a replay sends it and as the Flow lane does, with the
+// recorded bounds too, because a point is a third way onto the near-miss: R1
+// was accepted through it at 0.088. Both must refuse, nothing may be clicked,
+// and the oracle must record no save. The control is the same near-miss beside
+// the Save it imitates. These rows live here rather than in a spec of their own
+// because `e2e/content/tests/` is at its 25-file structure limit.
+
+const NEAR_MISS = { id: "exit-btn", testId: "save-and-exit", text: "Save changes and exit" };
+
+type NearMissPage = "R1" | "R2" | "R3" | "R4" | "R7" | "R8" | "control";
+
+/** Records Save; `identifierLess` takes its id and test id off first, which is how a page with neither records it. */
+async function recordSave(harness: ContentHarness, identifierLess: boolean) {
+  if (identifierLess) {
+    await harness.page.locator(SAVE_BASELINE).evaluate((element) => {
+      element.removeAttribute("id");
+      element.removeAttribute("data-testid");
+    });
+  }
+  const selector = identifierLess ? "button.btn.btn-primary" : SAVE_BASELINE;
+  return { recorded: await describe(harness, selector), bounds: await documentRect(harness, selector) };
+}
+
+/** Puts the near-miss where each row needs it; every shape but R7 and R8 gives it an id and a test id of its own. */
+async function arrangeNearMiss(page: Page, row: NearMissPage): Promise<void> {
+  await page.evaluate(({ which, nearMiss }) => {
+    const group = document.querySelector('[data-testid="primary-actions"]')!;
+    const save = group.querySelector('button[type="submit"]')!;
+    const discard = group.querySelector('[data-testid="discard-changes"]')!;
+    const button = document.createElement("button");
+    button.type = "button";
+    if (which !== "R7" && which !== "R8") {
+      button.id = nearMiss.id;
+      button.setAttribute("data-testid", nearMiss.testId);
+    }
+    button.textContent = nearMiss.text;
+    if (which === "R1" || which === "R3" || which === "R7" || which === "R8") save.replaceWith(button);
+    else document.querySelector("main > header")!.append(button);
+    if (which === "R2" || which === "R4") save.remove();
+    if (which === "R1" || which === "R2" || which === "R7") discard.remove();
+  }, { which: row, nearMiss: NEAR_MISS });
+}
+
+/** Starts recording every click the page receives, whatever it lands on, and returns a reader for them. */
+async function trackClicks(page: Page): Promise<() => Promise<string[]>> {
+  await page.evaluate(() => {
+    const clicks: string[] = [];
+    (window as unknown as { __nearMissClicks: string[] }).__nearMissClicks = clicks;
+    document.addEventListener("click", (event) => clicks.push(((event.target as Element | null)?.textContent ?? "").trim()), true);
+  });
+  return () => page.evaluate(() => (window as unknown as { __nearMissClicks: string[] }).__nearMissClicks);
+}
+
+test.describe("identity-drift near-miss: a label that contains the recorded one is not the recorded control", () => {
+  for (const spec of [
+    { row: "R1", identifierLess: false, page: "Save replaced in its slot by the near-miss, Discard removed" },
+    { row: "R2", identifierLess: true, page: "Save and Discard gone, the near-miss in the header" },
+    { row: "R3", identifierLess: true, page: "the near-miss in Save's slot, Discard kept" },
+    { row: "R4", identifierLess: true, page: "Save gone, Discard left in the slot, the near-miss in the header" },
+    { row: "R7", identifierLess: false, page: "Save replaced by the near-miss with no identifiers, Discard removed" },
+    { row: "R8", identifierLess: false, page: "Save replaced by the near-miss with no identifiers, Discard kept" }
+  ] as const) {
+    test(`${spec.row}, ${spec.identifierLess ? "identifier-less" : "authored"} recording: ${spec.page}`, async ({ openHarness, page }) => {
+      const harness = await openHarness("identity-drift");
+      const { recorded, bounds } = await recordSave(harness, spec.identifierLess);
+      await arrangeNearMiss(page, spec.row);
+      await expect(page.getByRole("button", { name: NEAR_MISS.text, exact: true })).toHaveCount(1);
+      const clicks = await trackClicks(page);
+
+      const selector = recorded.selector ? { selector: recorded.selector } : {};
+      for (const [shape, point] of [["replay", {}], ["flow", { visualTarget: visualTarget({ documentBounds: bounds }) }]] as const) {
+        const reply = await harness.runAction({ commandId: `near-miss:${spec.row}:${shape}`, actionType: "web.dom.click", ...selector, ...point, options: recordedElement(recorded) });
+        expect(reply, `${shape}: ${reply.message}`).toMatchObject({ status: "failed", failure: TARGET_NOT_FOUND });
+      }
+
+      expect(await clicks()).toEqual([]);
+      expect((await harness.finalState()).state).toMatchObject({ saveCount: 0, discardCount: 0, savedInMode: null });
+    });
+  }
+
+  test("control: the same near-miss beside the Save it imitates, and Save is what resolves", async ({ openHarness, page }) => {
+    const harness = await openHarness("identity-drift");
+    const { recorded } = await recordSave(harness, true);
+    await arrangeNearMiss(page, "control");
+
+    const reply = await harness.runAction({ commandId: "near-miss:control", actionType: "web.dom.click", ...(recorded.selector ? { selector: recorded.selector } : {}), options: recordedElement(recorded) });
+
+    expect(reply.status, reply.message).toBe("succeeded");
+    expect(reply.element).toMatchObject({ tagName: "button", visibleText: "Save changes" });
+    await expect.poll(async () => (await harness.finalState()).state).toMatchObject({ saveCount: 1, discardCount: 0 });
   });
 });

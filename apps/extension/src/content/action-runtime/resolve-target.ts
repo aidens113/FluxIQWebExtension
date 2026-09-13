@@ -22,12 +22,22 @@
 // Level 2 scored the same element -0.237 and refused it. `identity/veto.ts`
 // closes that: it scores the match against the recording with the same matcher
 // Level 2 uses and refuses one the page contradicts, or one that answers
-// nothing the recording named -- the second rule being what protects a
+// nothing the recording named exactly -- the second rule being what protects a
 // recording carrying no stable identifier, whose thin denominator lets an
-// impostor drift above zero rather than below it. A veto is a miss, not an
+// impostor drift above zero rather than below it, and what refuses a different
+// action whose label merely contains the recorded one. A veto is a miss, not an
 // abort, so the strategies after it and then scoring still run -- which is how
 // a control that merely moved into another slot is recovered rather than only
 // not clicked.
+//
+// A point is checked once more. `coordinates` and `visual-target` land on one
+// element by construction, so a page holding that element's identical twin
+// never shows in their count: on `ambiguous-targets` `no-context` the recorded
+// bounds fell on the first of two byte-identical Continue buttons, and the
+// replay clicked it and reported success (`L-replay` Defect 1). So a point's
+// answer is acted on only after the recorded target's family is scored, and a
+// family scoring calls tied fails TARGET_AMBIGUOUS, as the fingerprint
+// strategy's text match already did on the same page.
 //
 // A failure carries Core's structured record rather than only a sentence:
 // TARGET_AMBIGUOUS naming the candidates that tied, TARGET_NOT_FOUND naming the
@@ -60,9 +70,11 @@
 // to Core's element matcher through `identity/score.ts` -- the same matcher
 // Core would score them with itself, published for a browser since Wave 3 as
 // `fluxiq/automation-studio/fingerprinting`. A candidate wins by clearing the
-// floor and beating the runner-up by a margin; otherwise the tie is reported
-// rather than broken by document order. The confidence on a scored resolution
-// is Core's measurement of the candidate that won, never a constant.
+// floor, beating the runner-up by a margin, and agreeing exactly on something
+// that says which control it is; otherwise the tie is reported rather than
+// broken by document order, or the target is reported not found. The
+// confidence on a scored resolution is Core's measurement of the candidate that
+// won, never a constant.
 //
 // An exact resolution reports its strategy, its candidate count and the score
 // the veto took of it -- which closes the last piece of D1. `identity/veto.ts`
@@ -188,6 +200,11 @@ export class TargetResolutionError extends Error implements WebAutomationFailure
 export function resolveTarget(action: BrowserActionCommand): ResolvedTarget {
   const target = recordedTarget(action);
   const misses: string[] = [];
+  // Enumerating and scoring the family is the costly half of a resolution, and
+  // both a point's answer and the final fallback may need it. Nothing on the
+  // page changes inside this call, so it runs at most once.
+  let family: ScoredFamily | undefined;
+  const scoredFamily = (known: RecordedTarget): ScoredFamily => (family ??= scoreFamily(known));
 
   for (const attempt of exactAttempts(action, target)) {
     if (!attempt.matches.length) {
@@ -208,6 +225,12 @@ export function resolveTarget(action: BrowserActionCommand): ResolvedTarget {
       if (verdict?.refusedBecause) {
         misses.push(`${attempt.description} (${verdict.summary})`);
         continue;
+      }
+      // A point answers with one element whatever else the page holds, so its
+      // count proves nothing about a twin. Scoring the family does.
+      if (target && POSITIONAL_STRATEGIES.has(attempt.strategy)) {
+        const { decided } = scoredFamily(target);
+        if (decided?.outcome === "ambiguous") throw scoredAmbiguous(decided, [...misses, attempt.description]);
       }
       // And when it accepts, its measurement is what the resolution reports.
       // The veto weighed this element on the way past; carrying the number out
@@ -230,8 +253,7 @@ export function resolveTarget(action: BrowserActionCommand): ResolvedTarget {
   // Nothing answered exactly. The page may still hold the control under a new
   // name, so the same-family candidates are enumerated once and scored: the
   // enumeration is what a not-found failure reports either way.
-  const nearby = target ? collectTargetCandidates(candidateFamily(target)) : NO_POOL;
-  const decided = target ? scoreTargetCandidates(target, nearby.candidates) : undefined;
+  const { nearby, decided } = target ? scoredFamily(target) : NO_FAMILY;
   if (decided?.outcome === "resolved") return scoredTarget(decided, nearby.candidates.length);
   if (decided?.outcome === "ambiguous") throw scoredAmbiguous(decided, misses);
   throw notFound(`No target resolved from ${misses.join(", ")}.`, misses, nearby, decided);
@@ -239,6 +261,20 @@ export function resolveTarget(action: BrowserActionCommand): ResolvedTarget {
 
 /** No enumeration was run at all: nothing was looked at, so nothing was cut short. */
 const NO_POOL: TargetCandidatePool = { candidates: [], examined: 0, truncated: false };
+
+/** The strategies that choose an element by where it is rather than by what it is. */
+const POSITIONAL_STRATEGIES: ReadonlySet<BrowserActionTargetStrategy> = new Set(["coordinates", "visual-target"]);
+
+/** The recorded target's same-family candidates, and what scoring made of them. */
+type ScoredFamily = { nearby: TargetCandidatePool; decided: CandidateSelection | undefined };
+
+/** No recorded target, so no family was enumerated or scored. */
+const NO_FAMILY: ScoredFamily = { nearby: NO_POOL, decided: undefined };
+
+function scoreFamily(target: RecordedTarget): ScoredFamily {
+  const nearby = collectTargetCandidates(candidateFamily(target));
+  return { nearby, decided: scoreTargetCandidates(target, nearby.candidates) };
+}
 
 /**
  * An exact strategy's win, with the measurement the veto took on the way past.

@@ -286,3 +286,49 @@ test("an accepted match hands back what Core measured, and nothing that came off
   assert.deepEqual(Object.keys(verdict.measurement).sort(), ["confidence", "score"]);
   for (const value of Object.values(verdict.measurement)) assert.equal(typeof value, "number");
 });
+
+/**
+ * Rule 2 is exact now (`corroboration.ts`). The production wrong action is a
+ * label that contains the recorded one, and Core puts that on a positive rung,
+ * so the rule as first written accepted it: a Level 1 match on "Save changes
+ * and exit" was clicked at 0.633 (reports/i-resolver-safety.md, R3). Each row
+ * asserts the score is on the acting side of rule 1 first, so that rule 2 alone
+ * has to refuse it.
+ */
+const PARTIAL_LABEL_IMPOSTORS = [
+  {
+    name: "a different action wearing the recorded class set, with no identifiers",
+    candidate: candidate("exit-bare", {
+      tagName: "button", role: "button", classNames: ["btn", "btn-primary"],
+      visibleText: "Save changes and exit", accessibleName: "Save changes and exit", isVisibleOnViewport: true
+    })
+  },
+  {
+    name: "the same action with an id and a test id of its own",
+    candidate: candidate("exit-btn", {
+      tagName: "button", role: "button", id: "exit-btn", testId: "save-and-exit", selector: "#exit-btn",
+      visibleText: "Save changes and exit", accessibleName: "Save changes and exit", isVisibleOnViewport: true
+    })
+  }
+];
+
+for (const recording of [{ name: "an authored recording", recorded: RECORDED }, { name: "a recording with no identifiers", recorded: THIN_RECORDINGS[0]!.recorded }]) {
+  for (const impostor of PARTIAL_LABEL_IMPOSTORS) {
+    test(`rule 2 refuses a partial-label wrong action: ${impostor.name}, against ${recording.name}`, () => {
+      const score = normalized(recording.recorded, impostor.candidate);
+      assert.ok(score >= TARGET_VETO_FLOOR, `${score} is under the veto floor, so rule 1 refuses this and the row no longer tests rule 2`);
+      assert.equal(vetoCandidate(recording.recorded, impostor.candidate).refusedBecause, "uncorroborated");
+    });
+  }
+}
+
+test("the line is exactness: a shortened label with its name kept acts, and shortened in both does not", () => {
+  // The first half is `DRIFTED[3]`, kept above. The second is the cost the exact
+  // rule accepts, because it scores like the different action does.
+  const shortenedInBoth = candidate("save-short", {
+    tagName: "button", role: "button", classNames: ["btn", "btn-primary"], visibleText: "Save", accessibleName: "Save", isVisibleOnViewport: true
+  });
+  assert.equal(vetoCandidate(RECORDED, DRIFTED[3]!.candidate).refusedBecause, undefined);
+  assert.ok(normalized(RECORDED, shortenedInBoth) >= TARGET_VETO_FLOOR);
+  assert.equal(vetoCandidate(RECORDED, shortenedInBoth).refusedBecause, "uncorroborated");
+});

@@ -259,3 +259,135 @@ test("a page the scan read to the end still says plainly that no such control is
   assert.equal(failure.code, "web.target.not_found");
   assert.equal(failure.actual, "nothing matched; 0 control(s) of the same family are on the page");
 });
+
+// CS1d: a point is not a choice between twins.
+//
+// `coordinates` and `visual-target` resolve through `elementFromPoint`, which
+// answers with one element whatever else the page holds, so a point strategy's
+// pool always has one member and a byte-identical twin never shows in it. On
+// `ambiguous-targets` `no-context` the recorded bounds landed on the first of
+// two identical Continue buttons and the replay clicked it (`L-replay` Defect
+// 1). The resolver now scores the recorded target's family before acting on a
+// point, and a family that scoring calls tied is TARGET_AMBIGUOUS.
+//
+// The page is a stub, because the runner is Node. It answers what this path
+// reads -- a point, the candidate sweep, the gate's style and box, the signals
+// `candidateFingerprint` asks a button for -- and installs the platform classes
+// the identity modules test with `instanceof`, as empty classes no stub belongs
+// to. `identity-resolution.spec.ts` runs the same shape on the real fixture.
+
+/** A `<button class="ui-button">Continue</button>`, as far as resolution reads one. */
+class TwinButton {
+  readonly tagName = "BUTTON";
+  readonly id = "";
+  readonly classList = ["ui-button"];
+  readonly textContent = "Continue";
+  readonly isConnected = true;
+  readonly ownerDocument = { defaultView: { getComputedStyle: () => ({ display: "block", visibility: "visible" }) } };
+
+  constructor(readonly top: number) {}
+
+  getAttribute(name: string): string | null {
+    return name === "class" ? "ui-button" : null;
+  }
+
+  hasAttribute(): boolean {
+    return false;
+  }
+
+  getBoundingClientRect(): { x: number; y: number; top: number; bottom: number; width: number; height: number } {
+    return { x: 100, y: this.top, top: this.top, bottom: this.top + 32, width: 120, height: 32 };
+  }
+
+  /** Asked only `:disabled`, and a twin is not. */
+  matches(): boolean {
+    return false;
+  }
+
+  /** Asked only for an ancestor, and a twin has none. */
+  closest(): Element | null {
+    return null;
+  }
+
+  /** A twin holds nothing but its text. */
+  querySelectorAll(): Element[] {
+    return [];
+  }
+}
+
+/** A page of `count` identical Continue buttons with the first under every point, its globals restored when the test ends. */
+function installTwinPage(t: TestContext, count: number): Element[] {
+  const buttons = Array.from({ length: count }, (_, index) => new TwinButton(100 + index * 40) as unknown as Element);
+  const installed: Record<string, unknown> = {
+    document: {
+      elementFromPoint: (): Element | null => buttons[0] ?? null,
+      querySelector: (): Element | null => null,
+      querySelectorAll: (selector: string): Element[] => (selector === "button" || selector.includes("[contenteditable]") ? buttons : []),
+      getElementById: (): Element | null => null,
+      addEventListener: (): void => {},
+      removeEventListener: (): void => {},
+      activeElement: null
+    },
+    window: { innerHeight: 720, scrollX: 0, scrollY: 0, addEventListener: (): void => {}, removeEventListener: (): void => {} },
+    HTMLElement: class {},
+    HTMLInputElement: class {},
+    HTMLSelectElement: class {},
+    HTMLTextAreaElement: class {}
+  };
+  for (const [name, value] of Object.entries(installed)) {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, name);
+    Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
+    t.after(() => {
+      if (previous) Object.defineProperty(globalThis, name, previous);
+      else delete (globalThis as Record<string, unknown>)[name];
+    });
+  }
+  return buttons;
+}
+
+/** The primary Continue as the baseline page recorded it: the test id that told the twins apart, and their shared label. */
+const RECORDED_CONTINUE = {
+  tagName: "button", implicitRole: "button", testId: "choice-primary", selector: '[data-testid="choice-primary"]',
+  visibleText: "Continue", accessibleName: "Continue"
+};
+
+/** The Flow's shape: the recorded selector, gone from this page, then a point. */
+function pointCommand(point: Record<string, unknown>): BrowserActionCommand {
+  return clickCommand({ selector: RECORDED_CONTINUE.selector, ...point, element: RECORDED_CONTINUE } as Partial<BrowserActionCommand>);
+}
+
+const POINTS = [
+  { strategy: "coordinates", fields: { coordinates: { x: 160, y: 116 } } },
+  { strategy: "visual target", fields: { visualTarget: { namespace: "web", statePath: "recorded.continue", documentBounds: { x: 100, y: 100, width: 120, height: 32 } } } }
+];
+
+for (const point of POINTS) {
+  test(`a point on one of two identical twins fails TARGET_AMBIGUOUS instead of clicking it: ${point.strategy}`, (t) => {
+    installTwinPage(t, 2);
+
+    let thrown: unknown;
+    try {
+      resolveTarget(pointCommand(point.fields));
+    } catch (error) {
+      thrown = error;
+    }
+
+    const failed = thrown as { failure?: { code: string; expected?: string }; resolution?: { strategy: string; candidateCount: number; bestScore?: number; runnerUpScore?: number } } | undefined;
+    assert.ok(failed?.failure, "the point resolved one of the twins instead of failing");
+    assert.equal(failed.failure.code, "web.target.ambiguous");
+    // The point did land -- it is named among what was tried -- and scoring decided.
+    assert.match(failed.failure.expected ?? "", new RegExp(point.strategy, "u"));
+    assert.equal(failed.resolution?.strategy, "scored-candidate");
+    assert.equal(failed.resolution?.candidateCount, 2);
+    assert.equal(failed.resolution?.bestScore, failed.resolution?.runnerUpScore);
+  });
+}
+
+test("a point on a control with no twin still resolves by the point", (t) => {
+  const [only] = installTwinPage(t, 1);
+
+  const resolved = resolveTarget(pointCommand(POINTS[0]!.fields));
+
+  assert.equal(resolved.element, only);
+  assert.equal(resolved.resolution.strategy, "coordinates");
+});

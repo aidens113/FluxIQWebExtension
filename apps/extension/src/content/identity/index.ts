@@ -27,10 +27,16 @@
 // to act on evidence Level 2 would reject outright. It hands back what Core
 // measured either way, which is what lets an accepted exact match report a
 // confidence it did not have to be scored twice for.
+//
+// `corroboration.ts` is the one test both acting paths put to Core's score
+// before acting on it: something that says which control this is -- the text,
+// the name, the label, the id or the test id -- must agree exactly, because a
+// partial agreement is what a different action with a similar label looks like.
 
 export { accessibleNameFor, authoredNameAttribute } from "./accessible-name";
 export { boundedText } from "./bounded-text";
 export { candidateFingerprint, candidateLabel, collectTargetCandidates } from "./candidates";
+export { corroboratesExactly } from "./corroboration";
 export { elementContext, landmarkRole } from "./context";
 export { implicitRole } from "./implicit-role";
 export { associatedLabel, labelText } from "./label";

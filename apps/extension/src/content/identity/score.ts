@@ -5,10 +5,12 @@
 // (`fluxiq/automation-studio/fingerprinting`), which owns the signal weights,
 // the per-signal comparisons and the confidence formula. A second scorer
 // downstream would drift from Core's within a release and give two different
-// answers to the same question, so this module contributes exactly three things
+// answers to the same question, so this module contributes exactly four things
 // Core cannot know about a browser: which recorded signals are worth comparing,
-// how good is good enough, and how much better than the runner-up counts as an
-// answer rather than a tie.
+// how good is good enough, how much better than the runner-up counts as an
+// answer rather than a tie, and -- through `corroboration.ts` -- which of Core's
+// agreements makes a winner the recorded control rather than a neighbour that
+// merely shares its words.
 //
 // **Which signals.** Only the ones a live candidate can also produce. A
 // recorded descriptor carries an xpath, an attribute map and viewport bounds;
@@ -39,6 +41,7 @@ import {
   type ElementFingerprintScore
 } from "fluxiq/automation-studio/fingerprinting";
 import type { TargetCandidate } from "./candidates";
+import { corroboratesExactly } from "./corroboration";
 
 /** A candidate and what Core made of it. */
 export type ScoredCandidate = {
@@ -53,7 +56,8 @@ export type ScoredCandidate = {
  * candidates it weighed and the scores it gave them. The difference is what the
  * Flow should do: `ambiguous` means the page offers several plausible controls
  * and the Flow must say which it meant; `unmatched` means nothing on the page
- * resembles the recorded control closely enough to act on.
+ * resembles the recorded control closely enough to act on, or that the best of
+ * it agrees exactly with nothing that says which control it is.
  */
 export type CandidateSelection =
   | { outcome: "resolved"; chosen: ScoredCandidate; runnerUp: ScoredCandidate | undefined; ranked: ScoredCandidate[] }
@@ -104,8 +108,15 @@ export type RecordedIdentity = {
  * identifier the candidate **does not carry** is now charged -0.1, while one
  * that **contradicts** the recording stays at -0.8. The drift case's
  * identifiers are absent and the near-miss's are contradicted, so the two
- * separate by 0.301 -- 0.389 against 0.088 -- with this floor sitting inside
- * that gap. The floor needs no movement; moving it would undo the separation.
+ * separate by 0.301 -- 0.389 against 0.088 -- with this floor inside that gap.
+ *
+ * **That separation holds only for a near-miss whose identifiers contradict.**
+ * With none of its own the same "Save changes and exit" scores 0.359: 0.030
+ * under the drift case, and level with the recorded Save shortened to "Save".
+ * On a recording with no identifiers it scores 0.633
+ * (`reports/i-resolver-safety.md`). No floor sits between identical numbers, so
+ * this one did not move; `corroboration.ts`, applied to the winner, draws the
+ * separation instead.
  *
  * Not to be confused with `veto.ts`'s `TARGET_VETO_FLOOR`, which is 0. This one
  * answers a selection question -- is this good enough to choose from several?
@@ -130,9 +141,9 @@ const matcher = createAutomationStudioElementMatcher();
  * Ranks the pool against the recorded control and says whether one of them is
  * the answer.
  *
- * The ranking is Core's, in Core's order. The floor and the margin are applied
- * after it, so a refusal still knows exactly what it refused and how close the
- * call was.
+ * The ranking is Core's, in Core's order. The floor, the margin and the
+ * corroboration rule are applied after it, so a refusal still knows exactly
+ * what it refused and how close the call was.
  */
 export function scoreTargetCandidates(target: RecordedIdentity, candidates: TargetCandidate[]): CandidateSelection {
   if (!candidates.length) return { outcome: "unmatched", ranked: [] };
@@ -154,6 +165,9 @@ export function scoreTargetCandidates(target: RecordedIdentity, candidates: Targ
   if (runnerUp && chosen.score.normalizedScore - runnerUp.score.normalizedScore < TARGET_SCORE_MARGIN) {
     return { outcome: "ambiguous", ranked };
   }
+  // A winner nothing distinguishing agrees with exactly is not an answer, however
+  // far it leads. Checked last, so a tie is still reported as the tie it is.
+  if (!corroboratesExactly(chosen.score)) return { outcome: "unmatched", ranked };
   return { outcome: "resolved", chosen, runnerUp, ranked };
 }
 
