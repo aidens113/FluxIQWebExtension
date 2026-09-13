@@ -983,3 +983,25 @@ reader (`82454db`) and the no-candidates union (`12de09e`), both committed.
   mutations each failed their rows, restored byte-identical.
 - Outcome: Accepted
 
+
+## Part fifteen, archived 2026-09-13
+
+Moved verbatim to keep headroom under the plan limit: the run-scenario
+follow-ups (`3959823`), committed.
+
+### 2026-09-13 — g-run-scenario-followups: a second discard read and a bounded scan
+
+- Agent: worker `g-run-scenario-followups`; verified by supervisor.
+- Changed: `run-scenario.ts` (a second audit read after the browser closes and
+  before Core stops); `flow-lane/recording-discards.ts` (union by audit entry id);
+  `redaction-attestation/` (a `persistent-isolated` workspace scans only files
+  written since run start); `declared-secrets.ts` (dead wrapper removed); tests.
+- Decisions: a discarded action found by either read replaces the run's failure
+  category, the old one kept as `supersededFailureCategory`, since it is the root
+  cause; the redaction attestation keeps the earlier category, a separate finding.
+- Validation: supervisor read the diff; test-runner in a private `dist-sup8`,
+  `node --test` -> `# tests 496`, `# pass 496`, `# fail 0`, 29 discard, scope and
+  wiring rows. Worker: seven mutations each caught, restored byte-identical.
+- Not verified: the second read on the 24-run campaign; the bounded scan live.
+- Outcome: Accepted
+

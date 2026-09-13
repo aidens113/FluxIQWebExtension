@@ -752,20 +752,25 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   writes.
 - Outcome: Revised
 
-### 2026-09-13 — g-run-scenario-followups: a second discard read and a bounded scan
+### 2026-09-13 — w19-e4: a click that lands on a refused page fails as navigation_unexpected
 
-- Agent: worker `g-run-scenario-followups`; verified by supervisor.
-- Changed: `run-scenario.ts` (a second audit read after the browser closes and
-  before Core stops); `flow-lane/recording-discards.ts` (union by audit entry id);
-  `redaction-attestation/` (a `persistent-isolated` workspace scans only files
-  written since run start); `declared-secrets.ts` (dead wrapper removed); tests.
-- Decisions: a discarded action found by either read replaces the run's failure
-  category, the old one kept as `supersededFailureCategory`, since it is the root
-  cause; the redaction attestation keeps the earlier category, a separate finding.
-- Validation: supervisor read the diff; test-runner in a private `dist-sup8`,
-  `node --test` -> `# tests 496`, `# pass 496`, `# fail 0`, 29 discard, scope and
-  wiring rows. Worker: seven mutations each caught, restored byte-identical.
-- Not verified: the second read on the 24-run campaign; the bounded scan live.
+- Agent: worker `w19-e4`; verified by supervisor.
+- Changed: new `apps/extension/src/runtime/click-landing.ts` and its test; one
+  call in `runtime/action-runner.ts` and its test. A replayed `web.dom.click`
+  whose own tab's top frame commits a document served with HTTP 400 or above
+  fails as `navigation_unexpected`, naming the status and path, never the page.
+- Decisions: the status is read from the committed document at commit time, not
+  after `waitForTabReady`, which would add at least 1 s per navigating click;
+  accepted. A soft 404 served 200 and a sign-in page served 401 are Week 2. The
+  two architecture pages that should name the module join the integration batch.
+- Validation: supervisor read the diff and the new module;
+  `EXTENSION_TEST_BUILD_LABEL=sup-e4 ... extension check` -> exit 0; `... test` ->
+  `# tests 390`, `# pass 390`, `# fail 0`, 29 landing rows, `waited 300 ms` for a
+  click that commits nothing. Worker: three mutations (threshold, top-frame
+  filter, the one call) each failed their rows; on a built extension a redirect
+  to a 404 read 404, a 403 read 403, and the click reply beat the unload 15 of 15.
+- Not verified: W10 `broken-link` and W27 `blocked-url` reporting
+  `navigation_unexpected` 3 of 3 in the Lab.
 - Outcome: Accepted
 
 ## Open Questions

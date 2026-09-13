@@ -1042,7 +1042,10 @@ snapshot bytes are not measured in Week 1. After the supervisor's Core
 `pnpm build` only: `packages/test-runner/src/flow-lane/persisted-flow-run.ts`,
 replacing the local copy of Core's target-resolution union
 (`reports/g-target-resolution-union.md`) with an import of Core's own type, and
-its test.
+its test. `docs/architecture/failure-taxonomy.md` (about `:133-138`) and
+`docs/architecture/web-capabilities.md`, naming `runtime/click-landing.ts` as the
+producer of `navigation_unexpected` for a click landing on an error page
+(`reports/w19-e4.md`).
 
 ## g-single-run-evidence — a lone `lab run --flow` records the evidence the bench reads
 
