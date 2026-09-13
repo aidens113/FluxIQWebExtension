@@ -1033,7 +1033,10 @@ the `test:content` script only;
 about `:17-20` only; `apps/extension/e2e/content/tests/identity-fixtures.ts`, its
 header's spec count; `domain/src/output-nodes/targets.ts` (about `:42-53`) and
 `domain/src/client/gateway-mapping.ts` (about `:201-209`), the comments saying
-Core ignores `parameters.element`, which Core's target gate changed. Once W19's domain mapper has landed, also
+Core ignores `parameters.element`, which Core's target gate changed;
+`apps/extension/src/content/actions/assert.ts`, the header at about `:34-43`,
+which still calls a failed claim on a sign-in gate a narrow case although
+`w19-e2` gave URL claims that branch too. Once W19's domain mapper has landed, also
 `domain/src/io/input-model.ts`, the checkbox comment at about `:181-184` only.
 
 **Read:** the "Found" or "Notes" lines naming each item in
@@ -1185,6 +1188,64 @@ the replacement text `reports/w19-c1.md` gives for its transition-comparison
 section (about `:417-427`) and the two sentences for about `:379-397`, adjusted
 to the lines as they now stand, beside your own importer-SDK documentation. Run
 Core `pnpm docs:check` after.
+
+---
+
+# Seventh dispatch — from Lab Stage 1
+
+`reports/l-stage1.md` ran this repository at `16ff729` against a pinned Core
+`267a2ca`. Both briefs below are read-only in both repositories: they may read
+the run bundles under `F:\fxlab-runs\stage1\` and the worktrees under
+`F:\fxlab\`, write scratch probes outside every tree, and run no Lab command.
+Each ends with a fix design partitioned by file (extension, domain, test-runner,
+Core), with the unit, content-harness and Lab proof each change needs, and says
+which parts HEAD (`1d7d1ab` here, Core `0e6d3ac`) already changes.
+
+## i-recording-loss — where recording entries go missing under load
+
+**Owns:** `reports/i-recording-loss.md` only.
+
+**Read:** `reports/l-stage1.md` (step 4b, W18 run 1, W25, and the open
+questions); `reports/i-flow-lane-errors.md` (a); `reports/L-dropped-action.md`;
+`reports/L-race-fix.md`; `reports/g-core-late-event.md`.
+
+**Task.** In 14 of 24 step 4b runs Core received fewer recording entries than a
+passing run (5-6 instead of 10-13 in nine, none in five), and the losses track
+load: 1 of 15 passed under two instances, 9 of 10 alone. W18 run 1 stored an
+empty recording although the extension counted five events, and two W25 runs
+produced no Flow. Find where entries are lost between the extension recording
+them and Core finalizing, from the bundles' own evidence (the extension's log
+against Core's logs and `runtime.settle`, with timestamps) and file:line across
+the extension's send path, the WebSocket host, and Core's bridge queue, flush
+and finalization order. Resolve the report's contradiction about entries
+appended after Stop. Say whether anything committed since `16ff729` and
+`267a2ca` changes the picture.
+
+**Done when** the root cause is shown in at least two losing runs and absent in a
+passing one, and the fix design's Lab proof is step 4b at 24 of 24 under
+two-instance load.
+
+## i-stage1-failures — W18's password field, W24's missing failure, W25's category
+
+**Owns:** `reports/i-stage1-failures.md` only.
+
+**Read:** `reports/l-stage1.md` on W18, W24 and W25; `reports/f-w18-secret-leg.md`,
+`g-resolver-corroboration.md`, `g-recorder-signals.md` and
+`g-flow-lane-observation.md` Outcomes.
+
+**Task.** For each, the root cause with bundle evidence and file:line:
+(a) W18 runs 2 and 3: the Flow's password type step did not find the field.
+What did resolution see, and did a sensitive control's withheld identity leave
+nothing to match? (b) W24 `intermediate-state` `unannounced`: the Flow reported
+no failure where `output_not_observed` was expected. Which component should have
+reported it, and why did it not? (c) W25 `delayed-ui` `too-slow`: why
+`target_not_found` where `timeout` was expected. Where a failure is a recording
+that lost its entries (W18 run 1, the two W25 runs without a Flow), name it and
+leave it to `i-recording-loss`. Note any overlap with a running brief (`w19-*`,
+`g-target-resolution-union`, `g-bench-evidence-size`,
+`g-run-scenario-followups`).
+
+**Report:** `reports/i-stage1-failures.md`.
 
 ## i-w19-expectation, follow-up — W10 `broken-link` and W27 `blocked-url` (read-only)
 

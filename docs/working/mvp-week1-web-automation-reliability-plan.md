@@ -712,54 +712,63 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
   the timeline order of the explained event after its click; every Lab row.
 - Outcome: Revised
 
-### 2026-09-13 — W10 and W27 take E4; three negative variants declare a failed click
+### 2026-09-13 — l-stage1: the Core pin held, and recording entries go missing under load
 
-- Agent: worker `i-w19-expectation` (follow-up, read-only); decisions by
-  supervisor.
-- Changed: `reports/i-w19-expectation.md` "Follow-up: W10 and W27"; sixth-dispatch
-  briefs.
-- Found: both fixtures serve a real error: W10 `broken-link` redirects to a 404
-  and W27's guard answers 403. A landing marker reaches W10 but never W27, whose
-  recorded click navigated nowhere. A "no navigation" claim fails W15's new tab,
-  late navigations and single-page-app routes, costs about 1 s on some 30 clicks
-  per pass, and still passes W27, whose blocked path contains the recorded one.
-  **C1 already breaks three rows:** W19 `expired`, W10 `broken-link` and W27
-  `blocked-url` declare their click `succeeded`, so once the click correctly
-  fails, the Flow lane records the category and then throws on the actions check
-  (`run-flow-lane.ts:129-130`).
+- Agent: worker `l-stage1` (Lab); decisions by supervisor.
+- Changed: `reports/l-stage1.md`; no tracked file. Worktrees under `F:\fxlab\`
+  (repository `16ff729`, Core `267a2ca`); runs under `F:\fxlab-runs\stage1\`.
+- Validation: supervisor tally of `F:\fxlab-runs\stage1\`: `find . -name
+  run.json` -> 40 files (the worker reports 44 records, so 4 are unaccounted
+  for), every one naming `"commit":"16ff729..."` and `"commit":"267a2ca..."`,
+  with `"dirty":false` 80 times out of 80. Across the 25 `snapshots/flow-lane.json`
+  files, `basic-form` shows `candidateCount=4` 10 times and `candidateCount=2`
+  9 times, and 5 of its 24 step 4b runs wrote none; auth-gate shows
+  `candidateCount=2` twice and delayed-ui once. `basic-form` `run.json` verdicts
+  -> 14 `failed`, 12 `passed`, which includes the rerun and the smoke bench's
+  runs. Worker figures, each a Lab observation: pin proof
+  `exit=0 unpinned=0` on all three worktrees. Step 4b -> 10 of 24 runs with `candidateCount` 4,
+  a FAIL; the 14 losing runs gave Core 5-6 entries instead of 10-13 (nine runs)
+  or none (five), 1 of 15 passing under two instances against 9 of 10 alone; run
+  12's build hit a Windows access violation and passed when rerun alone. W18
+  `auth-gate --flow` -> 0 of 3: one empty recording although the extension
+  counted five events, two password type steps that found no field; the
+  password in no bundle file; oracle passed 3 of 3. `reconnect` 3 of 3. W24 -> 0
+  of 3, no failure where `output_not_observed` was expected. W25 -> 0 of 3, two
+  runs with no Flow and one `target_not_found` where `timeout` was expected.
+  Smoke bench 4 of 4, compare exit 1 on navigation latency (2609 against
+  1684 ms). Step 4 extension e2e -> `8 passed`, MV3 worker restart included.
+  Lowest free memory 8.71 GB.
 - Decisions:
-  - **E4 is taken:** a replayed click whose own tab lands on a page served with
-    HTTP 400 or above fails as `navigation_unexpected`. It needs no wire change
-    and makes no claim on other clicks. It costs about 300 ms on each click that
-    commits nothing, roughly 9 s per pass. It is serial after `w19-e3`, which is
-    committed.
-  - The landing marker is Week 2, for wrong landings served with 200. The "no
-    navigation" claim is rejected. E2 lands alone. D1 is unchanged.
-  - The three variants declare the click `failed`, as W27's `disabled` and
-    `detached` already do (`g-negative-click-outcomes`).
-- Validation: worker, read-only, nothing run: no probe reaches the background
-  navigation path without a browser. Supervisor read the follow-up whole.
-- Not verified: that Chromium reports the 404 and 403 statuses to the extension;
-  that W27's click result reaches the background before its page unloads; how
-  the bench scores a matched category followed by a thrown actions check.
-- Outcome: Accepted
+  - **Recording-entry loss under load is the first Week 1 blocker.** It is
+    partial, repeated and load-correlated, so it is a real defect, not the
+    faulty RAM, and it likely explains W18's empty recording and W25's missing
+    Flows. `i-recording-loss` investigates.
+  - W18's password field, W24 and W25 go to `i-stage1-failures`, judged against
+    HEAD, since most of this session's fixes postdate `16ff729`.
+  - The smoke comparison ran under two-instance load against Part 3's rule, so
+    its latency "regression" is not evidence; it reruns alone in Stage 2.
+- Not verified: the cause of the lost entries; 30 run exits were read from each
+  run's captured output, because the worker's file watch blocked the status-line
+  writes.
+- Outcome: Revised
 
-### 2026-09-13 — g-negative-click-outcomes: three negative variants expect a failed click
+### 2026-09-13 — w19-e2 and the E1 event id land
 
-- Agent: worker `g-negative-click-outcomes`; verified by supervisor. Core's target
-  gate is committed as `0e6d3ac`, with Core's completed briefs archived.
-- Changed: `auth-gate/manifest.ts` (`expired`: typing `succeeded`, sign-in click
-  `failed`, restated because a variant's `actions` replace the workflow's),
-  `navigation/scenario.ts` (`broken-link`), `failure-surfaces/manifest.ts`
-  (`blocked-url`), and each scenario's test.
-- Decisions: the existing and clone lanes reject any non-succeeded attempt
-  (`existing-flow-run.ts:96-97`), as they already did for `disabled` and
-  `detached`; the week1 negatives run on the isolated Flow lane, so that is not
-  Week 1.
-- Validation: supervisor read the diff; `pnpm --filter
-  @fluxiq-web-extension/scenario-lab check` -> exit 0; `... test` -> `# tests 202`,
-  `# pass 202`, `# fail 0`. Worker: each click flipped back to `succeeded` failed
-  its own scenario test, restored by hash.
+- Agent: workers `w19-e2` and `w19-e1` (resumed); verified by supervisor.
+- Changed: `85a7e21`, `content/action-runtime/results.ts`: a failed URL claim that
+  names a URL, on a sign-in gate, reports `web.auth.required`, naming the claim
+  and never the page's address. `4d88d65`: the explained landing also carries
+  `explainedByEventId`, the click's `web.<sequence>.<timestamp>` from the domain's
+  builder.
+- Decisions: a failed URL claim on a sign-up or change-password form also reads
+  as `auth_required`, the same heuristic the selector branch uses; Week 2. Core
+  stores a click's sequence and timestamp but not its event id, so D1 rebuilds the
+  id with that same domain builder; Core needs no change.
+- Validation: supervisor read the `results.ts` diff; `EXTENSION_TEST_BUILD_LABEL=sup-e2
+  ... extension check` -> exit 0, `... test` -> `# tests 372`, `# pass 372`, the
+  E1 follow-up's rows included; content `failures.spec.ts check-assert.spec.ts`
+  -> `26 passed`. Workers: E2's three mutations and E1's dropped id each failed
+  their rows, restored by hash.
 - Outcome: Accepted
 
 ## Open Questions
