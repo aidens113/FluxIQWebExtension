@@ -12,6 +12,15 @@ import type { BenchRunRecord, BenchRunsFile } from "./report-store.js";
 export type BenchMarkdownCoverage = { total: BenchExecutionCoverage; byLane: Partial<Record<EvaluationLane, BenchExecutionCoverage>> };
 
 /**
+ * The lane label of every figure `report.json` counts over both lanes at once:
+ * the latency, duration and evidence-size distributions and the truncation
+ * count. Mixing lanes there is accepted for Week 1; printing it unlabelled is
+ * not, because a reader would take a latency beside per-lane rates as Flow-lane
+ * latency.
+ */
+const ALL_LANES = "all lanes";
+
+/**
  * `report.md`: results, skipped results with their reasons, every run's
  * verdict and how many actions FluxIQ executed in it, the corpus metrics, and
  * where each measurement came from.
@@ -136,11 +145,13 @@ function metricLines(report: BenchReport, coverage: BenchMarkdownCoverage): stri
     "",
     "Not executed is how many runs of that lane's population for the metric executed no FluxIQ action. A rate whose Not executed approaches its Total is a statement about the Testing Lab and the fixture, not about FluxIQ.",
     "",
-    "## Distributions",
+    `## Distributions, ${ALL_LANES}`,
     "",
-    table(["Metric", "Samples", "p50", "p95"], distributions.map(([name, distribution]) => [name, String(distribution.samples), distribution.p50 === null ? "n/a" : String(distribution.p50), distribution.p95 === null ? "n/a" : String(distribution.p95)])),
+    `Unlike the rates, every distribution is counted over ${ALL_LANES}: the recording lane's runs and the Flow lane's together. An action latency here is not Flow-lane latency, and a run duration is not the time FluxIQ took to execute a workflow.`,
     "",
-    `Truncation count: ${metrics.truncationCount}. Week 2 metrics (harness recovery; adaptation cost, validation, persistence, and reuse) are null.`,
+    table(["Lane", "Metric", "Samples", "p50", "p95"], distributions.map(([name, distribution]) => [ALL_LANES, name, String(distribution.samples), distribution.p50 === null ? "n/a" : String(distribution.p50), distribution.p95 === null ? "n/a" : String(distribution.p95)])),
+    "",
+    `Truncation count, ${ALL_LANES}: ${metrics.truncationCount}. Week 2 metrics (harness recovery; adaptation cost, validation, persistence, and reuse) are null.`,
     "",
   ];
 }

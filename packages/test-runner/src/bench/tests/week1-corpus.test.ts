@@ -24,6 +24,7 @@ const PLAN_NEGATIVE_VARIANTS: Record<string, string> = {
   "W14 modal-flows/interstitial/armed": "user_intervention_required",
   "W19 auth-gate/primary/expired": "auth_required",
   "W24 intermediate-state/primary/unannounced": "output_not_observed",
+  "W29 identity-drift/primary/save-and-exit": "target_not_found",
 };
 /** The plan's corpus table: variants expected to succeed. */
 const PLAN_POSITIVE_VARIANTS = [
@@ -39,8 +40,8 @@ const PLAN_POSITIVE_VARIANTS = [
   "W23 identity-drift/primary/wrapped-aria",
 ];
 
-test("week1 lists W01 to W28 once each, in order; smoke is basic-form and one more week1 row, variant-free", () => {
-  assert.deepEqual(week1Corpus.rows.map((row) => row.id), Array.from({ length: 28 }, (_, index) => `W${String(index + 1).padStart(2, "0")}`));
+test("week1 lists W01 to W29 once each, in order; smoke is basic-form and one more week1 row, variant-free", () => {
+  assert.deepEqual(week1Corpus.rows.map((row) => row.id), Array.from({ length: 29 }, (_, index) => `W${String(index + 1).padStart(2, "0")}`));
   assert.equal(smokeCorpus.rows[0]?.scenarioId, "basic-form");
   assert.ok(smokeCorpus.rows.length >= 2 && smokeCorpus.rows.length <= 3);
   for (const row of smokeCorpus.rows) {
@@ -78,7 +79,7 @@ test("every smoke result resolves and runs on the recording lane", async () => {
  * unarmed workflows too, FluxIQ executed W01-W18 on no lane at all: the
  * recording lane executes at most a two-action Core probe.
  */
-test("week1 plans 66 runnable results per repeat: every unarmed workflow on both lanes, every resolved variant on the Flow lane", async (t) => {
+test("week1 plans 67 runnable results per repeat: every unarmed workflow on both lanes, every resolved variant on the Flow lane", async (t) => {
   const plan = expandCorpus(week1Corpus, await loadScenarioManifests(repositoryRoot));
   const runnable = plan.filter((entry) => entry.skipReason === undefined);
   const byLane = (lane: string) => runnable.filter((entry) => entry.lane === lane);
@@ -86,8 +87,8 @@ test("week1 plans 66 runnable results per repeat: every unarmed workflow on both
   const variantsOn = (lane: string) => byLane(lane).filter((entry) => entry.variantId !== null);
   t.diagnostic(`runnable: ${runnable.length} (${byLane("recording").length} recording; ${byLane("flow").length} flow, ${unarmedOn("flow").length} unarmed and ${variantsOn("flow").length} variants); skipped: ${plan.length - runnable.length}`);
   assert.deepEqual(week1Corpus.lanes, ["recording", "flow"]);
-  // The count a week1 bench's run time is estimated from. A new corpus row, such as W29, changes it.
-  assert.deepEqual([runnable.length, unarmedOn("recording").length, variantsOn("recording").length, unarmedOn("flow").length, variantsOn("flow").length], [66, 23, 0, 23, 20]);
+  // The count a week1 bench's run time is estimated from. A new corpus row changes it: W29's variant made it 67.
+  assert.deepEqual([runnable.length, unarmedOn("recording").length, variantsOn("recording").length, unarmedOn("flow").length, variantsOn("flow").length], [67, 23, 0, 23, 21]);
   // The Flow lane runs exactly the unarmed workflows the recording lane runs: W01-W18 for criterion 1, and W24-W28.
   assert.deepEqual(unarmedOn("flow").map(label), unarmedOn("recording").map(label));
   const criterionOne = Array.from({ length: 18 }, (_, index) => `W${String(index + 1).padStart(2, "0")}`);
