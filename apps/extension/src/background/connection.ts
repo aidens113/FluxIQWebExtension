@@ -1,98 +1,65 @@
-// The extension's connection to FluxIQ. It holds the session and settings, the
-// recording's own state, and the active tab, and it routes between the browser
-// (tabs, content scripts, runtime commands) and the client gateway.
+// The extension's connection to FluxIQ. It holds the session and settings, and
+// it owns the order its collaborators run in; the work itself lives in
+// ./connection, one responsibility per object:
 //
-// Everything it does not need to hold itself lives in ./connection: the
-// WebSocket session and its reconnection lifecycle, the activity log, the
-// runtime command status, navigation and pointer-click filtering, project
-// context, evidence capture, and Core's HTTP API. This file is the facade that
-// owns the order those collaborators run in.
+//   ActivePage           where the browser is: the active tab and whether its
+//                        page can be recorded or driven.
+//   ActiveRecording      the recording in progress, and every transition into
+//                        and out of one, the start handshake with FluxIQ included.
+//   RecordedEventIntake  the one funnel every recorded event passes through,
+//                        navigation included.
+//   ServerCommandChannel what FluxIQ sends, the runtime command it runs, and the
+//                        result that goes back.
+//
+// Beneath those sit the WebSocket session and its reconnection lifecycle, the
+// activity log, the runtime command status, navigation and pointer-click
+// filtering, project context, evidence capture, and Core's HTTP API.
+//
+// Every public method here is the dispatch point for code inside the object: a
+// collaborator that needs one calls it back through a port, never at the
+// collaborator that implements it, so a stub or override on the public method is
+// still honoured. The delegations return the collaborator's promise rather than
+// awaiting it, so moving a method here added no asynchronous step to its caller.
 
-import {
-  createWebAutomationRecordingEvent,
-  createWebAutomationStateFromTabs,
-  createWebAutomationStateUpdate,
-  webAutomationActionResultPayload,
-  webAutomationActionVisualTargetFromElement,
-  WEB_AUTOMATION_DOMAIN_ID,
-  WEB_AUTOMATION_INPUT_IDS
-} from "@fluxiq-web-extension/domain/client";
 import type {
   ActivityEntry,
-  BrowserActionResult,
-  ClientGatewayServerMessage,
   CoreRecordingsPage,
   ExtensionStatus,
   FluxIQSession,
   FluxIQSettings,
-  JsonObject,
-  RecordingBlockState,
   RecordingEventPayload,
-  RecordingLogPage,
-  RecordingState,
-  RuntimeCommandStatus,
-  ServerCommandPayload,
-  UnsupportedPageState
+  RecordingLogPage
 } from "../shared/protocol";
 import { activeTab, allTabFrames, allTabs, ensureContentScript, sendToTab } from "./tabs";
 import { captureActionBoundary } from "./action-evidence";
 import { clearQueuedEvents, queueEvent, readQueuedEvents, writeSession } from "./storage";
-import { ExtensionRuntimeCommandRouter, gatewayActionResultFromBrowserResult } from "../runtime";
 // Written as ".../index" because this file and its collaborators' directory are
 // siblings of the same name: "./connection" would resolve back to this file.
 import {
+  ActivePage,
+  ActiveRecording,
   ActivityLog,
-  browserStateFromTabs,
   compactObject,
   ContentAttachment,
-  describeActiveTabLike,
   EventSequence,
   fetchCoreRecordings,
   GatewaySession,
-  gatewayRecordingEventFromPayload,
-  isDomSnapshotPayload,
   NavigationRecorder,
-  objectValue,
   PointerClickFilter,
   ProjectContext,
+  RecordedEventIntake,
   RecordingEvidenceReporter,
-  RecordingStartHandshake,
   RuntimeStatusTracker,
+  ServerCommandChannel,
   StateAssetStore,
-  stringValue,
-  unsupportedPageForUrl,
-  activityDetail,
-  activityLabel,
-  classifyRecordingStartRefusal,
-  clickEventSignature,
-  eventSourceId,
-  isExecutableRecordedAction,
-  isNavigationExplanation,
-  isRecordingStartRefusalError,
-  recordingActionChannels,
-  recordingEnvironment,
-  recordingSources,
-  recordingStartRefusalBlock,
-  runtimeActionLabel,
-  runtimeConfirmationForActionResult,
-  runtimeResultTarget,
   type CoreApiCredentials,
-  type RecordingStartRefusal,
   type TabSnapshotTransport
 } from "./connection/index";
 
 type StatusListener = (status: ExtensionStatus) => void;
 
 export class FluxIQConnection {
-  private recordingState: RecordingState = "idle";
   private lastError: string | undefined;
-  private activeTabId: number | undefined;
-  private activeTabUrl: string | undefined;
-  private eventCount = 0;
-  private recordingStartedAt: number | undefined;
-  private activeRecordingId: string | undefined;
-  private recordingBlock: RecordingBlockState | undefined;
-  private unsupportedPage: UnsupportedPageState | undefined;
   private readonly listeners = new Set<StatusListener>();
 
   private readonly activityLog = new ActivityLog();
@@ -102,61 +69,74 @@ export class FluxIQConnection {
   private readonly clicks = new PointerClickFilter();
   private readonly transport: TabSnapshotTransport = { sendToTab, allTabFrames };
   private readonly gateway: GatewaySession;
-  private readonly recordingStart: RecordingStartHandshake;
   private readonly projects: ProjectContext;
   private readonly attachment: ContentAttachment;
   private readonly evidence: RecordingEvidenceReporter;
+  private readonly page: ActivePage;
+  private readonly recording: ActiveRecording;
+  private readonly intake: RecordedEventIntake;
+  private readonly commands: ServerCommandChannel;
 
+  // Construction order is dependency order: a collaborator handed to another as
+  // an instance is built first. Anything reached through a closure is read when
+  // it is called, never during construction, so it may be built later.
   constructor(
     private settings: FluxIQSettings,
     private session: FluxIQSession
   ) {
+    const onActivity = (kind: string, label: string, detail?: string, tone?: ActivityEntry["tone"]) => this.addActivity(kind, label, detail, tone);
+    const emitStatus = () => this.emitStatus();
+    const setLastError = (message: string | undefined) => { this.lastError = message; };
+    // Forwards exactly the arguments it was given, so an override on the public
+    // method sees the same call a direct `this.handleRecordingEvent(...)` made.
+    const recordEvent = (...args: Parameters<FluxIQConnection["handleRecordingEvent"]>) => this.handleRecordingEvent(...args);
+
     this.gateway = new GatewaySession({
       settings: () => this.settings,
       session: () => this.session,
       persistSession: (session) => this.persistSession(session),
-      emitStatus: () => this.emitStatus(),
+      emitStatus,
       reportError: (message) => { this.lastError = message; },
       clearError: () => { this.lastError = undefined; },
-      beforeConnect: () => this.refreshActiveTab(),
+      beforeConnect: () => this.page.refresh(),
       queue: { queueEvent, readQueuedEvents, clearQueuedEvents },
       handlers: {
-        onServerMessage: (message) => void this.onMessage(message),
+        onServerMessage: (message) => void this.commands.handleMessage(message),
         onPairingRequired: (referenceCode, reason) => {
           this.lastError = reason || "Approve this client in FluxIQ.";
           this.addActivity("pairing", "Waiting for approval", referenceCode ? `Reference ${referenceCode}` : undefined, "warning");
           this.emitStatus();
         },
-        onSessionReady: (message) => void this.onSessionReady(message),
-        onCommand: (payload, messageId) => void this.handleServerCommandPayload(payload, messageId),
-        onHeartbeat: () => void this.sendBrowserState()
+        onSessionReady: (message) => void this.commands.handleSessionReady(message),
+        onCommand: (payload, messageId) => void this.commands.handleCommand(payload, messageId),
+        onHeartbeat: () => void this.page.sendBrowserState()
       }
     });
     this.projects = new ProjectContext({
       settings: () => this.settings,
       session: () => this.session,
       adoptProjectId: (projectId) => this.persistSession(compactObject({ ...this.session, projectId })),
-      onActivity: (kind, label, detail, tone) => this.addActivity(kind, label, detail, tone)
+      onActivity
     });
     this.attachment = new ContentAttachment({
       sendToTab,
       ensureContentScript,
       settings: () => this.settings,
-      isRecording: () => this.recordingState === "recording",
+      isRecording: () => this.recording.state() === "recording",
       hasRecordedTab: (tabId) => this.navigation.hasRecordedTab(tabId),
       noteRecordedTab: (tabId, url, timestamp) => this.navigation.noteRecordedTab(tabId, url, timestamp)
     });
     this.evidence = new RecordingEvidenceReporter({
       send: this.gateway.send,
-      recordingState: () => this.recordingState,
+      recordingState: () => this.recording.state(),
       resolveProjectId: (reason) => this.projects.resolve(reason),
-      onActivity: (kind, label, detail, tone) => this.addActivity(kind, label, detail, tone),
-      emitStatus: () => this.emitStatus(),
+      onActivity,
+      emitStatus,
       clientId: () => this.session.clientId,
-      activeTabId: () => this.activeTabId,
-      activeTabUrl: () => this.activeTabUrl,
-      unsupportedPage: () => this.unsupportedPage,
-      setUnsupportedPage: (state) => { this.unsupportedPage = state; },
+      activeTabId: () => this.page.tabId(),
+      activeTabUrl: () => this.page.url(),
+      unsupportedPage: () => this.page.unsupported(),
+      setUnsupportedPage: (state) => this.page.setUnsupported(state),
       transport: this.transport,
       ensureContentScript,
       attachTabForRecording: (tabId) => this.attachment.attachTabForRecording(tabId),
@@ -164,52 +144,82 @@ export class FluxIQConnection {
       allTabs,
       stateAssets: new StateAssetStore({
         credentials: () => this.coreApiCredentials(),
-        onActivity: (kind, label, detail, tone) => this.addActivity(kind, label, detail, tone)
+        onActivity
       }),
       screenshotDiagnostics: () => ({
         sessionId: this.session.sessionId,
         clientId: this.session.clientId,
         projectId: this.session.projectId,
         activeRecordingProjectId: this.projects.activeRecordingProject(),
-        activeTabId: this.activeTabId,
+        activeTabId: this.page.tabId(),
         coreApiUrl: this.settings.coreApiUrl
       })
     });
-    this.recordingStart = new RecordingStartHandshake({
-      // Each attempt resolves the project again rather than reusing the first
-      // answer: a retry exists because FluxIQ's context moved, and the
-      // extension's own view of it may have moved with it.
-      send: async (attempt) => {
-        const projectId = await this.projects.resolve(attempt.attempt === 0 ? "recording_start" : "recording_start_retry");
-        await this.gateway.send("client.start_recording", {
-          recordingId: attempt.recordingId,
-          ...(projectId ? { projectId } : {}),
-          startedAt: attempt.startedAt,
-          domainId: WEB_AUTOMATION_DOMAIN_ID,
-          initialState: attempt.initialState,
-          environment: recordingEnvironment(this.session.clientId, this.activeTabUrl),
-          sources: recordingSources(this.session.clientId),
-          actionChannels: recordingActionChannels(this.session.clientId),
-          metadata: {
-            domainId: WEB_AUTOMATION_DOMAIN_ID,
-            requestedBy: "extension-record-button",
-            projectId: projectId ?? null,
-            activeTabUrl: this.activeTabUrl ?? null,
-            startAttempt: attempt.attempt
-          }
-        });
-      },
-      beginLocally: (recordingId) => this.beginRecordingWithoutAcceptance(recordingId),
-      surfaceRefusal: (refusal, attempts) => this.applyRecordingRefusal(refusal, attempts),
-      noteRetry: (refusal, attempt, of, delayMs) => {
-        this.addActivity(
-          "recording",
-          "Recording start delayed",
-          `${refusal.detail} Retrying in ${delayMs} ms (${attempt} of ${of}).`,
-          "warning"
-        );
-        this.emitStatus();
-      }
+    this.page = new ActivePage({
+      send: this.gateway.send,
+      gatewayState: () => this.gateway.state(),
+      clientId: () => this.session.clientId,
+      recordingState: () => this.recording.state(),
+      attachTabForRecording: (tabId) => this.attachment.attachTabForRecording(tabId),
+      activeTab,
+      allTabs,
+      onActivity,
+      emitStatus,
+      updateTab: (tab) => this.handleTabUpdated(tab)
+    });
+    this.recording = new ActiveRecording({
+      send: this.gateway.send,
+      gatewayState: () => this.gateway.state(),
+      session: () => this.session,
+      settings: () => this.settings,
+      persistSession: (session) => this.persistSession(session),
+      page: this.page,
+      projects: this.projects,
+      evidence: this.evidence,
+      attachment: this.attachment,
+      navigation: this.navigation,
+      clicks: this.clicks,
+      sequence: this.sequence,
+      activityLog: this.activityLog,
+      allTabs,
+      recordEvent,
+      onActivity,
+      emitStatus,
+      lastError: () => this.lastError,
+      setLastError
+    });
+    this.intake = new RecordedEventIntake({
+      send: this.gateway.send,
+      recording: this.recording,
+      page: this.page,
+      navigation: this.navigation,
+      clicks: this.clicks,
+      sequence: this.sequence,
+      evidence: this.evidence,
+      attachment: this.attachment,
+      sendToTab,
+      onActivity,
+      recordEvent
+    });
+    this.commands = new ServerCommandChannel({
+      send: this.gateway.send,
+      gateway: this.gateway,
+      recording: this.recording,
+      page: this.page,
+      runtimeStatus: this.runtimeStatus,
+      attachment: this.attachment,
+      evidence: this.evidence,
+      sequence: this.sequence,
+      session: () => this.session,
+      settings: () => this.settings,
+      persistSession: (session) => this.persistSession(session),
+      captureActionBoundary,
+      setLastError,
+      onActivity,
+      emitStatus,
+      recordEvent,
+      stopRecording: (notifyServer) => this.stopRecording(notifyServer),
+      disconnect: () => this.disconnect()
     });
   }
 
@@ -217,25 +227,30 @@ export class FluxIQConnection {
     const gateway = this.gateway.statusFields();
     const status: ExtensionStatus = {
       connectionState: gateway.connectionState,
-      recordingState: this.recordingState,
+      recordingState: this.recording.state(),
       gatewayUrl: this.settings.gatewayUrl,
       settings: this.settings,
       clientId: this.session.clientId,
       queueSize: gateway.queueSize,
-      eventCount: this.eventCount,
+      eventCount: this.recording.eventCount(),
       recentActivities: this.activityLog.recentEntries(),
       runtime: { ...this.runtimeStatus.current() }
     };
     const lastActivityAt = this.activityLog.lastActivityAt();
+    const activeTabId = this.page.tabId();
+    const activeTabUrl = this.page.url();
+    const recordingStartedAt = this.recording.startedAt();
+    const unsupportedPage = this.page.unsupported();
+    const recordingBlock = this.recording.block();
     if (this.session.sessionId) status.sessionId = this.session.sessionId;
     if (this.session.projectId !== undefined) status.projectId = this.session.projectId;
-    if (this.activeTabId !== undefined) status.activeTabId = this.activeTabId;
-    if (this.activeTabUrl) status.activeTabUrl = this.activeTabUrl;
+    if (activeTabId !== undefined) status.activeTabId = activeTabId;
+    if (activeTabUrl) status.activeTabUrl = activeTabUrl;
     if (gateway.pairingReferenceCode) status.pairingReferenceCode = gateway.pairingReferenceCode;
-    if (this.recordingStartedAt !== undefined) status.recordingStartedAt = this.recordingStartedAt;
+    if (recordingStartedAt !== undefined) status.recordingStartedAt = recordingStartedAt;
     if (lastActivityAt !== undefined) status.lastActivityAt = lastActivityAt;
-    if (this.unsupportedPage) status.unsupportedPage = this.unsupportedPage;
-    if (this.recordingBlock) status.recordingBlock = this.recordingBlock;
+    if (unsupportedPage) status.unsupportedPage = unsupportedPage;
+    if (recordingBlock) status.recordingBlock = recordingBlock;
     if (this.lastError) status.lastError = this.lastError;
     if (gateway.lastMessageAt !== undefined) status.lastMessageAt = gateway.lastMessageAt;
     return status;
@@ -265,449 +280,46 @@ export class FluxIQConnection {
 
   disconnect(): void {
     this.gateway.stopReconnecting();
-    this.recordingStart.cancel();
+    this.recording.cancelStart();
     this.gateway.closeClient();
-    if (this.recordingState === "recording") this.addActivity("connection", "Disconnected during recording", "Events will queue until reconnect.", "warning");
+    if (this.recording.state() === "recording") this.addActivity("connection", "Disconnected during recording", "Events will queue until reconnect.", "warning");
     this.gateway.markDisconnected();
   }
 
-  async startRecording(): Promise<void> {
-    if (this.recordingStart.isPending()) {
-      this.addActivity("recording", "Recording is starting", "Waiting for FluxIQ project acceptance.", "warning");
-      return;
-    }
-    if (this.gateway.state() !== "connected") {
-      this.lastError = "Connect to FluxIQ before recording.";
-      this.emitStatus();
-      return;
-    }
-    await this.refreshActiveTab();
-    if (this.unsupportedPage) {
-      this.lastError = this.unsupportedPage.reason;
-      this.addActivity("page", "Page cannot be recorded", this.unsupportedPage.reason, "warning");
-      this.emitStatus();
-      return;
-    }
-    this.resetRecordingLog();
-    this.recordingBlock = undefined;
-    const recordingId = `client.${this.session.clientId}.${Date.now()}`;
-    const startedAt = Date.now();
-    const initialState = await this.evidence.buildInitialRecordingState(startedAt);
-    // Wording only, so it reads what is already known rather than paying for a
-    // second Core lookup: the send resolves the project authoritatively, once
-    // per attempt.
-    this.addActivity("recording", "Starting recording", this.projects.current() ? "Waiting for FluxIQ project acceptance." : "Waiting for FluxIQ project context.", "warning");
-    await this.recordingStart.begin({ recordingId, startedAt, initialState: initialState as unknown as JsonObject });
-    this.emitStatus();
+  startRecording(): Promise<void> {
+    return this.recording.start();
   }
 
-  async stopRecording(notifyServer = true): Promise<void> {
-    if (this.recordingState !== "recording") return;
-    const recordingId = this.activeRecordingId;
-    const projectId = this.projects.activeRecordingProject();
-    const endedAt = Date.now();
-    const stopPayload = recordingId
-      ? compactObject({
-          recordingId,
-          ...(projectId !== undefined ? { projectId } : {}),
-          endedAt
-        })
-      : undefined;
-    this.recordingState = "idle";
-    this.clicks.clear();
-    this.activeRecordingId = undefined;
-    this.projects.setActiveRecordingProject(undefined);
-    this.addActivity("recording", "Recording stopped", `${this.eventCount} user actions captured`, "neutral");
-    this.emitStatus();
-    void this.attachment.broadcast({ type: "recording", recording: false, settings: this.settings }, false);
-    if (notifyServer && stopPayload) {
-      await this.gateway.send("client.stop_recording", stopPayload);
-    }
+  stopRecording(notifyServer = true): Promise<void> {
+    return this.recording.stop(notifyServer);
   }
 
   dismissRecordingBlock(): void {
-    this.recordingBlock = undefined;
-    if (isRecordingStartRefusalError(this.lastError)) this.lastError = undefined;
-    this.emitStatus();
+    this.recording.dismissBlock();
   }
 
-  async handleRecordingEvent(payload: RecordingEventPayload, tabId?: number, frameId?: number): Promise<void> {
-    if (this.recordingState !== "recording") return;
-    if (payload.kind === "dom.click") {
-      const sourceEvent = stringValue(objectValue(payload.metadata)?.sourceEvent);
-      const signature = clickEventSignature(payload, tabId, frameId);
-      if (sourceEvent === "pointerdown" && signature) {
-        if (this.clicks.isSuppressed(signature)) return;
-        this.clicks.suppressNext(signature);
-        await this.processRecordingEvent(payload, tabId, frameId);
-        return;
-      }
-      if (sourceEvent === "click" && signature && this.clicks.isSuppressed(signature)) {
-        return;
-      }
-    }
-    await this.processRecordingEvent(payload, tabId, frameId);
+  handleRecordingEvent(payload: RecordingEventPayload, tabId?: number, frameId?: number): Promise<void> {
+    return this.intake.accept(payload, tabId, frameId);
   }
 
-  async handleContentReady(payload: RecordingEventPayload, tabId?: number, frameId?: number): Promise<void> {
-    let readyPayload = payload;
-    if (this.recordingState === "recording" && tabId !== undefined && !this.unsupportedPage) {
-      await this.attachment.setRecordingState(tabId, true, frameId).catch(() => undefined);
-      if (!payload.snapshot) {
-        const snapshot = await sendToTab(tabId, { type: "captureSnapshot" }, frameId)
-          .then((value) => isDomSnapshotPayload(value) ? value : undefined)
-          .catch(() => undefined);
-        if (snapshot) readyPayload = { ...payload, snapshot };
-      }
-    }
-    await this.handleRecordingEvent(readyPayload, tabId, frameId);
+  handleContentReady(payload: RecordingEventPayload, tabId?: number, frameId?: number): Promise<void> {
+    return this.intake.acceptContentReady(payload, tabId, frameId);
   }
 
-  async handleTabUpdated(tab: chrome.tabs.Tab): Promise<void> {
-    const becameActive = Boolean(tab.active && tab.id !== undefined && this.activeTabId !== tab.id);
-    if (tab.active && tab.id !== undefined) {
-      this.activeTabId = tab.id;
-      this.activeTabUrl = tab.url;
-      this.unsupportedPage = unsupportedPageForUrl(tab.url);
-      this.emitStatus();
-    }
-    if (!tab.id) return;
-    if (tab.active && this.recordingState === "recording" && !this.unsupportedPage) {
-      await this.attachment.attachTabForRecording(tab.id).catch(() => undefined);
-      if (becameActive) this.addActivity("tab", "Recording active tab", tab.url ?? `Tab ${tab.id}`);
-    }
-    if (this.gateway.state() === "connected") {
-      await this.gateway.send("client.state_update", createWebAutomationStateUpdate({
-        activeContextId: String(tab.id),
-        contexts: [compactObject({ contextId: String(tab.id), url: tab.url, title: tab.title, status: tab.status }) as JsonObject],
-        recording: this.recordingState === "recording",
-        state: createWebAutomationStateFromTabs(describeActiveTabLike(tab), [describeActiveTabLike(tab)], {
-          timestamp: Date.now(),
-          sourceId: eventSourceId(this.session.clientId),
-          recording: this.recordingState === "recording",
-          permissions: ["activeTab", "scripting", "storage", "tabs"]
-        }) as unknown as JsonObject,
-        metadata: { reason: "tab-updated", inputId: WEB_AUTOMATION_INPUT_IDS.browserState }
-      }));
-      await this.sendBrowserState();
-    }
+  handleTabUpdated(tab: chrome.tabs.Tab): Promise<void> {
+    return this.page.handleTabUpdate(tab);
   }
 
-  async selectAutomationTab(tabId: number): Promise<void> {
-    const tab = await chrome.tabs.update(tabId, { active: true });
-    if (tab.id !== tabId || unsupportedPageForUrl(tab.url)) {
-      throw new Error("The requested automation tab is unavailable or unsupported.");
-    }
-    await this.handleTabUpdated({ ...tab, active: true });
+  selectAutomationTab(tabId: number): Promise<void> {
+    return this.page.select(tabId);
   }
 
   handleNavigationCommitted(details: chrome.webNavigation.WebNavigationTransitionCallbackDetails): void {
-    // Browser-provided transition metadata is more reliable than tabs.onUpdated,
-    // which fires repeatedly for a single load (URL, title, and status changes).
-    if (details.transitionType === "link" || details.transitionType === "form_submit" || details.transitionType === "reload") return;
-    this.scheduleNavigation(details.tabId, details.url, details.timeStamp, details.transitionType === "typed");
+    this.intake.noteNavigationCommitted(details);
   }
 
   handleHistoryStateUpdated(details: chrome.webNavigation.WebNavigationFramedCallbackDetails): void {
-    this.scheduleNavigation(details.tabId, details.url, details.timeStamp, false);
-  }
-
-  private scheduleNavigation(tabId: number, url: string, timestamp: number, explicitlyTyped: boolean): void {
-    if (this.recordingState !== "recording" || unsupportedPageForUrl(url)) return;
-    this.navigation.schedule(tabId, url, () => void this.recordNavigation(tabId, url, timestamp, explicitlyTyped));
-  }
-
-  private async recordNavigation(tabId: number, url: string, timestamp: number, explicitlyTyped: boolean): Promise<void> {
-    if (this.recordingState !== "recording") return;
-    if (!this.navigation.shouldRecord(tabId, url, timestamp, explicitlyTyped, this.recordingStartedAt)) return;
-    await this.handleRecordingEvent({
-      kind: "browser.navigation",
-      sequence: this.sequence.next(),
-      url,
-      title: "",
-      eventTimestampMs: timestamp,
-      metadata: explicitlyTyped ? { transition: "typed" } : undefined
-    }, tabId);
-  }
-
-  private async processRecordingEvent(payload: RecordingEventPayload, tabId?: number, frameId?: number): Promise<void> {
-    if (this.recordingState !== "recording") return;
-    if (tabId !== undefined && isNavigationExplanation(payload)) {
-      this.navigation.noteExplanatoryAction(tabId, payload.eventTimestampMs);
-    }
-    if (isExecutableRecordedAction(payload)) {
-      this.eventCount += 1;
-      this.addActivity(payload.kind, activityLabel(payload), activityDetail(payload));
-      // The content script sees only its own frame, so the snapshot it attaches
-      // describes one document however many the page has. The event goes out
-      // with the merged tab snapshot the state beside it is projected from --
-      // one page, one instant -- and that merge runs once, here, rather than a
-      // second time inside the reporter. A single-frame page is unaffected.
-      const captured = await this.evidence.captureEventSnapshot(payload, tabId, frameId);
-      const recorded = captured.snapshot === undefined ? payload : { ...payload, snapshot: captured.snapshot };
-      await this.gateway.send("client.recording_event", gatewayRecordingEventFromPayload(recorded, tabId, frameId, this.activeRecordingId));
-      await this.evidence.sendRecordingEvidence(payload, tabId, frameId, captured);
-      return;
-    }
-    if (payload.kind !== "content.ready") {
-      this.addActivity(payload.kind, `Evidence: ${activityLabel(payload)}`, activityDetail(payload));
-    }
-    await this.evidence.sendRecordingEvidence(payload, tabId, frameId);
-  }
-
-  private async onMessage(message: ClientGatewayServerMessage): Promise<void> {
-    this.gateway.noteMessageReceived();
-
-    if (message.type === "server.ping") {
-      this.gateway.noteMessageReceived();
-      this.emitStatus();
-      return;
-    }
-
-    if (message.type === "server.error") {
-      this.lastError = message.payload.message;
-      // A refused recording start is scoped to the recording, not to the
-      // connection: the socket is healthy and marking it failed would tear
-      // down a session that is working.
-      const refusal = classifyRecordingStartRefusal(message.payload);
-      if (refusal) {
-        this.recordingStart.noteRefusal(refusal);
-        return;
-      }
-      this.gateway.markFailed();
-      return;
-    }
-
-    if (message.type === "server.set_active_tab") {
-      await this.handleServerCommandPayload({ ...message.payload, command: "set_active_tab" }, message.id);
-      return;
-    }
-    if (message.type === "server.disconnect") {
-      this.disconnect();
-    }
-  }
-
-  private async onSessionReady(message: Extract<ClientGatewayServerMessage, { type: "server.session_ready" }>): Promise<void> {
-    await this.persistSession(compactObject({
-      ...this.session,
-      sessionId: message.payload.sessionId,
-      token: message.payload.token,
-      ...(message.payload.projectId !== undefined ? { projectId: message.payload.projectId } : {}),
-      serverUrl: this.settings.gatewayUrl,
-      connectedAt: Date.now()
-    }));
-    this.gateway.markSessionReady();
-    this.addActivity("connection", "Connected to FluxIQ", "Client session ready", "success");
-    await this.sendBrowserState();
-    await this.gateway.flushQueue();
-  }
-
-  private async handleServerCommandPayload(payload: ServerCommandPayload, messageId: string): Promise<void> {
-    if (payload.command === "ping") {
-      this.gateway.noteMessageReceived();
-      this.emitStatus();
-      return;
-    }
-    if (payload.command === "disconnect") {
-      this.disconnect();
-      return;
-    }
-    if (payload.command === "start_recording") {
-      await this.beginAcceptedRecording(payload.recordingId, payload.projectId);
-      return;
-    }
-    if (payload.command === "stop_recording") {
-      await this.stopRecording(false);
-      return;
-    }
-    if (payload.command === "set_active_tab") {
-      const tabId = Number(payload.tabId);
-      this.activeTabId = tabId;
-      await chrome.tabs.update(tabId, { active: true });
-      this.emitStatus();
-      return;
-    }
-    if (payload.command === "capture_snapshot") {
-      this.startRuntimeStatus({
-        commandId: messageId,
-        actionType: "web.dom.capture_snapshot",
-        label: "Capture snapshot",
-        target: this.activeTabUrl
-      });
-      await this.runtimeCommandRouter().captureSnapshot();
-      this.finishRuntimeStatus({
-        commandId: messageId,
-        actionType: "web.dom.capture_snapshot",
-        status: "succeeded",
-        // Capturing evidence has no post-condition of its own to check.
-        validation: { status: "none", reason: "evidence-only" },
-        message: "Snapshot command dispatched.",
-        startedAt: this.runtimeStatus.current().startedAt ?? Date.now(),
-        finishedAt: Date.now()
-      });
-      return;
-    }
-    if (payload.command === "execute_action") {
-      this.applyRuntimeStart(this.runtimeStatus.startAction(payload.action));
-      await captureActionBoundary("before", payload.action);
-      // The evidence observer brings the target page forward. Re-read Chrome's
-      // authoritative active tab after that asynchronous boundary so a delayed
-      // tabs.onActivated callback cannot leave runtime dispatch on a stale tab.
-      await this.refreshActiveTab();
-      await this.runtimeCommandRouter().executeAction(payload.action);
-    }
-  }
-
-  private runtimeCommandRouter(): ExtensionRuntimeCommandRouter {
-    return new ExtensionRuntimeCommandRouter({
-      activeTabId: () => this.activeTabId,
-      unsupportedPageReason: () => this.unsupportedPage?.reason,
-      attachTabForRecording: (tabId) => this.attachment.attachTabForRecording(tabId),
-      captureActiveSnapshot: (label) => this.evidence.captureActiveSnapshot(label),
-      sendActionResult: (result, tabId, frameId) => this.sendActionResult(result, tabId, frameId)
-    });
-  }
-
-  private async beginAcceptedRecording(recordingId: string, projectId?: string | null): Promise<void> {
-    this.recordingStart.noteAccepted();
-    if (projectId !== undefined) {
-      await this.persistSession(compactObject({ ...this.session, projectId }));
-    }
-    if (this.recordingState === "recording") {
-      if (projectId !== undefined && this.projects.activeRecordingProject() !== projectId) {
-        this.projects.setActiveRecordingProject(projectId);
-        await this.evidence.captureActiveSnapshot("Project-linked snapshot captured");
-      }
-      return;
-    }
-    this.resetRecordingLog();
-    this.navigation.clearRecordingTabs();
-    this.recordingBlock = undefined;
-    this.activeRecordingId = recordingId;
-    this.projects.setActiveRecordingProject(projectId !== undefined ? projectId : this.session.projectId);
-    this.eventCount = 0;
-    this.activityLog.clearRecent();
-    const recordingTabs = await allTabs();
-    this.recordingStartedAt = Date.now();
-    this.recordingState = "recording";
-    for (const tab of recordingTabs) {
-      if (tab.tabId < 0 || !tab.url || unsupportedPageForUrl(tab.url)) continue;
-      this.navigation.seedRecordingTab(tab.tabId, tab.url, this.recordingStartedAt);
-    }
-    this.addActivity("recording", "Recording started", this.activeTabUrl ?? "Active tab", "success");
-    this.emitStatus();
-    if (this.activeTabId !== undefined) await this.attachment.attachTabForRecording(this.activeTabId);
-    await this.sendBrowserState();
-    await this.handleRecordingEvent({
-      kind: "browser.tab",
-      sequence: this.sequence.next(),
-      url: this.activeTabUrl ?? "",
-      title: "",
-      eventTimestampMs: Date.now(),
-      metadata: { recordingState: "started", recordingId }
-    });
-    await this.evidence.captureActiveSnapshot("Initial snapshot captured");
-  }
-
-  // A refusal the handshake has stopped fighting -- persistent from the first
-  // answer, or transient and out of retries. Either way the recorder must not
-  // be left silently idle: the block says what happened, `lastError` says it
-  // on the status line, and the activity log keeps the trail.
-  private applyRecordingRefusal(refusal: RecordingStartRefusal, attempts: number): void {
-    this.recordingStart.cancel();
-    if (this.recordingState === "recording") {
-      this.recordingState = "idle";
-      this.clicks.clear();
-      void this.attachment.broadcast({ type: "recording", recording: false, settings: this.settings }, false);
-    }
-    this.recordingStartedAt = undefined;
-    this.activeRecordingId = undefined;
-    this.projects.setActiveRecordingProject(undefined);
-    this.recordingBlock = recordingStartRefusalBlock(refusal, attempts);
-    this.lastError = refusal.lastError;
-    this.addActivity("recording", "Recording locked", refusal.detail, "warning");
-    this.emitStatus();
-  }
-
-  // FluxIQ did not answer the start in time. Recording begins locally so no
-  // user action is lost; the project link attaches later if one arrives. A
-  // refusal is not silence and never reaches here -- it goes to
-  // `applyRecordingRefusal`, through a bounded retry when waiting can help.
-  private async beginRecordingWithoutAcceptance(recordingId: string): Promise<void> {
-    const projectId = await this.projects.resolve("recording_start_timeout");
-    await this.beginAcceptedRecording(recordingId, projectId ?? null);
-    if (!projectId) {
-      this.addActivity("recording", "Project context pending", "Structured state will record; screenshots attach after FluxIQ links a project.", "warning");
-      this.emitStatus();
-    }
-  }
-
-  private async sendBrowserState(): Promise<void> {
-    await this.gateway.send("client.state_update", browserStateFromTabs(await activeTab(), await allTabs(), this.recordingState));
-  }
-
-  private async sendActionResult(result: BrowserActionResult, tabId?: number, frameId?: number): Promise<void> {
-    this.finishRuntimeStatus({
-      ...result,
-      ...(tabId !== undefined ? { tabId } : {}),
-      ...(frameId !== undefined ? { frameId } : {})
-    });
-    await captureActionBoundary("after", result);
-    const visualTarget = result.visualTarget ?? (result.element
-      ? webAutomationActionVisualTargetFromElement(result.element as never)
-      : undefined);
-    await this.gateway.send("client.action_result", gatewayActionResultFromBrowserResult(result));
-    await this.sendRuntimeActionConfirmation(result, tabId, frameId);
-    await this.handleRecordingEvent(compactObject({
-      kind: "action.result",
-      sequence: this.sequence.next(),
-      url: result.url ?? this.activeTabUrl ?? "",
-      title: result.title ?? "",
-      eventTimestampMs: result.finishedAt,
-      element: result.element,
-      visualTarget,
-      snapshot: result.snapshot,
-      actionResult: result
-    }), tabId, frameId);
-  }
-
-  // A succeeded runtime action is also something the recording must contain:
-  // it is replayed as the recorded event a user would have produced.
-  private async sendRuntimeActionConfirmation(result: BrowserActionResult, tabId?: number, frameId?: number): Promise<void> {
-    if (result.status !== "succeeded") return;
-    const confirmation = runtimeConfirmationForActionResult(result);
-    if (!confirmation) return;
-    const event = createWebAutomationRecordingEvent({
-      kind: confirmation.kind,
-      sequence: this.sequence.next(),
-      url: result.url ?? this.activeTabUrl ?? "",
-      title: result.title ?? "",
-      eventTimestampMs: result.finishedAt,
-      element: result.element as unknown as JsonObject | undefined,
-      visualTarget: result.visualTarget as unknown as JsonObject | undefined,
-      snapshot: result.snapshot as unknown as JsonObject,
-      inputValue: confirmation.inputValue,
-      key: confirmation.key,
-      scroll: confirmation.scroll,
-      actionResult: webAutomationActionResultPayload(result as never),
-      metadata: {
-        domainId: WEB_AUTOMATION_DOMAIN_ID,
-        inputId: confirmation.inputId,
-        runtimeConfirmation: true
-      }
-    }, {
-      ...(tabId !== undefined ? { tabId } : {}),
-      ...(frameId !== undefined ? { frameId } : {})
-    });
-    await this.gateway.send("client.recording_event", event);
-  }
-
-  private async refreshActiveTab(): Promise<void> {
-    const tab = await activeTab();
-    this.activeTabId = tab?.tabId;
-    this.activeTabUrl = tab?.url;
-    this.unsupportedPage = unsupportedPageForUrl(tab?.url);
-    this.emitStatus();
+    this.intake.noteHistoryStateUpdated(details);
   }
 
   private async persistSession(session: FluxIQSession): Promise<void> {
@@ -727,38 +339,6 @@ export class FluxIQConnection {
 
   private addActivity(kind: string, label: string, detail?: string, tone: ActivityEntry["tone"] = "neutral"): void {
     this.activityLog.record(kind, label, detail, tone);
-    this.emitStatus();
-  }
-
-  private resetRecordingLog(): void {
-    this.eventCount = 0;
-    this.activityLog.reset();
-    this.clicks.clear();
-  }
-
-  private startRuntimeStatus(status: Omit<RuntimeCommandStatus, "state">): void {
-    this.applyRuntimeStart(this.runtimeStatus.start(status));
-  }
-
-  private applyRuntimeStart(next: RuntimeCommandStatus): void {
-    this.lastError = undefined;
-    this.addActivity("runtime", `Runtime started: ${next.label ?? next.actionType ?? "Command"}`, next.target, "warning");
-    this.emitStatus();
-  }
-
-  private finishRuntimeStatus(result: BrowserActionResult & { tabId?: number; frameId?: number }): void {
-    const failed = result.status !== "succeeded";
-    const label = runtimeActionLabel(result.actionType);
-    this.runtimeStatus.finish(result);
-    if (result.tabId !== undefined) this.activeTabId = result.tabId;
-    if (result.url) this.activeTabUrl = result.url;
-    if (failed) this.lastError = result.message ?? `${label} failed.`;
-    this.addActivity(
-      "runtime",
-      failed ? `Runtime failed: ${label}` : `Runtime succeeded: ${label}`,
-      result.message ?? runtimeResultTarget(result),
-      failed ? "danger" : "success"
-    );
     this.emitStatus();
   }
 }

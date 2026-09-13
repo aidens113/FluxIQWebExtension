@@ -32,6 +32,7 @@ import type { ContentAttachment } from "./content-attachment";
 import type { EventSequence } from "./event-sequence";
 import type { GatewayMessageSender, GatewaySession } from "./gateway-session";
 import type { RecordingEvidenceReporter } from "./recording-evidence";
+import { classifyRecordingStartRefusal } from "./recording-start/index";
 import {
   runtimeActionLabel,
   runtimeConfirmationForActionResult,
@@ -78,8 +79,12 @@ export class ServerCommandChannel {
 
     if (message.type === "server.error") {
       this.deps.setLastError(message.payload.message);
-      if (message.payload.code === "recording.project_required") {
-        this.deps.recording.noteProjectRequired(message.payload.message);
+      // A refused recording start is scoped to the recording, not to the
+      // connection: the socket is healthy and marking it failed would tear
+      // down a session that is working.
+      const refusal = classifyRecordingStartRefusal(message.payload);
+      if (refusal) {
+        this.deps.recording.noteStartRefusal(refusal);
         return;
       }
       this.deps.gateway.markFailed();

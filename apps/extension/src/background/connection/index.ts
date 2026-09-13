@@ -1,3 +1,5 @@
+export { ActivePage, type ActivePageDeps } from "./active-page";
+export { ActiveRecording, type ActiveRecordingDeps } from "./active-recording";
 export { ActivityLog } from "./activity-log";
 export {
   actionTypesFromCapabilities,
@@ -39,6 +41,7 @@ export {
 export { NavigationRecorder } from "./navigation-recorder";
 export { PointerClickFilter } from "./pointer-click-filter";
 export { ProjectContext, type ProjectContextDeps } from "./project-context";
+export { RecordedEventIntake, type RecordedEventIntakeDeps } from "./recorded-event-intake";
 export {
   activityDetail,
   activityLabel,
@@ -72,6 +75,7 @@ export {
   runtimeConfirmationForActionResult,
   runtimeResultTarget
 } from "./runtime-status";
+export { ServerCommandChannel, type ServerCommandChannelDeps } from "./server-command-channel";
 export {
   StateAssetStore,
   type ScreenImageSize,
