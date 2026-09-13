@@ -8,7 +8,7 @@ silent deletion. Moved out of the plan on 2026-09-11: the list keeps growing and
 the plan sits against its 800-line threshold.
 
 **Every entry carries a status tag, audited 2026-09-12 by v-openq-audit against
-the tree at `11d2ed3`.** Read the tag first; the original text below it is kept
+the tree at `11d2ed3`, and re-audited 2026-09-13 by i-open-questions-refresh at `0257357`.** Read the tag first; the original text below it is kept
 verbatim as the record of what was believed when it was raised, and the closing
 paragraph says what was read to settle or correct it.
 
@@ -19,6 +19,7 @@ paragraph says what was read to settle or correct it.
 | `[OPEN — description corrected …]` | Live, but part of what it says is no longer true. **Read the correction before briefing it**; the original text alone will send a worker at the wrong files. |
 | `[PARTLY SETTLED …]` | Some sub-items closed, some live. The closing paragraph splits them. |
 | `[SUPERSEDED …]` | Duplicated by another entry; merge at the next compaction. |
+| `[RULED OUT OF WEEK 1 …]` | Not closed, and not Week 1's to close. The closing paragraph names the ruling's heading and reason. Do not brief it in Week 1. |
 
 Why the tags exist: on 2026-09-12 two entries here described work that
 `ed6ab74` had already done and were never marked, and a worker was dispatched
@@ -28,7 +29,7 @@ settles it. A worker's report is not evidence that an entry is closed — read t
 code; three entries audited on 2026-09-12 were settled by commits whose own
 reports had claimed something narrower or wider than what the tree actually did.
 
-- [OPEN — description corrected 2026-09-12] **Credentials at replay.** A Flow built from a recording cannot recover a
+- [SETTLED 2026-09-13] **Credentials at replay.** A Flow built from a recording cannot recover a
   redacted password (auth-gate W18). Proposed: the manifest declares the
   fixture credential and the Flow lane supplies it as a declared secret,
   never from the recording. Owner: senior supervisor agent, for the Wave 2
@@ -45,7 +46,12 @@ reports had claimed something narrower or wider than what the tree actually did.
   isolation (`flow-lane/tests/declared-secrets.test.ts`) and exercised by no
   scenario — the same inert-wiring shape as the run-manifest join. What is left is
   one manifest edit plus the environment variable, not a design decision.
-- [OPEN] **Selector-keyed patch lane vs fingerprint-first doctrine.** Core's
+
+  **Settled 2026-09-13 by i-open-questions-refresh.** `auth-gate/manifest.ts:107` declares the
+  password as a secret, and the Flow lane supplies it once, under its node's path (archive
+  "f-w18-secret-leg" and "f-runner-secret-input"); `l-stage2c` passed W18 3 of 3 on each lane with
+  the declared value found 0 times in Core's kept workspace, SQLite included.
+- [RULED OUT OF WEEK 1 — a Week 2 contract decision] **Selector-keyed patch lane vs fingerprint-first doctrine.** Core's
   `validateTargetOverrideEvidence` takes `{selector}`. Week 1 makes the
   extension accept fingerprint-shaped targets; whether the patch lane
   becomes fingerprint-shaped is a Week 2 contract decision. Owner: senior
@@ -54,7 +60,11 @@ reports had claimed something narrower or wider than what the tree actually did.
   still declares `validateTargetOverrideEvidence(evidence, target: { selector:
   string }, failedAction)`. Unchanged by Waves 2 and 3; still the Week 2 contract
   decision it was raised as.
-- [OPEN — description corrected 2026-09-12] **The extension latches idle when Core refuses a recording start.** When Core
+
+  **Ruled out of Week 1, 2026-09-13.** `tools.ts:91` is still selector-keyed; whether the patch lane
+  becomes fingerprint-shaped belongs with Week 2's run-time Flow changes (archive "i-leftover-sizing
+  and i-week2-entry-points"; ranking R19).
+- [SETTLED 2026-09-13] **The extension latches idle when Core refuses a recording start.** When Core
   answers `recording.project_required`, the extension clears its pending start,
   so the 750 ms local-start fallback never fires and the recorder stays idle
   until something else restarts it. No retry, and the user sees no reason. Found
@@ -77,7 +87,14 @@ reports had claimed something narrower or wider than what the tree actually did.
   (`RECORDING_START_ACCEPT_TIMEOUT_MS`, line 83), there is no retry, and the block
   is a bespoke UI state rather than a classified failure from the Phase 1.5 set.
   Rescope this to "no retry, and the refusal is not a classified failure".
-- [PARTLY SETTLED — the stale sentence is fixed; the ownership is not] **One harness spec file is shared by every verb brief and owned by none.**
+
+  **Settled 2026-09-13 by i-open-questions-refresh.** A refusal is now classified
+  (`recording-start/refusal.ts:32-107`: transient `context_stale`, persistent `project_not_selected`
+  or `project_mismatch`), a transient one is retried within a bound (`handshake.ts:17-32`), and a
+  persistent one locks the recorder with its reason on the panel (`active-recording.ts:359-369`),
+  wired by archive "f-connection-split". A refused start is not an action, so its closed reason set,
+  not the Phase 1.5 action codes, is the right classification.
+- [SETTLED 2026-09-12] **One harness spec file is shared by every verb brief and owned by none.**
   `apps/extension/e2e/content/tests/actions.spec.ts` carries a row per action, so
   each Wave 2 verb worker must edit it, yet no brief lists it under Owns. That
   contradicts the rule that briefs are partitioned by file, and concurrent edits
@@ -99,6 +116,9 @@ reports had claimed something narrower or wider than what the tree actually did.
   Not done: the file still exists (211 lines), is still touched by any brief that
   adds an action type, and is still listed under no brief's Owns. Give it an owner
   or accept it as supervisor-only.
+
+  **Settled 2026-09-12.** Archive "c-remaining inventory, and the scope it settles" rules
+  `actions.spec.ts` supervisor-only (C4).
 
 - [SETTLED 2026-09-12] **A disabled option is still selectable.** `select.ts` deliberately does not
   gate on actionability, because that capability belongs to w2-click and still
@@ -156,7 +176,7 @@ reports had claimed something narrower or wider than what the tree actually did.
   set: "of the branches that were returned, all but three were synchronous verbs …
   and the three asynchronous ones -- assert, extract-list and scroll". A half-true
   entry is how a worker gets sent at the wrong files.
-- [OPEN — environmental, standing] **The TypeScript compiler crashes under parallel load on this machine.** Twice
+- [SETTLED 2026-09-13 — standing guidance, not a defect] **The TypeScript compiler crashes under parallel load on this machine.** Twice
   on 2026-09-11 `tsc` died with a Windows access violation (exit 3221225477,
   surfacing as a segmentation fault and exit 139 through the shell): once during
   a benchmark build that overlapped another Lab run, and once during a worker
@@ -171,6 +191,9 @@ reports had claimed something narrower or wider than what the tree actually did.
   confirm or refute this. Keep it as standing operational guidance beside the two
   other environmental entries (the content harness under default Playwright
   concurrency, below, and Core's native SQLite).
+
+  **Settled 2026-09-13.** The cause is this machine's faulty RAM; the rerun-alone rule is in
+  `live-validation-plan.md:99` and in Current State's operating rules, so nothing here remains to close.
 - [SETTLED — confirmed 2026-09-12] **No end-to-end spec is type-checked.** `pnpm check` in `apps/extension` runs
   `tsc` over `src/**` through two configs, and neither covers `e2e/**`, so none of
   the thirteen Wave 2 harness specs is type-checked at all. A spec can reference a
@@ -199,7 +222,7 @@ reports had claimed something narrower or wider than what the tree actually did.
   **Re-verified 2026-09-12 by v-openq-audit, by reading the file rather than the
   report.** `apps/extension/tsconfig.test.json` reads `"include": ["src/**/*.ts",
   "e2e/**/*.ts"]` with `"exclude": []`. Closed.
-- [OPEN — operational; see also the last entry in this file] **`pnpm test:content -- --workers=4` silently runs no tests.** The `--` is
+- [SETTLED 2026-09-13] **`pnpm test:content -- --workers=4` silently runs no tests.** The `--` is
   passed through to Playwright as a *filename filter*, so it matches nothing and
   the command exits 1 with "No tests found". Write
   `pnpm --filter @fluxiq-web-extension/extension test:content --workers=4`, with
@@ -215,6 +238,10 @@ reports had claimed something narrower or wider than what the tree actually did.
   `pnpm exec playwright test -c e2e/playwright.content.config.ts --workers=4` from
   `apps/extension`. Both work; the second is the one Wave 3 actually used. Fold
   them into one entry at the next compaction.
+
+  **Settled 2026-09-13.** `apps/extension/package.json:10` now drops a leading `--` before calling
+  Playwright (archive "g-integration-small-fixes", where `test:content -- …identity-veto.spec.ts` ran
+  `4 passed`); the finish-week1 binding rules record 12 tests run through that form on 2026-09-13.
 
 - [SETTLED — re-verified 2026-09-12] **Settled: whether `timed_out` survives the domain hop.**
   w2-domain-status reports that `domain/src/runtime/adapter.ts` no longer flattens
@@ -253,7 +280,7 @@ reports had claimed something narrower or wider than what the tree actually did.
   (`gateway-action-parameters.ts:12-13`) — which is precisely what the "unusable
   parameter has no rejection channel" entry below is about. Landed in `ed6ab74`.
 
-- [OPEN — the user's decision] **The Firefox floor predates the main-world dialog override.** The dialog verb
+- [RULED OUT OF WEEK 1 — Firefox is Week 4; the floor stays the user's decision] **The Firefox floor predates the main-world dialog override.** The dialog verb
   overrides the page dialogs from the main world, which needs Chrome 111 or
   Firefox 128, while `manifest.firefox.json` declares `strict_min_version`
   109.0. On an older Firefox the override detects the wrong world and the verb
@@ -264,7 +291,10 @@ reports had claimed something narrower or wider than what the tree actually did.
   **Verified still open 2026-09-12:** `apps/extension/manifest.firefox.json:43`
   still declares `"strict_min_version": "109.0"`. Unchanged; still the user's call.
 
-- [OPEN] **The recorder never reports a checkbox checked state.** `content/
+  **Ruled out of Week 1.** Archive "c-remaining inventory, and the scope it settles": Firefox is
+  Phase 4.9, Week 4. The floor is unchanged (`manifest.firefox.json:43`) and stays the user's call then.
+
+- [SETTLED 2026-09-13] **The recorder never reports a checkbox checked state.** `content/
   describe-element.ts` omits it, so a recorded checkbox toggle carries no state
   and the mapping to `web.dom.check` deliberately stays evidence rather than
   replaying a guess; the previous behaviour typed the string on into checkboxes.
@@ -274,6 +304,10 @@ reports had claimed something narrower or wider than what the tree actually did.
   **Verified still open 2026-09-12:** `content/describe-element.ts` contains no
   `checked` at all, and `DomElementDescriptor` (`shared/protocol.ts:178-214`)
   declares no such field. Nothing in Wave 3 touched it.
+
+  **Settled 2026-09-13 (B5).** `content/describe-element.ts:69-70,174-178` records `checked` for a
+  checkbox or radio, never for a sensitive control, and `shared/protocol.ts:199-203` declares it; a
+  recorded toggle now maps to an executable `web.dom.check` (archive "B3 and B5 land").
 - [SETTLED — re-verified 2026-09-12] **Settled: the domain target accessible-name field.**
   `domain/src/output-nodes/targets.ts` reads `descriptor.name`, which still means
   the authored `name` attribute, while w2-identity-capture added a dedicated
@@ -290,7 +324,7 @@ reports had claimed something narrower or wider than what the tree actually did.
   line 122 reads `accessibleName: stringValue(element.accessibleName) ??
   stringValue(attributes?.["aria-label"])`. Holds.
 
-- [OPEN] **Landmark context carries a role but no name.** `context.landmark` records the
+- [SETTLED 2026-09-13] **Landmark context carries a role but no name.** `context.landmark` records the
   landmark role only, so the two named regions in the `ambiguous-targets` fixture
   produce identical context, which a test now pins. Corpus workflow W26 resolves
   ambiguity by context and will need either the landmark name or an xpath or
@@ -302,6 +336,12 @@ reports had claimed something narrower or wider than what the tree actually did.
   `content/identity/context.ts:40` fills it from `nearestLandmark(element)`, which
   returns a role. No name, no xpath, no bounds fallback. Still a Wave 4 blocker for
   corpus workflow W26.
+
+  **Settled 2026-09-13 (B5).** `shared/protocol.ts:242-245` declares `landmarkName`, filled at
+  `content/identity/context.ts:67,119` (archive "B3 and B5 land"). W26 needs no landmark signal: it is
+  CS1d, the twins resolved by position, and now reports `web.target.ambiguous` (archive
+  "g-flow-lane-observation and g-identity-drift-mode land; W26 is CS1d" and
+  "g-resolver-corroboration lands"). Its Lab proof belongs to criterion 3.
 - [SETTLED 2026-09-12] **Two page-scheme lists now exist.** `background/connection/browser-state.ts`
   decides which pages cannot be recorded, and w2-browser-actions added
   `runtime/unsupported-page.ts` for the same question on the action path. The
@@ -333,7 +373,7 @@ reports had claimed something narrower or wider than what the tree actually did.
   and the dispatch narrative matches the current code — the lifted parameters,
   `web.browser.tab`/`download` running in the worker, and `execute.ts` awaiting
   "one module per verb". Nothing in it now describes pre-Wave-2 behaviour.
-- [OPEN — the most consequential open item in this file] **A recorded action can be silently dropped from the proposed Flow.** In one
+- [SETTLED 2026-09-13 — a short recording now fails loudly; the benches watch for it] **A recorded action can be silently dropped from the proposed Flow.** In one
   `basic-form` run of four, the click was recorded (`web.element.clicked`, one
   event) but only four of five candidates were proposed, so the Flow lost the
   action without reporting anything. The rerun passed. This is the most serious
@@ -349,7 +389,15 @@ reports had claimed something narrower or wider than what the tree actually did.
   whole week's reliability claim rests on not having. Reproduce it before Wave 5
   measures anything.
 
-- [OPEN — description corrected 2026-09-12: its blocker is gone] **The expired auth-gate workflow cannot report `auth_required` yet.** W19 runs
+  **Settled 2026-09-13.** The cause was Core dropping what a client sent before its recording opened
+  (archive "i-recording-loss"), fixed by "g-core-start-order". A loss can no longer pass silently: a
+  proposal short of the recording's pinned events fails (B1, "g-flow-lane-observation"), and a Core
+  count below the extension's fails as `recording.persistence` on both lanes
+  (`run-expectations/recording-completeness.ts`, "g-recording-completeness"). `l-stage2d` saw no
+  such failure in 18 Flow runs. Any `recording.persistence` failure in `l-stage3a` or `l-stage3b`
+  reopens it as a Week 1 blocker (ranking R9).
+
+- [SETTLED 2026-09-13] **The expired auth-gate workflow cannot report `auth_required` yet.** W19 runs
   its Flow and every action succeeds, so no structured failure is produced and the
   lane fails honestly against the manifest expectation. The cause is upstream of
   the lane: the recorded Flow has no step requesting `/account`, because the
@@ -370,7 +418,12 @@ reports had claimed something narrower or wider than what the tree actually did.
   `domain/src/runtime/host-runtime.ts:102` over `domain/src/runtime/expectation/`.
   This is no longer blocked on anything; it is unbriefed work.
 
-- [OPEN — description corrected 2026-09-12] **A routine command deletes tracked build artifacts.** `pnpm lab` chains
+  **Settled 2026-09-13.** W19 took Option A, the click's own landing claim, rather than a navigation
+  step (archive "g-domain-mapping: … W19 takes Option A"), built by "w19-e1", "w19-e2" and
+  "w19-d1b". `l-stage2c` passed W19 `expired` 3 of 3 on the Flow lane with
+  `auth_required/web.auth.required`.
+
+- [SETTLED 2026-09-13 — Lab instances build elsewhere; a plain build refreshes the tracked copy by design] **A routine command deletes tracked build artifacts.** `pnpm lab` chains
   `pnpm build`, which removes and rewrites the eight tracked files under
   `apps/extension/build/`. That is why no parallel worker may run it, and why the
   flow lane drove the runner CLI directly instead. A command that deletes tracked
@@ -386,6 +439,12 @@ reports had claimed something narrower or wider than what the tree actually did.
   tracked `apps/extension/build/` — now **ten** tracked files, not eight
   (`git ls-files apps/extension/build`). The choice is unchanged: untrack the
   artifacts, or stop the Lab chaining a build.
+
+  **Settled 2026-09-13 by i-open-questions-refresh.** A Lab instance builds the extension under its
+  own root (`run-lab.mjs:48-52`, `build-extension.mjs:13-19`), so concurrent runs no longer delete the
+  unpacked extension another browser loads. A plain `pnpm lab` still refreshes the tracked
+  `apps/extension/build/` (`build-extension.mjs:76`), which AGENTS.md names as how that directory is
+  updated.
 
 - [SETTLED 2026-09-12] **The action type must be joined through the node, and one lane gets it wrong.**
   Core records every recorded action as `builtin.policy.action`, so a lane
@@ -459,7 +518,7 @@ reports had claimed something narrower or wider than what the tree actually did.
   `data:`, `devtools:`, and …". The user-facing wording still says *recorded*,
   which was the deliberate choice.
 
-- [OPEN] **The shared action-type reader adds calls to existing and clone runs.** Reusing
+- [RULED OUT OF WEEK 1 — the Week 1 bench runs isolated targets only] **The shared action-type reader adds calls to existing and clone runs.** Reusing
   `readFlowActionTypes` in `existing-flow-run.ts` brings its `recording.contract`
   throw and two extra Automation Studio calls to any existing or clone run that
   asserts actions. Neither target can be exercised on this machine, so the cost
@@ -473,7 +532,11 @@ reports had claimed something narrower or wider than what the tree actually did.
   existing or clone run that asserts actions. Neither target is exercisable on this
   machine, so the throw and the two extra Automation Studio calls remain
   unmeasured. Unchanged since raised.
-- [OPEN — and now documented in the code as intended behaviour] **An unusable parameter has no rejection channel.** The domain now lifts every
+
+  **Ruled out of Week 1.** Archive "g-lane-consistency": the existing and clone lanes stay as they
+  are because the Week 1 bench runs isolated targets. The throw (`flow-action-types.ts:57`) and the
+  extra calls (`existing-flow-run.ts:106`) remain unmeasured against a real server.
+- [SETTLED 2026-09-13] **An unusable parameter has no rejection channel.** The domain now lifts every
   Wave 2 parameter onto the command and refuses malformed values rather than
   coercing them, which is right. But a valid action type carrying an unusable
   parameter has nowhere to say so: a refused upload reaches the page as a command
@@ -492,6 +555,11 @@ reports had claimed something narrower or wider than what the tree actually did.
   `gateway-mapping.ts:122-125` returns a `WebAutomationActionRejection` carrying
   `web.action.unsupported_type` for an unknown action type. A parameter refusal has
   no equivalent. Phase 1.5 work, unbriefed.
+
+  **Settled 2026-09-13 (B3).** A refused required field rejects the whole command before dispatch as
+  `web.action.invalid_parameter`, `graph_validation_or_unknown_node`, not retryable, stage `dispatch`
+  (`gateway-mapping.ts:385`, `runtime/failure/codes.ts:71,136`; archive "B3 and B5 land"). A refused
+  optional field is simply not applied (`gateway-action-parameters.ts:12-20`), by design.
 - [SETTLED — re-verified 2026-09-12] **The downstream half of the expectation seam has no brief.** The plan says
   Core exposes an optional expectation evaluator and the downstream binds it in
   `domain/src/runtime/expectation-evaluator.ts` over the `web.dom.assert`
@@ -516,7 +584,7 @@ reports had claimed something narrower or wider than what the tree actually did.
   (conditions, mode, timeoutMs, context) => evaluate(...)` onto the boundary; and
   line 68 declares `"expectation-evaluation"` among the host runtime capabilities.
   The seam is bound and not inert.
-- [OPEN — both halves] **The runtime error type has no producer, and its code is not a closed type.**
+- [SETTLED 2026-09-12 — the class was removed, not given a producer] **The runtime error type has no producer, and its code is not a closed type.**
   `WebAutomationRuntimeError` is referenced by the new classifier but nothing in
   the tree throws one, so the classifier has no real input yet. Worse, its `code`
   is typed as a plain `string` rather than the closed code set, so a code outside
@@ -533,6 +601,11 @@ reports had claimed something narrower or wider than what the tree actually did.
   still reachable only from tests, and an out-of-set code would still classify as
   `UNKNOWN` at runtime rather than failing to compile. Duplicated as sub-item 2 of
   the Wave 3 integration checklist below; keep one of the two at compaction.
+
+  **Settled 2026-09-12.** `domain/src/runtime/errors.ts` no longer exists. `runtime/failure/carrier.ts:4-26`
+  records why: every producer attached a failure record instead, and a record's `code` is the closed
+  set, checked by the compiler at the throw (`1b6f5df`; row LR5 in `reports/c-remaining.md`, archive
+  "c-remaining inventory").
 - [SETTLED 2026-09-12 — all four gaps] **Redacting at one reader did not close the secret's other exits.** Phase 1.4
   step 1 was scoped as "stop the recorder capturing password values", and
   w3-redaction closed that properly by redacting inside `readElementValue`, which
@@ -634,7 +707,7 @@ reports had claimed something narrower or wider than what the tree actually did.
   a derivation test (`src/tests/demo-llm-create-ui.test.ts:609`). The declared
   `@fluxiq-web-extension/domain` dependency (`packages/test-runner/package.json:15`)
   stays and now earns its place.
-- [OPEN — the engineering is right, the plan text is not] **There are three failure vocabularies in this repository, and the plan names
+- [SETTLED 2026-09-13 — the plan text is corrected] **There are three failure vocabularies in this repository, and the plan names
   two.** Phase 1.5 step 5 says the runner's allowlist "derives from" the closed
   set in `codes.ts`. It cannot. The allowlist in `demo-llm-create-ui.ts` holds
   evidence-loop *result* codes (`web.inspect.succeeded`,
@@ -661,6 +734,11 @@ reports had claimed something narrower or wider than what the tree actually did.
   vocabulary feeds the other. Correcting them is a two-sentence edit and it belongs
   to whoever next touches the plan; leaving it is how the next brief repeats the
   conflation.
+
+  **Settled 2026-09-13.** The plan's Phase 1.5 steps now name `carrier.ts` in place of the removed
+  `WebAutomationRuntimeError`, and say the runner's allowlist derives from the domain's evidence-loop
+  result codes and tool ids, `WEB_LLM_EVIDENCE_RESULT_CODES` and `WEB_LLM_EVIDENCE_TOOL_IDS` (plan
+  ledger "i-open-questions-refresh").
 - [SETTLED 2026-09-12] **Three different `truncated` flags are landing on one evidence path.**
   w3-state-identity adds `elements.truncated` to recording state, w3-evidence
   adds a snapshot-level `truncated` with pre-filter totals, and w3-llm-packet
@@ -756,7 +834,7 @@ reports had claimed something narrower or wider than what the tree actually did.
   `identity-drift` (Discard −0.360 ahead of the real Save −0.375, and the resolver
   refusing both). The documented fallback — returning candidates for Core to score
   out of process — was correctly not taken.
-- [OPEN — description corrected 2026-09-12: the declared field is now write-only] **Corrected: the fingerprint does reach the content script.** The supervisor
+- [SETTLED 2026-09-12] **Corrected: the fingerprint does reach the content script.** The supervisor
   read `WebAutomationActionCommand`, found no `element` or `fingerprint` field,
   and told two workers the fingerprint was being dropped at the boundary and
   that the resolver was being built against an input that never arrives. That
@@ -787,7 +865,11 @@ reports had claimed something narrower or wider than what the tree actually did.
   green — the exact failure this contract improvement was meant to prevent. One
   line in `recordedTarget` (prefer `action.element`, fall back to
   `action.options?.element`) closes it.
-- [PARTLY SETTLED — 2 of 6 closed; audited 2026-09-12] **Integration checklist accumulating from Wave 3 reports.** Each is small,
+
+  **Settled 2026-09-12.** `recordedTarget()` prefers the declared `action.element` and falls back to
+  `options.element` (`resolve-target.ts:571-572`), and `tests/resolve-target.test.ts:113` fails if
+  the declared field stops being read.
+- [SETTLED 2026-09-13 — items 1, 2, 4 and 5 closed; 3 ruled out of Week 1 as B4; 6 a lesson] **Integration checklist accumulating from Wave 3 reports.** Each is small,
   unowned, and needs a still tree: the four failure builders in
   `validation-outcome.ts` now have zero production call sites; narrowing
   `WebAutomationRuntimeError["code"]` to the closed set is a two-line change in
@@ -822,7 +904,13 @@ reports had claimed something narrower or wider than what the tree actually did.
      records of what was true then.
   6. **Process note, no code state.** The ownership observation about
      `resolve-target.spec.ts` and `wait-conditions.ts` is a lesson, not a task.
-- [OPEN — process lesson, no code state] **Three Wave 3 briefs granted the same file with no partition inside it.**
+
+  **2026-09-13:** item 2 closed with E28 (the class is gone, `carrier.ts:4-26`); item 3 is B4, ruled
+  out of Week 1 unless the Lab evidence run misses a child frame's items (archive "c-remaining
+  inventory"; `runtime/action-runner.ts:234` still sends `topFrameOnly: frameId === undefined`); item
+  4 closed, `domain/.test-build/` regenerated (archive "Integration: root gates pass here against Core
+  built at `20bb3b4`").
+- [SETTLED 2026-09-13 — the rule is in AGENTS.md] **Three Wave 3 briefs granted the same file with no partition inside it.**
   `apps/extension/src/runtime/action-runner.ts` appears under Owns in
   w3-frame-plumbing, w3-extension-gaps (granted mid-wave on request) and
   w3-worker-codes. Nothing was lost, but only because each change happened to
@@ -836,6 +924,8 @@ reports had claimed something narrower or wider than what the tree actually did.
   top of this file and the two ownership failures recorded in the run-manifest and
   runner-alignment entries. Four instances now; worth promoting to the plan's
   wave-dispatch rules rather than leaving as a fourth open question.
+
+  **Settled.** AGENTS.md:96 now reads "If two briefs need the same file, the work is serial."
 - [SETTLED — re-verified 2026-09-12] **Settled: `workerActionFailedFailure` maps to `ACTION_FAILED`, not `UNKNOWN`.**
   The supervisor's brief told w3-worker-codes to map it to `UNKNOWN`, glossing
   that member as "the action ran and failed for a reason no other code names".
@@ -860,7 +950,7 @@ reports had claimed something narrower or wider than what the tree actually did.
   `action_failed` / retryable / `execution` and `:53,115` that `UNKNOWN` is
   `ambiguous_or_unknown` / not retryable — the behaviour difference the worker
   measured. Holds.
-- [OPEN — description corrected 2026-09-12: the stated blocker is gone] **Half of the headline audit finding is now closed, and it is worth being
+- [RULED OUT OF WEEK 1 — scoring stays in the browser; Core's gate is inert for web] **Half of the headline audit finding is now closed, and it is worth being
   precise about which half.** The Week 1 audit said "Core's element matcher never
   receives candidates and its top signals are zero for web targets". Those are two
   defects, not one.
@@ -895,7 +985,12 @@ reports had claimed something narrower or wider than what the tree actually did.
   today, because nothing populates `candidates` yet"). Decide whether the wire ever
   needs to carry them, given the scoring now happens where the live DOM is — which
   was D1's whole motivation. Do not re-derive this as blocked work.
-- [OPEN] **The domain test runner aborts the whole suite on the first throw.** Every
+
+  **Ruled out of Week 1.** Archive "i-resolver-safety: … D14 amended": for web, Week 1's floor is the
+  browser's, Core's element-target floor stays inert, Core similarity metadata is not Week 1, and B.3
+  is Week 2; restated in "Finish-Week-1 session: fifteen settled entries archived".
+  `gateway-mapping.ts:218` still says nothing populates `candidates`.
+- [SETTLED 2026-09-13] **The domain test runner aborts the whole suite on the first throw.** Every
   bundle is imported in one process, so a single failing assertion stops the run
   before most files execute, and a concurrent worker sees `# tests 10` and an
   abort rather than one red row. That happened during Wave 3: one stale assertion
@@ -911,7 +1006,11 @@ reports had claimed something narrower or wider than what the tree actually did.
   `for (const entry of entryPoints) { … await import(pathToFileURL(bundle).href); }`
   with no `try`/`catch` and no per-entry reporting, so the first throw still ends
   the run and hides every entry after it. Unchanged.
-- [OPEN — standing operational guidance] **The content harness fails catastrophically and misleadingly under default
+
+  **Settled 2026-09-13 (A3).** `domain/scripts/test-domain.mjs:54-72` imports each entry in its own
+  `try`, names every entry that failed to load, runs the rest, and exits 1 (archive "g-small-fixes:
+  C1, A3, A4, LR9 and C3").
+- [SETTLED 2026-09-13 — standing guidance, not a defect] **The content harness fails catastrophically and misleadingly under default
   Playwright concurrency on this machine.** w3-spec-reconciliation's first run
   reported **66 of 66 failed**, every one a 30-second timeout inside
   `e2e/content/harness.ts:88` with no assertion diff. That is indistinguishable
@@ -929,6 +1028,9 @@ reports had claimed something narrower or wider than what the tree actually did.
   `11d2ed3` "content harness 186 passed at --workers=4". Keep the tell in mind: a
   total, uniform failure whose every case is a timeout with no assertion diff is
   the machine; a partial failure with real diffs is real.
+
+  **Settled 2026-09-13.** `e2e/playwright.content.config.ts` defaults to `workers: 4` (archive
+  "g-small-fixes"), and the all-timeouts shape is in `live-validation-plan.md:101`.
 - [SETTLED 2026-09-12] **Three assert rows are tests that cannot fail.** Three of the five reconciled
   assert rows pass `timeoutMs: 200` to exercise the expiry path, but
   `AssertionOutcome` carries no timing, so they assert `STATE_MISMATCH` — and
@@ -1014,7 +1116,7 @@ reports had claimed something narrower or wider than what the tree actually did.
   argued for. One stale trace remains, outside this file:
   `content/action-runtime/validation-outcome.ts:24-28` still says the record type
   "types `code` as a bare `string`".
-- [OPEN — and now AT the limit, not near it] **`connection.ts` is close to its hard limits.** 745 of 800 lines, and
+- [SETTLED 2026-09-12] **`connection.ts` is close to its hard limits.** 745 of 800 lines, and
   `FluxIQConnection` carries 39 of its 40 permitted methods. The next change
   there will fail the structure audit rather than merely warn. Split it before
   Wave 4 rather than during whatever task first trips it. Found 2026-09-12 by
@@ -1028,6 +1130,9 @@ reports had claimed something narrower or wider than what the tree actually did.
   outright rather than warning. (The count is a regex over class-indent
   declarations, so read it as 39 or 40; either way it is at the boundary.) Split it
   before Wave 4, as this entry says.
+
+  **Settled 2026-09-12.** Archive "f-connection-split: `connection.ts` 764 lines to 344" (38 methods to
+  20); the file is 360 lines at `0257357`.
 - [SETTLED — record, accepted trade-off] **A merged multi-frame recording event is bigger, deliberately.** Now that the
   recording event carries the tab-merged snapshot, a multi-frame page sends the
   whole tab: measured +4.3 KB at two frames and +12 KB at six, and exactly zero
@@ -1039,7 +1144,7 @@ reports had claimed something narrower or wider than what the tree actually did.
   not synthetic ones. Recorded 2026-09-12.
   **2026-09-12:** left as the record it is. Nothing to close; revisit only with real
   page measurements, as it says.
-- [SUPERSEDED — duplicate; merge with the `--workers=4` entry above] **Operational: `pnpm --filter ... test:content -- --workers=4` runs nothing.**
+- [SETTLED 2026-09-13 — the same fix as the earlier --workers=4 entry] **Operational: `pnpm --filter ... test:content -- --workers=4` runs nothing.**
   pnpm forwards the literal `--`, and Playwright reports "No tests found", which
   reads as a broken harness rather than a bad command line. Run it directly:
   `pnpm exec playwright test -c e2e/playwright.content.config.ts --workers=4`
@@ -1051,7 +1156,7 @@ reports had claimed something narrower or wider than what the tree actually did.
   playwright test -c e2e/playwright.content.config.ts --workers=4` from
   `apps/extension`), that one carries the reason the pipe-versus-redirect rule
   caught it.
-- [OPEN — needs a Core decision] **A client's declared type and capabilities are
+- [RULED OUT OF WEEK 1 — a Core pairing-time decision, sized Later] **A client's declared type and capabilities are
   self-asserted and unverified, so nothing gating on them is a boundary.** Found
   2026-09-12 by L-doc-truth while correcting a comment, and confirmed by the
   supervisor by reading Core: `packages/fluxiq/src/client-gateway/service/
@@ -1080,7 +1185,11 @@ reports had claimed something narrower or wider than what the tree actually did.
   decision; it is recorded here because Week 1's redaction work rests on knowing
   which of the two these guards are. Owner: senior supervisor agent, for the
   Core document.
-- [OPEN — invalidates a class of measurement] **Every Flow-lane structured
+
+  **Ruled out of Week 1.** Archive "i-leftover-sizing and i-week2-entry-points" sizes Core's `hello`
+  identity as Later. The redaction guards stay defence in depth against our own producers; criterion
+  2's proofs do not assume a hostile client.
+- [OPEN — the records survive now; the classification rate is owed by both benches] **Every Flow-lane structured
   failure has been deleted from the recorded history, so any claim about how
   failures classify is unsound.** Found 2026-09-12 by x-evidence-crash while
   fixing a serialiser bug, and the survivorship analysis matters more than the
@@ -1118,7 +1227,13 @@ reports had claimed something narrower or wider than what the tree actually did.
   needs a fresh Flow-lane campaign over the negative variants, after the
   recording-proposal race fix lands, and the earlier bundles should be treated
   as evidence of nothing on this question. Owner: senior supervisor agent.
-- [OPEN — needs a product decision] **Redaction is signature-based, so a
+
+  **2026-09-13:** the loss is fixed (`redaction.ts:53,88`; the observation fix in archive
+  "g-flow-lane-observation"), and `l-stage2d`'s bundles carry Flow-lane failures such as
+  `output_not_observed` and `web.action.timeout`. What stays open is the rate: under "Rulings on how
+  the criteria count", `l-stage3a` and `l-stage3b` must show the W14, W19 and W27 negative variants at
+  90% or better (ranking R7).
+- [RULED OUT OF WEEK 1 — the limit is documented; warning or operator marking is Week 2] **Redaction is signature-based, so a
   sensitive field the page fails to mark is captured and replayed.** Found
   2026-09-12 by r-checkout while building a realistic storefront fixture.
   The canonical rule in `domain/src/sensitivity/` recognises `type="password"`,
@@ -1155,7 +1270,11 @@ reports had claimed something narrower or wider than what the tree actually did.
   Option 1 alone leaves a real capture path open. Option 2 is the smallest change
   that stops it being silent, which is this plan's recurring standard. Owner:
   senior supervisor agent, pending the user's decision.
-- [OPEN — a decision the supervisor took on an incorrect premise] **D13 moves
+
+  **Ruled out of Week 1, 2026-09-13.** Option 1 is in place (`sensitive-values.md:226-229`). Criterion
+  2's leak checks cover declared, marked secrets. Options 2 and 3 are Week 2, unless the user
+  chooses one for Week 1.
+- [RULED OUT OF WEEK 1 — Core's element-target gate is inert for web; decide with B.3] **D13 moves
   candidates across Core's `destructive` gate, which the accepting note denied.**
   Found 2026-09-12 by p-core-version while versioning the change.
   When the supervisor accepted D13, the recorded justification said the loosening
@@ -1189,7 +1308,11 @@ reports had claimed something narrower or wider than what the tree actually did.
   change needing a note has no home at patch, and under a caret range a patch
   would move a `destructive` gate with no host code changing. Owner: senior
   supervisor agent, pending the user.
-- [OPEN — three product defects found by the first realistic fixture] The
+
+  **Ruled out of Week 1, 2026-09-13.** Core's element-target floor stays inert for web (archive
+  "i-resolver-safety", CS2c), so the loosened `destructive` rung gates no web action this week. The
+  choice among the three options returns with B.3, Week 2.
+- [RULED OUT OF WEEK 1 — the fixture is outside the week1 corpus] The
   `admin-console` CRM fixture, built 2026-09-12 by r-admin at the user's
   prompting that the existing scenarios "dont look like any real website", found
   three defects on its first outing. Ranked by consequence, and none is fixed.
@@ -1224,7 +1347,11 @@ reports had claimed something narrower or wider than what the tree actually did.
   in the week1 corpus; adding it would turn the corpus red, which is a decision
   rather than an oversight. Owner: senior supervisor agent, for the wave after
   the current one lands.
-- [OPEN — the headline safety finding; needs the user's decision] **On the
+
+  **Ruled out of Week 1, 2026-09-13.** The exit criteria are measured on the week1 corpus, which
+  excludes `admin-console` by the decision this entry records; virtualised lists, open shadow roots
+  and pane scrolling are Week 2 recorder and resolver work.
+- [SETTLED 2026-09-13 in code — W29 carries the Lab proof] **On the
   recordings production actually generates, the resolver clicks a plausibly
   wrong control and reports success.** Measured 2026-09-12 by x-identifierless
   on the real matcher, in real Chromium, reproduced twice.
@@ -1265,7 +1392,14 @@ reports had claimed something narrower or wider than what the tree actually did.
   measurements, and two of them have already been corrected once. Changing one
   on this evidence without re-running the others is how a safety property gets
   quietly undone. Owner: senior supervisor agent, surfaced to the user.
-- [OPEN — real-page viability, not correctness] **Snapshot and evidence capture
+
+  **Settled in code 2026-09-13.** No floor could separate the cases, so a predicate does: a match that
+  no distinguishing recorded signal agrees with exactly is refused (archive "i-resolver-safety … D14
+  amended"; "g-resolver-corroboration lands"; `identity/corroboration.ts:46,67`). The accepted cost is
+  a refusal where a label was shortened. W29 `save-and-exit` puts this shape in the week1 bench; its
+  refusal in `l-stage3a` and `l-stage3b` is criterion 3's proof (ranking R6, R18).
+  The user has not explicitly accepted design A, and was told so on 2026-09-13.
+- [RULED OUT OF WEEK 1 — real-page capture cost is Week 2; no week1 page is that size] **Snapshot and evidence capture
   cost seconds on a realistic page, and that is the dominant latency in the
   product.** Measured 2026-09-12 by x-scan-cap in real Chromium while
   instrumenting something else.
@@ -1290,7 +1424,11 @@ reports had claimed something narrower or wider than what the tree actually did.
   needs a full capture, or whether a failure path and an exploration path want
   different budgets, which the byte budgets already distinguish.
   Owner: senior supervisor agent, for the wave after the current one lands.
-- [OPEN — scale findings from the first genuinely large fixture] The
+
+  **Ruled out of Week 1, 2026-09-13.** Criterion 5 compares bench A with bench B on the same small
+  pages, so this cost cannot move a Week 1 figure; it becomes a Week 1 blocker only if a bench p95
+  outside tolerance traces to capture (ranking R20).
+- [RULED OUT OF WEEK 1 — capacity caps and harness blind spots are Week 2] The
   `member-directory` console (4,484 elements, depth 14, 510 focusable controls,
   **0 authored class names**, one build-hash class on 244 elements at once, 240
   identical row-action buttons) was built 2026-09-12 by r-dashboard. Three
@@ -1323,7 +1461,10 @@ reports had claimed something narrower or wider than what the tree actually did.
   it only by `tablePosition.row` — a positional index this page's own filtering
   and sorting invalidate. So the one signal that distinguishes them is the one
   least stable across a session. Owner: senior supervisor agent.
-- [OPEN — two facts that constrain any fix to the identifier-less exposure]
+
+  **Ruled out of Week 1, 2026-09-13.** Neither cap is reached by a week1 page. The harness being more
+  permissive than a real page, and the testid-only fact vocabulary, are Week 2 tooling work.
+- [SETTLED 2026-09-13 — record; the fix became a predicate, and the cap goes with E58]
   Measured 2026-09-12 by x-identifierless alongside the 0.633 near-miss result.
   **1. No single constant separates the two regimes, so the floor cannot be
   tuned to fix this.** With identifiers, the wanted case and the dangerous one
@@ -1349,3 +1490,7 @@ reports had claimed something narrower or wider than what the tree actually did.
   The probe behind all of these validated itself first, reproducing `score.ts`'s
   published 0.389 and 0.088 to three decimals on an authored recording.
   Owner: senior supervisor agent, surfaced to the user with the 0.633 finding.
+
+  **2026-09-13:** fact 1 is why design A is a predicate rather than a moved floor (archive
+  "i-resolver-safety"); fact 2's outcome is a refusal, not a wrong click; `MAX_CANDIDATES` (still 60,
+  `identity/candidates.ts:108`) is ranked with real-page capacity, E58.

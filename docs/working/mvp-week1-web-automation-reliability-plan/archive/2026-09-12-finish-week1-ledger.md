@@ -3698,3 +3698,62 @@ The leftover sizing, root gates and architecture-page entries, archived when the
     `element-fingerprint.ts:282-283` holds −0.1 and −0.8, as the page states.
 - Not verified: the rendered Markdown.
 - Outcome: Accepted
+
+## Part forty-eight, archived 2026-09-13
+
+The Lab recheck entry, archived when the open-questions refresh was recorded.
+
+### 2026-09-13 — l-stage2d: the fixes for W15, W25 `too-slow`, W17 and W28 hold live, and W05 `short-catalog` fails as predicted
+
+- Agent: worker `l-stage2d` (Lab owner); verification by supervisor.
+- Pins: this repository `d639415` and Core `3cb8976`, both `dirty=false` in every
+  `run.json`; Core built once at 09:51.
+- Observed, each row ×3; every run is a single observation:
+  - **W15 `multi-tab`:** unarmed passes, click → tab ×3 → click. `popup-blocked`
+    passes, reporting `output_not_observed`. In `l-stage2c` it was 0 of 6;
+  - **W28 `iframe-checkout`:** passes, and both frame clicks succeed. Runs 1 and 2
+    each recorded one trailing scroll, in frame 4 at `x=0, y=29`, after both clicks;
+  - **W25 `too-slow`:** reports `web.action.timeout` and passes. In `l-stage2c` it
+    reported `output_dispatch.timed_out`;
+  - **W17 `upload`:** passes. The file's name and content are in Core's kept
+    workspace 0 times, SQLite included; `l-stage2c` found the name twice per run;
+  - **W05 `short-catalog`:** the first node, page 1's Next click, fails
+    `target_not_found` / `web.target.not_found`. Run 3 hit a startup timeout, and
+    its rerun, alone, did not;
+  - **All 18 Flow runs:** `startCandidateIndex` 0, `stoppedWithoutFailedAttempt` null,
+    and no `recording.persistence` failure. Lowest free memory 7.55 GB.
+- Found:
+  - **W04's and W08's Flow rows fail `recording.contract`** ("Core produced no
+    recording Flow proposal", 0 recorded actions) in the bench, which was stopped at
+    29 of 67 rows. Dispatched as `i-w04-w08-no-proposal`;
+  - W05 run 1: Core held 4 actions to the extension's 3. This is a single
+    observation, and the completeness check does not fail it;
+  - a trailing page scroll becomes a Flow node in W28, W05 and W07. The nodes
+    succeed;
+  - item 7d cannot be read from a bundle: whether a discard was a runtime
+    confirmation stays in Core's in-memory audit log.
+- Decisions:
+  - **W05 `short-catalog` is ruled out of Week 1,** as `i-w05-short-catalog` decided
+    once the Lab showed its failure. Core has no "Next present" output, and no
+    mapper builds a loop.
+  - **W28's scroll fix is not Week 1.** No verdict changes; the trailing scroll is
+    ranked with recorder fidelity as a Week 2 entry.
+- Validation:
+  - **Supervisor, the bundles:** a reader over the 19 `run.json` files under
+    `F:\fxlab-runs\stage2d\` `a`, `b` and `c` printed:
+    - W15 unarmed, W28 and W17, ×3 each: `fail=null | ver=passed | start=0 | early=null`;
+    - W15 `popup-blocked` ×3:
+      `fail={"category":"output_not_observed","code":"web.validation.output_not_observed"} | ver=passed | start=0`;
+    - W25 `too-slow` ×3: `fail={"category":"timeout","code":"web.action.timeout"} | ver=passed | start=0`;
+    - W05 `short-catalog` ×3:
+      `fail={"category":"target_not_found","code":"web.target.not_found"} | ver=failed | start=0`,
+      plus one run with no `flow-lane.json`.
+  - **Supervisor, W17's kept workspace** `run-mu02kwj1-8104b227`: `l-stage2c-search.mjs` over `fluxiq-root`
+    printed "files scanned=33", "sqliteDatabases=3 sqliteDatabasesUnreadable=0", and
+    `total needle=upload-name files=0 utf8=0 utf16le=0 sqliteCells=0`, with the same
+    zeros for the content and its first line. Its control needle printed
+    `total needle=control files=13 utf8=121 utf16le=0 sqliteCells=6`, so the search
+    reads the stores where the name would sit.
+- Not verified: the full bench, which was stopped; what causes the trailing scrolls;
+  which action Core held extra in W05 run 1.
+- Outcome: Accepted

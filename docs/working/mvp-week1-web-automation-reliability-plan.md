@@ -36,7 +36,7 @@ has its full proof. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
-settled ledger entries are in parts one to forty-seven of
+settled ledger entries are in parts one to forty-eight of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
 **True on 2026-09-13.**
@@ -80,15 +80,21 @@ settled ledger entries are in parts one to forty-seven of
     entry now carries it (`32b4324`);
   - the architecture pages for E1-E3, D1 and D1b (`d775b5e`).
 
-**Ruled out of Week 1, reasons in the ledger:**
-- Firefox; CS1b, a late recording event sent to the client as an error frame;
-- B4, B7, C5, C7 and D4; raw snapshot bytes; per-lane distributions;
-- the landing marker for a wrong landing served 200; honouring `failureRoute` (Core);
-- approving a recording proposal as a node definition, which drops `expectedState`;
-- W24 `unannounced` (a recorded-payload contract change) and W13 `banner-absent`
-  (P7, a new Core node outcome); both rows stay in the corpus.
-- W05 `short-catalog`: no "Next present" output and no loop mapper; its Lab failure
-  matched the prediction (`l-stage2d`).
+**Ruled out of Week 1, reasons in the ledger and its archive:**
+- Firefox and C8 (Week 4); CS1b; B4, B7, C5, C7 and D4; D5 unless the bench shows `unknown`
+  rows; raw snapshot bytes; per-lane distributions; read-only `lab` commands skipping the build.
+- Resolver: B.3; Core similarity metadata; Core's web element-target floor stays inert;
+  CS1f's Core-served confidence unless a criterion 3 row fails live.
+- Core: `failureRoute`; node definitions dropping `expectedState`; `hello` identity; `dataDir`;
+  timeout precedence; a second recording root; duplicate edges; changing a running Flow.
+- W19's edges: a wrong landing served 200, a soft 404, a 401 sign-in, a sign-up form's URL claim.
+- Evidence: a literal split across freed SQLite pages; a stored URL's query (Week 2 entry).
+- Rows: W24 `unannounced`; W13 `banner-absent` (P7); W05 `short-catalog`; W28's trailing
+  scroll; paginated extraction's Lab producer; negatives on the existing and clone lanes; W04's
+  and W08's Flow rows, which have no action to record. W24, W13 and W05 stay in the corpus.
+- Decisions left for Week 2 (open-questions E2, E53-E58): the patch lane's shape; redaction
+  beyond marked fields and D13's `destructive` rung (both the user's); realistic-fixture defects;
+  real-page capture cost and candidate caps.
 
 **In flight:**
 - **Lab Stage 3, concurrently at `d639415` and Core `3cb8976`:** `l-stage3a` and
@@ -489,8 +495,8 @@ Steps:
 3. **Downstream producers** (`content/action-runtime/results.ts`,
    `content/action-runtime/resolve-target.ts`, `apps/extension/src/runtime/
    action-runner.ts`, `domain/src/runtime/adapter.ts`, new
-   `domain/src/runtime/failure/{codes,classify}.ts` using
-   `WebAutomationRuntimeError`): every browser failure carries the
+   `domain/src/runtime/failure/{codes,classify,carrier}.ts`, a producer attaching a
+   failure record to what it throws): every browser failure carries the
    structured field — `TARGET_NOT_FOUND`/`TARGET_AMBIGUOUS` from the
    resolver, `OUTPUT_NOT_OBSERVED`/`STATE_MISMATCH` from validation with
    expected/actual, `NAVIGATION_UNEXPECTED` (landed URL, redirect,
@@ -498,8 +504,9 @@ Steps:
    and execution), `TIMEOUT`, `ACTION_REJECTED` (one shape), `AUTH_REQUIRED`
    (login-form-after-redirect heuristic, `auth-gate`),
    `USER_INTERVENTION_REQUIRED` (captcha markers, pending native dialog),
-   `UNKNOWN`. Codes are a closed set in `codes.ts`; the test-runner's
-   allowlist derives from it.
+   `UNKNOWN`. Codes are a closed set in `codes.ts`. The test-runner's allowlist
+   derives from a different vocabulary, the domain's evidence-loop result codes and
+   tool ids.
 4. **Failure-moment evidence** (`content/action-runtime/results.ts`,
    `domain/src/client/gateway-mapping.ts`, `domain/src/runtime/llm-evidence/`):
    a failed result attaches a sanitized `web-llm-evidence.v1` packet
@@ -508,7 +515,8 @@ Steps:
    supplement.
 5. **Test-runner alignment** (`packages/test-runner/src/demo-llm-create-ui.ts`
    allowlist, `failure.ts` dead list, `bench/evaluate-run.ts` categories; there is no `evaluation.ts`, corrected 2026-09-11): allowlist
-   generated from domain codes; `runnerFailureCategories` removed.
+   derived from `WEB_LLM_EVIDENCE_RESULT_CODES` and `WEB_LLM_EVIDENCE_TOOL_IDS` through
+   `@fluxiq-web-extension/domain/node`; `runnerFailureCategories` removed.
 
 Proof: T2 `content/failures.spec.ts` on `failure-surfaces`, `auth-gate`,
 `intermediate-state`, `navigation` planting each category and asserting the
@@ -634,61 +642,6 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 `2026-09-12-*` Wave 3 and live-validation files, and
 `2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-13 — l-stage2d: the fixes for W15, W25 `too-slow`, W17 and W28 hold live, and W05 `short-catalog` fails as predicted
-
-- Agent: worker `l-stage2d` (Lab owner); verification by supervisor.
-- Pins: this repository `d639415` and Core `3cb8976`, both `dirty=false` in every
-  `run.json`; Core built once at 09:51.
-- Observed, each row ×3; every run is a single observation:
-  - **W15 `multi-tab`:** unarmed passes, click → tab ×3 → click. `popup-blocked`
-    passes, reporting `output_not_observed`. In `l-stage2c` it was 0 of 6;
-  - **W28 `iframe-checkout`:** passes, and both frame clicks succeed. Runs 1 and 2
-    each recorded one trailing scroll, in frame 4 at `x=0, y=29`, after both clicks;
-  - **W25 `too-slow`:** reports `web.action.timeout` and passes. In `l-stage2c` it
-    reported `output_dispatch.timed_out`;
-  - **W17 `upload`:** passes. The file's name and content are in Core's kept
-    workspace 0 times, SQLite included; `l-stage2c` found the name twice per run;
-  - **W05 `short-catalog`:** the first node, page 1's Next click, fails
-    `target_not_found` / `web.target.not_found`. Run 3 hit a startup timeout, and
-    its rerun, alone, did not;
-  - **All 18 Flow runs:** `startCandidateIndex` 0, `stoppedWithoutFailedAttempt` null,
-    and no `recording.persistence` failure. Lowest free memory 7.55 GB.
-- Found:
-  - **W04's and W08's Flow rows fail `recording.contract`** ("Core produced no
-    recording Flow proposal", 0 recorded actions) in the bench, which was stopped at
-    29 of 67 rows. Dispatched as `i-w04-w08-no-proposal`;
-  - W05 run 1: Core held 4 actions to the extension's 3. This is a single
-    observation, and the completeness check does not fail it;
-  - a trailing page scroll becomes a Flow node in W28, W05 and W07. The nodes
-    succeed;
-  - item 7d cannot be read from a bundle: whether a discard was a runtime
-    confirmation stays in Core's in-memory audit log.
-- Decisions:
-  - **W05 `short-catalog` is ruled out of Week 1,** as `i-w05-short-catalog` decided
-    once the Lab showed its failure. Core has no "Next present" output, and no
-    mapper builds a loop.
-  - **W28's scroll fix is not Week 1.** No verdict changes; the trailing scroll is
-    ranked with recorder fidelity as a Week 2 entry.
-- Validation:
-  - **Supervisor, the bundles:** a reader over the 19 `run.json` files under
-    `F:\fxlab-runs\stage2d\` `a`, `b` and `c` printed:
-    - W15 unarmed, W28 and W17, ×3 each: `fail=null | ver=passed | start=0 | early=null`;
-    - W15 `popup-blocked` ×3:
-      `fail={"category":"output_not_observed","code":"web.validation.output_not_observed"} | ver=passed | start=0`;
-    - W25 `too-slow` ×3: `fail={"category":"timeout","code":"web.action.timeout"} | ver=passed | start=0`;
-    - W05 `short-catalog` ×3:
-      `fail={"category":"target_not_found","code":"web.target.not_found"} | ver=failed | start=0`,
-      plus one run with no `flow-lane.json`.
-  - **Supervisor, W17's kept workspace** `run-mu02kwj1-8104b227`: `l-stage2c-search.mjs` over `fluxiq-root`
-    printed "files scanned=33", "sqliteDatabases=3 sqliteDatabasesUnreadable=0", and
-    `total needle=upload-name files=0 utf8=0 utf16le=0 sqliteCells=0`, with the same
-    zeros for the content and its first line. Its control needle printed
-    `total needle=control files=13 utf8=121 utf16le=0 sqliteCells=6`, so the search
-    reads the stores where the name would sit.
-- Not verified: the full bench, which was stopped; what causes the trailing scrolls;
-  which action Core held extra in W05 run 1.
-- Outcome: Accepted
-
 ### 2026-09-13 — Rulings on how the criteria count, and Lab Stage 3 split across concurrent workers
 
 - Agent: supervisor, on `i-ranking-draft` Q1-Q4, and on the user's question why only
@@ -734,6 +687,56 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
     - `live-patch.ts:178` starts a patch clone at the failed node;
   - pushed, Core `3cb8976..f22f401`.
 - Not verified: the new in-page anchor link, which the checker skips.
+- Outcome: Accepted
+
+### 2026-09-13 — i-open-questions-refresh: every open question carries its true status, and six are ruled
+
+- Agent: worker `i-open-questions-refresh`, read-only; rulings, edits and verification
+  by supervisor.
+- Changed:
+  - `open-questions.md`: 25 tags and closing paragraphs, a `[RULED OUT OF WEEK 1 …]`
+    tag row, and the audit sentence;
+  - Current State's ruled-out list;
+  - the plan's failure-vocabulary sentences (E32).
+- Found:
+  - Of 33 entries not tagged settled:
+    - 21 are settled at HEAD, and 4 are ruled out by recorded decisions;
+    - 2 stay open: E32's plan text, now fixed, and E52's classification rate, which
+      both benches owe;
+    - 6 had no ruling.
+  - **Four settlements had no ledger heading until this one:**
+    - E3, the classified and retried recording-start refusal (`ab736a1`);
+    - E20, the Lab instance's own extension build root (`ab736a1`);
+    - E28, the removed runtime error class (`1b6f5df`);
+    - E37, the read of the declared `action.element` (`ab736a1`).
+  - PB10b is Week 1 work that landed as `w19-c2`, not a ruled-out item.
+    `i-ranking-draft` section 2 lists it wrongly.
+- Decisions:
+  - **Ruled out of Week 1 by the supervisor:**
+    - E2, the selector-keyed patch lane, a Week 2 contract;
+    - E55, the `admin-console` defects, and E58, the `member-directory` scale findings.
+      Both fixtures are outside the week1 corpus;
+    - E57, real-page capture cost. No week1 page is that size, so it becomes a blocker
+      only if a bench p95 traces to capture.
+  - **Scoped out of Week 1, with the product choice left to the user:**
+    - E53, redaction beyond marked fields; the signature limit is documented;
+    - E54, D13's loosened `destructive` rung. Core's element-target gate is inert for web
+      this week.
+  - **E56** is settled in code by the supervisor's design A, a corroboration predicate,
+    and W29 carries its Lab proof. The user has not explicitly accepted design A, and is
+    told so.
+- Validation: supervisor reads at `0257357`:
+  - `domain/src/runtime/errors.ts` does not exist;
+  - `apps/extension/src/background/connection.ts` is 360 lines;
+  - `background/connection/recording-start/refusal.ts` exists;
+  - `apps/extension/package.json:10` drops a leading `--` before calling Playwright;
+  - `manifest.firefox.json:43` is `"strict_min_version": "109.0"`;
+  - `content/action-runtime/resolve-target.ts:572` reads
+    `describedElement(action.element) ?? describedElement(action.options?.element)`;
+  - `content/identity/corroboration.ts:67` compares against `EXACT_SIMILARITY`;
+  - AGENTS.md:96 holds "If two briefs need the same file, the work is serial."
+- Not verified: the 26 settled entries the worker did not re-read; the Core claims behind
+  E51 and E54, which rest on the archive.
 - Outcome: Accepted
 
 ## Open Questions

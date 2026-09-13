@@ -4372,3 +4372,228 @@ kinds and counts only. Do not open anything under `F:\fxlab-runs\stage3\`.
 No Lab runs and no edits. Quote no recorded page data.
 
 **Report:** `reports/i-w04-w08-no-proposal.md`.
+
+## i-open-questions-refresh — every open question and ruled-out item, with its true status (read-only)
+
+Dispatched on `i-ranking-draft` open questions 5 and 6, while Lab Stage 3 runs. Week 1
+is finished only when every open item is closed, or ruled out with its reason
+recorded.
+
+**Owns:** `reports/i-open-questions-refresh.md`. Nothing tracked; the supervisor
+applies the edits.
+
+**Read:**
+- `open-questions.md`, in full;
+- the plan's Current State;
+- `reports/i-ranking-draft.md`, sections 2 and "Open questions";
+- the archive and the plan's ledger, by heading search only, for each item's ruling.
+
+**Task.**
+1. **Each entry in `open-questions.md`:** its current tag, and its true status (open,
+   settled or ruled out of Week 1). Cite the ledger or archive heading, or the code
+   (file:line) that settles it. Give the exact replacement tag and a one-sentence
+   resolution, written for pasting.
+2. **The archive's ruled-out items missing from Current State's "Ruled out of Week
+   1" list:** each with its reason and heading. Give a compact replacement for that
+   list that fits in at most 12 lines.
+3. **Items still open that bear on an exit criterion:** name them, for the ranking.
+
+Quote no recorded page data or secret values. Run nothing, and touch no Lab worktree
+or run directory.
+
+**Report:** `reports/i-open-questions-refresh.md`.
+
+## f-demo-cleanup-error — a demo keeps its lane's error when session cleanup fails (test-runner)
+
+From `l-stage3-demo` open question 2. In both attempts, the demo Core's session cleanup
+threw `EBUSY`, and that replaced the recording lane's own error.
+
+**Owns:** `packages/test-runner/src/demo-workspace/core-process.ts` and its tests in
+`packages/test-runner/src/demo-workspace/tests/`.
+
+**Read:** `reports/l-stage3-demo.md`, open questions 2 and 4;
+`packages/test-runner/src/secret-leak-attestation.ts:102`, for the retry the runner
+already uses.
+
+**Task.**
+1. **A failed lane keeps its error.** When the lane failed and removing the session
+   then fails too, report the lane's error, with the cleanup failure as a second,
+   labelled line. When only the cleanup fails, fail with the cleanup error, as now.
+2. **Retry the removal** on `EBUSY`, `EPERM` and `ENOTEMPTY`, after the Core process
+   tree has exited.
+3. **Never follow a junction.** The session directory holds junctions into the pinned
+   Core. Prove with a test that the removal deletes a junction without touching its
+   target: a junction to a temporary directory, whose file survives. If it does not,
+   unlink junctions first.
+
+**Tests.**
+- Rows for tasks 1 and 2: a removal that throws `EBUSY` and then succeeds; a lane error
+  kept when the removal throws.
+- The junction row from task 3.
+- A mutation for each guard, restored byte-identical.
+- The test-runner gates with a private build directory, and the structure audit.
+
+No Lab or demo runs.
+
+**Report:** `reports/f-demo-cleanup-error.md`.
+
+## i-demo-recording-finalize — why the demo's recording lane finds no new recording after Stop (read-only)
+
+From `l-stage3-demo` open question 3. Both demo recordings lack an end marker, and
+`waitForNewRecording` gave up after 10 s.
+
+**Owns:** `reports/i-demo-recording-finalize.md`. Nothing tracked.
+
+**Read:**
+- `reports/l-stage3-demo.md`: attempts `a1` and `a2`, and open question 3;
+- `packages/test-runner/src/demo-workspace/`: `workspace-lanes.ts`, `control-waits.ts`,
+  `provisioning.ts`, and what the lane calls to stop recording;
+- in `F:\!FluxIQ`: the `list-recordings` handler, and where a recording is finalized and
+  indexed.
+
+**Evidence, read-only:**
+- `F:\fxlab-runs\stage3\demo\a1` and `a2`: the demo workspace, the evidence bundle and
+  Core's log;
+- SQLite opened read-only with `node:sqlite`, reporting table names, row counts and
+  status fields only;
+- for comparison, a finalized Lab recording in `F:\fxlab-runs\stage2d\kept\`.
+
+Never delete anything under, or recurse into, a `.s\<session>` directory: those hold
+junctions into Core.
+
+**Task.**
+1. What `waitForNewRecording` waits for, exactly, and what `list-recordings` would
+   return for these two recordings, from their persisted state.
+2. How the demo stops recording, and whether that stop reached Core's finalize. Cite
+   Core's log lines and the stored state.
+3. Which is true, with citations:
+   - (a) finalize happened, but later than 10 s under load;
+   - (b) the stop never reached finalize;
+   - (c) the recording was finalized but not listed;
+   - (d) something else.
+4. The smallest fix: which repository and files, and which tests.
+
+No Lab or demo runs, and no edits. Quote no recorded page data or secret values.
+
+**Report:** `reports/i-demo-recording-finalize.md`.
+
+## i-harness-activation — what the Flow lane's harness activations count with no provider (read-only)
+
+From `i-bench-compare-prep` open question 1. In Stage 2, 14 of 44 Flow-lane runs had
+harness activations while `llm: disabled, calls 0`, and the Metrics section says the
+rate "must be 0 with provider disabled". In `l-stage2d`, every failed Flow run showed
+`harnessActivations=2`, and every passing run 0.
+
+**Owns:** `reports/i-harness-activation.md`. Nothing tracked.
+
+**Read:**
+- the plan's Metrics rows "Harness activation rate" and "Fuzzy recovery rate";
+- `packages/test-runner/src/flow-lane/persisted-flow-run.ts:170-230` and
+  `packages/test-runner/src/bench/aggregate-report.ts:100-130`;
+- in `F:\!FluxIQ`: where a run detail's interventions are written (the runtime service
+  and the recovery ladder), and the training-mode settings a Lab-created project gets.
+
+**Evidence, read-only:**
+- `l-stage2d`'s W25 `too-slow` and W15 `popup-blocked` bundles under
+  `F:\fxlab-runs\stage2d\a`, and one passing run there, for contrast;
+- any Core run detail they hold.
+
+Report kinds, statuses and counts only.
+
+**Task.**
+1. What each counted intervention is: its kind, its status, whether a provider was
+   called, and which Core code writes it for a failed node with no provider.
+2. Whether Core should record it in the Lab's training mode, and whether it meets the
+   metric's definition, "runs requesting an LLM intervention".
+3. Which is true, with citations:
+   - (a) the runner counts a record that is not an LLM request, so the metric should
+     filter it;
+   - (b) Core requests an LLM intervention it should not in this mode;
+   - (c) "must be 0" is wrong for negative variants that fail by design;
+   - (d) something else.
+4. The smallest correct fix: its repository, files and tests. Also say whether Lab
+   Stage 3's benches can be re-read without rerunning them.
+
+No runs and no edits. Quote no recorded page data.
+
+**Report:** `reports/i-harness-activation.md`.
+
+## f-actionless-flow-lane — a workflow whose script performs no action plans no Flow-lane row (test-runner, test-contracts)
+
+From `i-w04-w08-no-proposal` (case a). W04's and W08's scripts only read the page, so
+no recording can yield a Flow, and their four Flow rows can never pass.
+
+**Decided:**
+- W04 and W08 count for criterion 1 on the recording lane only. A Flow for an
+  extraction-only workflow is Week 2 (the archive's paginated-extraction ruling).
+- Stage 3's benches at `d639415` keep those four rows; the supervisor excludes them
+  when reading the benches.
+
+**Owns:** the bench planner `packages/test-runner/src/bench/expand-corpus.ts`, the
+runner's Flow-lane decision in `packages/test-runner/src/run-scenario.ts`, one new
+module in `packages/test-contracts/src/` for the shared check, its barrel export,
+and their tests.
+
+**Read:** `reports/i-w04-w08-no-proposal.md`, fix section.
+
+**Task.**
+1. **One shared check:** a workflow whose script holds no action step has no Flow lane.
+   Name the step kinds that count as actions from the scenario contract, not from a
+   list of rows.
+2. **The planner** plans no Flow row for such a workflow, so week1 plans 63 results,
+   not 67.
+3. **The runner:** a `lab run --flow` of such a workflow refuses before any browser
+   starts, as `fixture.invalid`, with a message naming the reason.
+
+**Tests.**
+- The shared check, both ways.
+- The planner's week1 plan: 63 results, with W04's and W08's Flow rows absent.
+- The runner's refusal.
+- A mutation for each guard, restored byte-identical.
+- The test-runner and test-contracts gates with a private build directory, and the
+  structure audit.
+
+No Lab runs.
+
+**Report:** `reports/f-actionless-flow-lane.md`.
+
+## i-evidence-packets — why no Flow-lane attempt carries a measured evidence packet (read-only)
+
+From the supervisor's read of bench A's first 8 Flow-lane runs at `d639415`: no action
+has `evidencePackets`, including the one failed run. So `sanitizedPacketBytes` is
+empty again, as in Stage 2 (0 samples). Criterion 2 needs a "sanitized packet ≤
+budget with `truncated` visible".
+
+**Owns:** `reports/i-evidence-packets.md`. Nothing tracked.
+
+**Read:**
+- `packages/test-runner/src/flow-lane/persisted-flow-run.ts:272-283`, and where
+  `EVIDENCE_PACKET_POINTS` is defined;
+- the archive's entries for `g-bench-evidence-size`, `g-single-run-evidence` and
+  `g-evidence-reader-merge`, found by heading search;
+- the domain's writer of that evidence summary, and where Core writes an attempt's
+  `metadata.stateRefs`.
+
+**Evidence, read-only:**
+- `l-stage2d`'s kept Core workspaces under `F:\fxlab-runs\stage2d\kept\`: for the run
+  detail's attempts, whether `metadata.stateRefs` exists, at which points, and
+  whether each holds `summary` and `truncated`;
+- those runs' `snapshots/flow-lane.json`.
+
+Report key names and counts only.
+
+**Task.**
+1. Which attempts carry `metadata.stateRefs`, at which points, and with or without
+   `summary` and `truncated`.
+2. Where the chain breaks, with citations:
+   - the domain never produces the summary on these runs;
+   - Core stores a reference without the summary;
+   - Core withholds it;
+   - the runner's point names differ;
+   - it is produced only on some paths, such as failure capture or LLM context.
+3. Whether those earlier entries were proven on real Lab packets, or on fixtures only.
+4. The smallest fix: its owner, tests, and the one Lab run that would prove it.
+
+No runs and no edits.
+
+**Report:** `reports/i-evidence-packets.md`.
