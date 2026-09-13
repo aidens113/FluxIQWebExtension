@@ -752,6 +752,30 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 - Not verified: every Lab figure above is a single observation under concurrent load.
 - Outcome: Accepted
 
+### 2026-09-13 — f-host-runtime-policy-action: the domain snapshots a recorded Flow's web actions
+
+- Agent: worker `f-host-runtime-policy-action`; the architecture page and the
+  verification by supervisor.
+- Changed:
+  - `domain/src/runtime/host-runtime.ts`: a node acts on a page when it is a web output
+    node, or `builtin.policy.action` naming a web action type in
+    `parameterValues.outputId`. `inspectStateDiff` declines when either side's snapshot
+    is missing, and the header comment says what the binding does and does not give;
+  - `domain/src/runtime/tests/host-runtime.test.ts`;
+  - by the supervisor, `docs/architecture/page-evidence.md`, which states which nodes
+    are snapshotted.
+- Validation: supervisor `sup66`:
+  - domain `pnpm check` exit=0;
+  - `DOMAIN_TEST_BUILD_LABEL=sup66 pnpm test` printed "# tests 404", "# pass 404",
+    "# fail 0";
+  - **mutation,** `sup-host-runtime-mutation.mjs`: the check back to definitionId-only printed
+    "# pass 403", "# fail 1", failing "a recorded action, Core's policy node naming
+    web.dom.click, gets a state ref from web.dom.capture_snapshot"; "restored identical=true".
+- Not verified: a Lab `product-catalog` Flow run showing a `beforeAction` packet on every
+  web action, each at most 6,000 bytes. `afterAction` also needs Core's
+  `g-core-host-state-node`.
+- Outcome: Accepted
+
 ## Open Questions
 
 Open questions live in [open-questions.md](./mvp-week1-web-automation-reliability-plan/open-questions.md).

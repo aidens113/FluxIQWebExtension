@@ -158,4 +158,7 @@ than one cap it is named for the cap instead.
 - **The host runtime boundary** (`domain/src/runtime/host-runtime.ts`) reuses
   the packet's sanitizer for the state snapshots Core stores on an attempt, so
   a state ref cannot carry more page data, or more sensitive page data, than
-  the LLM packet may.
+  the LLM packet may. It snapshots only nodes that act on a page: a web output
+  node, or a recorded action, which Core runs as `builtin.policy.action` naming
+  its web output in `parameterValues.outputId`. It computes a state diff only
+  when both the before and after snapshots were captured.

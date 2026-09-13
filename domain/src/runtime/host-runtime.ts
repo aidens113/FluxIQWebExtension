@@ -2,25 +2,31 @@
 //
 // Core's executor calls `captureStateSnapshot` at `before_action`,
 // `after_action`, `after_wait_retry` and `after_patch_test`, hands the two refs
-// back to `inspectStateDiff`, and stores the result on the attempt as
-// `stateRefs`. Nothing downstream had ever bound the boundary, so every web
-// attempt reached the trace with no state at all and Core's adaptive layer had
-// nothing to compare. This module binds it.
+// back to `inspectStateDiff`, and stores what it got on the attempt as
+// `stateRefs`. Binding the boundary is not enough on its own: a capture or diff
+// this module declines leaves its key off the attempt, so an attempt carries
+// only the state this module recognised its node for and actually captured.
 //
 // The same object carries `expectationEvaluator`. Core deliberately put the
 // evaluator on the boundary rather than adding a second binding call, so a host
 // that binds a runtime gets the evaluator with it and there is nothing to
 // forget; see the Core report `core-expectation-evaluator.md`.
 //
-// Three decisions worth knowing:
+// Four decisions worth knowing:
 //
 //  - **Only web nodes are snapshotted.** `captureStateSnapshot` runs for every
 //    node attempt in every Flow, including LLM, code and router nodes. A page
 //    snapshot around a node that never touched the page is noise, and it costs
-//    a gateway round trip each time, so the boundary declines a node whose
-//    definition is not a web output node. The seam has no way to say "not this
-//    one" other than to throw, and Core catches, which is why declining looks
-//    like a rejection here.
+//    a gateway round trip each time, so the boundary declines every other node.
+//    A web node is a web output node (`web.output.*`), or a recorded action:
+//    Core runs those as `builtin.policy.action` and names the web output in
+//    `parameterValues.outputId`, so such a node is recognised only by the
+//    `outputId` Core passes with it. The seam has no way to say "not this one"
+//    other than to throw, and Core catches, which is why declining looks like a
+//    rejection here.
+//  - **A diff needs a snapshot on both sides.** With one side missing, every
+//    element on the other would read as added or removed, a claim about a page
+//    nobody observed, so `inspectStateDiff` declines instead.
 //  - **A snapshot is bounded by the sanitized packet's own byte budget.**
 //    `sanitizeWebLlmSnapshot` is what already decides how much page evidence may
 //    travel, and it drops values and sensitive controls on the way. Reusing it
@@ -64,6 +70,12 @@ const MAX_DIFF_SELECTORS = 10;
  */
 const WEB_AUTOMATION_NODE_IDS: ReadonlySet<string> = new Set(WEB_AUTOMATION_ACTION_TYPES.map(webAutomationOutputNodeId));
 
+/** The web output ids a recorded action may name in `parameterValues.outputId`. */
+const WEB_AUTOMATION_OUTPUT_IDS: ReadonlySet<string> = new Set(WEB_AUTOMATION_ACTION_TYPES);
+
+/** Core's node definition for a recorded action. Core exports no constant for it. */
+const POLICY_ACTION_DEFINITION_ID = "builtin.policy.action";
+
 /** What this host can answer, in Core's capability vocabulary. */
 const HOST_RUNTIME_CAPABILITIES = Object.freeze(["state-snapshot", "state-diff", "expectation-evaluation"] as const);
 
@@ -73,7 +85,7 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
   return {
     capabilities: HOST_RUNTIME_CAPABILITIES,
     async captureStateSnapshot(input) {
-      if (!WEB_AUTOMATION_NODE_IDS.has(input.node.definitionId)) {
+      if (!actsOnPage(input.node)) {
         throw new Error(`Node ${input.node.definitionId} does not act on a page, so no web state was captured.`);
       }
       const result = await gateway.dispatch({
@@ -97,6 +109,9 @@ export function createWebAutomationHostRuntime(gateway: WebAutomationHostRuntime
       return { stateSnapshotId, stateRef: `${stateSnapshotId}@${input.attemptId}:${input.point}`, capturedAt: Date.now(), summary };
     },
     inspectStateDiff(input) {
+      if (input.before?.summary === undefined || input.after?.summary === undefined) {
+        throw new Error("A web state diff needs a snapshot on both sides, so none was computed.");
+      }
       return webAutomationStateDiff(input.before?.summary, input.after?.summary, input.before?.stateRef, input.after?.stateRef);
     },
     expectationEvaluator: (conditions, mode, timeoutMs, context) => evaluate(conditions, mode, timeoutMs, context)
@@ -149,6 +164,13 @@ export function webAutomationStateDiff(
 function actionSnapshot(payload: JsonObject | undefined): unknown {
   const action = payload?.result;
   return isRecord(action) ? action.snapshot : undefined;
+}
+
+/** A web output node, or a recorded action whose `outputId` names a web output. Nothing else acts on a page. */
+function actsOnPage(node: { definitionId: string; parameterValues?: JsonObject }): boolean {
+  if (WEB_AUTOMATION_NODE_IDS.has(node.definitionId)) return true;
+  const outputId = node.parameterValues?.outputId;
+  return node.definitionId === POLICY_ACTION_DEFINITION_ID && typeof outputId === "string" && WEB_AUTOMATION_OUTPUT_IDS.has(outputId);
 }
 
 function evidenceSelectors(summary: JsonObject | undefined): string[] {
