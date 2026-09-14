@@ -1,7 +1,7 @@
 # MVP Week 1 — Web Automation Reliability Plan
 
 Status: Active
-Status detail: The audit remediation, navigation intent, and pairing recovery are live-accepted. The user rejected non-resumable final benches after a Windows restart exposed the gap; durable campaign recovery is now in implementation before fresh full benches. No exit criterion is yet claimed complete.
+Status detail: Audit remediation, navigation intent, pairing recovery, and durable benchmark resume are live-accepted. Fresh full A/B benches are next; no exit criterion is yet claimed complete.
 Created: 2026-09-11
 Last updated: 2026-09-14
 Owner: Senior supervisor agent
@@ -27,7 +27,7 @@ This is the resumed session objective. Read it literally:
   every fix before its ledger entry, and single observations labelled as such,
   because this machine has faulty RAM.
 
-**Phase, as of 2026-09-14: implementing durable benchmark campaign recovery.** The
+**Phase, as of 2026-09-14: running fresh durable full benchmarks.** The
 acknowledged navigation intent passed W10 primary and `broken-link` 3/3 each.
 Two final benches reached 153/189 and 155/189 executable evaluations before a
 controlled Windows restart interrupted both; those partials are diagnostic,
@@ -110,13 +110,13 @@ settled ledger entries are in parts one to fifty of
   646 runner tests, and root gates pass. After correcting an invalid credentialed
   wrapper, isolated passed 5/5 and concurrent A/B 9/9 + 6/6: 20/20 total with
   zero pairing, leak, harness/persistence, or action-discard failures.
-- The restart-exposed campaign defect now has a downstream implementation:
+- The restart-exposed campaign defect now has a live-accepted downstream implementation:
   durable manifests and immutable checkpoints, exact receipts and evaluation
   identities, finalized-bundle reconciliation, staging preservation, strict
   compatibility, and a stale-safe single-owner lease. Unit and mutation proof
-  and root gates pass; commit and a live process-tree kill/resume remain.
+  and root gates pass; a forced staging death resumed to 4/4 exact-once passes.
 
-**Queued:** (1) live-prove durable resume; (2) run both full benches, compare, and close the ledger.
+**Queued:** run both full benches with durable recovery, compare, and close the ledger.
 
 **Exit criteria as they stand**
 
@@ -677,9 +677,20 @@ The first two 2026-09-13 entries are preserved in
   - supervisor mutations removing repeat from the cell key and removing exact
     repeat validation each failed the intended test, then were restored.
   - root `pnpm check`, `pnpm test`, and `pnpm build` each exited 0.
-- Not verified: a clean commit and a live process-tree interruption followed
-  by `lab bench --resume`.
-- Outcome: In Progress
+- Live validation at downstream `444d48c` / Core `19468b7`, with run state on
+  F:: the supervisor force-killed the exact `pnpm lab bench` process tree while
+  generation 1 named an active cell and one staging bundle existed. Explicit
+  `--resume bench-mu0zh3pc-8cdcdf04` archived the stale lease and staging bundle,
+  then finished 4/4 runs. Disk inspection found 12 valid linked generations,
+  4/4 unique run ids, 1 interrupted bundle, 1 archived lease, no active lease,
+  no ignored checkpoints, and a final report. A second resume returned the
+  same 4/4 outcome without executing another run.
+- The first live attempt exposed and fixed a fingerprint defect: headless mode
+  selected Playwright's different broken headless-shell binary. Commit
+  `444d48c` forces the exact full Chromium executable used by Lab; package
+  check passed and the forced browser reported `134.0.6998.35`.
+- Not verified: the two full repeat-three Week 1 benches.
+- Outcome: Accepted
 
 ### 2026-09-13 — The Lab-proof gap fixes, verified and committed
 

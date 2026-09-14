@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assertCampaignCompatibility, campaignCellIdentity, campaignCellKey, campaignPlanSha256, canonicalJson, createCampaignPlan, type CampaignCompatibility } from "../campaign-identity.js";
+import { assertCampaignCompatibility, campaignCellIdentity, campaignCellKey, campaignPlanSha256, canonicalJson, createCampaignPlan, type CampaignCompatibility } from "../campaign/index.js";
 import type { BenchPlanEntry } from "../expand-corpus.js";
 
 const entry = (lane: "recording" | "flow" = "recording"): BenchPlanEntry => ({

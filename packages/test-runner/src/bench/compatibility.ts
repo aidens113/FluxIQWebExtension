@@ -4,7 +4,7 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { chromium } from "@playwright/test";
-import type { CampaignCompatibility } from "./campaign-identity.js";
+import type { CampaignCompatibility } from "./campaign/index.js";
 
 const execFileAsync = promisify(execFile);
 

@@ -1,9 +1,7 @@
 // FluxBench: corpora, per-run evaluation, corpus metrics, reports, and comparison.
 export * from "./aggregate-report.js";
 export * from "./bench-receipt.js";
-export * from "./campaign-identity.js";
-export * from "./campaign-lease.js";
-export * from "./campaign-store.js";
+export * from "./campaign/index.js";
 export * from "./compare-reports.js";
 export * from "./compatibility.js";
 export * from "./durable-file.js";

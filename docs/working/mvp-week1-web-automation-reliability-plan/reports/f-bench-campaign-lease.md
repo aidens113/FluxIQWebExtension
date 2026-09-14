@@ -9,7 +9,7 @@ Status: Implemented; supervisor verification required
 
 ## Implementation
 
-- `campaign-lease.ts` prepares a durable owner record in a private candidate
+- `campaign/lease.ts` prepares a durable owner record in a private candidate
   directory and atomically renames that directory into the fixed `lease` path.
 - A live owner on the same boot and with the same OS process-start identity is
   refused. Dead processes, prior boots, and reused PIDs are recovered.

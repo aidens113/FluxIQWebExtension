@@ -4,11 +4,11 @@ Outcome: Complete; ready for orchestration integration
 
 ## Implemented
 
-- `campaign-identity.ts` defines schema/semantics `0.2`, canonical JSON and
+- `campaign/identity.ts` defines schema/semantics `0.2`, canonical JSON and
   SHA-256 helpers, exact six-field campaign-cell identity, repeat-major ordered
   plan construction, canonical plan hashes, and exact stable compatibility
   comparison.
-- `campaign-store.ts` strictly parses the immutable campaign manifest and
+- `campaign/store.ts` strictly parses the immutable campaign manifest and
   immutable checkpoint generations. It publishes both create-only through the
   durable-file primitive, validates canonical hashes and previous-generation
   links, and selects only the longest contiguous chain from generation zero.

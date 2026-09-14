@@ -7,7 +7,7 @@ import {
   acquireCampaignLease,
   CampaignLeaseHeldError,
   type CampaignLeaseProcessProbe,
-} from "../campaign-lease.js";
+} from "../campaign/index.js";
 
 const PID = 4101;
 
@@ -119,4 +119,3 @@ test("racing contenders produce exactly one owner and never displace it", async 
     await rm(root, { recursive: true, force: true });
   }
 });
-

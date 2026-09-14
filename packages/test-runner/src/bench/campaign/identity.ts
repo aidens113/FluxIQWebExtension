@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { BenchPlanEntry } from "./expand-corpus.js";
+import type { BenchPlanEntry } from "../expand-corpus.js";
 
 export const CAMPAIGN_SCHEMA_VERSION = "0.2" as const;
 export const BENCH_SEMANTICS_VERSION = "0.2" as const;

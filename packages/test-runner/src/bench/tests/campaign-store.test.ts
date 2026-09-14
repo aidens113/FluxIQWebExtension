@@ -3,8 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { BENCH_SEMANTICS_VERSION, CAMPAIGN_SCHEMA_VERSION, campaignPlanSha256, createCampaignPlan, type CampaignCompatibility } from "../campaign-identity.js";
-import { containedPath, loadCampaignCheckpointChain, loadCampaignManifest, parseCampaignCheckpoint, parseCampaignManifest, preserveInterruptedStaging, writeCampaignCheckpoint, writeCampaignManifest, writeCampaignProjection, type CampaignCheckpointInput, type CampaignManifest } from "../campaign-store.js";
+import { BENCH_SEMANTICS_VERSION, CAMPAIGN_SCHEMA_VERSION, campaignPlanSha256, containedPath, createCampaignPlan, loadCampaignCheckpointChain, loadCampaignManifest, parseCampaignCheckpoint, parseCampaignManifest, preserveInterruptedStaging, writeCampaignCheckpoint, writeCampaignManifest, writeCampaignProjection, type CampaignCheckpointInput, type CampaignCompatibility, type CampaignManifest } from "../campaign/index.js";
 import type { BenchPlanEntry } from "../expand-corpus.js";
 
 const benchId = "bench-unit-0123abcd";

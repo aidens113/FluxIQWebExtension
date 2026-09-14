@@ -4,7 +4,7 @@ import { mkdir, readFile, rename, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { createDurableJson, type DurableFileSystem } from "./durable-file.js";
+import { createDurableJson, type DurableFileSystem } from "../durable-file.js";
 
 const LEASE_SCHEMA_VERSION = "0.1" as const;
 const SAFE_ID = /^[A-Za-z0-9_-]{16,96}$/u;

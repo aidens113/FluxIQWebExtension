@@ -41,7 +41,7 @@ node --test packages/test-runner/dist/bench/tests/bench-receipt.test.js packages
 
 Observed after restoration: package build exit 0; focused tests 16 passed, 0
 failed. An earlier build observed concurrent integration errors in `cli.ts` and
-`campaign-store.ts`; their owners resolved them before this final rerun.
+`campaign/store.ts`; their owners resolved them before this final rerun.
 
 An isolated strict TypeScript check over the four assigned source/test files,
 run from `packages/test-runner`, passed with no diagnostics:

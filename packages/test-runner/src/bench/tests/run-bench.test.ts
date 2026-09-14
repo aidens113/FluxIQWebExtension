@@ -8,7 +8,7 @@ import { RunnerFailure } from "../../failure.js";
 import type { RunLaneObservation } from "../../flow-lane/index.js";
 import type { RunScenarioOptions, RunScenarioResult } from "../../run-scenario.js";
 import type { BenchCorpus } from "../corpus/index.js";
-import type { CampaignCompatibility } from "../campaign-identity.js";
+import type { CampaignCompatibility } from "../campaign/index.js";
 import { VARIANT_NEEDS_FLOW_LANE } from "../expand-corpus.js";
 import type { BenchRunsFile } from "../report-store.js";
 import { createResumableBench, resumeBench, runBench, type BenchCampaignCrashPoint, type ResumableRunBenchOptions, type RunBenchOptions } from "../run-bench.js";

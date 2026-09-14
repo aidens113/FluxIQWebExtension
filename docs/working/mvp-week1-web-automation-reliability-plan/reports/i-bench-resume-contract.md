@@ -200,9 +200,9 @@ Files are partitioned so implementation workers need not overlap.
 
 ### Partition B: campaign identity/store only
 
-- New `packages/test-runner/src/bench/campaign-identity.ts`: canonical plan/cell
+- New `packages/test-runner/src/bench/campaign/identity.ts`: canonical plan/cell
   keys, normalized request, compatibility fingerprint and equality checks.
-- New `packages/test-runner/src/bench/campaign-store.ts`: schemas and strict
+- New `packages/test-runner/src/bench/campaign/store.ts`: schemas and strict
   parser, immutable manifest/checkpoint writes, hash-chain loading, atomic JSON
   projections, interrupted-staging preservation.
 - New `packages/test-runner/src/bench/tests/campaign-identity.test.ts`: key
