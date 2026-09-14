@@ -11,6 +11,14 @@ test("classifies missing tools and unknown failures", () => {
   assert.equal(classifyRunnerFailure(new Error("unexpected")), "unknown");
 });
 
+test("classifies an allowlisted socket code through only a bounded cause chain", () => {
+  const nested = new Error("outer", { cause: new Error("undici", { cause: Object.assign(new Error("socket"), { code: "ECONNRESET" }) }) });
+  assert.equal(classifyRunnerFailure(nested), "process.startup");
+  const tooDeep = new Error("0", { cause: new Error("1", { cause: new Error("2", { cause: new Error("3", { cause: Object.assign(new Error("4"), { code: "ECONNRESET" }) }) }) }) });
+  assert.equal(classifyRunnerFailure(tooDeep), "unknown");
+  assert.equal(classifyRunnerFailure(new Error("outer", { cause: Object.assign(new Error("private"), { code: "SECRET_SOCKET_CODE" }) })), "unknown");
+});
+
 /**
  * The classification the bench-killing incident needed and did not have. Node
  * raises `ERR_MODULE_NOT_FOUND` when a FluxIQ Core rebuild in the sibling

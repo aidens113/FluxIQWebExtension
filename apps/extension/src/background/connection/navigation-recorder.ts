@@ -59,7 +59,10 @@ function withinExplanatoryWindow(openedAt: number, timestamp: number): boolean {
 }
 
 export class NavigationRecorder {
-  private readonly pending = new Map<number, { url: string; timer: ReturnType<typeof setTimeout> }>();
+  private readonly pending = new Map<number, { url: string; timer: ReturnType<typeof setTimeout>; record: () => unknown; generation: number }>();
+  private readonly running = new Map<Promise<void>, number>();
+  private readonly failures: Array<{ error: unknown; generation: number }> = [];
+  private generation = 0;
   private readonly lastRecorded = new Map<number, { url: string; timestamp: number }>();
   private readonly initialUrls = new Map<number, string>();
   private readonly explanatoryActions = new Map<number, ExplanatoryAction>();
@@ -79,14 +82,59 @@ export class NavigationRecorder {
   // Collapses the burst of URL, title, and status updates a single load emits
   // into one deferred call. A client redirect's second commit replaces the
   // first, so what is recorded is where the page settled.
-  schedule(tabId: number, url: string, record: () => void): void {
+  schedule(tabId: number, url: string, record: () => unknown): void {
     const existing = this.pending.get(tabId);
     if (existing) clearTimeout(existing.timer);
     const timer = setTimeout(() => {
+      const pending = this.pending.get(tabId);
+      if (pending?.timer !== timer) return;
       this.pending.delete(tabId);
-      record();
+      this.run(pending.record, pending.generation);
     }, NAVIGATION_DEBOUNCE_MS);
-    this.pending.set(tabId, { url, timer });
+    this.pending.set(tabId, { url, timer, record, generation: this.generation });
+  }
+
+  // Stop drains the debounce queue immediately and waits for sends whose
+  // callbacks have already begun. Keep draining until no work remains, since
+  // settling one callback may synchronously expose another navigation.
+  async flush(): Promise<void> {
+    const generation = this.generation;
+    do {
+      const pending = [...this.pending.values()].filter((item) => item.generation === generation);
+      this.pending.clear();
+      for (const item of pending) {
+        clearTimeout(item.timer);
+        this.run(item.record, generation);
+      }
+      const running = [...this.running].filter(([, itemGeneration]) => itemGeneration === generation).map(([promise]) => promise);
+      if (running.length > 0) await Promise.all(running);
+    } while ([...this.pending.values()].some((item) => item.generation === generation)
+      || [...this.running.values()].some((itemGeneration) => itemGeneration === generation));
+    const failure = this.failures.find((item) => item.generation === generation);
+    for (let index = this.failures.length - 1; index >= 0; index -= 1) {
+      if (this.failures[index]?.generation === generation) this.failures.splice(index, 1);
+    }
+    if (failure !== undefined) throw failure.error;
+  }
+
+  private run(record: () => unknown, generation: number): void {
+    let result: unknown;
+    try {
+      result = record();
+    } catch (error) {
+      if (generation === this.generation) this.failures.push({ error, generation });
+      return;
+    }
+    let running: Promise<void>;
+    running = Promise.resolve(result)
+      .then(() => undefined)
+      .catch((error: unknown) => {
+        if (generation === this.generation) this.failures.push({ error, generation });
+      })
+      .finally(() => {
+        this.running.delete(running);
+      });
+    this.running.set(running, generation);
   }
 
   // Decides what a debounced navigation becomes, and claims a navigation in its
@@ -133,6 +181,10 @@ export class NavigationRecorder {
   // A new recording starts from nothing. A click from the last one must not
   // explain, or be named by, a navigation in this one.
   clearRecordingTabs(): void {
+    this.generation += 1;
+    for (const item of this.pending.values()) clearTimeout(item.timer);
+    this.pending.clear();
+    this.failures.length = 0;
     this.lastRecorded.clear();
     this.initialUrls.clear();
     this.explanatoryActions.clear();

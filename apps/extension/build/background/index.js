@@ -3864,6 +3864,16 @@ var RecordingStartHandshake = class {
     if (this.pending.retryTimer !== void 0) clearTimeout(this.pending.retryTimer);
     this.pending = void 0;
   }
+  // Stop needs stronger ordering than ordinary cancellation: a retry send is
+  // detached from the UI promise and may still be resolving project context.
+  // Cancel ownership synchronously, then let Stop place its close only after
+  // that already-started send has settled. Its failure belongs to the start,
+  // not to teardown.
+  async cancelAndDrain() {
+    const inFlightSend = this.pending?.inFlightSend;
+    this.cancel();
+    if (inFlightSend) await inFlightSend.catch(() => void 0);
+  }
   noteRefusal(refusal) {
     const pending = this.pending;
     if (!pending) {
@@ -4020,6 +4030,17 @@ var ActiveRecording = class {
   events = 0;
   // A start already decided that has not yet reached `recording`.
   starting;
+  // Installed synchronously for every Stop that owns lifecycle work, including
+  // work which has not reached `recording` yet. Starts arriving afterwards
+  // wait behind this owner; callers crossing it share its exact result.
+  stopRequest;
+  // Covers the pre-handshake work too, so simultaneous UI presses released
+  // behind a Stop cannot both pass the handshake's pending check.
+  uiStart;
+  // The initial marker is the one event an accepted start must publish even
+  // when Stop already owns the lifecycle. This flag is true only for the
+  // synchronous admission of that marker, never across its asynchronous send.
+  admittingInitialMarker = false;
   // The recording this client last stopped: FluxIQ's acknowledgement of it can
   // still be on the wire.
   stoppedRecordingId;
@@ -4028,6 +4049,9 @@ var ActiveRecording = class {
   handshake;
   state() {
     return this.recordingState;
+  }
+  acceptsEvents() {
+    return this.recordingState === "recording" && (this.stopRequest === void 0 || this.admittingInitialMarker);
   }
   startedAt() {
     return this.recordingStartedAt;
@@ -4044,7 +4068,25 @@ var ActiveRecording = class {
   noteEvent() {
     this.events += 1;
   }
-  async start() {
+  start() {
+    if (this.uiStart) return this.uiStart.finished;
+    const uiStart = { cancelled: false, finished: Promise.resolve() };
+    const finished = this.startAfterStop(uiStart);
+    uiStart.finished = finished;
+    this.uiStart = uiStart;
+    void finished.then(
+      () => {
+        if (this.uiStart === uiStart) this.uiStart = void 0;
+      },
+      () => {
+        if (this.uiStart === uiStart) this.uiStart = void 0;
+      }
+    );
+    return finished;
+  }
+  async startAfterStop(uiStart) {
+    await this.settleCapturedStop();
+    if (uiStart.cancelled) return;
     if (this.handshake.isPending()) {
       this.deps.onActivity("recording", "Recording is starting", "Waiting for FluxIQ project acceptance.", "warning");
       return;
@@ -4055,6 +4097,7 @@ var ActiveRecording = class {
       return;
     }
     await this.deps.page.refresh();
+    if (uiStart.cancelled) return;
     const unsupported = this.deps.page.unsupported();
     if (unsupported) {
       this.deps.setLastError(unsupported.reason);
@@ -4067,20 +4110,67 @@ var ActiveRecording = class {
     const recordingId = `client.${this.deps.session().clientId}.${Date.now()}`;
     const startedAt = Date.now();
     const initialState = await this.deps.evidence.buildInitialRecordingState(startedAt);
+    if (uiStart.cancelled) return;
+    while (this.starting) await this.starting.finished;
+    if (uiStart.cancelled) return;
+    if (this.recordingState === "recording" || this.handshake.isPending()) {
+      this.deps.onActivity("recording", "Recording is starting", "Another recording start won while this request was preparing.", "warning");
+      return;
+    }
     this.deps.onActivity("recording", "Starting recording", this.deps.projects.current() ? "Waiting for FluxIQ project acceptance." : "Waiting for FluxIQ project context.", "warning");
     await this.handshake.begin({ recordingId, startedAt, initialState });
     this.deps.emitStatus();
   }
-  async stop(notifyServer) {
-    if (this.recordingState !== "recording") return;
-    const recordingId = this.activeRecordingId;
-    const projectId = this.deps.projects.activeRecordingProject();
-    const endedAt = Date.now();
-    const stopPayload = recordingId ? compactObject2({
-      recordingId,
-      ...projectId !== void 0 ? { projectId } : {},
-      endedAt
-    }) : void 0;
+  stop(notifyServer) {
+    if (this.stopRequest) return this.stopRequest.finished;
+    const uiStart = this.uiStart;
+    const starting = this.starting;
+    const pendingRecordingId = this.handshake.pendingRecordingId();
+    const recordingId = this.activeRecordingId ?? starting?.recordingId ?? pendingRecordingId;
+    if (this.recordingState !== "recording" && !uiStart && !starting && !pendingRecordingId) return Promise.resolve();
+    const endedAt = this.recordingState === "recording" ? Date.now() : void 0;
+    let resolveStop = () => void 0;
+    let rejectStop = () => void 0;
+    const finished = new Promise((resolve, reject) => {
+      resolveStop = resolve;
+      rejectStop = reject;
+    });
+    const stopRequest = { finished };
+    this.stopRequest = stopRequest;
+    if (uiStart) {
+      uiStart.cancelled = true;
+      if (this.uiStart === uiStart) this.uiStart = void 0;
+    }
+    const pendingSend = pendingRecordingId ? this.handshake.cancelAndDrain() : void 0;
+    void this.finishStopRequest(notifyServer, recordingId, uiStart, starting, pendingSend, endedAt).then(() => {
+      if (this.stopRequest === stopRequest) this.stopRequest = void 0;
+      resolveStop();
+    }, (error) => {
+      if (this.stopRequest === stopRequest) this.stopRequest = void 0;
+      rejectStop(error);
+    });
+    return finished;
+  }
+  async finishStopRequest(notifyServer, recordingId, uiStart, starting, pendingSend, endedAt) {
+    if (uiStart) await uiStart.finished.catch(() => void 0);
+    if (starting) await starting.finished;
+    if (pendingSend) await pendingSend;
+    if (!recordingId && this.recordingState !== "recording") return;
+    await this.finishStop(
+      notifyServer,
+      this.activeRecordingId ?? recordingId,
+      this.deps.projects.activeRecordingProject(),
+      endedAt ?? Date.now()
+    );
+  }
+  async finishStop(notifyServer, recordingId, projectId, endedAt) {
+    const stopPayload = recordingId ? compactObject2({ recordingId, ...projectId !== void 0 ? { projectId } : {}, endedAt }) : void 0;
+    let navigationFailure;
+    try {
+      await this.deps.navigation.flush();
+    } catch (error) {
+      navigationFailure = error;
+    }
     this.deps.scriptedNavigation.cancelAll("recording_stopped");
     this.recordingState = "idle";
     this.stoppedRecordingId = recordingId;
@@ -4091,8 +4181,13 @@ var ActiveRecording = class {
     this.deps.emitStatus();
     void this.deps.attachment.broadcast({ type: "recording", recording: false, settings: this.deps.settings() }, false);
     if (notifyServer && stopPayload) {
-      await this.deps.send("client.stop_recording", stopPayload);
+      try {
+        await this.deps.send("client.stop_recording", stopPayload);
+      } catch (error) {
+        if (navigationFailure === void 0) throw error;
+      }
     }
+    if (navigationFailure !== void 0) throw navigationFailure;
   }
   dismissBlock() {
     this.recordingBlock = void 0;
@@ -4102,6 +4197,8 @@ var ActiveRecording = class {
   // FluxIQ's `server.start_recording`: its acknowledgement of this client's
   // start, or a start FluxIQ asked for itself, from the web panel.
   async beginAccepted(recordingId, projectId) {
+    const stopRequest = this.stopRequest;
+    if (stopRequest) await stopRequest.finished.catch(() => void 0);
     if (!this.expectsStart(recordingId)) {
       this.deps.onActivity("recording", "Recording start ignored", "FluxIQ named a recording this client is not starting or running, or has already stopped.", "warning");
       return;
@@ -4112,6 +4209,7 @@ var ActiveRecording = class {
   // FluxIQ refused a start. The handshake decides whether that is retried or
   // surfaced; a refusal with no start of ours in flight is surfaced at once.
   noteStartRefusal(refusal) {
+    if (this.stopRequest) return;
     this.handshake.noteRefusal(refusal);
   }
   // Abandons a start still waiting on FluxIQ, with its timers.
@@ -4131,6 +4229,12 @@ var ActiveRecording = class {
       this.recordingState === "recording" ? this.activeRecordingId : void 0
     ].filter((id) => id !== void 0);
     return own.length === 0 || own.includes(recordingId);
+  }
+  // Capture once: a rejected Stop still completed teardown, and a later Stop
+  // belongs to a later recording rather than extending this caller's wait.
+  async settleCapturedStop() {
+    const stopRequest = this.stopRequest;
+    if (stopRequest) await stopRequest.finished.catch(() => void 0);
   }
   // Every way into a recording comes through here, so it starts once. A start
   // is marked the moment it is decided, before its first await. Another that
@@ -4186,14 +4290,21 @@ var ActiveRecording = class {
     const activeTabId = this.deps.page.tabId();
     if (activeTabId !== void 0) await this.deps.attachment.attachTabForRecording(activeTabId);
     await this.deps.page.sendBrowserState();
-    await this.deps.recordEvent({
-      kind: "browser.tab",
-      sequence: this.deps.sequence.next(),
-      url: this.deps.page.url() ?? "",
-      title: "",
-      eventTimestampMs: Date.now(),
-      metadata: { recordingState: "started", recordingId }
-    });
+    let initialMarker;
+    try {
+      this.admittingInitialMarker = true;
+      initialMarker = this.deps.recordEvent({
+        kind: "browser.tab",
+        sequence: this.deps.sequence.next(),
+        url: this.deps.page.url() ?? "",
+        title: "",
+        eventTimestampMs: Date.now(),
+        metadata: { recordingState: "started", recordingId }
+      });
+    } finally {
+      this.admittingInitialMarker = false;
+    }
+    await initialMarker;
     await this.deps.evidence.captureActiveSnapshot("Initial snapshot captured");
   }
   // Each attempt resolves the project again rather than reusing the first
@@ -5090,6 +5201,9 @@ function withinExplanatoryWindow(openedAt, timestamp) {
 }
 var NavigationRecorder = class {
   pending = /* @__PURE__ */ new Map();
+  running = /* @__PURE__ */ new Map();
+  failures = [];
+  generation = 0;
   lastRecorded = /* @__PURE__ */ new Map();
   initialUrls = /* @__PURE__ */ new Map();
   explanatoryActions = /* @__PURE__ */ new Map();
@@ -5109,10 +5223,49 @@ var NavigationRecorder = class {
     const existing = this.pending.get(tabId);
     if (existing) clearTimeout(existing.timer);
     const timer = setTimeout(() => {
+      const pending = this.pending.get(tabId);
+      if (pending?.timer !== timer) return;
       this.pending.delete(tabId);
-      record();
+      this.run(pending.record, pending.generation);
     }, NAVIGATION_DEBOUNCE_MS);
-    this.pending.set(tabId, { url, timer });
+    this.pending.set(tabId, { url, timer, record, generation: this.generation });
+  }
+  // Stop drains the debounce queue immediately and waits for sends whose
+  // callbacks have already begun. Keep draining until no work remains, since
+  // settling one callback may synchronously expose another navigation.
+  async flush() {
+    const generation = this.generation;
+    do {
+      const pending = [...this.pending.values()].filter((item) => item.generation === generation);
+      this.pending.clear();
+      for (const item of pending) {
+        clearTimeout(item.timer);
+        this.run(item.record, generation);
+      }
+      const running = [...this.running].filter(([, itemGeneration]) => itemGeneration === generation).map(([promise]) => promise);
+      if (running.length > 0) await Promise.all(running);
+    } while ([...this.pending.values()].some((item) => item.generation === generation) || [...this.running.values()].some((itemGeneration) => itemGeneration === generation));
+    const failure = this.failures.find((item) => item.generation === generation);
+    for (let index = this.failures.length - 1; index >= 0; index -= 1) {
+      if (this.failures[index]?.generation === generation) this.failures.splice(index, 1);
+    }
+    if (failure !== void 0) throw failure.error;
+  }
+  run(record, generation) {
+    let result;
+    try {
+      result = record();
+    } catch (error) {
+      if (generation === this.generation) this.failures.push({ error, generation });
+      return;
+    }
+    let running;
+    running = Promise.resolve(result).then(() => void 0).catch((error) => {
+      if (generation === this.generation) this.failures.push({ error, generation });
+    }).finally(() => {
+      this.running.delete(running);
+    });
+    this.running.set(running, generation);
   }
   // Decides what a debounced navigation becomes, and claims a navigation in its
   // own right so a repeat of the same URL is not recorded twice. A landing
@@ -5150,6 +5303,10 @@ var NavigationRecorder = class {
   // A new recording starts from nothing. A click from the last one must not
   // explain, or be named by, a navigation in this one.
   clearRecordingTabs() {
+    this.generation += 1;
+    for (const item of this.pending.values()) clearTimeout(item.timer);
+    this.pending.clear();
+    this.failures.length = 0;
     this.lastRecorded.clear();
     this.initialUrls.clear();
     this.explanatoryActions.clear();
@@ -5436,8 +5593,8 @@ var RecordedEventIntake = class {
   constructor(deps) {
     this.deps = deps;
   }
-  async accept(payload, tabId, frameId) {
-    if (this.deps.recording.state() !== "recording") return;
+  async accept(payload, tabId, frameId, admittedNavigation = false) {
+    if (!admittedNavigation && !this.deps.recording.acceptsEvents()) return;
     if (payload.kind === "dom.click") {
       const sourceEvent = stringValue5(objectValue3(payload.metadata)?.sourceEvent);
       const signature = clickEventSignature(payload, tabId, frameId);
@@ -5448,7 +5605,7 @@ var RecordedEventIntake = class {
   }
   async acceptContentReady(payload, tabId, frameId) {
     let readyPayload = payload;
-    if (this.deps.recording.state() === "recording" && tabId !== void 0 && !this.deps.page.unsupported()) {
+    if (this.deps.recording.acceptsEvents() && tabId !== void 0 && !this.deps.page.unsupported()) {
       await this.deps.attachment.setRecordingState(tabId, true, frameId).catch(() => void 0);
       if (!payload.snapshot) {
         const snapshot = await this.deps.sendToTab(tabId, { type: "captureSnapshot" }, frameId).then((value) => isDomSnapshotPayload(value) ? value : void 0).catch(() => void 0);
@@ -5479,11 +5636,10 @@ var RecordedEventIntake = class {
     this.scheduleNavigation(details.tabId, details.url, details.timeStamp, "other");
   }
   scheduleNavigation(tabId, url, timestamp, origin) {
-    if (this.deps.recording.state() !== "recording" || unsupportedPageForUrl(url)) return;
-    this.deps.navigation.schedule(tabId, url, () => void this.recordNavigation(tabId, url, timestamp, origin));
+    if (!this.deps.recording.acceptsEvents() || unsupportedPageForUrl(url)) return;
+    this.deps.navigation.schedule(tabId, url, () => this.recordNavigation(tabId, url, timestamp, origin));
   }
   async recordNavigation(tabId, url, timestamp, origin) {
-    if (this.deps.recording.state() !== "recording") return;
     const verdict = this.deps.navigation.shouldRecord(tabId, url, timestamp, origin, this.deps.recording.startedAt());
     if (verdict.kind === "drop") return;
     if (verdict.kind === "explained") {
@@ -5499,7 +5655,7 @@ var RecordedEventIntake = class {
         // document; `explainedByEventId` is the recording event id the click
         // was sent under, which names exactly one click in the recording.
         metadata: { transition: EXPLAINED_TRANSITION, explainedBy: verdict.click.sequence, explainedByEventId: verdict.click.eventId }
-      }, tabId);
+      }, tabId, void 0, true);
       return;
     }
     await this.deps.recordEvent({
@@ -5509,7 +5665,7 @@ var RecordedEventIntake = class {
       title: "",
       eventTimestampMs: timestamp,
       metadata: origin === "typed" ? { transition: "typed" } : void 0
-    }, tabId);
+    }, tabId, void 0, true);
   }
   async processEvent(payload, tabId, frameId) {
     if (this.deps.recording.state() !== "recording") return;
@@ -6465,8 +6621,8 @@ var FluxIQConnection = class {
   dismissRecordingBlock() {
     this.recording.dismissBlock();
   }
-  handleRecordingEvent(payload, tabId, frameId) {
-    return this.intake.accept(payload, tabId, frameId);
+  handleRecordingEvent(payload, tabId, frameId, admittedNavigation = false) {
+    return this.intake.accept(payload, tabId, frameId, admittedNavigation);
   }
   handleContentReady(payload, tabId, frameId) {
     return this.intake.acceptContentReady(payload, tabId, frameId);

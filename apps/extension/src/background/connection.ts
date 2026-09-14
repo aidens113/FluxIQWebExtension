@@ -321,8 +321,8 @@ export class FluxIQConnection {
     this.recording.dismissBlock();
   }
 
-  handleRecordingEvent(payload: RecordingEventPayload, tabId?: number, frameId?: number): Promise<void> {
-    return this.intake.accept(payload, tabId, frameId);
+  handleRecordingEvent(payload: RecordingEventPayload, tabId?: number, frameId?: number, admittedNavigation = false): Promise<void> {
+    return this.intake.accept(payload, tabId, frameId, admittedNavigation);
   }
 
   handleContentReady(payload: RecordingEventPayload, tabId?: number, frameId?: number): Promise<void> {

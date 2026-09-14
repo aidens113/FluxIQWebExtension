@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { removeRunOwnedTopologyState, startTopology } from "../coordinator.js";
+import { RunnerFailure } from "../failure.js";
 import { ProcessSupervisor } from "../process-supervisor.js";
 import type { ExistingTargetConfiguration } from "../target-config.js";
 
@@ -30,14 +31,17 @@ test("existing topology starts only Scenario Lab and never owns the external Flu
     credentials: { username: "runner", password: "secret", authorizationPin: "123456" },
   };
   const supervisor = new ProcessSupervisor();
-  const healthChecks: string[] = [];
+  const healthChecks: Array<{ url: string; operationStage: string | undefined }> = [];
   let topology: Awaited<ReturnType<typeof startTopology>> | undefined;
   try {
-    topology = await startTopology({ repositoryRoot, fluxiqRepositoryRoot: path.join(root, "unused-core"), runsDirectory: path.join(root, "owned-runs"), target }, supervisor, { waitForHttp: async url => { healthChecks.push(url); return new Response("ok"); } });
+    topology = await startTopology({ repositoryRoot, fluxiqRepositoryRoot: path.join(root, "unused-core"), runsDirectory: path.join(root, "owned-runs"), target }, supervisor, { waitForHttp: async (url, options) => { healthChecks.push({ url, operationStage: options?.operationStage }); return new Response("ok"); } });
     assert.equal(topology.targetMode, "existing");
     assert.equal(topology.fluxiqOrigin, target.baseUrl);
     assert.equal(topology.gatewayUrl, target.gatewayUrl);
-    assert.deepEqual(healthChecks, [target.baseUrl, `${topology.scenarioOrigin}/__control/health`]);
+    assert.deepEqual(healthChecks, [
+      { url: target.baseUrl, operationStage: "core.health" },
+      { url: `${topology.scenarioOrigin}/__control/health`, operationStage: "scenario.health" },
+    ]);
     assert.deepEqual(Object.keys(topology.processExitCodes()), ["scenario-lab"]);
     await stat(topology.allocation.browserProfileDir);
 
@@ -55,6 +59,14 @@ test("existing topology starts only Scenario Lab and never owns the external Flu
     await new Promise<void>(resolve => externalServer.close(() => resolve()));
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("every coordinator HTTP readiness wait has its closed service stage", async () => {
+  const source = await readFile(path.resolve(import.meta.dirname, "..", "..", "src", "coordinator.ts"), "utf8");
+  assert.equal(source.match(/waitForHttp\(`\$\{scenarioOrigin\}\/__control\/health`, \{\s+operationStage: "scenario\.health"/gu)?.length, 2);
+  assert.equal(source.match(/waitForHttp\(fluxiqOrigin, \{\s+operationStage: "core\.health"/gu)?.length, 1);
+  assert.equal(source.match(/waitForHttp\(target\.baseUrl, \{\s+operationStage: "core\.health"/gu)?.length, 1);
+  assert.match(source, /new RunnerFailure\("gateway\.connection", `Timed out waiting for client gateway/u, "the TCP wait remains a separate gateway diagnostic");
 });
 
 test("existing topology rejects isolated lifecycle options before spawning processes and removes its allocation", async () => {
@@ -99,4 +111,29 @@ test("isolated startup failure removes only its exact allocated run root", async
     assert.equal(await readFile(siblingSentinel, "utf8"), "sibling must survive");
     assert.equal(await readFile(sourceSentinel, "utf8"), "source must survive");
   } finally { await supervisor.cleanup(); await rm(root, { recursive: true, force: true }); }
+});
+
+test("isolated startup preserves its primary safe failure when cleanup also fails", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-isolated-primary-failure-"));
+  const runsDirectory = path.join(root, "owned-runs");
+  class CleanupFailureSupervisor extends ProcessSupervisor {
+    override async cleanup(): Promise<void> { throw new Error("cleanup detail must not replace startup failure"); }
+  }
+  try {
+    await assert.rejects(startTopology({
+      repositoryRoot: path.join(root, "missing-repository"),
+      fluxiqRepositoryRoot: path.join(root, "missing-core"),
+      runsDirectory,
+      runId: "failed-run",
+      target: { mode: "isolated" },
+      prepareHost: false,
+    }, new CleanupFailureSupervisor(), { waitForHttp: async () => new Response("must not be reached") }), error => {
+      assert.ok(error instanceof RunnerFailure);
+      assert.equal(error.category, "environment.missing");
+      assert.match(error.message, /Required test topology path is missing/);
+      assert.doesNotMatch(error.message, /cleanup detail/);
+      return true;
+    });
+    await assert.rejects(stat(path.join(runsDirectory, "failed-run")), error => typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT");
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

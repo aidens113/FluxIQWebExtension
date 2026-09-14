@@ -311,6 +311,20 @@ actions. `FLUXIQ_TEST_USERNAME`, `FLUXIQ_TEST_PASSWORD`, optional
 `FLUXIQ_TEST_TOTP`, and optional `FLUXIQ_TEST_PIN` may instead provide an
 explicit test identity.
 
+The control client's bounded transport failures retain a fixed operation stage
+(`auth.login`, `auth.session.validate`, `project.create`, `project.select`, or
+`control.request`) and the fixed `network` transport class. They may retain only
+an allowlisted nested socket code; request URLs, response bodies and arbitrary
+cause text are not persisted. Abort and timeout remain distinct bounded
+outcomes. If topology startup later has to clean up, a cleanup failure cannot
+replace this primary diagnostic.
+
+The earlier HTTP readiness waits use a separate closed diagnostic. Scenario Lab
+health is `scenario.health` and Core panel health is `core.health`; a timeout
+persists only that stage, `bounded: "timeout"`, and the integer bound. It never
+persists the checked URL, port, target, response, or cause. TCP gateway readiness
+remains a `gateway.connection` failure, and does not share these HTTP stages.
+
 The isolated lane selects the project again immediately before it starts the
 recording, so whether Core accepts the start does not depend on how long
 pairing, tab activation and the Core action probe took. The clone lane selects
@@ -1228,7 +1242,12 @@ separate artifact named `FluxIQ Web Automation Client (E2E)`.
 
 Playwright 1.51.1 launches its bundled Chromium with a fresh persistent
 profile, loads only the current unpacked E2E artifact, discovers the extension
-id from the MV3 service-worker URL, and opens the side-panel page directly.
+id from the MV3 service-worker URL, and opens the side-panel page directly. The
+finite runner treats extension discovery as its own readiness gate: it checks
+already-running workers, subscribes and immediately rechecks to close the
+observation race, accepts only `chrome-extension:` workers, and waits at most
+30 seconds before producing bounded counts and connection state. It removes
+its listener and timer on every outcome and never records worker URLs.
 Locale, timezone, viewport, and color scheme are fixed. The fixture hashes the
 complete extension artifact, attaches its metadata, closes Chromium, deletes
 the temporary profile, and verifies deletion.

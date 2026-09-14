@@ -86,6 +86,16 @@ type StartUnderWay = {
   readonly finished: Promise<void>;
 };
 
+type StopUnderWay = {
+  // Every caller crossing the same stop boundary observes this exact result.
+  readonly finished: Promise<void>;
+};
+
+type UiStartUnderWay = {
+  cancelled: boolean;
+  finished: Promise<void>;
+};
+
 export class ActiveRecording {
   private recordingState: RecordingState = "idle";
   private recordingStartedAt: number | undefined;
@@ -94,6 +104,17 @@ export class ActiveRecording {
   private events = 0;
   // A start already decided that has not yet reached `recording`.
   private starting: StartUnderWay | undefined;
+  // Installed synchronously for every Stop that owns lifecycle work, including
+  // work which has not reached `recording` yet. Starts arriving afterwards
+  // wait behind this owner; callers crossing it share its exact result.
+  private stopRequest: StopUnderWay | undefined;
+  // Covers the pre-handshake work too, so simultaneous UI presses released
+  // behind a Stop cannot both pass the handshake's pending check.
+  private uiStart: UiStartUnderWay | undefined;
+  // The initial marker is the one event an accepted start must publish even
+  // when Stop already owns the lifecycle. This flag is true only for the
+  // synchronous admission of that marker, never across its asynchronous send.
+  private admittingInitialMarker = false;
   // The recording this client last stopped: FluxIQ's acknowledgement of it can
   // still be on the wire.
   private stoppedRecordingId: string | undefined;
@@ -122,6 +143,11 @@ export class ActiveRecording {
     return this.recordingState;
   }
 
+  acceptsEvents(): boolean {
+    return this.recordingState === "recording"
+      && (this.stopRequest === undefined || this.admittingInitialMarker);
+  }
+
   startedAt(): number | undefined {
     return this.recordingStartedAt;
   }
@@ -142,7 +168,22 @@ export class ActiveRecording {
     this.events += 1;
   }
 
-  async start(): Promise<void> {
+  start(): Promise<void> {
+    if (this.uiStart) return this.uiStart.finished;
+    const uiStart = { cancelled: false, finished: Promise.resolve() };
+    const finished = this.startAfterStop(uiStart);
+    uiStart.finished = finished;
+    this.uiStart = uiStart;
+    void finished.then(
+      () => { if (this.uiStart === uiStart) this.uiStart = undefined; },
+      () => { if (this.uiStart === uiStart) this.uiStart = undefined; }
+    );
+    return finished;
+  }
+
+  private async startAfterStop(uiStart: UiStartUnderWay): Promise<void> {
+    await this.settleCapturedStop();
+    if (uiStart.cancelled) return;
     if (this.handshake.isPending()) {
       this.deps.onActivity("recording", "Recording is starting", "Waiting for FluxIQ project acceptance.", "warning");
       return;
@@ -153,6 +194,7 @@ export class ActiveRecording {
       return;
     }
     await this.deps.page.refresh();
+    if (uiStart.cancelled) return;
     const unsupported = this.deps.page.unsupported();
     if (unsupported) {
       this.deps.setLastError(unsupported.reason);
@@ -165,6 +207,17 @@ export class ActiveRecording {
     const recordingId = `client.${this.deps.session().clientId}.${Date.now()}`;
     const startedAt = Date.now();
     const initialState = await this.deps.evidence.buildInitialRecordingState(startedAt);
+    if (uiStart.cancelled) return;
+    // Server and UI starts share this final gate. A server start can win while
+    // UI preflight awaits; once any such start settles, re-evaluate every
+    // lifecycle owner and enter handshake.begin in the same turn so no other
+    // source can install a competing identity between decision and claim.
+    while (this.starting) await this.starting.finished;
+    if (uiStart.cancelled) return;
+    if (this.recordingState === "recording" || this.handshake.isPending()) {
+      this.deps.onActivity("recording", "Recording is starting", "Another recording start won while this request was preparing.", "warning");
+      return;
+    }
     // Wording only, so it reads what is already known rather than paying for a
     // second Core lookup: the send resolves the project authoritatively, once
     // per attempt.
@@ -173,18 +226,81 @@ export class ActiveRecording {
     this.deps.emitStatus();
   }
 
-  async stop(notifyServer: boolean): Promise<void> {
-    if (this.recordingState !== "recording") return;
-    const recordingId = this.activeRecordingId;
-    const projectId = this.deps.projects.activeRecordingProject();
-    const endedAt = Date.now();
+  stop(notifyServer: boolean): Promise<void> {
+    if (this.stopRequest) return this.stopRequest.finished;
+    const uiStart = this.uiStart;
+    const starting = this.starting;
+    const pendingRecordingId = this.handshake.pendingRecordingId();
+    const recordingId = this.activeRecordingId ?? starting?.recordingId ?? pendingRecordingId;
+    if (this.recordingState !== "recording" && !uiStart && !starting && !pendingRecordingId) return Promise.resolve();
+    // An already-active recording ends at this synchronous admission fence.
+    // A start still being accepted gets its end time only after its required
+    // initial marker has settled, so Core never sees an end before its start.
+    const endedAt = this.recordingState === "recording" ? Date.now() : undefined;
+    let resolveStop: () => void = () => undefined;
+    let rejectStop: (error: unknown) => void = () => undefined;
+    const finished = new Promise<void>((resolve, reject) => {
+      resolveStop = resolve;
+      rejectStop = reject;
+    });
+    const stopRequest = { finished };
+    this.stopRequest = stopRequest;
+    if (uiStart) {
+      uiStart.cancelled = true;
+      // Stop retains and drains A's promise below, but A no longer occupies
+      // the public single-flight slot: a later press is B, ordered behind this
+      // Stop. A's identity-checked settlement cannot clear B's slot.
+      if (this.uiStart === uiStart) this.uiStart = undefined;
+    }
+    const pendingSend = pendingRecordingId ? this.handshake.cancelAndDrain() : undefined;
+    void this.finishStopRequest(notifyServer, recordingId, uiStart, starting, pendingSend, endedAt).then(() => {
+      if (this.stopRequest === stopRequest) this.stopRequest = undefined;
+      resolveStop();
+    }, (error: unknown) => {
+      if (this.stopRequest === stopRequest) this.stopRequest = undefined;
+      rejectStop(error);
+    });
+    return finished;
+  }
+
+  private async finishStopRequest(
+    notifyServer: boolean,
+    recordingId: string | undefined,
+    uiStart: UiStartUnderWay | undefined,
+    starting: StartUnderWay | undefined,
+    pendingSend: Promise<void> | undefined,
+    endedAt: number | undefined
+  ): Promise<void> {
+    if (uiStart) await uiStart.finished.catch(() => undefined);
+    if (starting) await starting.finished;
+    if (pendingSend) await pendingSend;
+    // No start marker crossed the client boundary, so cancelling preflight is
+    // the whole Stop. Otherwise Core may own the captured identity and must see
+    // a matching close even when local start work rejected before activation.
+    if (!recordingId && this.recordingState !== "recording") return;
+    await this.finishStop(
+      notifyServer,
+      this.activeRecordingId ?? recordingId,
+      this.deps.projects.activeRecordingProject(),
+      endedAt ?? Date.now()
+    );
+  }
+
+  private async finishStop(
+    notifyServer: boolean,
+    recordingId: string | undefined,
+    projectId: string | null | undefined,
+    endedAt: number
+  ): Promise<void> {
     const stopPayload = recordingId
-      ? compactObject({
-          recordingId,
-          ...(projectId !== undefined ? { projectId } : {}),
-          endedAt
-        })
+      ? compactObject({ recordingId, ...(projectId !== undefined ? { projectId } : {}), endedAt })
       : undefined;
+    let navigationFailure: unknown;
+    try {
+      await this.deps.navigation.flush();
+    } catch (error) {
+      navigationFailure = error;
+    }
     this.deps.scriptedNavigation.cancelAll("recording_stopped");
     this.recordingState = "idle";
     this.stoppedRecordingId = recordingId;
@@ -195,8 +311,13 @@ export class ActiveRecording {
     this.deps.emitStatus();
     void this.deps.attachment.broadcast({ type: "recording", recording: false, settings: this.deps.settings() }, false);
     if (notifyServer && stopPayload) {
-      await this.deps.send("client.stop_recording", stopPayload);
+      try {
+        await this.deps.send("client.stop_recording", stopPayload);
+      } catch (error) {
+        if (navigationFailure === undefined) throw error;
+      }
     }
+    if (navigationFailure !== undefined) throw navigationFailure;
   }
 
   dismissBlock(): void {
@@ -208,6 +329,8 @@ export class ActiveRecording {
   // FluxIQ's `server.start_recording`: its acknowledgement of this client's
   // start, or a start FluxIQ asked for itself, from the web panel.
   async beginAccepted(recordingId: string, projectId?: string | null): Promise<void> {
+    const stopRequest = this.stopRequest;
+    if (stopRequest) await stopRequest.finished.catch(() => undefined);
     if (!this.expectsStart(recordingId)) {
       this.deps.onActivity("recording", "Recording start ignored", "FluxIQ named a recording this client is not starting or running, or has already stopped.", "warning");
       return;
@@ -219,6 +342,7 @@ export class ActiveRecording {
   // FluxIQ refused a start. The handshake decides whether that is retried or
   // surfaced; a refusal with no start of ours in flight is surfaced at once.
   noteStartRefusal(refusal: RecordingStartRefusal): void {
+    if (this.stopRequest) return;
     this.handshake.noteRefusal(refusal);
   }
 
@@ -240,6 +364,13 @@ export class ActiveRecording {
       this.recordingState === "recording" ? this.activeRecordingId : undefined
     ].filter((id) => id !== undefined);
     return own.length === 0 || own.includes(recordingId);
+  }
+
+  // Capture once: a rejected Stop still completed teardown, and a later Stop
+  // belongs to a later recording rather than extending this caller's wait.
+  private async settleCapturedStop(): Promise<void> {
+    const stopRequest = this.stopRequest;
+    if (stopRequest) await stopRequest.finished.catch(() => undefined);
   }
 
   // Every way into a recording comes through here, so it starts once. A start
@@ -296,14 +427,21 @@ export class ActiveRecording {
     const activeTabId = this.deps.page.tabId();
     if (activeTabId !== undefined) await this.deps.attachment.attachTabForRecording(activeTabId);
     await this.deps.page.sendBrowserState();
-    await this.deps.recordEvent({
-      kind: "browser.tab",
-      sequence: this.deps.sequence.next(),
-      url: this.deps.page.url() ?? "",
-      title: "",
-      eventTimestampMs: Date.now(),
-      metadata: { recordingState: "started", recordingId }
-    });
+    let initialMarker: Promise<void>;
+    try {
+      this.admittingInitialMarker = true;
+      initialMarker = this.deps.recordEvent({
+        kind: "browser.tab",
+        sequence: this.deps.sequence.next(),
+        url: this.deps.page.url() ?? "",
+        title: "",
+        eventTimestampMs: Date.now(),
+        metadata: { recordingState: "started", recordingId }
+      });
+    } finally {
+      this.admittingInitialMarker = false;
+    }
+    await initialMarker;
     await this.deps.evidence.captureActiveSnapshot("Initial snapshot captured");
   }
 

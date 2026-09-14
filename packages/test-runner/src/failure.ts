@@ -59,11 +59,27 @@ const MISSING_MODULE_CODES = ["ERR_MODULE_NOT_FOUND", "MODULE_NOT_FOUND", "ERR_P
 const MISSING_PATH_CODES = ["ENOENT", "EACCES", "EPERM"];
 /** Socket codes raised while a run's processes are coming up. */
 const STARTUP_CODES = ["EADDRINUSE", "ECONNREFUSED", "ECONNRESET"];
+const MAX_CAUSE_DEPTH = 4;
 
 export function classifyRunnerFailure(error: unknown): RunnerFailureCategory {
   if (error instanceof RunnerFailure) return error.category;
-  const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
-  if (MISSING_PATH_CODES.includes(code) || MISSING_MODULE_CODES.includes(code)) return "environment.missing";
-  if (STARTUP_CODES.includes(code)) return "process.startup";
+  for (const code of boundedCauseCodes(error)) {
+    if (MISSING_PATH_CODES.includes(code) || MISSING_MODULE_CODES.includes(code)) return "environment.missing";
+    if (STARTUP_CODES.includes(code)) return "process.startup";
+  }
   return "unknown";
+}
+
+function boundedCauseCodes(error: unknown): string[] {
+  const codes: string[] = [];
+  let current = error;
+  for (let depth = 0; depth < MAX_CAUSE_DEPTH && typeof current === "object" && current !== null; depth += 1) {
+    try {
+      if ("code" in current && typeof current.code === "string") codes.push(current.code);
+      current = "cause" in current ? current.cause : undefined;
+    } catch {
+      break;
+    }
+  }
+  return codes;
 }

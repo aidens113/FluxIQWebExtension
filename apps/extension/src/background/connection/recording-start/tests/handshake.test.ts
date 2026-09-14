@@ -267,6 +267,25 @@ test("an accepted start cancels the pending retry", async (t) => {
   assert.equal(sent.length, 1, "a cancelled retry must not resend after FluxIQ has already accepted");
 });
 
+test("cancelAndDrain closes ownership synchronously and waits for an in-flight send", async (t) => {
+  const held = heldSends();
+  const { timers, handshake } = harness(t, held.send);
+  const beginning = begin(handshake);
+  await settle();
+
+  const draining = handshake.cancelAndDrain();
+  assert.equal(handshake.isPending(), false);
+  assert.equal(timers.count(), 0);
+  let drained = false;
+  void draining.then(() => { drained = true; });
+  await settle();
+  assert.equal(drained, false);
+
+  held.release(0);
+  await Promise.all([beginning, draining]);
+  assert.equal(drained, true);
+});
+
 test("disconnecting cancels the handshake, and a new start replaces the old one", async (t) => {
   const { timers, sent, handshake } = harness(t);
   await begin(handshake);

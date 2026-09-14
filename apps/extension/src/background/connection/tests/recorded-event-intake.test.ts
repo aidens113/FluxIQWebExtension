@@ -32,6 +32,7 @@ type HarnessOptions = {
 
 function harness(state: RecordingState = "recording", options: HarnessOptions = {}) {
   let recordingState = state;
+  let acceptingEvents = state === "recording";
   let counted = 0;
   const sent: Array<{ type: string; payload: Record<string, unknown> }> = [];
   const evidenceKinds: string[] = [];
@@ -43,6 +44,7 @@ function harness(state: RecordingState = "recording", options: HarnessOptions = 
 
   const recording = {
     state: () => recordingState,
+    acceptsEvents: () => recordingState === "recording" && acceptingEvents,
     startedAt: () => 0,
     recordingId: () => "recording-1",
     noteEvent: () => {
@@ -93,9 +95,9 @@ function harness(state: RecordingState = "recording", options: HarnessOptions = 
     onActivity: (kind, label, _detail, tone) => {
       activities.push({ kind, label, tone });
     },
-    recordEvent: async (payload, tabId, frameId) => {
+    recordEvent: async (payload, tabId, frameId, admittedNavigation) => {
       reentered.push({ payload, tabId, frameId });
-      if (options.reenter) await intake?.accept(payload, tabId, frameId);
+      if (options.reenter) await intake?.accept(payload, tabId, frameId, admittedNavigation);
     }
   };
   intake = new RecordedEventIntake(deps);
@@ -112,6 +114,10 @@ function harness(state: RecordingState = "recording", options: HarnessOptions = 
     counted: () => counted,
     stop: () => {
       recordingState = "idle";
+      acceptingEvents = false;
+    },
+    fence: () => {
+      acceptingEvents = false;
     }
   };
 }
@@ -295,6 +301,26 @@ test("a typed navigation and a content-ready page re-enter through the facade's 
   h.stop();
   h.intake.noteNavigationCommitted(commit("https://shop.test/after", "typed", 20));
   assert.equal(h.scheduled.length, 2, "nothing is scheduled once the recording stops");
+});
+
+test("a stop fence refuses fresh content and navigation while draining an already-scheduled navigation", async () => {
+  const navigation = new NavigationRecorder();
+  const h = harness("recording", { navigation, reenter: true });
+  h.intake.noteNavigationCommitted(commit("https://shop.test/already-admitted", "typed", 10));
+  h.fence();
+
+  await h.intake.accept(click("pointerdown", 2), 4, 0);
+  await h.intake.acceptContentReady({
+    kind: "content.ready", sequence: 3, url: "https://shop.test/late", title: "Late", eventTimestampMs: 12
+  } as RecordingEventPayload, 4, 0);
+  h.intake.noteNavigationCommitted(commit("https://shop.test/not-admitted", "typed", 13));
+  await navigation.flush();
+
+  assert.deepEqual(h.scheduled, [], "the injected recorder owns scheduling in this row");
+  assert.deepEqual(h.recordingStates, [], "late content-ready performs no recording attachment work");
+  assert.equal(h.counted(), 1, "only the navigation admitted before the fence is recorded");
+  assert.deepEqual(h.sent.map((message) => (message.payload as SentRecordingEvent).payload?.url), ["https://shop.test/already-admitted"]);
+  assert.deepEqual(h.evidenceKinds, ["browser.navigation"]);
 });
 
 // --- A click's landing (W19, design E1) --------------------------------------

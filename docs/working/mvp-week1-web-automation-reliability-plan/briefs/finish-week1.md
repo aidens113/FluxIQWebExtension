@@ -5678,3 +5678,444 @@ leaks, persistence failures, action-bearing discards, and harness use without
 reading raw page data. Continue until final aggregate or a real blocker. Write
 only your report, no commit/push. Return pin, bench ID, outcome, exact bounded
 counts, validation, and remaining assumptions.
+## m-auth-expired-diagnosis — diagnose final-bench W19 expired classification drift (read-only)
+
+**Status:** assigned after the durable A/B final aggregates.
+
+**Scope:** Read the `Current State` of the shared plan, the W19 rows in
+`reports/l-final-durable-a.md` and `reports/l-final-durable-b.md`, then inspect only
+the auth-gate scenario/corpus contracts and the execution/evaluation modules needed
+to trace why B repeats 1 and 2 produced no structured `auth_required` failure. Do not
+edit product code or shared documents in this brief. Do not read or print the fixture
+secret or raw captured page/event data.
+
+**Deliverable:** Write bounded findings to
+`reports/m-auth-expired-diagnosis.md`: exact root cause, whether this is product,
+fixture, evaluator, or timing behavior, smallest safe fix with file ownership, and
+narrow reproduction/test commands. State what was and was not verified. No commit or
+push.
+
+## m-runner-flake-diagnosis — diagnose final-bench startup/fetch flakes (read-only)
+
+**Status:** assigned after the durable A/B final aggregates.
+
+**Scope:** Read the `Current State` of the shared plan and the failure summaries in
+`reports/l-final-durable-a.md` and `reports/l-final-durable-b.md`, then inspect only
+the runner/service-worker readiness, fixture-server lifecycle, and relevant W05/W25
+run metadata needed to trace A's one `fetch failed` and B's one 10-second service
+worker wait timeout. Keep inspection bounded and secret-free; do not dump raw events
+or page data. Do not edit product code or shared documents in this brief.
+
+**Deliverable:** Write findings to `reports/m-runner-flake-diagnosis.md`: causal or
+best-supported fault tree, whether the two observations share a cause, exact owned
+files for a fix, and a narrow mutation/reproduction plan. State uncertainty and
+validation honestly. No commit or push.
+
+## n-recorder-flush — close the click-landing stop race
+
+**Owns:** `apps/extension/src/background/connection/navigation-recorder.ts`,
+`recorded-event-intake.ts`, `active-recording.ts`, their barrel if required, focused
+tests under that directory's `tests/`, and `reports/n-recorder-flush.md` only.
+
+Implement the smallest awaited flush described in `m-auth-expired-diagnosis.md`:
+pending and already-running navigation callbacks must settle while recording is still
+active, before stop is sent. Preserve debounce/replacement behavior, handle send
+rejection deterministically, and prevent carry-over. Add focused tests and mutation
+proof. Run the narrow connection tests and extension test suite with a private build
+label. Do not run Lab, edit Core/shared docs, commit, or push.
+
+## n-extension-readiness — harden cold MV3 readiness
+
+**Owns:** a focused module/tests under `packages/test-runner/src/run-lifecycle/`, its
+barrel, `packages/test-runner/src/run-scenario.ts`, the narrow runner-wiring test if
+needed, and `reports/n-extension-readiness.md` only.
+
+Implement the bounded 30-second, `chrome-extension:`-only worker readiness helper in
+`m-runner-flake-diagnosis.md`. Cover observation zero, late arrival, unrelated worker,
+timeout diagnostics, and cleanup; mutation-prove the deadline and protocol guards.
+Run focused tests and the test-runner suite. Do not run Lab, edit Core/shared docs,
+commit, or push.
+
+## n-http-startup-diagnostics — preserve safe startup transport causality
+
+**Owns:** `packages/test-runner/src/http-control.ts`, `failure.ts`,
+`coordinator.ts`, their focused tests (including a new nearest-owned coordinator test
+if needed), and `reports/n-http-startup-diagnostics.md` only.
+
+Implement the minimum justified diagnostic hardening from
+`m-runner-flake-diagnosis.md`: fixed operation-stage labels, bounded nested transport
+codes/categories, no URL/body/raw error leakage, unchanged abort/timeout precedence,
+and safe startup-failure preservation before cleanup. Do not add non-idempotent project
+creation retries without reconciliation. Add tests and mutation proof, then run the
+test-runner suite. Do not run Lab, edit Core/shared docs, commit, or push.
+# Thirty-first dispatch — live validation of the three final-bench repairs
+
+## o-w19-recorder-flush — prove expired auth replay after recorder drain
+
+**Report:** `reports/o-w19-recorder-flush.md`
+
+**Read:** `Current State` in the shared plan; `reports/m-auth-expired-diagnosis.md`;
+`reports/n-recorder-flush.md`; the auth-gate manifest and only the Lab launcher
+code needed to run it.
+
+**Task:** From this dirty supervisor worktree, run W19 exactly six times as
+`lab run auth-gate --flow --variant expired --target isolated --evidence failure`.
+Use `FLUXIQ_TEST_ENV_FILES=none`, one unique lowercase instance/build label and a
+new run root below `F:\fxlab-runs\postfix\w19`. Resolve the fixture password from
+its source constant without printing, hashing, or writing it. Do not edit product
+code or shared docs. Record run IDs, exit/verdict/category counts, whether every
+run reports `auth_required`, and sanitized failure-stage facts. Preserve artifacts.
+Write the report as results arrive. Never commit or push.
+
+## o-lifecycle-stress — stress MV3 readiness and startup diagnostics
+
+**Report:** `reports/o-lifecycle-stress.md`
+
+**Read:** `Current State` in the shared plan; `reports/m-runner-flake-diagnosis.md`;
+`reports/n-extension-readiness.md`; `reports/n-http-startup-diagnostics.md`; W05
+and W25 manifests; only launcher code needed to run them.
+
+**Task:** From this dirty supervisor worktree, run five isolated Flow-lane W05
+primary recording/replays and five isolated Flow-lane W25 primary runs, alternating
+the scenarios. Use `FLUXIQ_TEST_ENV_FILES=none`, a unique lowercase instance/build
+label and a fresh root below `F:\fxlab-runs\postfix\lifecycle`. Capture failure
+evidence. Do not expose URLs, bodies, causes, secrets, or recorded page data. Report
+run IDs, verdict counts, readiness/startup failure counts, and for any failure only
+the fixed category and allowlisted operation-stage/detail keys. Preserve artifacts.
+Do not edit product code or shared docs. Write progressively. Never commit or push.
+
+## o-final-code-audit — adversarial review of the integrated repair set
+
+**Report:** `reports/o-final-code-audit.md`
+
+**Read:** `Current State`; reports `m-auth-expired-diagnosis.md`,
+`m-runner-flake-diagnosis.md`, and the three `n-*.md` implementation reports;
+then inspect only the changed product/test files for recorder flush, extension
+readiness, HTTP transport diagnostics, and startup cleanup.
+
+**Task:** Review the uncommitted diff adversarially for lost events, promise or
+timer leaks, cross-recording contamination, double settlement, diagnostic leaks,
+incorrect failure precedence, unsafe retries, and missing tests. Run read-only
+or non-mutating focused checks if useful. Do not edit product code or shared docs.
+Write each finding with severity, file/line, concrete failure path, and proposed
+correction; say explicitly when no issue is found. Also assess whether the tests
+would fail if each load-bearing guard were removed. Never commit or push.
+
+# Thirty-second dispatch — close adversarial-audit gaps
+
+## p-http-diagnostic-projection — persist only the closed startup diagnostic
+
+**Report:** `reports/p-http-diagnostic-projection.md`
+
+**Read:** `reports/o-final-code-audit.md`; current `run-scenario.ts`, failure
+event/evaluation contracts, and their owning tests.
+
+**Task:** Implement one narrow projector that carries only valid fixed HTTP
+`operationStage`, `transportCategory: network`, and allowlisted transport code
+from a `RunnerFailure` into the durable run error event. Never spread arbitrary
+details and do not expose path, URL, body, credentials, message, or cause. Add an
+integration test at the event boundary and exact fetch-call assertions proving
+non-idempotent project creation is not retried. Mutation-check removal of the
+projection. Touch only test-runner files. Run focused check/tests. Write the
+report progressively. Never commit or push.
+
+## p-recorder-stop-fence — single-flight stop and close event admission
+
+**Report:** `reports/p-recorder-stop-fence.md`
+
+**Read:** `reports/o-final-code-audit.md`; current recorder/intake changes and
+their tests.
+
+**Task:** Make stop establish a synchronous single-flight boundary before its
+first await. Concurrent UI/server stops must share one teardown and never send a
+duplicate stop. New content/navigation events after the boundary must be refused,
+while callbacks already captured in the current navigation generation must drain
+under that recording. Keep endedAt consistent with the admission boundary. Add
+tests for concurrent notifying stops, UI/server crossing, post-boundary content
+and navigation admission, timer-fired rejection safety, re-drain, and stale timer
+identity where feasible. Mutation-check the fence. Touch only extension source,
+tests, and regenerated tracked extension build. Run focused check/tests. Write the
+report progressively. Never commit or push.
+
+# Thirty-third dispatch — validate the stable integrated tree
+
+## q-w19-final-tree — repeat W19 after the stop fence
+
+**Report:** `reports/q-w19-final-tree.md`
+
+**Read:** reports `p-recorder-stop-fence.md` and `o-w19-recorder-flush.md`.
+
+**Task:** On the now-stable dirty supervisor tree, run three actual browser runs
+of `auth-gate --flow --variant expired --target isolated --evidence failure` in
+a new root below `F:\fxlab-runs\postfix\w19-final`, one unique label, with env
+files disabled and the fixture-only declared secret resolved without output.
+Do not count a pre-launch failure as a run. Record only run IDs, verdict/category,
+oracle, harness count and packet-budget/truncation facts. Preserve artifacts.
+Do not edit product/shared docs, commit, or push. Notify `o-lifecycle-stress`
+when the third actual run completes so it may start on the same stable tree.
+
+## q-recorder-fence-review — verify the audit correction (read-only)
+
+**Report:** `reports/q-recorder-fence-review.md`
+
+**Read:** `reports/o-final-code-audit.md`, `reports/p-recorder-stop-fence.md`,
+and only the final recorder/intake source and tests changed by that repair.
+
+**Task:** Review whether the stop boundary is truly synchronous and single-flight,
+late external events cannot use the admitted-navigation path, captured callbacks
+still drain exactly once, and start/stop crossings cannot corrupt generations.
+Inspect every call site of the changed intake signature. Do not edit code/shared
+docs or run a build while live Lab is active. Report concrete file/line findings,
+or explicitly state no material issue. Never commit or push.
+
+# Thirty-fourth dispatch — serialize new recordings behind stop settlement
+
+## r-recorder-start-stop-crossing — close the final fence lifecycle gap
+
+**Report:** `reports/r-recorder-start-stop-crossing.md`
+
+**Read:** `reports/q-recorder-fence-review.md`, `active-recording.ts`, and its
+focused tests. Wait until the supervisor confirms the current W05 Lab invocation
+has ended before editing or building.
+
+**Task:** Ensure the stop token is cleared before its public promise settles;
+serialize `start()` and `beginAccepted()` behind the captured stop settlement,
+even when stop reports an error; and prevent a refusal from mutating an active
+stop. Preserve existing first-caller stop notification semantics. Add held-send
+and held-drain crossings proving the new recording starts once after teardown,
+keeps its initial `browser.tab`, and no old callback enters it. Assess simultaneous
+UI starts after the wait and avoid introducing a duplicate handshake. Touch only
+extension recorder source/tests and regenerated build. Run focused suite/check
+and mutations for the crossing guards. Write progressively. Never commit/push.
+
+## s-recorder-final-review — final read-only lifecycle audit
+
+**Report:** `reports/s-recorder-final-review.md`
+
+**Read:** reports `q-recorder-fence-review.md` and
+`r-recorder-start-stop-crossing.md`; final `active-recording.ts` and changed tests.
+
+**Task:** Recheck the original crossing against final source, including token
+clear/settlement ordering, stop rejection, simultaneous UI starts, new server
+starts, refusal suppression, and old-generation navigation. Identify any new
+deadlock or duplicate-start path. Do not edit or build. Give a concise accept or
+concrete file/line finding in your report. Never commit/push.
+
+## t-recorder-mixed-start — serialize UI and server start sources
+
+**Report:** `reports/t-recorder-mixed-start.md`
+
+**Read:** `reports/s-recorder-final-review.md`; final recorder source/tests.
+
+**Task:** Close the mixed UI/server start race released by one stop. Immediately
+before `handshake.begin`, with no intervening await, re-evaluate/serialize against
+`starting`, an already-running recording, and a pending handshake so async UI
+preflight cannot issue a competing client start after a server start wins. Preserve
+normal repeated-button behavior and server project relinking. Add a held-stop,
+held-UI-preflight mixed-source test in both winner orders; prove one new identity,
+one initial tab event and at most one client start. Mutation-check the final gate.
+Touch only extension recorder source/tests and regenerated build. Run focused and
+full extension checks/tests. Write the report. Never commit/push.
+
+## u-recorder-acceptance-review — accept or reject final lifecycle source
+
+**Report:** `reports/u-recorder-acceptance-review.md`
+
+**Read:** reports `s-recorder-final-review.md`, `t-recorder-mixed-start.md`, and
+the final recorder source/tests only.
+
+**Task:** Re-run the mixed-source timeline mentally in both winner orders and
+check the final no-await boundary, rejection paths, and ordinary repeated starts.
+Do not edit or build. State `Accepted` only if no material start/stop/navigation
+race remains; otherwise give one concrete trace with file/line. Never commit/push.
+
+## v-recorder-stop-during-start — make Stop own pending starts
+
+**Report:** `reports/v-recorder-stop-during-start.md`
+
+**Read:** `reports/u-recorder-acceptance-review.md`; full final
+`active-recording.ts`, handshake API, and focused lifecycle tests.
+
+**Task:** A Stop crossing UI preflight, a pending client handshake, or server-owned
+`starting` must not resolve while that start later activates recording. Design one
+synchronous stop-request owner that cancels a not-yet-accepted client start when
+safe or waits for an accepted start and tears it down exactly once. Avoid deadlock
+with UI starts already waiting behind an older stop. Preserve one start marker and
+one stop notification whenever Core may own the recording. Add held-preflight,
+pending-handshake, held-`starting`, rejection and concurrent-stop tests. Mutation
+pin each branch. Touch only recorder/handshake source and colocated tests plus
+generated build. Run full extension check/test and focused mutation suite. Write
+the report, including the state-machine rule chosen. Never commit/push.
+
+## v-stop-state-machine-review — independently model the pending-stop fix
+
+**Report:** `reports/v-stop-state-machine-review.md`
+
+**Read:** `reports/u-recorder-acceptance-review.md`, current recorder and
+handshake source. Do not inspect the other worker's report until it finishes.
+
+**Task:** Read-only model every ordering among UI preflight, client handshake,
+server `beginAccepted`, local fallback, Stop, and stop rejection. State the
+minimal invariants needed to prevent post-Stop activation, deadlock, duplicate
+start/stop, or stranded Core recording. After the implementation worker reports
+stable, compare final source to the model and accept or give a concrete trace.
+Do not edit/build/commit/push; write only your report.
+
+## w-recorder-post-stop-ui-start — detach the cancelled UI owner
+
+**Report:** `reports/w-recorder-post-stop-ui-start.md`
+
+**Read:** final section of `reports/v-stop-state-machine-review.md` and the
+current pending-stop implementation/tests.
+
+**Task:** At the synchronous Stop boundary, detach the captured cancelled UI
+start from the public single-flight slot while retaining and awaiting its local
+promise. A later UI Start must create a distinct request, wait behind Stop, then
+proceed normally. Preserve identity-checked cleanup so old settlement cannot
+clear the new slot. Add the exact held-preflight `Start A → Stop → Start B`
+regression, including distinct promises, no start before Stop, then exactly one
+B client start/initial marker after acceptance. Mutation-check detachment. Run
+full extension check/test/build and focused test. Write report. Never commit/push.
+
+## x-w19-accepted-tree — final browser proof at the accepted lifecycle source
+
+**Report:** `reports/x-w19-accepted-tree.md`
+
+**Read:** the Accepted conclusion in `reports/v-stop-state-machine-review.md`
+and prior `q-w19-final-tree.md`.
+
+**Task:** Run three actual W19 expired Flow-lane isolated browser invocations on
+this exact stable tree under a new root `F:\fxlab-runs\postfix\w19-accepted` and
+unique label. Disable env files, resolve the fixture-only secret without output,
+and capture failure evidence. Report run IDs, evaluation/category/oracle, harness,
+packet budget and truncation only. Preserve artifacts. On 3/3 completion notify
+`o-lifecycle-stress` to resume its remaining nine runs. No edits/commit/push.
+
+## y-w19-startup-diagnosis — classify the accepted-tree startup failure
+
+**Report:** `reports/y-w19-startup-diagnosis.md`
+
+**Read:** failed bundle `run-mu1dfobh-b6be2187`, its process logs, fixed diagnostic
+contracts, and only owning runner source needed to identify its stage.
+
+**Task:** Read-only diagnose why this one run failed `process.startup` before Flow
+creation while the next three passed. Never quote/output raw logs, paths, URLs,
+identifiers beyond the run id, bodies, credentials, or causes. Report only fixed
+stage/category/code labels already safe in product contracts, elapsed bounds,
+counts, whether the failure predates extension launch, and the smallest safe
+diagnostic/fix if current artifacts cannot distinguish it. Do not build or compete
+with the active lifecycle Lab. Write only your report. Never commit/push.
+
+## z-startup-stage-design — design closed topology wait diagnostics
+
+**Report:** `reports/z-startup-stage-design.md`
+
+**Read:** `reports/y-w19-startup-diagnosis.md`; `coordinator.ts`, `http-control.ts`,
+TCP wait helper, failure capture/projectors, and owning tests only.
+
+**Task:** Read-only enumerate every pre-browser topology wait that can emit a
+bounded `process.startup` timeout. Propose the smallest closed stage enum and one
+projector retaining only bounded kind, stage, and timeout. Explain how to avoid
+target/URL/port/body/message/cause leakage and keep HTTP transport projection
+separate. Identify exact files/tests/mutations, partitioned by file. Do not edit,
+build, or compete with active Lab. Write only report. Never commit/push.
+
+## z-recorder-doc-audit — identify final lifecycle documentation deltas
+
+**Report:** `reports/z-recorder-doc-audit.md`
+
+**Read:** final recorder/handshake source and reports `p` through `w`; relevant
+recording sections of `docs/architecture/extension-client.md` only.
+
+**Task:** Read-only compare current architecture prose with the accepted final
+state machine. List only missing or inaccurate invariants: stop single-flight,
+pending-start ownership, event admission, generation drain, initial marker,
+wire closure, and starts queued behind stop. Propose concise replacement prose
+and exact insertion point. Do not edit/build/commit/push; write only report.
+
+# Thirty-fifth dispatch — close the pre-browser timeout diagnostic gap
+
+## aa-startup-stage-projection — persist closed topology readiness stage
+
+**Report:** `reports/aa-startup-stage-projection.md`
+
+**Read:** `reports/z-startup-stage-design.md`; final coordinator, HTTP wait,
+failure event/projector, and owning tests.
+
+**Task:** Implement the proposed separate closed topology-readiness diagnostic.
+The only stages are `scenario.health` and `core.health`; persist only valid
+`bounded`, `operationStage`, and integer bounded `timeoutMs`. Never retain URL,
+target, port, path, body, raw message, cause, or arbitrary details. Keep TCP
+gateway and HTTP transport diagnostics separate. Wire every applicable
+coordinator wait, project through the durable run error event, add unit and event-
+boundary tests, and mutation-check stage assignment, validation, and projection.
+Touch only test-runner source/tests. Run package check/full tests. Write report.
+Never commit/push.
+
+## ab-blocker-ranking-refresh — rank blockers from completed evidence
+
+**Report:** `reports/ab-blocker-ranking-refresh.md`
+
+**Read:** `reports/i-ranking-draft.md`, `i-leftover-sizing.md`,
+`l-final-durable-comparison.md`, `o-lifecycle-stress.md`,
+`x-w19-accepted-tree.md`, and accepted lifecycle review/result reports.
+
+**Task:** Read-only produce the Phase 1.6b blocker ranking using final measured
+corpus impact. Separate fixed/closed items, ruled-out variants, non-repeating
+machine/startup observations, and actual remaining Week 1 blockers. Give rank,
+affected cells/runs, severity, confidence, and next owner. Do not claim the fresh
+post-commit A/B pair yet. No code/docs beyond your report, build, Lab, commit,
+or push.
+
+## ac-active-recording-test-split — restore the hard structure budget
+
+**Report:** `reports/ac-active-recording-test-split.md`
+
+**Read:** final `active-recording.test.ts`, its imports/harness, the lifecycle
+tests added in reports `p` through `w`, and structure-audit placement rules.
+
+**Task:** Split by behavior, not line count. Keep pre-existing start/refusal/core
+behavior in `active-recording.test.ts`; move the coherent stop/navigation/start-
+crossing suite into `active-recording-stop-lifecycle.test.ts`. Extract only the
+minimum reusable test harness/support into one clearly named file under the same
+`tests/` directory if duplication would otherwise result. Preserve every test
+and assertion; no product change. Ensure every file is below 800 lines and tests
+stay beside their subject. Run extension check/full tests, structure check, and
+diff check. Write report with before/after counts. Never commit/push; do not run
+`structure:baseline` because the supervisor owns the shared index update.
+
+# Thirty-sixth dispatch — repaired clean-pinned acceptance pair
+
+## ad-final-repaired-a — run independent durable campaign A
+
+**Report:** `reports/ad-final-repaired-a.md`
+
+**Read:** this plan's Current State; reports `l-final-durable-a.md`,
+`aa-startup-stage-projection.md`, and `ac-active-recording-test-split.md`.
+
+**Task:** After the supervisor supplies the clean pushed pin, run the complete
+Week 1 corpus three times on isolated topology with failure evidence. Use only
+`F:\fxlab-runs\final-repaired\a`, instance/build label `ad-final-repaired-a`,
+and `FLUXIQ_TEST_ENV_FILES=none`. Resolve the fixture-only auth secret directly
+into the process environment without printing, persisting, hashing, or reporting
+it. Capture the campaign ID. Resume that same campaign after any interruption;
+never replace it. Do not edit tracked files while it runs. At terminal aggregate,
+inspect bounded checkpoint, projection, evidence, discard, lease, metric, and pin
+facts; then write only your report. Never commit/push.
+
+## ae-final-repaired-b — run independent durable campaign B
+
+**Report:** `reports/ae-final-repaired-b.md`
+
+**Read:** this plan's Current State; reports `l-final-durable-b.md`,
+`aa-startup-stage-projection.md`, and `ac-active-recording-test-split.md`.
+
+**Task:** After the supervisor supplies the clean pushed pin, run the complete
+Week 1 corpus three times on isolated topology with failure evidence. Use only
+`F:\fxlab-runs\final-repaired\b`, instance/build label `ae-final-repaired-b`,
+and `FLUXIQ_TEST_ENV_FILES=none`. Resolve the fixture-only auth secret directly
+into the process environment without printing, persisting, hashing, or reporting
+it. Capture the campaign ID. Resume that same campaign after any interruption;
+never replace it. Do not edit tracked files while it runs. At terminal aggregate,
+inspect bounded checkpoint, projection, evidence, discard, lease, metric, and pin
+facts; then write only your report. Never commit/push.

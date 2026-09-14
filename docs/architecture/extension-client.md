@@ -398,6 +398,26 @@ evidence. Core stores it as a domain event on the recording's timeline, where
 the recording mapper finds it beside the click it names
 ([A Click's Landing](#a-clicks-landing)).
 
+Stop is one synchronous, single-flight lifecycle boundary. The first Stop
+caller installs the shared operation and decides whether Core is notified;
+crossing callers receive that same promise and teardown runs once. From that
+boundary, ordinary content, tab, command-confirmation, and fresh-navigation
+events are no longer admitted.
+
+Before the recorder becomes idle or sends `client.stop_recording`, it drains
+the current navigation generation: pending 250 ms callbacks run immediately,
+callbacks already sending are awaited, and same-generation work exposed while
+they settle is drained too. Only callbacks admitted before Stop may use the
+internal navigation-admission path. A send failure remains the primary error,
+but does not prevent the matching Stop attempt. A later recording advances
+the generation only after this drain, so old callbacks cannot enter or fail
+the new recording.
+
+When Stop crosses a start Core has already accepted, ordinary events remain
+fenced, but that start's one initial `browser.tab` marker is admitted and
+awaited before teardown. Its Stop timestamp is then taken after the marker,
+so Core sees one ordered start marker followed by one close.
+
 The background worker also records a tab change as an action
 ([`background/connection/tab-recorder.ts`](../../apps/extension/src/background/connection/tab-recorder.ts)).
 `active-page.ts` hands it each tab Chrome activates or updates, and each tab
@@ -446,6 +466,20 @@ action is lost, but never before that attempt's send has settled:
   it is cancelled, and pressing Record again only says it is starting.
   Disconnecting cancels it.
 
+Stop owns starts which have not reached the public `recording` state too. A UI
+preflight that has not claimed the handshake is cancelled locally after each
+await and sends neither a false Start nor a false Stop. Once a handshake
+identity exists, Stop synchronously cancels its timers and fallback, drains
+the current send — including a detached retry — and then sends at most one
+matching `client.stop_recording` when notification was requested. A send
+rejection belongs to the cancelled start and does not strand or reject local
+teardown. A late acceptance of that stopped identity is ignored.
+
+If a server acceptance or local fallback already owns `starting`, Stop waits
+for that exact start to finish its sole initial marker and then tears it down
+once. Stop does not resolve while any pre-boundary continuation can later
+activate the recorder.
+
 A recording starts once
 ([`background/connection/active-recording.ts`](../../apps/extension/src/background/connection/active-recording.ts)).
 Every way into one, a local start or a `server.start_recording`, goes through
@@ -467,6 +501,15 @@ meanwhile waits for it. `beginAccepted` first reads which recording a
 - **Nothing of this client's own,** with no start pending or under way and no
   recording running. It is FluxIQ's own start, asked for from the web panel,
   and it begins.
+
+A Start arriving after Stop's boundary captures that Stop and waits for its
+teardown, whether the Stop fulfills or rejects, before rechecking lifecycle
+owners. When Stop cancels an older UI preparation A, it detaches A from the
+public UI single-flight slot while retaining A's promise for its own drain. A
+later press B therefore owns a distinct request and waits one-way behind Stop;
+A's identity-checked settlement cannot clear B. After Stop settles, UI and
+server starts arbitrate at one final no-await gate: the first pending handshake
+or `starting` owner wins, and the loser sends no competing Start.
 
 FluxIQ Core keeps the same order on its side, in its Automation Studio client
 gateway bridge (Core's

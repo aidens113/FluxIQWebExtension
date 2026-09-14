@@ -95,6 +95,7 @@ export async function startTopology(options: TopologyOptions, supervisor = new P
     });
     const scenarioOrigin = `http://127.0.0.1:${allocation.scenarioPort}`;
     await dependencies.waitForHttp(`${scenarioOrigin}/__control/health`, {
+      operationStage: "scenario.health",
       headers: { authorization: `Bearer ${allocation.controllerToken}` },
       ...(options.startupTimeoutMs === undefined ? {} : { timeoutMs: options.startupTimeoutMs }),
       ...(options.signal ? { signal: options.signal } : {}),
@@ -110,6 +111,7 @@ export async function startTopology(options: TopologyOptions, supervisor = new P
     });
     const fluxiqOrigin = `http://127.0.0.1:${allocation.webPort}`;
     await dependencies.waitForHttp(fluxiqOrigin, {
+      operationStage: "core.health",
       ...(options.startupTimeoutMs === undefined ? {} : { timeoutMs: options.startupTimeoutMs }),
       ...(options.signal ? { signal: options.signal } : {}),
     });
@@ -143,8 +145,10 @@ export async function startTopology(options: TopologyOptions, supervisor = new P
       close: closeTopology(supervisor, workspaceLock),
     };
   } catch (error) {
-    await supervisor.cleanup();
-    await removeAllocatedRunRoot(allocation);
+    // Preserve the startup failure: cleanup is best-effort here and must not
+    // replace the safe operation/category diagnostics the caller persists.
+    await supervisor.cleanup().catch(() => undefined);
+    await removeAllocatedRunRoot(allocation).catch(() => undefined);
     await workspaceLock?.release().catch(() => undefined);
     throw error;
   }
@@ -166,6 +170,7 @@ async function startExistingTopology(options: TopologyOptions, target: ExistingT
     const scenarioEntrypoint = options.scenarioEntrypoint ?? path.join(repositoryRoot, "apps", "scenario-lab", "dist", "server.js");
     await requirePaths([scenarioEntrypoint]);
     await dependencies.waitForHttp(target.baseUrl, {
+      operationStage: "core.health",
       ...(options.startupTimeoutMs === undefined ? {} : { timeoutMs: options.startupTimeoutMs }),
       ...(options.signal ? { signal: options.signal } : {}),
     });
@@ -175,6 +180,7 @@ async function startExistingTopology(options: TopologyOptions, target: ExistingT
     });
     const scenarioOrigin = `http://127.0.0.1:${allocation.scenarioPort}`;
     await dependencies.waitForHttp(`${scenarioOrigin}/__control/health`, {
+      operationStage: "scenario.health",
       headers: { authorization: `Bearer ${allocation.controllerToken}` },
       ...(options.startupTimeoutMs === undefined ? {} : { timeoutMs: options.startupTimeoutMs }),
       ...(options.signal ? { signal: options.signal } : {}),

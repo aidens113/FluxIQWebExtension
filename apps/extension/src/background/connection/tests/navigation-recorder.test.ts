@@ -114,3 +114,141 @@ test("a burst of commits in one tab records only the last, once the debounce set
   t.mock.timers.tick(1);
   assert.deepEqual(recorded, ["redirect"]);
 });
+
+test("flush runs the latest pending callback immediately and awaits it", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const recorder = new NavigationRecorder();
+  const recorded: string[] = [];
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  recorder.schedule(TAB, ACCOUNT, () => recorded.push("replaced"));
+  recorder.schedule(TAB, "https://shop.test/sign-in", async () => {
+    recorded.push("started");
+    await gate;
+    recorded.push("settled");
+  });
+
+  const flushing = recorder.flush();
+  assert.deepEqual(recorded, ["started"], "flush does not wait for the debounce timer");
+  let settled = false;
+  void flushing.then(() => { settled = true; });
+  await Promise.resolve();
+  assert.equal(settled, false, "the callback's asynchronous send still holds the flush");
+  release();
+  await flushing;
+  assert.deepEqual(recorded, ["started", "settled"], "the replaced callback never runs");
+});
+
+test("flush waits for a callback already running when stop begins", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const recorder = new NavigationRecorder();
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  let callbackSettled = false;
+  recorder.schedule(TAB, ACCOUNT, async () => {
+    await gate;
+    callbackSettled = true;
+  });
+  t.mock.timers.tick(250);
+
+  const flushing = recorder.flush();
+  await Promise.resolve();
+  assert.equal(callbackSettled, false);
+  release();
+  await flushing;
+  assert.equal(callbackSettled, true);
+});
+
+test("a rejected callback is reported once after all navigation work settles", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const recorder = new NavigationRecorder();
+  const sent: string[] = [];
+  recorder.schedule(TAB, ACCOUNT, async () => {
+    sent.push("attempted");
+    throw new Error("landing send failed");
+  });
+
+  await assert.rejects(recorder.flush(), /landing send failed/);
+  assert.deepEqual(sent, ["attempted"]);
+  await recorder.flush();
+});
+
+test("a timer-fired rejected callback is retained safely until flush observes it", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const recorder = new NavigationRecorder();
+  recorder.schedule(TAB, ACCOUNT, async () => {
+    throw new Error("timer-fired landing failed");
+  });
+
+  t.mock.timers.tick(250);
+  await Promise.resolve();
+  await Promise.resolve();
+  await assert.rejects(recorder.flush(), /timer-fired landing failed/);
+  await recorder.flush();
+});
+
+test("flush re-drains navigation scheduled while an admitted callback settles", async () => {
+  const recorder = new NavigationRecorder();
+  const recorded: string[] = [];
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  recorder.schedule(TAB, ACCOUNT, async () => {
+    recorded.push("first-started");
+    await gate;
+    recorder.schedule(TAB + 1, "https://shop.test/orders", () => recorded.push("second"));
+    recorded.push("first-settled");
+  });
+
+  const flushing = recorder.flush();
+  release();
+  await flushing;
+  assert.deepEqual(recorded, ["first-started", "first-settled", "second"]);
+});
+
+test("a stale cleared timer cannot displace the pending callback that replaced it", async (t) => {
+  const timers: Array<() => void> = [];
+  t.mock.method(globalThis, "setTimeout", ((callback: () => void) => {
+    timers.push(callback);
+    return timers.length as unknown as ReturnType<typeof setTimeout>;
+  }) as typeof setTimeout);
+  t.mock.method(globalThis, "clearTimeout", (() => undefined) as typeof clearTimeout);
+  const recorder = new NavigationRecorder();
+  const recorded: string[] = [];
+  recorder.schedule(TAB, ACCOUNT, () => recorded.push("stale"));
+  recorder.schedule(TAB, "https://shop.test/sign-in", () => recorded.push("current"));
+
+  timers[0]?.();
+  assert.deepEqual(recorded, [], "the stale timer does not run or delete its replacement");
+  timers[1]?.();
+  await Promise.resolve();
+  assert.deepEqual(recorded, ["current"]);
+});
+
+test("clearing recording tabs cancels pending work from the prior recording", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const recorder = new NavigationRecorder();
+  const recorded: string[] = [];
+  recorder.schedule(TAB, ACCOUNT, () => recorded.push("old recording"));
+  recorder.clearRecordingTabs();
+  t.mock.timers.tick(250);
+  await recorder.flush();
+  assert.deepEqual(recorded, []);
+});
+
+test("clearing recording tabs isolates already-running work from the next recording", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const recorder = new NavigationRecorder();
+  let rejectOld: (error: Error) => void = () => undefined;
+  const oldGate = new Promise<void>((_resolve, reject) => { rejectOld = reject; });
+  recorder.schedule(TAB, ACCOUNT, () => oldGate);
+  t.mock.timers.tick(250);
+  recorder.clearRecordingTabs();
+  const recorded: string[] = [];
+  recorder.schedule(TAB, "https://shop.test/new", () => recorded.push("new recording"));
+
+  await recorder.flush();
+  assert.deepEqual(recorded, ["new recording"], "the prior callback does not hold the new flush open");
+  rejectOld(new Error("old recording failed late"));
+  await Promise.resolve();
+  await recorder.flush();
+});

@@ -10,6 +10,7 @@ import { classifyRunnerFailure, RunnerFailure, type RunnerFailureCategory } from
 import { withoutProviderSecrets } from "./environment.js";
 import { WebPanelAuthSessionCache } from "./auth-session.js";
 import { ExistingFluxIQControlClient } from "./existing-fluxiq-control.js";
+import { httpTransportFailureDetails, topologyReadinessFailureDetails } from "./http-control.js";
 import { executeExistingPersistedFlow, preflightExistingFluxIQ, type ExistingFlowExecution, type ExistingFluxIQPreflight } from "./existing-flow-run.js";
 import { installDeterministicNetworkGuard, scenarioNetworkOrigins, type DeterministicNetworkGuard } from "./network-guard.js";
 import { verifyAuthenticatedFluxIQPanel, type FluxIQPanelVerificationOutcome } from "./panel-verification.js";
@@ -33,7 +34,7 @@ import { singleRunEvaluation } from "./run-evaluation/index.js";
 import { automationFailureFromActionResult, createRunManifest, flowActionTimings, runActionStatus, type CloneRunState } from "./run-manifest/index.js";
 import { assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, selectCoreProbeStep } from "./lane-rules/index.js";
 import { createScriptedNavigationDriver, ScenarioStepRunner } from "./scenario-steps/index.js";
-import { cleanupFailureOutcome, pairingStatusWaitFailureDetails, pairExtensionWithColdEpochRecovery } from "./run-lifecycle/index.js";
+import { awaitExtensionWorker, cleanupFailureOutcome, pairingStatusWaitFailureDetails, pairExtensionWithColdEpochRecovery } from "./run-lifecycle/index.js";
 import { assertSafeScenarioRunId, createBenchReceipt, type BenchReceiptMetadata } from "./bench/index.js";
 
 /** `evidence` overrides the manifest's `evidencePolicy`; `workflowId` and `variantId` select what `resolveScenarioWorkflow` resolves. */
@@ -381,7 +382,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
     const flowReported = flowObservation?.automationFailureReported;
     const finalizationWaitDetails = finalizedRecordingWaitFailureDetails(error);
     const pairingWaitDetails = pairingStatusWaitFailureDetails(error);
-    const failureEvent = { ...event(runId, scenario.id, undefined, "error", failureMessage), details: { failureCategory, ...(error instanceof RunnerFailure && error.category === "recording.contract" && error.details ? { failureDetails: error.details } : {}), ...(finalizationWaitDetails ? { failureDetails: finalizationWaitDetails } : {}), ...(pairingWaitDetails ? { failureDetails: pairingWaitDetails } : {}), ...(flowReported ? { flowReportedFailure: { category: flowReported.category, ...(flowReported.code === undefined ? {} : { code: flowReported.code }) } } : {}) } };
+    const httpTransportDetails = httpTransportFailureDetails(error);
+    const topologyReadinessDetails = topologyReadinessFailureDetails(error);
+    const failureEvent = { ...event(runId, scenario.id, undefined, "error", failureMessage), details: { failureCategory, ...(error instanceof RunnerFailure && error.category === "recording.contract" && error.details ? { failureDetails: error.details } : {}), ...(finalizationWaitDetails ? { failureDetails: finalizationWaitDetails } : {}), ...(pairingWaitDetails ? { failureDetails: pairingWaitDetails } : {}), ...(httpTransportDetails ? { failureDetails: httpTransportDetails } : {}), ...(topologyReadinessDetails ? { failureDetails: topologyReadinessDetails } : {}), ...(flowReported ? { flowReportedFailure: { category: flowReported.category, ...(flowReported.code === undefined ? {} : { code: flowReported.code }) } } : {}) } };
     const failurePage = stepRunner?.activePage() ?? scenarioPage;
     const bytes = evidence.failureScreenshot && scenario.id !== "sensitive-input" && failurePage && !failurePage.isClosed() ? await failurePage.screenshot({ type: "png" }).catch(() => undefined) : undefined;
     if (bytes) {
@@ -526,7 +529,7 @@ async function launchBrowser(topology: RunningTopology, extensionPath: string) {
   const context = await chromium.launchPersistentContext(topology.allocation.browserProfileDir, { headless: false, env: withoutProviderSecrets(process.env), locale: "en-US", timezoneId: "UTC", viewport: { width: 1280, height: 720 }, colorScheme: "light", args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`, "--no-first-run", "--disable-default-apps"] });
   return { context, browserVersion: context.browser()?.version() ?? "chromium" };
 }
-async function extensionControlPage(context: BrowserContext): Promise<Page> { const worker = context.serviceWorkers()[0] ?? await context.waitForEvent("serviceworker", { timeout: 10_000 }); const id = new URL(worker.url()).hostname; const page = await context.newPage(); await page.goto(`chrome-extension://${id}/sidepanel/index.html`); return page; }
+async function extensionControlPage(context: BrowserContext): Promise<Page> { const worker = await awaitExtensionWorker(context); const id = new URL(worker.url()).hostname; const page = await context.newPage(); await page.goto(`chrome-extension://${id}/sidepanel/index.html`); return page; }
 type PairedExtensionStatus = Record<string, unknown> & { connectionState: "connected"; sessionId: string };
 async function pairExtension(page: Page, topology: RunningTopology): Promise<PairedExtensionStatus> {
   return pairExtensionWithColdEpochRecovery({

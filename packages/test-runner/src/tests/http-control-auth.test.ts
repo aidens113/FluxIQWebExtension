@@ -4,7 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { WebPanelAuthSessionCache } from "../auth-session.js";
-import { FluxIQControlClient } from "../http-control.js";
+import { FluxIQControlClient, httpTransportFailureDetails } from "../http-control.js";
+import { RunnerFailure } from "../failure.js";
 
 const origin = "https://panel.example.test";
 const credentials = { username: "runner", password: "never-persist", totp: "123456", pin: "654321" };
@@ -104,4 +105,100 @@ test("destination mutations use only the public Automation Studio HTTP endpoints
     "/api/programs/automation-studio/get-flow",
   ]);
   assert.equal(new URL(requests[0]!.url).searchParams.get("domainId"), "web-automation");
+});
+
+test("startup control transports preserve fixed stages and bounded codes without leaking request data", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const rawSentinel = "raw-error-must-not-leak";
+  const privatePath = "/private/path-must-not-leak";
+  let failingPath = "/api/auth/login";
+  let failedFetchCalls = 0;
+  globalThis.fetch = async (input) => {
+    if (String(input).includes(failingPath)) {
+      failedFetchCalls += 1;
+      throw new TypeError(`${rawSentinel} ${privatePath}`, { cause: Object.assign(new Error("nested raw detail"), { code: "ECONNRESET" }) });
+    }
+    if (String(input).endsWith("/api/auth/login")) return response(200, { "set-cookie": "fluxiq_session=transport; Max-Age=3600" });
+    return String(input).includes("create-project")
+      ? new Response(JSON.stringify({ ok: true, payload: { id: "project.transport" } }), { status: 200 })
+      : response();
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const assertClosed = async (operation: () => Promise<unknown>, category: string, operationStage: string) => {
+    await assert.rejects(operation, (error: unknown) => {
+      assert.ok(error instanceof RunnerFailure);
+      assert.equal(error.category, category);
+      assert.equal(error.message, "FluxIQ HTTP transport failed");
+      assert.deepEqual(error.details, { operationStage, transportCategory: "network", transportCode: "ECONNRESET" });
+      assert.equal(error.cause, undefined);
+      const persisted = JSON.stringify({ message: error.message, category: error.category, details: error.details });
+      assert.equal(persisted.includes(rawSentinel), false);
+      assert.equal(persisted.includes(privatePath), false);
+      assert.equal(persisted.includes(credentials.password), false);
+      return true;
+    });
+  };
+
+  const loginClient = new FluxIQControlClient(origin);
+  await assertClosed(() => loginClient.login(credentials), "environment.missing", "auth.login");
+
+  failingPath = "never-match";
+  const control = new FluxIQControlClient(origin);
+  await control.login(credentials);
+  failingPath = "create-project";
+  failedFetchCalls = 0;
+  await assertClosed(() => control.createProject({ name: rawSentinel, authorizationPin: credentials.pin }), "recording.persistence", "project.create");
+  assert.equal(failedFetchCalls, 1, "non-idempotent project creation is never retried after a transport rejection");
+  failingPath = "automation-studio-context";
+  await assertClosed(() => control.selectProject("private-project"), "process.startup", "project.select");
+});
+
+test("the durable HTTP failure projector carries only closed transport fields", () => {
+  const rawSentinel = "raw-error-must-not-reach-the-event";
+  const failure = new RunnerFailure("recording.persistence", "FluxIQ HTTP transport failed", {
+    cause: new Error(rawSentinel),
+    details: {
+      operationStage: "project.create",
+      transportCategory: "network",
+      transportCode: "ECONNRESET",
+      path: `/private/${rawSentinel}`,
+      body: { password: rawSentinel },
+      message: rawSentinel,
+    },
+  });
+  const projected = httpTransportFailureDetails(failure);
+  assert.deepEqual(projected, {
+    operationStage: "project.create",
+    transportCategory: "network",
+    transportCode: "ECONNRESET",
+  });
+  assert.equal(JSON.stringify(projected).includes(rawSentinel), false);
+  assert.equal(httpTransportFailureDetails(new RunnerFailure("recording.persistence", "other", { details: failure.details! })), undefined);
+  assert.equal(httpTransportFailureDetails(new RunnerFailure("recording.persistence", "FluxIQ HTTP transport failed", { details: { operationStage: "private.path", transportCategory: "network" } })), undefined);
+  assert.equal(httpTransportFailureDetails(new RunnerFailure("recording.persistence", "FluxIQ HTTP transport failed", { details: { operationStage: "project.create", transportCategory: "network", transportCode: rawSentinel } })), undefined);
+});
+
+test("HTTP abort and timeout diagnostics keep precedence over transport wrapping", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_input, init) => new Promise<Response>((_resolve, reject) => {
+    if (init?.signal?.aborted) { reject(init.signal.reason); return; }
+    init?.signal?.addEventListener("abort", () => reject(new Error("raw abort rejection")), { once: true });
+  });
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const aborted = new AbortController();
+  aborted.abort();
+  await assert.rejects(() => new FluxIQControlClient(origin).login(credentials, { signal: aborted.signal }), (error: unknown) => error instanceof RunnerFailure
+    && error.category === "environment.missing"
+    && error.details?.bounded === "abort"
+    && error.details.operationStage === "auth.login"
+    && error.details.transportCode === undefined);
+
+  await assert.rejects(() => new FluxIQControlClient(origin).login(credentials, { timeoutMs: 1 }), (error: unknown) => error instanceof RunnerFailure
+    && error.category === "environment.missing"
+    && error.details?.bounded === "timeout"
+    && error.details.operationStage === "auth.login"
+    && error.details.timeoutMs === 1
+    && error.details.transportCode === undefined);
 });

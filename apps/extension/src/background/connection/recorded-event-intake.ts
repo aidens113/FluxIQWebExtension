@@ -44,7 +44,7 @@ export type RecordedEventIntakeDeps = {
   readonly onActivity: (kind: string, label: string, detail?: string, tone?: ActivityEntry["tone"]) => void;
   // Re-entry through the facade, so an event this module derives from another
   // one still takes the public intake path rather than short-cutting to itself.
-  readonly recordEvent: (payload: RecordingEventPayload, tabId?: number, frameId?: number) => Promise<void>;
+  readonly recordEvent: (payload: RecordingEventPayload, tabId?: number, frameId?: number, admittedNavigation?: boolean) => Promise<void>;
 };
 
 // The transition a click's landing is recorded under. It maps to no input, so
@@ -79,8 +79,8 @@ function landingLocation(url: string): string | undefined {
 export class RecordedEventIntake {
   constructor(private readonly deps: RecordedEventIntakeDeps) {}
 
-  async accept(payload: RecordingEventPayload, tabId?: number, frameId?: number): Promise<void> {
-    if (this.deps.recording.state() !== "recording") return;
+  async accept(payload: RecordingEventPayload, tabId?: number, frameId?: number, admittedNavigation = false): Promise<void> {
+    if (!admittedNavigation && !this.deps.recording.acceptsEvents()) return;
     if (payload.kind === "dom.click") {
       const sourceEvent = stringValue(objectValue(payload.metadata)?.sourceEvent);
       const signature = clickEventSignature(payload, tabId, frameId);
@@ -92,7 +92,7 @@ export class RecordedEventIntake {
 
   async acceptContentReady(payload: RecordingEventPayload, tabId?: number, frameId?: number): Promise<void> {
     let readyPayload = payload;
-    if (this.deps.recording.state() === "recording" && tabId !== undefined && !this.deps.page.unsupported()) {
+    if (this.deps.recording.acceptsEvents() && tabId !== undefined && !this.deps.page.unsupported()) {
       await this.deps.attachment.setRecordingState(tabId, true, frameId).catch(() => undefined);
       if (!payload.snapshot) {
         const snapshot = await this.deps.sendToTab(tabId, { type: "captureSnapshot" }, frameId)
@@ -135,12 +135,11 @@ export class RecordedEventIntake {
   }
 
   private scheduleNavigation(tabId: number, url: string, timestamp: number, origin: NavigationOrigin): void {
-    if (this.deps.recording.state() !== "recording" || unsupportedPageForUrl(url)) return;
-    this.deps.navigation.schedule(tabId, url, () => void this.recordNavigation(tabId, url, timestamp, origin));
+    if (!this.deps.recording.acceptsEvents() || unsupportedPageForUrl(url)) return;
+    this.deps.navigation.schedule(tabId, url, () => this.recordNavigation(tabId, url, timestamp, origin));
   }
 
   private async recordNavigation(tabId: number, url: string, timestamp: number, origin: NavigationOrigin): Promise<void> {
-    if (this.deps.recording.state() !== "recording") return;
     const verdict = this.deps.navigation.shouldRecord(tabId, url, timestamp, origin, this.deps.recording.startedAt());
     if (verdict.kind === "drop") return;
     if (verdict.kind === "explained") {
@@ -156,7 +155,7 @@ export class RecordedEventIntake {
         // document; `explainedByEventId` is the recording event id the click
         // was sent under, which names exactly one click in the recording.
         metadata: { transition: EXPLAINED_TRANSITION, explainedBy: verdict.click.sequence, explainedByEventId: verdict.click.eventId }
-      }, tabId);
+      }, tabId, undefined, true);
       return;
     }
     await this.deps.recordEvent({
@@ -166,7 +165,7 @@ export class RecordedEventIntake {
       title: "",
       eventTimestampMs: timestamp,
       metadata: origin === "typed" ? { transition: "typed" } : undefined
-    }, tabId);
+    }, tabId, undefined, true);
   }
 
   private async processEvent(payload: RecordingEventPayload, tabId?: number, frameId?: number): Promise<void> {

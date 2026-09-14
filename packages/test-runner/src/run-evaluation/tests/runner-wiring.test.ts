@@ -39,6 +39,31 @@ test("the focused pairing lifecycle owns both timeout stages and publishes their
   assert.ok(source.includes("...(pairingWaitDetails ? { failureDetails: pairingWaitDetails } : {})"));
 });
 
+test("the runner publishes only the closed HTTP transport projection in its durable error event", async () => {
+  const source = await runnerSource();
+  assert.match(source, /import \{[^}]*\bhttpTransportFailureDetails\b[^}]*\} from "\.\/http-control\.js";/u);
+  assert.ok(source.includes("const httpTransportDetails = httpTransportFailureDetails(error);"), "the caught startup failure is passed through the closed projector");
+  assert.ok(source.includes("...(httpTransportDetails ? { failureDetails: httpTransportDetails } : {})"), "the projection reaches the durable error event");
+  assert.equal(source.includes("failureDetails: error.details } : {}), ...(httpTransportDetails"), false, "HTTP details are not spread directly into the event");
+});
+
+test("the runner publishes only the closed topology-readiness projection in its durable error event", async () => {
+  const source = await runnerSource();
+  assert.match(source, /import \{[^}]*\btopologyReadinessFailureDetails\b[^}]*\} from "\.\/http-control\.js";/u);
+  assert.ok(source.includes("const topologyReadinessDetails = topologyReadinessFailureDetails(error);"));
+  assert.ok(source.includes("...(topologyReadinessDetails ? { failureDetails: topologyReadinessDetails } : {})"));
+  assert.equal(source.includes("failureDetails: error.details } : {}), ...(topologyReadinessDetails"), false);
+});
+
+test("the focused extension-readiness lifecycle validates the worker before opening any page", async () => {
+  const source = await runnerSource();
+  assert.match(source, /import \{[^}]*\bawaitExtensionWorker\b[^}]*\} from "\.\/run-lifecycle\/index\.js";/u);
+  const ready = source.indexOf("await awaitExtensionWorker(context)");
+  const page = source.indexOf("context.newPage()", ready);
+  assert.ok(ready > 0 && page > ready, "worker readiness precedes creation of the extension control page");
+  assert.equal(source.includes('waitForEvent("serviceworker"'), false, "the old unvalidated ten-second wait is gone");
+});
+
 test("scripted navigation is bound only after recording is confirmed and each step waits for acknowledgement and cleanup", async () => {
   const source = await runnerSource();
   const confirmed = source.indexOf('await pollStatus(extensionControl, value => value.recordingState === "recording")');

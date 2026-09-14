@@ -104,6 +104,17 @@ export class RecordingStartHandshake {
     this.pending = undefined;
   }
 
+  // Stop needs stronger ordering than ordinary cancellation: a retry send is
+  // detached from the UI promise and may still be resolving project context.
+  // Cancel ownership synchronously, then let Stop place its close only after
+  // that already-started send has settled. Its failure belongs to the start,
+  // not to teardown.
+  async cancelAndDrain(): Promise<void> {
+    const inFlightSend = this.pending?.inFlightSend;
+    this.cancel();
+    if (inFlightSend) await inFlightSend.catch(() => undefined);
+  }
+
   noteRefusal(refusal: RecordingStartRefusal): void {
     const pending = this.pending;
     // A refusal with nothing of ours in flight -- a start the web panel asked
