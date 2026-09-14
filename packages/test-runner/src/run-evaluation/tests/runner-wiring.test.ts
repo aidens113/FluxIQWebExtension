@@ -41,7 +41,7 @@ test("the focused pairing lifecycle owns both timeout stages and publishes their
 
 test("the runner publishes only the closed HTTP transport projection in its durable error event", async () => {
   const source = await runnerSource();
-  assert.match(source, /import \{[^}]*\bhttpTransportFailureDetails\b[^}]*\} from "\.\/http-control\.js";/u);
+  assert.match(source, /import \{[^}]*\bhttpTransportFailureDetails\b[^}]*\} from "\.\/http-control\/index\.js";/u);
   assert.ok(source.includes("const httpTransportDetails = httpTransportFailureDetails(error);"), "the caught startup failure is passed through the closed projector");
   assert.ok(source.includes("...(httpTransportDetails ? { failureDetails: httpTransportDetails } : {})"), "the projection reaches the durable error event");
   assert.equal(source.includes("failureDetails: error.details } : {}), ...(httpTransportDetails"), false, "HTTP details are not spread directly into the event");
@@ -49,7 +49,7 @@ test("the runner publishes only the closed HTTP transport projection in its dura
 
 test("the runner publishes only the closed topology-readiness projection in its durable error event", async () => {
   const source = await runnerSource();
-  assert.match(source, /import \{[^}]*\btopologyReadinessFailureDetails\b[^}]*\} from "\.\/http-control\.js";/u);
+  assert.match(source, /import \{[^}]*\btopologyReadinessFailureDetails\b[^}]*\} from "\.\/http-control\/index\.js";/u);
   assert.ok(source.includes("const topologyReadinessDetails = topologyReadinessFailureDetails(error);"));
   assert.ok(source.includes("...(topologyReadinessDetails ? { failureDetails: topologyReadinessDetails } : {})"));
   assert.equal(source.includes("failureDetails: error.details } : {}), ...(topologyReadinessDetails"), false);

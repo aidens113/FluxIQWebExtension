@@ -1,6 +1,6 @@
 import type { ExpectedEvent, ResolvedScenarioWorkflow, WebScenario } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../failure.js";
-import type { FluxIQHttpOptions } from "../http-control.js";
+import type { FluxIQHttpOptions } from "../http-control/index.js";
 import { declaredSecretBindingInputs, flowSecretRequests, type DeclaredSecret } from "./declared-secrets.js";
 import { declaredUploadInputs, flowUploadRequests } from "./declared-uploads.js";
 import { assertFlowActions, assertFlowExtraction, assertFlowFailure, flowExtractionExpectation, type FlowExtractionExpectation } from "./expectations.js";

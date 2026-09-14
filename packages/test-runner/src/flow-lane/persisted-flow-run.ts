@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { parseAutomationStudioFailureRecord, type AutomationStudioFailureRecord, type RunActionTiming } from "@fluxiq-web-extension/test-contracts";
 import type { AutomationNodeTargetResolution } from "fluxiq/automation-studio/nodes";
 import { RunnerFailure } from "../failure.js";
-import { isBoundedHttpFailure, type FluxIQHttpOptions } from "../http-control.js";
+import { isBoundedHttpFailure, type FluxIQHttpOptions } from "../http-control/index.js";
 import { runActionStatus } from "../run-manifest/index.js";
 
 /**

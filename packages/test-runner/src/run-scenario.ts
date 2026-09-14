@@ -10,7 +10,7 @@ import { classifyRunnerFailure, RunnerFailure, type RunnerFailureCategory } from
 import { withoutProviderSecrets } from "./environment.js";
 import { WebPanelAuthSessionCache } from "./auth-session.js";
 import { ExistingFluxIQControlClient } from "./existing-fluxiq-control.js";
-import { httpTransportFailureDetails, topologyReadinessFailureDetails } from "./http-control.js";
+import { httpTransportFailureDetails, topologyReadinessFailureDetails } from "./http-control/index.js";
 import { executeExistingPersistedFlow, preflightExistingFluxIQ, type ExistingFlowExecution, type ExistingFluxIQPreflight } from "./existing-flow-run.js";
 import { installDeterministicNetworkGuard, scenarioNetworkOrigins, type DeterministicNetworkGuard } from "./network-guard.js";
 import { verifyAuthenticatedFluxIQPanel, type FluxIQPanelVerificationOutcome } from "./panel-verification.js";

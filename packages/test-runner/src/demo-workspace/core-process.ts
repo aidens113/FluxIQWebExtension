@@ -9,7 +9,7 @@ import { ExistingFluxIQControlClient } from "../existing-fluxiq-control.js";
 import { prepareWebWorkspace } from "../coordinator.js";
 import { buildFluxIQEnvironment, webPanelHostModulePath } from "../environment.js";
 import { RunnerFailure } from "../failure.js";
-import { waitForHttp } from "../http-control.js";
+import { waitForHttp } from "../http-control/index.js";
 import { executable, processLogPath, ProcessSupervisor } from "../process-supervisor.js";
 import { requireSecureGatewayUrl } from "../target-config.js";
 import { hardenWindowsPrivatePath } from "../windows-acl.js";

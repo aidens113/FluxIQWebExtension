@@ -1,5 +1,5 @@
 import { RunnerFailure } from "../failure.js";
-import type { FluxIQHttpOptions } from "../http-control.js";
+import type { FluxIQHttpOptions } from "../http-control/index.js";
 import type { RecordingProposalControl } from "./recording-flow-proposal.js";
 
 /**

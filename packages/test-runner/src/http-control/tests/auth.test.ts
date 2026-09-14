@@ -3,9 +3,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { WebPanelAuthSessionCache } from "../auth-session.js";
-import { FluxIQControlClient, httpTransportFailureDetails } from "../http-control.js";
-import { RunnerFailure } from "../failure.js";
+import { WebPanelAuthSessionCache } from "../../auth-session.js";
+import { FluxIQControlClient, httpTransportFailureDetails } from "../index.js";
+import { RunnerFailure } from "../../failure.js";
 
 const origin = "https://panel.example.test";
 const credentials = { username: "runner", password: "never-persist", totp: "123456", pin: "654321" };

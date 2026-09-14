@@ -3,7 +3,7 @@ import type { CloneIdMapping, CloneJsonObject, ClonePackage } from "@fluxiq-web-
 import { assertClonePackage } from "@fluxiq-web-extension/test-contracts";
 import { attestCloneEquivalence, hashCanonicalJson, remapCloneDocument } from "./clone-policy.js";
 import { RunnerFailure } from "./failure.js";
-import type { FluxIQControlClient, FluxIQHttpOptions } from "./http-control.js";
+import type { FluxIQControlClient, FluxIQHttpOptions } from "./http-control/index.js";
 
 type JsonRecord = Record<string, unknown>;
 export type IsolatedDestinationControl = Pick<FluxIQControlClient, "createProject" | "createFlow" | "saveFlow" | "getFlow">;

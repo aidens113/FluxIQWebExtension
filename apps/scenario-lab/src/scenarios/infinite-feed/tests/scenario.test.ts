@@ -45,6 +45,12 @@ test("manifest is valid and scripts W11 as three page-sized scrolls, page waits,
   assert.equal(manifest.workflows, undefined);
 });
 
+test("manifest requires exactly three recorded scroll events before Flow approval", () => {
+  assert.deepEqual(scenario.manifest.expected.recordingEvents, [
+    { type: "web.scroll.changed", count: 3 },
+  ]);
+});
+
 test("end-early variant is armed by one mutate and expects success with 25 posts", () => {
   const manifest = scenario.manifest;
   assert.deepEqual(manifest.variants?.map(({ id }) => id), ["end-early"]);

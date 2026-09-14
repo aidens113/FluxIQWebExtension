@@ -1,5 +1,5 @@
-import { RunnerFailure, type RunnerFailureCategory } from "./failure.js";
-import { cookieExpiry, type AuthSessionStatus, type CachedAuthSession, type CookieValidationHook, type WebPanelAuthSessionCache } from "./auth-session.js";
+import { RunnerFailure, type RunnerFailureCategory } from "../failure.js";
+import { cookieExpiry, type AuthSessionStatus, type CachedAuthSession, type CookieValidationHook, type WebPanelAuthSessionCache } from "../auth-session.js";
 
 const TOPOLOGY_READINESS_STAGES = ["scenario.health", "core.health"] as const;
 export type TopologyReadinessStage = typeof TOPOLOGY_READINESS_STAGES[number];

@@ -20,12 +20,18 @@ export type ScenarioStepRunnerOptions = {
   uploadDirectory: string;
   /** Scripted navigation bound to the extension control page after recording starts. */
   scriptedNavigation(page: Page, url: string, timeoutMs?: number): Promise<void>;
+  /** Test seam for the post-wheel recorder settlement delay. */
+  settleScroll?: (delayMs: number) => Promise<void>;
   now?: () => number;
 };
 
 export type ScenarioStepResult = { extracted?: ExtractedRecord[] };
 
 const DEFAULT_WAIT_MS = 15_000;
+// The content recorder emits a scroll only after 400 ms without another scroll
+// event. Keep scripted wheel steps distinct by allowing that debounce plus a
+// scheduling margin to settle before the next scenario step can begin.
+const SCROLL_RECORDER_SETTLEMENT_MS = 500;
 
 /**
  * Performs recording-script steps with Playwright on the active scenario tab,
@@ -82,7 +88,11 @@ export class ScenarioStepRunner {
       case "click": await target().click(timeout); return {};
       case "type": await target().fill(String(step.value ?? ""), timeout); return {};
       case "select": await selectOptionByKeyboard(target(), String(step.value ?? ""), timeoutMs); return {};
-      case "scroll": await page.mouse.wheel(0, Number(step.value ?? 500)); return {};
+      case "scroll": {
+        await page.mouse.wheel(0, Number(step.value ?? 500));
+        await (this.options.settleScroll ?? wait)(SCROLL_RECORDER_SETTLEMENT_MS);
+        return {};
+      }
       case "navigate": {
         await this.options.scriptedNavigation(page, `${this.options.origin}${step.path ?? "/"}`, step.timeoutMs);
         return {};
@@ -111,6 +121,10 @@ export class ScenarioStepRunner {
     }
   }
 
+}
+
+function wait(delayMs: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
 function requiredText(step: ScenarioStep, value: unknown): string {

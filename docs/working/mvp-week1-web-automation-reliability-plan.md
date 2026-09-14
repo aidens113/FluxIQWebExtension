@@ -1,7 +1,7 @@
 # MVP Week 1 — Web Automation Reliability Plan
 
 Status: Active
-Status detail: Audit remediation, lifecycle repair, and durable benchmark resume are live-accepted. One fresh clean-pinned A/B pair remains before exit criteria can close.
+Status detail: Lifecycle and W11 timing repairs are live-accepted. One final clean-pinned A/B confirmation pair remains before exit criteria close.
 Created: 2026-09-11
 Last updated: 2026-09-14
 Owner: Senior supervisor agent
@@ -27,21 +27,20 @@ This is the resumed session objective. Read it literally:
   every fix before its ledger entry, and single observations labelled as such,
   because this machine has faulty RAM.
 
-**Phase, as of 2026-09-14: repairing the three variable final-bench failures.**
-Durable full campaigns A and B both completed all 189 executable evaluations
-plus 12 declared skips and retained 380 valid hash-linked checkpoints apiece.
-Their comparison found every tolerance-bearing metric equivalent, but three
-load-sensitive rows differed, so repeatability is not yet accepted. Reports named in
+**Phase, as of 2026-09-14: final confirmation after W11 repair.** Repaired full
+campaigns A and B each completed 189 evaluations plus 12 skips with 380 linked
+checkpoints. All 22 tolerance-bearing metrics were equivalent. W27 had one
+pre-Flow pairing reset in B; W11 repeat 2 missed one recorded scroll in both.
+W11 is repaired and passed a strict synchronized 3x3 proof. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
 settled ledger entries are in parts one to fifty of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
-**Repository state.** Downstream `dev` and `origin/dev` are `003ea99`; Core
+**Repository state.** Downstream `dev` and `origin/dev` are `8fb1331`; Core
 `dev` and `origin/dev` are `19468b7`, `fluxiq` 0.4.0. Core is clean and unchanged.
-The final-bench repairs are an uncommitted downstream-only unit until their live
-scenario validation and supervisor review finish.
+The W11 timing/contract repair and final reports are an uncommitted downstream unit.
 
 **Settled this session** (ledger and archive):
 - **Core:** trace withholding; the late-message discard; W19 C1 and C2; the shared
@@ -89,43 +88,37 @@ scenario validation and supervisor review finish.
   real-page capture cost and candidate caps.
 
 **In flight:**
-- Campaign A: `bench-mu0zusso-f044675b`, 189/189 valid, 179 pass/10 fail.
-  Campaign B: `bench-mu0zuaod-8a35e3d7`, 189/189 valid, 177 pass/12 fail.
-  Both finished without an active lease or ignored checkpoint. Comparison is
-  metric-equivalent; A/B p95 elapsed time is 115898/116488 ms and packet p95 is
-  5934 ms with maximum 5992 ms, below the 6000 ms budget. Leak, harness,
-  persistence and action-bearing-discard counts are zero.
-- Stable ruled-out variants account for W05 `short-catalog`, W13 `banner-absent`
-  and W24 `unannounced`. Variable rows are W05 primary recording (one MV3 worker
-  readiness timeout), W19 `expired` (two missed click landings), and W25 primary
-  (one pre-return HTTP transport failure). Read-only diagnosis traced these to a
-  downstream recorder stop race, cold service-worker discovery, and lost startup
-  failure detail respectively—not Core.
-- Accepted downstream repairs make Start/Stop single-flight across UI preflight,
-  handshake, server acceptance, recording and navigation drain; preserve the
-  initial marker and exact Core close; add a race-closed 30 s MV3 worker gate;
-  retain closed HTTP transport and `scenario.health`/`core.health` readiness
-  diagnostics; and preserve primary failure across cleanup. Nine recorder
-  mutations, readiness/diagnostic mutations, extension 513/513 and runner 705/705
-  passed in worker gates; the independent lifecycle model found no counterexample.
-- Live accepted-tree proof: W19 produced `auth_required` in 3/3 before the final
-  pending-start hardening and 3/3 successful replays around one non-repeating
-  pre-browser timeout after it. W05 and W25 each passed 5/5, with zero readiness,
-  startup-transport, raw-fetch, harness, or packet-budget failures.
+- Repaired campaigns A `bench-mu1esgvq-ea2bcc93` and B
+  `bench-mu1es0uy-050c724f` completed 189/189 plus 12 skips at clean `8fb1331`:
+  179/10 and 178/11 pass/fail. Both have 380 valid checkpoints, no lease/residue,
+  zero leaks/harness/persistence/action discards, packet p95 5934 and max 5992,
+  fallback 5/5, and required classifications 15/15.
+- The official comparison found all 22 gated metrics equivalent but one verdict
+  difference: B W27 Flow repeat 0 reset during pairing approval before Flow,
+  actions, steps, or evidence. Five peer runs passed; this is a single facility/
+  machine-load observation, not evidence for a product change.
+- Both campaigns' W11 Flow repeat 2 recorded two of three scrolls at the recorder's
+  400 ms debounce boundary. The runner now settles 500 ms after scripted wheels;
+  W11 requires exactly three scroll events. Mutations and root check/test/build
+  passed; three corrected concurrent A/B pairs all recorded/proposed/executed
+  3/3 scrolls with passing oracles and zero harness use.
+- Process disclosure: a worker search displayed the fixture-only loopback test
+  secret during setup. It was not repeated, hashed, or persisted in reports. The
+  search procedure must resolve the value without output in future runs.
 
-**Queued:** supervisor root gates, commit/push the downstream unit, then run a fresh
-clean-pinned durable A/B pair and close the exit-criteria ledger.
+**Queued:** commit/push this downstream unit, run one final clean-pinned durable
+A/B pair, compare it, then close the exit-criteria and blocker-ranking ledger.
 
 **Exit criteria as they stand**
 
 | Criterion | State | Proof still to observe |
 | --- | --- | --- |
-| Actions reliable | Full A/B complete; A satisfies W01-W19 while B has one W05 primary recording readiness failure | Fresh pair after the readiness gate, 3/3 on each applicable lane |
-| Evidence useful | Content harness covers 16/16 items; live proof and both benches have zero leaks, bounded packets and zero harness/persistence discards | Repeat the same observations at the repaired clean pin |
-| Deterministic fallback | Both benches: required fallback rows 5/5 | Repeat at the repaired clean pin |
-| Failures classified | Required W14/W19/W27: A 15/15, B 13/15; all negatives A 30/33, B 28/33 | Fresh pair must reach at least 90% in each required set |
-| Bench repeatable | Both campaigns completed and every measured tolerance is equivalent; comparison fails only because verdicts differ on three load-sensitive rows | Fresh repaired clean-pinned A/B pair with equal verdicts and equivalent metrics |
-| Blockers ranked | `i-ranking-draft` has drafted the ranking, and its counting questions are ruled; the known leftovers are sized (`i-leftover-sizing`) | The Phase 1.6b ledger entry, with both benches' figures |
+| Actions reliable | Repaired A/B and synchronized W11 proof satisfy W01-W19 | Confirm once at the final clean pin |
+| Evidence useful | Repaired A/B: zero leaks/harness/persistence discards; packets bounded | Confirm once at the final clean pin |
+| Deterministic fallback | Repaired A/B: required fallback rows 5/5 | Confirm once at the final clean pin |
+| Failures classified | Repaired A/B required W14/W19/W27: 15/15 each | Confirm at least 90% at the final clean pin |
+| Bench repeatable | All 22 metrics equivalent; one pre-Flow W27 verdict differed; W11 fixed live | Final clean-pinned A/B pair needs equal verdicts and equivalent metrics |
+| Blockers ranked | Measured ranking exists in `ab-blocker-ranking-refresh` | Final ledger entry with confirmation-pair figures |
 
 **Everything is tested: the operating rules.**
 - **Three tiers per change:** unit tests beside the subject, content harness,
@@ -689,6 +682,18 @@ The first two 2026-09-13 entries are preserved in
   check passed and the forced browser reported `134.0.6998.35`.
 - Not verified: the two full repeat-three Week 1 benches.
 - Outcome: Accepted
+
+### 2026-09-14 — Repaired pair diagnosed; W11 timing repair live-accepted
+
+- Agents: workers `ad` through `ao`; supervisor integrated and verified.
+- Found: repaired A/B finished 189+12 each with all gated metrics equivalent;
+  one pre-Flow W27 reset differed, while both W11 repeat-2 recordings lost a
+  scroll at the 400 ms debounce boundary.
+- Changed: scripted wheels settle 500 ms; W11 requires exactly three scrolls;
+  HTTP-control source/tests now share their owning feature directory.
+- Validation: root check/test/build passed; mutations failed as intended; three
+  synchronized A/B W11 pairs passed exact 3-scroll/action/oracle checks.
+- Outcome: Accepted; final clean-pinned A/B confirmation remains
 
 ### 2026-09-14 — Full durable pair diagnosed; lifecycle repairs live-accepted
 

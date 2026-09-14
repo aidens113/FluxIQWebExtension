@@ -18,8 +18,8 @@
   },
   "rules": {
     "directory-files": {
-      "packages/test-runner/src/tests": 50,
-      "packages/test-runner/src": 49,
+      "packages/test-runner/src/tests": 49,
+      "packages/test-runner/src": 48,
       "scripts": 32
     },
     "imports": {

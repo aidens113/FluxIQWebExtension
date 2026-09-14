@@ -46,7 +46,7 @@ export const infiniteFeedScenario = defineScenario<InfiniteFeedState>({
       { id: "posts-extracted", operation: "checkpoint" },
     ],
     expected: {
-      recordingEvents: [{ type: "web.scroll.changed" }],
+      recordingEvents: [{ type: "web.scroll.changed", count: 3 }],
       // No `web.dom.extract`: the extract step is the runner's own check, so no recording yields that action. The recording lane judges `extracted`.
       actions: [{ action: "web.dom.scroll", outcome: "succeeded" }],
       extracted: [{ step: extractStep, count: 40 }],

@@ -6103,6 +6103,186 @@ never replace it. Do not edit tracked files while it runs. At terminal aggregate
 inspect bounded checkpoint, projection, evidence, discard, lease, metric, and pin
 facts; then write only your report. Never commit/push.
 
+# Thirty-seventh dispatch — diagnose final A/B verdicts
+
+## af-w27-final-reset — classify the lone A/B mismatch
+
+**Report:** `reports/af-w27-final-reset.md`
+
+**Read:** reports `ad-final-repaired-a.md` and `ae-final-repaired-b.md`; only
+the W27 immutable evaluations/events needed from both assigned campaign roots;
+the bounded HTTP/gateway failure projectors and owning tests.
+
+**Task:** Read-only determine the exact safe stage and ordering of B's W27 Flow
+repeat-0 connection reset, compare with A and B repeats 1/2, and decide whether
+evidence supports product, Lab transport, or machine observation. Do not expose
+URLs, ports, bodies, arbitrary messages, credentials, or page data. Recommend
+the narrowest next validation or code owner. Write only report. Never commit/push.
+
+## ag-w11-final-oracle — classify the shared repeat-2 miss
+
+**Report:** `reports/ag-w11-final-oracle.md`
+
+**Read:** reports `ad-final-repaired-a.md` and `ae-final-repaired-b.md`; only
+W11 primary Flow immutable evaluations/events for both campaigns; W11 manifest,
+fixture, oracle, and the directly owning runner code.
+
+**Task:** Read-only explain why W11 primary Flow repeat 2 reports runtime pass
+but final-state oracle failure in both A and B, while repeats 0/1 pass. Determine
+whether this is deterministic ordering/state pollution, scenario design, or a
+product defect. Keep output bounded and secret-free. Recommend exact next test
+or file ownership. Write only report. Never commit/push.
+
+## ah-final-repaired-comparison — preserve official closeout facts
+
+**Report:** `reports/ah-final-repaired-comparison.md`
+
+**Read:** reports `ad-final-repaired-a.md`, `ae-final-repaired-b.md`, the two
+terminal reports/runs projections, and official compare output only.
+
+**Task:** Run the official comparator on the absolute A/B campaign directories
+and record its bounded result: metrics/tolerances, differing verdicts, criteria,
+durability, evidence, persistence, and remaining decision. Explicitly distinguish
+`outcome: equivalent` metrics from `comparisonPassed: false`. Record that a
+worker accidentally displayed the fixture-only loopback secret during discovery
+without including or hashing its value. Write only report. Never commit/push.
+
+# Thirty-eighth dispatch — close the W11 recording race
+
+## ai-scroll-step-settlement — separate scripted scroll recordings
+
+**Report:** `reports/ai-scroll-step-settlement.md`
+
+**Read:** `reports/ag-w11-final-oracle.md`; only `scenario-steps/step-runner.ts`
+and its owning test file; the recorder debounce constant/source for reference.
+
+**Task:** After every trusted scripted wheel, await a named documented settlement
+interval safely greater than the recorder's 400 ms debounce. Keep the delay scoped
+to scroll steps. Add ordering and exact-bound tests and mutation-check removal or
+too-short delay. Touch only runner step source/test. Run package check/full tests.
+Write report. Never commit/push or run Lab.
+
+## aj-w11-recording-contract — fail closed on a short recording
+
+**Report:** `reports/aj-w11-recording-contract.md`
+
+**Read:** `reports/ag-w11-final-oracle.md`; W11 infinite-feed scenario and its
+owning test only; manifest event-count contract type if needed.
+
+**Task:** Require exactly three `web.scroll.changed` recording events for W11 so
+an incomplete recording fails before proposal approval. Add a focused manifest
+contract test and mutation-check missing/wrong count. Touch only W11 scenario/test.
+Run scenario-lab check/full tests. Write report. Never commit/push or run Lab.
+
+## ak-http-control-test-placement — remove the ratchet regression
+
+**Report:** `reports/ak-http-control-test-placement.md`
+
+**Read:** structure-audit placement rules; `http-control.ts`, its two prefixed
+tests, direct imports, and relevant barrels/config only.
+
+**Task:** Reorganize the HTTP control subject and its auth/wait tests into one
+cohesive feature directory so `src/tests` returns to at most 50 files. Preserve
+the public import seam with a barrel, behavior, and every assertion; do not raise
+the structure baseline or mix unrelated tests. Run test-runner check/full tests,
+structure check, and diff check. Write report. Never commit/push or run Lab.
+
+## al-w11-live-a — three sequential W11 Flow proofs, side A
+
+**Report:** `reports/al-w11-live-a.md`
+
+**Read:** reports `ag-w11-final-oracle.md`, `ai-scroll-step-settlement.md`, and
+`aj-w11-recording-contract.md`; W11 manifest only.
+
+**Task:** After supervisor gate approval, run `infinite-feed --flow --target
+isolated` three times sequentially using unique run IDs under only
+`F:\fxlab-runs\w11-repaired\a` and label `al-w11-live-a`. Coordinate launch
+with side B to create synchronized load. Require three recorded scrolls, three
+proposal/actions, runtime pass, oracle pass, zero harness. Write report after all
+runs. Never edit code, commit, or push.
+
+## an-w11-synchronized-a — corrected synchronized trio A
+
+**Report:** `reports/an-w11-synchronized-a.md`
+
+**Read:** reports `al-w11-live-a.md` and `am-w11-live-b.md`.
+
+**Task:** Coordinate a start barrier with side B, then run three sequential
+`infinite-feed --flow --target isolated` validations under only
+`F:\fxlab-runs\w11-synchronized\a`, label `an-w11-synchronized-a`, and
+`FLUXIQ_TEST_ENV_FILES=none`. Ensure every optional panel credential is absent.
+Require all three runs to overlap B's corresponding trio and pass the exact
+three-scroll/candidate/action/oracle/harness checks. Write report. No code,
+commit, or push.
+
+## ao-w11-synchronized-b — corrected synchronized trio B
+
+**Report:** `reports/ao-w11-synchronized-b.md`
+
+**Read:** reports `al-w11-live-a.md` and `am-w11-live-b.md`.
+
+**Task:** Coordinate a start barrier with side A, then run three sequential
+`infinite-feed --flow --target isolated` validations under only
+`F:\fxlab-runs\w11-synchronized\b`, label `ao-w11-synchronized-b`, and
+`FLUXIQ_TEST_ENV_FILES=none`. Ensure every optional panel credential is absent.
+Require all three runs to overlap A's corresponding trio and pass the exact
+three-scroll/candidate/action/oracle/harness checks. Write report. No code,
+commit, or push.
+
+**Synchronized-proof amendment:** Side A's first artifact began 1.205 seconds
+before the shared barrier and is rejected. Preserve it as an excluded timing
+observation. After valid overlapping runs 2/3, both sides must run one additional
+barrier-coordinated replacement so each report contains three accepted concurrent
+observations. Do not reinterpret or delete the early artifact.
+
+# Thirty-ninth dispatch — final clean-pinned confirmation pair
+
+## ap-final-confirmation-a — durable confirmation campaign A
+
+**Report:** `reports/ap-final-confirmation-a.md`
+
+**Read:** Current State; reports `ah-final-repaired-comparison.md`,
+`an-w11-synchronized-a.md`, and `ao-w11-synchronized-b.md`.
+
+**Task:** After supervisor supplies the new clean pushed pin, run the complete
+Week 1 corpus three times, isolated, failure evidence, under only
+`F:\fxlab-runs\final-confirmation\a` with label `ap-final-confirmation-a` and
+env files disabled. Resolve the fixture-only auth secret directly into the
+process environment with a non-outputting expression; never search/display/hash
+it. Capture and resume the same campaign ID after interruption. Keep tracked
+files clean until terminal. Inspect bounded integrity/results, then report.
+Never commit/push.
+
+## aq-final-confirmation-b — durable confirmation campaign B
+
+**Report:** `reports/aq-final-confirmation-b.md`
+
+**Read:** Current State; reports `ah-final-repaired-comparison.md`,
+`an-w11-synchronized-a.md`, and `ao-w11-synchronized-b.md`.
+
+**Task:** After supervisor supplies the new clean pushed pin, run the complete
+Week 1 corpus three times, isolated, failure evidence, under only
+`F:\fxlab-runs\final-confirmation\b` with label `aq-final-confirmation-b` and
+env files disabled. Resolve the fixture-only auth secret directly into the
+process environment with a non-outputting expression; never search/display/hash
+it. Capture and resume the same campaign ID after interruption. Keep tracked
+files clean until terminal. Inspect bounded integrity/results, then report.
+Never commit/push.
+
+## am-w11-live-b — three sequential W11 Flow proofs, side B
+
+**Report:** `reports/am-w11-live-b.md`
+
+**Read:** reports `ag-w11-final-oracle.md`, `ai-scroll-step-settlement.md`, and
+`aj-w11-recording-contract.md`; W11 manifest only.
+
+**Task:** After supervisor gate approval, run `infinite-feed --flow --target
+isolated` three times sequentially using unique run IDs under only
+`F:\fxlab-runs\w11-repaired\b` and label `am-w11-live-b`. Coordinate launch
+with side A to create synchronized load. Require three recorded scrolls, three
+proposal/actions, runtime pass, oracle pass, zero harness. Write report after all
+runs. Never edit code, commit, or push.
+
 ## ae-final-repaired-b — run independent durable campaign B
 
 **Report:** `reports/ae-final-repaired-b.md`

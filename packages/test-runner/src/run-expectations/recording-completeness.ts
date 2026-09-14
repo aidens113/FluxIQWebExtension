@@ -1,5 +1,5 @@
 import { RunnerFailure } from "../failure.js";
-import type { FluxIQHttpOptions } from "../http-control.js";
+import type { FluxIQHttpOptions } from "../http-control/index.js";
 
 /** The single Core call this makes; `ExistingFluxIQControlClient` satisfies it. */
 export type RecordingCompletenessControl = {

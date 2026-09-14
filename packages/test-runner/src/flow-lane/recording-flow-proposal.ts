@@ -1,6 +1,6 @@
 import type { ExpectedEvent } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../failure.js";
-import type { FluxIQHttpOptions } from "../http-control.js";
+import type { FluxIQHttpOptions } from "../http-control/index.js";
 
 /** The Core calls the Flow lane makes; `ExistingFluxIQControlClient` satisfies it. */
 export type RecordingProposalControl = {

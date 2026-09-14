@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { RunnerFailure } from "../failure.js";
-import { httpTransportFailureDetails, topologyReadinessFailureDetails, waitForHttp, type TopologyReadinessStage } from "../http-control.js";
+import { RunnerFailure } from "../../failure.js";
+import { httpTransportFailureDetails, topologyReadinessFailureDetails, waitForHttp, type TopologyReadinessStage } from "../index.js";
 
 const RAW = "raw-topology-target-must-not-persist";
 

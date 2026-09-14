@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { RunnerFailure } from "./failure.js";
-import { FluxIQControlClient, type FluxIQHttpOptions } from "./http-control.js";
+import { FluxIQControlClient, type FluxIQHttpOptions } from "./http-control/index.js";
 
 type JsonRecord = Record<string, unknown>;
 export type ExistingProject = { id: string; name: string; description: string; domainId?: string | null; createdAt: number; updatedAt: number };

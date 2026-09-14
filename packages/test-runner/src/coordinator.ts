@@ -3,7 +3,7 @@ import path from "node:path";
 import { allocatePersistentRun, allocateRun, type RunAllocation } from "./allocation.js";
 import { buildFluxIQEnvironment, buildScenarioEnvironment, webPanelHostModulePath } from "./environment.js";
 import { RunnerFailure } from "./failure.js";
-import { waitForHttp, type FluxIQCredentials } from "./http-control.js";
+import { waitForHttp, type FluxIQCredentials } from "./http-control/index.js";
 import { ExistingFluxIQControlClient } from "./existing-fluxiq-control.js";
 import { executable, ProcessSupervisor, processLogPath } from "./process-supervisor.js";
 import { randomBytes, randomInt } from "node:crypto";

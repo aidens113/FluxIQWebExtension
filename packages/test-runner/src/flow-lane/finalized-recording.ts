@@ -1,5 +1,5 @@
 import { RunnerFailure } from "../failure.js";
-import type { FluxIQHttpOptions } from "../http-control.js";
+import type { FluxIQHttpOptions } from "../http-control/index.js";
 
 /**
  * Waiting for Core to finish writing a recording, before anything reads it.

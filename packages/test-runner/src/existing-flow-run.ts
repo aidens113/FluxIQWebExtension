@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { RunnerFailure } from "./failure.js";
-import { isBoundedHttpFailure, type FluxIQHttpOptions } from "./http-control.js";
+import { isBoundedHttpFailure, type FluxIQHttpOptions } from "./http-control/index.js";
 import type { ExpectedAction } from "@fluxiq-web-extension/test-contracts";
 import type {
   ExistingFlow,

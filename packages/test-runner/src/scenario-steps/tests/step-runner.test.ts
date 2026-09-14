@@ -10,6 +10,7 @@ import { RunnerFailure } from "../../failure.js";
 import { ScenarioStepRunner } from "../step-runner.js";
 
 const origin = "http://127.0.0.1:4100";
+const RECORDER_SCROLL_DEBOUNCE_MS = 400;
 
 /** A scenario tab whose locators log what Playwright would have done. */
 function fakePage(url: string, log: string[]) {
@@ -62,14 +63,15 @@ function harness() {
     log, first, pages, context: context as unknown as BrowserContext,
     now: () => (clock += 5),
     scriptedNavigation: async (_page: Page, url: string, timeoutMs?: number) => { log.push(`navigate ${url} ${timeoutMs ?? "default"}`); },
+    settleScroll: async (delayMs: number) => { log.push(`settle-scroll ${delayMs}`); },
   };
 }
 
 test("performs every operation on the active tab as trusted Playwright input and times each step", async () => {
   const uploads = await mkdtemp(path.join(os.tmpdir(), "fluxiq-steps-"));
   try {
-    const { log, first, pages, context, now, scriptedNavigation } = harness();
-    const runner = new ScenarioStepRunner({ context, page: first, origin, isScenarioUrl: (url) => url.startsWith(`${origin}/`), uploadDirectory: uploads, scriptedNavigation, now });
+    const { log, first, pages, context, now, scriptedNavigation, settleScroll } = harness();
+    const runner = new ScenarioStepRunner({ context, page: first, origin, isScenarioUrl: (url) => url.startsWith(`${origin}/`), uploadDirectory: uploads, scriptedNavigation, settleScroll, now });
     const steps: ScenarioStep[] = [
       { id: "name", operation: "type", target: "testid:name", value: "Ada" },
       { id: "plan", operation: "select", target: "testid:plan", value: "team" },
@@ -88,6 +90,7 @@ test("performs every operation on the active tab as trusted Playwright input and
       'fill [data-testid="name"] Ada',
       'wait [data-testid="plan"] visible', 'focus [data-testid="plan"]', 'press [data-testid="plan"] t',
       "wheel 0,400",
+      "settle-scroll 500",
       "keyboard Enter",
       "press role=textbox[Search] Enter",
       'check [data-testid="terms"] true',
@@ -105,6 +108,18 @@ test("performs every operation on the active tab as trusted Playwright input and
   } finally {
     await rm(uploads, { recursive: true, force: true });
   }
+});
+
+test("a scroll settles after the trusted wheel and beyond the recorder debounce", async () => {
+  const { log, first, context, now, scriptedNavigation, settleScroll } = harness();
+  const runner = new ScenarioStepRunner({ context, page: first, origin, isScenarioUrl: () => true, uploadDirectory: os.tmpdir(), scriptedNavigation, settleScroll, now });
+
+  await runner.run({ id: "wheel", operation: "scroll", value: 700 });
+
+  assert.deepEqual(log, ["wheel 0,700", "settle-scroll 500"]);
+  const settlementMs = Number(log[1]!.split(" ")[1]);
+  assert.ok(settlementMs > RECORDER_SCROLL_DEBOUNCE_MS);
+  runner.dispose();
 });
 
 test("switchTab, closeTab, waitForDownload, and extract act on and read the active tab", async () => {

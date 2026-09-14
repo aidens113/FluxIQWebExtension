@@ -9,7 +9,7 @@ export * from "./environment.js";
 export * from "./existing-fluxiq-control.js";
 export * from "./existing-flow-run.js";
 export * from "./failure.js";
-export * from "./http-control.js";
+export * from "./http-control/index.js";
 export * from "./inspect.js";
 export * from "./lab-instance/index.js";
 export * from "./interactive-session.js";
