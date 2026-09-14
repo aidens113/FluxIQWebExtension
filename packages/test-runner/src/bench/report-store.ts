@@ -1,6 +1,6 @@
-import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { BenchReport, BenchTarget, EvaluationLane, RunEvaluation } from "@fluxiq-web-extension/test-contracts";
+import { createDurableJson, writeDurableJson, writeDurableText } from "./durable-file.js";
 
 /** A bench id as `runBench` mints it: `bench-<base-36 time>-<8 hex>`. */
 export const BENCH_ID_PATTERN = /^bench-[a-z0-9]+-[0-9a-f]{8}$/u;
@@ -75,7 +75,7 @@ export function writeBenchRuns(directory: string, runs: BenchRunsFile): Promise<
 export async function writeRunEvaluation(directory: string, evaluation: RunEvaluation): Promise<string> {
   if (!FILE_SAFE_RUN_ID.test(evaluation.runId)) throw new Error(`Run id is not safe as a file name: ${evaluation.runId}`);
   const relative = `evaluations/${evaluation.runId}.json`;
-  await writeJson(directory, relative, evaluation);
+  await createDurableJson(path.join(directory, ...relative.split("/")), evaluation);
   return relative;
 }
 
@@ -83,13 +83,12 @@ export function writeBenchReport(directory: string, report: BenchReport): Promis
 
 export async function writeBenchMarkdown(directory: string, markdown: string): Promise<string> {
   const file = path.join(directory, "report.md");
-  await writeFile(file, markdown, "utf8");
+  await writeDurableText(file, markdown);
   return file;
 }
 
 async function writeJson(directory: string, relative: string, value: unknown): Promise<string> {
   const file = path.join(directory, ...relative.split("/"));
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  await writeDurableJson(file, value);
   return file;
 }

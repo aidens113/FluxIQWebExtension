@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { parseRunManifestJson, type RunManifest } from "@fluxiq-web-extension/test-contracts";
+import { parseRunEvaluationJson, parseRunManifestJson, type RunEvaluation, type RunManifest } from "@fluxiq-web-extension/test-contracts";
+import { parseBenchReceiptJson, type BenchReceipt } from "./bench-receipt.js";
 import { describeError } from "./describe-error.js";
 
 /**
@@ -30,6 +31,8 @@ export type RecordedRunFailure = { message: string; category: string | undefined
  */
 export type RunBundleReading = {
   manifest: RunManifest | undefined;
+  evaluation: RunEvaluation | undefined;
+  benchReceipt: BenchReceipt | undefined;
   metrics: Record<string, number>;
   finalSequence: number | undefined;
   errorSequence: number | undefined;
@@ -52,14 +55,25 @@ export type RunBundleReading = {
 export async function readRunBundle(runPath: string, failureCategory?: string): Promise<RunBundleReading> {
   const problems: string[] = [];
   const read = (name: string): Promise<string | undefined> => readFile(path.join(runPath, name), "utf8").catch((error: unknown) => { problems.push(`${name}: ${describeError(error)}`); return undefined; });
+  const readOptional = (name: string): Promise<string | undefined> => readFile(path.join(runPath, name), "utf8").catch(() => undefined);
   const manifestText = await read("run.json");
   let manifest: RunManifest | undefined;
   if (manifestText !== undefined) {
     try { manifest = parseRunManifestJson(manifestText); } catch (error) { problems.push(`run.json: ${describeError(error)}`); }
   }
   const metrics = summaryMetrics(await read("summary.json"), problems);
+  // These campaign artifacts are absent from historical and non-bench bundles.
+  // Reconciliation requires them explicitly; the legacy reader does not call
+  // their absence a bundle problem.
+  const evaluation = parsedFile(await readOptional("evaluation.json"), "evaluation.json", parseRunEvaluationJson, problems);
+  const benchReceipt = parsedFile(await readOptional("bench-receipt.json"), "bench-receipt.json", parseBenchReceiptJson, problems);
   const closing = closingEvents(await read("events.ndjson"), problems, failureCategory);
-  return { manifest, metrics, ...closing, problems };
+  return { manifest, evaluation, benchReceipt, metrics, ...closing, problems };
+}
+
+function parsedFile<T>(text: string | undefined, name: string, parse: (value: string) => T, problems: string[]): T | undefined {
+  if (text === undefined) return undefined;
+  try { return parse(text); } catch (error) { problems.push(`${name}: ${describeError(error)}`); return undefined; }
 }
 
 function summaryMetrics(text: string | undefined, problems: string[]): Record<string, number> {

@@ -5544,3 +5544,100 @@ Own `F:\fxlab\fxlab-16ff729-b`, root
 `F:\fxlab-runs\final3\pairing-concurrent\b`, and
 `reports/l-final-pairing-concurrent-b.md`. Run W09 primary Flow and W14
 `interstitial` recording three times each (six cells).
+
+## Stage 4t - durable benchmark campaign recovery
+
+The user rejected the current campaign behavior: finalized run bundles survive,
+but a host/process interruption prevents the bench from reconstructing and
+finishing its exact matrix. This is downstream Testing Lab ownership. Preserve
+evidence and fail closed on incompatible or corrupt checkpoints; do not weaken
+the requirement that the final aggregate cover the original exact plan.
+
+### i-bench-resume-contract
+
+Own only `reports/i-bench-resume-contract.md`; otherwise read-only. Inspect the
+bench CLI/command expansion, `run-bench`, report store/loaders, corpus expansion,
+and their tests. Specify the smallest explicit resume contract, campaign identity
+and compatibility fields, completed-cell key, validation/reconciliation rules,
+CLI shape, exit semantics, and test/file partition. Address a crash before a run,
+during staging, after bundle finalization but before checkpoint update, during
+checkpoint replacement, and after the final cell but before aggregation. No
+source/shared-doc/Core/run/commit/push changes.
+
+### i-bench-durability-audit
+
+Own only `reports/i-bench-durability-audit.md`; otherwise read-only. Inspect
+evidence-bundle finalization, bench JSON persistence, signal/process supervision,
+and prior restart evidence. Identify which writes are atomic/durable today,
+specific corruption windows, Windows rename/fsync constraints, stale staging and
+orphan-final-bundle handling, and the narrowest safe atomic writer/lifecycle
+hardening with deterministic tests. No source/shared-doc/Core/run/commit/push
+changes and no raw evidence or secrets.
+
+## Stage 4u - implement durable campaign recovery foundations
+
+All work is downstream-only. Persist only allowlisted campaign structure; never
+environment values, credentials, tokens, URLs, logs, or page/evidence payloads.
+Workers own disjoint files and never edit shared documents, Core, commits, or
+remotes. Each updates its own implementation report and runs focused tests.
+
+### f-bench-durable-file
+
+Own new `bench/durable-file.ts` and its colocated test, `bench/report-store.ts`,
+and `reports/f-bench-durable-file.md`. Provide synced sibling-temp atomic JSON/
+text replacement with exclusive temp creation, bounded Windows sharing retries,
+no destination unlink, and best-effort supported parent sync. Support exclusive
+immutable evaluation creation. Route all bench projections through it. Inject
+filesystem hooks to prove every interruption leaves old-or-new complete content,
+retry bounds, exact temp cleanup, and duplicate refusal. No other source files.
+
+### f-bench-campaign-store
+
+Own new `bench/campaign-identity.ts`, `bench/campaign-store.ts`, their colocated
+tests, and `reports/f-bench-campaign-store.md`. Import the planned durable writer
+as `writeDurableJson`. Implement strict schema-0.2 immutable campaign manifest,
+canonical SHA-256 plan/cell identities including repeat/lane, immutable hash-
+linked checkpoint generations, longest-contiguous-chain loading, exact completed
+records plus optional active attempt/state, path containment, and corruption/
+secret-key refusal. Do not edit barrels/orchestration/report store.
+
+### f-bench-receipt
+
+Own new `bench/bench-receipt.ts` and test, `run-scenario.ts`, its existing
+runner-wiring test, and `reports/f-bench-receipt.md`. Add optional supervisor-
+provided safe run ID and strict bounded campaign receipt metadata to
+`RunScenarioOptions`; use that run ID and write `bench-receipt.json` before
+bundle finalization. Receipt binds campaign, plan hash, cell key/identity,
+attempt, and run ID only. Validate exact keys and forbid secret-bearing keys.
+Pin ordering and default random-ID compatibility. No other source files.
+
+## Stage 4v - strengthen evidence publication durability
+
+`f-bundle-durable-publication` owns `packages/test-evidence/src/bundle.ts`, its
+existing tests plus at most one new colocated focused test, and
+`reports/f-bundle-durable-publication.md`. Preserve the staging/marker/same-
+parent-rename contract. Sync every written artifact before it can enter the
+index, sync index then completion marker, use bounded Windows sharing retries
+for final directory rename without deleting a destination, and best-effort
+parent-directory sync where supported. Keep event append serialization intact.
+Inject filesystem/finalization boundaries or the narrowest deterministic test
+hooks; prove an unpublished interruption never creates an accepted final name,
+transient Windows retry, collision refusal, and restored normal inspection.
+Do not edit runner source, shared docs, Core, commits, remotes, or run roots.
+
+## Stage 4w - integrate campaign create/resume orchestration
+
+`f-bench-resume-orchestration` owns `bench/run-bench.ts`,
+`bench/read-run-bundle.ts`, `bench/tests/run-bench.test.ts`, and
+`reports/f-bench-resume-orchestration.md`. Integrate the Stage 4u identity,
+store, durable writer, and receipt APIs. A new campaign durably publishes its
+manifest and generation zero before its first cell; every active attempt uses
+a deterministic direct-child run ID and checkpoint. Resume validates exact
+manifest/request/plan/current clean pins and build inputs, checkpoint chain,
+completed evaluation hashes/identities and finalized bundles. Reconcile a valid
+final active bundle without rerun; preserve staging and retry it; fail closed on
+ambiguous/corrupt state. Checkpoint completion after each cell and generate all
+projections/aggregate only from exact completed plan coverage. Provide a narrow
+create/resume API for CLI integration and deterministic crash hooks/tests at all
+five contract boundaries. Keep legacy creation behavior and final report schema.
+Do not edit CLI, barrels, report-store, shared docs, Core, commits, or remotes.

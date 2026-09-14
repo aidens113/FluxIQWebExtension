@@ -17,6 +17,8 @@ export type SingleRunInput = {
   workflowId: string | undefined;
   /** `undefined` when no variant was armed. */
   variantId: string | undefined;
+  /** The campaign repeat this run satisfies; absent for a standalone run. */
+  repeatIndex?: number;
   /** What the lane that ran this run observed. */
   observation: RunLaneObservation;
   /** The `run.json` the run just wrote. */
@@ -53,9 +55,9 @@ export type SingleRunInput = {
  * bench row record the same packets. A recording-lane run contributes none, as
  * on the bench.
  *
- * A single run is always `repeatIndex: 0` — it is nobody's replay — and it
- * scores against the resolved workflow's own `expected.failure`, which the
- * lane already carries on its observation.
+ * A standalone run defaults to `repeatIndex: 0`; a campaign supplies the exact
+ * repeat identity from its receipt. It scores against the resolved workflow's
+ * own `expected.failure`, which the lane already carries on its observation.
  */
 export function singleRunEvaluation(input: SingleRunInput): RunEvaluation {
   const evidence = input.observation.lane === "flow" && input.bundlePath !== undefined ? flowLaneEvidenceSizes(input.bundlePath) : undefined;
@@ -64,7 +66,7 @@ export function singleRunEvaluation(input: SingleRunInput): RunEvaluation {
       scenarioId: input.scenarioId,
       workflowId: input.workflowId ?? null,
       variantId: input.variantId ?? null,
-      repeatIndex: 0,
+      repeatIndex: input.repeatIndex ?? 0,
       expectedFailure: input.observation.automationFailureExpected,
     },
     outcome: runOutcome({

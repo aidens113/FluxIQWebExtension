@@ -34,9 +34,10 @@ import { automationFailureFromActionResult, createRunManifest, flowActionTimings
 import { assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, selectCoreProbeStep } from "./lane-rules/index.js";
 import { createScriptedNavigationDriver, ScenarioStepRunner } from "./scenario-steps/index.js";
 import { cleanupFailureOutcome, pairingStatusWaitFailureDetails, pairExtensionWithColdEpochRecovery } from "./run-lifecycle/index.js";
+import { assertSafeScenarioRunId, createBenchReceipt, type BenchReceiptMetadata } from "./bench/index.js";
 
 /** `evidence` overrides the manifest's `evidencePolicy`; `workflowId` and `variantId` select what `resolveScenarioWorkflow` resolves. */
-export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flow?: boolean; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration };
+export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flow?: boolean; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration; runId?: string; benchReceipt?: BenchReceiptMetadata };
 /**
  * `observation` carries the `RunEvaluation` fields only the lane that ran can
  * know, and `evaluation` is the run's own `RunEvaluation` built from it — the
@@ -47,7 +48,10 @@ export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot:
 export type RunScenarioResult = { runId: string; verdict: "passed" | "failed"; path: string; failureCategory?: string; observation?: RunLaneObservation; evaluation?: RunEvaluation };
 
 export async function runScenario(options: RunScenarioOptions): Promise<RunScenarioResult> {
-  const runId = `run-${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
+  if (options.benchReceipt && options.runId === undefined) throw new Error("A bench receipt requires a supervisor-provided run id");
+  const runId = options.runId ?? `run-${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
+  assertSafeScenarioRunId(runId);
+  const benchReceipt = options.benchReceipt ? createBenchReceipt(options.benchReceipt, runId) : undefined;
   const labPaths = resolveLabPaths(options.repositoryRoot, options.environment);
   const scenario = await loadScenarioManifest(options.repositoryRoot, options.scenarioId, labPaths.scenarioLabDist);
   const target = options.target ?? { mode: "isolated" as const };
@@ -503,9 +507,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
     // evidence sizes come from the staging directory's `snapshots/flow-lane.json`,
     // the file the bench reads once `finalize` has renamed that directory.
     const evaluation = observation
-      ? singleRunEvaluation({ runId, verdict, failureCategory, scenarioId: scenario.id, workflowId: workflow.workflowId, variantId: workflow.variant?.id, observation, manifest, metrics, events: bundle.getEvents(), wallClockMs: Date.now() - Date.parse(startedAt), bundlePath: bundle.stagingPath })
+      ? singleRunEvaluation({ runId, verdict, failureCategory, scenarioId: scenario.id, workflowId: workflow.workflowId, variantId: workflow.variant?.id, repeatIndex: benchReceipt?.cellIdentity.repeatIndex ?? 0, observation, manifest, metrics, events: bundle.getEvents(), wallClockMs: Date.now() - Date.parse(startedAt), bundlePath: bundle.stagingPath })
       : undefined;
     if (evaluation) await bundle.writeStructured("evaluation.json", evaluation);
+    if (benchReceipt) await bundle.writeStructured("bench-receipt.json", benchReceipt);
     bundle.registerEvidencePolicy(evidence.capture);
     const finalized = await bundle.finalize({ verdict, metrics });
     return { runId, verdict, path: finalized.path, ...(observation ? { observation } : {}), ...(evaluation ? { evaluation } : {}), ...(failureCategory ? { failureCategory } : {}) };

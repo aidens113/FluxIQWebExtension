@@ -1115,7 +1115,32 @@ through the same `runScenario` a `lab run` uses
 ```powershell
 pnpm lab bench --corpus smoke --repeat 2 --target isolated
 pnpm lab bench --corpus week1 --repeat 3 --target isolated
+pnpm lab bench --resume <bench-id>
 ```
+
+Every newly started bench is a durable campaign. The command publishes its
+bench id and immutable `campaign.json` before scheduling the first run, then
+adds an immutable, hash-linked checkpoint before and after each executable
+cell. A machine or process failure therefore loses at most the active attempt,
+not the campaign. Resume is always explicit: `lab bench --resume <bench-id>`
+loads the saved corpus, repeat count, target, workspace, and evidence policy;
+it never guesses the newest bench. It accepts a finalized active run only when
+the bundle's `bench-receipt.json`, evaluation identity, hashes, and completion
+marker bind it to that exact campaign cell. Otherwise an interrupted staging
+bundle is preserved under the campaign's `interrupted/` directory and the cell
+gets a new deterministic attempt id.
+
+One process owns a campaign at a time. The campaign lease refuses a concurrent
+live owner and automatically archives/reclaims an owner proven stale by the
+machine-boot and process-start identities, so a reboot or PID reuse does not
+require hand-editing a lock file.
+
+Resume fails closed if the facility or Core commit, lockfiles, built runner,
+extension, Scenario Lab, Chromium version, platform, architecture, locale,
+timezone, or viewport differs from the campaign manifest. Both repositories
+must consequently be clean when a resumable bench is created or resumed.
+Legacy benches remain readable and comparable, but have no campaign authority
+and cannot be resumed.
 
 - **Corpora** (`bench/corpus/`). `smoke` is W01 (`basic-form`) and W28
   (`iframe-checkout`) on the recording lane only. `week1` is W01 to W29 on both
@@ -1132,10 +1157,13 @@ pnpm lab bench --corpus week1 --repeat 3 --target isolated
   `isolated` or `persistent-isolated`. A result the corpus runs on no lane, or
   one that does not resolve against the registry, is recorded as skipped with
   its reason, never as a pass.
-- **Output**, under `<runs directory>/bench/<bench id>/`: a `RunEvaluation` per
-  run, `runs.json`, `report.json` (a `BenchReport`), and `report.md`. The bench
-  passes only when at least one run was evaluated and every evaluated run
-  passed.
+- **Output**, under `<runs directory>/bench/<bench id>/`: immutable
+  `campaign.json`, immutable generations under `checkpoints/`, a
+  `RunEvaluation` per completed cell, and the derived `runs.json`,
+  `report.json` (`BenchReport`), and `report.md`. The derived aggregate files
+  are published only after every executable plan cell has one validated
+  completion. The bench passes only when at least one run was evaluated and
+  every evaluated run passed.
 - **Rates** (`packages/test-contracts/src/bench-report.ts`) are computed per lane
   and never combined, because the recording lane executes at most the Core
   action probe, never the workflow: `flowCreationSuccess`,
@@ -1464,6 +1492,7 @@ pnpm lab run basic-form --flow
 pnpm lab matrix --all --repeat 1 --evidence failure
 pnpm lab inspect <run-id>
 pnpm lab bench --corpus smoke --repeat 2 --target isolated
+pnpm lab bench --resume <bench-id>
 pnpm lab compare <baseline-report> <candidate-report>
 pnpm lab compare <baseline-report> <candidate-report> --sequential
 pnpm lab compare <report> --halves

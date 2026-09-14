@@ -1,16 +1,17 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { parseBenchReportJson, parseRunEvaluationJson, type WebScenario } from "@fluxiq-web-extension/test-contracts";
+import { parseBenchReportJson, parseRunEvaluationJson, type RunEvaluation, type WebScenario } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../../failure.js";
 import type { RunLaneObservation } from "../../flow-lane/index.js";
 import type { RunScenarioOptions, RunScenarioResult } from "../../run-scenario.js";
 import type { BenchCorpus } from "../corpus/index.js";
+import type { CampaignCompatibility } from "../campaign-identity.js";
 import { VARIANT_NEEDS_FLOW_LANE } from "../expand-corpus.js";
 import type { BenchRunsFile } from "../report-store.js";
-import { runBench, type RunBenchOptions } from "../run-bench.js";
+import { createResumableBench, resumeBench, runBench, type BenchCampaignCrashPoint, type ResumableRunBenchOptions, type RunBenchOptions } from "../run-bench.js";
 
 // Only the fields resolveScenarioWorkflow reads.
 const scenario = (id: string, extra: Partial<WebScenario> = {}): WebScenario => ({ id, recordingScript: [], expected: {}, ...extra }) as WebScenario;
@@ -75,6 +76,47 @@ const options = (root: string, overrides: Partial<RunBenchOptions>): RunBenchOpt
 });
 const readRuns = async (directory: string): Promise<BenchRunsFile> => JSON.parse(await readFile(path.join(directory, "runs.json"), "utf8")) as BenchRunsFile;
 
+const campaignCompatibility: CampaignCompatibility = {
+  repositories: { facilityCommit: "1".repeat(40), coreCommit: "2".repeat(40) },
+  lockfiles: { facilitySha256: "3".repeat(64), coreSha256: "4".repeat(64) },
+  builds: { testRunnerSha256: "5".repeat(64), extensionSha256: "6".repeat(64), scenarioLabSha256: "7".repeat(64) },
+  environment: { platform: "win32", architecture: "x64", browserName: "chromium", browserVersion: "Chrome/134", locale: "en-US", timezone: "UTC", viewport: { width: 1280, height: 720 } },
+};
+
+function campaignEvaluation(runId: string, options: RunScenarioOptions): RunEvaluation {
+  const observation = options.flow ? flowObservation() : undefined;
+  return {
+    schemaVersion: "0.1", runId, verdict: "passed", invariants: [], metrics: { steps: 3 }, scenarioId: options.scenarioId,
+    workflowId: options.workflowId ?? null, variantId: options.variantId ?? null, repeatIndex: options.benchReceipt?.cellIdentity.repeatIndex ?? 0, lane: options.flow ? "flow" : "recording",
+    flowCreated: observation?.flowCreated ?? null, oracleVerdict: "passed", reportedVerdict: "passed", automationFailureReported: null,
+    automationFailureExpected: null, harnessActivations: observation?.harnessActivations ?? 0, durationMs: 40_000,
+    actions: observation?.actions ?? [{ actionType: "web.dom.type", durationMs: 1_500 }], evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 },
+    llm: { mode: "disabled", profileId: null, calls: 0 }, harnessRecovery: null, adaptationCost: null, adaptationValidation: null, adaptationPersistence: null, adaptationReuse: null,
+  };
+}
+
+function campaignRunner(calls: string[]) {
+  return async (options: RunScenarioOptions): Promise<RunScenarioResult> => {
+    assert.ok(options.runId && options.benchReceipt);
+    calls.push(options.runId);
+    const runPath = path.join(options.runsDirectory, options.runId);
+    await mkdir(runPath, { recursive: true });
+    const evaluation = campaignEvaluation(options.runId, options);
+    await writeFile(path.join(runPath, "run.json"), JSON.stringify(runManifest(options.runId, options.scenarioId, "passed")));
+    await writeFile(path.join(runPath, "summary.json"), JSON.stringify({ verdict: "passed", metrics: { steps: 3 } }));
+    await writeFile(path.join(runPath, "events.ndjson"), `${JSON.stringify({ sequence: 2, trigger: "final" })}\n`);
+    await writeFile(path.join(runPath, "evaluation.json"), JSON.stringify(evaluation));
+    await writeFile(path.join(runPath, "bench-receipt.json"), JSON.stringify({ schemaVersion: "0.1", ...options.benchReceipt, runId: options.runId }));
+    return { runId: options.runId, verdict: "passed", path: runPath, evaluation, ...(options.flow ? { observation: flowObservation() } : {}) };
+  };
+}
+
+const resumableOptions = (root: string, benchId: string, calls: string[], crashHook?: ResumableRunBenchOptions["crashHook"]): ResumableRunBenchOptions => ({
+  ...options(root, { repeatCount: 2, runScenario: campaignRunner(calls) }), compatibility: campaignCompatibility, benchId,
+  campaignLeaseOptions: { processId: 4101, processProbe: { bootIdentity: async () => "test-boot", processIdentity: async () => "test-process" } },
+  ...(crashHook ? { crashHook } : {}),
+});
+
 test("runs each runnable result once per repeat, one pass over the corpus at a time, and writes evaluations and a valid report", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-run-"));
   try {
@@ -108,6 +150,70 @@ test("runs each runnable result once per repeat, one pass over the corpus at a t
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("a resumable campaign recovers all five persistence crash boundaries without duplicate scenario execution", async (t) => {
+  const points: BenchCampaignCrashPoint[] = ["after-campaign-published", "after-attempt-checkpoint", "after-bundle-finalized", "after-completion-checkpoint", "before-aggregation"];
+  for (const [pointIndex, point] of points.entries()) await t.test(point, async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-resume-"));
+    const benchId = `bench-unit${pointIndex}-0123abcd`;
+    const calls: string[] = [];
+    let crashed = false;
+    try {
+      await assert.rejects(createResumableBench(resumableOptions(root, benchId, calls, async (at) => {
+        if (!crashed && at === point) {
+          crashed = true;
+          if (point === "after-attempt-checkpoint") await mkdir(path.join(root, "runs", `.staging-${benchId}-c0-a1`), { recursive: true });
+          throw new Error(`crash at ${point}`);
+        }
+      })), new RegExp(`crash at ${point}`, "u"));
+      const resumed = await resumeBench({ ...resumableOptions(root, benchId, calls), benchId });
+      assert.deepEqual([resumed.benchId, resumed.status, resumed.runs, resumed.skipped], [benchId, "passed", 6, 4]);
+      assert.equal(new Set(calls).size, 6, "a finalized active attempt is reconciled, never rerun");
+      assert.equal(calls.length, 6);
+      if (point === "after-attempt-checkpoint") assert.equal((await stat(path.join(resumed.directory, "interrupted", `${benchId}-c0-a1`))).isDirectory(), true);
+      const runs = await readRuns(resumed.directory);
+      assert.equal(runs.runs.filter((run) => run.status === "evaluated").length, 6);
+      assert.equal(new Set(runs.runs.filter((run) => run.status === "evaluated").map((run) => `${run.corpusRowId}/${run.lane}/${run.repeatIndex}`)).size, 6);
+      const firstReport = JSON.parse(await readFile(resumed.report ?? "missing", "utf8")) as Record<string, unknown>;
+      const again = await resumeBench({ ...resumableOptions(root, benchId, calls), benchId });
+      const secondReport = JSON.parse(await readFile(again.report ?? "missing", "utf8")) as Record<string, unknown>;
+      delete firstReport.generatedAt; delete secondReport.generatedAt;
+      assert.deepEqual(secondReport, firstReport, "idempotent resume regenerates equivalent aggregate content apart from its timestamp");
+      assert.equal(calls.length, 6);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+});
+
+test("resume fails closed on compatibility drift, evaluation corruption, and incomplete aggregate coverage", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-resume-"));
+  const benchId = "bench-guards-0123abcd";
+  try {
+    await assert.rejects(createResumableBench(resumableOptions(root, benchId, [], (point) => { if (point === "after-completion-checkpoint") throw new Error("stop"); })), /stop/u);
+    const changed = { ...campaignCompatibility, environment: { ...campaignCompatibility.environment, browserVersion: "Chrome/135" } };
+    await assert.rejects(resumeBench({ ...resumableOptions(root, benchId, []), benchId, compatibility: changed }), /compatibility does not match/u);
+    const campaignDirectory = path.join(root, "runs", "bench", benchId);
+    const runsBeforeResume = await readFile(path.join(campaignDirectory, "checkpoints", "000000000002.json"), "utf8");
+    const completed = JSON.parse(runsBeforeResume) as { completed: Array<{ evaluation: string }> };
+    await writeFile(path.join(campaignDirectory, ...(completed.completed[0]?.evaluation ?? "missing").split("/")), "{}\n");
+    await assert.rejects(resumeBench({ ...resumableOptions(root, benchId, []), benchId }), /evaluation hash mismatch/u);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("resume refuses a finalized active bundle whose hashed evaluation is from another repeat", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-repeat-"));
+  const benchId = "bench-repeat-0123abcd";
+  const calls: string[] = [];
+  try {
+    await assert.rejects(createResumableBench(resumableOptions(root, benchId, calls, (point) => {
+      if (point === "after-bundle-finalized" && calls.length === 4) throw new Error("stop on repeat one");
+    })), /stop on repeat one/u);
+    const activeRun = calls.at(-1); assert.ok(activeRun);
+    const evaluationPath = path.join(root, "runs", activeRun, "evaluation.json");
+    const evaluation = JSON.parse(await readFile(evaluationPath, "utf8")) as RunEvaluation;
+    await writeFile(evaluationPath, JSON.stringify({ ...evaluation, repeatIndex: 0 }));
+    await assert.rejects(resumeBench({ ...resumableOptions(root, benchId, calls), benchId }), /evaluation identity does not match/u);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test("a failing run fails the bench; a runner that throws is an inconclusive run, never a pass; --evidence passes through", async () => {
@@ -216,8 +322,9 @@ test("a run in which FluxIQ executed nothing is counted, printed, and never a hi
     // A manifest with no actions is exactly the week1 shape: the Core round-trip
     // probe did not apply to the workflow, so FluxIQ executed nothing while the
     // Testing Lab drove the fixture to the expected final state.
+    const baseRunner = fakeRunner([]);
     const runner = async (run: RunScenarioOptions): Promise<RunScenarioResult> => {
-      const result = await fakeRunner([])(run);
+      const result = await baseRunner(run);
       const nothing = run.scenarioId === "basic-form";
       await writeFile(path.join(result.path, "run.json"), JSON.stringify({ ...runManifest(result.runId, run.scenarioId, "passed"), actions: nothing ? [] : runManifest(result.runId, run.scenarioId, "passed").actions }));
       return result;

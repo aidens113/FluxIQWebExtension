@@ -67,6 +67,19 @@ test("the evaluation is a hashed artifact of the bundle, written before it is se
   assert.ok(written < finalized, "evaluation.json is written before the bundle is finalized, so it enters the artifact index");
 });
 
+test("a supervisor run id and strict campaign receipt are bound before bundle finalization", async () => {
+  const source = await runnerSource();
+  assert.match(source, /const runId = options\.runId \?\? `run-/u, "the existing random id remains the default");
+  assert.ok(source.includes("assertSafeScenarioRunId(runId);"), "a supplied id is validated before it reaches a path");
+  assert.ok(source.includes("options.benchReceipt ? createBenchReceipt(options.benchReceipt, runId) : undefined"), "the receipt is strictly created with that same id");
+  assert.ok(source.includes("repeatIndex: benchReceipt?.cellIdentity.repeatIndex ?? 0"), "campaign evaluation identity comes from the receipt while standalone runs remain repeat zero");
+  const receipt = source.indexOf('bundle.writeStructured("bench-receipt.json", benchReceipt)');
+  const evaluation = source.indexOf('bundle.writeStructured("evaluation.json", evaluation)');
+  const finalized = source.indexOf("await bundle.finalize(");
+  assert.ok(evaluation > 0 && receipt > evaluation, "the receipt follows the evaluation it will allow recovery to locate");
+  assert.ok(finalized > receipt, "the receipt is hashed into the bundle before finalization");
+});
+
 test("the redaction attestation scans once Core has stopped and its logs are in the bundle, before cleanup, the manifest and finalization", async () => {
   const source = await runnerSource();
   assert.equal(source.match(/attestRunRedaction\(/gu)?.length, 1, "one attestation per run, in one place");

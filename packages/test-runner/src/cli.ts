@@ -1,8 +1,8 @@
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { executeAuthCommand } from "./auth-cli.js";
 import { WebPanelAuthSessionCache } from "./auth-session.js";
-import { compareBenchCloseoutCommand, compareBenchCommand, findBenchCorpus, runBench } from "./bench/index.js";
+import { buildCampaignCompatibility, compareBenchCloseoutCommand, compareBenchCommand, createResumableBench, findBenchCorpus, loadResumableBenchRequest, resumeBench, type BenchCampaignLifecycle } from "./bench/index.js";
 import { ClonePackageCache } from "./clone-cache.js";
 import { parseLabCommand, expandMatrix } from "./commands.js";
 import { classifyRunnerFailure } from "./failure.js";
@@ -49,9 +49,26 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
       return "comparisonPassed" in comparison ? (comparison.comparisonPassed ? 0 : 1) : comparison.outcome === "regressed" ? 1 : 0;
     }
     if (command.command === "bench") {
-      const corpus = findBenchCorpus(command.corpusId);
-      const target = resolveTargetConfiguration({ ...(command.target ? { cliTarget: command.target } : {}), ...(command.workspace ? { cliWorkspace: command.workspace } : {}), env: resolvedEnvironment });
-      const outcome = await runBench({ corpus, repeatCount: command.repeat, target, manifests: await loadScenarioManifests(repositoryRoot, labPaths.scenarioLabDist), repositoryRoot, fluxiqRepositoryRoot, runsDirectory, environment: resolvedEnvironment, ...(command.evidence ? { evidence: command.evidence } : {}), runScenario, inspectRun });
+      const request = "resumeBenchId" in command ? await loadResumableBenchRequest(runsDirectory, command.resumeBenchId) : null;
+      const corpus = findBenchCorpus(request?.corpusId ?? ("corpusId" in command ? command.corpusId : ""));
+      const target = resolveTargetConfiguration({
+        ...("resumeBenchId" in command
+          ? { cliTarget: request!.target.mode, ...(request!.target.workspace === null ? {} : { cliWorkspace: request!.target.workspace }) }
+          : { ...(command.target ? { cliTarget: command.target } : {}), ...(command.workspace ? { cliWorkspace: command.workspace } : {}) }),
+        env: resolvedEnvironment,
+      });
+      const manifests = await loadScenarioManifests(repositoryRoot, labPaths.scenarioLabDist);
+      const compatibility = await buildCampaignCompatibility({
+        repositoryRoot,
+        fluxiqRepositoryRoot,
+        testRunnerBuildPath: path.dirname(fileURLToPath(import.meta.url)),
+        extensionBuildPath: labPaths.extensionPath,
+        scenarioLabBuildPath: labPaths.scenarioLabDist,
+      });
+      const shared = { corpus, target, manifests, repositoryRoot, fluxiqRepositoryRoot, runsDirectory, environment: resolvedEnvironment, runScenario, inspectRun, compatibility, lifecycle: reportBenchLifecycle };
+      const outcome = "resumeBenchId" in command
+        ? await resumeBench({ ...shared, benchId: command.resumeBenchId, repeatCount: request!.repeatCount, ...(request!.evidence === null ? {} : { evidence: request!.evidence }) })
+        : await createResumableBench({ ...shared, repeatCount: command.repeat, ...(command.evidence ? { evidence: command.evidence } : {}) });
       process.stdout.write(`${JSON.stringify(outcome)}\n`); return outcome.status === "passed" ? 0 : 1;
     }
     if ((command.command === "run" || command.command === "matrix") && command.llm?.mode === "live") throw new Error("Live LLM execution is fail-closed until the Phase 1 provider runner is enabled");
@@ -71,6 +88,10 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
     process.stderr.write(`${JSON.stringify({ status: "failed", category: classifyRunnerFailure(error), message: error instanceof Error ? error.message : String(error) })}\n`);
     return 1;
   }
+}
+
+function reportBenchLifecycle(record: BenchCampaignLifecycle): void {
+  if (record.event === "created" || record.event === "resumed") process.stderr.write(`${JSON.stringify({ event: `bench-campaign-${record.event}`, benchId: record.benchId, directory: record.directory })}\n`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) void runCli(process.argv.slice(2)).then(code => { process.exitCode = code; });

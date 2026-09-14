@@ -10,6 +10,7 @@ export type BenchTargetMode = Extract<TargetMode, "isolated" | "persistent-isola
 export type LabCommand =
   | { command: "run"; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flowLane?: true; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile }
   | { command: "matrix"; scenarioIds?: string[]; all: boolean; repeat: number; evidence?: EvidenceMode; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile }
+  | { command: "bench"; resumeBenchId: string }
   | { command: "bench"; corpusId: string; repeat: number; evidence?: EvidenceMode; target?: BenchTargetMode; workspace?: string }
   | { command: "auth"; operation: "status" | "clear" }
   | { command: "clone-cache"; operation: "status" | "refresh" | "clear" }
@@ -69,8 +70,14 @@ export function parseLabCommand(argv: string[]): LabCommand {
     return { command, operation: args[0] };
   }
   if (command === "bench") {
-    rejectUnknownOptions(args, ["--corpus", "--repeat", "--evidence", "--target", "--workspace"]);
-    if (positionalValues(args).length) throw new Error("bench takes options only: lab bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE]");
+    rejectUnknownOptions(args, ["--resume", "--corpus", "--repeat", "--evidence", "--target", "--workspace"]);
+    const resumeBenchId = option(args, "--resume");
+    if (resumeBenchId !== undefined) {
+      if (!/^bench-[a-z0-9]+-[0-9a-f]{8}$/u.test(resumeBenchId)) throw new Error("--resume requires a valid bench ID");
+      if (args.length !== 2) throw new Error("--resume cannot be combined with corpus, repeat, target, workspace, evidence, or positional options");
+      return { command, resumeBenchId };
+    }
+    if (positionalValues(args).length) throw new Error("bench takes options only: lab bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] | lab bench --resume BENCH_ID");
     const corpusId = option(args, "--corpus");
     if (corpusId === undefined || !KEBAB_ID.test(corpusId)) throw new Error("bench requires --corpus with a lowercase kebab-case corpus ID");
     const repeat = integerOption(args, "--repeat", 1);
@@ -93,7 +100,7 @@ export function parseLabCommand(argv: string[]): LabCommand {
     if (reports.length !== 2 || first === undefined || second === undefined) throw new Error(COMPARE_USAGE);
     return { command, baselineReport: first, candidateReport: second, sharedLoad: !args.includes("--sequential") };
   }
-  throw new Error("Usage: lab interactive <scenario> [--target isolated|persistent-isolated|existing] [--workspace NAME] [--fresh-login] | run <scenario> [--workflow ID] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] | matrix (--all|--scenarios-json JSON) [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves");
+  throw new Error("Usage: lab interactive <scenario> [--target isolated|persistent-isolated|existing] [--workspace NAME] [--fresh-login] | run <scenario> [--workflow ID] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] | matrix (--all|--scenarios-json JSON) [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] | bench --resume BENCH_ID | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves");
 }
 
 export function expandMatrix(command: Extract<LabCommand, { command: "matrix" }>, allScenarioIds: string[]): Array<{ scenarioId: string; repeatIndex: number }> {

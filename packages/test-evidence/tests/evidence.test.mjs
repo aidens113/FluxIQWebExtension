@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, readdir, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, open, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -220,6 +220,167 @@ test("publishes atomically and builds a hash-consistent artifact index", async (
   const stored = await readFile(path.join(result.path, "events.ndjson"), "utf8");
   assert.equal(stored.includes("do-not-store"), false);
   assert.equal(result.summary.firstFailure.stepId, "submit");
+});
+
+test("durably publishes only after synced artifacts and retries transient directory sharing failures", async (t) => {
+  const root = await temporaryRoot(t);
+  const prepublicationBoundaries = [
+    "journal.closed",
+    "artifacts.synced",
+    "index.synced",
+    "marker.synced",
+    "staging-directory.synced",
+  ];
+
+  for (const [index, interruptedAt] of prepublicationBoundaries.entries()) {
+    const runId = `interrupted-${index}`;
+    const syncedFiles = [];
+    const physicallySyncedFiles = [];
+    let journalSyncs = 0;
+    const bundle = new EvidenceBundle({
+      rootDirectory: root,
+      runId,
+      scenarioId: "publication-interruption",
+      testHooks: {
+        async openJournalFile(target, flags) {
+          const handle = await open(target, flags);
+          return {
+            writeFile: handle.writeFile.bind(handle),
+            async sync() { journalSyncs += 1; await handle.sync(); },
+            close: handle.close.bind(handle),
+          };
+        },
+        async openArtifactFile(target, flags) {
+          const handle = await open(target, flags);
+          return {
+            writeFile: handle.writeFile.bind(handle),
+            async sync() {
+              await handle.sync();
+              physicallySyncedFiles.push(path.relative(path.join(root, `.staging-${runId}`), target).replaceAll("\\", "/"));
+            },
+            close: handle.close.bind(handle),
+          };
+        },
+        afterFileSynced(relativePath) { syncedFiles.push(relativePath); },
+        afterBoundary(boundary) {
+          if (boundary === interruptedAt) throw new Error(`interrupt at ${boundary}`);
+        },
+      },
+    });
+    await bundle.initialize();
+    await bundle.writeText("diagnostics.txt", "durable artifact");
+    await assert.rejects(() => bundle.finalize({ verdict: "passed" }), new RegExp(interruptedAt.replaceAll(".", "\\.")));
+    assert.equal(journalSyncs, 1, `empty journal was not synced before ${interruptedAt}`);
+    await assert.rejects(() => stat(path.join(root, runId)), { code: "ENOENT" });
+    assert.equal((await stat(path.join(root, `.staging-${runId}`))).isDirectory(), true);
+    if (prepublicationBoundaries.indexOf(interruptedAt) >= prepublicationBoundaries.indexOf("artifacts.synced")) {
+      for (const artifact of ["diagnostics.txt", "evidence-policy.json", "summary.json", "report.html", "review/timeline.json", "review/contact-sheet.html"]) {
+        assert.equal(syncedFiles.includes(artifact), true, `${artifact} was not synced before ${interruptedAt}`);
+        assert.equal(physicallySyncedFiles.includes(artifact), true, `${artifact} did not reach FileHandle.sync before ${interruptedAt}`);
+      }
+    }
+    if (prepublicationBoundaries.indexOf(interruptedAt) >= prepublicationBoundaries.indexOf("index.synced")) {
+      assert.ok(syncedFiles.indexOf("artifact-index.json") > syncedFiles.indexOf("review/contact-sheet.html"));
+    }
+    if (prepublicationBoundaries.indexOf(interruptedAt) >= prepublicationBoundaries.indexOf("marker.synced")) {
+      assert.ok(syncedFiles.indexOf("bundle.complete.json") > syncedFiles.indexOf("artifact-index.json"));
+    }
+  }
+
+  const retryRun = "retry-success";
+  const retryDelays = [];
+  const syncedDirectories = [];
+  let renameAttempts = 0;
+  const retryBundle = new EvidenceBundle({
+    rootDirectory: root,
+    runId: retryRun,
+    scenarioId: "publication-retry",
+    testHooks: {
+      async renameDirectory(source, destination) {
+        renameAttempts += 1;
+        if (renameAttempts < 3) throw Object.assign(new Error("temporarily shared"), { code: renameAttempts === 1 ? "EPERM" : "EBUSY" });
+        await rename(source, destination);
+      },
+      async wait(milliseconds) { retryDelays.push(milliseconds); },
+      async syncDirectory(directory) { syncedDirectories.push(directory); },
+    },
+  });
+  await retryBundle.initialize();
+  const published = await retryBundle.finalize({ verdict: "passed" });
+  assert.equal(renameAttempts, 3);
+  assert.deepEqual(retryDelays, [10, 25]);
+  assert.equal(syncedDirectories.includes(path.join(root, `.staging-${retryRun}`)), true);
+  assert.equal(syncedDirectories.includes(root), true);
+  await assert.rejects(() => stat(path.join(root, `.staging-${retryRun}`)), { code: "ENOENT" });
+  const publishedIndex = await readFile(path.join(published.path, "artifact-index.json"));
+  const publishedMarker = JSON.parse(await readFile(path.join(published.path, "bundle.complete.json"), "utf8"));
+  assert.equal(publishedMarker.artifactIndexSha256, sha256(publishedIndex));
+  for (const artifact of published.index.artifacts) {
+    const bytes = await readFile(path.join(published.path, ...artifact.path.split("/")));
+    assert.equal(bytes.byteLength, artifact.bytes);
+    assert.equal(sha256(bytes), artifact.sha256);
+  }
+
+  const exhaustedDelays = [];
+  let exhaustedAttempts = 0;
+  const exhaustedBundle = new EvidenceBundle({
+    rootDirectory: root,
+    runId: "exhausted",
+    scenarioId: "publication-retry-exhausted",
+    testHooks: {
+      async renameDirectory() {
+        exhaustedAttempts += 1;
+        throw Object.assign(new Error("still shared"), { code: "EACCES" });
+      },
+      async wait(milliseconds) { exhaustedDelays.push(milliseconds); },
+    },
+  });
+  await exhaustedBundle.initialize();
+  await assert.rejects(() => exhaustedBundle.finalize({ verdict: "passed" }), { code: "EACCES" });
+  assert.equal(exhaustedAttempts, 4);
+  assert.deepEqual(exhaustedDelays, [10, 25, 50]);
+
+  let nonTransientAttempts = 0;
+  const nonTransientBundle = new EvidenceBundle({
+    rootDirectory: root,
+    runId: "non-transient",
+    scenarioId: "publication-non-transient",
+    testHooks: {
+      async renameDirectory() {
+        nonTransientAttempts += 1;
+        throw Object.assign(new Error("not retryable"), { code: "ENOENT" });
+      },
+      async wait() { throw new Error("must not wait"); },
+    },
+  });
+  await nonTransientBundle.initialize();
+  await assert.rejects(() => nonTransientBundle.finalize({ verdict: "passed" }), { code: "ENOENT" });
+  assert.equal(nonTransientAttempts, 1);
+
+  let collisionRenameCalled = false;
+  const collisionBundle = new EvidenceBundle({
+    rootDirectory: root,
+    runId: "collision",
+    scenarioId: "publication-collision",
+    testHooks: { async renameDirectory() { collisionRenameCalled = true; } },
+  });
+  await collisionBundle.initialize();
+  const destination = collisionBundle.finalPath;
+  await mkdir(destination);
+  await writeFile(path.join(destination, "preserved.txt"), "existing bundle");
+  await assert.rejects(() => collisionBundle.finalize({ verdict: "passed" }), /Evidence bundle already exists/u);
+  assert.equal(collisionRenameCalled, false);
+  assert.equal(await readFile(path.join(destination, "preserved.txt"), "utf8"), "existing bundle");
+  assert.equal((await stat(collisionBundle.stagingPath)).isDirectory(), true);
+
+  const unsupportedSyncBundle = new EvidenceBundle({
+    rootDirectory: root,
+    runId: "unsupported-directory-sync",
+    scenarioId: "publication-portability",
+    testHooks: { async syncDirectory() { throw Object.assign(new Error("unsupported"), { code: "EINVAL" }); } },
+  });
+  await unsupportedSyncBundle.initialize();
+  await assert.doesNotReject(() => unsupportedSyncBundle.finalize({ verdict: "passed" }));
 });
 
 test("deduplicates identical screenshots while retaining correlated events", async (t) => {

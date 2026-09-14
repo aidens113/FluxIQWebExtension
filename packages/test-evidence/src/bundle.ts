@@ -1,4 +1,4 @@
-import { rename, mkdir, open, readFile, readdir, rm, stat, writeFile, type FileHandle } from "node:fs/promises";
+import { rename, mkdir, open, readFile, readdir, rm, stat, type FileHandle } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import path from "node:path";
 import { assertEvidenceEvent, assertEvidencePolicy, type EvidencePolicy } from "@fluxiq-web-extension/test-contracts";
@@ -11,6 +11,27 @@ import type { ArtifactEntry, ArtifactIndex, CapturedEvidenceEvent, CaptureEviden
 const MEDIA_TYPES: Record<string, string> = { ".json": "application/json", ".ndjson": "application/x-ndjson", ".html": "text/html", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".zip": "application/zip", ".webm": "video/webm", ".log": "text/plain" };
 const TRANSIENT_JOURNAL_OPEN_CODES = new Set(["EBUSY", "EPERM", "EACCES"]);
 const JOURNAL_OPEN_DELAYS_MS = [10, 25, 50] as const;
+const TRANSIENT_PUBLICATION_RENAME_CODES = new Set(["EBUSY", "EPERM", "EACCES"]);
+const PUBLICATION_RENAME_DELAYS_MS = [10, 25, 50] as const;
+
+type EvidenceBundleFinalizationBoundary =
+  | "journal.closed"
+  | "artifacts.synced"
+  | "index.synced"
+  | "marker.synced"
+  | "staging-directory.synced"
+  | "directory.renamed"
+  | "root-directory.synced";
+
+type EvidenceBundleTestHooks = {
+  afterBoundary?: (boundary: EvidenceBundleFinalizationBoundary) => void | Promise<void>;
+  afterFileSynced?: (relativePath: string) => void | Promise<void>;
+  openJournalFile?: (target: string, flags: string) => Promise<FileHandle>;
+  openArtifactFile?: (target: string, flags: "w" | "wx") => Promise<Pick<FileHandle, "writeFile" | "sync" | "close">>;
+  renameDirectory?: (source: string, destination: string) => Promise<void>;
+  wait?: (milliseconds: number) => Promise<unknown>;
+  syncDirectory?: (directory: string) => Promise<void>;
+};
 
 export async function openEvidenceJournalWithRetry(
   target: string,
@@ -25,6 +46,54 @@ export async function openEvidenceJournalWithRetry(
       if (!code || !TRANSIENT_JOURNAL_OPEN_CODES.has(code) || attempt >= JOURNAL_OPEN_DELAYS_MS.length) throw error;
       await wait(JOURNAL_OPEN_DELAYS_MS[attempt]!);
     }
+  }
+}
+
+async function pathExists(target: string): Promise<boolean> {
+  try {
+    await stat(target);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+async function renameEvidenceBundleWithRetry(
+  source: string,
+  destination: string,
+  renameDirectory: (source: string, destination: string) => Promise<void> = rename,
+  wait: (milliseconds: number) => Promise<unknown> = delay,
+): Promise<void> {
+  for (let attempt = 0; ; attempt += 1) {
+    if (await pathExists(destination)) throw new Error(`Evidence bundle already exists: ${destination}`);
+    try {
+      await renameDirectory(source, destination);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException)?.code;
+      if (!code || !TRANSIENT_PUBLICATION_RENAME_CODES.has(code) || attempt >= PUBLICATION_RENAME_DELAYS_MS.length) throw error;
+      await wait(PUBLICATION_RENAME_DELAYS_MS[attempt]!);
+    }
+  }
+}
+
+async function syncDirectory(directory: string): Promise<void> {
+  let handle: FileHandle | undefined;
+  try {
+    handle = await open(directory, "r");
+    await handle.sync();
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
+}
+
+async function bestEffortSyncDirectory(directory: string, implementation: (directory: string) => Promise<void> = syncDirectory): Promise<void> {
+  try {
+    await implementation(directory);
+  } catch {
+    // Directory fsync is unsupported by Node on some platforms (notably
+    // Windows). Integrity inspection remains the cross-platform guarantee.
   }
 }
 
@@ -54,6 +123,8 @@ export type EvidenceBundleOptions = {
   now?: () => Date;
   redaction?: RedactionOptions;
   evidencePolicy?: CapturePolicy;
+  /** Deterministic filesystem boundaries for durability tests. */
+  testHooks?: EvidenceBundleTestHooks;
 };
 
 export class EvidenceBundle {
@@ -93,7 +164,10 @@ export class EvidenceBundle {
     }
     await mkdir(this.stagingPath, { recursive: false });
     try {
-      this.eventJournal = await openEvidenceJournalWithRetry(path.join(this.stagingPath, "events.ndjson"));
+      this.eventJournal = await openEvidenceJournalWithRetry(
+        path.join(this.stagingPath, "events.ndjson"),
+        this.options.testHooks?.openJournalFile,
+      );
     } catch (error) {
       await rm(this.stagingPath, { recursive: true, force: true });
       throw error;
@@ -168,6 +242,7 @@ export class EvidenceBundle {
     this.finalizing = true;
     await this.appendTail;
     await this.closeEventJournal();
+    await this.reachBoundary("journal.closed");
     const finishedAt = this.now().toISOString();
     const firstFailureEvent = this.events.find((event) => event.trigger === "error");
     const summary: EvidenceSummary = {
@@ -193,11 +268,24 @@ export class EvidenceBundle {
     await this.writeText("report.html", renderReport(summary, this.events));
     await this.writeStructured("review/timeline.json", createTimeline(this.events));
     await this.writeText("review/contact-sheet.html", renderContactSheet(this.events));
+    await this.reachBoundary("artifacts.synced");
     const index = await this.buildArtifactIndex(finishedAt);
     await this.writeBytes("artifact-index.json", Buffer.from(`${JSON.stringify(index, null, 2)}\n`), true);
+    await this.reachBoundary("index.synced");
     const indexBytes = await readFile(path.join(this.stagingPath, "artifact-index.json"));
     await this.writeBytes("bundle.complete.json", Buffer.from(`${JSON.stringify({ schemaVersion: "0.1", artifactIndexSha256: sha256(indexBytes) }, null, 2)}\n`), true);
-    await rename(this.stagingPath, this.finalPath);
+    await this.reachBoundary("marker.synced");
+    await bestEffortSyncDirectory(this.stagingPath, this.options.testHooks?.syncDirectory);
+    await this.reachBoundary("staging-directory.synced");
+    await renameEvidenceBundleWithRetry(
+      this.stagingPath,
+      this.finalPath,
+      this.options.testHooks?.renameDirectory,
+      this.options.testHooks?.wait,
+    );
+    await this.reachBoundary("directory.renamed");
+    await bestEffortSyncDirectory(this.options.rootDirectory, this.options.testHooks?.syncDirectory);
+    await this.reachBoundary("root-directory.synced");
     this.finalized = true;
     return { path: this.finalPath, summary, index };
   }
@@ -218,7 +306,13 @@ export class EvidenceBundle {
   private async closeEventJournal(): Promise<void> {
     const handle = this.eventJournal;
     this.eventJournal = undefined;
-    if (handle) await handle.close();
+    if (handle) {
+      try {
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+    }
   }
 
   private async writeBytes(relativePath: string, bytes: Uint8Array, replace: boolean): Promise<void> {
@@ -226,7 +320,19 @@ export class EvidenceBundle {
     const safePath = safeRelativePath(relativePath);
     const target = path.join(this.stagingPath, ...safePath.split("/"));
     await mkdir(path.dirname(target), { recursive: true });
-    await writeFile(target, bytes, { flag: replace ? "w" : "wx" });
+    const handle = await (this.options.testHooks?.openArtifactFile ?? open)(target, replace ? "w" : "wx");
+    try {
+      await handle.writeFile(bytes);
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await bestEffortSyncDirectory(path.dirname(target), this.options.testHooks?.syncDirectory);
+    await this.options.testHooks?.afterFileSynced?.(safePath);
+  }
+
+  private async reachBoundary(boundary: EvidenceBundleFinalizationBoundary): Promise<void> {
+    await this.options.testHooks?.afterBoundary?.(boundary);
   }
 
   private async buildArtifactIndex(generatedAt: string): Promise<ArtifactIndex> {

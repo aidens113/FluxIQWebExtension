@@ -43,6 +43,11 @@ test("a single scenario run produces a contract-valid RunEvaluation, with no cor
   assert.deepEqual(evaluation.evidence, { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 });
 });
 
+test("a campaign run preserves its exact repeat identity while standalone runs default to zero", () => {
+  assert.equal(singleRunEvaluation(input()).repeatIndex, 0);
+  assert.equal(singleRunEvaluation(input({ repeatIndex: 2 })).repeatIndex, 2);
+});
+
 test("every automation field comes from the lane observation, which until now nothing read", () => {
   const evaluation = singleRunEvaluation(input());
   assert.deepEqual([evaluation.lane, evaluation.flowCreated, evaluation.oracleVerdict, evaluation.reportedVerdict], ["recording", null, "passed", "passed"]);
@@ -131,7 +136,7 @@ const createdFlow = flowLaneObservation({
 /** The same run as the bench's Flow lane evaluates it, from the finalized bundle at `bundlePath`. `input()` closes on its `final` event, sequence 17. */
 function benchRowOf(run: SingleRunInput, bundlePath: string): RunEvaluation {
   return evaluateFlowRun({
-    scenarioId: run.scenarioId, workflowId: run.workflowId ?? null, variantId: run.variantId ?? null, repeatIndex: 0, expectedFailure: run.observation.automationFailureExpected,
+    scenarioId: run.scenarioId, workflowId: run.workflowId ?? null, variantId: run.variantId ?? null, repeatIndex: run.repeatIndex ?? 0, expectedFailure: run.observation.automationFailureExpected,
     result: { runId: run.runId, verdict: run.verdict, ...(run.failureCategory === undefined ? {} : { failureCategory: run.failureCategory }), path: bundlePath, observation: run.observation },
     manifest: run.manifest, metrics: run.metrics, finalSequence: 17, errorSequence: undefined, wallClockMs: run.wallClockMs,
   });

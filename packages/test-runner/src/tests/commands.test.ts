@@ -120,6 +120,19 @@ test("bench runs a named corpus a number of times on the recording lane's target
   assert.throws(() => parseLabCommand(["bench", "smoke"]), /options only/);
 });
 
+test("bench resume accepts exactly one durable campaign ID and no plan overrides", () => {
+  assert.deepEqual(parseLabCommand(["bench", "--resume", "bench-mu123abc-0123abcd"]), { command: "bench", resumeBenchId: "bench-mu123abc-0123abcd" });
+  assert.throws(() => parseLabCommand(["bench", "--resume"]), /requires a value/);
+  assert.throws(() => parseLabCommand(["bench", "--resume", "latest"]), /valid bench ID/);
+  assert.throws(() => parseLabCommand(["bench", "--resume", "bench-mu123abc-0123abcd", "--resume", "bench-mu123abc-abcdef01"]), /only be specified once/);
+  for (const extra of [
+    ["--corpus", "week1"], ["--repeat", "3"], ["--target", "isolated"],
+    ["--workspace", "bench-dev"], ["--evidence", "events"], ["extra"],
+  ]) {
+    assert.throws(() => parseLabCommand(["bench", "--resume", "bench-mu123abc-0123abcd", ...extra]), /cannot be combined/);
+  }
+});
+
 test("--flow with no value selects the Flow lane; with a value it still names a persisted Flow", () => {
   assert.deepEqual(parseLabCommand(["run", "basic-form", "--flow"]), { command: "run", scenarioId: "basic-form", flowLane: true });
   assert.deepEqual(parseLabCommand(["run", "basic-form", "--flow", "--target", "isolated"]), { command: "run", scenarioId: "basic-form", target: "isolated", flowLane: true });

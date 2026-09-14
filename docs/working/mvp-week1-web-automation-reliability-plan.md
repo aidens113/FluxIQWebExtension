@@ -1,9 +1,9 @@
 # MVP Week 1 — Web Automation Reliability Plan
 
 Status: Active
-Status detail: The audit remediation, navigation intent, and bounded pairing recovery are live-accepted. The first final repeat-three benches were interrupted by a controlled Windows restart; fresh full benches remain blocked on host restart/storage health. No exit criterion is yet claimed complete.
+Status detail: The audit remediation, navigation intent, and pairing recovery are live-accepted. The user rejected non-resumable final benches after a Windows restart exposed the gap; durable campaign recovery is now in implementation before fresh full benches. No exit criterion is yet claimed complete.
 Created: 2026-09-11
-Last updated: 2026-09-13
+Last updated: 2026-09-14
 Owner: Senior supervisor agent
 Scope: Week 1 of the 30-day MVP (Phases 1.1–1.6): browser action vocabulary, element identity, browser state/evidence, failure taxonomy, and FluxBench, with automated verification through the Testing Lab as the primary proof for every phase. Weeks 2–4 are out of scope except where Week 1 must leave a seam for them.
 Paired document: `F:\!FluxIQ\docs\working\mvp-week1-web-automation-reliability-plan.md` — Core owns the failure-taxonomy contracts (C1, C2, pulled ahead of Wave 2 by D11) and the expectation-evaluator seam (C3)
@@ -21,14 +21,13 @@ This is the resumed session objective. Read it literally:
   quoted observation from a real Testing Lab run in the Work Ledger, and every
   open item below is closed, or ruled out of Week 1 with the reason recorded.
   Nothing closes on a unit test, a compile, a harness row, or a worker's report.
-- **Quickly** means wide parallelism partitioned by file from the first dispatch.
-  Lab runs may run concurrently, one instance per worker (`L-lab-concurrency`),
+- **Quickly** means safe file-partitioned parallelism, with Lab concurrency
   bounded by this machine's RAM. Do not stop at phase boundaries to ask.
 - **Properly** means a mutation proof for every guard, the supervisor re-running
   every fix before its ledger entry, and single observations labelled as such,
   because this machine has faulty RAM.
 
-**Phase, as of 2026-09-13: awaiting host readiness for fresh full benches.** The
+**Phase, as of 2026-09-14: implementing durable benchmark campaign recovery.** The
 acknowledged navigation intent passed W10 primary and `broken-link` 3/3 each.
 Two final benches reached 153/189 and 155/189 executable evaluations before a
 controlled Windows restart interrupted both; those partials are diagnostic,
@@ -111,12 +110,13 @@ settled ledger entries are in parts one to fifty of
   646 runner tests, and root gates pass. After correcting an invalid credentialed
   wrapper, isolated passed 5/5 and concurrent A/B 9/9 + 6/6: 20/20 total with
   zero pairing, leak, harness/persistence, or action-discard failures.
-- Runtime Broker requested the restart; its initiator is unknown. C: logged NTFS
-  errors. Full benches require a stable no-restart window and confirmed storage health.
+- The restart-exposed campaign defect now has a downstream implementation:
+  durable manifests and immutable checkpoints, exact receipts and evaluation
+  identities, finalized-bundle reconciliation, staging preservation, strict
+  compatibility, and a stale-safe single-owner lease. Unit and mutation proof
+  and root gates pass; commit and a live process-tree kill/resume remain.
 
-**Queued, in dependency order**
-1. After host readiness is confirmed, run both full benches in fresh roots.
-2. Run the tracked comparison and finish the ranking and six-criterion ledger.
+**Queued:** (1) live-prove durable resume; (2) run both full benches, compare, and close the ledger.
 
 **Exit criteria as they stand**
 
@@ -154,9 +154,10 @@ settled ledger entries are in parts one to fifty of
   verbatim to the archive, and the index is regenerated with the structure
   baseline backed up.
 
-**Blocker for full benches:** the host restarted both active benches and logged
-C: NTFS errors. Another four-hour A/B attempt needs a stable no-restart window
-and confirmed storage health; targeted pairing validation proceeds meanwhile.
+**Blocker for full benches:** none once the durable campaign implementation is
+committed and passes its live kill/resume proof. The C: NTFS warning remains a
+machine risk, but campaign state is on F:, interruption is recoverable, and
+hash/compatibility checks fail closed on corruption.
 
 ---
 
@@ -648,62 +649,37 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 `2026-09-12-*` Wave 3 and live-validation files, and
 `2026-09-12-handoff-ledger.md` (the compaction and handoff entries).
 
-### 2026-09-13 — f-host-runtime-policy-action: the domain snapshots a recorded Flow's web actions
+The first two 2026-09-13 entries are preserved in
+[the pre-durability ledger archive](./mvp-week1-web-automation-reliability-plan/archive/2026-09-14-pre-durability-ledger.md).
 
-- Agent: worker `f-host-runtime-policy-action`; the architecture page and the
-  verification by supervisor.
-- Changed:
-  - `domain/src/runtime/host-runtime.ts`: a node acts on a page when it is a web output
-    node, or `builtin.policy.action` naming a web action type in
-    `parameterValues.outputId`. `inspectStateDiff` declines when either side's snapshot
-    is missing, and the header comment says what the binding does and does not give;
-  - `domain/src/runtime/tests/host-runtime.test.ts`;
-  - by the supervisor, `docs/architecture/page-evidence.md`, which states which nodes
-    are snapshotted.
-- Validation: supervisor `sup66`:
-  - domain `pnpm check` exit=0;
-  - `DOMAIN_TEST_BUILD_LABEL=sup66 pnpm test` printed "# tests 404", "# pass 404",
-    "# fail 0";
-  - **mutation,** `sup-host-runtime-mutation.mjs`: the check back to definitionId-only printed
-    "# pass 403", "# fail 1", failing "a recorded action, Core's policy node naming
-    web.dom.click, gets a state ref from web.dom.capture_snapshot"; "restored identical=true".
-- Not verified: a Lab `product-catalog` Flow run showing a `beforeAction` packet on every
-  web action, each at most 6,000 bytes. `afterAction` also needs Core's
-  `g-core-host-state-node`.
-- Outcome: Accepted
+### 2026-09-14 — Durable benchmark campaigns implemented; live proof pending
 
-### 2026-09-13 — l-stage3a and l-stage3b: the old-pin benches, stopped partway, show one new failure pattern
-
-- Agents: workers `l-stage3a` and `l-stage3b` (Lab owners), stopped by the supervisor;
-  tally by supervisor.
-- Observed at `d639415` and Core `3cb8976`, in the first repeat only, under four
-  concurrent Lab processes. Every figure is a single observation, and neither is the
-  criterion-5 bench.
-  - **Bench A:** 40 runs, 30 passed, 9 failed, 1 inconclusive (W16's recording lane).
-  - **Bench B:** 34 runs, 25 passed, 9 failed.
-- Found:
-  - **W10 `navigation` failed `recording.persistence` in both benches,** with no
-    discards: 3 runs in A (unarmed Flow, recording, `broken-link` Flow), 2 in B. At the
-    same pins with one Lab running, `l-stage2d`'s partial bench passed W10 on both lanes.
-    Dispatched as `i-stage3-load-failures`.
-  - **W13 `consent-then-click`'s Flow row failed `gateway.connection`** in B only.
-  - Otherwise the known shapes: W04's and W08's Flow rows get no proposal (fixed by
-    `f-actionless-flow-lane`); W05 `short-catalog` and W13 `banner-absent` fail
-    `target_not_found`, both ruled out; `harnessActivations` 2 on failed Flows (fixed by
-    `f-runner-no-dry-run-llm` and `g-core-ladder-llm-off`); no evidence packet (fixed by
-    `f-host-runtime-policy-action` and `g-core-host-state-node`).
-- Validation: supervisor, a reader over every `evaluation.json` and
-  `snapshots/flow-lane.json` under `F:\fxlab-runs\stage3\` `a` and `b` printed:
-  - A: `evaluations=39 verdicts={"passed":30,"failed":9} flowLaneFiles=18 start0=18 actions=62 actionsWithPackets=0`;
-  - B: `evaluations=34 verdicts={"passed":25,"failed":9} flowLaneFiles=14 start0=14 actions=49 actionsWithPackets=0`;
-  - failures by scenario, workflow, variant, lane and category: `recording.contract` ×4 in
-    each (`product-catalog` and `data-table`, unarmed and variant, Flow lane);
-    `recording.persistence` ×3 in A and ×2 in B (`navigation`); `runtime.behavior` ×2 in
-    each (`short-catalog`, `banner-absent`); `gateway.connection` ×1 in B
-    (`consent-then-click`, Flow lane).
-- Not verified: W14's Flow row onward, W16's Flow row through W29, and repeats 2 and 3
-  never ran. Nothing was rerun, per the stop order.
-- Outcome: Accepted
+- Agents: workers `f-bench-durable-file`, `f-bench-campaign-store`,
+  `f-bench-receipt`, `f-bundle-durable-publication`,
+  `f-bench-resume-orchestration`, and `f-bench-campaign-lease`; integration and
+  review by the supervisor. The two older ledger entries compacted above were
+  moved without deleting their evidence.
+- Changed: every new CLI bench publishes an immutable campaign and checkpoint
+  chain; each run carries an exact receipt and repeat identity; resume restores
+  the saved request, reconciles a valid finalized active bundle, preserves an
+  interrupted staging bundle, retries only the unfinished cell, and regenerates
+  aggregates only from exact complete coverage. Strict clean-repository/build/
+  browser compatibility prevents mixed experiments. A boot/process-identity
+  lease refuses concurrent owners and safely reclaims crash/reboot/PID-reuse
+  owners.
+- Validation: supervisor commands and observed results so far:
+  - test-evidence: 17/17;
+  - focused lease, compatibility, and orchestration: 24/24;
+  - test-runner full suite: 687/687;
+  - the first full runner pass had only a repeatable Windows temporary Git
+    cleanup `EBUSY`; bounded test cleanup fixed it and the isolated test passed;
+  - default Windows boot/current/missing-process probe returned true/true/true;
+  - supervisor mutations removing repeat from the cell key and removing exact
+    repeat validation each failed the intended test, then were restored.
+  - root `pnpm check`, `pnpm test`, and `pnpm build` each exited 0.
+- Not verified: a clean commit and a live process-tree interruption followed
+  by `lab bench --resume`.
+- Outcome: In Progress
 
 ### 2026-09-13 — The Lab-proof gap fixes, verified and committed
 
