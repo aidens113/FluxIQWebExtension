@@ -101,7 +101,7 @@ settled ledger entries are in parts one to fifty of
 - W02 recovery passed 3/3. The elapsed and CDP navigation attempts failed live;
   their acknowledged-intent replacement passed review, gates, mutations, and W10
   primary plus `broken-link` 3/3 at `6b379a9` with clean evidence diagnostics.
-- Downstream `54e30bc` and Core `19468b7` are pushed. Final A2/B2 reached 153/189
+- Downstream `6e9f9c6` and Core `19468b7` are pushed. Final A2/B2 reached 153/189
   and 155/189 executable rows before a controlled Windows restart. Both had zero
   leaks, harness/persistence failures, and action-bearing discards, but no final
   aggregate or exit capture; neither partial is accepted as a complete bench.
@@ -115,9 +115,8 @@ settled ledger entries are in parts one to fifty of
   errors. Full benches require a stable no-restart window and confirmed storage health.
 
 **Queued, in dependency order**
-1. Commit the accepted pairing matrix and push downstream `dev`.
-2. After host readiness is confirmed, run both full benches in fresh roots.
-3. Run the tracked comparison and finish the ranking and six-criterion ledger.
+1. After host readiness is confirmed, run both full benches in fresh roots.
+2. Run the tracked comparison and finish the ranking and six-criterion ledger.
 
 **Exit criteria as they stand**
 
