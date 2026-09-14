@@ -5641,3 +5641,40 @@ projections/aggregate only from exact completed plan coverage. Provide a narrow
 create/resume API for CLI integration and deterministic crash hooks/tests at all
 five contract boundaries. Keep legacy creation behavior and final report schema.
 Do not edit CLI, barrels, report-store, shared docs, Core, commits, or remotes.
+### l-final-durable-a
+
+Role: live-validation worker. Read this brief and the shared plan's Current
+State only. Own no source files. Own run root `F:\fxlab-runs\final3\a`, Lab
+instance/build label `l-final-durable-a`, and report
+`reports/l-final-durable-a.md`. Downstream must be clean at pushed `7b6600e`;
+Core clean at pushed `19468b7`. Refuse any mismatch. Set
+`FLUXIQ_TEST_ENV_FILES=none`, both labels, and the assigned run root. Populate
+only `FLUXIQ_TEST_SECRET_AUTH_GATE_PASSWORD` by reading the fixture-only value
+from `apps/scenario-lab/src/scenarios/auth-gate/constants.ts`; never print,
+persist, hash, or return it. Run `pnpm lab bench --corpus week1 --repeat 3
+--target isolated --evidence failure`. Record the emitted bench ID immediately.
+If interrupted, use the same environment and `pnpm lab bench --resume ID`;
+never start a replacement campaign. Monitor bounded counts, memory, categories,
+leaks, persistence failures, action-bearing discards, and harness use without
+reading raw page data. Continue until final aggregate or a real blocker. Write
+only your report, no commit/push. Return pin, bench ID, outcome, exact bounded
+counts, validation, and remaining assumptions.
+
+### l-final-durable-b
+
+Role: live-validation worker. Read this brief and the shared plan's Current
+State only. Own no source files. Own run root `F:\fxlab-runs\final3\b`, Lab
+instance/build label `l-final-durable-b`, and report
+`reports/l-final-durable-b.md`. Downstream must be clean at pushed `7b6600e`;
+Core clean at pushed `19468b7`. Refuse any mismatch. Set
+`FLUXIQ_TEST_ENV_FILES=none`, both labels, and the assigned run root. Populate
+only `FLUXIQ_TEST_SECRET_AUTH_GATE_PASSWORD` by reading the fixture-only value
+from `apps/scenario-lab/src/scenarios/auth-gate/constants.ts`; never print,
+persist, hash, or return it. Run `pnpm lab bench --corpus week1 --repeat 3
+--target isolated --evidence failure`. Record the emitted bench ID immediately.
+If interrupted, use the same environment and `pnpm lab bench --resume ID`;
+never start a replacement campaign. Monitor bounded counts, memory, categories,
+leaks, persistence failures, action-bearing discards, and harness use without
+reading raw page data. Continue until final aggregate or a real blocker. Write
+only your report, no commit/push. Return pin, bench ID, outcome, exact bounded
+counts, validation, and remaining assumptions.
