@@ -1,7 +1,7 @@
 # MVP Week 1 — Web Automation Reliability Plan
 
 Status: Active
-Status detail: The audit remediation and navigation intent are live-accepted. The first final repeat-three benches were interrupted by a controlled Windows restart; bounded pairing recovery passes code gates but still needs its targeted live matrix and fresh full benches. No exit criterion is yet claimed complete.
+Status detail: The audit remediation, navigation intent, and bounded pairing recovery are live-accepted. The first final repeat-three benches were interrupted by a controlled Windows restart; fresh full benches remain blocked on host restart/storage health. No exit criterion is yet claimed complete.
 Created: 2026-09-11
 Last updated: 2026-09-13
 Owner: Senior supervisor agent
@@ -28,7 +28,7 @@ This is the resumed session objective. Read it literally:
   every fix before its ledger entry, and single observations labelled as such,
   because this machine has faulty RAM.
 
-**Phase, as of 2026-09-13: live-validating bounded cold-pairing recovery.** The
+**Phase, as of 2026-09-13: awaiting host readiness for fresh full benches.** The
 acknowledged navigation intent passed W10 primary and `broken-link` 3/3 each.
 Two final benches reached 153/189 and 155/189 executable evaluations before a
 controlled Windows restart interrupted both; those partials are diagnostic,
@@ -108,14 +108,14 @@ settled ledger entries are in parts one to fifty of
 - Five identical cold pre-approval pairing timeouts led to bounded recovery:
   observation zero, at most two exact-cold retries inside the original deadline,
   bounded stages, and fixed transport diagnostics. Review, supervisor mutations,
-  646 runner tests, and downstream root check/test/build pass; live proof remains.
-- Runtime Broker requested the restart; its initiating actor is unknown. C: logged
-  NTFS errors around reboot. Full benches require a stable no-restart window and
-  confirmed storage health; the short targeted pairing matrix proceeds first.
+  646 runner tests, and root gates pass. After correcting an invalid credentialed
+  wrapper, isolated passed 5/5 and concurrent A/B 9/9 + 6/6: 20/20 total with
+  zero pairing, leak, harness/persistence, or action-discard failures.
+- Runtime Broker requested the restart; its initiator is unknown. C: logged NTFS
+  errors. Full benches require a stable no-restart window and confirmed storage health.
 
 **Queued, in dependency order**
-1. Commit the pairing recovery, run its five-cell isolated/concurrent matrix,
-   and push the accepted downstream pin.
+1. Commit the accepted pairing matrix and push downstream `dev`.
 2. After host readiness is confirmed, run both full benches in fresh roots.
 3. Run the tracked comparison and finish the ranking and six-criterion ledger.
 
@@ -127,7 +127,7 @@ settled ledger entries are in parts one to fifty of
 | Evidence useful | `l-stage2d`: W17's file name and content in Core's workspace 0 times, SQLite included. `l-stage2c`: the auth-gate secret 0 times | `l-evidence`: the `sensitive-input` leak check and the 16 items; both benches: packet budget and leak rows |
 | Deterministic fallback | Corroboration refuses an uncorroborated match (unit and harness) | W20-W23 recover and W26 disambiguates in the Lab |
 | Failures classified | `l-stage2d`, ×3: W15 `popup-blocked` reports `output_not_observed`, and W25 `too-slow` reports `web.action.timeout`. Stage 2: W10 and W27 `navigation_unexpected`. `l-stage2c`: W19 `auth_required` | Both benches: the W14, W19 and W27 negative variants at least 90%, plus the rate over every negative variant |
-| Bench repeatable | Final A2/B2 partials were interrupted by a controlled host restart at 153/189 and 155/189 executable rows. They exposed five exact cold-pairing timeouts; no complete A/B comparison is accepted | Pairing recovery live matrix; then two complete `--repeat 3` benches at the pushed remediation pins, followed by every Metrics tolerance and discard diagnostic through the tracked comparison tool |
+| Bench repeatable | Final A2/B2 partials were interrupted by a controlled host restart at 153/189 and 155/189 rows. Pairing recovery then passed isolated 5/5 and concurrent 15/15; no complete A/B comparison is accepted | Two complete `--repeat 3` benches at the pushed remediation pins, followed by every Metrics tolerance and discard diagnostic through the tracked comparison tool |
 | Blockers ranked | `i-ranking-draft` has drafted the ranking, and its counting questions are ruled; the known leftovers are sized (`i-leftover-sizing`) | The Phase 1.6b ledger entry, with both benches' figures |
 
 **Everything is tested: the operating rules.**

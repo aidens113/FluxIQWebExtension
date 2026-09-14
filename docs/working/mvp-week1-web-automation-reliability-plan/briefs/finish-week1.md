@@ -5469,3 +5469,78 @@ partition cells between workers without sharing mutable files. Across the two
 reports require 15/15 pairings and disclose all verdict/start/leak/persistence/
 harness/action-discard/memory/cleanup results. A pairing failure rejects the
 matrix. Preserve bounded bundles; no aggregate claim or full-bench substitution.
+
+## Stage 4q - deterministic isolated-authentication diagnosis
+
+Stage 4p stopped after W27 primary Flow twice finalized before pairing as
+`environment.missing` with the closed summary `FluxIQ authentication failed
+(401)`. No secret may be printed, copied, or compared by value.
+
+### i-final-pairing-auth-run
+
+Own only `reports/i-final-pairing-auth-run.md`; otherwise read-only. Inspect
+`reports/l-final-pairing-isolated.md`, the two bounded bundles under the assigned
+Stage 4p root, the process-only launcher/wrapper command shape, and prior accepted
+Lab reports needed for comparison. Use only booleans, lengths, hashes scoped to
+one process when indispensable, and closed status/category/timing fields. Do not
+read or publish raw tokens, environment dumps, page data, or payloads. Determine
+the narrowest evidence-backed cause or next discriminating probe. No run, source,
+shared-doc/Core/worktree/commit/push changes.
+
+### i-final-pairing-auth-code
+
+Own only `reports/i-final-pairing-auth-code.md`; otherwise read-only. Trace the
+test-runner isolated topology authentication construction, environment parser,
+Core launch/configuration, and request authentication seam in source and tests.
+Compare only code/configuration between downstream `54e30bc` and `74f6aa0` and
+the pinned Core commit. Do not inspect live secret values or Stage 4p bundle data.
+Identify plausible deterministic 401 causes, existing coverage, and the smallest
+safe probe/fix boundary. No run, source/shared-doc/Core/commit/push changes.
+
+## Lab Stage 4r - corrected isolated pairing recovery acceptance
+
+Stage 4q proved Stage 4p's wrapper wrongly supplied `FLUXIQ_TEST_USERNAME`,
+`FLUXIQ_TEST_PASSWORD`, and `FLUXIQ_TEST_PIN` to disposable isolation. That mode
+uses supplied credentials for login without seeding them into its fresh identity
+store. This is a run-contract correction, not a source change.
+
+`l-final-pairing-isolated2` owns `F:\fxlab\fxlab-09fd9c7-a`, new root
+`F:\fxlab-runs\final3\pairing-isolated2`, and
+`reports/l-final-pairing-isolated2.md`. Use downstream `74f6aa0713941206fdc61a739653579ca9fa14bb`
+and Core `19468b72c4472fd5cc58940737702d5e4d72c985`, exact and clean. Run the
+Stage 4p five-cell sequence once, but explicitly remove the three web-panel
+credential variables from the child environment while retaining
+`FLUXIQ_TEST_ENV_FILES=none`; do not load an env file. First run W27 as the
+discriminating probe. If it passes authentication and reaches pairing, continue
+W09, W10, W14 `recording`, and W28 `recording`. Otherwise stop. Require 5/5
+pairing acceptance and inspect the same closed verdict/start/leak/persistence/
+harness/action-discard/memory/cleanup fields. Never print secrets or raw data.
+No source/shared-doc/Core/commit/push changes.
+
+## Lab Stage 4s - concurrent pairing recovery acceptance
+
+Run both workers concurrently at downstream
+`74f6aa0713941206fdc61a739653579ca9fa14bb` and Core
+`19468b72c4472fd5cc58940737702d5e4d72c985`, exact and clean. Both explicitly
+remove all four `FLUXIQ_TEST_USERNAME/PASSWORD/PIN/TOTP` variables and set
+`FLUXIQ_TEST_ENV_FILES=none`. Use headed Chromium, disposable isolation, new
+roots, distinct instance labels, the established memory/leak guard, and no raw
+secret/page/payload output. Build instance-locally before running. Across both
+reports, require the same five cells three times each: 15/15 pairing acceptance,
+with closed verdict/start/leak/persistence/harness/action-discard/memory/cleanup
+fields. Stop for a leak, pairing failure, or deterministic blocker. Workers edit
+only their reports and own no source/shared-doc/Core/commit/push operation.
+
+### l-final-pairing-concurrent-a
+
+Own `F:\fxlab\fxlab-09fd9c7-a`, root
+`F:\fxlab-runs\final3\pairing-concurrent\a`, and
+`reports/l-final-pairing-concurrent-a.md`. Run W27 primary Flow, W10 primary
+Flow, and W28 primary recording three times each (nine cells).
+
+### l-final-pairing-concurrent-b
+
+Own `F:\fxlab\fxlab-16ff729-b`, root
+`F:\fxlab-runs\final3\pairing-concurrent\b`, and
+`reports/l-final-pairing-concurrent-b.md`. Run W09 primary Flow and W14
+`interstitial` recording three times each (six cells).
