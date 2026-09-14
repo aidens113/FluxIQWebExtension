@@ -203,4 +203,3 @@ license to classify failures away. If epoch remains stable while status becomes
 `disconnected`, the service-worker hypothesis is falsified and the next owner
 is the extension gateway state transition path, instrumented with closed-set
 transition counts rather than page or transport payloads.
-
