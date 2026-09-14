@@ -84,7 +84,10 @@ async function hashDirectory(root: string): Promise<string> {
 }
 
 async function installedBrowserVersion(): Promise<string> {
-  const browser = await chromium.launch({ headless: true });
+  // Extension runs use launchPersistentContext with the full Chromium build.
+  // `chromium.launch({ headless: true })` may select Playwright's separate
+  // headless-shell binary, so launching it would fingerprint the wrong browser.
+  const browser = await chromium.launch({ headless: true, executablePath: chromium.executablePath() });
   try { return browser.version(); }
   finally { await browser.close(); }
 }
