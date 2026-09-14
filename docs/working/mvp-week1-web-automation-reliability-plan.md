@@ -1,7 +1,7 @@
 # MVP Week 1 — Web Automation Reliability Plan
 
 Status: Active
-Status detail: The audit remediation is implemented and passes focused mutations plus downstream root gates; Stage 4 live proofs and final repeat-three benches remain, so no exit criterion is yet claimed complete. Session objective, set by the user: completely finish Week 1, with everything tested.
+Status detail: The audit remediation and navigation intent are live-accepted. The first final repeat-three benches were interrupted by a controlled Windows restart; bounded pairing recovery passes code gates but still needs its targeted live matrix and fresh full benches. No exit criterion is yet claimed complete.
 Created: 2026-09-11
 Last updated: 2026-09-13
 Owner: Senior supervisor agent
@@ -28,10 +28,11 @@ This is the resumed session objective. Read it literally:
   every fix before its ledger entry, and single observations labelled as such,
   because this machine has faulty RAM.
 
-**Phase, as of 2026-09-13: validating the last Stage 4 recording race.** W02 passed 3/3
-with recovery polling. W10 primary passed 3/3, but `broken-link` retained two candidates only 1/3 times, proving
-elapsed time cannot make Playwright navigation standalone. No exit criterion yet has
-its full proof. Reports named in
+**Phase, as of 2026-09-13: live-validating bounded cold-pairing recovery.** The
+acknowledged navigation intent passed W10 primary and `broken-link` 3/3 each.
+Two final benches reached 153/189 and 155/189 executable evaluations before a
+controlled Windows restart interrupted both; those partials are diagnostic,
+not acceptance evidence. No exit criterion yet has its full proof. Reports named in
 backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
 every dispatch and amendment is in
 [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
@@ -95,30 +96,28 @@ settled ledger entries are in parts one to fifty of
   real-page capture cost and candidate caps.
 
 **In flight:**
-- The three repository-state-audit repairs are implemented and accepted: the
-  load-derived 90-second finalization bound with selected diagnostics, first
-  functional-failure precedence, and the tracked six-criterion `lab compare`.
-- Supervisor verification passed a 54-test focused suite, eight mutation
-  proofs, and downstream root check/test/build gates. `l-final-proofs` passed
-  at downstream `4cde72d` and Core `19468b7`; the supervisor independently
-  parsed all 19 accepted bundles and confirmed their bounded results.
-- The first final-bench pair was stopped cleanly after both reproduced W02's
-  false no-action result; B also exposed W10 primary's one-candidate recording
-  race. Both had zero leak and recording-persistence findings before stop.
-- Both initial fixes are supervisor-tested: package check and 617 tests pass; mutations
-  fail 2/16 and 2/6 rows, then restore to 22/22. Root gates pass. Downstream
-  `15974e7` and Core `19468b7` are pushed.
-- `l-final-recheck-w02` passed 3/3 with nine durable attempts per run; every dispatch-to-settle interval exceeded 30 seconds. W10 had zero leaks and six correct
-  functional verdicts, but consecutive one-candidate variants reject the settle
-  barrier. CDP `typed` navigation also failed live (primary 1/3). Its replacement
-  intent/ack seam passed cross-review, package suites, and supervisor mutations,
-  but live W10 rejected its first sender guard 0/6. The corrected, structured
-  pin `6b379a9` passed both 3/3 with two actions/candidates and zero harness, leaks, persistence failures, or discards.
+- The three audit repairs, their 54 focused tests/eight mutations, and 19-bundle
+  `l-final-proofs` are accepted at downstream `4cde72d` / Core `19468b7`.
+- W02 recovery passed 3/3. The elapsed and CDP navigation attempts failed live;
+  their acknowledged-intent replacement passed review, gates, mutations, and W10
+  primary plus `broken-link` 3/3 at `6b379a9` with clean evidence diagnostics.
+- Downstream `54e30bc` and Core `19468b7` are pushed. Final A2/B2 reached 153/189
+  and 155/189 executable rows before a controlled Windows restart. Both had zero
+  leaks, harness/persistence failures, and action-bearing discards, but no final
+  aggregate or exit capture; neither partial is accepted as a complete bench.
+- Five identical cold pre-approval pairing timeouts led to bounded recovery:
+  observation zero, at most two exact-cold retries inside the original deadline,
+  bounded stages, and fixed transport diagnostics. Review, supervisor mutations,
+  646 runner tests, and downstream root check/test/build pass; live proof remains.
+- Runtime Broker requested the restart; its initiating actor is unknown. C: logged
+  NTFS errors around reboot. Full benches require a stable no-restart window and
+  confirmed storage health; the short targeted pairing matrix proceeds first.
 
 **Queued, in dependency order**
-1. Push the W10-accepted pin, then restart both complete repeat-three benches concurrently.
-2. **Phase 1.6b:** run the tracked comparison, complete `i-ranking-draft`, and
-   write the six observed exit-criterion figures into the ledger.
+1. Commit the pairing recovery, run its five-cell isolated/concurrent matrix,
+   and push the accepted downstream pin.
+2. After host readiness is confirmed, run both full benches in fresh roots.
+3. Run the tracked comparison and finish the ranking and six-criterion ledger.
 
 **Exit criteria as they stand**
 
@@ -128,13 +127,12 @@ settled ledger entries are in parts one to fifty of
 | Evidence useful | `l-stage2d`: W17's file name and content in Core's workspace 0 times, SQLite included. `l-stage2c`: the auth-gate secret 0 times | `l-evidence`: the `sensitive-input` leak check and the 16 items; both benches: packet budget and leak rows |
 | Deterministic fallback | Corroboration refuses an uncorroborated match (unit and harness) | W20-W23 recover and W26 disambiguates in the Lab |
 | Failures classified | `l-stage2d`, ×3: W15 `popup-blocked` reports `output_not_observed`, and W25 `too-slow` reports `web.action.timeout`. Stage 2: W10 and W27 `navigation_unexpected`. `l-stage2c`: W19 `auth_required` | Both benches: the W14, W19 and W27 negative variants at least 90%, plus the rate over every negative variant |
-| Bench repeatable | Earlier Stage 3 load attempts exposed the wait-bound and pairing-diagnostic defects; no final bench is running and no complete A/B comparison is accepted | Two complete `--repeat 3` benches at the pushed remediation pins, followed by every Metrics tolerance and discard diagnostic through the tracked comparison tool |
+| Bench repeatable | Final A2/B2 partials were interrupted by a controlled host restart at 153/189 and 155/189 executable rows. They exposed five exact cold-pairing timeouts; no complete A/B comparison is accepted | Pairing recovery live matrix; then two complete `--repeat 3` benches at the pushed remediation pins, followed by every Metrics tolerance and discard diagnostic through the tracked comparison tool |
 | Blockers ranked | `i-ranking-draft` has drafted the ranking, and its counting questions are ruled; the known leftovers are sized (`i-leftover-sizing`) | The Phase 1.6b ledger entry, with both benches' figures |
 
 **Everything is tested: the operating rules.**
-- **Three tiers per change:** unit tests in `tests/` beside the subject, the
-  content harness, and the Lab. A guard is done only when a mutation shows its
-  test failing.
+- **Three tiers per change:** unit tests beside the subject, content harness,
+  and Lab. A guard is done only when a mutation shows its test failing.
 - **Before any ledger entry, the supervisor reruns the gates:**
   - each package's gates under a private label (`EXTENSION_TEST_BUILD_LABEL`,
     `DOMAIN_TEST_BUILD_LABEL`);
@@ -157,7 +155,9 @@ settled ledger entries are in parts one to fifty of
   verbatim to the archive, and the index is regenerated with the structure
   baseline backed up.
 
-**Blockers:** none needing the user.
+**Blocker for full benches:** the host restarted both active benches and logged
+C: NTFS errors. Another four-hour A/B attempt needs a stable no-restart window
+and confirmed storage health; targeted pairing validation proceeds meanwhile.
 
 ---
 

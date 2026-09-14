@@ -32,10 +32,9 @@ test("the runner publishes safe finalization-wait details and preserves primary 
   assert.equal(source.match(/details: (?:cleanup|completion)\.event\.details/gu)?.length, 4, "every completion failure appends its own labelled event");
 });
 
-test("the two pairing waits identify whether timeout happened before or after approval", async () => {
+test("the focused pairing lifecycle owns both timeout stages and publishes their safe details", async () => {
   const source = await runnerSource();
-  assert.match(source, /awaitPairingStatus\([^;]+"pre-approval"\)/u);
-  assert.match(source, /awaitPairingStatus\([^;]+"post-approval"\)/u);
+  assert.match(source, /pairExtensionWithColdEpochRecovery\(\{/u);
   assert.ok(source.includes("const pairingWaitDetails = pairingStatusWaitFailureDetails(error);"));
   assert.ok(source.includes("...(pairingWaitDetails ? { failureDetails: pairingWaitDetails } : {})"));
 });

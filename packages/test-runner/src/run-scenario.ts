@@ -33,7 +33,7 @@ import { singleRunEvaluation } from "./run-evaluation/index.js";
 import { automationFailureFromActionResult, createRunManifest, flowActionTimings, runActionStatus, type CloneRunState } from "./run-manifest/index.js";
 import { assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, selectCoreProbeStep } from "./lane-rules/index.js";
 import { createScriptedNavigationDriver, ScenarioStepRunner } from "./scenario-steps/index.js";
-import { awaitPairingStatus, cleanupFailureOutcome, pairingStatusWaitFailureDetails } from "./run-lifecycle/index.js";
+import { cleanupFailureOutcome, pairingStatusWaitFailureDetails, pairExtensionWithColdEpochRecovery } from "./run-lifecycle/index.js";
 
 /** `evidence` overrides the manifest's `evidencePolicy`; `workflowId` and `variantId` select what `resolveScenarioWorkflow` resolves. */
 export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flow?: boolean; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration };
@@ -524,15 +524,12 @@ async function launchBrowser(topology: RunningTopology, extensionPath: string) {
 async function extensionControlPage(context: BrowserContext): Promise<Page> { const worker = context.serviceWorkers()[0] ?? await context.waitForEvent("serviceworker", { timeout: 10_000 }); const id = new URL(worker.url()).hostname; const page = await context.newPage(); await page.goto(`chrome-extension://${id}/sidepanel/index.html`); return page; }
 type PairedExtensionStatus = Record<string, unknown> & { connectionState: "connected"; sessionId: string };
 async function pairExtension(page: Page, topology: RunningTopology): Promise<PairedExtensionStatus> {
-  await runtimeMessage(page, { type: "fluxiq.connect", settings: { gatewayUrl: topology.gatewayUrl, coreApiUrl: topology.fluxiqOrigin, autoReconnect: true, captureMutations: true, captureInputValues: true, captureSnapshots: true } });
-  const status = await awaitPairingStatus(() => extensionStatus(page), value => (value.connectionState === "pairing" && typeof value.pairingReferenceCode === "string") || connectedExtensionStatus(value), "pre-approval");
-  if (connectedExtensionStatus(status)) return status;
-  await topology.control!.approvePairing(String(status.pairingReferenceCode));
-  const approved = await awaitPairingStatus(() => extensionStatus(page), connectedExtensionStatus, "post-approval");
-  if (!connectedExtensionStatus(approved)) throw new RunnerFailure("gateway.connection", "Extension pairing wait returned without a connected session");
-  return approved;
+  return pairExtensionWithColdEpochRecovery({
+    connect: async () => (await runtimeMessage(page, { type: "fluxiq.connect", settings: { gatewayUrl: topology.gatewayUrl, coreApiUrl: topology.fluxiqOrigin, autoReconnect: true, captureMutations: true, captureInputValues: true, captureSnapshots: true } })).status,
+    readStatus: () => extensionStatus(page),
+    approvePairing: referenceCode => topology.control!.approvePairing(referenceCode),
+  });
 }
-function connectedExtensionStatus(status: Record<string, unknown>): status is PairedExtensionStatus { return status.connectionState === "connected" && typeof status.sessionId === "string"; }
 /** How long the start page is given to show a probe candidate's target before that step is passed over. */
 const PROBE_TARGET_VISIBLE_MS = 1_000;
 /**

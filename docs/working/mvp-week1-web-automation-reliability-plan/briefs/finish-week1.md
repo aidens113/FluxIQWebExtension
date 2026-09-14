@@ -5379,3 +5379,93 @@ one isolated instance, with two extension/Core actions and two candidates in
 all six. Apply the same verdict/category/start-index/harness/leak/persistence/
 discard/memory/cleanup requirements. Stop on a leak; otherwise finish all six.
 No secrets, source/shared-doc edits, commits, pushes, or raw page data.
+
+## Lab Stage 4m — final pushed repeat-three benches
+
+**Exact pins:** downstream pushed `54e30bc127f76041269d3707817c2e78d369c6b2`;
+Core pushed `19468b72c4472fd5cc58940737702d5e4d72c985`. Read the Week 1 Current State,
+`reports/i-final-bench-restart-readiness.md`, and this brief only. Both workers
+run the complete `week1` corpus with `--repeat 3 --target isolated` using
+`FLUXIQ_TEST_ENV_FILES=none`, the established process-only auth wrapper, headed
+Chromium, and the Stage 4 memory guard. Never print credentials. Preserve every
+bundle/report and bounded evidence. Stop on a leak or deterministic blocker;
+pause below 3 GB free. No source/shared-doc/Core edits, commits, or pushes.
+
+### l-final-bench-a2
+
+Own `F:\fxlab\fxlab-09fd9c7-a`, new root `F:\fxlab-runs\final2\a`, and
+`reports/l-final-bench-a2.md`. Pin both repositories exactly and clean, build
+the required instance-local packages, run the full bench once, inspect all run
+and report acceptance fields, leak/persistence/discard/harness counts, memory,
+then clean all owned processes/listeners and report exact worktree state.
+
+### l-final-bench-b2
+
+Own `F:\fxlab\fxlab-16ff729-b`, new root `F:\fxlab-runs\final2\b`, and
+`reports/l-final-bench-b2.md`. Apply the same pin/build/run/inspection/cleanup
+contract independently. Do not share worktrees, run roots, instances, or
+mutable files with A.
+
+## Stage 4n — recover a cold pairing epoch under the original deadline
+
+Stage 4m produced five non-ruled pre-approval timeouts with the exact cold
+`disconnected`/no-message/no-code/no-session signature. Follow
+`reports/i-final-pairing-load-timeouts.md`.
+
+`f-final-pairing-epoch-recovery` owns a new focused test-runner run-lifecycle
+module and tests, the minimal `run-scenario.ts` imports/call replacement,
+`run-evaluation/tests/runner-wiring.test.ts` only for its pairing ownership pins, and
+`reports/f-final-pairing-epoch-recovery.md`. Extract pairing orchestration;
+consume the initial connect response as observation zero. Only for exact cold
+disconnected state, retry connect with bounded backoff/count inside the same
+absolute 15-second deadline and inspect its response immediately. Never retry
+error/reconnecting/message/code/session-bearing state; never approve without a
+reference. Keep diagnostics fixed and non-secret. Add all deterministic tests
+and the one-shot mutation specified by the investigation. Run test-runner check
+and focused tests. Do not edit extension/Core/shared docs/Lab, commit, push, or
+touch either active Stage 4m process/worktree/run root.
+
+## Stage 4o — pairing recovery review corrections
+
+`f-final-pairing-recovery-review-fixes` retains Stage 4n source/test/report
+ownership. Bound every post-approval status transport and sleep so a hung call
+cannot outlive that stage's 15-second deadline; observe late rejection. Convert
+immediate connect/read-status transport rejection into fixed, secret-safe
+`gateway.connection` failures while preserving established categorized
+failures and approval precedence. Require a non-empty reference code before
+approval. Add deterministic hung post-status, late rejection, arbitrary
+transport text, empty-code, and deadline cleanup regressions. Mutate each guard
+and restore. Run focused tests, full test-runner suite, and package check. No
+extension/Core/shared-doc/Lab/active-root edits, commits, or pushes.
+
+## Lab Stage 4p - targeted pairing recovery acceptance
+
+**Candidate pins:** the supervisor's committed downstream Stage 4n/4o pin and
+Core `19468b72c4472fd5cc58940737702d5e4d72c985`. Read the Current State,
+`reports/i-final-pairing-load-timeouts.md`, and this brief only. Use new run
+roots, `FLUXIQ_TEST_ENV_FILES=none`, process-only auth, headed Chromium, and the
+established memory/leak guard. Never print credentials or raw page data. Each
+worker owns only its named worktree, run root, and report; no source, shared-doc,
+Core, commit, or push changes.
+
+### l-final-pairing-isolated
+
+Own `F:\fxlab\fxlab-09fd9c7-a`, new root
+`F:\fxlab-runs\final3\pairing-isolated`, and
+`reports/l-final-pairing-isolated.md`. Pin both repositories exactly and clean,
+build instance-local packages, then run once each of the five cells whose A2/B2
+pre-approval pairing failed: W27 primary Flow, W09 primary Flow, W10 primary
+Flow, W14 `recording` Flow, and W28 `recording` Flow. Require 5/5 to pass pairing
+without a pre-approval timeout; also inspect verdicts, start index, leaks,
+persistence, harness failures, action-bearing discards, memory, cleanup, and
+worktree pins. Stop immediately for a leak or deterministic non-pairing blocker.
+
+### l-final-pairing-concurrent-a / l-final-pairing-concurrent-b
+
+After isolated acceptance, own distinct existing A/B worktrees and new roots
+under `F:\fxlab-runs\final3\pairing-concurrent\a` and `...\b`. Run the same five
+cells for three total repetitions each while both instances remain active;
+partition cells between workers without sharing mutable files. Across the two
+reports require 15/15 pairings and disclose all verdict/start/leak/persistence/
+harness/action-discard/memory/cleanup results. A pairing failure rejects the
+matrix. Preserve bounded bundles; no aggregate claim or full-bench substitution.

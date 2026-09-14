@@ -13,7 +13,10 @@ type WaitOptions = {
   intervalMs?: number;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
+  setTimer?: (callback: () => void, delayMs: number) => Timer;
+  clearTimer?: (timer: Timer) => void;
 };
+type Timer = ReturnType<typeof setTimeout>;
 
 const PAIRING_STATUS_TIMEOUT_MS = 15_000;
 const PAIRING_STATUS_INTERVAL_MS = 100;
@@ -30,14 +33,20 @@ export async function awaitPairingStatus(
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>(resolve => { setTimeout(resolve, ms); }));
   const timeoutMs = options.timeoutMs ?? PAIRING_STATUS_TIMEOUT_MS;
   const intervalMs = options.intervalMs ?? PAIRING_STATUS_INTERVAL_MS;
+  const setTimer = options.setTimer ?? setTimeout;
+  const clearTimer = options.clearTimer ?? clearTimeout;
   const startedAt = now();
   const deadline = startedAt + timeoutMs;
   let lastStatus: Status | undefined;
-  while (now() < deadline) {
-    const candidate = await readStatus();
-    lastStatus = record(candidate);
-    if (lastStatus && predicate(lastStatus)) return lastStatus;
-    await sleep(intervalMs);
+  try {
+    while (now() < deadline) {
+      const candidate = await beforeDeadline(readStatus(), deadline, now, setTimer, clearTimer);
+      lastStatus = record(candidate);
+      if (lastStatus && predicate(lastStatus)) return lastStatus;
+      await beforeDeadline(sleep(intervalMs), deadline, now, setTimer, clearTimer);
+    }
+  } catch (error) {
+    if (!(error instanceof PairingStatusDeadlineExpired)) throw error;
   }
   throw new RunnerFailure("gateway.connection", `Timed out waiting for extension pairing state during ${stage}`, {
     details: {
@@ -47,6 +56,29 @@ export async function awaitPairingStatus(
       lastStatus: safeStatus(lastStatus, now()),
     },
   });
+}
+
+async function beforeDeadline<T>(
+  promise: Promise<T>,
+  deadline: number,
+  now: () => number,
+  setTimer: (callback: () => void, delayMs: number) => Timer,
+  clearTimer: (timer: Timer) => void,
+): Promise<T> {
+  void promise.catch(() => undefined);
+  const remaining = deadline - now();
+  if (remaining <= 0) throw new PairingStatusDeadlineExpired();
+  let timer: Timer | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimer(() => reject(new PairingStatusDeadlineExpired()), remaining);
+  });
+  try {
+    const value = await Promise.race([promise, timeout]);
+    if (now() >= deadline) throw new PairingStatusDeadlineExpired();
+    return value;
+  } finally {
+    if (timer !== undefined) clearTimer(timer);
+  }
 }
 
 /** Selects only the pairing wait's closed diagnostic projection for a run-bundle event. */
@@ -105,3 +137,5 @@ function finiteNumber(value: unknown): value is number {
 function finiteNonNegativeInteger(value: unknown): value is number {
   return finiteNumber(value) && Number.isInteger(value) && value >= 0;
 }
+
+class PairingStatusDeadlineExpired extends Error {}
