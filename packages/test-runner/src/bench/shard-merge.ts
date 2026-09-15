@@ -3,9 +3,16 @@ import { lstat, mkdir, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { parseRunEvaluationJson, type RunEvaluation } from "@fluxiq-web-extension/test-contracts";
 import { createDurableText } from "./durable-file.js";
-import { canonicalJson, type CampaignPlanCell } from "./campaign/identity.js";
-import { loadCampaignShardGroup, type CampaignShardGroup, type CampaignShardProjectionDigest } from "./campaign/shard-group-store.js";
-import { containedPath, loadCampaignCheckpointChain, type CompletedCampaignCell } from "./campaign/store.js";
+import {
+  canonicalJson,
+  containedPath,
+  loadCampaignCheckpointChain,
+  loadCampaignShardGroup,
+  type CampaignPlanCell,
+  type CampaignShardGroup,
+  type CampaignShardProjectionDigest,
+  type CompletedCampaignCell
+} from "./campaign/index.js";
 
 export type AuthenticatedShardMergeEvaluation = Readonly<{
   cell: CampaignPlanCell;
