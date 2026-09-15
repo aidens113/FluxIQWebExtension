@@ -4,11 +4,23 @@ import os from "node:os";
 import path from "node:path";
 import { createDurableJson } from "../../durable-file.js";
 import { defaultCampaignLeaseProcessProbe, type CampaignLeaseProcessProbe } from "../lease.js";
+import { createCachedOwnerLiveness, type CachedOwnerLiveness } from "./cached-owner-liveness.js";
+import { pidPresence, type PidPresence } from "./pid-presence.js";
 
 const SCHEMA_VERSION = "0.1" as const;
 const SAFE_ID = /^[A-Za-z0-9_-]{16,96}$/u;
 const CONTENTION_CODES = new Set(["EACCES", "EBUSY", "EEXIST", "ENOTEMPTY", "EPERM"]);
 const GIB = 1024 ** 3;
+// How long an owner whose PID is still present is trusted after its last full
+// identity probe, which starts powershell.exe on Windows and so cannot run on
+// every 100 ms poll. The interval bounds one rare case only: an owner that
+// crashed, and whose PID another process took before the next poll, keeps its
+// slot or queue position for at most this long. A crashed owner whose PID is
+// not reused is recovered on the next poll. Owners release in `finally`, so a
+// crash is already the exception, and one minute is small beside cells that
+// run for minutes and the 30-minute wait timeout, while it cuts steady-state
+// probing from every poll to one probe per owner per minute per waiter.
+const OWNER_REVERIFY_INTERVAL_MS = 60_000;
 
 export type MachineCellSlotOwner = Readonly<{
   schemaVersion: typeof SCHEMA_VERSION;
@@ -38,6 +50,10 @@ export type MachineCellSlotOptions = {
   now?: () => Date;
   randomId?: () => string;
   sleep?: (milliseconds: number) => Promise<void>;
+  /** Spawn-free check of whether any process holds a PID; defaults to signal 0. */
+  pidPresence?: (pid: number) => PidPresence;
+  /** Monotonic millisecond clock for owner re-verification; defaults to `performance.now()`. */
+  monotonicNowMs?: () => number;
 };
 
 /** Acquires one FIFO, machine-wide isolated-cell slot from a filesystem pool. */
@@ -63,6 +79,16 @@ export async function acquireMachineCellSlot(rootDirectory: string, options: Mac
     processIdentitySha256: digest(processIdentity),
     requestedAt: requested.toISOString(),
   });
+  // Every poll still reads every owner and still runs stale recovery; only the
+  // cost of deciding liveness changes. See OWNER_REVERIFY_INTERVAL_MS.
+  const liveness = createCachedOwnerLiveness({
+    verify: candidate => ownerIsLive(candidate, probe, bootIdentity),
+    presence: options.pidPresence ?? (candidatePid => pidPresence(candidatePid)),
+    monotonicNowMs: options.monotonicNowMs ?? (() => performance.now()),
+    reverifyIntervalMs: OWNER_REVERIFY_INTERVAL_MS,
+  });
+  // This ticket's identity was probed just above, so its first poll need not repeat that.
+  liveness.markVerified(owner);
 
   const ticketsDirectory = inside(root, "tickets");
   const slotsDirectory = inside(root, "slots");
@@ -81,7 +107,7 @@ export async function acquireMachineCellSlot(rootDirectory: string, options: Mac
     const sleep = options.sleep ?? (milliseconds => new Promise<void>(resolve => setTimeout(resolve, milliseconds)));
     const deadline = Date.now() + configuration.waitTimeoutMs;
     for (;;) {
-      await recoverStaleEntries(ticketsDirectory, slotsDirectory, historyDirectory, configuration.capacity, probe, bootIdentity);
+      await recoverStaleEntries(ticketsDirectory, slotsDirectory, historyDirectory, configuration.capacity, liveness);
       const active = await readSlots(slotsDirectory, configuration.capacity);
       const tickets = await readOwners(ticketsDirectory, "ticket");
       const ordered = tickets.sort(compareOwners);
@@ -195,10 +221,11 @@ async function readStableOwner(ownerDirectory: string): Promise<MachineCellSlotO
   }
 }
 
-async function recoverStaleEntries(ticketsDirectory: string, slotsDirectory: string, historyDirectory: string, capacity: number, probe: CampaignLeaseProcessProbe, bootIdentity: string): Promise<void> {
+async function recoverStaleEntries(ticketsDirectory: string, slotsDirectory: string, historyDirectory: string, capacity: number, liveness: CachedOwnerLiveness): Promise<void> {
   const entries = [...await readOwners(ticketsDirectory, "ticket"), ...await readSlots(slotsDirectory, capacity)];
   for (const entry of entries) {
-    if (await ownerIsLive(entry.owner, probe, bootIdentity)) continue;
+    // Only the full identity probe inside `liveness` can report an owner not live.
+    if (await liveness.isLive(entry.owner)) continue;
     const kind = path.basename(entry.directory).startsWith("slot-") ? "slot" : "ticket";
     const archived = inside(historyDirectory, `${kind}-${entry.owner.ticketId}`);
     try {
@@ -209,7 +236,7 @@ async function recoverStaleEntries(ticketsDirectory: string, slotsDirectory: str
   }
 }
 
-async function ownerIsLive(owner: MachineCellSlotOwner, probe: CampaignLeaseProcessProbe, bootIdentity: string): Promise<boolean> {
+async function ownerIsLive(owner: Pick<MachineCellSlotOwner, "pid" | "bootIdentitySha256" | "processIdentitySha256">, probe: CampaignLeaseProcessProbe, bootIdentity: string): Promise<boolean> {
   if (owner.bootIdentitySha256 !== digest(bootIdentity)) return false;
   const processIdentity = await probe.processIdentity(owner.pid);
   return processIdentity !== null && owner.processIdentitySha256 === digest(processIdentity);
