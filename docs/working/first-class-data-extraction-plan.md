@@ -1,7 +1,7 @@
 # First-Class Data Extraction Plan
 
 Status: Active
-Status detail: Plan complete 2026-09-15 from four investigations; execution starts with phases X0 and X1 at the start of Week 2, and Core's design lives in the paired document.
+Status detail: Plan firming 2026-09-15; X0 and X1 are executable from x0-x1-execution, Core's K0 and K11 are decided in the paired document, and Core's K1-K10 detail is pending; execution starts with X0, X1, K0, and K1.
 Created: 2026-09-15
 Last updated: 2026-09-15
 Owner: Senior supervisor agent
@@ -13,7 +13,7 @@ Related: [30-Day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 
 ## Current State
 
-**Phase, as of 2026-09-15: plan complete; no code changed.** The user decided
+**Phase, as of 2026-09-15: plan firming for execution; no code changed.** The user decided
 that structured data extraction is a fundamental FluxIQ capability, Core
 included, and asked for the plan quickly using subagents. Four read-only
 investigations produced it: `ex-a-extension-domain`, `ex-c-plans-docs` and
@@ -37,9 +37,11 @@ user overrides them.
   claims have never been checked, and no evaluation or bench field measures it.
 
 **Defects found (not fixed), in priority order:**
-1. **Security:** `web.dom.extract` returns a sensitive control's live `.value`
-   (`extract.ts:10`); `extracted` has no sensitivity guard on the wire or in
-   recordings.
+1. **Security:** `web.dom.extract` returns a sensitive control's live `.value`,
+   its `value` attribute, and its HTML (`content/action-runtime/extract.ts:6-12`),
+   and a list field `input@value` does the same (`list-extraction.ts:141`);
+   neither the wire payload, the Core-side adapter, nor the recording reducer
+   re-checks `extracted` (`x0-x1-execution` Part 1).
 2. A list matching zero items passes, so a sign-in wall yields success with `[]`.
 3. Virtualised lists under-read silently, 15 of 240 (open question E55).
 4. Core trace withholding corrupts extracted strings that contain a run input.
@@ -49,13 +51,14 @@ user overrides them.
 **Done:** all four investigations; this plan and Core's design (paired
 document); Phase 2.0 in the MVP plan; the Week 1 plan closed and pointed here;
 agent instructions, Priority 4, and open questions E2, E53, and E55 updated;
-excluded dataset columns decided (D12); Encrypt column designed for Week 3 (D13).
+excluded dataset columns decided (D12); Encrypt column designed for Week 3 (D13);
+X0 and X1 execution detail (`x0-x1-execution`, D14); Core's K0 and K11 designs.
 
 **Not done:** every phase below.
 
 **Next steps:**
-1. Firm up Core's share from three investigations (Secret Keys derivation fix,
-   encrypted fields, dataset execution detail), recorded in the paired document.
+1. Merge Core's `k-datasets-execution` (K1-K10 detail) into the paired
+   document; Core's K0 and K11 designs are merged.
 2. Run X0 (security and correctness) and X1 (contracts) with Core K0 (Secret
    Keys derivation) and K1 (record-set contracts), partitioned by file, beside
    Phases 2.1-2.3.
@@ -93,15 +96,24 @@ extraction until it is a real, measured Flow capability.
 - **D1. Sequencing:** X0-X2 run beside Phases 2.1-2.3; recordable extraction
   (X4) lands before Phase 2.4; X6 runs with Phases 2.6-2.9; the Phase 3.7 UX
   builds on it in Week 3. X0-X4 are timeboxed to about the first half of Week 2.
-- **D2. Sensitive controls:** extraction refuses a sensitive control's value with
-  `blocked_by_capability_or_policy`, matching every other reader.
+- **D2. Sensitive controls:** extraction refuses every read of a sensitive
+  control, in every mode (live value, attribute, HTML, and list fields), with
+  `web.action.rejected` / `blocked_by_capability_or_policy`, matching every
+  other reader. A text read of a container skips the contents of sensitive
+  controls inside it (a sensitive `<textarea>`'s text, a sensitive `<select>`'s
+  option labels). The wire payload, the Core-side adapter, and the recording
+  reducer each drop `extracted` again for a sensitive element.
 - **D3. Recordings carry no extracted sample values** by default; previews come
   from Core's dataset store once it exists.
 - **D4. Empty lists:** `minItems` defaults to 1; a workflow where empty is valid
   (W06 `no-results`) declares `minItems: 0`. Otherwise zero items fail as
-  `output_not_observed`.
-- **D5. Pagination leaves the page on the last page read**, so the W05 and W07
-  final-state oracles stay valid.
+  `output_not_observed`, or as `auth_required` when the page is a sign-in gate.
+  The test-contracts validator requires `minItems: 0` wherever a workflow
+  expects zero records.
+- **D5. A successful paginated read leaves the page on the last page read**, so
+  the W05 and W07 final-state oracles stay valid. A read that times out reports
+  `timed_out` with the records and page count it read, and makes no promise
+  about which page is showing.
 - **D6. Measurement is counts-only.** No page value or page field name enters an
   evaluation, bench report, or bundle snapshot.
 - **D7. New baseline:** the week1 corpus grows from 63 to 67 runnable results and
@@ -132,22 +144,41 @@ extraction until it is a real, measured Flow capability.
   fields stays with E53 in the Week 1 open questions.
 - **D13. Encrypt column, built in Week 3:** a third column option beside
   include and exclude, reserved in the X1 contracts and built with Phase 3.7's
-  field editor. A run seals each value with the project's public key, so
-  unattended runs never need the user's password. Viewing, exporting, or using
-  the values in a later run needs the private key, which is sealed with the
-  user's FluxIQ account password in the pattern of Core's Secret Keys program
-  and never stored in the project folder. The table shows a masked cell with
-  Reveal, which asks for the password again; CSV/JSON export leaves the column
-  out unless the user confirms the password and chooses to include it in clear.
-  Lookup attacks are closed by design: each value gets a fresh random key and
-  IV, so identical values never look alike; no hash or deterministic token of an
-  encrypted value is stored, so encrypted columns cannot be sorted,
-  de-duplicated, or used as a key; and the password-sealed private key uses a
-  random salt and scrypt at no less than OWASP's minimum (N=2^17, r=8, p=1),
-  with its parameters stored beside it so they can be raised. What remains is
-  offline guessing of a weak account password by someone holding the files, and
-  a forgotten password loses the values. It protects copied project folders,
-  backups, and shared projects, not a logged-in, unlocked session.
+  field editor; Core's design is its phase K11. The extension sends values as
+  it does for include, and Core locks each value with the project's public key
+  before it reaches any output, log, or saved file, so unattended runs never
+  need a password. Every unlock asks for the account password at that moment
+  and nothing stays unlocked for the login session: Reveal shows a value for 30
+  seconds; CSV/JSON export leaves the column out unless the user confirms the
+  password and chooses to include it in clear; a later run that uses the values
+  needs a short-lived, password-confirmed grant, so an unattended run that needs
+  them fails before it touches the browser. The project's private key is locked
+  separately for each account allowed to read it and kept outside the project
+  folder. Lookup attacks are closed by design: each value gets a fresh random
+  key and IV and a padded length, so identical values never look alike; no hash
+  or deterministic token of an encrypted value is stored, so encrypted columns
+  cannot be sorted, de-duplicated, or used as a key; account keys are locked
+  with a random salt and scrypt at no less than OWASP's minimum (N=2^17, r=8,
+  p=1), with the parameters stored beside them. What remains is offline guessing
+  of a weak account password by someone holding both the project and the key
+  store; a forgotten password, or a project restored without its key store,
+  loses the values. It protects copied project folders, backups, and shared
+  projects, not a live, logged-in session.
+- **D14. Contract details settled by `x0-x1-execution`:**
+  - the pagination discriminator is `mode` (`next` when absent, `loadMore`,
+    `scroll`, `numbered`) in the domain and test-contracts alike;
+  - the request gains no `timeoutMs`: the command's existing `timeoutMs` is
+    honoured by the page, the `extract_list` node declares a `timeoutMs`
+    parameter, and a recorded node scales it by `maxPages`, since Core's
+    5,000 ms default would otherwise cut paginated reads short;
+  - `WEB_AUTOMATION_EXTRACT_MAX_ITEMS` is 1,000, mirrored by the page with an
+    agreement test until X3 imports it;
+  - a `handling: encrypt` field is refused at dispatch with
+    `web.action.not_implemented` until K11, and a spec-form field or non-`next`
+    pagination is refused by the page until X3;
+  - `recordableActionTypes`, evaluation schema 0.3, and the bench report change
+    in X5, not X1, so W04 and W08 do not reach the Flow lane before an extract
+    node exists.
 
 ## Design
 
@@ -162,9 +193,9 @@ extraction until it is a real, measured Flow capability.
     follows D13 and is refused until built;
   - `itemElement` fingerprint for repair; `minItems` (D4); a hard
     `WEB_AUTOMATION_EXTRACT_MAX_ITEMS`;
-  - `paginate` becomes a union of `next` (today's shape), `loadMore`, `scroll`,
-    and `numbered`, de-duplicating append modes by element identity;
-  - `timeoutMs` honoured by the page.
+  - `paginate` becomes a union on `mode` of `next` (today's shape), `loadMore`,
+    `scroll`, and `numbered`, de-duplicating append modes by element identity;
+  - the command's `timeoutMs` honoured by the page (D14).
 - **C2 result summary:** keep `extracted: records[]`; add a closed
   `extraction: { recordCount, pagesRead, truncated, missingFields, fieldNames }`;
   move dialog evidence off `extracted`. The domain output definition declares
@@ -221,7 +252,7 @@ panel beside Runtime Debug's Export Audit.
 | Phase | Work | Owner area | Depends on |
 | --- | --- | --- | --- |
 | X0 | Security and correctness: refuse sensitive `.value` (D2); fail empty lists (D4); de-duplicate append pagination; item cap; honour `timeoutMs`; the Lab reader's silent drop; Core K0 raises Secret Keys' password-derivation cost and re-seals older keys | extension, domain, test-runner, Core | none |
-| X1 | Contracts: C1, C2 (domain); Core K1 record-set contracts; test-contracts additions | domain, Core, test-contracts | none |
+| X1 | Contracts: C1, C2 (domain); Core K1 record-set contracts; test-contracts additions (steps X1.1-X1.5 in `reports/x0-x1-execution.md`) | domain, Core, test-contracts | none |
 | X2 | Core datasets K2-K6 and K8-K9: store, capture, record-batch persistence, run detail, iteration, endpoints and export route, datasets panel | Core | X1 |
 | X3 | Extraction engine: structured field specs and pagination modes, inference C4, repair hooks (needs the collection-target contract) | extension, domain | X1 |
 | X4 | Recordable extraction: picker and side-panel entry, recorded event and mapping C3, Core K7 mapper `recordOutput` lift | extension, domain, Core | X2, X3 |
@@ -250,6 +281,34 @@ all-pages choice on X2-X4, plus Encrypt column (D13) with its Core share (Core K
 ## Execution partition
 
 Workers own disjoint files; a file two phases need is serial.
+
+**X0 and X1** follow `reports/x0-x1-execution.md` Parts 2-4, which name every
+file, test case, acceptance command, and mutation target, amended by D2's
+container-text rule and D14:
+- W1 extension page: `content/action-runtime/{extract,list-extraction,results,index}.ts`,
+  `content/actions/{extract,extract-list,types,dialog}.ts`, their tests, and
+  `e2e/content/tests/{actions,extract-list,upload-dialog}.spec.ts`.
+- W2 domain contracts: `domain/src/actions/{types,schemas}.ts` and
+  `actions/extraction/**` (new), `client/gateway-action-parameters.ts`,
+  `client/gateway-mapping.ts`, and their tests.
+- W3 domain readers: `runtime/adapter.ts`, `recording/reducers.ts`, later
+  `output-nodes/definitions.ts`, and their tests.
+- W4 Lab reader: `packages/test-runner/src/flow-lane/{persisted-flow-run,expectations,run-flow-lane}.ts`
+  and the four flow-lane and evaluation test files.
+- W5 test-contracts: `packages/test-contracts/src/{scenario,validation}.ts` and
+  `tests/scenario-validation.test.mjs`.
+- W6 corpus follow-up: product-catalog manifest and its test,
+  `scenario-steps/extract-records.ts`, `run-expectations/extraction.ts`.
+- W7 docs: `sensitive-values.md`, `web-capabilities.md`, `extension-client.md`,
+  `testing-facility.md`.
+
+Order: W2-A, W3-A, W4, and W5 in parallel; W1-A after W2-A; W2-B after W1-A and
+W2-A; W1-B and W3-B after W2-B (W3-B also after Core K1 names the records path);
+W6 after W4 and W5; W7 last; then root `pnpm check`, `pnpm test`, `pnpm build`,
+one at a time. `content/actions/` gains no source file (the `extract-*` prefix
+rule).
+
+**Later phases:**
 - Extension X0/X3: `apps/extension/src/content/action-runtime/**`,
   `content/actions/extract*.ts`, `content/extraction/**` (new).
 - Extension X4 UI: `content/picker/**` (new), `background/extraction/**` (new),
@@ -369,6 +428,19 @@ evidence throughout.
 
 ## Work Ledger
 
+### 2026-09-15 — X0 and X1 made executable; Core K0 and K11 designs merged
+- Agent: supervisor; workers `x0-x1-execution` here, `k0-secret-keys-kdf` and
+  `k11-encrypted-fields` in the paired document
+- Changed: this document (Status detail, Current State, defect 1, D2, D4, D5,
+  D13, D14, C1, X1 row, execution partition, open questions)
+- Why: the reports corrected the leak's width, settled contract details, and
+  gave file-level steps; their recommendations became decisions under the
+  user's standing instruction, and the container-text gap was taken into D2
+  rather than parked
+- Validation: not validated; planning documents only, no code changed
+- Outcome: Accepted
+- Follow-up: merge Core's `k-datasets-execution`; start X0, X1, K0, and K1
+
 ### 2026-09-15 — Firming the plan for execution; investigations dispatched
 - Agent: supervisor; workers `x0-x1-execution` here, and `k0-secret-keys-kdf`,
   `k11-encrypted-fields`, `k-datasets-execution` in the paired document
@@ -468,3 +540,8 @@ evidence throughout.
 - Core's own questions (dataset-row withholding, output-reference withholding,
   side-effect class for read-only extraction, default `recordsPath`) are owned by
   the paired document.
+- **Core parameter-schema unions.** Whether Core's node parameter-schema dialect
+  accepts `oneOf`, needed to state C1's field and pagination unions in the
+  domain schema. Until answered, `fields` stays `type: "object"` and the gateway
+  lift enforces the union (X1.4). Owner: senior supervisor agent, answered in
+  Core K1.
