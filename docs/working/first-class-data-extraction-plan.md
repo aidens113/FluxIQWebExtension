@@ -49,7 +49,7 @@ user overrides them.
 **Done:** all four investigations; this plan and Core's design (paired
 document); Phase 2.0 in the MVP plan; the Week 1 plan closed and pointed here;
 agent instructions, Priority 4, and open questions E2, E53, and E55 updated;
-excluded dataset columns decided (D12).
+excluded dataset columns decided (D12); Encrypt column designed for Week 3 (D13).
 
 **Not done:** every phase below.
 
@@ -127,6 +127,17 @@ extraction until it is a real, measured Flow capability.
   element read, or its control, carries the sensitivity signature or
   `data-sensitive`; the user can change it. Recorder capture of unmarked form
   fields stays with E53 in the Week 1 open questions.
+- **D13. Encrypt column, built in Week 3:** a third column option beside
+  include and exclude, reserved in the X1 contracts and built with Phase 3.7's
+  field editor. A run seals each value with the project's public key, so
+  unattended runs never need the user's password. Viewing, exporting, or using
+  the values in a later run needs the private key, which is sealed with the
+  user's FluxIQ account password in the pattern of Core's Secret Keys program
+  and never stored in the project folder. The table shows a masked cell with
+  Reveal, which asks for the password again; CSV/JSON export leaves the column
+  out unless the user confirms the password and chooses to include it in clear.
+  A forgotten password loses the values. It protects copied project folders,
+  backups, and shared projects, not a logged-in, unlocked session.
 
 ## Design
 
@@ -136,8 +147,9 @@ extraction until it is a real, measured Flow capability.
   `schemas.ts`, `client/gateway-action-parameters.ts`):
   - a field value is the existing string grammar or a spec
     `{ kind: text|attribute|link|value|column, selector?, attribute?, header?,
-    required?, excluded?, element? }`, where `link` resolves against the
-    document base and `excluded` follows D12;
+    required?, handling?: include|exclude|encrypt, element? }`, where `link`
+    resolves against the document base, `exclude` follows D12, and `encrypt`
+    follows D13 and is refused until built;
   - `itemElement` fingerprint for repair; `minItems` (D4); a hard
     `WEB_AUTOMATION_EXTRACT_MAX_ITEMS`;
   - `paginate` becomes a union of `next` (today's shape), `loadMore`, `scroll`,
@@ -207,7 +219,7 @@ panel beside Runtime Debug's Export Audit.
 | X6 | Loop integration with Phases 2.4-2.9: extraction drift variants (W04 `text-variant`, W08 `column-reorder`, a new item-selector drift) through adaptation; E2 decided with extract targets in view; Phase 2.9's reuse proof includes an extraction workflow; minimal exported-data review (MVP 4.4, E53); cost measured on `member-directory` (E57, E58) | all | X4, X5 |
 
 Week 3's Phase 3.7 then builds the Simple Mode entry, field editing, and the
-all-pages choice on X2-X4.
+all-pages choice on X2-X4, plus Encrypt column (D13) with its Core share.
 
 ## Validation
 
@@ -321,6 +333,18 @@ evidence throughout.
 - Report to: docs/working/first-class-data-extraction-plan/reports/ex-d-test-facility.md
 
 ## Work Ledger
+
+### 2026-09-15 — Encrypt column designed (D13)
+- Agent: supervisor
+- Changed: this document (D13, C1 `handling`, Week 3 note, Current State); the
+  Core pair (record schema `handling`, open question 5)
+- Why: the user asked whether an encrypted column would be practical and
+  secure; Core's Secret Keys program and project-content protection
+  (`F:\!FluxIQ\docs\architecture\automation-studio\persistence.md:180-198`)
+  show it is, provided the key stays outside the project
+- Validation: not validated; planning documents only, no code changed
+- Outcome: Accepted
+- Follow-up: X1 and K1 reserve `encrypt`; Phase 3.7 builds it
 
 ### 2026-09-15 — D12 revised: Exclude column instead of a withheld marker
 - Agent: supervisor
