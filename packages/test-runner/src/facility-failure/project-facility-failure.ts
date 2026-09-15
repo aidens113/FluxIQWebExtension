@@ -6,10 +6,10 @@ import {
   type FacilityFailureOperationStage,
   type FacilityFailureStage,
 } from "@fluxiq-web-extension/test-contracts";
-import { finalizedRecordingWaitFailureDetails } from "../flow-lane/finalized-recording.js";
+import { finalizedRecordingWaitFailureDetails } from "../flow-lane/index.js";
 import { boundedRunnerCause, RunnerFailure } from "../failure.js";
 import { httpTransportFailureDetails, topologyReadinessFailureDetails } from "../http-control/index.js";
-import { pairingStatusWaitFailureDetails } from "../run-lifecycle/pairing-status-wait.js";
+import { pairingStatusWaitFailureDetails } from "../run-lifecycle/index.js";
 import { ProjectedFacilityError } from "./projected-facility-error.js";
 
 const CAUSE_CODES = new Set<string>(facilityFailureCauseCodes);

@@ -6,10 +6,22 @@ import path from "node:path";
 import test from "node:test";
 import type { RunEvaluation } from "@fluxiq-web-extension/test-contracts";
 import type { BenchPlanEntry } from "../expand-corpus.js";
-import { BENCH_SEMANTICS_VERSION, CAMPAIGN_SCHEMA_VERSION, campaignPlanSha256, createCampaignPlan, sha256Canonical, type CampaignCompatibility, type CampaignPlanCell } from "../campaign/identity.js";
-import { createCampaignShardGroup, type CampaignShardGroup } from "../campaign/shard-group-store.js";
-import { writeCampaignCheckpoint, type CampaignCheckpoint, type CampaignManifest, type CompletedCampaignCell } from "../campaign/store.js";
-import { CAMPAIGN_SHARD_ALGORITHM } from "../campaign/shard-plan.js";
+import {
+  BENCH_SEMANTICS_VERSION,
+  CAMPAIGN_SCHEMA_VERSION,
+  CAMPAIGN_SHARD_ALGORITHM,
+  campaignPlanSha256,
+  createCampaignPlan,
+  createCampaignShardGroup,
+  sha256Canonical,
+  writeCampaignCheckpoint,
+  type CampaignCheckpoint,
+  type CampaignCompatibility,
+  type CampaignManifest,
+  type CampaignPlanCell,
+  type CampaignShardGroup,
+  type CompletedCampaignCell
+} from "../campaign/index.js";
 import { prepareAuthenticatedShardMerge } from "../shard-merge.js";
 
 const compatibility: CampaignCompatibility = {
