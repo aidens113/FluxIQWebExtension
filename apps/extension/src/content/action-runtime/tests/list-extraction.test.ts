@@ -1,4 +1,4 @@
-// T1 coverage of list extraction's field grammar and its page bound.
+// T1 coverage of list extraction's field grammar and its page and item bounds.
 //
 // `parseExtractField` is the half of the capability that needs no DOM, so it
 // can run here; reading the fields from a live page, following pagination, and
@@ -7,8 +7,8 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { WEB_AUTOMATION_EXTRACT_MAX_PAGES } from "@fluxiq-web-extension/domain/client";
-import { EXTRACT_MAX_PAGES, parseExtractField } from "../list-extraction";
+import { WEB_AUTOMATION_EXTRACT_MAX_ITEMS, WEB_AUTOMATION_EXTRACT_MAX_PAGES } from "@fluxiq-web-extension/domain/client";
+import { EXTRACT_MAX_ITEMS, EXTRACT_MAX_PAGES, parseExtractField } from "../list-extraction";
 
 test("a plain selector reads the element's text", () => {
   assert.deepEqual(parseExtractField('[data-testid="product-name"]'), { kind: "element", selector: '[data-testid="product-name"]' });
@@ -45,4 +45,8 @@ test("a column field with no header is rejected rather than matching every colum
 
 test("the page bound agrees with the domain's, which the content script cannot import", () => {
   assert.equal(EXTRACT_MAX_PAGES, WEB_AUTOMATION_EXTRACT_MAX_PAGES);
+});
+
+test("the item bound agrees with the domain's", () => {
+  assert.equal(EXTRACT_MAX_ITEMS, WEB_AUTOMATION_EXTRACT_MAX_ITEMS);
 });

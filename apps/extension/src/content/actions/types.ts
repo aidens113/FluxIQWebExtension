@@ -14,8 +14,10 @@ import type {
   AssertionTarget,
   CheckableStateOutcome,
   DialogControl,
+  ExtractedElementValue,
   FileInputOutcome,
   KeyboardCapability,
+  ListExtractionOptions,
   ListExtractionOutcome,
   ResolvedTarget,
   WaitConditionOutcome,
@@ -28,7 +30,6 @@ import type {
   DomElementDescriptor,
   DomSnapshot,
   JsonObject,
-  JsonValue,
   WebAutomationAssertRequest,
   WebAutomationDialogRequest,
   WebAutomationExtractListRequest,
@@ -49,7 +50,8 @@ export type ContentActionDependencies = {
    */
   resolveTarget(action: BrowserActionCommand): ResolvedTarget;
   describeElement(element: Element): DomElementDescriptor;
-  extractElement(element: Element, options?: JsonObject): JsonValue;
+  /** Reads a value off the target, or refuses to when the target is a sensitive control (D2). */
+  extractElement(element: Element, options?: JsonObject): ExtractedElementValue;
   scrollElementIntoView(element: Element): void;
   setElementValue(element: HTMLInputElement | HTMLTextAreaElement, value: string): void;
   dispatchInputEvents(element: Element): void;
@@ -60,8 +62,8 @@ export type ContentActionDependencies = {
   keyboard: KeyboardCapability;
   /** Sets a checkbox or radio to a state rather than toggling it. */
   setCheckedState(element: Element, checked: boolean): CheckableStateOutcome;
-  /** Reads a repeating structure into records, following pagination. */
-  extractList(request: WebAutomationExtractListRequest): Promise<ListExtractionOutcome>;
+  /** Reads a repeating structure into records, following pagination, within the command's `timeoutMs` when it names one. */
+  extractList(request: WebAutomationExtractListRequest, options?: ListExtractionOptions): Promise<ListExtractionOutcome>;
   /** Puts files into a file input through a `DataTransfer`. */
   setInputFiles(element: Element, files: readonly WebAutomationUploadFile[]): FileInputOutcome;
   /** Arms the answer to the next native dialog, and reports the one that was handled. */

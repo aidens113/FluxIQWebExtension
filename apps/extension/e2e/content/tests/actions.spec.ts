@@ -203,6 +203,92 @@ test("extract: text by default, one attribute, or a field's value", async ({ ope
     .toMatchObject({ status: "succeeded", extracted: "Ada" });
 });
 
+/** The sensitive-input fixture's own pre-filled secrets: the password, the card, and the multi-token billing card. */
+const FIXTURE_SECRETS = ["SYNTHETIC_PASSWORD_DO_NOT_USE", "4111111111111111", "4222222222222220"];
+const SENSITIVE_FORM = '[data-testid="sensitive-form"]';
+/** Written into sensitive controls by `addContentBearingControls`; no reply may carry either. */
+const INJECTED_SECRETS = ["SYNTHETIC_RECOVERY_NOTE", "SYNTHETIC_ANSWER_LABEL", "SYNTHETIC_ANSWER_VALUE"];
+
+/** Every way `web.dom.extract` reads: text or a live value by default, one attribute, and inner HTML. */
+const EXTRACT_MODES = [undefined, { mode: "attribute", attribute: "value" }, { mode: "html" }] as const;
+
+/** Adds a sensitive textarea and a sensitive select, whose secrets are contents rather than values, and an ordinary select beside them. */
+async function addContentBearingControls(page: Page): Promise<void> {
+  await page.evaluate((formSelector) => {
+    const form = document.querySelector(formSelector);
+    if (!form) throw new Error(`${formSelector} is missing`);
+    form.insertAdjacentHTML(
+      "beforeend",
+      ' <label>Recovery note <textarea data-testid="recovery-note" data-sensitive="true">SYNTHETIC_RECOVERY_NOTE</textarea></label>' +
+        '<label>Security answer <select data-testid="security-answer" data-sensitive="true"><option value="SYNTHETIC_ANSWER_VALUE">SYNTHETIC_ANSWER_LABEL</option></select></label>' +
+        '<label>Contact time <select data-testid="contact-time"><option value="mornings">Mornings</option></select></label>'
+    );
+  }, SENSITIVE_FORM);
+}
+
+test("extract: a sensitive control is refused in every mode", async ({ openHarness }) => {
+  const harness = await openHarness("sensitive-input");
+  for (const selector of ['[data-testid="password"]', '[data-testid="payment"]', '[data-testid="billing"]']) {
+    for (const options of EXTRACT_MODES) {
+      const label = `${selector} read ${options ? JSON.stringify(options) : "by default"}`;
+      const reply = await harness.runAction({ commandId: "extract-sensitive", actionType: "web.dom.extract", selector, ...(options ? { options } : {}) });
+      expect(reply, label).toMatchObject({
+        status: "failed",
+        failure: { code: "web.action.rejected", category: "blocked_by_capability_or_policy" }
+      });
+      expect(reply, label).not.toHaveProperty("extracted");
+      const wire = JSON.stringify(reply);
+      for (const secret of FIXTURE_SECRETS) expect(wire, label).not.toContain(secret);
+    }
+  }
+  // The rule is targeted: the fixture's ordinary email field is still read.
+  expect(await harness.runAction({ commandId: "extract-username", actionType: "web.dom.extract", selector: 'input[name="username"]' }))
+    .toMatchObject({ status: "succeeded", extracted: "synthetic-user@example.test" });
+});
+
+test("extract: a text read of a container skips the contents of sensitive controls inside it", async ({ openHarness, page }) => {
+  const harness = await openHarness("sensitive-input");
+  await addContentBearingControls(page);
+  const reply = await harness.runAction({ commandId: "extract-form-text", actionType: "web.dom.extract", selector: SENSITIVE_FORM });
+  expect(reply).toMatchObject({ status: "succeeded", validation: { status: "none", reason: "evidence-only" } });
+  // Every label and the ordinary select's option are read; the sensitive
+  // textarea's text and the sensitive select's option label are not.
+  expect(reply.extracted).toBe("Email Password Test card Billing card Submit synthetic values Recovery note Security answer Contact time Mornings");
+  const wire = JSON.stringify(reply);
+  for (const secret of FIXTURE_SECRETS) expect(wire).not.toContain(secret);
+  // The injected contents are scanned in the read, not the whole reply: the
+  // reply's page snapshot still quotes a sensitive textarea's text and a
+  // sensitive select's option labels through the descriptor's `text`,
+  // `visibleText` and `accessibleName` -- a defect outside extraction,
+  // reported by x0-page.
+  for (const secret of INJECTED_SECRETS) expect(JSON.stringify(reply.extracted)).not.toContain(secret);
+});
+
+test("extract: an HTML read of a container removes sensitive descendants' value attributes and contents", async ({ openHarness, page }) => {
+  const harness = await openHarness("sensitive-input");
+  await addContentBearingControls(page);
+  const reply = await harness.runAction({ commandId: "extract-form-html", actionType: "web.dom.extract", selector: SENSITIVE_FORM, options: { mode: "html" } });
+  expect(reply).toMatchObject({ status: "succeeded", validation: { status: "none", reason: "evidence-only" } });
+  const html = String(reply.extracted);
+  // The sensitive controls are still in the markup, emptied of what they hold.
+  expect(html).toContain('<input name="password" data-testid="password" type="password">');
+  expect(html).toContain('<input name="payment" data-testid="payment" autocomplete="cc-number" inputmode="numeric">');
+  expect(html).toContain('<input name="billing" data-testid="billing" autocomplete="billing cc-number" inputmode="numeric">');
+  expect(html).toContain('<textarea data-testid="recovery-note" data-sensitive="true"></textarea>');
+  expect(html).toContain('<select data-testid="security-answer" data-sensitive="true"></select>');
+  // Ordinary controls keep their values and contents.
+  expect(html).toContain('value="synthetic-user@example.test"');
+  expect(html).toContain('<option value="mornings">Mornings</option>');
+  const wire = JSON.stringify(reply);
+  for (const secret of FIXTURE_SECRETS) expect(wire).not.toContain(secret);
+  // The injected contents are scanned in the read, not the whole reply: the
+  // reply's page snapshot still quotes a sensitive textarea's text and a
+  // sensitive select's option labels through the descriptor's `text`,
+  // `visibleText` and `accessibleName` -- a defect outside extraction,
+  // reported by x0-page.
+  for (const secret of INJECTED_SECRETS) expect(JSON.stringify(reply.extracted)).not.toContain(secret);
+});
+
 test("navigate: not a content-script action; the content script rejects it", async ({ openHarness, page }) => {
   const harness = await openHarness("basic-form");
   const reply = await harness.runAction({ commandId: "navigate", actionType: "web.browser.navigate", url: "http://127.0.0.1/" });

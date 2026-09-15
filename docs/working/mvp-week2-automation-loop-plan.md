@@ -28,8 +28,8 @@ and `w2-scope-repair-reuse` (Phases 2.5-2.9).
 **Next steps:**
 1. Write the phased plan from both reports, separating Core-owned work and
    creating a Core paired document if the scoping finds any.
-2. Start the first loop phases beside the running extraction work, within this
-   machine's limit of four code workers at once.
+2. Stop for the user's review before any loop phase is built: on 2026-09-15 the
+   user asked for the rest of Week 2 to be planned now and reviewed together.
 
 **Blockers:** none.
 

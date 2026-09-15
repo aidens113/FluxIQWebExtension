@@ -26,8 +26,9 @@
 //
 // Two codes are decided from the page rather than from the verb, and both sit
 // here because this is the single point every result passes through.
-// `authGateFailure` reports AUTH_REQUIRED when the target matched nothing, or a
-// URL claim did not hold, and what is on the page is a sign-in wall.
+// `authGateFailure` reports AUTH_REQUIRED when the target (or a list read's
+// item selector) matched nothing, or a URL claim did not hold, and what is on
+// the page is a sign-in wall.
 // `blockedByModal` reports USER_INTERVENTION_REQUIRED when a target was refused
 // as covered or inert and a modal dialog is standing over the page -- the
 // condition that code was named for, which nothing in the browser path produced
@@ -251,7 +252,10 @@ function unobservedOutputCode(action: BrowserActionCommand): WebAutomationFailur
  * thrown error leaves the orchestrator retrying a wall.
  *
  * "Not in this document" has two shapes: the element the action named matches
- * nothing, or a `web.dom.assert` URL claim did not hold. The second is W19's --
+ * nothing, or a `web.dom.assert` URL claim did not hold. For
+ * `web.dom.extract_list` the element named is the list's item selector, so an
+ * empty list read off a sign-in gate reports the gate rather than
+ * OUTPUT_NOT_OBSERVED (decision D4). The URL claim is W19's --
  * a replayed click's recorded landing is checked as a URL, and an expired
  * session leaves the browser on the gate instead. A URL claim that names no URL
  * is a malformed Flow, not a session, so it is left as it was, as is an action
@@ -276,13 +280,19 @@ function unobservedOutputCode(action: BrowserActionCommand): WebAutomationFailur
  * (nothing matches it) rules out, and a URL claim is never refused.
  */
 function authGateFailure(action: BrowserActionCommand, failure: FailureRecord): FailureRecord | undefined {
-  const missing = action.selector ? selectorMatchesNothing(action.selector) : false;
+  const sought = soughtSelector(action);
+  const missing = sought ? selectorMatchesNothing(sought) : false;
   if ((!missing && !namedUrlClaim(action)) || !signInGatePresent()) return undefined;
   const actual = missing ? failure.actual ?? "nothing matched the target" : "the page is not at the URL the Flow claimed";
   return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.AUTH_REQUIRED, {
-    expected: failure.expected ?? (missing ? `an element matching ${action.selector}` : "the page URL the Flow claimed"),
+    expected: failure.expected ?? (missing ? `an element matching ${sought}` : "the page URL the Flow claimed"),
     actual: `${actual}; the document is a sign-in gate, so the session has probably expired`
   });
+}
+
+/** The selector whose matching nothing means "not in this document": a list read's item selector, and every other action's target. */
+function soughtSelector(action: BrowserActionCommand): string | undefined {
+  return action.actionType === "web.dom.extract_list" ? action.extractList?.item : action.selector;
 }
 
 /** A `web.dom.assert` URL claim that names a URL; one that failed says the page is not where the Flow expected it. */

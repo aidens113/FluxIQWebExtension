@@ -1,7 +1,7 @@
 # First-Class Data Extraction Plan
 
 Status: Active
-Status detail: Plan firming 2026-09-15; X0 and X1 are executable from x0-x1-execution, Core's K0 and K11 are decided in the paired document, and Core's K1-K10 detail is pending; execution starts with X0, X1, K0, and K1.
+Status detail: Executing 2026-09-15; X0 domain, X1.5, and X0.7 have landed locally, and the rest of X0-X5 with Core's K0-K10 and K12 finishes before the user's plan review (D15).
 Created: 2026-09-15
 Last updated: 2026-09-15
 Owner: Senior supervisor agent
@@ -13,7 +13,8 @@ Related: [30-Day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 
 ## Current State
 
-**Phase, as of 2026-09-15: plan firming for execution; no code changed.** The user decided
+**Phase, as of 2026-09-15: executing; X0 domain guards, X1.5 scenario
+contracts, and X0.7 landed locally in `13b0a0d`.** The user decided
 that structured data extraction is a fundamental FluxIQ capability, Core
 included, and asked for the plan quickly using subagents. Four read-only
 investigations produced it: `ex-a-extension-domain`, `ex-c-plans-docs` and
@@ -57,13 +58,12 @@ X0 and X1 execution detail (`x0-x1-execution`, D14); Core's K0 and K11 designs.
 **Not done:** every phase below.
 
 **Next steps:**
-1. Merge Core's `k-datasets-execution` (K1-K10 detail) into the paired
-   document; Core's K0 and K11 designs are merged.
-2. Run X0 (security and correctness) and X1 (contracts) with Core K0 (Secret
-   Keys derivation) and K1 (record-set contracts), partitioned by file, beside
-   Phases 2.1-2.3.
-3. Settle Core's open questions 1-2 (dataset withholding, output references)
-   before Core phase K4 persists rows.
+1. Finish X0 (`x0-page`) and X1 (W2-B, W1-B, W3-B, X1.6); run root
+   `pnpm check`, `pnpm test`, and `pnpm build` one at a time; push.
+2. Detail X3-X5 (`x3-x5-execution`), then build them beside Core's K2-K10 and
+   K12 (paired document).
+3. Plan the rest of Week 2 in `mvp-week2-automation-loop-plan.md`, then stop
+   for the user's review (D15).
 
 **Blockers:** none. Sensitive data in saved and exported datasets (E53) is
 decided by D12: a column set to "Exclude column" is never read into the output,
@@ -182,6 +182,13 @@ extraction until it is a real, measured Flow capability.
     in X5, not X1, so W04 and W08 do not reach the Flow lane before an extract
     node exists.
 
+- **D15. Scope of this push (the user, 2026-09-15):** finish Week 2's
+  extraction foundation (X0-X5 here; K0-K10 and K12 in Core) and the security
+  fixes, plan the rest of Week 2, then stop for the user's review. K11 and
+  Phase 3.7 stay in Week 3. Repair hooks for extract nodes move from X3 to X6,
+  where the collection-target repair contract is decided with E2 beside loop
+  Phases 2.5-2.7.
+
 ## Design
 
 ### Web domain and extension contracts (owned here)
@@ -259,10 +266,10 @@ panel beside Runtime Debug's Export Audit.
 | X0 | Security and correctness: refuse sensitive `.value` (D2); fail empty lists (D4); de-duplicate append pagination; item cap; honour `timeoutMs`; the Lab reader's silent drop; Core K0 raises Secret Keys' password-derivation cost and re-seals older keys | extension, domain, test-runner, Core | none |
 | X1 | Contracts: C1, C2 (domain); Core K1 record-set contracts; test-contracts additions (steps X1.1-X1.5 in `reports/x0-x1-execution.md`) | domain, Core, test-contracts | none |
 | X2 | Core datasets K2-K6 and K8-K9: store, capture, record-batch persistence, run detail, iteration, endpoints and export route, datasets panel | Core | X1 |
-| X3 | Extraction engine: structured field specs and pagination modes, inference C4, repair hooks (needs the collection-target contract) | extension, domain | X1 |
-| X4 | Recordable extraction: picker and side-panel entry, recorded event and mapping C3, Core K7 mapper `recordOutput` lift | extension, domain, Core | X2, X3 |
+| X3 | Extraction engine: structured field specs and pagination modes, inference C4 (repair hooks moved to X6, D15) | extension, domain | X1 |
+| X4 | Recordable extraction: picker and side-panel entry, recorded event and mapping C3, Core K7 mapper `recordOutput` lift | extension, domain, Core | X2, X3, Core K12d (record-output editor) |
 | X5 | Lab measurement: extraction intent seam, `measureExtraction`, Flow-lane judging, bench metrics, fixtures (images, sparse fields, absolute links, numbered pages, load more, empty and large tables, frame extraction, sensitive text), W04/W08 Flow lanes | test-runner, test-contracts, scenario-lab | X1, X4 |
-| X6 | Loop integration with Phases 2.4-2.9: extraction drift variants (W04 `text-variant`, W08 `column-reorder`, a new item-selector drift) through adaptation; E2 decided with extract targets in view; Phase 2.9's reuse proof includes an extraction workflow; minimal exported-data review (MVP 4.4, E53); cost measured on `member-directory` (E57, E58) | all | X4, X5 |
+| X6 | Loop integration with Phases 2.4-2.9: extract-node repair hooks on the collection-target contract (with E2); extraction drift variants (W04 `text-variant`, W08 `column-reorder`, a new item-selector drift) through adaptation; E2 decided with extract targets in view; Phase 2.9's reuse proof includes an extraction workflow; minimal exported-data review (MVP 4.4, E53); cost measured on `member-directory` (E57, E58) | all | X4, X5 |
 
 Week 3's Phase 3.7 then builds the Simple Mode entry, field editing, and the
 all-pages choice on X2-X4, plus Encrypt column (D13) with its Core share (Core K11).
@@ -356,142 +363,8 @@ rule). W4 and W6 ran as one worker, `x01-test-runner`.
 
 ## Worker Briefs
 
-Recorded at dispatch on 2026-09-15; the full dispatched text asked for file:line
-evidence throughout.
-
-### Brief: ex-a-extension-domain
-- Repository: this repository
-- Task: document the current `web.dom.extract` and `web.dom.extract_list`
-  contracts, result transport and redaction, the recorder pipeline and where a
-  recorded extract event would plug in, `content/evidence/repeating.ts`, the
-  side-panel UI placement for an extraction entry and element picker, and
-  existing extraction tests; recommend the extension/domain design with files,
-  ordered steps, and tests.
-- Required reads: `domain/src`, `apps/extension/src`,
-  `docs/architecture/web-capabilities.md`, `docs/architecture/sensitive-values.md`
-- Owns (may edit): its report only
-- Must not touch: all source and documents
-- Definition of done: report answers every question with file:line
-- Report to: docs/working/first-class-data-extraction-plan/reports/ex-a-extension-domain.md
-
-### Brief: ex-b-core
-- Repository: FluxIQ Core
-- Task: document how node outputs persist per run, any existing dataset,
-  variable, or state concept, iteration and data-passing nodes, the recording
-  proposal pipeline for a domain-proposed extract node, import/export and
-  storage infrastructure, and web-panel surfaces and domain view contributions;
-  recommend the minimal generic Core design with files, steps, tests, and
-  compatibility impact.
-- Required reads: `packages/fluxiq/src`, `apps/web/src`, `docs/architecture`
-- Owns (may edit): its report only
-- Must not touch: all source and documents
-- Definition of done: report answers every question with file:line
-- Report to: `F:\!FluxIQ\docs\working\first-class-data-extraction-plan\reports\ex-b-core.md`
-
-### Brief: ex-c-plans-docs
-- Repository: this repository (plus Core's working-document index)
-- Task: inventory every existing statement about extraction and Week 2/3
-  sequencing, produce an exact edit list for existing documents, the protocol
-  requirements for this document and its Core pair, and a sequencing
-  recommendation.
-- Required reads: the MVP plan and agent instructions, `docs/working` indexes
-  and the Week 1, LLM, and testing-facility plans, open questions, the extraction
-  passages in architecture pages, the protocol
-- Owns (may edit): its report only
-- Must not touch: all documents
-- Definition of done: report lists statements, edits, protocol rules, sequence
-- Report to: docs/working/first-class-data-extraction-plan/reports/ex-c-plans-docs.md
-
-### Brief: ex-d-test-facility
-- Repository: this repository
-- Task: document what each extraction row judges on each lane today, the
-  contract changes needed so FluxIQ's own extraction is measured, fixture
-  coverage gaps, new metrics, and file-partitioned implementation steps with
-  tests and mutation targets.
-- Required reads: `packages/test-runner/src`, `packages/test-contracts/src`,
-  `apps/scenario-lab/src`, `docs/architecture/testing-facility.md`
-- Owns (may edit): its report only
-- Must not touch: all source and documents
-- Definition of done: report answers every question with file:line
-- Report to: docs/working/first-class-data-extraction-plan/reports/ex-d-test-facility.md
-
-### Brief: x0-x1-execution
-- Repository: this repository, read-only
-- Task: turn X0 and X1 into executable steps. Verify
-  `reports/ex-a-extension-domain.md`, `reports/ex-d-test-facility.md`, and this
-  document's Design (C1, C2) and decisions D2, D4, D12, D13 against code, then
-  give per step: files to create or change with the function or type touched
-  (file:line); test files (a `tests/` folder or the content e2e harness) with
-  cases; the acceptance command; mutation targets. X0: refuse a sensitive
-  control's value in `web.dom.extract` and on the `extracted` wire and
-  recording paths; `minItems` default 1 failing as `output_not_observed`, and
-  every scenario or test relying on an empty list passing (W06 `no-results`
-  declares `minItems: 0`); de-duplicated append pagination; an item cap;
-  honoured `timeoutMs`; the Lab Flow-run reader's silent drop of non-string
-  values. X1: C1 v2 (field specs with `handling: include|exclude|encrypt`,
-  `encrypt` refused until built; `itemElement`; the paginate union), C2, schemas
-  and gateway parameter mapping, and test-contracts additions, keeping today's
-  string field grammar valid. Give a worker partition: files each worker owns,
-  serial files, and order, within the structure audit budgets.
-- Required reads: `AGENTS.md`; this document; the two reports and the files
-  they name; `docs/architecture/sensitive-values.md`
-- Owns (may edit): its report only
-- Must not touch: all source and documents
-- Definition of done: X0 and X1 executable without rediscovery
-- Report to: docs/working/first-class-data-extraction-plan/reports/x0-x1-execution.md
-
-### Brief: x0-domain
-- Repository: this repository
-- Task: the domain share of X0, combining workers W2-A and W3-A of
-  `reports/x0-x1-execution.md` Part 4 so one worker owns the package: X0.2 (the
-  wire guard in `webAutomationActionResultPayload`, the adapter's dispatch
-  payload regardless of validation status, and the recording reducer), X0.3
-  domain (`minItems` type, schema, and lift with whole refusals), and X0.5
-  domain (`WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1_000`, schema maximum, lift
-  clamp), with the tests and mutation targets those steps name, amended by D2,
-  D4, and D14.
-- Required reads: `AGENTS.md`; this document's D2, D4, and D14; the report's
-  Part 2 X0.2, X0.3, X0.5, and Part 4 budget notes
-- Owns (may edit): `domain/src/actions/{types,schemas}.ts`,
-  `domain/src/actions/tests/schemas.test.ts`,
-  `domain/src/client/{gateway-action-parameters,gateway-mapping}.ts`,
-  `domain/src/client/tests/{gateway-command-parameters,gateway-mapping,gateway-mapping-redaction}.test.ts`,
-  `domain/src/runtime/adapter.ts`, `domain/src/runtime/tests/adapter-redaction.test.ts`,
-  `domain/src/recording/reducers.ts`, `domain/src/recording/tests/reducers.test.ts`
-- Must not touch: the extension, test packages, every other file, tracked
-  `domain/.test-build/` (always pass a build label)
-- Validation, run alone and not in a loop:
-  `pnpm --filter @fluxiq-web-extension/domain check`, then
-  `DOMAIN_TEST_BUILD_LABEL=x0-domain pnpm --filter @fluxiq-web-extension/domain test`,
-  then `node scripts/structure-audit.mjs`; apply each named mutation, observe
-  its test fail, and revert. No extension build or content harness.
-- Definition of done: check and tests pass; every mutation observed red and
-  reverted; structure audit passes
-- Report to: docs/working/first-class-data-extraction-plan/reports/x0-domain.md
-
-### Brief: x1-test-contracts
-- Repository: this repository
-- Task: step X1.5's test-contracts changes in `reports/x0-x1-execution.md`
-  Part 3: `ScenarioExtractPagination` as the `mode` union (D14),
-  `ScenarioStep.minItems`, `ExpectedExtraction` `pages`, `optionalFields`,
-  `truncated`, and nullable record values, the JSON Schema to match, and the
-  validation rules including the D4 rule that a zero-record expectation needs
-  `minItems: 0`. Add `minItems: 0` to product-catalog's
-  `extract-search-results` step (`manifest.ts:84`) so the corpus stays valid.
-  Hold `recordable-actions.ts`, `evaluation.ts`, and `bench-report.ts` (D14).
-- Required reads: `AGENTS.md`; this document's D4 and D14; the report's X1.5
-- Owns (may edit): `packages/test-contracts/src/{scenario,validation}.ts`,
-  `packages/test-contracts/tests/scenario-validation.test.mjs`,
-  `apps/scenario-lab/src/scenarios/product-catalog/manifest.ts`
-- Must not touch: `packages/test-runner`, the domain, the extension, every
-  other file
-- Validation, run alone: `pnpm --filter @fluxiq-web-extension/test-contracts test`,
-  the scenario-lab package's unit test script, and
-  `node scripts/structure-audit.mjs`; apply both named mutations, observe each
-  test fail, and revert
-- Definition of done: tests pass; mutations observed red and reverted;
-  structure audit passes
-- Report to: docs/working/first-class-data-extraction-plan/reports/x1-test-contracts.md
+Recorded at dispatch on 2026-09-15. Completed briefs are in the
+[archive](./first-class-data-extraction-plan/archive/2026-09-15-completed-briefs-and-ledger.md).
 
 ### Brief: x0-page
 - Repository: this repository
@@ -521,40 +394,179 @@ evidence throughout.
   observed red and reverted, or reported as refused; audit passes
 - Report to: `F:\!FluxIQWebExtension\docs\working\first-class-data-extraction-plan\reports\x0-page.md`
 
-### Brief: x01-test-runner
+### Brief: x3-x5-execution
+- Repository: this repository, with FluxIQ Core read where X4 meets K7, read-only
+- Task: turn X3, X4, and X5 into executable steps in the shape of
+  `reports/x0-x1-execution.md`. Verify `reports/ex-a-extension-domain.md` and
+  `reports/ex-d-test-facility.md` against the code as it stands after X0 and
+  X1 (commit `13b0a0d`; `x0-page` is in progress), then give per step: files
+  with the function or type touched (file:line), new exports, tests with
+  cases, the acceptance command, and mutation targets. X3: structured field
+  specs and the `loadMore`, `scroll`, and `numbered` pagination modes on the
+  page, replacing X1's page guard; inference C4 in `domain/src/extraction/`
+  seeded by `content/evidence/repeating.ts`; D2's sensitive-control rules kept;
+  no repair hooks (D15). X4: the picker and extraction entry in the Chrome side
+  panel and Firefox popup (background-owned pick session, picker clicks kept
+  out of the recording), picker messages C5, the recorded event and mapping C3
+  with `recordOutput` on the mapper candidate matching Core's K7 contract
+  (`metadata.recordsPath`, required `recordsPath`), and `timeoutMs` scaled by
+  `maxPages` (D14). X5: the extraction intent seam, `measureExtraction`,
+  Flow-lane judging, evaluation schema 0.3 and bench metrics,
+  `recordableActionTypes`, fixture additions, W04 and W08 Flow lanes, nullable
+  values, and reading Core's run datasets once K5 and K8 land. Give a worker
+  partition (owned files, serial files, order, dependencies on Core phases,
+  structure budgets) and name the steps that need manual browser validation.
+- Required reads: `AGENTS.md`; this document's Decisions, Design, Phases, and
+  Execution partition; the two reports named; `reports/x0-x1-execution.md`
+  Part 4; CD13-CD20 and K7-K8 in
+  `F:\!FluxIQ\docs\working\first-class-data-extraction-plan.md`
+- Owns (may edit): its report only
+- Must not touch: all source and documents; no builds, tests, Lab runs, or
+  browsers
+- Definition of done: X3, X4, and X5 executable without rediscovery
+- Report to: `F:\!FluxIQWebExtension\docs\working\first-class-data-extraction-plan\reports\x3-x5-execution.md`
+
+### Brief: x0-9-snapshot-sensitive-text
 - Repository: this repository
-- Task: restore compilation broken by `x1-test-contracts`' nullable record
-  values and pagination union, then X0.7. First the X1.5 follow-ups:
-  `packages/test-runner/src/scenario-steps/extract-records.ts` reads pagination
-  by `mode` (absent means `next`) and fails any other mode as `fixture.invalid`;
-  `packages/test-runner/src/run-expectations/extraction.ts` widens record values
-  to `string | null` (type errors at `extraction.ts:20` and
-  `extract-records.ts:62,67`); a null guard at
-  `apps/scenario-lab/src/scenarios/auth-gate/tests/scenario.test.ts:199`; and
-  `apps/scenario-lab/e2e/product-catalog.spec.ts:155-156` type-checking against
-  the union. Then X0.7 per `reports/x0-x1-execution.md` Part 2, with its tests
-  and mutation target.
-- Required reads: `AGENTS.md`; this document's D6 and D14; the report's X0.7
-  and X1.5; `reports/x1-test-contracts.md`
-- Owns (may edit): `packages/test-runner/src/scenario-steps/extract-records.ts`,
-  `packages/test-runner/src/run-expectations/extraction.ts`, their tests,
-  `packages/test-runner/src/flow-lane/{persisted-flow-run,expectations,run-flow-lane}.ts`,
-  `packages/test-runner/src/flow-lane/tests/{persisted-flow-run,expectations,run-flow-lane,lane-observation}.test.ts`,
-  `packages/test-runner/src/run-evaluation/tests/single-run-evaluation.test.ts`,
-  `apps/scenario-lab/src/scenarios/auth-gate/tests/scenario.test.ts`,
-  `apps/scenario-lab/e2e/product-catalog.spec.ts`
-- Must not touch: test-contracts, the domain, the extension, every other file;
-  no browser or Testing Lab run
-- Validation, run alone: `pnpm --filter @fluxiq-web-extension/test-runner build`
-  and the report's X0.7 `node --test` command;
-  `pnpm --filter @fluxiq-web-extension/scenario-lab test`;
-  `node scripts/structure-audit.mjs`; the X0.7 mutation observed red and
-  reverted
-- Definition of done: test-runner builds; the named and scenario-lab tests
-  pass; mutation observed; audit passes
-- Report to: `F:\!FluxIQWebExtension\docs\working\first-class-data-extraction-plan\reports\x01-test-runner.md`
+- Task: close the leak `x0-page` found (D2): element descriptors in the page
+  snapshot every reply carries include a sensitive `<textarea>`'s or
+  `<select>`'s contents through `text`, `visibleText`, and `accessibleName`
+  (`apps/extension/src/content/describe-element.ts:50-54,75-76`, per
+  `reports/x0-page.md`). A sensitive control's descriptor carries no string
+  derived from its contents; a container's text excludes the contents of
+  sensitive controls inside it, reusing `x0-page`'s helper where one exists.
+  Restore whole-reply secret scans in the specs `x0-page` narrowed, add unit
+  and content-harness cases on the sensitive-input fixture, and update the
+  page-text bullet in `docs/architecture/sensitive-values.md`.
+- Required reads: `AGENTS.md`; this document's D2; `reports/x0-page.md`;
+  `docs/architecture/sensitive-values.md`
+- Owns (may edit): `apps/extension/src/content/describe-element.ts`, a helper
+  beside it if needed, their unit tests, the specs `x0-page` narrowed, and
+  `docs/architecture/sensitive-values.md`
+- Must not touch: the domain, `content/action-runtime/**`, `content/actions/**`,
+  every other file
+- Validation, run alone: `pnpm --filter @fluxiq-web-extension/extension check`;
+  `EXTENSION_TEST_BUILD_LABEL=x0-9 node apps/extension/scripts/test-extension.mjs`;
+  the content harness for the affected specs with `--workers=1`;
+  `node scripts/structure-audit.mjs`; mutations observed red and reverted (on a
+  scratch copy outside the repository if the classifier refuses real source)
+- Report to: `F:\!FluxIQWebExtension\docs\working\first-class-data-extraction-plan\reports\x0-9-snapshot-sensitive-text.md`
+
+### Brief: x1-domain-contracts
+- Repository: this repository
+- Task: worker W2 part B of `reports/x0-x1-execution.md` Parts 3-4: X1.1 (new
+  `domain/src/actions/extraction/` with `request.ts`, `summary.ts`, `schema.ts`,
+  and a barrel, re-exported from `types.ts`; `WebAutomationActionResult`
+  gains `extraction` and `dialog`), X1.2's domain share (the lift for field
+  specs, `itemElement`, the `mode` pagination union, and the all-excluded
+  refusal; `encrypt` refused with `web.action.not_implemented` in
+  `gateway-mapping.ts`), X1.3's payload copy of `extraction` and `dialog`, and
+  X1.4's schemas with a `minItems` maximum at the item cap (D14), each with the
+  report's tests and mutation targets. Core K1 answered that `oneOf` is not
+  accepted, so `fields` stays `type: "object"`.
+- Required reads: `AGENTS.md`; this document's D2, D12-D14; the report's Parts
+  3-4; `reports/x0-domain.md`
+- Owns (may edit): `domain/src/actions/{types,schemas}.ts`,
+  `domain/src/actions/extraction/**`, `domain/src/actions/tests/schemas.test.ts`,
+  `domain/src/client/{gateway-action-parameters,gateway-mapping}.ts`,
+  `domain/src/client/tests/{gateway-command-parameters,gateway-mapping}.test.ts`
+- Must not touch: the extension, `domain/src/output-nodes/**`, other domain
+  directories, other packages
+- Validation, run alone: `pnpm --filter @fluxiq-web-extension/domain check`;
+  `DOMAIN_TEST_BUILD_LABEL=x1-domain pnpm --filter @fluxiq-web-extension/domain test`;
+  `node scripts/structure-audit.mjs`; mutations observed red and reverted
+- Report to: `F:\!FluxIQWebExtension\docs\working\first-class-data-extraction-plan\reports\x1-domain-contracts.md`
+
+### Brief: x1-page-b
+- Repository: this repository
+- Task: worker W1 part B of `reports/x0-x1-execution.md`, after
+  `x1-domain-contracts` and `x0-9-snapshot-sensitive-text`: X1.2's page guard
+  (a spec-form field or a non-`next` pagination mode fails with
+  `web.action.not_implemented` naming the feature, until X3) and X1.3's page
+  share (`ActionResultEvidence` and `buildResult` carry `extraction` and
+  `dialog`; `extract-list.ts` passes the summary with excluded fields left out
+  of `fieldNames`; `dialog.ts` moves its evidence from `extracted` to
+  `dialog`), with the report's tests and mutation targets.
+- Required reads: `AGENTS.md`; this document's D12 and D14; the report's X1.2,
+  X1.3, and Part 4; `reports/x0-page.md`; `reports/x1-domain-contracts.md`
+- Owns (may edit): `apps/extension/src/content/action-runtime/{list-extraction,results}.ts`,
+  `apps/extension/src/content/actions/{extract-list,dialog}.ts`, their unit
+  tests, `apps/extension/e2e/content/tests/{extract-list,upload-dialog}.spec.ts`
+- Must not touch: the domain, `describe-element.ts`, every other file
+- Validation, run alone: extension check; unit tests with
+  `EXTENSION_TEST_BUILD_LABEL=x1-page-b`; the content harness for
+  `extract-list` and `upload-dialog` with `--workers=1`; structure audit;
+  mutations observed red and reverted
+- Report to: `F:\!FluxIQWebExtension\docs\working\first-class-data-extraction-plan\reports\x1-page-b.md`
+
+### Brief: x1-output-nodes
+- Repository: this repository
+- Task: after `x1-domain-contracts`, give the `extract_list` output definition
+  `metadata.recordsPath: "extracted"` (Core CD19, read from the output
+  definition's `metadata` as `packages/fluxiq/src/domains/index.ts:43-49`
+  shows) and declare a `timeoutMs` parameter (D14), in
+  `domain/src/output-nodes/definitions.ts`, with tests and a mutation.
+- Required reads: `AGENTS.md`; this document's D14; the report's X1.3; the Core
+  file named
+- Owns (may edit): `domain/src/output-nodes/definitions.ts`,
+  `domain/src/output-nodes/tests/definitions.test.ts`
+- Must not touch: every other file
+- Validation, run alone: domain check; `DOMAIN_TEST_BUILD_LABEL=x1-nodes`
+  domain test; structure audit; dropping `recordsPath` observed red and reverted
+- Report to: `F:\!FluxIQWebExtension\docs\working\first-class-data-extraction-plan\reports\x1-output-nodes.md`
+
+### Brief: x1-6-e2e-typecheck
+- Repository: this repository
+- Task: X1.6: nothing type-checks `apps/scenario-lab/e2e`. Wire it into the
+  scenario-lab package's `check` script (a DOM-typed tsconfig for `e2e`,
+  following how `apps/extension/e2e` is checked if it is) so root `pnpm check`
+  fails on an e2e type error, and fix the two existing errors at
+  `apps/scenario-lab/e2e/member-directory.spec.ts:27-28` without changing what
+  the test does. Report, rather than fix, any other e2e errors that appear.
+- Required reads: `AGENTS.md`; `reports/x01-test-runner.md`; the scenario-lab
+  and extension package manifests and tsconfigs
+- Owns (may edit): `apps/scenario-lab/package.json` (the `check` script only),
+  a new e2e tsconfig under `apps/scenario-lab/`,
+  `apps/scenario-lab/e2e/member-directory.spec.ts`
+- Must not touch: every other file; no browser or Lab run
+- Validation, run alone: `pnpm --filter @fluxiq-web-extension/scenario-lab check`
+  passes; a deliberate type error in a scratch copy of an e2e spec makes it
+  fail; structure audit
+- Report to: `F:\!FluxIQWebExtension\docs\working\first-class-data-extraction-plan\reports\x1-6-e2e-typecheck.md`
 
 ## Work Ledger
+
+### 2026-09-15 — x0-page done and verified; snapshot leak taken in; X1 briefs recorded
+- Agent: supervisor; worker `x0-page`
+- Changed: the extension files named in `reports/x0-page.md` (uncommitted);
+  this document (briefs for `x0-9-snapshot-sensitive-text`,
+  `x1-domain-contracts`, `x1-page-b`, `x1-output-nodes`, `x1-6-e2e-typecheck`);
+  completed briefs and older ledger entries moved to the archive
+- Why: X0's page share (sensitive refusals in every mode, the container text and
+  HTML rules, `minItems` and sign-in gates, de-duplicated append pagination, the
+  item cap, honoured `timeoutMs`). The worker found page snapshots leaking
+  sensitive `<textarea>` and `<select>` contents, taken in as `x0-9`
+- Validation: supervisor runs, alone and in order:
+  `pnpm --filter @fluxiq-web-extension/extension check` → exit 0;
+  `EXTENSION_TEST_BUILD_LABEL=supervisor-x0-page node apps/extension/scripts/test-extension.mjs`
+  → `# tests 516`, `# pass 516`, `# fail 0`;
+  `pnpm --filter @fluxiq-web-extension/extension test:content -- actions extract-list --workers=1`
+  → `34 passed`. Mutation proofs not rerun by the supervisor.
+- Outcome: Accepted
+- Follow-up: commit; root gates, then push; dispatch `x0-9` and
+  `x1-domain-contracts` as slots free, then `x1-page-b`, `x1-output-nodes`, and
+  `x1-6-e2e-typecheck`
+
+### 2026-09-15 — Scope set for this push; X3-X5 detail dispatched
+- Agent: supervisor; worker `x3-x5-execution`
+- Changed: this document (Status detail, Current State, D15, X3 and X6 rows,
+  Worker Briefs)
+- Why: the user asked to finish the extraction work in Core and the
+  extension, the security fixes, and planning for the rest of Week 2, then stop
+  for review; X3-X5 had no file-level detail
+- Validation: not validated; planning document only
+- Outcome: Partial
+- Follow-up: build X1's remainder now; X3-X5 once detailed
 
 ### 2026-09-15 — x01-test-runner done; X0 domain, X1.5, and X0.7 verified together
 - Agent: supervisor; worker `x01-test-runner`
@@ -602,118 +614,8 @@ evidence throughout.
 - Outcome: Accepted
 - Follow-up: X5's reader uses Core's dataset endpoints
 
-### 2026-09-15 — Execution started: x0-domain and x1-test-contracts dispatched
-- Agent: supervisor; workers `x0-domain`, `x1-test-contracts`, with Core's
-  `k0-1-password-kdf` and `k0-4-database-manager-recheck`
-- Changed: this document (Worker Briefs)
-- Why: X0 and X1 are executable and independent of Core's pending dataset
-  detail; W2-A and W3-A are combined so one worker owns the domain package, and
-  at most four code workers run at once on this machine
-- Validation: not validated; dispatch only, no code changed yet
-- Outcome: Partial
-- Follow-up: verify both reports; then W1-A (after x0-domain) and W4 (after
-  x1-test-contracts)
-
-### 2026-09-15 — X0 and X1 made executable; Core K0 and K11 designs merged
-- Agent: supervisor; workers `x0-x1-execution` here, `k0-secret-keys-kdf` and
-  `k11-encrypted-fields` in the paired document
-- Changed: this document (Status detail, Current State, defect 1, D2, D4, D5,
-  D13, D14, C1, X1 row, execution partition, open questions)
-- Why: the reports corrected the leak's width, settled contract details, and
-  gave file-level steps; their recommendations became decisions under the
-  user's standing instruction, and the container-text gap was taken into D2
-  rather than parked
-- Validation: not validated; planning documents only, no code changed
-- Outcome: Accepted
-- Follow-up: merge Core's `k-datasets-execution`; start X0, X1, K0, and K1
-
-### 2026-09-15 — Firming the plan for execution; investigations dispatched
-- Agent: supervisor; workers `x0-x1-execution` here, and `k0-secret-keys-kdf`,
-  `k11-encrypted-fields`, `k-datasets-execution` in the paired document
-- Changed: this document (Current State next steps, X0 row, Week 3 note,
-  Worker Briefs)
-- Why: the user asked for the Secret Keys fix and the Encrypt column in the
-  plan and for Core's data share to be firmed up before work starts
-- Validation: not validated; planning documents only, no code changed
-- Outcome: Partial
-- Follow-up: write the four reports' results into both documents
-
-### 2026-09-15 — D13 hardened against lookup attacks
-- Agent: supervisor
-- Changed: this document (D13); the Core pair (open questions 5 and 6)
-- Why: the user asked whether a rainbow table could reverse an encrypted column
-- Validation: not validated; planning documents only, no code changed
-- Outcome: Accepted
-- Follow-up: Core open question 6 (Secret Keys' scrypt cost) sits outside this
-  plan's phases
-
-### 2026-09-15 — Encrypt column designed (D13)
-- Agent: supervisor
-- Changed: this document (D13, C1 `handling`, Week 3 note, Current State); the
-  Core pair (record schema `handling`, open question 5)
-- Why: the user asked whether an encrypted column would be practical and
-  secure; Core's Secret Keys program and project-content protection
-  (`F:\!FluxIQ\docs\architecture\automation-studio\persistence.md:180-198`)
-  show it is, provided the key stays outside the project
-- Validation: not validated; planning documents only, no code changed
-- Outcome: Accepted
-- Follow-up: X1 and K1 reserve `encrypt`; Phase 3.7 builds it
-
-### 2026-09-15 — D12 revised: Exclude column instead of a withheld marker
-- Agent: supervisor
-- Changed: this document (D12, C1 `excluded`, Current State, risks, E53); the
-  Core pair (record schema `excluded`, capture, open question 1); Week 1 open
-  question E53
-- Why: the user judged a column nobody can see no better than no column, and
-  asked for an "Exclude column" option, with an info hover, that leaves the
-  column out of the output entirely
-- Validation: not validated; planning documents only, no code changed
-- Outcome: Accepted
-- Follow-up: X1 and K1 carry the field; Phase 3.7's field editor shows the
-  option and its hover
-
-### 2026-09-15 — Sensitive dataset columns decided (D12)
-- Agent: supervisor
-- Changed: this document (D12, C1 `sensitive`, Current State, risks, E53); the
-  Core pair (record schema `sensitive`, capture, open question 1); Week 1 open
-  question E53
-- Why: the user asked what the dataset redaction question meant; under their
-  standing instruction the recommendation became the decision
-- Validation: not validated; planning documents only, no code changed
-- Outcome: Accepted
-- Follow-up: X1 and K1 carry the `sensitive` field
-
-### 2026-09-15 — Core design merged; plan complete
-- Agent: supervisor; worker `ex-b-core`
-- Changed: this document (Core findings, D9-D11, Lab reader, phases, risks); the
-  Core pair (design, phases K1-K10, open questions)
-- Why: Core's investigation corrected where records live and supplied the
-  generic dataset design
-- Validation: not validated; planning documents only, no code changed. Findings
-  are code reads with file:line in the four reports.
-- Outcome: Accepted
-- Follow-up: execute X0 and X1 at the start of Week 2
-
-### 2026-09-15 — Plan written from three investigations; existing plans updated
-- Agent: supervisor; workers `ex-a-extension-domain`, `ex-c-plans-docs`,
-  `ex-d-test-facility`
-- Changed: this document; MVP plan (Phase 2.0, loop note, Phase 3.7 notes,
-  Priority 4); `MVP_AGENT_INSTRUCTIONS.md` (Week 2, Week 3, Priority 4); Week 1
-  plan (Status `Complete`, next steps); Week 1 open questions E2 and E55
-- Why: turn the user's extraction decision into an executable, sequenced plan
-- Validation: not validated; planning documents only, no code changed
-- Outcome: Partial
-- Follow-up: merge `ex-b-core`; regenerate indexes; commit and push
-
-### 2026-09-15 — Plan created; read-only investigations dispatched
-- Agent: supervisor; workers `ex-a-extension-domain`, `ex-b-core`,
-  `ex-c-plans-docs`, `ex-d-test-facility`
-- Changed: this document and its Core pair
-- Why: the user decided extraction is a fundamental FluxIQ capability and asked
-  for a fast plan using subagents
-- Validation: not validated; planning documents only, no code changed
-- Outcome: Partial
-- Follow-up: write the phased plan from the four reports
+Earlier entries are in the
+[archive](./first-class-data-extraction-plan/archive/2026-09-15-completed-briefs-and-ledger.md).
 
 ## Open Questions
 
