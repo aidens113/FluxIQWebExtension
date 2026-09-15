@@ -3917,3 +3917,156 @@ The open-questions refresh and the four Lab-proof gaps entries, archived when th
     deadline, and `:40` fails "persisted demo recording … but did not finalize it".
 - Not verified: every Lab figure above is a single observation under concurrent load.
 - Outcome: Accepted
+
+## Part fifty-one, archived 2026-09-15
+
+### 2026-09-14 — Durable benchmark campaigns implemented; live proof pending
+
+- Agents: workers `f-bench-durable-file`, `f-bench-campaign-store`,
+  `f-bench-receipt`, `f-bundle-durable-publication`,
+  `f-bench-resume-orchestration`, and `f-bench-campaign-lease`; integration and
+  review by the supervisor. The two older ledger entries compacted above were
+  moved without deleting their evidence.
+- Changed: every new CLI bench publishes an immutable campaign and checkpoint
+  chain; each run carries an exact receipt and repeat identity; resume restores
+  the saved request, reconciles a valid finalized active bundle, preserves an
+  interrupted staging bundle, retries only the unfinished cell, and regenerates
+  aggregates only from exact complete coverage. Strict clean-repository/build/
+  browser compatibility prevents mixed experiments. A boot/process-identity
+  lease refuses concurrent owners and safely reclaims crash/reboot/PID-reuse
+  owners.
+- Validation: supervisor commands and observed results so far:
+  - test-evidence: 17/17;
+  - focused lease, compatibility, and orchestration: 24/24;
+  - test-runner full suite: 687/687;
+  - the first full runner pass had only a repeatable Windows temporary Git
+    cleanup `EBUSY`; bounded test cleanup fixed it and the isolated test passed;
+  - default Windows boot/current/missing-process probe returned true/true/true;
+  - supervisor mutations removing repeat from the cell key and removing exact
+    repeat validation each failed the intended test, then were restored.
+  - root `pnpm check`, `pnpm test`, and `pnpm build` each exited 0.
+- Live validation at downstream `444d48c` / Core `19468b7`, with run state on
+  F:: the supervisor force-killed the exact `pnpm lab bench` process tree while
+  generation 1 named an active cell and one staging bundle existed. Explicit
+  `--resume bench-mu0zh3pc-8cdcdf04` archived the stale lease and staging bundle,
+  then finished 4/4 runs. Disk inspection found 12 valid linked generations,
+  4/4 unique run ids, 1 interrupted bundle, 1 archived lease, no active lease,
+  no ignored checkpoints, and a final report. A second resume returned the
+  same 4/4 outcome without executing another run.
+- The first live attempt exposed and fixed a fingerprint defect: headless mode
+  selected Playwright's different broken headless-shell binary. Commit
+  `444d48c` forces the exact full Chromium executable used by Lab; package
+  check passed and the forced browser reported `134.0.6998.35`.
+- Not verified: the two full repeat-three Week 1 benches.
+- Outcome: Accepted
+
+### 2026-09-14 — Repaired pair diagnosed; W11 timing repair live-accepted
+
+- Agents: workers `ad` through `ao`; supervisor integrated and verified.
+- Found: repaired A/B finished 189+12 each with all gated metrics equivalent;
+  one pre-Flow W27 reset differed, while both W11 repeat-2 recordings lost a
+  scroll at the 400 ms debounce boundary.
+- Changed: scripted wheels settle 500 ms; W11 requires exactly three scrolls;
+  HTTP-control source/tests now share their owning feature directory.
+- Validation: root check/test/build passed; mutations failed as intended; three
+  synchronized A/B W11 pairs passed exact 3-scroll/action/oracle checks.
+- Outcome: Accepted; final clean-pinned A/B confirmation remains
+
+### 2026-09-14 — Full durable pair diagnosed; lifecycle repairs live-accepted
+
+- Agents: paired full-bench workers; diagnosis/implementation/review workers
+  `m` through `aa`; supervisor integration, source review and live validation.
+- Observed: both campaigns completed 189/189 evaluations plus 12 skips with
+  valid 380-checkpoint chains. All measured tolerances were equivalent, but
+  W05 readiness, W19 landing capture and W25 startup transport differed.
+- Changed: recording Stop now owns the complete start/record/stop lifecycle and
+  drains its navigation generation; MV3 discovery has a race-closed 30 s gate;
+  HTTP transport and topology readiness persist only closed safe diagnostics;
+  startup cleanup cannot replace the primary failure.
+- Validation: recorder mutations were killed; independent state-machine review
+  accepted the final source; W05 5/5 and W25 5/5 passed; W19 replay reported
+  `auth_required` in six initial and three final-tree runs, then three of four
+  accepted-tree attempts with one non-repeating pre-browser startup timeout.
+  Extension 513/513 and runner 705/705 passed; supervisor `pnpm check`,
+  `pnpm test`, and `pnpm build` passed. The repaired clean-pinned A/B pair remains.
+- Outcome: Accepted; clean-pinned A/B validation remains
+
+### 2026-09-13 — The Lab-proof gap fixes, verified and committed
+
+- Agents: workers `f-host-runtime-policy-action`, `g-core-host-state-node`,
+  `g-core-ladder-llm-off`, `f-runner-no-dry-run-llm`, `f-actionless-flow-lane`,
+  `g-evidence-budget-invariant`, `f-demo-cleanup-error`, `f-demo-wait-finalized` and
+  `f-evidence-items-harness`. Decisions, documentation edits and verification by
+  supervisor.
+- Committed:
+  - **Core:**
+    - `b94eca4`: the after-action capture and state diff get the node that ran;
+    - `e5c9828`: the recovery ladder offers no LLM rung when a run's LLM is off.
+  - **Here:**
+    - `d69aa09`: the domain snapshots a recorded Flow's web actions;
+    - `67e39fa`: no Flow-lane run for a workflow without actions;
+    - `0dcfa52`: the evidence packet budget invariant;
+    - `2357968`: the Lab sends no `dryRunLlm`;
+    - `cf6c549` and `9a96352`: the demo keeps its lane's error, and waits for its
+      recording to finalize;
+    - `4fe671e`: the content harness asserts all 16 evidence items.
+- Decisions:
+  - Route B for the ladder: an optional `allowLlmDiagnosis`, set from `invokeLlm`.
+  - A packet over the domain's exploration budget, imported and not restated, fails
+    as `performance.budget`.
+- Found: the supervisor's own exclusion mutation ran test-contracts' `test` script,
+  which rebuilt the shared `dist` while the file was mutated. Two test-runner rows
+  then failed until that `dist` was rebuilt. A mutation that runs a package's `test`
+  script must rebuild the package's `dist` after restoring.
+- Validation: supervisor, each gate alone.
+  - **Core gate `sup68`,** on the tree of both Core commits:
+    - `pnpm check` exit=0;
+    - fluxiq "Test Files 138 passed (138)" and "Tests 965 passed (965)"; web 228
+      files and "Tests 1156 passed (1156)";
+    - the stub node put back failed 5 of 19 tests, and `allowLlmDiagnosis` ignored
+      failed 2 of 5, each "restored identical=true".
+  - **Domain `sup66`:** "# tests 404", "# pass 404"; the definitionId-only check
+    failed 1 of 404.
+  - **Test-contracts:** "# tests 69", "# pass 69"; the exclusion never excluding
+    failed 1 of 69.
+  - **Test-runner gate `sup69`:**
+    - check exit=0; "# tests 588", "# pass 586";
+    - the 2 failures were the exclusion rows. They passed 12 of 12 once the stale
+      shared build was rebuilt, printing
+      `# runnable: 63 (23 recording; 40 flow, 21 unarmed and 19 variants); skipped: 4`.
+  - **Test-runner mutations,** each restored identical:
+    - the budget comparison as `>=` failed 3 of 7;
+    - the planner's exclusion removed failed 1 of 4;
+    - the runner's refusal disabled failed 1 of 8;
+    - no finalize wait failed 4 of 7;
+    - no retried removal codes failed 2 of 10;
+    - `dryRunLlm` restored failed 1 of 17.
+  - **Extension:** `pnpm check` exit=0, and `evidence.spec.ts` "30 passed (7.9s)".
+- Not verified: the Lab. `l-final-proofs` and the final bench pair run at the new pins.
+- Outcome: Accepted
+
+### 2026-09-13 — i-stage3-load-failures, and the session wrapped up with both branches pushed
+
+- Agent: worker `i-stage3-load-failures`, read-only; wrap-up by supervisor on the user's
+  instruction.
+- Found:
+  - **W10 is load.** All five failures hit the Flow lane's 30 s finalize wait. A passing
+    W10 took up to 25.8 s, and a stored entry took p50 634 ms alone against
+    1,001-1,420 ms with two benches.
+  - **W13 leans load, but it is unproven.** It timed out in the 15 s status wait with
+    no extension status recorded.
+  - **W16's inconclusive run came from the bench's stop,** not the product.
+  - **Two benches together ran about 20% faster.** Briefed as `f-lab-wait-bounds`;
+    Stage 4 amended.
+- At wrap-up:
+  - **Stopped:** `f-lab-wait-bounds` and `l-probe-late-rows`. Any partial
+    `f-lab-wait-bounds` edits in the working tree are uncommitted and unverified.
+  - **Pushed:** both `dev` branches.
+- Validation: supervisor:
+  - root gate `sup71` on `4fe671e`: `pnpm check`, `pnpm test` and `pnpm build`
+    exit=0;
+  - the content harness first "231 passed" with 2 `infinite-feed` teardown timeouts,
+    which passed alone, "3 passed (4.8s)"; the full rerun gave "233 passed (47.8s)";
+  - `finalized-recording.ts:71` reads `const DEFAULT_TIMEOUT_MS = 30_000;`.
+- Not verified: W13's cause; the Lab at the new pins.
+- Outcome: Accepted

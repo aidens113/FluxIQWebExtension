@@ -1,9 +1,9 @@
 # MVP Week 1 — Web Automation Reliability Plan
 
 Status: Active
-Status detail: Lifecycle and W11 timing repairs are live-accepted. One final clean-pinned A/B confirmation pair remains before exit criteria close.
+Status detail: Week 1 closed on 2026-09-15 on the sharded-final-2 pair with two disclosed startup exceptions; a production-Core confirmation pair will supersede them.
 Created: 2026-09-11
-Last updated: 2026-09-14
+Last updated: 2026-09-15
 Owner: Senior supervisor agent
 Scope: Week 1 of the 30-day MVP (Phases 1.1–1.6): browser action vocabulary, element identity, browser state/evidence, failure taxonomy, and FluxBench, with automated verification through the Testing Lab as the primary proof for every phase. Weeks 2–4 are out of scope except where Week 1 must leave a seam for them.
 Paired document: `F:\!FluxIQ\docs\working\mvp-week1-web-automation-reliability-plan.md` — Core owns the failure-taxonomy contracts (C1, C2, pulled ahead of Wave 2 by D11) and the expectation-evaluator seam (C3)
@@ -15,141 +15,83 @@ Related: [30-Day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 
 **Session objective, set by the user on 2026-09-12: COMPLETELY FINISH every Week
 1 item, using subagents to do it quickly AND properly, with EVERYTHING tested.**
-This is the resumed session objective. Read it literally:
+On 2026-09-14 the user asked for Week 1 to be closed that night.
 
-- **Finished** means all six exit criteria in [Objective](#objective) carry a
-  quoted observation from a real Testing Lab run in the Work Ledger, and every
-  open item below is closed, or ruled out of Week 1 with the reason recorded.
-  Nothing closes on a unit test, a compile, a harness row, or a worker's report.
-- **Quickly** means safe file-partitioned parallelism, with Lab concurrency
-  bounded by this machine's RAM. Do not stop at phase boundaries to ask.
-- **Properly** means a mutation proof for every guard, the supervisor re-running
-  every fix before its ledger entry, and single observations labelled as such,
-  because this machine has faulty RAM.
-
-**Phase, as of 2026-09-14: final confirmation after W11 repair.** Repaired full
-campaigns A and B each completed 189 evaluations plus 12 skips with 380 linked
-checkpoints. All 22 tolerance-bearing metrics were equivalent. W27 had one
-pre-Flow pairing reset in B; W11 repeat 2 missed one recorded scroll in both.
-W11 is repaired and passed a strict synchronized 3x3 proof. Reports named in
-backticks are under [reports/](./mvp-week1-web-automation-reliability-plan/reports/);
-every dispatch and amendment is in
-[briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
-settled ledger entries are in parts one to fifty of
+**Phase, as of 2026-09-15: Week 1 closed on the sharded-final-2 pair with two
+disclosed startup exceptions; a production-Core confirmation pair supersedes
+them.** Reports named in backticks are under
+[reports/](./mvp-week1-web-automation-reliability-plan/reports/); every dispatch is
+in [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
+settled ledger entries are in parts one to fifty-one of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
-**Repository state.** Downstream `dev` and `origin/dev` are `6e5d248`; Core
-`dev` and `origin/dev` are `19468b7`, `fluxiq` 0.4.0. Core is clean and unchanged.
-The sharded failure diagnosis and focused W05 proof are an uncommitted downstream unit.
+**Repository state.** Downstream `dev` carries the acceptance pin `3d6ecd6`, the
+fixes `3525938`, `878fbd5`, `83f54b3`, `b3278a4`, and this closeout's documentation commit, pushed to
+`origin/dev`. Core `dev` carries one documentation commit after `19468b7`.
 
-**Settled this session** (ledger and archive):
-- **Core:** trace withholding; the late-message discard; W19 C1 and C2; the shared
-  expectation record; the ordered, acknowledged client start; a recorded entry's
-  event identity.
-- **Evidence integrity:** the adapter guard; the second evidence producer;
-  snapshot evidence (LR7, LR8); redaction attestation in every Lab run; windowed
-  discard audits; single-run evidence sizes, through one reader.
-- **Structure and hygiene:** the `connection.ts` split; the test-runner ratchet;
-  stale comments, casts and the `test:content` script; the Flow lane imports
-  Core's target-resolution type.
-- **Matching and recording:** resolver corroboration (CS1d, W26); recorder signals
-  (B5); `invalid_parameter` (B3); a recording begins locally only after its start
-  was sent, and starts once however Core's acknowledgement arrives; a page change
-  is recorded before the action after it, and a wait is proposed before a click
-  whose target it produced (W25); a run whose recording Core holds short fails on
-  both lanes.
-- **W18:** the secret leg; every Flow run starts on the start page.
-- **The bench:** runs both lanes, with W29 and evidence sizes; three negative
-  variants whose click must fail; delayed-ui pins both clicks; W24's unreachable
-  unarmed wait is dropped.
-- **W19:**
-  - E1, the recorder links a click to its landing;
-  - E2, a URL claim on a sign-in gate reports `auth_required`;
-  - E3, an assert is resent once to a navigating tab;
-  - E4, a click landing on a refused page fails as `navigation_unexpected`;
-  - D1, the domain builds a click's landing claim, and a live click's action
-    entry now carries it (`32b4324`);
-  - the architecture pages for E1-E3, D1 and D1b (`d775b5e`).
+**Acceptance pair, clean pins downstream `3d6ecd6`, Core `19468b7`.** A
+`bench-mu202a52-127f75c3` and B `bench-mu202snn-ec661de2`: Week 1 x3, isolated,
+failure evidence, 3 shards, 2 jobs. Each has 189 evaluated runs plus 12 planned
+skips and an authenticated merge seal (`bq`, `br`). A: 179 passed. B: 179 passed.
+Both hold the nine ruled-out variant failures. Official comparison
+(`bz-final-2-comparison`): exit 1, `outcome: equivalent`, `comparisonPassed:
+false`, identical topology. All 23 tolerance-bearing metrics are equivalent,
+with 0 outside tolerance and 0 absent. Persistence discards are 0 on both sides.
+Exactly two runs differ, and both are the exceptions below.
 
-**Ruled out of Week 1, reasons in the ledger and its archive:**
-- Firefox and C8 (Week 4); CS1b; B4, B7, C5, C7 and D4; D5 unless the bench shows `unknown`
-  rows; raw snapshot bytes; per-lane distributions; read-only `lab` commands skipping the build.
-- Resolver: B.3; Core similarity metadata; Core's web element-target floor stays inert;
-  CS1f's Core-served confidence unless a criterion 3 row fails live.
-- Core: `failureRoute`; node definitions dropping `expectedState`; `hello` identity; `dataDir`;
-  timeout precedence; a second recording root; duplicate edges; changing a running Flow.
-- W19's edges: a wrong landing served 200, a soft 404, a 401 sign-in, a sign-up form's URL claim.
-- Evidence: a literal split across freed SQLite pages; a stored URL's query (Week 2 entry).
-- Rows: W24 `unannounced`; W13 `banner-absent` (P7); W05 `short-catalog`; W28's trailing
-  scroll; paginated extraction's Lab producer; negatives on the existing and clone lanes; W04's
-  and W08's Flow rows, which have no action to record. W24, W13 and W05 stay in the corpus.
-- Decisions left for Week 2 (open-questions E2, E53-E58): the patch lane's shape; redaction
-  beyond marked fields and D13's `destructive` rung (both the user's); realistic-fixture defects;
-  real-page capture cost and candidate caps.
+**The user's closeout decisions (2026-09-14 and 2026-09-15, in the ledger).**
+1. After B's first unexpected failure: "Both: close tonight + fix".
+2. After A's second: "Two exceptions, close tonight".
+3. After B's merge refused an orphaned temp file: "Quarantine file, resume B".
+4. Then: act on recommendations without asking.
 
-**In flight:**
-- Final-confirmation A `bench-mu1r0ez9-48775719` and B
-  `bench-mu1qz69w-e5ab6a03` are intentionally paused and invalidated as acceptance
-  evidence after B's W25 Flow repeat 0 finalized `environment.missing` before Flow,
-  actions, or harness. Their 180 and 190 contiguous checkpoints remain recoverable.
-- Three focused W25 Flow reruns passed at 55.5, 60.2, and 59.2 seconds with the
-  intended timeout, passing oracle, complete bundles, and zero harness use. This
-  rules out a repeating W25 product/fixture defect and identifies a facility event.
-- RunEvaluation schema 0.2 now preserves bounded typed facility diagnostics through
-  finalization, synthetic failure, checkpoint crash, and resume without raw causes.
-  Bench semantics 0.3 invalidates older acceptance campaigns deliberately.
-- Deterministic result-group sharding now gives each child independent authority,
-  leases, checkpoints, evaluations, and recovery; an authenticated parent merge
-  fails closed. A machine-wide FIFO gate caps live cells at two and checks memory.
-- Supervisor `pnpm check`, `pnpm test` (799/799 runner tests), and `pnpm build` pass.
-  Live two-shard kill/resume passed 2/2 with 64.668 seconds of real cell overlap.
-- Process disclosure: a worker search displayed the fixture-only loopback test
-  secret during setup. It was not repeated, hashed, or persisted in reports. The
-  search procedure must resolve the value without output in future runs.
+**The two disclosed exceptions, one classified class.**
+- B W14 `modal-flows`/`interstitial`, Flow, repeat 2: `process.startup`,
+  `http.timeout / project.select / 30000`. Focused `bu`: 3/3 passed
+  (`run-mu2h3iwq-fc8c53cf`, `run-mu2h59v9-7417a490`, `run-mu2h6yxo-591c2cff`).
+- A W28 `iframe-checkout`, recording, repeat 1: `gateway.connection`,
+  `unclassified`, "Timed out waiting for client gateway". Focused `bv`: 3/3 passed (`run-mu2h8ku2-521f71ec`, `run-mu2h9u41-17c539d7`,
+  `run-mu2hb2lg-cc6a1ed1`).
+- Both failed inside topology startup, before any browser or step. Cause
+  (`bs`, `bt`, supervisor-verified): each run served Core with `next dev
+  --turbopack` from a fresh copy, so first requests compiled on demand under
+  load. Slot waiters also spawned `powershell.exe` per owner on every 100 ms poll
+  (at least about 518 per minute measured). Supervisor worktree tests overlapped
+  the W28 window.
 
-**Focused gate:** Sharded A/B invalidated at A 21/B 23 by B W05's typed Core
-readiness timeout; exact W05 recording cell then passed 3/3. Start a new A/B pair.
+**B's manual step.** B's children finished, but its merge failed closed: shard
+002's `evaluations/` held a byte-identical temporary left by the durable writer's
+link-then-remove. With the user's approval the one file was moved to
+`F:\fxlab-runs\sharded-final-2\quarantine\`, and an exact-ID resume at the same
+pin then sealed B.
 
-**Exit criteria as they stand**
+**Exit criteria**
 
-| Criterion | State | Proof still to observe |
+| Criterion | State at closeout | Evidence |
 | --- | --- | --- |
-| Actions reliable | Repaired A/B and synchronized W11 proof satisfy W01-W19 | Confirm once at the final clean pin |
-| Evidence useful | Repaired A/B: zero leaks/harness/persistence discards; packets bounded | Confirm once at the final clean pin |
-| Deterministic fallback | Repaired A/B: required fallback rows 5/5 | Confirm once at the final clean pin |
-| Failures classified | Repaired A/B required W14/W19/W27: 15/15 each | Confirm at least 90% at the final clean pin |
-| Bench repeatable | All 22 metrics equivalent; one pre-Flow W27 verdict differed; W11 fixed live | Final clean-pinned A/B pair needs equal verdicts and equivalent metrics |
-| Blockers ranked | Measured ranking exists in `ab-blocker-ranking-refresh` | Final ledger entry with confirmation-pair figures |
+| Actions reliable | Recording unarmed 18/18 both; Flow unarmed 16/16 A, 15/16 B (W14 exception, 3/3 in isolation) | `bz`, `bu` |
+| Evidence useful | Packets 618/608, p95 5,934, max 5,992 bytes; 0 redaction findings; harness 0; content harness `evidence.spec.ts` 30 passed at `3d6ecd6` | `bq`, `br`, ledger |
+| Deterministic fallback | 5/5 recovered without harness, both | `bz` |
+| Failures classified | Required W14/W19/W27 15/15 both; all negatives 30/33 (W24 ruled out) | `bz` |
+| Bench repeatable | 23/23 tolerance metrics equivalent; two differing runs, both the disclosed startup class | `bz` |
+| Blockers ranked | `cb-blocker-ranking-final` | ledger entry 2026-09-15 |
 
-**Everything is tested: the operating rules.**
-- **Three tiers per change:** unit tests beside the subject, content harness,
-  and Lab. A guard is done only when a mutation shows its test failing.
-- **Before any ledger entry, the supervisor reruns the gates:**
-  - each package's gates under a private label (`EXTENSION_TEST_BUILD_LABEL`,
-    `DOMAIN_TEST_BUILD_LABEL`);
-  - the test-runner built into a private `--outDir` at `dist`'s depth.
-- **Commands that work here:**
-  - the content harness:
-    `pnpm exec playwright test -c e2e/playwright.content.config.ts --workers=2 <spec>`,
-    run from `apps/extension`;
-  - Core tests: `npx vitest run <files> --no-file-parallelism`;
-  - isolated Lab commands need `FLUXIQ_TEST_ENV_FILES=none`;
-  - a Lab worktree pins Core only when it sits beside a Core worktree under
-    `F:\fxlab\`.
-- **Faulty RAM:** rerun a rare, uniform or impossible failure once, alone, before
-  chasing it, and run heavy gates one at a time. The false-failure shapes are in
-  `live-validation-plan.md`.
-- **Commits:** one supervisor session per repository, and workers never commit.
-  A descriptor or context change is verified against the whole `identity-`
-  content-harness family.
-- **Plan size:** the plan stays at or under 800 lines. Settled entries move
-  verbatim to the archive, and the index is regenerated with the structure
-  baseline backed up.
+**Fixed after the pair, not in the acceptance pins.**
+- Production Core build for isolated and demo topologies, and startup-failure
+  logs kept in the bundle (`bw`).
+- Slot waiters no longer spawn PowerShell on every poll (`bx`).
+- Durable writer retries removing its temporary and fails loudly instead of leaving an orphan (`ca`).
+- Pushed `3d6ecd6` failed its own structure audit; restored (`by`), index
+  regenerated.
 
-**Blocker for full benches:** none; the durable implementation is committed and
-its clean-pinned live kill/resume proof passed. The C: NTFS warning remains a
-machine risk, but campaign state is on F:, interruption is recoverable, and
-hash/compatibility checks fail closed on corruption.
+**Next steps.**
+1. Production-Core confirmation pair from a Lab worktree at the pushed fix pin,
+   prebuilding each runs root; compare; replace the two exceptions.
+2. Follow-ups recorded, not scheduled: retune the slot gate's 3 GiB per cell from
+   a measured built-Core footprint; `isrFlushToDisk: false`; prune failed build
+   attempts; `workspace-lock.ts` owner-before-link.
+
+**Blockers:** none.
 
 ---
 
@@ -644,156 +586,78 @@ Earlier entries are archived under [archive/](./mvp-week1-web-automation-reliabi
 The first two 2026-09-13 entries are preserved in
 [the pre-durability ledger archive](./mvp-week1-web-automation-reliability-plan/archive/2026-09-14-pre-durability-ledger.md).
 
-### 2026-09-14 — Durable benchmark campaigns implemented; live proof pending
+The 2026-09-13 and 2026-09-14 entries through the durable-campaign work are in
+part fifty-one of
+[archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
-- Agents: workers `f-bench-durable-file`, `f-bench-campaign-store`,
-  `f-bench-receipt`, `f-bundle-durable-publication`,
-  `f-bench-resume-orchestration`, and `f-bench-campaign-lease`; integration and
-  review by the supervisor. The two older ledger entries compacted above were
-  moved without deleting their evidence.
-- Changed: every new CLI bench publishes an immutable campaign and checkpoint
-  chain; each run carries an exact receipt and repeat identity; resume restores
-  the saved request, reconciles a valid finalized active bundle, preserves an
-  interrupted staging bundle, retries only the unfinished cell, and regenerates
-  aggregates only from exact complete coverage. Strict clean-repository/build/
-  browser compatibility prevents mixed experiments. A boot/process-identity
-  lease refuses concurrent owners and safely reclaims crash/reboot/PID-reuse
-  owners.
-- Validation: supervisor commands and observed results so far:
-  - test-evidence: 17/17;
-  - focused lease, compatibility, and orchestration: 24/24;
-  - test-runner full suite: 687/687;
-  - the first full runner pass had only a repeatable Windows temporary Git
-    cleanup `EBUSY`; bounded test cleanup fixed it and the isolated test passed;
-  - default Windows boot/current/missing-process probe returned true/true/true;
-  - supervisor mutations removing repeat from the cell key and removing exact
-    repeat validation each failed the intended test, then were restored.
-  - root `pnpm check`, `pnpm test`, and `pnpm build` each exited 0.
-- Live validation at downstream `444d48c` / Core `19468b7`, with run state on
-  F:: the supervisor force-killed the exact `pnpm lab bench` process tree while
-  generation 1 named an active cell and one staging bundle existed. Explicit
-  `--resume bench-mu0zh3pc-8cdcdf04` archived the stale lease and staging bundle,
-  then finished 4/4 runs. Disk inspection found 12 valid linked generations,
-  4/4 unique run ids, 1 interrupted bundle, 1 archived lease, no active lease,
-  no ignored checkpoints, and a final report. A second resume returned the
-  same 4/4 outcome without executing another run.
-- The first live attempt exposed and fixed a fingerprint defect: headless mode
-  selected Playwright's different broken headless-shell binary. Commit
-  `444d48c` forces the exact full Chromium executable used by Lab; package
-  check passed and the forced browser reported `134.0.6998.35`.
-- Not verified: the two full repeat-three Week 1 benches.
-- Outcome: Accepted
+### 2026-09-15 — Week 1 closed on sharded-final-2 with two disclosed startup exceptions
 
-### 2026-09-14 — Repaired pair diagnosed; W11 timing repair live-accepted
-
-- Agents: workers `ad` through `ao`; supervisor integrated and verified.
-- Found: repaired A/B finished 189+12 each with all gated metrics equivalent;
-  one pre-Flow W27 reset differed, while both W11 repeat-2 recordings lost a
-  scroll at the 400 ms debounce boundary.
-- Changed: scripted wheels settle 500 ms; W11 requires exactly three scrolls;
-  HTTP-control source/tests now share their owning feature directory.
-- Validation: root check/test/build passed; mutations failed as intended; three
-  synchronized A/B W11 pairs passed exact 3-scroll/action/oracle checks.
-- Outcome: Accepted; final clean-pinned A/B confirmation remains
-
-### 2026-09-14 — Full durable pair diagnosed; lifecycle repairs live-accepted
-
-- Agents: paired full-bench workers; diagnosis/implementation/review workers
-  `m` through `aa`; supervisor integration, source review and live validation.
-- Observed: both campaigns completed 189/189 evaluations plus 12 skips with
-  valid 380-checkpoint chains. All measured tolerances were equivalent, but
-  W05 readiness, W19 landing capture and W25 startup transport differed.
-- Changed: recording Stop now owns the complete start/record/stop lifecycle and
-  drains its navigation generation; MV3 discovery has a race-closed 30 s gate;
-  HTTP transport and topology readiness persist only closed safe diagnostics;
-  startup cleanup cannot replace the primary failure.
-- Validation: recorder mutations were killed; independent state-machine review
-  accepted the final source; W05 5/5 and W25 5/5 passed; W19 replay reported
-  `auth_required` in six initial and three final-tree runs, then three of four
-  accepted-tree attempts with one non-repeating pre-browser startup timeout.
-  Extension 513/513 and runner 705/705 passed; supervisor `pnpm check`,
-  `pnpm test`, and `pnpm build` passed. The repaired clean-pinned A/B pair remains.
-- Outcome: Accepted; clean-pinned A/B validation remains
-
-### 2026-09-13 — The Lab-proof gap fixes, verified and committed
-
-- Agents: workers `f-host-runtime-policy-action`, `g-core-host-state-node`,
-  `g-core-ladder-llm-off`, `f-runner-no-dry-run-llm`, `f-actionless-flow-lane`,
-  `g-evidence-budget-invariant`, `f-demo-cleanup-error`, `f-demo-wait-finalized` and
-  `f-evidence-items-harness`. Decisions, documentation edits and verification by
-  supervisor.
-- Committed:
-  - **Core:**
-    - `b94eca4`: the after-action capture and state diff get the node that ran;
-    - `e5c9828`: the recovery ladder offers no LLM rung when a run's LLM is off.
-  - **Here:**
-    - `d69aa09`: the domain snapshots a recorded Flow's web actions;
-    - `67e39fa`: no Flow-lane run for a workflow without actions;
-    - `0dcfa52`: the evidence packet budget invariant;
-    - `2357968`: the Lab sends no `dryRunLlm`;
-    - `cf6c549` and `9a96352`: the demo keeps its lane's error, and waits for its
-      recording to finalize;
-    - `4fe671e`: the content harness asserts all 16 evidence items.
-- Decisions:
-  - Route B for the ladder: an optional `allowLlmDiagnosis`, set from `invokeLlm`.
-  - A packet over the domain's exploration budget, imported and not restated, fails
-    as `performance.budget`.
-- Found: the supervisor's own exclusion mutation ran test-contracts' `test` script,
-  which rebuilt the shared `dist` while the file was mutated. Two test-runner rows
-  then failed until that `dist` was rebuilt. A mutation that runs a package's `test`
-  script must rebuild the package's `dist` after restoring.
-- Validation: supervisor, each gate alone.
-  - **Core gate `sup68`,** on the tree of both Core commits:
-    - `pnpm check` exit=0;
-    - fluxiq "Test Files 138 passed (138)" and "Tests 965 passed (965)"; web 228
-      files and "Tests 1156 passed (1156)";
-    - the stub node put back failed 5 of 19 tests, and `allowLlmDiagnosis` ignored
-      failed 2 of 5, each "restored identical=true".
-  - **Domain `sup66`:** "# tests 404", "# pass 404"; the definitionId-only check
-    failed 1 of 404.
-  - **Test-contracts:** "# tests 69", "# pass 69"; the exclusion never excluding
-    failed 1 of 69.
-  - **Test-runner gate `sup69`:**
-    - check exit=0; "# tests 588", "# pass 586";
-    - the 2 failures were the exclusion rows. They passed 12 of 12 once the stale
-      shared build was rebuilt, printing
-      `# runnable: 63 (23 recording; 40 flow, 21 unarmed and 19 variants); skipped: 4`.
-  - **Test-runner mutations,** each restored identical:
-    - the budget comparison as `>=` failed 3 of 7;
-    - the planner's exclusion removed failed 1 of 4;
-    - the runner's refusal disabled failed 1 of 8;
-    - no finalize wait failed 4 of 7;
-    - no retried removal codes failed 2 of 10;
-    - `dryRunLlm` restored failed 1 of 17.
-  - **Extension:** `pnpm check` exit=0, and `evidence.spec.ts` "30 passed (7.9s)".
-- Not verified: the Lab. `l-final-proofs` and the final bench pair run at the new pins.
-- Outcome: Accepted
-
-### 2026-09-13 — i-stage3-load-failures, and the session wrapped up with both branches pushed
-
-- Agent: worker `i-stage3-load-failures`, read-only; wrap-up by supervisor on the user's
-  instruction.
+- Agents: workers `bs-w14-runner-sequence` and `bt-w14-core-handler` (read-only
+  diagnosis); `bw-core-production-build`, `bx-slot-poll-probe`,
+  `by-structure-violations`, `ca-durable-temp-cleanup` (worktree implementation);
+  `bq-sharded-final-2-a`, `br-sharded-final-2-b` (terminal verification);
+  `bz-final-2-comparison`, `cb-blocker-ranking-final` (reports). Supervisor ran
+  every Lab command, resume, comparison, focused proof and gate below.
+- Decisions (the user's, verbatim): "Both: close tonight + fix"; "Two
+  exceptions, close tonight"; "Quarantine file, resume B"; "please dont ask me
+  again for something, just do recommended. FINISH THIS".
 - Found:
-  - **W10 is load.** All five failures hit the Flow lane's 30 s finalize wait. A passing
-    W10 took up to 25.8 s, and a stored entry took p50 634 ms alone against
-    1,001-1,420 ms with two benches.
-  - **W13 leans load, but it is unproven.** It timed out in the 15 s status wait with
-    no extension status recorded.
-  - **W16's inconclusive run came from the bench's stop,** not the product.
-  - **Two benches together ran about 20% faster.** Briefed as `f-lab-wait-bounds`;
-    Stage 4 amended.
-- At wrap-up:
-  - **Stopped:** `f-lab-wait-bounds` and `l-probe-late-rows`. Any partial
-    `f-lab-wait-bounds` edits in the working tree are uncommitted and unverified.
-  - **Pushed:** both `dev` branches.
-- Validation: supervisor:
-  - root gate `sup71` on `4fe671e`: `pnpm check`, `pnpm test` and `pnpm build`
-    exit=0;
-  - the content harness first "231 passed" with 2 `infinite-feed` teardown timeouts,
-    which passed alone, "3 passed (4.8s)"; the full rerun gave "233 passed (47.8s)";
-  - `finalized-recording.ts:71` reads `const DEFAULT_TIMEOUT_MS = 30_000;`.
-- Not verified: W13's cause; the Lab at the new pins.
-- Outcome: Accepted
+  - B W14 Flow rep 2 `process.startup` `http.timeout / project.select / 30000`
+    and A W28 recording rep 1 `gateway.connection` `unclassified` both failed
+    inside topology startup (`run.json` ports and process exits empty, zero
+    steps). Cause: per-run `next dev --turbopack` compiled first requests on
+    demand under load (`coordinator.ts:106`, `:113`, `:121-122`, `:137`,
+    `:267`, `:281`).
+  - Slot waiters spawned `powershell.exe` per owner per 100 ms poll
+    (`acquire-machine-cell-slot.ts:84`, `:121`; `lease.ts:203-222`); a 20.0 s
+    sample saw 173 distinct probe processes.
+  - B's parent could not merge: shard 002 `evaluations/` held
+    `.bench-shard2-fdae3012-c15-a1.json.<pid>.<hex>.tmp`, byte-identical to its
+    published evaluation (`durable-file.ts:100-111`), and
+    `shard-merge.ts:114-123` requires an exact listing.
+  - Pushed `3d6ecd6` failed `scripts/structure-audit.mjs` with 5 violations.
+  - The handoff's "18 skips" was wrong; the plan has 12.
+- Changed: `3525938`, `878fbd5`, `83f54b3`, `b3278a4`: production Core build and startup-failure logs; slot probe
+  cache; durable temporary cleanup; barrel imports and test relocation;
+  regenerated working-docs index; reports `bq` to `cb`.
+- Validation:
+  - First resume of B at `3d6ecd6`: `bench-campaign-resumed`, then "Shard
+    evaluation directory contains a missing or orphan receipt", exit 1. After
+    moving the one temporary (SHA-256 identical to the published file, hash
+    preserved): exact-ID resume published `"runs":189,"passed":179,
+    "skipped":12`; supervisor observed `merge-seal=True`, parent `finished`,
+    parent chain 0 gap/link errors, leases 0, evaluations 66/60/63, 0 dot files.
+  - A: `merge-seal=True`, parent `finished`; supervisor verified shards 000/001
+    chains (0 gap/link errors) and 126 evaluation byte hashes; `bq` observed
+    merge seal 24/24 digests, 189/189 receipts, 0 residue.
+  - `node packages/test-runner/dist/cli.js compare <A> <B>`: `compare exit=1`,
+    `outcome=equivalent`, `comparisonPassed=False`, identical topology, 23
+    tolerance metrics equivalent, `outsideTolerance 0`, `absentComparableMetrics
+    0`, differing runs W14 Flow rep 2 and W28 recording rep 1 only, persistence
+    discards 0.
+  - W14 focused: `run-mu2h3iwq-fc8c53cf`, `run-mu2h59v9-7417a490`,
+    `run-mu2h6yxo-591c2cff` each exit 0, verdict passed, `facilityFailure: null`,
+    harness 0. W28 focused: `run-mu2h8ku2-521f71ec`,
+    `run-mu2h9u41-17c539d7`, `run-mu2hb2lg-cc6a1ed1` each exit 0, verdict passed,
+    `facilityFailure: null`, harness 0.
+  - From `apps/extension` at `3d6ecd6`: `pnpm exec playwright test -c
+    e2e/playwright.content.config.ts --workers=2 evidence.spec.ts` -> `30 passed
+    (21.1s)`, exit 0, tree clean before and after.
+  - Worktree before integration: `# tests 822`, `# pass 822`, `# fail 0`;
+    slot-probe `tests 30, pass 30, fail 0` and mutation M2 `fail 5`.
+  - Root gates on `b3278a4`: `pnpm -r --workspace-concurrency=1 test` exit 0
+    (domain `# pass 404`, extension `# pass 513`, test-runner `# pass 845`, every
+    other package passing, `# fail 0` throughout); `pnpm check` exit 0 (`# pass
+    63`, `# pass 15`, "structure-audit: passed (53 warning(s), 17 baselined).");
+    `pnpm build` exit 0 with no tracked changes.
+  - Live production build at `83f54b3`: "Compiled successfully in 13.8s", Core
+    "Ready in 635ms"; W14 Flow `run-mu2hl57s-867a8846` passed, and
+    `run-mu2hmz8e-3839eafd` reused the cache and passed in 21,527 ms (54,866-58,772
+    ms on `next dev`).
+- Not verified: the production-Core pair itself; a built Core's measured memory
+  footprint; the old probe loop's CPU cost beyond one sample; real Defender holds
+  against the 2.5 s removal schedule.
+- Outcome: Accepted with two disclosed exceptions; production-Core pair pending
 
 ## Open Questions
 

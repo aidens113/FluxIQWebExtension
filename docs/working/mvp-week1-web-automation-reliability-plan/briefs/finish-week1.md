@@ -6696,3 +6696,97 @@ it. Capture the campaign ID. Resume that same campaign after any interruption;
 never replace it. Do not edit tracked files while it runs. At terminal aggregate,
 inspect bounded checkpoint, projection, evidence, discard, lease, metric, and pin
 facts; then write only your report. Never commit/push.
+
+## bs-w14-runner-sequence — read-only runner diagnosis of B's W14 timeout
+
+**Report:** `reports/bs-w14-runner-sequence.md`
+
+**Task:** Trace every Core HTTP request a Flow-lane isolated run makes up to the
+failed `project.select`, whether it was the route's first hit on a fresh `next
+dev` Core, readiness warm-up, bounds, retained logs, shared `.next` or cache,
+and per-run memory; recommend the smallest root-cause fix. Read-only; no Lab
+command; both checkouts stay clean.
+
+## bt-w14-core-handler — read-only Core diagnosis of the context route stall
+
+**Report:** `reports/bt-w14-core-handler.md`
+
+**Task:** In Core, read the `automation-studio-context` handler and everything it
+awaits, its dev-compile graph, the production-build option, warm-up, and the
+readiness probe's compile cost; recommend the smallest fix and its owner.
+Read-only; no builds or servers.
+
+## bw-core-production-build — serve Lab Core from a cached production build
+
+**Report:** `reports/bw-core-production-build.md`
+
+**Task:** In Lab worktree `F:\fxlab\fxlab-prod-core`: a keyed, locked, atomically
+published `next build` per runs directory, `next start` per run for isolated and
+demo topologies, startup-failure logs copied into the bundle, one cache at
+`<runs>/.core-web-build` for every mode; unit tests and mutation proofs; no real
+build, Lab run or root gate until authorized.
+
+## bx-slot-poll-probe — stop spawning PowerShell on every slot poll
+
+**Report:** `reports/bx-slot-poll-probe.md`
+
+**Task:** In the worktree, owning `bench/campaign/machine-slots/`: remove steady-
+state process spawning from the 100 ms wait loop without ever archiving a live
+owner; count-based tests and mutation proofs; propose the documentation sentence.
+
+## by-structure-violations — restore the structure audit on pushed `dev`
+
+**Report:** `reports/by-structure-violations.md`
+
+**Task:** In the worktree: route three barrel-bypassing imports through their
+barrels and relocate the test that grew `src/tests/` past its baseline by subject
+(barrel tests to `bench/tests/`, CLI tests into `cli-llm.test.ts`); no baseline
+edit.
+
+## bq-sharded-final-2-a — terminal verification of campaign A (amended)
+
+**Report:** `reports/bq-sharded-final-2-a.md`
+
+**Task (amended 2026-09-15):** Read-only: coverage, every chain, evaluation and
+receipt parity, merge-seal digests, residue, outcomes, evidence figures.
+
+## br-sharded-final-2-b — terminal verification of campaign B (amended)
+
+**Report:** `reports/br-sharded-final-2-b.md`
+
+**Task (amended 2026-09-15):** As `bq`, and record the quarantined orphan
+temporary and the resume that sealed B.
+
+## bu-w14-focused and bv-w28-focused — isolated three-run proofs
+
+**Reports:** `reports/bu-w14-focused.md`, `reports/bv-w28-focused.md`
+
+**Task:** Run by the supervisor at `3d6ecd6`, sequentially, env files off:
+`pnpm lab run modal-flows --workflow interstitial --target isolated --evidence
+failure --flow` x3 (label `bu-w14-focused`) and `pnpm lab run iframe-checkout
+--target isolated --evidence failure` x3 (label `bv-w28-focused`).
+
+## bz-final-2-comparison — official A/B closeout comparison report
+
+**Report:** `reports/bz-final-2-comparison.md`
+
+**Task:** Write the comparison report from the supervisor's saved comparator
+output, in the shape of `ah-final-repaired-comparison.md`. Read-only.
+
+## cb-blocker-ranking-final — measured Week 1 blocker ranking
+
+**Report:** `reports/cb-blocker-ranking-final.md`
+
+**Task:** Replace `ab-blocker-ranking-refresh.md` with a ranking built on the
+closeout pair and tonight's diagnoses, marking code-fixed-but-unproven items.
+Read-only.
+
+## ca-durable-temp-cleanup — no orphaned temporary after a durable publish
+
+**Report:** `reports/ca-durable-temp-cleanup.md`
+
+**Task:** In the worktree, owning `bench/durable-file.ts` and its tests: bounded
+Windows sharing retries on removing the owned temporary after a create-mode link,
+never a silent success when removal fails, never deleting anything not provably
+this writer's; tests and mutation proofs; compile and test only after the
+supervisor's go-ahead.
