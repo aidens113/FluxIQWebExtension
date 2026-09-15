@@ -2,7 +2,8 @@ import { mkdir, readdir, readFile, rename, stat } from "node:fs/promises";
 import path from "node:path";
 import { createDurableJson, writeDurableJson } from "../durable-file.js";
 import { BENCH_ID_PATTERN } from "../report-store.js";
-import { BENCH_SEMANTICS_VERSION, CAMPAIGN_SCHEMA_VERSION, campaignCellKey, campaignPlanSha256, canonicalJson, isSha256, sha256Canonical, type CampaignCellIdentity, type CampaignCompatibility, type CampaignPlanCell, type CampaignRequest } from "./identity.js";
+import { BENCH_SEMANTICS_VERSION, CAMPAIGN_SCHEMA_VERSION, campaignCellKey, campaignPlanSha256, canonicalJson, isSha256, sha256Canonical, type CampaignCellIdentity, type CampaignCompatibility, type CampaignExecutionIdentity, type CampaignPlanCell, type CampaignRequest } from "./identity.js";
+import { CAMPAIGN_SHARD_ALGORITHM, MAX_CAMPAIGN_SHARDS, MIN_CAMPAIGN_SHARDS } from "./shard-plan.js";
 
 const RUN_ID = /^[A-Za-z0-9._-]{1,160}$/u;
 const CHECKPOINT_FILE = /^(\d{12})\.json$/u;
@@ -18,6 +19,7 @@ export type CampaignManifest = Readonly<{
   plan: readonly CampaignPlanCell[];
   planSha256: string;
   compatibility: CampaignCompatibility;
+  execution: CampaignExecutionIdentity;
 }>;
 
 export type CompletedCampaignCell = Readonly<{
@@ -63,9 +65,9 @@ export async function loadCampaignManifest(directory: string): Promise<CampaignM
 }
 
 export function parseCampaignManifest(value: unknown): CampaignManifest {
-  refuseSecretKeys(value);
-  const object = exactObject(value, ["schemaVersion", "benchId", "createdAt", "benchSemanticsVersion", "request", "plan", "planSha256", "compatibility"], "campaign manifest");
-  if (object.schemaVersion !== CAMPAIGN_SCHEMA_VERSION) throw new Error("Campaign manifest schemaVersion must be 0.2");
+  refuseCampaignSecretKeys(value);
+  const object = exactObject(value, ["schemaVersion", "benchId", "createdAt", "benchSemanticsVersion", "request", "plan", "planSha256", "compatibility", "execution"], "campaign manifest");
+  if (object.schemaVersion !== CAMPAIGN_SCHEMA_VERSION) throw new Error("Campaign manifest schemaVersion must be 0.3");
   const benchId = benchIdOf(object.benchId);
   const createdAt = isoDate(object.createdAt, "createdAt");
   if (object.benchSemanticsVersion !== BENCH_SEMANTICS_VERSION) throw new Error(`Unsupported benchSemanticsVersion: ${String(object.benchSemanticsVersion)}`);
@@ -74,7 +76,8 @@ export function parseCampaignManifest(value: unknown): CampaignManifest {
   const planSha256 = sha(object.planSha256, "planSha256");
   if (campaignPlanSha256(plan) !== planSha256) throw new Error("Campaign planSha256 does not match its canonical plan");
   const compatibility = parseCompatibility(object.compatibility);
-  return { schemaVersion: CAMPAIGN_SCHEMA_VERSION, benchId, createdAt, benchSemanticsVersion: BENCH_SEMANTICS_VERSION, request, plan, planSha256, compatibility };
+  const execution = parseExecution(object.execution);
+  return { schemaVersion: CAMPAIGN_SCHEMA_VERSION, benchId, createdAt, benchSemanticsVersion: BENCH_SEMANTICS_VERSION, request, plan, planSha256, compatibility, execution };
 }
 
 export async function writeCampaignCheckpoint(directory: string, input: CampaignCheckpointInput): Promise<CampaignCheckpoint> {
@@ -88,7 +91,7 @@ export async function writeCampaignCheckpoint(directory: string, input: Campaign
 
 /** Atomically replaces a non-authoritative campaign projection such as runs.json. */
 export async function writeCampaignProjection(directory: string, relative: string, value: unknown): Promise<string> {
-  refuseSecretKeys(value);
+  refuseCampaignSecretKeys(value);
   const file = containedPath(directory, relative);
   await writeDurableJson(file, value);
   return file;
@@ -125,9 +128,9 @@ export async function loadCampaignCheckpointChain(directory: string, manifest: C
 }
 
 export function parseCampaignCheckpoint(value: unknown): CampaignCheckpoint {
-  refuseSecretKeys(value);
+  refuseCampaignSecretKeys(value);
   const object = exactObject(value, ["schemaVersion", "generation", "previousSha256", "campaignId", "planSha256", "completed", "activeAttempt", "state", "checkpointSha256"], "campaign checkpoint");
-  if (object.schemaVersion !== CAMPAIGN_SCHEMA_VERSION) throw new Error("Campaign checkpoint schemaVersion must be 0.2");
+  if (object.schemaVersion !== CAMPAIGN_SCHEMA_VERSION) throw new Error("Campaign checkpoint schemaVersion must be 0.3");
   integer(object.generation, "generation");
   const generation = object.generation as number;
   const previousSha256 = object.previousSha256 === null ? null : sha(object.previousSha256, "previousSha256");
@@ -233,6 +236,31 @@ function parseExpectedFailure(value: unknown, label: string): CampaignPlanCell["
   return { category: object.category, ...(typeof object.code === "string" ? { code: object.code } : {}) } as CampaignPlanCell["expectedFailure"];
 }
 
+function parseExecution(value: unknown): CampaignExecutionIdentity {
+  if (!isRecord(value) || typeof value.mode !== "string") throw new Error("campaign execution identity is invalid");
+  if (value.mode === "serial") {
+    exactObject(value, ["mode"], "campaign execution identity");
+    return { mode: "serial" };
+  }
+  if (value.mode === "shard-parent") {
+    const object = exactObject(value, ["mode", "algorithm", "shardCount", "jobs"], "campaign execution identity");
+    shardAlgorithm(object.algorithm); validShardCount(object.shardCount); validJobs(object.jobs, object.shardCount as number);
+    return { mode: "shard-parent", algorithm: CAMPAIGN_SHARD_ALGORITHM, shardCount: object.shardCount as number, jobs: object.jobs as number };
+  }
+  if (value.mode === "shard-child") {
+    const object = exactObject(value, ["mode", "algorithm", "parentCampaignId", "parentPlanSha256", "shardIndex", "shardCount"], "campaign execution identity");
+    shardAlgorithm(object.algorithm); validShardCount(object.shardCount); integer(object.shardIndex, "shardIndex");
+    if ((object.shardIndex as number) >= (object.shardCount as number)) throw new Error("shardIndex must be less than shardCount");
+    return { mode: "shard-child", algorithm: CAMPAIGN_SHARD_ALGORITHM, parentCampaignId: benchIdOf(object.parentCampaignId), parentPlanSha256: sha(object.parentPlanSha256, "parentPlanSha256"), shardIndex: object.shardIndex as number, shardCount: object.shardCount as number };
+  }
+  throw new Error("campaign execution mode is invalid");
+}
+
+function shardAlgorithm(value: unknown): void { if (value !== CAMPAIGN_SHARD_ALGORITHM) throw new Error("campaign shard algorithm is invalid"); }
+function validShardCount(value: unknown): void { integer(value, "shardCount", true); if ((value as number) < MIN_CAMPAIGN_SHARDS || (value as number) > MAX_CAMPAIGN_SHARDS) throw new Error(`shardCount must be between ${MIN_CAMPAIGN_SHARDS} and ${MAX_CAMPAIGN_SHARDS}`); }
+function validJobs(value: unknown, shardCount: number): void { integer(value, "jobs", true); if ((value as number) > shardCount) throw new Error("jobs must be less than or equal to shardCount"); }
+function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
+
 function parseCompleted(value: unknown): CompletedCampaignCell {
   const object = exactObject(value, ["cellKey", "runId", "evaluation", "evaluationSha256"], "completed campaign cell");
   if (typeof object.runId !== "string" || !RUN_ID.test(object.runId)) throw new Error("Completed campaign runId is unsafe");
@@ -271,14 +299,15 @@ function exactObject(value: unknown, keys: readonly string[], label: string): Re
   return object;
 }
 
-function refuseSecretKeys(value: unknown, at = "$", seen = new Set<object>()): void {
+export function refuseCampaignSecretKeys(value: unknown, at = "$", seen = new Set<object>()): void {
   if (value === null || typeof value !== "object") return;
   if (seen.has(value)) throw new Error(`Campaign data contains a cycle at ${at}`);
   seen.add(value);
-  if (Array.isArray(value)) value.forEach((item, index) => refuseSecretKeys(item, `${at}[${index}]`, seen));
+  if (Array.isArray(value)) value.forEach((item, index) => refuseCampaignSecretKeys(item, `${at}[${index}]`, seen));
   else for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-    if (SECRET_KEY.test(key)) throw new Error(`Campaign data refuses secret-bearing key ${key}`);
-    refuseSecretKeys(child, `${at}.${key}`, seen);
+    const normalizedKey = key.replace(/([a-z0-9])([A-Z])/gu, "$1_$2");
+    if (SECRET_KEY.test(normalizedKey)) throw new Error(`Campaign data refuses secret-bearing key ${key}`);
+    refuseCampaignSecretKeys(child, `${at}.${key}`, seen);
   }
   seen.delete(value);
 }

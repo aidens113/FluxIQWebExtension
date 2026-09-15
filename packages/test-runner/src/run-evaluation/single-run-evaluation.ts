@@ -12,6 +12,8 @@ export type SingleRunInput = {
   verdict: "passed" | "failed";
   /** The runner's raw failure category; absent on a pass. */
   failureCategory: string | undefined;
+  /** Closed facility diagnostic; null for a healthy facility or an automation-only result. */
+  facilityFailure: RunEvaluation["facilityFailure"];
   scenarioId: string;
   /** `undefined` for the manifest's primary workflow, which the evaluation records as `null`. */
   workflowId: string | undefined;
@@ -62,6 +64,7 @@ export type SingleRunInput = {
 export function singleRunEvaluation(input: SingleRunInput): RunEvaluation {
   const evidence = input.observation.lane === "flow" && input.bundlePath !== undefined ? flowLaneEvidenceSizes(input.bundlePath) : undefined;
   return evaluateObservedRun({
+    facilityFailure: input.facilityFailure,
     identity: {
       scenarioId: input.scenarioId,
       workflowId: input.workflowId ?? null,

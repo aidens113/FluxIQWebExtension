@@ -5,9 +5,10 @@ import { parseRunEvaluationJson, type RunEvaluation, type WebScenario } from "@f
 import type { EvidenceMode } from "../commands.js";
 import type { RunScenarioOptions, RunScenarioResult } from "../run-scenario.js";
 import type { FluxIQTargetConfiguration } from "../target-config.js";
+import { projectFacilityFailure, ProjectedFacilityError } from "../facility-failure/index.js";
 import { parseBenchReceiptJson } from "./bench-receipt.js";
 import { actionsExecuted, aggregateBenchReport, benchResultsByLane, groupBenchResults } from "./aggregate-report.js";
-import { BENCH_SEMANTICS_VERSION, CAMPAIGN_SCHEMA_VERSION, acquireCampaignLease, assertCampaignCompatibility, campaignPlanSha256, canonicalJson, createCampaignPlan, loadCampaignCheckpointChain, loadCampaignManifest, preserveInterruptedStaging, writeCampaignCheckpoint, writeCampaignManifest, type ActiveCampaignAttempt, type CampaignCheckpoint, type CampaignCompatibility, type CampaignLease, type CampaignLeaseOptions, type CampaignManifest, type CampaignPlanCell, type CampaignRequest, type CompletedCampaignCell } from "./campaign/index.js";
+import { BENCH_SEMANTICS_VERSION, CAMPAIGN_SCHEMA_VERSION, acquireCampaignLease, assertCampaignCompatibility, campaignPlanSha256, canonicalJson, createCampaignPlan, createCampaignPlanShards, loadCampaignCheckpointChain, loadCampaignManifest, preserveInterruptedStaging, writeCampaignCheckpoint, writeCampaignManifest, type ActiveCampaignAttempt, type CampaignCheckpoint, type CampaignCompatibility, type CampaignLease, type CampaignLeaseOptions, type CampaignManifest, type CampaignPlanCell, type CampaignRequest, type CompletedCampaignCell } from "./campaign/index.js";
 import type { BenchCorpus } from "./corpus/index.js";
 import { describeError } from "./describe-error.js";
 import { FLOW_LANE_SOURCES, RECORDING_LANE_SOURCES, evaluateFailedAttempt, evaluateFlowRun, evaluateRecordingRun, type RunEvaluationIdentity } from "./evaluate-run.js";
@@ -88,6 +89,27 @@ export type ResumableRunBenchOptions = RunBenchOptions & {
 };
 
 export type ResumeBenchOptions = Omit<ResumableRunBenchOptions, "benchId"> & { benchId: string };
+
+export type PrecreatedBenchCampaignOptions = Omit<ResumableRunBenchOptions, "benchId"> & {
+  /** Exact nested child directory created by the shard-group authority. */
+  directory: string;
+  /** Expected immutable child manifest; the on-disk copy remains authoritative. */
+  manifest: CampaignManifest;
+  /** Orchestrator-owned per-attempt machine slot. It must release when the operation settles. */
+  withCellSlot?: <T>(operation: () => Promise<T>) => Promise<T>;
+};
+
+export type AuthenticatedBenchCampaignEvaluation = Readonly<{
+  completed: CompletedCampaignCell;
+  evaluation: RunEvaluation;
+}>;
+
+export type PrecreatedBenchParentProjectionOptions = Readonly<{
+  runsDirectory: string;
+  directory: string;
+  manifest: CampaignManifest;
+  evaluations: readonly AuthenticatedBenchCampaignEvaluation[];
+}>;
 
 /**
  * `lab bench`: runs every runnable corpus result `repeatCount` times, one pass
@@ -171,6 +193,7 @@ export async function createResumableBench(options: ResumableRunBenchOptions): P
     createdAt,
     benchSemanticsVersion: BENCH_SEMANTICS_VERSION,
     request,
+    execution: { mode: "serial" },
     plan,
     planSha256: campaignPlanSha256(plan),
     compatibility: options.compatibility,
@@ -179,7 +202,7 @@ export async function createResumableBench(options: ResumableRunBenchOptions): P
   await writeCampaignCheckpoint(directory, checkpointInput(manifest, null, [], null, "running"));
   await options.lifecycle?.({ event: "created", benchId, directory });
   await options.crashHook?.("after-campaign-published");
-  return withCampaignLease(directory, options.campaignLeaseOptions, (lease) => executeCampaign(options, manifest, entries, lease));
+  return withCampaignLease(directory, options.campaignLeaseOptions, (lease) => executeCampaign(options, manifest, entries, directory, lease));
 }
 
 /** Resumes exactly one explicitly named campaign after strict compatibility and artifact reconciliation. */
@@ -187,6 +210,7 @@ export async function resumeBench(options: ResumeBenchOptions): Promise<RunBench
   validateBenchRequest(options);
   const directory = benchDirectory(options.runsDirectory, options.benchId);
   const manifest = await loadCampaignManifest(directory);
+  if (manifest.execution.mode !== "serial") throw new Error("A serial campaign resume refuses shard parent and child manifests");
   assertCampaignCompatibility(manifest.compatibility, options.compatibility);
   const entries = expandCorpus(options.corpus, options.manifests);
   const currentPlan = createCampaignPlan(entries, options.repeatCount);
@@ -194,23 +218,95 @@ export async function resumeBench(options: ResumeBenchOptions): Promise<RunBench
   if (campaignPlanSha256(currentPlan) !== manifest.planSha256 || canonicalJson(currentPlan) !== canonicalJson(manifest.plan)) throw new Error("Campaign plan does not match the current corpus and manifests");
   return withCampaignLease(directory, options.campaignLeaseOptions, async (lease) => {
     await options.lifecycle?.({ event: "resumed", benchId: manifest.benchId, directory });
-    return executeCampaign(options, manifest, entries, lease);
+    return executeCampaign(options, manifest, entries, directory, lease);
   });
+}
+
+/** Executes or resumes one immutable shard child inside its independently leased nested directory. */
+export async function executePrecreatedBenchCampaign(options: PrecreatedBenchCampaignOptions): Promise<RunBenchOutcome> {
+  validateBenchRequest(options);
+  const { directory, manifest, entries } = await validatePrecreatedChild(options);
+  return withCampaignLease(directory, options.campaignLeaseOptions, async (lease) => {
+    await lease.assertOwned();
+    const chain = await loadCampaignCheckpointChain(directory, manifest);
+    if (!chain.latest) {
+      if (chain.ignored.length !== 0) throw new Error("Precreated campaign has checkpoint debris but no generation-zero authority");
+      await writeCampaignCheckpoint(directory, checkpointInput(manifest, null, [], null, "running"));
+      await options.lifecycle?.({ event: "created", benchId: manifest.benchId, directory });
+      await options.crashHook?.("after-campaign-published");
+    } else {
+      await options.lifecycle?.({ event: "resumed", benchId: manifest.benchId, directory });
+    }
+    return executeCampaign(options, manifest, entries, directory, lease, options.withCellSlot);
+  });
+}
+
+/** Publishes only canonical parent projections from caller-authenticated, parent-ordered child evaluations. */
+export async function publishPrecreatedBenchParentProjections(options: PrecreatedBenchParentProjectionOptions): Promise<RunBenchOutcome> {
+  const directory = path.resolve(options.directory);
+  if (directory !== benchDirectory(options.runsDirectory, options.manifest.benchId)) throw new Error("Shard parent projection directory does not match its canonical bench directory");
+  const manifest = await loadCampaignManifest(directory);
+  if (canonicalJson(manifest) !== canonicalJson(options.manifest)) throw new Error("Shard parent projection manifest does not match its immutable on-disk authority");
+  if (manifest.execution.mode !== "shard-parent") throw new Error("Shard parent projections require a shard-parent manifest");
+  const executable = manifest.plan.filter(({ skipReason }) => skipReason === null);
+  if (options.evaluations.length !== executable.length) throw new Error("Shard parent projections require exact executable plan coverage");
+  const shardOwners = new Map(createCampaignPlanShards(manifest.plan, manifest.execution.shardCount).flatMap((shard) => shard.plan.map((cell) => [cell.cellKey, shard.index] as const)));
+  const accepted = new Map<string, AcceptedCell>();
+  for (const [index, authenticated] of options.evaluations.entries()) {
+    const cell = executable[index];
+    if (!cell || authenticated.completed.cellKey !== cell.cellKey || accepted.has(cell.cellKey)) throw new Error("Shard parent evaluations are not exact and parent-ordered");
+    assertEvaluationIdentity(cell, authenticated.evaluation, authenticated.completed.runId);
+    if (authenticated.completed.evaluation !== `evaluations/${authenticated.evaluation.runId}.json`) throw new Error("Shard parent evaluation location is not canonical");
+    const shardIndex = shardOwners.get(cell.cellKey);
+    if (shardIndex === undefined) throw new Error("Shard parent evaluation has no deterministic child owner");
+    const record = { ...recordFromEvaluation(cell, authenticated.evaluation), evaluation: `shards/${shardIndex.toString().padStart(3, "0")}/${authenticated.completed.evaluation}` };
+    accepted.set(cell.cellKey, { cell, evaluation: authenticated.evaluation, completed: authenticated.completed, record, bundle: undefined });
+  }
+  return publishCampaignProjections(manifest, directory, accepted);
+}
+
+async function validatePrecreatedChild(options: PrecreatedBenchCampaignOptions): Promise<{ directory: string; manifest: CampaignManifest; entries: readonly BenchPlanEntry[] }> {
+  const campaignRoot = path.resolve(options.runsDirectory, "bench");
+  const directory = path.resolve(options.directory);
+  const relative = path.relative(campaignRoot, directory);
+  const segments = relative.split(path.sep);
+  if (relative === "" || path.isAbsolute(relative) || segments.some((segment) => segment === "..")) throw new Error("Precreated campaign directory must remain inside the bench root");
+  const saved = await loadCampaignManifest(directory);
+  if (canonicalJson(saved) !== canonicalJson(options.manifest)) throw new Error("Precreated campaign manifest does not match its immutable on-disk authority");
+  if (saved.execution.mode !== "shard-child") throw new Error("Precreated campaign execution requires a shard-child manifest and refuses a shard parent");
+  if (segments.length !== 3 || segments[1] !== "shards" || !/^\d{3}$/u.test(segments[2] ?? "")) throw new Error("Precreated campaign directory must be an exact nested shard directory inside the bench root");
+  if (segments[0] !== saved.execution.parentCampaignId || segments[2] !== saved.execution.shardIndex.toString().padStart(3, "0")) throw new Error("Precreated campaign directory does not match its parent and shard identity");
+
+  const parent = await loadCampaignManifest(path.join(campaignRoot, saved.execution.parentCampaignId));
+  if (parent.execution.mode !== "shard-parent") throw new Error("Precreated campaign parent directory does not contain shard-parent authority");
+  if (parent.planSha256 !== saved.execution.parentPlanSha256 || parent.execution.algorithm !== saved.execution.algorithm || parent.execution.shardCount !== saved.execution.shardCount) throw new Error("Precreated campaign parent plan authority does not match its child");
+  if (saved.createdAt !== parent.createdAt || saved.benchSemanticsVersion !== parent.benchSemanticsVersion || canonicalJson(saved.request) !== canonicalJson(parent.request) || canonicalJson(saved.compatibility) !== canonicalJson(parent.compatibility)) throw new Error("Precreated campaign child does not inherit exact parent authority");
+  assertCampaignCompatibility(saved.compatibility, options.compatibility);
+  if (canonicalJson(saved.request) !== canonicalJson(requestOf(options))) throw new Error("Precreated campaign request does not match the current request");
+
+  const entries = expandCorpus(options.corpus, options.manifests);
+  const currentParentPlan = createCampaignPlan(entries, options.repeatCount);
+  if (parent.planSha256 !== campaignPlanSha256(currentParentPlan) || canonicalJson(parent.plan) !== canonicalJson(currentParentPlan)) throw new Error("Precreated campaign parent plan does not match the current corpus and manifests");
+  const expected = createCampaignPlanShards(currentParentPlan, saved.execution.shardCount)[saved.execution.shardIndex];
+  if (!expected || saved.planSha256 !== campaignPlanSha256(expected.plan) || canonicalJson(saved.plan) !== canonicalJson(expected.plan)) throw new Error("Precreated campaign child plan does not match its saved parent partition");
+  return { directory, manifest: saved, entries };
 }
 
 /** Reads the authoritative request without selecting a latest campaign or accepting legacy runs.json state. */
 export async function loadResumableBenchRequest(runsDirectory: string, benchId: string): Promise<CampaignRequest> {
-  return (await loadCampaignManifest(benchDirectory(runsDirectory, benchId))).request;
+  const manifest = await loadCampaignManifest(benchDirectory(runsDirectory, benchId));
+  if (manifest.execution.mode !== "serial") throw new Error("A serial campaign request refuses shard parent and child manifests");
+  return manifest.request;
 }
 
-async function executeCampaign(options: ResumableRunBenchOptions, manifest: CampaignManifest, entries: readonly BenchPlanEntry[], lease: CampaignLease): Promise<RunBenchOutcome> {
-  const directory = benchDirectory(options.runsDirectory, manifest.benchId);
+async function executeCampaign(options: ResumableRunBenchOptions, manifest: CampaignManifest, entries: readonly BenchPlanEntry[], directory: string, lease: CampaignLease, withCellSlot?: <T>(operation: () => Promise<T>) => Promise<T>): Promise<RunBenchOutcome> {
+  if (manifest.execution.mode === "shard-parent") throw new Error("A shard parent is coordination authority and cannot execute cells");
   await lease.assertOwned();
   let chain = await loadCampaignCheckpointChain(directory, manifest);
   if (!chain.latest) throw new Error("Campaign has no authoritative generation-zero checkpoint");
   let checkpoint = chain.latest;
   await assertNoAmbiguousCampaignBundles(options.runsDirectory, manifest, checkpoint);
-  let completed = await validateCompleted(options, manifest, checkpoint.completed);
+  let completed = await validateCompleted(options, manifest, checkpoint.completed, directory);
 
   if (checkpoint.activeAttempt) {
     const active = checkpoint.activeAttempt;
@@ -245,15 +341,16 @@ async function executeCampaign(options: ResumableRunBenchOptions, manifest: Camp
 
     let accepted: AcceptedCell;
     try {
-      const result = await options.runScenario(scenarioOptions(options, manifest, cell, entry, active));
+      const operation = () => options.runScenario(scenarioOptions(options, manifest, cell, entry, active));
+      const result = await (withCellSlot ? withCellSlot(operation) : operation());
       if (result.runId !== active.runId || path.resolve(result.path) !== path.resolve(pathForRun(options.runsDirectory, active.runId))) throw new Error("Scenario returned a run outside its active campaign attempt");
       await options.crashHook?.("after-bundle-finalized");
       accepted = await acceptFinalizedAttempt(options, manifest, cell, active, directory);
     } catch (error) {
       if (await isDirectory(pathForRun(options.runsDirectory, active.runId))) throw error;
-      const evaluation = evaluateFailedAttempt({ ...evaluationIdentity(cell), lane: cell.lane, attemptId: active.runId, error, wallClockMs: Date.now() - Date.parse(active.startedAt) });
-      const observed = { problems: [`runner: ${describeError(error)}`], cause: describeError(error) };
-      const recorded = await persistEvaluation(directory, cell, evaluation, observed);
+      const facilityFailure = caughtFacilityFailure(error);
+      const evaluation = evaluateFailedAttempt({ ...evaluationIdentity(cell), lane: cell.lane, attemptId: active.runId, error, facilityFailure, wallClockMs: Date.now() - Date.parse(active.startedAt) });
+      const recorded = await persistEvaluation(directory, cell, evaluation, { problems: [] });
       accepted = { ...recorded, bundle: undefined };
     }
     const records = [...checkpoint.completed, accepted.completed];
@@ -286,11 +383,11 @@ async function withCampaignLease<T>(directory: string, leaseOptions: CampaignLea
 
 type AcceptedCell = { cell: CampaignPlanCell; evaluation: RunEvaluation; record: BenchRunRecord; completed: CompletedCampaignCell; bundle: Awaited<ReturnType<typeof readRunBundle>> | undefined };
 
-async function validateCompleted(options: ResumableRunBenchOptions, manifest: CampaignManifest, records: readonly CompletedCampaignCell[]): Promise<Map<string, AcceptedCell>> {
+async function validateCompleted(options: ResumableRunBenchOptions, manifest: CampaignManifest, records: readonly CompletedCampaignCell[], directory: string): Promise<Map<string, AcceptedCell>> {
   const accepted = new Map<string, AcceptedCell>();
   for (const record of records) {
     const cell = requirePlanCell(manifest, record.cellKey);
-    const evaluationPath = path.join(benchDirectory(options.runsDirectory, manifest.benchId), ...record.evaluation.split("/"));
+    const evaluationPath = path.join(directory, ...record.evaluation.split("/"));
     const bytes = await readFile(evaluationPath);
     if (sha256(bytes) !== record.evaluationSha256) throw new Error("Completed campaign evaluation hash mismatch");
     const evaluation = parseRunEvaluationJson(bytes.toString("utf8"));
@@ -345,7 +442,7 @@ function reconstructBenchEvaluation(cell: CampaignPlanCell, active: ActiveCampai
   if (!source || !bundle.manifest) throw new Error("Cannot reconstruct an evaluation from an incomplete finalized bundle");
   const identity = evaluationIdentity(cell);
   const result = { runId: active.runId, verdict: source.verdict === "passed" ? "passed" as const : "failed" as const, ...(source.failureCategory ? { failureCategory: source.failureCategory } : {}) };
-  const observed = { ...identity, result, manifest: bundle.manifest, metrics: bundle.metrics, finalSequence: bundle.finalSequence, errorSequence: bundle.errorSequence, wallClockMs: source.durationMs };
+  const observed = { ...identity, facilityFailure: source.facilityFailure, result, manifest: bundle.manifest, metrics: bundle.metrics, finalSequence: bundle.finalSequence, errorSequence: bundle.errorSequence, wallClockMs: source.durationMs };
   if (cell.lane === "recording") return evaluateRecordingRun(observed);
   return evaluateFlowRun({ ...observed, result: { ...result, path: bundlePath, observation: { lane: "flow", flowCreated: source.flowCreated === true, oracleVerdict: source.oracleVerdict, reportedVerdict: source.reportedVerdict, automationFailureReported: source.automationFailureReported, automationFailureExpected: source.automationFailureExpected, harnessActivations: source.harnessActivations, actions: source.actions } } });
 }
@@ -405,8 +502,9 @@ async function runOnce(options: RunBenchOptions, attempt: Attempt): Promise<{ ev
       target: options.target,
     });
   } catch (error) {
-    const evaluation = evaluateFailedAttempt({ ...identity, lane: entry.lane, attemptId: attempt.attemptId, error, wallClockMs: Date.now() - started });
-    return recordRun(attempt, evaluation, { problems: [`runner: ${describeError(error)}`], cause: describeError(error) });
+    const facilityFailure = caughtFacilityFailure(error);
+    const evaluation = evaluateFailedAttempt({ ...identity, lane: entry.lane, attemptId: attempt.attemptId, error, facilityFailure, wallClockMs: Date.now() - started });
+    return recordRun(attempt, evaluation, { problems: [] });
   }
   const wallClockMs = Date.now() - started;
   const problems: string[] = [];
@@ -414,7 +512,7 @@ async function runOnce(options: RunBenchOptions, attempt: Attempt): Promise<{ ev
   // A run can write several `error` events, and its cause is the one written under the category the runner returned.
   const bundle = await readRunBundle(result.path, result.failureCategory);
   problems.push(...bundle.problems);
-  const observed = { ...identity, result, manifest: bundle.manifest, metrics: bundle.metrics, finalSequence: bundle.finalSequence, errorSequence: bundle.errorSequence, wallClockMs };
+  const observed = { ...identity, facilityFailure: bundle.evaluation?.facilityFailure ?? null, result, manifest: bundle.manifest, metrics: bundle.metrics, finalSequence: bundle.finalSequence, errorSequence: bundle.errorSequence, wallClockMs };
   const evaluation = entry.lane === "flow" ? evaluateFlowRun(observed) : evaluateRecordingRun(observed);
   // The run's own `error` event is the only place the message behind a failed
   // run exists; the runner's result carries a category and no text.
@@ -429,6 +527,7 @@ async function recordRun(attempt: Attempt, evaluation: RunEvaluation, observed: 
       ...identityOf(attempt.entry), repeatIndex: attempt.repeatIndex, status: "evaluated",
       runId: evaluation.runId, evaluation: evaluationPath, verdict: evaluation.verdict,
       ...(evaluation.failureCategory === undefined ? {} : { failureCategory: evaluation.failureCategory }),
+      facilityFailure: evaluation.facilityFailure,
       actionsExecuted: actionsExecuted(evaluation),
       ...(evaluation.verdict !== "passed" && observed.cause ? { failureCause: observed.cause } : {}),
       ...(observed.problems.length ? { problems: observed.problems } : {}),
@@ -504,12 +603,16 @@ function assertEvaluationIdentity(cell: CampaignPlanCell, evaluation: RunEvaluat
   if (evaluation.runId !== runId || evaluation.scenarioId !== cell.scenarioId || evaluation.workflowId !== cell.workflowId || evaluation.variantId !== cell.variantId || evaluation.repeatIndex !== cell.repeatIndex || evaluation.lane !== cell.lane || canonicalJson(evaluation.automationFailureExpected) !== canonicalJson(cell.expectedFailure)) throw new Error("Completed evaluation identity does not match its campaign cell");
 }
 function assertCaughtRunnerEvaluation(evaluation: RunEvaluation): void {
-  if (evaluation.verdict !== "inconclusive" || !evaluation.invariants.some((invariant) => invariant.actual.startsWith("runner threw before finalizing a bundle:"))) throw new Error("Completed campaign cell has no finalized bundle");
+  if (evaluation.verdict !== "inconclusive" || evaluation.facilityFailure?.boundary !== "no-final-bundle" || !evaluation.invariants.some((invariant) => invariant.actual.startsWith("runner threw before finalizing a bundle:"))) throw new Error("Completed campaign cell has no finalized bundle");
 }
 function recordFromEvaluation(cell: CampaignPlanCell, evaluation: RunEvaluation, bundle?: Awaited<ReturnType<typeof readRunBundle>>, observed?: { problems: string[]; cause?: string }): BenchRunRecord {
   const problems = observed?.problems ?? bundle?.problems ?? [];
   const cause = observed?.cause ?? bundle?.recordedFailure?.message;
-  return { ...identityOf(cell), repeatIndex: cell.repeatIndex, status: "evaluated", runId: evaluation.runId, evaluation: `evaluations/${evaluation.runId}.json`, verdict: evaluation.verdict, ...(evaluation.failureCategory ? { failureCategory: evaluation.failureCategory } : {}), actionsExecuted: actionsExecuted(evaluation), ...(evaluation.verdict !== "passed" && cause ? { failureCause: cause } : {}), ...(problems.length ? { problems } : {}) };
+  return { ...identityOf(cell), repeatIndex: cell.repeatIndex, status: "evaluated", runId: evaluation.runId, evaluation: `evaluations/${evaluation.runId}.json`, verdict: evaluation.verdict, ...(evaluation.failureCategory ? { failureCategory: evaluation.failureCategory } : {}), facilityFailure: evaluation.facilityFailure, actionsExecuted: actionsExecuted(evaluation), ...(evaluation.verdict !== "passed" && cause ? { failureCause: cause } : {}), ...(problems.length ? { problems } : {}) };
+}
+
+function caughtFacilityFailure(error: unknown): NonNullable<RunEvaluation["facilityFailure"]> {
+  return error instanceof ProjectedFacilityError ? error.facilityFailure : projectFacilityFailure(error, "no-final-bundle", "bench.persist");
 }
 function requireAccepted(accepted: Map<string, AcceptedCell>, cell: CampaignPlanCell): AcceptedCell {
   const value = accepted.get(cell.cellKey); if (!value) throw new Error("Campaign aggregate is missing an executable cell"); return value;

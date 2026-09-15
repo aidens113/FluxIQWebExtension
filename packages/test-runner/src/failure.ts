@@ -19,7 +19,7 @@
 // answering why the *facility* could not produce a trustworthy run, which is a
 // different question from how the *automation* failed. Keep them apart.
 
-import type { FailureCategory } from "@fluxiq-web-extension/test-contracts";
+import { facilityFailureCauseCodes, type FailureCategory, type FacilityFailureCauseCode } from "@fluxiq-web-extension/test-contracts";
 
 /** Why the facility itself could not produce a trustworthy run; never how the automation failed. */
 export type RunnerFailureCategory = FailureCategory;
@@ -54,32 +54,41 @@ export class RunnerFailure extends Error {
  * mid-rebuild raises those rather than the not-found ones, and it is the same
  * fault.
  */
-const MISSING_MODULE_CODES = ["ERR_MODULE_NOT_FOUND", "MODULE_NOT_FOUND", "ERR_PACKAGE_PATH_NOT_EXPORTED", "ERR_PACKAGE_IMPORT_NOT_DEFINED", "ERR_UNSUPPORTED_DIR_IMPORT"];
-/** Filesystem codes for a path the facility required and could not reach. */
-const MISSING_PATH_CODES = ["ENOENT", "EACCES", "EPERM"];
-/** Socket codes raised while a run's processes are coming up. */
-const STARTUP_CODES = ["EADDRINUSE", "ECONNREFUSED", "ECONNRESET"];
+export type RunnerCauseKind = "module.missing" | "path.missing" | "path.denied" | "startup";
+export type BoundedRunnerCause = Readonly<{ code: FacilityFailureCauseCode | "EADDRINUSE"; kind: RunnerCauseKind }>;
+
+/** One shared allowlist for classification and durable projection. */
+const RUNNER_CAUSE_CODES = new Set<string>([...facilityFailureCauseCodes, "EADDRINUSE"]);
 const MAX_CAUSE_DEPTH = 4;
 
 export function classifyRunnerFailure(error: unknown): RunnerFailureCategory {
   if (error instanceof RunnerFailure) return error.category;
-  for (const code of boundedCauseCodes(error)) {
-    if (MISSING_PATH_CODES.includes(code) || MISSING_MODULE_CODES.includes(code)) return "environment.missing";
-    if (STARTUP_CODES.includes(code)) return "process.startup";
-  }
+  const cause = boundedRunnerCause(error);
+  if (cause?.kind === "module.missing" || cause?.kind === "path.missing" || cause?.kind === "path.denied") return "environment.missing";
+  if (cause?.kind === "startup") return "process.startup";
   return "unknown";
 }
 
-function boundedCauseCodes(error: unknown): string[] {
-  const codes: string[] = [];
+/** Selects the first recognized code through a bounded, getter-safe cause chain. */
+export function boundedRunnerCause(error: unknown): BoundedRunnerCause | undefined {
   let current = error;
   for (let depth = 0; depth < MAX_CAUSE_DEPTH && typeof current === "object" && current !== null; depth += 1) {
     try {
-      if ("code" in current && typeof current.code === "string") codes.push(current.code);
+      if ("code" in current && typeof current.code === "string" && RUNNER_CAUSE_CODES.has(current.code)) {
+        const code = current.code as BoundedRunnerCause["code"];
+        return { code, kind: causeKind(code) };
+      }
       current = "cause" in current ? current.cause : undefined;
     } catch {
-      break;
+      return undefined;
     }
   }
-  return codes;
+  return undefined;
+}
+
+function causeKind(code: BoundedRunnerCause["code"]): RunnerCauseKind {
+  if (code === "ENOENT") return "path.missing";
+  if (code === "EACCES" || code === "EPERM") return "path.denied";
+  if (code === "MODULE_NOT_FOUND" || code.startsWith("ERR_")) return "module.missing";
+  return "startup";
 }

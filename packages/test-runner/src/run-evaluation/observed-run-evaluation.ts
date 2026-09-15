@@ -17,6 +17,8 @@ export type RunEvaluationIdentity = {
 
 export type ObservedRun = {
   identity: RunEvaluationIdentity;
+  /** Closed, sanitized facility diagnostic; every producer must state null explicitly when the facility did not fail. */
+  facilityFailure: RunEvaluation["facilityFailure"];
   /** How the run fared as a test. */
   outcome: RunOutcome;
   /**
@@ -68,6 +70,7 @@ export function evaluateObservedRun(input: ObservedRun): RunEvaluation {
     runId: outcome.runId,
     verdict: judged.verdict,
     ...(judged.failureCategory === undefined ? {} : { failureCategory: judged.failureCategory }),
+    facilityFailure: input.facilityFailure,
     invariants: judged.invariants,
     metrics: outcome.metrics,
     scenarioId: identity.scenarioId,

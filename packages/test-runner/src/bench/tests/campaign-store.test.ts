@@ -7,6 +7,7 @@ import { BENCH_SEMANTICS_VERSION, CAMPAIGN_SCHEMA_VERSION, campaignPlanSha256, c
 import type { BenchPlanEntry } from "../expand-corpus.js";
 
 const benchId = "bench-unit-0123abcd";
+test("campaign semantics include typed facility diagnostics", () => { assert.equal(BENCH_SEMANTICS_VERSION, "0.3"); });
 const compatibility: CampaignCompatibility = {
   repositories: { facilityCommit: "a".repeat(40), coreCommit: "b".repeat(40) },
   lockfiles: { facilitySha256: "c".repeat(64), coreSha256: "d".repeat(64) },
@@ -23,9 +24,25 @@ function manifest(): CampaignManifest {
   return {
     schemaVersion: CAMPAIGN_SCHEMA_VERSION, benchId, createdAt: "2026-09-14T00:00:00.000Z", benchSemanticsVersion: BENCH_SEMANTICS_VERSION,
     request: { corpusId: "unit", repeatCount: 1, target: { mode: "isolated", workspace: null }, evidence: null },
-    plan, planSha256: campaignPlanSha256(plan), compatibility,
+    plan, planSha256: campaignPlanSha256(plan), compatibility, execution: { mode: "serial" },
   };
 }
+
+test("schema 0.3 accepts exact serial, shard-parent, and shard-child execution identities only", () => {
+  const serial = manifest();
+  assert.deepEqual(parseCampaignManifest(serial).execution, { mode: "serial" });
+  const parent = parseCampaignManifest({ ...serial, execution: { mode: "shard-parent", algorithm: "result-round-robin-v1", shardCount: 2, jobs: 1 } });
+  assert.deepEqual(parent.execution, { mode: "shard-parent", algorithm: "result-round-robin-v1", shardCount: 2, jobs: 1 });
+  const child = parseCampaignManifest({ ...serial, benchId: "bench-child-89abcdef", execution: { mode: "shard-child", algorithm: "result-round-robin-v1", parentCampaignId: serial.benchId, parentPlanSha256: serial.planSha256, shardIndex: 1, shardCount: 2 } });
+  assert.equal(child.execution.mode, "shard-child");
+  assert.throws(() => parseCampaignManifest({ ...serial, execution: { mode: "serial", shardCount: 2 } }), /unexpected or missing keys/u);
+  assert.throws(() => parseCampaignManifest({ ...serial, execution: { mode: "shard-parent", algorithm: "changed", shardCount: 2, jobs: 1 } }), /algorithm/u);
+  assert.throws(() => parseCampaignManifest({ ...serial, execution: { mode: "shard-parent", algorithm: "result-round-robin-v1", shardCount: 2 } }), /unexpected or missing keys/u);
+  assert.throws(() => parseCampaignManifest({ ...serial, execution: { mode: "shard-parent", algorithm: "result-round-robin-v1", shardCount: 2, jobs: 0 } }), /positive safe integer/u);
+  assert.throws(() => parseCampaignManifest({ ...serial, execution: { mode: "shard-parent", algorithm: "result-round-robin-v1", shardCount: 2, jobs: 3 } }), /less than or equal to shardCount/u);
+  assert.throws(() => parseCampaignManifest({ ...serial, execution: { mode: "shard-parent", algorithm: "result-round-robin-v1", shardCount: 2, jobs: 1.5 } }), /positive safe integer/u);
+  assert.throws(() => parseCampaignManifest({ ...serial, execution: { mode: "shard-child", algorithm: "result-round-robin-v1", parentCampaignId: serial.benchId, parentPlanSha256: serial.planSha256, shardIndex: 2, shardCount: 2 } }), /less than shardCount/u);
+});
 
 function checkpoint(campaign: CampaignManifest, generation: number, previousSha256: string | null, overrides: Partial<CampaignCheckpointInput> = {}): CampaignCheckpointInput {
   return {

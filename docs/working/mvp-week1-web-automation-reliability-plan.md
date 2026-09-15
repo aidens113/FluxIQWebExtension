@@ -38,9 +38,9 @@ every dispatch and amendment is in
 settled ledger entries are in parts one to fifty of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
-**Repository state.** Downstream `dev` and `origin/dev` are `8fb1331`; Core
+**Repository state.** Downstream `dev` and `origin/dev` are `4d5c8a6`; Core
 `dev` and `origin/dev` are `19468b7`, `fluxiq` 0.4.0. Core is clean and unchanged.
-The W11 timing/contract repair and final reports are an uncommitted downstream unit.
+Facility diagnostics and parallel durable bench shards are an uncommitted downstream unit.
 
 **Settled this session** (ledger and archive):
 - **Core:** trace withholding; the late-message discard; W19 C1 and C2; the shared
@@ -88,26 +88,27 @@ The W11 timing/contract repair and final reports are an uncommitted downstream u
   real-page capture cost and candidate caps.
 
 **In flight:**
-- Repaired campaigns A `bench-mu1esgvq-ea2bcc93` and B
-  `bench-mu1es0uy-050c724f` completed 189/189 plus 12 skips at clean `8fb1331`:
-  179/10 and 178/11 pass/fail. Both have 380 valid checkpoints, no lease/residue,
-  zero leaks/harness/persistence/action discards, packet p95 5934 and max 5992,
-  fallback 5/5, and required classifications 15/15.
-- The official comparison found all 22 gated metrics equivalent but one verdict
-  difference: B W27 Flow repeat 0 reset during pairing approval before Flow,
-  actions, steps, or evidence. Five peer runs passed; this is a single facility/
-  machine-load observation, not evidence for a product change.
-- Both campaigns' W11 Flow repeat 2 recorded two of three scrolls at the recorder's
-  400 ms debounce boundary. The runner now settles 500 ms after scripted wheels;
-  W11 requires exactly three scroll events. Mutations and root check/test/build
-  passed; three corrected concurrent A/B pairs all recorded/proposed/executed
-  3/3 scrolls with passing oracles and zero harness use.
+- Final-confirmation A `bench-mu1r0ez9-48775719` and B
+  `bench-mu1qz69w-e5ab6a03` are intentionally paused and invalidated as acceptance
+  evidence after B's W25 Flow repeat 0 finalized `environment.missing` before Flow,
+  actions, or harness. Their 180 and 190 contiguous checkpoints remain recoverable.
+- Three focused W25 Flow reruns passed at 55.5, 60.2, and 59.2 seconds with the
+  intended timeout, passing oracle, complete bundles, and zero harness use. This
+  rules out a repeating W25 product/fixture defect and identifies a facility event.
+- RunEvaluation schema 0.2 now preserves bounded typed facility diagnostics through
+  finalization, synthetic failure, checkpoint crash, and resume without raw causes.
+  Bench semantics 0.3 invalidates older acceptance campaigns deliberately.
+- Deterministic result-group sharding now gives each child independent authority,
+  leases, checkpoints, evaluations, and recovery; an authenticated parent merge
+  fails closed. A machine-wide FIFO gate caps live cells at two and checks memory.
+- Supervisor `pnpm check`, `pnpm test` (799/799 runner tests), and `pnpm build` pass.
+  The remaining gate is a clean-pinned live two-shard kill/resume proof.
 - Process disclosure: a worker search displayed the fixture-only loopback test
   secret during setup. It was not repeated, hashed, or persisted in reports. The
   search procedure must resolve the value without output in future runs.
 
-**Queued:** commit/push this downstream unit, run one final clean-pinned durable
-A/B pair, compare it, then close the exit-criteria and blocker-ranking ledger.
+**Focused gate:** W25 passed 3/3; implement durable facility diagnostics, their
+crash/resume proof, and deterministic parallel cell sharding before a fresh A/B pair.
 
 **Exit criteria as they stand**
 

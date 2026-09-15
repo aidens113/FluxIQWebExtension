@@ -6103,6 +6103,296 @@ never replace it. Do not edit tracked files while it runs. At terminal aggregate
 inspect bounded checkpoint, projection, evidence, discard, lease, metric, and pin
 facts; then write only your report. Never commit/push.
 
+# Forty-first dispatch — live parallel-shard recovery proof
+
+## bl-sharded-live-smoke — interrupt and resume two real cells
+
+**Report:** `reports/bl-sharded-live-smoke.md`
+
+**Read:** Current State; reports `ba-parallel-bench-design.md`,
+`bi-sharded-bench-orchestrator.md`, and `bk-sharded-bench-docs.md`.
+
+**Task:** After the supervisor supplies a clean local downstream pin, run a real
+`smoke` bench once with isolated topology, `--shards 2 --jobs 2`, env files
+disabled, and only `F:\fxlab-runs\sharded-smoke\interrupt` as the runs root.
+Do not need or inspect any fixture secret. Capture the logical bench ID without
+printing environment contents. Once both child cells have demonstrably begun,
+interrupt the owning process, inspect only non-secret campaign/checkpoint/lease
+state, then resume that exact ID with `lab bench --resume`. Require terminal
+sealed parent state, two terminal children, exact two-result coverage, valid
+checkpoint chains, no live leases or staging residue, and passing evaluations.
+Record timings and whether the two child attempts overlapped. Write the report
+only after the resumed campaign is terminal. Do not edit code, commit, or push.
+
+# Fortieth dispatch — focused W25 environment-missing gate
+
+## as-w25-focused-a — isolated live reproduction
+
+**Report:** `reports/as-w25-focused-a.md`
+
+**Read:** Current State; W25 manifest; the runner files that own fixture readiness
+and `environment.missing`; no unrelated corpus or MVP background documents.
+
+**Task:** On clean downstream `4d5c8a6` and Core `19468b72`, reproduce only W25
+`delayed-ui` / `too-slow` / Flow in a new run root under
+`F:\fxlab-runs\w25-focused\a`, env files disabled. Run three sequential attempts,
+preserve artifacts, and report bounded phase/timing/verdict evidence. Do not edit
+code, inspect raw page data, expose secrets, commit, push, or resume the full bench.
+
+## at-w25-diagnosis — source and artifact-boundary diagnosis
+
+**Report:** `reports/at-w25-diagnosis.md`
+
+**Read:** Current State; W25 manifest; sanitized B evaluation/checkpoint receipt for
+W25 `too-slow` Flow repeat 0; only source/tests owning fixture readiness,
+`environment.missing`, and pre-Flow orchestration.
+
+**Task:** Explain the precise failure boundary and plausible deterministic versus
+machine-load causes. Inspect only bounded metadata and never raw captured data or
+secrets. Do not edit production code or run a full corpus. Recommend the narrowest
+focused test/reproduction and a fix only if evidence justifies one. Write report;
+never commit/push.
+
+## au-synthetic-failure-observability — durable diagnostic audit
+
+**Report:** `reports/au-synthetic-failure-observability.md`
+
+**Read:** report `at-w25-diagnosis.md`; only bench evaluation/receipt schemas,
+failure projection, outer `runScenario` boundaries, and their owning tests.
+
+**Task:** Audit whether a no-final-bundle attempt durably records enough sanitized
+operation-stage and cause metadata to diagnose/resume after a crash or facility
+failure. Propose the smallest fail-closed contract/test change if there is a gap,
+including compatibility and secret-safety constraints. Do not edit production code,
+run Lab/full corpus, inspect raw artifacts, commit, or push. Write only your report.
+
+## av-correct-w25-diagnosis — repair contradicted report
+
+**Report:** replace `reports/at-w25-diagnosis.md`
+
+**Read:** reports `at-w25-diagnosis.md`, `au-synthetic-failure-observability.md`,
+and `as-w25-focused-a.md`; the immutable W25 evaluation only if needed.
+
+**Task:** Rewrite `at` so it correctly identifies W25 as a finalized failed bundle,
+removes every synthetic/no-final-bundle claim, incorporates the 3/3 focused result,
+and distinguishes a non-repeating facility observation from the separate durable
+typed-diagnostic gap. Run diff check. No production edits, Lab, commit, or push.
+
+## aw-facility-failure-contract — immutable typed diagnostic schema
+
+**Report:** `reports/aw-facility-failure-contract.md`
+
+**Own:** `packages/test-contracts/src/evaluation.ts`,
+`packages/test-contracts/src/evaluation-validation.ts`,
+`packages/test-contracts/tests/evaluation-contracts.test.mjs`, and direct barrel only.
+
+**Task:** Add a required nullable, closed-enum, secret-safe facility-failure diagnostic
+to `RunEvaluation`; version the run-evaluation schema without unnecessarily changing
+CandidateComparison; accept legacy 0.1 reads by explicit normalization while new
+writes are 0.2. Reject unknown/extra/raw-shaped values and invalid verdict pairings.
+Run package check/tests and diff check. Do not edit runner files, commit, or push.
+
+## ax-facility-producer-map — bounded implementation map
+
+**Report:** `reports/ax-facility-producer-map.md`
+
+**Read:** report `au`; only runner files/tests that create/read `RunEvaluation`, own
+`runScenario` error boundaries, failure projection, campaign persistence, and resume.
+
+**Task:** Produce an exact file-partitioned implementation map for propagating the new
+typed diagnostic through finalized and no-final-bundle paths, including stage tracking,
+legacy reads, aggregation, crash/resume and secret-sentinel tests. Do not edit production
+or test code, run Lab/full corpus, commit, or push. Write only your report.
+
+## ay-facility-projection-stages — closed projector and scenario wiring
+
+**Report:** `reports/ay-facility-projection-stages.md`
+
+**Own:** only Partition A files named in `reports/ax-facility-producer-map.md`.
+
+**Task:** Implement the closed, idempotent facility projector, projected error wrapper,
+shared allowlist, and `runScenario` stage tracking exactly within Partition A. Preserve
+primary-over-cleanup precedence and pass the finalized diagnostic toward evaluation.
+Add sentinel/fail-closed/mutation-sensitive tests. Run focused tests, package check, and
+diff check. Never edit contracts, evaluation producers, bench files, commit, push, or Lab.
+
+## az-facility-evaluation-producers — evaluation propagation
+
+**Report:** `reports/az-facility-evaluation-producers.md`
+
+**Own:** only Partition B files named in `reports/ax-facility-producer-map.md`.
+
+**Task:** Propagate the required nullable diagnostic through observed/single/recording/
+Flow evaluation producers and `evaluateFailedAttempt`, using the contract worker's exact
+exports. Make producer omission impossible; preserve expected-automation and inconclusive
+semantics. Add parity, serialization, and invalid-pairing tests. Run focused tests, package
+check, and diff check. Never edit contracts, scenario/projection, campaign files, commit,
+push, or Lab.
+
+## ba-parallel-bench-design — deterministic cell sharding
+
+**Report:** `reports/ba-parallel-bench-design.md`
+
+**Read:** Current State; campaign identity/store/lease/executor and CLI; aggregate/report/
+compare paths; only their owning tests and repository commands.
+
+**Task:** Design the smallest safe way to execute one logical full campaign across
+parallel, disjoint cell shards without multi-writer corruption. Prefer isolated shard
+campaign directories plus a deterministic authenticated merge if that preserves current
+receipt/checkpoint/resume guarantees. Specify CLI, identity/compatibility, aggregation,
+failure recovery, A/B independence, process/memory cap, file partition, and mutation tests.
+Do not edit code, run Lab/full corpus, inspect artifacts/secrets, commit, or push. Report only.
+
+## bb-facility-campaign-persistence — durable resume and rendering
+
+**Report:** `reports/bb-facility-campaign-persistence.md`
+
+**Own:** only Partition C files named in `reports/ax-facility-producer-map.md`.
+
+**Task:** Persist and reconstruct the typed facility diagnostic in resumable and legacy
+bench paths; derive run records/failure rendering only from the immutable evaluation;
+remove raw synthetic cause persistence; bump bench semantics; reject legacy-null synthetic
+resume. Add crash-after-checkpoint exact-once, reconstruction, idempotence, and recursive
+secret-sentinel absence tests. Run focused bench tests/package check/diff check. Never edit
+contracts, projection/scenario, evaluation-producer files, run Lab, commit, or push.
+
+## bc-shard-cli-plan — flags and pure deterministic partition
+
+**Report:** `reports/bc-shard-cli-plan.md`
+
+**Own:** `packages/test-runner/src/commands.ts`, its direct owning command tests; new
+`packages/test-runner/src/bench/campaign/shard-plan.ts` and its owning test; campaign
+barrel only if required. Do not edit campaign identity/store/executor/CLI dispatcher.
+
+**Task:** Implement strict creation-only `--shards 2..8` and `--jobs 1..shards` parsing
+with serial default unchanged and resume overrides refused. Implement pure
+`result-round-robin-v1` grouping that keeps all repeats together, preserves cell keys,
+reindexes child ordinals, balances deterministically, and proves exact disjoint coverage.
+Add invalid-flag and mutation-sensitive identity tests. Run focused tests/package check/
+diff check. Never touch diagnostic-owned files, run Lab, commit, or push.
+
+## bd-machine-cell-slots — global bounded concurrency lease
+
+**Report:** `reports/bd-machine-cell-slots.md`
+
+**Own:** new `packages/test-runner/src/bench/campaign/machine-slots/` source/tests only;
+do not edit an existing barrel, lease, campaign, CLI, or executor file.
+
+**Task:** Implement a reusable filesystem-backed FIFO machine slot pool for isolated Lab
+cells, default cap two, with boot/PID/process-identity fencing, atomic claims, stale-owner
+recovery, bounded polling, idempotent release, and a pluggable free-memory gate reserving
+4 GiB and budgeting 3 GiB per added slot. Reject unsafe roots/config and fail closed on
+unreadable ownership. Add concurrency/fairness/low-memory/dead/reboot/PID-reuse tests.
+Run focused tests/package check/diff check; report. No Lab, commit, push, or other edits.
+
+## be-shard-group-store — parent/child authority and merge seal
+
+**Report:** `reports/be-shard-group-store.md`
+
+**Own:** `packages/test-runner/src/bench/campaign/identity.ts`, `store.ts`, their direct
+tests; new `shard-group-store.ts` and owning test. Do not edit campaign barrel, executor,
+merge, CLI, commands, shard-plan, or machine-slots files.
+
+**Task:** Add campaign schema 0.3 execution identity for serial versus sharded logical
+parents/children, preserving bench semantics 0.3. Parse/prove exact child indices, IDs,
+plan hashes, request/compatibility/semantics and deterministic partition coverage using
+the pure shard-plan seam. Implement contained create-only parent/child manifests and an
+exact secret-refusing merge seal authenticating parent/child/projection digests. Add
+corruption/path-escape/unknown-key/coverage tests. Run focused tests/package check/diff
+check; report. No Lab, commit, push, or other edits.
+
+## bf-shard-authenticated-merge — terminal child merge
+
+**Report:** `reports/bf-shard-authenticated-merge.md`
+
+**Own:** new `packages/test-runner/src/bench/shard-merge.ts` and owning test only; do
+not edit executor, stores, barrels, reports, CLI, or comparison files.
+
+**Task:** Implement the pure/file-backed authenticated merge seam from `ba`: require
+terminal unleased child chains, exact parent/child identity and coverage, rehash/parse
+every immutable evaluation, reject duplicates/orphans/corruption, and copy bytes
+create-exclusively/idempotently into parent order. Produce merge inputs and exact seal
+digests for the executor without writing projections itself. Add child-finish permutation,
+byte corruption, duplicate/missing/orphan, identity mismatch, idempotent-copy, and path
+containment tests. Run focused/package/diff checks; report. No Lab, commit, or push.
+
+## bg-shard-child-executor — explicit-directory serial engine
+
+**Report:** `reports/bg-shard-child-executor.md`
+
+**Own:** `packages/test-runner/src/bench/run-bench.ts` and
+`packages/test-runner/src/bench/tests/run-bench.test.ts` only.
+
+**Task:** Refactor the proven serial campaign engine behind an explicit contained campaign
+directory/precreated manifest seam so independently leased nested shard children can execute
+and resume without changing cell semantics. Keep ordinary create/resume byte-compatible in
+behavior, refuse parent manifests in the serial engine, validate each child's saved plan
+against supplied entries, and expose the smallest orchestrator API. Preserve all diagnostic
+crash proofs. Add nested-child, wrong-parent/plan/directory, lease, interruption/reconcile,
+and exact-once tests. Run focused/full runner check/tests/diff check; report. Do not edit
+stores, merge, CLI, commands, slots, barrels, commit, push, or Lab.
+
+## bh-sharded-closeout-comparison — sealed topology comparability
+
+**Report:** `reports/bh-sharded-closeout-comparison.md`
+
+**Own:** `packages/test-runner/src/bench/closeout-comparison.ts`,
+`load-report.ts`, and their direct compare/load tests only.
+
+**Task:** Extend report loading with optional validated logical-campaign topology metadata:
+serial, or sealed sharded algorithm/count/jobs. A sharded report is readable only with a
+finished parent checkpoint and matching authenticated merge seal. Shared-load comparison
+must require identical topology; sequential comparison must disclose mismatch without
+hiding metric/verdict results. Preserve legacy serial report loading. Add unsealed/tampered/
+mismatched jobs-count-algorithm/legacy tests. Run focused/package/diff checks; report. Do not
+edit store/merge/executor/CLI/commands/barrels, run Lab, commit, or push.
+
+## bi-sharded-bench-orchestrator — logical create/resume scheduler
+
+**Report:** `reports/bi-sharded-bench-orchestrator.md`
+
+**Own:** new `packages/test-runner/src/bench/sharded-bench.ts` and owning test only.
+
+**Task:** Implement logical sharded create/resume using the frozen parent/child group,
+parent lease, saved jobs setting, bounded child worker pool, precreated child executor,
+and per-cell global machine-slot wrapper. Continue healthy siblings if one cell records a
+failure; reject scheduler/manifest overrides on resume. After terminal children, run the
+authenticated merge, write parent aggregating checkpoint, normal projections, exact seal,
+then finished checkpoint in crash-resumable/idempotent order. Add lifecycle, job-cap/FIFO
+wrapper, child-crash continuation, merge-boundary crash matrix, second-resume exactness,
+and invalid-parent tests. Run focused/package/full tests/diff; report. Do not edit existing
+files/barrels/CLI/commands/store/merge/executor/comparison, run Lab, commit, or push.
+
+## bj-sharded-cli-wiring — logical lifecycle dispatch
+
+**Report:** `reports/bj-sharded-cli-wiring.md`
+
+**Own:** `packages/test-runner/src/cli.ts`, `bench/index.ts`,
+`bench/campaign/index.ts`, and one new direct CLI wiring test only.
+
+**Task:** Export the approved sharding/slot/store/merge/orchestrator seams. Dispatch
+creation with `shards` to logical sharded execution and resume by saved manifest execution
+mode; keep serial paths unchanged and print only the logical parent lifecycle ID/path.
+Resolve one machine-wide slot root shared across differing A/B run roots via a safe OS-temp
+location, with no secret/path leakage, and ensure build preparation occurs once before child
+scheduling. Add source/runtime wiring tests for create/resume discrimination, no overrides,
+logical lifecycle, and shared slot root. Run focused/package/full tests/diff; report. Do not
+edit commands or implementation modules, run Lab, commit, or push.
+
+## bk-sharded-bench-docs — authored architecture and commands
+
+**Report:** `reports/bk-sharded-bench-docs.md`
+
+**Own:** `docs/architecture/testing-facility.md` and
+`docs/architecture/repository-layout.md` only.
+
+**Task:** Document `--shards/--jobs`, serial default, logical parent/child authority,
+repeat-group partitioning, two-cell global slot/memory policy, crash/resume semantics,
+authenticated merge/seal, A/B topology comparability, artifact layout, and narrow smoke/
+full commands. State that old paused campaigns resume only at their original pin and never
+mix schemas. Keep secrets and machine-specific run paths out. Run diff check; report. No
+code, generated docs, Lab, commit, or push.
+
 # Thirty-seventh dispatch — diagnose final A/B verdicts
 
 ## af-w27-final-reset — classify the lone A/B mismatch

@@ -14,7 +14,7 @@ test("the evidence sizes a lane measured reach the evaluation, copied rather tha
     sanitizedPacketBytes: [2_048, 4_096], rawSnapshotBytes: [], truncationCount: 1,
     packets: [{ actionPosition: 1, point: "beforeAction", bytes: 2_048, truncated: false }, { actionPosition: 1, point: "afterAction", bytes: 4_096, truncated: true }],
   };
-  const evaluation = evaluateObservedRun({ identity, outcome, observation: flow, evidence });
+  const evaluation = evaluateObservedRun({ identity, facilityFailure: null, outcome, observation: flow, evidence });
   // Only the contract's fields: the located packets are the budget check's input, not evaluation output.
   assert.deepEqual(evaluation.evidence, { sanitizedPacketBytes: [2_048, 4_096], rawSnapshotBytes: [], truncationCount: 1 });
   evidence.sanitizedPacketBytes.push(8_192);
@@ -22,9 +22,9 @@ test("the evidence sizes a lane measured reach the evaluation, copied rather tha
 });
 
 test("a run that passes no evidence sizes, as every recording-lane run does, records empty lists and no truncation", () => {
-  assert.deepEqual(evaluateObservedRun({ identity, outcome, observation: recording }).evidence, { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 });
+  assert.deepEqual(evaluateObservedRun({ identity, facilityFailure: null, outcome, observation: recording }).evidence, { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 });
 });
 
 test("a size the evaluation contract rejects is refused, never published", () => {
-  assert.throws(() => evaluateObservedRun({ identity, outcome, observation: flow, evidence: { sanitizedPacketBytes: [-1], rawSnapshotBytes: [], truncationCount: 0, packets: [] } }), /sanitizedPacketBytes/u);
+  assert.throws(() => evaluateObservedRun({ identity, facilityFailure: null, outcome, observation: flow, evidence: { sanitizedPacketBytes: [-1], rawSnapshotBytes: [], truncationCount: 0, packets: [] } }), /sanitizedPacketBytes/u);
 });

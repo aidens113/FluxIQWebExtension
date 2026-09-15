@@ -13,7 +13,7 @@ const identity = { scenarioId: "basic-form", workflowId: null, variantId: null, 
 // Only the fields an evaluation reads; the bench reads real manifests through parseRunManifestJson.
 const manifest = (fields: Partial<RunManifest> = {}): RunManifest => ({ startedAt: "2026-09-11T10:00:00.000Z", finishedAt: "2026-09-11T10:00:42.500Z", automationFailure: null, actions: [], ...fields }) as RunManifest;
 const action = (actionType: string, durationMs: number | undefined, status: ActionStatus = "succeeded") => ({ actionType, startedAt: "2026-09-11T10:00:10.000Z", ...(durationMs === undefined ? {} : { durationMs }), status });
-const input = (fields: Partial<RecordingRunInput> = {}): RecordingRunInput => ({ ...identity, result: { runId: "run-a", verdict: "passed" }, manifest: manifest(), metrics: { steps: 5 }, finalSequence: 17, errorSequence: undefined, wallClockMs: 50_000, ...fields });
+const input = (fields: Partial<RecordingRunInput> = {}): RecordingRunInput => ({ ...identity, result: { runId: "run-a", verdict: "passed" }, facilityFailure: null, manifest: manifest(), metrics: { steps: 5 }, finalSequence: 17, errorSequence: undefined, wallClockMs: 50_000, ...fields });
 /** A bundle directory that does not exist, so a Flow-lane evaluation that reads it finds no snapshot. */
 const NO_BUNDLE = path.join(tmpdir(), `fluxbench-no-bundle-${process.pid}-${Date.now()}`);
 /** The manifest holds the recording lane's probe action, so a Flow-lane evaluation reading it instead of the observation would be visible. */
@@ -103,11 +103,25 @@ test("without run.json the bench's wall clock is the duration and FluxIQ's verdi
 test("an expected failure travels with the run; a runner that throws is inconclusive, never a pass", () => {
   const negative = evaluateRecordingRun(input({ variantId: "expired", expectedFailure: { category: "auth_required" } }));
   assert.deepEqual([negative.variantId, negative.automationFailureExpected], ["expired", { category: "auth_required" }]);
-  const thrown = evaluateFailedAttempt({ ...identity, lane: "recording", repeatIndex: 1, attemptId: "bench-x-r1-0", error: new RunnerFailure("environment.missing", "Scenario Lab build is missing"), wallClockMs: 12 });
+  assert.equal(negative.facilityFailure, null, "an expected automation result is not a facility failure");
+  const facilityFailure = { boundary: "no-final-bundle", stage: "scenario.load", reason: "module.missing", causeCode: "ERR_MODULE_NOT_FOUND" } as const;
+  const thrown = evaluateFailedAttempt({ ...identity, lane: "recording", repeatIndex: 1, attemptId: "bench-x-r1-0", error: new RunnerFailure("environment.missing", "Scenario Lab build is missing"), facilityFailure, wallClockMs: 12 });
   assert.deepEqual([thrown.runId, thrown.verdict, thrown.failureCategory, thrown.oracleVerdict, thrown.reportedVerdict, thrown.durationMs, thrown.repeatIndex], ["bench-x-r1-0", "inconclusive", "environment.missing", null, null, 12, 1]);
   assert.equal(thrown.invariants[0]?.passed, false);
-  const thrownOnFlow = evaluateFailedAttempt({ ...identity, lane: "flow", attemptId: "bench-x-r0-1", error: new RunnerFailure("environment.missing", "Scenario Lab build is missing"), wallClockMs: 9 });
+  assert.deepEqual(thrown.facilityFailure, facilityFailure);
+  assert.deepEqual([thrown.actions, thrown.evidence.sanitizedPacketBytes, thrown.automationFailureReported], [[], [], null]);
+  const thrownOnFlow = evaluateFailedAttempt({ ...identity, lane: "flow", attemptId: "bench-x-r0-1", error: new RunnerFailure("environment.missing", "Scenario Lab build is missing"), facilityFailure, wallClockMs: 9 });
   assert.deepEqual([thrownOnFlow.lane, thrownOnFlow.flowCreated, thrownOnFlow.reportedVerdict], ["flow", false, null]);
+});
+
+test("facility diagnostics are explicit and cannot accompany a passing automation result", () => {
+  const facilityFailure = { boundary: "finalized-bundle", stage: "scenario.execute", reason: "http.transport", operationStage: "control.request", causeCode: "ECONNRESET" } as const;
+  const failed = evaluateRecordingRun(input({
+    result: { runId: "run-facility", verdict: "failed", failureCategory: "gateway.connection" }, facilityFailure,
+    manifest: manifest({ actions: [] }), errorSequence: 8,
+  }));
+  assert.deepEqual(failed.facilityFailure, facilityFailure);
+  assert.throws(() => evaluateRecordingRun(input({ facilityFailure })), /facilityFailure/u);
 });
 
 test("a Flow-lane run reports the lane's own observation, not an inference over the manifest", () => {

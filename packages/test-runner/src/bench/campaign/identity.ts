@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import type { BenchPlanEntry } from "../expand-corpus.js";
+import type { CAMPAIGN_SHARD_ALGORITHM } from "./shard-plan.js";
 
-export const CAMPAIGN_SCHEMA_VERSION = "0.2" as const;
-export const BENCH_SEMANTICS_VERSION = "0.2" as const;
+export const CAMPAIGN_SCHEMA_VERSION = "0.3" as const;
+export const BENCH_SEMANTICS_VERSION = "0.3" as const;
 const SHA256 = /^[0-9a-f]{64}$/u;
 
 export type CampaignCellIdentity = Readonly<{
@@ -43,6 +44,11 @@ export type CampaignCompatibility = Readonly<{
     viewport: Readonly<{ width: number; height: number }>;
   }>;
 }>;
+
+export type CampaignExecutionIdentity =
+  | Readonly<{ mode: "serial" }>
+  | Readonly<{ mode: "shard-parent"; algorithm: typeof CAMPAIGN_SHARD_ALGORITHM; shardCount: number; jobs: number }>
+  | Readonly<{ mode: "shard-child"; algorithm: typeof CAMPAIGN_SHARD_ALGORITHM; parentCampaignId: string; parentPlanSha256: string; shardIndex: number; shardCount: number }>;
 
 /** Canonical JSON with lexicographically ordered object keys. Undefined and non-JSON values are refused. */
 export function canonicalJson(value: unknown): string {

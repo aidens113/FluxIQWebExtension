@@ -120,6 +120,19 @@ test("bench runs a named corpus a number of times on the recording lane's target
   assert.throws(() => parseLabCommand(["bench", "smoke"]), /options only/);
 });
 
+test("bench shard and job flags are strict creation-only bounded options", () => {
+  assert.deepEqual(parseLabCommand(["bench", "--corpus", "week1", "--shards", "4", "--jobs", "2"]), { command: "bench", corpusId: "week1", repeat: 1, shards: 4, jobs: 2 });
+  assert.deepEqual(parseLabCommand(["bench", "--corpus", "week1", "--shards", "2"]), { command: "bench", corpusId: "week1", repeat: 1, shards: 2 });
+  assert.equal("shards" in parseLabCommand(["bench", "--corpus", "week1"]), false, "the serial default stays shape-compatible");
+  for (const value of ["1", "9", "2.5", "many"]) assert.throws(() => parseLabCommand(["bench", "--corpus", "week1", "--shards", value]), /--shards/);
+  for (const args of [["--jobs", "1"], ["--shards", "3", "--jobs", "0"], ["--shards", "3", "--jobs", "4"], ["--shards", "3", "--jobs", "1.5"]]) {
+    assert.throws(() => parseLabCommand(["bench", "--corpus", "week1", ...args]), /--jobs/);
+  }
+  assert.throws(() => parseLabCommand(["bench", "--corpus", "week1", "--shards", "2", "--shards", "3"]), /only be specified once/);
+  assert.throws(() => parseLabCommand(["bench", "--corpus", "week1", "--shards", "3", "--jobs", "1", "--jobs", "2"]), /only be specified once/);
+  assert.throws(() => parseLabCommand(["bench", "--corpus", "week1", "--target", "persistent-isolated", "--workspace", "bench-dev", "--shards", "2"]), /requires the isolated target/);
+});
+
 test("bench resume accepts exactly one durable campaign ID and no plan overrides", () => {
   assert.deepEqual(parseLabCommand(["bench", "--resume", "bench-mu123abc-0123abcd"]), { command: "bench", resumeBenchId: "bench-mu123abc-0123abcd" });
   assert.throws(() => parseLabCommand(["bench", "--resume"]), /requires a value/);
@@ -128,6 +141,7 @@ test("bench resume accepts exactly one durable campaign ID and no plan overrides
   for (const extra of [
     ["--corpus", "week1"], ["--repeat", "3"], ["--target", "isolated"],
     ["--workspace", "bench-dev"], ["--evidence", "events"], ["extra"],
+    ["--shards", "2"], ["--jobs", "1"],
   ]) {
     assert.throws(() => parseLabCommand(["bench", "--resume", "bench-mu123abc-0123abcd", ...extra]), /cannot be combined/);
   }

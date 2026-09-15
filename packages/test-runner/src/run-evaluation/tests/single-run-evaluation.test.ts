@@ -21,6 +21,7 @@ const probe = recordingLaneObservation({
 
 const input = (fields: Partial<SingleRunInput> = {}): SingleRunInput => ({
   runId: "run-a", verdict: "passed", failureCategory: undefined, scenarioId: "basic-form",
+  facilityFailure: null,
   workflowId: undefined, variantId: undefined, observation: probe,
   manifest: manifest({ actions: [action("web.browser.navigate", 1_911), action("web.dom.type", 1_553)] }),
   metrics: { steps: 5 }, events: [{ sequence: 17, trigger: "final" }], wallClockMs: 50_000,
@@ -138,9 +139,24 @@ function benchRowOf(run: SingleRunInput, bundlePath: string): RunEvaluation {
   return evaluateFlowRun({
     scenarioId: run.scenarioId, workflowId: run.workflowId ?? null, variantId: run.variantId ?? null, repeatIndex: run.repeatIndex ?? 0, expectedFailure: run.observation.automationFailureExpected,
     result: { runId: run.runId, verdict: run.verdict, ...(run.failureCategory === undefined ? {} : { failureCategory: run.failureCategory }), path: bundlePath, observation: run.observation },
-    manifest: run.manifest, metrics: run.metrics, finalSequence: 17, errorSequence: undefined, wallClockMs: run.wallClockMs,
+    facilityFailure: run.facilityFailure, manifest: run.manifest, metrics: run.metrics, finalSequence: 17, errorSequence: undefined, wallClockMs: run.wallClockMs,
   });
 }
+
+test("a finalized facility diagnostic survives serialization, while invalid pass pairing is rejected", () => {
+  const facilityFailure = {
+    boundary: "finalized-bundle", stage: "scenario.execute", reason: "readiness.timeout",
+    operationStage: "core.health", timeoutMs: 30_000,
+  } as const;
+  const failed = singleRunEvaluation(input({
+    verdict: "failed", failureCategory: "process.startup", facilityFailure,
+    observation: recordingLaneObservation({ oracleVerdict: null, reportedVerdict: null, automationFailureReported: null, automationFailureExpected: null, actions: [] }),
+    events: [{ sequence: 9, trigger: "error" }],
+  }));
+  assert.deepEqual(failed.facilityFailure, facilityFailure);
+  assert.deepEqual(parseRunEvaluationJson(JSON.stringify(failed)), failed);
+  assert.throws(() => singleRunEvaluation(input({ facilityFailure })), /facilityFailure/u);
+});
 
 test("a Flow-lane single run records the packets its bundle measured, and agrees with its bench row field for field", (t) => {
   const bundlePath = bundleWith(t, TWO_PACKETS);

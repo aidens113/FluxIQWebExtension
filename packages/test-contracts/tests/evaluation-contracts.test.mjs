@@ -2,8 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   ContractValidationError,
+  CANDIDATE_COMPARISON_SCHEMA_VERSION,
   assertRunEvaluation,
   evaluationLanes,
+  facilityFailureBoundaries,
+  facilityFailureCauseCodes,
+  facilityFailureOperationStages,
+  facilityFailureReasons,
+  facilityFailureStages,
   llmUsageModes,
   parseRunEvaluationJson,
   validateLlmUsage,
@@ -15,7 +21,7 @@ const disabledLlm = { mode: "disabled", profileId: null, calls: 0 };
 
 // A Flow-lane replay of W26 `no-context`: FluxIQ failed, as the variant expects, and classified the failure correctly.
 const flowRun = () => ({
-  schemaVersion: "0.1", runId: "run-w26-no-context-2", verdict: "passed",
+  schemaVersion: "0.2", runId: "run-w26-no-context-2", verdict: "passed", facilityFailure: null,
   invariants: [{ id: "failure-classified", passed: true, expected: "target_ambiguous", actual: "target_ambiguous", evidenceSequences: [3] }], metrics: {},
   scenarioId: "ambiguous-targets", workflowId: null, variantId: "no-context", repeatIndex: 1, lane: "flow", flowCreated: true,
   oracleVerdict: "failed", reportedVerdict: "failed",
@@ -35,6 +41,69 @@ const recordingRun = () => ({
 const without = (value, key) => { const copy = { ...value }; delete copy[key]; return copy; };
 const issuesOf = (value) => { const checked = validateRunEvaluation(value); return checked.valid ? [] : checked.issues.map((issue) => issue.path); };
 const rejects = (value, label) => assert.equal(validateRunEvaluation(value).valid, false, label);
+const facilityRun = (facilityFailure = { boundary: "no-final-bundle", stage: "scenario.execute", reason: "unclassified" }) => ({
+  ...flowRun(), verdict: "inconclusive", failureCategory: "unknown", facilityFailure,
+  flowCreated: false, oracleVerdict: null, reportedVerdict: null, automationFailureReported: null, actions: [],
+});
+
+test("run evaluations write schema 0.2 while CandidateComparison remains 0.1", () => {
+  assert.equal(flowRun().schemaVersion, "0.2");
+  assert.equal(CANDIDATE_COMPARISON_SCHEMA_VERSION, "0.1");
+});
+
+test("the JSON reader explicitly normalizes legacy schema 0.1 evaluations", () => {
+  const legacy = without({ ...flowRun(), schemaVersion: "0.1" }, "facilityFailure");
+  assert.deepEqual(validateRunEvaluation(legacy), { valid: true, value: { ...legacy, schemaVersion: "0.2", facilityFailure: null } });
+  assert.deepEqual(parseRunEvaluationJson(JSON.stringify(legacy)), { ...legacy, schemaVersion: "0.2", facilityFailure: null });
+  assert.throws(() => assertRunEvaluation(legacy), ContractValidationError);
+  assert.throws(() => parseRunEvaluationJson(JSON.stringify({ ...legacy, facilityFailure: null })), ContractValidationError);
+});
+
+test("facility failures use only the closed diagnostic vocabulary", () => {
+  for (const boundary of facilityFailureBoundaries) assert.equal(validateRunEvaluation(facilityRun({ boundary, stage: "scenario.execute", reason: "unclassified" })).valid, true);
+  for (const stage of facilityFailureStages) assert.equal(validateRunEvaluation(facilityRun({ boundary: "no-final-bundle", stage, reason: "unclassified" })).valid, true);
+  const reasonExamples = {
+    "readiness.timeout": { operationStage: "scenario.health", timeoutMs: 60_000 },
+    "http.timeout": { operationStage: "auth.login", timeoutMs: 30_000 },
+    "http.abort": { operationStage: "project.select" },
+    "http.transport": { operationStage: "control.request", causeCode: "ECONNRESET" },
+    "module.missing": { causeCode: "ERR_MODULE_NOT_FOUND" },
+    "path.missing": { causeCode: "ENOENT" },
+    "path.denied": { causeCode: "EACCES" },
+    unclassified: {},
+  };
+  for (const reason of facilityFailureReasons) assert.equal(validateRunEvaluation(facilityRun({ boundary: "no-final-bundle", stage: "scenario.load", reason, ...reasonExamples[reason] })).valid, true, reason);
+  for (const operationStage of facilityFailureOperationStages) {
+    const readiness = operationStage === "scenario.health" || operationStage === "core.health";
+    const diagnostic = { boundary: "finalized-bundle", stage: "scenario.execute", reason: readiness ? "readiness.timeout" : "http.abort", operationStage, ...(readiness ? { timeoutMs: 1 } : {}) };
+    assert.equal(validateRunEvaluation(facilityRun(diagnostic)).valid, true, operationStage);
+  }
+  for (const causeCode of facilityFailureCauseCodes) {
+    const diagnostic = causeCode === "ENOENT" ? { boundary: "no-final-bundle", stage: "scenario.load", reason: "path.missing", causeCode }
+      : causeCode === "EACCES" || causeCode === "EPERM" ? { boundary: "no-final-bundle", stage: "scenario.load", reason: "path.denied", causeCode }
+      : causeCode.startsWith("ERR_") || causeCode === "MODULE_NOT_FOUND" ? { boundary: "no-final-bundle", stage: "scenario.load", reason: "module.missing", causeCode }
+      : { boundary: "finalized-bundle", stage: "scenario.execute", reason: "http.transport", operationStage: "control.request", causeCode };
+    assert.equal(validateRunEvaluation(facilityRun(diagnostic)).valid, true, causeCode);
+  }
+  rejects(facilityRun({ boundary: "no-final-bundle", stage: "scenario.load", reason: "module.missing", causeCode: "ECONNRESET" }), "transport code paired as missing module");
+  rejects(facilityRun({ boundary: "finalized-bundle", stage: "scenario.execute", reason: "http.transport", operationStage: "control.request", causeCode: "ERR_MODULE_NOT_FOUND" }), "module code paired as HTTP transport");
+});
+
+test("facility diagnostics reject raw shapes, unknown values, and invalid pairings", () => {
+  const base = facilityRun().facilityFailure;
+  for (const mutation of [
+    { ...base, boundary: "partial-bundle" }, { ...base, stage: "private.stage" }, { ...base, reason: "raw-error" },
+    { ...base, operationStage: "private.request" }, { ...base, causeCode: "RAW_SENTINEL" },
+    { ...base, timeoutMs: 0 }, { ...base, timeoutMs: 300_001 }, { ...base, timeoutMs: 1.5 },
+    { ...base, message: "RAW_SENTINEL" }, { ...base, path: "RAW_SENTINEL" }, { ...base, url: "RAW_SENTINEL" },
+    { ...base, body: "RAW_SENTINEL" }, { ...base, password: "RAW_SENTINEL" },
+  ]) rejects(facilityRun(mutation), JSON.stringify(mutation));
+  rejects({ ...flowRun(), facilityFailure: facilityRun().facilityFailure }, "pass with facility failure");
+  rejects(without(flowRun(), "facilityFailure"), "missing required nullable field");
+  rejects({ ...facilityRun(), failureCategory: undefined }, "diagnostic without facility category");
+  rejects({ ...facilityRun(), reportedVerdict: "failed", automationFailureReported: { category: "timeout" } }, "facility diagnostic with automation result");
+  rejects({ ...facilityRun(), facilityFailure: null }, "synthetic inconclusive evaluation without diagnostic");
+});
 
 test("a Flow-lane evaluation carries every per-run measurement the Metrics table needs", () => {
   assert.deepEqual([...evaluationLanes], ["recording", "flow"]);

@@ -46,6 +46,8 @@ export type { RunEvaluationIdentity } from "../run-evaluation/index.js";
 
 export type RecordingRunInput = RunEvaluationIdentity & {
   result: { runId: string; verdict: "passed" | "failed"; failureCategory?: string };
+  /** Closed facility diagnostic; null when the facility itself did not fail. */
+  facilityFailure: RunEvaluation["facilityFailure"];
   manifest: RunManifest | undefined;
   metrics: Record<string, number>;
   /** Sequence of the run's `final` evidence event. */
@@ -73,7 +75,7 @@ export type FlowRunInput = Omit<RecordingRunInput, "result"> & {
  * lists and a truncation count of 0.
  */
 export function evaluateRecordingRun(input: RecordingRunInput): RunEvaluation {
-  return evaluateObservedRun({ identity: input, outcome: outcomeOf(input), observation: benchRecordingObservation(input) });
+  return evaluateObservedRun({ identity: input, facilityFailure: input.facilityFailure, outcome: outcomeOf(input), observation: benchRecordingObservation(input) });
 }
 
 /**
@@ -92,6 +94,7 @@ export function evaluateFlowRun(input: FlowRunInput): RunEvaluation {
   const observed = input.result.observation?.lane === "flow" ? input.result.observation : undefined;
   return evaluateObservedRun({
     identity: input,
+    facilityFailure: input.facilityFailure,
     outcome: outcomeOf(input),
     observation: {
       lane: "flow",
@@ -108,10 +111,11 @@ export function evaluateFlowRun(input: FlowRunInput): RunEvaluation {
 }
 
 /** An attempt whose runner threw before finalizing a bundle: inconclusive, since nothing about the automation was observed. */
-export function evaluateFailedAttempt(input: RunEvaluationIdentity & { lane: EvaluationLane; attemptId: string; error: unknown; wallClockMs: number }): RunEvaluation {
+export function evaluateFailedAttempt(input: RunEvaluationIdentity & { lane: EvaluationLane; attemptId: string; error: unknown; facilityFailure: NonNullable<RunEvaluation["facilityFailure"]>; wallClockMs: number }): RunEvaluation {
   const category = classifyRunnerFailure(input.error);
   return evaluateObservedRun({
     identity: input,
+    facilityFailure: input.facilityFailure,
     outcome: {
       runId: input.attemptId,
       verdict: "inconclusive",

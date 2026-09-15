@@ -1,18 +1,21 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import type { BenchReport, RunEvaluation } from "@fluxiq-web-extension/test-contracts";
 import { aggregateBenchReport, groupBenchResults } from "../aggregate-report.js";
+import { BENCH_SEMANTICS_VERSION, CAMPAIGN_SCHEMA_VERSION, CAMPAIGN_SHARD_ALGORITHM, campaignPlanSha256, createCampaignPlan, createCampaignShardGroup, writeCampaignCheckpoint, writeCampaignShardMergeSeal, type CampaignCompatibility, type CampaignManifest, type CampaignShardProjectionDigest } from "../campaign/index.js";
 import { benchHalves, compareBenchCommand, summarizeBenchComparison } from "../compare-reports.js";
 import { compareBenchCloseoutCommand } from "../closeout-comparison.js";
 import { comparisonExitCriteria } from "../comparison-details.js";
+import { loadBenchReport } from "../load-report.js";
 import { benchDirectory, writeBenchReport, writeBenchRuns, writeRunEvaluation, type BenchRunsFile } from "../report-store.js";
 
 type CorpusRun = { corpusRowId: string; evaluation: RunEvaluation };
 const run = (scenarioId: string, repeatIndex: number, fields: Partial<RunEvaluation> = {}): RunEvaluation => ({
-  schemaVersion: "0.1", runId: `run-${scenarioId}-${repeatIndex}`, verdict: "passed", invariants: [], metrics: {},
+  schemaVersion: "0.2", runId: `run-${scenarioId}-${repeatIndex}`, verdict: "passed", facilityFailure: null, invariants: [], metrics: {},
   scenarioId, workflowId: null, variantId: null, repeatIndex, lane: "recording", flowCreated: null,
   oracleVerdict: "passed", reportedVerdict: "passed", automationFailureReported: null, automationFailureExpected: null,
   harnessActivations: 0, durationMs: 40_000, actions: [], evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 },
@@ -37,6 +40,48 @@ async function writeBench(runsDirectory: string, benchId: string, repeatCount: n
   await writeBenchReport(directory, report);
   return report;
 }
+
+const topologyCompatibility: CampaignCompatibility = {
+  repositories: { facilityCommit: "1".repeat(40), coreCommit: "2".repeat(40) },
+  lockfiles: { facilitySha256: "3".repeat(64), coreSha256: "4".repeat(64) },
+  builds: { testRunnerSha256: "5".repeat(64), extensionSha256: "6".repeat(64), scenarioLabSha256: "7".repeat(64) },
+  environment: { platform: "win32", architecture: "x64", browserName: "chromium", browserVersion: "Chrome/134", locale: "en-US", timezone: "UTC", viewport: { width: 1280, height: 720 } },
+};
+
+async function writeShardedAuthority(runsDirectory: string, benchId: string, jobs: number, shardCount = 2, options: { seal?: boolean; parentFinished?: boolean } = {}): Promise<string> {
+  const directory = benchDirectory(runsDirectory, benchId);
+  const entries = scenarios.map((scenarioId, index) => ({ corpusRowId: `W0${index + 1}`, scenarioId, workflowId: null, variantId: null, lane: "recording" as const, resolved: true, expectedFailure: null }));
+  const plan = createCampaignPlan(entries, 1);
+  const parent: CampaignManifest = {
+    schemaVersion: CAMPAIGN_SCHEMA_VERSION,
+    benchId,
+    createdAt: "2026-09-14T00:00:00.000Z",
+    benchSemanticsVersion: BENCH_SEMANTICS_VERSION,
+    request: { corpusId: "smoke", repeatCount: 1, target: { mode: "isolated", workspace: null }, evidence: null },
+    plan,
+    planSha256: campaignPlanSha256(plan),
+    compatibility: topologyCompatibility,
+    execution: { mode: "shard-parent", algorithm: CAMPAIGN_SHARD_ALGORITHM, shardCount, jobs },
+  };
+  const group = await createCampaignShardGroup(directory, parent);
+  const projections: CampaignShardProjectionDigest[] = [];
+  for (const [index, child] of group.children.entries()) {
+    const childDirectory = path.join(directory, "shards", index.toString().padStart(3, "0"));
+    const completed = child.plan.map((cell, ordinal) => ({ cellKey: cell.cellKey, runId: `child-${index}-${ordinal}`, evaluation: `evaluations/child-${index}-${ordinal}.json`, evaluationSha256: "8".repeat(64) }));
+    const terminal = await writeCampaignCheckpoint(childDirectory, { generation: 0, previousSha256: null, campaignId: child.benchId, planSha256: child.planSha256, completed, activeAttempt: null, state: "finished" });
+    await writeFile(path.join(childDirectory, "runs.json"), `{"child":${index}}\n`, "utf8");
+    await writeFile(path.join(childDirectory, "report.json"), `{"child":${index}}\n`, "utf8");
+    await writeFile(path.join(childDirectory, "report.md"), `# child ${index}\n`, "utf8");
+    projections.push({ index, campaignId: child.benchId, terminalCheckpointSha256: terminal.checkpointSha256, runsSha256: await fileSha256(path.join(childDirectory, "runs.json")), reportSha256: await fileSha256(path.join(childDirectory, "report.json")), markdownSha256: await fileSha256(path.join(childDirectory, "report.md")) });
+  }
+  const completed = plan.map((cell, ordinal) => ({ cellKey: cell.cellKey, runId: `parent-${ordinal}`, evaluation: `evaluations/parent-${ordinal}.json`, evaluationSha256: "9".repeat(64) }));
+  await writeCampaignCheckpoint(directory, { generation: 0, previousSha256: null, campaignId: parent.benchId, planSha256: parent.planSha256, completed: options.parentFinished === false ? [] : completed, activeAttempt: null, state: options.parentFinished === false ? "running" : "finished" });
+  await writeFile(path.join(directory, "report.md"), "# merged\n", "utf8");
+  if (options.seal !== false) await writeCampaignShardMergeSeal(directory, group, projections, { runsSha256: await fileSha256(path.join(directory, "runs.json")), reportSha256: await fileSha256(path.join(directory, "report.json")), markdownSha256: await fileSha256(path.join(directory, "report.md")) });
+  return directory;
+}
+
+async function fileSha256(file: string): Promise<string> { return createHash("sha256").update(await readFile(file)).digest("hex"); }
 
 test("matching reports are equivalent; a rate off by more than one workflow regresses; run duration is measured but does not set the verdict at four samples", () => {
   const baseline = bench("bench-base", 1, corpusRuns(1));
@@ -196,5 +241,61 @@ test("closeout comparison rejects a report whose runs file omits an evaluated re
     first.status = "skipped"; delete first.evaluation;
     await writeFile(runsFile, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
     await assert.rejects(compareBenchCloseoutCommand({ runsDirectory, cwd: root, baseline: "bench-mtx00001-0123abcd", candidate: "bench-mtx00002-4567cdef", sharedLoad: true }), /report lists 4 results but runs\.json provides 3 evaluated result groups/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("legacy reports remain readable as implicit serial topology", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-legacy-topology-"));
+  try {
+    const runsDirectory = path.join(root, "runs");
+    await writeBench(runsDirectory, "bench-mtx00001-0123abcd", 1, corpusRuns(1));
+    await writeBench(runsDirectory, "bench-mtx00002-4567cdef", 1, corpusRuns(1));
+    assert.equal((await loadBenchReport("bench-mtx00001-0123abcd", runsDirectory, root)).topology, undefined);
+    const comparison = await compareBenchCloseoutCommand({ runsDirectory, cwd: root, baseline: "bench-mtx00001-0123abcd", candidate: "bench-mtx00002-4567cdef", sharedLoad: true });
+    assert.deepEqual(comparison.topology, { baseline: { mode: "serial" }, candidate: { mode: "serial" }, identical: true });
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("a sharded report requires a finished parent and an untampered matching seal", async t => {
+  for (const kind of ["unsealed", "tampered-seal", "unfinished-parent", "changed-algorithm"] as const) await t.test(kind, async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-sharded-invalid-"));
+    try {
+      const runsDirectory = path.join(root, "runs");
+      const benchId = "bench-mtx00001-0123abcd";
+      await writeBench(runsDirectory, benchId, 1, corpusRuns(1));
+      const directory = await writeShardedAuthority(runsDirectory, benchId, 1, 2, { seal: kind !== "unsealed", parentFinished: kind !== "unfinished-parent" });
+      if (kind === "tampered-seal") {
+        const file = path.join(directory, "merge-seal.json");
+        const seal = JSON.parse(await readFile(file, "utf8")) as { sealSha256: string };
+        seal.sealSha256 = "f".repeat(64);
+        await writeFile(file, JSON.stringify(seal), "utf8");
+      }
+      if (kind === "changed-algorithm") {
+        const file = path.join(directory, "campaign.json");
+        const manifest = JSON.parse(await readFile(file, "utf8")) as { execution: { algorithm: string } };
+        manifest.execution.algorithm = "changed";
+        await writeFile(file, JSON.stringify(manifest), "utf8");
+      }
+      await assert.rejects(loadBenchReport(benchId, runsDirectory, root), /merge-seal|digest|finished|algorithm|ENOENT/u);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+});
+
+test("shared-load closeout requires identical sharding jobs and count while sequential closeout discloses differences", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-topology-compare-"));
+  try {
+    const runsDirectory = path.join(root, "runs");
+    for (const benchId of ["bench-mtx00001-0123abcd", "bench-mtx00002-4567cdef", "bench-mtx00003-89abcdef"]) await writeBench(runsDirectory, benchId, 1, corpusRuns(1));
+    await writeShardedAuthority(runsDirectory, "bench-mtx00001-0123abcd", 1, 2);
+    await writeShardedAuthority(runsDirectory, "bench-mtx00002-4567cdef", 2, 2);
+    await writeShardedAuthority(runsDirectory, "bench-mtx00003-89abcdef", 1, 3);
+    await assert.rejects(compareBenchCloseoutCommand({ runsDirectory, cwd: root, baseline: "bench-mtx00001-0123abcd", candidate: "bench-mtx00002-4567cdef", sharedLoad: true }), /identical execution topology.*jobs=1.*jobs=2/u);
+    await assert.rejects(compareBenchCloseoutCommand({ runsDirectory, cwd: root, baseline: "bench-mtx00001-0123abcd", candidate: "bench-mtx00003-89abcdef", sharedLoad: true }), /identical execution topology.*shards=2.*shards=3/u);
+    const sequential = await compareBenchCloseoutCommand({ runsDirectory, cwd: root, baseline: "bench-mtx00001-0123abcd", candidate: "bench-mtx00002-4567cdef", sharedLoad: false });
+    assert.equal(sequential.comparisonPassed, true, "topology disclosure does not hide or replace the metric/verdict result");
+    assert.equal(sequential.topology.identical, false);
+    assert.deepEqual(sequential.topology.baseline, { mode: "sharded", algorithm: CAMPAIGN_SHARD_ALGORITHM, shardCount: 2, jobs: 1 });
+    assert.deepEqual(sequential.topology.candidate, { mode: "sharded", algorithm: CAMPAIGN_SHARD_ALGORITHM, shardCount: 2, jobs: 2 });
+    assert.ok(sequential.gaps.some(gap => /execution topology differs.*jobs=1.*jobs=2/u.test(gap)));
   } finally { await rm(root, { recursive: true, force: true }); }
 });

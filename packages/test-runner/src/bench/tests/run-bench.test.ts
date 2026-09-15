@@ -1,17 +1,19 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { parseBenchReportJson, parseRunEvaluationJson, type RunEvaluation, type WebScenario } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../../failure.js";
+import { ProjectedFacilityError } from "../../facility-failure/index.js";
 import type { RunLaneObservation } from "../../flow-lane/index.js";
 import type { RunScenarioOptions, RunScenarioResult } from "../../run-scenario.js";
 import type { BenchCorpus } from "../corpus/index.js";
-import type { CampaignCompatibility } from "../campaign/index.js";
-import { VARIANT_NEEDS_FLOW_LANE } from "../expand-corpus.js";
+import { acquireCampaignLease, BENCH_SEMANTICS_VERSION, CAMPAIGN_SCHEMA_VERSION, CAMPAIGN_SHARD_ALGORITHM, campaignPlanSha256, canonicalJson, createCampaignPlan, createCampaignPlanShards, loadCampaignCheckpointChain, sha256Canonical, writeCampaignManifest, type CampaignCompatibility, type CampaignManifest } from "../campaign/index.js";
+import { expandCorpus, VARIANT_NEEDS_FLOW_LANE } from "../expand-corpus.js";
 import type { BenchRunsFile } from "../report-store.js";
-import { createResumableBench, resumeBench, runBench, type BenchCampaignCrashPoint, type ResumableRunBenchOptions, type RunBenchOptions } from "../run-bench.js";
+import { createResumableBench, executePrecreatedBenchCampaign, publishPrecreatedBenchParentProjections, resumeBench, runBench, type AuthenticatedBenchCampaignEvaluation, type BenchCampaignCrashPoint, type PrecreatedBenchCampaignOptions, type ResumableRunBenchOptions, type RunBenchOptions } from "../run-bench.js";
 
 // Only the fields resolveScenarioWorkflow reads.
 const scenario = (id: string, extra: Partial<WebScenario> = {}): WebScenario => ({ id, recordingScript: [], expected: {}, ...extra }) as WebScenario;
@@ -33,6 +35,7 @@ const corpus: BenchCorpus = {
 
 /** The same corpus run on both lanes: every unarmed row runs on the Flow lane too, and the `drift` variant of W28 becomes a Flow-lane result instead of a skip. */
 const bothLanes: BenchCorpus = { ...corpus, lanes: ["recording", "flow"] };
+const oneCellCorpus: BenchCorpus = { ...corpus, rows: [corpus.rows[0]!] };
 
 function runManifest(runId: string, scenarioId: string, verdict: "passed" | "failed") {
   return {
@@ -75,6 +78,17 @@ const options = (root: string, overrides: Partial<RunBenchOptions>): RunBenchOpt
   runScenario: fakeRunner([]), inspectRun: async () => ({ valid: true }), ...overrides,
 });
 const readRuns = async (directory: string): Promise<BenchRunsFile> => JSON.parse(await readFile(path.join(directory, "runs.json"), "utf8")) as BenchRunsFile;
+const sha256Bytes = (value: string | Buffer): string => createHash("sha256").update(value).digest("hex");
+
+async function campaignBytes(directory: string): Promise<Buffer[]> {
+  const bytes: Buffer[] = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const location = path.join(directory, entry.name);
+    if (entry.isDirectory()) bytes.push(...await campaignBytes(location));
+    else if (entry.isFile()) bytes.push(await readFile(location));
+  }
+  return bytes;
+}
 
 const campaignCompatibility: CampaignCompatibility = {
   repositories: { facilityCommit: "1".repeat(40), coreCommit: "2".repeat(40) },
@@ -86,7 +100,7 @@ const campaignCompatibility: CampaignCompatibility = {
 function campaignEvaluation(runId: string, options: RunScenarioOptions): RunEvaluation {
   const observation = options.flow ? flowObservation() : undefined;
   return {
-    schemaVersion: "0.1", runId, verdict: "passed", invariants: [], metrics: { steps: 3 }, scenarioId: options.scenarioId,
+    schemaVersion: "0.2", runId, verdict: "passed", facilityFailure: null, invariants: [], metrics: { steps: 3 }, scenarioId: options.scenarioId,
     workflowId: options.workflowId ?? null, variantId: options.variantId ?? null, repeatIndex: options.benchReceipt?.cellIdentity.repeatIndex ?? 0, lane: options.flow ? "flow" : "recording",
     flowCreated: observation?.flowCreated ?? null, oracleVerdict: "passed", reportedVerdict: "passed", automationFailureReported: null,
     automationFailureExpected: null, harnessActivations: observation?.harnessActivations ?? 0, durationMs: 40_000,
@@ -116,6 +130,52 @@ const resumableOptions = (root: string, benchId: string, calls: string[], crashH
   campaignLeaseOptions: { processId: 4101, processProbe: { bootIdentity: async () => "test-boot", processIdentity: async () => "test-process" } },
   ...(crashHook ? { crashHook } : {}),
 });
+
+async function precreatedChild(root: string, calls: string[], childIndex = 0, crashHook?: PrecreatedBenchCampaignOptions["crashHook"]): Promise<PrecreatedBenchCampaignOptions> {
+  const parentId = "bench-parent-0123abcd";
+  const configured = resumableOptions(root, parentId, calls, crashHook);
+  const entries = expandCorpus(configured.corpus, configured.manifests);
+  const plan = createCampaignPlan(entries, configured.repeatCount);
+  const parent: CampaignManifest = {
+    schemaVersion: CAMPAIGN_SCHEMA_VERSION,
+    benchId: parentId,
+    createdAt: "2026-09-14T00:00:00.000Z",
+    benchSemanticsVersion: BENCH_SEMANTICS_VERSION,
+    request: { corpusId: configured.corpus.id, repeatCount: configured.repeatCount, target: { mode: configured.target.mode as "isolated" | "persistent-isolated", workspace: configured.target.mode === "persistent-isolated" ? configured.target.workspace : null }, evidence: configured.evidence ?? null },
+    plan,
+    planSha256: campaignPlanSha256(plan),
+    compatibility: configured.compatibility,
+    execution: { mode: "shard-parent", algorithm: CAMPAIGN_SHARD_ALGORITHM, shardCount: 2, jobs: 1 },
+  };
+  const parentDirectory = path.join(configured.runsDirectory, "bench", parentId);
+  const shards = createCampaignPlanShards(plan, parent.execution.mode === "shard-parent" ? parent.execution.shardCount : 0);
+  const shard = shards[childIndex];
+  assert.ok(shard);
+  const manifest: CampaignManifest = {
+    schemaVersion: CAMPAIGN_SCHEMA_VERSION,
+    benchId: `bench-shard${childIndex}-${sha256Canonical([parentId, childIndex]).slice(0, 8)}`,
+    createdAt: parent.createdAt,
+    benchSemanticsVersion: parent.benchSemanticsVersion,
+    request: parent.request,
+    plan: shard.plan,
+    planSha256: campaignPlanSha256(shard.plan),
+    compatibility: parent.compatibility,
+    execution: { mode: "shard-child", algorithm: CAMPAIGN_SHARD_ALGORITHM, parentCampaignId: parentId, parentPlanSha256: parent.planSha256, shardIndex: childIndex, shardCount: shards.length },
+  };
+  await writeCampaignManifest(parentDirectory, parent);
+  for (const candidate of shards) {
+    const child: CampaignManifest = candidate.index === childIndex ? manifest : {
+      ...manifest,
+      benchId: `bench-shard${candidate.index}-${sha256Canonical([parentId, candidate.index]).slice(0, 8)}`,
+      plan: candidate.plan,
+      planSha256: campaignPlanSha256(candidate.plan),
+      execution: { mode: "shard-child", algorithm: CAMPAIGN_SHARD_ALGORITHM, parentCampaignId: parentId, parentPlanSha256: parent.planSha256, shardIndex: candidate.index, shardCount: shards.length },
+    };
+    await writeCampaignManifest(path.join(parentDirectory, "shards", candidate.index.toString().padStart(3, "0")), child);
+  }
+  const { benchId: _benchId, ...childOptions } = configured;
+  return { ...childOptions, directory: path.join(parentDirectory, "shards", childIndex.toString().padStart(3, "0")), manifest };
+}
 
 test("runs each runnable result once per repeat, one pass over the corpus at a time, and writes evaluations and a valid report", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-run-"));
@@ -185,6 +245,231 @@ test("a resumable campaign recovers all five persistence crash boundaries withou
   });
 });
 
+test("a nested precreated shard child leases its own directory and resumes a finalized interruption exactly once", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-child-"));
+  const calls: string[] = [];
+  let crashed = false;
+  let acquired = 0;
+  let released = 0;
+  let active = 0;
+  const withCellSlot = async <T>(operation: () => Promise<T>): Promise<T> => {
+    acquired += 1; active += 1;
+    try { return await operation(); }
+    finally { active -= 1; released += 1; }
+  };
+  try {
+    const child = { ...await precreatedChild(root, calls, 0, (point) => {
+      if (!crashed && point === "after-bundle-finalized") { crashed = true; throw new Error("stop nested child after bundle"); }
+    }), withCellSlot };
+    await assert.rejects(executePrecreatedBenchCampaign(child), /stop nested child after bundle/u);
+    assert.equal(calls.length, 1);
+    assert.deepEqual([acquired, released, active], [1, 1, 0], "post-bundle interruption happens after the cell slot is released");
+    const { crashHook: _crashHook, ...resume } = child;
+    const outcome = await executePrecreatedBenchCampaign(resume);
+    const runnable = child.manifest.plan.filter(({ skipReason }) => skipReason === null).length;
+    assert.deepEqual([outcome.directory, outcome.runs, outcome.skipped], [path.resolve(child.directory), runnable, child.manifest.plan.length - runnable]);
+    assert.equal(calls.length, runnable);
+    assert.equal(new Set(calls).size, runnable, "the finalized child attempt is reconciled rather than rerun");
+    await executePrecreatedBenchCampaign(resume);
+    assert.equal(calls.length, runnable, "a finished child remains exactly-once on another resume");
+    assert.deepEqual([acquired, released, active], [calls.length, calls.length, 0], "every passing cell releases its slot and reconciliation acquires none");
+    assert.equal(await stat(path.join(child.directory, "lease")).then(() => true, () => false), false, "the child lease is released");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("a precreated child releases its per-cell slot when runScenario fails", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-child-slot-failure-"));
+  let calls = 0;
+  let acquired = 0;
+  let released = 0;
+  let active = 0;
+  try {
+    const base = await precreatedChild(root, [], 0);
+    const outcome = await executePrecreatedBenchCampaign({
+      ...base,
+      runScenario: async () => { calls += 1; throw new Error("closed test failure"); },
+      withCellSlot: async <T>(operation: () => Promise<T>): Promise<T> => {
+        acquired += 1; active += 1;
+        try { return await operation(); }
+        finally { active -= 1; released += 1; }
+      },
+    });
+    const runnable = base.manifest.plan.filter(({ skipReason }) => skipReason === null).length;
+    assert.deepEqual([outcome.status, calls, acquired, released, active], ["failed", runnable, runnable, runnable, 0]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("precreated child execution rejects parent, path, parent-plan, and current-plan contradictions", async (t) => {
+  for (const kind of ["parent", "outside", "wrong-directory", "wrong-parent-plan", "current-plan"] as const) await t.test(kind, async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-child-guard-"));
+    try {
+      const child = await precreatedChild(root, [], 0);
+      const parentDirectory = path.dirname(path.dirname(child.directory));
+      if (kind === "parent") {
+        const parent = JSON.parse(await readFile(path.join(parentDirectory, "campaign.json"), "utf8")) as CampaignManifest;
+        await assert.rejects(executePrecreatedBenchCampaign({ ...child, directory: parentDirectory, manifest: parent }), /refuses a shard parent/u);
+      } else if (kind === "outside") {
+        await assert.rejects(executePrecreatedBenchCampaign({ ...child, directory: path.join(root, "outside") }), /inside the bench root/u);
+      } else if (kind === "wrong-directory") {
+        await assert.rejects(executePrecreatedBenchCampaign({ ...child, directory: path.join(parentDirectory, "shards", "001") }), /does not match its immutable/u);
+      } else if (kind === "wrong-parent-plan") {
+        assert.equal(child.manifest.execution.mode, "shard-child");
+        const manifest: CampaignManifest = { ...child.manifest, execution: { ...child.manifest.execution, parentPlanSha256: "f".repeat(64) } };
+        await writeFile(path.join(child.directory, "campaign.json"), canonicalJson(manifest));
+        await assert.rejects(executePrecreatedBenchCampaign({ ...child, manifest }), /parent plan authority does not match/u);
+      } else {
+        const changedCorpus: BenchCorpus = { ...child.corpus, rows: child.corpus.rows.slice(0, 2) };
+        await assert.rejects(executePrecreatedBenchCampaign({ ...child, corpus: changedCorpus }), /parent plan does not match the current corpus/u);
+      }
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+});
+
+test("a live lease on one nested child excludes a second executor", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-child-lease-"));
+  try {
+    const child = await precreatedChild(root, [], 0);
+    const lease = await acquireCampaignLease(child.directory, child.campaignLeaseOptions);
+    try { await assert.rejects(executePrecreatedBenchCampaign(child), /already owned by live process/u); }
+    finally { await lease.release(); }
+    const outcome = await executePrecreatedBenchCampaign(child);
+    assert.equal(outcome.status, "passed");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("authenticated child evaluations publish canonical parent projections without owning checkpoints or a seal", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-parent-projection-"));
+  const calls: string[] = [];
+  try {
+    const first = await precreatedChild(root, calls, 0);
+    const parentDirectory = path.dirname(path.dirname(first.directory));
+    const secondDirectory = path.join(parentDirectory, "shards", "001");
+    const secondManifest = JSON.parse(await readFile(path.join(secondDirectory, "campaign.json"), "utf8")) as CampaignManifest;
+    await executePrecreatedBenchCampaign(first);
+    await executePrecreatedBenchCampaign({ ...first, directory: secondDirectory, manifest: secondManifest });
+
+    const authenticated = new Map<string, AuthenticatedBenchCampaignEvaluation>();
+    for (const [directory, manifest] of [[first.directory, first.manifest], [secondDirectory, secondManifest]] as const) {
+      const chain = await loadCampaignCheckpointChain(directory, manifest);
+      assert.equal(chain.latest?.state, "finished");
+      for (const completed of chain.latest?.completed ?? []) {
+        const evaluation = parseRunEvaluationJson(await readFile(path.join(directory, ...completed.evaluation.split("/")), "utf8"));
+        authenticated.set(completed.cellKey, { completed, evaluation });
+      }
+    }
+    const parent = JSON.parse(await readFile(path.join(parentDirectory, "campaign.json"), "utf8")) as CampaignManifest;
+    const evaluations = parent.plan.filter(({ skipReason }) => skipReason === null).map(({ cellKey }) => {
+      const value = authenticated.get(cellKey); assert.ok(value); return value;
+    });
+    const projectionOptions = { runsDirectory: first.runsDirectory, directory: parentDirectory, manifest: parent, evaluations };
+    const outcome = await publishPrecreatedBenchParentProjections(projectionOptions);
+    assert.deepEqual([outcome.directory, outcome.runs, outcome.skipped], [parentDirectory, evaluations.length, parent.plan.length - evaluations.length]);
+    const runs = await readRuns(parentDirectory);
+    assert.deepEqual(runs.runs.map((record) => `${record.corpusRowId}/${record.lane}/${record.repeatIndex}`), parent.plan.map((cell) => `${cell.corpusRowId}/${cell.lane}/${cell.repeatIndex}`));
+    for (const record of runs.runs.filter((candidate) => candidate.status === "evaluated")) {
+      assert.match(record.evaluation ?? "", /^shards\/00[01]\/evaluations\//u);
+      assert.equal(parseRunEvaluationJson(await readFile(path.join(parentDirectory, ...(record.evaluation ?? "missing").split("/")), "utf8")).runId, record.runId);
+    }
+    assert.equal(await stat(path.join(parentDirectory, "checkpoints")).then(() => true, () => false), false);
+    assert.equal(await stat(path.join(parentDirectory, "merge-seal.json")).then(() => true, () => false), false);
+    await assert.rejects(publishPrecreatedBenchParentProjections({ ...projectionOptions, evaluations: evaluations.slice(1) }), /exact executable plan coverage/u);
+    const [head, ...tail] = evaluations; assert.ok(head);
+    await assert.rejects(publishPrecreatedBenchParentProjections({ ...projectionOptions, evaluations: [{ ...head, evaluation: { ...head.evaluation, repeatIndex: 99 } }, ...tail] }), /evaluation identity does not match/u);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("a synthetic facility diagnostic survives completion-checkpoint crash and resume exactly once without persisting its raw cause", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-diagnostic-"));
+  const benchId = "bench-diagnostic-0123abcd";
+  const sentinel = "SYNTHETIC_SECRET_SENTINEL_DO_NOT_PERSIST";
+  const facilityFailure = { boundary: "no-final-bundle", stage: "scenario.load", reason: "module.missing", causeCode: "ERR_MODULE_NOT_FOUND" } as const;
+  let calls = 0;
+  let crashed = false;
+  const runScenario = async (): Promise<RunScenarioResult> => {
+    calls += 1;
+    throw new ProjectedFacilityError(Object.assign(new Error(sentinel), { code: "ERR_MODULE_NOT_FOUND", path: sentinel, credential: sentinel }), facilityFailure);
+  };
+  const configured = (): ResumableRunBenchOptions => ({
+    ...resumableOptions(root, benchId, []), corpus: oneCellCorpus, repeatCount: 1, runScenario,
+    crashHook: (point) => { if (!crashed && point === "after-completion-checkpoint") { crashed = true; throw new Error("stop after diagnostic checkpoint"); } },
+  });
+  try {
+    await assert.rejects(createResumableBench(configured()), /stop after diagnostic checkpoint/u);
+    assert.equal(calls, 1);
+    const campaignDirectory = path.join(root, "runs", "bench", benchId);
+    const [evaluationName] = await readdir(path.join(campaignDirectory, "evaluations"));
+    assert.ok(evaluationName);
+    const before = parseRunEvaluationJson(await readFile(path.join(campaignDirectory, "evaluations", evaluationName), "utf8"));
+    assert.deepEqual(before.facilityFailure, facilityFailure);
+
+    const { crashHook: _firstCrashHook, ...resumeOptions } = configured();
+    const resumed = await resumeBench({ ...resumeOptions, benchId });
+    assert.equal(calls, 1, "the completed synthetic attempt is not executed twice");
+    const [record] = (await readRuns(campaignDirectory)).runs.filter((run) => run.status === "evaluated");
+    assert.deepEqual(record?.facilityFailure, facilityFailure);
+    assert.deepEqual(resumed.failureCauses, ["1 run — environment.missing: no-final-bundle / scenario.load / module.missing / ERR_MODULE_NOT_FOUND"]);
+    assert.ok((await readFile(resumed.markdown, "utf8")).includes("no-final-bundle / scenario.load / module.missing / ERR_MODULE_NOT_FOUND"));
+    for (const bytes of await campaignBytes(campaignDirectory)) assert.equal(bytes.includes(Buffer.from(sentinel)), false, "raw thrown data must not enter the campaign directory");
+
+    const firstRuns = await readRuns(campaignDirectory);
+    const again = await resumeBench({ ...resumeOptions, benchId });
+    const secondRuns = await readRuns(campaignDirectory);
+    delete firstRuns.finishedAt; delete secondRuns.finishedAt;
+    assert.deepEqual(secondRuns, firstRuns);
+    assert.equal(calls, 1);
+    assert.deepEqual(again.failureCauses, resumed.failureCauses);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("a finalized diagnostic survives bundle reconciliation, and a bundle-less legacy-null evaluation is rejected", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-diagnostic-"));
+  const finalizedId = "bench-finalized-0123abcd";
+  const finalizedFailure = { boundary: "finalized-bundle", stage: "scenario.execute", reason: "readiness.timeout", operationStage: "core.health", timeoutMs: 30_000 } as const;
+  let calls = 0;
+  const finalizedRunner = async (options: RunScenarioOptions): Promise<RunScenarioResult> => {
+    calls += 1;
+    assert.ok(options.runId && options.benchReceipt);
+    const runPath = path.join(options.runsDirectory, options.runId);
+    await mkdir(runPath, { recursive: true });
+    const evaluation = { ...campaignEvaluation(options.runId, options), verdict: "failed" as const, failureCategory: "process.startup" as const, facilityFailure: finalizedFailure, invariants: [{ id: "runner-verdict", passed: false, expected: "passed", actual: "failed: process.startup", evidenceSequences: [2] }], oracleVerdict: null, reportedVerdict: null, actions: [] };
+    await writeFile(path.join(runPath, "run.json"), JSON.stringify({ ...runManifest(options.runId, options.scenarioId, "failed"), actions: [] }));
+    await writeFile(path.join(runPath, "summary.json"), JSON.stringify({ verdict: "failed", metrics: { steps: 3 } }));
+    await writeFile(path.join(runPath, "events.ndjson"), `${JSON.stringify({ sequence: 2, trigger: "error", summary: "safe", details: { failureCategory: "process.startup" } })}\n`);
+    await writeFile(path.join(runPath, "evaluation.json"), JSON.stringify(evaluation));
+    await writeFile(path.join(runPath, "bench-receipt.json"), JSON.stringify({ schemaVersion: "0.1", ...options.benchReceipt, runId: options.runId }));
+    return { runId: options.runId, verdict: "failed", failureCategory: "process.startup", path: runPath, evaluation };
+  };
+  try {
+    const base = { ...resumableOptions(root, finalizedId, []), corpus: oneCellCorpus, repeatCount: 1, runScenario: finalizedRunner };
+    await assert.rejects(createResumableBench({ ...base, crashHook: (point) => { if (point === "after-bundle-finalized") throw new Error("stop after bundle"); } }), /stop after bundle/u);
+    const resumed = await resumeBench({ ...base, benchId: finalizedId });
+    assert.equal(calls, 1, "the finalized active attempt is reconciled, not rerun");
+    const [record] = (await readRuns(resumed.directory)).runs.filter((run) => run.status === "evaluated");
+    const evaluation = parseRunEvaluationJson(await readFile(path.join(resumed.directory, record?.evaluation ?? "missing"), "utf8"));
+    assert.deepEqual(evaluation.facilityFailure, finalizedFailure);
+    assert.deepEqual(record?.facilityFailure, finalizedFailure);
+
+    const legacyId = "bench-legacy-0123abcd";
+    let stopped = false;
+    const legacyBase = { ...resumableOptions(root, legacyId, []), corpus: oneCellCorpus, repeatCount: 1, runScenario: async () => { throw new ProjectedFacilityError(new Error("safe"), { boundary: "no-final-bundle", stage: "scenario.load", reason: "unclassified" }); } };
+    await assert.rejects(createResumableBench({ ...legacyBase, crashHook: (point) => { if (!stopped && point === "after-completion-checkpoint") { stopped = true; throw new Error("stop legacy"); } } }), /stop legacy/u);
+    const directory = path.join(root, "runs", "bench", legacyId);
+    const checkpointFile = path.join(directory, "checkpoints", "000000000002.json");
+    const checkpoint = JSON.parse(await readFile(checkpointFile, "utf8")) as Record<string, unknown> & { completed: Array<{ evaluation: string; evaluationSha256: string }>; checkpointSha256: string };
+    const evaluationPath = path.join(directory, ...checkpoint.completed[0]!.evaluation.split("/"));
+    const current = JSON.parse(await readFile(evaluationPath, "utf8")) as Record<string, unknown>;
+    delete current.facilityFailure;
+    current.schemaVersion = "0.1";
+    const legacyText = `${JSON.stringify(current)}\n`;
+    await writeFile(evaluationPath, legacyText);
+    checkpoint.completed[0]!.evaluationSha256 = sha256Bytes(legacyText);
+    const { checkpointSha256: _oldDigest, ...unsigned } = checkpoint;
+    checkpoint.checkpointSha256 = sha256Canonical(unsigned);
+    await writeFile(checkpointFile, canonicalJson(checkpoint));
+    await assert.rejects(resumeBench({ ...legacyBase, benchId: legacyId }), /facilityFailure/u);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("resume fails closed on compatibility drift, evaluation corruption, and incomplete aggregate coverage", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-resume-"));
   const benchId = "bench-guards-0123abcd";
@@ -233,7 +518,8 @@ test("a failing run fails the bench; a runner that throws is an inconclusive run
     const runs = await readRuns(outcome.directory);
     const evaluated = runs.runs.filter((run) => run.status === "evaluated");
     assert.deepEqual(evaluated.map((run) => [run.corpusRowId, run.verdict, run.failureCategory ?? null]), [["W01", "passed", null], ["W02", "failed", "runtime.behavior"], ["W28", "inconclusive", "environment.missing"]]);
-    assert.match(evaluated[2]?.problems?.[0] ?? "", /^runner: Scenario Lab build is missing/);
+    assert.equal(evaluated[2]?.problems, undefined, "a raw synthetic error is not a campaign problem");
+    assert.deepEqual(evaluated[2]?.facilityFailure, { boundary: "no-final-bundle", stage: "bench.persist", reason: "unclassified" });
     const report = parseBenchReportJson(await readFile(path.join(outcome.directory, "report.json"), "utf8"));
     assert.deepEqual(report.workflows.map((workflow) => [workflow.corpusRowId, workflow.flakeClass]), [["W01", "stable-pass"], ["W02", "stable-fail"], ["W28", "stable-fail"]]);
   } finally {
@@ -416,25 +702,25 @@ test("a bench killed by a missing dependency reports the cause, in runs.json, in
   }
 });
 
-/** A passing bench says nothing about failure causes, and a bundle-read problem stays a problem rather than becoming a cause. */
-test("no failed run means no cause section, and a run's own cause never displaces its bundle problems", async () => {
+/** A passing bench says nothing about failure causes, and a synthetic failure persists only its closed diagnostic. */
+test("no failed run means no cause section, and a synthetic run never persists its raw error", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-bench-run-"));
   try {
     const clean = await runBench(options(root, { repeatCount: 1 }));
     assert.equal(clean.failureCauses, undefined);
     assert.doesNotMatch(await readFile(clean.markdown, "utf8"), /Why the failed runs failed/);
 
-    // The runner threw, so there is no bundle at all: the cause and the
-    // problem say the same thing, and the report prints it once.
+    // The runner threw, so there is no bundle at all. Only the closed
+    // diagnostic may reach campaign projections.
     const threw = await runBench(options(root, {
       repeatCount: 1,
       runScenario: async () => { throw new RunnerFailure("environment.missing", "Scenario Lab build is missing"); },
     }));
     const evaluated = (await readRuns(threw.directory)).runs.filter((run) => run.status === "evaluated");
-    assert.deepEqual(evaluated.map((run) => [run.verdict, run.failureCause, run.problems]), Array.from({ length: 3 }, () => ["inconclusive", "Scenario Lab build is missing", ["runner: Scenario Lab build is missing"]]));
+    assert.deepEqual(evaluated.map((run) => [run.verdict, run.failureCause, run.problems, run.facilityFailure]), Array.from({ length: 3 }, () => ["inconclusive", undefined, undefined, { boundary: "no-final-bundle", stage: "bench.persist", reason: "unclassified" }]));
     const markdown = await readFile(threw.markdown, "utf8");
-    assert.equal(markdown.split("runner: Scenario Lab build is missing").length - 1, 3, "one cell per run, the cause not repeated beside the problem that already carries it");
-    assert.deepEqual(threw.failureCauses, ["3 runs — environment.missing: Scenario Lab build is missing"]);
+    assert.equal(markdown.includes("Scenario Lab build is missing"), false);
+    assert.deepEqual(threw.failureCauses, ["3 runs — environment.missing: no-final-bundle / bench.persist / unclassified"]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

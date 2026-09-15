@@ -1,3 +1,4 @@
+import type { FacilityFailureDiagnostic } from "@fluxiq-web-extension/test-contracts";
 import type { BenchRunRecord } from "./report-store.js";
 
 /**
@@ -25,13 +26,18 @@ export function benchFailureCauses(runs: readonly BenchRunRecord[]): BenchFailur
   const grouped = new Map<string, BenchFailureCause>();
   for (const run of runs) {
     if (run.status !== "evaluated" || run.verdict === undefined || run.verdict === "passed") continue;
-    const cause: BenchFailureCause = { runs: 0, category: run.failureCategory ?? "unknown", message: run.failureCause ?? "" };
+    const cause: BenchFailureCause = { runs: 0, category: run.failureCategory ?? "unknown", message: run.facilityFailure ? describeFacilityFailure(run.facilityFailure) : run.failureCause ?? "" };
     const key = `${cause.category}\u0000${cause.message}`;
     const existing = grouped.get(key) ?? cause;
     existing.runs += 1;
     grouped.set(key, existing);
   }
   return [...grouped.values()].sort((left, right) => right.runs - left.runs);
+}
+
+/** Stable, secret-safe display of the immutable closed diagnostic. */
+export function describeFacilityFailure(diagnostic: FacilityFailureDiagnostic): string {
+  return [diagnostic.boundary, diagnostic.stage, diagnostic.reason, diagnostic.operationStage, diagnostic.causeCode, diagnostic.timeoutMs === undefined ? undefined : `${diagnostic.timeoutMs}ms`].filter((value) => value !== undefined).join(" / ");
 }
 
 /** One cause as a single line: how many runs, the category, and the message. */

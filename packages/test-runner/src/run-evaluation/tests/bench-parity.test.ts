@@ -33,18 +33,20 @@ type Run = {
   failureCategory: string | undefined;
   /** What the fixture oracle actually did, as only the lane knows. */
   oracleVerdict: "passed" | "failed" | null;
+  facilityFailure?: RunEvaluation["facilityFailure"];
   manifest?: RunManifest | undefined;
 };
 
 function observationOf(run: Run): RunLaneObservation {
-  return recordingLaneObservation({ oracleVerdict: run.oracleVerdict, reportedVerdict: "passed", automationFailureReported: null, automationFailureExpected: null, actions: laneActions });
+  return recordingLaneObservation({ oracleVerdict: run.oracleVerdict, reportedVerdict: run.facilityFailure ? null : "passed", automationFailureReported: null, automationFailureExpected: null, actions: run.facilityFailure ? [] : laneActions });
 }
 
 function fromBench(run: Run): RunEvaluation {
   const input: RecordingRunInput = {
     scenarioId: "basic-form", workflowId: null, variantId: null, repeatIndex: 0, expectedFailure: null,
+    facilityFailure: run.facilityFailure ?? null,
     result: { runId: "run-a", verdict: run.verdict, ...(run.failureCategory === undefined ? {} : { failureCategory: run.failureCategory }) },
-    manifest: "manifest" in run ? run.manifest : manifest(),
+    manifest: "manifest" in run ? run.manifest : run.facilityFailure ? manifest({ actions: [] }) : manifest(),
     metrics: { steps: 5 }, finalSequence: 17, errorSequence: 18, wallClockMs: 50_000,
   };
   return evaluateRecordingRun(input);
@@ -53,6 +55,7 @@ function fromBench(run: Run): RunEvaluation {
 function fromSingleRun(run: Run): RunEvaluation {
   return singleRunEvaluation({
     runId: "run-a", verdict: run.verdict, failureCategory: run.failureCategory, scenarioId: "basic-form",
+    facilityFailure: run.facilityFailure ?? null,
     workflowId: undefined, variantId: undefined, observation: observationOf(run),
     manifest: "manifest" in run ? run.manifest : manifest(),
     metrics: { steps: 5 }, events: [{ sequence: 17, trigger: "final" }, { sequence: 18, trigger: "error" }], wallClockMs: 50_000,
@@ -80,6 +83,13 @@ test("a fixture that disagreed: both record an oracle failure, and agree", () =>
   const run: Run = { verdict: "failed", failureCategory: "runtime.behavior", oracleVerdict: "failed" };
   assert.deepEqual(differences(fromBench(run), fromSingleRun(run)), []);
   assert.equal(fromBench(run).oracleVerdict, "failed");
+});
+
+test("a finalized facility failure is identical across both producers", () => {
+  const facilityFailure = { boundary: "finalized-bundle", stage: "scenario.execute", reason: "unclassified" } as const;
+  const run: Run = { verdict: "failed", failureCategory: "gateway.pairing", oracleVerdict: null, facilityFailure };
+  assert.deepEqual(differences(fromBench(run), fromSingleRun(run)), []);
+  assert.deepEqual(fromBench(run).facilityFailure, facilityFailure);
 });
 
 test("a rig that broke after the oracle passed: they differ, in oracleVerdict and in nothing else", () => {

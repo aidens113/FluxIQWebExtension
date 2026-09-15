@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { RunnerFailure } from "../../failure.js";
+import { ProjectedFacilityError } from "../../facility-failure/index.js";
 import { runScenario } from "../../run-scenario.js";
 
 /**
@@ -22,6 +23,25 @@ test("the runner evaluates every run it observes, exactly once", async () => {
   assert.equal(source.match(/singleRunEvaluation\(/gu)?.length, 1, "one evaluation per run, built in one place");
   assert.match(source, /const evaluation = observation\s*\r?\n\s*\? singleRunEvaluation\(/u, "no observation, no evaluation: the existing and clone targets run on no evaluation lane");
   assert.match(source, /import \{ singleRunEvaluation \} from "\.\/run-evaluation\/index\.js";/u, "through the barrel the bench also evaluates through");
+});
+
+test("the runner tracks closed facility stages and wires one nullable diagnostic into evaluation", async () => {
+  const source = await runnerSource();
+  const at = {
+    load: source.indexOf('setFacilityStage("scenario.load")'),
+    initialize: source.indexOf('setFacilityStage("bundle.initialize")'),
+    execute: source.indexOf('setFacilityStage("scenario.execute")'),
+    cleanup: source.indexOf('setFacilityStage("scenario.cleanup")'),
+    publish: source.indexOf('setFacilityStage("bundle.publish")'),
+  };
+  for (const [name, index] of Object.entries(at)) assert.ok(index > 0, `${name} stage is tracked`);
+  assert.ok(at.load < at.initialize && at.initialize < at.execute && at.execute < at.cleanup && at.cleanup < at.publish);
+  assert.equal(source.match(/let facilityFailure: RunEvaluation\["facilityFailure"\] = null/gu)?.length, 1);
+  assert.match(source, /singleRunEvaluation\(\{[^}]*\bfacilityFailure\b/u);
+  assert.match(source, /projectFacilityFailure\(error, "no-final-bundle", facilityStage\)/u);
+  assert.equal(source.match(/const hadPrimaryFailure = failureCategory !== undefined && failureMessage !== undefined;/gu)?.length, 4);
+  assert.equal(source.match(/if \(!hadPrimaryFailure && flowObservation\?\.reportedVerdict == null\)/gu)?.length, 4);
+  assert.equal(source.includes("actions.length === 0"), false, "recorded actions do not suppress a later facility failure");
 });
 
 test("the runner publishes safe finalization-wait details and preserves primary failures across cleanup", async () => {
@@ -240,9 +260,10 @@ test("a Flow-lane run of a workflow whose script records no action is refused as
   try {
     // The extension path does not exist, so a run the refusal missed stops at `requireExtension`, before Core or a browser.
     const outcome: unknown = await runScenario({ repositoryRoot: root, fluxiqRepositoryRoot: path.join(runsDirectory, "no-core"), runsDirectory, scenarioId: "product-catalog", flow: true, environment: { FLUXIQ_LAB_EXTENSION_PATH: path.join(runsDirectory, "no-extension") } }).then((result) => result, (error: unknown) => error);
-    assert.ok(outcome instanceof RunnerFailure, `the run is refused, not run: ${outcome instanceof Error ? outcome.message : JSON.stringify(outcome)}`);
+    assert.ok(outcome instanceof ProjectedFacilityError, `the run is refused, not run: ${outcome instanceof Error ? outcome.message : JSON.stringify(outcome)}`);
     assert.equal(outcome.category, "fixture.invalid");
-    assert.match(outcome.message, /^A Flow run was refused: the Flow lane builds its Flow from the workflow's own recording, and no step of the workflow's recordingScript records an action \(operations: extract, checkpoint\)/u);
+    assert.equal(outcome.message, "Scenario attempt failed outside a finalized bundle");
+    assert.deepEqual(outcome.facilityFailure, { boundary: "no-final-bundle", stage: "scenario.load", reason: "unclassified" });
     assert.deepEqual(await readdir(runsDirectory), [], "no evidence bundle was created");
   } finally {
     // Retried: a run the refusal missed may still be closing bundle files, and a cleanup error must not hide the assertion.

@@ -1,7 +1,7 @@
 import { benchRateMetrics, evaluationLanes, type BenchDistribution, type BenchReport, type EvaluationLane } from "@fluxiq-web-extension/test-contracts";
 import { BENCH_RATE_DEFINITIONS } from "./aggregate-report.js";
 import type { BenchExecutionCoverage } from "./execution-coverage.js";
-import { benchFailureCauses, type BenchFailureCause } from "./failure-cause.js";
+import { benchFailureCauses, describeFacilityFailure, type BenchFailureCause } from "./failure-cause.js";
 import type { BenchRunRecord, BenchRunsFile } from "./report-store.js";
 
 /**
@@ -57,7 +57,7 @@ export function renderBenchMarkdown(runs: BenchRunsFile, report: BenchReport | u
     "",
     "## Runs",
     "",
-    evaluated.length ? table(["Row", "Workflow", "Variant", "Lane", "Repeat", "Run", "Verdict", "Actions FluxIQ executed", "Failure category", "Cause and problems"], evaluated.map((run) => [run.corpusRowId, run.workflowId ?? "primary", run.variantId ?? "unarmed", run.lane, String(run.repeatIndex), run.runId ?? "", run.verdict ?? "", String(run.actionsExecuted ?? 0), run.failureCategory ?? "", causeAndProblems(run)])) : "None.",
+    evaluated.length ? table(["Row", "Workflow", "Variant", "Lane", "Repeat", "Run", "Verdict", "Actions FluxIQ executed", "Failure category", "Facility diagnostic", "Cause and problems"], evaluated.map((run) => [run.corpusRowId, run.workflowId ?? "primary", run.variantId ?? "unarmed", run.lane, String(run.repeatIndex), run.runId ?? "", run.verdict ?? "", String(run.actionsExecuted ?? 0), run.failureCategory ?? "", run.facilityFailure ? describeFacilityFailure(run.facilityFailure) : "", causeAndProblems(run)])) : "None.",
     "",
     ...(report && coverage ? metricLines(report, coverage) : []),
     "## Measurement sources",

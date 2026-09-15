@@ -35,15 +35,15 @@ test("a packet one byte over the budget fails, and the failure names each packet
 
 test("a run with no packets gets no budget invariant, on either lane", () => {
   assert.equal(evidenceBudgetInvariant([]), undefined);
-  const noPackets = evaluateObservedRun({ identity, outcome: passedOutcome, observation: flow, evidence: evidenceOf([]) });
+  const noPackets = evaluateObservedRun({ identity, facilityFailure: null, outcome: passedOutcome, observation: flow, evidence: evidenceOf([]) });
   assert.deepEqual(noPackets.invariants.map((item) => item.id), ["runner-verdict"]);
   assert.equal(noPackets.verdict, "passed");
-  const recording = evaluateObservedRun({ identity, outcome: passedOutcome, observation: { ...flow, lane: "recording", flowCreated: null } });
+  const recording = evaluateObservedRun({ identity, facilityFailure: null, outcome: passedOutcome, observation: { ...flow, lane: "recording", flowCreated: null } });
   assert.deepEqual(recording.invariants.map((item) => item.id), ["runner-verdict"]);
 });
 
 test("within budget, a Flow-lane evaluation carries a passing budget invariant and keeps its verdict", () => {
-  const evaluation = evaluateObservedRun({ identity, outcome: passedOutcome, observation: flow, evidence: evidenceOf([packet(1, "beforeAction", BUDGET)]) });
+  const evaluation = evaluateObservedRun({ identity, facilityFailure: null, outcome: passedOutcome, observation: flow, evidence: evidenceOf([packet(1, "beforeAction", BUDGET)]) });
   assert.equal(evaluation.verdict, "passed");
   assert.equal("failureCategory" in evaluation, false);
   assert.deepEqual(evaluation.invariants.map((item) => [item.id, item.passed]), [["runner-verdict", true], ["evidence-packet-budget", true]]);
@@ -51,7 +51,7 @@ test("within budget, a Flow-lane evaluation carries a passing budget invariant a
 });
 
 test("over budget, a run the runner passed fails as performance.budget, and the evaluation stays contract-valid", () => {
-  const evaluation = evaluateObservedRun({ identity, outcome: passedOutcome, observation: flow, evidence: evidenceOf([packet(2, "afterAction", BUDGET + 1)]) });
+  const evaluation = evaluateObservedRun({ identity, facilityFailure: null, outcome: passedOutcome, observation: flow, evidence: evidenceOf([packet(2, "afterAction", BUDGET + 1)]) });
   assert.deepEqual([evaluation.verdict, evaluation.failureCategory], ["failed", "performance.budget"]);
   assert.deepEqual(evaluation.invariants.map((item) => [item.id, item.passed]), [["runner-verdict", true], ["evidence-packet-budget", false]]);
   assert.deepEqual(parseRunEvaluationJson(JSON.stringify(evaluation)), evaluation);
@@ -59,7 +59,7 @@ test("over budget, a run the runner passed fails as performance.budget, and the 
 
 test("over budget, a run the runner already failed keeps its own category and still records the breach", () => {
   const failed: ObservedRun["outcome"] = { ...passedOutcome, verdict: "failed", failureCategory: "runtime.behavior", invariants: [{ id: "runner-verdict", passed: false, expected: "passed", actual: "failed: runtime.behavior", evidenceSequences: [9] }] };
-  const evaluation = evaluateObservedRun({ identity, outcome: failed, observation: flow, evidence: evidenceOf([packet(1, "beforeAction", BUDGET + 1)]) });
+  const evaluation = evaluateObservedRun({ identity, facilityFailure: null, outcome: failed, observation: flow, evidence: evidenceOf([packet(1, "beforeAction", BUDGET + 1)]) });
   assert.deepEqual([evaluation.verdict, evaluation.failureCategory], ["failed", "runtime.behavior"]);
   assert.deepEqual(evaluation.invariants.map((item) => [item.id, item.passed]), [["runner-verdict", false], ["evidence-packet-budget", false]]);
 });
@@ -81,7 +81,7 @@ test("read from a bundle, the failure quotes no packet content, even text a malf
       { actionType: "web.dom.click", status: "succeeded", evidencePackets: [{ point: "afterAction", bytes: BUDGET + 1, truncated: true, summary: { title: content[0], elements: [{ selector: content[1] }] }, stateRef: content[2] }, { point: content[0], bytes: BUDGET + 2, truncated: true }] },
     ],
   };
-  const evaluation = evaluateObservedRun({ identity, outcome: passedOutcome, observation: flow, evidence: flowLaneEvidenceSizes(bundleWith(t, snapshot)) });
+  const evaluation = evaluateObservedRun({ identity, facilityFailure: null, outcome: passedOutcome, observation: flow, evidence: flowLaneEvidenceSizes(bundleWith(t, snapshot)) });
   const budget = evaluation.invariants.find((item) => item.id === "evidence-packet-budget");
   assert.equal(budget?.actual, `2 of 3 packets over budget: action 2 afterAction: ${BUDGET + 1} bytes; action 2 at an unnamed point: ${BUDGET + 2} bytes`);
   const serialised = JSON.stringify(evaluation);

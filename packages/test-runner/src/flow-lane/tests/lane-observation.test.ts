@@ -13,7 +13,7 @@ const run = (overrides: Partial<PersistedFlowRunOutcome> = {}): PersistedFlowRun
 /** The observation must satisfy the contract that consumes it, not merely typecheck. */
 function evaluationFrom(observation: RunLaneObservation): RunEvaluation {
   return {
-    schemaVersion: EVALUATION_SCHEMA_VERSION, runId: "run.one", verdict: "passed", invariants: [], metrics: {},
+    schemaVersion: EVALUATION_SCHEMA_VERSION, runId: "run.one", verdict: "passed", facilityFailure: null, invariants: [], metrics: {},
     scenarioId: "auth-gate", workflowId: null, variantId: null, repeatIndex: 0, durationMs: 10,
     evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 },
     llm: { mode: "disabled", profileId: null, calls: 0 },

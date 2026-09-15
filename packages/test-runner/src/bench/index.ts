@@ -18,3 +18,5 @@ export * from "./read-run-bundle.js";
 export * from "./render-markdown.js";
 export * from "./report-store.js";
 export * from "./run-bench.js";
+export * from "./shard-merge.js";
+export * from "./sharded-bench.js";

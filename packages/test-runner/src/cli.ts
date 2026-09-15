@@ -1,8 +1,9 @@
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { executeAuthCommand } from "./auth-cli.js";
 import { WebPanelAuthSessionCache } from "./auth-session.js";
-import { buildCampaignCompatibility, compareBenchCloseoutCommand, compareBenchCommand, createResumableBench, findBenchCorpus, loadResumableBenchRequest, resumeBench, type BenchCampaignLifecycle } from "./bench/index.js";
+import { benchDirectory, buildCampaignCompatibility, compareBenchCloseoutCommand, compareBenchCommand, createResumableBench, createShardedBench, findBenchCorpus, loadCampaignManifest, resumeBench, resumeShardedBench, type RunBenchOutcome } from "./bench/index.js";
 import { ClonePackageCache } from "./clone-cache.js";
 import { parseLabCommand, expandMatrix } from "./commands.js";
 import { classifyRunnerFailure } from "./failure.js";
@@ -49,7 +50,8 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
       return "comparisonPassed" in comparison ? (comparison.comparisonPassed ? 0 : 1) : comparison.outcome === "regressed" ? 1 : 0;
     }
     if (command.command === "bench") {
-      const request = "resumeBenchId" in command ? await loadResumableBenchRequest(runsDirectory, command.resumeBenchId) : null;
+      const savedManifest = "resumeBenchId" in command ? await loadCampaignManifest(benchDirectory(runsDirectory, command.resumeBenchId)) : null;
+      const request = savedManifest?.request ?? null;
       const corpus = findBenchCorpus(request?.corpusId ?? ("corpusId" in command ? command.corpusId : ""));
       const target = resolveTargetConfiguration({
         ...("resumeBenchId" in command
@@ -66,9 +68,18 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
         scenarioLabBuildPath: labPaths.scenarioLabDist,
       });
       const shared = { corpus, target, manifests, repositoryRoot, fluxiqRepositoryRoot, runsDirectory, environment: resolvedEnvironment, runScenario, inspectRun, compatibility, lifecycle: reportBenchLifecycle };
-      const outcome = "resumeBenchId" in command
-        ? await resumeBench({ ...shared, benchId: command.resumeBenchId, repeatCount: request!.repeatCount, ...(request!.evidence === null ? {} : { evidence: request!.evidence }) })
-        : await createResumableBench({ ...shared, repeatCount: command.repeat, ...(command.evidence ? { evidence: command.evidence } : {}) });
+      const machineSlotsDirectory = path.join(os.tmpdir(), "fluxiq-testing-lab-machine-slots");
+      let outcome: RunBenchOutcome;
+      if ("resumeBenchId" in command) {
+        const resume = { ...shared, benchId: command.resumeBenchId, repeatCount: request!.repeatCount, ...(request!.evidence === null ? {} : { evidence: request!.evidence }) };
+        if (savedManifest!.execution.mode === "serial") outcome = await resumeBench(resume);
+        else if (savedManifest!.execution.mode === "shard-parent") outcome = await resumeShardedBench({ ...resume, machineSlotsDirectory });
+        else throw new Error("A shard child cannot be resumed as a logical bench campaign");
+      } else if (command.shards === undefined) {
+        outcome = await createResumableBench({ ...shared, repeatCount: command.repeat, ...(command.evidence ? { evidence: command.evidence } : {}) });
+      } else {
+        outcome = await createShardedBench({ ...shared, repeatCount: command.repeat, ...(command.evidence ? { evidence: command.evidence } : {}), shardCount: command.shards, jobs: command.jobs ?? Math.min(command.shards, 2), machineSlotsDirectory });
+      }
       process.stdout.write(`${JSON.stringify(outcome)}\n`); return outcome.status === "passed" ? 0 : 1;
     }
     if ((command.command === "run" || command.command === "matrix") && command.llm?.mode === "live") throw new Error("Live LLM execution is fail-closed until the Phase 1 provider runner is enabled");
@@ -90,7 +101,7 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
   }
 }
 
-function reportBenchLifecycle(record: BenchCampaignLifecycle): void {
+function reportBenchLifecycle(record: Readonly<{ event: string; benchId: string; directory: string }>): void {
   if (record.event === "created" || record.event === "resumed") process.stderr.write(`${JSON.stringify({ event: `bench-campaign-${record.event}`, benchId: record.benchId, directory: record.directory })}\n`);
 }
 

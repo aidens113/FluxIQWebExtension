@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { classifyRunnerFailure, RunnerFailure } from "../failure.js";
+import { boundedRunnerCause, classifyRunnerFailure, RunnerFailure } from "../failure.js";
 
 test("preserves explicit failure categories", () => {
   assert.equal(classifyRunnerFailure(new RunnerFailure("gateway.connection", "offline")), "gateway.connection");
@@ -17,6 +17,17 @@ test("classifies an allowlisted socket code through only a bounded cause chain",
   const tooDeep = new Error("0", { cause: new Error("1", { cause: new Error("2", { cause: new Error("3", { cause: Object.assign(new Error("4"), { code: "ECONNRESET" }) }) }) }) });
   assert.equal(classifyRunnerFailure(tooDeep), "unknown");
   assert.equal(classifyRunnerFailure(new Error("outer", { cause: Object.assign(new Error("private"), { code: "SECRET_SOCKET_CODE" }) })), "unknown");
+});
+
+test("the shared bounded cause selector is closed and getter-safe", () => {
+  assert.deepEqual(boundedRunnerCause(Object.assign(new Error("private"), { code: "ENOENT" })), { code: "ENOENT", kind: "path.missing" });
+  assert.deepEqual(boundedRunnerCause(Object.assign(new Error("private"), { code: "EPERM" })), { code: "EPERM", kind: "path.denied" });
+  assert.deepEqual(boundedRunnerCause(Object.assign(new Error("private"), { code: "ERR_MODULE_NOT_FOUND" })), { code: "ERR_MODULE_NOT_FOUND", kind: "module.missing" });
+  assert.deepEqual(boundedRunnerCause(Object.assign(new Error("private"), { code: "ECONNRESET" })), { code: "ECONNRESET", kind: "startup" });
+  assert.equal(boundedRunnerCause(Object.assign(new Error("private"), { code: "PRIVATE_CODE" })), undefined);
+  assert.equal(boundedRunnerCause(new Proxy({}, { has: () => { throw new Error("private"); } })), undefined);
+  const hostile = Object.create(null, { code: { get: () => { throw new Error("private"); } } });
+  assert.equal(boundedRunnerCause(hostile), undefined);
 });
 
 /**

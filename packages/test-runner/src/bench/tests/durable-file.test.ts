@@ -231,7 +231,7 @@ test("report store replaces mutable projections and creates evaluations immutabl
     assert.equal(JSON.parse(await readFile(path.join(root, "report.json"), "utf8")).reportId, "report-two");
     assert.equal(await readFile(path.join(root, "report.md"), "utf8"), "second");
 
-    const evaluation = { runId: "run-one", schemaVersion: "0.1" } as RunEvaluation;
+    const evaluation = { runId: "run-one", schemaVersion: "0.2", facilityFailure: null } as unknown as RunEvaluation;
     assert.equal(await writeRunEvaluation(root, evaluation), "evaluations/run-one.json");
     await assert.rejects(writeRunEvaluation(root, evaluation), (error: NodeJS.ErrnoException) => error.code === "EEXIST");
   } finally {

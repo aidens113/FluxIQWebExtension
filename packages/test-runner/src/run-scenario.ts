@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { chromium, type BrowserContext, type Page } from "@playwright/test";
-import { assertClonePackage, assertRunManifest, canonicalClonePackageJson, flowLaneExclusion, resolveScenarioWorkflow, scenarioPageFactSchedule, type ResolvedScenarioWorkflow, type RunActionTiming, type RunAutomationFailure, type RunEvaluation, type ScenarioArming, type WebScenario } from "@fluxiq-web-extension/test-contracts";
+import { assertClonePackage, assertRunManifest, canonicalClonePackageJson, flowLaneExclusion, resolveScenarioWorkflow, scenarioPageFactSchedule, type FacilityFailureStage, type ResolvedScenarioWorkflow, type RunActionTiming, type RunAutomationFailure, type RunEvaluation, type ScenarioArming, type WebScenario } from "@fluxiq-web-extension/test-contracts";
 import { createCorrelationId, EvidenceBundle, EvidenceCaptureController, sha256 } from "@fluxiq-web-extension/test-evidence";
 import type { EvidenceMode } from "./commands.js";
 import { removeRunOwnedTopologyState, startTopology, type RunningTopology } from "./coordinator.js";
@@ -36,6 +36,7 @@ import { assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, selectC
 import { createScriptedNavigationDriver, ScenarioStepRunner } from "./scenario-steps/index.js";
 import { awaitExtensionWorker, cleanupFailureOutcome, pairingStatusWaitFailureDetails, pairExtensionWithColdEpochRecovery } from "./run-lifecycle/index.js";
 import { assertSafeScenarioRunId, createBenchReceipt, type BenchReceiptMetadata } from "./bench/index.js";
+import { projectFacilityFailure, ProjectedFacilityError } from "./facility-failure/index.js";
 
 /** `evidence` overrides the manifest's `evidencePolicy`; `workflowId` and `variantId` select what `resolveScenarioWorkflow` resolves. */
 export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flow?: boolean; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration; runId?: string; benchReceipt?: BenchReceiptMetadata };
@@ -49,6 +50,17 @@ export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot:
 export type RunScenarioResult = { runId: string; verdict: "passed" | "failed"; path: string; failureCategory?: string; observation?: RunLaneObservation; evaluation?: RunEvaluation };
 
 export async function runScenario(options: RunScenarioOptions): Promise<RunScenarioResult> {
+  let facilityStage: FacilityFailureStage = "scenario.load";
+  try {
+    return await runScenarioImplementation(options, stage => { facilityStage = stage; });
+  } catch (error) {
+    if (error instanceof ProjectedFacilityError) throw error;
+    throw new ProjectedFacilityError(error, projectFacilityFailure(error, "no-final-bundle", facilityStage));
+  }
+}
+
+async function runScenarioImplementation(options: RunScenarioOptions, setFacilityStage: (stage: FacilityFailureStage) => void): Promise<RunScenarioResult> {
+  setFacilityStage("scenario.load");
   if (options.benchReceipt && options.runId === undefined) throw new Error("A bench receipt requires a supervisor-provided run id");
   const runId = options.runId ?? `run-${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
   assertSafeScenarioRunId(runId);
@@ -84,6 +96,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
   const redactionLiterals = target.mode === "existing" && scenario.secrets?.length ? undefined : scenarioRedactionLiterals(scenario);
   let redaction: RunRedactionAttestation | undefined;
   const evidence = effectiveEvidencePolicy(scenario.evidencePolicy, options.evidence);
+  setFacilityStage("bundle.initialize");
   const bundle = new EvidenceBundle({ rootDirectory: options.runsDirectory, runId, scenarioId: scenario.id, redaction: { secrets }, evidencePolicy: evidence.capture });
   await bundle.initialize();
   const capture = new EvidenceCaptureController(bundle, evidence.capture);
@@ -98,6 +111,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
   let verdict: "passed" | "failed" = "failed";
   let failureCategory: RunnerFailureCategory | undefined;
   let failureMessage: string | undefined;
+  let facilityFailure: RunEvaluation["facilityFailure"] = null;
   let existingPreflight: ExistingFluxIQPreflight | undefined;
   let existingExecution: ExistingFlowExecution | undefined;
   let panelVerification: FluxIQPanelVerificationOutcome | undefined;
@@ -124,6 +138,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
   const cloneState: CloneRunState = { sourceSessionIdentityVerified: false, sourceHashVerifiedAfterRun: false, cleanupOutcome: "pending" };
   let topologyStateRemoved = false;
   const extensionPath = labPaths.extensionPath;
+  setFacilityStage("scenario.execute");
   try {
     await requireExtension(extensionPath);
     if (target.mode === "clone") {
@@ -377,6 +392,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
   } catch (error) {
     failureCategory = classifyRunnerFailure(error);
     failureMessage = error instanceof Error ? error.message : String(error);
+    if (flowObservation?.reportedVerdict == null) {
+      facilityFailure = projectFacilityFailure(error, "finalized-bundle", "scenario.execute");
+    }
     // Recorded-event mismatches are types and counts, never page data, so they are published for diagnosis.
     // So is what the Flow reported when the lane got that far: Core's category and closed-set code, and nothing else of the record.
     const flowReported = flowObservation?.automationFailureReported;
@@ -394,6 +412,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
       await bundle.appendEvent({ ...failureEvent, screenshot: { path: artifactPath, sha256: digest } });
     } else await capture.trigger(failureEvent).catch(() => undefined);
   } finally {
+    setFacilityStage("scenario.cleanup");
     stepRunner?.dispose();
     consoleErrors?.dispose();
     if (recordingStarted && extensionPage) await runtimeMessage(extensionPage, { type: "fluxiq.stopRecording" }).catch(() => undefined);
@@ -405,17 +424,25 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
         if (sourceAfter.source.contentHash !== cloneState.clonePackage.source.contentHash) throw new RunnerFailure("runtime.behavior", "Source Flow changed while its isolated clone was running");
         cloneState.sourceHashVerifiedAfterRun = true;
       } catch (error) {
+        const hadPrimaryFailure = failureCategory !== undefined && failureMessage !== undefined;
         const completion = cleanupFailureOutcome({ category: failureCategory, message: failureMessage }, "clone-source-verification", error instanceof Error ? error.message : String(error), classifyRunnerFailure(error));
         verdict = "failed";
         failureCategory = completion.primary.category;
         failureMessage = completion.primary.message;
+        if (!hadPrimaryFailure && flowObservation?.reportedVerdict == null) {
+          facilityFailure = projectFacilityFailure(error, "finalized-bundle", "scenario.cleanup");
+        }
         await capture.trigger({ ...event(runId, scenario.id, undefined, "error", completion.event.summary), details: completion.event.details }).catch(() => undefined);
       }
     }
     try { await context?.close(); }
     catch (error) {
+      const hadPrimaryFailure = failureCategory !== undefined && failureMessage !== undefined;
       const cleanup = cleanupFailureOutcome({ category: failureCategory, message: failureMessage }, "browser", error);
       verdict = "failed"; failureCategory = cleanup.primary.category; failureMessage = cleanup.primary.message;
+      if (!hadPrimaryFailure && flowObservation?.reportedVerdict == null) {
+        facilityFailure = projectFacilityFailure(error, "finalized-bundle", "scenario.cleanup");
+      }
       await capture.trigger({ ...event(runId, scenario.id, undefined, "error", cleanup.event.summary), details: cleanup.event.details }).catch(() => undefined);
     }
     // The second read of Core's discard audit. Core audits a discard only when the late
@@ -443,8 +470,12 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
     }
     try { await topology?.close(); }
     catch (error) {
+      const hadPrimaryFailure = failureCategory !== undefined && failureMessage !== undefined;
       const cleanup = cleanupFailureOutcome({ category: failureCategory, message: failureMessage }, "topology", error);
       verdict = "failed"; failureCategory = cleanup.primary.category; failureMessage = cleanup.primary.message;
+      if (!hadPrimaryFailure && flowObservation?.reportedVerdict == null) {
+        facilityFailure = projectFacilityFailure(error, "finalized-bundle", "scenario.cleanup");
+      }
       await capture.trigger({ ...event(runId, scenario.id, undefined, "error", cleanup.event.summary), details: cleanup.event.details }).catch(() => undefined);
     }
     if (failureMessage && !bundle.getEvents().some(item => item.trigger === "error" && item.summary === failureMessage)) {
@@ -472,16 +503,21 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
         topologyStateRemoved = true;
         cloneState.cleanupOutcome = "completed";
       } catch (error) {
+        const hadPrimaryFailure = failureCategory !== undefined && failureMessage !== undefined;
         const cleanup = cleanupFailureOutcome({ category: failureCategory, message: failureMessage }, "clone-destination", error);
         verdict = "failed";
         failureCategory = cleanup.primary.category;
         failureMessage = cleanup.primary.message;
+        if (!hadPrimaryFailure && flowObservation?.reportedVerdict == null) {
+          facilityFailure = projectFacilityFailure(error, "finalized-bundle", "scenario.cleanup");
+        }
         cloneState.cleanupOutcome = "failed";
         await capture.trigger({ ...event(runId, scenario.id, undefined, "error", cleanup.event.summary), details: cleanup.event.details }).catch(() => undefined);
       }
     }
     if (target.mode === "clone" && !topology) cloneState.cleanupOutcome = "completed";
   }
+  setFacilityStage("bundle.publish");
   try {
     const manifest = await createRunManifest({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, target: options.target, scenario, runId, seed, startedAt, verdict, browserVersion, extensionPath, topology, existingPreflight, existingExecution, panelVerification, cloneState, workflowId: workflow.workflowId, variantId: workflow.variant?.id, automationFailure, steps: stepRunner?.timings() ?? [], actions, redaction });
     assertRunManifest(manifest);
@@ -510,7 +546,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<RunScena
     // evidence sizes come from the staging directory's `snapshots/flow-lane.json`,
     // the file the bench reads once `finalize` has renamed that directory.
     const evaluation = observation
-      ? singleRunEvaluation({ runId, verdict, failureCategory, scenarioId: scenario.id, workflowId: workflow.workflowId, variantId: workflow.variant?.id, repeatIndex: benchReceipt?.cellIdentity.repeatIndex ?? 0, observation, manifest, metrics, events: bundle.getEvents(), wallClockMs: Date.now() - Date.parse(startedAt), bundlePath: bundle.stagingPath })
+      ? singleRunEvaluation({ runId, verdict, failureCategory, facilityFailure, scenarioId: scenario.id, workflowId: workflow.workflowId, variantId: workflow.variant?.id, repeatIndex: benchReceipt?.cellIdentity.repeatIndex ?? 0, observation, manifest, metrics, events: bundle.getEvents(), wallClockMs: Date.now() - Date.parse(startedAt), bundlePath: bundle.stagingPath })
       : undefined;
     if (evaluation) await bundle.writeStructured("evaluation.json", evaluation);
     if (benchReceipt) await bundle.writeStructured("bench-receipt.json", benchReceipt);

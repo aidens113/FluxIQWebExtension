@@ -1129,32 +1129,60 @@ through the same `runScenario` a `lab run` uses
 ```powershell
 pnpm lab bench --corpus smoke --repeat 2 --target isolated
 pnpm lab bench --corpus week1 --repeat 3 --target isolated
+pnpm lab bench --corpus week1 --repeat 3 --target isolated --shards 2 --jobs 2
 pnpm lab bench --resume <bench-id>
 ```
 
-Every newly started bench is a durable campaign. The command publishes its
-bench id and immutable `campaign.json` before scheduling the first run, then
-adds an immutable, hash-linked checkpoint before and after each executable
-cell. A machine or process failure therefore loses at most the active attempt,
-not the campaign. Resume is always explicit: `lab bench --resume <bench-id>`
-loads the saved corpus, repeat count, target, workspace, and evidence policy;
-it never guesses the newest bench. It accepts a finalized active run only when
-the bundle's `bench-receipt.json`, evaluation identity, hashes, and completion
-marker bind it to that exact campaign cell. Otherwise an interrupted staging
-bundle is preserved under the campaign's `interrupted/` directory and the cell
-gets a new deterministic attempt id.
+Without `--shards`, a new campaign is serial. `--shards <count>` selects the
+deterministic sharded topology; the count is 2--8. `--jobs <count>` is 1 through
+the shard count and controls how many child executors the parent schedules at
+once. It is meaningful only with sharding. More jobs do not bypass the
+machine-wide admission gate: at most two scenario cells may own global slots,
+waiters are FIFO across concurrent campaigns, and available physical memory is
+checked again before every cell. Admission retains 4 GiB for the machine and
+budgets 3 GiB for each active/new cell. A slot surrounds only `runScenario`, so
+checkpointing, reconciliation, aggregation, and an idle child do not consume
+it; the slot is released on success, failure, or interruption.
 
-One process owns a campaign at a time. The campaign lease refuses a concurrent
-live owner and automatically archives/reclaims an owner proven stale by the
-machine-boot and process-start identities, so a reboot or PID reuse does not
-require hand-editing a lock file.
+Every newly started bench is a durable campaign. Serial execution publishes
+one immutable `campaign.json`; sharded execution publishes an immutable parent
+authority and exact child authorities beneath `shards/<index>/`. The parent
+records the fixed partition algorithm, shard count, and jobs. Complete result
+groups are assigned round-robin in first-plan order, and every repeat of one
+result stays in the same child. Child plan ordinals are local, but cell keys
+retain their parent identity, so the partition has disjoint, exact coverage.
+The parent coordinates and never executes a scenario cell itself.
+
+Each executing serial campaign or child owns its directory with an independent
+lease and adds an immutable, hash-linked checkpoint before and after every
+executable cell. A machine or process failure therefore loses at most the
+active attempt, not the campaign. Resume is always explicit:
+`lab bench --resume <bench-id>` loads the saved request and topology; it never
+guesses the newest bench. It accepts a finalized active run only when the
+bundle's `bench-receipt.json`, evaluation identity, hashes, and completion
+marker bind it to that exact campaign cell. Otherwise an interrupted staging
+bundle is preserved under that serial/child campaign's `interrupted/` directory
+and the cell gets a new deterministic attempt id. A lease refuses a concurrent
+live owner and archives/reclaims only an owner proven stale by machine-boot and
+process-start identities, so a reboot or PID reuse needs no lock-file edit.
+
+After every child is terminal, the parent validates their exact partition and
+authenticated evaluations, then publishes parent-ordered `runs.json`,
+`report.json`, and `report.md`. A create-only merge seal authenticates the
+parent manifest and plan, every child manifest, plan, terminal checkpoint and
+projection, and the merged projections. Only then does the parent publish its
+finished checkpoint. Repeating merge/resume is idempotent; missing,
+overlapping, foreign, corrupt, or secret-bearing state fails closed.
 
 Resume fails closed if the facility or Core commit, lockfiles, built runner,
 extension, Scenario Lab, Chromium version, platform, architecture, locale,
 timezone, or viewport differs from the campaign manifest. Both repositories
-must consequently be clean when a resumable bench is created or resumed.
-Legacy benches remain readable and comparable, but have no campaign authority
-and cannot be resumed.
+must consequently be clean when a resumable bench is created or resumed. A
+paused campaign can resume only at its original compatible commit/build pin;
+current code does not weaken compatibility to reopen it. Legacy completed
+evaluations and reports remain readable and comparable through explicit
+normalization, but a legacy bench without current campaign authority cannot be
+resumed.
 
 - **Corpora** (`bench/corpus/`). `smoke` is W01 (`basic-form`) and W28
   (`iframe-checkout`) on the recording lane only. `week1` is W01 to W29 on both
@@ -1171,13 +1199,30 @@ and cannot be resumed.
   `isolated` or `persistent-isolated`. A result the corpus runs on no lane, or
   one that does not resolve against the registry, is recorded as skipped with
   its reason, never as a pass.
-- **Output**, under `<runs directory>/bench/<bench id>/`: immutable
-  `campaign.json`, immutable generations under `checkpoints/`, a
-  `RunEvaluation` per completed cell, and the derived `runs.json`,
-  `report.json` (`BenchReport`), and `report.md`. The derived aggregate files
-  are published only after every executable plan cell has one validated
-  completion. The bench passes only when at least one run was evaluated and
-  every evaluated run passed.
+- **Output**, under `<runs directory>/bench/<bench id>/`: immutable campaign
+  authority and checkpoint generations plus derived `runs.json`, `report.json`
+  (`BenchReport`), and `report.md`. A serial campaign keeps its evaluations in
+  `evaluations/`. A sharded parent keeps each child's complete serial-shaped
+  state under `shards/<index>/`; parent run records point to those immutable
+  child evaluations, and `merge-seal.json` authenticates the merge. Derived
+  aggregate files are published only after every executable plan cell has one
+  validated completion. The bench passes only when at least one run was
+  evaluated and every evaluated run passed.
+
+```text
+<runs directory>/bench/<bench id>/
+  campaign.json
+  checkpoints/                 serial checkpoints, or sharded parent finish
+  evaluations/                 serial campaigns only
+  shards/000/                  sharded campaigns only
+    campaign.json
+    checkpoints/
+    evaluations/
+    runs.json, report.json, report.md
+  shards/001/ ...
+  merge-seal.json              sharded campaigns only
+  runs.json, report.json, report.md
+```
 - **Rates** (`packages/test-contracts/src/bench-report.ts`) are computed per lane
   and never combined, because the recording lane executes at most the Core
   action probe, never the workflow: `flowCreationSuccess`,
@@ -1207,9 +1252,13 @@ all six exit criteria. It reads `recording.persistence` run events only to
 aggregate discard kinds, maxima, recording-presence/finalization counts, and
 window-exclusion counts; it cannot emit event messages, payloads, page data, or
 recording ids. Concurrent benches are labelled as shared-load measurements by
-default; add `--sequential` only when the reports were produced sequentially.
-Any metric outside its tolerance in either direction, any comparable metric
-present on only one side, or any differing result/run verdict exits 1. `--halves`
+default. A shared-load comparison fails closed unless both reports have the
+same topology: both serial, or both sharded with the same algorithm, shard
+count, and jobs. Add `--sequential` only when the reports were produced
+sequentially; that mode may compare metrics across different topologies but
+explicitly discloses the mismatch. Any metric outside its tolerance in either
+direction, any comparable metric present on only one side, or any differing
+result/run verdict exits 1. `--halves`
 retains the narrower contract-only comparison because its reports are computed
 in memory rather than stored as two complete bench bundles.
 The two-report output's `comparisonPassed` means only that those A/B metric and
@@ -1499,18 +1548,17 @@ pnpm test
 pnpm build
 ```
 
-The sibling Core checkout defaults to `F:\!FluxIQ` on the current Windows
-layout. Both repositories must have compatible installed dependencies. Override
-the roots when needed, then run one of the finite commands:
+Keep the Core checkout as a compatible sibling of this repository, or set the
+documented repository-root environment overrides. Then run one of the finite
+commands:
 
 ```powershell
-$env:FLUXIQ_WEB_EXTENSION_ROOT = "F:\!FluxIQWebExtension"
-$env:FLUXIQ_CORE_ROOT = "F:\!FluxIQ"
 pnpm lab run basic-form --seed 1 --evidence events
 pnpm lab run basic-form --flow
 pnpm lab matrix --all --repeat 1 --evidence failure
 pnpm lab inspect <run-id>
 pnpm lab bench --corpus smoke --repeat 2 --target isolated
+pnpm lab bench --corpus week1 --repeat 3 --target isolated --shards 2 --jobs 2
 pnpm lab bench --resume <bench-id>
 pnpm lab compare <baseline-report> <candidate-report>
 pnpm lab compare <baseline-report> <candidate-report> --sequential

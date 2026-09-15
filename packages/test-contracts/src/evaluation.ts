@@ -2,7 +2,10 @@ import type { AutomationStudioAdaptiveFailureClass } from "./failure-category.js
 import type { LlmExecutionProfile } from "./llm.js";
 import type { ExpectedFailure } from "./scenario.js";
 
-export const EVALUATION_SCHEMA_VERSION = "0.1" as const;
+/** Schema written by new `RunEvaluation` producers. */
+export const EVALUATION_SCHEMA_VERSION = "0.2" as const;
+/** Candidate comparisons did not change with the run-evaluation diagnostic. */
+export const CANDIDATE_COMPARISON_SCHEMA_VERSION = "0.1" as const;
 
 /**
  * The test-rig failure taxonomy: why the facility itself could not produce a
@@ -18,6 +21,44 @@ export const failureCategories = [
 ] as const;
 export type FailureCategory = (typeof failureCategories)[number];
 export type InvariantResult = { id: string; passed: boolean; expected: string; actual: string; evidenceSequences: number[] };
+
+export const facilityFailureBoundaries = ["finalized-bundle", "no-final-bundle"] as const;
+export type FacilityFailureBoundary = (typeof facilityFailureBoundaries)[number];
+
+export const facilityFailureStages = [
+  "scenario.load", "bundle.initialize", "scenario.execute", "scenario.cleanup", "bundle.publish", "bench.persist",
+] as const;
+export type FacilityFailureStage = (typeof facilityFailureStages)[number];
+
+export const facilityFailureReasons = [
+  "readiness.timeout", "http.timeout", "http.abort", "http.transport",
+  "module.missing", "path.missing", "path.denied", "unclassified",
+] as const;
+export type FacilityFailureReason = (typeof facilityFailureReasons)[number];
+
+export const facilityFailureOperationStages = [
+  "scenario.health", "core.health", "auth.login", "auth.session.validate",
+  "project.create", "project.select", "control.request",
+] as const;
+export type FacilityFailureOperationStage = (typeof facilityFailureOperationStages)[number];
+
+export const facilityFailureCauseCodes = [
+  "ERR_MODULE_NOT_FOUND", "MODULE_NOT_FOUND", "ERR_PACKAGE_PATH_NOT_EXPORTED",
+  "ERR_PACKAGE_IMPORT_NOT_DEFINED", "ERR_UNSUPPORTED_DIR_IMPORT", "ENOENT", "EACCES", "EPERM",
+  "ECONNREFUSED", "ECONNRESET", "EPIPE", "ETIMEDOUT", "ENETUNREACH", "EHOSTUNREACH",
+  "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_SOCKET",
+] as const;
+export type FacilityFailureCauseCode = (typeof facilityFailureCauseCodes)[number];
+
+/** Closed, bounded diagnostic for a test-facility failure; never raw error data. */
+export type FacilityFailureDiagnostic = {
+  boundary: FacilityFailureBoundary;
+  stage: FacilityFailureStage;
+  reason: FacilityFailureReason;
+  operationStage?: FacilityFailureOperationStage;
+  causeCode?: FacilityFailureCauseCode;
+  timeoutMs?: number;
+};
 
 /**
  * Lanes a run evaluation comes from. `recording`: the Testing Lab drives the
@@ -65,6 +106,8 @@ export type RunEvaluation = {
   verdict: "passed" | "failed" | "inconclusive";
   /** Test-rig failure only; see the type comment. */
   failureCategory?: FailureCategory;
+  /** Sanitized facility diagnostic, or `null` when the facility itself did not fail. */
+  facilityFailure: FacilityFailureDiagnostic | null;
   invariants: InvariantResult[];
   metrics: Record<string, number>;
   scenarioId: string;
@@ -101,7 +144,7 @@ export type RunEvaluation = {
 };
 
 export type CandidateComparison = {
-  schemaVersion: typeof EVALUATION_SCHEMA_VERSION;
+  schemaVersion: typeof CANDIDATE_COMPARISON_SCHEMA_VERSION;
   baselineRunId: string;
   candidateRunId: string;
   safetyPassed: boolean;

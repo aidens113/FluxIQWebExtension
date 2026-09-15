@@ -11,7 +11,7 @@ export type LabCommand =
   | { command: "run"; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flowLane?: true; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile }
   | { command: "matrix"; scenarioIds?: string[]; all: boolean; repeat: number; evidence?: EvidenceMode; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile }
   | { command: "bench"; resumeBenchId: string }
-  | { command: "bench"; corpusId: string; repeat: number; evidence?: EvidenceMode; target?: BenchTargetMode; workspace?: string }
+  | { command: "bench"; corpusId: string; repeat: number; evidence?: EvidenceMode; target?: BenchTargetMode; workspace?: string; shards?: number; jobs?: number }
   | { command: "auth"; operation: "status" | "clear" }
   | { command: "clone-cache"; operation: "status" | "refresh" | "clear" }
   | { command: "inspect"; runId: string }
@@ -70,21 +70,27 @@ export function parseLabCommand(argv: string[]): LabCommand {
     return { command, operation: args[0] };
   }
   if (command === "bench") {
-    rejectUnknownOptions(args, ["--resume", "--corpus", "--repeat", "--evidence", "--target", "--workspace"]);
+    rejectUnknownOptions(args, ["--resume", "--corpus", "--repeat", "--evidence", "--target", "--workspace", "--shards", "--jobs"]);
     const resumeBenchId = option(args, "--resume");
     if (resumeBenchId !== undefined) {
       if (!/^bench-[a-z0-9]+-[0-9a-f]{8}$/u.test(resumeBenchId)) throw new Error("--resume requires a valid bench ID");
-      if (args.length !== 2) throw new Error("--resume cannot be combined with corpus, repeat, target, workspace, evidence, or positional options");
+      if (args.length !== 2) throw new Error("--resume cannot be combined with corpus, repeat, target, workspace, evidence, shards, jobs, or positional options");
       return { command, resumeBenchId };
     }
-    if (positionalValues(args).length) throw new Error("bench takes options only: lab bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] | lab bench --resume BENCH_ID");
+    if (positionalValues(args).length) throw new Error("bench takes options only: lab bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] [--shards N [--jobs N]] | lab bench --resume BENCH_ID");
     const corpusId = option(args, "--corpus");
     if (corpusId === undefined || !KEBAB_ID.test(corpusId)) throw new Error("bench requires --corpus with a lowercase kebab-case corpus ID");
     const repeat = integerOption(args, "--repeat", 1);
     if (repeat < 1 || repeat > 100) throw new Error("--repeat must be between 1 and 100");
+    const shards = optionalIntegerOption(args, "--shards");
+    const jobs = optionalIntegerOption(args, "--jobs");
+    if (shards !== undefined && (shards < 2 || shards > 8)) throw new Error("--shards must be between 2 and 8");
+    if (jobs !== undefined && shards === undefined) throw new Error("--jobs requires --shards");
+    if (jobs !== undefined && (jobs < 1 || jobs > shards!)) throw new Error("--jobs must be between 1 and --shards");
     const { target, workspace } = targetOptions(args);
     if (target === "existing" || target === "clone") throw new Error("bench runs the recording lane: --target must be isolated or persistent-isolated");
-    return { command, corpusId, repeat, ...optionalEvidence(args), ...(target ? { target } : {}), ...(workspace ? { workspace } : {}) };
+    if (shards !== undefined && target === "persistent-isolated") throw new Error("--shards currently requires the isolated target");
+    return { command, corpusId, repeat, ...optionalEvidence(args), ...(target ? { target } : {}), ...(workspace ? { workspace } : {}), ...(shards === undefined ? {} : { shards }), ...(jobs === undefined ? {} : { jobs }) };
   }
   if (command === "inspect") return { command, runId: positional(args, 0, "run ID") };
   if (command === "compare") {
@@ -100,7 +106,7 @@ export function parseLabCommand(argv: string[]): LabCommand {
     if (reports.length !== 2 || first === undefined || second === undefined) throw new Error(COMPARE_USAGE);
     return { command, baselineReport: first, candidateReport: second, sharedLoad: !args.includes("--sequential") };
   }
-  throw new Error("Usage: lab interactive <scenario> [--target isolated|persistent-isolated|existing] [--workspace NAME] [--fresh-login] | run <scenario> [--workflow ID] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] | matrix (--all|--scenarios-json JSON) [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] | bench --resume BENCH_ID | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves");
+  throw new Error("Usage: lab interactive <scenario> [--target isolated|persistent-isolated|existing] [--workspace NAME] [--fresh-login] | run <scenario> [--workflow ID] [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--seed N] [--evidence MODE] | matrix (--all|--scenarios-json JSON) [--target isolated|persistent-isolated|existing|clone] [--workspace NAME] [--flow ID] [--fresh-login] [--repeat N] [--evidence MODE] | bench --corpus ID [--repeat N] [--target isolated|persistent-isolated] [--workspace NAME] [--evidence MODE] [--shards N [--jobs N]] | bench --resume BENCH_ID | auth status|clear | clone-cache status|refresh|clear | inspect <run-id> | compare <baseline-report> <candidate-report> [--sequential] | compare <report> --halves");
 }
 
 export function expandMatrix(command: Extract<LabCommand, { command: "matrix" }>, allScenarioIds: string[]): Array<{ scenarioId: string; repeatIndex: number }> {
@@ -160,6 +166,7 @@ function llmOptions(args: string[]): LlmExecutionProfile | undefined {
 }
 function option(args: string[], name: string): string | undefined { const indexes = args.flatMap((value, index) => value === name ? [index] : []); if (indexes.length > 1) throw new Error(`${name} may only be specified once`); const index = indexes[0]; return index === undefined ? undefined : args[index + 1] ?? (() => { throw new Error(`${name} requires a value`); })(); }
 function integerOption(args: string[], name: string, fallback: number): number { const value = option(args, name); if (value === undefined) return fallback; const parsed = Number(value); if (!Number.isSafeInteger(parsed)) throw new Error(`${name} must be an integer`); return parsed; }
+function optionalIntegerOption(args: string[], name: string): number | undefined { const value = option(args, name); if (value === undefined) return undefined; const parsed = Number(value); if (!Number.isSafeInteger(parsed)) throw new Error(`${name} must be an integer`); return parsed; }
 function optionalSeed(args: string[]): { seed?: number } { const seed = option(args, "--seed"); if (seed === undefined) return {}; const parsed = Number(seed); if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > 0xffffffff) throw new Error("--seed must be a uint32"); return { seed: parsed }; }
 /**
  * `--flow` carries a value on the existing and clone targets, where it names

@@ -1,4 +1,8 @@
-import { evaluationLanes, failureCategories, llmUsageModes, type CandidateComparison, type LlmUsage, type RunEvaluation } from "./evaluation.js";
+import {
+  evaluationLanes, facilityFailureBoundaries, facilityFailureCauseCodes, facilityFailureOperationStages,
+  facilityFailureReasons, facilityFailureStages, failureCategories, llmUsageModes,
+  type CandidateComparison, type LlmUsage, type RunEvaluation,
+} from "./evaluation.js";
 import { AUTOMATION_STUDIO_ADAPTIVE_FAILURE_CLASSES } from "./failure-category.js";
 import { ContractValidationError, type ValidationIssue, type ValidationResult } from "./validation.js";
 import { add, array, enumeration, finite, isObject, keys, object, optionalText, parseJson, result, text, type JsonObject } from "./runtime-validation.js";
@@ -6,19 +10,24 @@ import { add, array, enumeration, finite, isObject, keys, object, optionalText, 
 const KEBAB_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const week2Keys = ["harnessRecovery", "adaptationCost", "adaptationValidation", "adaptationPersistence", "adaptationReuse"] as const;
 const runEvaluationKeys = [
-  "schemaVersion", "runId", "verdict", "failureCategory", "invariants", "metrics",
+  "schemaVersion", "runId", "verdict", "failureCategory", "facilityFailure", "invariants", "metrics",
   "scenarioId", "workflowId", "variantId", "repeatIndex", "lane", "flowCreated", "oracleVerdict", "reportedVerdict",
   "automationFailureReported", "automationFailureExpected", "harnessActivations", "durationMs", "actions", "evidence", "llm",
   ...week2Keys,
 ];
 const automationVerdicts = ["passed", "failed"] as const;
+const moduleCauseCodes = ["ERR_MODULE_NOT_FOUND", "MODULE_NOT_FOUND", "ERR_PACKAGE_PATH_NOT_EXPORTED", "ERR_PACKAGE_IMPORT_NOT_DEFINED", "ERR_UNSUPPORTED_DIR_IMPORT"] as const;
+const httpTransportCauseCodes = ["ECONNREFUSED", "ECONNRESET", "EPIPE", "ETIMEDOUT", "ENETUNREACH", "EHOSTUNREACH", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_SOCKET"] as const;
 
 export function validateRunEvaluation(input: unknown): ValidationResult<RunEvaluation> {
-  const issues: ValidationIssue[] = []; const value = object(input, "$", issues);
+  const normalized = normalizeLegacyRunEvaluation(input);
+  const issues: ValidationIssue[] = []; const value = object(normalized, "$", issues);
   if (value) {
     keys(value, runEvaluationKeys, "$", issues);
-    if (value.schemaVersion !== "0.1") add(issues, "$.schemaVersion", "must equal 0.1"); text(value, "runId", "$", issues); enumeration(value.verdict, ["passed", "failed", "inconclusive"], "$.verdict", issues);
+    if (value.schemaVersion !== "0.2") add(issues, "$.schemaVersion", "must equal 0.2"); text(value, "runId", "$", issues); enumeration(value.verdict, ["passed", "failed", "inconclusive"], "$.verdict", issues);
     if (value.failureCategory !== undefined) enumeration(value.failureCategory, failureCategories, "$.failureCategory", issues);
+    if (!("facilityFailure" in value)) add(issues, "$.facilityFailure", "is required");
+    checkFacilityFailure(value.facilityFailure, "$.facilityFailure", issues);
     array(value.invariants, "$.invariants", issues, checkInvariant);
     if (Array.isArray(value.invariants)) {
       const ids = value.invariants.filter(isRecord).map(item => item.id).filter((id): id is string => typeof id === "string"); if (new Set(ids).size !== ids.length) add(issues, "$.invariants", "invariant ids must be unique");
@@ -28,15 +37,24 @@ export function validateRunEvaluation(input: unknown): ValidationResult<RunEvalu
     }
     if (value.verdict === "failed" && value.failureCategory === undefined) add(issues, "$.failureCategory", "is required for failed verdict");
     if (value.verdict === "passed" && value.failureCategory !== undefined) add(issues, "$.failureCategory", "must be absent for passed verdict");
+    checkFacilityFailurePairing(value, issues);
     checkMetrics(value.metrics, "$.metrics", issues);
     checkRunIdentity(value, issues);
     checkRunOutcome(value, issues);
     checkRunMeasurements(value, issues);
   }
-  return result(input, issues);
+  return result(normalized, issues);
 }
-export function assertRunEvaluation(input: unknown): asserts input is RunEvaluation { const checked = validateRunEvaluation(input); if (!checked.valid) throw new ContractValidationError("RunEvaluation", checked.issues); }
-export function parseRunEvaluationJson(json: string): RunEvaluation { const input = parse(json, "RunEvaluation"); assertRunEvaluation(input); return input; }
+export function assertRunEvaluation(input: unknown): asserts input is RunEvaluation {
+  const checked = validateRunEvaluation(input);
+  if (!checked.valid) throw new ContractValidationError("RunEvaluation", checked.issues);
+  if (checked.value !== input) throw new ContractValidationError("RunEvaluation", [{ path: "$.schemaVersion", message: "legacy evaluations must be parsed and normalized before use" }]);
+}
+export function parseRunEvaluationJson(json: string): RunEvaluation {
+  const checked = validateRunEvaluation(parse(json, "RunEvaluation"));
+  if (!checked.valid) throw new ContractValidationError("RunEvaluation", checked.issues);
+  return checked.value;
+}
 
 /** Validates an `LlmUsage`; `RunEvaluation` and `BenchReport` embed one as `llm`. */
 export function validateLlmUsage(input: unknown): ValidationResult<LlmUsage> {
@@ -105,6 +123,54 @@ function checkRunMeasurements(value: JsonObject, issues: ValidationIssue[]): voi
   checkEvidenceSizes(value.evidence, "$.evidence", issues);
   nest(validateLlmUsage(value.llm), "$.llm", issues);
   for (const key of week2Keys) if (value[key] !== null) add(issues, `$.${key}`, "must be null until Week 2 defines it");
+}
+
+function checkFacilityFailure(input: unknown, path: string, issues: ValidationIssue[]): void {
+  if (input === null || input === undefined) return;
+  const value = object(input, path, issues); if (!value) return;
+  keys(value, ["boundary", "stage", "reason", "operationStage", "causeCode", "timeoutMs"], path, issues);
+  enumeration(value.boundary, facilityFailureBoundaries, `${path}.boundary`, issues);
+  enumeration(value.stage, facilityFailureStages, `${path}.stage`, issues);
+  enumeration(value.reason, facilityFailureReasons, `${path}.reason`, issues);
+  if (value.operationStage !== undefined) enumeration(value.operationStage, facilityFailureOperationStages, `${path}.operationStage`, issues);
+  if (value.causeCode !== undefined) enumeration(value.causeCode, facilityFailureCauseCodes, `${path}.causeCode`, issues);
+  if (value.timeoutMs !== undefined) finite(value.timeoutMs, `${path}.timeoutMs`, issues, 1, 300_000, true);
+  checkFacilityReasonDetails(value, path, issues);
+}
+
+function checkFacilityReasonDetails(value: JsonObject, path: string, issues: ValidationIssue[]): void {
+  const operationStage = value.operationStage;
+  const causeCode = value.causeCode;
+  const hasTimeout = value.timeoutMs !== undefined;
+  const readinessStage = operationStage === "scenario.health" || operationStage === "core.health";
+  const httpStage = typeof operationStage === "string" && !readinessStage && (facilityFailureOperationStages as readonly string[]).includes(operationStage);
+  const moduleCode = typeof causeCode === "string" && (moduleCauseCodes as readonly string[]).includes(causeCode);
+  const transportCode = causeCode === undefined || typeof causeCode === "string" && (httpTransportCauseCodes as readonly string[]).includes(causeCode);
+  if (value.reason === "readiness.timeout" && (!readinessStage || !hasTimeout || causeCode !== undefined)) add(issues, path, "readiness.timeout requires a readiness operationStage and timeoutMs only");
+  if (value.reason === "http.timeout" && (!httpStage || !hasTimeout || causeCode !== undefined)) add(issues, path, "http.timeout requires an HTTP operationStage and timeoutMs only");
+  if (value.reason === "http.abort" && (!httpStage || hasTimeout || causeCode !== undefined)) add(issues, path, "http.abort requires only an HTTP operationStage");
+  if (value.reason === "http.transport" && (!httpStage || hasTimeout || !transportCode)) add(issues, path, "http.transport requires an HTTP operationStage and optional transport causeCode");
+  if (value.reason === "module.missing" && (!moduleCode || operationStage !== undefined || hasTimeout)) add(issues, path, "module.missing requires only an allowlisted module causeCode");
+  if (value.reason === "path.missing" && (causeCode !== "ENOENT" || operationStage !== undefined || hasTimeout)) add(issues, path, "path.missing requires only causeCode ENOENT");
+  if (value.reason === "path.denied" && (causeCode !== "EACCES" && causeCode !== "EPERM" || operationStage !== undefined || hasTimeout)) add(issues, path, "path.denied requires only causeCode EACCES or EPERM");
+  if (value.reason === "unclassified" && (operationStage !== undefined || causeCode !== undefined || hasTimeout)) add(issues, path, "unclassified cannot carry optional diagnostic fields");
+}
+
+function checkFacilityFailurePairing(value: JsonObject, issues: ValidationIssue[]): void {
+  const diagnostic = value.facilityFailure;
+  if (diagnostic === null || diagnostic === undefined) {
+    if (value.verdict === "inconclusive") add(issues, "$.facilityFailure", "is required for an inconclusive facility result");
+    return;
+  }
+  if (value.verdict === "passed") add(issues, "$.facilityFailure", "must be null for a passed evaluation");
+  if (value.failureCategory === undefined) add(issues, "$.failureCategory", "is required with a facility failure diagnostic");
+  if (value.reportedVerdict !== null || value.automationFailureReported !== null) add(issues, "$.facilityFailure", "cannot accompany an automation result");
+}
+
+/** Schema 0.1 is read-only compatibility and normalizes explicitly to the 0.2 shape. */
+function normalizeLegacyRunEvaluation(input: unknown): unknown {
+  if (!isObject(input) || input.schemaVersion !== "0.1" || "facilityFailure" in input) return input;
+  return { ...input, schemaVersion: "0.2", facilityFailure: null };
 }
 
 function nullableVerdict(input: unknown, path: string, issues: ValidationIssue[]): void {

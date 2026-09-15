@@ -22,6 +22,8 @@ export type BenchRunRecord = {
   evaluation?: string;
   verdict?: RunEvaluation["verdict"];
   failureCategory?: string;
+  /** Immutable evaluation's closed facility diagnostic; null for a healthy facility. */
+  facilityFailure?: RunEvaluation["facilityFailure"];
   /**
    * Evaluated runs: how many actions FluxIQ executed. `0` means FluxIQ
    * executed nothing and the run's verdict says only what the Testing Lab and
