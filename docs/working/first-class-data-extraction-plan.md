@@ -48,7 +48,8 @@ user overrides them.
 
 **Done:** all four investigations; this plan and Core's design (paired
 document); Phase 2.0 in the MVP plan; the Week 1 plan closed and pointed here;
-agent instructions, Priority 4, and open questions E2 and E55 updated.
+agent instructions, Priority 4, and open questions E2, E53, and E55 updated;
+dataset sensitivity decided (D12).
 
 **Not done:** every phase below.
 
@@ -58,9 +59,9 @@ agent instructions, Priority 4, and open questions E2 and E55 updated.
 2. Settle Core's open questions 1-2 (dataset withholding, output references)
    before Core phase K4 persists rows.
 
-**Blockers:** none. **Decision for the user:** redaction beyond marked fields
-(E53) for persisted and exported datasets; until it is decided, datasets carry only
-what existing rules allow and sensitive controls are refused (D2).
+**Blockers:** none. Sensitive data in saved and exported datasets (E53) is
+decided by D12: a column marked sensitive is never stored or exported, and
+nothing guesses from content.
 
 ---
 
@@ -114,6 +115,15 @@ extraction until it is a real, measured Flow capability.
 - **D11. Versioning:** additive Core pieces ship first; run-scoped variables,
   output-reference resolution, and any withholding change ship as `fluxiq`
   0.5.0 with a Migration Notes entry.
+- **D12. Sensitive columns (E53, for datasets):** extraction never judges
+  content, which both misses and misfires. A field spec may be marked
+  `sensitive`; Core keeps a withheld marker in place of that column's values in
+  stored rows, previews, and exports, while a later node in the same run can
+  still read it, as with run inputs. The picker marks a field sensitive by
+  default when the element it reads, or that element's control, carries the
+  sensitivity signature or `data-sensitive`; the user can mark any other column.
+  Recorder capture of unmarked form fields stays with E53 in the Week 1 open
+  questions.
 
 ## Design
 
@@ -123,7 +133,8 @@ extraction until it is a real, measured Flow capability.
   `schemas.ts`, `client/gateway-action-parameters.ts`):
   - a field value is the existing string grammar or a spec
     `{ kind: text|attribute|link|value|column, selector?, attribute?, header?,
-    required?, element? }`, where `link` resolves against the document base;
+    required?, sensitive?, element? }`, where `link` resolves against the
+    document base and `sensitive` follows D12;
   - `itemElement` fingerprint for repair; `minItems` (D4); a hard
     `WEB_AUTOMATION_EXTRACT_MAX_ITEMS`;
   - `paginate` becomes a union of `next` (today's shape), `loadMore`, `scroll`,
@@ -237,8 +248,9 @@ Workers own disjoint files; a file two phases need is serial.
 - W05 `short-catalog` (Week 2 rank W2-2) replays Next clicks against a page with
   no Next; recordable extraction replaces those clicks, so re-measure before
   treating it as fixed.
-- Datasets and export widen what page data leaves the browser; E53's redaction
-  decision is the user's.
+- Datasets and export widen what page data leaves the browser; D12 protects
+  marked columns only, so a secret the page shows as unmarked text is still
+  saved when a field reads it.
 - Large pages: `web.dom.extract` took 3,503 ms on 5,000 elements (E57); caps and
   item-selector generation must be measured on `member-directory`.
 - Picker clicks can be recorded as `dom.click` unless suppressed; Firefox popup
@@ -307,6 +319,17 @@ evidence throughout.
 
 ## Work Ledger
 
+### 2026-09-15 — Sensitive dataset columns decided (D12)
+- Agent: supervisor
+- Changed: this document (D12, C1 `sensitive`, Current State, risks, E53); the
+  Core pair (record schema `sensitive`, capture, open question 1); Week 1 open
+  question E53
+- Why: the user asked what the dataset redaction question meant; under their
+  standing instruction the recommendation became the decision
+- Validation: not validated; planning documents only, no code changed
+- Outcome: Accepted
+- Follow-up: X1 and K1 carry the `sensitive` field
+
 ### 2026-09-15 — Core design merged; plan complete
 - Agent: supervisor; worker `ex-b-core`
 - Changed: this document (Core findings, D9-D11, Lab reader, phases, risks); the
@@ -341,9 +364,8 @@ evidence throughout.
 
 ## Open Questions
 
-- **E53 redaction for datasets and export.** Whether secret-shaped text beyond
-  marked fields is withheld from persisted and exported datasets. Owner: the
-  user; default until decided is D2 plus the existing marked-field rules.
+- **E53 redaction for datasets and export.** Decided 2026-09-15 as D12, on the
+  user's standing instruction to act on recommendations; the user may override.
 - **Collection-target repair contract.** The shape Core gives list targets so
   adaptation can repair `extract_list` (today `elementTarget` means one
   element). Owner: senior supervisor agent, decided with E2 before X3's repair
