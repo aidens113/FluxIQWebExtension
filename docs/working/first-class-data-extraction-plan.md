@@ -54,9 +54,12 @@ excluded dataset columns decided (D12); Encrypt column designed for Week 3 (D13)
 **Not done:** every phase below.
 
 **Next steps:**
-1. At the start of Week 2, run X0 (security and correctness) and X1 (contracts)
-   in parallel, partitioned by file, beside Phases 2.1-2.3.
-2. Settle Core's open questions 1-2 (dataset withholding, output references)
+1. Firm up Core's share from three investigations (Secret Keys derivation fix,
+   encrypted fields, dataset execution detail), recorded in the paired document.
+2. Run X0 (security and correctness) and X1 (contracts) with Core K0 (Secret
+   Keys derivation) and K1 (record-set contracts), partitioned by file, beside
+   Phases 2.1-2.3.
+3. Settle Core's open questions 1-2 (dataset withholding, output references)
    before Core phase K4 persists rows.
 
 **Blockers:** none. Sensitive data in saved and exported datasets (E53) is
@@ -217,7 +220,7 @@ panel beside Runtime Debug's Export Audit.
 
 | Phase | Work | Owner area | Depends on |
 | --- | --- | --- | --- |
-| X0 | Security and correctness: refuse sensitive `.value` (D2); fail empty lists (D4); de-duplicate append pagination; item cap; honour `timeoutMs`; the Lab reader's silent drop | extension, domain, test-runner | none |
+| X0 | Security and correctness: refuse sensitive `.value` (D2); fail empty lists (D4); de-duplicate append pagination; item cap; honour `timeoutMs`; the Lab reader's silent drop; Core K0 raises Secret Keys' password-derivation cost and re-seals older keys | extension, domain, test-runner, Core | none |
 | X1 | Contracts: C1, C2 (domain); Core K1 record-set contracts; test-contracts additions | domain, Core, test-contracts | none |
 | X2 | Core datasets K2-K6 and K8-K9: store, capture, record-batch persistence, run detail, iteration, endpoints and export route, datasets panel | Core | X1 |
 | X3 | Extraction engine: structured field specs and pagination modes, inference C4, repair hooks (needs the collection-target contract) | extension, domain | X1 |
@@ -226,7 +229,7 @@ panel beside Runtime Debug's Export Audit.
 | X6 | Loop integration with Phases 2.4-2.9: extraction drift variants (W04 `text-variant`, W08 `column-reorder`, a new item-selector drift) through adaptation; E2 decided with extract targets in view; Phase 2.9's reuse proof includes an extraction workflow; minimal exported-data review (MVP 4.4, E53); cost measured on `member-directory` (E57, E58) | all | X4, X5 |
 
 Week 3's Phase 3.7 then builds the Simple Mode entry, field editing, and the
-all-pages choice on X2-X4, plus Encrypt column (D13) with its Core share.
+all-pages choice on X2-X4, plus Encrypt column (D13) with its Core share (Core K11).
 
 ## Validation
 
@@ -339,7 +342,43 @@ evidence throughout.
 - Definition of done: report answers every question with file:line
 - Report to: docs/working/first-class-data-extraction-plan/reports/ex-d-test-facility.md
 
+### Brief: x0-x1-execution
+- Repository: this repository, read-only
+- Task: turn X0 and X1 into executable steps. Verify
+  `reports/ex-a-extension-domain.md`, `reports/ex-d-test-facility.md`, and this
+  document's Design (C1, C2) and decisions D2, D4, D12, D13 against code, then
+  give per step: files to create or change with the function or type touched
+  (file:line); test files (a `tests/` folder or the content e2e harness) with
+  cases; the acceptance command; mutation targets. X0: refuse a sensitive
+  control's value in `web.dom.extract` and on the `extracted` wire and
+  recording paths; `minItems` default 1 failing as `output_not_observed`, and
+  every scenario or test relying on an empty list passing (W06 `no-results`
+  declares `minItems: 0`); de-duplicated append pagination; an item cap;
+  honoured `timeoutMs`; the Lab Flow-run reader's silent drop of non-string
+  values. X1: C1 v2 (field specs with `handling: include|exclude|encrypt`,
+  `encrypt` refused until built; `itemElement`; the paginate union), C2, schemas
+  and gateway parameter mapping, and test-contracts additions, keeping today's
+  string field grammar valid. Give a worker partition: files each worker owns,
+  serial files, and order, within the structure audit budgets.
+- Required reads: `AGENTS.md`; this document; the two reports and the files
+  they name; `docs/architecture/sensitive-values.md`
+- Owns (may edit): its report only
+- Must not touch: all source and documents
+- Definition of done: X0 and X1 executable without rediscovery
+- Report to: docs/working/first-class-data-extraction-plan/reports/x0-x1-execution.md
+
 ## Work Ledger
+
+### 2026-09-15 — Firming the plan for execution; investigations dispatched
+- Agent: supervisor; workers `x0-x1-execution` here, and `k0-secret-keys-kdf`,
+  `k11-encrypted-fields`, `k-datasets-execution` in the paired document
+- Changed: this document (Current State next steps, X0 row, Week 3 note,
+  Worker Briefs)
+- Why: the user asked for the Secret Keys fix and the Encrypt column in the
+  plan and for Core's data share to be firmed up before work starts
+- Validation: not validated; planning documents only, no code changed
+- Outcome: Partial
+- Follow-up: write the four reports' results into both documents
 
 ### 2026-09-15 — D13 hardened against lookup attacks
 - Agent: supervisor
