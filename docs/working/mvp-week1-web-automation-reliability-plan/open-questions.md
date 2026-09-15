@@ -1279,7 +1279,8 @@ reports had claimed something narrower or wider than what the tree actually did.
   chooses one for Week 1.
 
   **2026-09-15:** for extraction datasets this is decided by D12 in
-  `first-class-data-extraction-plan.md`: a column marked sensitive is never stored or exported.
+  `first-class-data-extraction-plan.md`: a column set to "Exclude column" is never read into the
+  output, the saved table, or exports.
   Recorder capture of unmarked form fields stays open here.
 - [RULED OUT OF WEEK 1 — Core's element-target gate is inert for web; decide with B.3] **D13 moves
   candidates across Core's `destructive` gate, which the accepting note denied.**

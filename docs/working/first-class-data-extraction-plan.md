@@ -49,7 +49,7 @@ user overrides them.
 **Done:** all four investigations; this plan and Core's design (paired
 document); Phase 2.0 in the MVP plan; the Week 1 plan closed and pointed here;
 agent instructions, Priority 4, and open questions E2, E53, and E55 updated;
-dataset sensitivity decided (D12).
+excluded dataset columns decided (D12).
 
 **Not done:** every phase below.
 
@@ -60,8 +60,8 @@ dataset sensitivity decided (D12).
    before Core phase K4 persists rows.
 
 **Blockers:** none. Sensitive data in saved and exported datasets (E53) is
-decided by D12: a column marked sensitive is never stored or exported, and
-nothing guesses from content.
+decided by D12: a column set to "Exclude column" is never read into the output,
+the saved table, or exports, and nothing guesses from content.
 
 ---
 
@@ -115,15 +115,18 @@ extraction until it is a real, measured Flow capability.
 - **D11. Versioning:** additive Core pieces ship first; run-scoped variables,
   output-reference resolution, and any withholding change ship as `fluxiq`
   0.5.0 with a Migration Notes entry.
-- **D12. Sensitive columns (E53, for datasets):** extraction never judges
-  content, which both misses and misfires. A field spec may be marked
-  `sensitive`; Core keeps a withheld marker in place of that column's values in
-  stored rows, previews, and exports, while a later node in the same run can
-  still read it, as with run inputs. The picker marks a field sensitive by
-  default when the element it reads, or that element's control, carries the
-  sensitivity signature or `data-sensitive`; the user can mark any other column.
-  Recorder capture of unmarked form fields stays with E53 in the Week 1 open
-  questions.
+- **D12. Excluded columns (E53, for datasets; the user's design):** extraction
+  never judges content, which both misses and misfires. Each field has an
+  **Exclude column** option. An excluded column is left out entirely, not
+  masked: the page never reads its values, so it is absent from the extraction
+  node's output, the saved table, the preview, and CSV/JSON exports. Excluding
+  rather than deleting a column stops field detection from proposing it again.
+  An info hover explains it: use it for private information such as passwords,
+  card numbers, or personal details you don't want collected, saved, or
+  exported. The picker pre-selects Exclude column when the
+  element read, or its control, carries the sensitivity signature or
+  `data-sensitive`; the user can change it. Recorder capture of unmarked form
+  fields stays with E53 in the Week 1 open questions.
 
 ## Design
 
@@ -133,8 +136,8 @@ extraction until it is a real, measured Flow capability.
   `schemas.ts`, `client/gateway-action-parameters.ts`):
   - a field value is the existing string grammar or a spec
     `{ kind: text|attribute|link|value|column, selector?, attribute?, header?,
-    required?, sensitive?, element? }`, where `link` resolves against the
-    document base and `sensitive` follows D12;
+    required?, excluded?, element? }`, where `link` resolves against the
+    document base and `excluded` follows D12;
   - `itemElement` fingerprint for repair; `minItems` (D4); a hard
     `WEB_AUTOMATION_EXTRACT_MAX_ITEMS`;
   - `paginate` becomes a union of `next` (today's shape), `loadMore`, `scroll`,
@@ -249,8 +252,8 @@ Workers own disjoint files; a file two phases need is serial.
   no Next; recordable extraction replaces those clicks, so re-measure before
   treating it as fixed.
 - Datasets and export widen what page data leaves the browser; D12 protects
-  marked columns only, so a secret the page shows as unmarked text is still
-  saved when a field reads it.
+  excluded columns only, so private data in a column nobody excluded is still
+  saved and exported.
 - Large pages: `web.dom.extract` took 3,503 ms on 5,000 elements (E57); caps and
   item-selector generation must be measured on `member-directory`.
 - Picker clicks can be recorded as `dom.click` unless suppressed; Firefox popup
@@ -319,6 +322,19 @@ evidence throughout.
 
 ## Work Ledger
 
+### 2026-09-15 — D12 revised: Exclude column instead of a withheld marker
+- Agent: supervisor
+- Changed: this document (D12, C1 `excluded`, Current State, risks, E53); the
+  Core pair (record schema `excluded`, capture, open question 1); Week 1 open
+  question E53
+- Why: the user judged a column nobody can see no better than no column, and
+  asked for an "Exclude column" option, with an info hover, that leaves the
+  column out of the output entirely
+- Validation: not validated; planning documents only, no code changed
+- Outcome: Accepted
+- Follow-up: X1 and K1 carry the field; Phase 3.7's field editor shows the
+  option and its hover
+
 ### 2026-09-15 — Sensitive dataset columns decided (D12)
 - Agent: supervisor
 - Changed: this document (D12, C1 `sensitive`, Current State, risks, E53); the
@@ -364,8 +380,8 @@ evidence throughout.
 
 ## Open Questions
 
-- **E53 redaction for datasets and export.** Decided 2026-09-15 as D12, on the
-  user's standing instruction to act on recommendations; the user may override.
+- **E53 redaction for datasets and export.** Decided 2026-09-15 as D12; the
+  user chose excluding a column outright over masking its values.
 - **Collection-target repair contract.** The shape Core gives list targets so
   adaptation can repair `extract_list` (today `elementTarget` means one
   element). Owner: senior supervisor agent, decided with E2 before X3's repair
