@@ -199,7 +199,8 @@ extraction until it is a real, measured Flow capability.
 - **C2 result summary:** keep `extracted: records[]`; add a closed
   `extraction: { recordCount, pagesRead, truncated, missingFields, fieldNames }`;
   move dialog evidence off `extracted`. The domain output definition declares
-  the default `recordsPath` (`extracted`) and a record-schema hint for Core.
+  `metadata.recordsPath: "extracted"`, which Core reads when it lifts a
+  recording proposal (paired CD19).
 - **C3 recorded extraction event:** kind `data.extract`, event
   `web.data.extraction_defined`, input `web.user.data_extraction_defined`, output
   `web.dom.extract_list` with a `recordOutput` on the mapper candidate; a
@@ -243,8 +244,10 @@ panel beside Runtime Debug's Export Audit.
   `extractionFalseSuccess`, each shown with its coverage.
 - The Flow-lane judge fails a missing extract node as `recording.contract`,
   pairs attempts with steps by candidate order, and concatenates per-page
-  attempts. The Flow-run reader reads Core's run datasets once K5 lands; until
-  then only `session.trace.attempts[].outputs.result` carries records, subject to
+  attempts. Once Core's K4 lands the saved trace carries `$dataset` markers
+  instead of rows (paired CD14), so the Flow-run reader reads Core's run
+  datasets (`list-run-datasets`, `get-run-dataset-page`); until then only
+  `session.trace.attempts[].outputs.result` carries records, subject to
   withholding. It reports non-string values instead of dropping them.
 
 ## Phases
@@ -426,7 +429,81 @@ evidence throughout.
 - Definition of done: X0 and X1 executable without rediscovery
 - Report to: docs/working/first-class-data-extraction-plan/reports/x0-x1-execution.md
 
+### Brief: x0-domain
+- Repository: this repository
+- Task: the domain share of X0, combining workers W2-A and W3-A of
+  `reports/x0-x1-execution.md` Part 4 so one worker owns the package: X0.2 (the
+  wire guard in `webAutomationActionResultPayload`, the adapter's dispatch
+  payload regardless of validation status, and the recording reducer), X0.3
+  domain (`minItems` type, schema, and lift with whole refusals), and X0.5
+  domain (`WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1_000`, schema maximum, lift
+  clamp), with the tests and mutation targets those steps name, amended by D2,
+  D4, and D14.
+- Required reads: `AGENTS.md`; this document's D2, D4, and D14; the report's
+  Part 2 X0.2, X0.3, X0.5, and Part 4 budget notes
+- Owns (may edit): `domain/src/actions/{types,schemas}.ts`,
+  `domain/src/actions/tests/schemas.test.ts`,
+  `domain/src/client/{gateway-action-parameters,gateway-mapping}.ts`,
+  `domain/src/client/tests/{gateway-command-parameters,gateway-mapping,gateway-mapping-redaction}.test.ts`,
+  `domain/src/runtime/adapter.ts`, `domain/src/runtime/tests/adapter-redaction.test.ts`,
+  `domain/src/recording/reducers.ts`, `domain/src/recording/tests/reducers.test.ts`
+- Must not touch: the extension, test packages, every other file, tracked
+  `domain/.test-build/` (always pass a build label)
+- Validation, run alone and not in a loop:
+  `pnpm --filter @fluxiq-web-extension/domain check`, then
+  `DOMAIN_TEST_BUILD_LABEL=x0-domain pnpm --filter @fluxiq-web-extension/domain test`,
+  then `node scripts/structure-audit.mjs`; apply each named mutation, observe
+  its test fail, and revert. No extension build or content harness.
+- Definition of done: check and tests pass; every mutation observed red and
+  reverted; structure audit passes
+- Report to: docs/working/first-class-data-extraction-plan/reports/x0-domain.md
+
+### Brief: x1-test-contracts
+- Repository: this repository
+- Task: step X1.5's test-contracts changes in `reports/x0-x1-execution.md`
+  Part 3: `ScenarioExtractPagination` as the `mode` union (D14),
+  `ScenarioStep.minItems`, `ExpectedExtraction` `pages`, `optionalFields`,
+  `truncated`, and nullable record values, the JSON Schema to match, and the
+  validation rules including the D4 rule that a zero-record expectation needs
+  `minItems: 0`. Add `minItems: 0` to product-catalog's
+  `extract-search-results` step (`manifest.ts:84`) so the corpus stays valid.
+  Hold `recordable-actions.ts`, `evaluation.ts`, and `bench-report.ts` (D14).
+- Required reads: `AGENTS.md`; this document's D4 and D14; the report's X1.5
+- Owns (may edit): `packages/test-contracts/src/{scenario,validation}.ts`,
+  `packages/test-contracts/tests/scenario-validation.test.mjs`,
+  `apps/scenario-lab/src/scenarios/product-catalog/manifest.ts`
+- Must not touch: `packages/test-runner`, the domain, the extension, every
+  other file
+- Validation, run alone: `pnpm --filter @fluxiq-web-extension/test-contracts test`,
+  the scenario-lab package's unit test script, and
+  `node scripts/structure-audit.mjs`; apply both named mutations, observe each
+  test fail, and revert
+- Definition of done: tests pass; mutations observed red and reverted;
+  structure audit passes
+- Report to: docs/working/first-class-data-extraction-plan/reports/x1-test-contracts.md
+
 ## Work Ledger
+
+### 2026-09-15 — Core K1-K10 decided; records path and Lab reader updated
+- Agent: supervisor; Core worker `k-datasets-execution`
+- Changed: this document (C2 records path, Lab Flow-run reader, open questions)
+- Why: Core decided that the domain output declares `metadata.recordsPath` and
+  that saved traces carry dataset markers instead of rows
+- Validation: not validated; planning documents only
+- Outcome: Accepted
+- Follow-up: X5's reader uses Core's dataset endpoints
+
+### 2026-09-15 — Execution started: x0-domain and x1-test-contracts dispatched
+- Agent: supervisor; workers `x0-domain`, `x1-test-contracts`, with Core's
+  `k0-1-password-kdf` and `k0-4-database-manager-recheck`
+- Changed: this document (Worker Briefs)
+- Why: X0 and X1 are executable and independent of Core's pending dataset
+  detail; W2-A and W3-A are combined so one worker owns the domain package, and
+  at most four code workers run at once on this machine
+- Validation: not validated; dispatch only, no code changed yet
+- Outcome: Partial
+- Follow-up: verify both reports; then W1-A (after x0-domain) and W4 (after
+  x1-test-contracts)
 
 ### 2026-09-15 — X0 and X1 made executable; Core K0 and K11 designs merged
 - Agent: supervisor; workers `x0-x1-execution` here, `k0-secret-keys-kdf` and
@@ -538,8 +615,8 @@ evidence throughout.
   element). Owner: senior supervisor agent, decided with E2 before X3's repair
   hooks.
 - Core's own questions (dataset-row withholding, output-reference withholding,
-  side-effect class for read-only extraction, default `recordsPath`) are owned by
-  the paired document.
+  side-effect class, default `recordsPath`, key custody, derivation cost) are
+  decided in the paired document as CD1-CD20.
 - **Core parameter-schema unions.** Whether Core's node parameter-schema dialect
   accepts `oneOf`, needed to state C1's field and pagination unions in the
   domain schema. Until answered, `fields` stays `type: "object"` and the gateway
