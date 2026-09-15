@@ -370,6 +370,29 @@ This week represents the primary technological differentiator of the MVP.
 
 ---
 
+## Phase 2.0 — Data Extraction Foundation
+
+### Objective
+
+Make structured extraction a real, repairable Flow capability at the start of Week 2, so the adaptation loop can repair extraction like any other automation. Decided 2026-09-15; tracked in `docs/working/first-class-data-extraction-plan.md`.
+
+### Build
+
+- FluxIQ Core: domain-neutral datasets (records with a schema), per-run persistence, preview, CSV and JSON export, iteration over records by later nodes.
+- Web domain and extension: DOM extraction contracts, element picking, repeating-structure and field detection, pagination.
+- Recordable extraction that compiles to ordinary Flow nodes.
+- FluxBench judges FluxIQ's own extracted records on the Flow lane.
+
+### Sequencing
+
+Runs alongside Phases 2.1-2.3 and lands recordable extraction before Phase 2.4, whose output validation needs a completeness signal for extracted records.
+
+### Exit Criteria
+
+A recorded extraction runs as a Flow, persists a dataset that can be previewed and exported, and FluxBench judges its records on the Flow lane.
+
+---
+
 ## Phase 2.1 — Standardize Adaptation Context
 
 ### Objective
@@ -653,6 +676,8 @@ Week 2 is complete when FluxIQ reliably demonstrates:
 
 If this loop is unreliable, improving it remains higher priority than Week 3 feature expansion.
 
+Extraction Flows built on Phase 2.0 are held to this same loop; Phase 2.0 is Week 2 work, not Week 3 feature expansion.
+
 ---
 
 # WEEK 3 — SIMPLE UX AND FIRST-CLASS SCRAPING
@@ -880,6 +905,8 @@ Technical users retain access to the underlying automation system without forcin
 
 Use web scraping as a major acquisition/use case without limiting FluxIQ's identity to scraping.
 
+The engine beneath this experience (datasets, preview, CSV/JSON export, repeating-structure and field detection, pagination, and recordable extraction compiled to Flow nodes) is built in Phase 2.0. This phase exposes it in Simple Mode.
+
 ### Primary Entry Point
 
 **Extract Data From This Page**
@@ -925,7 +952,7 @@ Use web scraping as a major acquisition/use case without limiting FluxIQ's ident
 
 ### Important Requirement
 
-The resulting scraper should still compile down into normal FluxIQ flows/subflows so runtime adaptation can repair it like any other automation.
+The resulting scraper compiles down into normal FluxIQ flows/subflows so runtime adaptation can repair it like any other automation. Phase 2.0 builds that compilation; this phase must not bypass it.
 
 ### Exit Criteria
 
@@ -1470,6 +1497,8 @@ Add tests for newly discovered important failure classes.
 ## Priority 4 — Scraping UX
 
 Improve the strongest initial acquisition use case.
+
+Extraction correctness and repairability (Phase 2.0) is Priority 0/1 work; this priority covers the scraping UX built on it.
 
 ## Priority 5 — Advanced Functionality
 

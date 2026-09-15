@@ -146,7 +146,7 @@ Add or improve tests for meaningful workflow/failure classes.
 
 ## Priority 4 — Scraping UX
 
-Improve extraction, repeating structures, pagination, output, and scraper creation.
+Improve the scraping experience (field picking, preview and output UX, scraper creation) on the Phase 2.0 extraction foundation. Extraction correctness and repairability are Priority 0/1 work.
 
 ---
 
@@ -207,6 +207,7 @@ Primary areas:
 - Validation
 - Persistence
 - Deterministic reuse
+- Extraction foundation: datasets, recordable extraction compiled to Flow nodes, FluxBench extraction measurement (Phase 2.0)
 
 This is the highest-value technical portion of the MVP.
 
@@ -225,7 +226,7 @@ Primary areas:
 - Runtime progress
 - Adaptation UI
 - Advanced Editor entry point
-- Scraping
+- Scraping UX on the Week 2 extraction foundation
 - Human takeover
 
 ---

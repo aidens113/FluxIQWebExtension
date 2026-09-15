@@ -1,13 +1,13 @@
 # MVP Week 1 — Web Automation Reliability Plan
 
-Status: Active
-Status detail: Week 1 is complete as of 2026-09-15, confirmed by a production-Core pair with no differing run that superseded the two startup exceptions of the earlier next-dev pair.
+Status: Complete
+Status detail: Week 1 is complete as of 2026-09-15; its follow-ups carry into Week 2 planning, starting with first-class-data-extraction-plan.md.
 Created: 2026-09-11
 Last updated: 2026-09-15
 Owner: Senior supervisor agent
 Scope: Week 1 of the 30-day MVP (Phases 1.1–1.6): browser action vocabulary, element identity, browser state/evidence, failure taxonomy, and FluxBench, with automated verification through the Testing Lab as the primary proof for every phase. Weeks 2–4 are out of scope except where Week 1 must leave a seam for them.
 Paired document: `F:\!FluxIQ\docs\working\mvp-week1-web-automation-reliability-plan.md` — Core owns the failure-taxonomy contracts (C1, C2, pulled ahead of Wave 2 by D11) and the expectation-evaluator seam (C3)
-Related: [30-Day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%20MVP%20Implementation%20Plan.md), [MVP agent instructions](../../MVP_AGENT_INSTRUCTIONS.md), [testing facility](../architecture/testing-facility.md), [extension client](../architecture/extension-client.md), [automated-testing-facility-plan](./automated-testing-facility-plan.md), [llm-production-automation-plan](./llm-production-automation-plan.md), audit reports under [reports/](./mvp-week1-web-automation-reliability-plan/reports/)
+Related: [30-Day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%20MVP%20Implementation%20Plan.md), [MVP agent instructions](../../MVP_AGENT_INSTRUCTIONS.md), [testing facility](../architecture/testing-facility.md), [extension client](../architecture/extension-client.md), [automated-testing-facility-plan](./automated-testing-facility-plan.md), [llm-production-automation-plan](./llm-production-automation-plan.md), audit reports under [reports/](./mvp-week1-web-automation-reliability-plan/reports/), [first-class-data-extraction-plan](./first-class-data-extraction-plan.md)
 
 ---
 
@@ -82,8 +82,11 @@ about 2.5 GB.
 - A runs root's `.core-web-build` holds junctions into the Core worktree: never
   delete a runs root with a tool that follows junctions (`ce`).
 
-**Next steps:** Week 2, starting from `cb-blocker-ranking-final`'s Week 2 ranks
-and the open questions.
+**Next steps:** Week 2 starts with the extraction foundation in
+[first-class-data-extraction-plan.md](./first-class-data-extraction-plan.md),
+which takes ranked item W2-2 (W05 `short-catalog`) and the extraction defect in
+open question E55; the adaptation phases start from `cb-blocker-ranking-final`'s
+remaining Week 2 ranks (W2-1, W2-3) and the open questions.
 
 **Blockers:** none.
 

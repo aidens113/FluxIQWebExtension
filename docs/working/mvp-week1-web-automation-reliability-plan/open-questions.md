@@ -64,6 +64,9 @@ reports had claimed something narrower or wider than what the tree actually did.
   **Ruled out of Week 1, 2026-09-13.** `tools.ts:91` is still selector-keyed; whether the patch lane
   becomes fingerprint-shaped belongs with Week 2's run-time Flow changes (archive "i-leftover-sizing
   and i-week2-entry-points"; ranking R19).
+
+  **2026-09-15:** decide this with extraction in view: an extract node's item and field targets are
+  selectors too, so the repair lane must cover them (`first-class-data-extraction-plan.md`).
 - [SETTLED 2026-09-13] **The extension latches idle when Core refuses a recording start.** When Core
   answers `recording.project_required`, the extension clears its pending start,
   so the 750 ms local-start fallback never fires and the recorder stays idle
@@ -1351,6 +1354,9 @@ reports had claimed something narrower or wider than what the tree actually did.
   **Ruled out of Week 1, 2026-09-13.** The exit criteria are measured on the week1 corpus, which
   excludes `admin-console` by the decision this entry records; virtualised lists, open shadow roots
   and pane scrolling are Week 2 recorder and resolver work.
+
+  **2026-09-15:** defect 1, the silent virtualised under-read, is claimed by
+  `first-class-data-extraction-plan.md`.
 - [SETTLED 2026-09-13 in code — W29 carries the Lab proof] **On the
   recordings production actually generates, the resolver clicks a plausibly
   wrong control and reports success.** Measured 2026-09-12 by x-identifierless
