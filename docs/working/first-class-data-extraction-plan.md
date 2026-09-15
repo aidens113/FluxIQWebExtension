@@ -60,8 +60,9 @@ X0 and X1 execution detail (`x0-x1-execution`, D14); Core's K0 and K11 designs.
 **Next steps:**
 1. Finish X0 (`x0-page`) and X1 (W2-B, W1-B, W3-B, X1.6); run root
    `pnpm check`, `pnpm test`, and `pnpm build` one at a time; push.
-2. Detail X3-X5 (`x3-x5-execution`), then build them beside Core's K2-K10 and
-   K12 (paired document).
+2. Build X3-X5 from `x3-x5-execution` (D16) beside Core's K2-K10 and K12; X4's
+   domain share waits for Core K7 with `timeoutMs`, and X5's Flow-lane judging
+   for K5 and K8.
 3. Plan the rest of Week 2 in `mvp-week2-automation-loop-plan.md`, then stop
    for the user's review (D15).
 
@@ -188,6 +189,35 @@ extraction until it is a real, measured Flow capability.
   Phase 3.7 stay in Week 3. Repair hooks for extract nodes move from X3 to X6,
   where the collection-target repair contract is decided with E2 beside loop
   Phases 2.5-2.7.
+- **D16. Contract details settled by `x3-x5-execution`:**
+  - record field keys match Core's id pattern (`^[A-Za-z0-9_-]{1,100}$`, never
+    `__proto__`, `constructor`, or `prototype`) through one domain key function,
+    and the picker keeps a separate human label; dataset ids match
+    `^[A-Za-z0-9._:-]{1,200}$`, and a re-recorded extraction gets a new id;
+  - an optional field the page cannot read is `null`; Core stores that as an
+    absent key, and the Lab's dataset reader restores `null` for every schema
+    field a row lacks;
+  - X5's Flow-lane judging reads Core's run datasets (K5 and K8), with no
+    interim reader;
+  - Core's K7 lifts an optional candidate `timeoutMs` into
+    `parameterValues.timeoutMs`, the only way D14's scaled timeout reaches a
+    recorded node;
+  - a recorded `extract_list` is executable through an object-parameter
+    exception like `upload`'s, and extraction candidates carry no
+    `expectedConfirmation`;
+  - the picker captures its clicks on `window`, ahead of the recorder, and the
+    recorder's mutation tally skips the picker overlay;
+  - `scroll` de-duplicates by element and content together, so a virtualised
+    list that recycles a node for a new record still reads it (E55 defect 1),
+    measured on `admin-console` in X5;
+  - new content-harness specs go in an `e2e/content/tests/extraction/`
+    subdirectory, because `e2e/content/tests/` already holds 25 files;
+  - column header labels in a recorded schema are page structure, not sample
+    values, so D3 holds, and `sensitive-values.md` says so;
+  - nested values (`extract-specs`) have no contract and move to Week 3's
+    Phase 3.7;
+  - more Flow-lane rows become judged (W05, W07, W09, W11, W15, and W18 beside
+    W04 and W08), so new failures in the first A/B pair are measurements under D7.
 
 ## Design
 
@@ -211,20 +241,25 @@ extraction until it is a real, measured Flow capability.
   `metadata.recordsPath: "extracted"`, which Core reads when it lifts a
   recording proposal (paired CD19).
 - **C3 recorded extraction event:** kind `data.extract`, event
-  `web.data.extraction_defined`, input `web.user.data_extraction_defined`, output
-  `web.dom.extract_list` with a `recordOutput` on the mapper candidate; a
-  single-field form maps to `web.dom.extract` with a structured
-  `extract: { mode, attribute? }` parameter. The plug points are the eleven
-  listed in `ex-a` section 3.
+  `web.data.extraction_defined`, and two inputs:
+  `web.user.data_extraction_defined` maps to `web.dom.extract_list`, with
+  `recordOutput` and a scaled `timeoutMs` on the mapper candidate;
+  `web.user.value_extraction_defined` maps to `web.dom.extract` with a
+  structured `extract: { mode, attribute? }` parameter and no `recordOutput`.
+  Extraction candidates carry no `expectedConfirmation` (D16). The plug points
+  are in `x3-x5-execution` Part 1.
 - **C4 inference proposal** (new `domain/src/extraction/`):
   `{ container, item, itemCount, fields: [{ name, spec, coverage }], pagination?,
   confidence }`, seeded by `content/evidence/repeating.ts`, whose signature logic
   moves to a shared module.
-- **C5 picker messages:** content `extraction.pick_start|pick_cancel|preview`;
-  runtime `fluxiq.extractionStart|Confirm|Cancel`,
-  `fluxiq.getExtractionSession`. The pick session lives in the background
-  (Firefox popups close on page focus) and suppresses its clicks from the
-  recorder.
+- **C5 picker messages,** named in a new `shared/extraction-messages.ts`:
+  content `extraction.pick_start|pick_cancel|preview|propose|record`; content to
+  background `fluxiq.extractionPicked`; runtime
+  `fluxiq.extractionStart|Confirm|Cancel`, `fluxiq.getExtractionSession`, and
+  the control-page-only `fluxiq.test.defineExtraction` for X5's intent seam.
+  The pick session lives in the background (Firefox popups close on page
+  focus), picks are captured on `window` ahead of the recorder, and the overlay
+  is excluded from the recorder's mutation tally (D16).
 
 ### Core share (owned by the paired document)
 
@@ -253,11 +288,11 @@ panel beside Runtime Debug's Export Audit.
   `extractionFalseSuccess`, each shown with its coverage.
 - The Flow-lane judge fails a missing extract node as `recording.contract`,
   pairs attempts with steps by candidate order, and concatenates per-page
-  attempts. Once Core's K4 lands the saved trace carries `$dataset` markers
-  instead of rows (paired CD14), so the Flow-run reader reads Core's run
-  datasets (`list-run-datasets`, `get-run-dataset-page`); until then only
-  `session.trace.attempts[].outputs.result` carries records, subject to
-  withholding. It reports non-string values instead of dropping them.
+  attempts. The Flow-run reader reads Core's run datasets from K5's
+  `runDetail.datasets` and K8's `get-run-dataset-page`, restoring `null` for
+  fields a stored row lacks (D16). There is no interim reader, because
+  `get-flow-run-detail` attempts have never carried records. It reports
+  non-string values instead of dropping them.
 
 ## Phases
 
@@ -268,7 +303,7 @@ panel beside Runtime Debug's Export Audit.
 | X2 | Core datasets K2-K6 and K8-K9: store, capture, record-batch persistence, run detail, iteration, endpoints and export route, datasets panel | Core | X1 |
 | X3 | Extraction engine: structured field specs and pagination modes, inference C4 (repair hooks moved to X6, D15) | extension, domain | X1 |
 | X4 | Recordable extraction: picker and side-panel entry, recorded event and mapping C3, Core K7 mapper `recordOutput` lift | extension, domain, Core | X2, X3, Core K12d (record-output editor) |
-| X5 | Lab measurement: extraction intent seam, `measureExtraction`, Flow-lane judging, bench metrics, fixtures (images, sparse fields, absolute links, numbered pages, load more, empty and large tables, frame extraction, sensitive text), W04/W08 Flow lanes | test-runner, test-contracts, scenario-lab | X1, X4 |
+| X5 | Lab measurement: extraction intent seam, `measureExtraction`, Flow-lane judging, bench metrics, fixtures (images, sparse fields, absolute links, numbered pages, load more, empty and large tables, frame extraction, sensitive text), W04/W08 Flow lanes | test-runner, test-contracts, scenario-lab | X1, X4; Flow-lane judging after Core K5 and K8 |
 | X6 | Loop integration with Phases 2.4-2.9: extract-node repair hooks on the collection-target contract (with E2); extraction drift variants (W04 `text-variant`, W08 `column-reorder`, a new item-selector drift) through adaptation; E2 decided with extract targets in view; Phase 2.9's reuse proof includes an extraction workflow; minimal exported-data review (MVP 4.4, E53); cost measured on `member-directory` (E57, E58) | all | X4, X5 |
 
 Week 3's Phase 3.7 then builds the Simple Mode entry, field editing, and the
@@ -328,6 +363,14 @@ rule). W4 and W6 ran as one worker, `x01-test-runner`.
 - X5: an expected `null` record value cannot pass on either lane yet (the
   recording reader leaves the field out; the Flow reader drops it and now fails
   the run); X5's extraction intent and dataset reader must carry nulls.
+
+**X3-X5** follow `reports/x3-x5-execution.md` Parts 2-5 (workers X3-A to X5-D,
+owned and serial files, order, Core dependencies, structure budgets, and manual
+browser validation), amended by D16. Order: X3-A and X3-B after X1; then X3-C;
+X4-A after X3-A and Core K7 (with `timeoutMs`); X4-B after X3-C; X4-C and X4-D
+in parallel; manual Chrome side-panel and Firefox popup validation of the
+picker; X5-A; then X5-B and the fixture workers, with X5-C once Core K5 and K8
+land; X5-H; X5-D; then the Lab runs and the bench pair, one at a time.
 
 **Later phases:**
 - Extension X0/X3: `apps/extension/src/content/action-runtime/**`,
@@ -535,6 +578,19 @@ Recorded at dispatch on 2026-09-15. Completed briefs are in the
 - Report to: `F:\!FluxIQWebExtension\docs\working\first-class-data-extraction-plan\reports\x1-6-e2e-typecheck.md`
 
 ## Work Ledger
+
+### 2026-09-15 — X3-X5 made executable; D16 decided
+- Agent: supervisor; worker `x3-x5-execution`
+- Changed: this document (Current State, D16, C3, C5, the Lab reader, the X5
+  row, the execution partition); the paired document's CD19 and K7; the report
+- Why: the report found that the Lab's Flow-run reader reads a place Core never
+  fills, that D14's scaled timeout could not reach a recorded node, and Core
+  contract constraints on keys, ids, and nulls; its recommendations became
+  decisions, and the virtualised-list recycling risk was taken into `scroll`'s
+  de-duplication rather than left open
+- Validation: not validated; planning documents only
+- Outcome: Accepted
+- Follow-up: brief X3-A and X3-B once X1 lands
 
 ### 2026-09-15 — x0-page done and verified; snapshot leak taken in; X1 briefs recorded
 - Agent: supervisor; worker `x0-page`
