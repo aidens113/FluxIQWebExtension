@@ -136,7 +136,14 @@ extraction until it is a real, measured Flow capability.
   and never stored in the project folder. The table shows a masked cell with
   Reveal, which asks for the password again; CSV/JSON export leaves the column
   out unless the user confirms the password and chooses to include it in clear.
-  A forgotten password loses the values. It protects copied project folders,
+  Lookup attacks are closed by design: each value gets a fresh random key and
+  IV, so identical values never look alike; no hash or deterministic token of an
+  encrypted value is stored, so encrypted columns cannot be sorted,
+  de-duplicated, or used as a key; and the password-sealed private key uses a
+  random salt and scrypt at no less than OWASP's minimum (N=2^17, r=8, p=1),
+  with its parameters stored beside it so they can be raised. What remains is
+  offline guessing of a weak account password by someone holding the files, and
+  a forgotten password loses the values. It protects copied project folders,
   backups, and shared projects, not a logged-in, unlocked session.
 
 ## Design
@@ -333,6 +340,15 @@ evidence throughout.
 - Report to: docs/working/first-class-data-extraction-plan/reports/ex-d-test-facility.md
 
 ## Work Ledger
+
+### 2026-09-15 — D13 hardened against lookup attacks
+- Agent: supervisor
+- Changed: this document (D13); the Core pair (open questions 5 and 6)
+- Why: the user asked whether a rainbow table could reverse an encrypted column
+- Validation: not validated; planning documents only, no code changed
+- Outcome: Accepted
+- Follow-up: Core open question 6 (Secret Keys' scrypt cost) sits outside this
+  plan's phases
 
 ### 2026-09-15 — Encrypt column designed (D13)
 - Agent: supervisor
