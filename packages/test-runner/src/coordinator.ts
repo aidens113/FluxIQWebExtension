@@ -1,6 +1,7 @@
-import { access, cp, mkdir, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { access, rm } from "node:fs/promises";
 import path from "node:path";
 import { allocatePersistentRun, allocateRun, type RunAllocation } from "./allocation.js";
+import { coreWebServerProcessSpec, prepareCoreWebBuild } from "./core-web-build/index.js";
 import { buildFluxIQEnvironment, buildScenarioEnvironment, webPanelHostModulePath } from "./environment.js";
 import { RunnerFailure } from "./failure.js";
 import { waitForHttp, type FluxIQCredentials } from "./http-control/index.js";
@@ -27,6 +28,19 @@ export type TopologyOptions = {
   scenarioEntrypoint?: string;
   /** One Lab instance's copy of the web panel host; defaults to the path domain/package.json declares. */
   hostModulePath?: string;
+  /**
+   * Receives the run's logs directory when startup fails, after the run's
+   * processes have stopped and before its run root is removed, so the caller
+   * can keep the logs of a run that never produced a topology.
+   */
+  copyStartupFailureLogs?: (logsDirectory: string) => Promise<void>;
+  /**
+   * The runs directory whose `.core-web-build/` holds the Core web build every
+   * mode shares. `lab run` passes its user-visible runs directory, because an
+   * isolated topology's own runs directory is the per-run `.work` area.
+   * Defaults to `runsDirectory`.
+   */
+  coreWebBuildRunsDirectory?: string;
 };
 
 export type RunningTopology = {
@@ -42,7 +56,7 @@ export type RunningTopology = {
   close(): Promise<void>;
 };
 
-export type TopologyDependencies = { waitForHttp: typeof waitForHttp };
+export type TopologyDependencies = { waitForHttp: typeof waitForHttp; prepareCoreWebBuild?: typeof prepareCoreWebBuild };
 const defaultTopologyDependencies: TopologyDependencies = { waitForHttp };
 
 export async function startTopology(options: TopologyOptions, supervisor = new ProcessSupervisor(), dependencies: TopologyDependencies = defaultTopologyDependencies): Promise<RunningTopology> {
@@ -88,7 +102,13 @@ export async function startTopology(options: TopologyOptions, supervisor = new P
       });
     }
     await requirePaths([hostModulePath]);
-    const nextExecutable = await prepareWebWorkspace(fluxiqRepositoryRoot, allocation.webWorkspaceDir);
+    // Core serves a production build shared by every run and every mode below
+    // one runs directory; a development server compiles on demand and waits on
+    // its file watcher, which stalled readiness and first requests under load.
+    const coreWebBuild = await (dependencies.prepareCoreWebBuild ?? prepareCoreWebBuild)({
+      fluxiqRepositoryRoot, runsDirectory: options.coreWebBuildRunsDirectory ?? runsDirectory, supervisor, logPath: processLogPath(allocation.logsDir, "core-web-build"),
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
     supervisor.start({
       name: "scenario-lab", command: executable("node"), args: [scenarioEntrypoint], cwd: repositoryRoot,
       env: buildScenarioEnvironment(allocation, options.seed ?? 1), logPath: processLogPath(allocation.logsDir, "scenario-lab"),
@@ -101,14 +121,11 @@ export async function startTopology(options: TopologyOptions, supervisor = new P
       ...(options.signal ? { signal: options.signal } : {}),
     });
 
-    supervisor.start({
-      name: "fluxiq-web", command: nextExecutable,
-      args: ["dev", "--turbopack", "--hostname", "127.0.0.1", "--port", String(allocation.webPort)],
-      cwd: allocation.webWorkspaceDir,
-      shell: process.platform === "win32",
+    supervisor.start(coreWebServerProcessSpec({
+      name: "fluxiq-web", build: coreWebBuild, port: allocation.webPort,
       env: buildFluxIQEnvironment(allocation, { repositoryRoot, fluxiqRepositoryRoot, hostModulePath }),
       logPath: processLogPath(allocation.logsDir, "core"),
-    });
+    }));
     const fluxiqOrigin = `http://127.0.0.1:${allocation.webPort}`;
     await dependencies.waitForHttp(fluxiqOrigin, {
       operationStage: "core.health",
@@ -147,7 +164,9 @@ export async function startTopology(options: TopologyOptions, supervisor = new P
   } catch (error) {
     // Preserve the startup failure: cleanup is best-effort here and must not
     // replace the safe operation/category diagnostics the caller persists.
+    // The stopped processes' logs reach the caller before the run root goes.
     await supervisor.cleanup().catch(() => undefined);
+    if (options.copyStartupFailureLogs) await options.copyStartupFailureLogs(allocation.logsDir).catch(() => undefined);
     await removeAllocatedRunRoot(allocation).catch(() => undefined);
     await workspaceLock?.release().catch(() => undefined);
     throw error;
@@ -198,6 +217,7 @@ async function startExistingTopology(options: TopologyOptions, target: ExistingT
     };
   } catch (error) {
     await supervisor.cleanup();
+    if (options.copyStartupFailureLogs) await options.copyStartupFailureLogs(allocation.logsDir).catch(() => undefined);
     await removeAllocatedRunRoot(allocation);
     throw error;
   }
@@ -254,51 +274,6 @@ async function ensureBootstrapIdentity(rootDir: string, credentials: FluxIQCrede
     password: credentials.password,
     ...(credentials.pin ? { pin: credentials.pin } : {}),
   });
-}
-
-export async function prepareWebWorkspace(fluxiqRepositoryRoot: string, target: string): Promise<string> {
-  const source = path.join(fluxiqRepositoryRoot, "apps", "web");
-  const sourceNodeModules = path.join(source, "node_modules");
-  const isolatedCoreRoot = path.resolve(target, "..", "..");
-  await requirePaths([sourceNodeModules, path.join(fluxiqRepositoryRoot, "tsconfig.base.json"), path.join(fluxiqRepositoryRoot, "packages")]);
-  await cp(source, target, {
-    recursive: true,
-    force: false,
-    filter: candidate => ![".next", "node_modules", "playwright-report", "test-results", "next.config.ts"].includes(path.basename(candidate)),
-  });
-  const targetNodeModules = path.join(target, "node_modules");
-  await mirrorNodeModules(sourceNodeModules, targetNodeModules);
-  const rootNodeTypes = path.join(fluxiqRepositoryRoot, "node_modules", "@types", "node");
-  await requirePaths([rootNodeTypes]);
-  await mkdir(path.join(targetNodeModules, "@types"), { recursive: true });
-  await symlink(await realpath(rootNodeTypes), path.join(targetNodeModules, "@types", "node"), process.platform === "win32" ? "junction" : "dir");
-  await cp(path.join(fluxiqRepositoryRoot, "tsconfig.base.json"), path.join(isolatedCoreRoot, "tsconfig.base.json"));
-  await symlink(path.join(fluxiqRepositoryRoot, "packages"), path.join(isolatedCoreRoot, "packages"), process.platform === "win32" ? "junction" : "dir");
-  const commonFilesystemRoot = path.parse(path.resolve(fluxiqRepositoryRoot)).root;
-  await writeFile(path.join(target, "next.config.mjs"), [
-    "export default {",
-    '  transpilePackages: ["fluxiq"],',
-    `  turbopack: { root: ${JSON.stringify(commonFilesystemRoot)} },`,
-    "};",
-    "",
-  ].join("\n"), "utf8");
-  return path.join(sourceNodeModules, ".bin", process.platform === "win32" ? "next.cmd" : "next");
-}
-
-async function mirrorNodeModules(source: string, target: string): Promise<void> {
-  await mkdir(target, { recursive: true });
-  for (const entry of await readdir(source, { withFileTypes: true })) {
-    if (entry.name.startsWith("@") && entry.isDirectory()) {
-      const sourceScope = path.join(source, entry.name);
-      const targetScope = path.join(target, entry.name);
-      await mkdir(targetScope, { recursive: true });
-      for (const scoped of await readdir(sourceScope)) {
-        await symlink(await realpath(path.join(sourceScope, scoped)), path.join(targetScope, scoped), process.platform === "win32" ? "junction" : "dir");
-      }
-      continue;
-    }
-    await symlink(await realpath(path.join(source, entry.name)), path.join(target, entry.name), process.platform === "win32" ? "junction" : "dir");
-  }
 }
 
 export async function withTopology<T>(options: TopologyOptions, operation: (topology: RunningTopology, signal: AbortSignal) => Promise<T>): Promise<T> {

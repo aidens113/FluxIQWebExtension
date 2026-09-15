@@ -212,33 +212,90 @@ Browser/DOM/URL/selector/tab/extension concepts remain downstream.
 
 The isolated runner allocates a unique directory, three loopback ports, and a
 random controller token for every run. It builds the repository's domain host,
-starts the scenario lab, creates an isolated copy of Core's web workspace,
-starts the Core web process and client gateway, probes readiness, launches the
-current E2E extension build, and cleans up supervised processes and the
-disposable topology on completion or failure. Existing mode uses the distinct
-attachment lifecycle documented below.
+prepares or reuses the production build of Core's web panel, starts the
+scenario lab, starts the Core web process from that build and the client
+gateway, probes readiness, launches the current E2E extension build, and cleans
+up supervised processes and the disposable topology on completion or failure.
+Existing mode uses the distinct attachment lifecycle documented below.
 
 ```text
 pnpm lab run <scenario-id>
   |
   +-- test-runs/.work/<run-id>/        removed after the run
   |     +-- fluxiq-root/.fluxiq/       isolated Core data
-  |     +-- core-workspace/apps/web/   disposable Core web copy
   |     +-- browser-profile/           fresh persistent Chromium profile
-  |     +-- logs/                      copied before cleanup
+  |     +-- logs/                      copied before cleanup, also when startup fails
+  +-- test-runs/.core-web-build/<key>/  production build shared by every mode
   +-- test-runs/<run-id>/              finalized attested evidence bundle
   |
   +-- scenario lab    http://127.0.0.1:<random>
-  +-- FluxIQ web      http://127.0.0.1:<random>
+  +-- FluxIQ web      http://127.0.0.1:<random>   (next start)
   +-- client gateway  ws://127.0.0.1:<random>/client
   +-- isolated identity, disposable project, production pairing and actions
   +-- finalized evidence bundle retained after disposable topology cleanup
 ```
 
-Core's source packages and installed dependencies are linked into the
-run-scoped web copy. This avoids sharing Core data, ports, or a web build
-directory between runs. The runner is therefore coupled to a compatible
-sibling Core checkout and its installed web dependencies.
+A run shares no Core data, ports, or logs with another run. It does share the
+read-only production build of Core's web panel. The runner is therefore coupled
+to a compatible sibling Core checkout with built packages and installed web
+dependencies.
+
+### Core web panel production build
+
+Core's web panel runs as a production server,
+`next start --hostname 127.0.0.1 --port <port>`, never as a development server.
+Core accepts performance measurements only from a production host. A
+development server also compiles each route on its first request and makes
+requests wait on its file watcher; under shared load that stalled Core
+readiness and the first authenticated request of isolated runs.
+
+Every mode shares one build cache, `.core-web-build/<key>/`, below the
+user-visible runs directory: `test-runs`, or `FLUXIQ_TEST_RUNS_DIR` when it is
+set. An `isolated` or `clone` topology allocates its runs below `test-runs/.work`,
+so `lab run` passes its own runs directory to the topology as
+`coreWebBuildRunsDirectory`. `persistent-isolated` runs and the demo commands
+already work from that directory. The key is a
+SHA-256 over Core's `HEAD`; the content of the `apps/web` files the build copies
+and of Core's `tsconfig.base.json`; the content of `packages/fluxiq/dist`,
+`packages/contracts/dist`, and `packages/client-gateway-websocket/dist`; the
+generated `next.config.mjs`; and the installed Next version. Changing any of
+them makes the next run build again. The web panel host module and every
+`FLUXIQ_*` value are read at runtime, so they are not part of the key.
+
+A build runs in its own attempt directory, `<key>/b-<random>/`, laid out the
+way the per-run workspace copy used to be: `apps/web` copied without build
+output or dependencies, `node_modules` mirrored as links into Core's
+installation, Core's `tsconfig.base.json`, and a `packages` link.
+`next build --turbopack` runs there with a build-only FluxIQ root inside the
+attempt, the client gateway disabled, and inherited `FLUXIQ_*`, `NEXT_PUBLIC_*`,
+`NODE_ENV`, and `PORT` values removed. Only after the build exits 0 and leaves
+`.next/BUILD_ID` does the attempt receive `build-complete.json`, and only then
+does the key receive `published.json` naming the attempt. Both records are
+written to a temporary file and renamed into place. A run accepts a build only
+when those two records and `BUILD_ID` agree, so a failed, interrupted, or
+half-written attempt is never reused. An attempt is never moved after its
+build, and an unpublished attempt stays on disk until it is removed by hand.
+
+Runs that share a runs directory build once. The first takes a create-only
+`.operation.lock` in the key directory through `workspace-lock.ts`, which is
+reclaimed only from a verifiably dead owner. The others poll for the
+publication for at most twelve minutes: the build's own ten-minute bound plus
+two minutes for staging. A lock that stays unreadable for ten seconds fails
+closed and is never reclaimed automatically. The build's output goes only to
+the building run's `logs/core-web-build.log`, and a failed build surfaces as a
+closed `process.startup` failure.
+
+Each run then serves the published build's `apps/web` with its own port,
+`FLUXIQ_*` environment, readiness and snapshot probes, and `logs/core.log`.
+Next 15.5 writes into `.next` at runtime only through its incremental cache
+(revalidated pages and cached `fetch` responses) and its image optimizer, and
+Core's panel uses none of them. Do not remove a build directory while a run is
+serving it.
+
+When startup fails, the runner stops the run's processes and hands the run's
+logs directory to the caller before it removes the run root. `lab run` copies
+those logs into the evidence bundle through the same redacting copy, and under
+the same redaction attestation, as a run that started.
 
 ### Persistent isolated topology
 
@@ -256,8 +313,8 @@ pnpm lab run basic-form --target persistent-isolated --workspace regression-main
   |     +-- browser-profile/                           Chromium and extension state
   |     +-- .identity/credentials.json                 owner-protected test identity
   |     +-- .sessions/<run-id>/                        removed after this invocation
-  |           +-- core-workspace/apps/web/             disposable Core web copy
-  |           +-- logs/                                copied before cleanup
+  |           +-- logs/                                copied before cleanup, also when startup fails
+  +-- test-runs/.core-web-build/<key>/                 production build shared by runs
   +-- test-runs/<run-id>/                              finalized evidence bundle
 ```
 
@@ -554,9 +611,11 @@ non-overlapping interval and reconciles both the canonical graph document and
 its SQL viewport index when a generated graph is replaced.
 
 All four demo commands lock and reuse the exact `FLUXIQ_DEMO_RUN_DIR`. Each invocation
-starts and stops its own copied Core web process while retaining
-`fluxiq-root/.fluxiq`; temporary Core copies live under `.sessions` and are
-removed after shutdown. The directory also contains `workspace.json`, a protected
+starts and stops its own Core web process, served with `next start` from the
+shared production build in `.core-web-build/<key>/` below `FLUXIQ_TEST_RUNS_DIR`
+(see [Core web panel production build](#core-web-panel-production-build)),
+while retaining `fluxiq-root/.fluxiq`; each invocation's session directory
+lives under `.sessions` and is removed after shutdown. The directory also contains `workspace.json`, a protected
 `scenario-port.json` that keeps recording URLs replayable across invocations, separate
 persistent extension and panel browser profiles, a workspace-local copy of the
 latest built extension, append-only process/Scenario Lab logs, finalized
@@ -1139,7 +1198,11 @@ the shard count and controls how many child executors the parent schedules at
 once. It is meaningful only with sharding. More jobs do not bypass the
 machine-wide admission gate: at most two scenario cells may own global slots,
 waiters are FIFO across concurrent campaigns, and available physical memory is
-checked again before every cell. Admission retains 4 GiB for the machine and
+checked again before every cell. A waiter re-reads the pool every 100 ms but
+runs the full process-identity probe (a PowerShell query on Windows) only when
+it first sees an owner, when a spawn-free signal-0 check reports that owner's
+PID gone (the probe confirms before a crashed owner is archived), and at most
+once a minute per owner to catch a reused PID. Admission retains 4 GiB for the machine and
 budgets 3 GiB for each active/new cell. A slot surrounds only `runScenario`, so
 checkpointing, reconciliation, aggregation, and an idle child do not consume
 it; the slot is released on success, failure, or interruption.

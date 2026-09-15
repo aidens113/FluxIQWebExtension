@@ -123,3 +123,10 @@ test("removing a session deletes a junction inside it without touching the junct
     await rm(scratch, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });
+
+test("the demo Core serves the cached production build from the runs directory, never a development server", async () => {
+  const source = await readFile(path.resolve(import.meta.dirname, "..", "..", "..", "src", "demo-workspace", "core-process.ts"), "utf8");
+  assert.match(source, /await prepareCoreWebBuild\(\{[^}]*\brunsDirectory: config\.runsDirectory,/u);
+  assert.match(source, /supervisor\.start\(coreWebServerProcessSpec\(\{\s*name: "demo-fluxiq-web",\s*build: coreWebBuild,\s*port: webPort,/u);
+  assert.doesNotMatch(source, /"dev"|--turbopack|prepareWebWorkspace/u);
+});
