@@ -4,8 +4,12 @@ import { randomBytes } from "node:crypto";
 
 const TEMPORARY_ATTEMPTS = 8;
 const WINDOWS_RENAME_DELAYS_MS = [10, 20, 40, 80] as const;
+// Removing a freshly linked temporary can wait out a scanner that holds the new
+// file for seconds; a throw there stops an unattended campaign mid-run.
+const WINDOWS_TEMPORARY_REMOVAL_DELAYS_MS = [10, 20, 40, 80, 160, 320, 640, 1280] as const;
 const WINDOWS_SHARING_ERRORS = new Set(["EACCES", "EBUSY", "EPERM"]);
 const UNSUPPORTED_DIRECTORY_SYNC_ERRORS = new Set(["EACCES", "EBADF", "EISDIR", "EINVAL", "ENOTSUP", "EPERM"]);
+const TEMPORARY_LEFT_CODE = "ERR_DURABLE_TEMPORARY_LEFT";
 const writesByTarget = new Map<string, Promise<void>>();
 
 export type DurableFileStage =
@@ -54,7 +58,13 @@ export function writeDurableJson(target: string, value: unknown, options: Durabl
   return writeDurableText(target, `${JSON.stringify(value, null, 2)}\n`, options);
 }
 
-/** Publishes complete, file-synced UTF-8 content only when `target` is absent. */
+/**
+ * Publishes complete, file-synced UTF-8 content only when `target` is absent.
+ * If the published target's own sibling temporary still cannot be removed
+ * after bounded sharing retries, the call rejects with code
+ * `ERR_DURABLE_TEMPORARY_LEFT` (carrying `target` and `temporary`) instead of
+ * reporting success over a directory that exact-listing readers will refuse.
+ */
 export function createDurableText(target: string, contents: string, options: DurableFileOptions = {}): Promise<void> {
   return serializeTarget(target, () => publish(target, contents, "create", options));
 }
@@ -84,8 +94,10 @@ async function publish(target: string, contents: string, mode: "create" | "repla
 
   const { handle, temporary } = await createTemporary(absoluteTarget, fileSystem, options.randomSuffix);
   let openHandle: DurableFileHandle | undefined = handle;
-  let published = false;
+  // True while the finally block still owes a best-effort removal of the temporary name.
+  let temporaryPending = true;
   const checkpoint = async (stage: DurableFileStage): Promise<void> => options.checkpoint?.(stage, { target: absoluteTarget, temporary });
+  const removeTemporary = (): Promise<void> => withSharingRetries(() => fileSystem.remove(temporary, { force: true }), WINDOWS_TEMPORARY_REMOVAL_DELAYS_MS, options);
 
   try {
     await checkpoint("temporary-created");
@@ -97,18 +109,27 @@ async function publish(target: string, contents: string, mode: "create" | "repla
     openHandle = undefined;
     await checkpoint("file-closed");
 
-    if (mode === "create") await fileSystem.link(temporary, absoluteTarget);
-    else await renameWithSharingRetries(temporary, absoluteTarget, fileSystem, options);
-    published = true;
+    if (mode === "create") {
+      await fileSystem.link(temporary, absoluteTarget);
+    } else {
+      await withSharingRetries(() => fileSystem.rename(temporary, absoluteTarget), WINDOWS_RENAME_DELAYS_MS, options);
+      temporaryPending = false;
+    }
     await checkpoint("target-published");
 
-    if (mode === "create") await removeOwnedTemporary(fileSystem, temporary);
+    if (mode === "create") {
+      // This is the single post-publication removal: its exhausted failure is
+      // reported below and never retried again or swallowed by the finally block.
+      temporaryPending = false;
+      await removeTemporary().catch((cause: unknown) => { throw temporaryLeftError(absoluteTarget, temporary, cause); });
+    }
     await checkpoint("before-directory-sync");
     await syncParentDirectory(parent, fileSystem, options.platform ?? process.platform);
     await checkpoint("directory-synced");
   } finally {
     if (openHandle) await openHandle.close().catch(() => undefined);
-    if (!published || mode === "create") await removeOwnedTemporary(fileSystem, temporary);
+    // An earlier failure is already propagating; cleanup must not replace it.
+    if (temporaryPending) await removeTemporary().catch(() => undefined);
   }
 }
 
@@ -126,16 +147,17 @@ async function createTemporary(target: string, fileSystem: DurableFileSystem, ra
   throw new Error("Unreachable temporary-file allocation state");
 }
 
-async function renameWithSharingRetries(source: string, target: string, fileSystem: DurableFileSystem, options: DurableFileOptions): Promise<void> {
+/** Retries only Windows sharing violations (for example a scanner holding a new file), sleeping through `delays` once each. */
+async function withSharingRetries(operation: () => Promise<void>, delays: readonly number[], options: DurableFileOptions): Promise<void> {
   const platform = options.platform ?? process.platform;
   const sleep = options.sleep ?? ((milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
   for (let attempt = 0; ; attempt += 1) {
     try {
-      await fileSystem.rename(source, target);
+      await operation();
       return;
     } catch (error) {
-      if (platform !== "win32" || !WINDOWS_SHARING_ERRORS.has(errorCode(error) ?? "") || attempt >= WINDOWS_RENAME_DELAYS_MS.length) throw error;
-      await sleep(WINDOWS_RENAME_DELAYS_MS[attempt]!);
+      if (platform !== "win32" || !WINDOWS_SHARING_ERRORS.has(errorCode(error) ?? "") || attempt >= delays.length) throw error;
+      await sleep(delays[attempt]!);
     }
   }
 }
@@ -153,8 +175,9 @@ async function syncParentDirectory(parent: string, fileSystem: DurableFileSystem
   }
 }
 
-async function removeOwnedTemporary(fileSystem: DurableFileSystem, temporary: string): Promise<void> {
-  await fileSystem.remove(temporary, { force: true }).catch(() => undefined);
+function temporaryLeftError(target: string, temporary: string, cause: unknown): Error {
+  const message = `Durable publication of ${target} succeeded but its own temporary ${temporary} could not be removed`;
+  return Object.assign(new Error(message, { cause }), { code: TEMPORARY_LEFT_CODE, target, temporary });
 }
 
 function defaultRandomSuffix(): string {
