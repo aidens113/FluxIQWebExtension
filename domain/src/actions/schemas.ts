@@ -1,5 +1,5 @@
 import type { JsonObject } from "fluxiq/core";
-import { WEB_AUTOMATION_EXTRACT_MAX_PAGES } from "./types";
+import { WEB_AUTOMATION_EXTRACT_MAX_ITEMS, WEB_AUTOMATION_EXTRACT_MAX_PAGES } from "./types";
 import type { WebAutomationActionType } from "./types";
 
 export type WebAutomationActionDefinition = {
@@ -153,7 +153,9 @@ const extractListSchema = {
         maxPages: { type: "integer", label: "Maximum pages", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES }
       }
     },
-    maxItems: { type: "integer", label: "Maximum items", minimum: 1 }
+    maxItems: { type: "integer", label: "Maximum items", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_ITEMS },
+    // Default 1 where absent, so an empty list fails unless the Flow says empty is an answer.
+    minItems: { type: "integer", label: "Minimum items", minimum: 0 }
   }
 } satisfies JsonObject;
 

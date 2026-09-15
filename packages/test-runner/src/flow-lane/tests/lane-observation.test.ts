@@ -5,7 +5,7 @@ import { flowLaneObservation, recordingLaneObservation, selectLaneObservation, t
 import type { PersistedFlowRunOutcome } from "../persisted-flow-run.js";
 
 const run = (overrides: Partial<PersistedFlowRunOutcome> = {}): PersistedFlowRunOutcome => ({
-  runId: "run.one", status: "succeeded", harnessActivations: 0, failure: null, extracted: [],
+  runId: "run.one", status: "succeeded", harnessActivations: 0, failure: null, extracted: [], extractedNonStringValues: 0,
   actions: [{ actionType: "web.dom.type", status: "succeeded", startedAt: new Date(0).toISOString(), durationMs: 12, failure: null }],
   ...overrides,
 });

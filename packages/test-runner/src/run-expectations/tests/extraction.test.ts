@@ -22,6 +22,14 @@ test("a record with a missing or extra field does not match", () => {
   assert.throws(() => assertExtraction([{ step: "read", records: [{ name: "Kettle", price: "$25.00", rating: "4" }, records[1]!] }], "read", records), /record 0/);
 });
 
+test("an expected null matches only a field present with null, never a missing field or an empty string", () => {
+  const withNull = [{ name: "Kettle", price: null }];
+  assert.doesNotThrow(() => assertExtraction([{ step: "read", count: 1, records: withNull }], "read", withNull));
+  assert.throws(() => assertExtraction([{ step: "read", records: withNull }], "read", [{ name: "Kettle" }]), /record 0 does not match/);
+  assert.throws(() => assertExtraction([{ step: "read", records: withNull }], "read", [{ name: "Kettle", price: "" }]), /record 0 does not match/);
+  assert.throws(() => assertExtraction([{ step: "read", records: [{ name: "Kettle", price: "" }] }], "read", withNull), /record 0 does not match/);
+});
+
 test("only entries naming this step apply, and no entries means nothing to assert", () => {
   assert.doesNotThrow(() => assertExtraction([{ step: "other", count: 9 }], "read", records));
   assert.doesNotThrow(() => assertExtraction(undefined, "read", []));

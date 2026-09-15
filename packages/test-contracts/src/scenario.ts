@@ -2,7 +2,7 @@ import { AUTOMATION_STUDIO_ADAPTIVE_FAILURE_CLASSES, type AutomationStudioAdapti
 
 export const SCENARIO_SCHEMA_VERSION = "0.1" as const;
 
-/** Upper bound on pages an extract step may follow, shared by the validator and the JSON Schema. */
+/** Upper bound on pages an extract step may read, or scrolls it may make, shared by the validator and the JSON Schema. */
 export const SCENARIO_EXTRACT_MAX_PAGES = 50;
 
 export const scenarioCapabilities = [
@@ -22,9 +22,9 @@ export type NetworkPolicy = "loopback-only" | "allowlisted-real-site";
  * Operations a recording script may perform. The recording lane drives each
  * through Playwright while the extension records. `extract` is the runner's own
  * data-extraction check, never recorded as an extract action. Without
- * `pagination` it only reads the page. With it, the step clicks `next` as
- * trusted input to reach each further page, and the extension records those
- * clicks (`recordableActionTypes`).
+ * `pagination` it only reads the page. With it, the step reaches each further
+ * page as trusted input -- in the default `next` mode by clicking `next` -- and
+ * the extension records those clicks (`recordableActionTypes`).
  */
 export const scenarioStepOperations = [
   "click",
@@ -45,19 +45,40 @@ export const scenarioStepOperations = [
 
 export type ScenarioStepOperation = (typeof scenarioStepOperations)[number];
 
-/** Follow the `next` control until it is absent or `maxPages` pages, the first included, were read. */
-export type ScenarioExtractPagination = { next: string; maxPages: number };
+/** The ways an extract step reaches further pages, named as the domain's `WebAutomationExtractListPagination` names them (D14). */
+export const scenarioExtractPaginationModes = ["next", "loadMore", "scroll", "numbered"] as const;
+
+export type ScenarioExtractPaginationMode = (typeof scenarioExtractPaginationModes)[number];
+
+/**
+ * How an extract step reaches each further page, discriminated by `mode`:
+ *
+ * - `next`, the mode when `mode` is absent: follow the `next` control until it
+ *   is absent or `maxPages` pages, the first included, were read;
+ * - `loadMore`: press `control` to append items, reading at most `maxPages`
+ *   pages, the first included;
+ * - `scroll`: scroll to load more items, at most `maxScrolls` times;
+ * - `numbered`: visit the page controls matched by `pages`, reading at most
+ *   `maxPages` pages, the first included.
+ */
+export type ScenarioExtractPagination =
+  | { mode?: "next"; next: string; maxPages: number }
+  | { mode: "loadMore"; control: string; maxPages: number }
+  | { mode: "scroll"; maxScrolls: number }
+  | { mode: "numbered"; pages: string; maxPages: number };
 
 /**
  * One recording-script step. `target` is required for click, type, select,
  * waitForState, check, upload, and extract; `path` for navigate and for
  * switchTab (the open tab whose URL path matches); `value` for type, select,
  * scroll, press (a key name), check (a boolean), upload (a file name), and
- * waitForDownload (the suggested file name). `fields` and `pagination` belong
- * to extract only: `fields` maps a field name to a selector inside each item
- * matched by `target`, `selector@attribute` reads an attribute, not text, and
- * `column:<header text>` reads the cell under that header when items are
- * table rows, so extraction survives a column reorder.
+ * waitForDownload (the suggested file name). `fields`, `pagination` and
+ * `minItems` belong to extract only: `fields` maps a field name to a selector
+ * inside each item matched by `target`, `selector@attribute` reads an
+ * attribute, not text, and `column:<header text>` reads the cell under that
+ * header when items are table rows, so extraction survives a column reorder.
+ * `minItems` is the fewest items the read must find, 1 when absent (D4); a
+ * workflow where an empty list is valid declares 0.
  */
 export type ScenarioStep = {
   id: string;
@@ -68,6 +89,7 @@ export type ScenarioStep = {
   timeoutMs?: number;
   fields?: Record<string, string>;
   pagination?: ScenarioExtractPagination;
+  minItems?: number;
 };
 
 export type ExpectedFact = { id: string; subject: string; predicate: string; value: unknown };
@@ -98,9 +120,22 @@ export type ExpectedAction = { action: string; outcome?: (typeof expectedActionO
 /**
  * What an extract step must yield. `count` is the exact number of records;
  * `records` is the complete expected list, compared exactly and in order, so
- * a longer or shorter result fails. When both are given, both must hold.
+ * a longer or shorter result fails, with `null` where an item holds no value
+ * for a field. When both are given, both must hold. `pages` is the number of
+ * pages the read covers, and only a paginated step has more than one;
+ * `optionalFields` names the step's fields an item may lack; `truncated` is
+ * whether the read reports being cut short by a cap. Expecting no records
+ * (`count: 0` or `records: []`) requires the step to declare `minItems: 0`
+ * (D4).
  */
-export type ExpectedExtraction = { step: string; count?: number; records?: Array<Record<string, string>> };
+export type ExpectedExtraction = {
+  step: string;
+  count?: number;
+  records?: Array<Record<string, string | null>>;
+  pages?: number;
+  optionalFields?: string[];
+  truncated?: boolean;
+};
 /** The failure category a negative scenario or variant must be classified as, in Core's taxonomy. */
 export type ExpectedFailure = { category: AutomationStudioAdaptiveFailureClass; code?: string };
 export type ScenarioGoal = { id: string; description: string; successFacts: ExpectedFact[] };
@@ -207,6 +242,7 @@ export type WebScenario = {
 
 const stringArray = { type: "array", items: { type: "string" } } as const;
 const kebabId = { type: "string", pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$", minLength: 1 } as const;
+const pageBound = { type: "integer", minimum: 1, maximum: SCENARIO_EXTRACT_MAX_PAGES } as const;
 
 /** Portable JSON Schema for editors and non-TypeScript scenario producers. */
 export const webScenarioJsonSchema = {
@@ -246,11 +282,30 @@ export const webScenarioJsonSchema = {
         target: { type: "string", minLength: 1 }, value: { type: ["string", "number", "boolean"] },
         path: { type: "string", pattern: "^/" }, timeoutMs: { type: "integer", minimum: 0 },
         fields: { type: "object", minProperties: 1, additionalProperties: { type: "string", minLength: 1 } },
-        pagination: {
-          type: "object", additionalProperties: false, required: ["next", "maxPages"],
-          properties: { next: { type: "string", minLength: 1 }, maxPages: { type: "integer", minimum: 1, maximum: SCENARIO_EXTRACT_MAX_PAGES } },
-        },
+        pagination: { $ref: "#/$defs/pagination" },
+        minItems: { type: "integer", minimum: 0 },
       },
+    },
+    /** One member per `scenarioExtractPaginationModes` entry, in that order; only `next` may omit `mode`. */
+    pagination: {
+      oneOf: [
+        {
+          type: "object", additionalProperties: false, required: ["next", "maxPages"],
+          properties: { mode: { const: "next" }, next: { type: "string", minLength: 1 }, maxPages: pageBound },
+        },
+        {
+          type: "object", additionalProperties: false, required: ["mode", "control", "maxPages"],
+          properties: { mode: { const: "loadMore" }, control: { type: "string", minLength: 1 }, maxPages: pageBound },
+        },
+        {
+          type: "object", additionalProperties: false, required: ["mode", "maxScrolls"],
+          properties: { mode: { const: "scroll" }, maxScrolls: pageBound },
+        },
+        {
+          type: "object", additionalProperties: false, required: ["mode", "pages", "maxPages"],
+          properties: { mode: { const: "numbered" }, pages: { type: "string", minLength: 1 }, maxPages: pageBound },
+        },
+      ],
     },
     expected: {
       type: "object",
@@ -282,7 +337,10 @@ export const webScenarioJsonSchema = {
       anyOf: [{ required: ["count"] }, { required: ["records"] }],
       properties: {
         step: { type: "string", minLength: 1 }, count: { type: "integer", minimum: 0 },
-        records: { type: "array", items: { type: "object", additionalProperties: { type: "string" } } },
+        records: { type: "array", items: { type: "object", additionalProperties: { type: ["string", "null"] } } },
+        pages: { type: "integer", minimum: 1 },
+        optionalFields: { type: "array", uniqueItems: true, items: { type: "string", minLength: 1 } },
+        truncated: { type: "boolean" },
       },
     },
     failure: {

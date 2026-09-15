@@ -101,7 +101,8 @@ async function executeWebAutomationRuntimeCommand(fluxiq: FluxIQ, command: FluxI
   // and did the producer -- not a layer after it -- declare it had already
   // withheld the values? An absent declaration means withhold.
   const clientResult = jsonObject(result.payload?.result);
-  const withholdComparison = isSensitiveElementDescriptor(clientResult?.element) && !producerDeclaredRedaction(clientResult?.validation);
+  const sensitiveTarget = isSensitiveElementDescriptor(clientResult?.element);
+  const withholdComparison = sensitiveTarget && !producerDeclaredRedaction(clientResult?.validation);
   const failure = commandFailure(status, outputId as WebAutomationActionType, message, result.failure, diagnostics?.evidenceDigest, withholdComparison);
   const runtimeResult: FluxIQRuntimeCommandResult = {
     commandId: command.commandId ?? `web.${Date.now()}`,
@@ -117,7 +118,14 @@ async function executeWebAutomationRuntimeCommand(fluxiq: FluxIQ, command: FluxI
       ...(diagnostics ? { failureDiagnostics: diagnostics.report, ...(diagnostics.evidence ? { failureEvidence: diagnostics.evidence as unknown as JsonObject } : {}) } : {})
     })
   };
-  if (result.payload !== undefined) runtimeResult.payload = withholdComparison ? secretSafeDispatchPayload(result.payload) : result.payload;
+  if (result.payload !== undefined) {
+    // A value read off a sensitive control is dropped on the rule's verdict
+    // alone (D2). No declaration buys it back and no validation status skips
+    // it, so it is asked here rather than inside the comparison guard, which
+    // stands down for both.
+    const readable = sensitiveTarget ? dispatchPayloadWithoutExtracted(result.payload) : result.payload;
+    runtimeResult.payload = withholdComparison ? secretSafeDispatchPayload(readable) : readable;
+  }
   const target = outputTargetFromPayload(payload as JsonObject);
   if (target) runtimeResult.target = target;
   return runtimeResult;
@@ -266,6 +274,25 @@ function producerDeclaredRedaction(validation: unknown): boolean {
   if (!isProducerRedactedComparison(validation)) return false;
   const { expected, actual } = validation as JsonObject;
   return expected !== WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT && actual !== WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT;
+}
+
+/**
+ * The dispatch payload without the value a read took off the page, for an
+ * action whose target the sensitivity rule marks (D2).
+ *
+ * `webAutomationActionResultPayload` drops it where the payload is built, but
+ * that is the client's side of the WebSocket, for the reason given for
+ * `secretSafeDispatchPayload` below. The two guards differ in what may stand
+ * them down. A comparison is prose a producer can declare it built from a
+ * length, and a `none` validation carries none to withhold; a read value is the
+ * control's contents, so neither the declaration nor the validation's status is
+ * consulted here, and the element is all that is asked.
+ */
+function dispatchPayloadWithoutExtracted(payload: JsonObject): JsonObject {
+  const actionResult = jsonObject(payload.result);
+  if (!actionResult || !("extracted" in actionResult)) return payload;
+  const { extracted: _withheld, ...rest } = actionResult;
+  return { ...payload, result: rest };
 }
 
 /**

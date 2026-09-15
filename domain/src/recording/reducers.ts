@@ -18,6 +18,10 @@
 // An event with no descriptor cannot be judged and is treated as ordinary: the
 // recorder always sends one for an input event, and refusing every value on a
 // missing field would empty `forms.*` on the strength of a shape change.
+//
+// The same question guards `runtime.lastActionResult`: a read's `extracted`
+// value is dropped when the result's own element is sensitive (D2), because the
+// last action result is folded into the same recorded state as `forms.*`.
 
 import type { RecordingDomainEventReducer, StateSnapshot } from "fluxiq/automation-studio";
 import { isSensitiveElementDescriptor } from "../sensitivity";
@@ -46,12 +50,26 @@ export const webAutomationStateReducer: RecordingDomainEventReducer = ({ event, 
     if (event.sourceId !== undefined) snapshotOptions.sourceId = event.sourceId;
     next = mergeWebState(next, createWebAutomationStateFromSnapshot(payload.snapshot, snapshotOptions));
   }
-  if (payload.actionResult && typeof payload.actionResult === "object") next = withWebStateValue(next, "runtime.lastActionResult", payload.actionResult, source);
+  if (payload.actionResult && typeof payload.actionResult === "object") next = withWebStateValue(next, "runtime.lastActionResult", actionResultForState(payload.actionResult), source);
   if (payload.visualTarget && typeof payload.visualTarget === "object") next = withWebStateValue(next, "runtime.lastActionVisualTarget", payload.visualTarget, source);
   if (event.eventType === "web.client.error") next = withWebStateValue(next, "runtime.lastError", payload, source);
 
   return next;
 };
+
+/**
+ * The action result as state keeps it: whole for an ordinary element, and
+ * without `extracted` for one the sensitivity rule marks (D2). A read of such a
+ * control is refused on the page, and the wire mapping drops the value again;
+ * this is the third reader asking, for the same reason `forms.*` is guarded
+ * above. Everything else about the result -- its status, its element, its
+ * validation -- still lands.
+ */
+function actionResultForState(actionResult: object): object {
+  if (Array.isArray(actionResult) || !("extracted" in actionResult)) return actionResult;
+  const { extracted: _withheld, ...rest } = actionResult as Record<string, unknown>;
+  return isSensitiveElementDescriptor(rest.element) ? rest : actionResult;
+}
 
 function isSnapshotPayload(value: unknown): value is WebAutomationDomSnapshotInput {
   if (!value || typeof value !== "object") return false;

@@ -21,6 +21,7 @@
 
 import type { JsonObject } from "fluxiq/core";
 import {
+  WEB_AUTOMATION_EXTRACT_MAX_ITEMS,
   WEB_AUTOMATION_EXTRACT_MAX_PAGES,
   WEB_AUTOMATION_UPLOAD_MAX_FILE_BYTES,
   WEB_AUTOMATION_UPLOAD_MAX_TOTAL_BYTES,
@@ -172,6 +173,13 @@ function assertRequestValue(value: unknown): WebAutomationAssertRequest | undefi
  * A list extraction needs both the item selector and the field map; a
  * `paginate` that is present but malformed refuses the whole request rather
  * than quietly reading one page of a request that asked for several.
+ *
+ * `maxItems` is held to the domain's record bound, as `maxPages` is to its page
+ * bound. `minItems` is refused whole the same way `paginate` is when it is sent
+ * but unreadable: dropped, the page would apply its default of 1 to a Flow that
+ * asked for 0, and fail a read that was allowed to be empty. A minimum above the
+ * maximum -- the one named, or the bound when none is -- is refused whole too,
+ * because no page could ever satisfy it.
  */
 function extractListRequestValue(value: unknown): WebAutomationExtractListRequest | undefined {
   const request = jsonObject(value);
@@ -180,8 +188,18 @@ function extractListRequestValue(value: unknown): WebAutomationExtractListReques
   if (!request || item === undefined || fields === undefined) return undefined;
   const paginate = request.paginate === undefined ? undefined : paginationValue(request.paginate);
   if (request.paginate !== undefined && paginate === undefined) return undefined;
-  const maxItems = positiveInteger(request.maxItems);
-  return { item, fields, ...(paginate !== undefined ? { paginate } : {}), ...(maxItems !== undefined ? { maxItems } : {}) };
+  const namedMaxItems = positiveInteger(request.maxItems);
+  const maxItems = namedMaxItems === undefined ? undefined : Math.min(namedMaxItems, WEB_AUTOMATION_EXTRACT_MAX_ITEMS);
+  const minItems = nonNegativeInteger(request.minItems);
+  if (request.minItems !== undefined && minItems === undefined) return undefined;
+  if (minItems !== undefined && minItems > (maxItems ?? WEB_AUTOMATION_EXTRACT_MAX_ITEMS)) return undefined;
+  return {
+    item,
+    fields,
+    ...(paginate !== undefined ? { paginate } : {}),
+    ...(maxItems !== undefined ? { maxItems } : {}),
+    ...(minItems !== undefined ? { minItems } : {})
+  };
 }
 
 /** Every field must name a selector: a map with one unusable entry would extract a column of nothing. */

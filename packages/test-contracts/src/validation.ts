@@ -1,6 +1,6 @@
 import { isAutomationStudioAdaptiveFailureClass } from "./failure-category.js";
 import { recordableActionTypes } from "./recordable-actions.js";
-import { SCENARIO_EXTRACT_MAX_PAGES, expectedActionOutcomes, scenarioCapabilities, scenarioStepOperations, type WebScenario } from "./scenario.js";
+import { SCENARIO_EXTRACT_MAX_PAGES, expectedActionOutcomes, scenarioCapabilities, scenarioExtractPaginationModes, scenarioStepOperations, type ScenarioExtractPaginationMode, type WebScenario } from "./scenario.js";
 
 export type ValidationIssue = { path: string; message: string };
 export type ValidationResult<T> = { valid: true; value: T } | { valid: false; issues: ValidationIssue[] };
@@ -58,25 +58,46 @@ const validateFact: Validator = (value, path, issues) => {
   if (!("value" in value)) issue(issues, `${path}.value`, "is required");
 };
 
+/**
+ * The keys each pagination mode takes beside `mode`: the control selector it
+ * needs, if any, and the bounded count it follows (`ScenarioExtractPagination`).
+ * Keyed by every mode, so a new mode does not compile until its row exists.
+ */
+const PAGINATION_KEYS: Readonly<Record<ScenarioExtractPaginationMode, { selector?: string; count: string }>> = {
+  next: { selector: "next", count: "maxPages" },
+  loadMore: { selector: "control", count: "maxPages" },
+  scroll: { count: "maxScrolls" },
+  numbered: { selector: "pages", count: "maxPages" },
+};
+/** Step keys only an extract step may carry. */
+const EXTRACT_ONLY = ["fields", "pagination", "minItems"];
+
+const validatePagination = (pagination: unknown, paginationPath: string, issues: ValidationIssue[]) => {
+  if (!isObject(pagination)) return issue(issues, paginationPath, "must be an object");
+  // `next` is the mode when `mode` is absent (D14).
+  const mode = pagination.mode === undefined ? "next" : pagination.mode;
+  if (typeof mode !== "string" || !Object.hasOwn(PAGINATION_KEYS, mode)) return issue(issues, `${paginationPath}.mode`, `must be one of ${scenarioExtractPaginationModes.join(", ")}`);
+  const { selector, count } = PAGINATION_KEYS[mode as ScenarioExtractPaginationMode];
+  checkKeys(pagination, selector === undefined ? ["mode", count] : ["mode", selector, count], paginationPath, issues);
+  if (selector !== undefined) requiredString(pagination, selector, paginationPath, issues);
+  const bound = pagination[count];
+  if (!Number.isInteger(bound) || Number(bound) < 1 || Number(bound) > SCENARIO_EXTRACT_MAX_PAGES) {
+    issue(issues, `${paginationPath}.${count}`, `must be an integer from 1 to ${SCENARIO_EXTRACT_MAX_PAGES}`);
+  }
+};
+
 const validateExtractShape = (value: JsonObject, path: string, issues: ValidationIssue[]) => {
   if (!isObject(value.fields) || Object.keys(value.fields).length === 0) issue(issues, `${path}.fields`, "must be a non-empty object for extract");
   else for (const [name, selector] of Object.entries(value.fields)) {
     if (typeof selector !== "string" || selector.length === 0) issue(issues, `${path}.fields.${name}`, "must be a non-empty selector string");
   }
-  if (value.pagination === undefined) return;
-  const paginationPath = `${path}.pagination`;
-  if (!isObject(value.pagination)) return issue(issues, paginationPath, "must be an object");
-  checkKeys(value.pagination, ["next", "maxPages"], paginationPath, issues);
-  requiredString(value.pagination, "next", paginationPath, issues);
-  const maxPages = value.pagination.maxPages;
-  if (!Number.isInteger(maxPages) || Number(maxPages) < 1 || Number(maxPages) > SCENARIO_EXTRACT_MAX_PAGES) {
-    issue(issues, `${paginationPath}.maxPages`, `must be an integer from 1 to ${SCENARIO_EXTRACT_MAX_PAGES}`);
-  }
+  if (value.minItems !== undefined && (!Number.isInteger(value.minItems) || Number(value.minItems) < 0)) issue(issues, `${path}.minItems`, "must be a non-negative integer");
+  if (value.pagination !== undefined) validatePagination(value.pagination, `${path}.pagination`, issues);
 };
 
 const validateStep: Validator = (value, path, issues) => {
   if (!isObject(value)) return issue(issues, path, "must be an object");
-  checkKeys(value, ["id", "operation", "target", "value", "path", "timeoutMs", "fields", "pagination"], path, issues);
+  checkKeys(value, ["id", "operation", "target", "value", "path", "timeoutMs", ...EXTRACT_ONLY], path, issues);
   requiredString(value, "id", path, issues);
   const operation = String(value.operation);
   if (!scenarioStepOperations.includes(value.operation as never)) issue(issues, `${path}.operation`, "has an unsupported value");
@@ -93,7 +114,7 @@ const validateStep: Validator = (value, path, issues) => {
     issue(issues, `${path}.value`, `must be a non-empty string for ${operation}`);
   }
   if (operation === "extract") validateExtractShape(value, path, issues);
-  else for (const key of ["fields", "pagination"]) if (value[key] !== undefined) issue(issues, `${path}.${key}`, "is allowed only for extract");
+  else for (const key of EXTRACT_ONLY) if (value[key] !== undefined) issue(issues, `${path}.${key}`, "is allowed only for extract");
 };
 
 const validateGoal: Validator = (value, path, issues) => {
@@ -106,14 +127,23 @@ const validateGoal: Validator = (value, path, issues) => {
 
 const validateExtraction: Validator = (value, path, issues) => {
   if (!isObject(value)) return issue(issues, path, "must be an object");
-  checkKeys(value, ["step", "count", "records"], path, issues);
+  checkKeys(value, ["step", "count", "records", "pages", "optionalFields", "truncated"], path, issues);
   requiredString(value, "step", path, issues);
   if (value.count === undefined && value.records === undefined) issue(issues, path, "needs count or records");
   if (value.count !== undefined && (!Number.isInteger(value.count) || Number(value.count) < 0)) issue(issues, `${path}.count`, "must be a non-negative integer");
   if (value.records !== undefined) arrayOf(value.records, `${path}.records`, issues, (record, recordPath, target) => {
     if (!isObject(record)) return issue(target, recordPath, "must be an object");
-    for (const [field, text] of Object.entries(record)) if (typeof text !== "string") issue(target, `${recordPath}.${field}`, "must be a string");
+    // `null` is an item that holds no value for the field.
+    for (const [field, text] of Object.entries(record)) if (text !== null && typeof text !== "string") issue(target, `${recordPath}.${field}`, "must be a string or null");
   });
+  if (value.pages !== undefined && (!Number.isInteger(value.pages) || Number(value.pages) < 1)) issue(issues, `${path}.pages`, "must be a positive integer");
+  if (value.optionalFields !== undefined) {
+    arrayOf(value.optionalFields, `${path}.optionalFields`, issues, (field, fieldPath, target) => {
+      if (typeof field !== "string" || field.length === 0) issue(target, fieldPath, "must be a non-empty string");
+    });
+    if (Array.isArray(value.optionalFields) && new Set(value.optionalFields).size !== value.optionalFields.length) issue(issues, `${path}.optionalFields`, "must contain unique values");
+  }
+  if (value.truncated !== undefined && typeof value.truncated !== "boolean") issue(issues, `${path}.truncated`, "must be a boolean");
 };
 
 const validateFailure: Validator = (value, path, issues) => {
@@ -163,14 +193,34 @@ const validateVariant: Validator = (value, path, issues) => {
   validateExpected(value.expected, `${path}.expected`, issues);
 };
 
-/** Every `extracted[].step`, in a workflow's expectations and in each of its variants, must name one of its extract steps. */
+/**
+ * Every `extracted[]` entry, in a workflow's expectations and in each of its
+ * variants, is judged against the extract step it names in that workflow's
+ * recordingScript. The step must exist; `pages` needs a paginated step;
+ * `optionalFields` must name fields of that step; and an entry expecting no
+ * records (`count: 0` or `records: []`) needs the step to declare
+ * `minItems: 0`, because an extract step fails on an empty list by default
+ * (D4), so without it the expectation could never be met.
+ */
 const checkExtractionReferences = (workflow: JsonObject, path: string, issues: ValidationIssue[]) => {
   const script = Array.isArray(workflow.recordingScript) ? workflow.recordingScript.filter(isObject) : [];
-  const extractIds = new Set(script.filter((step) => step.operation === "extract").map((step) => step.id));
+  const extractSteps = new Map<unknown, JsonObject>(script.filter((step) => step.operation === "extract").map((step) => [step.id, step]));
   const check = (expected: unknown, expectedPath: string) => {
     if (!isObject(expected) || !Array.isArray(expected.extracted)) return;
     expected.extracted.forEach((entry, index) => {
-      if (isObject(entry) && typeof entry.step === "string" && !extractIds.has(entry.step)) issue(issues, `${expectedPath}.extracted[${index}].step`, "must name an extract step in this workflow's recordingScript");
+      if (!isObject(entry) || typeof entry.step !== "string") return;
+      const entryPath = `${expectedPath}.extracted[${index}]`;
+      const step = extractSteps.get(entry.step);
+      if (step === undefined) return issue(issues, `${entryPath}.step`, "must name an extract step in this workflow's recordingScript");
+      if (entry.pages !== undefined && step.pagination === undefined) issue(issues, `${entryPath}.pages`, `is allowed only when step ${entry.step} paginates`);
+      if (Array.isArray(entry.optionalFields) && isObject(step.fields)) {
+        const fields = step.fields;
+        entry.optionalFields.forEach((field, fieldIndex) => {
+          if (typeof field === "string" && !Object.hasOwn(fields, field)) issue(issues, `${entryPath}.optionalFields[${fieldIndex}]`, `must name a field of step ${entry.step}`);
+        });
+      }
+      const expectsNone = entry.count === 0 || (Array.isArray(entry.records) && entry.records.length === 0);
+      if (expectsNone && step.minItems !== 0) issue(issues, entryPath, `expects no records, but step ${entry.step} fails on an empty list unless it declares minItems: 0 (D4)`);
     });
   };
   check(workflow.expected, `${path}.expected`);

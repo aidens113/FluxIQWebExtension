@@ -139,7 +139,7 @@ async function runScript(page: Page, script: ScenarioStep[]): Promise<Map<string
   return extracted;
 }
 
-/** Reads every item on the settled page, then follows the pagination control until it is absent or `maxPages` pages were read. */
+/** Reads every item on the settled page, then follows `next` pagination until the control is absent or `maxPages` pages were read. No other mode is read. */
 async function extract(page: Page, step: ScenarioStep): Promise<Array<Record<string, string>>> {
   const records: Array<Record<string, string>> = [];
   for (let read = 1; ; read += 1) {
@@ -152,7 +152,9 @@ async function extract(page: Page, step: ScenarioStep): Promise<Array<Record<str
       }),
     )), step.fields ?? {}));
     const pagination = step.pagination;
-    if (!pagination || read >= pagination.maxPages) return records;
+    if (!pagination) return records;
+    if (pagination.mode !== undefined && pagination.mode !== "next") throw new Error(`Unsupported pagination mode ${pagination.mode}`);
+    if (read >= pagination.maxPages) return records;
     const next = byTestId(page, pagination.next);
     if (await next.count() === 0) return records;
     const status = await page.getByTestId("page-status").textContent() ?? "";

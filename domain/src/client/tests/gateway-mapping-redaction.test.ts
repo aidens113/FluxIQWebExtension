@@ -108,3 +108,51 @@ test("a validation with no comparison to withhold is untouched, flag or no flag"
   const skipped = webAutomationActionResultPayload(sensitiveResult({ status: "none", reason: "evidence-only" }));
   assert.deepEqual(skipped.validation, { status: "none", reason: "evidence-only" });
 });
+
+// -- A read's `extracted` value (D2) -----------------------------------------
+// The page refuses every read of a sensitive control; this is the wire's own
+// check that it did. A read value is the control's contents rather than prose
+// about them, so no declaration buys it through. Each row sends it beside a
+// `none` validation, which gives the comparison guard nothing to withhold, and
+// beside a declared redaction, which that guard honours: a read guard that
+// leaned on either would leak here.
+
+/** A `web.dom.extract` result on an element, carrying what a page that failed to refuse the read would send. */
+function extractResult(element: unknown, validation: WebAutomationActionValidation, extracted: string): WebAutomationActionResult {
+  return {
+    commandId: "command.extract",
+    actionType: "web.dom.extract",
+    status: "succeeded",
+    validation,
+    message: "Value extracted.",
+    url: "https://example.test/checkout",
+    element: element as never,
+    extracted,
+    startedAt: 100,
+    finishedAt: 140
+  };
+}
+
+const sensitiveElement = sensitiveResult({ status: "none", reason: "evidence-only" }).element;
+
+const readValidations: Array<[what: string, validation: WebAutomationActionValidation]> = [
+  ["beside a validation with no comparison", { status: "none", reason: "evidence-only" }],
+  ["beside a declared redaction", { status: "passed", expected: redactedPhrasing, actual: redactedPhrasing, redacted: true }]
+];
+
+test("a sensitive element's extracted value never reaches the wire", () => {
+  for (const [what, validation] of readValidations) {
+    const payload = webAutomationActionResultPayload(extractResult(sensitiveElement, validation, producerSentinel));
+    assert.equal(JSON.stringify(payload).includes(producerSentinel), false, `${what}: the value read off the control left on the wire`);
+    assert.equal("extracted" in payload, false, `${what}: the field is absent, not emptied`);
+    assert.deepEqual(payload.element, sensitiveElement, `${what}: the descriptor still rides, so the next reader can ask the rule again`);
+  }
+});
+
+test("an ordinary element's extracted value is carried", () => {
+  const ordinaryElement = { tagName: "input", selector: "input[name=\"username\"]", inputType: "text", attributes: { autocomplete: "username" } };
+  for (const [what, validation] of readValidations) {
+    const payload = webAutomationActionResultPayload(extractResult(ordinaryElement, validation, "synthetic-control-text"));
+    assert.equal(payload.extracted, "synthetic-control-text", `${what}: redaction stays targeted, or no read returns anything`);
+  }
+});

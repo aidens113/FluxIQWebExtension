@@ -257,7 +257,7 @@ test("the flow-lane snapshot carries Core's target resolution on each action tha
     proposal: { proposalId: "proposal.one", recordingId: "recording.one", mapperId: "web-recording-actions", status: "approved", candidateCount: 2, issues: [] },
     flowId: "flow.new",
     run: {
-      runId: "run.one", status: "succeeded", failure: null, harnessActivations: 0, extracted: [],
+      runId: "run.one", status: "succeeded", failure: null, harnessActivations: 0, extracted: [], extractedNonStringValues: 2,
       actions: [
         { actionType: "web.dom.type", status: "succeeded", startedAt: new Date(0).toISOString(), failure: null, targetResolution },
         { actionType: "web.dom.click", status: "succeeded", startedAt: new Date(0).toISOString(), failure: null },
@@ -272,6 +272,8 @@ test("the flow-lane snapshot carries Core's target resolution on each action tha
   ]);
   assert.equal(snapshot.candidateCount, 2);
   assert.equal(snapshot.recording.entryCount, 2);
+  // X0.7: the run's count of extracted values that are not strings is published beside the extraction count, as a count only.
+  assert.equal(snapshot.extractionNonStringValues, 2);
 });
 
 /**

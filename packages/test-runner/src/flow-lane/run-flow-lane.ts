@@ -177,7 +177,7 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
   assertFlowDidNotStopEarly(run);
   assertFlowFailure(expected.failure, run.failure);
   assertFlowActions(expected.actions, run.actions);
-  assertFlowExtraction(expected.extracted, run.extracted, actionTypes);
+  assertFlowExtraction(expected.extracted, run.extracted, actionTypes, run.extractedNonStringValues);
   return { recording, proposal, flowId: approved.flowId, run, observation, extraction, startCandidateIndex };
 }
 
@@ -250,9 +250,11 @@ function assertFlowDidNotStopEarly(run: PersistedFlowRunOutcome): void {
  * For the same reason each action carries the size and truncation flag of the
  * sanitized evidence packets Core captured around it -- measurements, never the
  * packets. `extractionExpectation` says whether the workflow's extraction was
- * judged against this Flow, and each action carries Core's transition
- * comparison status when Core reported one. `stoppedWithoutFailedAttempt` is
- * the run's early stop, by counts, or null when it did not stop that way.
+ * judged against this Flow, and `extractionNonStringValues` counts the values
+ * its extract attempts carried that are not strings, never the values. Each
+ * action carries Core's transition comparison status when Core reported one.
+ * `stoppedWithoutFailedAttempt` is the run's early stop, by counts, or null
+ * when it did not stop that way.
  */
 export function flowLaneSnapshot(evidence: FlowLaneEvidence) {
   return {
@@ -262,7 +264,7 @@ export function flowLaneSnapshot(evidence: FlowLaneEvidence) {
     harnessActivations: evidence.run.harnessActivations, failure: evidence.run.failure, stoppedWithoutFailedAttempt: evidence.run.stoppedWithoutFailedAttempt ?? null,
     // Where the run started in the recording's candidate order: 0 for its first action, null when no attempt landed on an action node.
     startCandidateIndex: evidence.startCandidateIndex ?? null,
-    extractionCount: evidence.run.extracted.length, extractionExpectation: evidence.extraction,
+    extractionCount: evidence.run.extracted.length, extractionNonStringValues: evidence.run.extractedNonStringValues, extractionExpectation: evidence.extraction,
     actions: evidence.run.actions.map((action) => ({
       actionType: action.actionType,
       status: action.status,

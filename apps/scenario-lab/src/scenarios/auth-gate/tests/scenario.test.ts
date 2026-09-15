@@ -196,7 +196,10 @@ test("the account route serves protected content only to a valid session and not
   }
   const [expectedRecord] = authGateScenario.manifest.expected.extracted?.[0]?.records ?? [];
   assert.ok(expectedRecord, "the manifest expects one account record");
-  for (const value of Object.values(expectedRecord)) assert.ok(body.includes(value), value);
+  for (const value of Object.values(expectedRecord)) {
+    assert.ok(value !== null, "every expected account value is text the page serves, never null");
+    assert.ok(body.includes(value), value);
+  }
   assert.deepEqual(route(valid, "account", "HEAD"), served);
 
   assert.deepEqual(route(seeded(), "account"), expiredRedirect);

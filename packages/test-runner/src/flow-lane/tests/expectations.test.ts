@@ -60,12 +60,26 @@ test("a workflow expecting no failure fails on any reported failure, so a differ
 
 test("extraction is compared per extract attempt, in order, so pagination is proven not assumed", () => {
   const page = [{ name: "Alpha" }, { name: "Beta" }];
-  assertFlowExtraction([{ step: "read-catalog", count: 2, records: page }], [page], extractingFlow);
-  assertFlowExtraction(undefined, [], extractingFlow);
-  assertFlowExtraction([], [page], extractingFlow);
-  assert.throws(() => assertFlowExtraction([{ step: "read-catalog", count: 2 }], [], extractingFlow), /expected 1/);
-  assert.throws(() => assertFlowExtraction([{ step: "read-catalog", count: 3 }], [page], extractingFlow), /expected 3/);
-  assert.throws(() => assertFlowExtraction([{ step: "read-catalog", records: [{ name: "Beta" }, { name: "Alpha" }] }], [page], extractingFlow), /record 0 does not match/);
+  assertFlowExtraction([{ step: "read-catalog", count: 2, records: page }], [page], extractingFlow, 0);
+  assertFlowExtraction(undefined, [], extractingFlow, 0);
+  assertFlowExtraction([], [page], extractingFlow, 0);
+  assert.throws(() => assertFlowExtraction([{ step: "read-catalog", count: 2 }], [], extractingFlow, 0), /expected 1/);
+  assert.throws(() => assertFlowExtraction([{ step: "read-catalog", count: 3 }], [page], extractingFlow, 0), /expected 3/);
+  assert.throws(() => assertFlowExtraction([{ step: "read-catalog", records: [{ name: "Beta" }, { name: "Alpha" }] }], [page], extractingFlow, 0), /record 0 does not match/);
+});
+
+/** X0.7: a value the Flow's reader leaves out of a record can make that record match, so the count is judged before the records. */
+test("a judged extraction whose attempts carried a value that is not a string fails as that, even when the records match", () => {
+  const page = [{ name: "Alpha" }, { name: "Beta" }];
+  assert.throws(() => assertFlowExtraction([{ step: "read-catalog", count: 2, records: page }], [page], extractingFlow, 1), (error: unknown) => {
+    assert.ok(error instanceof RunnerFailure);
+    assert.equal(error.category, "runtime.behavior");
+    assert.equal(error.message, "The Flow's extract attempts carried 1 field value(s) that are not strings");
+    assert.deepEqual(error.details, { nonStringValues: 1 });
+    return true;
+  });
+  // An extraction that is not judged is not failed on the count either.
+  assertFlowExtraction([{ step: "read-catalog", count: 2, records: page }], [page], clickOnlyFlow, 1);
 });
 
 /**
@@ -76,11 +90,11 @@ test("extraction is compared per extract attempt, in order, so pagination is pro
 test("a Flow with no extract node is not judged on the workflow's extraction, and the expectation is named as not applying", () => {
   const expected = [{ step: "read-account", count: 1 }];
   assert.equal(flowExtractionExpectation(expected, clickOnlyFlow), "not_applicable");
-  assertFlowExtraction(expected, [], clickOnlyFlow);
+  assertFlowExtraction(expected, [], clickOnlyFlow, 0);
   // Either extract output makes the expectation apply, and it is then judged.
   assert.equal(flowExtractionExpectation(expected, extractingFlow), "judged");
   assert.equal(flowExtractionExpectation(expected, new Map([["node.extract", "web.dom.extract"]])), "judged");
-  assert.throws(() => assertFlowExtraction(expected, [], new Map([["node.extract", "web.dom.extract"]])), /produced 0 extraction result\(s\), expected 1/);
+  assert.throws(() => assertFlowExtraction(expected, [], new Map([["node.extract", "web.dom.extract"]]), 0), /produced 0 extraction result\(s\), expected 1/);
   // A workflow that declares no extraction has nothing to apply, whatever the Flow holds.
   assert.equal(flowExtractionExpectation(undefined, extractingFlow), "not_expected");
   assert.equal(flowExtractionExpectation([], clickOnlyFlow), "not_expected");

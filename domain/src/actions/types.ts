@@ -163,7 +163,16 @@ export type WebAutomationExtractListRequest = {
   item: string;
   fields: Record<string, string>;
   paginate?: WebAutomationExtractListPagination | undefined;
+  /** At most this many records, held to `WEB_AUTOMATION_EXTRACT_MAX_ITEMS`, which is also the bound when absent. */
   maxItems?: number | undefined;
+  /**
+   * At least this many records, or the read fails as `output_not_observed` (or
+   * `auth_required` on a sign-in gate). Default 1, so a list that matched
+   * nothing is never a success; a workflow where an empty list is a valid
+   * answer declares `0`. A request whose minimum exceeds its maximum is
+   * refused whole, since no page could satisfy it.
+   */
+  minItems?: number | undefined;
 };
 
 /** What `web.dom.assert` claims about the page. `expected` carries the text or URL for `text` and `url`. */
@@ -390,6 +399,14 @@ export const WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1_024;
 
 /** Upper bound on the pages one `web.dom.extract_list` may follow, mirroring the scenario contract's own. */
 export const WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
+
+/**
+ * Upper bound on the records one `web.dom.extract_list` may return, across every
+ * page it reads, and the bound a request that names none is held to. The page
+ * mirrors it (`content/action-runtime/list-extraction.ts`) with a test that the
+ * two agree.
+ */
+export const WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1_000;
 
 /** Bounds on `web.dom.upload`, so a file cannot make an action command unbounded on the wire. */
 export const WEB_AUTOMATION_UPLOAD_MAX_FILE_BYTES = 1_048_576;

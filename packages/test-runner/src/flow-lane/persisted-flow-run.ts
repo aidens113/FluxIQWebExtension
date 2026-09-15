@@ -40,6 +40,13 @@ export type PersistedFlowAction = {
   failure: AutomationStudioFailureRecord | null;
   extracted?: Array<Record<string, string>>;
   /**
+   * How many values the attempt's extracted list carried that `extracted`
+   * leaves out: each field value that is not a string, and each entry that is
+   * not a record. Present exactly when `extracted` is. A count, never the
+   * values (D6).
+   */
+  extractedNonStringValues?: number;
+  /**
    * Core's comparison of what the attempt did against the transition its node
    * expected, by Core's name for it (`matched`, `blocked`, ...; Core
    * `runtime/executor/contracts.ts`, `AutomationStudioTransitionComparisonStatus`).
@@ -126,6 +133,8 @@ export type PersistedFlowRunOutcome = {
   harnessActivations: number;
   /** Records every extract attempt yielded, in attempt order. Proves paginated extraction. */
   extracted: Array<Array<Record<string, string>>>;
+  /** Every extract attempt's `extractedNonStringValues`, summed: the values `extracted` leaves out. Counts only (D6). */
+  extractedNonStringValues: number;
   /**
    * Set only when Core failed the run, every attempt succeeded, and at least one
    * of the Flow's action nodes was never attempted: the run stopped early rather
@@ -210,6 +219,7 @@ function outcomeFromDetail(
     failure,
     harnessActivations: detail.harnessActivations,
     extracted: actions.flatMap((action) => (action.extracted ? [action.extracted] : [])),
+    extractedNonStringValues: actions.reduce((sum, action) => sum + (action.extractedNonStringValues ?? 0), 0),
     ...(stop ? { stoppedWithoutFailedAttempt: stop } : {}),
     ...(startCandidateIndex === undefined ? {} : { startCandidateIndex }),
   };
@@ -308,7 +318,7 @@ function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<s
     ...(finishedAt === undefined ? {} : { durationMs: Math.max(0, Math.round(finishedAt - startedAt)) }),
     // Core's own record, parsed by Core's parser. A record Core would reject is treated as absent.
     failure: parseAutomationStudioFailureRecord(attempt.failure) ?? null,
-    ...(extracted ? { extracted } : {}),
+    ...(extracted ? { extracted: extracted.records, extractedNonStringValues: extracted.nonStringValues } : {}),
     ...(comparisonStatus ? { comparisonStatus } : {}),
     ...(targetResolution ? { targetResolution } : {}),
     ...(evidencePackets.length ? { evidencePackets } : {}),
@@ -381,19 +391,31 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-/** Records an extract action reported, wherever Core carried the action result. */
-function extractedRecords(attempt: Record<string, unknown>): Array<Record<string, string>> | undefined {
+/**
+ * Records an extract action reported, wherever Core carried the action result,
+ * and how many values they leave out: each field value that is not a string,
+ * and each entry that is not a record. Dropping those silently let a record
+ * missing a value it did carry match an expectation that omits that field.
+ */
+function extractedRecords(attempt: Record<string, unknown>): { records: Array<Record<string, string>>; nonStringValues: number } | undefined {
   const metadata = attempt.metadata && typeof attempt.metadata === "object" ? attempt.metadata as Record<string, unknown> : undefined;
   const candidates = [attempt.structuredResult, metadata?.result, metadata?.structuredResult, metadata]
     .map((value) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>).extracted : undefined))
     .find((value) => Array.isArray(value));
   if (!Array.isArray(candidates)) return undefined;
   const records: Array<Record<string, string>> = [];
+  let nonStringValues = 0;
   for (const entry of candidates) {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
-    records.push(Object.fromEntries(Object.entries(entry as Record<string, unknown>).flatMap(([key, value]) => (typeof value === "string" ? [[key, value] as const] : []))));
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      nonStringValues += 1;
+      continue;
+    }
+    const values = Object.entries(entry as Record<string, unknown>);
+    const strings = values.filter((pair): pair is [string, string] => typeof pair[1] === "string");
+    nonStringValues += values.length - strings.length;
+    records.push(Object.fromEntries(strings));
   }
-  return records;
+  return { records, nonStringValues };
 }
 
 function runStatus(value: string): PersistedFlowRunOutcome["status"] {

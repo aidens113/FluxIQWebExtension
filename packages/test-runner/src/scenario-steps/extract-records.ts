@@ -53,12 +53,16 @@ export function parseExtractField(spec: string): ExtractField {
  * and leave following `next` to the Flow, but a recording's extract step yields
  * no extract node, so nothing followed it: W05's and W07's final state, page 3
  * of 3, failed on both lanes before any Flow existed.
+ *
+ * Only `next` pagination is followed, whether `mode` names it or is absent. Any
+ * other mode fails the step as `fixture.invalid` before a page is read, rather
+ * than reading the first page as if it were the whole list.
  */
 export async function extractRecords(scope: TargetScope, step: ScenarioStep): Promise<ExtractedRecord[]> {
   const fields = Object.entries(step.fields ?? {}).map(([name, spec]) => [name, parseExtractField(spec)] as const);
   if (!fields.length) throw new RunnerFailure("fixture.invalid", `Extract step ${step.id} names no fields`);
   const itemTarget = parseScenarioTarget(step.target);
-  const pagination = step.pagination;
+  const pagination = nextPagination(step);
   const nextTarget = pagination ? parseScenarioTarget(pagination.next) : undefined;
   const records: ExtractedRecord[] = [];
   for (let page = 1; ; page += 1) {
@@ -69,6 +73,13 @@ export async function extractRecords(scope: TargetScope, step: ScenarioStep): Pr
     if (await next.count() === 0) return records;
     await followNext(next, items[0] ?? next, step, page);
   }
+}
+
+/** The step's pagination when it follows `next`, which is the mode when `mode` is absent (D14). Any other mode has no reader here. */
+function nextPagination(step: ScenarioStep): { next: string; maxPages: number } | undefined {
+  const pagination = step.pagination;
+  if (!pagination || pagination.mode === undefined || pagination.mode === "next") return pagination;
+  throw new RunnerFailure("fixture.invalid", `Extract step ${step.id} paginates by ${pagination.mode}, and the Lab's extract reader follows only next`, { details: { stepId: step.id, mode: pagination.mode } });
 }
 
 async function readRecord(item: Locator, fields: ReadonlyArray<readonly [string, ExtractField]>): Promise<ExtractedRecord> {

@@ -101,7 +101,8 @@ extraction until it is a real, measured Flow capability.
   `web.action.rejected` / `blocked_by_capability_or_policy`, matching every
   other reader. A text read of a container skips the contents of sensitive
   controls inside it (a sensitive `<textarea>`'s text, a sensitive `<select>`'s
-  option labels). The wire payload, the Core-side adapter, and the recording
+  option labels), and an HTML read of a container removes sensitive
+  descendants' `value` attributes and contents. The wire payload, the Core-side adapter, and the recording
   reducer each drop `extracted` again for a sensitive element.
 - **D3. Recordings carry no extracted sample values** by default; previews come
   from Core's dataset store once it exists.
@@ -172,7 +173,8 @@ extraction until it is a real, measured Flow capability.
     parameter, and a recorded node scales it by `maxPages`, since Core's
     5,000 ms default would otherwise cut paginated reads short;
   - `WEB_AUTOMATION_EXTRACT_MAX_ITEMS` is 1,000, mirrored by the page with an
-    agreement test until X3 imports it;
+    agreement test until X3 imports it; `minItems` above the cap is refused
+    whole, and its schema gains the same maximum in X1.4;
   - a `handling: encrypt` field is refused at dispatch with
     `web.action.not_implemented` until K11, and a spec-form field or non-`next`
     pagination is refused by the page until X3;
@@ -309,7 +311,16 @@ Order: W2-A, W3-A, W4, and W5 in parallel; W1-A after W2-A; W2-B after W1-A and
 W2-A; W1-B and W3-B after W2-B (W3-B also after Core K1 names the records path);
 W6 after W4 and W5; W7 last; then root `pnpm check`, `pnpm test`, `pnpm build`,
 one at a time. `content/actions/` gains no source file (the `extract-*` prefix
-rule).
+rule). W4 and W6 ran as one worker, `x01-test-runner`.
+
+**Found during X0 and X1, taken in rather than parked:**
+- X1.6: nothing type-checks `apps/scenario-lab/e2e`, and
+  `member-directory.spec.ts:27-28` already has two type errors; wire that
+  directory into the scenario-lab `check` so `pnpm check` fails on it, and fix
+  the two errors.
+- X5: an expected `null` record value cannot pass on either lane yet (the
+  recording reader leaves the field out; the Flow reader drops it and now fails
+  the run); X5's extraction intent and dataset reader must carry nulls.
 
 **Later phases:**
 - Extension X0/X3: `apps/extension/src/content/action-runtime/**`,
@@ -482,7 +493,105 @@ evidence throughout.
   structure audit passes
 - Report to: docs/working/first-class-data-extraction-plan/reports/x1-test-contracts.md
 
+### Brief: x0-page
+- Repository: this repository
+- Task: worker W1 part A of `reports/x0-x1-execution.md` Part 4, on the landed
+  `x0-domain` work: X0.1, the page side of X0.3 and X0.5, X0.4, and X0.6, with
+  the tests and mutation targets Part 2 names, amended by D2: a text read of a
+  container skips the contents of sensitive controls inside it, and an HTML
+  read of a container removes sensitive descendants' `value` attributes and
+  contents, each with a content-harness case (the sensitive-input fixture, or
+  markup injected with `page.evaluate`).
+- Required reads: `AGENTS.md`; this document's D2, D4, D5, and D14; the
+  report's Part 2 X0.1 and X0.3-X0.6 and Part 4; `reports/x0-domain.md`
+- Owns (may edit): `apps/extension/src/content/action-runtime/{extract,list-extraction,results,index}.ts`,
+  `apps/extension/src/content/action-runtime/tests/list-extraction.test.ts`,
+  `apps/extension/src/content/actions/{extract,extract-list,types}.ts`,
+  `apps/extension/src/content/actions/tests/{extract,execute}.test.ts`,
+  `apps/extension/e2e/content/tests/{actions,extract-list}.spec.ts`
+- Must not touch: the domain, test packages, `content/actions/dialog.ts`, every
+  other file, tracked `apps/extension/build/` (always pass a build label)
+- Validation, run alone: `pnpm --filter @fluxiq-web-extension/extension check`;
+  `EXTENSION_TEST_BUILD_LABEL=x0-page node apps/extension/scripts/test-extension.mjs`;
+  the content harness for `actions` and `extract-list` with `--workers=1`, at
+  most once per iteration; each mutation target with a `--grep` for its case;
+  `node scripts/structure-audit.mjs`. A mutation edit refused by the permission
+  classifier is reported, never worked around.
+- Definition of done: check, unit tests, and harness cases pass; mutations
+  observed red and reverted, or reported as refused; audit passes
+- Report to: `F:\!FluxIQWebExtension\docs\working\first-class-data-extraction-plan\reports\x0-page.md`
+
+### Brief: x01-test-runner
+- Repository: this repository
+- Task: restore compilation broken by `x1-test-contracts`' nullable record
+  values and pagination union, then X0.7. First the X1.5 follow-ups:
+  `packages/test-runner/src/scenario-steps/extract-records.ts` reads pagination
+  by `mode` (absent means `next`) and fails any other mode as `fixture.invalid`;
+  `packages/test-runner/src/run-expectations/extraction.ts` widens record values
+  to `string | null` (type errors at `extraction.ts:20` and
+  `extract-records.ts:62,67`); a null guard at
+  `apps/scenario-lab/src/scenarios/auth-gate/tests/scenario.test.ts:199`; and
+  `apps/scenario-lab/e2e/product-catalog.spec.ts:155-156` type-checking against
+  the union. Then X0.7 per `reports/x0-x1-execution.md` Part 2, with its tests
+  and mutation target.
+- Required reads: `AGENTS.md`; this document's D6 and D14; the report's X0.7
+  and X1.5; `reports/x1-test-contracts.md`
+- Owns (may edit): `packages/test-runner/src/scenario-steps/extract-records.ts`,
+  `packages/test-runner/src/run-expectations/extraction.ts`, their tests,
+  `packages/test-runner/src/flow-lane/{persisted-flow-run,expectations,run-flow-lane}.ts`,
+  `packages/test-runner/src/flow-lane/tests/{persisted-flow-run,expectations,run-flow-lane,lane-observation}.test.ts`,
+  `packages/test-runner/src/run-evaluation/tests/single-run-evaluation.test.ts`,
+  `apps/scenario-lab/src/scenarios/auth-gate/tests/scenario.test.ts`,
+  `apps/scenario-lab/e2e/product-catalog.spec.ts`
+- Must not touch: test-contracts, the domain, the extension, every other file;
+  no browser or Testing Lab run
+- Validation, run alone: `pnpm --filter @fluxiq-web-extension/test-runner build`
+  and the report's X0.7 `node --test` command;
+  `pnpm --filter @fluxiq-web-extension/scenario-lab test`;
+  `node scripts/structure-audit.mjs`; the X0.7 mutation observed red and
+  reverted
+- Definition of done: test-runner builds; the named and scenario-lab tests
+  pass; mutation observed; audit passes
+- Report to: `F:\!FluxIQWebExtension\docs\working\first-class-data-extraction-plan\reports\x01-test-runner.md`
+
 ## Work Ledger
+
+### 2026-09-15 — x01-test-runner done; X0 domain, X1.5, and X0.7 verified together
+- Agent: supervisor; worker `x01-test-runner`
+- Changed: the test-runner and scenario-lab files named in its report
+  (uncommitted); this document (execution notes, open questions)
+- Why: restore the compilation `x1-test-contracts` broke and land X0.7; Core K1
+  answered the parameter-schema union question
+- Validation: supervisor runs, alone and in order:
+  `pnpm --filter @fluxiq-web-extension/test-runner build` → exit 0; `node --test`
+  over the seven flow-lane, extract-records, extraction, and single-run
+  evaluation test files → `# tests 73`, `# pass 73`, `# fail 0`;
+  `pnpm --filter @fluxiq-web-extension/scenario-lab test` → `# tests 205`,
+  `# pass 205`, `# fail 0`. The domain and test-contracts runs are in the entry
+  below. Mutation proofs not rerun by the supervisor.
+- Outcome: Accepted
+- Follow-up: commit this group with X0 domain and X1.5; X1.6 and the X5 null
+  note are recorded under Execution partition
+
+### 2026-09-15 — x0-domain done; x1-test-contracts partial; two briefs recorded
+- Agent: supervisor; workers `x0-domain`, `x1-test-contracts`
+- Changed: the domain X0 files and the test-contracts X1.5 files named in the
+  two reports (uncommitted); this document (D2, D14, Worker Briefs)
+- Why: `x1-test-contracts` left the scenario-lab test build and the test-runner
+  type check failing on nullable record values until its follow-ups land, so
+  W4 and W6 combine into `x01-test-runner`, which fixes compilation first; D2's
+  container rule now covers HTML reads; `minItems` gains a schema maximum
+- Validation: supervisor runs, alone and in order:
+  `pnpm --filter @fluxiq-web-extension/domain check` → exit 0;
+  `DOMAIN_TEST_BUILD_LABEL=supervisor-x0 pnpm --filter @fluxiq-web-extension/domain test`
+  → `# tests 412`, `# pass 412`, `# fail 0`;
+  `pnpm --filter @fluxiq-web-extension/test-contracts test` → `# tests 81`,
+  `# pass 81`, `# fail 0`. Mutation proofs not rerun by the supervisor. The
+  scenario-lab test build and the test-runner type check are known broken until
+  `x01-test-runner` lands.
+- Outcome: Partial
+- Follow-up: `x0-page` and `x01-test-runner` dispatched; commit X0 domain and
+  X1.5 together once the test-runner and scenario-lab builds are green
 
 ### 2026-09-15 — Core K1-K10 decided; records path and Lab reader updated
 - Agent: supervisor; Core worker `k-datasets-execution`
@@ -617,8 +726,8 @@ evidence throughout.
 - Core's own questions (dataset-row withholding, output-reference withholding,
   side-effect class, default `recordsPath`, key custody, derivation cost) are
   decided in the paired document as CD1-CD20.
-- **Core parameter-schema unions.** Whether Core's node parameter-schema dialect
-  accepts `oneOf`, needed to state C1's field and pagination unions in the
-  domain schema. Until answered, `fields` stays `type: "object"` and the gateway
-  lift enforces the union (X1.4). Owner: senior supervisor agent, answered in
-  Core K1.
+- **Core parameter-schema unions.** Answered 2026-09-15 by Core K1: node
+  parameters are not JSON Schema and a domain output's schema is only compared
+  for equality (`packages/fluxiq/src/programs/automation-studio/nodes/contracts.ts:40-64`,
+  `packages/fluxiq/src/io/index.ts:511,517`), so `fields` stays
+  `type: "object"` and the gateway lift enforces the unions (X1.4).

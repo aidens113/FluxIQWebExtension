@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import type { JsonObject } from "fluxiq/core";
 import {
   WEB_AUTOMATION_ACTION_TYPES,
+  WEB_AUTOMATION_EXTRACT_MAX_ITEMS,
   WEB_AUTOMATION_EXTRACT_MAX_PAGES,
   WEB_AUTOMATION_UPLOAD_MAX_FILE_BYTES,
   type WebAutomationActionCommand,
@@ -95,6 +96,19 @@ refusedWhole("web.dom.extract_list", { extractList: { fields: { title: "h3" } } 
 // A paginate that is present but unusable refuses the whole request rather than
 // quietly reading page one of a request that asked for several.
 refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, paginate: { maxPages: 3 } } }, ["extractList"], "a paginate with no next link");
+// The domain's record bound, as the page bound above: a Flow asking for more reads at most this many.
+assert.equal(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, maxItems: 5_000 } }).extractList?.maxItems, WEB_AUTOMATION_EXTRACT_MAX_ITEMS);
+// `minItems` (D4). Absent, the page applies 1, so a list matching nothing fails;
+// 0 is how a Flow says an empty list is an answer, and it must survive the lift.
+assert.deepEqual(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: 0 } }).extractList, { item: "li", fields: { title: "h3" }, minItems: 0 }, "zero is a declaration, not an absent minimum");
+assert.equal(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: 3, maxItems: 3 } }).extractList?.minItems, 3, "a minimum equal to the maximum can be met");
+// Unreadable, it is refused whole rather than dropped: dropped, the page's
+// default of 1 would fail a read the Flow may have allowed to be empty.
+refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: -1 } }, ["extractList"], "a negative minimum");
+refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: "1" } }, ["extractList"], "a minimum sent as a string is not read as a number");
+// A minimum no page could satisfy.
+refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: 5, maxItems: 3 } }, ["extractList"], "a minimum above the maximum");
+refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: WEB_AUTOMATION_EXTRACT_MAX_ITEMS + 1 } }, ["extractList"], "a minimum above the bound a request naming no maximum is held to");
 
 // -- `web.dom.upload`: name, MIME type, bounded base64 ------------------------
 assert.deepEqual(mapped("web.dom.upload", { selector: "input[type=file]", upload: { files: [{ name: "a.txt", mimeType: "text/plain", contentBase64: "aGk=" }] } }).upload, {

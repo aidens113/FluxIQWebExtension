@@ -45,7 +45,7 @@ const typeCommand: FluxIQRuntimeCommand = {
 };
 
 /** The adapter driven against a fake FluxIQ, as `adapter.test.ts` drives it. */
-async function runCommand(result: GatewayActionResult): Promise<FluxIQRuntimeCommandResult> {
+async function runCommand(result: GatewayActionResult, command: FluxIQRuntimeCommand = typeCommand): Promise<FluxIQRuntimeCommandResult> {
   const fluxiq = {
     programs: {
       clientGateway: {
@@ -60,7 +60,7 @@ async function runCommand(result: GatewayActionResult): Promise<FluxIQRuntimeCom
     }
   } as unknown as FluxIQ;
   const adapter = createWebAutomationRuntimeAdapter({ fluxiq });
-  return await adapter.execute(typeCommand, {});
+  return await adapter.execute(command, {});
 }
 
 const producerSentinel = "SENTINEL-VALUE-A-PRODUCER-SHOULD-HAVE-WITHHELD";
@@ -287,3 +287,52 @@ for (const [client, withheld] of withholdingClients) {
     });
   }
 }
+
+// -- A read's `extracted` value (D2) -----------------------------------------
+// The page refuses every read of a sensitive control and the wire mapping drops
+// the value again; this is the exit a wire reaches, so it drops it a third time
+// on the descriptor alone. The comparison guard stands down for a `none`
+// validation and for a producer's declaration, and each row pairs the value
+// with one of those, so a read guard that leaned on that guard leaks here.
+
+const extractCommand: FluxIQRuntimeCommand = {
+  kind: "execute_action",
+  commandId: "command.extract",
+  outputId: "web.dom.extract",
+  parameters: { selector: "[data-testid=\"payment\"]" }
+};
+
+const readValidations: Array<[what: string, validation: JsonObject]> = [
+  ["a validation with no comparison", { status: "none", reason: "evidence-only" }],
+  ["a declared redaction", { status: "passed", expected: redactedPhrasing, actual: redactedPhrasing, redacted: true }]
+];
+
+for (const [what, validation] of readValidations) {
+  test(`a sensitive element's extracted value is dropped from the runtime result, beside ${what}`, async () => {
+    const result = await runCommand({
+      commandId: "client.command.extract",
+      status: "succeeded",
+      message: "Value extracted.",
+      payload: sensitivePayload({ actionType: "web.dom.extract", validation, extracted: producerSentinel })
+    }, extractCommand);
+    assert.equal(JSON.stringify(result).includes(producerSentinel), false, "nothing read off a sensitive control reaches an attempt trace");
+    const action = (result.payload as JsonObject).result as JsonObject;
+    assert.equal("extracted" in action, false, "the field is absent, not emptied");
+    assert.equal(action.element !== undefined, true, "the descriptor the guard read still rides with the result");
+  });
+}
+
+test("an ordinary element's extracted value reaches the runtime result", async () => {
+  const result = await runCommand({
+    commandId: "client.command.extract-ordinary",
+    status: "succeeded",
+    message: "Value extracted.",
+    payload: sensitivePayload({
+      actionType: "web.dom.extract",
+      element: { selector: "input[name=\"username\"]", tagName: "input", inputType: "text", attributes: { autocomplete: "username" } },
+      validation: { status: "none", reason: "evidence-only" },
+      extracted: "synthetic-control-text"
+    })
+  }, extractCommand);
+  assert.equal(((result.payload as JsonObject).result as JsonObject).extracted, "synthetic-control-text", "redaction stays targeted, or no read returns anything");
+});

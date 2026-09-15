@@ -14,6 +14,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { RecordingDomainEventReducerContext, StateSnapshot } from "fluxiq/automation-studio";
+import { WEB_AUTOMATION_EVENTS } from "../../constants";
 import { webAutomationStateReducer } from "../reducers";
 import { createWebAutomationInitialState } from "../state";
 
@@ -100,4 +101,52 @@ test("the shared rule adds two signals the reducer's own copy did not read", () 
   ] as Array<[string, Record<string, unknown>]>) {
     assert.equal(formValue(reduce(element)), undefined, `${label}: the value was written to form state`);
   }
+});
+
+// -- `runtime.lastActionResult` (D2) -----------------------------------------
+// A read's `extracted` value is the control's contents. The page refuses the
+// read and the wire drops the value; the reducer asks the rule again from the
+// result's own element, as it does for `forms.*` above.
+
+/** One recorded action result, as the gateway mapping puts it on the event payload. */
+function reduceActionResult(actionResult: Record<string, unknown>): StateSnapshot {
+  return webAutomationStateReducer({
+    event: {
+      recordingId: "recording.test",
+      domainId: "web-automation",
+      eventType: WEB_AUTOMATION_EVENTS.actionExecuted,
+      timestamp: 42,
+      sourceId: "tab:1",
+      payload: { url: "https://example.test/checkout", title: "Checkout", actionResult }
+    },
+    previousState: createWebAutomationInitialState(42)
+  } as unknown as RecordingDomainEventReducerContext) as StateSnapshot;
+}
+
+function lastActionResult(state: StateSnapshot): unknown {
+  return state.namespaces.web?.values["runtime.lastActionResult"]?.value;
+}
+
+const extractResult = (element: Record<string, unknown>): Record<string, unknown> => ({
+  commandId: "command.extract",
+  actionType: "web.dom.extract",
+  status: "succeeded",
+  validation: { status: "none", reason: "evidence-only" },
+  element,
+  extracted: SENT_VALUE,
+  startedAt: 40,
+  finishedAt: 42
+});
+
+test("a sensitive element's action result loses only its extracted value", () => {
+  const sensitive = extractResult(field({ inputType: "password" }));
+  const state = reduceActionResult(sensitive);
+  const { extracted: _withheld, ...everythingElse } = sensitive;
+  assert.deepEqual(lastActionResult(state), everythingElse, "the status, element and validation still land");
+  assert.equal(JSON.stringify(state).includes(SENT_VALUE), false, "the value survived somewhere in the snapshot");
+});
+
+test("an ordinary element's action result keeps its extracted value", () => {
+  const ordinary = extractResult(field({ inputType: "text", attributes: { name: "coupon" } }));
+  assert.deepEqual(lastActionResult(reduceActionResult(ordinary)), ordinary);
 });

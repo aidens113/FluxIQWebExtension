@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AUTOMATION_STUDIO_ADAPTIVE_FAILURE_CLASSES as coreFailureClasses } from "@fluxiq/contracts/automation-studio";
-import { ContractValidationError, assertWebScenario, expectedActionOutcomes, parseWebScenarioJson, resolveScenarioWorkflow, runActionStatuses, scenarioPageFactSchedule, AUTOMATION_STUDIO_ADAPTIVE_FAILURE_CLASSES, scenarioStepOperations, validateWebScenario, webScenarioJsonSchema } from "../dist/index.js";
+import { ContractValidationError, assertWebScenario, expectedActionOutcomes, parseWebScenarioJson, resolveScenarioWorkflow, runActionStatuses, scenarioPageFactSchedule, AUTOMATION_STUDIO_ADAPTIVE_FAILURE_CLASSES, scenarioExtractPaginationModes, scenarioStepOperations, validateWebScenario, webScenarioJsonSchema } from "../dist/index.js";
 
 const validScenario = {
   schemaVersion: "0.1",
@@ -72,7 +72,8 @@ const catalogScenario = {
     { id: "search", operation: "type", target: "testid:search", value: "lamp" },
     { id: "submit", operation: "press", target: "testid:search", value: "Enter" },
     { id: "in-stock", operation: "check", target: "testid:in-stock", value: true },
-    { id: "products", operation: "extract", target: "testid:product", fields: { name: "testid:name", url: "testid:link@href" } },
+    // The no-results variant expects an empty list, so the step declares minItems: 0 (D4).
+    { id: "products", operation: "extract", target: "testid:product", fields: { name: "testid:name", url: "testid:link@href" }, minItems: 0 },
   ],
   expected: { extracted: [{ step: "products", count: 2, records: [{ name: "Lamp", url: "/p/1" }, { name: "Desk lamp", url: "/p/2" }] }] },
   variants: [
@@ -281,6 +282,111 @@ test("rejects malformed workflows, variants, extraction, and step values", () =>
     "$.variants", "$.variants[1].arm.operation", "$.variants[1].expected.extracted[0]",
     "$.workflows", "$.workflows[0].recordingScript", "$.workflows[1].expected.extracted[0].step",
   ]) assert.ok(paths.includes(path), `expected an issue at ${path}; got ${paths.join(", ")}`);
+});
+
+/** A scenario's issue paths, empty when it is valid. */
+const issuePaths = (scenario) => {
+  const result = validateWebScenario(scenario);
+  return result.valid ? [] : result.issues.map(({ path }) => path);
+};
+const catalogStep = { id: "products", operation: "extract", target: "testid:product", fields: { name: "testid:name", price: "testid:price" } };
+/** A scenario whose one named workflow runs `step` and expects `extraction` of it, with optional variants judged against the same step. */
+const readingCatalog = (step, extraction, variants) => ({
+  ...validScenario,
+  workflows: [{ id: "read-catalog", description: "Read the catalog.", recordingScript: [step], expected: { extracted: [{ step: step.id, ...extraction }] }, ...(variants ? { variants } : {}) }],
+});
+
+test("accepts every pagination mode, and next when mode is absent", () => {
+  const paginations = [
+    { next: "testid:next", maxPages: 3 },
+    { mode: "next", next: "testid:next", maxPages: 3 },
+    { mode: "loadMore", control: "testid:load-more", maxPages: 3 },
+    { mode: "scroll", maxScrolls: 10 },
+    { mode: "numbered", pages: "testid:pagination-page", maxPages: 3 },
+  ];
+  for (const pagination of paginations) {
+    assert.deepEqual(issuePaths(readingCatalog({ ...catalogStep, pagination }, { count: 23, pages: 3 })), [], JSON.stringify(pagination));
+  }
+  assert.deepEqual([...new Set(paginations.map(({ mode }) => mode ?? "next"))], [...scenarioExtractPaginationModes]);
+});
+
+test("rejects an unknown pagination mode, a key its mode does not take, and a missing control", () => {
+  const paginated = (pagination) => issuePaths(readingCatalog({ ...catalogStep, pagination }, { count: 23 }));
+  const at = (key) => `$.workflows[0].recordingScript[0].pagination.${key}`;
+  assert.deepEqual(paginated({ mode: "infinite", next: "testid:next", maxPages: 3 }), [at("mode")]);
+  // A key another mode owns is an extra key: load more has no `next`, next has no `control`, and scrolling is bounded by scrolls, not pages.
+  assert.deepEqual(paginated({ mode: "loadMore", control: "testid:load-more", next: "testid:next", maxPages: 3 }), [at("next")]);
+  assert.deepEqual(paginated({ next: "testid:next", maxPages: 3, control: "testid:load-more" }), [at("control")]);
+  assert.deepEqual(paginated({ mode: "scroll", maxScrolls: 10, maxPages: 3 }), [at("maxPages")]);
+  assert.deepEqual(paginated({ mode: "numbered", maxPages: 3 }), [at("pages")]);
+  assert.deepEqual(paginated({ mode: "scroll", maxScrolls: 0 }), [at("maxScrolls")]);
+});
+
+test("allows minItems on an extract step only, as a non-negative integer", () => {
+  const withStep = (step) => issuePaths({ ...validScenario, recordingScript: [...validScenario.recordingScript, step] });
+  assert.deepEqual(withStep({ ...catalogStep, minItems: 0 }), []);
+  assert.deepEqual(withStep({ ...catalogStep, minItems: 5 }), []);
+  assert.deepEqual(withStep({ id: "open", operation: "click", target: "testid:open", minItems: 0 }), ["$.recordingScript[3].minItems"]);
+  assert.deepEqual(withStep({ ...catalogStep, minItems: -1 }), ["$.recordingScript[3].minItems"]);
+  assert.deepEqual(withStep({ ...catalogStep, minItems: 1.5 }), ["$.recordingScript[3].minItems"]);
+});
+
+test("rejects optionalFields that are not fields of the step they name", () => {
+  assert.deepEqual(issuePaths(readingCatalog(catalogStep, { count: 2, optionalFields: ["price"] })), []);
+  assert.deepEqual(issuePaths(readingCatalog(catalogStep, { count: 2, optionalFields: ["price", "rating"] })), ["$.workflows[0].expected.extracted[0].optionalFields[1]"]);
+  // A variant is judged against the same step.
+  const hidden = { id: "no-ratings", description: "Ratings are hidden.", arm: { operation: "hide-ratings" }, expected: { extracted: [{ step: "products", count: 2, optionalFields: ["rating"] }] } };
+  assert.deepEqual(issuePaths(readingCatalog(catalogStep, { count: 2 }, [hidden])), ["$.workflows[0].variants[0].expected.extracted[0].optionalFields[0]"]);
+});
+
+test("rejects pages on a step that does not paginate", () => {
+  const paginated = { ...catalogStep, pagination: { next: "testid:next", maxPages: 3 } };
+  assert.deepEqual(issuePaths(readingCatalog(catalogStep, { count: 2, pages: 1 })), ["$.workflows[0].expected.extracted[0].pages"]);
+  assert.deepEqual(issuePaths(readingCatalog(paginated, { count: 2, pages: 1 })), []);
+  assert.deepEqual(issuePaths(readingCatalog(paginated, { count: 2, pages: 0 })), ["$.workflows[0].expected.extracted[0].pages"]);
+});
+
+/**
+ * D4: an extract step fails on an empty list unless it declares minItems: 0,
+ * so an expectation of no records against any other step can never be met.
+ */
+test("rejects an expectation of no records unless its step declares minItems: 0", () => {
+  const cleared = { id: "cleared", description: "The catalog is emptied.", arm: { operation: "clear" }, expected: { extracted: [{ step: "products", records: [] }] } };
+  const entries = ["$.workflows[0].expected.extracted[0]", "$.workflows[0].variants[0].expected.extracted[0]"];
+  const unmeetable = validateWebScenario(readingCatalog(catalogStep, { count: 0 }, [cleared]));
+  assert.deepEqual(unmeetable.valid ? [] : unmeetable.issues.map(({ path }) => path), entries);
+  assert.ok(!unmeetable.valid && unmeetable.issues.every(({ message }) => message.includes("minItems: 0")), JSON.stringify(unmeetable.issues));
+  // minItems: 1 is the default spelled out, so it is no better.
+  assert.deepEqual(issuePaths(readingCatalog({ ...catalogStep, minItems: 1 }, { count: 0 }, [cleared])), entries);
+  assert.deepEqual(issuePaths(readingCatalog({ ...catalogStep, minItems: 0 }, { count: 0 }, [cleared])), []);
+  // The primary workflow is held to the same rule: W06's no-results shape without its declaration.
+  const { minItems: _declared, ...undeclared } = catalogScenario.recordingScript[3];
+  assert.deepEqual(issuePaths({ ...catalogScenario, recordingScript: [...catalogScenario.recordingScript.slice(0, 3), undeclared] }), ["$.variants[0].expected.extracted[0]"]);
+});
+
+test("accepts null record values and a boolean truncated, and rejects anything else", () => {
+  const records = [{ name: "Lamp", price: null }, { name: "Desk lamp", price: "$12.00" }];
+  assert.deepEqual(issuePaths(readingCatalog(catalogStep, { count: 2, records, optionalFields: ["price"], truncated: false })), []);
+  assert.deepEqual(
+    issuePaths(readingCatalog(catalogStep, { count: 1, records: [{ name: 7, price: null }], truncated: "no" })),
+    ["$.workflows[0].expected.extracted[0].records[0].name", "$.workflows[0].expected.extracted[0].truncated"],
+  );
+});
+
+test("the JSON schema lists every pagination mode and the extraction fields the validator takes", () => {
+  const { step, pagination, extraction } = webScenarioJsonSchema.$defs;
+  assert.equal(step.properties.pagination.$ref, "#/$defs/pagination");
+  assert.deepEqual(pagination.oneOf.map((member) => member.properties.mode.const), [...scenarioExtractPaginationModes]);
+  // Only `next` may omit its mode (D14).
+  assert.deepEqual(pagination.oneOf.map((member) => member.required.includes("mode")), [false, true, true, true]);
+  // Every key a schema member lists is one the validator accepts for that mode.
+  for (const member of pagination.oneOf) {
+    const filled = Object.fromEntries(Object.entries(member.properties).map(([key, schema]) => [key, "const" in schema ? schema.const : schema.type === "integer" ? 3 : "testid:control"]));
+    assert.deepEqual(issuePaths(readingCatalog({ ...catalogStep, pagination: filled }, { count: 2 })), [], JSON.stringify(filled));
+  }
+  assert.deepEqual(step.properties.minItems, { type: "integer", minimum: 0 });
+  assert.deepEqual(extraction.properties.records.items.additionalProperties.type, ["string", "null"]);
+  assert.deepEqual(Object.keys(extraction.properties), ["step", "count", "records", "pages", "optionalFields", "truncated"]);
 });
 
 test("the JSON schema lists every step operation and failure category", () => {

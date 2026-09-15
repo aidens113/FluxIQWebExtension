@@ -1,6 +1,6 @@
 import type { ClientGatewayActionCommand, ClientGatewayRecordingEvent, ClientGatewayStateUpdate } from "@fluxiq/client-gateway-websocket";
 import type { AutomationStudioFailureRecord } from "fluxiq/automation-studio";
-import type { JsonObject } from "fluxiq/core";
+import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { webAutomationEventTypeForClientKind } from "../io/input-model";
 import { webAutomationActionTargetFromElement, webAutomationActionVisualTargetFromElement, type WebAutomationElementStateInput } from "../recording/web-state";
@@ -279,11 +279,30 @@ export function webAutomationActionResultPayload(result: WebAutomationActionResu
     element: result.element,
     visualTarget: result.visualTarget,
     snapshot: result.snapshot,
-    extracted: result.extracted,
+    extracted: secretSafeExtracted(result.extracted, result.element),
     resolution: result.resolution,
     startedAt: result.startedAt,
     finishedAt: result.finishedAt
   });
+}
+
+/**
+ * What a read took off the page, as it may leave the browser: carried for an
+ * ordinary element and never for one the sensitivity rule marks (D2).
+ *
+ * The page refuses every read of a sensitive control, so a sensitive element
+ * arriving here with a value is a page-side regression, and this is the wire's
+ * own check of it: the same descriptor and the same rule the comparison guard
+ * below asks. Unlike a comparison, a read value has no declaration that buys
+ * it back. `extracted` is the control's contents rather than prose about them,
+ * so there is nothing a producer could have withheld and still sent, and the
+ * validation's `redacted` flag and status are not consulted.
+ *
+ * The reach is the descriptor's, as it is for the comparison: a result with no
+ * `element` cannot be judged here and carries what the page sent.
+ */
+function secretSafeExtracted(extracted: JsonValue | undefined, element: unknown): JsonValue | undefined {
+  return isSensitiveElementDescriptor(element) ? undefined : extracted;
 }
 
 /**

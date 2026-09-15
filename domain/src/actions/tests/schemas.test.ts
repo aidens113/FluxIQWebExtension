@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationActionDefinitions } from "../schemas";
-import { WEB_AUTOMATION_ACTION_TYPES, WEB_AUTOMATION_EXTRACT_MAX_PAGES, type WebAutomationActionType } from "../types";
+import { WEB_AUTOMATION_ACTION_TYPES, WEB_AUTOMATION_EXTRACT_MAX_ITEMS, WEB_AUTOMATION_EXTRACT_MAX_PAGES, type WebAutomationActionType } from "../types";
 
 function definitionFor(actionType: WebAutomationActionType) {
   const definition = webAutomationActionDefinitions.find((candidate) => candidate.actionType === actionType);
@@ -87,6 +87,16 @@ test("web.dom.extract_list mirrors the scenario contract's extract step and boun
   assert.deepEqual(paginate.required, ["next", "maxPages"]);
   // The bound is the domain's, so no Flow can follow pages without end.
   assert.equal(((paginate.properties as JsonObject).maxPages as JsonObject).maximum, WEB_AUTOMATION_EXTRACT_MAX_PAGES);
+});
+
+test("web.dom.extract_list bounds the records it returns and lets a Flow say an empty list is an answer", () => {
+  const properties = objectAt(propertiesOf("web.dom.extract_list"), "extractList").properties as JsonObject;
+  // The record bound is the domain's: the one the parameter lift clamps to and the page mirrors.
+  assert.equal((properties.maxItems as JsonObject).maximum, WEB_AUTOMATION_EXTRACT_MAX_ITEMS);
+  // D4: absent, the minimum is 1, so 0 is the only way to accept an empty list and must be authorable.
+  const minItems = properties.minItems as JsonObject;
+  assert.equal(minItems.type, "integer");
+  assert.equal(minItems.minimum, 0);
 });
 
 test("web.dom.upload carries each file's name, type, and content", () => {

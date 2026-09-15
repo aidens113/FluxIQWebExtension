@@ -128,6 +128,25 @@ test("harness activations and extracted records come from Core's run detail", as
   const outcome = await executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
   assert.equal(outcome.harnessActivations, 2);
   assert.deepEqual(outcome.extracted, [[{ name: "Alpha" }, { name: "Beta" }]]);
+  assert.equal(outcome.extractedNonStringValues, 0);
+  assert.equal(outcome.actions[0]?.extractedNonStringValues, 0);
+});
+
+/** X0.7: this reader used to drop a value that is not a string silently, so a record missing a value it did carry could still match. */
+test("an extracted value that is not a string, or an entry that is not a record, is left out of the records and counted", async () => {
+  const extract = (order: number, extracted: unknown[]) => attempt({ attemptId: `attempt.${order}`, nodeId: `node.${order}`, order, definitionId: "web.dom.extract_list", metadata: { result: { extracted } } });
+  const { client } = control({}, { actionAttempts: [extract(0, [{ name: "Alpha", price: null }, "stray", { name: "Beta", tags: ["x"] }])] });
+  const outcome = await executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
+  assert.deepEqual(outcome.extracted, [[{ name: "Alpha" }, { name: "Beta" }]]);
+  assert.equal(outcome.extractedNonStringValues, 3);
+  assert.equal(outcome.actions[0]?.extractedNonStringValues, 3);
+
+  // The run's count is every attempt's, summed, and an attempt with no extracted list carries none.
+  const { client: several } = control({}, { actionAttempts: [extract(0, [{ name: "Alpha", price: 4 }]), attempt({ attemptId: "attempt.click", order: 1 }), extract(2, [null, { name: "Gamma" }])] });
+  const summed = await executeRecordedFlowRun(several, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
+  assert.deepEqual(summed.extracted, [[{ name: "Alpha" }], [{ name: "Gamma" }]]);
+  assert.deepEqual(summed.actions.map((action) => action.extractedNonStringValues), [1, undefined, 1]);
+  assert.equal(summed.extractedNonStringValues, 2);
 });
 
 test("a run with no durable action, or a detail for another run, is refused", async () => {

@@ -1,13 +1,17 @@
 import type { ExpectedExtraction } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../failure.js";
 
+/** One record: each field's value, or `null` where the item held no value for it, as `ExpectedExtraction` spells it. */
+type ExtractionRecord = Record<string, string | null>;
+
 /**
  * Asserts one extract step's records against every `expected.extracted` entry
  * naming it. `count` is the exact number of records; `records` is the complete
  * list, compared exactly and in order, so a longer or shorter result fails;
- * when both are given both must hold.
+ * when both are given both must hold. A `null` value matches only a field
+ * present with `null`, never a field left out of the record or an empty string.
  */
-export function assertExtraction(expected: readonly ExpectedExtraction[] | undefined, stepId: string, records: readonly Record<string, string>[]): void {
+export function assertExtraction(expected: readonly ExpectedExtraction[] | undefined, stepId: string, records: readonly ExtractionRecord[]): void {
   for (const entry of expected ?? []) {
     if (entry.step !== stepId) continue;
     if (entry.count !== undefined && records.length !== entry.count) {
@@ -24,7 +28,7 @@ export function assertExtraction(expected: readonly ExpectedExtraction[] | undef
   }
 }
 
-function sameRecord(expected: Record<string, string>, actual: Record<string, string>): boolean {
+function sameRecord(expected: ExtractionRecord, actual: ExtractionRecord): boolean {
   const keys = Object.keys(expected);
   return keys.length === Object.keys(actual).length && keys.every((key) => Object.hasOwn(actual, key) && actual[key] === expected[key]);
 }

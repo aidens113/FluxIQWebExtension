@@ -81,7 +81,8 @@ export const productCatalogManifest = createScenarioManifest({
         { id: "type-search-term", operation: "type", target: "testid:search-input", value: SEARCH_TERM },
         { id: "submit-search", operation: "press", target: "testid:search-input", value: "Enter" },
         { id: "search-applied", operation: "waitForState", target: "testid:search-summary", timeoutMs: 2000 },
-        { id: "extract-search-results", operation: "extract", target: "testid:product-card", fields: cardFields },
+        // The no-results variant expects an empty list, which an extract step refuses unless it declares minItems: 0 (D4).
+        { id: "extract-search-results", operation: "extract", target: "testid:product-card", fields: cardFields, minItems: 0 },
         { id: "search-results-extracted", operation: "checkpoint" },
       ],
       expected: {

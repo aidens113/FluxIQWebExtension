@@ -84,11 +84,20 @@ export function flowExtractionExpectation(expected: readonly ExpectedExtraction[
  * and a Flow built from it replays them as clicks, not as an extract node.
  * Only a Flow that holds an extract node is judged here, one attempt per
  * expected entry, so each page it read is compared rather than assumed.
+ *
+ * `nonStringValues` is the run's `extractedNonStringValues`: values its extract
+ * attempts carried that the records leave out. A judged run with any fails as
+ * that before its records are compared, because a record missing a value it
+ * did carry could otherwise match an expectation that omits the field. Counts
+ * only (D6).
  */
-export function assertFlowExtraction(expected: readonly ExpectedExtraction[] | undefined, extracted: readonly Array<Record<string, string>>[], actionTypes: ReadonlyMap<string, string>): void {
+export function assertFlowExtraction(expected: readonly ExpectedExtraction[] | undefined, extracted: readonly Array<Record<string, string>>[], actionTypes: ReadonlyMap<string, string>, nonStringValues: number): void {
   if (flowExtractionExpectation(expected, actionTypes) !== "judged") return;
   const entries = expected ?? [];
   if (!entries.length) return;
+  if (nonStringValues > 0) {
+    throw new RunnerFailure("runtime.behavior", `The Flow's extract attempts carried ${nonStringValues} field value(s) that are not strings`, { details: { nonStringValues } });
+  }
   if (entries.length !== extracted.length) {
     throw new RunnerFailure("runtime.behavior", `The Flow produced ${extracted.length} extraction result(s), expected ${entries.length}`, { details: { expectedCount: entries.length, actualCount: extracted.length } });
   }

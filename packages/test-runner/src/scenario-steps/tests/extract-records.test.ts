@@ -135,3 +135,23 @@ test("a followed next that never replaces the page fails the step instead of rea
   await assert.rejects(extractRecords(scope, paginatedStep(5, 150)), (error: unknown) => error instanceof RunnerFailure && error.category === "runtime.behavior" && /followed next from page 1, and that page was not replaced within 150 ms/u.test(error.message));
   assert.deepEqual(clicks, [0]);
 });
+
+/** D14: pagination is a `mode` union, and this reader follows `next` alone, so another mode must not read as a one-page list. */
+test("pagination is followed as next whether mode names it or is absent, and any other mode fails as fixture.invalid before a page is read", async () => {
+  const named = paginatedScope(catalogPages(), { latencyMs: 10 });
+  const step = paginatedStep(5);
+  const records = await extractRecords(named.scope, { ...step, pagination: { mode: "next", ...step.pagination } });
+  assert.deepEqual(records.map((record) => record.name), ["Kettle", "Lamp", "Mug", "Napkins", "Oven mitt"]);
+  assert.deepEqual(named.clicks, [0, 1]);
+  const others = [{ mode: "loadMore", control: "testid:more", maxPages: 3 }, { mode: "scroll", maxScrolls: 3 }, { mode: "numbered", pages: "testid:page", maxPages: 3 }] as const;
+  for (const pagination of others) {
+    const { scope, clicks } = paginatedScope(catalogPages(), { latencyMs: 10 });
+    const reads: string[] = [];
+    const watched: TargetScope = { ...scope, locator: (selector) => { reads.push(selector); return scope.locator(selector); } };
+    await assert.rejects(
+      extractRecords(watched, { id: "extract-all-pages", operation: "extract", target: "testid:card", fields: { name: "testid:name" }, pagination }),
+      (error: unknown) => error instanceof RunnerFailure && error.category === "fixture.invalid" && error.message.includes(pagination.mode),
+    );
+    assert.deepEqual({ reads, clicks }, { reads: [], clicks: [] }, pagination.mode);
+  }
+});
