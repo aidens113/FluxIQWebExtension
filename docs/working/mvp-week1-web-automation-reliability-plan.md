@@ -38,9 +38,9 @@ every dispatch and amendment is in
 settled ledger entries are in parts one to fifty of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
-**Repository state.** Downstream `dev` and `origin/dev` are `4d5c8a6`; Core
+**Repository state.** Downstream `dev` and `origin/dev` are `6e5d248`; Core
 `dev` and `origin/dev` are `19468b7`, `fluxiq` 0.4.0. Core is clean and unchanged.
-Facility diagnostics and parallel durable bench shards are an uncommitted downstream unit.
+The sharded failure diagnosis and focused W05 proof are an uncommitted downstream unit.
 
 **Settled this session** (ledger and archive):
 - **Core:** trace withholding; the late-message discard; W19 C1 and C2; the shared
@@ -107,8 +107,8 @@ Facility diagnostics and parallel durable bench shards are an uncommitted downst
   secret during setup. It was not repeated, hashed, or persisted in reports. The
   search procedure must resolve the value without output in future runs.
 
-**Focused gate:** W25 passed 3/3; implement durable facility diagnostics, their
-crash/resume proof, and deterministic parallel cell sharding before a fresh A/B pair.
+**Focused gate:** Sharded A/B invalidated at A 21/B 23 by B W05's typed Core
+readiness timeout; exact W05 recording cell then passed 3/3. Start a new A/B pair.
 
 **Exit criteria as they stand**
 

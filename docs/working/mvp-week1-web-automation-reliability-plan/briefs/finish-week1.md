@@ -6144,6 +6144,75 @@ Do not edit tracked files until terminal. Inspect bounded parent/child chain,
 seal, projection, evidence, discard, metric, lease, pin, and classification
 facts, then write only the report. Never commit or push.
 
+# Forty-third dispatch — isolate sharded-final B failure
+
+## bo-sharded-b-readiness-diagnosis — bounded finalized-bundle diagnosis
+
+**Report:** `reports/bo-sharded-b-readiness-diagnosis.md`
+
+**Read:** Current State; reports `at-w25-diagnosis.md` and
+`au-synthetic-failure-observability.md`.
+
+**Task:** Read only the failed B evaluation and its named finalized run bundle for
+`bench-mu1ya4i1-dd6087fc`, shard 000 cell 10. Determine the exact scenario,
+workflow, lane, repeat, stage, typed facility diagnostic, action/Flow/harness
+state, bounded timing, cleanup, and receipt/checkpoint integrity. Do not emit raw
+messages, page data, environment values, or secrets. Compare only the same cell's
+available peers in A/B and prior campaigns to distinguish product behavior from
+facility startup/readiness. Write the bounded report. No code, Lab run, commit,
+or push.
+
+## bp-product-catalog-recording-focused — three isolated reruns
+
+**Report:** `reports/bp-product-catalog-recording-focused.md`
+
+**Read:** report `bo-sharded-b-readiness-diagnosis.md` when present and the W05
+manifest only.
+
+**Task:** After both full campaigns are confirmed stopped, run the exact failed
+`product-catalog` / `paginated-extraction` recording-lane cell three times
+sequentially on isolated topology under only
+`F:\fxlab-runs\product-catalog-focused\a`, label
+`bp-product-catalog-recording-focused`, with env files disabled. No fixture secret
+is needed or may be inspected. Require ordinary readiness, finalized complete
+bundles, expected recording/oracle behavior, zero harness, and no residue. If a
+run fails, preserve and report it; do not start a new full campaign. Write report
+after all three observations. No code, commit, or push.
+
+# Forty-fourth dispatch — replacement sharded confirmation pair
+
+## bq-sharded-final-2-a — replacement complete campaign A
+
+**Report:** `reports/bq-sharded-final-2-a.md`
+
+**Read:** Current State; reports `bo-sharded-b-readiness-diagnosis.md`,
+`bp-product-catalog-recording-focused.md`, and `bl-sharded-live-smoke.md`.
+
+**Task:** After the supervisor supplies the new clean pushed pin, run Week 1 x3,
+isolated, failure evidence, `--shards 3 --jobs 2`, under only
+`F:\fxlab-runs\sharded-final-2\a`, label `bq-sharded-final-2-a`, env files
+disabled. Resolve the fixture secret non-outputting. Launch immediately with B;
+capture and resume only the exact logical ID. If any unexpected cell fails, alert
+the supervisor immediately and preserve state. Do not write tracked files until
+terminal. Then inspect bounded chain/seal/projection/evidence/discard/metric/
+lease/pin/classification facts and write only the report. Never commit or push.
+
+## br-sharded-final-2-b — replacement complete campaign B
+
+**Report:** `reports/br-sharded-final-2-b.md`
+
+**Read:** Current State; reports `bo-sharded-b-readiness-diagnosis.md`,
+`bp-product-catalog-recording-focused.md`, and `bl-sharded-live-smoke.md`.
+
+**Task:** After the supervisor supplies the new clean pushed pin, run Week 1 x3,
+isolated, failure evidence, `--shards 3 --jobs 2`, under only
+`F:\fxlab-runs\sharded-final-2\b`, label `br-sharded-final-2-b`, env files
+disabled. Resolve the fixture secret non-outputting. Launch immediately with A;
+capture and resume only the exact logical ID. If any unexpected cell fails, alert
+the supervisor immediately and preserve state. Do not write tracked files until
+terminal. Then inspect bounded chain/seal/projection/evidence/discard/metric/
+lease/pin/classification facts and write only the report. Never commit or push.
+
 ## bn-sharded-final-b — complete Week 1 campaign B
 
 **Report:** `reports/bn-sharded-final-b.md`
