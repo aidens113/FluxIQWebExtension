@@ -102,7 +102,7 @@ Facility diagnostics and parallel durable bench shards are an uncommitted downst
   leases, checkpoints, evaluations, and recovery; an authenticated parent merge
   fails closed. A machine-wide FIFO gate caps live cells at two and checks memory.
 - Supervisor `pnpm check`, `pnpm test` (799/799 runner tests), and `pnpm build` pass.
-  The remaining gate is a clean-pinned live two-shard kill/resume proof.
+  Live two-shard kill/resume passed 2/2 with 64.668 seconds of real cell overlap.
 - Process disclosure: a worker search displayed the fixture-only loopback test
   secret during setup. It was not repeated, hashed, or persisted in reports. The
   search procedure must resolve the value without output in future runs.
@@ -146,8 +146,8 @@ crash/resume proof, and deterministic parallel cell sharding before a fresh A/B 
   verbatim to the archive, and the index is regenerated with the structure
   baseline backed up.
 
-**Blocker for full benches:** none once the durable campaign implementation is
-committed and passes its live kill/resume proof. The C: NTFS warning remains a
+**Blocker for full benches:** none; the durable implementation is committed and
+its clean-pinned live kill/resume proof passed. The C: NTFS warning remains a
 machine risk, but campaign state is on F:, interruption is recoverable, and
 hash/compatibility checks fail closed on corruption.
 

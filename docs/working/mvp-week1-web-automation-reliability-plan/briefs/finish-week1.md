@@ -6124,6 +6124,44 @@ checkpoint chains, no live leases or staging residue, and passing evaluations.
 Record timings and whether the two child attempts overlapped. Write the report
 only after the resumed campaign is terminal. Do not edit code, commit, or push.
 
+# Forty-second dispatch — fresh sharded final-confirmation pair
+
+## bm-sharded-final-a — complete Week 1 campaign A
+
+**Report:** `reports/bm-sharded-final-a.md`
+
+**Read:** Current State; reports `bl-sharded-live-smoke.md`,
+`ah-final-repaired-comparison.md`, and `at-w25-diagnosis.md`.
+
+**Task:** After the supervisor supplies the new clean pushed pin, run the complete
+Week 1 corpus three times with isolated topology, failure evidence,
+`--shards 3 --jobs 2`, and only `F:\fxlab-runs\sharded-final\a` as the runs
+root. Use label `bm-sharded-final-a`, disable env files, and resolve the
+fixture-only auth secret directly into the child process without printing,
+persisting, hashing, or reporting it. Coordinate immediate launch with side B.
+Capture the logical ID and resume that exact campaign after any interruption.
+Do not edit tracked files until terminal. Inspect bounded parent/child chain,
+seal, projection, evidence, discard, metric, lease, pin, and classification
+facts, then write only the report. Never commit or push.
+
+## bn-sharded-final-b — complete Week 1 campaign B
+
+**Report:** `reports/bn-sharded-final-b.md`
+
+**Read:** Current State; reports `bl-sharded-live-smoke.md`,
+`ah-final-repaired-comparison.md`, and `at-w25-diagnosis.md`.
+
+**Task:** After the supervisor supplies the new clean pushed pin, run the complete
+Week 1 corpus three times with isolated topology, failure evidence,
+`--shards 3 --jobs 2`, and only `F:\fxlab-runs\sharded-final\b` as the runs
+root. Use label `bn-sharded-final-b`, disable env files, and resolve the
+fixture-only auth secret directly into the child process without printing,
+persisting, hashing, or reporting it. Coordinate immediate launch with side A.
+Capture the logical ID and resume that exact campaign after any interruption.
+Do not edit tracked files until terminal. Inspect bounded parent/child chain,
+seal, projection, evidence, discard, metric, lease, pin, and classification
+facts, then write only the report. Never commit or push.
+
 # Fortieth dispatch — focused W25 environment-missing gate
 
 ## as-w25-focused-a — isolated live reproduction
