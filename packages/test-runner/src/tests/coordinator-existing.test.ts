@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import type { ChildProcess, SpawnOptions } from "node:child_process";
+import { EventEmitter } from "node:events";
+import { mkdtemp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import os from "node:os";
 import path from "node:path";
+import { PassThrough } from "node:stream";
 import test from "node:test";
 import { removeRunOwnedTopologyState, startTopology } from "../coordinator.js";
 import { RunnerFailure } from "../failure.js";
@@ -137,3 +140,88 @@ test("isolated startup preserves its primary safe failure when cleanup also fail
     await assert.rejects(stat(path.join(runsDirectory, "failed-run")), error => typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("an isolated startup failure hands every process log to the caller before removing its run root, and Core serves the production build", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-isolated-startup-logs-"));
+  const repositoryRoot = path.join(root, "repository");
+  const fluxiqRepositoryRoot = path.join(root, "core");
+  // As `lab run` calls it: the isolated topology allocates below `.work`, and
+  // the shared Core web build lives below the user-visible runs directory.
+  const visibleRunsDirectory = path.join(root, "owned-runs");
+  const runsDirectory = path.join(visibleRunsDirectory, ".work");
+  const scenarioEntrypoint = path.join(repositoryRoot, "apps", "scenario-lab", "dist", "server.js");
+  const hostModulePath = path.join(repositoryRoot, "domain", "dist", "web-panel-host.mjs");
+  for (const file of [scenarioEntrypoint, hostModulePath, path.join(fluxiqRepositoryRoot, "apps", "web", "package.json")]) {
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, "", "utf8");
+  }
+  const buildRunsDirectories: string[] = [];
+  const buildDirectory = path.join(visibleRunsDirectory, ".core-web-build", "0".repeat(24), "b-0123456789ab");
+  const build = { key: "0".repeat(24), directory: buildDirectory, webDirectory: path.join(buildDirectory, "apps", "web"), nextExecutable: path.join(fluxiqRepositoryRoot, "next"), buildId: "build-1" };
+  const spawned: Array<{ command: string; args: readonly string[]; options: SpawnOptions }> = [];
+  const supervisor = new ProcessSupervisor((command, args, options) => {
+    spawned.push({ command, args, options });
+    const child = fakeChild();
+    setImmediate(() => child.stdout.write(command === build.nextExecutable ? "core output\n" : "scenario lab output\n"));
+    return child;
+  }, async child => exitChild(child as FakeChild, 0));
+  const readinessFailure = new RunnerFailure("process.startup", "Core did not become ready");
+  let copied: Record<string, string> | undefined;
+  try {
+    await assert.rejects(startTopology({
+      repositoryRoot, fluxiqRepositoryRoot, runsDirectory, coreWebBuildRunsDirectory: visibleRunsDirectory, runId: "failed-run", target: { mode: "isolated" }, prepareHost: false, scenarioEntrypoint, hostModulePath,
+      copyStartupFailureLogs: async logsDirectory => {
+        copied = {};
+        for (const name of (await readdir(logsDirectory)).sort()) copied[name] = await readFile(path.join(logsDirectory, name), "utf8");
+      },
+    }, supervisor, {
+      waitForHttp: async (_url, options) => {
+        if (options?.operationStage !== "core.health") return new Response("ok");
+        await new Promise(resolve => setTimeout(resolve, 50));
+        throw readinessFailure;
+      },
+      prepareCoreWebBuild: async buildOptions => { buildRunsDirectories.push(buildOptions.runsDirectory); return build; },
+    }), (error: unknown) => error === readinessFailure);
+
+    assert.deepEqual(buildRunsDirectories, [visibleRunsDirectory], "the Core web build is shared below the user-visible runs directory, not the per-run .work area");
+    assert.deepEqual(Object.keys(copied ?? {}), ["core.log", "scenario-lab.log"], "every process log reached the caller");
+    assert.match(copied?.["core.log"] ?? "", /\[stdout\] core output/u);
+    assert.match(copied?.["scenario-lab.log"] ?? "", /\[stdout\] scenario lab output/u);
+    await assert.rejects(stat(path.join(runsDirectory, "failed-run")), error => typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT");
+
+    const core = spawned.find(item => item.command === build.nextExecutable);
+    assert.ok(core, "Core was started");
+    assert.deepEqual(core.args, ["start", "--hostname", "127.0.0.1", "--port", core.options.env?.PORT], "Core serves the build on the run's own port");
+    assert.equal(core.options.cwd, build.webDirectory);
+    assert.equal(core.options.env?.FLUXIQ_ROOT, path.join(runsDirectory, "failed-run", "fluxiq-root"), "the per-run environment is unchanged");
+  } finally {
+    await supervisor.cleanup().catch(() => undefined);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("lab run sends a startup failure's process logs through the bundle's own log copy", async () => {
+  const source = await readFile(path.resolve(import.meta.dirname, "..", "..", "src", "run-scenario.ts"), "utf8");
+  assert.match(source, /topology = await startTopology\(\{[^\n]*\bcopyStartupFailureLogs: logsDirectory => copyProcessLogs\(bundle, logsDirectory\)/u);
+  assert.match(source, /topology = await startTopology\(\{[^\n]*\brunsDirectory: topologyRunsDirectory, coreWebBuildRunsDirectory: options\.runsDirectory,/u, "every mode shares one Core web build below lab run's own runs directory");
+  assert.match(source, /async function copyProcessLogs\(bundle: EvidenceBundle, logsDir: string\)/u, "the same redacting copy a run that started uses");
+});
+
+type FakeChild = ChildProcess & { stdout: PassThrough; stderr: PassThrough };
+
+function fakeChild(): FakeChild {
+  const child = new EventEmitter() as unknown as FakeChild;
+  Object.defineProperties(child, {
+    stdout: { value: new PassThrough() },
+    stderr: { value: new PassThrough() },
+    pid: { value: 4_242 },
+    exitCode: { value: null, writable: true, configurable: true },
+    signalCode: { value: null, writable: true, configurable: true },
+  });
+  return child;
+}
+
+function exitChild(child: FakeChild, code: number): void {
+  Object.defineProperty(child, "exitCode", { value: code, writable: true, configurable: true });
+  child.emit("exit", code, null);
+}

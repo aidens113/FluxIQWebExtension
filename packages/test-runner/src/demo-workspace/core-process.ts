@@ -5,8 +5,8 @@ import { access, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { allocateLoopbackPort } from "../allocation.js";
 import { WebPanelAuthSessionCache } from "../auth-session.js";
+import { coreWebServerProcessSpec, prepareCoreWebBuild } from "../core-web-build/index.js";
 import { ExistingFluxIQControlClient } from "../existing-fluxiq-control.js";
-import { prepareWebWorkspace } from "../coordinator.js";
 import { buildFluxIQEnvironment, webPanelHostModulePath } from "../environment.js";
 import { RunnerFailure } from "../failure.js";
 import { waitForHttp } from "../http-control/index.js";
@@ -67,7 +67,12 @@ export async function withPersistentDemoCore<T>(config: DemoWorkspaceConfigurati
       logPath: processLogPath(logsDirectory, `${sessionId}-domain-setup`),
     });
     await ensureDemoIdentity(config);
-    const nextExecutable = await prepareWebWorkspace(config.fluxiqRepositoryRoot, webWorkspaceDirectory);
+    const coreWebBuild = await prepareCoreWebBuild({
+      fluxiqRepositoryRoot: config.fluxiqRepositoryRoot,
+      runsDirectory: config.runsDirectory,
+      supervisor,
+      logPath: processLogPath(logsDirectory, `${sessionId}-core-web-build`),
+    });
     const scenarioPort = await allocateLoopbackPort();
     const allocation = {
       runId: sessionId,
@@ -83,19 +88,17 @@ export async function withPersistentDemoCore<T>(config: DemoWorkspaceConfigurati
       gatewayPort,
       controllerToken: randomBytes(32).toString("base64url"),
     };
-    supervisor.start({
+    supervisor.start(coreWebServerProcessSpec({
       name: "demo-fluxiq-web",
-      command: nextExecutable,
-      args: ["dev", "--turbopack", "--hostname", "127.0.0.1", "--port", String(webPort)],
-      cwd: webWorkspaceDirectory,
-      shell: process.platform === "win32",
+      build: coreWebBuild,
+      port: webPort,
       env: buildFluxIQEnvironment(allocation, {
         repositoryRoot: config.repositoryRoot,
         fluxiqRepositoryRoot: config.fluxiqRepositoryRoot,
         hostModulePath,
       }),
       logPath: processLogPath(logsDirectory, `${sessionId}-core`),
-    });
+    }));
     await waitForHttp(config.origin, { timeoutMs: 60_000 });
     await fetch(`${config.origin}/api/client-gateway/snapshot`, { signal: AbortSignal.timeout(30_000) }).catch(() => undefined);
     await waitForTcpGateway(gatewayPort, 60_000);
