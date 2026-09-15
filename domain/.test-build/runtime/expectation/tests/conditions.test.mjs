@@ -8,6 +8,7 @@ var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 // src/actions/types.ts
 var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
+var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
 var WEB_AUTOMATION_UPLOAD_MAX_FILE_BYTES = 1048576;
 var WEB_AUTOMATION_UPLOAD_MAX_TOTAL_BYTES = 4194304;
 var WEB_AUTOMATION_ACTION_TYPES = [
@@ -173,7 +174,9 @@ var extractListSchema = {
         maxPages: { type: "integer", label: "Maximum pages", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES }
       }
     },
-    maxItems: { type: "integer", label: "Maximum items", minimum: 1 }
+    maxItems: { type: "integer", label: "Maximum items", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_ITEMS },
+    // Default 1 where absent, so an empty list fails unless the Flow says empty is an answer.
+    minItems: { type: "integer", label: "Minimum items", minimum: 0 }
   }
 };
 var uploadSchema = {
@@ -926,8 +929,18 @@ function extractListRequestValue(value) {
   if (!request || item === void 0 || fields === void 0) return void 0;
   const paginate = request.paginate === void 0 ? void 0 : paginationValue(request.paginate);
   if (request.paginate !== void 0 && paginate === void 0) return void 0;
-  const maxItems = positiveInteger(request.maxItems);
-  return { item, fields, ...paginate !== void 0 ? { paginate } : {}, ...maxItems !== void 0 ? { maxItems } : {} };
+  const namedMaxItems = positiveInteger(request.maxItems);
+  const maxItems = namedMaxItems === void 0 ? void 0 : Math.min(namedMaxItems, WEB_AUTOMATION_EXTRACT_MAX_ITEMS);
+  const minItems = nonNegativeInteger(request.minItems);
+  if (request.minItems !== void 0 && minItems === void 0) return void 0;
+  if (minItems !== void 0 && minItems > (maxItems ?? WEB_AUTOMATION_EXTRACT_MAX_ITEMS)) return void 0;
+  return {
+    item,
+    fields,
+    ...paginate !== void 0 ? { paginate } : {},
+    ...maxItems !== void 0 ? { maxItems } : {},
+    ...minItems !== void 0 ? { minItems } : {}
+  };
 }
 function fieldMapValue(value) {
   const fields = jsonObject(value);

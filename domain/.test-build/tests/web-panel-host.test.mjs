@@ -32,6 +32,7 @@ var WEB_AUTOMATION_EVENTS = {
 // src/actions/types.ts
 var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
+var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
 var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.navigate",
   "web.dom.click",
@@ -195,7 +196,9 @@ var extractListSchema = {
         maxPages: { type: "integer", label: "Maximum pages", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES }
       }
     },
-    maxItems: { type: "integer", label: "Maximum items", minimum: 1 }
+    maxItems: { type: "integer", label: "Maximum items", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_ITEMS },
+    // Default 1 where absent, so an empty list fails unless the Flow says empty is an answer.
+    minItems: { type: "integer", label: "Minimum items", minimum: 0 }
   }
 };
 var uploadSchema = {
@@ -1817,11 +1820,16 @@ var webAutomationStateReducer = ({ event: event2, previousState }) => {
     if (event2.sourceId !== void 0) snapshotOptions.sourceId = event2.sourceId;
     next = mergeWebState(next, createWebAutomationStateFromSnapshot(payload.snapshot, snapshotOptions));
   }
-  if (payload.actionResult && typeof payload.actionResult === "object") next = withWebStateValue(next, "runtime.lastActionResult", payload.actionResult, source);
+  if (payload.actionResult && typeof payload.actionResult === "object") next = withWebStateValue(next, "runtime.lastActionResult", actionResultForState(payload.actionResult), source);
   if (payload.visualTarget && typeof payload.visualTarget === "object") next = withWebStateValue(next, "runtime.lastActionVisualTarget", payload.visualTarget, source);
   if (event2.eventType === "web.client.error") next = withWebStateValue(next, "runtime.lastError", payload, source);
   return next;
 };
+function actionResultForState(actionResult) {
+  if (Array.isArray(actionResult) || !("extracted" in actionResult)) return actionResult;
+  const { extracted: _withheld, ...rest } = actionResult;
+  return isSensitiveElementDescriptor(rest.element) ? rest : actionResult;
+}
 function isSnapshotPayload(value) {
   if (!value || typeof value !== "object") return false;
   const snapshot = value;

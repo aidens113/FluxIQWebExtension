@@ -47,6 +47,7 @@ var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 // src/actions/types.ts
 var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
+var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
 var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.navigate",
   "web.dom.click",
@@ -210,7 +211,9 @@ var extractListSchema = {
         maxPages: { type: "integer", label: "Maximum pages", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES }
       }
     },
-    maxItems: { type: "integer", label: "Maximum items", minimum: 1 }
+    maxItems: { type: "integer", label: "Maximum items", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_ITEMS },
+    // Default 1 where absent, so an empty list fails unless the Flow says empty is an answer.
+    minItems: { type: "integer", label: "Minimum items", minimum: 0 }
   }
 };
 var uploadSchema = {
@@ -690,11 +693,14 @@ function webAutomationActionResultPayload(result) {
     element: result.element,
     visualTarget: result.visualTarget,
     snapshot: result.snapshot,
-    extracted: result.extracted,
+    extracted: secretSafeExtracted(result.extracted, result.element),
     resolution: result.resolution,
     startedAt: result.startedAt,
     finishedAt: result.finishedAt
   });
+}
+function secretSafeExtracted(extracted, element) {
+  return isSensitiveElementDescriptor(element) ? void 0 : extracted;
 }
 function webAutomationSecretSafeValidation(validation, element) {
   if (validation === void 0 || validation.status === "none") return validation;
@@ -776,4 +782,38 @@ test("the declaration is not a way to keep a comparison on an ordinary control f
 test("a validation with no comparison to withhold is untouched, flag or no flag", () => {
   const skipped = webAutomationActionResultPayload(sensitiveResult({ status: "none", reason: "evidence-only" }));
   assert.deepEqual(skipped.validation, { status: "none", reason: "evidence-only" });
+});
+function extractResult(element, validation, extracted) {
+  return {
+    commandId: "command.extract",
+    actionType: "web.dom.extract",
+    status: "succeeded",
+    validation,
+    message: "Value extracted.",
+    url: "https://example.test/checkout",
+    element,
+    extracted,
+    startedAt: 100,
+    finishedAt: 140
+  };
+}
+var sensitiveElement = sensitiveResult({ status: "none", reason: "evidence-only" }).element;
+var readValidations = [
+  ["beside a validation with no comparison", { status: "none", reason: "evidence-only" }],
+  ["beside a declared redaction", { status: "passed", expected: redactedPhrasing, actual: redactedPhrasing, redacted: true }]
+];
+test("a sensitive element's extracted value never reaches the wire", () => {
+  for (const [what, validation] of readValidations) {
+    const payload = webAutomationActionResultPayload(extractResult(sensitiveElement, validation, producerSentinel));
+    assert.equal(JSON.stringify(payload).includes(producerSentinel), false, `${what}: the value read off the control left on the wire`);
+    assert.equal("extracted" in payload, false, `${what}: the field is absent, not emptied`);
+    assert.deepEqual(payload.element, sensitiveElement, `${what}: the descriptor still rides, so the next reader can ask the rule again`);
+  }
+});
+test("an ordinary element's extracted value is carried", () => {
+  const ordinaryElement = { tagName: "input", selector: 'input[name="username"]', inputType: "text", attributes: { autocomplete: "username" } };
+  for (const [what, validation] of readValidations) {
+    const payload = webAutomationActionResultPayload(extractResult(ordinaryElement, validation, "synthetic-control-text"));
+    assert.equal(payload.extracted, "synthetic-control-text", `${what}: redaction stays targeted, or no read returns anything`);
+  }
 });

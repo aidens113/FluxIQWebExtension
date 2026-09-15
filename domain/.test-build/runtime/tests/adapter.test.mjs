@@ -18,6 +18,7 @@ var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 // src/actions/types.ts
 var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
+var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
 var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.navigate",
   "web.dom.click",
@@ -186,7 +187,9 @@ var extractListSchema = {
         maxPages: { type: "integer", label: "Maximum pages", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES }
       }
     },
-    maxItems: { type: "integer", label: "Maximum items", minimum: 1 }
+    maxItems: { type: "integer", label: "Maximum items", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_ITEMS },
+    // Default 1 where absent, so an empty list fails unless the Flow says empty is an answer.
+    minItems: { type: "integer", label: "Minimum items", minimum: 0 }
   }
 };
 var uploadSchema = {
@@ -1463,7 +1466,8 @@ async function executeWebAutomationRuntimeCommand(fluxiq, command) {
   const status = result.status ?? (result.ok ? "succeeded" : "failed");
   const diagnostics = failureDiagnostics(status, result.payload);
   const clientResult = jsonObject(result.payload?.result);
-  const withholdComparison = isSensitiveElementDescriptor(clientResult?.element) && !producerDeclaredRedaction(clientResult?.validation);
+  const sensitiveTarget = isSensitiveElementDescriptor(clientResult?.element);
+  const withholdComparison = sensitiveTarget && !producerDeclaredRedaction(clientResult?.validation);
   const failure = commandFailure(status, outputId, message, result.failure, diagnostics?.evidenceDigest, withholdComparison);
   const runtimeResult = {
     commandId: command.commandId ?? `web.${Date.now()}`,
@@ -1479,7 +1483,10 @@ async function executeWebAutomationRuntimeCommand(fluxiq, command) {
       ...diagnostics ? { failureDiagnostics: diagnostics.report, ...diagnostics.evidence ? { failureEvidence: diagnostics.evidence } : {} } : {}
     })
   };
-  if (result.payload !== void 0) runtimeResult.payload = withholdComparison ? secretSafeDispatchPayload(result.payload) : result.payload;
+  if (result.payload !== void 0) {
+    const readable = sensitiveTarget ? dispatchPayloadWithoutExtracted(result.payload) : result.payload;
+    runtimeResult.payload = withholdComparison ? secretSafeDispatchPayload(readable) : readable;
+  }
   const target = outputTargetFromPayload(payload);
   if (target) runtimeResult.target = target;
   return runtimeResult;
@@ -1556,6 +1563,12 @@ function producerDeclaredRedaction(validation) {
   if (!isProducerRedactedComparison(validation)) return false;
   const { expected, actual } = validation;
   return expected !== WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT && actual !== WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT;
+}
+function dispatchPayloadWithoutExtracted(payload) {
+  const actionResult = jsonObject(payload.result);
+  if (!actionResult || !("extracted" in actionResult)) return payload;
+  const { extracted: _withheld, ...rest } = actionResult;
+  return { ...payload, result: rest };
 }
 function secretSafeDispatchPayload(payload) {
   const actionResult = jsonObject(payload.result);

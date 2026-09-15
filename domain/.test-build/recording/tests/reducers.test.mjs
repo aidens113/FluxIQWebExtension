@@ -2,6 +2,28 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+// src/constants.ts
+var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
+var WEB_AUTOMATION_SCHEMA_VERSION = "0.1";
+var WEB_AUTOMATION_EVENTS = {
+  clientReady: "web.client.ready",
+  tabStateChanged: "web.tab.state_changed",
+  pageNavigated: "web.page.navigated",
+  elementClicked: "web.element.clicked",
+  elementInputChanged: "web.element.input_changed",
+  elementChanged: "web.element.changed",
+  formSubmitted: "web.form.submitted",
+  elementFocused: "web.element.focused",
+  elementBlurred: "web.element.blurred",
+  keyboardPressed: "web.keyboard.pressed",
+  mouseWheel: "web.mouse.wheel",
+  scrollChanged: "web.scroll.changed",
+  domMutated: "web.dom.mutated",
+  snapshotCaptured: "web.snapshot.captured",
+  actionExecuted: "web.action.executed",
+  clientError: "web.client.error"
+};
+
 // src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
 var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
@@ -33,10 +55,6 @@ function isSensitiveElementDescriptor(descriptor) {
 function stringField(value) {
   return typeof value === "string" ? value : void 0;
 }
-
-// src/constants.ts
-var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
-var WEB_AUTOMATION_SCHEMA_VERSION = "0.1";
 
 // src/recording/state.ts
 var WEB_AUTOMATION_STATE_NAMESPACE = "web";
@@ -845,11 +863,16 @@ var webAutomationStateReducer = ({ event, previousState }) => {
     if (event.sourceId !== void 0) snapshotOptions.sourceId = event.sourceId;
     next = mergeWebState(next, createWebAutomationStateFromSnapshot(payload.snapshot, snapshotOptions));
   }
-  if (payload.actionResult && typeof payload.actionResult === "object") next = withWebStateValue(next, "runtime.lastActionResult", payload.actionResult, source);
+  if (payload.actionResult && typeof payload.actionResult === "object") next = withWebStateValue(next, "runtime.lastActionResult", actionResultForState(payload.actionResult), source);
   if (payload.visualTarget && typeof payload.visualTarget === "object") next = withWebStateValue(next, "runtime.lastActionVisualTarget", payload.visualTarget, source);
   if (event.eventType === "web.client.error") next = withWebStateValue(next, "runtime.lastError", payload, source);
   return next;
 };
+function actionResultForState(actionResult) {
+  if (Array.isArray(actionResult) || !("extracted" in actionResult)) return actionResult;
+  const { extracted: _withheld, ...rest } = actionResult;
+  return isSensitiveElementDescriptor(rest.element) ? rest : actionResult;
+}
 function isSnapshotPayload(value) {
   if (!value || typeof value !== "object") return false;
   const snapshot = value;
@@ -944,4 +967,41 @@ test("the shared rule adds two signals the reducer's own copy did not read", () 
   ]) {
     assert.equal(formValue(reduce(element)), void 0, `${label}: the value was written to form state`);
   }
+});
+function reduceActionResult(actionResult) {
+  return webAutomationStateReducer({
+    event: {
+      recordingId: "recording.test",
+      domainId: "web-automation",
+      eventType: WEB_AUTOMATION_EVENTS.actionExecuted,
+      timestamp: 42,
+      sourceId: "tab:1",
+      payload: { url: "https://example.test/checkout", title: "Checkout", actionResult }
+    },
+    previousState: createWebAutomationInitialState(42)
+  });
+}
+function lastActionResult(state) {
+  return state.namespaces.web?.values["runtime.lastActionResult"]?.value;
+}
+var extractResult = (element) => ({
+  commandId: "command.extract",
+  actionType: "web.dom.extract",
+  status: "succeeded",
+  validation: { status: "none", reason: "evidence-only" },
+  element,
+  extracted: SENT_VALUE,
+  startedAt: 40,
+  finishedAt: 42
+});
+test("a sensitive element's action result loses only its extracted value", () => {
+  const sensitive = extractResult(field({ inputType: "password" }));
+  const state = reduceActionResult(sensitive);
+  const { extracted: _withheld, ...everythingElse } = sensitive;
+  assert.deepEqual(lastActionResult(state), everythingElse, "the status, element and validation still land");
+  assert.equal(JSON.stringify(state).includes(SENT_VALUE), false, "the value survived somewhere in the snapshot");
+});
+test("an ordinary element's action result keeps its extracted value", () => {
+  const ordinary = extractResult(field({ inputType: "text", attributes: { name: "coupon" } }));
+  assert.deepEqual(lastActionResult(reduceActionResult(ordinary)), ordinary);
 });

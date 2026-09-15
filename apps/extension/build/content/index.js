@@ -274,6 +274,7 @@
   // ../../domain/src/actions/types.ts
   var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
   var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
+  var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
   var WEB_AUTOMATION_ACTION_TYPES = [
     "web.browser.navigate",
     "web.dom.click",
@@ -437,7 +438,9 @@
           maxPages: { type: "integer", label: "Maximum pages", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES }
         }
       },
-      maxItems: { type: "integer", label: "Maximum items", minimum: 1 }
+      maxItems: { type: "integer", label: "Maximum items", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_ITEMS },
+      // Default 1 where absent, so an empty list fails unless the Flow says empty is an answer.
+      minItems: { type: "integer", label: "Minimum items", minimum: 0 }
     }
   };
   var uploadSchema = {
@@ -3158,11 +3161,21 @@
   // src/content/actions/extract.ts
   function extractAction(action, deps, startedAt) {
     const { element, resolution } = deps.resolveTarget(action);
-    const extracted = deps.extractElement(element, action.options);
+    const read = deps.extractElement(element, action.options);
+    if (!read.ok) {
+      return deps.rejected(
+        action,
+        startedAt,
+        read.refusal,
+        "a readable element that is not a sensitive control",
+        "the target is a sensitive control, so its value is never read",
+        { element: deps.describeElement(element), resolution }
+      );
+    }
     return deps.success(action, startedAt, "Value extracted.", { status: "none", reason: "evidence-only" }, {
       element: deps.describeElement(element),
       snapshot: deps.captureSnapshot(),
-      extracted,
+      extracted: read.value,
       resolution
     });
   }
@@ -3649,19 +3662,34 @@
     const request = action.extractList;
     if (!request) return deps.failure(action, new Error("web.dom.extract_list needs extractList parameters."), startedAt);
     try {
-      const outcome = await deps.extractList(request);
-      return deps.success(action, startedAt, "List extracted.", validationFor(outcome, Object.keys(request.fields)), {
-        extracted: outcome.records,
-        snapshot: deps.captureSnapshot()
-      });
+      const outcome = await deps.extractList(request, { timeoutMs: action.timeoutMs });
+      const minItems = minimumItems(request.minItems);
+      const expected = `at least ${count2(minItems, "record")}, each carrying ${Object.keys(request.fields).join(", ")}`;
+      const evidence = { extracted: outcome.records, snapshot: deps.captureSnapshot() };
+      if (outcome.timedOut) {
+        return deps.timedOut(action, startedAt, `Timed out extracting the list after ${count2(outcome.pagesRead, "page")}.`, {
+          status: "failed",
+          expected,
+          actual: `${readSummary(outcome)}; the time ran out before the list ended`
+        }, evidence);
+      }
+      return deps.success(action, startedAt, "List extracted.", validationFor(outcome, minItems, expected), evidence);
     } catch (error) {
       return deps.failure(action, error, startedAt);
     }
   }
-  function validationFor(outcome, fieldNames) {
-    const expected = `every record carries ${fieldNames.join(", ")}`;
-    const read = `${count2(outcome.records.length, "record")} from ${count2(outcome.pagesRead, "page")}${outcome.truncated ? ", truncated" : ""}`;
-    return outcome.missingFields.length === 0 ? { status: "passed", expected, actual: `${read}; every declared field present` } : { status: "failed", expected, actual: `${read}; missing from some records: ${outcome.missingFields.join(", ")}` };
+  function minimumItems(requested) {
+    return typeof requested === "number" && Number.isFinite(requested) ? Math.max(0, Math.trunc(requested)) : 1;
+  }
+  function validationFor(outcome, minItems, expected) {
+    const shortfalls = [
+      ...outcome.records.length < minItems ? [`fewer than the ${minItems} required`] : [],
+      ...outcome.missingFields.length > 0 ? [`missing from some records: ${outcome.missingFields.join(", ")}`] : []
+    ];
+    return shortfalls.length === 0 ? { status: "passed", expected, actual: `${readSummary(outcome)}; every declared field present` } : { status: "failed", expected, actual: `${readSummary(outcome)}; ${shortfalls.join("; ")}` };
+  }
+  function readSummary(outcome) {
+    return `${count2(outcome.records.length, "record")} from ${count2(outcome.pagesRead, "page")}${outcome.truncated ? ", truncated" : ""}`;
   }
   function count2(value, noun) {
     return `${value} ${noun}${value === 1 ? "" : "s"}`;
@@ -4036,11 +4064,45 @@
 
   // src/content/action-runtime/extract.ts
   function extractElement(element, options) {
+    if (isSensitiveFormControl(element)) return { ok: false, refusal: "sensitive_value" };
     const mode = options?.mode;
-    if (mode === "html") return element.innerHTML;
-    if (mode === "attribute" && typeof options?.attribute === "string") return element.getAttribute(options.attribute) ?? "";
-    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) return element.value;
-    return element.textContent?.replace(/\s+/g, " ").trim() ?? "";
+    if (mode === "html") return { ok: true, value: htmlWithoutSensitiveContent(element) };
+    if (mode === "attribute" && typeof options?.attribute === "string") return { ok: true, value: element.getAttribute(options.attribute) ?? "" };
+    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) {
+      return { ok: true, value: element.value };
+    }
+    return { ok: true, value: readableText(element) };
+  }
+  function readableText(element) {
+    const text3 = hasSensitiveDescendant(element) ? textOutsideSensitiveControls(element) : element.textContent ?? "";
+    return text3.replace(/\s+/gu, " ").trim();
+  }
+  function hasSensitiveDescendant(root) {
+    for (const descendant of root.querySelectorAll("*")) {
+      if (isSensitiveFormControl(descendant)) return true;
+    }
+    return false;
+  }
+  function textOutsideSensitiveControls(root) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
+        return isSensitiveFormControl(node) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP;
+      }
+    });
+    let text3 = "";
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) text3 += node.nodeValue ?? "";
+    return text3;
+  }
+  function htmlWithoutSensitiveContent(element) {
+    if (!hasSensitiveDescendant(element)) return element.innerHTML;
+    const copy = document.implementation.createHTMLDocument("").importNode(element, true);
+    for (const descendant of copy.querySelectorAll("*")) {
+      if (!isSensitiveFormControl(descendant)) continue;
+      descendant.removeAttribute("value");
+      descendant.replaceChildren();
+    }
+    return copy.innerHTML;
   }
 
   // src/content/action-runtime/scroll-element-into-view.ts
@@ -4579,6 +4641,7 @@
 
   // src/content/action-runtime/list-extraction.ts
   var EXTRACT_MAX_PAGES = 50;
+  var EXTRACT_MAX_ITEMS = 1e3;
   var LIST_CHANGE_TIMEOUT_MS = 1e4;
   var LIST_CHANGE_POLL_MS = 25;
   var COLUMN_PREFIX = "column:";
@@ -4599,25 +4662,30 @@
       ...attribute === void 0 ? {} : { attribute }
     };
   }
-  async function extractList(request) {
+  async function extractList(request, options = {}) {
     const item = request.item.trim();
     if (!item) throw new Error("An extract_list request needs an item selector.");
     const fields = Object.entries(request.fields).map(([name, spec]) => [name, parseExtractField(spec)]);
     if (fields.length === 0) throw new Error("An extract_list request names no fields.");
     const maxPages = request.paginate ? Math.min(Math.max(1, Math.trunc(request.paginate.maxPages)), EXTRACT_MAX_PAGES) : 1;
-    const maxItems = request.maxItems === void 0 ? void 0 : Math.max(0, Math.trunc(request.maxItems));
+    const maxItems = Math.min(Math.max(0, Math.trunc(request.maxItems ?? EXTRACT_MAX_ITEMS)), EXTRACT_MAX_ITEMS);
+    const deadline = deadlineFor(options.timeoutMs);
     const records = [];
     const missing = /* @__PURE__ */ new Set();
+    const read = /* @__PURE__ */ new Set();
     let pagesRead = 0;
     let truncated = false;
+    let timedOut = false;
     for (; ; ) {
       const items = Array.from(document.querySelectorAll(item));
       pagesRead += 1;
       for (const element of items) {
-        if (maxItems !== void 0 && records.length >= maxItems) {
+        if (read.has(element)) continue;
+        if (records.length >= maxItems) {
           truncated = true;
           break;
         }
+        read.add(element);
         records.push(readRecord(element, fields, missing));
       }
       if (truncated) break;
@@ -4629,30 +4697,43 @@
         break;
       }
       if (!(next instanceof HTMLElement)) throw new Error(`The pagination control ${JSON.stringify(paginate.next)} is not a clickable element.`);
+      if (deadline !== void 0 && Date.now() >= deadline) {
+        timedOut = true;
+        break;
+      }
       next.click();
-      if (!await waitForListChange(item, items)) {
+      const change = await waitForListChange(item, items, deadline);
+      if (change === "timed_out") {
+        timedOut = true;
+        break;
+      }
+      if (change === "unchanged") {
         throw new Error(`The list did not change within ${LIST_CHANGE_TIMEOUT_MS}ms of following ${JSON.stringify(paginate.next)} to page ${pagesRead + 1}.`);
       }
     }
-    return { records, pagesRead, truncated, missingFields: [...missing].sort() };
+    return { records, pagesRead, truncated, timedOut, missingFields: [...missing].sort() };
+  }
+  function deadlineFor(timeoutMs) {
+    return typeof timeoutMs === "number" && Number.isFinite(timeoutMs) && timeoutMs > 0 ? Date.now() + timeoutMs : void 0;
   }
   function readRecord(item, fields, missing) {
     const record = {};
     for (const [name, field] of fields) {
-      const value = readField(item, field);
+      const value = readField(item, name, field);
       if (value === void 0) missing.add(name);
       else record[name] = value;
     }
     return record;
   }
-  function readField(item, field) {
-    if (field.kind === "column") return readColumn(item, field.header);
+  function readField(item, name, field) {
+    if (field.kind === "column") return readColumn(item, name, field.header);
     const element = field.selector ? item.querySelector(field.selector) : item;
     if (!element) return void 0;
+    if (isSensitiveFormControl(element)) throw sensitiveFieldRefusal(name);
     if (field.attribute !== void 0) return element.getAttribute(field.attribute) ?? void 0;
-    return normalizeText4(element.textContent ?? "");
+    return readableText(element);
   }
-  function readColumn(item, header) {
+  function readColumn(item, name, header) {
     const row = item;
     const table = row.tagName === "TR" ? row.closest("table") : null;
     if (!table) throw new Error("A column field needs extract_list items that are table rows.");
@@ -4660,15 +4741,30 @@
     const index = headerRow ? Array.from(headerRow.cells).findIndex((cell2) => normalizeText4(cell2.textContent ?? "") === header) : -1;
     if (index < 0) return void 0;
     const cell = row.cells[index];
-    return cell ? normalizeText4(cell.textContent ?? "") : void 0;
+    if (!cell) return void 0;
+    if (isSensitiveFormControl(cell)) throw sensitiveFieldRefusal(name);
+    return readableText(cell);
   }
-  async function waitForListChange(itemSelector, previous2) {
-    const deadline = Date.now() + LIST_CHANGE_TIMEOUT_MS;
+  function sensitiveFieldRefusal(name) {
+    const failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, {
+      expected: `field ${name} reads no sensitive control`,
+      actual: `sensitive_value: field ${name} resolved to a sensitive control, so its value is never read`
+    });
+    return Object.assign(
+      new Error(`The extract_list field ${JSON.stringify(name)} resolved to a sensitive control, so its value is never read.`),
+      { failure }
+    );
+  }
+  async function waitForListChange(itemSelector, previous2, actionDeadline) {
+    const changeDeadline = Date.now() + LIST_CHANGE_TIMEOUT_MS;
+    const commandEndsFirst = actionDeadline !== void 0 && actionDeadline <= changeDeadline;
+    const deadline = commandEndsFirst ? actionDeadline : changeDeadline;
     while (!listChanged(itemSelector, previous2)) {
-      if (Date.now() >= deadline) return false;
-      await delay2(LIST_CHANGE_POLL_MS);
+      const now = Date.now();
+      if (now >= deadline) return commandEndsFirst ? "timed_out" : "unchanged";
+      await delay2(Math.min(LIST_CHANGE_POLL_MS, deadline - now));
     }
-    return true;
+    return "changed";
   }
   function listChanged(itemSelector, previous2) {
     const current = document.querySelectorAll(itemSelector);
@@ -5103,13 +5199,17 @@
     return action.actionType === "web.dom.assert" ? WEB_AUTOMATION_FAILURE_CODES.STATE_MISMATCH : WEB_AUTOMATION_FAILURE_CODES.OUTPUT_NOT_OBSERVED;
   }
   function authGateFailure(action, failure) {
-    const missing = action.selector ? selectorMatchesNothing(action.selector) : false;
+    const sought = soughtSelector(action);
+    const missing = sought ? selectorMatchesNothing(sought) : false;
     if (!missing && !namedUrlClaim(action) || !signInGatePresent()) return void 0;
     const actual = missing ? failure.actual ?? "nothing matched the target" : "the page is not at the URL the Flow claimed";
     return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.AUTH_REQUIRED, {
-      expected: failure.expected ?? (missing ? `an element matching ${action.selector}` : "the page URL the Flow claimed"),
+      expected: failure.expected ?? (missing ? `an element matching ${sought}` : "the page URL the Flow claimed"),
       actual: `${actual}; the document is a sign-in gate, so the session has probably expired`
     });
+  }
+  function soughtSelector(action) {
+    return action.actionType === "web.dom.extract_list" ? action.extractList?.item : action.selector;
   }
   function namedUrlClaim(action) {
     return action.actionType === "web.dom.assert" && action.assert?.kind === "url" && Boolean(action.assert.expected);

@@ -4,6 +4,7 @@ import test from "node:test";
 
 // src/actions/types.ts
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
+var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
 var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.navigate",
   "web.dom.click",
@@ -175,7 +176,9 @@ var extractListSchema = {
         maxPages: { type: "integer", label: "Maximum pages", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES }
       }
     },
-    maxItems: { type: "integer", label: "Maximum items", minimum: 1 }
+    maxItems: { type: "integer", label: "Maximum items", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_ITEMS },
+    // Default 1 where absent, so an empty list fails unless the Flow says empty is an answer.
+    minItems: { type: "integer", label: "Minimum items", minimum: 0 }
   }
 };
 var uploadSchema = {

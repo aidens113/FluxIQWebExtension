@@ -52,6 +52,7 @@ var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 // src/actions/types.ts
 var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
+var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
 var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.navigate",
   "web.dom.click",
@@ -220,7 +221,9 @@ var extractListSchema = {
         maxPages: { type: "integer", label: "Maximum pages", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES }
       }
     },
-    maxItems: { type: "integer", label: "Maximum items", minimum: 1 }
+    maxItems: { type: "integer", label: "Maximum items", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_ITEMS },
+    // Default 1 where absent, so an empty list fails unless the Flow says empty is an answer.
+    minItems: { type: "integer", label: "Minimum items", minimum: 0 }
   }
 };
 var uploadSchema = {
@@ -1458,7 +1461,8 @@ async function executeWebAutomationRuntimeCommand(fluxiq, command) {
   const status = result.status ?? (result.ok ? "succeeded" : "failed");
   const diagnostics = failureDiagnostics(status, result.payload);
   const clientResult = jsonObject(result.payload?.result);
-  const withholdComparison = isSensitiveElementDescriptor(clientResult?.element) && !producerDeclaredRedaction(clientResult?.validation);
+  const sensitiveTarget = isSensitiveElementDescriptor(clientResult?.element);
+  const withholdComparison = sensitiveTarget && !producerDeclaredRedaction(clientResult?.validation);
   const failure = commandFailure(status, outputId, message, result.failure, diagnostics?.evidenceDigest, withholdComparison);
   const runtimeResult = {
     commandId: command.commandId ?? `web.${Date.now()}`,
@@ -1474,7 +1478,10 @@ async function executeWebAutomationRuntimeCommand(fluxiq, command) {
       ...diagnostics ? { failureDiagnostics: diagnostics.report, ...diagnostics.evidence ? { failureEvidence: diagnostics.evidence } : {} } : {}
     })
   };
-  if (result.payload !== void 0) runtimeResult.payload = withholdComparison ? secretSafeDispatchPayload(result.payload) : result.payload;
+  if (result.payload !== void 0) {
+    const readable = sensitiveTarget ? dispatchPayloadWithoutExtracted(result.payload) : result.payload;
+    runtimeResult.payload = withholdComparison ? secretSafeDispatchPayload(readable) : readable;
+  }
   const target = outputTargetFromPayload(payload);
   if (target) runtimeResult.target = target;
   return runtimeResult;
@@ -1552,6 +1559,12 @@ function producerDeclaredRedaction(validation) {
   const { expected, actual } = validation;
   return expected !== WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT && actual !== WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT;
 }
+function dispatchPayloadWithoutExtracted(payload) {
+  const actionResult = jsonObject(payload.result);
+  if (!actionResult || !("extracted" in actionResult)) return payload;
+  const { extracted: _withheld, ...rest } = actionResult;
+  return { ...payload, result: rest };
+}
 function secretSafeDispatchPayload(payload) {
   const actionResult = jsonObject(payload.result);
   const validation = jsonObject(actionResult?.validation);
@@ -1626,7 +1639,7 @@ var typeCommand = {
   outputId: "web.dom.type",
   parameters: { selector: '[data-testid="payment"]' }
 };
-async function runCommand(result) {
+async function runCommand(result, command = typeCommand) {
   const fluxiq = {
     programs: {
       clientGateway: {
@@ -1644,7 +1657,7 @@ async function runCommand(result) {
     }
   };
   const adapter = createWebAutomationRuntimeAdapter({ fluxiq });
-  return await adapter.execute(typeCommand, {});
+  return await adapter.execute(command, {});
 }
 var producerSentinel = "SENTINEL-VALUE-A-PRODUCER-SHOULD-HAVE-WITHHELD";
 function sensitivePayload(overrides = {}) {
@@ -1818,3 +1831,41 @@ for (const [client, withheld] of withholdingClients) {
     });
   }
 }
+var extractCommand = {
+  kind: "execute_action",
+  commandId: "command.extract",
+  outputId: "web.dom.extract",
+  parameters: { selector: '[data-testid="payment"]' }
+};
+var readValidations = [
+  ["a validation with no comparison", { status: "none", reason: "evidence-only" }],
+  ["a declared redaction", { status: "passed", expected: redactedPhrasing, actual: redactedPhrasing, redacted: true }]
+];
+for (const [what, validation] of readValidations) {
+  test(`a sensitive element's extracted value is dropped from the runtime result, beside ${what}`, async () => {
+    const result = await runCommand({
+      commandId: "client.command.extract",
+      status: "succeeded",
+      message: "Value extracted.",
+      payload: sensitivePayload({ actionType: "web.dom.extract", validation, extracted: producerSentinel })
+    }, extractCommand);
+    assert.equal(JSON.stringify(result).includes(producerSentinel), false, "nothing read off a sensitive control reaches an attempt trace");
+    const action = result.payload.result;
+    assert.equal("extracted" in action, false, "the field is absent, not emptied");
+    assert.equal(action.element !== void 0, true, "the descriptor the guard read still rides with the result");
+  });
+}
+test("an ordinary element's extracted value reaches the runtime result", async () => {
+  const result = await runCommand({
+    commandId: "client.command.extract-ordinary",
+    status: "succeeded",
+    message: "Value extracted.",
+    payload: sensitivePayload({
+      actionType: "web.dom.extract",
+      element: { selector: 'input[name="username"]', tagName: "input", inputType: "text", attributes: { autocomplete: "username" } },
+      validation: { status: "none", reason: "evidence-only" },
+      extracted: "synthetic-control-text"
+    })
+  }, extractCommand);
+  assert.equal(result.payload.result.extracted, "synthetic-control-text", "redaction stays targeted, or no read returns anything");
+});

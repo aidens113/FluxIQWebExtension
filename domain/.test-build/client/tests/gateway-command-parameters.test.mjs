@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 // src/actions/types.ts
 var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
+var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
 var WEB_AUTOMATION_UPLOAD_MAX_FILE_BYTES = 1048576;
 var WEB_AUTOMATION_UPLOAD_MAX_TOTAL_BYTES = 4194304;
 var WEB_AUTOMATION_ACTION_TYPES = [
@@ -266,7 +267,9 @@ var extractListSchema = {
         maxPages: { type: "integer", label: "Maximum pages", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES }
       }
     },
-    maxItems: { type: "integer", label: "Maximum items", minimum: 1 }
+    maxItems: { type: "integer", label: "Maximum items", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_ITEMS },
+    // Default 1 where absent, so an empty list fails unless the Flow says empty is an answer.
+    minItems: { type: "integer", label: "Minimum items", minimum: 0 }
   }
 };
 var uploadSchema = {
@@ -858,8 +861,18 @@ function extractListRequestValue(value) {
   if (!request || item === void 0 || fields === void 0) return void 0;
   const paginate = request.paginate === void 0 ? void 0 : paginationValue(request.paginate);
   if (request.paginate !== void 0 && paginate === void 0) return void 0;
-  const maxItems = positiveInteger(request.maxItems);
-  return { item, fields, ...paginate !== void 0 ? { paginate } : {}, ...maxItems !== void 0 ? { maxItems } : {} };
+  const namedMaxItems = positiveInteger(request.maxItems);
+  const maxItems = namedMaxItems === void 0 ? void 0 : Math.min(namedMaxItems, WEB_AUTOMATION_EXTRACT_MAX_ITEMS);
+  const minItems = nonNegativeInteger(request.minItems);
+  if (request.minItems !== void 0 && minItems === void 0) return void 0;
+  if (minItems !== void 0 && minItems > (maxItems ?? WEB_AUTOMATION_EXTRACT_MAX_ITEMS)) return void 0;
+  return {
+    item,
+    fields,
+    ...paginate !== void 0 ? { paginate } : {},
+    ...maxItems !== void 0 ? { maxItems } : {},
+    ...minItems !== void 0 ? { minItems } : {}
+  };
 }
 function fieldMapValue(value) {
   const fields = jsonObject(value);
@@ -1110,6 +1123,13 @@ refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: {} } }
 refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "" } } }, ["extractList"], "a field naming no selector would extract a column of nothing");
 refusedWhole("web.dom.extract_list", { extractList: { fields: { title: "h3" } } }, ["extractList"], "no item selector selects no records");
 refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, paginate: { maxPages: 3 } } }, ["extractList"], "a paginate with no next link");
+assert.equal(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, maxItems: 5e3 } }).extractList?.maxItems, WEB_AUTOMATION_EXTRACT_MAX_ITEMS);
+assert.deepEqual(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: 0 } }).extractList, { item: "li", fields: { title: "h3" }, minItems: 0 }, "zero is a declaration, not an absent minimum");
+assert.equal(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: 3, maxItems: 3 } }).extractList?.minItems, 3, "a minimum equal to the maximum can be met");
+refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: -1 } }, ["extractList"], "a negative minimum");
+refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: "1" } }, ["extractList"], "a minimum sent as a string is not read as a number");
+refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: 5, maxItems: 3 } }, ["extractList"], "a minimum above the maximum");
+refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: WEB_AUTOMATION_EXTRACT_MAX_ITEMS + 1 } }, ["extractList"], "a minimum above the bound a request naming no maximum is held to");
 assert.deepEqual(mapped("web.dom.upload", { selector: "input[type=file]", upload: { files: [{ name: "a.txt", mimeType: "text/plain", contentBase64: "aGk=" }] } }).upload, {
   files: [{ name: "a.txt", mimeType: "text/plain", contentBase64: "aGk=" }]
 });
