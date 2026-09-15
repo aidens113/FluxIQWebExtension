@@ -637,6 +637,134 @@ proof are wrong estimates. The observed file times are:
   then `ca` integration with test-runner rebuild and tests, then documents and
   `pnpm check`.
 
+## Pushed and overnight pair preparation (about 02:52-02:58 local; clock-checked)
+
+- Memory sampler (`prod-core-memory.csv`) stopped after 13 rows, last written
+  02:47:36, process no longer alive. Partial observations only: `next build`
+  process tree peak 1,111 MB private (build child 1,022 MB); the `next start`
+  CLI process 165 MB; the `next start` server process was not captured. The
+  built Core's server footprint is still unmeasured; sample it during the pair.
+  Correction: the sampler did not die; it writes rows only while Next.js
+  processes exist and exited normally at 02:58 with `peak next-build tree private
+  MB=1111`, `peak next-start tree private MB=165`, `peak next-dev tree private
+  MB=0`, `rows=13`. Single observation over the two validation runs; `next
+  start` appears to serve in-process at about 165 MB against about 2,600 MB for
+  a dev Core. The pair's monitor keeps sampling to `prod-pair-memory.csv`.
+- Launched detached at 02:58:03: A launcher PID 26488 (worktree
+  `F:\fxlab\fxlab-prod-core`, label `cf-prod-core-final-a`, runs root
+  `F:\fxlab-runs\prod-core-final\a`), B launcher PID 27468 (worktree
+  `F:\fxlab\fxlab-7263534`, label `cg-prod-core-final-b`, runs root
+  `F:\fxlab-runs\prod-core-final\b`); both `head=118aeb7 status=0`. Monitor
+  `prod-pair-monitor.ps1` armed.
+- Both prebuilds: `prebuild exit=0 seconds=90`, `secretLoaded=True`. Campaigns
+  created: A `bench-mu2i36f9-ea262b66`, B `bench-mu2i36jy-ddf2e39f`. Resume only
+  by these exact IDs from the same worktree, labels and runs root.
+- Live check at 03:00:23 local: node processes 11, `next start` 1, `next dev` 0,
+  `next build` 0; each runs root has cache `6ac4f31e34cc2e50f3e864ff` published
+  with 1 attempt; 1 evaluation per side already. Slot-probe PowerShell: 7 distinct
+  probe PIDs in 20.2 s (104 samples), against 173 in 20.0 s during the dev pair.
+  Free memory 14,268 MiB.
+- Pace at 03:09:30 local: A 25 evaluated, 0 failed, first 03:00:09, last
+  03:09:11, mean run 22,117 ms, max 53,342 ms; B 24 evaluated, 0 failed, first
+  03:00:21, last 03:09:08, mean 22,330 ms, max 48,354 ms. About 165 evaluations
+  per hour per campaign (the dev-Core pair ran about 30 per hour per campaign at
+  roughly 85-90 s per run). Estimated terminal about 04:10 local.
+- Production Core memory under the pair (monitor CSV, 22 samples 02:59-03:09):
+  per `next start` process private MB median 158, p95 168, max 168; all such
+  processes together median 288, max 328; at most 2 concurrent; available
+  memory min 13,742, median 13,934 MiB. Live tree at 03:10:25: 2 `next start`
+  node processes (125 and 130 MB private), each a direct child of `cmd.exe` with
+  no child processes, so the server runs in-process and the figures are complete.
+  The dev-Core pair's server child ran about 2,400-2,630 MB each.
+- 03:59:46 local: A 163/189 (shard 002 37/63), B 165/189 (002 39/63); shards
+  000/001 finished on both; launchers alive; all nine expected ruled-out failures
+  logged per side and no unexpected failure. Early check of the four finished
+  shards: generations 134/122/134/122, 0 gap or link errors, 0 non-generation
+  files, `finished`, no active attempt, completed 66/60/66/60 equal to evaluation
+  files, 0 dot files, `evaluationSha256` byte matches 66/60/66/60 with 0
+  mismatches, 0 leases, projections present; 0 `.tmp` files anywhere under either
+  bench root.
+- B terminal (about 04:06 local): launcher status `bench exit=1 seconds=4053`,
+  `end`; launcher exited. Bench outcome line `{"status":"failed",...,"results":63,
+  "runs":189,"passed":180,"skipped":12,"notExecuted":54,"actionsExecuted":336,
+  "failureCauses":["9 runs — runtime.behavior: no cause recorded"]}` (exit 1 is
+  the bench verdict from the nine ruled-out variants). Supervisor observed
+  `merge-seal=True`, parent checkpoints 3, `finished`, parent lease 0, projections
+  present, 0 `.tmp`. No facility or startup failure. Dispatched
+  `ce-prod-final-b` (read-only verification, including production-start markers
+  in every bundle's Core log).
+- A terminal (about 04:07 local): `bench exit=1 seconds=4076`, `end`, launcher
+  exited; outcome `"runs":189,"passed":180,"skipped":12,"notExecuted":54,
+  "actionsExecuted":336,"failureCauses":["9 runs — runtime.behavior: no cause
+  recorded"]`; `merge-seal=True`, parent 3 checkpoints `finished`, lease 0,
+  projections present, 0 `.tmp`. Dispatched `cd-prod-final-a`.
+- Official comparison (supervisor, runner built at `118aeb7` in worktree A):
+  `compare exit=0`, `outcome=equivalent`, `comparisonPassed=True`, topology
+  identical, differing results 0 and runs 0; 48 rows (23 equivalent, 4
+  not-applicable, 21 no-tolerance-stated, 0 outside tolerance). Flow creation
+  1/1, initial execution and replay 0.9310/0.9310, false failure 0.0357/0.0357,
+  classification 0.9091/0.9091; run-duration p95 35,059/37,864 ms and p50
+  21,235/22,034 ms; `wait_for_selector` p95 7,023/7,034 ms; packet p95
+  5,934/5,934; truncations 165/165. Criteria: 1 recording 18/18 and Flow 16/16
+  both; 3 fallback 5/5; 4 required 15/15, all 30/33; 5 outside tolerance 0 and
+  differing 0; persistence discards 0. The two startup exceptions are
+  superseded. Supervisor wrote `reports/cf-prod-final-comparison.md`.
+- Global lesson recorded through the `lesson` skill:
+  `F:\!AgentBrain\lessons\global\act-on-recommendation-dont-ask.md`;
+  `node F:\!AgentBrain\install.mjs --index` exit 0 ("lesson indexes written for:
+  fluxiq, global"); brain commit `4ddadb7` "Add lesson:
+  act-on-recommendation-dont-ask" (2 files). Not pushed; the skill commits only.
+- `ce-prod-final-b` Done (report copied into the repo): 201 cells = 189
+  evaluated + 12 skipped, 0 duplicate or missing keys; chains 3/134/122/128 all
+  `finished`, no active attempt; evaluation, receipt and bundle parity 189/189;
+  seal 24/24 digests; 0 leases, staging, interrupted, `.tmp` or symlinks; `.work`
+  empty; 180 passed, 9 failed (the ruled-out variants), 0 facility failures;
+  harness 0; redaction findings 0; packets p95 5,934, max 5,992 bytes;
+  truncations 165; duration p50 22,034, p95 37,864 ms. Production Core: 189/189
+  `core.log` files with one "Ready in" and zero "Compiling" or "(dev)"; no
+  campaign bundle has `core-web-build.log` (only the prebuild run
+  `run-mu2i19zw-88ac50e9`). Hazard noted: each runs root's `.core-web-build`
+  holds 18 junctions into `F:\fxlab\!FluxIQ`, so never delete a runs root with a
+  tool that follows junctions (Windows PowerShell 5.1 `Remove-Item -Recurse` can);
+  recorded as a follow-up.
+- `cd-prod-final-a` Done (report copied into the repo at commit): 201 cells =
+  189 + 12, 0 duplicate, missing or extra keys; 4 chains `finished`, 387/387
+  checkpoint digests match; parity 189/189 on every check; seal 24/24; 180
+  passed, 9 failed (the ruled-out variants), 12 skipped, `facilityFailure` null
+  in all 201 rows; residue: leases 0, `.staging` 0, `interrupted` 0, `.tmp` 0,
+  `.work` empty, 18 symlinks all inside `.core-web-build`; 190/190 `core.log`
+  (189 campaign runs plus the prebuild `run-mu2i18kx-25eec9be`) with one "Ready
+  in" and zero "Compiling" or "(dev)"; `core-web-build.log` only in the prebuild
+  run; harness 0; attestation findings 0; packets p95 5,934, max 5,992 bytes;
+  truncations 165; duration p50 21,235, p95 35,059 ms. Its note: a future
+  no-symlink residue gate must exclude `.core-web-build`.
+- Core paired document updated to the confirmed result (closeout paragraph and
+  `Status detail`); Core docs check, index regeneration, audit and local commit
+  follow, then the joint push with downstream after `cd`/`ce` report.
+
+- Secret scan before commit (in memory, names only): `secretSource=lab-instance
+  scanned=17 secretHits=0 tokenLikeHits=0`. Two earlier scan attempts aborted
+  safely on supervisor script defects (reading `process.argv[1]` inside a script
+  file). Nothing was committed until the clean scan.
+- Downstream commit `118aeb7` "Close Week 1 on the sharded-final-2 pair";
+  pushed `3d6ecd6..118aeb7 dev -> dev` (exit 0). Core pushed `19468b7..54ae663
+  dev -> dev` (exit 0). Both `## dev...origin/dev`, status clean.
+- Overnight pair design: run A from Lab worktree `F:\fxlab\fxlab-prod-core` and B
+  from `F:\fxlab\fxlab-7263534`, both detached at `118aeb7`, beside Core worktree
+  `F:\fxlab\!FluxIQ` detached at `54ae663` (no non-documentation Core change since
+  `19468b7`). Separate worktrees avoid one side's Lab build deleting the shared
+  `domain/dist` under the other's running processes. Both worktrees were clean
+  with no processes using them before checkout; B's `pnpm install
+  --frozen-lockfile --prefer-offline` printed "Already up to date". The
+  worktrees' lockfile hash differs from the main checkout's only by line endings;
+  both sides share the worktree form.
+- Each side runs detached through the scratchpad `launch-prod-core-side.ps1`:
+  labels, runs root, env files off, a timed `lab run basic-form` prebuild of the
+  Lab instance and Core production cache in that runs root, then the fixture
+  secret loaded in memory from the freshly built module (abort if absent), then
+  `lab bench --corpus week1 --repeat 3 --target isolated --evidence failure
+  --shards 3 --jobs 2`. Status lines in `F:\fxlab-runs\prod-core-final\logs\`.
+
 ## Launch runbook (non-secret; values never printed)
 
 Auth-gate fixture: built module
@@ -667,6 +795,12 @@ $env:FLUXIQ_TEST_SECRET_AUTH_GATE_PASSWORD = node -e "import(process.argv[1]).th
 pnpm lab run basic-form --target isolated --evidence failure   # prebuild the Core cache in this runs root, timed
 pnpm lab bench --corpus week1 --repeat 3 --target isolated --evidence failure --shards 3 --jobs 2
 ```
+
+Note (03:10 local): the one-liner above still works. A brief "empty `default`"
+result at 03:05 was a supervisor script defect: a script run as `node file.cjs
+<args>` reads its first argument from `process.argv[2]`, not `argv[1]`, so it had
+imported itself. Re-probed with `argv[2]`: the built constants module exports
+`authGateDemoCredentials` with keys `username,password`.
 
 Capture the logical ID; resume only with `pnpm lab bench --resume <id>` under the
 same labels and runs root. Measure the prebuild's duration and the probe

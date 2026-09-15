@@ -1,7 +1,7 @@
 # MVP Week 1 — Web Automation Reliability Plan
 
 Status: Active
-Status detail: Week 1 closed on 2026-09-15 on the sharded-final-2 pair with two disclosed startup exceptions; a production-Core confirmation pair will supersede them.
+Status detail: Week 1 is complete as of 2026-09-15, confirmed by a production-Core pair with no differing run that superseded the two startup exceptions of the earlier next-dev pair.
 Created: 2026-09-11
 Last updated: 2026-09-15
 Owner: Senior supervisor agent
@@ -17,79 +17,73 @@ Related: [30-Day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 1 item, using subagents to do it quickly AND properly, with EVERYTHING tested.**
 On 2026-09-14 the user asked for Week 1 to be closed that night.
 
-**Phase, as of 2026-09-15: Week 1 closed on the sharded-final-2 pair with two
-disclosed startup exceptions; a production-Core confirmation pair supersedes
-them.** Reports named in backticks are under
+**Phase, as of 2026-09-15: Week 1 is complete.** The production-Core
+confirmation pair passed the official comparison with no differing run, which
+supersedes the two startup exceptions accepted on the earlier `next dev` pair.
+Reports named in backticks are under
 [reports/](./mvp-week1-web-automation-reliability-plan/reports/); every dispatch is
 in [briefs/finish-week1.md](./mvp-week1-web-automation-reliability-plan/briefs/finish-week1.md);
 settled ledger entries are in parts one to fifty-one of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
 
-**Repository state.** Downstream `dev` carries the acceptance pin `3d6ecd6`, the
-fixes `3525938`, `878fbd5`, `83f54b3`, `b3278a4`, and this closeout's documentation commit, pushed to
-`origin/dev`. Core `dev` carries one documentation commit after `19468b7`.
+**Repository state.** Downstream `dev` and `origin/dev` carry the fixes
+`3525938`, `878fbd5`, `83f54b3`, `b3278a4`, the closeout `118aeb7`, and this
+confirmation's documentation commit. Core `dev` carries documentation commits
+only after `19468b7`.
 
-**Acceptance pair, clean pins downstream `3d6ecd6`, Core `19468b7`.** A
-`bench-mu202a52-127f75c3` and B `bench-mu202snn-ec661de2`: Week 1 x3, isolated,
-failure evidence, 3 shards, 2 jobs. Each has 189 evaluated runs plus 12 planned
-skips and an authenticated merge seal (`bq`, `br`). A: 179 passed. B: 179 passed.
-Both hold the nine ruled-out variant failures. Official comparison
-(`bz-final-2-comparison`): exit 1, `outcome: equivalent`, `comparisonPassed:
-false`, identical topology. All 23 tolerance-bearing metrics are equivalent,
-with 0 outside tolerance and 0 absent. Persistence discards are 0 on both sides.
-Exactly two runs differ, and both are the exceptions below.
+**Acceptance evidence: the production-Core pair.** A `bench-mu2i36f9-ea262b66`
+(Lab worktree `F:\fxlab\fxlab-prod-core`) and B `bench-mu2i36jy-ddf2e39f`
+(`F:\fxlab\fxlab-7263534`), both at downstream `118aeb7` and Core `54ae663`:
+Week 1 x3, isolated, failure evidence, 3 shards, 2 jobs. Each ran 189 evaluated
+plus 12 skips: 180 passed, and 9 failed, all ruled-out variants. There was no
+startup or facility failure, the merge seal is present, and no temporary was
+left (`cd`, `ce`). Official comparison (`cf-prod-final-comparison`): exit 0,
+`comparisonPassed: true`, identical topology, 0 differing results or runs,
+23/23 tolerance metrics equivalent, persistence discards 0.
 
-**The user's closeout decisions (2026-09-14 and 2026-09-15, in the ledger).**
-1. After B's first unexpected failure: "Both: close tonight + fix".
-2. After A's second: "Two exceptions, close tonight".
-3. After B's merge refused an orphaned temp file: "Quarantine file, resume B".
-4. Then: act on recommendations without asking.
+**Exit criteria: all six met.**
 
-**The two disclosed exceptions, one classified class.**
-- B W14 `modal-flows`/`interstitial`, Flow, repeat 2: `process.startup`,
-  `http.timeout / project.select / 30000`. Focused `bu`: 3/3 passed
-  (`run-mu2h3iwq-fc8c53cf`, `run-mu2h59v9-7417a490`, `run-mu2h6yxo-591c2cff`).
-- A W28 `iframe-checkout`, recording, repeat 1: `gateway.connection`,
-  `unclassified`, "Timed out waiting for client gateway". Focused `bv`: 3/3 passed (`run-mu2h8ku2-521f71ec`, `run-mu2h9u41-17c539d7`,
-  `run-mu2hb2lg-cc6a1ed1`).
-- Both failed inside topology startup, before any browser or step. Cause
-  (`bs`, `bt`, supervisor-verified): each run served Core with `next dev
-  --turbopack` from a fresh copy, so first requests compiled on demand under
-  load. Slot waiters also spawned `powershell.exe` per owner on every 100 ms poll
-  (at least about 518 per minute measured). Supervisor worktree tests overlapped
-  the W28 window.
+| Criterion | Evidence |
+| --- | --- |
+| Actions reliable | Recording unarmed 18/18 and Flow unarmed 16/16 stable in both campaigns (`cf`) |
+| Evidence useful | Packets 612 per side, p95 5,934 B, max under 6,000; redaction findings 0; harness 0; content harness `evidence.spec.ts` 30 passed (`cd`, `ce`, ledger) |
+| Deterministic fallback | 5/5 recovered without harness in both (`cf`) |
+| Failures classified | Required W14/W19/W27 15/15 in both; all negatives 30/33, the W24 `unannounced` runs ruled out (`cf`) |
+| Bench repeatable | 0 outside tolerance, 0 differing runs, repeat count 3 (`cf`) |
+| Blockers ranked | `cb-blocker-ranking-final`; ranks 1, 2 and 4 are fixed and now Lab-proven, and rank 3 is a Week 2 diagnostic |
 
-**B's manual step.** B's children finished, but its merge failed closed: shard
-002's `evaluations/` held a byte-identical temporary left by the durable writer's
-link-then-remove. With the user's approval the one file was moved to
-`F:\fxlab-runs\sharded-final-2\quarantine\`, and an exact-ID resume at the same
-pin then sealed B.
+**How Week 1 got here, 2026-09-14 and 2026-09-15.** The first clean-pinned
+pair at `3d6ecd6` (`bq`, `br`, `bz`) had two runs that differed. W14 Flow
+repeat 2 failed in B and W28 recording repeat 1 failed in A; both failed inside
+topology startup on a per-run `next dev` Core, and each passed 3/3 in isolation
+(`bu`, `bv`). The user accepted them as disclosed exceptions and asked for the
+root cause to be fixed. Fixes: the Lab serves Core from a cached production
+build (`bw`); slot waiters stop spawning PowerShell every poll (`bx`); pushed
+`dev`'s structure audit was restored (`by`); and the durable writer no longer
+leaves orphaned temporaries (`ca`). One such orphan had blocked B's merge until
+it was quarantined with the user's approval. The production pair ran each cell
+in about 22 s instead of about 90 s, with each Core at about 160 MB instead of
+about 2.5 GB.
 
-**Exit criteria**
+**The user's decisions (ledger).**
+- "Both: close tonight + fix".
+- "Two exceptions, close tonight".
+- "Quarantine file, resume B".
+- "please dont ask me again for something, just do recommended".
 
-| Criterion | State at closeout | Evidence |
-| --- | --- | --- |
-| Actions reliable | Recording unarmed 18/18 both; Flow unarmed 16/16 A, 15/16 B (W14 exception, 3/3 in isolation) | `bz`, `bu` |
-| Evidence useful | Packets 618/608, p95 5,934, max 5,992 bytes; 0 redaction findings; harness 0; content harness `evidence.spec.ts` 30 passed at `3d6ecd6` | `bq`, `br`, ledger |
-| Deterministic fallback | 5/5 recovered without harness, both | `bz` |
-| Failures classified | Required W14/W19/W27 15/15 both; all negatives 30/33 (W24 ruled out) | `bz` |
-| Bench repeatable | 23/23 tolerance metrics equivalent; two differing runs, both the disclosed startup class | `bz` |
-| Blockers ranked | `cb-blocker-ranking-final` | ledger entry 2026-09-15 |
+**Follow-ups, not Week 1 blockers.**
+- Give the TCP gateway wait a closed failure stage.
+- Let the merge tolerate a byte-identical writer temporary.
+- Handle the duplicate-create `EEXIST` path that can still swallow a locked
+  temporary.
+- Retune the slot gate's 3 GiB per cell to the measured built-Core footprint.
+- Add `isrFlushToDisk: false` and prune failed build attempts.
+- Make `workspace-lock.ts` write its owner before linking.
+- A runs root's `.core-web-build` holds junctions into the Core worktree: never
+  delete a runs root with a tool that follows junctions (`ce`).
 
-**Fixed after the pair, not in the acceptance pins.**
-- Production Core build for isolated and demo topologies, and startup-failure
-  logs kept in the bundle (`bw`).
-- Slot waiters no longer spawn PowerShell on every poll (`bx`).
-- Durable writer retries removing its temporary and fails loudly instead of leaving an orphan (`ca`).
-- Pushed `3d6ecd6` failed its own structure audit; restored (`by`), index
-  regenerated.
-
-**Next steps.**
-1. Production-Core confirmation pair from a Lab worktree at the pushed fix pin,
-   prebuilding each runs root; compare; replace the two exceptions.
-2. Follow-ups recorded, not scheduled: retune the slot gate's 3 GiB per cell from
-   a measured built-Core footprint; `isrFlushToDisk: false`; prune failed build
-   attempts; `workspace-lock.ts` owner-before-link.
+**Next steps:** Week 2, starting from `cb-blocker-ranking-final`'s Week 2 ranks
+and the open questions.
 
 **Blockers:** none.
 
@@ -589,6 +583,65 @@ The first two 2026-09-13 entries are preserved in
 The 2026-09-13 and 2026-09-14 entries through the durable-campaign work are in
 part fifty-one of
 [archive/2026-09-12-finish-week1-ledger.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-12-finish-week1-ledger.md).
+
+### 2026-09-15 — Production-Core confirmation pair supersedes the two startup exceptions
+
+- Agents: workers `cd-prod-final-a`, `ce-prod-final-b` (terminal verification).
+  The supervisor launched both campaigns, ran the comparator, wrote
+  `cf-prod-final-comparison`, and ran every check below.
+- Pins: downstream `118aeb7`, Core `54ae663`. A `bench-mu2i36f9-ea262b66` from
+  Lab worktree `F:\fxlab\fxlab-prod-core`, B `bench-mu2i36jy-ddf2e39f` from
+  `F:\fxlab\fxlab-7263534`. Both Week 1 x3, isolated, failure evidence, 3 shards
+  and 2 jobs, launched detached at 02:58 local through a launcher that ran a
+  timed `lab run basic-form` prebuild first (`prebuild exit=0 seconds=90` each).
+- Decisions: act on the recommendation without asking (the user's instruction,
+  also recorded as global lesson `act-on-recommendation-dont-ask`, brain commit
+  `4ddadb7`).
+- Found:
+  - Cells served Core with `next start` from one published cache per runs root
+    (`6ac4f31e34cc2e50f3e864ff`, one attempt each). A live check at 03:00:23
+    saw `next start` 1, `next dev` 0, `next build` 0.
+  - Each Core ran as one in-process node process at a median of 158 MB and a
+    maximum of 168 MB private (monitor CSV). The live tree at 03:10:25 showed
+    two processes at 125 and 130 MB, each with no child. A `next dev` Core ran
+    about 2,400-2,630 MB.
+  - Slot-probe PowerShell: 7 distinct processes in 20.2 s, against 173 in 20.0 s
+    during the `next dev` pair. Available memory stayed at 13,742-14,589 MiB.
+  - Mean run 22,117 / 22,330 ms at 03:09, against about 85-90 s on `next dev`.
+- Validation:
+  - B outcome line: `"runs":189,"passed":180,"skipped":12,"failureCauses":["9
+    runs — runtime.behavior: no cause recorded"]`, `bench exit=1
+    seconds=4053`; `merge-seal=True`, parent `finished`, lease 0, 0 `.tmp`.
+  - A outcome line: `"runs":189,"passed":180,"skipped":12`, same single failure
+    cause, `bench exit=1 seconds=4076`; `merge-seal=True`, parent `finished`,
+    lease 0, 0 `.tmp`.
+  - Supervisor check of shards 000/001 on both sides at 03:59: generations
+    134/122, 0 gap or link errors, `evaluationSha256` byte matches 66/60 per
+    side, 0 leases, 0 `.tmp` under either bench root.
+  - `node F:\fxlab\fxlab-prod-core\packages\test-runner\dist\cli.js compare <A>
+    <B>`: `compare exit=0`, `outcome=equivalent`, `comparisonPassed=True`,
+    topology identical, differing results 0 and runs 0, 48 rows (23
+    equivalent, 4 not applicable, 21 disclosures, 0 outside tolerance);
+    run-duration p95 35,059 / 37,864 ms; criteria 1 recording 18/18 and Flow
+    16/16 both, 3 fallback 5/5, 4 required 15/15, 5 differing 0; persistence
+    discards 0.
+  - `cd-prod-final-a`: 189 evaluated + 12 skipped, 0 duplicate, missing or
+    extra keys; 4 chains `finished`, 387/387 checkpoint digests; parity
+    189/189; seal 24/24 digests; 0 leases, staging, interrupted or `.tmp`; 180
+    passed, 9 ruled-out failures, `facilityFailure` null in all 201 rows;
+    harness 0; attestation findings 0; packet max 5,992 bytes; 190/190
+    `core.log` with "Ready in" and zero "Compiling" or "(dev)"; only the
+    prebuild run built Core.
+  - `ce-prod-final-b`: 189 evaluated + 12 skipped, 0 duplicate or missing
+    keys; chains 3/134/122/128 `finished`; parity 189/189; seal 24/24 digests;
+    0 leases, staging, interrupted, `.tmp` or symlinks; 180 passed, 9 ruled-out
+    failures, 0 facility failures; harness 0; redaction findings 0; packet max
+    5,992 bytes; 189/189 `core.log` with "Ready in" and zero "Compiling" or
+    "(dev)"; no campaign bundle built Core.
+- Not verified: the slot gate's 3 GiB per cell is not yet retuned to the
+  measured footprint; real Defender holds against the 2.5 s removal schedule.
+- Outcome: Accepted; the two startup exceptions are superseded and Week 1 is
+  complete
 
 ### 2026-09-15 — Week 1 closed on sharded-final-2 with two disclosed startup exceptions
 
