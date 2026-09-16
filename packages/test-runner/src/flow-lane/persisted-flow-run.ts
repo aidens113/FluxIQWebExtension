@@ -26,10 +26,18 @@ export type PersistedFlowTerminalWait = {
 };
 
 /** The Core calls a Flow run makes; `ExistingFluxIQControlClient` satisfies it. */
+/**
+ * The execution grant a live provider run carries. Core refuses such a run any
+ * of the flags a deterministic run uses -- a pre-started run id, an authorized
+ * domain, an idempotency key -- so a run holding one takes a different path
+ * through `executeRecordedFlowRun` rather than adding a flag to the usual one.
+ */
+export type PersistedFlowLlmExecution = { grantId: string; purpose: "diagnosis_only" | "diagnose_and_adapt" };
+
 export type PersistedFlowRunControl = {
   selectExistingContext(projectId: string, clientId?: string, bounds?: FluxIQHttpOptions, flowId?: string): Promise<void>;
   startPersistedFlow(input: { projectId: string; flowId: string; inputs?: Record<string, unknown>; authorizedDomainIds?: string[] } & FluxIQHttpOptions): Promise<{ runId: string }>;
-  runPersistedFlow(input: { projectId: string; flowId: string; runId?: string; inputs?: Record<string, unknown>; authorizedDomainIds?: string[]; idempotencyKey?: string } & FluxIQHttpOptions): Promise<{ session: { runId: string; status: string } }>;
+  runPersistedFlow(input: { projectId: string; flowId: string; runId?: string; inputs?: Record<string, unknown>; authorizedDomainIds?: string[]; idempotencyKey?: string; llmExecution?: PersistedFlowLlmExecution } & FluxIQHttpOptions): Promise<{ session: { runId: string; status: string } }>;
   automationStudioCall(endpoint: string, payload: Record<string, unknown>, bounds?: FluxIQHttpOptions, domainId?: string): Promise<unknown>;
 };
 
@@ -189,30 +197,43 @@ export type FlowStopWithoutFailedAttempt = { attemptedActions: number; unvisited
  */
 export async function executeRecordedFlowRun(
   control: PersistedFlowRunControl,
-  input: { projectId: string; flowId: string; facilityRunId: string; domainId?: string; inputs?: Record<string, unknown>; actionTypes?: ReadonlyMap<string, string>; candidateOrder?: ReadonlyMap<string, number> },
+  input: { projectId: string; flowId: string; facilityRunId: string; domainId?: string; inputs?: Record<string, unknown>; actionTypes?: ReadonlyMap<string, string>; candidateOrder?: ReadonlyMap<string, number>; llmExecution?: PersistedFlowLlmExecution },
   bounds: FluxIQHttpOptions = {},
   terminalWait: PersistedFlowTerminalWait = {},
 ): Promise<PersistedFlowRunOutcome> {
   const domainId = input.domainId ?? LAB_PROJECT_DOMAIN_ID;
   await control.selectExistingContext(input.projectId, undefined, bounds, input.flowId);
   const inputs = input.inputs ?? {};
-  const started = await control.startPersistedFlow({ projectId: input.projectId, flowId: input.flowId, inputs, authorizedDomainIds: [domainId], ...bounds });
-  const runId = started.runId;
-  if (!runId) throw new RunnerFailure("runtime.behavior", "Core did not return a run id for the approved Flow");
+  // A live provider run must create its own session: Core revokes the grant and
+  // refuses the run outright when it is handed a run id it did not start, an
+  // authorized domain, or an idempotency key. So the two-step start-then-run
+  // the deterministic lane uses collapses into one call here, and the run id
+  // comes back from the run rather than going into it.
+  const started = input.llmExecution ? undefined : await control.startPersistedFlow({ projectId: input.projectId, flowId: input.flowId, inputs, authorizedDomainIds: [domainId], ...bounds });
+  const runId = started?.runId;
+  if (!input.llmExecution && !runId) throw new RunnerFailure("runtime.behavior", "Core did not return a run id for the approved Flow");
   let sessionStatus = "unknown";
+  let executedRunId = runId;
   try {
-    const result = await control.runPersistedFlow({ projectId: input.projectId, flowId: input.flowId, runId, inputs, authorizedDomainIds: [domainId], idempotencyKey: `fluxiq-lab:${input.facilityRunId}:${randomUUID()}`, ...bounds });
+    const result = await control.runPersistedFlow(input.llmExecution
+      ? { projectId: input.projectId, flowId: input.flowId, inputs, llmExecution: input.llmExecution, ...bounds }
+      : { projectId: input.projectId, flowId: input.flowId, runId: runId!, inputs, authorizedDomainIds: [domainId], idempotencyKey: `fluxiq-lab:${input.facilityRunId}:${randomUUID()}`, ...bounds });
     sessionStatus = result.session.status;
-    if (result.session.runId !== runId) throw new RunnerFailure("runtime.behavior", "Core ran a different run than the one it started");
+    executedRunId = result.session.runId;
+    if (runId !== undefined && result.session.runId !== runId) throw new RunnerFailure("runtime.behavior", "Core ran a different run than the one it started");
+    if (!executedRunId) throw new RunnerFailure("runtime.behavior", "Core did not return a run id for the approved Flow");
   } catch (error) {
     // Only a bounded request can have left Core executing after the client went
     // away. An arbitrary runner failure is not evidence that a run completed.
-    if (!isBoundedHttpFailure(error)) throw error;
-    const detail = await awaitTerminalRunDetail(control, input.projectId, runId, input.actionTypes ?? new Map(), error, terminalWait);
-    return outcomeFromDetail(runId, detail, await datasetsOf(control, { projectId: input.projectId, runId, domainId }, detail, bounds), sessionStatus, input.actionTypes, input.candidateOrder);
+    // A run whose id Core never returned left nothing to read back, so the
+    // bounded-failure recovery below has nothing to recover and the original
+    // failure stands.
+    if (!isBoundedHttpFailure(error) || !executedRunId) throw error;
+    const detail = await awaitTerminalRunDetail(control, input.projectId, executedRunId, input.actionTypes ?? new Map(), error, terminalWait);
+    return outcomeFromDetail(executedRunId, detail, await datasetsOf(control, { projectId: input.projectId, runId: executedRunId, domainId }, detail, bounds), sessionStatus, input.actionTypes, input.candidateOrder);
   }
-  const detail = await readRunDetail(control, input.projectId, runId, bounds, input.actionTypes ?? new Map());
-  return outcomeFromDetail(runId, detail, await datasetsOf(control, { projectId: input.projectId, runId, domainId }, detail, bounds), sessionStatus, input.actionTypes, input.candidateOrder);
+  const detail = await readRunDetail(control, input.projectId, executedRunId!, bounds, input.actionTypes ?? new Map());
+  return outcomeFromDetail(executedRunId!, detail, await datasetsOf(control, { projectId: input.projectId, runId: executedRunId!, domainId }, detail, bounds), sessionStatus, input.actionTypes, input.candidateOrder);
 }
 
 /**

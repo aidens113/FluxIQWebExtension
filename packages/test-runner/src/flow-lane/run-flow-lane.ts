@@ -8,7 +8,7 @@ import { awaitFinalizedRecording, type FinalizedRecording, type FinalizedRecordi
 import { flowActionTypes, readFlowNodes, type FlowNodeRecord } from "./flow-action-types.js";
 import { flowLaneObservation, type RunLaneObservation } from "./lane-observation.js";
 import { approveRecordingFlowProposal, assertProposalCoversRecording, createRecordingFlowProposal, type RecordingFlowProposal } from "./recording-flow-proposal.js";
-import { executeRecordedFlowRun, type PersistedFlowRunControl, type PersistedFlowRunOutcome } from "./persisted-flow-run.js";
+import { executeRecordedFlowRun, type PersistedFlowLlmExecution, type PersistedFlowRunControl, type PersistedFlowRunOutcome } from "./persisted-flow-run.js";
 import { resetScenarioLab } from "./reset-scenario-lab.js";
 import type { RecordingProposalControl } from "./recording-flow-proposal.js";
 
@@ -67,6 +67,15 @@ export type FlowLaneInput = {
    * discard against that recording: the runner's discard read stops here.
    */
   flowDispatchStarting: (at: number) => void;
+  /**
+   * Authorizes a live provider call against the Flow this lane just built, and
+   * is called only when the run asked for one. The lane owns neither the
+   * credential nor Core's grant vocabulary; it knows only that a run may carry
+   * an authorization, and when in the sequence it has to be taken out -- after
+   * the Flow exists, because the grant binds to it, and just before the run,
+   * because Core expires it within the minute.
+   */
+  authorizeLiveLlm?: (flowId: string) => Promise<PersistedFlowLlmExecution>;
   bounds?: FluxIQHttpOptions;
 };
 
@@ -148,12 +157,17 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
   // A node on a file input asks for its files the same way, keyed by its recorded
   // control. It gets the file the recording lane chose, or the run fails here.
   const uploadInputs = declaredUploadInputs({ scenarioId: input.scenario.id, steps: input.workflow.recordingScript, requests: flowUploadRequests(nodes) });
+  // After the Flow exists and immediately before it runs: Core issues the grant
+  // against this Flow's saved settings and expires it within the minute, so
+  // nothing slow may come between the two.
+  const llmExecution = input.authorizeLiveLlm ? await input.authorizeLiveLlm(approved.flowId) : undefined;
   // Just before the first Flow action can reach Core, whose runtime confirmation Core audits against the finalized recording.
   input.flowDispatchStarting(Date.now());
   const run = await executeRecordedFlowRun(input.control, {
     projectId: input.projectId,
     flowId: approved.flowId,
     facilityRunId: input.facilityRunId,
+    ...(llmExecution ? { llmExecution } : {}),
     ...(input.projectDomainId === undefined ? {} : { domainId: input.projectDomainId }),
     actionTypes,
     candidateOrder,

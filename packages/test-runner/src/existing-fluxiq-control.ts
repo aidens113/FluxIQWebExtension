@@ -13,7 +13,20 @@ export type ExistingRouteDecision = { decisionId: string; routerId: string; sele
 export type ExistingSubflowExecution = { entryId: string; subflowId: string; status: RuntimeStatus; graphFlowId?: string; routeDecisionId?: string };
 export type ExistingRunIntervention = { interventionId: string; kind: "diagnosis" | "runtime_patch" | "router_patch" | "subflow_patch" | "expectation_patch" | "instruction_suggestion" | "change_proposal"; requestId?: string; promptVersion?: string; provider?: string; model?: string; validationOk?: boolean; validationCodes?: string[]; inputTokens?: number; outputTokens?: number; totalTokens?: number; estimatedCostUsd?: number; createdAt?: number };
 export type ExistingRuntimePatchAttempt = { kind?: string; proposalOnly?: boolean; executed?: boolean; preflightOk?: boolean; issueCodes: string[]; adaptationCreated: boolean; changeProposalCreated: boolean };
-export type ExistingRunDetail = { summary: ExistingRunSummary; routeDecisions: ExistingRouteDecision[]; subflows: ExistingSubflowExecution[]; actionAttempts: ExistingRunAction[]; interventions?: ExistingRunIntervention[]; runtimePatchAttempts?: ExistingRuntimePatchAttempt[]; adaptationIds?: string[]; changeProposalIds?: string[]; providerCallCount?: number };
+/**
+ * Why Core did or did not reach the provider on this run, read from the run
+ * detail's `metadata.llmGate`. Counts and Core's own fixed sentence only: it is
+ * what tells a live run that never called the provider apart from one that did,
+ * so a run cannot report a green result on an unreached model.
+ */
+export type ExistingRunLlmGate = { invoked: boolean; reason?: string; code?: string };
+/**
+ * Core's own per-run provider accounting (`metadata.llmGate.costAccounting`).
+ * Counts and totals only, and the numbers a budget is actually held to: an
+ * intervention record can omit its token usage, this does not.
+ */
+export type ExistingRunLlmAccounting = { calls: number; inputTokens: number; outputTokens: number; totalTokens: number; estimatedCostUsd: number; budgetBreaches: number; pendingCalls: number };
+export type ExistingRunDetail = { summary: ExistingRunSummary; routeDecisions: ExistingRouteDecision[]; subflows: ExistingSubflowExecution[]; actionAttempts: ExistingRunAction[]; interventions?: ExistingRunIntervention[]; runtimePatchAttempts?: ExistingRuntimePatchAttempt[]; adaptationIds?: string[]; changeProposalIds?: string[]; providerCallCount?: number; llmGate?: ExistingRunLlmGate; llmAccounting?: ExistingRunLlmAccounting };
 export type ExistingFlowSubflow = { subflowId: string; flowId: string; projectId: string; graphFlowId?: string; name: string; status: string; role: string };
 export type ExistingFlowRouter = { routerId: string; flowId: string; projectId: string; fallback?: { kind: string; subflowId?: string }; rules: Array<{ ruleId: string; target?: { kind?: string; subflowId?: string } }> };
 export type ExistingFlowAdaptationSummary = { adaptationId: string; flowId: string; projectId: string; status: string };
@@ -63,6 +76,19 @@ export class ExistingFluxIQControlClient extends FluxIQControlClient {
     const suffix = domainId ? `?domainId=${encodeURIComponent(domainId)}` : "";
     const envelope = record(await this.request(`/api/programs/automation-studio/${endpoint}${suffix}`, payload, "environment.missing", "POST", bounds), `${endpoint} response`);
     if (envelope.ok !== true) throw new RunnerFailure("environment.missing", `Automation Studio call failed: ${endpoint}`);
+    return envelope.payload;
+  }
+
+  /**
+   * One Secret Keys program call. The Secret Keys program is session-bound, so
+   * Core's route adds the caller's `authSessionId`; only the password and PIN
+   * travel in the payload, and no secret value is ever returned by the calls
+   * this client makes.
+   */
+  async secretKeysCall(endpoint: string, payload: JsonRecord = {}, bounds: FluxIQHttpOptions = {}): Promise<unknown> {
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(endpoint)) throw new Error("Secret Keys endpoint is malformed");
+    const envelope = record(await this.request(`/api/programs/secret-keys/${endpoint}`, payload, "environment.missing", "POST", bounds), `${endpoint} response`);
+    if (envelope.ok !== true) throw new RunnerFailure("environment.missing", `Secret Keys call failed: ${endpoint}`);
     return envelope.payload;
   }
 
@@ -243,11 +269,22 @@ export class ExistingFluxIQControlClient extends FluxIQControlClient {
     return runtimeSession(payload.runtimeSession, "runtimeSession", input.projectId, input.flowId);
   }
 
-  async runPersistedFlow(input: { projectId: string; flowId: string; runId?: string; inputs?: JsonRecord; maxSteps?: number; authorizedDomainIds?: string[]; idempotencyKey?: string } & FluxIQHttpOptions): Promise<{ session: ExistingRuntimeSession; summary?: ExistingRunSummary }> {
+  /**
+   * `llmExecution` turns this into an explicit live-provider run. Core refuses
+   * such a run a pre-started run id, an authorized domain, an idempotency key or
+   * any adaptive mode but `manual_approval`, and revokes the grant when it sees
+   * one, so those fields are omitted here rather than left to a caller.
+   */
+  async runPersistedFlow(input: { projectId: string; flowId: string; runId?: string; inputs?: JsonRecord; maxSteps?: number; authorizedDomainIds?: string[]; idempotencyKey?: string; llmExecution?: { grantId: string; purpose: "diagnosis_only" | "diagnose_and_adapt" } } & FluxIQHttpOptions): Promise<{ session: ExistingRuntimeSession; summary?: ExistingRunSummary }> {
+    if (input.llmExecution && (input.runId || input.idempotencyKey || input.authorizedDomainIds?.length)) {
+      throw new RunnerFailure("runtime.behavior", "A live LLM run cannot carry a pre-started run id, an idempotency key, or an authorized domain");
+    }
     const payload = record(await this.automationStudioCall("run-runtime-session", {
       projectId: input.projectId, flowId: input.flowId, ...(input.runId ? { runId: input.runId } : {}), ...(input.inputs ? { inputs: input.inputs } : {}),
       ...(input.maxSteps === undefined ? {} : { maxSteps: positiveInteger(input.maxSteps, "maxSteps") }), ...(input.authorizedDomainIds ? { authorizedDomainIds: input.authorizedDomainIds } : {}),
-      ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}), adaptiveMode: "deterministic", authorizedExternalSideEffects: false,
+      ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
+      adaptiveMode: input.llmExecution ? "manual_approval" : "deterministic", authorizedExternalSideEffects: false,
+      ...(input.llmExecution ? { runIntent: input.llmExecution.purpose, llmExecutionGrantId: input.llmExecution.grantId } : {}),
     }, input), "run runtime payload");
     const session = runtimeSession(payload.runtimeSession, "runtimeSession", input.projectId, input.flowId);
     const summary = payload.runSummary == null ? undefined : runSummary(payload.runSummary, "runSummary");
@@ -276,8 +313,10 @@ export class ExistingFluxIQControlClient extends FluxIQControlClient {
     const llmGate = optionalRecord(metadata?.llmGate, "runDetail.metadata.llmGate");
     const costAccounting = optionalRecord(llmGate?.costAccounting, "runDetail.metadata.llmGate.costAccounting");
     const providerCallCount = costAccounting?.calls === undefined ? undefined : integer(costAccounting.calls, "runDetail.metadata.llmGate.costAccounting.calls");
+    const gate = llmGate === undefined ? undefined : runLlmGate(llmGate);
+    const accounting = costAccounting === undefined ? undefined : runLlmAccounting(costAccounting);
     const runtimePatchAttempts = array(metadata?.runtimePatchAttempts ?? [], "runDetail.metadata.runtimePatchAttempts").map((value, index) => runtimePatchAttempt(value, `runDetail.metadata.runtimePatchAttempts[${index}]`));
-    return { summary, routeDecisions, subflows, actionAttempts: actions, interventions, runtimePatchAttempts, adaptationIds, changeProposalIds, ...(providerCallCount === undefined ? {} : { providerCallCount }) };
+    return { summary, routeDecisions, subflows, actionAttempts: actions, interventions, runtimePatchAttempts, adaptationIds, changeProposalIds, ...(providerCallCount === undefined ? {} : { providerCallCount }), ...(gate === undefined ? {} : { llmGate: gate }), ...(accounting === undefined ? {} : { llmAccounting: accounting }) };
   }
 
   async listFlowRuns(projectId: string, flowId: string): Promise<ExistingRunSummary[]> {
@@ -426,6 +465,39 @@ function runIntervention(value: unknown, at: string): ExistingRunIntervention {
   const provider = optionalIdentifier(item.provider, "provider");
   const model = optionalIdentifier(item.model, "model");
   return { interventionId: text(item.interventionId, `${at}.interventionId`), kind: enumeration(item.kind, ["diagnosis", "runtime_patch", "router_patch", "subflow_patch", "expectation_patch", "instruction_suggestion", "change_proposal"] as const, `${at}.kind`), ...(requestId ? { requestId } : {}), ...(promptVersion ? { promptVersion } : {}), ...(provider ? { provider } : {}), ...(model ? { model } : {}), ...(typeof validation?.ok === "boolean" ? { validationOk: validation.ok } : {}), ...(validationCodes.length ? { validationCodes } : {}), ...optionalUsage("inputTokens"), ...optionalUsage("outputTokens"), ...optionalUsage("totalTokens"), ...optionalUsage("estimatedCostUsd"), ...(item.createdAt === undefined ? {} : { createdAt: finite(item.createdAt, `${at}.createdAt`) }) };
+}
+/** Core's own per-run accounting, read as the non-negative numbers it is. */
+function runLlmAccounting(value: JsonRecord): ExistingRunLlmAccounting {
+  const at = "runDetail.metadata.llmGate.costAccounting";
+  const cost = finite(value.estimatedCostUsd ?? 0, `${at}.estimatedCostUsd`);
+  if (cost < 0) invalid(`${at}.estimatedCostUsd must be non-negative`);
+  return {
+    calls: integer(value.calls ?? 0, `${at}.calls`),
+    inputTokens: integer(value.inputTokens ?? 0, `${at}.inputTokens`),
+    outputTokens: integer(value.outputTokens ?? 0, `${at}.outputTokens`),
+    totalTokens: integer(value.totalTokens ?? 0, `${at}.totalTokens`),
+    estimatedCostUsd: cost,
+    budgetBreaches: integer(value.budgetBreaches ?? 0, `${at}.budgetBreaches`),
+    pendingCalls: integer(value.pendingCalls ?? 0, `${at}.pendingCalls`),
+  };
+}
+
+/**
+ * Core's own gate record, bounded. `reason` is one of Core's fixed sentences
+ * and never carries page data, but it is bounded and stripped of control
+ * characters here anyway, because this is a value the runner prints.
+ */
+function runLlmGate(value: JsonRecord): ExistingRunLlmGate {
+  const at = "runDetail.metadata.llmGate";
+  const bounded = (input: unknown, field: string, maximum: number): string | undefined => {
+    if (input === undefined || input === null) return undefined;
+    const parsed = text(input, `${at}.${field}`);
+    if (parsed.length > maximum) invalid(`${at}.${field} is too long`);
+    return parsed.replace(/[ -]/gu, " ");
+  };
+  const reason = bounded(value.reason, "reason", 512);
+  const code = bounded(value.code, "code", 128);
+  return { invoked: typeof value.invoked === "boolean" ? value.invoked : false, ...(reason ? { reason } : {}), ...(code ? { code } : {}) };
 }
 function runtimePatchAttempt(value: unknown, at: string): ExistingRuntimePatchAttempt {
   const item = record(value, at);

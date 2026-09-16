@@ -57,6 +57,21 @@ export class FluxIQControlClient {
     return "login";
   }
 
+  /**
+   * Logs in again on the credentials this client already holds, replacing its
+   * session.
+   *
+   * A FluxIQ session carries a Secret Keys unlock that is computed at login,
+   * from the keys that existed then. A key created later is not in it, and
+   * every operation that needs the key's plaintext -- an LLM execution grant,
+   * for one -- is refused on that session however recently it authenticated.
+   * Logging in again is how a caller that just installed a key can use it.
+   */
+  async reauthenticate(bounds: FluxIQHttpOptions = {}): Promise<void> {
+    if (!this.credentials) throw new RunnerFailure("environment.missing", "FluxIQ control client cannot re-authenticate without credentials");
+    await this.freshLogin(this.credentials, this.loginOptions.sessionCache, bounds);
+  }
+
   async authSessionStatus(username: string): Promise<AuthSessionStatus | undefined> {
     return this.loginOptions.sessionCache?.status({ origin: this.origin, username });
   }

@@ -52,6 +52,15 @@ export type RunningTopology = {
   control?: ExistingFluxIQControlClient;
   projectId?: string;
   authorizationPin?: string;
+  /**
+   * The account password this topology authenticated with, present only on a
+   * topology that owns its Core. Installing a Secret Key is a credentialed
+   * mutation in FluxIQ -- Core re-authorizes the session with the password and
+   * PIN before it will encrypt one -- so a run that has to install a provider
+   * key needs it. It is never written anywhere: an isolated run's is generated
+   * per run and lives only in this process.
+   */
+  authorizationPassword?: string;
   processExitCodes(): Record<string, number | null>;
   close(): Promise<void>;
 };
@@ -158,6 +167,7 @@ export async function startTopology(options: TopologyOptions, supervisor = new P
       gatewayUrl: `ws://127.0.0.1:${allocation.gatewayPort}/client`,
       ...(control ? { control } : {}), ...(projectId ? { projectId } : {}),
       ...(credentials?.pin ? { authorizationPin: credentials.pin } : {}),
+      ...(credentials?.password ? { authorizationPassword: credentials.password } : {}),
       processExitCodes: () => supervisor.processExitCodes(),
       close: closeTopology(supervisor, workspaceLock),
     };

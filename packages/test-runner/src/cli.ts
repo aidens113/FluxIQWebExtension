@@ -9,6 +9,7 @@ import { parseLabCommand, expandMatrix } from "./commands.js";
 import { classifyRunnerFailure } from "./failure.js";
 
 import { inspectRun } from "./inspect.js";
+import { beginLiveLlmRun } from "./live-llm/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
 import { runInteractiveSession } from "./interactive-session.js";
 import { runScenario } from "./run-scenario.js";
@@ -82,16 +83,23 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
       }
       process.stdout.write(`${JSON.stringify(outcome)}\n`); return outcome.status === "passed" ? 0 : 1;
     }
-    if ((command.command === "run" || command.command === "matrix") && command.llm?.mode === "live") throw new Error("Live LLM execution is fail-closed until the Phase 1 provider runner is enabled");
     if (command.command === "run") {
       const target = resolveTargetConfiguration({ ...(command.target ? { cliTarget: command.target } : {}), ...(command.flowId ? { cliFlowId: command.flowId } : {}), ...(command.workspace ? { cliWorkspace: command.workspace } : {}), ...(command.freshLogin ? { cliFreshLogin: true } : {}), env: resolvedEnvironment });
-      const result = await runScenario({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: command.scenarioId, ...(command.seed === undefined ? {} : { seed: command.seed }), ...(command.workflowId ? { workflowId: command.workflowId } : {}), ...(command.variantId ? { variantId: command.variantId } : {}), ...(command.flowLane ? { flow: true } : {}), ...(command.evidence ? { evidence: command.evidence } : {}), environment: resolvedEnvironment, target });
+      // Before the run, so an unexecutable profile or an absent credential is a
+      // refusal an operator can read, rather than a sanitized facility failure
+      // reported from inside a run that had already started a browser.
+      const live = command.llm ? await beginLiveLlmRun({ profile: command.llm, repositoryRoot, environment: resolvedEnvironment, flowLane: command.flowLane === true, targetMode: target.mode }) : undefined;
+      const result = await runScenario({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: command.scenarioId, ...(command.seed === undefined ? {} : { seed: command.seed }), ...(command.workflowId ? { workflowId: command.workflowId } : {}), ...(command.variantId ? { variantId: command.variantId } : {}), ...(command.flowLane ? { flow: true } : {}), ...(command.evidence ? { evidence: command.evidence } : {}), ...(live ? { live } : {}), environment: resolvedEnvironment, target });
       process.stdout.write(`${JSON.stringify(result)}\n`); return result.verdict === "passed" ? 0 : 1;
     }
     const target = resolveTargetConfiguration({ ...(command.target ? { cliTarget: command.target } : {}), ...(command.flowId ? { cliFlowId: command.flowId } : {}), ...(command.workspace ? { cliWorkspace: command.workspace } : {}), ...(command.freshLogin ? { cliFreshLogin: true } : {}), env: resolvedEnvironment });
     const manifests = await loadScenarioManifests(repositoryRoot, labPaths.scenarioLabDist);
     const results = [];
-    for (const job of expandMatrix(command, manifests.map(item => item.id))) results.push(await runScenario({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: job.scenarioId, ...(command.evidence ? { evidence: command.evidence } : {}), environment: resolvedEnvironment, target }));
+    // A live matrix is one scenario at one repeat (`parseLabCommand`), and it
+    // runs the Flow lane because that is the only lane a provider is authorized
+    // against; `runScenario` refuses the combination otherwise.
+    const matrixLive = command.llm ? await beginLiveLlmRun({ profile: command.llm, repositoryRoot, environment: resolvedEnvironment, flowLane: true, targetMode: target.mode }) : undefined;
+    for (const job of expandMatrix(command, manifests.map(item => item.id))) results.push(await runScenario({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: job.scenarioId, ...(command.evidence ? { evidence: command.evidence } : {}), ...(matrixLive ? { live: matrixLive, flow: true } : {}), environment: resolvedEnvironment, target }));
     const passed = results.every(result => result.verdict === "passed");
     process.stdout.write(`${JSON.stringify({ status: passed ? "passed" : "failed", runs: results })}\n`);
     return passed ? 0 : 1;

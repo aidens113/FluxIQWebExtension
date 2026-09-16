@@ -29,6 +29,7 @@ import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant, scenarioLabOriginProof } from "./lab-control/index.js";
 import { awaitFinalizedRecording, declaredSecretValues, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneObservation, resolveDeclaredSecrets, runFlowLane, selectLaneObservation, type DeclaredSecret, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
 import { attestRunRedaction, runRedactionScopes, scenarioRedactionLiterals, type RunRedactionAttestation } from "./redaction-attestation/index.js";
+import type { LiveLlmRun } from "./live-llm/index.js";
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog, readRecordingCompleteness, runExtractionMeasurements, type ExtractionStepRead } from "./run-expectations/index.js";
 import { singleRunEvaluation } from "./run-evaluation/index.js";
 import { automationFailureFromActionResult, createRunManifest, flowActionTimings, runActionStatus, type CloneRunState } from "./run-manifest/index.js";
@@ -39,7 +40,7 @@ import { assertSafeScenarioRunId, createBenchReceipt, type BenchReceiptMetadata 
 import { projectFacilityFailure, ProjectedFacilityError } from "./facility-failure/index.js";
 
 /** `evidence` overrides the manifest's `evidencePolicy`; `workflowId` and `variantId` select what `resolveScenarioWorkflow` resolves. */
-export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flow?: boolean; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration; runId?: string; benchReceipt?: BenchReceiptMetadata };
+export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flow?: boolean; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration; runId?: string; benchReceipt?: BenchReceiptMetadata; live?: LiveLlmRun };
 /**
  * `observation` carries the `RunEvaluation` fields only the lane that ran can
  * know, and `evaluation` is the run's own `RunEvaluation` built from it — the
@@ -88,12 +89,14 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   // of the same scenario does not require them to be configured.
   const declaredSecrets: DeclaredSecret[] = options.flow ? resolveDeclaredSecrets(scenario, environment) : [];
   const secrets = [environment.FLUXIQ_TEST_PASSWORD, environment.FLUXIQ_TEST_PIN, environment.FLUXIQ_TEST_TOTP, ...declaredSecretValues(declaredSecrets)].filter((value): value is string => Boolean(value));
-  // What the redaction attestation scans for once Core has stopped, read here so a
-  // bad declaration fails before the bundle. Never added to `secrets`: the bundle's
-  // redactor would scrub them on write and hide the leak the bundle scan looks for.
-  // The existing target's FluxIQ is remote and cannot be scanned, so a scenario
-  // declaring literals there stays unattested (`pending`) instead of verified.
-  const redactionLiterals = target.mode === "existing" && scenario.secrets?.length ? undefined : scenarioRedactionLiterals(scenario);
+  // A live provider run is planned and credentialed before this is reached (`beginLiveLlmRun`), so that an unexecutable profile or an absent key refuses at the command line rather than inside a run.
+  const live = options.live; if (live && options.flow !== true) throw new RunnerFailure("fixture.invalid", "A live LLM run needs the Flow lane: pass --flow, which is what builds the Flow the provider is authorized against");
+  // What the redaction attestation scans for once Core has stopped -- the scenario's declared
+  // literals and a live run's provider credential -- read here so a bad declaration fails before
+  // the bundle. Never added to `secrets`: the bundle's redactor would scrub them on write and hide
+  // the leak the bundle scan looks for. The existing target's FluxIQ is remote and cannot be
+  // scanned, so a scenario declaring literals there stays unattested (`pending`) instead of verified.
+  const redactionLiterals = target.mode === "existing" && scenario.secrets?.length ? undefined : [...scenarioRedactionLiterals(scenario), ...(live?.redactionLiterals ?? [])];
   let redaction: RunRedactionAttestation | undefined;
   const evidence = effectiveEvidencePolicy(scenario.evidencePolicy, options.evidence);
   setFacilityStage("bundle.initialize");
@@ -374,6 +377,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
           // The unarmed workflow's, which the recording lane asserted above.
           recordingEvents: recordingWorkflow.expected.recordingEvents ?? [],
           scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, secrets: declaredSecrets,
+          ...(live ? { authorizeLiveLlm: live.authorizer(control, activeTopology) } : {}),
           // Closes the discard window for the second read: Core audits the Flow's runtime confirmations against the finalized recording.
           flowDispatchStarting: at => { discardWindowUntil = at; },
           prepareFlowPage: async () => {
@@ -405,6 +409,8 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
             catch { return false; }
           },
         });
+        // Settled before any expectation is judged: a run that overspent its budget or reached no provider failed at what was asked of it, whatever the automation then did.
+        if (live) await live.settle(control, { projectId: topology.projectId, runId: lane.run.runId }, bundle, details => capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The live provider run finished"), details }));
         if (lane.observation.oracleVerdict === "failed") throw new RunnerFailure("runtime.behavior", "The generated Flow ran, but the fixture's expected final state did not hold afterwards");
         await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The generated Flow ran and met the workflow's expectations"), details: { runtimeRunId: lane.run.runId, actionCount: lane.run.actions.length, harnessActivations: lane.run.harnessActivations } });
       }
@@ -584,7 +590,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     // evidence sizes come from the staging directory's `snapshots/flow-lane.json`,
     // the file the bench reads once `finalize` has renamed that directory.
     const evaluation = observation
-      ? singleRunEvaluation({ runId, verdict, failureCategory, facilityFailure, scenarioId: scenario.id, workflowId: workflow.workflowId, variantId: workflow.variant?.id, repeatIndex: benchReceipt?.cellIdentity.repeatIndex ?? 0, observation, manifest, metrics, events: bundle.getEvents(), wallClockMs: Date.now() - Date.parse(startedAt), bundlePath: bundle.stagingPath })
+      ? singleRunEvaluation({ runId, verdict, failureCategory, facilityFailure, scenarioId: scenario.id, workflowId: workflow.workflowId, variantId: workflow.variant?.id, repeatIndex: benchReceipt?.cellIdentity.repeatIndex ?? 0, observation, manifest, metrics, events: bundle.getEvents(), wallClockMs: Date.now() - Date.parse(startedAt), llm: live?.usage, bundlePath: bundle.stagingPath })
       : undefined;
     if (evaluation) await bundle.writeStructured("evaluation.json", evaluation);
     if (benchReceipt) await bundle.writeStructured("bench-receipt.json", benchReceipt);

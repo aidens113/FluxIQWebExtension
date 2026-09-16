@@ -1,4 +1,4 @@
-import { EVALUATION_SCHEMA_VERSION, assertRunEvaluation, type ExpectedFailure, type InvariantResult, type RunEvaluation } from "@fluxiq-web-extension/test-contracts";
+import { EVALUATION_SCHEMA_VERSION, assertRunEvaluation, type ExpectedFailure, type InvariantResult, type LlmUsage, type RunEvaluation } from "@fluxiq-web-extension/test-contracts";
 import type { RunLaneObservation } from "../flow-lane/index.js";
 import { evidenceBudgetInvariant } from "./evidence-budget-invariant.js";
 import type { FlowLaneEvidence } from "./flow-lane-evidence-sizes.js";
@@ -42,6 +42,13 @@ export type ObservedRun = {
    * and no budget invariant is added.
    */
   evidence?: FlowLaneEvidence;
+  /**
+   * The provider configuration this run used and the calls it made. Absent, the
+   * run ran provider-free and is recorded as `disabled`, which is every run that
+   * did not ask for a live model. Only the run itself can know this: the lane
+   * measures the automation, and a provider call is not part of it.
+   */
+  llm?: LlmUsage;
 };
 
 /**
@@ -93,7 +100,7 @@ export function evaluateObservedRun(input: ObservedRun): RunEvaluation {
     evidence: evidence
       ? { sanitizedPacketBytes: [...evidence.sanitizedPacketBytes], rawSnapshotBytes: [...evidence.rawSnapshotBytes], truncationCount: evidence.truncationCount }
       : { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 },
-    llm: { mode: "disabled", profileId: null, calls: 0 },
+    llm: input.llm ?? { mode: "disabled", profileId: null, calls: 0 },
     // The lane's own measurements, or `null` when the lane measured no
     // extraction -- which the contract reads as unmeasured, never as "no
     // extraction step". Only the lane that ran can tell those apart, so it is

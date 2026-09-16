@@ -1,4 +1,4 @@
-import type { RunEvaluation, RunManifest } from "@fluxiq-web-extension/test-contracts";
+import type { LlmUsage, RunEvaluation, RunManifest } from "@fluxiq-web-extension/test-contracts";
 import type { RunLaneObservation } from "../flow-lane/index.js";
 import { flowLaneEvidenceSizes } from "./flow-lane-evidence-sizes.js";
 import { evaluateObservedRun } from "./observed-run-evaluation.js";
@@ -38,6 +38,8 @@ export type SingleRunInput = {
    * bench reads from the finalized bundle. Absent, no evidence size is read.
    */
   bundlePath?: string;
+  /** The provider usage the run observed; absent or undefined for a provider-free run. */
+  llm?: LlmUsage | undefined;
 };
 
 /**
@@ -83,6 +85,7 @@ export function singleRunEvaluation(input: SingleRunInput): RunEvaluation {
     }),
     observation: input.observation,
     ...(evidence ? { evidence } : {}),
+    ...(input.llm ? { llm: input.llm } : {}),
   });
 }
 
