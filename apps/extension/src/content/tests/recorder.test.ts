@@ -20,7 +20,13 @@ import { captureSettings } from "../capture-settings";
 import type { RecordingEventKind, RecordingEventPayload } from "../types";
 
 type Recorder = typeof import("../recorder");
-type FakeRecord = { type: "childList" | "attributes" | "characterData"; addedNodes: { length: number }; removedNodes: { length: number } };
+/**
+ * A node as the tally sees it: what it is attached to, and whether it carries
+ * an attribute. That is the whole of what `picker-host.ts` asks of a node, and
+ * asking it of plain objects is what lets the tally be tested here at all.
+ */
+type FakeNode = { parentNode: FakeNode | null; hasAttribute(name: string): boolean };
+type FakeRecord = { type: "childList" | "attributes" | "characterData"; target: FakeNode; addedNodes: FakeNode[]; removedNodes: FakeNode[] };
 
 const STUB_GLOBALS = ["window", "document", "location", "chrome", "MutationObserver"] as const;
 const stubWindow: Record<string, unknown> = {};
@@ -43,7 +49,20 @@ class StubMutationObserver {
   }
 }
 
-const added = (count = 1): FakeRecord => ({ type: "childList", addedNodes: { length: count }, removedNodes: { length: 0 } });
+/** A node of the page itself, carrying no attribute at all. */
+const pageNode = (): FakeNode => ({ parentNode: null, hasAttribute: () => false });
+
+/** The picker's overlay host, and anything the overlay put inside it. */
+const overlayNode = (): FakeNode => ({ parentNode: null, hasAttribute: (name) => name === "data-fluxiq-picker" });
+
+const added = (count = 1): FakeRecord => ({
+  type: "childList",
+  target: pageNode(),
+  addedNodes: Array.from({ length: count }, pageNode),
+  removedNodes: []
+});
+
+const changedText = (): FakeRecord => ({ type: "characterData", target: pageNode(), addedNodes: [], removedNodes: [] });
 const kinds = (): RecordingEventKind[] => sent.map((message) => message.payload.kind);
 
 /** Runs `body` against a recording recorder on a stub page, with `setTimeout` mocked, and restores every global. */
@@ -90,7 +109,7 @@ test("a click after a DOM addition sends the dom.mutation first, and the quiet p
 
 test("every kind that can be executable flushes the batch first; a kind that cannot leaves it to the timer", async (t) => {
   await whileRecording(t, ({ emit }) => {
-    const executable: RecordingEventKind[] = ["dom.click", "dom.input", "dom.change", "dom.submit", "dom.keydown"];
+    const executable: RecordingEventKind[] = ["dom.click", "dom.input", "dom.change", "dom.submit", "dom.keydown", "data.extract"];
     for (const kind of executable) {
       sent.length = 0;
       deliver?.([added()]);
@@ -112,7 +131,7 @@ test("with nothing pending an executable event sends only itself, also after the
   await whileRecording(t, ({ emit }) => {
     emit("dom.click", {});
     assert.deepEqual(kinds(), ["dom.click"]);
-    deliver?.([{ type: "attributes", addedNodes: { length: 0 }, removedNodes: { length: 0 } }]);
+    deliver?.([{ type: "attributes", target: pageNode(), addedNodes: [], removedNodes: [] }]);
     t.mock.timers.tick(500);
     emit("dom.keydown", {});
     assert.deepEqual(kinds(), ["dom.click", "dom.mutation", "dom.keydown"]);
@@ -123,7 +142,7 @@ test("with nothing pending an executable event sends only itself, also after the
 test("records the observer has queued but not yet delivered are counted in the flush", async (t) => {
   await whileRecording(t, ({ emit }) => {
     deliver?.([added()]);
-    undelivered = [added(3), { type: "characterData", addedNodes: { length: 0 }, removedNodes: { length: 0 } }];
+    undelivered = [added(3), changedText()];
     emit("dom.submit", {});
     assert.deepEqual(kinds(), ["dom.mutation", "dom.submit"]);
     assert.deepEqual(sent[0]?.payload.mutation, { added: 4, removed: 0, attributes: 0, text: 1 });
@@ -141,5 +160,43 @@ test("with mutation capture off nothing is flushed, and the flush adds no field 
     emit("dom.click", {});
     assert.deepEqual(kinds(), ["dom.click"]);
     assert.deepEqual(Object.keys(sent[0]?.payload ?? {}).sort(), Object.keys(alone ?? {}).sort());
+  });
+});
+
+test("the picker's overlay is not a page change: its host, and what it holds, are not counted", async (t) => {
+  await whileRecording(t, ({ emit }) => {
+    const host = overlayNode();
+    const insideOverlay: FakeNode = { parentNode: host, hasAttribute: () => false };
+    deliver?.([
+      // The overlay goes up in the same batch as a change the page made.
+      { type: "childList", target: pageNode(), addedNodes: [host, pageNode()], removedNodes: [] },
+      // The highlight moves.
+      { type: "attributes", target: insideOverlay, addedNodes: [], removedNodes: [] },
+      // The pick ends and the overlay comes down.
+      { type: "childList", target: pageNode(), addedNodes: [], removedNodes: [host] }
+    ]);
+    emit("dom.click", {});
+    assert.deepEqual(kinds(), ["dom.mutation", "dom.click"]);
+    assert.deepEqual(
+      sent[0]?.payload.mutation,
+      { added: 1, removed: 0, attributes: 0, text: 0 },
+      "only the node the page itself added is counted"
+    );
+  });
+});
+
+test("a data.extract carries the definition it was given", async (t) => {
+  await whileRecording(t, ({ emit }) => {
+    const extraction = {
+      form: "list",
+      datasetId: "products-1a2b3c4d",
+      label: "Products",
+      request: { item: "[data-testid=\"product-card\"]", fields: { product_name: "[data-testid=\"product-name\"]" } },
+      fieldLabels: { product_name: "product-name" },
+      itemCount: 8
+    } as const;
+    emit("data.extract", { extraction });
+    assert.deepEqual(kinds(), ["data.extract"]);
+    assert.deepEqual(sent[0]?.payload.extraction, extraction);
   });
 });

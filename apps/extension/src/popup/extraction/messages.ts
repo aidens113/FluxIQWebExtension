@@ -2,18 +2,22 @@
 //
 // The four message *names* are `EXTRACTION_RUNTIME_MESSAGES` in
 // `shared/extraction-messages.ts`, which is the one spelling both sides build
-// against. The payload shapes below are declared here, in the panel's own
-// directory, because the background half (X4.3) is being written beside this
-// one: when its payload types land in the shared file, these move there and
-// this module re-exports them. Until then the panel is typed against what it
-// actually sends, rather than against `unknown`.
+// against -- and so, now, is the confirm payload: the panel writes it and the
+// background worker reads it, each held a copy of the shape while the two
+// halves were being written in parallel, and the copies are gone. This module
+// re-exports the shared declarations so the panel's own imports stay local, and
+// declares only what the panel alone reads: how a session looks to it, and what
+// its four calls answer.
 //
 // Nothing here carries a value read from the page except `ExtractionPreviewRow`,
 // which exists only in memory for as long as the confirmation panel is open.
 // A preview row never reaches the confirm payload, and an excluded column's
 // values never reach a preview row at all (D12).
 
-import type { WebAutomationExtractFieldHandling, WebAutomationExtractFieldKind, WebAutomationExtractionProposal, WebAutomationExtractListPagination } from "@fluxiq-web-extension/domain/client";
+import type { WebAutomationExtractionProposal } from "@fluxiq-web-extension/domain/client";
+import type { ExtractionPreviewRow } from "../../shared/extraction-messages";
+
+export type { ExtractionConfirmField, ExtractionConfirmRequest, ExtractionPreviewRow } from "../../shared/extraction-messages";
 
 /**
  * How far the pick has got, as the background's session store reports it:
@@ -22,14 +26,6 @@ import type { WebAutomationExtractFieldHandling, WebAutomationExtractFieldKind, 
  * recording and the panel is done.
  */
 export type ExtractionSessionState = "picking" | "picked" | "recorded";
-
-/**
- * One preview row, keyed by the proposal's field key. `null` is a field the
- * page had no value for. A key the user excluded is never present: the page is
- * not asked to read it, and the panel drops the key from every row it holds the
- * moment the user excludes it (D12).
- */
-export type ExtractionPreviewRow = Record<string, string | null>;
 
 /** The pick session for the active tab, as `fluxiq.getExtractionSession` reports it. */
 export type ExtractionSessionView = {
@@ -40,37 +36,6 @@ export type ExtractionSessionView = {
   preview?: ExtractionPreviewRow[] | undefined;
   /** Why no proposal was made, in the content script's fixed refusal vocabulary. */
   refused?: string | undefined;
-};
-
-/** The column the user settled on, as the confirm message carries it. */
-export type ExtractionConfirmField = {
-  /** The record field key (D16), unique within the message. */
-  key: string;
-  /** The column's name: a header, a test id, or what the user renamed it to. Never text read inside an item. */
-  label: string;
-  kind: WebAutomationExtractFieldKind;
-  /** Where inside an item the value is read; absent, the item itself. */
-  selector?: string | undefined;
-  attribute?: string | undefined;
-  header?: string | undefined;
-  /** `false` marks the column optional: an item the page cannot read it from carries `null` for it (D16). */
-  required?: boolean | undefined;
-  /** `exclude` means the page never reads the column (D12). `encrypt` is not offered until Core K11 is built (D13). */
-  handling: Exclude<WebAutomationExtractFieldHandling, "encrypt">;
-};
-
-/** `fluxiq.extractionConfirm`: everything the background needs to build the recorded definition, and nothing read from the page. */
-export type ExtractionConfirmRequest = {
-  /** The name the dataset is saved under. */
-  label: string;
-  /** The generalized item selector, exactly as proposed. */
-  item: string;
-  /** The columns to record, in the order the panel showed them. A column the user removed is simply absent. */
-  fields: ExtractionConfirmField[];
-  /** How to read past the first page, or absent to read this page only. */
-  paginate?: WebAutomationExtractListPagination | undefined;
-  /** How many items the list held when the extraction was defined. */
-  itemCount: number;
 };
 
 /** What `start`, `confirm` and `cancel` answer. The panel re-reads the session afterwards rather than trusting a payload here. */

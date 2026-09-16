@@ -17,6 +17,7 @@ import {
   type WebAutomationActionResult,
   type WebAutomationActionType,
   type WebAutomationActionVisualTarget,
+  type WebAutomationRecordedExtraction,
   type WebAutomationRecordedTab
 } from "@fluxiq-web-extension/domain/client";
 // The page-level evidence a capture gathers is produced in `content/evidence/`
@@ -378,6 +379,10 @@ export type RecordingEventKind =
   | "dom.scroll"
   | "dom.mutation"
   | "dom.snapshot"
+  // The extraction the user defined with the picker (X4). It is executable: the
+  // definition it carries becomes a `web.dom.extract_list` or `web.dom.extract`
+  // node, which is why it flushes the pending mutation batch like a click does.
+  | "data.extract"
   | "action.result"
   | "client.error";
 
@@ -397,6 +402,13 @@ export type RecordingEventPayload = {
   actionResult?: BrowserActionResult | undefined;
   /** A tab switch or close the background recorded; the recording-start marker has none. */
   tab?: WebAutomationRecordedTab | undefined;
+  /**
+   * `data.extract`: the extraction the user defined. Selectors, field keys,
+   * labels and counts -- never a value read from the page (decision D3), and
+   * never a column the user excluded (decision D12), which is absent from the
+   * request itself rather than filtered out of the result.
+   */
+  extraction?: WebAutomationRecordedExtraction | undefined;
   metadata?: JsonObject | undefined;
 };
 

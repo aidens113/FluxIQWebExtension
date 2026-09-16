@@ -16,11 +16,19 @@ import { captureSettings } from "./capture-settings";
 import { compactObject } from "./compact-object";
 import { captureSnapshot } from "./dom-snapshot";
 import { describeElement, readElementValue } from "./describe-element";
+import { isPickerHostNode } from "./picker-host";
 import { shouldAttachStateSnapshot } from "./snapshots";
 import type { RecordingEventKind, RecordingEventPayload } from "./types";
 
-/** The kinds a recorded event can become an executable action from. */
-const EXECUTABLE_KINDS: ReadonlySet<RecordingEventKind> = new Set(["dom.click", "dom.input", "dom.change", "dom.submit", "dom.keydown"]);
+/**
+ * The kinds a recorded event can become an executable action from.
+ *
+ * `data.extract` is one of them: the extraction the user defined becomes a
+ * `web.dom.extract_list` or `web.dom.extract` node, so it flushes the pending
+ * mutation batch for the same reason a click does -- a page change made before
+ * the extraction was defined must not be recorded after it.
+ */
+const EXECUTABLE_KINDS: ReadonlySet<RecordingEventKind> = new Set(["dom.click", "dom.input", "dom.change", "dom.submit", "dom.keydown", "data.extract"]);
 
 let recording = false;
 let sequence = 0;
@@ -118,13 +126,33 @@ function flushPendingMutation(): void {
   emit("dom.mutation", { mutation });
 }
 
+/**
+ * Counts what the page changed, and not what the extension did to it.
+ *
+ * The picker's overlay is a node the extension adds to the page and takes away
+ * again while recording is on. Counted, it would put a `dom.mutation` in the
+ * recording that no page behaviour produced, and a replay built from that
+ * recording would wait for a change that never comes. So a record whose target
+ * is inside the overlay is skipped whole, and the overlay host itself is not
+ * counted as an added or removed node (`picker-host.ts`).
+ */
 function tallyMutations(mutations: readonly MutationRecord[]): void {
   for (const mutation of mutations) {
-    pendingMutation.added += mutation.addedNodes.length;
-    pendingMutation.removed += mutation.removedNodes.length;
+    if (isPickerHostNode(mutation.target)) continue;
+    pendingMutation.added += countOutsidePicker(mutation.addedNodes);
+    pendingMutation.removed += countOutsidePicker(mutation.removedNodes);
     if (mutation.type === "attributes") pendingMutation.attributes += 1;
     if (mutation.type === "characterData") pendingMutation.text += 1;
   }
+}
+
+/** How many of `nodes` are the page's own. */
+function countOutsidePicker(nodes: ArrayLike<Node> & Iterable<Node>): number {
+  let count = 0;
+  for (const node of nodes) {
+    if (!isPickerHostNode(node)) count += 1;
+  }
+  return count;
 }
 
 function basePayload(kind: RecordingEventKind, details: Partial<RecordingEventPayload>): RecordingEventPayload {
@@ -144,6 +172,7 @@ function basePayload(kind: RecordingEventKind, details: Partial<RecordingEventPa
   if (details.key !== undefined) payload.key = details.key;
   if (details.scroll) payload.scroll = details.scroll;
   if (details.mutation) payload.mutation = details.mutation;
+  if (details.extraction) payload.extraction = details.extraction;
   if (details.actionResult) payload.actionResult = details.actionResult;
   if (details.metadata) payload.metadata = details.metadata;
   return payload;

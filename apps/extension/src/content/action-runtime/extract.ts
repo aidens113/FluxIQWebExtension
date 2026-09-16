@@ -2,6 +2,12 @@
 // field's value, or the element's whitespace-collapsed text -- and never a
 // sensitive control's (decision D2).
 //
+// The four modes are the domain's `WebAutomationExtractReadMode` vocabulary.
+// `actions/extract.ts` decides what to read from the command's structured
+// `extract` (contract C3) and falls back to its `options`, then hands the
+// result here as one shape, so this reader has one bag to read whichever way
+// the command was recorded.
+//
 // A target that is sensitive by the one shared rule (`isSensitiveFormControl`),
 // or sits inside an element that is, is refused in every mode, before anything
 // is read: its live value, any attribute, and its HTML alike. An element inside

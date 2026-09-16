@@ -13,6 +13,13 @@
 // the picker to show and for the content harness to prove inference on a real
 // page. Its reply holds selectors, labels and counts, never a page value
 // (decision D3).
+//
+// The picker's own messages -- start a pick, cancel it, preview it, record it
+// -- are routed to `content/picker/` and answered by the **top frame only**.
+// The overlay belongs to the page the user is looking at, and the worker
+// addresses frame 0 to reach it; a child frame that receives one anyway stays
+// silent rather than putting a second overlay up inside itself, which the
+// worker reads as the page refusing.
 
 import { CONTENT_SCRIPT_VERSION, isActiveContentInstance } from "./instance";
 import { captureSettings } from "./capture-settings";
@@ -20,6 +27,7 @@ import { setRecordingState } from "./recorder";
 import { actionFailure, captureSnapshotForResponse, executeAction } from "./action-runtime";
 import { inferListFromElement } from "./extraction";
 import { isTopFrame } from "./frame-geometry";
+import { extractionContentMessage, handleExtractionMessage } from "./picker";
 import { EXTRACTION_PROPOSE_MESSAGE, type ExtractionProposeResponse } from "../shared/extraction-messages";
 import type { BrowserActionCommand } from "./types";
 
@@ -79,6 +87,11 @@ export function installMessageHandler(): void {
         .then(sendResponse)
         .catch((error: unknown) => sendResponse(actionFailure(typed.action as BrowserActionCommand, error)));
       return true;
+    }
+    const extraction = extractionContentMessage(typed);
+    if (extraction) {
+      if (!isTopFrame()) return false;
+      return handleExtractionMessage(extraction, sendResponse) === "open";
     }
     if (typed.type === EXTRACTION_PROPOSE_MESSAGE) {
       if (!isAddressedToThisFrame(typed)) return false;
