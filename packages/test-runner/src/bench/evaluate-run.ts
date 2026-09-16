@@ -106,6 +106,9 @@ export function evaluateFlowRun(input: FlowRunInput): RunEvaluation {
       automationFailureReported: observed?.automationFailureReported ?? null,
       automationFailureExpected: input.expectedFailure,
       harnessActivations: observed?.harnessActivations ?? 0,
+      // What the recovery produced, or null when the lane measured none: a run
+      // that never reached the Flow lane is unmeasured, not recovery-free.
+      harnessRecovery: observed?.harnessRecovery ?? null,
       actions: observed ? [...observed.actions] : [],
       // The lane's own per-step extraction measurements, or null when it
       // published none: a run that never reached the Flow lane measured no

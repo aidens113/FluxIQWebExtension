@@ -326,7 +326,12 @@ function assertFlowDidNotStopEarly(run: PersistedFlowRunOutcome): void {
  * closed names only, never a field name or a record. Each action carries
  * Core's transition comparison status when Core reported one.
  * `stoppedWithoutFailedAttempt` is the run's early stop, by counts, or null
- * when it did not stop that way.
+ * when it did not stop that way. `harnessRecovery` is what Core's recovery did
+ * -- each intervention's kind and validation, each runtime patch attempt's kind,
+ * flags and issue codes, and the adaptation and change proposal ids the run
+ * created -- with `attempted: false` for a run that needed none; Core's
+ * workspace is deleted after an isolated run, so this is the only place the
+ * answer survives.
  */
 export function flowLaneSnapshot(evidence: FlowLaneEvidence) {
   return {
@@ -334,6 +339,7 @@ export function flowLaneSnapshot(evidence: FlowLaneEvidence) {
     proposalId: evidence.proposal.proposalId, mapperId: evidence.proposal.mapperId, candidateCount: evidence.proposal.candidateCount, proposalIssues: [...evidence.proposal.issues],
     flowId: evidence.flowId, runtimeRunId: evidence.run.runId, status: evidence.run.status,
     harnessActivations: evidence.run.harnessActivations, failure: evidence.run.failure, stoppedWithoutFailedAttempt: evidence.run.stoppedWithoutFailedAttempt ?? null,
+    harnessRecovery: evidence.run.harnessRecovery,
     // Where the run started in the recording's candidate order: 0 for its first action, null when no attempt landed on an action node.
     startCandidateIndex: evidence.startCandidateIndex ?? null,
     extraction: extractionSnapshot(evidence.extraction),

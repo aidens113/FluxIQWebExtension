@@ -106,7 +106,10 @@ export function evaluateObservedRun(input: ObservedRun): RunEvaluation {
     // extraction step". Only the lane that ran can tell those apart, so it is
     // taken from the observation rather than derived here.
     extraction: observation.extraction === null ? null : [...observation.extraction],
-    harnessRecovery: null,
+    // The lane's record of what Core's recovery did, or `null` -- not measured --
+    // when the lane stated none. Like `extraction`, only the lane that ran can
+    // tell "recovered nothing" from "never measured", so it is not derived here.
+    harnessRecovery: observation.harnessRecovery ? structuredClone(observation.harnessRecovery) : null,
     adaptationCost: null,
     adaptationValidation: null,
     adaptationPersistence: null,

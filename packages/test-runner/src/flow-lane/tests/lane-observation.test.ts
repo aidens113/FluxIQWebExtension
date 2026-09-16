@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assertRunEvaluation, EVALUATION_SCHEMA_VERSION, type RunEvaluation, type RunExtractionMeasurement } from "@fluxiq-web-extension/test-contracts";
+import { assertRunEvaluation, EVALUATION_SCHEMA_VERSION, type RunEvaluation, type RunExtractionMeasurement, type RunHarnessRecovery } from "@fluxiq-web-extension/test-contracts";
 import { flowLaneObservation, recordingLaneObservation, selectLaneObservation, type RunLaneObservation } from "../lane-observation.js";
 import type { PersistedFlowRunOutcome } from "../persisted-flow-run.js";
 
+const NO_RECOVERY: RunHarnessRecovery = { attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [] };
+
 const run = (overrides: Partial<PersistedFlowRunOutcome> = {}): PersistedFlowRunOutcome => ({
-  runId: "run.one", status: "succeeded", harnessActivations: 0, failure: null, extracted: [], extractedNonStringValues: 0, extractionDurationsByNode: new Map(),
+  runId: "run.one", status: "succeeded", harnessActivations: 0, harnessRecovery: NO_RECOVERY, failure: null, extracted: [], extractedNonStringValues: 0, extractionDurationsByNode: new Map(),
   actions: [{ actionType: "web.dom.type", status: "succeeded", startedAt: new Date(0).toISOString(), durationMs: 12, failure: null }],
   ...overrides,
 });
@@ -65,6 +67,35 @@ test("no Flow was created, so FluxIQ reported no verdict", () => {
 
 test("harness activations come from Core's run detail", () => {
   assert.equal(flowLaneObservation({ flowCreated: true, oracleVerdict: "passed", run: run({ harnessActivations: 2 }), automationFailureExpected: null }).harnessActivations, 2);
+});
+
+/**
+ * `null` is unmeasured and `attempted: false` is measured with nothing to
+ * recover, as with extraction: a run that recovered nothing says so, and only
+ * a run that never happened, or a lane that runs no Flow, says nothing.
+ */
+test("the run's recovery record travels on the observation; no recovery is stated, and a run that never happened states none", () => {
+  const recovered: RunHarnessRecovery = {
+    attempted: true,
+    interventions: [{ kind: "diagnosis", validationOk: true, validationCodes: [] }, { kind: "runtime_patch", validationOk: true, validationCodes: [] }],
+    runtimePatchAttempts: [{ kind: "temporary_wait_retry", proposalOnly: false, executed: true, preflightOk: true, issueCodes: [], adaptationCreated: true, changeProposalCreated: false }],
+    adaptationIds: ["adaptation.run.one.temporary_wait_retry.1700"],
+    changeProposalIds: [],
+  };
+  const adapted = flowLaneObservation({ flowCreated: true, oracleVerdict: "passed", run: run({ harnessActivations: 2, harnessRecovery: recovered }), automationFailureExpected: null });
+  assert.deepEqual(adapted.harnessRecovery, recovered);
+  assertRunEvaluation(evaluationFrom(adapted));
+
+  const quiet = flowLaneObservation({ flowCreated: true, oracleVerdict: "passed", run: run(), automationFailureExpected: null });
+  assert.deepEqual(quiet.harnessRecovery, NO_RECOVERY);
+  assert.equal(quiet.reportedVerdict, "passed", "a run that needed no recovery is not a failed one");
+  assertRunEvaluation(evaluationFrom(quiet));
+
+  assert.equal(flowLaneObservation({ flowCreated: false, oracleVerdict: null, run: run({ harnessRecovery: recovered }), automationFailureExpected: null }).harnessRecovery, null);
+  const recording = recordingLaneObservation({ oracleVerdict: "passed", reportedVerdict: "passed", automationFailureReported: null, automationFailureExpected: null, actions: [] });
+  assert.equal(recording.harnessRecovery, null);
+  // The contract refuses a recovery record on a run where no Flow ran.
+  assert.throws(() => assertRunEvaluation(evaluationFrom({ ...recording, harnessRecovery: NO_RECOVERY })), /\$\.harnessRecovery/u);
 });
 
 /**

@@ -9,6 +9,8 @@ export * from "./validation.js";
 export * from "./run-validation.js";
 export * from "./evidence-validation.js";
 export * from "./evaluation-validation.js";
+export * from "./harness-recovery.js";
+export * from "./harness-recovery-validation.js";
 export * from "./bench-report.js";
 export * from "./bench-report-validation.js";
 export * from "./clone-package.js";

@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { parseAutomationStudioFailureRecord, type AutomationStudioFailureRecord, type RunActionTiming } from "@fluxiq-web-extension/test-contracts";
+import { parseAutomationStudioFailureRecord, type AutomationStudioFailureRecord, type RunActionTiming, type RunHarnessRecovery } from "@fluxiq-web-extension/test-contracts";
 import type { AutomationNodeTargetResolution } from "fluxiq/automation-studio/nodes";
 import { RunnerFailure } from "../failure.js";
 import { isBoundedHttpFailure, type FluxIQHttpOptions } from "../http-control/index.js";
 import { runActionStatus } from "../run-manifest/index.js";
+import { readHarnessRecovery, type HarnessRecoveryControl } from "./harness-recovery.js";
 import { LAB_PROJECT_DOMAIN_ID } from "./lab-project-domain.js";
 import { readRunDatasets, runDatasetSummaries, type FlowRunDataset, type RunDatasetSummary } from "./run-datasets.js";
 
@@ -34,7 +35,7 @@ export type PersistedFlowTerminalWait = {
  */
 export type PersistedFlowLlmExecution = { grantId: string; purpose: "diagnosis_only" | "diagnose_and_adapt" | "explore_and_adapt" };
 
-export type PersistedFlowRunControl = {
+export type PersistedFlowRunControl = HarnessRecoveryControl & {
   selectExistingContext(projectId: string, clientId?: string, bounds?: FluxIQHttpOptions, flowId?: string): Promise<void>;
   startPersistedFlow(input: { projectId: string; flowId: string; inputs?: Record<string, unknown>; authorizedDomainIds?: string[] } & FluxIQHttpOptions): Promise<{ runId: string }>;
   runPersistedFlow(input: { projectId: string; flowId: string; runId?: string; inputs?: Record<string, unknown>; authorizedDomainIds?: string[]; idempotencyKey?: string; llmExecution?: PersistedFlowLlmExecution } & FluxIQHttpOptions): Promise<{ session: { runId: string; status: string } }>;
@@ -142,6 +143,14 @@ export type PersistedFlowRunOutcome = {
   /** LLM interventions Core recorded for the run. Week 1 runs provider-free, so this must stay 0. */
   harnessActivations: number;
   /**
+   * What Core's recovery harness did during the run: each intervention, each
+   * runtime patch attempt, and the adaptations and change proposals the run
+   * created (`readHarnessRecovery`); `attempted: false` when it did nothing.
+   * Core deletes an isolated run's workspace afterwards, so this is the only
+   * record of whether a patch was preflighted, executed or only proposed.
+   */
+  harnessRecovery: RunHarnessRecovery;
+  /**
    * The datasets the run stored, read whole from Core (K5, K8). This is where
    * a Flow run's extracted records are: an attempt carries a record count and
    * a `$dataset` marker, never the rows.
@@ -230,10 +239,28 @@ export async function executeRecordedFlowRun(
     // failure stands.
     if (!isBoundedHttpFailure(error) || !executedRunId) throw error;
     const detail = await awaitTerminalRunDetail(control, input.projectId, executedRunId, input.actionTypes ?? new Map(), error, terminalWait);
-    return outcomeFromDetail(executedRunId, detail, await datasetsOf(control, { projectId: input.projectId, runId: executedRunId, domainId }, detail, bounds), sessionStatus, input.actionTypes, input.candidateOrder);
+    return outcomeFromDetail(executedRunId, detail, await terminalReadsOf(control, { projectId: input.projectId, runId: executedRunId, domainId }, detail, bounds), sessionStatus, input.actionTypes, input.candidateOrder);
   }
   const detail = await readRunDetail(control, input.projectId, executedRunId!, bounds, input.actionTypes ?? new Map());
-  return outcomeFromDetail(executedRunId!, detail, await datasetsOf(control, { projectId: input.projectId, runId: executedRunId!, domainId }, detail, bounds), sessionStatus, input.actionTypes, input.candidateOrder);
+  return outcomeFromDetail(executedRunId!, detail, await terminalReadsOf(control, { projectId: input.projectId, runId: executedRunId!, domainId }, detail, bounds), sessionStatus, input.actionTypes, input.candidateOrder);
+}
+
+type TerminalReads = { datasets: FlowRunDataset[]; harnessRecovery: RunHarnessRecovery };
+
+/**
+ * What is read once the detail is terminal: the run's datasets, then what its
+ * recovery did. The recovery read comes second, so a run whose datasets cannot
+ * be read fails exactly as it did before recovery was recorded.
+ */
+async function terminalReadsOf(
+  control: PersistedFlowRunControl,
+  scope: { projectId: string; runId: string; domainId: string },
+  detail: Awaited<ReturnType<typeof readRunDetail>>,
+  bounds: FluxIQHttpOptions,
+): Promise<TerminalReads> {
+  const datasets = await datasetsOf(control, scope, detail, bounds);
+  const harnessRecovery = await readHarnessRecovery(control, { projectId: scope.projectId, runId: scope.runId }, detail.runDetail, bounds);
+  return { datasets, harnessRecovery };
 }
 
 /**
@@ -254,7 +281,7 @@ async function datasetsOf(
 function outcomeFromDetail(
   runId: string,
   detail: Awaited<ReturnType<typeof readRunDetail>>,
-  datasets: FlowRunDataset[],
+  { datasets, harnessRecovery }: TerminalReads,
   sessionStatus: string,
   actionTypes: ReadonlyMap<string, string> | undefined,
   candidateOrder: ReadonlyMap<string, number> | undefined,
@@ -273,6 +300,7 @@ function outcomeFromDetail(
     actions,
     failure,
     harnessActivations: detail.harnessActivations,
+    harnessRecovery,
     extracted: datasets,
     extractedNonStringValues: datasets.reduce((sum, dataset) => sum + dataset.nonStringValues, 0),
     extractionDurationsByNode: detail.durationsByNode,
@@ -338,7 +366,7 @@ async function readRunDetail(
   runId: string,
   bounds: FluxIQHttpOptions,
   actionTypes: ReadonlyMap<string, string>,
-): Promise<{ summaryStatus: string | undefined; actions: PersistedFlowAction[]; attemptNodeIds: readonly string[]; harnessActivations: number; datasets: RunDatasetSummary[]; durationsByNode: Map<string, number> }> {
+): Promise<{ summaryStatus: string | undefined; actions: PersistedFlowAction[]; attemptNodeIds: readonly string[]; harnessActivations: number; datasets: RunDatasetSummary[]; durationsByNode: Map<string, number>; runDetail: Readonly<Record<string, unknown>> }> {
   const payload = asRecord(await control.automationStudioCall("get-flow-run-detail", { projectId, runId }, bounds), "run detail payload");
   const detail = asRecord(payload.runDetail, "runDetail");
   const summary = asRecord(detail.summary, "runDetail.summary");
@@ -350,7 +378,7 @@ async function readRunDetail(
   const actions = attempts.map((attempt) => flowAction(attempt, actionTypes));
   // In attempt order, one entry per attempt that names a node, so a retried node appears once per attempt.
   const attemptNodeIds = attempts.flatMap((attempt) => (typeof attempt.nodeId === "string" ? [attempt.nodeId] : []));
-  return { summaryStatus: typeof summary.status === "string" ? summary.status : undefined, actions, attemptNodeIds, harnessActivations: interventions.length, datasets: runDatasetSummaries(detail), durationsByNode: attemptDurationsByNode(attempts) };
+  return { summaryStatus: typeof summary.status === "string" ? summary.status : undefined, actions, attemptNodeIds, harnessActivations: interventions.length, datasets: runDatasetSummaries(detail), durationsByNode: attemptDurationsByNode(attempts), runDetail: detail };
 }
 
 /**

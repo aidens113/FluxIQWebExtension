@@ -4,6 +4,7 @@ import type { ExpectedEvent, ResolvedScenarioWorkflow, ScenarioStep, WebScenario
 import { RunnerFailure } from "../../failure.js";
 import { deterministicUploadBytes } from "../../trusted-input/index.js";
 import type { DeclaredSecret } from "../declared-secrets.js";
+import type { HarnessRecoveryDetail } from "../harness-recovery.js";
 import { flowLaneSnapshot, runFlowLane, type FlowLaneControl, type FlowLaneEvidence } from "../run-flow-lane.js";
 
 /**
@@ -31,13 +32,15 @@ import { flowLaneSnapshot, runFlowLane, type FlowLaneControl, type FlowLaneEvide
  * attempt the run detail reports. `flowReads` lists every read of the approved
  * Flow's structure, in order.
  */
-function fakeCore(options: { appendsAt: readonly number[]; finalizedAt?: number; graphNodes?: readonly unknown[]; lostCandidates?: number; attempt?: Record<string, unknown>; runStatus?: string; datasets?: ReadonlyArray<{ datasetId: string; nodeIds: string[]; rows: Array<Record<string, unknown>> }> }) {
+function fakeCore(options: { appendsAt: readonly number[]; finalizedAt?: number; graphNodes?: readonly unknown[]; lostCandidates?: number; attempt?: Record<string, unknown>; runStatus?: string; datasets?: ReadonlyArray<{ datasetId: string; nodeIds: string[]; rows: Array<Record<string, unknown>> }>; recovery?: { raw: Record<string, unknown>; parsed: HarnessRecoveryDetail } }) {
   const clock = { value: 0 };
   const proposalRequestedAt: number[] = [];
   const reviewedProposals: string[] = [];
   const startedInputs: Record<string, unknown>[] = [];
   const runInputs: Record<string, unknown>[] = [];
   const flowReads: string[] = [];
+  // Every read of the run's recovery through the control client's parser.
+  const recoveryReads: string[] = [];
   // The lane's steps in the order they reached Core or the page: flow reads, the start, and what `runLane` adds.
   const sequence: string[] = [];
   const visibleEntries = () => options.appendsAt.filter(at => at <= clock.value).length;
@@ -84,7 +87,7 @@ function fakeCore(options: { appendsAt: readonly number[]; finalizedAt?: number;
       if (endpoint === "get-flow-run-detail") {
         const attempt = { attemptId: "attempt.one", nodeId: "node.one", definitionId: "builtin.policy.action", order: 1, status: "succeeded", startedAt: 10, finishedAt: 20, ...options.attempt };
         const datasets = (options.datasets ?? []).map(({ datasetId, nodeIds, rows }) => ({ runId: "run.one", datasetId, nodeIds, recordCount: rows.length, truncated: false, invalidCount: 0 }));
-        return { runDetail: { summary: { runId: "run.one", status: options.runStatus ?? "succeeded" }, actionAttempts: [attempt], interventions: [], ...(datasets.length ? { datasets } : {}) } };
+        return { runDetail: { summary: { runId: "run.one", status: options.runStatus ?? "succeeded" }, actionAttempts: [attempt], interventions: [], ...(datasets.length ? { datasets } : {}), ...options.recovery?.raw } };
       }
       if (endpoint === "get-run-dataset-page") {
         const stored = (options.datasets ?? []).find((dataset) => dataset.datasetId === payload.datasetId);
@@ -97,6 +100,12 @@ function fakeCore(options: { appendsAt: readonly number[]; finalizedAt?: number;
     selectExistingContext: async () => {},
     startPersistedFlow: async (input) => { sequence.push("start"); startedInputs.push(input.inputs ?? {}); return { runId: "run.one" }; },
     runPersistedFlow: async (input) => { runInputs.push(input.inputs ?? {}); return { session: { runId: "run.one", status: options.runStatus ?? "succeeded" } }; },
+    // What the control client's parser returns for the same detail; its parsing is `harness-recovery.test.ts`'s subject.
+    getRunDetail: async (projectId, runId) => {
+      recoveryReads.push(`${projectId}/${runId}`);
+      if (!options.recovery) throw new Error("a detail that recorded no recovery was read for one");
+      return options.recovery.parsed;
+    },
   };
   return {
     control,
@@ -105,6 +114,7 @@ function fakeCore(options: { appendsAt: readonly number[]; finalizedAt?: number;
     startedInputs,
     runInputs,
     flowReads,
+    recoveryReads,
     sequence,
     now: () => clock.value,
     sleep: async (ms: number) => { clock.value += ms; },
@@ -527,4 +537,48 @@ test("each action's transition comparison status reaches the flow-lane snapshot"
   const evidence: FlowLaneEvidence[] = [];
   await runLane(fake, evidence, { expected: { failure: { category: "auth_required" } } });
   assert.deepEqual(flowLaneSnapshot(evidence[0]!).actions, [{ actionType: "web.dom.click", status: "failed", failure: authRequired, comparisonStatus: "blocked" }]);
+});
+
+/**
+ * The first live DeepSeek run (`run-mu4nxysj-3234c535`) made a validated
+ * diagnosis and a validated patch call and passed, and nothing it left said
+ * what the patch became, because Core's workspace is deleted afterwards. The
+ * lane now publishes it: to the evidence the runner writes as
+ * `snapshots/flow-lane.json`, and to the observation the evaluation is read from.
+ */
+test("the lane publishes what Core's recovery did, and a run that needed none says so without a second read", async () => {
+  const adaptationId = "adaptation.run.one.temporary_wait_retry.1700";
+  const parsed: HarnessRecoveryDetail = {
+    // As the parser returns them: with the request id, provider, model and tokens the record leaves behind.
+    interventions: [
+      { interventionId: "intervention.diagnosis", kind: "diagnosis", requestId: "llm.request.private", provider: "deepseek", model: "deepseek-chat", validationOk: true, totalTokens: 1_020 },
+      { interventionId: "intervention.patch", kind: "runtime_patch", validationOk: true },
+    ],
+    runtimePatchAttempts: [{ kind: "temporary_wait_retry", proposalOnly: false, executed: true, preflightOk: true, issueCodes: [], adaptationCreated: true, changeProposalCreated: false }],
+    adaptationIds: [adaptationId],
+    changeProposalIds: [],
+  };
+  const raw = { interventions: [{ interventionId: "intervention.diagnosis", prompt: "PRIVATE-PROMPT" }, { interventionId: "intervention.patch", response: "PRIVATE-RESPONSE" }], adaptationIds: [adaptationId] };
+  const recovered = { attempted: true, interventions: [{ kind: "diagnosis", validationOk: true, validationCodes: [] }, { kind: "runtime_patch", validationOk: true, validationCodes: [] }], runtimePatchAttempts: parsed.runtimePatchAttempts, adaptationIds: [adaptationId], changeProposalIds: [] };
+
+  const fake = fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500, recovery: { raw, parsed } });
+  const evidence: FlowLaneEvidence[] = [];
+  const { outcome } = await runLane(fake, evidence);
+  assert.deepEqual(fake.recoveryReads, ["project.web/run.one"]);
+  assert.deepEqual(outcome.run.harnessRecovery, recovered);
+  assert.deepEqual(evidence[0]?.observation.harnessRecovery, recovered, "the observation the evaluation is read from carries it");
+  const snapshot = flowLaneSnapshot(evidence[0]!);
+  assert.deepEqual(snapshot.harnessRecovery, recovered);
+  assert.equal(snapshot.harnessActivations, 2);
+  const serialized = JSON.stringify(snapshot);
+  for (const text of ["PRIVATE-PROMPT", "PRIVATE-RESPONSE", "llm.request.private", "deepseek-chat", "intervention.diagnosis"]) assert.equal(serialized.includes(text), false, text);
+
+  const quiet = fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500 });
+  const quietEvidence: FlowLaneEvidence[] = [];
+  await runLane(quiet, quietEvidence);
+  assert.deepEqual(quiet.recoveryReads, [], "a provider-free run's detail recorded nothing to recover, so nothing more is read");
+  const none = { attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [] };
+  assert.deepEqual(flowLaneSnapshot(quietEvidence[0]!).harnessRecovery, none);
+  assert.deepEqual(quietEvidence[0]?.observation.harnessRecovery, none);
+  assert.equal(quietEvidence[0]?.observation.reportedVerdict, "passed");
 });

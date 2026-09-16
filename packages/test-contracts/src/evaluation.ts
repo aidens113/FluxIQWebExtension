@@ -1,4 +1,5 @@
 import type { AutomationStudioAdaptiveFailureClass } from "./failure-category.js";
+import type { RunHarnessRecovery } from "./harness-recovery.js";
 import type { LlmExecutionProfile } from "./llm.js";
 import type { ExpectedFailure } from "./scenario.js";
 
@@ -211,8 +212,18 @@ export type RunEvaluation = {
    * not measured, as in every evaluation written before schema 0.3 (D7).
    */
   extraction: RunExtractionMeasurement[] | null;
+  /**
+   * What Core's recovery harness did during the Flow run, read from Core's run
+   * detail: `null` when it was not measured, which is every run on which no
+   * Flow ran (the recording lane, and a Flow-lane run that built no Flow) and
+   * every evaluation written before the field was defined. A run that needed
+   * no recovery states `attempted: false`, never `null`.
+   *
+   * The field was reserved in schema 0.3, so defining it changes no version:
+   * a 0.3 evaluation holding `null` reads exactly as before.
+   */
+  harnessRecovery: RunHarnessRecovery | null;
   /** Week 2 measurements: `null` in Week 1, reserved so the schema is already present. */
-  harnessRecovery: null;
   adaptationCost: null;
   adaptationValidation: null;
   adaptationPersistence: null;

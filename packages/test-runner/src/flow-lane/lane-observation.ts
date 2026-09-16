@@ -10,7 +10,16 @@ import type { PersistedFlowRunOutcome } from "./persisted-flow-run.js";
 export type RunLaneObservation = Pick<
   RunEvaluation,
   "lane" | "flowCreated" | "oracleVerdict" | "reportedVerdict" | "automationFailureReported" | "automationFailureExpected" | "harnessActivations" | "actions" | "extraction"
->;
+> & {
+  /**
+   * Core's recovery record for the Flow that ran, `null` when none ran. Both
+   * lane builders below state it. It is optional only because the bench's Flow
+   * lane (`bench/evaluate-run.ts`, `evaluateFlowRun`) rebuilds its observation
+   * member by member and does not yet copy this one; absent, the evaluation
+   * records `null` -- not measured -- and never "no recovery".
+   */
+  harnessRecovery?: RunEvaluation["harnessRecovery"];
+};
 
 /**
  * The recording lane: it creates no Flow, so `flowCreated` is null and
@@ -39,6 +48,8 @@ export function recordingLaneObservation(input: {
     harnessActivations: 0,
     actions: [...input.actions],
     extraction: null,
+    // No Flow ran, so nothing was there for Core to recover.
+    harnessRecovery: null,
   };
 }
 
@@ -70,6 +81,8 @@ export function flowLaneObservation(input: {
     harnessActivations: run?.harnessActivations ?? 0,
     actions: run ? run.actions.flatMap((action) => (action.durationMs === undefined ? [] : [{ actionType: action.actionType, durationMs: action.durationMs }])) : [],
     extraction: run && input.extraction ? [...input.extraction] : null,
+    // A run that recovered nothing states `attempted: false`; only a run that never happened is unmeasured.
+    harnessRecovery: run ? run.harnessRecovery : null,
   };
 }
 

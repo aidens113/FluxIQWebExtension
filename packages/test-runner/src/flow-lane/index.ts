@@ -6,6 +6,7 @@ export * from "./declared-secrets.js";
 export * from "./expectations.js";
 export * from "./finalized-recording.js";
 export * from "./flow-action-types.js";
+export * from "./harness-recovery.js";
 export * from "./lab-project-domain.js";
 export * from "./lane-observation.js";
 export * from "./persisted-flow-run.js";

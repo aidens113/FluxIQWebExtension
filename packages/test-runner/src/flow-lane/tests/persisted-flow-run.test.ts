@@ -204,7 +204,9 @@ test("a run whose detail lists no dataset reads none, and asks Core for none", a
 });
 
 test("harness activations come from the run detail's interventions", async () => {
-  const { client } = control({}, { interventions: [{ interventionId: "one" }, { interventionId: "two" }] });
+  // A detail holding interventions is also read for what its recovery did; that read is `harness-recovery.test.ts`'s subject.
+  const getRunDetail = async () => ({ interventions: [{ interventionId: "one", kind: "diagnosis" as const }, { interventionId: "two", kind: "runtime_patch" as const }] });
+  const { client } = control({ getRunDetail }, { interventions: [{ interventionId: "one" }, { interventionId: "two" }] });
   assert.equal((await executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" })).harnessActivations, 2);
 });
 

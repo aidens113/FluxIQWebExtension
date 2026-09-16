@@ -4,11 +4,14 @@ import {
   type CandidateComparison, type LlmUsage, type RunEvaluation, type RunExtractionMeasurement,
 } from "./evaluation.js";
 import { AUTOMATION_STUDIO_ADAPTIVE_FAILURE_CLASSES } from "./failure-category.js";
+import { validateRunHarnessRecovery } from "./harness-recovery-validation.js";
 import { ContractValidationError, type ValidationIssue, type ValidationResult } from "./validation.js";
 import { add, array, enumeration, finite, isObject, keys, object, optionalText, parseJson, result, text, type JsonObject } from "./runtime-validation.js";
 
 const KEBAB_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
-const week2Keys = ["harnessRecovery", "adaptationCost", "adaptationValidation", "adaptationPersistence", "adaptationReuse"] as const;
+/** The Week 2 members that are still reserved: `harnessRecovery` is defined and checked on its own. */
+const reservedWeek2Keys = ["adaptationCost", "adaptationValidation", "adaptationPersistence", "adaptationReuse"] as const;
+const week2Keys = ["harnessRecovery", ...reservedWeek2Keys] as const;
 const runEvaluationKeys = [
   "schemaVersion", "runId", "verdict", "failureCategory", "facilityFailure", "invariants", "metrics",
   "scenarioId", "workflowId", "variantId", "repeatIndex", "lane", "flowCreated", "oracleVerdict", "reportedVerdict",
@@ -131,7 +134,20 @@ function checkRunMeasurements(value: JsonObject, issues: ValidationIssue[]): voi
   nest(validateLlmUsage(value.llm), "$.llm", issues);
   if (!("extraction" in value)) add(issues, "$.extraction", "is required: null when extraction was not measured");
   else checkExtraction(value.extraction, "$.extraction", issues);
-  for (const key of week2Keys) if (value[key] !== null) add(issues, `$.${key}`, "must be null until Week 2 defines it");
+  checkHarnessRecovery(value, issues);
+  for (const key of reservedWeek2Keys) if (value[key] !== null) add(issues, `$.${key}`, "must be null until Week 2 defines it");
+}
+
+/**
+ * `null` when recovery was not measured; otherwise Core's recovery record for
+ * the Flow that ran. Only a run whose Flow was created can have one: nothing
+ * else ran anything Core could have recovered.
+ */
+function checkHarnessRecovery(value: JsonObject, issues: ValidationIssue[]): void {
+  if (!("harnessRecovery" in value)) { add(issues, "$.harnessRecovery", "is required: null when recovery was not measured"); return; }
+  if (value.harnessRecovery === null) return;
+  if (value.lane !== "flow" || value.flowCreated !== true) add(issues, "$.harnessRecovery", "must be null unless a Flow was created and ran");
+  nest(validateRunHarnessRecovery(value.harnessRecovery), "$.harnessRecovery", issues);
 }
 
 /** `null` when extraction was not measured; otherwise one counts-only measurement per extraction step (D6). */

@@ -1,0 +1,212 @@
+import assert from "node:assert/strict";
+import test, { type TestContext } from "node:test";
+import { validateRunHarnessRecovery, type RunHarnessRecovery } from "@fluxiq-web-extension/test-contracts";
+import { ExistingFluxIQControlClient } from "../../existing-fluxiq-control.js";
+import { RunnerFailure } from "../../failure.js";
+import { flowLaneObservation } from "../lane-observation.js";
+import { executeRecordedFlowRun, type PersistedFlowRunControl, type PersistedFlowRunOutcome } from "../persisted-flow-run.js";
+import { flowLaneSnapshot, type FlowLaneEvidence } from "../run-flow-lane.js";
+
+/**
+ * What Core's run detail carries and a recovery record must never hold: a
+ * prompt, a response, a selector, page text and issue sentences, plus the
+ * request id, model and prompt version the parser keeps and the record leaves
+ * behind.
+ */
+const MUST_NOT_TRAVEL = ["PRIVATE-PROMPT", "PRIVATE-RESPONSE", "#private-selector", "PRIVATE-PAGE-TEXT", "PRIVATE-ISSUE", "llm.request.private", "deepseek-chat", "runtime-diagnosis.v1"];
+
+const ADAPTATION_ID = "adaptation.run.one.temporary_wait_retry.1700";
+const PROPOSAL_ID = "proposal.adaptation.run.one.temporary_target_override.1600";
+const summary = { runId: "run.one", projectId: "project.web", flowId: "flow.new", status: "succeeded", updatedAt: 2_000, actionAttemptCount: 1, routeDecisionCount: 0, subflowEntryCount: 0, interventionCount: 2, adaptationCount: 1 };
+const attempt = { attemptId: "attempt.one", nodeId: "node.one", definitionId: "web.dom.type", order: 0, status: "succeeded", startedAt: 1_000, finishedAt: 1_030 };
+
+/**
+ * A run Core recovered, shaped as `annotate.ts` and `patches.ts` write it: a
+ * diagnosis, then a patch response whose three patches were a proposal-only
+ * target override that created a change proposal, an executed wait-retry that
+ * created an adaptation, and a reroute refused at preflight.
+ */
+function recoveredDetail(): Record<string, unknown> {
+  return {
+    summary, routeDecisions: [], subflows: [], actionAttempts: [attempt],
+    interventions: [
+      {
+        interventionId: "intervention.diagnosis", kind: "diagnosis",
+        promptVersion: "automation-studio.runtime-diagnosis.v1+stage.gather", provider: "deepseek", model: "deepseek-chat",
+        validation: { ok: true, issues: ["diagnosis.evidence_partial: PRIVATE-ISSUE about PRIVATE-PAGE-TEXT"] },
+        tokenUsage: { inputTokens: 900, outputTokens: 120, totalTokens: 1_020, estimatedCostUsd: 0.001 },
+        createdAt: 1_100, metadata: { requestId: "llm.request.private" },
+        reason: "PRIVATE-ISSUE", prompt: "PRIVATE-PROMPT", response: { text: "PRIVATE-RESPONSE" },
+      },
+      {
+        interventionId: "intervention.patch", kind: "runtime_patch", provider: "deepseek", model: "deepseek-chat",
+        validation: { ok: true, issues: ["PRIVATE-ISSUE: a sentence is not a code"] },
+        createdAt: 1_200, response: { patches: [{ selector: "#private-selector" }] },
+      },
+    ],
+    adaptationIds: [ADAPTATION_ID],
+    changeProposalIds: [PROPOSAL_ID],
+    metadata: {
+      runtimePatchAttempts: [
+        { kind: "temporary_target_override", proposalOnly: true, executed: false, preflightOk: true, issues: [], changeProposalId: PROPOSAL_ID, targetResolution: { selector: "#private-selector" }, traceStatus: "not-run" },
+        { kind: "temporary_wait_retry", proposalOnly: false, executed: true, preflightOk: true, issues: [], adaptationId: ADAPTATION_ID, verification: { text: "PRIVATE-PAGE-TEXT" }, traceStatus: "passed" },
+        { kind: "temporary_reroute", proposalOnly: false, executed: false, preflightOk: false, issues: ["Unknown target node PRIVATE-PAGE-TEXT"], traceStatus: "not-run" },
+      ],
+    },
+  };
+}
+
+const RECOVERED: RunHarnessRecovery = {
+  attempted: true,
+  interventions: [
+    { kind: "diagnosis", validationOk: true, validationCodes: ["diagnosis.evidence_partial"] },
+    { kind: "runtime_patch", validationOk: true, validationCodes: [] },
+  ],
+  runtimePatchAttempts: [
+    { kind: "temporary_target_override", proposalOnly: true, executed: false, preflightOk: true, issueCodes: [], adaptationCreated: false, changeProposalCreated: true },
+    { kind: "temporary_wait_retry", proposalOnly: false, executed: true, preflightOk: true, issueCodes: [], adaptationCreated: true, changeProposalCreated: false },
+    { kind: "temporary_reroute", proposalOnly: false, executed: false, preflightOk: false, issueCodes: ["runtime_patch.target_node_invalid"], adaptationCreated: false, changeProposalCreated: false },
+  ],
+  adaptationIds: [ADAPTATION_ID],
+  changeProposalIds: [PROPOSAL_ID],
+};
+
+const NO_RECOVERY: RunHarnessRecovery = { attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [] };
+
+function json(payload: unknown, headers: Record<string, string> = {}): Response {
+  return new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json", ...headers } });
+}
+
+/**
+ * Core as the Flow lane meets it, serving whichever detail `serve` last named.
+ * The lane's own calls are fakes. `getRunDetail` is the real control client
+ * parsing that same detail through a stubbed `fetch`: the parser is what this
+ * reader reuses, so it is not faked. One per test, so `fetch` is stubbed and
+ * restored exactly once.
+ */
+async function core(t: TestContext) {
+  const calls: string[] = [];
+  let detail: () => Record<string, unknown> = recoveredDetail;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input));
+    if (url.pathname === "/api/auth/login") return json({ ok: true }, { "set-cookie": "fluxiq_session=opaque; Max-Age=3600" });
+    if (url.pathname.endsWith("/get-flow-run-detail")) return json({ ok: true, payload: { runDetail: detail() } });
+    throw new Error(`unexpected ${url.pathname}`);
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const parser = new ExistingFluxIQControlClient("https://panel.example.test");
+  await parser.login({ username: "runner", password: "password-value", totp: "123456", pin: "654321" });
+  const control: PersistedFlowRunControl = {
+    selectExistingContext: async () => { calls.push("select"); },
+    startPersistedFlow: async () => { calls.push("start"); return { runId: "run.one" }; },
+    runPersistedFlow: async () => { calls.push("run"); return { session: { runId: "run.one", status: "succeeded" } }; },
+    automationStudioCall: async (endpoint) => { calls.push(endpoint); return { runDetail: detail() }; },
+    getRunDetail: async (projectId, runId, bounds) => { calls.push("getRunDetail"); return parser.getRunDetail(projectId, runId, bounds); },
+  };
+  const serve = (next: () => Record<string, unknown>) => { detail = next; calls.length = 0; };
+  return { control, calls, serve };
+}
+
+const run = (control: PersistedFlowRunControl) => executeRecordedFlowRun(control, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
+
+/** The snapshot the runner writes for `run`, with nothing else in the evidence worth reading. */
+function snapshotOf(outcome: PersistedFlowRunOutcome) {
+  return flowLaneSnapshot({
+    recording: { recordingId: "recording.one", entryCount: 1, entriesAppendedWhileWaiting: 0, waitedMs: 0, polls: 1 },
+    proposal: { proposalId: "proposal.one", mapperId: "web-recording-actions", candidateCount: 1, issues: [] },
+    flowId: "flow.new",
+    run: outcome,
+    observation: flowLaneObservation({ flowCreated: true, oracleVerdict: "passed", run: outcome, automationFailureExpected: null }),
+    extraction: { expectation: "not_expected", extractNodes: 0, unpairedDatasets: 0, nonStringValues: 0, steps: [] },
+    startCandidateIndex: 0,
+  } as unknown as FlowLaneEvidence);
+}
+
+test("a recovered run is recorded in full: the diagnosis, the proposal-only override and its change proposal, the executed patch and its adaptation", async (t) => {
+  const { control, calls } = await core(t);
+  const outcome = await run(control);
+  assert.deepEqual(outcome.harnessRecovery, RECOVERED);
+  assert.equal(outcome.harnessActivations, 2);
+  // The record is read once the detail is terminal, through the control client's own parser.
+  assert.deepEqual(calls, ["select", "start", "run", "get-flow-run-detail", "getRunDetail"]);
+  assert.deepEqual(validateRunHarnessRecovery(outcome.harnessRecovery), { valid: true, value: outcome.harnessRecovery });
+  // Written into `snapshots/flow-lane.json`, and carried to the evaluation by the lane's observation.
+  assert.deepEqual(snapshotOf(outcome).harnessRecovery, RECOVERED);
+  assert.deepEqual(flowLaneObservation({ flowCreated: true, oracleVerdict: "passed", run: outcome, automationFailureExpected: null }).harnessRecovery, RECOVERED);
+});
+
+test("nothing free-text reaches the recovery record or the snapshot written from it", async (t) => {
+  const { control } = await core(t);
+  const outcome = await run(control);
+  const raw = JSON.stringify(recoveredDetail());
+  for (const text of MUST_NOT_TRAVEL) assert.ok(raw.includes(text), `the fixture carries ${text}, so its absence below means something`);
+  // An empty record holds no text either; this one must hold the recovery.
+  assert.deepEqual(outcome.harnessRecovery, RECOVERED);
+  for (const [name, serialized] of [["record", JSON.stringify(outcome.harnessRecovery)], ["snapshot", JSON.stringify(snapshotOf(outcome))]] as const) {
+    for (const text of MUST_NOT_TRAVEL) assert.equal(serialized.includes(text), false, `the ${name} carries ${text}`);
+  }
+});
+
+test("a run with no recovery records no recovery, as attempted: false, without a second read", async (t) => {
+  const quiet = (extra: Record<string, unknown>) => () => ({ summary: { ...summary, interventionCount: 0, adaptationCount: 0 }, routeDecisions: [], subflows: [], actionAttempts: [attempt], ...extra });
+  const { control, calls, serve } = await core(t);
+  for (const [name, extra] of Object.entries({
+    "lists absent": {},
+    "lists empty": { interventions: [], adaptationIds: [], changeProposalIds: [], metadata: { runtimePatchAttempts: [] } },
+    "lists null": { interventions: null, adaptationIds: null, changeProposalIds: null, metadata: null },
+    "metadata without attempts": { interventions: [], metadata: { llmGate: { invoked: false } } },
+  })) {
+    serve(quiet(extra));
+    const outcome = await run(control);
+    assert.deepEqual(outcome.harnessRecovery, NO_RECOVERY, name);
+    assert.deepEqual(calls, ["select", "start", "run", "get-flow-run-detail"], `${name}: a provider-free run costs no second read`);
+    const observation = flowLaneObservation({ flowCreated: true, oracleVerdict: "passed", run: outcome, automationFailureExpected: null });
+    assert.deepEqual(observation.harnessRecovery, NO_RECOVERY, `${name}: no recovery is stated, not left unmeasured`);
+    assert.equal(observation.reportedVerdict, "passed", `${name}: and it is not a failed one`);
+    assert.deepEqual(snapshotOf(outcome).harnessRecovery, NO_RECOVERY, name);
+  }
+});
+
+test("a recovery field Core wrote malformed fails the reader, naming its path", async (t) => {
+  type Detail = Record<string, unknown>;
+  const patched = (mutate: (detail: Detail) => void) => () => { const detail = recoveredDetail(); mutate(detail); return detail; };
+  const patchAttempts = (detail: Detail) => (detail.metadata as { runtimePatchAttempts: Detail[] }).runtimePatchAttempts;
+  const interventions = (detail: Detail) => detail.interventions as Detail[];
+  const cases: ReadonlyArray<readonly [path: string, mutate: (detail: Detail) => void]> = [
+    ["runDetail.metadata.runtimePatchAttempts[1].issues", (detail) => { patchAttempts(detail)[1]!.issues = "Unknown target node PRIVATE-PAGE-TEXT"; }],
+    ["runDetail.metadata.runtimePatchAttempts", (detail) => { detail.metadata = { runtimePatchAttempts: "PRIVATE-PAGE-TEXT" }; }],
+    ["runDetail.metadata", (detail) => { detail.metadata = "PRIVATE-PAGE-TEXT"; }],
+    ["interventions[0].kind", (detail) => { interventions(detail)[0]!.kind = "PRIVATE-PAGE-TEXT"; }],
+    ["interventions[1].validation.issues[0]", (detail) => { interventions(detail)[1]!.validation = { ok: false, issues: [{ text: "PRIVATE-ISSUE" }] }; }],
+    ["runDetail.adaptationIds[0]", (detail) => { detail.adaptationIds = ["PRIVATE-PAGE-TEXT with spaces"]; }],
+    ["runDetail.changeProposalIds", (detail) => { detail.changeProposalIds = PROPOSAL_ID; }],
+    ["runDetail.changeProposalIds[0]", (detail) => { detail.changeProposalIds = [""]; }],
+  ];
+  const { control, serve } = await core(t);
+  for (const [path, mutate] of cases) {
+    serve(patched(mutate));
+    await assert.rejects(
+      () => run(control),
+      (error: unknown) => error instanceof RunnerFailure && error.message.startsWith(`Malformed FluxIQ API response: ${path} `) && !error.message.includes("PRIVATE"),
+      path,
+    );
+  }
+});
+
+test("a recovery the parser admits but the contract refuses fails before it reaches the bundle", async () => {
+  // The parser's kinds and codes are closed today; this pins what happens if the two ever drift apart.
+  const control = {
+    selectExistingContext: async () => {},
+    startPersistedFlow: async () => ({ runId: "run.one" }),
+    runPersistedFlow: async () => ({ session: { runId: "run.one", status: "succeeded" } }),
+    automationStudioCall: async () => ({ runDetail: { summary: { runId: "run.one", status: "succeeded" }, actionAttempts: [attempt], interventions: [{}] } }),
+    getRunDetail: async () => ({ interventions: [{ interventionId: "one", kind: "diagnosis" as const, validationCodes: ["Not A Code"] }] }),
+  } satisfies PersistedFlowRunControl;
+  await assert.rejects(
+    () => run(control),
+    (error: unknown) => error instanceof RunnerFailure
+      && error.message.includes("harnessRecovery.interventions[0].validationCodes[0]")
+      && !error.message.includes("Not A Code"),
+  );
+});

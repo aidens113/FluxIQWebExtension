@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test, { type TestContext } from "node:test";
-import { parseRunEvaluationJson, type RunEvaluation, type RunManifest } from "@fluxiq-web-extension/test-contracts";
+import { parseRunEvaluationJson, type RunEvaluation, type RunHarnessRecovery, type RunManifest } from "@fluxiq-web-extension/test-contracts";
 import { evaluateFlowRun } from "../../bench/index.js";
 import { flowLaneObservation, recordingLaneObservation } from "../../flow-lane/index.js";
 import { singleRunEvaluation, type SingleRunInput } from "../single-run-evaluation.js";
@@ -13,6 +13,16 @@ type ActionStatus = NonNullable<RunManifest["actions"]>[number]["status"];
 /** Only the fields an evaluation reads; a real run writes a full, validated manifest. */
 const manifest = (fields: Partial<RunManifest> = {}): RunManifest => ({ startedAt: "2026-09-12T10:00:00.000Z", finishedAt: "2026-09-12T10:00:42.500Z", automationFailure: null, actions: [], ...fields }) as RunManifest;
 const action = (actionType: string, durationMs: number | undefined, status: ActionStatus = "succeeded") => ({ actionType, startedAt: "2026-09-12T10:00:10.000Z", ...(durationMs === undefined ? {} : { durationMs }), status });
+
+const NO_RECOVERY: RunHarnessRecovery = { attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [] };
+/** A diagnosis, then a patch Core only proposed, which created a change proposal. */
+const RECOVERED: RunHarnessRecovery = {
+  attempted: true,
+  interventions: [{ kind: "diagnosis", validationOk: true, validationCodes: [] }, { kind: "runtime_patch", validationOk: true, validationCodes: [] }],
+  runtimePatchAttempts: [{ kind: "temporary_target_override", proposalOnly: true, executed: false, preflightOk: true, issueCodes: [], adaptationCreated: false, changeProposalCreated: true }],
+  adaptationIds: [],
+  changeProposalIds: ["proposal.adaptation.core-run.1.temporary_target_override.1600"],
+};
 
 const probe = recordingLaneObservation({
   oracleVerdict: "passed", reportedVerdict: "passed", automationFailureReported: null, automationFailureExpected: null,
@@ -82,7 +92,7 @@ test("a Flow-lane run reports the persisted Core run, not the recording lane's p
   const observation = flowLaneObservation({
     flowCreated: true, oracleVerdict: "passed", automationFailureExpected: null,
     run: {
-      runId: "core-run.1", status: "succeeded", harnessActivations: 2, failure: null, extracted: [], extractedNonStringValues: 0, extractionDurationsByNode: new Map(),
+      runId: "core-run.1", status: "succeeded", harnessActivations: 2, harnessRecovery: RECOVERED, failure: null, extracted: [], extractedNonStringValues: 0, extractionDurationsByNode: new Map(),
       actions: [{ actionType: "web.dom.click", status: "succeeded", startedAt: "2026-09-12T10:00:11.000Z", durationMs: 210, failure: null }],
     },
   });
@@ -92,6 +102,9 @@ test("a Flow-lane run reports the persisted Core run, not the recording lane's p
   assert.deepEqual([evaluation.lane, evaluation.flowCreated, evaluation.harnessActivations], ["flow", true, 2]);
   assert.deepEqual(evaluation.actions, [{ actionType: "web.dom.click", durationMs: 210 }]);
   assert.equal(evaluation.actions.some((item) => item.actionType === "web.browser.navigate"), false);
+  // What Core's recovery did reaches `evaluation.json`, validated, and survives serialization.
+  assert.deepEqual(evaluation.harnessRecovery, RECOVERED);
+  assert.deepEqual(parseRunEvaluationJson(JSON.stringify(evaluation)), evaluation);
 });
 
 test("the runner's wall clock covers a run whose manifest has no usable finish time", () => {
@@ -131,7 +144,7 @@ const TWO_PACKETS = {
 
 const createdFlow = flowLaneObservation({
   flowCreated: true, oracleVerdict: "passed", automationFailureExpected: null,
-  run: { runId: "core-run.1", status: "succeeded", harnessActivations: 0, failure: null, extracted: [], extractedNonStringValues: 0, extractionDurationsByNode: new Map(), actions: [{ actionType: "web.dom.click", status: "succeeded", startedAt: "2026-09-12T10:00:11.000Z", durationMs: 210, failure: null }] },
+  run: { runId: "core-run.1", status: "succeeded", harnessActivations: 0, harnessRecovery: NO_RECOVERY, failure: null, extracted: [], extractedNonStringValues: 0, extractionDurationsByNode: new Map(), actions: [{ actionType: "web.dom.click", status: "succeeded", startedAt: "2026-09-12T10:00:11.000Z", durationMs: 210, failure: null }] },
 });
 
 /** The same run as the bench's Flow lane evaluates it, from the finalized bundle at `bundlePath`. `input()` closes on its `final` event, sequence 17. */
@@ -166,7 +179,11 @@ test("a Flow-lane single run records the packets its bundle measured, and agrees
   assert.deepEqual(parseRunEvaluationJson(JSON.stringify(evaluation)), evaluation);
   // Until this read existed, `evaluation.json` recorded no packets for the run
   // whose bench row recorded two. One file, one judgement.
-  assert.deepEqual(evaluation, benchRowOf(run, bundlePath));
+  const benchRow = benchRowOf(run, bundlePath);
+  // Whole evaluations, recovery included: the bench's Flow lane copies
+  // `harnessRecovery` like every other observed member.
+  assert.deepEqual(evaluation.harnessRecovery, NO_RECOVERY);
+  assert.deepEqual(evaluation, benchRow);
 });
 
 test("a recording-lane single run reads no evidence sizes, even from a directory holding Flow-lane packets", (t) => {
@@ -189,4 +206,13 @@ test("lab run hands its evaluation the bundle the Flow lane wrote its snapshot i
   assert.ok(at.snapshot < at.evaluated, "the Flow lane's snapshot is written before the run is evaluated");
   assert.ok(at.evaluated < at.finalized, "the staging directory still exists: finalize renames it");
   assert.match(source, /\? singleRunEvaluation\(\{[^}]*\bbundlePath: bundle\.stagingPath\b[^}]*\}\)/u, "the evaluation reads the bundle this run is writing");
+});
+
+test("a run with no recovery is evaluated as no recovery, and one that ran no Flow as unmeasured", () => {
+  const quiet = singleRunEvaluation(input({ observation: createdFlow }));
+  assert.deepEqual(quiet.harnessRecovery, NO_RECOVERY);
+  assert.equal(quiet.verdict, "passed");
+  assert.equal(singleRunEvaluation(input()).harnessRecovery, null, "the recording lane runs no Flow");
+  const noFlow = flowLaneObservation({ flowCreated: false, oracleVerdict: null, run: undefined, automationFailureExpected: null });
+  assert.equal(singleRunEvaluation(input({ observation: noFlow })).harnessRecovery, null, "a Flow that was never created recovered nothing and measured nothing");
 });

@@ -16,6 +16,7 @@ import {
   parseRunEvaluationJson,
   validateLlmUsage,
   validateRunEvaluation,
+  validateRunHarnessRecovery,
 } from "../dist/index.js";
 
 const week2 = { harnessRecovery: null, adaptationCost: null, adaptationValidation: null, adaptationPersistence: null, adaptationReuse: null };
@@ -298,7 +299,7 @@ test("identity, repeat index, lane, and measurements are bounded", () => {
   assert.equal(validateRunEvaluation({ ...flowRun(), harnessActivations: 2 }).valid, true);
 });
 
-test("Week 2 fields are present and null", () => {
+test("Week 2 fields are present, and the reserved ones null", () => {
   for (const key of Object.keys(week2)) {
     rejects({ ...flowRun(), [key]: 0 }, `${key} set`);
     rejects(without(flowRun(), key), `${key} missing`);
@@ -327,4 +328,69 @@ test("the test-rig verdict rules still hold and malformed JSON is a contract err
   rejects({ ...flowRun(), verdict: "failed" }, "failed verdict without a failed invariant or rig failure");
   assert.throws(() => parseRunEvaluationJson("{"), ContractValidationError);
   assert.throws(() => assertRunEvaluation({ ...flowRun(), lane: "llm" }), ContractValidationError);
+});
+
+// The first live DeepSeek run's question, answered: a diagnosis, then a patch response whose
+// target override Core only proposed (a change proposal) and whose wait-retry it executed (an adaptation).
+const recovered = () => ({
+  attempted: true,
+  interventions: [
+    { kind: "diagnosis", validationOk: true, validationCodes: ["diagnosis.evidence_partial"] },
+    { kind: "runtime_patch", validationOk: null, validationCodes: [] },
+  ],
+  runtimePatchAttempts: [
+    { kind: "temporary_target_override", proposalOnly: true, executed: false, preflightOk: true, issueCodes: [], adaptationCreated: false, changeProposalCreated: true },
+    { kind: "temporary_wait_retry", proposalOnly: false, executed: true, preflightOk: true, issueCodes: [], adaptationCreated: true, changeProposalCreated: false },
+    { kind: null, proposalOnly: null, executed: null, preflightOk: false, issueCodes: ["runtime_patch.target_node_invalid"], adaptationCreated: false, changeProposalCreated: false },
+  ],
+  adaptationIds: ["adaptation.run-mu4nxysj-3234c535.temporary_wait_retry.1789000000000"],
+  changeProposalIds: ["proposal.adaptation.run-mu4nxysj-3234c535.temporary_target_override.1789000000000"],
+});
+const noRecovery = () => ({ attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [] });
+
+test("harnessRecovery records what Core's recovery did on a Flow that ran, and round-trips", () => {
+  for (const harnessRecovery of [recovered(), noRecovery(), null]) {
+    const evaluation = { ...flowRun(), harnessRecovery };
+    assert.doesNotThrow(() => assertRunEvaluation(evaluation), JSON.stringify(harnessRecovery));
+    assert.deepEqual(parseRunEvaluationJson(JSON.stringify(evaluation)), evaluation);
+  }
+  assert.deepEqual(validateRunHarnessRecovery(recovered()), { valid: true, value: recovered() });
+  // Only a run whose Flow was created and ran has anything Core could have recovered.
+  assert.deepEqual(issuesOf({ ...recordingRun(), harnessRecovery: noRecovery() }), ["$.harnessRecovery"]);
+  assert.deepEqual(issuesOf({ ...facilityRun(), harnessRecovery: noRecovery() }), ["$.harnessRecovery"]);
+  assert.deepEqual(issuesOf({ ...recordingRun(), harnessRecovery: null }), []);
+});
+
+test("no recovery reads as no recovery, and never as a recovery that failed", () => {
+  assert.deepEqual(issuesOf({ ...flowRun(), harnessRecovery: { ...noRecovery(), attempted: true } }), ["$.harnessRecovery.attempted"]);
+  assert.deepEqual(issuesOf({ ...flowRun(), harnessRecovery: { ...recovered(), attempted: false } }), ["$.harnessRecovery.attempted"]);
+  for (const list of ["interventions", "runtimePatchAttempts", "adaptationIds", "changeProposalIds"]) {
+    const only = { ...noRecovery(), [list]: recovered()[list].slice(0, 1) };
+    assert.deepEqual(issuesOf({ ...flowRun(), harnessRecovery: only }), ["$.harnessRecovery.attempted"], `${list} alone is recovery`);
+    assert.equal(validateRunHarnessRecovery({ ...only, attempted: true }).valid, true, list);
+  }
+});
+
+test("harnessRecovery carries kinds, codes, identifiers and flags, never text", () => {
+  const withRecovery = (mutate) => { const harnessRecovery = recovered(); mutate(harnessRecovery); return { ...flowRun(), harnessRecovery }; };
+  for (const [path, mutate] of Object.entries({
+    "$.harnessRecovery.interventions[0].kind": (value) => { value.interventions[0].kind = "The model diagnosed a moved button"; },
+    "$.harnessRecovery.interventions[0].validationCodes[0]": (value) => { value.interventions[0].validationCodes[0] = "diagnosis.evidence_partial: only " + PLANTED; },
+    "$.harnessRecovery.interventions[1].validationOk": (value) => { value.interventions[1].validationOk = "yes"; },
+    "$.harnessRecovery.runtimePatchAttempts[0].kind": (value) => { value.runtimePatchAttempts[0].kind = "temporary target override"; },
+    "$.harnessRecovery.runtimePatchAttempts[2].issueCodes[0]": (value) => { value.runtimePatchAttempts[2].issueCodes[0] = "Unknown target node #card-" + PLANTED; },
+    "$.harnessRecovery.runtimePatchAttempts[1].executed": (value) => { delete value.runtimePatchAttempts[1].executed; },
+    "$.harnessRecovery.runtimePatchAttempts[1].adaptationCreated": (value) => { value.runtimePatchAttempts[1].adaptationCreated = null; },
+    "$.harnessRecovery.runtimePatchAttempts[0].selector": (value) => { value.runtimePatchAttempts[0].selector = "#card"; },
+    "$.harnessRecovery.adaptationIds[0]": (value) => { value.adaptationIds[0] = "adaptation for card " + PLANTED; },
+    "$.harnessRecovery.changeProposalIds[0]": (value) => { value.changeProposalIds[0] = ""; },
+    "$.harnessRecovery.changeProposalIds": (value) => { value.changeProposalIds = "proposal.one"; },
+    "$.harnessRecovery.prompt": (value) => { value.prompt = "PRIVATE"; },
+    "$.harnessRecovery.interventions": (value) => { delete value.interventions; },
+  })) {
+    const evaluation = withRecovery(mutate);
+    assert.ok(issuesOf(evaluation).includes(path), `${path}: ${JSON.stringify(issuesOf(evaluation))}`);
+    for (const message of validateRunEvaluation(evaluation).issues) assert.equal(message.message.includes(PLANTED), false, "a refusal never quotes the value it refused");
+  }
+  assert.deepEqual(messagesAt({ ...flowRun(), harnessRecovery: "recovered" }, "$.harnessRecovery"), ["must be an object"]);
 });
