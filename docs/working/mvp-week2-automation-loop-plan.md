@@ -98,19 +98,29 @@ bootstrap already demonstrates the right build-a-flow pattern but **refuses any
 flow that is not blank**, so the "improve an existing flow" entry point cannot
 reuse it unchanged.
 
-**Done:** both scoping reports; this plan and its Core pair; the four
-investigations, each supervisor-verified rather than taken on trust.
+**Done and supervisor-verified** (each re-run by the supervisor, not accepted
+from a report): both scoping reports, this plan and its Core pair, and the four
+investigations. **Phase SEC** — three rounds, closing `create-session`,
+`create-user`, the TOTP pair, `update-user` on its authority-changing path, and
+a vault unlock that proved nothing. **Phase G** — rollback restores the whole
+graph, with all eight operation inverses audited and a second instance fixed in
+`restoreSnapshot`. **Phase T** — the repair target is opaque and the evidence
+packet no longer describes selectors to the model, asserted on the serialized
+payload with an exhaustive key allowlist. **Phase P** — every endpoint declares
+whether it destroys, and omitting or misspelling that is a compile error.
 
-**In progress**, five workers resuming partial work the crash interrupted:
-Phase D (its failing test is on disk and its fix is not, so Core's only type
-errors are in that one file), Phase SEC, and Phase G in Core; X4-C and X4-D in
-the extension.
+**Phase P is committed but deliberately NOT pushed.** Making
+`review-flow-adaptation` authoring leaves a stale assertion at
+`AS/runtime/tests/service-flow-bootstrap-adaptation.test.ts:383` still expecting
+a PIN. `AGENTS.md` forbids pushing a unit that includes something known to be
+broken, and the worker owning that file is correcting it.
 
-**Not started:** Phase P — its partial edit was reverted, because making
-`classification` a required field is all-or-nothing across ~223 registration
-sites and half-applied it stopped Core compiling. That design survives as
-`phase-p-partial.patch` in the session scratchpad and must be redone as one
-atomic change. Also Phases T, H and S, the content picker X4-B, and the loop
+**In progress:** Phase D (the five fixes); Phase H (the harness registry, which
+Phase T unblocked); the picker's last one-ended seams; and the Phase P fallout —
+the two hierarchy endpoints reclassified to authoring, and the Data window
+taught to collect a PIN rather than routing around the gate.
+
+**Not started:** Phase S (the stage protocol, which follows H) and the loop
 phases 2.1-2.9.
 
 **Concurrency is five workers, not nine.** Both crashes happened with nine heavy
