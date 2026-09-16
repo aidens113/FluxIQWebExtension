@@ -1,13 +1,13 @@
-// domain/src/recording/web-state/tests/snapshot.test.ts
+// src/recording/web-state/tests/snapshot.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 import { validateStateSnapshot } from "fluxiq/automation-studio";
 
-// domain/src/constants.ts
+// src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 var WEB_AUTOMATION_SCHEMA_VERSION = "0.1";
 
-// domain/src/recording/state.ts
+// src/recording/state.ts
 var WEB_AUTOMATION_STATE_NAMESPACE = "web";
 function createWebAutomationInitialState(timestamp = Date.now()) {
   return {
@@ -23,7 +23,7 @@ function createWebAutomationInitialState(timestamp = Date.now()) {
   };
 }
 
-// domain/src/sensitivity/signature.ts
+// src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
 var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
 var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
@@ -36,7 +36,7 @@ function isSensitiveControlType(type) {
   return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
 }
 
-// domain/src/sensitivity/descriptor.ts
+// src/sensitivity/descriptor.ts
 function sensitiveFieldSignatureOfDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
   const record = descriptor;
@@ -55,12 +55,12 @@ function stringField(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// domain/src/recording/web-state/compact-json-object.ts
+// src/recording/web-state/compact-json-object.ts
 function compactJsonObject(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
 
-// domain/src/recording/web-state/element/identity.ts
+// src/recording/web-state/element/identity.ts
 var MAX_STATE_ID_LENGTH = 120;
 function meaningfulText(value) {
   return typeof value === "string" && value.trim().length >= 2;
@@ -102,7 +102,7 @@ function sanitizeStateId(value) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, MAX_STATE_ID_LENGTH) || "element";
 }
 
-// domain/src/recording/web-state/element/kind.ts
+// src/recording/web-state/element/kind.ts
 function isLikelyActionableElement(element) {
   const tagName = element.tagName.toLowerCase();
   const role = element.role?.toLowerCase();
@@ -125,7 +125,7 @@ function isEnabled(element) {
   return element.attributes?.disabled === void 0 && element.attributes?.["aria-disabled"] !== "true";
 }
 
-// domain/src/recording/web-state/geometry.ts
+// src/recording/web-state/geometry.ts
 function stateBounds(bounds) {
   if (!bounds) return void 0;
   const x = finite(bounds.x);
@@ -165,7 +165,7 @@ function finite(value) {
   return Number.isFinite(value) ? value : void 0;
 }
 
-// domain/src/recording/web-state/element/selection.ts
+// src/recording/web-state/element/selection.ts
 var MAX_STATE_ELEMENTS = 1500;
 var WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS = ["count", "captured", "truncated", "captureTruncated", "stateTruncated"];
 function shouldCaptureElementState(element) {
@@ -227,7 +227,7 @@ function hasElementBounds(element) {
   return stateBounds(element.documentBounds ?? element.bounds) !== void 0;
 }
 
-// domain/src/recording/web-state/visual-frame.ts
+// src/recording/web-state/visual-frame.ts
 var MAX_VISUAL_FRAME_ELEMENTS = 1e3;
 var WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID = "web-automation.viewport";
 var WEB_AUTOMATION_SCREEN_FRAME_ID = "screen";
@@ -390,7 +390,7 @@ function elementLayerLabel(element) {
   return element.name ?? element.visibleText ?? element.text ?? element.value ?? element.href ?? element.tagName;
 }
 
-// domain/src/recording/web-state/action-target.ts
+// src/recording/web-state/action-target.ts
 function webAutomationActionTargetFromElement(element) {
   const secret = isSensitiveElementDescriptor(element);
   const visibleText = secret ? void 0 : element.visibleText;
@@ -464,12 +464,12 @@ function webAutomationActionVisualTargetFromElement(element, input = {}) {
   });
 }
 
-// domain/src/page-evidence/wire.ts
+// src/page-evidence/wire.ts
 function pageEvidenceWire(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// domain/src/recording/web-state/evidence/read.ts
+// src/recording/web-state/evidence/read.ts
 var MAX_TEXT = 200;
 function list(value) {
   return Array.isArray(value) ? value : [];
@@ -501,7 +501,7 @@ function finite2(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : void 0;
 }
 
-// domain/src/recording/web-state/evidence/input.ts
+// src/recording/web-state/evidence/input.ts
 function pageEvidenceOfSnapshot(snapshot) {
   return pageEvidenceWire(snapshot.evidence);
 }
@@ -509,7 +509,7 @@ function pageEvidenceTruncatedElements(evidence) {
   return pageEvidenceWire(evidence?.elements)?.truncated === true;
 }
 
-// domain/src/recording/web-state/state-values.ts
+// src/recording/web-state/state-values.ts
 function putStateValue(snapshot, path, type, value, observedAt, sourceId, input = {}) {
   const namespace = snapshot.namespaces[WEB_AUTOMATION_STATE_NAMESPACE] ?? {
     schemaId: WEB_AUTOMATION_DOMAIN_ID,
@@ -594,7 +594,7 @@ function elementStatePayload(element) {
   });
 }
 
-// domain/src/recording/web-state/evidence/project.ts
+// src/recording/web-state/evidence/project.ts
 var EVIDENCE_PATH_PREFIX = "evidence.";
 var MAX_DIALOGS = 5;
 var MAX_OVERLAY_BLOCKERS = 5;
@@ -794,7 +794,7 @@ function putText(put, path, value, input) {
   if (bounded !== void 0) put(path, "string", bounded, input);
 }
 
-// domain/src/recording/web-state/snapshot.ts
+// src/recording/web-state/snapshot.ts
 function createWebAutomationStateFromSnapshot(snapshot, input = {}) {
   const timestamp = input.timestamp ?? Date.now();
   let state = createWebAutomationInitialState(timestamp);
@@ -820,7 +820,7 @@ function createWebAutomationStateFromSnapshot(snapshot, input = {}) {
   return withScreenVisualFrame(state, snapshot, selection.elements, input);
 }
 
-// domain/src/recording/web-state/tests/snapshot.test.ts
+// src/recording/web-state/tests/snapshot.test.ts
 var page = [
   { tagName: "button", selector: "button.icon" },
   { tagName: "button", selector: "button.save", text: "Save", bounds: { x: 20, y: 30, width: 80, height: 32 } },

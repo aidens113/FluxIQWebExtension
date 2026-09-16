@@ -1,8 +1,8 @@
-// domain/src/tests/safety.test.ts
+// src/tests/safety.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// domain/src/actions/safety.ts
+// src/actions/safety.ts
 var WEB_AUTOMATION_ACTION_SAFETY = {
   "web.browser.navigate": "review",
   "web.dom.click": "review",
@@ -27,7 +27,7 @@ var WEB_AUTOMATION_ACTION_SAFETY = {
   "web.browser.download": "review"
 };
 
-// domain/src/actions/extraction/request.ts
+// src/actions/extraction/request.ts
 var WEB_AUTOMATION_EXTRACT_PAGINATION_MODES = ["next", "loadMore", "scroll", "numbered"];
 var WEB_AUTOMATION_EXTRACT_FIELD_KINDS = ["text", "attribute", "link", "value", "column"];
 var WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS = ["include", "exclude", "encrypt"];
@@ -35,10 +35,10 @@ var WEB_AUTOMATION_EXTRACT_READ_MODES = ["text", "attribute", "value", "html"];
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
 var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
 
-// domain/src/actions/extraction/read-request.ts
+// src/actions/extraction/read-request.ts
 var REFUSED = Symbol("refused");
 
-// domain/src/actions/extraction/schema.ts
+// src/actions/extraction/schema.ts
 function webAutomationExtractListSchema(elementFingerprintSchema2) {
   const pageBound = { type: "integer", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES };
   const fieldSpecSchema = {
@@ -91,7 +91,7 @@ function webAutomationExtractListSchema(elementFingerprintSchema2) {
   };
 }
 
-// domain/src/actions/types.ts
+// src/actions/types.ts
 var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.navigate",
   "web.dom.click",
@@ -113,7 +113,7 @@ var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.download"
 ];
 
-// domain/src/actions/schemas.ts
+// src/actions/schemas.ts
 var elementFingerprintSchema = {
   type: "object",
   label: "Element fingerprint",
@@ -417,10 +417,10 @@ var webAutomationActionDefinitions = [
   }
 ];
 
-// domain/src/constants.ts
+// src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 
-// domain/src/output-nodes/definitions.ts
+// src/output-nodes/definitions.ts
 var controlInput = { id: "in", label: "In", valueType: "signal", role: "control" };
 var outputPorts = [
   { id: "success", label: "Success", valueType: "any", role: "success" },
@@ -556,7 +556,7 @@ function iconForOutput(outputId) {
   return "square-dot";
 }
 
-// domain/src/io/input-model.ts
+// src/io/input-model.ts
 var WEB_AUTOMATION_INPUT_IDS = {
   browserState: "web.browser.state",
   recordingEvidence: "web.recording.evidence",
@@ -611,7 +611,7 @@ var OUTPUT_FOR_ACTION_INPUT = new Map(
   actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
 );
 
-// domain/src/io/manifest-definitions.ts
+// src/io/manifest-definitions.ts
 var webAutomationManifestInputs = [
   ...stateInputDefinitions,
   ...actionInputDefinitions.map(([id, title, outputId]) => ({ id, title, role: "action", outputId }))
@@ -644,7 +644,7 @@ function requiresElementTarget(parameterSchema) {
   return Array.isArray(parameterSchema.required) && parameterSchema.required.includes("selector");
 }
 
-// domain/src/tests/safety.test.ts
+// src/tests/safety.test.ts
 var SAFE_OUTPUTS = [
   "web.dom.wait_for_selector",
   "web.dom.wait_for_text",

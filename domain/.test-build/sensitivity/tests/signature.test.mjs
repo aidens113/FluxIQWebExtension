@@ -1,8 +1,8 @@
-// domain/src/sensitivity/tests/signature.test.ts
+// src/sensitivity/tests/signature.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// domain/src/sensitivity/signature.ts
+// src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
 var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
 var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
@@ -15,7 +15,7 @@ function isSensitiveControlType(type) {
   return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
 }
 
-// domain/src/sensitivity/tests/signature.test.ts
+// src/sensitivity/tests/signature.test.ts
 test("a password control is sensitive by either type field, in any case", () => {
   assert.equal(isSensitiveFieldSignature({ inputType: "password" }), true);
   assert.equal(isSensitiveFieldSignature({ inputType: "PASSWORD" }), true);

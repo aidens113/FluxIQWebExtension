@@ -1,4 +1,4 @@
-// domain/src/runtime/llm-evidence/harness-options/tests/options.test.ts
+// src/runtime/llm-evidence/harness-options/tests/options.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -7,10 +7,10 @@ import {
   runAutomationStudioRuntimeExploration
 } from "fluxiq/automation-studio";
 
-// domain/src/constants.ts
+// src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 
-// domain/src/runtime/llm-evidence/present.ts
+// src/runtime/llm-evidence/present.ts
 function present(fields) {
   const source = fields;
   const written = {};
@@ -21,7 +21,7 @@ function present(fields) {
   return written;
 }
 
-// domain/src/runtime/llm-evidence/limits.ts
+// src/runtime/llm-evidence/limits.ts
 import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES } from "fluxiq/automation-studio";
 var WEB_LLM_EVIDENCE_BYTE_BUDGETS = Object.freeze({
   ceiling: 12e3,
@@ -50,10 +50,10 @@ function evidenceByteLimit(input, fallback, ceiling = WEB_LLM_EVIDENCE_BYTE_BUDG
   return Math.min(Number(input), cap);
 }
 
-// domain/src/runtime/llm-evidence/harness-options/execute.ts
+// src/runtime/llm-evidence/harness-options/execute.ts
 import { automationStudioExplorationScopeAllows } from "fluxiq/automation-studio";
 
-// domain/src/sensitivity/signature.ts
+// src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
 var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
 var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
@@ -66,7 +66,7 @@ function isSensitiveControlType(type) {
   return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
 }
 
-// domain/src/sensitivity/descriptor.ts
+// src/sensitivity/descriptor.ts
 function sensitiveFieldSignatureOfDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
   const record = descriptor;
@@ -85,7 +85,7 @@ function stringField(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// domain/src/runtime/llm-evidence/location.ts
+// src/runtime/llm-evidence/location.ts
 function safeEvidenceUrl(input) {
   if (typeof input !== "string" || !input || input.length > WEB_LLM_EVIDENCE_BOUNDS.url) throw new Error("web evidence URL must be bounded");
   const url = new URL(input);
@@ -105,7 +105,7 @@ function sameOriginHref(input, base) {
   }
 }
 
-// domain/src/runtime/llm-evidence/untrusted-json.ts
+// src/runtime/llm-evidence/untrusted-json.ts
 function isJsonRecord(input) {
   return Boolean(input) && typeof input === "object" && !Array.isArray(input);
 }
@@ -130,7 +130,7 @@ function boundedCount(input, maximum) {
   return input;
 }
 
-// domain/src/runtime/llm-evidence/elements.ts
+// src/runtime/llm-evidence/elements.ts
 var FRAME_SELECTOR_PATTERN = /^frame\[(\d{1,6})\]\s*>>\s*(.+)$/u;
 var FRAME_ID_ATTRIBUTE = "data-fluxiq-frame-id";
 function sanitizedEvidenceElement(raw, context) {
@@ -140,7 +140,7 @@ function sanitizedEvidenceElement(raw, context) {
   if (!tag || !addressed || isSensitiveElementDescriptor(raw)) return void 0;
   const attributes = isJsonRecord(raw.attributes) ? raw.attributes : {};
   const role = boundedText(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
-  const name = boundedText(raw.name, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const name = boundedText(raw.accessibleName ?? raw.name, WEB_LLM_EVIDENCE_BOUNDS.text);
   const rawText = boundedText(raw.visibleText ?? raw.text, WEB_LLM_EVIDENCE_BOUNDS.text);
   const text = rawText === name ? void 0 : rawText;
   const rawInputType = boundedText(raw.inputType, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
@@ -253,12 +253,12 @@ function sanitizedSelectedValue(input, options) {
   return value && options.some((option) => option.value === value) ? value : void 0;
 }
 
-// domain/src/page-evidence/wire.ts
+// src/page-evidence/wire.ts
 function pageEvidenceWire(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// domain/src/runtime/llm-evidence/page-evidence.ts
+// src/runtime/llm-evidence/page-evidence.ts
 var READY_STATES = ["loading", "interactive", "complete"];
 var ORDINARY_NAVIGATION_TYPE = "navigate";
 var MAX_REDIRECTS = 100;
@@ -376,7 +376,7 @@ function evidenceBlocker(input) {
   });
 }
 
-// domain/src/runtime/llm-evidence/sanitize.ts
+// src/runtime/llm-evidence/sanitize.ts
 var WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v2";
 function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
   const snapshot2 = jsonRecord(input, "web DOM snapshot");
@@ -481,7 +481,7 @@ function trimToBudget(evidence, selectors, maxEvidenceBytes) {
   }
 }
 
-// domain/src/runtime/llm-evidence/capture.ts
+// src/runtime/llm-evidence/capture.ts
 function selectSession(sessionIds) {
   const unique = [...new Set(sessionIds)];
   if (unique.length !== 1) throw new Error("exactly one connected web-automation client is required for LLM evidence");
@@ -521,7 +521,7 @@ async function actAndCapture(gateway, sessionId, request, actionType, parameters
   return await captureEvidence(gateway, sessionId, request, signal, expectedOrigin ?? new URL(current.evidence.location).origin);
 }
 
-// domain/src/runtime/llm-evidence/tool-rejection.ts
+// src/runtime/llm-evidence/tool-rejection.ts
 var WEB_LLM_TOOL_RESULT_SCHEMA_VERSION = "web-llm-tool-result.v1";
 var WEB_LLM_TOOL_REJECTION_CODES = [
   "invalid_input",
@@ -545,7 +545,7 @@ function toolRejection(code) {
   return { schemaVersion: WEB_LLM_TOOL_RESULT_SCHEMA_VERSION, ok: false, code };
 }
 
-// domain/src/runtime/llm-evidence/reveal.ts
+// src/runtime/llm-evidence/reveal.ts
 var COMMITTING_ACTION_WORDS = /\b(?:submit|purchase|buy|pay|checkout|order|delete|remove|destroy|unsubscribe|confirm|send|publish)\b/iu;
 function safeRevealElement(element) {
   const identity = [element.selector, element.name, element.text].filter(Boolean).join(" ");
@@ -572,7 +572,7 @@ function currentElementForReturnedTarget(returned, current, target) {
   return { ...matches[0], selector };
 }
 
-// domain/src/runtime/llm-evidence/vocabulary.ts
+// src/runtime/llm-evidence/vocabulary.ts
 var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe"];
 var WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
 var WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
@@ -589,7 +589,7 @@ var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
   ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
 ]);
 
-// domain/src/runtime/llm-evidence/harness-options/safety.ts
+// src/runtime/llm-evidence/harness-options/safety.ts
 var WEB_RECOVERY_COMMITTING_WORDS = /\b(?:submit|save|apply|approve|confirm|purchase|buy|pay|checkout|order|transfer|withdraw|delete|remove|destroy|erase|discard|reset|revoke|unsubscribe|send|publish|post|upload|sign|accept)\b/iu;
 var WEB_RECOVERY_DISMISSAL_WORDS = /\b(?:close|dismiss|cancel|back|later|skip|no thanks|not now|got it|understood|continue browsing)\b/iu;
 var ACTIONABLE_ROLES = /* @__PURE__ */ new Set(["button", "tab", "menuitem", "treeitem"]);
@@ -623,7 +623,7 @@ function agreeingSignals(element, page) {
   return signals;
 }
 
-// domain/src/runtime/llm-evidence/harness-options/vocabulary.ts
+// src/runtime/llm-evidence/harness-options/vocabulary.ts
 var WEB_RECOVERY_HARNESS_OPTION_IDS = [
   "web.recovery.inspect",
   "web.recovery.reveal",
@@ -645,7 +645,7 @@ function webAutomationExplorationScope(location) {
   return new URL(location).origin;
 }
 
-// domain/src/runtime/llm-evidence/harness-options/execute.ts
+// src/runtime/llm-evidence/harness-options/execute.ts
 var WEB_RECOVERY_WAIT_BOUNDS = Object.freeze({ minMs: 100, maxMs: 5e3, defaultMs: 1e3 });
 function webRecoveryHarnessImplementations(context) {
   const returned = /* @__PURE__ */ new Map();
@@ -771,7 +771,7 @@ async function defaultSleep(ms, signal) {
   });
 }
 
-// domain/src/runtime/llm-evidence/harness-options/options.ts
+// src/runtime/llm-evidence/harness-options/options.ts
 var TARGET_HANDLE_PATTERN = "^target\\.[1-9][0-9]?$";
 var EXPLORATION_STAGES = ["gather", "iterate"];
 var DOMAIN_SCOPE = { kind: "domain", domainId: WEB_AUTOMATION_DOMAIN_ID };
@@ -849,7 +849,7 @@ function webAutomationRecoveryHarnessOptionBundle(context) {
   };
 }
 
-// domain/src/runtime/llm-evidence/harness-options/tests/options.test.ts
+// src/runtime/llm-evidence/harness-options/tests/options.test.ts
 test("registers five options into Core's registry and offers them only while exploring", () => {
   const registry = registered();
   assert.deepEqual(registry.list(resolution()).map((option) => option.toolId), [...WEB_RECOVERY_HARNESS_OPTION_IDS]);

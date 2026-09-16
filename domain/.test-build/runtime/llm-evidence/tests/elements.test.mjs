@@ -1,8 +1,8 @@
-// domain/src/runtime/llm-evidence/tests/elements.test.ts
+// src/runtime/llm-evidence/tests/elements.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// domain/src/sensitivity/signature.ts
+// src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
 var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
 var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
@@ -15,7 +15,7 @@ function isSensitiveControlType(type) {
   return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
 }
 
-// domain/src/sensitivity/descriptor.ts
+// src/sensitivity/descriptor.ts
 function sensitiveFieldSignatureOfDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
   const record = descriptor;
@@ -34,7 +34,7 @@ function stringField(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// domain/src/runtime/llm-evidence/limits.ts
+// src/runtime/llm-evidence/limits.ts
 import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES } from "fluxiq/automation-studio";
 var WEB_LLM_EVIDENCE_BYTE_BUDGETS = Object.freeze({
   ceiling: 12e3,
@@ -54,7 +54,7 @@ var WEB_LLM_EVIDENCE_BOUNDS = Object.freeze({
   dialogs: 3
 });
 
-// domain/src/runtime/llm-evidence/location.ts
+// src/runtime/llm-evidence/location.ts
 function evidenceLocation(url) {
   return `${url.origin}${url.pathname}`;
 }
@@ -68,7 +68,7 @@ function sameOriginHref(input, base) {
   }
 }
 
-// domain/src/runtime/llm-evidence/present.ts
+// src/runtime/llm-evidence/present.ts
 function present(fields) {
   const source = fields;
   const written = {};
@@ -79,7 +79,7 @@ function present(fields) {
   return written;
 }
 
-// domain/src/runtime/llm-evidence/untrusted-json.ts
+// src/runtime/llm-evidence/untrusted-json.ts
 function isJsonRecord(input) {
   return Boolean(input) && typeof input === "object" && !Array.isArray(input);
 }
@@ -96,7 +96,7 @@ function boundedCount(input, maximum) {
   return input;
 }
 
-// domain/src/runtime/llm-evidence/elements.ts
+// src/runtime/llm-evidence/elements.ts
 var FRAME_SELECTOR_PATTERN = /^frame\[(\d{1,6})\]\s*>>\s*(.+)$/u;
 var FRAME_ID_ATTRIBUTE = "data-fluxiq-frame-id";
 function sanitizedEvidenceElement(raw, context) {
@@ -106,7 +106,7 @@ function sanitizedEvidenceElement(raw, context) {
   if (!tag || !addressed || isSensitiveElementDescriptor(raw)) return void 0;
   const attributes = isJsonRecord(raw.attributes) ? raw.attributes : {};
   const role = boundedText(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
-  const name = boundedText(raw.name, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const name = boundedText(raw.accessibleName ?? raw.name, WEB_LLM_EVIDENCE_BOUNDS.text);
   const rawText = boundedText(raw.visibleText ?? raw.text, WEB_LLM_EVIDENCE_BOUNDS.text);
   const text = rawText === name ? void 0 : rawText;
   const rawInputType = boundedText(raw.inputType, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
@@ -219,7 +219,7 @@ function sanitizedSelectedValue(input, options) {
   return value && options.some((option) => option.value === value) ? value : void 0;
 }
 
-// domain/src/runtime/llm-evidence/tests/elements.test.ts
+// src/runtime/llm-evidence/tests/elements.test.ts
 var CONTEXT = { target: "tab.1", url: new URL("https://fixture.test/checkout") };
 function described(raw) {
   return sanitizedEvidenceElement({ tagName: "input", selector: "#field", ...raw }, CONTEXT);
@@ -264,4 +264,10 @@ test("an element with no tag or no selector cannot be addressed and is dropped",
   assert.equal(sanitizedEvidenceElement({ selector: "#field" }, CONTEXT), void 0);
   assert.equal(sanitizedEvidenceElement({ tagName: "input" }, CONTEXT), void 0);
   assert.equal(sanitizedEvidenceElement("input#field", CONTEXT), void 0);
+});
+test("an element's accessible name reaches the packet under the field the extension actually sends", () => {
+  const button = sanitizedEvidenceElement({ tagName: "button", selector: "#save", role: "button", accessibleName: "Save settings" }, CONTEXT);
+  assert.equal(button?.element.name, "Save settings");
+  assert.equal(sanitizedEvidenceElement({ tagName: "button", selector: "#a", name: "Apply" }, CONTEXT)?.element.name, "Apply");
+  assert.equal(sanitizedEvidenceElement({ tagName: "button", selector: "#b", name: "stale", accessibleName: "Current" }, CONTEXT)?.element.name, "Current");
 });

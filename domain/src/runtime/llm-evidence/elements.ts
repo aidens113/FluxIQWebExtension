@@ -103,7 +103,11 @@ export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementC
 
   const attributes = isJsonRecord(raw.attributes) ? raw.attributes : {};
   const role = boundedText(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
-  const name = boundedText(raw.name, WEB_LLM_EVIDENCE_BOUNDS.text);
+  // The extension sends an element's accessible name as `accessibleName`
+  // (and leaves it out for a secret field). Reading only `name` dropped it
+  // from every real packet while fixtures built with `name` kept passing, so
+  // the model never saw the label a drifted control is usually found by.
+  const name = boundedText(raw.accessibleName ?? raw.name, WEB_LLM_EVIDENCE_BOUNDS.text);
   const rawText = boundedText(raw.visibleText ?? raw.text, WEB_LLM_EVIDENCE_BOUNDS.text);
   const text = rawText === name ? undefined : rawText;
   const rawInputType = boundedText(raw.inputType, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();

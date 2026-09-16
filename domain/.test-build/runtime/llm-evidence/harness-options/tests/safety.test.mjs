@@ -1,8 +1,8 @@
-// domain/src/runtime/llm-evidence/harness-options/tests/safety.test.ts
+// src/runtime/llm-evidence/harness-options/tests/safety.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// domain/src/runtime/llm-evidence/harness-options/safety.ts
+// src/runtime/llm-evidence/harness-options/safety.ts
 var WEB_RECOVERY_COMMITTING_WORDS = /\b(?:submit|save|apply|approve|confirm|purchase|buy|pay|checkout|order|transfer|withdraw|delete|remove|destroy|erase|discard|reset|revoke|unsubscribe|send|publish|post|upload|sign|accept)\b/iu;
 var WEB_RECOVERY_DISMISSAL_WORDS = /\b(?:close|dismiss|cancel|back|later|skip|no thanks|not now|got it|understood|continue browsing)\b/iu;
 var ACTIONABLE_ROLES = /* @__PURE__ */ new Set(["button", "tab", "menuitem", "treeitem"]);
@@ -36,7 +36,7 @@ function agreeingSignals(element2, page2) {
   return signals;
 }
 
-// domain/src/runtime/llm-evidence/harness-options/tests/safety.test.ts
+// src/runtime/llm-evidence/harness-options/tests/safety.test.ts
 var REFUSALS = [
   ["a button whose name says it deletes", { name: "Delete account", role: "button" }, "committing_wording"],
   ["a button whose visible text says it pays", { text: "Pay now", role: "button" }, "committing_wording"],

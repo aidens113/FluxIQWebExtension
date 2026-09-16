@@ -1,9 +1,9 @@
-// domain/src/runtime/tests/adapter-redaction.test.ts
+// src/runtime/tests/adapter-redaction.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
 
-// domain/src/sensitivity/signature.ts
+// src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
 var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
 var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
@@ -16,7 +16,7 @@ function isSensitiveControlType(type) {
   return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
 }
 
-// domain/src/sensitivity/descriptor.ts
+// src/sensitivity/descriptor.ts
 function sensitiveFieldSignatureOfDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
   const record = descriptor;
@@ -35,21 +35,21 @@ function stringField(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// domain/src/sensitivity/redaction.ts
+// src/sensitivity/redaction.ts
 var WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT = "(withheld: the action ran on a control that holds a secret)";
 function isProducerRedactedComparison(validation) {
   if (!validation || typeof validation !== "object" || Array.isArray(validation)) return false;
   return validation.redacted === true;
 }
 
-// domain/src/runtime/adapter.ts
+// src/runtime/adapter.ts
 import { createHash } from "node:crypto";
 import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES as AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES2 } from "fluxiq/automation-studio";
 
-// domain/src/constants.ts
+// src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 
-// domain/src/output-nodes/targets/targets.ts
+// src/output-nodes/targets/targets.ts
 function outputTargetFromPayload(payload) {
   const adaptedTarget = objectValue(payload.target);
   const adaptedFingerprint = objectValue(adaptedTarget?.fingerprint);
@@ -180,7 +180,7 @@ function booleanValue(value) {
   return typeof value === "boolean" ? value : void 0;
 }
 
-// domain/src/actions/extraction/request.ts
+// src/actions/extraction/request.ts
 var WEB_AUTOMATION_EXTRACT_PAGINATION_MODES = ["next", "loadMore", "scroll", "numbered"];
 var WEB_AUTOMATION_EXTRACT_FIELD_KINDS = ["text", "attribute", "link", "value", "column"];
 var WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS = ["include", "exclude", "encrypt"];
@@ -188,10 +188,10 @@ var WEB_AUTOMATION_EXTRACT_READ_MODES = ["text", "attribute", "value", "html"];
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
 var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
 
-// domain/src/actions/extraction/read-request.ts
+// src/actions/extraction/read-request.ts
 var REFUSED = Symbol("refused");
 
-// domain/src/actions/extraction/schema.ts
+// src/actions/extraction/schema.ts
 function webAutomationExtractListSchema(elementFingerprintSchema2) {
   const pageBound = { type: "integer", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES };
   const fieldSpecSchema = {
@@ -244,7 +244,7 @@ function webAutomationExtractListSchema(elementFingerprintSchema2) {
   };
 }
 
-// domain/src/actions/types.ts
+// src/actions/types.ts
 var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.navigate",
@@ -267,7 +267,7 @@ var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.download"
 ];
 
-// domain/src/actions/safety.ts
+// src/actions/safety.ts
 var WEB_AUTOMATION_ACTION_SAFETY = {
   "web.browser.navigate": "review",
   "web.dom.click": "review",
@@ -292,7 +292,7 @@ var WEB_AUTOMATION_ACTION_SAFETY = {
   "web.browser.download": "review"
 };
 
-// domain/src/actions/schemas.ts
+// src/actions/schemas.ts
 var elementFingerprintSchema = {
   type: "object",
   label: "Element fingerprint",
@@ -596,7 +596,7 @@ var webAutomationActionDefinitions = [
   }
 ];
 
-// domain/src/output-nodes/definitions.ts
+// src/output-nodes/definitions.ts
 var controlInput = { id: "in", label: "In", valueType: "signal", role: "control" };
 var outputPorts = [
   { id: "success", label: "Success", valueType: "any", role: "success" },
@@ -732,7 +732,7 @@ function iconForOutput(outputId) {
   return "square-dot";
 }
 
-// domain/src/io/gateway-output-dispatcher.ts
+// src/io/gateway-output-dispatcher.ts
 async function dispatchWebAutomationOutput(fluxiq, request) {
   const sessionId = targetSessionId(fluxiq, request.metadata);
   if (!sessionId) return { ok: false, outputId: request.outputId, error: "A single paired web-automation client must be selected before dispatching an output." };
@@ -782,7 +782,7 @@ function stringValue2(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// domain/src/io/input-model.ts
+// src/io/input-model.ts
 var WEB_AUTOMATION_INPUT_IDS = {
   browserState: "web.browser.state",
   recordingEvidence: "web.recording.evidence",
@@ -837,7 +837,7 @@ var OUTPUT_FOR_ACTION_INPUT = new Map(
   actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
 );
 
-// domain/src/runtime/capabilities.ts
+// src/runtime/capabilities.ts
 var webAutomationRuntimeCapabilities = [
   {
     id: "web.actions",
@@ -904,7 +904,7 @@ var webAutomationGatewayCapabilities = [
   }
 ];
 
-// domain/src/runtime/failure/codes.ts
+// src/runtime/failure/codes.ts
 var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   /** The target was found but refused the action: disabled, hidden, or covered by another element. */
   ACTION_REJECTED: "web.action.rejected",
@@ -1001,7 +1001,7 @@ function boundedText(value) {
   return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
 }
 
-// domain/src/runtime/failure/carrier.ts
+// src/runtime/failure/carrier.ts
 function carriedWebAutomationFailure(error, fallback = {}) {
   const carried = property(error, "failure");
   const code = property(carried, "code");
@@ -1025,7 +1025,7 @@ function text(value) {
   return typeof value === "string" && value.length > 0 ? value : void 0;
 }
 
-// domain/src/runtime/failure/classify.ts
+// src/runtime/failure/classify.ts
 function classifyWebAutomationFailure(error, outcome) {
   if (outcome.failure !== void 0) return outcome.failure;
   const carried = carriedWebAutomationFailure(error, withActual(comparedText(outcome.validation), errorMessage(error)));
@@ -1065,7 +1065,7 @@ function errorMessage(error) {
   return typeof message === "string" && message.length > 0 ? message : void 0;
 }
 
-// domain/src/runtime/llm-evidence/limits.ts
+// src/runtime/llm-evidence/limits.ts
 import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES } from "fluxiq/automation-studio";
 var WEB_LLM_EVIDENCE_BYTE_BUDGETS = Object.freeze({
   ceiling: 12e3,
@@ -1094,10 +1094,10 @@ function evidenceByteLimit(input, fallback, ceiling = WEB_LLM_EVIDENCE_BYTE_BUDG
   return Math.min(Number(input), cap);
 }
 
-// domain/src/runtime/llm-evidence/harness-options/execute.ts
+// src/runtime/llm-evidence/harness-options/execute.ts
 import { automationStudioExplorationScopeAllows } from "fluxiq/automation-studio";
 
-// domain/src/runtime/llm-evidence/present.ts
+// src/runtime/llm-evidence/present.ts
 function present(fields) {
   const source = fields;
   const written = {};
@@ -1108,7 +1108,7 @@ function present(fields) {
   return written;
 }
 
-// domain/src/runtime/llm-evidence/location.ts
+// src/runtime/llm-evidence/location.ts
 function safeEvidenceUrl(input) {
   if (typeof input !== "string" || !input || input.length > WEB_LLM_EVIDENCE_BOUNDS.url) throw new Error("web evidence URL must be bounded");
   const url = new URL(input);
@@ -1128,7 +1128,7 @@ function sameOriginHref(input, base) {
   }
 }
 
-// domain/src/runtime/llm-evidence/untrusted-json.ts
+// src/runtime/llm-evidence/untrusted-json.ts
 function isJsonRecord(input) {
   return Boolean(input) && typeof input === "object" && !Array.isArray(input);
 }
@@ -1149,7 +1149,7 @@ function boundedCount(input, maximum) {
   return input;
 }
 
-// domain/src/runtime/llm-evidence/elements.ts
+// src/runtime/llm-evidence/elements.ts
 var FRAME_SELECTOR_PATTERN = /^frame\[(\d{1,6})\]\s*>>\s*(.+)$/u;
 var FRAME_ID_ATTRIBUTE = "data-fluxiq-frame-id";
 function sanitizedEvidenceElement(raw, context) {
@@ -1159,7 +1159,7 @@ function sanitizedEvidenceElement(raw, context) {
   if (!tag || !addressed || isSensitiveElementDescriptor(raw)) return void 0;
   const attributes = isJsonRecord(raw.attributes) ? raw.attributes : {};
   const role = boundedText2(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
-  const name = boundedText2(raw.name, WEB_LLM_EVIDENCE_BOUNDS.text);
+  const name = boundedText2(raw.accessibleName ?? raw.name, WEB_LLM_EVIDENCE_BOUNDS.text);
   const rawText = boundedText2(raw.visibleText ?? raw.text, WEB_LLM_EVIDENCE_BOUNDS.text);
   const text2 = rawText === name ? void 0 : rawText;
   const rawInputType = boundedText2(raw.inputType, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
@@ -1272,12 +1272,12 @@ function sanitizedSelectedValue(input, options) {
   return value && options.some((option) => option.value === value) ? value : void 0;
 }
 
-// domain/src/page-evidence/wire.ts
+// src/page-evidence/wire.ts
 function pageEvidenceWire(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// domain/src/runtime/llm-evidence/page-evidence.ts
+// src/runtime/llm-evidence/page-evidence.ts
 var READY_STATES = ["loading", "interactive", "complete"];
 var ORDINARY_NAVIGATION_TYPE = "navigate";
 var MAX_REDIRECTS = 100;
@@ -1395,7 +1395,7 @@ function evidenceBlocker(input) {
   });
 }
 
-// domain/src/runtime/llm-evidence/sanitize.ts
+// src/runtime/llm-evidence/sanitize.ts
 var WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v2";
 function sanitizeWebLlmSnapshot(input, options = {}) {
   return sanitizeWebLlmSnapshotWithBindings(input, options).evidence;
@@ -1503,7 +1503,7 @@ function trimToBudget(evidence, selectors, maxEvidenceBytes) {
   }
 }
 
-// domain/src/runtime/llm-evidence/tool-rejection.ts
+// src/runtime/llm-evidence/tool-rejection.ts
 var WEB_LLM_TOOL_REJECTION_CODES = [
   "invalid_input",
   "cross_origin",
@@ -1514,7 +1514,7 @@ var WEB_LLM_TOOL_REJECTION_CODES = [
   "sensitive_value"
 ];
 
-// domain/src/runtime/llm-evidence/vocabulary.ts
+// src/runtime/llm-evidence/vocabulary.ts
 var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe"];
 var WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
 var WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
@@ -1531,7 +1531,7 @@ var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
   ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
 ]);
 
-// domain/src/runtime/llm-evidence/harness-options/vocabulary.ts
+// src/runtime/llm-evidence/harness-options/vocabulary.ts
 var WEB_RECOVERY_HARNESS_OPTION_IDS = [
   "web.recovery.inspect",
   "web.recovery.reveal",
@@ -1545,10 +1545,10 @@ var WEB_RECOVERY_ACT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[2];
 var WEB_RECOVERY_WAIT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[3];
 var WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
 
-// domain/src/runtime/llm-evidence/harness-options/execute.ts
+// src/runtime/llm-evidence/harness-options/execute.ts
 var WEB_RECOVERY_WAIT_BOUNDS = Object.freeze({ minMs: 100, maxMs: 5e3, defaultMs: 1e3 });
 
-// domain/src/runtime/adapter.ts
+// src/runtime/adapter.ts
 function createWebAutomationRuntimeAdapter(options) {
   return {
     adapterId: options.adapterId ?? "web-automation.gateway",
@@ -1767,7 +1767,7 @@ function compact3(value) {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== void 0));
 }
 
-// domain/src/runtime/tests/adapter-redaction.test.ts
+// src/runtime/tests/adapter-redaction.test.ts
 var typeCommand = {
   kind: "execute_action",
   commandId: "command.type",

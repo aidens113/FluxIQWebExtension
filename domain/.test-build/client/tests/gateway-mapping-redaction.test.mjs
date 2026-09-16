@@ -1,8 +1,8 @@
-// domain/src/client/tests/gateway-mapping-redaction.test.ts
+// src/client/tests/gateway-mapping-redaction.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// domain/src/sensitivity/signature.ts
+// src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
 var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
 var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
@@ -15,7 +15,7 @@ function isSensitiveControlType(type) {
   return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
 }
 
-// domain/src/sensitivity/descriptor.ts
+// src/sensitivity/descriptor.ts
 function sensitiveFieldSignatureOfDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
   const record = descriptor;
@@ -34,24 +34,24 @@ function stringField(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// domain/src/sensitivity/redaction.ts
+// src/sensitivity/redaction.ts
 var WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT = "(withheld: the action ran on a control that holds a secret)";
 function isProducerRedactedComparison(validation) {
   if (!validation || typeof validation !== "object" || Array.isArray(validation)) return false;
   return validation.redacted === true;
 }
 
-// domain/src/constants.ts
+// src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 
-// domain/src/actions/extraction/field-key.ts
+// src/actions/extraction/field-key.ts
 var FIELD_KEY_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
 var RESERVED_FIELD_KEYS = /* @__PURE__ */ new Set(["__proto__", "constructor", "prototype"]);
 function isWebAutomationExtractFieldKey(key) {
   return typeof key === "string" && FIELD_KEY_PATTERN.test(key) && !RESERVED_FIELD_KEYS.has(key);
 }
 
-// domain/src/actions/extraction/request.ts
+// src/actions/extraction/request.ts
 var WEB_AUTOMATION_EXTRACT_PAGINATION_MODES = ["next", "loadMore", "scroll", "numbered"];
 var WEB_AUTOMATION_EXTRACT_FIELD_KINDS = ["text", "attribute", "link", "value", "column"];
 var WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS = ["include", "exclude", "encrypt"];
@@ -59,10 +59,10 @@ var WEB_AUTOMATION_EXTRACT_READ_MODES = ["text", "attribute", "value", "html"];
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
 var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
 
-// domain/src/actions/extraction/read-request.ts
+// src/actions/extraction/read-request.ts
 var REFUSED = Symbol("refused");
 
-// domain/src/actions/extraction/schema.ts
+// src/actions/extraction/schema.ts
 function webAutomationExtractListSchema(elementFingerprintSchema2) {
   const pageBound = { type: "integer", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES };
   const fieldSpecSchema = {
@@ -115,7 +115,7 @@ function webAutomationExtractListSchema(elementFingerprintSchema2) {
   };
 }
 
-// domain/src/actions/extraction/summary.ts
+// src/actions/extraction/summary.ts
 function webAutomationExtractionSummaryValue(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return void 0;
   const summary = value;
@@ -134,7 +134,7 @@ function fieldKeyList(value) {
   return Array.isArray(value) && value.every(isWebAutomationExtractFieldKey) ? [...value] : void 0;
 }
 
-// domain/src/actions/schemas.ts
+// src/actions/schemas.ts
 var elementFingerprintSchema = {
   type: "object",
   label: "Element fingerprint",
@@ -438,7 +438,7 @@ var webAutomationActionDefinitions = [
   }
 ];
 
-// domain/src/actions/safety.ts
+// src/actions/safety.ts
 var WEB_AUTOMATION_ACTION_SAFETY = {
   "web.browser.navigate": "review",
   "web.dom.click": "review",
@@ -463,7 +463,7 @@ var WEB_AUTOMATION_ACTION_SAFETY = {
   "web.browser.download": "review"
 };
 
-// domain/src/output-nodes/definitions.ts
+// src/output-nodes/definitions.ts
 var controlInput = { id: "in", label: "In", valueType: "signal", role: "control" };
 var outputPorts = [
   { id: "success", label: "Success", valueType: "any", role: "success" },
@@ -599,7 +599,7 @@ function iconForOutput(outputId) {
   return "square-dot";
 }
 
-// domain/src/actions/types.ts
+// src/actions/types.ts
 var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.navigate",
@@ -642,7 +642,7 @@ var WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = {
   "web.browser.download": "browser.download"
 };
 
-// domain/src/io/input-model.ts
+// src/io/input-model.ts
 var WEB_AUTOMATION_INPUT_IDS = {
   browserState: "web.browser.state",
   recordingEvidence: "web.recording.evidence",
@@ -697,12 +697,12 @@ var OUTPUT_FOR_ACTION_INPUT = new Map(
   actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
 );
 
-// domain/src/recording/web-state/evidence/project.ts
+// src/recording/web-state/evidence/project.ts
 var COLLECTION = { elementKind: "collection", comparable: false };
 var LIVE_COLLECTION = { ...COLLECTION, volatility: "rapid" };
 var SETTLED_COLLECTION = { ...COLLECTION, volatility: "slow" };
 
-// domain/src/runtime/failure/codes.ts
+// src/runtime/failure/codes.ts
 var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   /** The target was found but refused the action: disabled, hidden, or covered by another element. */
   ACTION_REJECTED: "web.action.rejected",
@@ -796,7 +796,7 @@ function boundedText(value) {
   return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
 }
 
-// domain/src/client/gateway-mapping.ts
+// src/client/gateway-mapping.ts
 function webAutomationActionResultPayload(result) {
   return compactJsonObject2({
     commandId: result.commandId,
@@ -849,7 +849,7 @@ function compactJsonObject2(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
 
-// domain/src/client/tests/gateway-mapping-redaction.test.ts
+// src/client/tests/gateway-mapping-redaction.test.ts
 var producerSentinel = "SENTINEL-VALUE-A-PRODUCER-SHOULD-HAVE-WITHHELD";
 var redactedPhrasing = "the field holds a withheld value of 19 characters";
 function sensitiveResult(validation) {

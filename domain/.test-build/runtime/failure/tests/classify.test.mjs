@@ -1,15 +1,15 @@
-// domain/src/runtime/failure/tests/classify.test.ts
+// src/runtime/failure/tests/classify.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
 
-// domain/src/actions/extraction/read-request.ts
+// src/actions/extraction/read-request.ts
 var REFUSED = Symbol("refused");
 
-// domain/src/actions/types.ts
+// src/actions/types.ts
 var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 
-// domain/src/runtime/failure/codes.ts
+// src/runtime/failure/codes.ts
 var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   /** The target was found but refused the action: disabled, hidden, or covered by another element. */
   ACTION_REJECTED: "web.action.rejected",
@@ -106,7 +106,7 @@ function boundedText(value) {
   return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
 }
 
-// domain/src/runtime/failure/carrier.ts
+// src/runtime/failure/carrier.ts
 function carriedWebAutomationFailure(error, fallback = {}) {
   const carried = property(error, "failure");
   const code = property(carried, "code");
@@ -130,7 +130,7 @@ function text(value) {
   return typeof value === "string" && value.length > 0 ? value : void 0;
 }
 
-// domain/src/runtime/failure/classify.ts
+// src/runtime/failure/classify.ts
 function classifyWebAutomationFailure(error, outcome) {
   if (outcome.failure !== void 0) return outcome.failure;
   const carried = carriedWebAutomationFailure(error, withActual(comparedText(outcome.validation), errorMessage(error)));
@@ -170,7 +170,7 @@ function errorMessage(error) {
   return typeof message === "string" && message.length > 0 ? message : void 0;
 }
 
-// domain/src/runtime/failure/tests/classify.test.ts
+// src/runtime/failure/tests/classify.test.ts
 var ProducerError = class extends Error {
   failure;
   constructor(failure, message) {

@@ -1,4 +1,4 @@
-// domain/src/tests/core-gateway-recording-order.test.ts
+// src/tests/core-gateway-recording-order.test.ts
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
@@ -8,7 +8,7 @@ import { AutomationStudioClientGatewayBridge, AutomationStudioNativeNodeRuntime 
 import { CLIENT_GATEWAY_PROTOCOL_VERSION, ClientGatewayService } from "fluxiq/client-gateway";
 import { IoRegistry } from "fluxiq/io";
 
-// domain/src/constants.ts
+// src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 var WEB_AUTOMATION_SCHEMA_VERSION = "0.1";
 var WEB_AUTOMATION_EVENTS = {
@@ -31,14 +31,14 @@ var WEB_AUTOMATION_EVENTS = {
   clientError: "web.client.error"
 };
 
-// domain/src/actions/extraction/field-key.ts
+// src/actions/extraction/field-key.ts
 var FIELD_KEY_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
 var RESERVED_FIELD_KEYS = /* @__PURE__ */ new Set(["__proto__", "constructor", "prototype"]);
 function isWebAutomationExtractFieldKey(key) {
   return typeof key === "string" && FIELD_KEY_PATTERN.test(key) && !RESERVED_FIELD_KEYS.has(key);
 }
 
-// domain/src/output-nodes/targets/targets.ts
+// src/output-nodes/targets/targets.ts
 function elementFingerprint(value) {
   const element = objectValue(value);
   if (!element) return void 0;
@@ -139,7 +139,7 @@ function booleanValue(value) {
   return typeof value === "boolean" ? value : void 0;
 }
 
-// domain/src/actions/extraction/request.ts
+// src/actions/extraction/request.ts
 var WEB_AUTOMATION_EXTRACT_PAGINATION_MODES = ["next", "loadMore", "scroll", "numbered"];
 var WEB_AUTOMATION_EXTRACT_FIELD_KINDS = ["text", "attribute", "link", "value", "column"];
 var WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS = ["include", "exclude", "encrypt"];
@@ -153,7 +153,7 @@ function webAutomationExtractListTimeoutMs(request) {
   return WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS * pages;
 }
 
-// domain/src/actions/extraction/read-request.ts
+// src/actions/extraction/read-request.ts
 function webAutomationExtractListRequestValue(value) {
   const request = jsonObject(value);
   const item = nonEmptyString(request?.item);
@@ -284,7 +284,7 @@ function jsonObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// domain/src/actions/extraction/recorded-definition.ts
+// src/actions/extraction/recorded-definition.ts
 var DATASET_ID_PATTERN = /^[A-Za-z0-9._:-]{1,200}$/u;
 var RESERVED_DATASET_IDS = /* @__PURE__ */ new Set([".", ".."]);
 var LABEL_MAX_LENGTH = 200;
@@ -335,7 +335,7 @@ function jsonObject2(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// domain/src/actions/extraction/schema.ts
+// src/actions/extraction/schema.ts
 function webAutomationExtractListSchema(elementFingerprintSchema2) {
   const pageBound = { type: "integer", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES };
   const fieldSpecSchema = {
@@ -388,7 +388,7 @@ function webAutomationExtractListSchema(elementFingerprintSchema2) {
   };
 }
 
-// domain/src/actions/schemas.ts
+// src/actions/schemas.ts
 var elementFingerprintSchema = {
   type: "object",
   label: "Element fingerprint",
@@ -692,7 +692,7 @@ var webAutomationActionDefinitions = [
   }
 ];
 
-// domain/src/actions/safety.ts
+// src/actions/safety.ts
 var WEB_AUTOMATION_ACTION_SAFETY = {
   "web.browser.navigate": "review",
   "web.dom.click": "review",
@@ -717,7 +717,7 @@ var WEB_AUTOMATION_ACTION_SAFETY = {
   "web.browser.download": "review"
 };
 
-// domain/src/output-nodes/definitions.ts
+// src/output-nodes/definitions.ts
 var controlInput = { id: "in", label: "In", valueType: "signal", role: "control" };
 var outputPorts = [
   { id: "success", label: "Success", valueType: "any", role: "success" },
@@ -853,7 +853,7 @@ function iconForOutput(outputId) {
   return "square-dot";
 }
 
-// domain/src/actions/types.ts
+// src/actions/types.ts
 var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.navigate",
@@ -896,7 +896,7 @@ var WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = {
   "web.browser.download": "browser.download"
 };
 
-// domain/src/sensitivity/signature.ts
+// src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
 var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
 var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
@@ -909,7 +909,7 @@ function isSensitiveControlType(type) {
   return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
 }
 
-// domain/src/sensitivity/descriptor.ts
+// src/sensitivity/descriptor.ts
 function sensitiveFieldSignatureOfDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
   const record = descriptor;
@@ -928,7 +928,7 @@ function stringField(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// domain/src/output-nodes/recorded-element-key.ts
+// src/output-nodes/recorded-element-key.ts
 function webAutomationRecordedElementKey(payload) {
   const element = objectValue(payload.element);
   const attributes = objectValue(element?.attributes);
@@ -942,7 +942,7 @@ function sanitizeRecordedElementKey(value) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 120);
 }
 
-// domain/src/output-nodes/secret-binding.ts
+// src/output-nodes/secret-binding.ts
 var WEB_AUTOMATION_SECRET_STATE_PREFIX = "web.secret.";
 function webAutomationSecretStatePath(key) {
   return `${WEB_AUTOMATION_SECRET_STATE_PREFIX}${key}`;
@@ -955,7 +955,7 @@ function webAutomationSecretBindingPath(value) {
   return path2?.startsWith(WEB_AUTOMATION_SECRET_STATE_PREFIX) ? path2 : void 0;
 }
 
-// domain/src/output-nodes/upload-binding.ts
+// src/output-nodes/upload-binding.ts
 var WEB_AUTOMATION_UPLOAD_STATE_PREFIX = "web.upload.";
 function webAutomationUploadStatePath(key) {
   return `${WEB_AUTOMATION_UPLOAD_STATE_PREFIX}${key}`;
@@ -968,12 +968,12 @@ function webAutomationUploadBindingPath(value) {
   return path2?.startsWith(WEB_AUTOMATION_UPLOAD_STATE_PREFIX) ? path2 : void 0;
 }
 
-// domain/src/output-nodes/url-path.ts
+// src/output-nodes/url-path.ts
 function webAutomationUrlPath(value) {
   return typeof value === "string" && /^\/(?![/\\])[^?#]*$/u.test(value) ? value : void 0;
 }
 
-// domain/src/output-nodes/payloads.ts
+// src/output-nodes/payloads.ts
 function webAutomationOutputPayload(outputId, payload) {
   return withRecordedFrame(outputId, payload, recordedOutputParameters(outputId, payload));
 }
@@ -1069,7 +1069,7 @@ function isRadioElement(element) {
   return stringValue(element.inputType)?.toLowerCase() === "radio" || stringValue(element.role)?.toLowerCase() === "radio";
 }
 
-// domain/src/io/input-model.ts
+// src/io/input-model.ts
 var WEB_AUTOMATION_INPUT_IDS = {
   browserState: "web.browser.state",
   recordingEvidence: "web.recording.evidence",
@@ -1240,7 +1240,7 @@ function stringValue2(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// domain/src/io/manifest-definitions.ts
+// src/io/manifest-definitions.ts
 var webAutomationManifestInputs = [
   ...stateInputDefinitions,
   ...actionInputDefinitions.map(([id, title, outputId]) => ({ id, title, role: "action", outputId }))
@@ -1273,17 +1273,17 @@ function requiresElementTarget(parameterSchema) {
   return Array.isArray(parameterSchema.required) && parameterSchema.required.includes("selector");
 }
 
-// domain/src/host.ts
+// src/host.ts
 import { FluxIQ } from "fluxiq";
 
-// domain/src/io/web-automation-io.ts
+// src/io/web-automation-io.ts
 import {
   defineDomainIo,
   defineInput,
   defineOutput
 } from "fluxiq";
 
-// domain/src/recording/observations.ts
+// src/recording/observations.ts
 var webAutomationObservationExtractor = ({ event: event2 }) => ({
   observationType: event2.eventType,
   ...event2.payload !== void 0 ? { payload: event2.payload } : {},
@@ -1294,7 +1294,7 @@ var webAutomationObservationExtractor = ({ event: event2 }) => ({
   }
 });
 
-// domain/src/recording/state.ts
+// src/recording/state.ts
 var WEB_AUTOMATION_STATE_NAMESPACE = "web";
 function createWebAutomationInitialState(timestamp = Date.now()) {
   return {
@@ -1347,12 +1347,12 @@ function inferStateType(value) {
   return "json";
 }
 
-// domain/src/recording/web-state/compact-json-object.ts
+// src/recording/web-state/compact-json-object.ts
 function compactJsonObject(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
 
-// domain/src/recording/web-state/element/identity.ts
+// src/recording/web-state/element/identity.ts
 var MAX_STATE_ID_LENGTH = 120;
 function meaningfulText(value) {
   return typeof value === "string" && value.trim().length >= 2;
@@ -1394,7 +1394,7 @@ function sanitizeStateId(value) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, MAX_STATE_ID_LENGTH) || "element";
 }
 
-// domain/src/recording/web-state/element/kind.ts
+// src/recording/web-state/element/kind.ts
 function isLikelyActionableElement(element) {
   const tagName = element.tagName.toLowerCase();
   const role = element.role?.toLowerCase();
@@ -1417,7 +1417,7 @@ function isEnabled(element) {
   return element.attributes?.disabled === void 0 && element.attributes?.["aria-disabled"] !== "true";
 }
 
-// domain/src/recording/web-state/geometry.ts
+// src/recording/web-state/geometry.ts
 function stateBounds(bounds) {
   if (!bounds) return void 0;
   const x = finite(bounds.x);
@@ -1457,7 +1457,7 @@ function finite(value) {
   return Number.isFinite(value) ? value : void 0;
 }
 
-// domain/src/recording/web-state/element/selection.ts
+// src/recording/web-state/element/selection.ts
 var MAX_STATE_ELEMENTS = 1500;
 var WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS = ["count", "captured", "truncated", "captureTruncated", "stateTruncated"];
 function shouldCaptureElementState(element) {
@@ -1519,7 +1519,7 @@ function hasElementBounds(element) {
   return stateBounds(element.documentBounds ?? element.bounds) !== void 0;
 }
 
-// domain/src/recording/web-state/visual-frame.ts
+// src/recording/web-state/visual-frame.ts
 var MAX_VISUAL_FRAME_ELEMENTS = 1e3;
 var WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID = "web-automation.viewport";
 var WEB_AUTOMATION_SCREEN_FRAME_ID = "screen";
@@ -1682,7 +1682,7 @@ function elementLayerLabel(element) {
   return element.name ?? element.visibleText ?? element.text ?? element.value ?? element.href ?? element.tagName;
 }
 
-// domain/src/recording/web-state/action-target.ts
+// src/recording/web-state/action-target.ts
 function webAutomationActionTargetFromElement(element) {
   const secret = isSensitiveElementDescriptor(element);
   const visibleText = secret ? void 0 : element.visibleText;
@@ -1756,12 +1756,12 @@ function webAutomationActionVisualTargetFromElement(element, input = {}) {
   });
 }
 
-// domain/src/page-evidence/wire.ts
+// src/page-evidence/wire.ts
 function pageEvidenceWire(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// domain/src/recording/web-state/evidence/read.ts
+// src/recording/web-state/evidence/read.ts
 var MAX_TEXT = 200;
 function list(value) {
   return Array.isArray(value) ? value : [];
@@ -1793,7 +1793,7 @@ function finite2(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : void 0;
 }
 
-// domain/src/recording/web-state/evidence/input.ts
+// src/recording/web-state/evidence/input.ts
 function pageEvidenceOfSnapshot(snapshot) {
   return pageEvidenceWire(snapshot.evidence);
 }
@@ -1801,7 +1801,7 @@ function pageEvidenceTruncatedElements(evidence2) {
   return pageEvidenceWire(evidence2?.elements)?.truncated === true;
 }
 
-// domain/src/recording/web-state/state-values.ts
+// src/recording/web-state/state-values.ts
 function putStateValue(snapshot, path2, type, value, observedAt, sourceId, input = {}) {
   const namespace = snapshot.namespaces[WEB_AUTOMATION_STATE_NAMESPACE] ?? {
     schemaId: WEB_AUTOMATION_DOMAIN_ID,
@@ -1886,7 +1886,7 @@ function elementStatePayload(element) {
   });
 }
 
-// domain/src/recording/web-state/evidence/project.ts
+// src/recording/web-state/evidence/project.ts
 var EVIDENCE_PATH_PREFIX = "evidence.";
 var MAX_DIALOGS = 5;
 var MAX_OVERLAY_BLOCKERS = 5;
@@ -2086,7 +2086,7 @@ function putText(put, path2, value, input) {
   if (bounded !== void 0) put(path2, "string", bounded, input);
 }
 
-// domain/src/recording/web-state/snapshot.ts
+// src/recording/web-state/snapshot.ts
 function createWebAutomationStateFromSnapshot(snapshot, input = {}) {
   const timestamp = input.timestamp ?? Date.now();
   let state = createWebAutomationInitialState(timestamp);
@@ -2112,7 +2112,7 @@ function createWebAutomationStateFromSnapshot(snapshot, input = {}) {
   return withScreenVisualFrame(state, snapshot, selection.elements, input);
 }
 
-// domain/src/recording/reducers.ts
+// src/recording/reducers.ts
 var webAutomationStateReducer = ({ event: event2, previousState }) => {
   const payload = event2.payload ?? {};
   const timestamp = event2.timestamp ?? Date.now();
@@ -2172,7 +2172,7 @@ function mergeWebState(previous, incoming) {
   };
 }
 
-// domain/src/recording/events.ts
+// src/recording/events.ts
 var elementSchema = {
   type: "object",
   properties: {
@@ -2258,7 +2258,7 @@ var webAutomationRecordingEvents = [
   event(WEB_AUTOMATION_EVENTS.clientError, "Client error", "The client reported an error.")
 ];
 
-// domain/src/recording/domain.ts
+// src/recording/domain.ts
 var webAutomationRecordingDomain = {
   domainId: WEB_AUTOMATION_DOMAIN_ID,
   label: "Web Automation",
@@ -2359,10 +2359,10 @@ var webAutomationRecordingDomain = {
   }
 };
 
-// domain/src/runtime/adapter.ts
+// src/runtime/adapter.ts
 import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES as AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES2 } from "fluxiq/automation-studio";
 
-// domain/src/runtime/capabilities.ts
+// src/runtime/capabilities.ts
 var webAutomationRuntimeCapabilities = [
   {
     id: "web.actions",
@@ -2429,7 +2429,7 @@ var webAutomationGatewayCapabilities = [
   }
 ];
 
-// domain/src/runtime/failure/codes.ts
+// src/runtime/failure/codes.ts
 var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   /** The target was found but refused the action: disabled, hidden, or covered by another element. */
   ACTION_REJECTED: "web.action.rejected",
@@ -2523,7 +2523,7 @@ function boundedText(value) {
   return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
 }
 
-// domain/src/runtime/llm-evidence/limits.ts
+// src/runtime/llm-evidence/limits.ts
 import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES } from "fluxiq/automation-studio";
 var WEB_LLM_EVIDENCE_BYTE_BUDGETS = Object.freeze({
   ceiling: 12e3,
@@ -2543,10 +2543,10 @@ var WEB_LLM_EVIDENCE_BOUNDS = Object.freeze({
   dialogs: 3
 });
 
-// domain/src/runtime/llm-evidence/harness-options/execute.ts
+// src/runtime/llm-evidence/harness-options/execute.ts
 import { automationStudioExplorationScopeAllows } from "fluxiq/automation-studio";
 
-// domain/src/runtime/llm-evidence/tool-rejection.ts
+// src/runtime/llm-evidence/tool-rejection.ts
 var WEB_LLM_TOOL_REJECTION_CODES = [
   "invalid_input",
   "cross_origin",
@@ -2557,7 +2557,7 @@ var WEB_LLM_TOOL_REJECTION_CODES = [
   "sensitive_value"
 ];
 
-// domain/src/runtime/llm-evidence/vocabulary.ts
+// src/runtime/llm-evidence/vocabulary.ts
 var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe"];
 var WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
 var WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
@@ -2574,7 +2574,7 @@ var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
   ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
 ]);
 
-// domain/src/runtime/llm-evidence/harness-options/vocabulary.ts
+// src/runtime/llm-evidence/harness-options/vocabulary.ts
 var WEB_RECOVERY_HARNESS_OPTION_IDS = [
   "web.recovery.inspect",
   "web.recovery.reveal",
@@ -2588,16 +2588,16 @@ var WEB_RECOVERY_ACT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[2];
 var WEB_RECOVERY_WAIT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[3];
 var WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
 
-// domain/src/runtime/llm-evidence/harness-options/execute.ts
+// src/runtime/llm-evidence/harness-options/execute.ts
 var WEB_RECOVERY_WAIT_BOUNDS = Object.freeze({ minMs: 100, maxMs: 5e3, defaultMs: 1e3 });
 
-// domain/src/extraction/dataset-id.ts
+// src/extraction/dataset-id.ts
 var COMBINING_MARKS = new RegExp("\\p{M}+", "gu");
 
-// domain/src/extraction/label-key.ts
+// src/extraction/label-key.ts
 var COMBINING_MARKS2 = new RegExp("\\p{M}+", "gu");
 
-// domain/src/client/gateway-mapping.ts
+// src/client/gateway-mapping.ts
 function createWebAutomationRecordingEvent(payload, input = {}) {
   const eventType = webAutomationEventTypeForClientKind(payload.kind);
   const target = payload.element;
@@ -2667,7 +2667,7 @@ function compactJsonObject2(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
 
-// domain/src/runtime/expectation/click-landing.ts
+// src/runtime/expectation/click-landing.ts
 var LANDING_WAIT_MS = 5e3;
 var EXPLAINED_TRANSITION = "explained";
 var ACTION_ENTRY = "action";
@@ -2719,7 +2719,7 @@ function urlPath(value) {
   }
 }
 
-// domain/src/runtime/expectation/conditions.ts
+// src/runtime/expectation/conditions.ts
 var ASSERT_KINDS = Object.freeze({
   exists: true,
   absent: true,
@@ -2729,15 +2729,15 @@ var ASSERT_KINDS = Object.freeze({
   enabled: true
 });
 
-// domain/src/runtime/host-runtime.ts
+// src/runtime/host-runtime.ts
 var WEB_AUTOMATION_NODE_IDS = new Set(WEB_AUTOMATION_ACTION_TYPES.map(webAutomationOutputNodeId));
 var WEB_AUTOMATION_OUTPUT_IDS = new Set(WEB_AUTOMATION_ACTION_TYPES);
 var HOST_RUNTIME_CAPABILITIES = Object.freeze(["state-snapshot", "state-diff", "expectation-evaluation"]);
 
-// domain/src/web-panel-host.ts
+// src/web-panel-host.ts
 import { AutomationStudioNativeNodeRuntime } from "fluxiq/automation-studio";
 
-// domain/src/recording/proposals/late-target-wait.ts
+// src/recording/proposals/late-target-wait.ts
 var EVIDENCE_OBSERVATION = "input.event";
 var ACTION_ENTRY2 = "action";
 var MUTATION_KIND = "dom.mutation";
@@ -2802,7 +2802,7 @@ function stringValue3(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// domain/src/recording/proposals/record-output.ts
+// src/recording/proposals/record-output.ts
 var DEFAULT_MAX_RECORDS = 1e3;
 var MAX_RECORDS_CEILING = 1e4;
 var LABEL_MAX_LENGTH2 = 200;
@@ -2838,7 +2838,7 @@ function distinctLabel(label, key, taken) {
   return unique;
 }
 
-// domain/src/web-panel-host.ts
+// src/web-panel-host.ts
 var CANDIDATE_LABELS = {
   "web.browser.navigate": "Navigate",
   "web.dom.click": "Click",
@@ -2942,7 +2942,7 @@ function readString(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// domain/src/tests/core-gateway-recording-order.test.ts
+// src/tests/core-gateway-recording-order.test.ts
 var PAGE = "http://127.0.0.1:4100/scenarios/delayed-ui/";
 var TITLE = "Delayed UI";
 var TAB = 7;

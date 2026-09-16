@@ -71,6 +71,21 @@ const driftCases: Record<Exclude<IdentityDriftMode, "baseline">, DriftCase> = {
       expect({ x: box?.x, y: box?.y }).toEqual({ x: recorded.x, y: recorded.y });
     },
   },
+  "renamed-redesign": {
+    // Nothing the recording knew Save by is left, so a person finds it by what
+    // it is now called: the form's one submit control, still in Save's slot.
+    control: (page) => page.getByRole("button", { name: "Apply changes", exact: true }),
+    async assertDrift(page, save, recorded) {
+      await expect(page.getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
+      expect(await save.evaluate((element) => element.getAttributeNames())).toEqual(["type", "class"]);
+      await expect(save).toHaveAttribute("type", "submit");
+      await expect(save).toHaveAttribute("class", "ui-button ui-button--accent");
+      await expect(page.getByTestId("primary-actions").getByRole("button")).toHaveText(["Apply changes", "Discard changes"]);
+      await expect(page.getByTestId("footer-actions").getByRole("button")).toHaveCount(0);
+      const box = await save.boundingBox();
+      expect({ x: box?.x, y: box?.y }).toEqual({ x: recorded.x, y: recorded.y });
+    },
+  },
   "wrapped-aria": {
     control: (page) => page.getByRole("button", { name: "Save changes", exact: true }),
     async assertDrift(page, save) {
@@ -147,6 +162,21 @@ test("Discard restores the field and is recorded without saving", async ({ page,
   await expect(page.getByTestId("display-name")).toHaveValue("Workspace 42");
   await expect(page.getByTestId("save-status")).toHaveText("Changes discarded");
   expect(await state(lab)).toMatchObject({ savedDisplayName: null, saveCount: 0, discardCount: 1, lastOperation: "discarded" });
+});
+
+test("renamed-redesign: pressing Discard, the other control a repair could name, fails Save's oracle", async ({ page, lab, networkGuard: _guard }) => {
+  const variant = manifest.variants?.find((candidate) => candidate.id === "renamed-redesign");
+  if (!variant) throw new Error("no renamed-redesign variant");
+  const expected = resolveScenarioWorkflow(manifest, { variantId: variant.id }).expected;
+  await armVariant(lab, "identity-drift", variant);
+  await page.goto(`${lab.origin}${startPath}`);
+  await expectFacts(page, variant.expected.pageFacts);
+
+  await page.getByTestId("display-name").fill(workspaceName);
+  await page.getByRole("button", { name: "Discard changes", exact: true }).click();
+  await expect(page.getByTestId("save-status")).toHaveText("Changes discarded");
+  for (const fact of expected.finalState ?? []) await expect(page.getByTestId(fact.subject)).not.toHaveText(String(fact.value));
+  expect(await state(lab)).toMatchObject({ mode: variant.id, savedDisplayName: null, saveCount: 0, savedInMode: null, discardCount: 1 });
 });
 
 test("every manifest variant has a drift case in this spec", () => {

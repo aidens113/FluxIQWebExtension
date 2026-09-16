@@ -1,8 +1,8 @@
-// domain/src/runtime/llm-evidence/tests/present.test.ts
+// src/runtime/llm-evidence/tests/present.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// domain/src/runtime/llm-evidence/present.ts
+// src/runtime/llm-evidence/present.ts
 function present(fields) {
   const source = fields;
   const written = {};
@@ -13,7 +13,7 @@ function present(fields) {
   return written;
 }
 
-// domain/src/runtime/llm-evidence/tests/present.test.ts
+// src/runtime/llm-evidence/tests/present.test.ts
 var dialog = () => present({ role: "dialog", name: void 0, modal: true });
 test("an optional field given undefined is absent, not present-and-undefined", () => {
   const value = dialog();

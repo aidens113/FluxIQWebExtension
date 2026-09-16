@@ -32,6 +32,13 @@ export function renderSaveAction(mode: IdentityDriftMode): string {
       // satisfy WCAG 2.5.3 -- so the accessible name is preserved by the
       // redesign's own accessibility rule, not by the fixture's convenience.
       return '<button type="submit" class="ui-button ui-button--accent" aria-label="Save changes">Save</button>';
+    case "renamed-redesign":
+      // The `reworded-aria` component without the aria-label: the same class
+      // vocabulary, no id or test id, and the label renamed outright to
+      // `text-only`'s "Apply changes", so the accessible name changes with it.
+      // Still the form's one submit button, still in Save's slot, and still a
+      // save: `render.ts` routes it to `save` like every drift.
+      return '<button type="submit" class="ui-button ui-button--accent">Apply changes</button>';
     case "save-and-exit":
       // Not Save at all: a different action in its slot, carrying nothing but
       // its own text. This is row R7's markup exactly; an added `type`, class

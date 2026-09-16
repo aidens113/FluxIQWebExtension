@@ -77,3 +77,14 @@ test("an element with no tag or no selector cannot be addressed and is dropped",
   assert.equal(sanitizedEvidenceElement({ tagName: "input" }, CONTEXT), undefined);
   assert.equal(sanitizedEvidenceElement("input#field", CONTEXT), undefined);
 });
+
+test("an element's accessible name reaches the packet under the field the extension actually sends", () => {
+  // The extension's gateway payload names it `accessibleName`. This module read
+  // only `name`, so every real packet lost the label while fixtures built with
+  // `name` kept passing -- the model repaired drifted controls without their names.
+  const button = sanitizedEvidenceElement({ tagName: "button", selector: "#save", role: "button", accessibleName: "Save settings" }, CONTEXT);
+  assert.equal(button?.element.name, "Save settings");
+  // A producer that still says `name` is read too, and `accessibleName` wins where both are present.
+  assert.equal(sanitizedEvidenceElement({ tagName: "button", selector: "#a", name: "Apply" }, CONTEXT)?.element.name, "Apply");
+  assert.equal(sanitizedEvidenceElement({ tagName: "button", selector: "#b", name: "stale", accessibleName: "Current" }, CONTEXT)?.element.name, "Current");
+});

@@ -1,7 +1,6 @@
-// src/runtime/llm-evidence/tests/limits.test.ts
+// src/runtime/llm-evidence/tests/renamed-save-override.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES as AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES2, sanitizeAutomationStudioLlmFailureEvidence } from "fluxiq/automation-studio";
 
 // src/runtime/llm-evidence/limits.ts
 import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES } from "fluxiq/automation-studio";
@@ -172,6 +171,11 @@ function sanitizedEvidenceElement(raw, context) {
 }
 function safeFillTag(tag, inputType) {
   return tag === "textarea" || tag === "input" && (!inputType || ["text", "search", "email", "tel", "url", "number"].includes(inputType));
+}
+function actionableEvidenceElement(element) {
+  if (["button", "a", "summary", "select", "textarea"].includes(element.tag)) return true;
+  if (element.tag === "input") return element.inputType !== "hidden";
+  return ["button", "link", "checkbox", "radio", "option", "switch", "tab", "menuitem", "treeitem"].includes(element.role ?? "");
 }
 function semanticRevealKind(tag, role, attributes) {
   if (role === "tab" || role === "menuitem" || role === "treeitem") return "view";
@@ -367,9 +371,6 @@ function evidenceBlocker(input) {
 
 // src/runtime/llm-evidence/sanitize.ts
 var WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v2";
-function sanitizeWebLlmSnapshot(input, options = {}) {
-  return sanitizeWebLlmSnapshotWithBindings(input, options).evidence;
-}
 function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
   const snapshot = jsonRecord(input, "web DOM snapshot");
   const url = safeEvidenceUrl(snapshot.url);
@@ -518,157 +519,300 @@ var WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
 // src/runtime/llm-evidence/harness-options/execute.ts
 var WEB_RECOVERY_WAIT_BOUNDS = Object.freeze({ minMs: 100, maxMs: 5e3, defaultMs: 1e3 });
 
-// src/runtime/llm-evidence/tests/limits.test.ts
-var bytes = (value) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
-var largePage = (count, extra = {}) => ({
-  url: "https://example.test/large",
-  title: "Large fixture",
-  interactiveElements: Array.from({ length: count }, (_, index) => ({
-    tagName: "button",
-    selector: `[data-index="${index}"]`,
-    visibleText: `Item ${index} ${"x".repeat(120)}`
-  })),
-  ...extra
-});
-test("the failure budget is Core's own gate, and the exploration budget sits under the shared ceiling", () => {
-  assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES2);
-  assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, 3e3);
-  assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration, 6e3);
-  assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling, 12e3);
-  assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure < WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration, true);
-  assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration < WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling, true);
-});
-test("applies each path's default when the caller names no budget", () => {
-  const exploration = sanitizeWebLlmSnapshot(largePage(60));
-  assert.equal(bytes(exploration) <= WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration, true, `${bytes(exploration)} bytes`);
-  const failure = sanitizeWebLlmSnapshot(largePage(60), { budget: "failure" });
-  assert.equal(bytes(failure) <= WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, true, `${bytes(failure)} bytes`);
-  assert.equal(failure.elements.length < exploration.elements.length, true);
-});
-test("clamps a request above the path's ceiling instead of honouring it", () => {
-  const failure = sanitizeWebLlmSnapshot(largePage(60), { budget: "failure", maxEvidenceBytes: 9e3 });
-  assert.equal(bytes(failure) <= WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, true, `${bytes(failure)} bytes`);
-  const exploration = sanitizeWebLlmSnapshot(largePage(60), { maxEvidenceBytes: 5e4 });
-  assert.equal(bytes(exploration) <= WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling, true, `${bytes(exploration)} bytes`);
-});
-test("refuses a budget that is not a positive bounded integer rather than falling back silently", () => {
-  for (const maxEvidenceBytes of [0, -1, 1.5, 100001, Number.NaN]) {
-    assert.throws(() => sanitizeWebLlmSnapshot(largePage(2), { maxEvidenceBytes }), /positive bounded integer/u, `budget ${maxEvidenceBytes}`);
+// src/runtime/llm-evidence/repairable-parameters.ts
+var WEB_REPAIRABLE_ELEMENT_PARAMETER = "element";
+var WEB_REPAIRABLE_ITEM_PARAMETER = "item";
+var WEB_REPAIRABLE_FIELD_PARAMETER_PREFIX = "field.";
+var ELEMENT_ROLE_BY_DEFINITION_ID = {
+  "web.output.dom-type": "fillable",
+  "web.output.dom-clear": "fillable",
+  "web.output.dom-select": "selectable",
+  "web.output.dom-click": "clickable",
+  "web.output.dom-keypress": "keyable",
+  "web.output.dom-wait_for_selector": "observable",
+  "web.output.dom-extract": "observable"
+};
+var LIST_EXTRACTION_DEFINITION_ID = "web.output.dom-extract_list";
+function webRepairableParameters(definitionId) {
+  const elementRole = ELEMENT_ROLE_BY_DEFINITION_ID[definitionId];
+  if (elementRole) return [{ name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role: elementRole, required: true }];
+  if (definitionId === LIST_EXTRACTION_DEFINITION_ID) return [{ name: WEB_REPAIRABLE_ITEM_PARAMETER, role: "list_item", required: true }];
+  return [];
+}
+function webRepairableParameterFor(definitionId, name) {
+  const declared = webRepairableParameters(definitionId).find((parameter) => parameter.name === name);
+  if (declared) return declared;
+  if (definitionId !== LIST_EXTRACTION_DEFINITION_ID || !isFieldParameterName(name)) return void 0;
+  return { name, role: "observable", required: false };
+}
+function elementFillsRepairableParameter(element, role) {
+  if (role === "fillable") return safeFillTag(element.tag, element.inputType);
+  if (role === "selectable") return element.tag === "select";
+  if (role === "clickable") return actionableEvidenceElement(element);
+  if (role === "keyable") return safeFillTag(element.tag, element.inputType) || element.tag === "select" || actionableEvidenceElement(element);
+  if (role === "list_item") return element.item !== void 0;
+  return true;
+}
+function isFieldParameterName(name) {
+  if (!name.startsWith(WEB_REPAIRABLE_FIELD_PARAMETER_PREFIX)) return false;
+  const key = name.slice(WEB_REPAIRABLE_FIELD_PARAMETER_PREFIX.length);
+  return key.length > 0 && key.length <= 40 && /^[A-Za-z0-9](?:[A-Za-z0-9_.:-]*[A-Za-z0-9])?$/u.test(key);
+}
+
+// src/runtime/llm-evidence/target-override.ts
+function validateWebRuntimeTargetOverrideEvidence(evidence, target, failedAction, selectors) {
+  const declared = webRepairableParameters(failedAction.definitionId);
+  if (declared.length === 0) return { status: "absent" };
+  const handles = proposedHandles(target);
+  if (!handles) return { status: "absent" };
+  if (Object.keys(handles).some((name) => !webRepairableParameterFor(failedAction.definitionId, name))) return { status: "absent" };
+  if (declared.some((parameter) => parameter.required && handles[parameter.name] === void 0)) return { status: "absent" };
+  const resolved = /* @__PURE__ */ new Map();
+  for (const [name, handle] of Object.entries(handles)) {
+    const parameter = webRepairableParameterFor(failedAction.definitionId, name);
+    const candidates = evidence.elements.filter((element) => elementFillsRepairableParameter(element, parameter.role));
+    const named = evidence.elements.filter((element) => element.target === handle);
+    if (named.length > 1) return { status: "ambiguous" };
+    if (named.length === 1 && elementFillsRepairableParameter(named[0], parameter.role)) {
+      resolved.set(name, { element: named[0], named: true });
+      continue;
+    }
+    if (candidates.length === 0) return { status: "absent" };
+    if (candidates.length > 1) return { status: "ambiguous" };
+    resolved.set(name, { element: candidates[0], named: false });
   }
-});
-test("reports truncation and the element count exactly at the budget boundary", () => {
-  const page = largePage(12);
-  const whole = sanitizeWebLlmSnapshot(page, { maxEvidenceBytes: WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling });
-  assert.equal(whole.elements.length, 12);
-  assert.equal(whole.truncated, false);
-  const exact = sanitizeWebLlmSnapshot(page, { maxEvidenceBytes: bytes(whole) });
-  assert.equal(exact.elements.length, 12);
-  assert.equal(exact.truncated, false);
-  assert.equal(bytes(exact), bytes(whole));
-  const oneShort = sanitizeWebLlmSnapshot(page, { maxEvidenceBytes: bytes(whole) - 1 });
-  assert.equal(oneShort.elements.length, 11);
-  assert.equal(oneShort.truncated, true);
-  assert.equal(bytes(oneShort) <= bytes(whole) - 1, true);
-});
-test("names which limit truncated the packet, one row per limit", () => {
-  const budget = sanitizeWebLlmSnapshot(largePage(12), { maxEvidenceBytes: 900 });
-  assert.equal(budget.budgetTruncated, true, "the budget forced removals: ask again with more room");
-  assert.equal(budget.captureTruncated, void 0);
-  assert.equal(budget.elementsTruncated, void 0);
-  assert.equal(budget.truncated, true);
-  const bound = sanitizeWebLlmSnapshot(largePage(WEB_LLM_EVIDENCE_BOUNDS.elements + 1), { maxEvidenceBytes: WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling });
-  assert.equal(bound.elementsTruncated, true, "more elements were offered than the packet's bound carries");
-  assert.equal(bound.elements.length, WEB_LLM_EVIDENCE_BOUNDS.elements);
-  assert.equal(bound.captureTruncated, void 0);
-  assert.equal(bound.truncated, true);
-  const capture = sanitizeWebLlmSnapshot(largePage(2, { truncated: true }), { maxEvidenceBytes: WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling });
-  assert.equal(capture.captureTruncated, true, "the browser cut before sending: narrowing the capture is the remedy");
-  assert.equal(capture.elementsTruncated, void 0);
-  assert.equal(capture.budgetTruncated, void 0);
-  assert.equal(capture.truncated, true);
-  const whole = sanitizeWebLlmSnapshot(largePage(2), { maxEvidenceBytes: WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling });
-  assert.equal(whole.truncated, false);
-  assert.deepEqual([whole.captureTruncated, whole.elementsTruncated, whole.budgetTruncated], [void 0, void 0, void 0], "a whole packet carries none of the three");
-});
-test("all three limits can fire at once, and each stays separately readable", () => {
-  const page = largePage(WEB_LLM_EVIDENCE_BOUNDS.elements + 5, { truncated: true });
-  const evidence = sanitizeWebLlmSnapshot(page, { budget: "failure" });
-  assert.equal(evidence.captureTruncated, true);
-  assert.equal(evidence.elementsTruncated, true);
-  assert.equal(evidence.budgetTruncated, true);
-  assert.equal(evidence.truncated, true);
-  assert.equal(bytes(evidence) <= WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, true, `${bytes(evidence)} bytes`);
-});
-test("gives up page facts before the last element, and refuses only when nothing is left to drop", () => {
-  const page = {
-    url: "https://example.test/checkout",
-    title: "Checkout",
-    selectedText: "order reference 4471",
-    // The producer's shape: one nested `evidence` object, written field for
-    // field as `apps/extension/src/content/evidence/types.ts` declares it. The
-    // packet reads only this shape, so a fixture in the old flat shape would
-    // silently carry no loading state and no dialog and prove nothing about
-    // the order they are given up in.
-    evidence: {
-      loading: { documentState: "interactive", busy: false, busyRegions: [], indicators: [], pendingNavigation: false },
-      dialogs: { open: [{ selector: "#confirm", role: "dialog", modal: true, native: false, label: "Confirm your order" }], modal: true }
-    },
-    interactiveElements: [
-      { tagName: "button", selector: "#place-order", visibleText: "Place order" },
-      { tagName: "button", selector: "#cancel", visibleText: "Cancel" }
-    ]
-  };
-  const rung = (budget) => sanitizeWebLlmSnapshot(page, { maxEvidenceBytes: budget });
-  const shape = (evidence) => ({
-    elements: evidence.elements.length,
-    selectedText: evidence.selectedText !== void 0,
-    title: evidence.title !== void 0,
-    loading: evidence.loading !== void 0,
-    dialogs: evidence.dialogs !== void 0,
-    truncated: evidence.truncated,
-    budget: evidence.budgetTruncated === true
+  return { status: "resolved", target: resolvedTarget(handles, resolved, selectors) };
+}
+function proposedHandles(target) {
+  const handles = target?.handles;
+  if (!handles || typeof handles !== "object" || Array.isArray(handles)) return void 0;
+  const entries = Object.entries(handles);
+  if (entries.length === 0) return void 0;
+  if (!entries.every(([name, handle]) => typeof handle === "string" && handle.length > 0 && name.length > 0)) return void 0;
+  return Object.fromEntries(entries);
+}
+function resolvedTarget(handles, resolved, selectors) {
+  const handleResolution = [...resolved.values()].every((entry) => entry.named) ? "named" : "inferred";
+  const single = resolved.size === 1 ? resolved.get(WEB_REPAIRABLE_ELEMENT_PARAMETER)?.element : void 0;
+  const flat = single ? elementFingerprint(single, selectors) : void 0;
+  return present({
+    handles: Object.fromEntries([...resolved].map(([name, entry]) => [name, entry.element.target])),
+    handleResolution,
+    tagName: flat?.tagName,
+    role: flat?.role,
+    accessibleName: flat?.accessibleName,
+    visibleText: flat?.visibleText,
+    selector: flat?.selector,
+    metadata: flat?.metadata,
+    targets: flat ? void 0 : Object.fromEntries([...resolved].map(([name, entry]) => [name, elementFingerprint(entry.element, selectors)])),
+    proposedHandles: handleResolution === "inferred" ? handles : void 0
   });
-  const whole = rung(WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling);
-  assert.deepEqual(shape(whole), { elements: 2, selectedText: true, title: true, loading: true, dialogs: true, truncated: false, budget: false });
-  const oneElement = rung(bytes(whole) - 1);
-  assert.deepEqual(shape(oneElement), { elements: 1, selectedText: true, title: true, loading: true, dialogs: true, truncated: true, budget: true });
-  const noSelection = rung(bytes(oneElement) - 1);
-  assert.deepEqual(shape(noSelection), { elements: 1, selectedText: false, title: true, loading: true, dialogs: true, truncated: true, budget: true });
-  const noTitle = rung(bytes(noSelection) - 1);
-  assert.deepEqual(shape(noTitle), { elements: 1, selectedText: false, title: false, loading: true, dialogs: true, truncated: true, budget: true });
-  const noLoading = rung(bytes(noTitle) - 1);
-  assert.deepEqual(shape(noLoading), { elements: 1, selectedText: false, title: false, loading: false, dialogs: true, truncated: true, budget: true });
-  const noDialogs = rung(bytes(noLoading) - 1);
-  assert.deepEqual(shape(noDialogs), { elements: 1, selectedText: false, title: false, loading: false, dialogs: false, truncated: true, budget: true });
-  const nothing = rung(bytes(noDialogs) - 1);
-  assert.deepEqual(shape(nothing), { elements: 0, selectedText: false, title: false, loading: false, dialogs: false, truncated: true, budget: true });
-  assert.throws(() => rung(bytes(nothing) - 1), /exceeds the evidence byte limit/u);
+}
+function elementFingerprint(element, selectors) {
+  const metadata = present({
+    browserFrameId: element.frameId,
+    inputType: element.inputType,
+    controlType: element.controlType,
+    formId: element.form,
+    listIndex: element.item?.index,
+    listTotal: element.item?.total
+  });
+  return present({
+    tagName: element.tag,
+    role: element.role,
+    accessibleName: element.name,
+    visibleText: element.text,
+    // The hint, and only where the caller still holds the binding that issued
+    // the handle. The packet has not carried a selector since `.v2`, so a repair
+    // resolved from a packet alone is fingerprint-only -- which is weaker, not
+    // wrong: the name, the role and the tag are what Core scores highest.
+    selector: selectors?.get(element.target),
+    metadata: Object.keys(metadata).length ? metadata : void 0
+  });
+}
+
+// src/runtime/llm-evidence/tests/renamed-save-override.test.ts
+var FORM_SECTION = { formId: "settings-form", landmark: "region", landmarkName: "General", heading: "General" };
+var ADVANCED_SECTION = { formId: "settings-form", landmark: "region", landmarkName: "Advanced", heading: "Advanced" };
+var RENAMED_SAVE_SELECTOR = "main > form > section:nth-of-type(1) > div > button:nth-of-type(1)";
+var DEFINITION_LIST = [["Data region", "EU (Frankfurt)"], ["Message retention", "365 days"], ["Audit log", "Enabled for all members"], ["API access", "Workspace owners only"]];
+var listCell = (tag, index, text) => ({
+  tagName: tag,
+  selector: `main > form > section:nth-of-type(2) > dl > ${tag}:nth-of-type(${index + 1})`,
+  text,
+  visibleText: text,
+  accessibleName: text,
+  context: ADVANCED_SECTION
 });
-test("a failure packet passes Core's failure-evidence gate whole", () => {
-  const evidence = sanitizeWebLlmSnapshot({
-    url: "https://example.test/checkout?session=private",
-    title: "Checkout",
-    frame: { isTop: true },
-    selectedText: "order reference 4471",
-    loading: { readyState: "interactive", busy: true },
-    navigation: { pending: true, to: "https://example.test/receipt" },
-    dialogs: [{ role: "dialog", name: "Confirm your order", modal: true, selector: "#confirm" }],
-    blockingOverlay: { selector: "#cookie-wall", tagName: "div", name: "We use cookies" },
-    elementTotal: 240,
-    focusedElement: { tagName: "input", selector: "#coupon", name: "Coupon" },
-    interactiveElements: Array.from({ length: 60 }, (_, index) => ({
+var capturedRenamedRedesign = {
+  url: "http://127.0.0.1:4173/scenarios/identity-drift/",
+  title: "Workspace settings",
+  viewport: { width: 1280, height: 720, scrollX: 0, scrollY: 0, documentWidth: 1280, documentHeight: 1277, devicePixelRatio: 1 },
+  frame: { isTop: true, viewportOffset: { x: 0, y: 0, width: 1280, height: 720 } },
+  interactiveElements: [
+    {
       tagName: "button",
-      selector: `[data-testid="row-${index}"]`,
-      name: `Add item ${index}`,
-      attributes: { "data-fluxiq-frame-id": index % 2 === 0 ? "0" : "4" },
-      context: { formId: "checkout", landmark: "main", heading: "Your basket", listPosition: { index, total: 240 } }
-    }))
-  }, { budget: "failure" });
-  const gated = sanitizeAutomationStudioLlmFailureEvidence("runtime_diagnosis", evidence);
-  assert.deepEqual(gated, JSON.parse(JSON.stringify(evidence)));
-  assert.equal(bytes(gated) <= AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES2, true, `${bytes(gated)} bytes`);
-  assert.equal(evidence.truncated, true);
-  assert.equal(evidence.elements.length > 0, true);
-  assert.equal(evidence.elements.length <= WEB_LLM_EVIDENCE_BOUNDS.elements, true);
-  assert.doesNotMatch(JSON.stringify(evidence), /session=private/u);
+      selector: "#discard-settings",
+      text: "Discard changes",
+      visibleText: "Discard changes",
+      id: "discard-settings",
+      testId: "discard-changes",
+      accessibleName: "Discard changes",
+      implicitRole: "button",
+      context: FORM_SECTION,
+      attributes: { id: "discard-settings", class: "btn btn-secondary", type: "reset", "data-testid": "discard-changes" }
+    },
+    {
+      tagName: "button",
+      selector: RENAMED_SAVE_SELECTOR,
+      text: "Apply changes",
+      visibleText: "Apply changes",
+      accessibleName: "Apply changes",
+      implicitRole: "button",
+      context: FORM_SECTION,
+      attributes: { class: "ui-button ui-button--accent", type: "submit" }
+    },
+    {
+      tagName: "input",
+      selector: "#display-name",
+      id: "display-name",
+      value: "Workspace 121",
+      inputType: "text",
+      hasValue: true,
+      testId: "display-name",
+      accessibleName: "Workspace name",
+      label: "Workspace name",
+      implicitRole: "textbox",
+      context: FORM_SECTION,
+      attributes: { id: "display-name", name: "displayName", type: "text", autocomplete: "organization", "aria-describedby": "display-name-hint", "data-testid": "display-name" }
+    },
+    { tagName: "label", selector: "body > main > form > section:nth-of-type(1) > label", text: "Workspace name", visibleText: "Workspace name", accessibleName: "Workspace name", context: FORM_SECTION, attributes: { for: "display-name" } },
+    { tagName: "h2", selector: "#general-heading", text: "General", visibleText: "General", id: "general-heading", accessibleName: "General", implicitRole: "heading", context: { ...FORM_SECTION, heading: "Workspace settings" }, attributes: { id: "general-heading" } },
+    { tagName: "h2", selector: "#advanced-heading", text: "Advanced", visibleText: "Advanced", id: "advanced-heading", accessibleName: "Advanced", implicitRole: "heading", context: { ...ADVANCED_SECTION, heading: "General" }, attributes: { id: "advanced-heading" } },
+    { tagName: "p", selector: "#display-name-hint", text: "Shown in the sidebar and on invitations.", visibleText: "Shown in the sidebar and on invitations.", id: "display-name-hint", implicitRole: "paragraph", context: FORM_SECTION, attributes: { id: "display-name-hint" } },
+    { tagName: "h1", selector: "body > main > header > h1", text: "Workspace settings", visibleText: "Workspace settings", accessibleName: "Workspace settings", implicitRole: "heading", context: { landmark: "banner" } },
+    { tagName: "p", selector: "body > main > header > p", text: "Changes apply to everyone in this workspace.", visibleText: "Changes apply to everyone in this workspace.", implicitRole: "paragraph", context: { landmark: "banner", heading: "Workspace settings" } },
+    { tagName: "p", selector: "body > main > form > section:nth-of-type(2) > p", text: "Your organization manages these settings; they are read-only here.", visibleText: "Your organization manages these settings; they are read-only here.", implicitRole: "paragraph", context: ADVANCED_SECTION },
+    ...DEFINITION_LIST.map(([term], index) => listCell("dt", index, term)),
+    ...DEFINITION_LIST.map(([, detail], index) => listCell("dd", index, detail)),
+    { tagName: "p", selector: "body > main > form > footer > p", text: "Need something else? Ask a workspace owner.", visibleText: "Need something else? Ask a workspace owner.", implicitRole: "paragraph", context: { formId: "settings-form", landmark: "form", landmarkName: "Workspace settings", heading: "Advanced" } },
+    {
+      tagName: "form",
+      selector: "#settings-form",
+      id: "settings-form",
+      name: "Workspace settings",
+      testId: "settings-form",
+      accessibleName: "Workspace settings",
+      implicitRole: "form",
+      context: { formId: "settings-form", landmark: "form", landmarkName: "Workspace settings", heading: "Workspace settings" },
+      attributes: { id: "settings-form", "aria-label": "Workspace settings", "data-testid": "settings-form" }
+    },
+    {
+      tagName: "div",
+      selector: '[data-testid="primary-actions"]',
+      role: "group",
+      name: "General actions",
+      testId: "primary-actions",
+      accessibleName: "General actions",
+      context: FORM_SECTION,
+      attributes: { class: "form-actions", "aria-label": "General actions", "data-testid": "primary-actions" }
+    },
+    {
+      tagName: "footer",
+      selector: '[data-testid="footer-actions"]',
+      role: "group",
+      name: "Footer actions",
+      testId: "footer-actions",
+      accessibleName: "Footer actions",
+      implicitRole: "contentinfo",
+      context: { formId: "settings-form", landmark: "form", landmarkName: "Workspace settings", heading: "Advanced" },
+      attributes: { class: "form-footer", "aria-label": "Footer actions", "data-testid": "footer-actions" }
+    },
+    { tagName: "main", selector: "body > main", implicitRole: "main", context: { landmark: "main" } },
+    { tagName: "header", selector: "body > main > header", implicitRole: "banner", context: { landmark: "banner" } },
+    { tagName: "section", selector: "body > main > form > section:nth-of-type(1)", accessibleName: "General", implicitRole: "region", context: { ...FORM_SECTION, heading: "Workspace settings" }, attributes: { "aria-labelledby": "general-heading" } },
+    { tagName: "section", selector: "body > main > form > section:nth-of-type(2)", accessibleName: "Advanced", implicitRole: "region", context: { ...ADVANCED_SECTION, heading: "General" }, attributes: { class: "advanced", "aria-labelledby": "advanced-heading" } },
+    { tagName: "dl", selector: "body > main > form > section:nth-of-type(2) > dl", context: ADVANCED_SECTION }
+  ],
+  evidence: {
+    elements: { scanned: 37, candidates: 35, matched: 27, returned: 27, truncated: false, changed: 0, recentlyInteracted: 0 },
+    loading: { documentState: "complete", busy: false, busyRegions: [], indicators: [], pendingNavigation: false },
+    navigation: { url: "http://127.0.0.1:4173/scenarios/identity-drift/", origin: "http://127.0.0.1:4173", path: "/scenarios/identity-drift/", type: "navigate", historyLength: 2, visibility: "visible" },
+    regions: [
+      { role: "main", selector: "body > main", bounds: { x: 256, y: 32, width: 768, height: 1213.16 } },
+      { role: "banner", selector: "body > main > header", bounds: { x: 256, y: 32, width: 768, height: 93.44 } },
+      { role: "form", selector: "#settings-form", label: "Workspace settings", bounds: { x: 256, y: 145.34, width: 768, height: 1059.81 } },
+      { role: "region", selector: "body > main > form > section:nth-of-type(1)", label: "General", bounds: { x: 256, y: 145.34, width: 768, height: 207.91 } },
+      { role: "region", selector: "body > main > form > section:nth-of-type(2)", label: "Advanced", bounds: { x: 256, y: 373.16, width: 768, height: 792 } }
+    ],
+    forms: [{
+      selector: "#settings-form",
+      label: "Workspace settings",
+      controlCount: 3,
+      controls: [
+        { selector: "#display-name", controlType: "text", name: "displayName", label: "Workspace name", required: true, hasValue: true, autocomplete: "organization" },
+        { selector: RENAMED_SAVE_SELECTOR, controlType: "submit", label: "Apply changes" },
+        { selector: "#discard-settings", controlType: "reset", label: "Discard changes" }
+      ],
+      submit: RENAMED_SAVE_SELECTOR
+    }]
+  },
+  focusedElement: { tagName: "body", selector: "body" }
+};
+var failurePacket = () => sanitizeWebLlmSnapshotWithBindings(capturedRenamedRedesign, { budget: "failure", failedAction: {} });
+var clickAction = { nodeId: "save-changes", definitionId: "web.output.dom-click" };
+var override = (handle) => ({ handles: { element: handle } });
+test("the failure packet shows the renamed Save as the page's one submit control, by its accessible name and never by selector", () => {
+  const { evidence, selectors } = failurePacket();
+  assert.equal(evidence.failedTargetUnknown, true);
+  const submits = evidence.elements.filter((element) => element.controlType === "submit");
+  assert.deepEqual(submits, [{ target: "target.2", tag: "button", name: "Apply changes", controlType: "submit", form: "settings-form", landmark: "region", heading: "General" }]);
+  assert.deepEqual(evidence.elements.filter((element) => element.tag === "button").map((element) => [element.name, element.controlType]), [["Discard changes", "reset"], ["Apply changes", "submit"]]);
+  assert.doesNotMatch(JSON.stringify(evidence), /Save changes/);
+  assert.equal(selectors.get("target.2"), RENAMED_SAVE_SELECTOR);
+  assert.doesNotMatch(JSON.stringify(evidence), /main > form|#display-name|Workspace 121/);
+});
+test("accepts an override naming the renamed Save, and resolves it fingerprint first", () => {
+  const { evidence, selectors } = failurePacket();
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.2"), clickAction, selectors), {
+    status: "resolved",
+    target: {
+      handles: { element: "target.2" },
+      handleResolution: "named",
+      tagName: "button",
+      // The accessible name, which Core's matcher weighs above visible text. The
+      // packet omits visible text that repeats the name, so the fingerprint does too.
+      accessibleName: "Apply changes",
+      selector: RENAMED_SAVE_SELECTOR,
+      metadata: { controlType: "submit", formId: "settings-form" }
+    }
+  });
+});
+test("refuses an override naming a handle it was never shown, or anything on the page a click cannot use", () => {
+  const { evidence, selectors } = failurePacket();
+  const clickable = evidence.elements.filter((element) => elementFillsRepairableParameter(element, "clickable")).map((element) => element.target);
+  assert.deepEqual(clickable, ["target.1", "target.2", "target.3"]);
+  const unpressable = evidence.elements.filter((element) => !clickable.includes(element.target)).map((element) => element.target);
+  assert.ok(unpressable.length > 0, "the packet described nothing a click cannot use");
+  for (const handle of ["save-changes", "#save-settings", "Save changes", "target.0", "target.99", ...unpressable]) {
+    assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override(handle), clickAction, selectors), { status: "ambiguous" }, handle);
+  }
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { handles: { element: "target.2", button: "target.2" } }, clickAction, selectors), { status: "absent" });
+});
+test("does not tell a pressable wrong control from Save: Discard, named by its own handle, is accepted as Discard", () => {
+  const { evidence, selectors } = failurePacket();
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, override("target.1"), clickAction, selectors), {
+    status: "resolved",
+    target: {
+      handles: { element: "target.1" },
+      handleResolution: "named",
+      tagName: "button",
+      accessibleName: "Discard changes",
+      selector: "#discard-settings",
+      metadata: { controlType: "reset", formId: "settings-form" }
+    }
+  });
+  const textField = validateWebRuntimeTargetOverrideEvidence(evidence, override("target.3"), clickAction, selectors);
+  assert.equal(textField.status, "resolved");
+  assert.deepEqual(textField.status === "resolved" ? [textField.target.tagName, textField.target.selector] : void 0, ["input", "#display-name"]);
 });

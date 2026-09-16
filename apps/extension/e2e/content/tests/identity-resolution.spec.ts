@@ -227,6 +227,46 @@ test.describe("scored selection: Core's matcher decides what an exact strategy c
     expect((await harness.finalState()).state).toMatchObject({ saveCount: 0, discardCount: 0, savedInMode: null });
   });
 
+  test("renamed-redesign: the fixture's own rendering of that drift is refused on both paths, and nothing is pressed", async ({ openHarness, page }) => {
+    const harness = await openHarness("identity-drift");
+    const recorded = await describe(harness, SAVE_BASELINE);
+    const bounds = await documentRect(harness, SAVE_BASELINE);
+    await armMode(harness, "renamed-redesign");
+    // The row above as a rendering the fixture reaches by itself, without the id
+    // and test id: the `reworded-aria` component with its aria-label gone and
+    // its label renamed, so the accessible name changed as well.
+    await expect(page.getByRole("button", { name: "Apply changes", exact: true })).toHaveAttribute("class", "ui-button ui-button--accent");
+    await expect(page.getByRole("button", { name: "Save changes", exact: true })).toHaveCount(0);
+    const clicks = await trackClicks(page);
+
+    // Measured with Core's matcher as it now stands, and the same on both
+    // paths: the renamed Save ranks first at -0.104, Discard second at -0.360,
+    // confidence 0 -- 0.454 under the 0.35 floor. The ranking is right and the
+    // floor refuses it anyway, which is what sends this variant's live run to
+    // the provider. The Flow path's point lands on the renamed Save and is
+    // refused at the same score.
+    for (const [shape, point] of [["replay", {}], ["flow", { visualTarget: visualTarget({ documentBounds: bounds }) }]] as const) {
+      const reply = await harness.runAction({
+        commandId: `renamed-redesign:${shape}`,
+        actionType: "web.dom.click",
+        ...(recorded.selector ? { selector: recorded.selector } : {}),
+        ...point,
+        options: recordedElement(recorded)
+      });
+      expect(reply, `${shape}: ${reply.message}`).toMatchObject({
+        status: "failed",
+        failure: TARGET_NOT_FOUND,
+        resolution: { strategy: "fingerprint", candidateCount: 2, confidence: 0 }
+      });
+      expect(reply.resolution?.bestScore).toBeCloseTo(-0.104, 3);
+      expect(reply.resolution?.runnerUpScore).toBeCloseTo(-0.36, 3);
+      if (shape === "flow") expect(reply.message).toContain('refused button "Apply changes" scoring -0.10');
+    }
+
+    expect(await clicks()).toEqual([]);
+    expect((await harness.finalState()).state).toMatchObject({ mode: "renamed-redesign", saveCount: 0, discardCount: 0, savedInMode: null, status: "" });
+  });
+
   test("reworded-aria: the surviving accessible name resolves the right control, and Discard is not touched", async ({ openHarness, page }) => {
     const harness = await openHarness("identity-drift");
     const recorded = await describe(harness, SAVE_BASELINE);

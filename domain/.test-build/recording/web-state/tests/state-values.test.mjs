@@ -1,15 +1,15 @@
-// domain/src/recording/web-state/tests/state-values.test.ts
+// src/recording/web-state/tests/state-values.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// domain/src/constants.ts
+// src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 var WEB_AUTOMATION_SCHEMA_VERSION = "0.1";
 
-// domain/src/recording/state.ts
+// src/recording/state.ts
 var WEB_AUTOMATION_STATE_NAMESPACE = "web";
 
-// domain/src/sensitivity/signature.ts
+// src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
 var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
 var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
@@ -22,7 +22,7 @@ function isSensitiveControlType(type) {
   return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
 }
 
-// domain/src/sensitivity/descriptor.ts
+// src/sensitivity/descriptor.ts
 function sensitiveFieldSignatureOfDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
   const record = descriptor;
@@ -41,12 +41,12 @@ function stringField(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// domain/src/recording/web-state/compact-json-object.ts
+// src/recording/web-state/compact-json-object.ts
 function compactJsonObject(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
 
-// domain/src/recording/web-state/element/identity.ts
+// src/recording/web-state/element/identity.ts
 function meaningfulText(value) {
   return typeof value === "string" && value.trim().length >= 2;
 }
@@ -58,12 +58,12 @@ function stableElementId(element2) {
   return stableAttribute(element2, "data-testid") ?? stableAttribute(element2, "data-test") ?? stableAttribute(element2, "data-cy") ?? stableAttribute(element2, "id") ?? stableAttribute(element2, "name");
 }
 
-// domain/src/recording/web-state/element/kind.ts
+// src/recording/web-state/element/kind.ts
 function isEnabled(element2) {
   return element2.attributes?.disabled === void 0 && element2.attributes?.["aria-disabled"] !== "true";
 }
 
-// domain/src/recording/web-state/geometry.ts
+// src/recording/web-state/geometry.ts
 function stateBounds(bounds) {
   if (!bounds) return void 0;
   const x = finite(bounds.x);
@@ -83,7 +83,7 @@ function finite(value) {
   return Number.isFinite(value) ? value : void 0;
 }
 
-// domain/src/recording/web-state/state-values.ts
+// src/recording/web-state/state-values.ts
 function putStateValue(snapshot, path, type, value, observedAt, sourceId, input = {}) {
   const namespace = snapshot.namespaces[WEB_AUTOMATION_STATE_NAMESPACE] ?? {
     schemaId: WEB_AUTOMATION_DOMAIN_ID,
@@ -168,7 +168,7 @@ function elementStatePayload(element2) {
   });
 }
 
-// domain/src/recording/web-state/tests/state-values.test.ts
+// src/recording/web-state/tests/state-values.test.ts
 var EMPTY = { schemaId: "test", schemaVersion: 1, timestamp: 0, namespaces: {} };
 var LEAKED = "synthetic-value-the-producer-should-have-withheld";
 function element(overrides) {

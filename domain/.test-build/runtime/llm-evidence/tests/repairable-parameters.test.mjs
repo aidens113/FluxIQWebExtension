@@ -1,8 +1,8 @@
-// domain/src/runtime/llm-evidence/tests/repairable-parameters.test.ts
+// src/runtime/llm-evidence/tests/repairable-parameters.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// domain/src/runtime/llm-evidence/limits.ts
+// src/runtime/llm-evidence/limits.ts
 import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES } from "fluxiq/automation-studio";
 var WEB_LLM_EVIDENCE_BYTE_BUDGETS = Object.freeze({
   ceiling: 12e3,
@@ -22,10 +22,10 @@ var WEB_LLM_EVIDENCE_BOUNDS = Object.freeze({
   dialogs: 3
 });
 
-// domain/src/runtime/llm-evidence/harness-options/execute.ts
+// src/runtime/llm-evidence/harness-options/execute.ts
 import { automationStudioExplorationScopeAllows } from "fluxiq/automation-studio";
 
-// domain/src/runtime/llm-evidence/elements.ts
+// src/runtime/llm-evidence/elements.ts
 function safeFillTag(tag, inputType) {
   return tag === "textarea" || tag === "input" && (!inputType || ["text", "search", "email", "tel", "url", "number"].includes(inputType));
 }
@@ -35,7 +35,7 @@ function actionableEvidenceElement(element2) {
   return ["button", "link", "checkbox", "radio", "option", "switch", "tab", "menuitem", "treeitem"].includes(element2.role ?? "");
 }
 
-// domain/src/runtime/llm-evidence/tool-rejection.ts
+// src/runtime/llm-evidence/tool-rejection.ts
 var WEB_LLM_TOOL_REJECTION_CODES = [
   "invalid_input",
   "cross_origin",
@@ -46,7 +46,7 @@ var WEB_LLM_TOOL_REJECTION_CODES = [
   "sensitive_value"
 ];
 
-// domain/src/runtime/llm-evidence/vocabulary.ts
+// src/runtime/llm-evidence/vocabulary.ts
 var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe"];
 var WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
 var WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
@@ -63,7 +63,7 @@ var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
   ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
 ]);
 
-// domain/src/runtime/llm-evidence/harness-options/vocabulary.ts
+// src/runtime/llm-evidence/harness-options/vocabulary.ts
 var WEB_RECOVERY_HARNESS_OPTION_IDS = [
   "web.recovery.inspect",
   "web.recovery.reveal",
@@ -77,10 +77,10 @@ var WEB_RECOVERY_ACT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[2];
 var WEB_RECOVERY_WAIT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[3];
 var WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
 
-// domain/src/runtime/llm-evidence/harness-options/execute.ts
+// src/runtime/llm-evidence/harness-options/execute.ts
 var WEB_RECOVERY_WAIT_BOUNDS = Object.freeze({ minMs: 100, maxMs: 5e3, defaultMs: 1e3 });
 
-// domain/src/runtime/llm-evidence/repairable-parameters.ts
+// src/runtime/llm-evidence/repairable-parameters.ts
 var WEB_REPAIRABLE_ELEMENT_PARAMETER = "element";
 var WEB_REPAIRABLE_ITEM_PARAMETER = "item";
 var WEB_REPAIRABLE_FIELD_PARAMETER_PREFIX = "field.";
@@ -120,7 +120,7 @@ function isFieldParameterName(name) {
   return key.length > 0 && key.length <= 40 && /^[A-Za-z0-9](?:[A-Za-z0-9_.:-]*[A-Za-z0-9])?$/u.test(key);
 }
 
-// domain/src/runtime/llm-evidence/tests/repairable-parameters.test.ts
+// src/runtime/llm-evidence/tests/repairable-parameters.test.ts
 var element = (fields) => ({ target: "target.1", tag: "div", ...fields });
 test("every declared parameter name is a name Core will carry as a handle key", () => {
   const coreHandleKey = /^[A-Za-z0-9](?:[A-Za-z0-9_.:-]*[A-Za-z0-9])?$/u;

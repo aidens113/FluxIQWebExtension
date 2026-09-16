@@ -25,6 +25,22 @@
  * `apps/extension/e2e/content/tests/identity-resolution.spec.ts` pins 0.389 and
  * 0.366 in real Chromium.
  *
+ * `renamed-redesign` is the step past `reworded-aria`, and the one drift the
+ * matcher is meant to refuse: the same redesign without the aria-label, and
+ * the label renamed to "Apply changes", so nothing the recording knew Save by
+ * survives -- not its id, test id, class, text or accessible name. Measured in
+ * Chromium against the authored recording, it still ranks first, at -0.104
+ * with Discard at -0.360 and confidence 0: 0.454 under the 0.35 floor, so the
+ * resolver refuses it on the replay path and on the Flow path's recorded point
+ * alike (`identity-resolution.spec.ts` pins both).
+ *
+ * It exists for the LLM repair loop. A provider-free run must fail it with
+ * `target_not_found`; a person, or a model reading the sanitized evidence,
+ * still sees exactly one submit control in Save's slot, named "Apply
+ * changes", beside a reset named "Discard changes". Pressing it saves, so a
+ * run that repairs the target passes Save's own oracle, and pressing Discard
+ * writes "Changes discarded", which does not.
+ *
  * `save-and-exit` is not a drift of Save but the negative case beside them:
  * Save is gone, and its slot holds a lone "Save changes and exit" with no id,
  * class or test id -- a different action whose name contains the recorded one.
@@ -33,6 +49,6 @@
  * variant expects `target_not_found`, and pressing it records an operation of
  * its own rather than a save.
  */
-export const identityDriftModes = ["baseline", "selector-only", "text-only", "moved", "wrapped-aria", "reworded-aria", "save-and-exit"] as const;
+export const identityDriftModes = ["baseline", "selector-only", "text-only", "moved", "wrapped-aria", "reworded-aria", "renamed-redesign", "save-and-exit"] as const;
 
 export type IdentityDriftMode = (typeof identityDriftModes)[number];

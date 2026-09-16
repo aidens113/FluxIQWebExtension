@@ -200,6 +200,50 @@ test("each drifted rendering changes only what its variant describes", () => {
   assert.match(wrapped, /<span id="save-settings-label" class="btn-label">Save changes<\/span>/);
 });
 
+test("renamed-redesign takes away every signal the recording knew Save by, and leaves one submit control a reader can still name", () => {
+  const html = pageIn("renamed-redesign");
+  const actions = region(html, "primary-actions", "div");
+  // No id, no test id, no aria-label: the class is the redesign's, and the
+  // visible text is the accessible name.
+  assert.deepEqual(submitButton(actions), { attributes: { class: "ui-button ui-button--accent" }, text: "Apply changes" });
+  assert.ok(actions.indexOf('type="submit"') < actions.indexOf('type="reset"'));
+  assert.match(actions, /data-testid="discard-changes">Discard changes<\/button>$/);
+  assert.doesNotMatch(html, /Save changes|save-settings|btn-primary/);
+  assert.doesNotMatch(region(html, "footer-actions", "footer"), /<button/);
+  assert.deepEqual(submitControls(html), ['<button type="submit" class="ui-button ui-button--accent">']);
+  assert.match(html, /mutate\('save', \{ displayName \}\)/);
+});
+
+test("renamed-redesign expects the repaired run, says a provider-free run fails, and its oracle refuses Discard", () => {
+  const variant = (manifest.variants ?? []).find((candidate) => candidate.id === "renamed-redesign");
+  assert.ok(variant, "no renamed-redesign variant");
+  const resolved = resolveScenarioWorkflow(manifest, { variantId: "renamed-redesign" });
+  // The expectations are the save, not a refusal: only a run that repairs the
+  // click can meet them.
+  assert.equal(resolved.expected.failure, undefined);
+  assert.deepEqual(resolved.expected.finalState, manifest.expected.finalState);
+  assert.deepEqual(resolved.expected.actions, [{ action: "web.dom.type", outcome: "succeeded" }, { action: "web.dom.click", outcome: "succeeded" }]);
+  assert.deepEqual(variant.expected.pageFacts, [
+    { id: "settings-form-visible", subject: "settings-form", predicate: "visible", value: true },
+    { id: "recorded-save-gone", subject: "save-changes", predicate: "exists", value: false },
+    { id: "discard-kept", subject: "discard-changes", predicate: "exists", value: true },
+  ]);
+  assert.match(variant.description, /Only a repair can pass this row\./);
+  assert.match(variant.description, /a provider-free run fails with target_not_found/);
+
+  // The save through the renamed control meets every fact; Discard, the other
+  // control a click could land on, meets none of them.
+  const armed = scenario.mutate(scenario.createState(42), "set-mode", { mode: "renamed-redesign" });
+  const saved = scenario.mutate(armed, "save", { displayName: workspaceName });
+  const discarded = scenario.mutate(armed, "discard", {});
+  assert.deepEqual([saved.savedInMode, saved.saveCount, saved.discardCount], ["renamed-redesign", 1, 0]);
+  for (const fact of resolved.expected.finalState ?? []) {
+    assert.equal(saved.status, fact.value, fact.id);
+    assert.notEqual(discarded.status, fact.value, fact.id);
+    assert.notEqual(armed.status, fact.value, fact.id);
+  }
+});
+
 test("the fixture serves no documents beyond its start page", () => {
   assert.equal(scenario.route, undefined);
 });

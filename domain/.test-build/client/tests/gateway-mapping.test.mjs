@@ -1,15 +1,15 @@
-// domain/src/client/tests/gateway-mapping.test.ts
+// src/client/tests/gateway-mapping.test.ts
 import assert from "node:assert/strict";
 import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
 
-// domain/src/actions/extraction/field-key.ts
+// src/actions/extraction/field-key.ts
 var FIELD_KEY_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
 var RESERVED_FIELD_KEYS = /* @__PURE__ */ new Set(["__proto__", "constructor", "prototype"]);
 function isWebAutomationExtractFieldKey(key) {
   return typeof key === "string" && FIELD_KEY_PATTERN.test(key) && !RESERVED_FIELD_KEYS.has(key);
 }
 
-// domain/src/output-nodes/targets/targets.ts
+// src/output-nodes/targets/targets.ts
 function outputTargetFromPayload(payload) {
   const adaptedTarget2 = objectValue(payload.target);
   const adaptedFingerprint = objectValue(adaptedTarget2?.fingerprint);
@@ -140,7 +140,7 @@ function booleanValue(value) {
   return typeof value === "boolean" ? value : void 0;
 }
 
-// domain/src/actions/extraction/request.ts
+// src/actions/extraction/request.ts
 var WEB_AUTOMATION_EXTRACT_PAGINATION_MODES = ["next", "loadMore", "scroll", "numbered"];
 var WEB_AUTOMATION_EXTRACT_FIELD_KINDS = ["text", "attribute", "link", "value", "column"];
 var WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS = ["include", "exclude", "encrypt"];
@@ -148,7 +148,7 @@ var WEB_AUTOMATION_EXTRACT_READ_MODES = ["text", "attribute", "value", "html"];
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
 var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
 
-// domain/src/actions/extraction/read-request.ts
+// src/actions/extraction/read-request.ts
 function webAutomationExtractListRequestValue(value) {
   const request = jsonObject(value);
   const item = nonEmptyString(request?.item);
@@ -279,7 +279,7 @@ function jsonObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// domain/src/actions/extraction/recorded-definition.ts
+// src/actions/extraction/recorded-definition.ts
 var DATASET_ID_PATTERN = /^[A-Za-z0-9._:-]{1,200}$/u;
 var RESERVED_DATASET_IDS = /* @__PURE__ */ new Set([".", ".."]);
 var LABEL_MAX_LENGTH = 200;
@@ -330,7 +330,7 @@ function jsonObject2(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// domain/src/actions/extraction/schema.ts
+// src/actions/extraction/schema.ts
 function webAutomationExtractListSchema(elementFingerprintSchema2) {
   const pageBound = { type: "integer", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES };
   const fieldSpecSchema = {
@@ -383,7 +383,7 @@ function webAutomationExtractListSchema(elementFingerprintSchema2) {
   };
 }
 
-// domain/src/actions/extraction/summary.ts
+// src/actions/extraction/summary.ts
 function webAutomationExtractionSummaryValue(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return void 0;
   const summary2 = value;
@@ -402,7 +402,7 @@ function fieldKeyList(value) {
   return Array.isArray(value) && value.every(isWebAutomationExtractFieldKey) ? [...value] : void 0;
 }
 
-// domain/src/actions/types.ts
+// src/actions/types.ts
 var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 var WEB_AUTOMATION_UPLOAD_MAX_FILE_BYTES = 1048576;
 var WEB_AUTOMATION_UPLOAD_MAX_TOTAL_BYTES = 4194304;
@@ -447,7 +447,7 @@ var WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = {
   "web.browser.download": "browser.download"
 };
 
-// domain/src/constants.ts
+// src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 var WEB_AUTOMATION_EVENTS = {
   clientReady: "web.client.ready",
@@ -469,7 +469,7 @@ var WEB_AUTOMATION_EVENTS = {
   clientError: "web.client.error"
 };
 
-// domain/src/actions/safety.ts
+// src/actions/safety.ts
 var WEB_AUTOMATION_ACTION_SAFETY = {
   "web.browser.navigate": "review",
   "web.dom.click": "review",
@@ -494,7 +494,7 @@ var WEB_AUTOMATION_ACTION_SAFETY = {
   "web.browser.download": "review"
 };
 
-// domain/src/actions/schemas.ts
+// src/actions/schemas.ts
 var elementFingerprintSchema = {
   type: "object",
   label: "Element fingerprint",
@@ -798,7 +798,7 @@ var webAutomationActionDefinitions = [
   }
 ];
 
-// domain/src/output-nodes/definitions.ts
+// src/output-nodes/definitions.ts
 var controlInput = { id: "in", label: "In", valueType: "signal", role: "control" };
 var outputPorts = [
   { id: "success", label: "Success", valueType: "any", role: "success" },
@@ -934,7 +934,7 @@ function iconForOutput(outputId) {
   return "square-dot";
 }
 
-// domain/src/sensitivity/signature.ts
+// src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
 var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
 var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
@@ -947,7 +947,7 @@ function isSensitiveControlType(type) {
   return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
 }
 
-// domain/src/sensitivity/descriptor.ts
+// src/sensitivity/descriptor.ts
 function sensitiveFieldSignatureOfDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
   const record = descriptor;
@@ -966,14 +966,14 @@ function stringField(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// domain/src/sensitivity/redaction.ts
+// src/sensitivity/redaction.ts
 var WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT = "(withheld: the action ran on a control that holds a secret)";
 function isProducerRedactedComparison(validation) {
   if (!validation || typeof validation !== "object" || Array.isArray(validation)) return false;
   return validation.redacted === true;
 }
 
-// domain/src/output-nodes/recorded-element-key.ts
+// src/output-nodes/recorded-element-key.ts
 function webAutomationRecordedElementKey(payload) {
   const element = objectValue(payload.element);
   const attributes = objectValue(element?.attributes);
@@ -987,7 +987,7 @@ function sanitizeRecordedElementKey(value) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 120);
 }
 
-// domain/src/output-nodes/secret-binding.ts
+// src/output-nodes/secret-binding.ts
 var WEB_AUTOMATION_SECRET_STATE_PREFIX = "web.secret.";
 function webAutomationSecretStatePath(key) {
   return `${WEB_AUTOMATION_SECRET_STATE_PREFIX}${key}`;
@@ -1006,7 +1006,7 @@ function webAutomationUnresolvedSecretParameters(parameters) {
   });
 }
 
-// domain/src/output-nodes/upload-binding.ts
+// src/output-nodes/upload-binding.ts
 var WEB_AUTOMATION_UPLOAD_STATE_PREFIX = "web.upload.";
 function webAutomationUploadStatePath(key) {
   return `${WEB_AUTOMATION_UPLOAD_STATE_PREFIX}${key}`;
@@ -1019,12 +1019,12 @@ function webAutomationUploadBindingPath(value) {
   return path?.startsWith(WEB_AUTOMATION_UPLOAD_STATE_PREFIX) ? path : void 0;
 }
 
-// domain/src/output-nodes/url-path.ts
+// src/output-nodes/url-path.ts
 function webAutomationUrlPath(value) {
   return typeof value === "string" && /^\/(?![/\\])[^?#]*$/u.test(value) ? value : void 0;
 }
 
-// domain/src/output-nodes/payloads.ts
+// src/output-nodes/payloads.ts
 function webAutomationOutputPayload(outputId, payload) {
   return withRecordedFrame(outputId, payload, recordedOutputParameters(outputId, payload));
 }
@@ -1120,7 +1120,7 @@ function isRadioElement(element) {
   return stringValue(element.inputType)?.toLowerCase() === "radio" || stringValue(element.role)?.toLowerCase() === "radio";
 }
 
-// domain/src/io/input-model.ts
+// src/io/input-model.ts
 var WEB_AUTOMATION_INPUT_IDS = {
   browserState: "web.browser.state",
   recordingEvidence: "web.recording.evidence",
@@ -1194,15 +1194,15 @@ var OUTPUT_FOR_ACTION_INPUT = new Map(
   actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
 );
 
-// domain/src/recording/state.ts
+// src/recording/state.ts
 var WEB_AUTOMATION_STATE_NAMESPACE = "web";
 
-// domain/src/recording/web-state/compact-json-object.ts
+// src/recording/web-state/compact-json-object.ts
 function compactJsonObject(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
 
-// domain/src/recording/web-state/element/identity.ts
+// src/recording/web-state/element/identity.ts
 var MAX_STATE_ID_LENGTH = 120;
 function meaningfulText(value) {
   return typeof value === "string" && value.trim().length >= 2;
@@ -1228,7 +1228,7 @@ function sanitizeStateId(value) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, MAX_STATE_ID_LENGTH) || "element";
 }
 
-// domain/src/recording/web-state/geometry.ts
+// src/recording/web-state/geometry.ts
 function stateBounds(bounds) {
   if (!bounds) return void 0;
   const x = finite(bounds.x);
@@ -1244,13 +1244,13 @@ function finite(value) {
   return Number.isFinite(value) ? value : void 0;
 }
 
-// domain/src/recording/web-state/visual-frame.ts
+// src/recording/web-state/visual-frame.ts
 var WEB_AUTOMATION_SCREEN_FRAME_ID = "screen";
 function safeLayerId(value, fallbackIndex) {
   return value.replace(/[^a-z0-9.]+/gi, ".").replace(/^\.+|\.+$/g, "").slice(0, 80) || String(fallbackIndex);
 }
 
-// domain/src/recording/web-state/action-target.ts
+// src/recording/web-state/action-target.ts
 function webAutomationActionTargetFromElement(element) {
   const secret = isSensitiveElementDescriptor(element);
   const visibleText = secret ? void 0 : element.visibleText;
@@ -1324,12 +1324,12 @@ function webAutomationActionVisualTargetFromElement(element, input = {}) {
   });
 }
 
-// domain/src/recording/web-state/evidence/project.ts
+// src/recording/web-state/evidence/project.ts
 var COLLECTION = { elementKind: "collection", comparable: false };
 var LIVE_COLLECTION = { ...COLLECTION, volatility: "rapid" };
 var SETTLED_COLLECTION = { ...COLLECTION, volatility: "slow" };
 
-// domain/src/runtime/failure/codes.ts
+// src/runtime/failure/codes.ts
 var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   /** The target was found but refused the action: disabled, hidden, or covered by another element. */
   ACTION_REJECTED: "web.action.rejected",
@@ -1423,7 +1423,7 @@ function boundedText(value) {
   return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
 }
 
-// domain/src/client/gateway-action-parameters.ts
+// src/client/gateway-action-parameters.ts
 function webAutomationReadActionParameters(parameters) {
   const lifted = {
     // Which tab and frame the action runs in, as opposed to the tab a
@@ -1594,7 +1594,7 @@ function jsonObject3(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// domain/src/client/gateway-mapping.ts
+// src/client/gateway-mapping.ts
 function createWebAutomationRecordingEvent(payload, input = {}) {
   const eventType = webAutomationEventTypeForClientKind(payload.kind);
   const target = payload.element;
@@ -1801,7 +1801,7 @@ function compactJsonObject2(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
 
-// domain/src/client/tests/gateway-mapping.test.ts
+// src/client/tests/gateway-mapping.test.ts
 var unsupportedTypeFailure = { category: "blocked_by_capability_or_policy", code: "web.action.unsupported_type", retryable: false, stage: "dispatch" };
 var wireRows = [
   ["content.ready", WEB_AUTOMATION_EVENTS.clientReady],

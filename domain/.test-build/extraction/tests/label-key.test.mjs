@@ -1,18 +1,18 @@
-// domain/src/extraction/tests/label-key.test.ts
+// src/extraction/tests/label-key.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// domain/src/actions/extraction/field-key.ts
+// src/actions/extraction/field-key.ts
 var FIELD_KEY_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
 var RESERVED_FIELD_KEYS = /* @__PURE__ */ new Set(["__proto__", "constructor", "prototype"]);
 function isWebAutomationExtractFieldKey(key) {
   return typeof key === "string" && FIELD_KEY_PATTERN.test(key) && !RESERVED_FIELD_KEYS.has(key);
 }
 
-// domain/src/actions/extraction/read-request.ts
+// src/actions/extraction/read-request.ts
 var REFUSED = Symbol("refused");
 
-// domain/src/extraction/label-key.ts
+// src/extraction/label-key.ts
 var MAX_KEY_LENGTH = 100;
 var FALLBACK_KEY = "field";
 var RESERVED_KEY_SUFFIX = "_field";
@@ -30,7 +30,7 @@ function webAutomationExtractionFieldKey(label, taken) {
   }
 }
 
-// domain/src/extraction/tests/label-key.test.ts
+// src/extraction/tests/label-key.test.ts
 var CORE_FIELD_ID_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
 var PROTOTYPE_NAMES = ["__proto__", "constructor", "prototype"];
 var none = /* @__PURE__ */ new Set();
