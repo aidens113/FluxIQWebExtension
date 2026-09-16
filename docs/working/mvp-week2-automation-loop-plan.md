@@ -1,7 +1,7 @@
 # MVP Week 2 Automation Loop Plan
 
 Status: Active
-Status detail: Executing 2026-09-15; the user gave the go and asked for maximum parallelism. Phases D, P, SEC and G are being built in Core; the loop phases follow once their prerequisites land.
+Status detail: Executing 2026-09-16. Phases D, G, P, SEC, T, H, S and 2.1-2.3 are built, verified and pushed in both repositories; the Testing Lab now reaches the real DeepSeek provider. Phase 2.3 is inert until three worked-out diffs are applied. Loop phases 2.4-2.9 and X6 are not started.
 Created: 2026-09-15
 Last updated: 2026-09-15
 Owner: Senior supervisor agent
@@ -22,70 +22,15 @@ recovery loop. Two earlier scoping reports cover Phases 2.1-2.4 and 2.5-2.9 with
 file:line evidence. Path prefix: `AS/` is Core's
 `packages/fluxiq/src/programs/automation-studio/`.
 
-**L14 is far smaller than it looks.** `w2-c` found the loop already exists and
-is already domain-neutral (`AS/runtime/llm/evidence-loop.ts`). What is missing
-is a registry of harness options, any Core-owned neutral options at all (Core
-ships zero; every tool today comes from this repository), and the other entry
-points, which `execution-grants.ts:493-511` bolts shut. **Phase H** delivers it.
-
-**One leak blocked it, and it is now Phase T.** Core's repair target *is* a CSS
-selector (`structured-response.ts:14-16`), hard-required at five sites including
-the JSON schema, the provider prompt (`deepseek-provider.ts:38,57-73`) and the
-service options (`service.ts:356`) — while its sibling `TargetOverrideFailedAction`
-(`live-patch.ts:34-37`) is already domain-neutral, so the intent was there and
-one type was missed. Three smaller leaks follow: an unscoped `llmEvidenceRuntime`
-(`service.ts:352-357,769-772`); the closed task-kind union and hard-coded stage
-prose that block L15 (**Phase S**); and Core's sanitizers carrying web nouns.
-
-**No loop exit criterion (2.1-2.9) is met yet.** The parts exist and are tested,
-but no runtime loop connects them: the harness packet fills four of its slots so
-expected state, the state diff, prior adaptations and recording context never
-reach the model; diagnosis is free text with no plan stage; exploration serves
-Flow creation only; patch validation is proven by a mock-provider unit test
-alone; "resume" restarts from the beginning; and nothing records which
-adaptation a later run used, so FluxBench's Week 2 metrics are typed `null`.
-Per-criterion detail with file:line evidence is in the two scoping reports.
-
-**Defects: five, corrected to seven, now Phase D.** `w2-a` proved two by running
-Core's own `live-patch.ts` unmodified in a scratch copy — 19 of 19 expectations
-matched — and corrected two of the five descriptions that were wrong as written:
-a never-executed proposal does not auto-apply (the harm is that its fabricated
-success is indistinguishable from a verified one), and the unwritten
-`failureSignature` is not why matching fails (the only production call site
-passes no adaptations at all). It found a sixth instance
-(`temporary_recovery_subflow_call`) and a seventh path skipping the promotion
-gates. Detail: `reports/w2-a-defect-fixes.md`.
-
-**One cause explains all of them: success is recorded from the absence of
-contradicting evidence rather than from observed evidence.** The fixes, the
-load-bearing order, and the reasoning are below under "The five fixes"; the
-per-defect evidence and regression lists are in
-`reports/w2-a-defect-fixes.md`.
-
-**L13's first increment needs no new contract.** `w2-b` found a flow is six
-stores of which only the graph is transactional: routers, subflows and
-instructions have no revisions or inverses, and flow variables, errors and
-regions have no write path at all. But action targets, expected state, retries
-and wiring are already expressible and revertible as graph operations, so the
-first increment can proceed; only router, subflow, instruction and flow-field
-changes need a new contract.
-
-**Three findings that are not merely design gaps, now Phase G:** a `delete_node`
-inverse omits cascaded edges, so rollback does not restore the graph it removed —
-and rollback is the safety net every later phase leans on; structural adaptations
-cannot be applied at all, because the promotion gate requires a `proposalId` no
-endpoint can create; and two apply engines sit behind the single
-`review-flow-adaptation` endpoint with different rollback guarantees, chosen by
-deployment configuration.
-
-**The PIN conflict is resolved, and its premise was wrong.** `w2-b` reported
-that every flow write endpoint requires a PIN an autonomous loop cannot supply;
-`w2-d` disproved the general claim, and the supervisor confirmed it — the PIN
-guards *one program*, not writes as such, and several destructive endpoints have
-none (Phase P). The user settled the rest as L16. One conflict does remain: flow
-bootstrap already demonstrates the right build-a-flow pattern but **refuses any
-flow that is not blank**, so the "improve an existing flow" entry point cannot
-reuse it unchanged.
+**The four investigations are delivered, not just recorded.** Their findings —
+that the exploration loop already existed and only needed a registry and its
+other entry points, that Core's repair target was a CSS selector, that success
+was inferred from silence in seven places, that a `delete_node` inverse dropped
+cascaded edges, and that the PIN guarded one program rather than destruction —
+are all now built as Phases H, T, D, G and P. The evidence, with file:line
+detail, is in `reports/w2-a` through `w2-d` and the two scoping reports. One
+finding is still open: flow bootstrap refuses any flow that is not blank, so the
+"improve an existing flow" entry point cannot reuse it unchanged.
 
 **Done and supervisor-verified** (each re-run by the supervisor, not accepted
 from a report): both scoping reports, this plan and its Core pair, and the four
@@ -107,44 +52,75 @@ and Core's sanitizers no longer carrying browser nouns. **Phase 2.1** — the
 recovery context, which records what was withheld and why. All of it is pushed
 in both repositories.
 
-**In progress:** Phase 2.2 (diagnosis separated from exploration, and the first
-caller to drive Phase S's stages) and the Lab's Flow-lane extraction judging.
+**Phase 2.2** — a deterministic diagnosis gate, a structured diagnosis, a plan
+stage and a recovery trace. **Phase 2.3** — closed exploration outcomes, a
+budget over wall clock and actions, a whole-recovery deadline, and the web
+domain's own harness options refused semantically per L3. The model now actually
+receives the recovery context, and there is a named channel for a structured
+diagnosis. Everything above is pushed in both repositories and both audits pass.
 
-**Not started:** loop phases 2.3-2.9.
+**THE LAB REACHES A REAL PROVIDER, and that is new.** Live LLM execution had
+been fail-closed with "until the Phase 1 provider runner is enabled", and the
+line under that guard never passed the parsed configuration into the run — every
+`--live-llm` flag was read and dropped. It is wired now, proved by a real call:
+`pnpm lab run identity-drift --variant save-and-exit --flow --live-llm
+--llm-task diagnose --llm-max-calls 1 --llm-max-cost-usd 0.25` → passed, with
+`"llm":{"mode":"live","profileId":"lab-diagnose","calls":1}`. Read
+`reports/w2-live-provider.md` before running it again. The user's standing
+instruction is that a feature is not demonstrated until it has run against the
+real DeepSeek key in `.env.local`; a mock or a green unit suite is preparation,
+not evidence.
 
-**Deferred, not forgotten:** `deniedEvidenceKeys` is optional on Core's binding,
+**What that live run does NOT show**, because a green is easy to over-read: the
+diagnosis was staged and never validated, since `diagnose` authorizes exactly
+one call; the token and cost figures are the reserved cap rather than measured,
+because DeepSeek reported no usage; and it is one run, not a repeatable result.
+
+**Not started:** loop phases 2.4-2.9, and X6.
+
+**Nothing drives the exploration in production yet.** Phase 2.3 is built and
+tested but inert: three diffs are worked out in `reports/w2-3-bounded-exploration.md`
+and not applied. Two are about fifteen lines and need no registration change;
+the third needs ~11 lines in `service.ts`, which sits at exactly its frozen 6757
+baseline, so it needs a baseline decision or R0 first.
+
+**Deferred, not forgotten:** `deniedEvidenceKeys` is optional on Core's binding
 and `context-packet.ts:81` defaults a missing declaration to deny nothing — the
 same silent-no-protection shape this plan keeps finding. It should be required
-and should fail closed. It waits only because Phase 2.2 is mid-edit in two of
-the three files it touches, and forcing an all-or-nothing change into an active
-file is what broke the build during Phase P.
+and fail closed. Measured cost: 8 call sites, 7 of them in
+`AS/runtime/tests/**`; the exact diff is in `reports/w2-harness-loose-ends.md`.
+Also outstanding: `recovery/structured-diagnosis.ts:131` still reads
+`response.metadata` rather than the new channel, and the two only mean anything
+together.
+
+**A module cycle has bitten twice in one day and wants a rule.**
+`llm/harness/intervention.ts` value-imports out of `AS/runtime/recovery/`, so a
+`recovery` module reading an `llm` constant at the top level gets `undefined` at
+run time with a completely clean type check. The same cycle silently emptied the
+opaque handle's `pattern`, `maxLength` and `maxProperties` from the schema sent
+to the provider. Both were found by a single failing test, not by the type
+checker. An `importBoundaries` entry would stop the third instance.
 
 **Concurrency is five workers, not nine.** Both crashes happened with nine heavy
 workers running on a machine with a known memory fault, so this is recorded as a
 real resource limit rather than caution.
 
-**Next steps:**
-1. **Done.** Every finding that had no phase to deliver it now has one: **T**
-   for L2's opaque repair target, **H** for L14's harness-option registry, its
-   Core-owned neutral options and the other two entry points, **S** for L15's
-   stage protocol, and **G** for the rollback-correctness defects. Phase 2.3 no
-   longer writes an exploration loop, because one already exists.
-2. **Done**, as `w2-d`, and it found more than an inventory. The PIN does not
-   guard destruction today, it guards *one program*: all ~58 checks live in
-   `automation-studio`, so moving a node on a canvas needs a PIN while deleting
-   a user's captured dataset rows does not. Phase P carries the mechanism.
-   Separately, `w2-d` found a **security defect unrelated to the loop** —
-   `identity-access/create-session` mints a session for any user id with no
-   credential recheck, at the handler and in the service alike. Admin-only to
-   reach, so not an unauthenticated escalation, but it sidesteps the recheck the
-   rest of the program enforces. Now Phase SEC, recommended for a fix ahead of
-   the loop rather than bundled into L16. Counts and the three code findings were
-   re-verified by the supervisor against the handler bodies; the worker's
-   220/57 is 223/58 by my own count, which changes no conclusion.
-3. **Done.** `w2-b`'s finding is folded into the Phases section: the first loop
-   increment needs no new authoring contract, so router, subflow, instruction
-   and flow-field contracts come after it rather than gating it.
-4. Nothing is built until the user says go.
+**Next steps, in order:**
+1. **A validated diagnosis against the real provider.** Today's live call was
+   staged and never validated, because `diagnose` authorizes exactly one call.
+   Run `--llm-task adapt` (two calls) and record the verdict, the call count and
+   real token and cost figures. Until that lands, "the loop works" is not a
+   claim anyone should make.
+2. Apply the three diffs in `reports/w2-3-bounded-exploration.md` so Phase 2.3
+   actually runs in production. The third needs a `service.ts` baseline decision
+   or R0 first.
+3. Point `recovery/structured-diagnosis.ts:131` at the new diagnosis channel,
+   and make `deniedEvidenceKeys` required and fail-closed. Both are measured and
+   written up; neither is a judgement call any more.
+4. Add the `importBoundaries` rule for the `llm` / `recovery` cycle before it
+   costs a third person an afternoon.
+5. Then Phase 2.4, and 2.5-2.9 after it.
+
 
 **Blockers:** none. The user's direction is recorded as L12-L16. The earlier
 request that he approve L6 and L9 is **withdrawn**: L13 supersedes both, because
