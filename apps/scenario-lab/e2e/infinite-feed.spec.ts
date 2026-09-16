@@ -4,12 +4,20 @@ import type { RunningScenarioLab } from "../src/server.js";
 import { feedItem, infiniteFeedScenario, type InfiniteFeedState } from "../src/scenarios/infinite-feed/index.js";
 import { armVariant, readFinalState, test } from "./lab-fixture.js";
 
-const SEED = 42;
+/**
+ * The scenario's own declared seed rather than a literal. This feed's posts
+ * are a function of the lab seed, a run starts the lab on the scenario's seed
+ * unless `--seed` overrides it (`test-runner/src/run-scenario.ts`), and the
+ * manifest's expected records are the content of that seed. Reading it off the
+ * scenario keeps the seed in one place, so the fixture and this spec cannot
+ * disagree about which feed they are describing.
+ */
+const SEED = infiniteFeedScenario.seed;
 const START = "/scenarios/infinite-feed/";
 const EXTRACT_STEP = "extract-loaded-posts";
 type ExtractedRecord = Record<string, string>;
 
-// The expected records derive from SEED, so the lab runs on it.
+// The manifest's records and the ones derived below are both the content of SEED, so the lab runs on it.
 test.use({ labSeed: SEED });
 
 const feedState = (lab: RunningScenarioLab) => readFinalState<InfiniteFeedState>(lab, "infinite-feed");
@@ -82,7 +90,9 @@ test("W11 loads exactly 40 posts with the fixed scroll steps and extracts them i
   expect(await feedState(lab)).toEqual({ mode: "baseline", feedLength: 60, loadedCount: 10, ended: false, sessions: 1, lastOperation: "opened" });
 
   const extracted = await runScript(page, workflow.recordingScript);
-  expect(workflow.expected.extracted).toEqual([{ step: EXTRACT_STEP, count: 40 }]);
+  // Exact equality on the whole entry, so a field this spec does not judge --
+  // a `pages` the reader never counts, say -- fails here rather than passing unseen.
+  expect(workflow.expected.extracted).toEqual([{ step: EXTRACT_STEP, count: 40, records: expectedRecords(40) }]);
   expect(extracted.get(EXTRACT_STEP)).toEqual(expectedRecords(40));
   await assertFacts(page, workflow.expected.finalState ?? []);
   expect(requests).toEqual([2, 3, 4].map(number => `${START}page/${number}`));
@@ -141,7 +151,7 @@ test("end-early variant: the feed ends at 25 posts and extraction succeeds with 
 
   const extractStep = workflow.recordingScript.find(({ id }) => id === EXTRACT_STEP);
   if (!extractStep) throw new Error("extract step is missing");
-  expect(workflow.expected.extracted).toEqual([{ step: EXTRACT_STEP, count: 25 }]);
+  expect(workflow.expected.extracted).toEqual([{ step: EXTRACT_STEP, count: 25, records: expectedRecords(25) }]);
   expect(await extract(page, extractStep)).toEqual(expectedRecords(25));
   await assertFacts(page, workflow.expected.finalState ?? []);
   expect(requests).toEqual([`${START}page/2`, `${START}page/3`]);

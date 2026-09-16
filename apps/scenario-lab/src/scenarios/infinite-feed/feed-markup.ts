@@ -31,14 +31,27 @@ export function renderFeedPage(seed: number, pageNumber: number, feedLength: num
   return `<div class="feed-page" data-testid="feed-page-${pageNumber}" data-page="${pageNumber}" data-last-page="${lastPage}">${items}</div>`;
 }
 
-/** The start document: the first page, the sentinel the client observes, the loading indicator, and the end-of-feed marker. */
-export function renderFeedDocument(feedLength: number, context: RenderContext): string {
+/**
+ * How the feed reaches its next page. `scroll` is the baseline: a sentinel the
+ * client observes, loading more as it comes into view. `load-more` replaces it
+ * with a button, which is the other way real feeds page and the control an
+ * extraction paginating by `loadMore` presses. Only one is ever on the page, so
+ * a run cannot load a page by scrolling and by pressing at the same time.
+ */
+export type FeedPagination = "scroll" | "load-more";
+
+/** The start document: the first page, the control that loads the next one, the loading indicator, and the end-of-feed marker. */
+export function renderFeedDocument(feedLength: number, context: RenderContext, pagination: FeedPagination): string {
+  const loadMore = pagination === "load-more";
+  const control = loadMore
+    ? `<button type="button" data-testid="load-more">Load more posts</button>`
+    : `<div class="feed-sentinel" data-testid="feed-sentinel" aria-hidden="true"></div>`;
   const body = `${styles}<main>
     <h1>Neighbourhood feed</h1>
-    <p>Posts from the community board. More posts load as you scroll.</p>
+    <p>Posts from the community board. ${loadMore ? "Select Load more posts to see more." : "More posts load as you scroll."}</p>
     <p data-testid="feed-status" aria-live="polite"></p>
     <div role="feed" aria-label="Community posts" aria-busy="false" data-testid="feed">${renderFeedPage(context.seed, 1, feedLength)}</div>
-    <div class="feed-sentinel" data-testid="feed-sentinel" aria-hidden="true"></div>
+    ${control}
     <p data-testid="feed-loading" role="status" hidden>Loading more posts...</p>
     <p data-testid="feed-end" hidden>You're all caught up. There are no more posts.</p>
   </main>`;
@@ -55,11 +68,13 @@ function renderFeedItem(item: FeedItem): string {
     </article>`;
 }
 
-// Opens a feed session through `mutate`, then appends the next page each
-// time the sentinel scrolls into view. Pages come from the scenario's own
+// Opens a feed session through `mutate`, then appends the next page each time
+// the sentinel scrolls into view, or each time the Load more button is pressed
+// when that is the control on the page. Pages come from the scenario's own
 // route, which records the load in the fixture state before responding.
 const feedClient = `const feed = document.querySelector('[data-testid="feed"]');
 const sentinel = document.querySelector('[data-testid="feed-sentinel"]');
+const loadMore = document.querySelector('[data-testid="load-more"]');
 const loading = document.querySelector('[data-testid="feed-loading"]');
 const end = document.querySelector('[data-testid="feed-end"]');
 const status = document.querySelector('[data-testid="feed-status"]');
@@ -71,8 +86,9 @@ function showStatus() {
   status.textContent = (ended ? 'Showing all ' : 'Showing ') + count + ' posts';
 }
 function finish() {
-  observer.disconnect();
-  sentinel.remove();
+  if (observer) observer.disconnect();
+  if (sentinel) sentinel.remove();
+  if (loadMore) loadMore.remove();
   end.hidden = false;
 }
 async function loadNextPage() {
@@ -94,10 +110,11 @@ async function loadNextPage() {
   showStatus();
   busy = false;
 }
-const observer = new IntersectionObserver(entries => {
+const observer = sentinel ? new IntersectionObserver(entries => {
   if (busy || ended || !entries.some(entry => entry.isIntersecting)) return;
   void loadNextPage();
-});
+}) : null;
+if (loadMore) loadMore.addEventListener('click', () => { if (!busy && !ended) void loadNextPage(); });
 await mutate('open');
 showStatus();
-if (ended) finish(); else observer.observe(sentinel);`;
+if (ended) finish(); else if (observer) observer.observe(sentinel);`;

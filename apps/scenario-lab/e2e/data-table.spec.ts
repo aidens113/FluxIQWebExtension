@@ -40,9 +40,22 @@ function extractByHeader(page: Page, target: string, fields: Record<string, stri
   }), fields);
 }
 
+/**
+ * Judges what each extract step read. `pages` and `truncated` are refused
+ * rather than skipped: this spec drives the script with plain Playwright, so it
+ * follows no pagination and applies no extraction cap, and neither field is
+ * anything it observes. Skipping them is how an expectation nothing judges
+ * reads as a pass, which is the defect X5-F removed from the runner; the
+ * `large-table` variant's `truncated: true` is unjudgeable here for that
+ * reason, and says so loudly the moment a test reaches it.
+ */
 function expectExtracted(extracted: Record<string, Records>, expectations: ExpectedExtraction[] = []): void {
   expect(expectations.length).toBeGreaterThan(0);
   for (const expectation of expectations) {
+    const unjudgeable = (["pages", "truncated"] as const).filter((field) => expectation[field] !== undefined);
+    if (unjudgeable.length > 0) {
+      throw new Error(`Extract step ${expectation.step} declares ${unjudgeable.join(" and ")}, which this spec's reader never observes, so the expectation cannot be judged`);
+    }
     const actual = extracted[expectation.step];
     if (expectation.count !== undefined) expect(actual).toHaveLength(expectation.count);
     if (expectation.records) expect(actual).toEqual(expectation.records);
@@ -55,6 +68,20 @@ async function expectFinalState(page: Page, facts: ExpectedFact[] = []): Promise
     await expect(page.getByTestId(fact.subject)).toHaveText(String(fact.value));
   }
 }
+
+test("an extraction expectation this spec cannot observe is refused rather than skipped", () => {
+  const read = { "extract-inventory": [] };
+  const refuse = (expectation: ExpectedExtraction) => () => expectExtracted(read, [expectation]);
+  expect(refuse({ step: "extract-inventory", truncated: true })).toThrow(/declares truncated, which this spec's reader never observes/);
+  expect(refuse({ step: "extract-inventory", pages: 2 })).toThrow(/declares pages, which this spec's reader never observes/);
+  expect(refuse({ step: "extract-inventory", pages: 2, truncated: true })).toThrow(/declares pages and truncated/);
+  // An entry declaring neither is judged as before, so the guard costs the judgeable case nothing.
+  expect(refuse({ step: "extract-inventory", count: 0, records: [] })).not.toThrow();
+  // The entry this guard exists for: only the extraction engine's 1,000-record cap
+  // can report `truncated`, so no test in this spec may claim to have judged it.
+  const largeTable = manifest.variants?.find(({ id }) => id === "large-table");
+  expect(largeTable?.expected.extracted).toEqual([{ step: "extract-inventory", count: 1000, truncated: true }]);
+});
 
 test("W08 extracts every inventory row through its column headers", async ({ page, lab, networkGuard: _guard }) => {
   const workflow = resolveScenarioWorkflow(manifest);

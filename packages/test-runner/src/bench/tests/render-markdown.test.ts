@@ -8,11 +8,12 @@ import type { BenchRunsFile } from "../report-store.js";
 
 /** One W01 run on `lane`, with one click taking `clickMs`. */
 const run = (lane: EvaluationLane, durationMs: number, clickMs: number): RunEvaluation => ({
-  schemaVersion: "0.2", runId: `run-${lane}`, verdict: "passed", facilityFailure: null, invariants: [], metrics: {},
+  schemaVersion: "0.3", runId: `run-${lane}`, verdict: "passed", facilityFailure: null, invariants: [], metrics: {},
   scenarioId: "basic-form", workflowId: null, variantId: null, repeatIndex: 0, lane, flowCreated: lane === "flow" ? true : null,
   oracleVerdict: "passed", reportedVerdict: "passed", automationFailureReported: null, automationFailureExpected: null,
   harnessActivations: 0, durationMs, actions: [{ actionType: "web.dom.click", durationMs: clickMs }], evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 },
   llm: { mode: "disabled", profileId: null, calls: 0 },
+  extraction: null,
   harnessRecovery: null, adaptationCost: null, adaptationValidation: null, adaptationPersistence: null, adaptationReuse: null,
 });
 

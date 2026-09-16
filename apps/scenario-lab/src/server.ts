@@ -194,8 +194,22 @@ function listen(server: Server, port: number, host: string): Promise<void> {
   });
 }
 
+// `server.close()` stops the server accepting new connections but waits for the open ones
+// to end, and an idle HTTP keep-alive socket never ends on its own. So teardown hung until
+// the test timed out: `Tearing down "openHarness" exceeded the test timeout of 30000ms`,
+// after the row's assertions had already passed. It moved between rows and never repeated
+// on the row it had just hit, which reads like this machine's RAM fault but is not --
+// whether a socket is still open is a race, and product-catalog serving eight images made
+// the race much easier to lose.
+//
+// `closeAllConnections()` destroys those sockets, which is what a fixture server being torn
+// down after its assertions have run actually wants. It is called after `close()` so the
+// server is already refusing new connections when the open ones are destroyed.
 function close(server: Server): Promise<void> {
-  return new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  return new Promise((resolve, reject) => {
+    server.close(error => error ? reject(error) : resolve());
+    server.closeAllConnections();
+  });
 }
 
 function validateRunToken(token: string): void {

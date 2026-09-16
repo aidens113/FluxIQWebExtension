@@ -34,6 +34,7 @@ export function renderDataTablePage(state: DataTableState, context: RenderContex
       <thead><tr>${state.columnOrder.map((column) => headerCell(column, state.sort)).join("")}</tr></thead>
       <tbody data-testid="inventory-body">${rows.map((row) => bodyRow(row, state.columnOrder)).join("")}</tbody>
     </table>
+    ${rows.length === 0 ? '<p data-testid="empty-inventory">No products are listed.</p>' : ""}
     <footer><small data-testid="seed-marker">Snapshot ${escapeHtml(state.seedMarker)}</small></footer>
   </main>`;
   return page("Inventory", body, clientScript(state, context));

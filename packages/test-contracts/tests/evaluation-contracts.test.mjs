@@ -3,8 +3,10 @@ import test from "node:test";
 import {
   ContractValidationError,
   CANDIDATE_COMPARISON_SCHEMA_VERSION,
+  EVALUATION_SCHEMA_VERSION,
   assertRunEvaluation,
   evaluationLanes,
+  extractionMeasurementStatuses,
   facilityFailureBoundaries,
   facilityFailureCauseCodes,
   facilityFailureOperationStages,
@@ -21,7 +23,7 @@ const disabledLlm = { mode: "disabled", profileId: null, calls: 0 };
 
 // A Flow-lane replay of W26 `no-context`: FluxIQ failed, as the variant expects, and classified the failure correctly.
 const flowRun = () => ({
-  schemaVersion: "0.2", runId: "run-w26-no-context-2", verdict: "passed", facilityFailure: null,
+  schemaVersion: "0.3", runId: "run-w26-no-context-2", verdict: "passed", facilityFailure: null,
   invariants: [{ id: "failure-classified", passed: true, expected: "target_ambiguous", actual: "target_ambiguous", evidenceSequences: [3] }], metrics: {},
   scenarioId: "ambiguous-targets", workflowId: null, variantId: "no-context", repeatIndex: 1, lane: "flow", flowCreated: true,
   oracleVerdict: "failed", reportedVerdict: "failed",
@@ -30,8 +32,16 @@ const flowRun = () => ({
   harnessActivations: 0, durationMs: 1840.5,
   actions: [{ actionType: "web.dom.click", durationMs: 120 }, { actionType: "web.dom.extract", durationMs: 35.25 }],
   evidence: { sanitizedPacketBytes: [2048, 1024], rawSnapshotBytes: [65536], truncationCount: 0 },
-  llm: disabledLlm, ...week2,
+  llm: disabledLlm, extraction: null, ...week2,
 });
+// A paginated list extraction step, judged: 24 of 24 expected records read over three pages, every expected field present.
+const measurement = (overrides = {}) => ({
+  stepIndex: 2, status: "judged", expectedRecords: 24, observedRecords: 24, matchedRecords: 24,
+  expectedFields: 3, presentFields: 3, unexpectedFields: 0, pagesFollowed: 3, truncated: false, durationMs: 412.5, nonStringValues: 0, ...overrides,
+});
+const extractionRun = (measurements = [measurement()]) => ({ ...flowRun(), extraction: measurements });
+// A card number: the kind of page value D6 keeps out of every evaluation.
+const PLANTED = "4242424242424242";
 // The recording lane of W01: the Testing Lab drove the script; no Flow exists and FluxIQ reported nothing.
 const recordingRun = () => ({
   ...flowRun(), runId: "run-basic-form-0", scenarioId: "basic-form", variantId: null, repeatIndex: 0, lane: "recording", flowCreated: null,
@@ -40,23 +50,101 @@ const recordingRun = () => ({
 });
 const without = (value, key) => { const copy = { ...value }; delete copy[key]; return copy; };
 const issuesOf = (value) => { const checked = validateRunEvaluation(value); return checked.valid ? [] : checked.issues.map((issue) => issue.path); };
+const messagesAt = (value, path) => { const checked = validateRunEvaluation(value); return checked.valid ? [] : checked.issues.filter((issue) => issue.path === path).map((issue) => issue.message); };
 const rejects = (value, label) => assert.equal(validateRunEvaluation(value).valid, false, label);
 const facilityRun = (facilityFailure = { boundary: "no-final-bundle", stage: "scenario.execute", reason: "unclassified" }) => ({
   ...flowRun(), verdict: "inconclusive", failureCategory: "unknown", facilityFailure,
   flowCreated: false, oracleVerdict: null, reportedVerdict: null, automationFailureReported: null, actions: [],
 });
 
-test("run evaluations write schema 0.2 while CandidateComparison remains 0.1", () => {
-  assert.equal(flowRun().schemaVersion, "0.2");
+test("run evaluations write schema 0.3 while CandidateComparison remains 0.1", () => {
+  assert.equal(EVALUATION_SCHEMA_VERSION, "0.3");
+  assert.equal(flowRun().schemaVersion, "0.3");
   assert.equal(CANDIDATE_COMPARISON_SCHEMA_VERSION, "0.1");
+  assert.doesNotThrow(() => assertRunEvaluation(flowRun()));
+  // Schema 0.3 carries one counts-only measurement per extraction step, and round-trips.
+  const notRun = measurement({ stepIndex: 5, status: "not_run", observedRecords: 0, matchedRecords: 0, presentFields: 0, pagesFollowed: null, truncated: null, durationMs: null });
+  const measured = extractionRun([measurement(), notRun]);
+  assert.doesNotThrow(() => assertRunEvaluation(measured));
+  assert.deepEqual(parseRunEvaluationJson(JSON.stringify(measured)), measured);
+  // Measured, with no extraction step, is an empty list; null is unmeasured.
+  assert.equal(validateRunEvaluation(extractionRun([])).valid, true);
+  rejects({ ...flowRun(), schemaVersion: "0.4" }, "a schema after 0.3");
 });
 
-test("the JSON reader explicitly normalizes legacy schema 0.1 evaluations", () => {
-  const legacy = without({ ...flowRun(), schemaVersion: "0.1" }, "facilityFailure");
-  assert.deepEqual(validateRunEvaluation(legacy), { valid: true, value: { ...legacy, schemaVersion: "0.2", facilityFailure: null } });
-  assert.deepEqual(parseRunEvaluationJson(JSON.stringify(legacy)), { ...legacy, schemaVersion: "0.2", facilityFailure: null });
+test("the JSON reader explicitly normalizes legacy schema 0.1 evaluations to 0.3", () => {
+  const legacy = without(without({ ...flowRun(), schemaVersion: "0.1" }, "facilityFailure"), "extraction");
+  const read = { ...legacy, schemaVersion: "0.3", facilityFailure: null, extraction: null };
+  assert.deepEqual(validateRunEvaluation(legacy), { valid: true, value: read });
+  assert.deepEqual(parseRunEvaluationJson(JSON.stringify(legacy)), read);
   assert.throws(() => assertRunEvaluation(legacy), ContractValidationError);
   assert.throws(() => parseRunEvaluationJson(JSON.stringify({ ...legacy, facilityFailure: null })), ContractValidationError);
+  assert.throws(() => parseRunEvaluationJson(JSON.stringify({ ...legacy, extraction: null })), ContractValidationError);
+});
+
+test("a schema 0.2 evaluation reads back as 0.3 with extraction null: unmeasured, never an empty list", () => {
+  const legacy = without({ ...flowRun(), schemaVersion: "0.2" }, "extraction");
+  const read = parseRunEvaluationJson(JSON.stringify(legacy));
+  assert.deepEqual(read, { ...legacy, schemaVersion: "0.3", extraction: null });
+  assert.equal(read.extraction, null);
+  assert.deepEqual(validateRunEvaluation(legacy), { valid: true, value: read });
+  // Normalized, not valid as written: a producer must write 0.3.
+  assert.throws(() => assertRunEvaluation(legacy), ContractValidationError);
+  // No 0.2 producer wrote extraction, so a 0.2 stating it is refused rather than upgraded.
+  assert.throws(() => parseRunEvaluationJson(JSON.stringify({ ...legacy, extraction: [measurement()] })), ContractValidationError);
+  assert.throws(() => parseRunEvaluationJson(JSON.stringify({ ...legacy, extraction: null })), ContractValidationError);
+  // Normalization adds only extraction: a 0.2 still states facilityFailure.
+  assert.throws(() => parseRunEvaluationJson(JSON.stringify(without(legacy, "facilityFailure"))), ContractValidationError);
+});
+
+test("a string planted anywhere in an extraction measurement is refused as a page value (D6)", () => {
+  const refusedAsString = (value, path) => messagesAt(value, path).some((message) => message.startsWith("must not be a string"));
+  for (const key of [
+    "stepIndex", "expectedRecords", "observedRecords", "matchedRecords", "expectedFields", "presentFields", "unexpectedFields",
+    "pagesFollowed", "truncated", "durationMs", "nonStringValues", "status",
+  ]) {
+    const run = extractionRun([measurement(), measurement({ stepIndex: 3, [key]: PLANTED })]);
+    assert.equal(validateRunEvaluation(run).valid, false, key);
+    assert.equal(refusedAsString(run, `$.extraction[1].${key}`), true, `${key} refused as a string`);
+    assert.throws(() => parseRunEvaluationJson(JSON.stringify(run)), ContractValidationError, key);
+  }
+  // A member the contract never names -- a field name, a sample, a step id -- is refused as a string, not only as unknown.
+  for (const key of ["fieldName", "sampleValue", "stepId"]) {
+    const run = extractionRun([measurement({ [key]: PLANTED })]);
+    assert.equal(refusedAsString(run, `$.extraction[0].${key}`), true, `${key} refused as a string`);
+  }
+  // The one string a measurement carries is its closed status.
+  for (const status of extractionMeasurementStatuses) assert.equal(validateRunEvaluation(extractionRun([measurement({ status })])).valid, true, status);
+  assert.deepEqual([...extractionMeasurementStatuses], ["judged", "not_run", "not_expected"]);
+  rejects(extractionRun([PLANTED]), "a measurement that is a string");
+  rejects({ ...flowRun(), extraction: PLANTED }, "extraction as a string");
+});
+
+test("extraction counts are bounded: matched records by expected and observed ones, present fields by expected ones", () => {
+  // At every bound: a short read matched in full, every expected field present.
+  assert.equal(validateRunEvaluation(extractionRun([measurement({ observedRecords: 15, matchedRecords: 15 })])).valid, true);
+  assert.equal(validateRunEvaluation(extractionRun([measurement({ observedRecords: 30, matchedRecords: 24, unexpectedFields: 2 })])).valid, true);
+  // More matched records than expected, though no more than observed.
+  assert.deepEqual(issuesOf(extractionRun([measurement({ observedRecords: 30, matchedRecords: 25 })])), ["$.extraction[0].matchedRecords"]);
+  // More matched records than observed, though no more than expected.
+  assert.deepEqual(issuesOf(extractionRun([measurement({ observedRecords: 15, matchedRecords: 16 })])), ["$.extraction[0].matchedRecords"]);
+  assert.deepEqual(issuesOf(extractionRun([measurement({ presentFields: 4 })])), ["$.extraction[0].presentFields"]);
+  for (const [label, override] of Object.entries({
+    "negative step": { stepIndex: -1 },
+    "fractional records": { observedRecords: 23.5 },
+    "negative unexpected fields": { unexpectedFields: -1 },
+    "fractional non-string values": { nonStringValues: 0.5 },
+    "numeric status": { status: 1 },
+    "negative pages": { pagesFollowed: -1 },
+    "fractional pages": { pagesFollowed: 1.5 },
+    "numeric truncated": { truncated: 1 },
+    "negative duration": { durationMs: -1 },
+    "missing member": { nonStringValues: undefined },
+    "extra numeric member": { recordBytes: 2048 },
+  })) rejects(extractionRun([measurement(override)]), label);
+  assert.equal(validateRunEvaluation(extractionRun([measurement({ pagesFollowed: null, truncated: null, durationMs: null })])).valid, true);
+  rejects({ ...flowRun(), extraction: { 0: measurement() } }, "extraction as an object");
+  assert.deepEqual(issuesOf(without(flowRun(), "extraction")), ["$.extraction"]);
 });
 
 test("facility failures use only the closed diagnostic vocabulary", () => {
@@ -177,7 +265,7 @@ test("identity, repeat index, lane, and measurements are bounded", () => {
   })) rejects({ ...flowRun(), ...mutation }, label);
   for (const key of [
     "scenarioId", "workflowId", "variantId", "repeatIndex", "lane", "flowCreated", "oracleVerdict", "reportedVerdict",
-    "automationFailureReported", "automationFailureExpected", "harnessActivations", "durationMs", "actions", "evidence", "llm",
+    "automationFailureReported", "automationFailureExpected", "harnessActivations", "durationMs", "actions", "evidence", "llm", "extraction",
   ]) rejects(without(flowRun(), key), `missing ${key}`);
   // A harness activation with the provider disabled is a measured Week 1 failure, so the contract must be able to record one.
   assert.equal(validateRunEvaluation({ ...flowRun(), harnessActivations: 2 }).valid, true);

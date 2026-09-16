@@ -20,9 +20,8 @@
 // request is either well formed or it is not this action's request.
 
 import type { JsonObject } from "fluxiq/core";
+import { webAutomationExtractListRequestValue, webAutomationExtractReadValue } from "../actions/extraction";
 import {
-  WEB_AUTOMATION_EXTRACT_MAX_ITEMS,
-  WEB_AUTOMATION_EXTRACT_MAX_PAGES,
   WEB_AUTOMATION_UPLOAD_MAX_FILE_BYTES,
   WEB_AUTOMATION_UPLOAD_MAX_TOTAL_BYTES,
   type WebAutomationActionCommand,
@@ -30,8 +29,7 @@ import {
   type WebAutomationAssertRequest,
   type WebAutomationDialogRequest,
   type WebAutomationDownloadRequest,
-  type WebAutomationExtractListPagination,
-  type WebAutomationExtractListRequest,
+  type WebAutomationElementFingerprint,
   type WebAutomationKeyModifiers,
   type WebAutomationOptionSelector,
   type WebAutomationScrollRequest,
@@ -46,7 +44,7 @@ import { webAutomationUrlPath } from "../output-nodes";
 /** The command fields that come from a gateway command's `parameters` rather than from its target or envelope. */
 export type WebAutomationLiftedActionParameters = Pick<
   WebAutomationActionCommand,
-  "tabId" | "frameId" | "frameUrlPath" | "newTab" | "option" | "scroll" | "wait" | "modifiers" | "checked" | "assert" | "extractList" | "upload" | "dialog" | "tab" | "download"
+  "tabId" | "frameId" | "frameUrlPath" | "newTab" | "option" | "scroll" | "wait" | "modifiers" | "checked" | "assert" | "extract" | "extractList" | "upload" | "dialog" | "tab" | "download"
 >;
 
 /**
@@ -83,7 +81,8 @@ export function webAutomationReadActionParameters(parameters: JsonObject): WebAu
     modifiers: keyModifiersValue(parameters.modifiers),
     checked: booleanValue(parameters.checked),
     assert: assertRequestValue(parameters.assert),
-    extractList: extractListRequestValue(parameters.extractList),
+    extract: webAutomationExtractReadValue(parameters.extract),
+    extractList: webAutomationExtractListRequestValue(parameters.extractList),
     upload: uploadRequestValue(parameters.upload),
     dialog: dialogRequestValue(parameters.dialog),
     tab: tabRequestValue(parameters.tab),
@@ -167,57 +166,6 @@ function assertRequestValue(value: unknown): WebAutomationAssertRequest | undefi
   const expected = stringValue(request.expected);
   const timeoutMs = positiveInteger(request.timeoutMs);
   return { kind, ...(expected !== undefined ? { expected } : {}), ...(timeoutMs !== undefined ? { timeoutMs } : {}) };
-}
-
-/**
- * A list extraction needs both the item selector and the field map; a
- * `paginate` that is present but malformed refuses the whole request rather
- * than quietly reading one page of a request that asked for several.
- *
- * `maxItems` is held to the domain's record bound, as `maxPages` is to its page
- * bound. `minItems` is refused whole the same way `paginate` is when it is sent
- * but unreadable: dropped, the page would apply its default of 1 to a Flow that
- * asked for 0, and fail a read that was allowed to be empty. A minimum above the
- * maximum -- the one named, or the bound when none is -- is refused whole too,
- * because no page could ever satisfy it.
- */
-function extractListRequestValue(value: unknown): WebAutomationExtractListRequest | undefined {
-  const request = jsonObject(value);
-  const item = nonEmptyString(request?.item);
-  const fields = fieldMapValue(request?.fields);
-  if (!request || item === undefined || fields === undefined) return undefined;
-  const paginate = request.paginate === undefined ? undefined : paginationValue(request.paginate);
-  if (request.paginate !== undefined && paginate === undefined) return undefined;
-  const namedMaxItems = positiveInteger(request.maxItems);
-  const maxItems = namedMaxItems === undefined ? undefined : Math.min(namedMaxItems, WEB_AUTOMATION_EXTRACT_MAX_ITEMS);
-  const minItems = nonNegativeInteger(request.minItems);
-  if (request.minItems !== undefined && minItems === undefined) return undefined;
-  if (minItems !== undefined && minItems > (maxItems ?? WEB_AUTOMATION_EXTRACT_MAX_ITEMS)) return undefined;
-  return {
-    item,
-    fields,
-    ...(paginate !== undefined ? { paginate } : {}),
-    ...(maxItems !== undefined ? { maxItems } : {}),
-    ...(minItems !== undefined ? { minItems } : {})
-  };
-}
-
-/** Every field must name a selector: a map with one unusable entry would extract a column of nothing. */
-function fieldMapValue(value: unknown): Record<string, string> | undefined {
-  const fields = jsonObject(value);
-  if (!fields) return undefined;
-  const entries = Object.entries(fields);
-  const named = entries.filter(([name, selector]) => name.length > 0 && nonEmptyString(selector) !== undefined) as [string, string][];
-  return named.length > 0 && named.length === entries.length ? Object.fromEntries(named) : undefined;
-}
-
-/** `maxPages` is held to the domain's own bound, the one the page-side reader also applies, so no Flow pages forever. */
-function paginationValue(value: unknown): WebAutomationExtractListPagination | undefined {
-  const paginate = jsonObject(value);
-  const next = nonEmptyString(paginate?.next);
-  const maxPages = positiveInteger(paginate?.maxPages);
-  if (next === undefined || maxPages === undefined) return undefined;
-  return { next, maxPages: Math.min(maxPages, WEB_AUTOMATION_EXTRACT_MAX_PAGES) };
 }
 
 /**

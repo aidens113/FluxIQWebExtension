@@ -227,6 +227,95 @@ test("every recorded row sent as a domain event maps to what the live input path
   assert.equal(mapCall(observationCall(calls, eventOf("dom.wheel"))), null, "the never-emitted wheel event type proposes nothing");
 });
 
+// -- A recorded extraction, through Core (X4) ---------------------------------
+// This is the cross-repository row: Core's proposal lift parses the
+// `recordOutput` the mapper proposes and rejects the whole candidate when it is
+// invalid (K7), so a candidate that survives here is one Core will approve into
+// a Flow node that saves a dataset.
+
+const EXTRACTION_SENTINEL = "SENTINEL-PAGE-VALUE-FROM-THE-PICKER";
+const extractionRequest = {
+  item: "li.product",
+  fields: {
+    name: { kind: "text", selector: ".name" },
+    link: { kind: "link", selector: "a" },
+    email: { kind: "text", selector: ".email", handling: "exclude" }
+  },
+  paginate: { next: "a.next", maxPages: 3 },
+  maxItems: 200
+};
+const extractionDefinition = {
+  form: "list",
+  datasetId: "products:4f1c9a",
+  label: "Products",
+  itemCount: 24,
+  request: extractionRequest,
+  fieldLabels: { name: "Product name", link: "Link", email: "Email" }
+};
+
+function definedExtraction(extraction: JsonObject, sequence = 2): RecordingEvent {
+  return createWebAutomationRecordingEvent({ kind: "data.extract", sequence, url: "https://example.test/products", title: "Products", eventTimestampMs: 1_000 + sequence, extraction }, { tabId: 7, frameId: 0 });
+}
+
+test("a recorded list extraction proposes extract_list with a recordOutput Core can lift, a scaled timeout, and no confirmation", async () => {
+  const event = definedExtraction({ ...extractionDefinition, samples: [{ name: EXTRACTION_SENTINEL }] });
+  const { web } = await recordThroughCore([{ event }]);
+  assert.equal(web.length, 1, "Core proposes the extraction once");
+  const candidate = web[0] as { outputId: string; sourceInputIds?: string[]; expectedConfirmation?: unknown; recordOutput?: JsonObject; timeoutMs?: number; parameters: JsonObject };
+  assert.equal(candidate.outputId, "web.dom.extract_list");
+  assert.deepEqual(candidate.sourceInputIds, [WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined]);
+  // Core waits for a confirmation input whenever one is set, and the extension
+  // confirms no extract action, so a confirmation would fail every replay.
+  assert.equal("expectedConfirmation" in candidate, false, "an extraction candidate carries no confirmation");
+  assert.equal(candidate.timeoutMs, 30_000, "10,000 ms a page, times the 3 pages the request may read (D14)");
+  assert.deepEqual(candidate.parameters.extractList, extractionRequest);
+
+  const recordOutput = candidate.recordOutput;
+  assert.ok(recordOutput, "the candidate proposes a dataset");
+  assert.equal(recordOutput.datasetId, "products:4f1c9a");
+  assert.equal(recordOutput.writeMode, "append");
+  assert.equal(recordOutput.maxRecords, 200);
+  // Core fills the path from the output's own metadata, so the candidate names none.
+  assert.equal(recordOutput.recordsPath, "extracted", "Core resolved the path from the output definition");
+  const fields = recordOutput.schema as { fields: Array<{ id: string; label: string; valueType: string; required?: boolean; handling?: string }> };
+  assert.deepEqual(fields.fields.map((field) => field.id), ["name", "link", "email"]);
+  for (const field of fields.fields) {
+    assert.match(field.id, /^[A-Za-z0-9_-]{1,100}$/u, `${field.id} is a field id Core accepts`);
+  }
+  assert.equal(fields.fields.find((field) => field.id === "email")?.handling, "exclude", "the excluded column persists, so detection does not propose it again (D12)");
+  assert.equal(fields.fields.find((field) => field.id === "link")?.valueType, "url");
+  assert.equal(JSON.stringify(candidate).includes(EXTRACTION_SENTINEL), false, "no sample value reaches the proposal");
+});
+
+test("a recorded single-value extraction proposes extract_list's sibling, and saves no dataset", async () => {
+  const event = createWebAutomationRecordingEvent(
+    { kind: "data.extract", sequence: 3, url: "https://example.test/order", title: "Order", eventTimestampMs: 1_100, element: { selector: "h1.total", tagName: "h1", id: "total" }, extraction: { form: "value", label: "Order total", read: { mode: "text" } } },
+    { tabId: 7, frameId: 0 }
+  );
+  const { web } = await recordThroughCore([{ event }]);
+  assert.equal(web.length, 1);
+  const candidate = web[0] as { outputId: string; sourceInputIds?: string[]; recordOutput?: unknown; timeoutMs?: number; parameters: JsonObject };
+  assert.equal(candidate.outputId, "web.dom.extract");
+  assert.deepEqual(candidate.sourceInputIds, [WEB_AUTOMATION_INPUT_IDS.valueExtractionDefined]);
+  // Capture replaces an array at the records path, and one value is not a list.
+  assert.equal("recordOutput" in candidate, false, "a single value saves no dataset");
+  assert.equal("timeoutMs" in candidate, false, "and reads one page, so it needs no scaled timeout");
+  assert.deepEqual(candidate.parameters.extract, { mode: "text" });
+});
+
+test("a definition Core or the domain would refuse is proposed as nothing at all", async () => {
+  // Each of these would otherwise reach Core and reject the candidate, with the
+  // Flow already built around it.
+  for (const [why, extraction] of [
+    ["a field key Core refuses", { ...extractionDefinition, request: { ...extractionRequest, fields: { "Product name": { kind: "text" } } } }],
+    ["a dataset id Core refuses", { ...extractionDefinition, datasetId: "products/4f1c" }],
+    ["a request that reads nothing", { ...extractionDefinition, request: { item: "li.product", fields: {} } }]
+  ] as Array<[string, JsonObject]>) {
+    const { web } = await recordThroughCore([{ event: definedExtraction(extraction) }]);
+    assert.deepEqual(web, [], why);
+  }
+});
+
 test("W25: a page change recorded as a domain event between a DOM addition and the click after it stops the wait", async () => {
   const opener = withClickInput(click(1, 900, { url: DELAYED_UI, selector: "#open" }));
   const mutation = { latestEvidence: { kind: "dom.mutation", url: DELAYED_UI, title: "Delayed UI", sequence: 2, timestamp: 1_000, mutation: { added: 1, removed: 0, attributes: 0, text: 0 } } };

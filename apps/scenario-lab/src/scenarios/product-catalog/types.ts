@@ -1,5 +1,18 @@
-/** The catalog's modes: the baseline and one per corpus variant. `set-variant` switches between them. */
-export const catalogVariants = ["baseline", "text-variant", "short-catalog", "no-results"] as const;
+/**
+ * The catalog's modes: the baseline and one per corpus variant. `set-variant`
+ * switches between them.
+ *
+ * The extraction modes change one property of the card or its pagination and
+ * nothing else, so a run that reads them differently has measured that one
+ * property: `sparse-cards` drops a field from some cards, `absolute-links`
+ * rewrites the link's `href` without moving the target, `link-pagination`
+ * makes Next an anchor rather than a button, and `lazy-images` defers the
+ * photo into `data-src`.
+ */
+export const catalogVariants = [
+  "baseline", "text-variant", "short-catalog", "no-results",
+  "sparse-cards", "absolute-links", "link-pagination", "lazy-images",
+] as const;
 
 export type CatalogVariant = (typeof catalogVariants)[number];
 

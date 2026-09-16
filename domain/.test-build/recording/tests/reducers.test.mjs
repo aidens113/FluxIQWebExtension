@@ -19,6 +19,7 @@ var WEB_AUTOMATION_EVENTS = {
   mouseWheel: "web.mouse.wheel",
   scrollChanged: "web.scroll.changed",
   domMutated: "web.dom.mutated",
+  dataExtractionDefined: "web.data.extraction_defined",
   snapshotCaptured: "web.snapshot.captured",
   actionExecuted: "web.action.executed",
   clientError: "web.client.error"

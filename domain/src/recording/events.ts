@@ -56,6 +56,7 @@ const basePayloadSchema: RecordingEventJsonSchema = {
     mutation: { type: "object", label: "DOM mutation summary" },
     snapshot: { type: "object", label: "Snapshot" },
     actionResult: { type: "object", label: "Action result" },
+    extraction: { type: "object", label: "Extraction definition" },
     recordingState: { type: "string", label: "Recording state" }
   }
 };
@@ -85,6 +86,7 @@ export const webAutomationRecordingEvents: RecordingDomainEventDefinition[] = [
   event(WEB_AUTOMATION_EVENTS.mouseWheel, "Mouse wheel", "A user moved the mouse wheel or equivalent pointing-device wheel input."),
   event(WEB_AUTOMATION_EVENTS.scrollChanged, "Scroll changed", "The page or context scroll position changed."),
   event(WEB_AUTOMATION_EVENTS.domMutated, "DOM mutated", "A DOM mutation summary was recorded."),
+  event(WEB_AUTOMATION_EVENTS.dataExtractionDefined, "Data extraction defined", "A user defined a list or value extraction with the picker."),
   event(WEB_AUTOMATION_EVENTS.snapshotCaptured, "Snapshot captured", "A structured page snapshot was captured."),
   event(WEB_AUTOMATION_EVENTS.actionExecuted, "Action executed", "A requested automation action completed."),
   event(WEB_AUTOMATION_EVENTS.clientError, "Client error", "The client reported an error.")

@@ -22,10 +22,20 @@
 // source, so nothing here has to remember to redact it. The keydown path is the
 // exception that does, because a key press carries the value one character at a
 // time and never goes through a value reader -- `recordableKey` handles it.
+//
+// That exception is why it asks the ancestor-aware rule rather than the
+// control's own signature (decision D2). Every other reader moved to
+// `isWithinSensitiveControl`, so a field inside an element marked
+// `data-sensitive` -- not marked itself -- yielded no value, no text and no
+// checked state anywhere, while its keys were still recorded one character at a
+// time and could be reassembled in order. A single rule for "is, or sits inside,
+// a sensitive control" is what keeps a path that reads no value from drifting
+// away from the paths that do.
 
 import { compactObject } from "./compact-object";
 import { describeElement, readElementValue } from "./describe-element";
-import { isSensitiveFormControl, isTextEntryElement, shouldRecordChangeEvent } from "./element-traits";
+import { isTextEntryElement, shouldRecordChangeEvent } from "./element-traits";
+import { isWithinSensitiveControl } from "./sensitive-text";
 import {
   actionEventTarget,
   eventTargetElement,
@@ -170,17 +180,23 @@ export function installRecordingEventListeners(): void {
 /**
  * The key as it may be recorded, or `undefined` when it may not be.
  *
- * A printable key pressed in a sensitive control is that control's value,
- * arriving one character at a time, so it is withheld and only the press
- * survives -- the recording still shows that the field was typed into, which is
- * what a replay needs, without ever carrying what was typed. A key whose name
- * is longer than one character (`Tab`, `Enter`, `Escape`, an arrow, a modifier)
- * carries no content and always travels, because the navigation and submission
- * it performs are the point of recording keys at all.
+ * A printable key pressed in a sensitive control, or in anything inside one, is
+ * that control's value, arriving one character at a time, so it is withheld and
+ * only the press survives -- the recording still shows that the field was typed
+ * into, which is what a replay needs, without ever carrying what was typed. A
+ * key whose name is longer than one character (`Tab`, `Enter`, `Escape`, an
+ * arrow, a modifier) carries no content and always travels, because the
+ * navigation and submission it performs are the point of recording keys at all.
+ *
+ * The question is asked of the element's ancestors as well as of itself
+ * (`isWithinSensitiveControl`, `sensitive-text.ts`): an ordinary text field
+ * inside a group marked `data-sensitive` holds part of what that group holds,
+ * and its keys were the last route by which those characters still left the
+ * page.
  */
 function recordableKey(key: string, target: Element | null): string | undefined {
   if (!target || [...key].length !== 1) return key;
-  return isSensitiveFormControl(target) ? undefined : key;
+  return isWithinSensitiveControl(target) ? undefined : key;
 }
 
 /**

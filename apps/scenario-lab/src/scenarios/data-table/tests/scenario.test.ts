@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { resolveScenarioWorkflow, validateWebScenario } from "@fluxiq-web-extension/test-contracts";
-import { defaultColumnOrder, inventoryRows } from "../inventory.js";
+import { defaultColumnOrder, inventoryRows, LARGE_INVENTORY_ROWS } from "../inventory.js";
 import { dataTableScenario } from "../scenario.js";
 import type { DataTableState } from "../table-state.js";
 
@@ -156,4 +156,77 @@ test("a sorted render persists the order, marks only the sorted header, and embe
 
 test("the fixture serves only its start page", () => {
   assert.equal(dataTableScenario.route, undefined);
+});
+
+test("large-table arms 2,000 distinct rows and expects the read to stop at the 1,000-record cap and say so", () => {
+  const resolved = resolveScenarioWorkflow(manifest, { variantId: "large-table" });
+  assert.deepEqual(resolved.variant?.arm, { operation: "load-large-inventory" });
+  assert.deepEqual(resolved.expected.extracted, [{ step: "extract-inventory", count: 1000, truncated: true }]);
+  // The expectation is only meaningful while the page holds more rows than the cap.
+  assert.ok(LARGE_INVENTORY_ROWS > 1000, "the table must exceed the cap for truncation to be observable");
+  assert.deepEqual(resolved.recordingScript, resolveScenarioWorkflow(manifest).recordingScript, "the variant never changes the recording");
+
+  const armed = apply(seeded(), "load-large-inventory");
+  assert.equal(armed.rows.length, LARGE_INVENTORY_ROWS);
+  assert.deepEqual([armed.lastOperation, armed.sort], ["large-inventory-loaded", null]);
+  for (const key of ["id", "product"] as const) {
+    assert.equal(new Set(armed.rows.map((row) => row[key])).size, LARGE_INVENTORY_ROWS, `${key} values stay distinct, so a truncated read cannot look de-duplicated`);
+  }
+  assert.deepEqual(armed.view.rowOrder, armed.rows.map((row) => row.id));
+  assert.equal(armed.view.description, "Not sorted");
+  assert.deepEqual(armed.rows[0], { ...inventoryRows[0], id: "sku-9001", product: `${inventoryRows[0]?.product} #1` });
+});
+
+test("the large table renders every row through the same headers, so extraction reads it the ordinary way", () => {
+  const html = dataTableScenario.render(apply(seeded(), "load-large-inventory"), context);
+  assert.deepEqual(headersOf(html), ["Product", "Category", "Price", "Stock"]);
+  assert.equal(rowsOf(html).length, LARGE_INVENTORY_ROWS);
+  assert.match(html, /<p data-testid="row-count">2000 products<\/p>/);
+  assert.match(html, /<p data-testid="sort-status" role="status">Not sorted<\/p>/);
+  assert.doesNotMatch(html, /data-testid="empty-inventory"/, "a full table shows no empty state");
+  assert.deepEqual(recordsByHeader(html)[0], { product: "Ceramic pour-over set #1", category: "Kitchen", price: "$34.00", stock: "18" });
+});
+
+test("the empty-table workflow declares minItems: 0, and its no-rows variant expects an empty list", () => {
+  const workflow = resolveScenarioWorkflow(manifest, { workflowId: "empty-table" });
+  const step = workflow.recordingScript.find(({ operation }) => operation === "extract");
+  assert.deepEqual(step, { id: "extract-any-inventory", operation: "extract", target: "testid:inventory-row", fields: byHeader, minItems: 0 });
+  assert.deepEqual(workflow.expected.extracted, [{ step: "extract-any-inventory", count: 12, records: everyRow }]);
+
+  const empty = resolveScenarioWorkflow(manifest, { workflowId: "empty-table", variantId: "no-rows" });
+  assert.deepEqual(empty.variant?.arm, { operation: "clear-inventory" });
+  assert.deepEqual(empty.expected.extracted, [{ step: "extract-any-inventory", count: 0, records: [] }]);
+  assert.deepEqual(empty.expected.finalState?.map(({ subject, value }) => [subject, value]), [["row-count", "0 products"], ["empty-inventory", "No products are listed."]]);
+  // D4's rule is what makes the empty expectation reachable, so pin it here too.
+  assert.equal(step?.minItems, 0, "an extract step fails on an empty list unless it declares minItems: 0");
+});
+
+test("clear-inventory empties the table but keeps the headers a column field resolves through", () => {
+  const cleared = apply(seeded(), "clear-inventory");
+  assert.deepEqual(cleared.rows, []);
+  assert.deepEqual([cleared.lastOperation, cleared.sort], ["inventory-cleared", null]);
+  assert.deepEqual(cleared.view, { rowOrder: [], description: "Not sorted" });
+  assert.deepEqual(cleared.columnOrder, defaultColumnOrder, "the columns survive the rows");
+
+  const html = dataTableScenario.render(cleared, context);
+  assert.deepEqual(headersOf(html), ["Product", "Category", "Price", "Stock"], "headers render with no rows, so column: fields still resolve");
+  assert.equal(rowsOf(html).length, 0);
+  assert.match(html, /<caption>Current stock by product<\/caption>/);
+  assert.match(html, /<p data-testid="row-count">0 products<\/p>/);
+  assert.match(html, /<p data-testid="empty-inventory">No products are listed\.<\/p>/);
+});
+
+test("clearing and loading drop a sort rather than describing one the table no longer has", () => {
+  const sorted = apply(seeded(), "sort", { column: "price" });
+  assert.equal(sorted.view.description, "Sorted by Price, ascending");
+  for (const operation of ["clear-inventory", "load-large-inventory"]) {
+    const next = apply(sorted, operation);
+    assert.equal(next.sort, null, operation);
+    assert.equal(next.view.description, "Not sorted", operation);
+    assert.equal(next.sortCount, sorted.sortCount, `${operation} reports no new sort`);
+  }
+  const untouched = structuredClone(sorted);
+  apply(sorted, "clear-inventory");
+  apply(sorted, "load-large-inventory");
+  assert.deepEqual(sorted, untouched, "mutate does not modify its input");
 });

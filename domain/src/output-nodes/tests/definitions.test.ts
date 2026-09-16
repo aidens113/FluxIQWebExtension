@@ -160,3 +160,27 @@ test("element targeting is declared by exactly the actions that cannot run witho
     assert.equal(nodeFor(outputId).metadata?.elementTarget === true, requiresSelector, `${outputId}: element targeting must follow its schema`);
   }
 });
+
+test("the list extraction tells Core where its records are, and no other node claims to return records", () => {
+  // Core's record capture reads `outputs.result` at `recordsPath`
+  // (`runtime/executor/record-capture.ts`), and its proposal lift defaults that
+  // path from the output's `metadata.recordsPath` (Core CD19), rejecting a
+  // candidate with none. Core never hard-codes `extracted`, so without this key
+  // a recorded list extraction cannot become a node that saves its records.
+  assert.equal(nodeFor("web.dom.extract_list").metadata?.recordsPath, "extracted");
+  // `web.dom.extract` answers on `extracted` too, but with one value rather than
+  // a list, so a default path there could never capture anything.
+  const declared = WEB_AUTOMATION_ACTION_TYPES.filter((outputId) => nodeFor(outputId).metadata?.recordsPath !== undefined);
+  assert.deepEqual(declared, ["web.dom.extract_list"]);
+});
+
+test("the list extraction offers a timeout, because a paginated read outlasts Core's default (D14)", () => {
+  // The request carries no timeout of its own: the command's `timeoutMs` is the
+  // one the page honours, and this parameter is where a node states it.
+  const parameter = nodeFor("web.dom.extract_list").parameters.find((candidate) => candidate.id === "timeoutMs");
+  assert.ok(parameter, "web.dom.extract_list offers no timeoutMs parameter");
+  assert.equal(parameter.valueType, "number");
+  assert.equal(parameter.defaultValue, 10_000, "the same default as every element-scoped action");
+  assert.equal(parameter.required, undefined, "a timeout is optional");
+  assert.equal(parameter.allowStateBinding, true);
+});

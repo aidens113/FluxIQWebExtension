@@ -1,5 +1,6 @@
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_EVENTS, type WebAutomationEventType } from "../constants";
+import { webAutomationExtractListRequestValue, webAutomationRecordedExtraction } from "../actions/extraction";
 import { webAutomationActionDefinitions } from "../actions/schemas";
 import type { WebAutomationActionType } from "../actions/types";
 import { webAutomationOutputPayload, webAutomationSecretBindingPath, webAutomationUploadBindingPath } from "../output-nodes";
@@ -17,7 +18,12 @@ export const WEB_AUTOMATION_INPUT_IDS = {
   pageScrolled: "web.user.page_scrolled",
   filesChosen: "web.user.files_chosen",
   tabSwitched: "web.user.tab_switched",
-  tabClosed: "web.user.tab_closed"
+  tabClosed: "web.user.tab_closed",
+  // Two inputs, because an input maps to exactly one output and the two forms
+  // of a recorded extraction run different verbs: a list saves a dataset, a
+  // single value answers with one value and saves none.
+  dataExtractionDefined: "web.user.data_extraction_defined",
+  valueExtractionDefined: "web.user.value_extraction_defined"
 } as const;
 
 export type WebAutomationInputId = typeof WEB_AUTOMATION_INPUT_IDS[keyof typeof WEB_AUTOMATION_INPUT_IDS];
@@ -33,6 +39,8 @@ export type WebAutomationRecordedInputPayload = {
   scroll?: JsonObject;
   /** A recorded tab switch or close, as `client/gateway-mapping.ts` `WebAutomationRecordedTab` puts it on the wire. */
   tab?: JsonObject;
+  /** A recorded extraction definition, as `actions/extraction/recorded-definition.ts` rebuilds it. */
+  extraction?: JsonObject;
   metadata?: JsonObject;
 };
 
@@ -59,6 +67,7 @@ export function webAutomationEventTypeForClientKind(kind: string): WebAutomation
   if (kind === "dom.scroll") return WEB_AUTOMATION_EVENTS.scrollChanged;
   if (kind === "dom.mutation") return WEB_AUTOMATION_EVENTS.domMutated;
   if (kind === "dom.snapshot") return WEB_AUTOMATION_EVENTS.snapshotCaptured;
+  if (kind === "data.extract") return WEB_AUTOMATION_EVENTS.dataExtractionDefined;
   if (kind === "action.result") return WEB_AUTOMATION_EVENTS.actionExecuted;
   return WEB_AUTOMATION_EVENTS.clientError;
 }
@@ -103,7 +112,9 @@ export const actionInputDefinitions = [
   [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"],
   [WEB_AUTOMATION_INPUT_IDS.filesChosen, "Files chosen", "web.dom.upload"],
   [WEB_AUTOMATION_INPUT_IDS.tabSwitched, "Tab switched", "web.browser.tab"],
-  [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"]
+  [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"],
+  [WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined, "Data extraction defined", "web.dom.extract_list"],
+  [WEB_AUTOMATION_INPUT_IDS.valueExtractionDefined, "Value extraction defined", "web.dom.extract"]
 ] as const;
 
 const OUTPUT_FOR_ACTION_INPUT = new Map<WebAutomationInputId, WebAutomationActionType>(
@@ -129,6 +140,15 @@ function recordedActionInputId(eventType: string, payload: JsonObject, metadata:
       return WEB_AUTOMATION_INPUT_IDS.pageScrolled;
     case WEB_AUTOMATION_EVENTS.tabStateChanged:
       return recordedTabInputId(payload);
+    // An extraction the user defined with the picker. Which input it is depends
+    // on the form the definition declares, and a definition the reader refuses
+    // is not one: it stays evidence rather than becoming an extraction that
+    // reads something other than what was picked.
+    case WEB_AUTOMATION_EVENTS.dataExtractionDefined: {
+      const definition = webAutomationRecordedExtraction(payload.extraction);
+      if (definition === undefined) return undefined;
+      return definition.form === "value" ? WEB_AUTOMATION_INPUT_IDS.valueExtractionDefined : WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined;
+    }
     case WEB_AUTOMATION_EVENTS.elementInputChanged:
     case WEB_AUTOMATION_EVENTS.elementChanged: {
       const element = objectValue(payload.element);
@@ -214,9 +234,14 @@ function hasExecutableParameters(outputId: WebAutomationActionType, parameters: 
  *   the recording invented, and a secret request is not a file list.
  * - `tab` as a close, or as a switch naming its tab by path. A switch naming
  *   nothing would go to whichever tab happened to be in front.
+ * - `extractList` exactly when the request reader reads it. The reader is the
+ *   one that decides what the page will be asked to do, so a request it would
+ *   refuse at dispatch must not become a node here either: the node would reach
+ *   Core, dispatch, and be refused with the Flow already built around it.
  */
 function isExecutableRequiredParameter(key: string, value: unknown): boolean {
   if (key === "upload") return webAutomationUploadBindingPath(value) !== undefined;
+  if (key === "extractList") return webAutomationExtractListRequestValue(value) !== undefined;
   if (key === "tab") {
     const tab = objectValue(value);
     return tab?.operation === "close" || (tab?.operation === "switch" && isNonEmptyString(tab.urlPath));

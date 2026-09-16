@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { getAutomationNodeDefinition, parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
 
+// src/actions/extraction/read-request.ts
+var REFUSED = Symbol("refused");
+
 // src/actions/types.ts
 var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 

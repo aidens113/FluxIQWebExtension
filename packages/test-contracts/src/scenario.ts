@@ -20,11 +20,14 @@ export type NetworkPolicy = "loopback-only" | "allowlisted-real-site";
 
 /**
  * Operations a recording script may perform. The recording lane drives each
- * through Playwright while the extension records. `extract` is the runner's own
- * data-extraction check, never recorded as an extract action. Without
- * `pagination` it only reads the page. With it, the step reaches each further
- * page as trusted input -- in the default `next` mode by clicking `next` -- and
- * the extension records those clicks (`recordableActionTypes`).
+ * through Playwright while the extension records. `extract` reads the page and
+ * is recorded as a data-extraction action: the extraction intent puts one
+ * extract node in the recording, which the domain maps to `web.dom.extract_list`,
+ * or to `web.dom.extract` for a single-element read. With `pagination` the step
+ * reaches each further page as trusted input -- in the default `next` mode by
+ * clicking `next` -- but those clicks belong to that one node, so a paginated
+ * step yields the same types as an unpaginated one and no `web.dom.click`
+ * (`recordableActionTypes`).
  */
 export const scenarioStepOperations = [
   "click",

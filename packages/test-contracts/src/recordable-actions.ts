@@ -18,13 +18,11 @@ import type { ScenarioStepOperation } from "./scenario.js";
  * - `press` records the key, and a key can change the focused control's value.
  * - `check` sets the control by clicking it.
  * - `navigate` loads a URL directly, which the recorder marks `typed`.
- *
- * `extract` is the runner's own check, not a user action, so no recording holds
- * a `web.dom.extract`. Without `pagination` it only reads the page and yields
- * nothing. With it, the step clicks `next` as trusted input to reach each
- * further page, and the extension records those clicks
- * (`scenario-steps/extract-records.ts`), so it yields what a click yields.
- *
+ * - `extract` is recorded as a data-extraction action, not as the clicks it
+ *   makes: the extraction intent puts an extract node in the recording, which
+ *   the domain maps to `web.dom.extract_list`, or to `web.dom.extract` for a
+ *   single-element read. Pagination belongs to that one node, so a paginated
+ *   step yields the same two types as an unpaginated one and no `web.dom.click`.
  * - `upload` sets a file input's files as trusted input. The extension records
  *   the change, and the domain maps a file choice to `web.dom.upload`.
  * - `switchTab` brings another open tab to the front and `closeTab` closes the
@@ -52,7 +50,7 @@ const ACTIONS_BY_OPERATION: Readonly<Record<ScenarioStepOperation, readonly stri
   switchTab: ["web.browser.tab"],
   closeTab: ["web.browser.tab"],
   waitForDownload: [],
-  extract: [],
+  extract: ["web.dom.extract_list", "web.dom.extract"],
 };
 
 /**
@@ -60,13 +58,11 @@ const ACTIONS_BY_OPERATION: Readonly<Record<ScenarioStepOperation, readonly stri
  * `expected.actions` entry outside this set cannot be met by any run, so it is
  * a defect in the scenario, never a product failure.
  */
-export function recordableActionTypes(script: readonly { operation?: unknown; pagination?: unknown }[]): ReadonlySet<string> {
+export function recordableActionTypes(script: readonly { operation?: unknown }[]): ReadonlySet<string> {
   const types = new Set<string>();
-  for (const { operation, pagination } of script) {
+  for (const { operation } of script) {
     if (typeof operation !== "string" || !Object.hasOwn(ACTIONS_BY_OPERATION, operation)) continue;
-    // A paginated extract follows `next` by clicking it, and those clicks are recorded.
-    const yields = operation === "extract" && pagination !== undefined ? ACTIONS_BY_OPERATION.click : ACTIONS_BY_OPERATION[operation as ScenarioStepOperation];
-    for (const type of yields) types.add(type);
+    for (const type of ACTIONS_BY_OPERATION[operation as ScenarioStepOperation]) types.add(type);
   }
   return types;
 }

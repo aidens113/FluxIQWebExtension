@@ -1,11 +1,12 @@
 import type { FluxIQ } from "fluxiq";
 import { AutomationStudioNativeNodeRuntime, type AutomationStudioRecordingMapperCandidate, type AutomationStudioRecordingMapperContext, type AutomationStudioRecordingMapperObservation } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
+import { webAutomationExtractListTimeoutMs, webAutomationRecordedExtraction } from "./actions/extraction";
 import { WEB_AUTOMATION_ACTION_TYPES } from "./actions/types";
 import { WEB_AUTOMATION_DOMAIN_ID } from "./constants";
 import { GatewayInputHub } from "./io/gateway-input-hub";
 import { dispatchWebAutomationOutput } from "./io/gateway-output-dispatcher";
-import { webAutomationRecordedAction } from "./io/input-model";
+import { WEB_AUTOMATION_INPUT_IDS, webAutomationRecordedAction, type WebAutomationRecordedAction } from "./io/input-model";
 import { webAutomationManifestInputs, webAutomationManifestOutputs } from "./io/manifest-definitions";
 import { webAutomationDomain } from "./manifest";
 import {
@@ -17,7 +18,7 @@ import {
   WEB_AUTOMATION_RUNTIME_PERMISSIONS
 } from "./output-nodes/native-runtime";
 import { webAutomationRecordingDomain } from "./recording/domain";
-import { webAutomationLateTargetWait } from "./recording/proposals";
+import { webAutomationLateTargetWait, webAutomationRecordOutput } from "./recording/proposals";
 import { WEB_AUTOMATION_STATE_NAMESPACE } from "./recording/state";
 import { WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID } from "./recording/web-state";
 import { webAutomationOutputPayload } from "./web-panel/output-nodes";
@@ -107,8 +108,16 @@ const CANDIDATE_LABELS: Partial<Record<string, string>> = {
   "web.dom.keypress": "Press key",
   "web.dom.scroll": "Scroll",
   "web.dom.upload": "Upload files",
-  "web.browser.tab": "Browser tab"
+  "web.browser.tab": "Browser tab",
+  "web.dom.extract_list": "Extract list",
+  "web.dom.extract": "Extract value"
 };
+
+/** The two inputs a recorded extraction resolves to, which propose a candidate of their own. */
+const EXTRACTION_INPUT_IDS: ReadonlySet<string> = new Set([
+  WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined,
+  WEB_AUTOMATION_INPUT_IDS.valueExtractionDefined
+]);
 
 /**
  * Recording -> Subflow mapper. It resolves each observation through the same
@@ -133,6 +142,7 @@ export function mapWebRecordingObservation(observation: AutomationStudioRecordin
   const step = recordedStep(observation);
   const action = webAutomationRecordedAction(step.eventType, step.payload, step.metadata);
   if (!action) return linkedClickEntry(observation, context?.following ?? []) ?? webAutomationLateTargetWait(step, (context?.following ?? []).map(recordedStep)) ?? null;
+  if (EXTRACTION_INPUT_IDS.has(action.inputId)) return extractionCandidate(action, step.payload);
   const expectedState = action.outputId === "web.dom.click" ? webAutomationClickLandingExpectation(step, (context?.following ?? []).map(recordedStep)) : undefined;
   return candidate(action.outputId, action.parameters, action.inputId, CANDIDATE_LABELS[action.outputId] ?? action.outputId, expectedState);
 }
@@ -156,6 +166,36 @@ function recordedEventPayload(observation: AutomationStudioRecordingMapperObserv
     return (readObject(observation.payload.payload) ?? observation.payload) as JsonObject;
   }
   return observation.payload;
+}
+
+/**
+ * A recorded extraction's candidate, which differs from every other action's in
+ * three ways.
+ *
+ * - **It carries no `expectedConfirmation`.** Core waits for the confirmation
+ *   input whenever one is set (`runtime/io-policy.ts`), and the extension
+ *   confirms no extract action, so a confirmation would fail every replay after
+ *   five seconds. The late-target wait omits it for the same reason.
+ * - **A list carries a `recordOutput`**, which is what makes the approved node
+ *   save its rows as a dataset. The single-value form carries none: capture
+ *   replaces an array at the records path, and one value is not a list.
+ * - **A list carries a scaled `timeoutMs`.** Core sends the node's timeout as
+ *   the command timeout, defaulting to 5,000 ms, which would cut a paginated
+ *   read short at its first page (D14).
+ */
+function extractionCandidate(action: WebAutomationRecordedAction, payload: JsonObject): AutomationStudioRecordingMapperCandidate {
+  const definition = webAutomationRecordedExtraction(payload.extraction);
+  const list = definition?.form === "list" ? definition : undefined;
+  return {
+    outputId: action.outputId,
+    parameters: compact(action.parameters),
+    // Action-role, which is what Core requires of a source input
+    // (`proposal-candidates.ts`); both extraction inputs are registered as one.
+    sourceInputIds: [action.inputId],
+    ...(list ? { recordOutput: webAutomationRecordOutput(list), timeoutMs: webAutomationExtractListTimeoutMs(list.request) } : {}),
+    confidence: 0.9,
+    label: CANDIDATE_LABELS[action.outputId] ?? action.outputId
+  };
 }
 
 function candidate(outputId: string, parameters: JsonObject, sourceInputId: string, label: string, expectedState?: JsonObject): AutomationStudioRecordingMapperCandidate {

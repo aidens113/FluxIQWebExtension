@@ -9,12 +9,24 @@
 // So this verb's own post-condition is the arming, not the dialog: it passes
 // when the page-world override acknowledged it, and is refused when the
 // override is absent, which is what makes an unanswerable dialog fail fast
-// instead of hanging. The dialog the override handled last is carried as
-// evidence, so the action after a dialog reports what was actually answered.
+// instead of hanging. The dialog the override handled last is carried as the
+// result's `dialog`, so the action after a dialog reports what was actually
+// answered. It never rides on `extracted`, which holds only what a read took
+// off the page.
+//
+// A prompt's `promptText` is not the page's text: `page-world/dialog-override.ts`
+// records the answer the prompt returned. That is the text a Flow supplied,
+// which may be a run input, or the page's default when none was supplied, or
+// what a person typed into a prompt nothing had armed. It is user data, as a
+// typed value is, and there is no element whose sensitivity could clear it, so
+// it is always withheld the way a sensitive typed value is (decision D2): by
+// `describeFieldValue`'s length marker, never its content. The page's own
+// `message` is carried as it was.
 
-import type { BrowserActionCommand, BrowserActionResult, JsonValue } from "../types";
+import type { BrowserActionCommand, BrowserActionResult } from "../types";
 import type { ObservedDialog } from "../action-runtime";
 import type { ContentActionDependencies } from "./types";
+import { describeFieldValue } from "./value-redaction";
 
 export function dialogAction(action: BrowserActionCommand, deps: ContentActionDependencies, startedAt: number): BrowserActionResult {
   const request = action.dialog;
@@ -29,7 +41,7 @@ export function dialogAction(action: BrowserActionCommand, deps: ContentActionDe
   const previous = deps.dialogControl.observed();
   const evidence = {
     snapshot: deps.captureSnapshot(),
-    ...(previous ? { extracted: observedAsJson(previous) } : {})
+    ...(previous ? { dialog: observedDialogEvidence(previous) } : {})
   };
 
   if (!armed) {
@@ -42,13 +54,16 @@ export function dialogAction(action: BrowserActionCommand, deps: ContentActionDe
   }, evidence);
 }
 
-/** The handled dialog as evidence. Its message is the page's own text, which Phase 1.4 redacts. */
-function observedAsJson(observed: ObservedDialog): JsonValue {
+/**
+ * The handled dialog as evidence, field by field. Its message is the page's own
+ * text, which Phase 1.4 redacts; a prompt's answer is withheld to its length.
+ */
+function observedDialogEvidence(observed: ObservedDialog): NonNullable<BrowserActionResult["dialog"]> {
   return {
     kind: observed.kind,
     message: observed.message,
     response: observed.response,
     at: observed.at,
-    ...(observed.promptText === undefined ? {} : { promptText: observed.promptText })
+    ...(observed.promptText === undefined ? {} : { promptText: describeFieldValue(observed.promptText, true) })
   };
 }

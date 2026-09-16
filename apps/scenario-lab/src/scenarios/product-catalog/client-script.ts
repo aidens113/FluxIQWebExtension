@@ -43,7 +43,11 @@ document.querySelector('[data-testid="search-form"]').addEventListener('submit',
 });
 inStockOnly.addEventListener('change', () => { void show({ page: 1, query: view.query, inStockOnly: inStockOnly.checked }); });
 results.addEventListener('click', (event) => {
-  const control = event.target.closest('button[data-page]');
-  if (control) void show({ ...view, page: Number(control.dataset.page) });
+  const control = event.target.closest('[data-page]');
+  if (!control) return;
+  // link-pagination renders Next as an anchor, so the default navigation has
+  // to be stopped; on a button preventDefault does nothing.
+  event.preventDefault();
+  void show({ ...view, page: Number(control.dataset.page) });
 });`;
 }

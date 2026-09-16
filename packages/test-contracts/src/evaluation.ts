@@ -2,8 +2,8 @@ import type { AutomationStudioAdaptiveFailureClass } from "./failure-category.js
 import type { LlmExecutionProfile } from "./llm.js";
 import type { ExpectedFailure } from "./scenario.js";
 
-/** Schema written by new `RunEvaluation` producers. */
-export const EVALUATION_SCHEMA_VERSION = "0.2" as const;
+/** Schema written by new `RunEvaluation` producers. 0.1 and 0.2 are read as 0.3 (`validateRunEvaluation`). */
+export const EVALUATION_SCHEMA_VERSION = "0.3" as const;
 /** Candidate comparisons did not change with the run-evaluation diagnostic. */
 export const CANDIDATE_COMPARISON_SCHEMA_VERSION = "0.1" as const;
 
@@ -85,6 +85,43 @@ export type LlmUsageMode = (typeof llmUsageModes)[number];
 export type LlmUsage = { mode: LlmUsageMode; profileId: string | null; calls: number };
 
 /**
+ * Whether an extraction step's records were judged against the workflow's
+ * expectation (`judged`), the step was expected but never ran (`not_run`), or
+ * the step ran with no expectation to judge it by (`not_expected`).
+ */
+export const extractionMeasurementStatuses = ["judged", "not_run", "not_expected"] as const;
+export type ExtractionMeasurementStatus = (typeof extractionMeasurementStatuses)[number];
+
+/**
+ * One extraction step of a run, measured. **Counts and flags only** (D6): no
+ * step id, field name, selector, or page value ever enters it, so an
+ * evaluation can be shared without carrying what a page showed. `status` is
+ * the one string, and it is a closed vocabulary.
+ *
+ * `matchedRecords` never exceeds `expectedRecords` or `observedRecords`, and
+ * `presentFields` never exceeds `expectedFields`. `pagesFollowed`,
+ * `truncated`, and `durationMs` are `null` when the step did not report them.
+ */
+export type RunExtractionMeasurement = {
+  /** The step's position in the workflow's script, from 0. */
+  stepIndex: number;
+  status: ExtractionMeasurementStatus;
+  expectedRecords: number;
+  observedRecords: number;
+  /** Observed records equal to an expected record. */
+  matchedRecords: number;
+  expectedFields: number;
+  /** Expected fields the observed records carried. */
+  presentFields: number;
+  /** Fields the observed records carried that the expectation does not name. */
+  unexpectedFields: number;
+  pagesFollowed: number | null;
+  truncated: boolean | null;
+  durationMs: number | null;
+  /** Observed field values that were not strings. */
+  nonStringValues: number;
+};
+/**
  * One run's evaluation. `verdict`, `failureCategory`, `invariants`, and
  * `metrics` judge the run as a test; every later field is a per-run
  * measurement the Week 1 Metrics table aggregates into a `BenchReport`.
@@ -135,6 +172,12 @@ export type RunEvaluation = {
   actions: RunActionLatency[];
   evidence: RunEvidenceSizes;
   llm: LlmUsage;
+  /**
+   * One measurement per extraction step, in step order; `[]` when the run
+   * measured extraction and had no extraction step. `null` when extraction was
+   * not measured, as in every evaluation written before schema 0.3 (D7).
+   */
+  extraction: RunExtractionMeasurement[] | null;
   /** Week 2 measurements: `null` in Week 1, reserved so the schema is already present. */
   harnessRecovery: null;
   adaptationCost: null;

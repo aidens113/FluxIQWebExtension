@@ -4,6 +4,7 @@ import {
   BENCH_TOLERANCE,
   ContractValidationError,
   assertBenchReport,
+  benchExtractionRateMetrics,
   benchFlakeClasses,
   benchRateMetrics,
   benchTargets,
@@ -296,4 +297,102 @@ test("the validator rejects a comparison that contradicts its tolerance or this 
   rejects({ ...candidate, comparison: "none" }, "comparison not an object");
   rejects(withEntry(0, { note: "x" }), "unknown entry property");
   assert.throws(() => parseBenchReportJson("{"), ContractValidationError);
+});
+
+/** The Flow lane's extraction over two of its three results: six judged steps, three unjudged, 144 expected records. */
+const extractionMetrics = (overrides = {}) => ({
+  judgedSteps: 6, unjudgedSteps: 3,
+  extractionRecordAccuracy: rate(140, 144, 2), extractionCountAccuracy: rate(5, 6, 2), extractionExactSuccess: rate(4, 6, 2),
+  extractionFieldCompleteness: rate(17, 18, 2), paginationAccuracy: rate(6, 6, 2), extractionFalseSuccess: rate(1, 6, 2),
+  extractionDurationMs: spread(9, 300, 900), extractionMsPerPage: spread(9, 100, 250), ...overrides,
+});
+const extracted = (byLane = { flow: extractionMetrics() }, overrides = {}) => report({ metrics: metrics({ extractionByLane: byLane }), ...overrides });
+const extractionPath = (lane, member) => `$.metrics.extractionByLane.${lane}${member ? `.${member}` : ""}`;
+
+test("an extraction block validates and round-trips; a report without one is valid and reads as unmeasured", () => {
+  assert.deepEqual([...benchExtractionRateMetrics], ["extractionRecordAccuracy", "extractionCountAccuracy", "extractionExactSuccess", "extractionFieldCompleteness", "paginationAccuracy", "extractionFalseSuccess"]);
+  assert.deepEqual(issuesOf(extracted()), []);
+  assert.deepEqual(parseBenchReportJson(JSON.stringify(extracted())), extracted());
+  assert.equal(extracted().schemaVersion, "0.1"); // the block is optional, so the schema version stays 0.1
+  // 144 expected records exceed the lane's 3 results times 3 repeats: records are not runs, so that bound does not apply.
+  assert.equal(extracted().metrics.extractionByLane.flow.extractionRecordAccuracy.total > 9, true);
+  // Both lanes, each bounded by its own results: the recording lane lists one.
+  const recording = extractionMetrics({ extractionRecordAccuracy: rate(24, 24, 1), extractionCountAccuracy: rate(1, 1, 1), extractionExactSuccess: rate(1, 1, 1), extractionFieldCompleteness: rate(3, 3, 1), paginationAccuracy: rate(1, 1, 1), extractionFalseSuccess: rate(0, 1, 1) });
+  assert.deepEqual(issuesOf(extracted({ recording, flow: extractionMetrics() })), []);
+  assert.deepEqual(issuesOf(extracted({ recording: extractionMetrics(), flow: extractionMetrics() })), benchExtractionRateMetrics.map((metric) => extractionPath("recording", `${metric}.workflows`)));
+  // Absent: every report written before extraction was measured, laned or not.
+  for (const older of [report(), legacy(), smoke(), covered()]) assert.equal(Object.hasOwn(parseBenchReportJson(JSON.stringify(older)).metrics, "extractionByLane"), false, older.reportId);
+  assert.deepEqual(issuesOf(extracted({})), []); // an empty block measured nothing on either lane
+});
+
+test("extraction rates are counts over totals: matched records never outnumber expected ones", () => {
+  assert.deepEqual(issuesOf(extracted({ flow: extractionMetrics({ extractionRecordAccuracy: rate(145, 144, 2) }) })), [extractionPath("flow", "extractionRecordAccuracy.count")]);
+  for (const [label, override] of Object.entries({
+    "rate not count over total": { extractionCountAccuracy: { ...rate(5, 6, 2), rate: 0.5 } }, "null rate with a total": { paginationAccuracy: { ...rate(6, 6, 2), rate: null } },
+    "rate without a total": { extractionFalseSuccess: { count: 0, total: 0, workflows: 0, rate: 0 } }, "population beyond the lane's results": { extractionExactSuccess: rate(4, 6, 4) },
+    "empty population with a total": { extractionFieldCompleteness: rate(17, 18, 0) }, "fractional count": { extractionRecordAccuracy: rate(140.5, 144, 2) },
+    "negative judged steps": { judgedSteps: -1 }, "fractional unjudged steps": { unjudgedSteps: 0.5 },
+    "p50 above p95": { extractionMsPerPage: spread(9, 300, 250) }, "percentiles without samples": { extractionDurationMs: spread(0, 1, 1) },
+    "unknown rate": { extractionSpeed: rate(1, 1, 1) }, "a planted field value": { sampleValue: "4242424242424242" }, "a field name": { fieldNames: ["price"] },
+    "missing rate": { extractionFalseSuccess: undefined }, "missing distribution": { extractionMsPerPage: undefined },
+  })) rejects(extracted({ flow: extractionMetrics(override) }), label);
+  rejects(extracted("flow"), "block as a string"); rejects(extracted({ flow: [] }), "lane as a list");
+});
+
+test("extraction is per lane: refused on a lane without results, and in a report whose results state no lane", () => {
+  assert.deepEqual(issuesOf({ ...smoke(), metrics: { ...smoke().metrics, extractionByLane: { flow: extractionMetrics() } } }), [extractionPath("flow")]);
+  assert.deepEqual(issuesOf(extracted({ replay: extractionMetrics() })), [extractionPath("replay")]);
+  const older = legacy();
+  assert.deepEqual(issuesOf({ ...older, metrics: { ...older.metrics, extractionByLane: { recording: extractionMetrics({ judgedSteps: 0 }) } } }), ["$.metrics.extractionByLane"]);
+});
+
+test("extraction comparisons hold accuracy within one record and success rates within one workflow", () => {
+  const candidate = extracted();
+  const outcome = (metric, base) => compareBenchMetric(metric, base, candidate)?.outcome;
+  // Record accuracy: 140 of 144. One record either way is equivalent; two is not.
+  assert.equal(compareBenchMetric("extraction:flow:extractionRecordAccuracy", 141 / 144, candidate).tolerance, 1 / 144);
+  assert.deepEqual([141, 139, 142, 138].map((matched) => outcome("extraction:flow:extractionRecordAccuracy", matched / 144)), ["equivalent", "equivalent", "regressed", "improved"]);
+  // Exact success: 4 of 6 steps over 2 workflows, so one workflow is half the rate; one step of six is inside it.
+  assert.equal(compareBenchMetric("extraction:flow:extractionExactSuccess", 1, candidate).tolerance, BENCH_TOLERANCE.rateWorkflows / 2);
+  assert.deepEqual([5 / 6, 0].map((base) => outcome("extraction:flow:extractionExactSuccess", base)), ["equivalent", "improved"]);
+  // False success is lower-better, within one workflow.
+  assert.deepEqual([0, 5 / 6].map((base) => outcome("extraction:flow:extractionFalseSuccess", base)), ["equivalent", "improved"]);
+  assert.equal(compareBenchMetric("extraction:flow:extractionFalseSuccess", 1, extracted({ flow: extractionMetrics({ extractionFalseSuccess: rate(6, 6, 2) }) })).outcome, "equivalent");
+  assert.equal(compareBenchMetric("extraction:flow:extractionFalseSuccess", 0, extracted({ flow: extractionMetrics({ extractionFalseSuccess: rate(6, 6, 2) }) })).outcome, "regressed");
+  // Not measured: another lane, a distribution, an empty population, an unknown name, and a report without the block.
+  for (const metric of [
+    "extraction:recording:extractionRecordAccuracy", "extraction:replay:extractionRecordAccuracy", "extraction:flow:extractionDurationMs",
+    "extraction:flow:extractionSpeed", "extraction:flow:constructor", "extraction:flow:extractionRecordAccuracy:extra", "extraction:extractionRecordAccuracy",
+  ]) assert.equal(compareBenchMetric(metric, 1, candidate), undefined, metric);
+  assert.equal(compareBenchMetric("extraction:flow:paginationAccuracy", 1, extracted({ flow: extractionMetrics({ paginationAccuracy: rate(0, 0, 0) }) })), undefined);
+  assert.equal(compareBenchMetric("extraction:flow:extractionRecordAccuracy", 1, report()), undefined);
+});
+
+test("compareBenchReports lists each lane's extraction rates after the Metrics-table rates, and the validator holds their tolerance", () => {
+  const base = report({
+    reportId: "bench-2026-09-10-x",
+    metrics: metrics({ extractionByLane: { flow: extractionMetrics({ extractionCountAccuracy: rate(3, 6, 2), paginationAccuracy: rate(4, 6, 2), extractionFalseSuccess: rate(5, 6, 2), extractionExactSuccess: rate(1, 6, 2) }) } }),
+  });
+  const candidate = extracted();
+  const comparison = compareBenchReports(base, candidate);
+  const ids = comparison.metrics.map(({ metric }) => metric);
+  assert.deepEqual(comparison.metrics.filter(({ metric }) => metric.startsWith("extraction:")).map(({ metric, outcome }) => [metric, outcome]), [
+    ["extraction:flow:extractionRecordAccuracy", "equivalent"],
+    ["extraction:flow:extractionCountAccuracy", "improved"], // 5 of 6 against 3 of 6: two steps beyond one
+    ["extraction:flow:extractionExactSuccess", "equivalent"], // 4 of 6 against 1 of 6: inside one workflow of two
+    ["extraction:flow:extractionFieldCompleteness", "equivalent"],
+    ["extraction:flow:paginationAccuracy", "improved"],
+    ["extraction:flow:extractionFalseSuccess", "improved"], // lower is better
+  ]);
+  const firstExtraction = ids.findIndex((id) => id.startsWith("extraction:"));
+  assert.equal(ids.slice(0, firstExtraction).every((id) => id.startsWith("rate:")), true);
+  assert.equal(ids.slice(firstExtraction + 6).some((id) => id.startsWith("rate:") || id.startsWith("extraction:")), false);
+  assert.doesNotThrow(() => assertBenchReport({ ...candidate, comparison }));
+  assert.deepEqual(parseBenchReportJson(JSON.stringify({ ...candidate, comparison })).comparison, comparison);
+  // A baseline without the block compares no extraction metric: it did not measure extraction.
+  assert.equal(compareBenchReports(report({ reportId: "bench-2026-09-10-a" }), candidate).metrics.some(({ metric }) => metric.startsWith("extraction:")), false);
+  // An entry judged under the wrong tolerance -- exact success under one step of six instead of one workflow of two -- is refused.
+  const exact = ids.indexOf("extraction:flow:extractionExactSuccess");
+  const tampered = { ...comparison, metrics: comparison.metrics.map((entry, at) => (at === exact ? { ...entry, tolerance: 1 / 6, outcome: "improved" } : entry)) };
+  assert.deepEqual(issuesOf({ ...candidate, comparison: tampered }), [`$.comparison.metrics[${exact}].tolerance`, `$.comparison.metrics[${exact}].outcome`]);
 });

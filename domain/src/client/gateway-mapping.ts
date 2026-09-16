@@ -12,8 +12,11 @@ import {
   type WebAutomationActionResult,
   type WebAutomationActionType,
   type WebAutomationActionValidation,
-  type WebAutomationElementFingerprint
+  type WebAutomationDialogKind,
+  type WebAutomationElementFingerprint,
+  type WebAutomationObservedDialog
 } from "../actions/types";
+import { webAutomationExtractionSummaryValue, webAutomationRecordedExtraction, type WebAutomationExtractListRequest } from "../actions/extraction";
 import { webAutomationActionDefinitions } from "../actions/schemas";
 import { elementFingerprint, webAutomationUnresolvedSecretParameters, webAutomationUploadBindingPath } from "../output-nodes";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "../runtime/failure";
@@ -36,6 +39,8 @@ export type WebAutomationRecordedPayload = {
   actionResult?: JsonObject | undefined;
   /** Only on a recorded tab switch or close. The recording-start marker carries none, which is what keeps it evidence. */
   tab?: WebAutomationRecordedTab | undefined;
+  /** Only on a recorded extraction: the definition the picker produced, stored as the reader rebuilds it. */
+  extraction?: JsonObject | undefined;
   metadata?: JsonObject | undefined;
 };
 
@@ -104,6 +109,9 @@ export function createWebAutomationRecordingEvent(payload: WebAutomationRecorded
       // Only the two declared fields are copied, so nothing else a caller put on
       // the tab change -- a tab id, a full URL -- reaches the stored recording.
       tab: payload.tab === undefined ? undefined : { operation: payload.tab.operation, ...(payload.tab.urlPath !== undefined ? { urlPath: payload.tab.urlPath } : {}) },
+      // Rebuilt field by field rather than passed through, so no sample value
+      // and no unknown key the picker put beside the definition is stored (D3).
+      extraction: webAutomationRecordedExtraction(payload.extraction),
       ...(payload.metadata?.recordingState !== undefined ? { recordingState: payload.metadata.recordingState } : {})
     }),
     metadata: compactJsonObject({
@@ -162,6 +170,13 @@ export function webAutomationActionFromGatewayCommand(command: ClientGatewayActi
   const unreadable = refused.filter((field) => required.includes(field));
   if (unreadable.length > 0) {
     return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: unreadableFieldMessage(normalized.actionType, unreadable), failure: unreadableFieldFailure(normalized.actionType, unreadable) };
+  }
+  // A well-formed request for the Encrypt column, which is not built yet (D13,
+  // D14). Read as `include` it would send the values in clear; read as `exclude`
+  // it would drop a column the Flow asked to keep. Refused, by field key only.
+  const encrypted = normalized.actionType === "web.dom.extract_list" ? encryptedFieldKeys(lifted.extractList) : [];
+  if (encrypted.length > 0) {
+    return { commandId: command.commandId, status: "rejected", actionType: command.actionType, message: encryptedFieldMessage(encrypted), failure: encryptedFieldFailure(encrypted) };
   }
   const target = command.target ?? {};
   return compactJsonObject({
@@ -266,6 +281,12 @@ function elementFingerprintSources(target: JsonObject, parameters: JsonObject): 
  * text; they ride on the failure record, which `result-mapping.ts` puts on the
  * gateway result rather than in this payload, and they are bounded and filtered
  * where they are built.
+ *
+ * `extraction` and `dialog` are copied field by field, never passed through.
+ * The summary admits only counts, a flag and well-formed field keys
+ * (`actions/extraction/summary.ts`), so a producer that put page text beside
+ * them sends none of it. The dialog keeps its five declared fields and nothing
+ * else a producer added.
  */
 export function webAutomationActionResultPayload(result: WebAutomationActionResult): JsonObject {
   return compactJsonObject({
@@ -280,6 +301,8 @@ export function webAutomationActionResultPayload(result: WebAutomationActionResu
     visualTarget: result.visualTarget,
     snapshot: result.snapshot,
     extracted: secretSafeExtracted(result.extracted, result.element),
+    extraction: webAutomationExtractionSummaryValue(result.extraction),
+    dialog: observedDialogValue(result.dialog),
     resolution: result.resolution,
     startedAt: result.startedAt,
     finishedAt: result.finishedAt
@@ -410,6 +433,52 @@ function unreadableFieldFailure(actionType: WebAutomationActionType, fields: rea
 function unreadableFieldMessage(actionType: WebAutomationActionType, fields: readonly string[]): string {
   return `Not dispatched: ${actionType} requires ${fields.join(", ")}, and what was sent could not be read.`;
 }
+
+/** The keys of the fields a list extraction asks to encrypt. A key is a well-formed field key (D16), never a selector or a value. */
+function encryptedFieldKeys(request: WebAutomationExtractListRequest | undefined): string[] {
+  if (request === undefined) return [];
+  return Object.entries(request.fields).filter(([, field]) => typeof field !== "string" && field.handling === "encrypt").map(([key]) => key);
+}
+
+/**
+ * The refusal of a well-formed request for the Encrypt column. The client does
+ * not implement it yet, so it is the closed set's capability refusal, decided at
+ * dispatch; retrying unchanged cannot succeed. The text names field keys only.
+ */
+function encryptedFieldFailure(keys: readonly string[]): AutomationStudioFailureRecord {
+  return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.NOT_IMPLEMENTED, {
+    expected: "web.dom.extract_list fields whose column is included or excluded",
+    actual: `${namedFieldKeys(keys)} asked to be encrypted, which is not implemented yet, so the action was not dispatched`
+  });
+}
+
+function encryptedFieldMessage(keys: readonly string[]): string {
+  return `Not dispatched: web.dom.extract_list asks to encrypt ${namedFieldKeys(keys)}, and the Encrypt column is not implemented yet.`;
+}
+
+/** At most five keys by name, so a wide field map cannot make a refusal unbounded. */
+function namedFieldKeys(keys: readonly string[]): string {
+  const named = keys.slice(0, 5).join(", ");
+  return keys.length > 5 ? `${named} and ${keys.length - 5} more` : named;
+}
+
+/**
+ * A handled dialog copied field by field, or `undefined` when it is not one.
+ * `message` is the page's own text and `promptText` the reply the Flow
+ * supplied; both travel as they did when this evidence rode on `extracted`.
+ */
+function observedDialogValue(value: unknown): WebAutomationObservedDialog | undefined {
+  const dialog = jsonObject(value);
+  if (!dialog) return undefined;
+  const kind = DIALOG_KINDS.find((candidate) => candidate === dialog.kind);
+  const response = dialog.response === "accept" || dialog.response === "dismiss" ? dialog.response : undefined;
+  if (kind === undefined || response === undefined || typeof dialog.message !== "string") return undefined;
+  if (typeof dialog.at !== "number" || !Number.isFinite(dialog.at)) return undefined;
+  if (dialog.promptText !== undefined && typeof dialog.promptText !== "string") return undefined;
+  return { kind, message: dialog.message, response, at: dialog.at, ...(typeof dialog.promptText === "string" ? { promptText: dialog.promptText } : {}) };
+}
+
+const DIALOG_KINDS: readonly WebAutomationDialogKind[] = ["alert", "confirm", "prompt", "beforeunload"];
 
 /** The parameters an action's schema requires, read from the one schema table the way `io/input-model.ts` reads it. */
 function requiredParameters(actionType: WebAutomationActionType): string[] {

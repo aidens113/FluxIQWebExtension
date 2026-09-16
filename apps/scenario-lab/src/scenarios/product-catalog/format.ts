@@ -18,6 +18,45 @@ export function productPath(product: CatalogProduct): string {
   return `${CATALOG_ROOT}products/${product.slug}`;
 }
 
+/**
+ * The origin `absolute-links` writes card links against. A fixed, non-loopback
+ * host on purpose: the lab's port moves between runs and an expected record is
+ * literal text, so a link to the live origin could not be written down here.
+ * Nothing navigates it -- the workflows that read it extract the attribute.
+ */
+export const CATALOG_ABSOLUTE_ORIGIN = "https://catalog.example.test";
+
+/** The card link's `href` exactly as the page writes it under `variant`. */
+export function productHref(product: CatalogProduct, variant: CatalogVariant): string {
+  return variant === "absolute-links" ? `${CATALOG_ABSOLUTE_ORIGIN}${productPath(product)}` : productPath(product);
+}
+
+/** The slug of the shared placeholder a deferred card shows before its photo arrives. */
+export const CATALOG_PLACEHOLDER_SLUG = "placeholder";
+
+/** A card photo, served by the `route` hook. Read as an attribute, never fetched by an extraction. */
+export function productImagePath(slug: string): string {
+  return `${CATALOG_ROOT}images/${slug}.svg`;
+}
+
+export function productImageAlt(product: CatalogProduct): string {
+  return `${product.name} product photo`;
+}
+
+/**
+ * Under `sparse-cards` a card omits its price when the product is out of stock
+ * and its rating when the rating is below 4.2, so those fields are absent from
+ * the card rather than empty. The manifest builds its expected records from
+ * these two predicates and the page renders from them, so the two cannot drift.
+ */
+export function cardShowsPrice(product: CatalogProduct, variant: CatalogVariant): boolean {
+  return variant !== "sparse-cards" || product.inStock;
+}
+
+export function cardShowsRating(product: CatalogProduct, variant: CatalogVariant): boolean {
+  return variant !== "sparse-cards" || product.ratingTenths >= 42;
+}
+
 export function stockLabel(product: CatalogProduct): string {
   return product.inStock ? "In stock" : "Out of stock";
 }

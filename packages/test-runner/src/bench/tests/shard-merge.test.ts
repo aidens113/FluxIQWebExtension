@@ -52,12 +52,13 @@ function parent(): CampaignManifest {
 
 function evaluation(cell: CampaignPlanCell, runId = `run-${cell.cellKey.slice(0, 12)}`): RunEvaluation {
   return {
-    schemaVersion: "0.2", runId, verdict: "passed", facilityFailure: null,
+    schemaVersion: "0.3", runId, verdict: "passed", facilityFailure: null,
     invariants: [{ id: "runner-verdict", passed: true, expected: "passed", actual: "passed", evidenceSequences: [] }], metrics: {},
     scenarioId: cell.scenarioId, workflowId: cell.workflowId, variantId: cell.variantId, repeatIndex: cell.repeatIndex, lane: cell.lane,
     flowCreated: cell.lane === "flow" ? true : null, oracleVerdict: "passed", reportedVerdict: cell.lane === "flow" ? "passed" : null, automationFailureReported: null,
     automationFailureExpected: cell.expectedFailure, harnessActivations: 0, durationMs: 10, actions: [],
     evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 }, llm: { mode: "disabled", profileId: null, calls: 0 },
+    extraction: null,
     harnessRecovery: null, adaptationCost: null, adaptationValidation: null, adaptationPersistence: null, adaptationReuse: null,
   };
 }

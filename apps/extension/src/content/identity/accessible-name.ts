@@ -10,8 +10,21 @@
 // and never for a field the shared sensitivity rule marks sensitive. Text is
 // read only for elements whose role takes its name from content, so a
 // container never acquires a name made of the first words inside it.
+//
+// And one rule about contents (decision D2 of the data-extraction plan). Both
+// places this computation reads page text -- each `aria-labelledby` reference,
+// and the element's own text -- read through `textOutsideSensitiveControls`
+// (`../sensitive-text.ts`), so no name quotes what a sensitive control holds: a
+// sensitive `<textarea>`'s text, a sensitive `<select>`'s option labels, the
+// words in an element the rule marks. A reference holding one contributes its
+// other words, and an element that is, or sits inside, a sensitive control
+// takes no name from content. The filter lives here rather than with each
+// caller so every caller has it: the descriptor, page evidence, and the
+// resolver's candidates. An associated `<label>`'s text is `label.ts`'s, which
+// skips nested form controls.
 
 import { isSensitiveFormControl } from "../element-traits";
+import { textOutsideSensitiveControls } from "../sensitive-text";
 import { boundedText } from "./bounded-text";
 import { associatedLabel } from "./label";
 
@@ -52,13 +65,16 @@ export function authoredNameAttribute(element: Element): string | undefined {
     ?? undefined;
 }
 
-/** The text of the elements `aria-labelledby` points at, in the order it lists them. */
+/**
+ * The text of the elements `aria-labelledby` points at, in the order it lists
+ * them, each less any sensitive control's contents.
+ */
 function labelledByName(element: Element): string | undefined {
   const ids = (element.getAttribute("aria-labelledby") ?? "").split(/\s+/u).filter(Boolean).slice(0, MAX_LABELLEDBY_IDS);
   if (!ids.length) return undefined;
   const parts = ids.flatMap((id) => {
     const target = document.getElementById(id);
-    const text = target === element ? undefined : boundedText(target?.textContent, MAX_NAME_LENGTH);
+    const text = target && target !== element ? boundedText(textOutsideSensitiveControls(target), MAX_NAME_LENGTH) : undefined;
     return text ? [text] : [];
   });
   return boundedText(parts.join(" "), MAX_NAME_LENGTH);
@@ -72,8 +88,9 @@ function buttonValueName(element: Element): string | undefined {
   return boundedText(element.value, MAX_NAME_LENGTH);
 }
 
+/** The element's own text, less any sensitive control's contents, for a role that takes its name from content. */
 function nameFromContent(element: Element): string | undefined {
-  return supportsNameFromContent(element) ? boundedText(element.textContent, MAX_NAME_LENGTH) : undefined;
+  return supportsNameFromContent(element) ? boundedText(textOutsideSensitiveControls(element), MAX_NAME_LENGTH) : undefined;
 }
 
 function supportsNameFromContent(element: Element): boolean {

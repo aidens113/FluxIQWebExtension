@@ -71,11 +71,18 @@ type FailureRecord = NonNullable<BrowserActionResult["failure"]>;
  * action result and what a bare `Element` return type quietly withheld. It is
  * absent only where nothing was resolved: a keypress with no named target, an
  * assertion about a selector, a scroll to a position.
+ *
+ * `extracted` holds only what a read took off the page. `web.dom.extract_list`
+ * gives an account of its read beside it on `extraction`: counts, a flag and
+ * the declared field keys, never page text (C2). A native dialog handled before
+ * the action rides on `dialog`, never on `extracted`.
  */
 export type ActionResultEvidence = {
   element?: DomElementDescriptor | undefined;
   snapshot?: DomSnapshot | undefined;
   extracted?: JsonValue | undefined;
+  extraction?: BrowserActionResult["extraction"];
+  dialog?: BrowserActionResult["dialog"];
   resolution?: BrowserActionTargetResolution | undefined;
 };
 
@@ -415,6 +422,8 @@ function buildResult(
   const snapshot = evidence.snapshot ?? (captureSettings.snapshots || core.status !== "succeeded" ? captureSnapshot() : undefined);
   if (snapshot) result.snapshot = snapshot;
   if (evidence.extracted !== undefined) result.extracted = evidence.extracted;
+  if (evidence.extraction) result.extraction = evidence.extraction;
+  if (evidence.dialog) result.dialog = evidence.dialog;
   if (evidence.resolution) result.resolution = evidence.resolution;
   return result;
 }

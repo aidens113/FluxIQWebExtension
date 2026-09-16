@@ -172,6 +172,45 @@ rows.push(
   { row: "9i dom.input, file input recorded holding no files", event: recorded("dom.input", { element: { ...fileInput, hasValue: false } }), eventType: WEB_AUTOMATION_EVENTS.elementInputChanged }
 );
 
+// The rows X4 added: an extraction the user defined with the picker. The form
+// the definition declares decides which of the two inputs it is, because one
+// input maps to exactly one output and a list and a single value run different
+// verbs.
+const listExtraction = {
+  form: "list",
+  datasetId: "products:4f1c9a",
+  label: "Products",
+  itemCount: 24,
+  request: { item: "li.product", fields: { name: { kind: "text", selector: ".name" } }, paginate: { next: "a.next", maxPages: 3 } },
+  fieldLabels: { name: "Product name" }
+};
+const valueExtraction = { form: "value", label: "Order total", read: { mode: "text" } };
+const heading = { selector: "h1.total", tagName: "h1", id: "total" };
+rows.push(
+  {
+    row: "20 data.extract, a list",
+    event: recorded("data.extract", { extraction: listExtraction }),
+    eventType: WEB_AUTOMATION_EVENTS.dataExtractionDefined,
+    inputId: WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined,
+    outputId: "web.dom.extract_list"
+  },
+  {
+    row: "20a data.extract, a single value",
+    event: recorded("data.extract", { element: heading, extraction: valueExtraction }),
+    eventType: WEB_AUTOMATION_EVENTS.dataExtractionDefined,
+    inputId: WEB_AUTOMATION_INPUT_IDS.valueExtractionDefined,
+    outputId: "web.dom.extract"
+  },
+  // A request the lift would refuse at dispatch must not become a node here
+  // either: the node would reach Core, dispatch, and be refused with the Flow
+  // already built around it.
+  { row: "20b data.extract, a request that cannot be read", event: recorded("data.extract", { extraction: { ...listExtraction, request: { item: "li.product", fields: {} } } }), eventType: WEB_AUTOMATION_EVENTS.dataExtractionDefined },
+  { row: "20c data.extract, a field key Core would refuse", event: recorded("data.extract", { extraction: { ...listExtraction, request: { item: "li.product", fields: { "Product name": { kind: "text" } } } } }), eventType: WEB_AUTOMATION_EVENTS.dataExtractionDefined },
+  { row: "20d data.extract, no definition at all", event: recorded("data.extract"), eventType: WEB_AUTOMATION_EVENTS.dataExtractionDefined },
+  // A value read needs a target: the verb reads one element.
+  { row: "20e data.extract, a single value with no element", event: recorded("data.extract", { extraction: valueExtraction }), eventType: WEB_AUTOMATION_EVENTS.dataExtractionDefined }
+);
+
 const outputNodes = listWebAutomationOutputNodeDefinitions();
 
 for (const { row, event, eventType, inputId, outputId } of rows) {
@@ -221,12 +260,16 @@ assert.equal(webAutomationInputIdForRecordedEvent(recorded("dom.scroll", { scrol
 const inputOutputs: string[] = actionInputDefinitions.map(([, , outputId]) => outputId);
 const recordableOutputs: string[] = [...new Set(inputOutputs)];
 const dispatchOnlyOutputs = [
-  "web.dom.wait_for_selector", "web.dom.wait_for_text", "web.dom.extract", "web.dom.capture_snapshot",
+  "web.dom.wait_for_selector", "web.dom.wait_for_text", "web.dom.capture_snapshot",
   // Added in Week 1 (decision D6). `web.dom.check` is recordable, from a
   // checkbox or radio change; `web.dom.upload` from a file choice; and
-  // `web.browser.tab` from a tab switch or close. The other four are authored
-  // or driven by a Flow and no recorded user event produces one.
-  "web.dom.assert", "web.dom.extract_list", "web.dom.dialog", "web.browser.download"
+  // `web.browser.tab` from a tab switch or close. The rest are authored or
+  // driven by a Flow and no recorded user event produces one.
+  //
+  // X4 made both extraction verbs recordable: the picker records a definition,
+  // which maps to `web.dom.extract_list` for a list and `web.dom.extract` for a
+  // single value.
+  "web.dom.assert", "web.dom.dialog", "web.browser.download"
 ];
 // Every action input names one output. Only the tab switch and the tab close
 // share theirs: both are `web.browser.tab`, told apart by the operation the node carries.
@@ -258,6 +301,17 @@ assert.deepEqual(withheld?.parameters.text, { $state: { path: "web.secret.passwo
 assert.equal(webAutomationInputIdForRecordedEvent(recorded("dom.input", { element: passwordField })), WEB_AUTOMATION_INPUT_IDS.textEntered, "the live gateway path agrees with the mapper");
 // Only a request counts: an ordinary control with no recorded value has nothing to type.
 assert.equal(webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.elementInputChanged, { element: field }), undefined, "an empty literal is still not executable");
+
+// A recorded extraction's node carries the request the picker recorded, and the
+// definition it was rebuilt from holds no value read from the page (D3).
+const recordedList = webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.dataExtractionDefined, recorded("data.extract", { extraction: { ...listExtraction, samples: [{ name: "SENTINEL-PAGE-VALUE" }] } }));
+assert.equal(recordedList?.outputId, "web.dom.extract_list");
+assert.deepEqual(recordedList?.parameters.extractList, listExtraction.request, "the node carries the request it was recorded with");
+assert.equal(JSON.stringify(recordedList?.parameters).includes("SENTINEL-PAGE-VALUE"), false, "no sample value reaches the node");
+const recordedValue = webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.dataExtractionDefined, recorded("data.extract", { element: heading, extraction: valueExtraction }));
+assert.equal(recordedValue?.outputId, "web.dom.extract");
+assert.deepEqual(recordedValue?.parameters.extract, { mode: "text" }, "the node says which value to read");
+assert.equal(recordedValue?.parameters.selector, "h1.total");
 
 // State and evidence inputs never become executable.
 assert.equal(stateInputDefinitions.every((input) => (input.role as string) !== "action"), true);

@@ -182,9 +182,8 @@ test("an expectation may only name an attempt status a run can actually record",
 });
 
 /**
- * W11, W15 and admin-console each pinned a `web.dom.extract` that no recording
- * holds, because an extract step is the runner's own check. The Flow lane then
- * failed those rows as if FluxIQ had dropped an action.
+ * W11, W15 and admin-console each pinned a `web.dom.extract` no recording held.
+ * Since X5.1 an extract records one: only a pin no step yields is unmeetable.
  */
 test("an expected action that no step of its workflow's recording script records is rejected as a scenario defect", () => {
   const unmeetable = {
@@ -196,14 +195,14 @@ test("an expected action that no step of its workflow's recording script records
     expected: { ...validScenario.expected, actions: [{ action: "web.dom.type" }, { action: "web.dom.extract", outcome: "succeeded" }] },
     // A variant never changes the recording, so its entries are judged against the workflow's script.
     variants: [{ id: "keyboard-only", description: "Submit is reachable by keyboard only.", arm: { operation: "set-mode" }, expected: { actions: [{ action: "web.dom.keypress", outcome: "succeeded" }] } }],
-    // A named workflow is judged against its own script, never the primary workflow's click.
-    workflows: [{ id: "scroll-only", description: "Scroll the page.", recordingScript: [{ id: "scroll-down", operation: "scroll", value: 500 }], expected: { actions: [{ action: "web.dom.scroll" }, { action: "web.dom.click", outcome: "succeeded" }] } }],
+    // A named workflow is judged against its own script, never the primary workflow's click. It extracts nothing, so its `web.dom.extract` pin is the unmeetable-extract case.
+    workflows: [{ id: "scroll-only", description: "Scroll the page.", recordingScript: [{ id: "scroll-down", operation: "scroll", value: 500 }], expected: { actions: [{ action: "web.dom.scroll" }, { action: "web.dom.click", outcome: "succeeded" }, { action: "web.dom.extract" }] } }],
   };
   const result = validateWebScenario(unmeetable);
   assert.equal(result.valid, false);
   const issues = result.valid ? [] : result.issues;
-  assert.deepEqual(issues.map(({ path }) => path), ["$.expected.actions[1].action", "$.variants[0].expected.actions[0].action", "$.workflows[0].expected.actions[1].action"]);
-  assert.match(issues[0].message, /^names web\.dom\.extract, which no step of this workflow's recordingScript records/);
+  assert.deepEqual(issues.map(({ path }) => path), ["$.variants[0].expected.actions[0].action", "$.workflows[0].expected.actions[1].action", "$.workflows[0].expected.actions[2].action"]);
+  assert.match(issues[2].message, /^names web\.dom\.extract, which no step of this workflow's recordingScript records/);
   assert.ok(issues.every(({ message }) => message.endsWith("so it is a scenario defect, not a product failure")), JSON.stringify(issues));
   assert.throws(() => assertWebScenario(unmeetable), ContractValidationError);
 });
@@ -220,13 +219,14 @@ test("an expected action some step records is accepted, and a playback goal with
     expected: { ...validScenario.expected, actions: [{ action: "web.dom.select", outcome: "succeeded" }] },
   };
   assert.equal(validateWebScenario(playback).valid, true);
-  // A paginated extract clicks `next` as trusted input, and the extension records those clicks; an unpaginated one only reads.
+  // Pagination belongs to the one recorded extract node, so a paginated extract records the same `web.dom.extract_list` an unpaginated one does, and neither yields a `web.dom.click` for the Flow lane to judge.
   const readStep = { id: "all-products", operation: "extract", target: "testid:product", fields: { name: "testid:name" } };
-  const readsPages = (step) => ({ ...validScenario, workflows: [{ id: "read-catalog", description: "Read the catalog.", recordingScript: [step], expected: { actions: [{ action: "web.dom.click", outcome: "succeeded" }] } }] });
-  const paginated = validateWebScenario(readsPages({ ...readStep, pagination: { next: "testid:next", maxPages: 3 } }));
-  assert.equal(paginated.valid, true, paginated.valid ? "" : JSON.stringify(paginated.issues));
-  const unpaginated = validateWebScenario(readsPages(readStep));
-  assert.deepEqual(unpaginated.valid ? [] : unpaginated.issues.map(({ path }) => path), ["$.workflows[0].expected.actions[0].action"]);
+  const readsPages = (step, action) => ({ ...validScenario, workflows: [{ id: "read-catalog", description: "Read the catalog.", recordingScript: [step], expected: { actions: [{ action, outcome: "succeeded" }] } }] });
+  const paged = { ...readStep, pagination: { next: "testid:next", maxPages: 3 } };
+  const extracts = validateWebScenario(readsPages(paged, "web.dom.extract_list"));
+  assert.equal(extracts.valid, true, extracts.valid ? "" : JSON.stringify(extracts.issues));
+  // Neither form records a click, so a `web.dom.click` pin is refused on both.
+  for (const step of [paged, readStep]) assert.deepEqual(validateWebScenario(readsPages(step, "web.dom.click")).issues?.map(({ path }) => path) ?? [], ["$.workflows[0].expected.actions[0].action"], JSON.stringify(step));
 });
 
 /**

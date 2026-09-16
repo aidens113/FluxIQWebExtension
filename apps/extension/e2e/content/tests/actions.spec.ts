@@ -254,14 +254,10 @@ test("extract: a text read of a container skips the contents of sensitive contro
   // Every label and the ordinary select's option are read; the sensitive
   // textarea's text and the sensitive select's option label are not.
   expect(reply.extracted).toBe("Email Password Test card Billing card Submit synthetic values Recovery note Security answer Contact time Mornings");
+  // The whole reply, its page snapshot included: no element descriptor quotes
+  // a sensitive control's contents either.
   const wire = JSON.stringify(reply);
-  for (const secret of FIXTURE_SECRETS) expect(wire).not.toContain(secret);
-  // The injected contents are scanned in the read, not the whole reply: the
-  // reply's page snapshot still quotes a sensitive textarea's text and a
-  // sensitive select's option labels through the descriptor's `text`,
-  // `visibleText` and `accessibleName` -- a defect outside extraction,
-  // reported by x0-page.
-  for (const secret of INJECTED_SECRETS) expect(JSON.stringify(reply.extracted)).not.toContain(secret);
+  for (const secret of [...FIXTURE_SECRETS, ...INJECTED_SECRETS]) expect(wire).not.toContain(secret);
 });
 
 test("extract: an HTML read of a container removes sensitive descendants' value attributes and contents", async ({ openHarness, page }) => {
@@ -279,14 +275,100 @@ test("extract: an HTML read of a container removes sensitive descendants' value 
   // Ordinary controls keep their values and contents.
   expect(html).toContain('value="synthetic-user@example.test"');
   expect(html).toContain('<option value="mornings">Mornings</option>');
+  // The whole reply, its page snapshot included: no element descriptor quotes
+  // a sensitive control's contents either.
   const wire = JSON.stringify(reply);
-  for (const secret of FIXTURE_SECRETS) expect(wire).not.toContain(secret);
-  // The injected contents are scanned in the read, not the whole reply: the
-  // reply's page snapshot still quotes a sensitive textarea's text and a
-  // sensitive select's option labels through the descriptor's `text`,
-  // `visibleText` and `accessibleName` -- a defect outside extraction,
-  // reported by x0-page.
-  for (const secret of INJECTED_SECRETS) expect(JSON.stringify(reply.extracted)).not.toContain(secret);
+  for (const secret of [...FIXTURE_SECRETS, ...INJECTED_SECRETS]) expect(wire).not.toContain(secret);
+});
+
+/** Written below into a span inside a sensitive editable region: its words, and a `value` attribute an attribute read would return. */
+const DRAFT_SECRETS = ["SYNTHETIC_DRAFT_WORDS", "SYNTHETIC_DRAFT_VALUE"];
+
+test("extract: an element inside a sensitive control is refused in every mode, as the control is", async ({ openHarness, page }) => {
+  const harness = await openHarness("sensitive-input");
+  await addContentBearingControls(page);
+  await page.evaluate((formSelector) => {
+    document.querySelector(formSelector)?.insertAdjacentHTML(
+      "beforeend",
+      '<div data-testid="private-draft" contenteditable="true" data-sensitive="true">Draft <span data-testid="private-draft-words" value="SYNTHETIC_DRAFT_VALUE">SYNTHETIC_DRAFT_WORDS</span></div>'
+    );
+  }, SENSITIVE_FORM);
+  // An option of a sensitive select holds the select's value and a label; a
+  // span inside a sensitive editable region holds its words and an attribute.
+  for (const selector of ['[data-testid="security-answer"] option', '[data-testid="private-draft-words"]']) {
+    for (const options of EXTRACT_MODES) {
+      const label = `${selector} read ${options ? JSON.stringify(options) : "by default"}`;
+      const reply = await harness.runAction({ commandId: "extract-inside-sensitive", actionType: "web.dom.extract", selector, ...(options ? { options } : {}) });
+      expect(reply, label).toMatchObject({ status: "failed", failure: { code: "web.action.rejected", category: "blocked_by_capability_or_policy" } });
+      expect(reply, label).not.toHaveProperty("extracted");
+      const wire = JSON.stringify(reply);
+      for (const secret of [...FIXTURE_SECRETS, ...INJECTED_SECRETS, ...DRAFT_SECRETS]) expect(wire, label).not.toContain(secret);
+    }
+  }
+  // The rule is targeted: an ordinary select's option is still read.
+  expect(await harness.runAction({
+    commandId: "extract-ordinary-option", actionType: "web.dom.extract", selector: '[data-testid="contact-time"] option', options: { mode: "attribute", attribute: "value" }
+  })).toMatchObject({ status: "succeeded", extracted: "mornings" });
+});
+
+/**
+ * Written by `addSnapshotOnlyRoutes` into places a snapshot reaches and a read
+ * does not -- the last into the sensitive textarea inside the span a button is
+ * named by; no snapshot may carry any.
+ */
+const SNAPSHOT_SECRETS = ["SYNTHETIC_LISTBOX_LABEL", "SYNTHETIC_EDITABLE_NOTE", "SYNTHETIC_LABELLEDBY_NOTE"];
+
+/**
+ * Adds the routes by which a snapshot, rather than a read, could quote a
+ * sensitive control's contents: a sensitive listbox, whose options render and
+ * so can be described on their own; a sensitive editable region; and a button
+ * named through `aria-labelledby` by a span holding a sensitive textarea.
+ */
+async function addSnapshotOnlyRoutes(page: Page): Promise<void> {
+  await page.evaluate((formSelector) => {
+    const form = document.querySelector(formSelector);
+    if (!form) throw new Error(`${formSelector} is missing`);
+    form.insertAdjacentHTML(
+      "beforeend",
+      '<label>Backup code <select data-testid="backup-code" data-sensitive="true" size="2"><option>SYNTHETIC_LISTBOX_LABEL</option></select></label>' +
+        '<div data-testid="private-note" contenteditable="true" data-sensitive="true" aria-label="Private note">SYNTHETIC_EDITABLE_NOTE</div>' +
+        '<span id="hint-name">Hint <textarea data-sensitive="true">SYNTHETIC_LABELLEDBY_NOTE</textarea></span>' +
+        '<button type="button" data-testid="hint" aria-labelledby="hint-name">?</button>'
+    );
+  }, SENSITIVE_FORM);
+}
+
+test("capture_snapshot: no descriptor quotes a sensitive control's contents, and a container's text leaves them out", async ({ openHarness, page }) => {
+  const harness = await openHarness("sensitive-input");
+  await addContentBearingControls(page);
+  await addSnapshotOnlyRoutes(page);
+  const snapshot = await harness.capture();
+  const reply = await harness.runAction({ commandId: "capture-sensitive", actionType: "web.dom.capture_snapshot" });
+  expect(reply).toMatchObject({ status: "succeeded" });
+  // The whole of both: every descriptor, the page evidence, and the reply around them.
+  expect(reply.snapshot?.interactiveElements.length ?? 0).toBeGreaterThan(0);
+  for (const wire of [JSON.stringify(snapshot), JSON.stringify(reply)]) {
+    for (const secret of [...FIXTURE_SECRETS, ...INJECTED_SECRETS, ...SNAPSHOT_SECRETS]) expect(wire).not.toContain(secret);
+  }
+
+  const elements = snapshot.interactiveElements;
+  const bySelector = (selector: string) => elements.find((element) => element.selector === selector);
+  const labelReading = (words: string) => elements.find((element) => element.tagName === "label" && element.text?.startsWith(words));
+  // A sensitive control gives no text, and keeps the name its label gives it.
+  const note = bySelector('[data-testid="recovery-note"]');
+  expect(note).toMatchObject({ accessibleName: "Recovery note", label: "Recovery note" });
+  expect(note).not.toHaveProperty("text");
+  expect(note).not.toHaveProperty("visibleText");
+  const privateNote = bySelector('[data-testid="private-note"]');
+  expect(privateNote).toMatchObject({ accessibleName: "Private note" });
+  expect(privateNote).not.toHaveProperty("text");
+  // A label wrapping one reads as its own words; an ordinary select's contents are kept.
+  for (const words of ["Recovery note", "Security answer", "Backup code"]) {
+    expect(labelReading(words), words).toMatchObject({ text: words, visibleText: words, accessibleName: words });
+  }
+  expect(labelReading("Contact time")).toMatchObject({ text: "Contact time Mornings", accessibleName: "Contact time Mornings" });
+  // A name drawn from a reference holding sensitive contents keeps the reference's other words.
+  expect(bySelector('[data-testid="hint"]')).toMatchObject({ text: "?", accessibleName: "Hint" });
 });
 
 test("navigate: not a content-script action; the content script rejects it", async ({ openHarness, page }) => {

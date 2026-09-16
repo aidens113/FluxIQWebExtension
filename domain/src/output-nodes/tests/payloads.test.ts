@@ -49,9 +49,59 @@ test("a check keeps the fingerprint and visual target replay falls back on", () 
 test("the dispatch-only actions have no recorded payload", () => {
   // None of these is produced by a recorded user event: they are authored, or
   // driven by a Flow. Their parameters come from the node, not from a mapping.
-  for (const outputId of ["web.dom.assert", "web.dom.extract_list", "web.dom.dialog", "web.browser.download"]) {
+  // `extract_list` left this list in X4: the picker records one.
+  for (const outputId of ["web.dom.assert", "web.dom.dialog", "web.browser.download"]) {
     assert.deepEqual(webAutomationOutputPayload(outputId, { element: checkbox, inputValue: "on" }), {}, outputId);
   }
+});
+
+// -- A recorded extraction (X4) -----------------------------------------------
+// The definition is rebuilt by the recorded-definition reader rather than read
+// off the payload, so the node carries selectors, keys and counts and no value
+// read from the page (D3).
+
+const listRequest = { item: "li.product", fields: { name: { kind: "text", selector: ".name" } }, paginate: { next: "a.next", maxPages: 3 } };
+const listExtraction = { form: "list", datasetId: "products:4f1c9a", label: "Products", itemCount: 24, request: listRequest, fieldLabels: { name: "Product name" } };
+
+test("a recorded list extraction carries its request, and the frame it was recorded in", () => {
+  const parameters = webAutomationOutputPayload("web.dom.extract_list", { extraction: listExtraction, url: "https://example.test/products", browserFrameId: 2 });
+  assert.deepEqual(parameters.extractList, listRequest);
+  assert.equal(parameters.browserFrameId, 2, "a list read runs in the document it was recorded in");
+});
+
+test("no sample value the picker sent beside the definition reaches the node", () => {
+  const sample = "SENTINEL-PAGE-VALUE-FROM-THE-PICKER";
+  const parameters = webAutomationOutputPayload("web.dom.extract_list", {
+    extraction: { ...listExtraction, samples: [{ name: sample }], preview: sample }
+  });
+  assert.equal(JSON.stringify(parameters).includes(sample), false);
+  assert.deepEqual(Object.keys(parameters), ["extractList"]);
+});
+
+test("a definition the reader refuses builds nothing, so the event stays evidence", () => {
+  for (const extraction of [undefined, {}, { form: "list" }, { ...listExtraction, datasetId: "products/4f1c" }, { ...listExtraction, request: { item: "li", fields: {} } }]) {
+    assert.deepEqual(webAutomationOutputPayload("web.dom.extract_list", { extraction } as never), {}, JSON.stringify(extraction) ?? "undefined");
+  }
+});
+
+test("a recorded single-value extraction says which value to read, beside its target", () => {
+  const heading = { selector: "h1.total", tagName: "h1", id: "total" };
+  const parameters = webAutomationOutputPayload("web.dom.extract", { element: heading, extraction: { form: "value", label: "Order total", read: { mode: "attribute", attribute: "data-total" } } });
+  assert.equal(parameters.selector, "h1.total");
+  assert.deepEqual(parameters.extract, { mode: "attribute", attribute: "data-total" });
+});
+
+test("an extract with no recorded definition is the plain read it has always been", () => {
+  const heading = { selector: "h1.total", tagName: "h1", id: "total" };
+  const parameters = webAutomationOutputPayload("web.dom.extract", { element: heading });
+  assert.equal("extract" in parameters, false, "nothing claims a read mode nobody recorded");
+  assert.equal(parameters.selector, "h1.total");
+});
+
+test("the two forms do not answer for each other", () => {
+  assert.deepEqual(webAutomationOutputPayload("web.dom.extract_list", { extraction: { form: "value", label: "Total", read: { mode: "text" } } }), {}, "a value definition proposes no list read");
+  const listAsValue = webAutomationOutputPayload("web.dom.extract", { element: { selector: "ul", tagName: "ul" }, extraction: listExtraction });
+  assert.equal("extract" in listAsValue, false, "a list definition proposes no single-value read");
 });
 
 // -- The frame the interaction was recorded in --------------------------------

@@ -19,14 +19,75 @@ var WEB_AUTOMATION_EVENTS = {
   mouseWheel: "web.mouse.wheel",
   scrollChanged: "web.scroll.changed",
   domMutated: "web.dom.mutated",
+  dataExtractionDefined: "web.data.extraction_defined",
   snapshotCaptured: "web.snapshot.captured",
   actionExecuted: "web.action.executed",
   clientError: "web.client.error"
 };
 
-// src/actions/types.ts
+// src/actions/extraction/request.ts
+var WEB_AUTOMATION_EXTRACT_PAGINATION_MODES = ["next", "loadMore", "scroll", "numbered"];
+var WEB_AUTOMATION_EXTRACT_FIELD_KINDS = ["text", "attribute", "link", "value", "column"];
+var WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS = ["include", "exclude", "encrypt"];
+var WEB_AUTOMATION_EXTRACT_READ_MODES = ["text", "attribute", "value", "html"];
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
 var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
+
+// src/actions/extraction/read-request.ts
+var REFUSED = Symbol("refused");
+
+// src/actions/extraction/schema.ts
+function webAutomationExtractListSchema(elementFingerprintSchema2) {
+  const pageBound = { type: "integer", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES };
+  const fieldSpecSchema = {
+    type: "object",
+    label: "Field",
+    required: ["kind"],
+    properties: {
+      kind: { type: "string", label: "Reads", enum: [...WEB_AUTOMATION_EXTRACT_FIELD_KINDS] },
+      selector: { type: "string", label: "Selector inside the item" },
+      attribute: { type: "string", label: "Attribute" },
+      header: { type: "string", label: "Column header" },
+      required: { type: "boolean", label: "Required" },
+      // `encrypt` is reserved (D13) and refused at dispatch until it is built.
+      handling: { type: "string", label: "Column", enum: [...WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS] },
+      element: elementFingerprintSchema2
+    }
+  };
+  return {
+    type: "object",
+    label: "List extraction",
+    required: ["item", "fields"],
+    properties: {
+      item: { type: "string", label: "Item selector" },
+      itemElement: elementFingerprintSchema2,
+      fields: {
+        type: "object",
+        label: "Field map",
+        description: "Each field key maps to a selector string (`selector`, `selector@attribute`, `column:<header>`) or a field spec.",
+        metadata: { fieldSpec: fieldSpecSchema }
+      },
+      // No member is required of every mode, so nothing is required here: the
+      // lift refuses a mode missing its own bound or naming another mode's key.
+      paginate: {
+        type: "object",
+        label: "Pagination",
+        properties: {
+          mode: { type: "string", label: "Mode", enum: [...WEB_AUTOMATION_EXTRACT_PAGINATION_MODES] },
+          next: { type: "string", label: "Next control" },
+          control: { type: "string", label: "Load-more control" },
+          pages: { type: "string", label: "Page controls" },
+          maxPages: { ...pageBound, label: "Maximum pages" },
+          maxScrolls: { ...pageBound, label: "Maximum scrolls" }
+        }
+      },
+      maxItems: { type: "integer", label: "Maximum items", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_ITEMS },
+      // Default 1 where absent, so an empty list fails unless the Flow says empty
+      // is an answer; above the item bound no page could satisfy it.
+      minItems: { type: "integer", label: "Minimum items", minimum: 0, maximum: WEB_AUTOMATION_EXTRACT_MAX_ITEMS }
+    }
+  };
+}
 
 // src/actions/schemas.ts
 var elementFingerprintSchema = {
@@ -134,25 +195,14 @@ var assertSchema = {
     timeoutMs: { type: "integer", label: "Timeout in ms" }
   }
 };
-var extractListSchema = {
+var extractListSchema = webAutomationExtractListSchema(elementFingerprintSchema);
+var extractReadSchema = {
   type: "object",
-  label: "List extraction",
-  required: ["item", "fields"],
+  label: "Read",
+  required: ["mode"],
   properties: {
-    item: { type: "string", label: "Item selector" },
-    fields: { type: "object", label: "Field map" },
-    paginate: {
-      type: "object",
-      label: "Pagination",
-      required: ["next", "maxPages"],
-      properties: {
-        next: { type: "string", label: "Next control" },
-        maxPages: { type: "integer", label: "Maximum pages", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES }
-      }
-    },
-    maxItems: { type: "integer", label: "Maximum items", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_ITEMS },
-    // Default 1 where absent, so an empty list fails unless the Flow says empty is an answer.
-    minItems: { type: "integer", label: "Minimum items", minimum: 0 }
+    mode: { type: "string", label: "Reads", enum: [...WEB_AUTOMATION_EXTRACT_READ_MODES] },
+    attribute: { type: "string", label: "Attribute" }
   }
 };
 var uploadSchema = {
@@ -273,7 +323,19 @@ var webAutomationActionDefinitions = [
     description: "Wait until page text appears or the page settles.",
     parameterSchema: { type: "object", required: ["text"], properties: { text: { type: "string" }, timeoutMs: { type: "integer" }, wait: waitSchema } }
   },
-  { actionType: "web.dom.extract", label: "Extract", description: "Extract text, value, or attributes from an element.", parameterSchema: selectorSchema },
+  {
+    actionType: "web.dom.extract",
+    label: "Extract",
+    description: "Extract text, value, or attributes from an element.",
+    // `selector` stays required, so this keeps declaring an element target. The
+    // structured `extract` says which value to read; the legacy `options.mode`
+    // beside it still works for a Flow that authored one.
+    parameterSchema: {
+      type: "object",
+      required: ["selector"],
+      properties: { ...elementProperties, timeoutMs: { type: "integer", label: "Timeout in ms" }, extract: extractReadSchema }
+    }
+  },
   {
     actionType: "web.dom.capture_snapshot",
     label: "Capture Snapshot",
@@ -1284,6 +1346,7 @@ var basePayloadSchema = {
     mutation: { type: "object", label: "DOM mutation summary" },
     snapshot: { type: "object", label: "Snapshot" },
     actionResult: { type: "object", label: "Action result" },
+    extraction: { type: "object", label: "Extraction definition" },
     recordingState: { type: "string", label: "Recording state" }
   }
 };
@@ -1311,6 +1374,7 @@ var webAutomationRecordingEvents = [
   event(WEB_AUTOMATION_EVENTS.mouseWheel, "Mouse wheel", "A user moved the mouse wheel or equivalent pointing-device wheel input."),
   event(WEB_AUTOMATION_EVENTS.scrollChanged, "Scroll changed", "The page or context scroll position changed."),
   event(WEB_AUTOMATION_EVENTS.domMutated, "DOM mutated", "A DOM mutation summary was recorded."),
+  event(WEB_AUTOMATION_EVENTS.dataExtractionDefined, "Data extraction defined", "A user defined a list or value extraction with the picker."),
   event(WEB_AUTOMATION_EVENTS.snapshotCaptured, "Snapshot captured", "A structured page snapshot was captured."),
   event(WEB_AUTOMATION_EVENTS.actionExecuted, "Action executed", "A requested automation action completed."),
   event(WEB_AUTOMATION_EVENTS.clientError, "Client error", "The client reported an error.")

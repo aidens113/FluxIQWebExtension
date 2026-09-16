@@ -13,6 +13,21 @@ const outputPorts: AutomationNodePort[] = [
 ];
 
 /**
+ * Where in an action's result the page puts a list of records.
+ *
+ * Core's record capture reads a node's `outputs.result` at `recordsPath`
+ * (`runtime/executor/record-capture.ts`), and its proposal lift defaults that
+ * path from the output's `metadata.recordsPath` (Core CD19), rejecting a
+ * candidate that has none. Core never hard-codes `extracted`, because the key is
+ * this domain's vocabulary. Only the list extraction returns records:
+ * `web.dom.extract` also answers on `extracted`, but with one value, so a path
+ * declared there would be a default that can never capture.
+ */
+const recordsPathByOutput: Partial<Record<WebAutomationActionType, string>> = {
+  "web.dom.extract_list": "extracted"
+};
+
+/**
  * The post-conditions Core's transition comparison evaluates after the action.
  *
  * Core reads `node.parameterValues.expectedState` (`runtime/executor/
@@ -54,6 +69,7 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
       ? definition.parameterSchema.required.filter((value): value is string => typeof value === "string")
       : []
   );
+  const recordsPath = recordsPathByOutput[definition.actionType];
   return {
     schemaVersion: "0.1",
     id: webAutomationOutputNodeId(definition.actionType),
@@ -98,7 +114,8 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
       // key press to the focused element, a URL assertion, a tab operation —
       // must not declare it, because Core fails an action outright when a
       // declared element target has no fingerprint to resolve.
-      ...(requiredParameters.has("selector") ? { elementTarget: true } : {})
+      ...(requiredParameters.has("selector") ? { elementTarget: true } : {}),
+      ...(recordsPath ? { recordsPath } : {})
     }
   };
 }
@@ -129,6 +146,7 @@ function parametersForOutput(outputId: WebAutomationActionType): AutomationNodeP
     { id: "smooth", label: "Smooth", valueType: "boolean", defaultValue: false },
     structured("scroll", "Scroll Mode")
   ];
+  if (outputId === "web.dom.extract") return [...selectorParameters, structured("extract", "Read")];
   if (outputId === "web.dom.wait_for_selector") return [...selectorParameters, structured("wait", "Condition")];
   if (outputId === "web.dom.wait_for_text") return [
     { id: "text", label: "Text", valueType: "string", required: true, ui: { control: "text" } },
@@ -138,7 +156,13 @@ function parametersForOutput(outputId: WebAutomationActionType): AutomationNodeP
   if (outputId === "web.dom.capture_snapshot") return [];
   if (outputId === "web.dom.check") return [...selectorParameters, { id: "checked", label: "Checked", valueType: "boolean", defaultValue: true }];
   if (outputId === "web.dom.assert") return [...selectorParameters, structured("assert", "Assertion")];
-  if (outputId === "web.dom.extract_list") return [structured("extractList", "List")];
+  // D14: the request carries no timeout of its own. The command's `timeoutMs` is
+  // the one the page honours, and a paginated read outlasts Core's 5,000 ms
+  // default, so the node states one; a recorded node scales it by `maxPages`.
+  if (outputId === "web.dom.extract_list") return [
+    structured("extractList", "List"),
+    { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 10_000 }
+  ];
   if (outputId === "web.dom.upload") return [...selectorParameters, structured("upload", "Files")];
   if (outputId === "web.dom.dialog") return [structured("dialog", "Dialog")];
   if (outputId === "web.browser.tab") return [structured("tab", "Tab")];

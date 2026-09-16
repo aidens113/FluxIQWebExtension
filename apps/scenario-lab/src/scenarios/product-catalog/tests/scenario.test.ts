@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { resolveScenarioWorkflow, validateWebScenario } from "@fluxiq-web-extension/test-contracts";
-import { productPath } from "../format.js";
+import { CATALOG_ABSOLUTE_ORIGIN, CATALOG_PLACEHOLDER_SLUG, productHref, productImageAlt, productImagePath } from "../format.js";
 import { listCatalog } from "../listing.js";
 import { catalogProducts } from "../products.js";
 import { productCatalogScenario as scenario } from "../scenario.js";
@@ -34,17 +34,21 @@ function selections(): Selection[] {
   });
 }
 
-test("manifest declares W04-W07 as a valid primary workflow, three workflows, and their variants", () => {
+const armed = (variant: string) => ({ operation: "set-variant", payload: { variant } });
+
+test("manifest declares W04-W07 as a valid primary workflow, five workflows, and their variants", () => {
   const result = validateWebScenario(manifest);
   assert.equal(result.valid, true, result.valid ? "" : JSON.stringify(result.issues));
-  assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["paginated-extraction", "search", "in-stock-only"]);
+  assert.deepEqual(manifest.workflows?.map(({ id }) => id), ["paginated-extraction", "search", "in-stock-only", "with-images", "numbered-pages"]);
   assert.deepEqual([manifest, ...(manifest.workflows ?? [])].map((workflow) => (workflow.variants ?? []).map(({ id, arm }) => ({ id, arm }))), [
-    [{ id: "text-variant", arm: { operation: "set-variant", payload: { variant: "text-variant" } } }],
-    [{ id: "short-catalog", arm: { operation: "set-variant", payload: { variant: "short-catalog" } } }],
-    [{ id: "no-results", arm: { operation: "set-variant", payload: { variant: "no-results" } } }],
+    [{ id: "text-variant", arm: armed("text-variant") }, { id: "sparse-cards", arm: armed("sparse-cards") }, { id: "absolute-links", arm: armed("absolute-links") }],
+    [{ id: "short-catalog", arm: armed("short-catalog") }, { id: "link-pagination", arm: armed("link-pagination") }],
+    [{ id: "no-results", arm: armed("no-results") }],
+    [],
+    [{ id: "lazy-images", arm: armed("lazy-images") }],
     [],
   ]);
-  assert.equal(selections().length, 7);
+  assert.equal(selections().length, 13);
   for (const selection of selections()) {
     const { expected, recordingScript } = resolveScenarioWorkflow(manifest, selection);
     const extractSteps = recordingScript.filter(({ operation }) => operation === "extract");
@@ -73,17 +77,31 @@ test("expected records are exactly what each workflow reads from the listing, wi
   const runs: Array<[Selection, CatalogVariant, CatalogView, boolean]> = [
     [{}, "baseline", view(1), false],
     [{ variantId: "text-variant" }, "text-variant", view(1), false],
+    [{ variantId: "sparse-cards" }, "sparse-cards", view(1), false],
+    [{ variantId: "absolute-links" }, "absolute-links", view(1), false],
     [{ workflowId: "paginated-extraction" }, "baseline", view(1), true],
     [{ workflowId: "paginated-extraction", variantId: "short-catalog" }, "short-catalog", view(1), true],
+    [{ workflowId: "paginated-extraction", variantId: "link-pagination" }, "link-pagination", view(1), true],
     [{ workflowId: "search" }, "baseline", view(1, "lamp"), false],
     [{ workflowId: "search", variantId: "no-results" }, "no-results", view(1, "lamp"), false],
     [{ workflowId: "in-stock-only" }, "baseline", view(1, "", true), true],
+    [{ workflowId: "with-images" }, "baseline", view(1), false],
+    [{ workflowId: "with-images", variantId: "lazy-images" }, "lazy-images", view(1), false],
+    [{ workflowId: "numbered-pages" }, "baseline", view(1), true],
   ];
   assert.deepEqual(runs.map(([selection]) => label(selection)), selections().map(label));
   for (const [selection, variant, start, paginate] of runs) {
     const pages = paginate ? range(1, listCatalog(variant, start).pageCount) : [1];
-    const urls = pages.flatMap((page) => listCatalog(variant, { ...start, page }).items.map((product) => productPath(product)));
-    assert.deepEqual(records(selection).map(({ url }) => url), urls, label(selection));
+    const items = pages.flatMap((page) => listCatalog(variant, { ...start, page }).items);
+    const expected = records(selection);
+    if (selection.workflowId === "with-images") {
+      const deferred = variant === "lazy-images";
+      assert.deepEqual(expected.map(({ image }) => image), items.map(({ slug }) => productImagePath(deferred ? CATALOG_PLACEHOLDER_SLUG : slug)), label(selection));
+      assert.deepEqual(expected.map(({ deferredImage }) => deferredImage), items.map(({ slug }) => deferred ? productImagePath(slug) : null), label(selection));
+      assert.deepEqual(expected.map(({ imageAlt }) => imageAlt), items.map((product) => productImageAlt(product)), label(selection));
+      continue;
+    }
+    assert.deepEqual(expected.map(({ url }) => url), items.map((product) => productHref(product, variant)), label(selection));
   }
   const pageOne = records({});
   assert.deepEqual(pageOne[0], { name: "Aurora Desk Lamp", price: "$49.00", rating: "4.6 out of 5", url: "/scenarios/product-catalog/products/aurora-desk-lamp" });
@@ -96,6 +114,38 @@ test("expected records are exactly what each workflow reads from the listing, wi
   const inStock = records({ workflowId: "in-stock-only" });
   assert.equal(inStock.length, 18);
   assert.ok(inStock.every(({ availability }) => availability === "In stock"));
+
+  // A dropped field is null, never "": p03 is out of stock, p05 is rated 4.1, and p07 is both.
+  const sparse = records({ variantId: "sparse-cards" });
+  assert.deepEqual(sparse[2], { name: "Cobalt Ceramic Mug", price: null, rating: "4.8 out of 5", url: pageOne[2]?.url ?? "" });
+  assert.deepEqual(sparse[4], { name: "Ember Scented Candle", price: "$22.00", rating: null, url: pageOne[4]?.url ?? "" });
+  assert.deepEqual(sparse[6], { name: "Grove Planter Set", price: null, rating: null, url: pageOne[6]?.url ?? "" });
+  assert.equal(sparse.filter(({ price }) => price === null).length, 2);
+  assert.equal(sparse.filter(({ rating }) => rating === null).length, 2);
+  assert.equal(sparse.some((record) => Object.values(record).includes("")), false);
+
+  // Only the link text moves; every other field stays exactly as the baseline reads it.
+  const absolute = records({ variantId: "absolute-links" });
+  assert.equal(absolute[0]?.url, `${CATALOG_ABSOLUTE_ORIGIN}/scenarios/product-catalog/products/aurora-desk-lamp`);
+  assert.ok(absolute.every(({ url }) => url?.startsWith(CATALOG_ABSOLUTE_ORIGIN)));
+  assert.deepEqual(absolute.map(({ url: _url, ...rest }) => rest), pageOne.map(({ url: _url, ...rest }) => rest));
+
+  const eager = records({ workflowId: "with-images" });
+  assert.deepEqual(eager[0], {
+    name: "Aurora Desk Lamp",
+    image: "/scenarios/product-catalog/images/aurora-desk-lamp.svg",
+    imageAlt: "Aurora Desk Lamp product photo",
+    deferredImage: null,
+  });
+  assert.ok(eager.every(({ deferredImage }) => deferredImage === null));
+  const deferred = records({ workflowId: "with-images", variantId: "lazy-images" });
+  assert.equal(deferred[0]?.image, "/scenarios/product-catalog/images/placeholder.svg");
+  assert.equal(deferred[0]?.deferredImage, "/scenarios/product-catalog/images/aurora-desk-lamp.svg");
+  assert.ok(deferred.every(({ image }) => image === productImagePath(CATALOG_PLACEHOLDER_SLUG)));
+  assert.deepEqual(deferred.map(({ imageAlt }) => imageAlt), eager.map(({ imageAlt }) => imageAlt));
+
+  // numbered-pages reads the same 23 records as following Next, over the same three pages.
+  assert.deepEqual(records({ workflowId: "numbered-pages" }), records({ workflowId: "paginated-extraction" }));
 });
 
 test("show records each served view, clamps pages, bounds queries, and ignores invalid payloads", () => {
@@ -135,6 +185,13 @@ test("set-variant arms each variant from the start page and baseline restores", 
   assert.deepEqual(apply(empty, "show", { query: "lamp" }).oracle, { resultCount: 0, pageCount: 1, productIds: [] });
   assert.equal(apply(empty, "show", { inStockOnly: true }).oracle.resultCount, 18);
   assert.deepEqual(apply(short, "set-variant", { variant: "baseline" }), { ...initial, variant: "baseline" });
+  // The extraction variants change how a card is written, not which products the listing holds.
+  for (const variant of ["sparse-cards", "absolute-links", "link-pagination", "lazy-images"] as const) {
+    const armedState = apply(initial, "set-variant", { variant });
+    assert.equal(armedState.variant, variant);
+    assert.deepEqual(armedState.oracle, initial.oracle, variant);
+    assert.deepEqual(armedState.view, view(1), variant);
+  }
   for (const payload of [{ variant: "bogus" }, {}, null]) assert.equal(apply(initial, "set-variant", payload), initial);
 });
 
@@ -218,4 +275,66 @@ test("product routes serve a page per catalog product, record the visit, and 404
     assert.equal(route(initial, subpath), undefined, subpath);
   }
   assert.equal(route(apply(initial, "set-variant", { variant: "short-catalog" }), "products/ridge-clip-lamp"), undefined);
+});
+
+/**
+ * Each extraction variant is a control for exactly one property of the card or
+ * its pagination, so these assertions are written against the served markup: a
+ * variant that changed anything else would show up here, rather than hiding
+ * behind a record comparison that happens to still match.
+ */
+test("each extraction variant changes one card property and leaves the rest of the page alone", () => {
+  const initial = scenario.createState(114);
+  const occurrences = (html: string, needle: string) => html.split(needle).length - 1;
+  const markupOf = (variant: CatalogVariant) => {
+    const html = scenario.render(apply(initial, "set-variant", { variant }), context);
+    return html.slice(0, html.indexOf("<script"));
+  };
+
+  const baseline = markupOf("baseline");
+  assert.equal(count(baseline, "product-image"), 8);
+  assert.match(baseline, /<img data-testid="product-image" alt="Aurora Desk Lamp product photo" width="48" height="48" src="\/scenarios\/product-catalog\/images\/aurora-desk-lamp\.svg">/);
+  assert.equal(baseline.includes("data-src"), false, "an eager card carries no deferred source at all, so the field reads null");
+
+  const lazy = markupOf("lazy-images");
+  assert.equal(count(lazy, "product-image"), 8);
+  assert.equal(occurrences(lazy, `src="${productImagePath(CATALOG_PLACEHOLDER_SLUG)}"`), 8);
+  assert.match(lazy, /src="\/scenarios\/product-catalog\/images\/placeholder\.svg" data-src="\/scenarios\/product-catalog\/images\/aurora-desk-lamp\.svg" loading="lazy">/);
+
+  const sparse = markupOf("sparse-cards");
+  assert.equal(count(sparse, "product-card"), 8, "the cards are all still there; only two of their fields are not");
+  assert.equal(count(sparse, "product-price"), 6);
+  assert.equal(count(sparse, "product-rating"), 6);
+  assert.equal(count(baseline, "product-price"), 8);
+  assert.equal(count(baseline, "product-rating"), 8);
+
+  const absolute = markupOf("absolute-links");
+  assert.equal(occurrences(absolute, `href="${CATALOG_ABSOLUTE_ORIGIN}`), 8);
+  assert.ok(absolute.includes(`href="${CATALOG_ABSOLUTE_ORIGIN}/scenarios/product-catalog/products/aurora-desk-lamp"`));
+  assert.equal(baseline.includes(CATALOG_ABSOLUTE_ORIGIN), false);
+
+  const links = markupOf("link-pagination");
+  assert.match(links, /<a data-testid="pagination-next" data-page="2" href="\/scenarios\/product-catalog\/\?page=2" aria-label="Next page">Next<\/a>/);
+  assert.equal(occurrences(links, '<button type="button" data-testid="pagination-next"'), 0);
+  assert.equal(occurrences(baseline, '<button type="button" data-testid="pagination-next"'), 1);
+  // numbered-pages reads these, and they are the same control in every mode.
+  // Counted raw: `count` closes the quote, and these ids end in a page number.
+  assert.equal(occurrences(links, 'data-testid="pagination-page-'), 3);
+  assert.equal(occurrences(baseline, 'data-testid="pagination-page-'), 3);
+});
+
+test("card photos are served for the armed catalog only, and loading one records no visit", () => {
+  const initial = scenario.createState(114);
+  const image = route(initial, "images/aurora-desk-lamp.svg");
+  assert.equal(image?.status, 200);
+  assert.deepEqual(image?.headers, { "content-type": "image/svg+xml" });
+  assert.match(image?.body ?? "", /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" width="48" height="48"/);
+  assert.equal(image?.mutation, undefined, "loading an image is not a product visit");
+  assert.equal(route(initial, `images/${CATALOG_PLACEHOLDER_SLUG}.svg`)?.status, 200);
+  for (const subpath of ["images/not-a-product.svg", "images/aurora-desk-lamp.png", "images/aurora-desk-lamp", "images/", "images"]) {
+    assert.equal(route(initial, subpath), undefined, subpath);
+  }
+  const short = apply(initial, "set-variant", { variant: "short-catalog" });
+  assert.equal(route(short, "images/willow-reading-lamp.svg"), undefined, "a product the armed catalog lacks has no photo either");
+  assert.equal(route(short, `images/${CATALOG_PLACEHOLDER_SLUG}.svg`)?.status, 200);
 });

@@ -12,6 +12,7 @@ import type { JsonObject, JsonValue } from "fluxiq/core";
 // import; this one is type-only and erased, so nothing is loaded at runtime and
 // no cycle exists in the bundle.
 import type { WebAutomationFailureRecord } from "../runtime/failure";
+import type { WebAutomationExtractionSummary, WebAutomationExtractListRequest, WebAutomationExtractRead } from "./extraction";
 
 export type WebAutomationActionType =
   | "web.browser.navigate"
@@ -148,32 +149,24 @@ export type WebAutomationKeyModifiers = {
   shift?: boolean | undefined;
 };
 
-/** Follow the `next` control until it is absent or `maxPages` pages, the first included, were read. */
-export type WebAutomationExtractListPagination = { next: string; maxPages: number };
-
-/**
- * `web.dom.extract_list` over a repeating structure, mirroring the scenario
- * contract's extract step (`packages/test-contracts/src/scenario.ts`): `item`
- * selects each record's root, and `fields` maps a field name to a selector
- * inside it. `selector@attribute` reads an attribute rather than text, and
- * `column:<header text>` reads the cell under that header when the items are
- * table rows, so extraction survives a column reorder.
- */
-export type WebAutomationExtractListRequest = {
-  item: string;
-  fields: Record<string, string>;
-  paginate?: WebAutomationExtractListPagination | undefined;
-  /** At most this many records, held to `WEB_AUTOMATION_EXTRACT_MAX_ITEMS`, which is also the bound when absent. */
-  maxItems?: number | undefined;
-  /**
-   * At least this many records, or the read fails as `output_not_observed` (or
-   * `auth_required` on a sign-in gate). Default 1, so a list that matched
-   * nothing is never a success; a workflow where an empty list is a valid
-   * answer declares `0`. A request whose minimum exceeds its maximum is
-   * refused whole, since no page could satisfy it.
-   */
-  minItems?: number | undefined;
-};
+// `web.dom.extract_list`'s request (C1) and result summary (C2) live in
+// `./extraction`, and are re-exported here so every existing importer of this
+// module keeps working. That directory imports this module type-only.
+export type {
+  WebAutomationExtractField,
+  WebAutomationExtractFieldHandling,
+  WebAutomationExtractFieldKind,
+  WebAutomationExtractFieldSpec,
+  WebAutomationExtractionSummary,
+  WebAutomationExtractListPagination,
+  WebAutomationExtractListRequest,
+  WebAutomationExtractRead,
+  WebAutomationExtractReadMode,
+  WebAutomationRecordedExtraction,
+  WebAutomationRecordedListExtraction,
+  WebAutomationRecordedValueExtraction
+} from "./extraction";
+export { WEB_AUTOMATION_EXTRACT_MAX_ITEMS, WEB_AUTOMATION_EXTRACT_MAX_PAGES } from "./extraction";
 
 /** What `web.dom.assert` claims about the page. `expected` carries the text or URL for `text` and `url`. */
 export type WebAutomationAssertKind = "exists" | "absent" | "text" | "url" | "visible" | "enabled";
@@ -193,6 +186,24 @@ export type WebAutomationUploadRequest = { files: WebAutomationUploadFile[] };
 export type WebAutomationDialogRequest = {
   response: "accept" | "dismiss";
   promptText?: string | undefined;
+};
+
+/** The native dialog kinds the page-world override answers. */
+export type WebAutomationDialogKind = "alert" | "confirm" | "prompt" | "beforeunload";
+
+/**
+ * A native dialog the page-world override handled, carried on the result of
+ * the action that follows it so a Flow can see what was actually answered.
+ * `message` is the page's own text. It rides on `dialog` and never on
+ * `extracted`, which is reserved for values an extraction read.
+ */
+export type WebAutomationObservedDialog = {
+  kind: WebAutomationDialogKind;
+  message: string;
+  response: "accept" | "dismiss";
+  promptText?: string | undefined;
+  /** When the override handled it, in epoch milliseconds. */
+  at: number;
 };
 
 /**
@@ -259,6 +270,8 @@ export type WebAutomationActionCommand = {
   modifiers?: WebAutomationKeyModifiers | undefined;
   /** `web.dom.check`: the state to leave the checkbox or radio in. */
   checked?: boolean | undefined;
+  /** `web.dom.extract`: which value of the target to read. Without it a read is the legacy `options.mode`. */
+  extract?: WebAutomationExtractRead | undefined;
   /** `web.dom.extract_list`. */
   extractList?: WebAutomationExtractListRequest | undefined;
   /** `web.dom.assert`. */
@@ -380,7 +393,12 @@ export type WebAutomationActionResult<TElement = JsonObject, TSnapshot = JsonObj
   element?: TElement | undefined;
   visualTarget?: WebAutomationActionVisualTarget | undefined;
   snapshot?: TSnapshot | undefined;
+  /** What a read took off the page: one value, or `web.dom.extract_list`'s records. Never dialog evidence. */
   extracted?: JsonValue | undefined;
+  /** `web.dom.extract_list`'s account of its own read (C2): counts, a flag, and declared field keys only. */
+  extraction?: WebAutomationExtractionSummary | undefined;
+  /** The native dialog handled before this action, when there was one. */
+  dialog?: WebAutomationObservedDialog | undefined;
   resolution?: WebAutomationTargetResolution | undefined;
   failure?: WebAutomationFailureRecord | undefined;
   startedAt: number;
@@ -396,17 +414,6 @@ export type WebAutomationActionResult<TElement = JsonObject, TSnapshot = JsonObj
  * `domain/src/tests/action-result.test.ts` asserts the two agree.
  */
 export const WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1_024;
-
-/** Upper bound on the pages one `web.dom.extract_list` may follow, mirroring the scenario contract's own. */
-export const WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
-
-/**
- * Upper bound on the records one `web.dom.extract_list` may return, across every
- * page it reads, and the bound a request that names none is held to. The page
- * mirrors it (`content/action-runtime/list-extraction.ts`) with a test that the
- * two agree.
- */
-export const WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1_000;
 
 /** Bounds on `web.dom.upload`, so a file cannot make an action command unbounded on the wire. */
 export const WEB_AUTOMATION_UPLOAD_MAX_FILE_BYTES = 1_048_576;

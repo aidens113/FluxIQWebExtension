@@ -1,5 +1,5 @@
 import {
-  defaultColumnOrder, inventoryColumns, inventoryRows,
+  defaultColumnOrder, inventoryColumns, inventoryRows, largeInventoryRows,
   type InventoryColumn, type InventoryColumnDefinition, type InventoryRow,
 } from "./inventory.js";
 
@@ -16,7 +16,7 @@ export type DataTableState = {
   columnOrder: InventoryColumn[];
   sort: DataTableSort | null;
   sortCount: number;
-  lastOperation: "seeded" | "sorted" | "columns-reordered";
+  lastOperation: "seeded" | "sorted" | "columns-reordered" | "inventory-cleared" | "large-inventory-loaded";
   view: DataTableView;
 };
 
@@ -40,16 +40,29 @@ export function createDataTableState(seed: number): DataTableState {
 /**
  * `sort` with `{ column }` sorts that column ascending, or flips it to
  * descending when it is already sorted ascending. `reorder-columns` arms the
- * `column-reorder` variant. Any other operation or payload changes nothing.
+ * `column-reorder` variant, `clear-inventory` the `no-rows` variant, and
+ * `load-large-inventory` the `large-table` variant. Any other operation or
+ * payload changes nothing.
  */
 export function mutateDataTableState(state: DataTableState, operation: string, payload: unknown): DataTableState {
   if (operation === "reorder-columns") return { ...state, columnOrder: [...reorderedColumns], lastOperation: "columns-reordered" };
+  if (operation === "clear-inventory") return withRows(state, [], "inventory-cleared");
+  if (operation === "load-large-inventory") return withRows(state, largeInventoryRows(), "large-inventory-loaded");
   if (operation !== "sort") return state;
   const column = columnOf(payload);
   if (!column) return state;
   const direction: SortDirection = state.sort?.column === column && state.sort.direction === "ascending" ? "descending" : "ascending";
   const sort: DataTableSort = { column, direction };
   return { ...state, sort, sortCount: state.sortCount + 1, lastOperation: "sorted", view: sortView(state.rows, sort) };
+}
+
+/**
+ * Replaces the catalog and re-derives the view from it. The sort is dropped
+ * with the rows it ordered: a status line naming a sort of a table that is no
+ * longer the one sorted would be a claim the page cannot support.
+ */
+function withRows(state: DataTableState, rows: InventoryRow[], lastOperation: DataTableState["lastOperation"]): DataTableState {
+  return { ...state, rows, sort: null, lastOperation, view: sortView(rows, null) };
 }
 
 /**

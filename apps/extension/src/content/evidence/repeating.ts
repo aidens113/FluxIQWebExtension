@@ -14,6 +14,7 @@
 // that numbers its rows is still rendering one template -- keying on the exact
 // id would split every numbered run into singletons.
 
+import { webAutomationIdentifierShape, webAutomationItemSignature } from "@fluxiq-web-extension/domain/client";
 import { boundedText } from "../identity";
 import { selectorFor, testIdFor } from "../describe-element";
 import { present } from "../../shared/present";
@@ -23,7 +24,6 @@ const ITEM_SELECTOR = "li,tr,article,[data-testid],[role='listitem'],[role='row'
 const MAX_SCANNED_ITEMS = 2_000;
 const MIN_ITEMS_PER_RUN = 3;
 const MAX_STRUCTURES = 6;
-const MAX_SIGNATURE_CLASSES = 3;
 const MAX_FIELDS = 8;
 const MAX_REPRESENTATIVE_TEXT = 160;
 
@@ -49,7 +49,7 @@ function clusterSiblings(): SiblingRun[] {
     if (!container) continue;
     const groups = byContainer.get(container) ?? new Map<string, Element[]>();
     byContainer.set(container, groups);
-    const signature = itemSignature(element);
+    const signature = templateSignature(element);
     const group = groups.get(signature);
     if (group) group.push(element);
     else groups.set(signature, [element]);
@@ -64,16 +64,21 @@ function clusterSiblings(): SiblingRun[] {
   return runs;
 }
 
-/** What two rows of the same template share: tag, role, test-id shape, and the classes they are styled by. */
-function itemSignature(element: Element): string {
-  const role = element.getAttribute("role")?.trim().toLowerCase() ?? "";
-  const classes = [...element.classList].sort().slice(0, MAX_SIGNATURE_CLASSES).join(".");
-  return `${element.tagName.toLowerCase()}|${role}|${identifierShape(testIdFor(element))}|${classes}`;
-}
-
-/** A test id with its numbers replaced, so `row-1` and `row-2` are one template rather than two. */
-function identifierShape(value: string | undefined): string {
-  return value === undefined ? "" : value.replace(/\d+/gu, "#");
+/**
+ * What two rows of the same template share, as the domain computes it
+ * (`webAutomationItemSignature`). The page supplies the parts and the string is
+ * built in one place, because the picker's inference
+ * (`content/extraction/infer-list.ts`) groups siblings by the same string: a
+ * second spelling here would mean the run this evidence reports is not the run
+ * the picker proposes.
+ */
+function templateSignature(element: Element): string {
+  return webAutomationItemSignature({
+    tagName: element.tagName,
+    role: element.getAttribute("role"),
+    testId: testIdFor(element),
+    classes: element.classList
+  });
 }
 
 function describeRun(run: SiblingRun): RepeatingStructureEvidence {
@@ -102,7 +107,7 @@ function itemFields(item: Element): string[] {
   const fields = new Set<string>();
   for (const element of item.querySelectorAll("[data-testid],[data-test],[data-cy]")) {
     const id = testIdFor(element);
-    if (id) fields.add(identifierShape(id));
+    if (id) fields.add(webAutomationIdentifierShape(id));
     if (fields.size >= MAX_FIELDS) break;
   }
   return [...fields];

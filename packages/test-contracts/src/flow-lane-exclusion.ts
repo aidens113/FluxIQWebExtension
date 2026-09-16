@@ -9,9 +9,10 @@ import type { ScenarioStep } from "./scenario.js";
  * on any product: Core proposes nothing, and the lane refuses an empty
  * proposal as `recording.contract` rather than pass a Flow that did nothing.
  * Which steps record an action is `recordableActionTypes`, keyed by every
- * `ScenarioStepOperation`, not a list of scenarios. An `extract` without
- * `pagination` and a `checkpoint` only read the page, which is all W04 and W08
- * do; a Flow that extracts is authored, never proposed from a recording.
+ * `ScenarioStepOperation`, not a list of scenarios. Only the runner's own waits
+ * and checks — `waitForState`, `checkpoint` and `waitForDownload` — record
+ * nothing. An `extract` records a `web.dom.extract_list`, paginated or not, so
+ * W04 and W08 reach the Flow lane and their extraction is judged there.
  *
  * The bench skips such a workflow's Flow-lane results and the runner refuses a
  * `--flow` run of it as `fixture.invalid`, both with this reason, so the two

@@ -26,12 +26,13 @@ const compatibility: CampaignCompatibility = {
 
 function evaluation(cell: CampaignPlanCell, runId: string, verdict: "passed" | "failed" = "passed"): RunEvaluation {
   return {
-    schemaVersion: "0.2", runId, verdict, ...(verdict === "failed" ? { failureCategory: "runtime.behavior" as const } : {}), facilityFailure: null,
+    schemaVersion: "0.3", runId, verdict, ...(verdict === "failed" ? { failureCategory: "runtime.behavior" as const } : {}), facilityFailure: null,
     invariants: verdict === "passed" ? [] : [{ id: "runner-verdict", passed: false, expected: "passed", actual: "failed", evidenceSequences: [] }], metrics: {},
     scenarioId: cell.scenarioId, workflowId: cell.workflowId, variantId: cell.variantId, repeatIndex: cell.repeatIndex, lane: cell.lane,
     flowCreated: null, oracleVerdict: verdict, reportedVerdict: null, automationFailureReported: null, automationFailureExpected: cell.expectedFailure,
     harnessActivations: 0, durationMs: 10, actions: [{ actionType: "web.dom.click", durationMs: 2 }],
     evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 }, llm: { mode: "disabled", profileId: null, calls: 0 },
+    extraction: null,
     harnessRecovery: null, adaptationCost: null, adaptationValidation: null, adaptationPersistence: null, adaptationReuse: null,
   };
 }

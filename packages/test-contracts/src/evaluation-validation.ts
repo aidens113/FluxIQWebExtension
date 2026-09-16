@@ -1,7 +1,7 @@
 import {
-  evaluationLanes, facilityFailureBoundaries, facilityFailureCauseCodes, facilityFailureOperationStages,
-  facilityFailureReasons, facilityFailureStages, failureCategories, llmUsageModes,
-  type CandidateComparison, type LlmUsage, type RunEvaluation,
+  EVALUATION_SCHEMA_VERSION, evaluationLanes, extractionMeasurementStatuses, facilityFailureBoundaries, facilityFailureCauseCodes,
+  facilityFailureOperationStages, facilityFailureReasons, facilityFailureStages, failureCategories, llmUsageModes,
+  type CandidateComparison, type LlmUsage, type RunEvaluation, type RunExtractionMeasurement,
 } from "./evaluation.js";
 import { AUTOMATION_STUDIO_ADAPTIVE_FAILURE_CLASSES } from "./failure-category.js";
 import { ContractValidationError, type ValidationIssue, type ValidationResult } from "./validation.js";
@@ -13,8 +13,13 @@ const runEvaluationKeys = [
   "schemaVersion", "runId", "verdict", "failureCategory", "facilityFailure", "invariants", "metrics",
   "scenarioId", "workflowId", "variantId", "repeatIndex", "lane", "flowCreated", "oracleVerdict", "reportedVerdict",
   "automationFailureReported", "automationFailureExpected", "harnessActivations", "durationMs", "actions", "evidence", "llm",
-  ...week2Keys,
+  "extraction", ...week2Keys,
 ];
+/** The whole-number members of a `RunExtractionMeasurement`. */
+const extractionCountKeys = [
+  "stepIndex", "expectedRecords", "observedRecords", "matchedRecords", "expectedFields", "presentFields", "unexpectedFields", "nonStringValues",
+] as const satisfies readonly (keyof RunExtractionMeasurement)[];
+const extractionMeasurementKeys = [...extractionCountKeys, "status", "pagesFollowed", "truncated", "durationMs"] as const satisfies readonly (keyof RunExtractionMeasurement)[];
 const automationVerdicts = ["passed", "failed"] as const;
 const moduleCauseCodes = ["ERR_MODULE_NOT_FOUND", "MODULE_NOT_FOUND", "ERR_PACKAGE_PATH_NOT_EXPORTED", "ERR_PACKAGE_IMPORT_NOT_DEFINED", "ERR_UNSUPPORTED_DIR_IMPORT"] as const;
 const httpTransportCauseCodes = ["ECONNREFUSED", "ECONNRESET", "EPIPE", "ETIMEDOUT", "ENETUNREACH", "EHOSTUNREACH", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_SOCKET"] as const;
@@ -24,7 +29,7 @@ export function validateRunEvaluation(input: unknown): ValidationResult<RunEvalu
   const issues: ValidationIssue[] = []; const value = object(normalized, "$", issues);
   if (value) {
     keys(value, runEvaluationKeys, "$", issues);
-    if (value.schemaVersion !== "0.2") add(issues, "$.schemaVersion", "must equal 0.2"); text(value, "runId", "$", issues); enumeration(value.verdict, ["passed", "failed", "inconclusive"], "$.verdict", issues);
+    if (value.schemaVersion !== EVALUATION_SCHEMA_VERSION) add(issues, "$.schemaVersion", `must equal ${EVALUATION_SCHEMA_VERSION}`); text(value, "runId", "$", issues); enumeration(value.verdict, ["passed", "failed", "inconclusive"], "$.verdict", issues);
     if (value.failureCategory !== undefined) enumeration(value.failureCategory, failureCategories, "$.failureCategory", issues);
     if (!("facilityFailure" in value)) add(issues, "$.facilityFailure", "is required");
     checkFacilityFailure(value.facilityFailure, "$.facilityFailure", issues);
@@ -122,7 +127,42 @@ function checkRunMeasurements(value: JsonObject, issues: ValidationIssue[]): voi
   array(value.actions, "$.actions", issues, checkActionLatency);
   checkEvidenceSizes(value.evidence, "$.evidence", issues);
   nest(validateLlmUsage(value.llm), "$.llm", issues);
+  if (!("extraction" in value)) add(issues, "$.extraction", "is required: null when extraction was not measured");
+  else checkExtraction(value.extraction, "$.extraction", issues);
   for (const key of week2Keys) if (value[key] !== null) add(issues, `$.${key}`, "must be null until Week 2 defines it");
+}
+
+/** `null` when extraction was not measured; otherwise one counts-only measurement per extraction step (D6). */
+function checkExtraction(input: unknown, path: string, issues: ValidationIssue[]): void {
+  if (input === null) return;
+  if (!Array.isArray(input)) { add(issues, path, "must be null or an array of extraction measurements"); return; }
+  array(input, path, issues, checkExtractionMeasurement);
+}
+
+/**
+ * One extraction step's measurement. A string is refused wherever it appears,
+ * except a closed `status`, before any other check: a string is the only way a
+ * page value, field name, or step id could reach an evaluation (D6), so its
+ * refusal must not depend on it landing in a member that also checks a type.
+ */
+function checkExtractionMeasurement(input: unknown, path: string, issues: ValidationIssue[]): void {
+  const value = object(input, path, issues); if (!value) return;
+  for (const [key, member] of Object.entries(value)) {
+    const closedStatus = key === "status" && (extractionMeasurementStatuses as readonly unknown[]).includes(member);
+    if (typeof member === "string" && !closedStatus) add(issues, `${path}.${key}`, "must not be a string: an extraction measurement carries counts and flags only, never a page value (D6)");
+  }
+  keys(value, extractionMeasurementKeys, path, issues);
+  for (const key of extractionCountKeys) finite(value[key], `${path}.${key}`, issues, 0, Number.MAX_SAFE_INTEGER, true);
+  enumeration(value.status, extractionMeasurementStatuses, `${path}.status`, issues);
+  if (value.pagesFollowed !== null) finite(value.pagesFollowed, `${path}.pagesFollowed`, issues, 0, Number.MAX_SAFE_INTEGER, true);
+  if (value.truncated !== null && typeof value.truncated !== "boolean") add(issues, `${path}.truncated`, "must be a boolean or null");
+  if (value.durationMs !== null) finite(value.durationMs, `${path}.durationMs`, issues);
+  const { matchedRecords, expectedRecords, observedRecords, presentFields, expectedFields } = value;
+  if (typeof matchedRecords === "number") {
+    if (typeof expectedRecords === "number" && matchedRecords > expectedRecords) add(issues, `${path}.matchedRecords`, "must not exceed expectedRecords");
+    if (typeof observedRecords === "number" && matchedRecords > observedRecords) add(issues, `${path}.matchedRecords`, "must not exceed observedRecords");
+  }
+  if (typeof presentFields === "number" && typeof expectedFields === "number" && presentFields > expectedFields) add(issues, `${path}.presentFields`, "must not exceed expectedFields");
 }
 
 function checkFacilityFailure(input: unknown, path: string, issues: ValidationIssue[]): void {
@@ -167,10 +207,17 @@ function checkFacilityFailurePairing(value: JsonObject, issues: ValidationIssue[
   if (value.reportedVerdict !== null || value.automationFailureReported !== null) add(issues, "$.facilityFailure", "cannot accompany an automation result");
 }
 
-/** Schema 0.1 is read-only compatibility and normalizes explicitly to the 0.2 shape. */
+/**
+ * Schemas 0.1 and 0.2 are read-only compatibility and normalize explicitly to
+ * the 0.3 shape: neither measured extraction, so `extraction` reads as `null`
+ * (unmeasured, never `[]`), and 0.1 gains 0.2's `facilityFailure: null`. An
+ * old version stating a member it never had is not normalized, and fails.
+ */
 function normalizeLegacyRunEvaluation(input: unknown): unknown {
-  if (!isObject(input) || input.schemaVersion !== "0.1" || "facilityFailure" in input) return input;
-  return { ...input, schemaVersion: "0.2", facilityFailure: null };
+  if (!isObject(input) || "extraction" in input) return input;
+  if (input.schemaVersion === "0.2") return { ...input, schemaVersion: EVALUATION_SCHEMA_VERSION, extraction: null };
+  if (input.schemaVersion === "0.1" && !("facilityFailure" in input)) return { ...input, schemaVersion: EVALUATION_SCHEMA_VERSION, facilityFailure: null, extraction: null };
+  return input;
 }
 
 function nullableVerdict(input: unknown, path: string, issues: ValidationIssue[]): void {

@@ -15,7 +15,7 @@ import { dispatchInputEvents } from "./input-events";
 import { checkActionability } from "./actionability";
 import { keyboard } from "./keyboard";
 import { setCheckedState } from "./checkable-state";
-import { extractList } from "./list-extraction";
+import { extractList } from "../extraction";
 import { setInputFiles } from "./file-input";
 import { dialogControl } from "./dialog-control";
 import { evaluateAssertion } from "./assertion-evaluation";

@@ -100,12 +100,12 @@ const campaignCompatibility: CampaignCompatibility = {
 function campaignEvaluation(runId: string, options: RunScenarioOptions): RunEvaluation {
   const observation = options.flow ? flowObservation() : undefined;
   return {
-    schemaVersion: "0.2", runId, verdict: "passed", facilityFailure: null, invariants: [], metrics: { steps: 3 }, scenarioId: options.scenarioId,
+    schemaVersion: "0.3", runId, verdict: "passed", facilityFailure: null, invariants: [], metrics: { steps: 3 }, scenarioId: options.scenarioId,
     workflowId: options.workflowId ?? null, variantId: options.variantId ?? null, repeatIndex: options.benchReceipt?.cellIdentity.repeatIndex ?? 0, lane: options.flow ? "flow" : "recording",
     flowCreated: observation?.flowCreated ?? null, oracleVerdict: "passed", reportedVerdict: "passed", automationFailureReported: null,
     automationFailureExpected: null, harnessActivations: observation?.harnessActivations ?? 0, durationMs: 40_000,
     actions: observation?.actions ?? [{ actionType: "web.dom.type", durationMs: 1_500 }], evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 },
-    llm: { mode: "disabled", profileId: null, calls: 0 }, harnessRecovery: null, adaptationCost: null, adaptationValidation: null, adaptationPersistence: null, adaptationReuse: null,
+    llm: { mode: "disabled", profileId: null, calls: 0 }, extraction: null, harnessRecovery: null, adaptationCost: null, adaptationValidation: null, adaptationPersistence: null, adaptationReuse: null,
   };
 }
 

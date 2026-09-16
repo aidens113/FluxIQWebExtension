@@ -6,11 +6,12 @@ import { benchDistribution } from "../distribution.js";
 import { benchExecutionCoverage } from "../execution-coverage.js";
 
 const run = (repeatIndex: number, fields: Partial<RunEvaluation> = {}): RunEvaluation => ({
-  schemaVersion: "0.2", runId: `run-${repeatIndex}`, verdict: "passed", facilityFailure: null, invariants: [], metrics: {},
+  schemaVersion: "0.3", runId: `run-${repeatIndex}`, verdict: "passed", facilityFailure: null, invariants: [], metrics: {},
   scenarioId: "basic-form", workflowId: null, variantId: null, repeatIndex, lane: "recording", flowCreated: null,
   oracleVerdict: "passed", reportedVerdict: "passed", automationFailureReported: null, automationFailureExpected: null,
   harnessActivations: 0, durationMs: 40_000, actions: [], evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 },
   llm: { mode: "disabled", profileId: null, calls: 0 },
+  extraction: null,
   harnessRecovery: null, adaptationCost: null, adaptationValidation: null, adaptationPersistence: null, adaptationReuse: null,
   ...fields,
 });

@@ -19,8 +19,8 @@ type Run = Selection & { state: Partial<MemberDirectoryState> };
 
 const key = ({ workflowId, variantId }: Selection) => `${workflowId ?? "primary"}/${variantId ?? "unarmed"}`;
 const directoryState = (lab: RunningScenarioLab) => readFinalState<MemberDirectoryState>(lab, SCENARIO);
-const promoted = { mode: "baseline", roles: { [RECORDED_MEMBER.id]: "Admin" }, removed: [], oracle: { memberCount: 240, adminCount: 44, pendingCount: 32 } };
-const untouched = { roles: {}, removed: [], activity: [], oracle: { memberCount: 240, adminCount: 43, pendingCount: 32 } };
+const promoted = { mode: "baseline", roles: { [RECORDED_MEMBER.id]: "Admin" }, removed: [], oracle: { memberCount: 240, adminCount: 44, pendingCount: 32 } } satisfies Partial<MemberDirectoryState>;
+const untouched = { roles: {}, removed: [], activity: [], oracle: { memberCount: 240, adminCount: 43, pendingCount: 32 } } satisfies Partial<MemberDirectoryState>;
 
 /** The runs whose recording script plays through to the end. The two negative variants have a test each. */
 const runs: Run[] = [

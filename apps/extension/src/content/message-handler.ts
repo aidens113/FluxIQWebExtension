@@ -7,12 +7,20 @@
 //
 // A page of iframes runs one copy of this script per frame, so `executeAction`
 // also carries who it is for -- see `isAddressedToThisFrame`.
+//
+// `extraction.propose` is the one message that answers about page structure
+// rather than acting: it infers the extraction a picked element proposes, for
+// the picker to show and for the content harness to prove inference on a real
+// page. Its reply holds selectors, labels and counts, never a page value
+// (decision D3).
 
 import { CONTENT_SCRIPT_VERSION, isActiveContentInstance } from "./instance";
 import { captureSettings } from "./capture-settings";
 import { setRecordingState } from "./recorder";
 import { actionFailure, captureSnapshotForResponse, executeAction } from "./action-runtime";
+import { inferListFromElement } from "./extraction";
 import { isTopFrame } from "./frame-geometry";
+import { EXTRACTION_PROPOSE_MESSAGE, type ExtractionProposeResponse } from "../shared/extraction-messages";
 import type { BrowserActionCommand } from "./types";
 
 /** The id the browser always gives a tab's main frame; every child frame has a positive one. */
@@ -47,7 +55,7 @@ function isAddressedToThisFrame(message: { frameId?: number; topFrameOnly?: bool
 
 export function installMessageHandler(): void {
   chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
-    const typed = message as { type?: string; recording?: boolean; settings?: { captureMutations?: boolean; captureInputValues?: boolean; captureSnapshots?: boolean }; action?: BrowserActionCommand; commandId?: string; x?: number; y?: number; frameId?: number; topFrameOnly?: boolean };
+    const typed = message as { type?: string; recording?: boolean; settings?: { captureMutations?: boolean; captureInputValues?: boolean; captureSnapshots?: boolean }; action?: BrowserActionCommand; commandId?: string; selector?: string; x?: number; y?: number; frameId?: number; topFrameOnly?: boolean };
     if (typed.type === "fluxiq.ping") {
       sendResponse({ ok: true, active: isActiveContentInstance(), version: CONTENT_SCRIPT_VERSION });
       return false;
@@ -72,6 +80,35 @@ export function installMessageHandler(): void {
         .catch((error: unknown) => sendResponse(actionFailure(typed.action as BrowserActionCommand, error)));
       return true;
     }
+    if (typed.type === EXTRACTION_PROPOSE_MESSAGE) {
+      if (!isAddressedToThisFrame(typed)) return false;
+      // Inference is synchronous, so the channel closes with the reply already
+      // sent, as `fluxiq.ping` does.
+      sendResponse(proposeExtraction(typed.selector));
+      return false;
+    }
     return false;
   });
+}
+
+/**
+ * The extraction the picked element proposes, or why none was made. Reading
+ * page structure is all this does: the reply carries selectors, labels built
+ * from structure, counts and coverage, and no value read from the page (D3).
+ */
+function proposeExtraction(selector: string | undefined): ExtractionProposeResponse {
+  const picked = pickedElement(selector);
+  if (!picked) return { ok: false, refused: "target_not_found" };
+  const proposal = inferListFromElement(picked);
+  return proposal ? { ok: true, proposal } : { ok: false, refused: "no_repeating_run" };
+}
+
+/** The element the selector names here, or `null` when this frame has none or the browser cannot parse it. */
+function pickedElement(selector: string | undefined): Element | null {
+  if (typeof selector !== "string" || selector.trim() === "") return null;
+  try {
+    return document.querySelector(selector);
+  } catch {
+    return null;
+  }
 }

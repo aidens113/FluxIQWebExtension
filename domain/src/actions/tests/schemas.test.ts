@@ -81,12 +81,21 @@ test("web.dom.extract_list mirrors the scenario contract's extract step and boun
   assert.deepEqual(request.required, ["item", "fields"]);
   const properties = request.properties as JsonObject;
   assert.equal((properties.item as JsonObject).type, "string");
-  assert.equal((properties.fields as JsonObject).type, "object");
   assert.equal((properties.maxItems as JsonObject).type, "integer");
   const paginate = properties.paginate as JsonObject;
-  assert.deepEqual(paginate.required, ["next", "maxPages"]);
-  // The bound is the domain's, so no Flow can follow pages without end.
-  assert.equal(((paginate.properties as JsonObject).maxPages as JsonObject).maximum, WEB_AUTOMATION_EXTRACT_MAX_PAGES);
+  // No key is required of every mode: `scroll` has no `maxPages` and `next` no `control`.
+  assert.equal(paginate.required, undefined, "the lift, not the schema, decides what each mode requires");
+  const pagination = paginate.properties as JsonObject;
+  // D14: the discriminator is `mode`, with the scenario contract's four names in its order.
+  assert.deepEqual((pagination.mode as JsonObject).enum, ["next", "loadMore", "scroll", "numbered"]);
+  for (const key of ["next", "control", "pages"]) assert.equal((pagination[key] as JsonObject | undefined)?.type, "string", `paginate is missing ${key}`);
+  // The bound is the domain's, so no Flow can follow pages, or scroll, without end.
+  for (const key of ["maxPages", "maxScrolls"]) {
+    const bound = pagination[key] as JsonObject;
+    assert.equal(bound.type, "integer", key);
+    assert.equal(bound.minimum, 1, key);
+    assert.equal(bound.maximum, WEB_AUTOMATION_EXTRACT_MAX_PAGES, key);
+  }
 });
 
 test("web.dom.extract_list bounds the records it returns and lets a Flow say an empty list is an answer", () => {
@@ -97,6 +106,28 @@ test("web.dom.extract_list bounds the records it returns and lets a Flow say an 
   const minItems = properties.minItems as JsonObject;
   assert.equal(minItems.type, "integer");
   assert.equal(minItems.minimum, 0);
+  // D14: a minimum above the item bound is refused by the lift, so the schema says so too.
+  assert.equal(minItems.maximum, WEB_AUTOMATION_EXTRACT_MAX_ITEMS);
+});
+
+test("web.dom.extract_list describes the field spec and the recorded item element without a composition keyword", () => {
+  const properties = objectAt(propertiesOf("web.dom.extract_list"), "extractList").properties as JsonObject;
+  // The item element is the same fingerprint schema every other action's target uses.
+  assert.deepEqual(properties.itemElement, objectAt(propertiesOf("web.dom.click"), "element"));
+  // Core's parameter-schema dialect has no `oneOf` (Core K1): `fields` stays a
+  // plain object, and the lift enforces "a string or a spec".
+  const fields = properties.fields as JsonObject;
+  assert.equal(fields.type, "object");
+  assert.equal(JSON.stringify(properties).includes("oneOf"), false, "no composition keyword anywhere in the request schema");
+  const spec = (fields.metadata as JsonObject).fieldSpec as JsonObject;
+  assert.deepEqual(spec.required, ["kind"]);
+  const specProperties = spec.properties as JsonObject;
+  assert.deepEqual((specProperties.kind as JsonObject).enum, ["text", "attribute", "link", "value", "column"]);
+  // D12 and D13: include, exclude, and the reserved encrypt.
+  assert.deepEqual((specProperties.handling as JsonObject).enum, ["include", "exclude", "encrypt"]);
+  assert.equal((specProperties.required as JsonObject).type, "boolean");
+  for (const key of ["selector", "attribute", "header"]) assert.equal((specProperties[key] as JsonObject).type, "string", key);
+  assert.deepEqual(specProperties.element, objectAt(propertiesOf("web.dom.click"), "element"));
 });
 
 test("web.dom.upload carries each file's name, type, and content", () => {

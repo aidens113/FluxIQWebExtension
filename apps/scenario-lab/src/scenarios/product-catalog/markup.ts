@@ -1,5 +1,8 @@
 import { escapeHtml, page } from "../../html.js";
-import { CATALOG_ROOT, formatPrice, formatRating, productPath, stockLabel } from "./format.js";
+import {
+  CATALOG_PLACEHOLDER_SLUG, CATALOG_ROOT, cardShowsPrice, cardShowsRating, formatPrice, formatRating,
+  productHref, productImageAlt, productImagePath, stockLabel,
+} from "./format.js";
 import type { CatalogListing, CatalogProduct, CatalogVariant } from "./types.js";
 
 const CATALOG_STYLE = `
@@ -38,7 +41,7 @@ export function resultsMarkup(listing: CatalogListing, variant: CatalogVariant):
     items.length > 0
       ? `<ul data-testid="product-list" aria-label="Products">${items.map((product) => productCard(product, variant)).join("")}</ul>`
       : `<p data-testid="empty-results">${searching ? "No products match your search." : "No products to show."}</p>`,
-    resultCount > 0 ? pagination(listing) : "",
+    resultCount > 0 ? pagination(listing, variant) : "",
   ].join("");
 }
 
@@ -55,15 +58,40 @@ export function productPageMarkup(product: CatalogProduct, variant: CatalogVaria
   return page(`${product.name} | Product catalog`, body, "");
 }
 
-/** Field elements hold only their text (the name only its link), so read text needs no whitespace normalization. */
+/**
+ * Field elements hold only their text (the name only its link), so read text
+ * needs no whitespace normalization. Under `sparse-cards` the price and rating
+ * elements are absent rather than empty, which is what makes an optional field
+ * read as no value at all.
+ */
 function productCard(product: CatalogProduct, variant: CatalogVariant): string {
   const nameId = `product-${product.id}-name`;
   return `<li data-testid="product-card" data-product-id="${product.id}"><article aria-labelledby="${nameId}">`
-    + `<h3 id="${nameId}" data-testid="product-name"><a data-testid="product-link" href="${productPath(product)}">${escapeHtml(product.name)}</a></h3>`
-    + `<p data-testid="product-price">${formatPrice(product.priceCents, variant)}</p>`
-    + `<p data-testid="product-rating">${formatRating(product.ratingTenths)}</p>`
+    + productImage(product, variant)
+    + `<h3 id="${nameId}" data-testid="product-name"><a data-testid="product-link" href="${productHref(product, variant)}">${escapeHtml(product.name)}</a></h3>`
+    + (cardShowsPrice(product, variant) ? `<p data-testid="product-price">${formatPrice(product.priceCents, variant)}</p>` : "")
+    + (cardShowsRating(product, variant) ? `<p data-testid="product-rating">${formatRating(product.ratingTenths)}</p>` : "")
     + `<p>${stockBadge(product)}</p>`
     + `</article></li>`;
+}
+
+/**
+ * The card photo. `lazy-images` defers it as a lazy loader does: `src` holds
+ * the shared placeholder and the real document waits in `data-src`. An eager
+ * card carries no `data-src` at all, so a read of that attribute finds no
+ * value rather than an empty string.
+ */
+function productImage(product: CatalogProduct, variant: CatalogVariant): string {
+  const common = `data-testid="product-image" alt="${escapeHtml(productImageAlt(product))}" width="48" height="48"`;
+  return variant === "lazy-images"
+    ? `<img ${common} src="${productImagePath(CATALOG_PLACEHOLDER_SLUG)}" data-src="${productImagePath(product.slug)}" loading="lazy">`
+    : `<img ${common} src="${productImagePath(product.slug)}">`;
+}
+
+/** A card photo document. The card needs one that loads; an extraction reads the attribute and never the bytes. */
+export function catalogImageSvg(slug: string): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" role="img" aria-label="${escapeHtml(slug)}">`
+    + `<rect width="48" height="48" fill="#dfe6ef"></rect></svg>`;
 }
 
 function stockBadge(product: CatalogProduct): string {
@@ -71,13 +99,22 @@ function stockBadge(product: CatalogProduct): string {
 }
 
 /** Numbered pages and a Next control that is absent, not disabled, on the last page. */
-function pagination({ view, pageCount }: CatalogListing): string {
+function pagination({ view, pageCount }: CatalogListing, variant: CatalogVariant): string {
   const numbers = Array.from({ length: pageCount }, (_, index) => index + 1).map((number) =>
     `<button type="button" data-testid="pagination-page-${number}" data-page="${number}" aria-label="Page ${number}"${number === view.page ? ' aria-current="page"' : ""}>${number}</button>`);
-  const next = view.page < pageCount
-    ? `<button type="button" data-testid="pagination-next" data-page="${view.page + 1}" aria-label="Next page">Next</button>`
-    : "";
+  const next = view.page < pageCount ? nextControl(view.page + 1, variant) : "";
   return `<nav aria-label="Pagination" data-testid="pagination"><p data-testid="page-status">Page ${view.page} of ${pageCount}</p>${numbers.join("")}${next}</nav>`;
+}
+
+/**
+ * Next as a button, or as a real link under `link-pagination`. Both carry the
+ * same test id and `data-page`, so the client follows either and only the
+ * element kind changes.
+ */
+function nextControl(nextPage: number, variant: CatalogVariant): string {
+  return variant === "link-pagination"
+    ? `<a data-testid="pagination-next" data-page="${nextPage}" href="${CATALOG_ROOT}?page=${nextPage}" aria-label="Next page">Next</a>`
+    : `<button type="button" data-testid="pagination-next" data-page="${nextPage}" aria-label="Next page">Next</button>`;
 }
 
 function countLabel(count: number, noun: string): string {

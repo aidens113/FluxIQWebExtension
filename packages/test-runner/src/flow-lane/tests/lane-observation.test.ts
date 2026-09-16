@@ -17,6 +17,7 @@ function evaluationFrom(observation: RunLaneObservation): RunEvaluation {
     scenarioId: "auth-gate", workflowId: null, variantId: null, repeatIndex: 0, durationMs: 10,
     evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 },
     llm: { mode: "disabled", profileId: null, calls: 0 },
+    extraction: null,
     harnessRecovery: null, adaptationCost: null, adaptationValidation: null, adaptationPersistence: null, adaptationReuse: null,
     ...observation,
   };

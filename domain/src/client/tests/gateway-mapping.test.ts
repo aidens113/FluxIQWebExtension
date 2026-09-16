@@ -157,6 +157,42 @@ assert.equal(
 const tabCommand = webAutomationActionFromGatewayCommand({ commandId: "command.tab", actionType: "web.browser.tab", parameters: webAutomationOutputPayload("web.browser.tab", tabEvent.payload ?? {}) });
 assert.deepEqual("status" in tabCommand ? undefined : tabCommand.tab, { operation: "switch", urlPath: "/scenarios/multi-tab/details" }, "a recorded switch reaches the command as its path alone");
 
+// -- A recorded extraction definition (X4, D3) --------------------------------
+// The picker runs in the page, so what it hands the recorder is page-adjacent.
+// The stored payload is rebuilt field by field, so no sample value and no key
+// the picker added beside the definition reaches the recording.
+
+const extractionSentinel = "SENTINEL-PAGE-VALUE-FROM-THE-PICKER";
+const recordedExtraction = {
+  form: "list",
+  datasetId: "products:4f1c9a",
+  label: "Products",
+  itemCount: 24,
+  request: { item: "li.product", fields: { name: { kind: "text", selector: ".name" } } },
+  fieldLabels: { name: "Product name" }
+};
+const extractionEvent = createWebAutomationRecordingEvent({
+  kind: "data.extract",
+  sequence: 11,
+  url: "https://example.test/products",
+  title: "Products",
+  eventTimestampMs: 110,
+  extraction: { ...recordedExtraction, samples: [{ name: extractionSentinel }], previewHtml: extractionSentinel }
+});
+assert.equal(extractionEvent.eventType, WEB_AUTOMATION_EVENTS.dataExtractionDefined);
+assert.deepEqual(extractionEvent.payload?.extraction, recordedExtraction, "only the declared fields are stored");
+assert.equal(JSON.stringify(extractionEvent).includes(extractionSentinel), false, "no sample value reaches the recorded event");
+assert.equal(
+  "extraction" in (createWebAutomationRecordingEvent({ kind: "data.extract", sequence: 12, url: "https://example.test", title: "Example", eventTimestampMs: 120, extraction: { form: "list" } }).payload ?? {}),
+  false,
+  "a definition that cannot be read is stored as none at all"
+);
+assert.equal(
+  "extraction" in (createWebAutomationRecordingEvent({ kind: "dom.click", sequence: 13, url: "https://example.test", title: "Example", eventTimestampMs: 130 }).payload ?? {}),
+  false,
+  "an ordinary event carries no extraction"
+);
+
 // -- A run-time request nobody answered ---------------------------------------
 // An unanswered upload request is refused the way an unanswered secret is: a
 // user-intervention refusal naming the parameter and path, not an unreadable
@@ -579,5 +615,107 @@ assert.equal(
   (webAutomationActionFromGatewayCommand({ commandId: "command.both", actionType: "web.dom.assert", parameters: { assert: { kind: "contains" }, text: { $state: { path: "web.secret.password" } } } }) as { failure?: { code?: string } }).failure?.code,
   "web.intervention.required"
 );
+
+// -- A request for the Encrypt column is refused until it is built (D13, D14) --
+// The request is well formed, so this is not INVALID_PARAMETER: the client
+// does not implement the option yet. Read as `include` the values would leave
+// in clear. The refusal names field keys, never a selector or a value.
+
+const encryptSentinel = "SENTINEL-SELECTOR-OF-AN-ENCRYPTED-FIELD";
+function extractListCommand(handling: string, actionType = "web.dom.extract_list") {
+  return webAutomationActionFromGatewayCommand({
+    commandId: "command.encrypt",
+    actionType,
+    parameters: { extractList: { item: "tr", fields: { name: "td.name", card_number: { kind: "text", selector: encryptSentinel, handling } } } }
+  });
+}
+const encryptedCommand = extractListCommand("encrypt");
+assert.equal("status" in encryptedCommand, true, "an encrypt field is not dispatched");
+const encryptedFailure = "failure" in encryptedCommand ? encryptedCommand.failure : undefined;
+assert.equal(encryptedFailure?.code, "web.action.not_implemented");
+assert.equal(encryptedFailure?.category, "blocked_by_capability_or_policy");
+assert.equal(encryptedFailure?.stage, "dispatch");
+assert.equal(encryptedFailure?.retryable, false);
+assert.deepEqual(parseAutomationStudioFailureRecord(encryptedFailure), encryptedFailure, "Core's parser keeps the record whole");
+assert.equal("message" in encryptedCommand && encryptedCommand.message.includes("card_number"), true, "the refusal names the field key");
+assert.equal(JSON.stringify(encryptedCommand).includes(encryptSentinel), false, "the refusal carries no selector or value from the field");
+assert.equal("status" in extractListCommand("include"), false, "the same field included is dispatched");
+assert.equal("status" in extractListCommand("exclude"), false, "the same field excluded is dispatched");
+// Only the verb that reads the field map is refused over it.
+assert.equal("status" in extractListCommand("encrypt", "web.dom.click"), false, "a click does not read an extraction request");
+// A malformed request is still refused as malformed first.
+assert.equal(
+  (webAutomationActionFromGatewayCommand({ commandId: "command.both", actionType: "web.dom.extract_list", parameters: { extractList: { item: "tr", fields: { card: { kind: "text", handling: "encrypt" }, price: { kind: "column" } } } } }) as { failure?: { code?: string } }).failure?.code,
+  "web.action.invalid_parameter"
+);
+
+// -- An extraction's summary, on the wire (C2) --------------------------------
+// The summary is counts, a flag, and declared field keys. It is copied field by
+// field, so nothing the page put beside it rides along, and a string that is not
+// a field key drops the whole summary rather than carrying page text.
+
+const declaredFieldKeys = ["name", "price"];
+const summary = { recordCount: 8, pagesRead: 1, truncated: false, missingFields: ["price"], fieldNames: declaredFieldKeys };
+const extractionResult: WebAutomationActionResult = {
+  commandId: "command.extract-list",
+  actionType: "web.dom.extract_list",
+  status: "succeeded",
+  validation: { status: "passed", expected: "at least 1 record", actual: "8 records" },
+  extracted: [{ name: "Synthetic product", price: null }],
+  extraction: summary,
+  startedAt: 1,
+  finishedAt: 2
+};
+assert.deepEqual(webAutomationActionResultPayload(extractionResult).extraction, summary, "the summary is carried");
+assert.deepEqual(webAutomationActionResultPayload({ ...extractionResult, extraction: { ...summary, truncated: true, recordCount: 1_000 } }).extraction, { ...summary, truncated: true, recordCount: 1_000 });
+
+/** Every string anywhere inside a JSON value. */
+function stringsIn(value: unknown): string[] {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(stringsIn);
+  return value && typeof value === "object" ? Object.values(value).flatMap(stringsIn) : [];
+}
+const summarySentinel = "SENTINEL-PAGE-TEXT-BESIDE-THE-SUMMARY";
+const widenedSummary = webAutomationActionResultPayload({ ...extractionResult, extraction: { ...summary, sample: summarySentinel, pages: [{ title: summarySentinel }] } as never }).extraction;
+assert.deepEqual(widenedSummary, summary, "unknown keys are left behind");
+assert.equal(stringsIn(widenedSummary).every((entry) => declaredFieldKeys.includes(entry)), true, "every string in the summary is a declared field key");
+
+const malformedSummaries: Array<[why: string, extraction: unknown]> = [
+  ["a field name that is page text, not a key", { ...summary, fieldNames: ["name", "Synthetic product, 42 Example Street"] }],
+  ["a missing field that is not one of the read's fields", { ...summary, missingFields: ["colour"] }],
+  ["a negative record count", { ...summary, recordCount: -1 }],
+  ["a page count that is not an integer", { ...summary, pagesRead: 1.5 }],
+  ["a truncation flag that is not a boolean", { ...summary, truncated: "no" }],
+  ["field names that are not a list", { ...summary, fieldNames: "name,price" }],
+  ["a summary that is not an object", ["name", "price"]]
+];
+for (const [why, extraction] of malformedSummaries) {
+  assert.equal("extraction" in webAutomationActionResultPayload({ ...extractionResult, extraction: extraction as never }), false, why);
+}
+assert.equal("extraction" in webAutomationActionResultPayload(failedValidationResult), false, "a result that read no list gains no summary");
+
+// -- A dialog's evidence rides on `dialog`, not `extracted` -------------------
+const observedDialog = { kind: "prompt", message: "Name this report", response: "accept", promptText: "Quarterly", at: 1_700_000_000_000 } as const;
+const dialogResult: WebAutomationActionResult = {
+  commandId: "command.after-dialog",
+  actionType: "web.dom.dialog",
+  status: "succeeded",
+  validation: { status: "passed", expected: "the next dialog is dismissed", actual: "the response was armed and acknowledged by the page" },
+  dialog: observedDialog,
+  startedAt: 1,
+  finishedAt: 2
+};
+const dialogPayload = webAutomationActionResultPayload(dialogResult);
+assert.deepEqual(dialogPayload.dialog, observedDialog, "a dialog result carries the dialog it handled");
+assert.equal("extracted" in dialogPayload, false, "and no extracted value");
+assert.deepEqual(
+  webAutomationActionResultPayload({ ...dialogResult, dialog: { kind: "confirm", message: "Delete?", response: "dismiss", at: 5, html: "<b>dropped</b>" } as never }).dialog,
+  { kind: "confirm", message: "Delete?", response: "dismiss", at: 5 },
+  "copied field by field"
+);
+for (const dialog of [{ ...observedDialog, kind: "toast" }, { ...observedDialog, response: "ignore" }, { ...observedDialog, at: "now" }, { ...observedDialog, promptText: 7 }, "Name this report"]) {
+  assert.equal("dialog" in webAutomationActionResultPayload({ ...dialogResult, dialog: dialog as never }), false, JSON.stringify(dialog));
+}
+assert.equal("dialog" in webAutomationActionResultPayload(failedValidationResult), false, "a result after no dialog gains none");
 
 console.log("Web automation gateway mapping tests passed.");

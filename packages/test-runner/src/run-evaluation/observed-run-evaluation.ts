@@ -94,6 +94,7 @@ export function evaluateObservedRun(input: ObservedRun): RunEvaluation {
       ? { sanitizedPacketBytes: [...evidence.sanitizedPacketBytes], rawSnapshotBytes: [...evidence.rawSnapshotBytes], truncationCount: evidence.truncationCount }
       : { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 },
     llm: { mode: "disabled", profileId: null, calls: 0 },
+    extraction: null,
     harnessRecovery: null,
     adaptationCost: null,
     adaptationValidation: null,

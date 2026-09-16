@@ -229,7 +229,7 @@ test("deep links serve the same shell and record the one route a request did pro
 });
 
 test("the extraction workflow expects the whole book, written as the page writes each row", () => {
-  // The extract step is the runner's own check, so no recording yields a web.dom.extract action for the Flow lane to judge.
+  // This workflow pins no `actions`: the Flow lane judges its `extracted` records instead. Since X5.1 an extract step does record a web.dom.extract_list, so a pin here would be meetable -- the manifest simply makes none.
   assert.equal(resolveScenarioWorkflow(manifest, { workflowId: "extract-customer-list" }).expected.actions, undefined);
   assert.equal(resolveScenarioWorkflow(manifest, { workflowId: "extract-customer-list", variantId: "short-book" }).expected.actions, undefined);
   const whole = resolveScenarioWorkflow(manifest, { workflowId: "extract-customer-list" }).expected.extracted?.[0];

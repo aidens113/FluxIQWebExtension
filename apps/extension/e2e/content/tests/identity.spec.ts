@@ -2,7 +2,9 @@
 // accessible name, label, implicit role and page context that Phase 1.3 added
 // to `DomElementDescriptor`. Each case reads one element through the read-only
 // `web.dom.extract` verb, whose reply carries exactly the descriptor the
-// background worker receives.
+// background worker receives -- except a sensitive control, which that verb
+// refuses in every mode (decision D2 of the data-extraction plan), and which is
+// read from the snapshot the same `describeElement` builds.
 //
 // identity-drift is the point of the suite: the same Save action is described
 // in all five renderings, so what survives each drift is visible per mode --
@@ -24,6 +26,20 @@ async function describe(harness: ContentHarness, selector: string): Promise<Desc
     throw new Error(`extract did not describe ${selector}: ${reply.status} ${reply.message ?? ""}`);
   }
   return reply.element;
+}
+
+type SnapshotDescriptor = Awaited<ReturnType<ContentHarness["capture"]>>["interactiveElements"][number];
+
+/**
+ * The descriptor for one element, taken from the snapshot instead. Extraction
+ * refuses a sensitive control in every mode, so `web.dom.extract` cannot
+ * describe one; the snapshot is where the background worker reads the same
+ * `describeElement` output for it, so nothing about the descriptor changes.
+ */
+async function describeInSnapshot(harness: ContentHarness, selector: string): Promise<SnapshotDescriptor> {
+  const element = (await harness.capture()).interactiveElements.find((candidate) => candidate.selector === selector);
+  if (!element) throw new Error(`the snapshot of ${harness.scenarioId} carries no descriptor for ${selector}`);
+  return element;
 }
 
 /** Arms an identity-drift mode through the fixture's own `set-mode`, then reloads the page. */
@@ -186,16 +202,17 @@ test("data-table: a cell's context is its row, its column and the column's heade
 
 test("sensitive-input: value presence is reported, the value is not part of identity", async ({ openHarness }) => {
   const harness = await openHarness("sensitive-input");
-  const password = await describe(harness, '[data-testid="password"]');
+  const password = await describeInSnapshot(harness, '[data-testid="password"]');
   expect(password).toMatchObject({ label: "Password", accessibleName: "Password", hasValue: true });
   // A password field has no implicit ARIA role, and no identity signal may be
   // built from its value: `label` and `accessibleName` come from the wrapping
-  // <label>, and `hasValue` is a boolean. Redacting the descriptor's `value`
-  // itself is Phase 1.4, so this case deliberately asserts nothing about it.
+  // <label>, `hasValue` is a boolean, and the descriptor carries no `value` at
+  // all.
   expect(password.implicitRole).toBeUndefined();
+  expect(password).not.toHaveProperty("value");
   expect(password.accessibleName).not.toContain("SYNTHETIC");
   expect(password.label).not.toContain("SYNTHETIC");
-  expect(await describe(harness, '[data-testid="payment"]')).toMatchObject({
+  expect(await describeInSnapshot(harness, '[data-testid="payment"]')).toMatchObject({
     label: "Test card",
     accessibleName: "Test card",
     hasValue: true

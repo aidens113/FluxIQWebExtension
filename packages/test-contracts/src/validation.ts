@@ -231,11 +231,13 @@ const checkExtractionReferences = (workflow: JsonObject, path: string, issues: V
  * Every `actions[].action`, in a workflow's expectations and in each of its
  * variants, must be a type some step of the workflow's recording script can
  * yield (`recordableActionTypes`). A variant never changes the recording, so its
- * entries are judged against the same script. Any other entry is unmeetable: W11
- * and W15 each pinned a `web.dom.extract` that no recording holds, and the Flow
- * lane failed those rows as if FluxIQ had dropped an action. A script with no
- * steps is a playback goal, whose actions no recording yields, so it is not
- * judged here.
+ * entries are judged against the same script. Any other entry is unmeetable, and
+ * the Flow lane fails the row as if FluxIQ had dropped an action: W11 and W15
+ * each pinned a `web.dom.extract` that no recording held. Since X5.1 an extract
+ * step records a `web.dom.extract_list`, so what is unmeetable is an action no
+ * step yields at all, such as a `web.dom.click` pinned on a workflow that only
+ * extracts. A script with no steps is a playback goal, whose actions no
+ * recording yields, so it is not judged here.
  */
 const checkExpectedActionSources = (workflow: JsonObject, path: string, issues: ValidationIssue[]) => {
   const script = Array.isArray(workflow.recordingScript) ? workflow.recordingScript.filter(isObject) : [];

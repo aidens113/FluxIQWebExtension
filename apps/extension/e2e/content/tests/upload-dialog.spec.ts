@@ -124,9 +124,36 @@ test("dialog: an armed accept deletes the draft and is reported as evidence afte
     deletePrompts: { accepted: 1, dismissed: 0 }
   });
 
-  // The next dialog action carries the dialog the override actually handled.
+  // The next dialog action carries the dialog the override actually handled,
+  // on `dialog`: `extracted` holds only what a read took off the page.
   const next = await harness.runAction({ commandId: "arm-again", actionType: "web.dom.dialog", dialog: { response: "dismiss" } });
-  expect(next.extracted).toMatchObject({ kind: "confirm", message: DELETE_PROMPT, response: "accept" });
+  expect(next.dialog).toMatchObject({ kind: "confirm", message: DELETE_PROMPT, response: "accept" });
+  expect(next).not.toHaveProperty("extracted");
+});
+
+test("dialog: a prompt's answer is reported by its length, never its content", async ({ openHarness, page }) => {
+  // The answer is user data, as a typed value is: the text a Flow supplied, or
+  // what a person typed. The prompt's message is the page's own text.
+  const message = "Name this report";
+  const answer = "SYNTHETIC_PROMPT_ANSWER";
+  const harness = await openHarness("modal-flows");
+  const armed = await harness.runAction({
+    commandId: "arm-prompt", actionType: "web.dom.dialog", dialog: { response: "accept", promptText: answer }
+  });
+  expect(armed).toMatchObject({ status: "succeeded", validation: { expected: "the next dialog is accepted with the supplied text" } });
+
+  // modal-flows has no prompt of its own, so the page's world asks one. The
+  // override answers it with the armed text; were the override missing,
+  // Playwright would dismiss the real prompt and this would be null.
+  expect(await page.evaluate((text) => window.prompt(text), message)).toBe(answer);
+
+  const next = await harness.runAction({ commandId: "arm-after-prompt", actionType: "web.dom.dialog", dialog: { response: "dismiss" } });
+  expect(next.dialog).toEqual({
+    kind: "prompt", message, response: "accept", promptText: `a withheld value of ${answer.length} characters`, at: expect.any(Number)
+  });
+  expect(next).not.toHaveProperty("extracted");
+  // Nowhere in either reply, their page snapshots included.
+  for (const reply of [armed, next]) expect(JSON.stringify(reply)).not.toContain(answer);
 });
 
 test("dialog: a command with no dialog request is refused rather than arming nothing", async ({ openHarness }) => {

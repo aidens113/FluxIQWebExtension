@@ -1,5 +1,6 @@
 import { fixtureClient, page } from "../../html.js";
 import { createScenarioManifest, defineScenario } from "../../types.js";
+import { orderLines, renderOrderLines } from "./order-lines.js";
 
 type State = { sameOriginClicks: number; crossOriginClicks: number };
 
@@ -24,6 +25,21 @@ export const iframeCheckoutScenario = defineScenario<State>({
       actions: [{ action: "web.dom.click", outcome: "succeeded" }],
       finalState: [{ id: "same-confirmed", subject: "same-frame", predicate: "text", value: "Confirmed" }, { id: "cross-confirmed", subject: "cross-frame", predicate: "text", value: "Confirmed" }],
     },
+    workflows: [{
+      id: "extract-order-lines",
+      description: "Extract the order lines listed inside the same-origin checkout frame. The intent names the frame, which is the only way this read reaches them: the picker runs in the top frame only, so nothing here could have been pointed at by hand.",
+      recordingScript: [
+        {
+          id: "extract-lines", operation: "extract", target: "frame:Same-origin checkout/testid:order-line",
+          fields: { item: "testid:order-line-item", quantity: "testid:order-line-quantity", amount: "testid:order-line-amount" },
+        },
+        { id: "lines-extracted", operation: "checkpoint" },
+      ],
+      expected: {
+        pageFacts: [{ id: "two-frames", subject: "document", predicate: "iframe-count", value: 2 }],
+        extracted: [{ step: "extract-lines", count: orderLines.length, records: orderLines.map((line) => ({ ...line })) }],
+      },
+    }],
   }),
   createState: () => ({ sameOriginClicks: 0, crossOriginClicks: 0 }),
   mutate(state, operation) {
@@ -42,7 +58,11 @@ export const iframeCheckoutScenario = defineScenario<State>({
   },
 });
 
+// Only the same-origin frame lists the order: the cross-origin one stays the
+// click surface it has always been, so a read that reached across origins
+// could not be mistaken for this workflow succeeding.
 function iframePage(kind: "same" | "cross", runToken: string): string {
-  return page(`${kind} origin frame`, `<main><h1>${kind === "same" ? "Same" : "Cross"}-origin frame</h1><button data-testid="${kind}-frame-action">Confirm synthetic checkout</button><p data-testid="frame-result" aria-live="polite">Pending</p></main>`, `${fixtureClient(runToken, "iframe-checkout")}
+  const order = kind === "same" ? renderOrderLines() : "";
+  return page(`${kind} origin frame`, `<main><h1>${kind === "same" ? "Same" : "Cross"}-origin frame</h1>${order}<button data-testid="${kind}-frame-action">Confirm synthetic checkout</button><p data-testid="frame-result" aria-live="polite">Pending</p></main>`, `${fixtureClient(runToken, "iframe-checkout")}
 document.querySelector('button').addEventListener('click', async () => { await mutate('${kind}'); document.querySelector('[data-testid="frame-result"]').textContent = 'Confirmed'; });`);
 }

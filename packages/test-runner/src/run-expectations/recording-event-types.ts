@@ -1,9 +1,16 @@
 /**
  * The recording-domain event type each recorded client event kind is stored
  * as: the vocabulary `expected.recordingEvents` is written in. It mirrors
- * `webAutomationEventTypeForClientKind` (`domain/src/io/input-model.ts`); the
- * runner does not depend on the domain package, and a test fails when the two
- * disagree.
+ * `webAutomationEventTypeForClientKind` (`domain/src/io/input-model.ts`), and
+ * a test fails when the two disagree -- by reading the domain's source, so the
+ * mirror drifts silently until that test is next run. It drifted exactly that
+ * way once: X4.1 added `data.extract` to the domain and this table kept its
+ * old shape.
+ *
+ * The runner *can* import the domain (`@fluxiq-web-extension/domain/node` is a
+ * dependency, and `run-evaluation/evidence-budget-invariant.ts` derives from it
+ * already), so this table is a hand-copy by habit rather than by necessity.
+ * Whether to delegate to the domain function instead is the supervisor's call.
  */
 export const recordingEventTypesByKind: Readonly<Record<string, string>> = Object.freeze({
   "content.ready": "web.client.ready",
@@ -20,6 +27,7 @@ export const recordingEventTypesByKind: Readonly<Record<string, string>> = Objec
   "dom.scroll": "web.scroll.changed",
   "dom.mutation": "web.dom.mutated",
   "dom.snapshot": "web.snapshot.captured",
+  "data.extract": "web.data.extraction_defined",
   "action.result": "web.action.executed",
 });
 

@@ -14,7 +14,9 @@ import {
   type WebAutomationActionCommand,
   type WebAutomationActionType
 } from "../../actions/types";
+import { elementFingerprint } from "../../output-nodes";
 import { WEB_AUTOMATION_FAILURE_CODES } from "../../runtime/failure";
+import { webAutomationReadActionParameters } from "../gateway-action-parameters";
 import { webAutomationActionFromGatewayCommand, type WebAutomationActionRejection } from "../gateway-mapping";
 
 /** The mapped command, with the rejection branch ruled out so a field read below cannot be silently undefined. */
@@ -89,7 +91,7 @@ assert.deepEqual(mapped("web.dom.extract_list", {
 }).extractList, { item: "tr.row", fields: { name: "td.name", href: "a@href", price: "column:Price" }, paginate: { next: "a.next", maxPages: 3 }, maxItems: 40 });
 assert.deepEqual(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" } } }).extractList, { item: "li", fields: { title: "h3" } });
 // The domain's own page bound, the same one the page-side reader applies.
-assert.equal(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, paginate: { next: "a.next", maxPages: 5_000 } } }).extractList?.paginate?.maxPages, WEB_AUTOMATION_EXTRACT_MAX_PAGES);
+assert.deepEqual(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, paginate: { next: "a.next", maxPages: 5_000 } } }).extractList?.paginate, { next: "a.next", maxPages: WEB_AUTOMATION_EXTRACT_MAX_PAGES });
 refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: {} } }, ["extractList"], "no fields extracts nothing");
 refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "" } } }, ["extractList"], "a field naming no selector would extract a column of nothing");
 refusedWhole("web.dom.extract_list", { extractList: { fields: { title: "h3" } } }, ["extractList"], "no item selector selects no records");
@@ -109,6 +111,104 @@ refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { titl
 // A minimum no page could satisfy.
 refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: 5, maxItems: 3 } }, ["extractList"], "a minimum above the maximum");
 refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: WEB_AUTOMATION_EXTRACT_MAX_ITEMS + 1 } }, ["extractList"], "a minimum above the bound a request naming no maximum is held to");
+
+// -- `web.dom.extract_list` field specs (C1) ---------------------------------
+// A field is today's string or a spec. Each kind lifts with exactly its own
+// properties, and the recorded element is normalized by the one normalizer.
+const specRows: Array<[kind: string, spec: JsonObject]> = [
+  ["text", { kind: "text", selector: "h3" }],
+  ["attribute", { kind: "attribute", selector: "a", attribute: "href" }],
+  ["link", { kind: "link", selector: "a.product" }],
+  ["value", { kind: "value", selector: "input[name=qty]" }],
+  ["column", { kind: "column", header: "Price" }],
+  ["a spec reading the item itself", { kind: "text" }],
+  ["an optional included field", { kind: "text", selector: "p.note", required: false, handling: "include" }]
+];
+for (const [what, spec] of specRows) {
+  assert.deepEqual(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { field: spec } } }).extractList, { item: "li", fields: { field: spec } }, what);
+}
+// Strings and specs mix, and an excluded field beside an included one is a read.
+assert.deepEqual(
+  mapped("web.dom.extract_list", { extractList: { item: "tr", fields: { name: "td.name", card: { kind: "text", selector: "td.card", handling: "exclude" } } } }).extractList?.fields,
+  { name: "td.name", card: { kind: "text", selector: "td.card", handling: "exclude" } }
+);
+const recordedField = { selector: "td.price", tagName: "td", testId: "price", unrelated: "dropped by the normalizer" };
+assert.deepEqual(
+  mapped("web.dom.extract_list", { extractList: { item: "tr", fields: { price: { kind: "text", element: recordedField } } } }).extractList?.fields.price,
+  { kind: "text", element: elementFingerprint(recordedField) },
+  "a field's element is the fingerprint normalizer's output"
+);
+assert.deepEqual(
+  mapped("web.dom.extract_list", { extractList: { item: "tr.row", itemElement: { selector: "tr.row", tagName: "tr", testId: "row-1" }, fields: { name: "td.name" } } }).extractList?.itemElement,
+  elementFingerprint({ selector: "tr.row", tagName: "tr", testId: "row-1" }),
+  "the item element is the fingerprint normalizer's output"
+);
+// The lift reads an encrypt field: refusing it is `gateway-mapping.ts`'s
+// decision (not implemented), not an unreadable parameter.
+assert.deepEqual(
+  webAutomationReadActionParameters({ extractList: { item: "li", fields: { card: { kind: "text", handling: "encrypt" } } } }).lifted.extractList?.fields,
+  { card: { kind: "text", handling: "encrypt" } }
+);
+const malformedSpecs: Array<[why: string, fields: JsonObject]> = [
+  ["an attribute field naming no attribute", { href: { kind: "attribute", selector: "a" } }],
+  ["an attribute field naming an empty attribute", { href: { kind: "attribute", selector: "a", attribute: "" } }],
+  ["a column field naming no header", { price: { kind: "column" } }],
+  ["an attribute on a kind that reads none", { title: { kind: "text", selector: "h3", attribute: "title" } }],
+  ["a header on a kind that reads none", { title: { kind: "link", header: "Title" } }],
+  ["an unknown kind", { title: { kind: "html", selector: "h3" } }],
+  ["a spec with no kind", { title: { selector: "h3" } }],
+  ["an empty selector", { title: { kind: "text", selector: "" } }],
+  ["a required flag that is not a boolean", { title: { kind: "text", required: "yes" } }],
+  ["an unknown handling", { title: { kind: "text", handling: "mask" } }],
+  ["an element with no identity signal", { title: { kind: "text", element: { unrelated: true } } }],
+  ["an element that is not an object", { title: { kind: "text", element: "h3" } }],
+  ["a field that is neither a string nor a spec", { title: 3 }],
+  ["one malformed field among good ones", { name: "td.name", price: { kind: "column" } }],
+  ["every field excluded, which reads nothing", { card: { kind: "text", handling: "exclude" }, cvc: { kind: "value", selector: "input", handling: "exclude" } }]
+];
+for (const [why, fields] of malformedSpecs) {
+  refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields } }, ["extractList"], why);
+}
+refusedWhole("web.dom.extract_list", { extractList: { item: "tr", itemElement: { unrelated: true }, fields: { name: "td.name" } } }, ["extractList"], "an item element with no identity signal");
+refusedWhole("web.dom.extract_list", { extractList: { item: "tr", itemElement: "tr.row", fields: { name: "td.name" } } }, ["extractList"], "an item element that is not an object");
+
+// -- Record field keys (D16) --------------------------------------------------
+// A key is Core's field id: 1-100 of A-Z a-z 0-9 _ -, never a prototype name. A
+// label such as "Product name" is the picker's, not a key.
+assert.deepEqual(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { "product-name_2": "h3", [`k${"x".repeat(99)}`]: "p" } } }).extractList?.fields, { "product-name_2": "h3", [`k${"x".repeat(99)}`]: "p" }, "a 100-character key is a key");
+for (const key of ["Product name", "price.amount", "prix€", `k${"x".repeat(100)}`, "constructor", "prototype"]) {
+  refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { [key]: "h3" } } }, ["extractList"], `a field key Core would refuse: ${JSON.stringify(key)}`);
+}
+// An object literal's `__proto__` sets the prototype instead of a key, so the key arrives as JSON does.
+refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: JSON.parse("{\"__proto__\":\"h3\"}") as JsonObject } }, ["extractList"], "the __proto__ key");
+
+// -- Pagination modes (D14) ---------------------------------------------------
+// An absent mode is `next`, and `next` leaves in today's shape. Every bound is the page bound.
+const paginationRows: Array<[what: string, sent: JsonObject, lifted: JsonObject]> = [
+  ["next, named", { mode: "next", next: "a.next", maxPages: 3 }, { next: "a.next", maxPages: 3 }],
+  ["loadMore", { mode: "loadMore", control: "button.more", maxPages: 4 }, { mode: "loadMore", control: "button.more", maxPages: 4 }],
+  ["scroll", { mode: "scroll", maxScrolls: 6 }, { mode: "scroll", maxScrolls: 6 }],
+  ["numbered", { mode: "numbered", pages: "[data-testid^=pagination-page-]", maxPages: 2 }, { mode: "numbered", pages: "[data-testid^=pagination-page-]", maxPages: 2 }],
+  ["loadMore past the bound", { mode: "loadMore", control: "button.more", maxPages: 5_000 }, { mode: "loadMore", control: "button.more", maxPages: WEB_AUTOMATION_EXTRACT_MAX_PAGES }],
+  ["scroll past the bound", { mode: "scroll", maxScrolls: 5_000 }, { mode: "scroll", maxScrolls: WEB_AUTOMATION_EXTRACT_MAX_PAGES }]
+];
+for (const [what, sent, lifted] of paginationRows) {
+  assert.deepEqual(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, paginate: sent } }).extractList?.paginate, lifted, what);
+}
+const malformedPagination: Array<[why: string, paginate: JsonObject]> = [
+  ["an unknown mode", { mode: "infinite", maxScrolls: 3 }],
+  ["a mode that is not a string", { mode: 2, next: "a.next", maxPages: 3 }],
+  ["loadMore with no control", { mode: "loadMore", maxPages: 3 }],
+  ["numbered with no page controls", { mode: "numbered", maxPages: 3 }],
+  ["scroll with no bound", { mode: "scroll" }],
+  ["loadMore with no bound", { mode: "loadMore", control: "button.more" }],
+  ["scroll carrying another mode's key", { mode: "scroll", maxScrolls: 3, next: "a.next" }],
+  ["next carrying another mode's key", { next: "a.next", maxPages: 3, control: "button.more" }],
+  ["scroll carrying a page bound", { mode: "scroll", maxScrolls: 3, maxPages: 3 }]
+];
+for (const [why, paginate] of malformedPagination) {
+  refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, paginate } }, ["extractList"], why);
+}
 
 // -- `web.dom.upload`: name, MIME type, bounded base64 ------------------------
 assert.deepEqual(mapped("web.dom.upload", { selector: "input[type=file]", upload: { files: [{ name: "a.txt", mimeType: "text/plain", contentBase64: "aGk=" }] } }).upload, {

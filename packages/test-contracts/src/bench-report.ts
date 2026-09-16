@@ -21,6 +21,17 @@ export const benchRateMetrics = [
 ] as const;
 export type BenchRateMetric = (typeof benchRateMetrics)[number];
 
+/**
+ * The extraction rates of one lane. Each is a `BenchRate` whose `count` and
+ * `total` are in the unit its metric defines (records for record accuracy),
+ * over the lane's extraction steps. `extractionFalseSuccess` is lower-better.
+ */
+export const benchExtractionRateMetrics = [
+  "extractionRecordAccuracy", "extractionCountAccuracy", "extractionExactSuccess",
+  "extractionFieldCompleteness", "paginationAccuracy", "extractionFalseSuccess",
+] as const;
+export type BenchExtractionRateMetric = (typeof benchExtractionRateMetrics)[number];
+
 /** The plan's repeatability tolerance: rates within one workflow of each other, latency p95 within 25%. */
 export const BENCH_TOLERANCE: Readonly<{ rateWorkflows: number; latencyP95Ratio: number }> = Object.freeze({ rateWorkflows: 1, latencyP95Ratio: 0.25 });
 
@@ -63,6 +74,21 @@ export type BenchRates = Record<BenchRateMetric, BenchRate>;
 
 /** p50 and p95 over `samples` values, both `null` when there are none. */
 export type BenchDistribution = { samples: number; p50: number | null; p95: number | null };
+
+/**
+ * One lane's extraction measurements, aggregated from its runs'
+ * `RunEvaluation.extraction`. Counts only (D6): no field name or value.
+ */
+export type BenchExtractionMetrics = {
+  /** Extraction steps judged against the workflow's expectation. */
+  judgedSteps: number;
+  /** Extraction steps measured without a judgement: not run, or run with no expectation. */
+  unjudgedSteps: number;
+  /** Each step's extraction duration. */
+  extractionDurationMs: BenchDistribution;
+  /** Each step's extraction duration over the pages it followed. */
+  extractionMsPerPage: BenchDistribution;
+} & Record<BenchExtractionRateMetric, BenchRate>;
 
 /**
  * The Week 1 Metrics table over the whole corpus. Units are in the field
@@ -120,6 +146,14 @@ export type BenchCorpusMetrics = {
    * `notExecutedRuns`.
    */
   actionsExecuted?: number;
+  /**
+   * Extraction, **per lane and never combined**, like `ratesByLane`; a lane is
+   * stated only when the report lists results on it. Optional because it is
+   * absent, not zero, in a report written before extraction was measured
+   * (D7): read it as unmeasured. The schema version stays 0.1 because the block
+   * is optional, as `notExecutedRuns` is.
+   */
+  extractionByLane?: Partial<Record<EvaluationLane, BenchExtractionMetrics>>;
   /** Week 2 measurements: `null` in Week 1, reserved so the schema is already present. */
   harnessRecovery: null;
   adaptationCost: null;
@@ -130,10 +164,14 @@ export type BenchCorpusMetrics = {
 
 /**
  * One metric against a baseline report. `metric` is
- * `rate:<EvaluationLane>:<BenchRateMetric>`, `action-latency-p95:<action type>`,
- * or `run-duration-p95`. `candidate` is this report's value; `tolerance` is
- * the largest |candidate - baseline| still `equivalent`: one workflow of this
- * report's rate population on that lane, or 25% of the baseline p95.
+ * `rate:<EvaluationLane>:<BenchRateMetric>`,
+ * `extraction:<EvaluationLane>:<BenchExtractionRateMetric>`,
+ * `action-latency-p95:<action type>`, or `run-duration-p95`. `candidate` is
+ * this report's value; `tolerance` is the largest |candidate - baseline| still
+ * `equivalent`: one workflow of this report's rate population on that lane,
+ * which extraction's success rates share; one unit of an extraction accuracy
+ * or completeness rate's population (one record, for record accuracy); or 25%
+ * of the baseline p95. Extraction's distributions are reported, not compared.
  */
 export type BenchMetricComparison = { metric: string; baseline: number; candidate: number; tolerance: number; outcome: BenchComparisonOutcome };
 
@@ -163,10 +201,16 @@ export type BenchReport = {
 type ComparedReport = Pick<BenchReport, "metrics" | "workflows">;
 
 const RATE_METRIC = /^rate:([a-z]+):([A-Za-z]+)$/u;
+const EXTRACTION_METRIC = /^extraction:([a-z]+):([A-Za-z]+)$/u;
 const ACTION_LATENCY_PREFIX = "action-latency-p95:";
 const RUN_DURATION = "run-duration-p95";
 const EPSILON = 1e-9;
+/** An extraction accuracy or completeness rate is equivalent within one unit of its population: one record, for record accuracy. */
+const EXTRACTION_ACCURACY_UNITS = 1;
 const lowerIsBetterRates: ReadonlySet<BenchRateMetric> = new Set<BenchRateMetric>(["falseFailure", "falseSuccess", "harnessActivation"]);
+/** Extraction rates judged per workflow, like the Metrics table's; the others are accuracies judged per unit. */
+const extractionSuccessRates: ReadonlySet<BenchExtractionRateMetric> = new Set<BenchExtractionRateMetric>(["extractionExactSuccess", "extractionFalseSuccess"]);
+const lowerIsBetterExtractionRates: ReadonlySet<BenchExtractionRateMetric> = new Set<BenchExtractionRateMetric>(["extractionFalseSuccess"]);
 
 type MeasuredMetric = { value: number; lowerIsBetter: boolean; tolerance: (baseline: number) => number };
 
@@ -183,13 +227,14 @@ export function compareBenchMetric(metric: string, baseline: number, candidate: 
   return { metric, baseline, candidate: measured.value, tolerance, outcome };
 }
 
-/** Compares every metric both reports measured: each lane's rates in table order, action types by name, then run duration. */
+/** Compares every metric both reports measured: each lane's rates in table order, each lane's extraction rates, action types by name, then run duration. */
 export function compareBenchReports(baseline: BenchReport, candidate: BenchReport): BenchComparison {
   if (baseline.corpusId !== candidate.corpusId) throw new Error(`Bench reports of different corpora cannot be compared: ${baseline.corpusId}, ${candidate.corpusId}`);
   if (baseline.reportId === candidate.reportId) throw new Error(`A bench report cannot be compared with itself: ${candidate.reportId}`);
   const metrics: BenchMetricComparison[] = [];
   const rates = evaluationLanes.flatMap((lane) => benchRateMetrics.map((name) => `rate:${lane}:${name}`));
-  const ids = [...rates, ...Object.keys(candidate.metrics.actionLatencyMs).sort().map((type) => ACTION_LATENCY_PREFIX + type), RUN_DURATION];
+  const extraction = evaluationLanes.flatMap((lane) => benchExtractionRateMetrics.map((name) => `extraction:${lane}:${name}`));
+  const ids = [...rates, ...extraction, ...Object.keys(candidate.metrics.actionLatencyMs).sort().map((type) => ACTION_LATENCY_PREFIX + type), RUN_DURATION];
   for (const metric of ids) {
     const base = measure(metric, baseline);
     const compared = base && compareBenchMetric(metric, base.value, candidate);
@@ -207,6 +252,8 @@ function measure(metric: string, report: ComparedReport): MeasuredMetric | undef
     const actionType = metric.slice(ACTION_LATENCY_PREFIX.length);
     return Object.hasOwn(metrics.actionLatencyMs, actionType) ? latency(metrics.actionLatencyMs[actionType]?.p95) : undefined;
   }
+  const extraction = EXTRACTION_METRIC.exec(metric);
+  if (extraction) return measureExtraction(report, extraction[1], extraction[2]);
   const match = RATE_METRIC.exec(metric);
   const lane = match?.[1];
   const name = match?.[2];
@@ -215,6 +262,21 @@ function measure(metric: string, report: ComparedReport): MeasuredMetric | undef
   if (!measured || measured.rate === null) return undefined;
   const { rate, workflows } = measured;
   return { value: rate, lowerIsBetter: lowerIsBetterRates.has(name), tolerance: () => BENCH_TOLERANCE.rateWorkflows / workflows };
+}
+
+/**
+ * One extraction rate on one lane, or `undefined` when the report did not
+ * measure it: no `extractionByLane`, as in a report written before extraction
+ * was measured, no block for the lane, or an empty population.
+ */
+function measureExtraction(report: ComparedReport, lane: string | undefined, name: string | undefined): MeasuredMetric | undefined {
+  const byLane = report.metrics.extractionByLane;
+  if (!byLane || !isLane(lane) || !isExtractionRateMetric(name) || !Object.hasOwn(byLane, lane)) return undefined;
+  const measured = byLane[lane]?.[name];
+  if (!measured || measured.rate === null) return undefined;
+  const { rate, total, workflows } = measured;
+  const tolerance = extractionSuccessRates.has(name) ? () => BENCH_TOLERANCE.rateWorkflows / workflows : () => EXTRACTION_ACCURACY_UNITS / total;
+  return { value: rate, lowerIsBetter: lowerIsBetterExtractionRates.has(name), tolerance };
 }
 
 /**
@@ -231,4 +293,5 @@ function laneRates(report: ComparedReport, lane: EvaluationLane): BenchRates | u
   return lane === "recording" && recordingAlone ? rates : undefined;
 }
 const isRateMetric = (name: string | undefined): name is BenchRateMetric => name !== undefined && (benchRateMetrics as readonly string[]).includes(name);
+const isExtractionRateMetric = (name: string | undefined): name is BenchExtractionRateMetric => name !== undefined && (benchExtractionRateMetrics as readonly string[]).includes(name);
 const isLane = (name: string | undefined): name is EvaluationLane => name !== undefined && (evaluationLanes as readonly string[]).includes(name);

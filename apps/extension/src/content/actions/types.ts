@@ -17,12 +17,11 @@ import type {
   ExtractedElementValue,
   FileInputOutcome,
   KeyboardCapability,
-  ListExtractionOptions,
-  ListExtractionOutcome,
   ResolvedTarget,
   WaitConditionOutcome,
   WaitConditionRequest
 } from "../action-runtime";
+import type { ListExtractionOptions, ListExtractionOutcome } from "../extraction";
 import type {
   BrowserActionCommand,
   BrowserActionResult,

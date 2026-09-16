@@ -15,10 +15,203 @@ import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES as AUTOMATION_STUDIO_L
 // src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 
-// src/actions/types.ts
-var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
+// src/output-nodes/targets/targets.ts
+function outputTargetFromPayload(payload) {
+  const adaptedTarget = objectValue(payload.target);
+  const adaptedFingerprint = objectValue(adaptedTarget?.fingerprint);
+  const selectedCandidate = selectedTargetCandidate(adaptedTarget);
+  const explicitVisualTarget = objectValue(adaptedTarget?.visualTarget) ?? objectValue(payload.visualTarget);
+  const element = firstElementFingerprint(elementFingerprintSources(payload, adaptedTarget, adaptedFingerprint, selectedCandidate));
+  const selector = stringValue(selectedCandidate?.selector) ?? stringValue(adaptedFingerprint?.selector) ?? stringValue(adaptedTarget?.selector) ?? stringValue(payload.selector) ?? stringValue(element?.selector) ?? stringValue(explicitVisualTarget?.selector);
+  if (!selector && !explicitVisualTarget) return void 0;
+  return compact({
+    selector,
+    ...element ? { element } : {},
+    ...explicitVisualTarget ? { visualTarget: explicitVisualTarget } : {}
+  });
+}
+function elementFingerprintSources(payload, adaptedTarget, adaptedFingerprint, selectedCandidate) {
+  const adapted = [adaptedTarget?.element, selectedCandidate, adaptedFingerprint];
+  return adaptedTarget?.selectedCandidate !== void 0 ? [...adapted, payload.element] : [payload.element, ...adapted];
+}
+function firstElementFingerprint(sources) {
+  for (const source of sources) {
+    const fingerprint = elementFingerprint(source);
+    if (fingerprint && Object.keys(fingerprint).length > 0) return fingerprint;
+  }
+  return void 0;
+}
+function selectedTargetCandidate(target) {
+  const selectedCandidateId = stringValue(objectValue(target?.selectedCandidate)?.candidateId);
+  if (!selectedCandidateId || !Array.isArray(target?.candidates)) return void 0;
+  return target.candidates.map(objectValue).find((candidate) => stringValue(candidate?.candidateId) === selectedCandidateId);
+}
+function elementFingerprint(value) {
+  const element = objectValue(value);
+  if (!element) return void 0;
+  const attributes = elementAttributes(element.attributes);
+  return compact({
+    selector: stringValue(element.selector),
+    xpath: stringValue(element.xpath),
+    id: stringValue(element.id),
+    classNames: Array.isArray(element.classNames) ? element.classNames.filter((item) => typeof item === "string") : void 0,
+    visibleText: stringValue(element.visibleText),
+    tagName: stringValue(element.tagName),
+    text: stringValue(element.text),
+    value: stringValue(element.value),
+    role: stringValue(element.role),
+    implicitRole: stringValue(element.implicitRole),
+    name: stringValue(element.name),
+    href: stringValue(element.href),
+    inputType: stringValue(element.inputType),
+    checked: booleanValue(element.checked),
+    testId: elementTestId(element, attributes),
+    accessibleName: stringValue(element.accessibleName) ?? stringValue(attributes?.["aria-label"]),
+    label: stringValue(element.label),
+    attributes,
+    context: elementContext(element.context),
+    // Core's remaining fingerprint signals, named so their absence is a
+    // decision and so a signal Core adds stops this producer compiling. A
+    // browser recording has no source for any of them: the first four are a
+    // host application's own identifiers and a Core state path, `url` names
+    // the page rather than the control, `bounds` are the capture's viewport
+    // and not this instant's (which is why `content/identity/score.ts` refuses
+    // to compare them), and `metadata` is Core's own passthrough slot, which
+    // this normalizer must not start writing into behind the declared fields.
+    automationId: void 0,
+    entityId: void 0,
+    entityKind: void 0,
+    statePath: void 0,
+    queryPath: void 0,
+    url: void 0,
+    bounds: void 0,
+    metadata: void 0
+  });
+}
+function elementContext(value) {
+  const context = objectValue(value);
+  if (!context) return void 0;
+  const fields = compact({
+    formId: stringValue(context.formId),
+    formName: stringValue(context.formName),
+    formAction: stringValue(context.formAction),
+    fieldsetLegend: stringValue(context.fieldsetLegend),
+    landmark: stringValue(context.landmark),
+    landmarkName: stringValue(context.landmarkName),
+    heading: stringValue(context.heading),
+    listPosition: listPosition(context.listPosition),
+    tablePosition: tablePosition(context.tablePosition)
+  });
+  return Object.keys(fields).length > 0 ? fields : void 0;
+}
+function listPosition(value) {
+  const position = objectValue(value);
+  const index = numberValue(position?.index);
+  const total = numberValue(position?.total);
+  return index === void 0 || total === void 0 ? void 0 : { index, total };
+}
+function tablePosition(value) {
+  const position = objectValue(value);
+  const row = numberValue(position?.row);
+  const column = numberValue(position?.column);
+  if (row === void 0 || column === void 0) return void 0;
+  const columnHeader = stringValue(position?.columnHeader);
+  return columnHeader === void 0 ? { row, column } : { row, column, columnHeader };
+}
+function elementAttributes(value) {
+  const attributes = objectValue(value);
+  if (!attributes) return void 0;
+  const strings = {};
+  for (const [name, item] of Object.entries(attributes)) {
+    if (typeof item === "string") strings[name] = item;
+  }
+  return strings;
+}
+function elementTestId(element, attributes) {
+  return stringValue(element.testId) ?? stringValue(attributes?.["data-testid"]) ?? stringValue(attributes?.["data-test"]) ?? stringValue(attributes?.["data-cy"]);
+}
+function compact(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== void 0));
+}
+function objectValue(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+function stringValue(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function numberValue(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+function booleanValue(value) {
+  return typeof value === "boolean" ? value : void 0;
+}
+
+// src/actions/extraction/request.ts
+var WEB_AUTOMATION_EXTRACT_PAGINATION_MODES = ["next", "loadMore", "scroll", "numbered"];
+var WEB_AUTOMATION_EXTRACT_FIELD_KINDS = ["text", "attribute", "link", "value", "column"];
+var WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS = ["include", "exclude", "encrypt"];
+var WEB_AUTOMATION_EXTRACT_READ_MODES = ["text", "attribute", "value", "html"];
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
 var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
+
+// src/actions/extraction/read-request.ts
+var REFUSED = Symbol("refused");
+
+// src/actions/extraction/schema.ts
+function webAutomationExtractListSchema(elementFingerprintSchema2) {
+  const pageBound = { type: "integer", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES };
+  const fieldSpecSchema = {
+    type: "object",
+    label: "Field",
+    required: ["kind"],
+    properties: {
+      kind: { type: "string", label: "Reads", enum: [...WEB_AUTOMATION_EXTRACT_FIELD_KINDS] },
+      selector: { type: "string", label: "Selector inside the item" },
+      attribute: { type: "string", label: "Attribute" },
+      header: { type: "string", label: "Column header" },
+      required: { type: "boolean", label: "Required" },
+      // `encrypt` is reserved (D13) and refused at dispatch until it is built.
+      handling: { type: "string", label: "Column", enum: [...WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS] },
+      element: elementFingerprintSchema2
+    }
+  };
+  return {
+    type: "object",
+    label: "List extraction",
+    required: ["item", "fields"],
+    properties: {
+      item: { type: "string", label: "Item selector" },
+      itemElement: elementFingerprintSchema2,
+      fields: {
+        type: "object",
+        label: "Field map",
+        description: "Each field key maps to a selector string (`selector`, `selector@attribute`, `column:<header>`) or a field spec.",
+        metadata: { fieldSpec: fieldSpecSchema }
+      },
+      // No member is required of every mode, so nothing is required here: the
+      // lift refuses a mode missing its own bound or naming another mode's key.
+      paginate: {
+        type: "object",
+        label: "Pagination",
+        properties: {
+          mode: { type: "string", label: "Mode", enum: [...WEB_AUTOMATION_EXTRACT_PAGINATION_MODES] },
+          next: { type: "string", label: "Next control" },
+          control: { type: "string", label: "Load-more control" },
+          pages: { type: "string", label: "Page controls" },
+          maxPages: { ...pageBound, label: "Maximum pages" },
+          maxScrolls: { ...pageBound, label: "Maximum scrolls" }
+        }
+      },
+      maxItems: { type: "integer", label: "Maximum items", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_ITEMS },
+      // Default 1 where absent, so an empty list fails unless the Flow says empty
+      // is an answer; above the item bound no page could satisfy it.
+      minItems: { type: "integer", label: "Minimum items", minimum: 0, maximum: WEB_AUTOMATION_EXTRACT_MAX_ITEMS }
+    }
+  };
+}
+
+// src/actions/types.ts
+var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.navigate",
   "web.dom.click",
@@ -171,25 +364,14 @@ var assertSchema = {
     timeoutMs: { type: "integer", label: "Timeout in ms" }
   }
 };
-var extractListSchema = {
+var extractListSchema = webAutomationExtractListSchema(elementFingerprintSchema);
+var extractReadSchema = {
   type: "object",
-  label: "List extraction",
-  required: ["item", "fields"],
+  label: "Read",
+  required: ["mode"],
   properties: {
-    item: { type: "string", label: "Item selector" },
-    fields: { type: "object", label: "Field map" },
-    paginate: {
-      type: "object",
-      label: "Pagination",
-      required: ["next", "maxPages"],
-      properties: {
-        next: { type: "string", label: "Next control" },
-        maxPages: { type: "integer", label: "Maximum pages", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES }
-      }
-    },
-    maxItems: { type: "integer", label: "Maximum items", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_ITEMS },
-    // Default 1 where absent, so an empty list fails unless the Flow says empty is an answer.
-    minItems: { type: "integer", label: "Minimum items", minimum: 0 }
+    mode: { type: "string", label: "Reads", enum: [...WEB_AUTOMATION_EXTRACT_READ_MODES] },
+    attribute: { type: "string", label: "Attribute" }
   }
 };
 var uploadSchema = {
@@ -310,7 +492,19 @@ var webAutomationActionDefinitions = [
     description: "Wait until page text appears or the page settles.",
     parameterSchema: { type: "object", required: ["text"], properties: { text: { type: "string" }, timeoutMs: { type: "integer" }, wait: waitSchema } }
   },
-  { actionType: "web.dom.extract", label: "Extract", description: "Extract text, value, or attributes from an element.", parameterSchema: selectorSchema },
+  {
+    actionType: "web.dom.extract",
+    label: "Extract",
+    description: "Extract text, value, or attributes from an element.",
+    // `selector` stays required, so this keeps declaring an element target. The
+    // structured `extract` says which value to read; the legacy `options.mode`
+    // beside it still works for a Flow that authored one.
+    parameterSchema: {
+      type: "object",
+      required: ["selector"],
+      properties: { ...elementProperties, timeoutMs: { type: "integer", label: "Timeout in ms" }, extract: extractReadSchema }
+    }
+  },
   {
     actionType: "web.dom.capture_snapshot",
     label: "Capture Snapshot",
@@ -374,6 +568,9 @@ var outputPorts = [
   { id: "success", label: "Success", valueType: "any", role: "success" },
   { id: "failed", label: "Failed", valueType: "any", role: "failure" }
 ];
+var recordsPathByOutput = {
+  "web.dom.extract_list": "extracted"
+};
 var expectedStateParameter = {
   id: "expectedState",
   label: "Expected State",
@@ -392,6 +589,7 @@ function createWebAutomationOutputNodeDefinition(definition) {
   const requiredParameters = new Set(
     Array.isArray(definition.parameterSchema.required) ? definition.parameterSchema.required.filter((value) => typeof value === "string") : []
   );
+  const recordsPath = recordsPathByOutput[definition.actionType];
   return {
     schemaVersion: "0.1",
     id: webAutomationOutputNodeId(definition.actionType),
@@ -436,7 +634,8 @@ function createWebAutomationOutputNodeDefinition(definition) {
       // key press to the focused element, a URL assertion, a tab operation —
       // must not declare it, because Core fails an action outright when a
       // declared element target has no fingerprint to resolve.
-      ...requiredParameters.has("selector") ? { elementTarget: true } : {}
+      ...requiredParameters.has("selector") ? { elementTarget: true } : {},
+      ...recordsPath ? { recordsPath } : {}
     }
   };
 }
@@ -463,6 +662,7 @@ function parametersForOutput(outputId) {
     { id: "smooth", label: "Smooth", valueType: "boolean", defaultValue: false },
     structured("scroll", "Scroll Mode")
   ];
+  if (outputId === "web.dom.extract") return [...selectorParameters, structured("extract", "Read")];
   if (outputId === "web.dom.wait_for_selector") return [...selectorParameters, structured("wait", "Condition")];
   if (outputId === "web.dom.wait_for_text") return [
     { id: "text", label: "Text", valueType: "string", required: true, ui: { control: "text" } },
@@ -472,7 +672,10 @@ function parametersForOutput(outputId) {
   if (outputId === "web.dom.capture_snapshot") return [];
   if (outputId === "web.dom.check") return [...selectorParameters, { id: "checked", label: "Checked", valueType: "boolean", defaultValue: true }];
   if (outputId === "web.dom.assert") return [...selectorParameters, structured("assert", "Assertion")];
-  if (outputId === "web.dom.extract_list") return [structured("extractList", "List")];
+  if (outputId === "web.dom.extract_list") return [
+    structured("extractList", "List"),
+    { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 1e4 }
+  ];
   if (outputId === "web.dom.upload") return [...selectorParameters, structured("upload", "Files")];
   if (outputId === "web.dom.dialog") return [structured("dialog", "Dialog")];
   if (outputId === "web.browser.tab") return [structured("tab", "Tab")];
@@ -532,137 +735,6 @@ var WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT = "(withheld: the action ran on a co
 function isProducerRedactedComparison(validation) {
   if (!validation || typeof validation !== "object" || Array.isArray(validation)) return false;
   return validation.redacted === true;
-}
-
-// src/output-nodes/targets.ts
-function outputTargetFromPayload(payload) {
-  const adaptedTarget = objectValue(payload.target);
-  const adaptedFingerprint = objectValue(adaptedTarget?.fingerprint);
-  const selectedCandidate = selectedTargetCandidate(adaptedTarget);
-  const explicitVisualTarget = objectValue(adaptedTarget?.visualTarget) ?? objectValue(payload.visualTarget);
-  const element = firstElementFingerprint(elementFingerprintSources(payload, adaptedTarget, adaptedFingerprint, selectedCandidate));
-  const selector = stringValue(selectedCandidate?.selector) ?? stringValue(adaptedFingerprint?.selector) ?? stringValue(adaptedTarget?.selector) ?? stringValue(payload.selector) ?? stringValue(element?.selector) ?? stringValue(explicitVisualTarget?.selector);
-  if (!selector && !explicitVisualTarget) return void 0;
-  return compact({
-    selector,
-    ...element ? { element } : {},
-    ...explicitVisualTarget ? { visualTarget: explicitVisualTarget } : {}
-  });
-}
-function elementFingerprintSources(payload, adaptedTarget, adaptedFingerprint, selectedCandidate) {
-  const adapted = [adaptedTarget?.element, selectedCandidate, adaptedFingerprint];
-  return adaptedTarget?.selectedCandidate !== void 0 ? [...adapted, payload.element] : [payload.element, ...adapted];
-}
-function firstElementFingerprint(sources) {
-  for (const source of sources) {
-    const fingerprint = elementFingerprint(source);
-    if (fingerprint && Object.keys(fingerprint).length > 0) return fingerprint;
-  }
-  return void 0;
-}
-function selectedTargetCandidate(target) {
-  const selectedCandidateId = stringValue(objectValue(target?.selectedCandidate)?.candidateId);
-  if (!selectedCandidateId || !Array.isArray(target?.candidates)) return void 0;
-  return target.candidates.map(objectValue).find((candidate) => stringValue(candidate?.candidateId) === selectedCandidateId);
-}
-function elementFingerprint(value) {
-  const element = objectValue(value);
-  if (!element) return void 0;
-  const attributes = elementAttributes(element.attributes);
-  return compact({
-    selector: stringValue(element.selector),
-    xpath: stringValue(element.xpath),
-    id: stringValue(element.id),
-    classNames: Array.isArray(element.classNames) ? element.classNames.filter((item) => typeof item === "string") : void 0,
-    visibleText: stringValue(element.visibleText),
-    tagName: stringValue(element.tagName),
-    text: stringValue(element.text),
-    value: stringValue(element.value),
-    role: stringValue(element.role),
-    implicitRole: stringValue(element.implicitRole),
-    name: stringValue(element.name),
-    href: stringValue(element.href),
-    inputType: stringValue(element.inputType),
-    checked: booleanValue(element.checked),
-    testId: elementTestId(element, attributes),
-    accessibleName: stringValue(element.accessibleName) ?? stringValue(attributes?.["aria-label"]),
-    label: stringValue(element.label),
-    attributes,
-    context: elementContext(element.context),
-    // Core's remaining fingerprint signals, named so their absence is a
-    // decision and so a signal Core adds stops this producer compiling. A
-    // browser recording has no source for any of them: the first four are a
-    // host application's own identifiers and a Core state path, `url` names
-    // the page rather than the control, `bounds` are the capture's viewport
-    // and not this instant's (which is why `content/identity/score.ts` refuses
-    // to compare them), and `metadata` is Core's own passthrough slot, which
-    // this normalizer must not start writing into behind the declared fields.
-    automationId: void 0,
-    entityId: void 0,
-    entityKind: void 0,
-    statePath: void 0,
-    queryPath: void 0,
-    url: void 0,
-    bounds: void 0,
-    metadata: void 0
-  });
-}
-function elementContext(value) {
-  const context = objectValue(value);
-  if (!context) return void 0;
-  const fields = compact({
-    formId: stringValue(context.formId),
-    formName: stringValue(context.formName),
-    formAction: stringValue(context.formAction),
-    fieldsetLegend: stringValue(context.fieldsetLegend),
-    landmark: stringValue(context.landmark),
-    landmarkName: stringValue(context.landmarkName),
-    heading: stringValue(context.heading),
-    listPosition: listPosition(context.listPosition),
-    tablePosition: tablePosition(context.tablePosition)
-  });
-  return Object.keys(fields).length > 0 ? fields : void 0;
-}
-function listPosition(value) {
-  const position = objectValue(value);
-  const index = numberValue(position?.index);
-  const total = numberValue(position?.total);
-  return index === void 0 || total === void 0 ? void 0 : { index, total };
-}
-function tablePosition(value) {
-  const position = objectValue(value);
-  const row = numberValue(position?.row);
-  const column = numberValue(position?.column);
-  if (row === void 0 || column === void 0) return void 0;
-  const columnHeader = stringValue(position?.columnHeader);
-  return columnHeader === void 0 ? { row, column } : { row, column, columnHeader };
-}
-function elementAttributes(value) {
-  const attributes = objectValue(value);
-  if (!attributes) return void 0;
-  const strings = {};
-  for (const [name, item] of Object.entries(attributes)) {
-    if (typeof item === "string") strings[name] = item;
-  }
-  return strings;
-}
-function elementTestId(element, attributes) {
-  return stringValue(element.testId) ?? stringValue(attributes?.["data-testid"]) ?? stringValue(attributes?.["data-test"]) ?? stringValue(attributes?.["data-cy"]);
-}
-function compact(value) {
-  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== void 0));
-}
-function objectValue(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
-}
-function stringValue(value) {
-  return typeof value === "string" ? value : void 0;
-}
-function numberValue(value) {
-  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
-}
-function booleanValue(value) {
-  return typeof value === "boolean" ? value : void 0;
 }
 
 // src/io/gateway-output-dispatcher.ts
@@ -729,7 +801,12 @@ var WEB_AUTOMATION_INPUT_IDS = {
   pageScrolled: "web.user.page_scrolled",
   filesChosen: "web.user.files_chosen",
   tabSwitched: "web.user.tab_switched",
-  tabClosed: "web.user.tab_closed"
+  tabClosed: "web.user.tab_closed",
+  // Two inputs, because an input maps to exactly one output and the two forms
+  // of a recorded extraction run different verbs: a list saves a dataset, a
+  // single value answers with one value and saves none.
+  dataExtractionDefined: "web.user.data_extraction_defined",
+  valueExtractionDefined: "web.user.value_extraction_defined"
 };
 var stateInputDefinitions = [
   { id: WEB_AUTOMATION_INPUT_IDS.browserState, title: "Browser state", description: "Current browser, tab, and compact DOM state available for policy conditions.", role: "state" },
@@ -746,7 +823,9 @@ var actionInputDefinitions = [
   [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"],
   [WEB_AUTOMATION_INPUT_IDS.filesChosen, "Files chosen", "web.dom.upload"],
   [WEB_AUTOMATION_INPUT_IDS.tabSwitched, "Tab switched", "web.browser.tab"],
-  [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"]
+  [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"],
+  [WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined, "Data extraction defined", "web.dom.extract_list"],
+  [WEB_AUTOMATION_INPUT_IDS.valueExtractionDefined, "Value extraction defined", "web.dom.extract"]
 ];
 var OUTPUT_FOR_ACTION_INPUT = new Map(
   actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])

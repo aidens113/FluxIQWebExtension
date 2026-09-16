@@ -1,4 +1,7 @@
-import { BENCH_REPORT_SCHEMA_VERSION, benchFlakeClasses, benchRateMetrics, benchTargets, compareBenchMetric, type BenchCorpusMetrics, type BenchReport } from "./bench-report.js";
+import {
+  BENCH_REPORT_SCHEMA_VERSION, benchExtractionRateMetrics, benchFlakeClasses, benchRateMetrics, benchTargets, compareBenchMetric,
+  type BenchCorpusMetrics, type BenchExtractionMetrics, type BenchReport,
+} from "./bench-report.js";
 import { evaluationLanes, type EvaluationLane } from "./evaluation.js";
 import { validateLlmUsage } from "./evaluation-validation.js";
 import { ContractValidationError, type ValidationIssue, type ValidationResult } from "./validation.js";
@@ -13,6 +16,9 @@ const week2Keys = ["harnessRecovery", "adaptationCost", "adaptationValidation", 
 /** Optional: the eight benches on disk before these existed omit both, and an omission is an unmeasured count, not a zero one. */
 const coverageKeys = ["notExecutedRuns", "actionsExecuted"] as const;
 const distributionKeys = ["runDurationMs", "sanitizedPacketBytes", "rawSnapshotBytes"] as const;
+const extractionStepKeys = ["judgedSteps", "unjudgedSteps"] as const satisfies readonly (keyof BenchExtractionMetrics)[];
+const extractionDistributionKeys = ["extractionDurationMs", "extractionMsPerPage"] as const satisfies readonly (keyof BenchExtractionMetrics)[];
+const extractionMetricKeys = [...extractionStepKeys, ...benchExtractionRateMetrics, ...extractionDistributionKeys] as const satisfies readonly (keyof BenchExtractionMetrics)[];
 /** What a set of counts is bounded by: how many workflow results, each run `repeatCount` times. */
 type Population = { workflows: number; repeatCount: number };
 /** Every result the report lists, the results on each lane, and whether its results state a lane at all. */
@@ -94,13 +100,14 @@ function reportPopulation(workflows: unknown, repeatCount: unknown): ReportPopul
 function checkCorpusMetrics(input: unknown, population: ReportPopulation, issues: ValidationIssue[]): boolean {
   const before = issues.length; const path = "$.metrics"; const value = object(input, path, issues);
   if (value) {
-    keys(value, ["ratesByLane", "rates", "actionLatencyMs", ...distributionKeys, "truncationCount", ...coverageKeys, ...week2Keys], path, issues);
+    keys(value, ["ratesByLane", "rates", "actionLatencyMs", ...distributionKeys, "truncationCount", ...coverageKeys, "extractionByLane", ...week2Keys], path, issues);
     checkRates(value, path, population, issues);
     const latency = object(value.actionLatencyMs, `${path}.actionLatencyMs`, issues);
     if (latency) for (const [actionType, distribution] of Object.entries(latency)) { if (!actionType) add(issues, `${path}.actionLatencyMs`, "action types must be non-empty"); checkDistribution(distribution, `${path}.actionLatencyMs.${actionType}`, issues); }
     for (const key of distributionKeys) checkDistribution(value[key], `${path}.${key}`, issues);
     finite(value.truncationCount, `${path}.truncationCount`, issues, 0, Number.MAX_SAFE_INTEGER, true);
     checkExecutionCoverage(value, path, population, issues);
+    checkExtractionByLane(value.extractionByLane, `${path}.extractionByLane`, population, issues);
     for (const key of week2Keys) if (value[key] !== null) add(issues, `${path}.${key}`, "must be null until Week 2 defines it");
   }
   return issues.length === before;
@@ -169,8 +176,58 @@ function checkRate(input: unknown, path: string, population: Population, issues:
   if (workflows > total) add(issues, `${path}.workflows`, "must not exceed total: each workflow in the population adds at least one unit");
   if (total > 0 && workflows === 0) add(issues, `${path}.workflows`, "must be positive when total is");
   if (total > workflows * population.repeatCount) add(issues, `${path}.total`, "must not exceed workflows times repeatCount");
+  checkRateValue(rate, count, total, path, issues);
+}
+function checkRateValue(rate: unknown, count: number, total: number, path: string, issues: ValidationIssue[]): void {
   if (total === 0) { if (rate !== null) add(issues, `${path}.rate`, "must be null when total is 0"); }
   else if (typeof rate !== "number" || Math.abs(rate - count / total) > EPSILON) add(issues, `${path}.rate`, "must equal count / total");
+}
+
+/**
+ * The extraction measurements, each lane optional.
+ *
+ * **Absence is accepted and means unmeasured** (D7), as for the
+ * execution-coverage counts. When stated, they are per lane like the rates:
+ * refused in a report whose results state no lane, and a lane is stated only
+ * when the report lists results on it. Counts only (D6): every member is a
+ * number, a `BenchRate`, or a `BenchDistribution`.
+ */
+function checkExtractionByLane(input: unknown, path: string, population: ReportPopulation, issues: ValidationIssue[]): void {
+  if (input === undefined) return;
+  if (!population.laned) { add(issues, path, "must be absent: extraction is measured per lane, and this report's results state no lane"); return; }
+  const byLane = object(input, path, issues); if (!byLane) return;
+  keys(byLane, evaluationLanes, path, issues);
+  for (const lane of evaluationLanes) {
+    if (byLane[lane] === undefined) continue;
+    const results = population.byLane.get(lane) ?? 0; const lanePath = `${path}.${lane}`;
+    if (results === 0) add(issues, lanePath, `must be absent: the report lists no result on the ${lane} lane`);
+    else checkExtractionMetrics(byLane[lane], lanePath, results, issues);
+  }
+}
+function checkExtractionMetrics(input: unknown, path: string, laneResults: number, issues: ValidationIssue[]): void {
+  const value = object(input, path, issues); if (!value) return;
+  keys(value, extractionMetricKeys, path, issues);
+  for (const key of extractionStepKeys) finite(value[key], `${path}.${key}`, issues, 0, Number.MAX_SAFE_INTEGER, true);
+  for (const metric of benchExtractionRateMetrics) checkExtractionRate(value[metric], `${path}.${metric}`, laneResults, issues);
+  for (const key of extractionDistributionKeys) checkDistribution(value[key], `${path}.${key}`, issues);
+}
+/**
+ * An extraction rate: `count` of `total` in its metric's unit, over `workflows`
+ * of the lane's results. Its count never exceeds its total, so matched records
+ * never outnumber expected ones. Records and fields can outnumber runs, so
+ * unlike a Metrics-table rate its total is not bounded by workflows times
+ * repeatCount.
+ */
+function checkExtractionRate(input: unknown, path: string, laneResults: number, issues: ValidationIssue[]): void {
+  const value = object(input, path, issues); if (!value) return;
+  keys(value, ["count", "total", "workflows", "rate"], path, issues);
+  for (const key of ["count", "total", "workflows"] as const) finite(value[key], `${path}.${key}`, issues, 0, Number.MAX_SAFE_INTEGER, true);
+  const { count, total, workflows, rate } = value;
+  if (typeof count !== "number" || typeof total !== "number" || typeof workflows !== "number") return;
+  if (count > total) add(issues, `${path}.count`, "must not exceed total");
+  if (workflows > laneResults) add(issues, `${path}.workflows`, "must not exceed the workflow results on its lane");
+  if (total > 0 && workflows === 0) add(issues, `${path}.workflows`, "must be positive when total is");
+  checkRateValue(rate, count, total, path, issues);
 }
 function checkDistribution(input: unknown, path: string, issues: ValidationIssue[]): void {
   const value = object(input, path, issues); if (!value) return;

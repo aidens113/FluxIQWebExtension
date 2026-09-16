@@ -1,5 +1,5 @@
 import type { JsonObject } from "fluxiq/core";
-import { WEB_AUTOMATION_EXTRACT_MAX_ITEMS, WEB_AUTOMATION_EXTRACT_MAX_PAGES } from "./types";
+import { WEB_AUTOMATION_EXTRACT_READ_MODES, webAutomationExtractListSchema } from "./extraction";
 import type { WebAutomationActionType } from "./types";
 
 export type WebAutomationActionDefinition = {
@@ -131,31 +131,20 @@ const assertSchema = {
 } satisfies JsonObject;
 
 /**
- * `WebAutomationExtractListRequest`, the same field forms the scenario
- * contract's extract step uses: a field's selector is read inside each item,
- * `selector@attribute` reads an attribute rather than text, and
- * `column:<header text>` reads the cell under that header, so extraction
- * survives a column reorder.
+ * `WebAutomationExtractListRequest`, owned by `./extraction` with the request
+ * type. Its item and field elements are this file's fingerprint schema, passed
+ * in so the two cannot differ and no import runs back into this module.
  */
-const extractListSchema = {
+const extractListSchema = webAutomationExtractListSchema(elementFingerprintSchema);
+
+/** `WebAutomationExtractRead` (C3): which value of the target `web.dom.extract` reads. */
+const extractReadSchema = {
   type: "object",
-  label: "List extraction",
-  required: ["item", "fields"],
+  label: "Read",
+  required: ["mode"],
   properties: {
-    item: { type: "string", label: "Item selector" },
-    fields: { type: "object", label: "Field map" },
-    paginate: {
-      type: "object",
-      label: "Pagination",
-      required: ["next", "maxPages"],
-      properties: {
-        next: { type: "string", label: "Next control" },
-        maxPages: { type: "integer", label: "Maximum pages", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES }
-      }
-    },
-    maxItems: { type: "integer", label: "Maximum items", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_ITEMS },
-    // Default 1 where absent, so an empty list fails unless the Flow says empty is an answer.
-    minItems: { type: "integer", label: "Minimum items", minimum: 0 }
+    mode: { type: "string", label: "Reads", enum: [...WEB_AUTOMATION_EXTRACT_READ_MODES] },
+    attribute: { type: "string", label: "Attribute" }
   }
 } satisfies JsonObject;
 
@@ -290,7 +279,19 @@ export const webAutomationActionDefinitions: WebAutomationActionDefinition[] = [
     description: "Wait until page text appears or the page settles.",
     parameterSchema: { type: "object", required: ["text"], properties: { text: { type: "string" }, timeoutMs: { type: "integer" }, wait: waitSchema } }
   },
-  { actionType: "web.dom.extract", label: "Extract", description: "Extract text, value, or attributes from an element.", parameterSchema: selectorSchema },
+  {
+    actionType: "web.dom.extract",
+    label: "Extract",
+    description: "Extract text, value, or attributes from an element.",
+    // `selector` stays required, so this keeps declaring an element target. The
+    // structured `extract` says which value to read; the legacy `options.mode`
+    // beside it still works for a Flow that authored one.
+    parameterSchema: {
+      type: "object",
+      required: ["selector"],
+      properties: { ...elementProperties, timeoutMs: { type: "integer", label: "Timeout in ms" }, extract: extractReadSchema }
+    }
+  },
   {
     actionType: "web.dom.capture_snapshot",
     label: "Capture Snapshot",

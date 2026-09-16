@@ -11,11 +11,30 @@
 // one value reader every capture path goes through -- this descriptor, the
 // snapshot, the recorder's `dom.input` and the `dom.change` listener -- and it
 // returns nothing for a sensitive control, so no caller can capture one by
-// forgetting to ask. `hasValue` still reports presence, and `describeElement`
-// withholds `selectedValue` and the option list of a sensitive select. The rule
+// forgetting to ask. `hasValue` still reports presence.
+//
+// The two other readers of what a control *holds* follow that rule and are
+// exported beside it, so each is closed by a test of its own rather than only
+// through the assembled descriptor: `checkedState`, which for a checkbox or
+// radio is everything the control holds, and `selectState`, a select's option
+// list and current selection -- the options are the value space, so publishing
+// them narrows the secret. All three ask `isWithinSensitiveControl`, so a
+// control that merely sits inside a marked element is withheld as a marked
+// control itself is (decision D2). The rule
 // is the single `isSensitiveFieldSignature` in `shared/sensitive-field.ts`,
 // reached through `isSensitiveFormControl`; a second rule anywhere is a leak
 // waiting to happen, which is how a card number escaped once already.
+//
+// Text follows the same rule (decision D2 of the data-extraction plan). A
+// sensitive textarea's text and a sensitive select's option labels are what
+// those controls hold, so `visibleText` and `directVisibleText` read through
+// `textOutsideSensitiveControls` (`sensitive-text.ts`): a sensitive control,
+// and anything inside one, gives no `text` or `visibleText`, and a container's
+// text leaves those contents out. The snapshot ranks and admits elements by
+// the same two readers, so a control known only by its contents is not listed.
+// The `accessibleName`, `label` and `context` assembled here come from
+// `identity/`, which reads every page string through the same helper, so none
+// needs filtering again here.
 //
 // It does not cover the action verbs, which read `element.value` directly to
 // prove their own post-conditions and put it in a validation string
@@ -29,10 +48,10 @@ import {
   hasClickHandler,
   hasEnteredValue,
   isInteractableUiElement,
-  isSemanticTextElement,
-  isSensitiveFormControl
+  isSemanticTextElement
 } from "./element-traits";
 import { accessibleNameFor, authoredNameAttribute, elementContext, implicitRole, labelText } from "./identity";
+import { isWithinSensitiveControl, textOutsideSensitiveControls } from "./sensitive-text";
 import type { DomElementDescriptor } from "./types";
 
 export function describeElement(element: Element): DomElementDescriptor {
@@ -80,16 +99,10 @@ export function describeElement(element: Element): DomElementDescriptor {
   if (markupRole) descriptor.implicitRole = markupRole;
   const context = elementContext(element);
   if (context) descriptor.context = context;
-  // A sensitive select yields neither its selection nor its option list: the
-  // options are the value space, so publishing them narrows the secret.
-  if (element instanceof HTMLSelectElement && !isSensitiveFormControl(element)) {
-    descriptor.options = [...element.options].slice(0, 20).map((option) => ({
-      value: option.value.slice(0, 200),
-      label: (option.label || option.textContent || "").replace(/\s+/gu, " ").trim().slice(0, 200),
-    }));
-    if (descriptor.options.some((option) => option.value === element.value)) {
-      descriptor.selectedValue = element.value.slice(0, 200);
-    }
+  const select = selectState(element);
+  if (select) {
+    descriptor.options = select.options;
+    if (select.selectedValue !== undefined) descriptor.selectedValue = select.selectedValue;
   }
   const attributes: Record<string, string> = {};
   // `value` is deliberately absent: value *presence* travels as `hasValue`, so
@@ -122,27 +135,31 @@ export function selectorFor(element: Element): string {
   return parts.join(" > ");
 }
 
-/** All text under the element, including descendants. */
+/**
+ * All text under the element, including descendants -- less every sensitive
+ * control's contents, and none for an element that is, or sits inside, one.
+ */
 export function visibleText(element: Element): string | undefined {
-  const text = element.textContent?.replace(/\s+/g, " ").trim();
+  const text = textOutsideSensitiveControls(element).replace(/\s+/g, " ").trim();
   return text ? text.slice(0, 500) : undefined;
 }
 
-/** Only the element's own text nodes, so a container does not inherit its children's words. */
+/**
+ * Only the element's own text nodes, so a container does not inherit its
+ * children's words -- and none for an element inside a sensitive control.
+ */
 export function directVisibleText(element: Element): string | undefined {
-  const text = [...element.childNodes]
-    .filter((node) => node.nodeType === Node.TEXT_NODE)
-    .map((node) => node.textContent ?? "")
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
+  const text = textOutsideSensitiveControls(element, "own").replace(/\s+/g, " ").trim();
   return text ? text.slice(0, 500) : undefined;
 }
 
 /**
  * What the control holds, or `undefined` when it holds nothing readable -- and
  * always `undefined` for a sensitive control, whose value must never leave the
- * page on any path.
+ * page on any path, or for an element inside one. A span inside an editable
+ * region marked `data-sensitive` is editable itself, and its words are that
+ * region's value, so it is asked about as the region is
+ * (`isWithinSensitiveControl`, `sensitive-text.ts`).
  *
  * The redaction lives here rather than at each emission point because every
  * capture path comes through here: the recorder's `dom.input`, the `dom.change`
@@ -152,7 +169,7 @@ export function directVisibleText(element: Element): string | undefined {
  */
 export function readElementValue(element: Element | null): string | undefined {
   if (!element) return undefined;
-  if (isSensitiveFormControl(element)) return undefined;
+  if (isWithinSensitiveControl(element)) return undefined;
   // A file input's value is the chosen file's local name (`C:\fakepath\…`), which
   // is the user's, not the page's. Replay supplies the file itself, and presence
   // still travels as `hasValue`.
@@ -166,16 +183,47 @@ export function readElementValue(element: Element | null): string | undefined {
 
 /**
  * Whether a checkbox or radio is checked, or `undefined` for every other
- * control -- and for a sensitive one. The checked state is state rather than a
- * value, but for these two controls it is everything they hold, so it follows
- * the rule `readElementValue` follows: a control the sensitivity rule marks
- * yields nothing, and the wire projection withholds it a second time.
+ * control -- and for a sensitive one, or one inside a sensitive control. The
+ * checked state is state rather than a value, but for these two controls it is
+ * everything they hold, so it follows the rule `readElementValue` follows: a
+ * control the sensitivity rule marks yields nothing, and the wire projection
+ * withholds it a second time. A checkbox inside an element marked
+ * `data-sensitive` is not marked itself, and its state is still part of what
+ * that element holds, so it is asked about as the element is
+ * (`isWithinSensitiveControl`, `sensitive-text.ts`).
  */
-function checkedState(element: Element): boolean | undefined {
+export function checkedState(element: Element): boolean | undefined {
   if (!(element instanceof HTMLInputElement)) return undefined;
   const type = element.type.toLowerCase();
   if (type !== "checkbox" && type !== "radio") return undefined;
-  return isSensitiveFormControl(element) ? undefined : element.checked;
+  return isWithinSensitiveControl(element) ? undefined : element.checked;
+}
+
+/** A select's option list and, when the selection is one of them, its value. */
+type SelectState = {
+  options: NonNullable<DomElementDescriptor["options"]>;
+  selectedValue?: string | undefined;
+};
+
+/**
+ * What a `<select>` offers and what it currently holds, or `undefined` for
+ * every other element -- and for a select that is, or sits inside, a sensitive
+ * control, which yields neither. The option list is the control's value space,
+ * so publishing it narrows the secret however the selection itself is withheld,
+ * and the labels are the words the page renders for those values.
+ *
+ * The selection travels only when it is one of the options listed, so a
+ * `selectedValue` never says more than the list already did.
+ */
+export function selectState(element: Element): SelectState | undefined {
+  if (!(element instanceof HTMLSelectElement) || isWithinSensitiveControl(element)) return undefined;
+  const options = [...element.options].slice(0, 20).map((option) => ({
+    value: option.value.slice(0, 200),
+    label: (option.label || option.textContent || "").replace(/\s+/gu, " ").trim().slice(0, 200),
+  }));
+  const state: SelectState = { options };
+  if (options.some((option) => option.value === element.value)) state.selectedValue = element.value.slice(0, 200);
+  return state;
 }
 
 /**

@@ -22,6 +22,25 @@ export const inventoryColumns: Readonly<Record<InventoryColumn, InventoryColumnD
 export const defaultColumnOrder: readonly InventoryColumn[] = ["product", "category", "price", "stock"];
 
 /**
+ * Rows the `large-table` variant loads, past the 1,000-record extraction cap
+ * (`WEB_AUTOMATION_EXTRACT_MAX_ITEMS`), so a read of this table is cut short
+ * and reports itself truncated. Every row is built from the authored catalog
+ * rather than a seed, so the expected count holds under any lab seed, and each
+ * product name and SKU stays distinct so a truncated read cannot be mistaken
+ * for a de-duplicated one.
+ */
+export const LARGE_INVENTORY_ROWS = 2_000;
+
+/** The `large-table` catalog: `LARGE_INVENTORY_ROWS` distinct rows cycling the authored ones. */
+export function largeInventoryRows(): InventoryRow[] {
+  return Array.from({ length: LARGE_INVENTORY_ROWS }, (_, index) => {
+    const source = inventoryRows[index % inventoryRows.length] as InventoryRow;
+    const number = index + 1;
+    return { ...source, id: `sku-${9000 + number}`, product: `${source.product} #${number}` };
+  });
+}
+
+/**
  * The seeded catalog in its unsorted display order. Prices and stock counts
  * are distinct, and sorting their text instead of their amounts gives a
  * different order ("$129.00" sorts before "$9.50" as text).

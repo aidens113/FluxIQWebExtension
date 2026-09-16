@@ -15,10 +15,12 @@ const variantOnly = (id: string, scenarioId: string, workflowId: string | null, 
  *
  * Both lanes run. Every unarmed workflow runs on both, and every variant on the
  * Flow lane, the only lane that arms one, except a workflow whose script performs
- * no action, which no recording can turn into a Flow: W04's and W08's four
- * Flow-lane entries are planned as skipped, with that reason. That leaves 63
- * runnable results per repeat, 23 on the recording lane and 40 on the Flow lane
- * (21 unarmed, 19 variants). The
+ * no action, which no recording can turn into a Flow. Since X5.1 an extract step
+ * records a `web.dom.extract_list`, so W04 and W08 — the two whose four Flow-lane
+ * entries used to be planned as skipped — now reach the Flow lane and are judged
+ * on their extraction there, and no week1 workflow is excluded: 0 skipped. That
+ * leaves 67 runnable results per repeat, 23 on the recording lane and 44 on the
+ * Flow lane (23 unarmed, 21 variants). The
  * Flow lane is the only lane on which FluxIQ executes a workflow, so it is what
  * makes W01-W18 a measurement of FluxIQ and gives drift recovery, fuzzy
  * recovery and failure classification a population; the recording lane keeps

@@ -20,8 +20,17 @@
 // renamed one is an excess property. `shared/present.ts` states the general
 // case; this type is the one it could not be applied to until the helper's
 // guard was fixed.
+//
+// `context` rides on every descriptor, a sensitive control's included, so every
+// string read here from the page -- the legend, the heading, the column header,
+// the text of a landmark's reference -- goes through `contextText`, which reads
+// it through `textOutsideSensitiveControls` (`../sensitive-text.ts`, decision
+// D2 of the data-extraction plan): a sensitive `<textarea>`'s text, a sensitive
+// `<select>`'s option labels and the words in an element the rule marks are
+// left out, and text that sits inside a sensitive control gives nothing.
 
 import { present } from "../../shared/present";
+import { textOutsideSensitiveControls } from "../sensitive-text";
 import type { DomElementContext } from "../types";
 import { boundedText } from "./bounded-text";
 
@@ -85,7 +94,12 @@ function formAttribute(form: Element | null, name: string): string | undefined {
 
 function fieldsetLegend(element: Element): string | undefined {
   const legend = element.closest("fieldset")?.querySelector(":scope > legend");
-  return boundedText(legend?.textContent, MAX_CONTEXT_TEXT);
+  return legend ? contextText(legend) : undefined;
+}
+
+/** An element's bounded text, less every sensitive control's contents, and none for one inside a sensitive control. */
+function contextText(element: Element): string | undefined {
+  return boundedText(textOutsideSensitiveControls(element), MAX_CONTEXT_TEXT);
 }
 
 /** The nearest landmark at or above the element, with its role. */
@@ -114,7 +128,9 @@ function nearestLandmark(element: Element): Landmark | undefined {
  * rides in `context`, which the wire keeps on every control, a password field
  * included. So it is stricter about references: one that points at a form
  * control or an editable region contributes nothing, because such an
- * element's text is what it holds, not what the page calls the landmark.
+ * element's text is what it holds, not what the page calls the landmark. Any
+ * other reference is read by `contextText`, so one holding a sensitive
+ * control's contents contributes only its other words.
  */
 function landmarkName(landmark: Element): string | undefined {
   return labelledByText(landmark)
@@ -128,7 +144,7 @@ function labelledByText(landmark: Element): string | undefined {
   const parts = ids.flatMap((id) => {
     const target = landmark.ownerDocument?.getElementById(id);
     if (!target || target === landmark || holdsInput(target)) return [];
-    const text = boundedText(target.textContent, MAX_CONTEXT_TEXT);
+    const text = contextText(target);
     return text ? [text] : [];
   });
   return boundedText(parts.join(" "), MAX_CONTEXT_TEXT);
@@ -178,12 +194,12 @@ function nearestHeading(element: Element): string | undefined {
     let scanned = 0;
     while (sibling && scanned < MAX_HEADING_SIBLINGS) {
       scanned += 1;
-      if (sibling.matches(HEADING_SELECTOR)) return boundedText(sibling.textContent, MAX_CONTEXT_TEXT);
+      if (sibling.matches(HEADING_SELECTOR)) return contextText(sibling);
       if (sibling.firstElementChild && queries < MAX_HEADING_SUBTREE_QUERIES) {
         queries += 1;
         const headings = sibling.querySelectorAll(HEADING_SELECTOR);
         const last = headings[headings.length - 1];
-        if (last) return boundedText(last.textContent, MAX_CONTEXT_TEXT);
+        if (last) return contextText(last);
       }
       sibling = sibling.previousElementSibling;
     }
@@ -219,7 +235,8 @@ function columnHeader(row: HTMLTableRowElement, cell: HTMLTableCellElement): str
   const table = row.closest("table");
   if (!(table instanceof HTMLTableElement)) return undefined;
   const headerRow = table.tHead?.rows[0] ?? table.rows[0];
-  return boundedText(headerRow?.cells[cell.cellIndex]?.textContent, MAX_CONTEXT_TEXT);
+  const header = headerRow?.cells[cell.cellIndex];
+  return header ? contextText(header) : undefined;
 }
 
 function hasAuthoredName(element: Element): boolean {

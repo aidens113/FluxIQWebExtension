@@ -51,19 +51,69 @@ Withholding is unconditional and does not depend on a setting.
 
 - **Element descriptors.** `readElementValue`
   ([`content/describe-element.ts`](../../apps/extension/src/content/describe-element.ts))
-  returns nothing for a sensitive control, so no descriptor carries its value.
+  returns nothing for a sensitive control, or for an element inside one — a
+  span in an editable region marked `data-sensitive` is editable itself, and
+  its words are the region's value — so no descriptor carries its value.
   A sensitive `<select>` yields neither its `selectedValue` nor its option
   list — the options are the value space, and publishing them narrows the
   secret. The attribute allowlist deliberately excludes `value`. A file input
   yields no value either, sensitive or not: its value is the chosen file's
   local name, which belongs to the person's machine rather than the page. Only
   `hasValue` says whether it holds files.
+
+  Nor does a descriptor quote what a sensitive control holds as text: a
+  sensitive `<textarea>`'s text, a sensitive `<select>`'s option labels, the
+  words in any element the rule marks. `visibleText` and `directVisibleText`
+  read through `textOutsideSensitiveControls`
+  ([`content/sensitive-text.ts`](../../apps/extension/src/content/sensitive-text.ts)),
+  so a sensitive control, or anything inside one such as a listbox's
+  `<option>`, gives no `text` or `visibleText`, and a container's text leaves
+  those contents out: a `<label>` wrapping a sensitive textarea reads as its
+  label. The snapshot ranks and admits elements by the same two readers, so a
+  control known only by its contents is not listed.
+
+  Names follow, and the filter is in the name computation itself,
+  `accessibleNameFor`
+  ([`content/identity/accessible-name.ts`](../../apps/extension/src/content/identity/accessible-name.ts)),
+  so every name it gives leaves those contents out, whoever asks: the
+  descriptor's `accessibleName`, the names in page evidence (a form control's
+  `label`, a region's, a dialog's, an overlay's, a loading indicator's), and
+  the resolver's candidates. It reads page text in two places, and both go
+  through the same helper: the text of each element `aria-labelledby`
+  references, so a reference holding a sensitive control contributes only its
+  other words, and the element's own text when its role takes a name from
+  content, so a `<label>` wrapping a sensitive textarea is named by its label
+  and an `<option>` inside a sensitive select takes no name. A name from
+  `aria-label`, `title` or `placeholder` is kept, and so is an associated
+  `<label>`, whose reader skips nested form controls, so a sensitive control
+  still carries the name its label gives it. The descriptor sets
+  `accessibleName` to that name as computed, with no second filter of its own,
+  so a button named by a reference holding a sensitive textarea is named by the
+  reference's other words.
+
+  The rest of a descriptor's identity reads page text the same way. The
+  `<label>` reader
+  ([`content/identity/label.ts`](../../apps/extension/src/content/identity/label.ts)),
+  whose text is the descriptor's `label` and, for an associated label, the
+  accessible name, skips a subtree rooted at a sensitive control as it skips a
+  nested form control, gives nothing for a label that sits inside one, and
+  reads the text beside an unlabelled control through the same helper. Every
+  string in `context`
+  ([`content/identity/context.ts`](../../apps/extension/src/content/identity/context.ts))
+  — the fieldset legend, the heading, the table's column header, and the text
+  of the reference a landmark is named by — goes through it too, which matters
+  because `context` rides on every descriptor, a sensitive control's included.
 - **Recorded events.** The `change` listener's `inputValue` comes from the
   same reader, so a file input's `change` carries none, and `recordableKey`
   ([`content/dom-events.ts`](../../apps/extension/src/content/dom-events.ts))
   drops the key itself: a printable key pressed in a sensitive control *is*
   that control's value, one character at a time, and never goes through a
-  value reader.
+  value reader. The rule it asks is the ancestor-aware one
+  (`isWithinSensitiveControl`), so a printable key pressed in **anything inside
+  a marked element** is withheld too, not only one pressed in a control the
+  rule marks itself: an ordinary text field inside a `data-sensitive` group
+  yields no value, text or state anywhere, and its characters must not be
+  recordable one by one and reassembled in order.
 - **The page selection.** `capturedSelectionText` in
   `content/dom-snapshot.ts` withholds `selectedText` when the selection came
   out of, or reaches into, a sensitive control — the focused control, the
@@ -163,6 +213,8 @@ neither guard stamps one, and the adapter strips any flag it did not honour.
   ([`domain/src/output-nodes/upload-binding.ts`](../../domain/src/output-nodes/upload-binding.ts)).
 - **Page evidence.** Form controls report `hasValue`, the raw `autocomplete`
   tokens, and a `sensitive` marker — see [page evidence](page-evidence.md).
+  Every name in it comes from the same filtered `accessibleNameFor` (see
+  "Element descriptors" above).
   The tokens are carried on purpose, so a consumer can ask the rule itself
   instead of inheriting whatever the producer concluded.
 
@@ -227,15 +279,45 @@ pairing that fails stops the run before the Flow starts
   `<input type="text">` holding a password, with no `autocomplete` and no
   `data-sensitive`, is an ordinary control to every guard here. Marking it is
   the page's job — or the recording operator's.
-- **Not a rule about page text.** Visible text, extracted values,
-  `web.dom.extract` output and assertion text are page content the automation
-  was asked for; only the selection has a sensitivity guard, and only because
-  a selection can silently contain a control's value. A page that displays a
-  secret as text therefore puts it into every state snapshot, into the
-  snapshot each action result carries, and so into Core's workspace, and no
-  guard here or in Core withholds it. A display rule — dropping `visibleText`
-  and `text`, not only the value, for an element marked `data-sensitive` — is
-  not built. The Lab's run leak check finds a declared secret shown this way
+- **Not a rule about page text.** Visible text, extracted values and
+  assertion text are page content the automation was asked for. The rule
+  reaches into text in two places only, each because the text is a control's
+  value in another form: the selection, which can silently contain a
+  control's value, and a sensitive control's contents — a sensitive
+  `<textarea>`'s text, a sensitive `<select>`'s option labels, the words in
+  any element the rule marks. No element descriptor — its text, name,
+  `label` or `context` — and no computed name quotes those contents (see
+  "Element descriptors" above). Extraction refuses a sensitive control, and any
+  element inside one, in every mode: an `<option>` of a sensitive select or a
+  span in a marked editable region is refused as the control is, by
+  `isWithinSensitiveControl` in the same helper. It leaves those contents out
+  of a container's HTML and, through the reader descriptors and names use, its
+  text (`content/action-runtime/extract.ts`). A list field is held to the same
+  rule in every kind (`content/extraction/field-reader.ts`), the `value` kind
+  most of all, since a control's live value is the secret itself: a field that
+  resolves to a sensitive control, or to anything inside one, refuses the
+  *whole* read rather than returning the other columns.
+
+  An **excluded** column is the other half of that, and it is not a redaction:
+  a field with `handling: "exclude"` is dropped in
+  `content/extraction/field-spec.ts` before anything on the page is read, so
+  its values are never read rather than read and removed, and the column is
+  absent from the output, the summary's `fieldNames`, the saved table and every
+  export (decision D12). Inference pre-selects it for a field whose element is,
+  or sits inside, a sensitive control and can propose nothing else
+  (`content/extraction/infer-fields.ts`); the user may change it in the picker,
+  which is where that decision belongs.
+
+  Everything else is ordinary content. A page that displays a secret as
+  unmarked text puts it into every state snapshot, into the snapshot each
+  action result carries, and so into Core's workspace, and no guard here or in
+  Core withholds it. Nor is every string read from the page filtered for a
+  sensitive control's contents yet: in page evidence a loading indicator with
+  no accessible name is labelled by its raw text
+  (`content/evidence/loading.ts`), as a repeating structure's representative
+  text is (`content/evidence/repeating.ts`), and a resolver candidate's
+  `visibleText` is read raw (`content/identity/candidates.ts`). The Lab's run
+  leak check finds a declared secret shown this way
   ([testing facility](testing-facility.md)).
 - **Not shadow-DOM aware.** A selection inside a closed shadow root is not
   reachable, here or anywhere else in the recorder.

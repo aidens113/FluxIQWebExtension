@@ -1,5 +1,5 @@
 import type { JsonObject } from "fluxiq/core";
-import type { WebAutomationElementContext, WebAutomationElementFingerprint } from "../actions/types";
+import type { WebAutomationElementContext, WebAutomationElementFingerprint } from "../../actions/types";
 
 export type WebAutomationOutputTarget = JsonObject;
 

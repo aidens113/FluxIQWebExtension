@@ -8,7 +8,18 @@
 // the collector skips nested controls -- so no value can reach the wire through
 // this path and the sensitivity rule in shared/sensitive-field.ts stays the one
 // place that decides which values must never leave the page.
+//
+// Nor are a sensitive control's contents (decision D2 of the data-extraction
+// plan): the words in an element the rule marks are that control's value in
+// another form. A label's text is the descriptor's `label` and, through
+// `accessible-name.ts`, the accessible name and every page-evidence name, so
+// the collector skips a subtree rooted at a sensitive control as it skips a
+// nested control, a label that sits inside one gives nothing
+// (`isWithinSensitiveControl`), and the text beside an unlabelled control is
+// read through `textOutsideSensitiveControls` (both `../sensitive-text.ts`).
 
+import { isSensitiveFormControl } from "../element-traits";
+import { isWithinSensitiveControl, textOutsideSensitiveControls } from "../sensitive-text";
 import { boundedText } from "./bounded-text";
 
 const MAX_LABEL_LENGTH = 200;
@@ -50,8 +61,13 @@ function associatedLabelElements(element: Element): Element[] {
   return labels.slice(0, MAX_ASSOCIATED_LABELS);
 }
 
-/** A label's own words: its text nodes, with any nested control's content left out. */
+/**
+ * A label's own words: its text nodes, with any nested control's content and
+ * any sensitive control's contents left out -- and none for a label that sits
+ * inside a sensitive control.
+ */
 function labelElementText(label: Element, control: Element): string {
+  if (isWithinSensitiveControl(label)) return "";
   const parts: string[] = [];
   collectLabelText(label, control, parts, 0);
   return parts.join(" ").replace(/\s+/gu, " ").trim();
@@ -65,7 +81,7 @@ function collectLabelText(node: Node, control: Element, parts: string[], depth: 
     return;
   }
   if (!(node instanceof Element)) return;
-  if (node === control || node.matches(NESTED_CONTROL_SELECTOR)) return;
+  if (node === control || node.matches(NESTED_CONTROL_SELECTOR) || isSensitiveFormControl(node)) return;
   for (const child of node.childNodes) collectLabelText(child, control, parts, depth + 1);
 }
 
@@ -97,7 +113,7 @@ function labelBeforeSiblings(element: Element): string | undefined {
 function nearbyLabelText(candidate: Element): string | undefined {
   if (!NEARBY_LABEL_TAGS.has(candidate.tagName.toLowerCase())) return undefined;
   if (candidate.querySelector(NESTED_CONTROL_SELECTOR)) return undefined;
-  return boundedText(candidate.textContent, MAX_NEARBY_LABEL_LENGTH);
+  return boundedText(textOutsideSensitiveControls(candidate), MAX_NEARBY_LABEL_LENGTH);
 }
 
 function isLabelableControl(element: Element): boolean {

@@ -271,10 +271,79 @@
   // ../../domain/src/constants.ts
   var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 
-  // ../../domain/src/actions/types.ts
-  var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
+  // ../../domain/src/actions/extraction/field-key.ts
+  var FIELD_KEY_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
+  var RESERVED_FIELD_KEYS = /* @__PURE__ */ new Set(["__proto__", "constructor", "prototype"]);
+  function isWebAutomationExtractFieldKey(key) {
+    return typeof key === "string" && FIELD_KEY_PATTERN.test(key) && !RESERVED_FIELD_KEYS.has(key);
+  }
+
+  // ../../domain/src/actions/extraction/request.ts
+  var WEB_AUTOMATION_EXTRACT_PAGINATION_MODES = ["next", "loadMore", "scroll", "numbered"];
+  var WEB_AUTOMATION_EXTRACT_FIELD_KINDS = ["text", "attribute", "link", "value", "column"];
+  var WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS = ["include", "exclude", "encrypt"];
+  var WEB_AUTOMATION_EXTRACT_READ_MODES = ["text", "attribute", "value", "html"];
   var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
   var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
+
+  // ../../domain/src/actions/extraction/read-request.ts
+  var REFUSED = Symbol("refused");
+
+  // ../../domain/src/actions/extraction/schema.ts
+  function webAutomationExtractListSchema(elementFingerprintSchema2) {
+    const pageBound = { type: "integer", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES };
+    const fieldSpecSchema = {
+      type: "object",
+      label: "Field",
+      required: ["kind"],
+      properties: {
+        kind: { type: "string", label: "Reads", enum: [...WEB_AUTOMATION_EXTRACT_FIELD_KINDS] },
+        selector: { type: "string", label: "Selector inside the item" },
+        attribute: { type: "string", label: "Attribute" },
+        header: { type: "string", label: "Column header" },
+        required: { type: "boolean", label: "Required" },
+        // `encrypt` is reserved (D13) and refused at dispatch until it is built.
+        handling: { type: "string", label: "Column", enum: [...WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS] },
+        element: elementFingerprintSchema2
+      }
+    };
+    return {
+      type: "object",
+      label: "List extraction",
+      required: ["item", "fields"],
+      properties: {
+        item: { type: "string", label: "Item selector" },
+        itemElement: elementFingerprintSchema2,
+        fields: {
+          type: "object",
+          label: "Field map",
+          description: "Each field key maps to a selector string (`selector`, `selector@attribute`, `column:<header>`) or a field spec.",
+          metadata: { fieldSpec: fieldSpecSchema }
+        },
+        // No member is required of every mode, so nothing is required here: the
+        // lift refuses a mode missing its own bound or naming another mode's key.
+        paginate: {
+          type: "object",
+          label: "Pagination",
+          properties: {
+            mode: { type: "string", label: "Mode", enum: [...WEB_AUTOMATION_EXTRACT_PAGINATION_MODES] },
+            next: { type: "string", label: "Next control" },
+            control: { type: "string", label: "Load-more control" },
+            pages: { type: "string", label: "Page controls" },
+            maxPages: { ...pageBound, label: "Maximum pages" },
+            maxScrolls: { ...pageBound, label: "Maximum scrolls" }
+          }
+        },
+        maxItems: { type: "integer", label: "Maximum items", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_ITEMS },
+        // Default 1 where absent, so an empty list fails unless the Flow says empty
+        // is an answer; above the item bound no page could satisfy it.
+        minItems: { type: "integer", label: "Minimum items", minimum: 0, maximum: WEB_AUTOMATION_EXTRACT_MAX_ITEMS }
+      }
+    };
+  }
+
+  // ../../domain/src/actions/types.ts
+  var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
   var WEB_AUTOMATION_ACTION_TYPES = [
     "web.browser.navigate",
     "web.dom.click",
@@ -422,25 +491,14 @@
       timeoutMs: { type: "integer", label: "Timeout in ms" }
     }
   };
-  var extractListSchema = {
+  var extractListSchema = webAutomationExtractListSchema(elementFingerprintSchema);
+  var extractReadSchema = {
     type: "object",
-    label: "List extraction",
-    required: ["item", "fields"],
+    label: "Read",
+    required: ["mode"],
     properties: {
-      item: { type: "string", label: "Item selector" },
-      fields: { type: "object", label: "Field map" },
-      paginate: {
-        type: "object",
-        label: "Pagination",
-        required: ["next", "maxPages"],
-        properties: {
-          next: { type: "string", label: "Next control" },
-          maxPages: { type: "integer", label: "Maximum pages", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES }
-        }
-      },
-      maxItems: { type: "integer", label: "Maximum items", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_ITEMS },
-      // Default 1 where absent, so an empty list fails unless the Flow says empty is an answer.
-      minItems: { type: "integer", label: "Minimum items", minimum: 0 }
+      mode: { type: "string", label: "Reads", enum: [...WEB_AUTOMATION_EXTRACT_READ_MODES] },
+      attribute: { type: "string", label: "Attribute" }
     }
   };
   var uploadSchema = {
@@ -561,7 +619,19 @@
       description: "Wait until page text appears or the page settles.",
       parameterSchema: { type: "object", required: ["text"], properties: { text: { type: "string" }, timeoutMs: { type: "integer" }, wait: waitSchema } }
     },
-    { actionType: "web.dom.extract", label: "Extract", description: "Extract text, value, or attributes from an element.", parameterSchema: selectorSchema },
+    {
+      actionType: "web.dom.extract",
+      label: "Extract",
+      description: "Extract text, value, or attributes from an element.",
+      // `selector` stays required, so this keeps declaring an element target. The
+      // structured `extract` says which value to read; the legacy `options.mode`
+      // beside it still works for a Flow that authored one.
+      parameterSchema: {
+        type: "object",
+        required: ["selector"],
+        properties: { ...elementProperties, timeoutMs: { type: "integer", label: "Timeout in ms" }, extract: extractReadSchema }
+      }
+    },
     {
       actionType: "web.dom.capture_snapshot",
       label: "Capture Snapshot",
@@ -650,6 +720,9 @@
     { id: "success", label: "Success", valueType: "any", role: "success" },
     { id: "failed", label: "Failed", valueType: "any", role: "failure" }
   ];
+  var recordsPathByOutput = {
+    "web.dom.extract_list": "extracted"
+  };
   var expectedStateParameter = {
     id: "expectedState",
     label: "Expected State",
@@ -668,6 +741,7 @@
     const requiredParameters = new Set(
       Array.isArray(definition.parameterSchema.required) ? definition.parameterSchema.required.filter((value) => typeof value === "string") : []
     );
+    const recordsPath = recordsPathByOutput[definition.actionType];
     return {
       schemaVersion: "0.1",
       id: webAutomationOutputNodeId(definition.actionType),
@@ -712,7 +786,8 @@
         // key press to the focused element, a URL assertion, a tab operation —
         // must not declare it, because Core fails an action outright when a
         // declared element target has no fingerprint to resolve.
-        ...requiredParameters.has("selector") ? { elementTarget: true } : {}
+        ...requiredParameters.has("selector") ? { elementTarget: true } : {},
+        ...recordsPath ? { recordsPath } : {}
       }
     };
   }
@@ -739,6 +814,7 @@
       { id: "smooth", label: "Smooth", valueType: "boolean", defaultValue: false },
       structured("scroll", "Scroll Mode")
     ];
+    if (outputId === "web.dom.extract") return [...selectorParameters, structured("extract", "Read")];
     if (outputId === "web.dom.wait_for_selector") return [...selectorParameters, structured("wait", "Condition")];
     if (outputId === "web.dom.wait_for_text") return [
       { id: "text", label: "Text", valueType: "string", required: true, ui: { control: "text" } },
@@ -748,7 +824,10 @@
     if (outputId === "web.dom.capture_snapshot") return [];
     if (outputId === "web.dom.check") return [...selectorParameters, { id: "checked", label: "Checked", valueType: "boolean", defaultValue: true }];
     if (outputId === "web.dom.assert") return [...selectorParameters, structured("assert", "Assertion")];
-    if (outputId === "web.dom.extract_list") return [structured("extractList", "List")];
+    if (outputId === "web.dom.extract_list") return [
+      structured("extractList", "List"),
+      { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 1e4 }
+    ];
     if (outputId === "web.dom.upload") return [...selectorParameters, structured("upload", "Files")];
     if (outputId === "web.dom.dialog") return [structured("dialog", "Dialog")];
     if (outputId === "web.browser.tab") return [structured("tab", "Tab")];
@@ -798,7 +877,12 @@
     pageScrolled: "web.user.page_scrolled",
     filesChosen: "web.user.files_chosen",
     tabSwitched: "web.user.tab_switched",
-    tabClosed: "web.user.tab_closed"
+    tabClosed: "web.user.tab_closed",
+    // Two inputs, because an input maps to exactly one output and the two forms
+    // of a recorded extraction run different verbs: a list saves a dataset, a
+    // single value answers with one value and saves none.
+    dataExtractionDefined: "web.user.data_extraction_defined",
+    valueExtractionDefined: "web.user.value_extraction_defined"
   };
   var stateInputDefinitions = [
     { id: WEB_AUTOMATION_INPUT_IDS.browserState, title: "Browser state", description: "Current browser, tab, and compact DOM state available for policy conditions.", role: "state" },
@@ -815,7 +899,9 @@
     [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"],
     [WEB_AUTOMATION_INPUT_IDS.filesChosen, "Files chosen", "web.dom.upload"],
     [WEB_AUTOMATION_INPUT_IDS.tabSwitched, "Tab switched", "web.browser.tab"],
-    [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"]
+    [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"],
+    [WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined, "Data extraction defined", "web.dom.extract_list"],
+    [WEB_AUTOMATION_INPUT_IDS.valueExtractionDefined, "Value extraction defined", "web.dom.extract"]
   ];
   var OUTPUT_FOR_ACTION_INPUT = new Map(
     actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
@@ -887,6 +973,38 @@
       metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, outputIds: WEB_AUTOMATION_ACTION_TYPES }
     }
   ];
+
+  // ../../domain/src/extraction/dataset-id.ts
+  var COMBINING_MARKS = new RegExp("\\p{M}+", "gu");
+
+  // ../../domain/src/extraction/label-key.ts
+  var MAX_KEY_LENGTH = 100;
+  var FALLBACK_KEY = "field";
+  var RESERVED_KEY_SUFFIX = "_field";
+  var OUTSIDE_KEY_CHARACTERS = /[^a-z0-9_-]+/u;
+  var COMBINING_MARKS2 = new RegExp("\\p{M}+", "gu");
+  function webAutomationExtractionFieldKey(label, taken) {
+    const words = label.toLowerCase().normalize("NFKD").replace(COMBINING_MARKS2, "").split(OUTSIDE_KEY_CHARACTERS).filter((word) => word.length > 0);
+    let key = words.join("_").slice(0, MAX_KEY_LENGTH) || FALLBACK_KEY;
+    if (!isWebAutomationExtractFieldKey(key)) key = `${key}${RESERVED_KEY_SUFFIX}`;
+    if (!taken.has(key)) return key;
+    for (let ordinal = 2; ; ordinal += 1) {
+      const suffix = `_${ordinal}`;
+      const candidate = `${key.slice(0, MAX_KEY_LENGTH - suffix.length)}${suffix}`;
+      if (!taken.has(candidate)) return candidate;
+    }
+  }
+
+  // ../../domain/src/extraction/signature.ts
+  var MAX_SIGNATURE_CLASSES = 3;
+  function webAutomationItemSignature(parts) {
+    const role = parts.role?.trim().toLowerCase() ?? "";
+    const classes = [...parts.classes].sort().slice(0, MAX_SIGNATURE_CLASSES).join(".");
+    return `${parts.tagName.toLowerCase()}|${role}|${webAutomationIdentifierShape(parts.testId)}|${classes}`;
+  }
+  function webAutomationIdentifierShape(value) {
+    return value === void 0 ? "" : value.replace(/\d+/gu, "#");
+  }
 
   // ../../domain/src/runtime/failure/codes.ts
   var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
@@ -979,10 +1097,10 @@
   var EVIDENCE_DIGEST_PATTERN = /^[a-f0-9]{64}$/u;
   function boundedText(value) {
     if (value === void 0) return void 0;
-    const collapsed = value.replace(/\s+/gu, " ").trim();
-    if (collapsed.length === 0) return void 0;
-    if (collapsed.length <= WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH) return collapsed;
-    return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
+    const collapsed2 = value.replace(/\s+/gu, " ").trim();
+    if (collapsed2.length === 0) return void 0;
+    if (collapsed2.length <= WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH) return collapsed2;
+    return `${collapsed2.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
   }
 
   // ../../domain/src/runtime/failure/carrier.ts
@@ -1235,6 +1353,46 @@
     return Number.isFinite(rect2.width) && Number.isFinite(rect2.height) && rect2.width >= 2 && rect2.height >= 2;
   }
 
+  // src/content/sensitive-text.ts
+  function textOutsideSensitiveControls(element, extent = "all") {
+    const text3 = extent === "own" ? ownText(element) : element.textContent ?? "";
+    if (!/\S/u.test(text3)) return text3;
+    if (isWithinSensitiveControl(element)) return "";
+    if (extent === "own" || !hasTextBearingSensitiveDescendant(element)) return text3;
+    return textSkippingSensitiveSubtrees(element);
+  }
+  function ownText(element) {
+    return [...element.childNodes].filter((node) => node.nodeType === Node.TEXT_NODE).map((node) => node.textContent ?? "").join(" ");
+  }
+  function isWithinSensitiveControl(element) {
+    for (let current = element; current; current = current.parentElement) {
+      if (isSensitiveFormControl(current)) return true;
+    }
+    return false;
+  }
+  function hasTextBearingSensitiveDescendant(root) {
+    for (const descendant of root.querySelectorAll("*")) {
+      if (descendant.firstChild && isSensitiveFormControl(descendant)) return true;
+    }
+    return false;
+  }
+  function textSkippingSensitiveSubtrees(root) {
+    let text3 = "";
+    const pending = [...root.childNodes].reverse();
+    for (let node = pending.pop(); node; node = pending.pop()) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        text3 += node.nodeValue ?? "";
+      } else if (node.nodeType === Node.ELEMENT_NODE && !isSensitiveFormControl(node)) {
+        const children = node.childNodes;
+        for (let index = children.length - 1; index >= 0; index -= 1) {
+          const child = children[index];
+          if (child) pending.push(child);
+        }
+      }
+    }
+    return text3;
+  }
+
   // src/content/identity/bounded-text.ts
   function boundedText2(value, maxLength) {
     const text3 = (value ?? "").replace(/\s+/gu, " ").trim();
@@ -1267,6 +1425,7 @@
     return labels.slice(0, MAX_ASSOCIATED_LABELS);
   }
   function labelElementText(label, control) {
+    if (isWithinSensitiveControl(label)) return "";
     const parts = [];
     collectLabelText(label, control, parts, 0);
     return parts.join(" ").replace(/\s+/gu, " ").trim();
@@ -1279,7 +1438,7 @@
       return;
     }
     if (!(node instanceof Element)) return;
-    if (node === control || node.matches(NESTED_CONTROL_SELECTOR)) return;
+    if (node === control || node.matches(NESTED_CONTROL_SELECTOR) || isSensitiveFormControl(node)) return;
     for (const child of node.childNodes) collectLabelText(child, control, parts, depth + 1);
   }
   function nearbyLabel(element) {
@@ -1303,7 +1462,7 @@
   function nearbyLabelText(candidate) {
     if (!NEARBY_LABEL_TAGS.has(candidate.tagName.toLowerCase())) return void 0;
     if (candidate.querySelector(NESTED_CONTROL_SELECTOR)) return void 0;
-    return boundedText2(candidate.textContent, MAX_NEARBY_LABEL_LENGTH);
+    return boundedText2(textOutsideSensitiveControls(candidate), MAX_NEARBY_LABEL_LENGTH);
   }
   function isLabelableControl(element) {
     if (element instanceof HTMLInputElement) return element.type.toLowerCase() !== "hidden";
@@ -1371,7 +1530,7 @@
     if (!ids.length) return void 0;
     const parts = ids.flatMap((id) => {
       const target = document.getElementById(id);
-      const text3 = target === element ? void 0 : boundedText2(target?.textContent, MAX_NAME_LENGTH);
+      const text3 = target && target !== element ? boundedText2(textOutsideSensitiveControls(target), MAX_NAME_LENGTH) : void 0;
       return text3 ? [text3] : [];
     });
     return boundedText2(parts.join(" "), MAX_NAME_LENGTH);
@@ -1383,7 +1542,7 @@
     return boundedText2(element.value, MAX_NAME_LENGTH);
   }
   function nameFromContent(element) {
-    return supportsNameFromContent(element) ? boundedText2(element.textContent, MAX_NAME_LENGTH) : void 0;
+    return supportsNameFromContent(element) ? boundedText2(textOutsideSensitiveControls(element), MAX_NAME_LENGTH) : void 0;
   }
   function supportsNameFromContent(element) {
     if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement || element instanceof HTMLTextAreaElement) return false;
@@ -1696,7 +1855,10 @@
   }
   function fieldsetLegend(element) {
     const legend = element.closest("fieldset")?.querySelector(":scope > legend");
-    return boundedText2(legend?.textContent, MAX_CONTEXT_TEXT);
+    return legend ? contextText(legend) : void 0;
+  }
+  function contextText(element) {
+    return boundedText2(textOutsideSensitiveControls(element), MAX_CONTEXT_TEXT);
   }
   function nearestLandmark(element) {
     let current = element;
@@ -1717,7 +1879,7 @@
     const parts = ids.flatMap((id) => {
       const target = landmark.ownerDocument?.getElementById(id);
       if (!target || target === landmark || holdsInput(target)) return [];
-      const text3 = boundedText2(target.textContent, MAX_CONTEXT_TEXT);
+      const text3 = contextText(target);
       return text3 ? [text3] : [];
     });
     return boundedText2(parts.join(" "), MAX_CONTEXT_TEXT);
@@ -1744,12 +1906,12 @@
       let scanned = 0;
       while (sibling && scanned < MAX_HEADING_SIBLINGS) {
         scanned += 1;
-        if (sibling.matches(HEADING_SELECTOR)) return boundedText2(sibling.textContent, MAX_CONTEXT_TEXT);
+        if (sibling.matches(HEADING_SELECTOR)) return contextText(sibling);
         if (sibling.firstElementChild && queries < MAX_HEADING_SUBTREE_QUERIES) {
           queries += 1;
           const headings = sibling.querySelectorAll(HEADING_SELECTOR);
           const last = headings[headings.length - 1];
-          if (last) return boundedText2(last.textContent, MAX_CONTEXT_TEXT);
+          if (last) return contextText(last);
         }
         sibling = sibling.previousElementSibling;
       }
@@ -1780,7 +1942,8 @@
     const table = row.closest("table");
     if (!(table instanceof HTMLTableElement)) return void 0;
     const headerRow = table.tHead?.rows[0] ?? table.rows[0];
-    return boundedText2(headerRow?.cells[cell.cellIndex]?.textContent, MAX_CONTEXT_TEXT);
+    const header = headerRow?.cells[cell.cellIndex];
+    return header ? contextText(header) : void 0;
   }
   function hasAuthoredName2(element) {
     return element.hasAttribute("aria-label") || element.hasAttribute("aria-labelledby") || element.hasAttribute("title");
@@ -2217,14 +2380,10 @@
     if (markupRole) descriptor.implicitRole = markupRole;
     const context = elementContext(element);
     if (context) descriptor.context = context;
-    if (element instanceof HTMLSelectElement && !isSensitiveFormControl(element)) {
-      descriptor.options = [...element.options].slice(0, 20).map((option) => ({
-        value: option.value.slice(0, 200),
-        label: (option.label || option.textContent || "").replace(/\s+/gu, " ").trim().slice(0, 200)
-      }));
-      if (descriptor.options.some((option) => option.value === element.value)) {
-        descriptor.selectedValue = element.value.slice(0, 200);
-      }
+    const select = selectState(element);
+    if (select) {
+      descriptor.options = select.options;
+      if (select.selectedValue !== void 0) descriptor.selectedValue = select.selectedValue;
     }
     const attributes = {};
     for (const attribute of ["id", "class", "name", "type", "autocomplete", "data-sensitive", "placeholder", "title", "alt", "href", "tabindex", "aria-label", "aria-labelledby", "aria-describedby", "for", "aria-disabled", "aria-expanded", "aria-controls", "aria-pressed", "aria-selected", "data-testid", "data-test", "data-cy", "disabled", "onclick"]) {
@@ -2253,16 +2412,16 @@
     return parts.join(" > ");
   }
   function visibleText(element) {
-    const text3 = element.textContent?.replace(/\s+/g, " ").trim();
+    const text3 = textOutsideSensitiveControls(element).replace(/\s+/g, " ").trim();
     return text3 ? text3.slice(0, 500) : void 0;
   }
   function directVisibleText(element) {
-    const text3 = [...element.childNodes].filter((node) => node.nodeType === Node.TEXT_NODE).map((node) => node.textContent ?? "").join(" ").replace(/\s+/g, " ").trim();
+    const text3 = textOutsideSensitiveControls(element, "own").replace(/\s+/g, " ").trim();
     return text3 ? text3.slice(0, 500) : void 0;
   }
   function readElementValue(element) {
     if (!element) return void 0;
-    if (isSensitiveFormControl(element)) return void 0;
+    if (isWithinSensitiveControl(element)) return void 0;
     if (element instanceof HTMLInputElement && element.type.toLowerCase() === "file") return void 0;
     if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) {
       return element.value.slice(0, 2e3);
@@ -2274,7 +2433,17 @@
     if (!(element instanceof HTMLInputElement)) return void 0;
     const type = element.type.toLowerCase();
     if (type !== "checkbox" && type !== "radio") return void 0;
-    return isSensitiveFormControl(element) ? void 0 : element.checked;
+    return isWithinSensitiveControl(element) ? void 0 : element.checked;
+  }
+  function selectState(element) {
+    if (!(element instanceof HTMLSelectElement) || isWithinSensitiveControl(element)) return void 0;
+    const options = [...element.options].slice(0, 20).map((option) => ({
+      value: option.value.slice(0, 200),
+      label: (option.label || option.textContent || "").replace(/\s+/gu, " ").trim().slice(0, 200)
+    }));
+    const state = { options };
+    if (options.some((option) => option.value === element.value)) state.selectedValue = element.value.slice(0, 200);
+    return state;
   }
   function testIdFor(element) {
     return element.getAttribute("data-testid") ?? element.getAttribute("data-test") ?? element.getAttribute("data-cy") ?? void 0;
@@ -2668,7 +2837,6 @@
   var MAX_SCANNED_ITEMS = 2e3;
   var MIN_ITEMS_PER_RUN = 3;
   var MAX_STRUCTURES = 6;
-  var MAX_SIGNATURE_CLASSES = 3;
   var MAX_FIELDS = 8;
   var MAX_REPRESENTATIVE_TEXT = 160;
   function repeatingEvidence() {
@@ -2686,7 +2854,7 @@
       if (!container) continue;
       const groups = byContainer.get(container) ?? /* @__PURE__ */ new Map();
       byContainer.set(container, groups);
-      const signature = itemSignature(element);
+      const signature = templateSignature(element);
       const group = groups.get(signature);
       if (group) group.push(element);
       else groups.set(signature, [element]);
@@ -2699,13 +2867,13 @@
     }
     return runs;
   }
-  function itemSignature(element) {
-    const role = element.getAttribute("role")?.trim().toLowerCase() ?? "";
-    const classes = [...element.classList].sort().slice(0, MAX_SIGNATURE_CLASSES).join(".");
-    return `${element.tagName.toLowerCase()}|${role}|${identifierShape(testIdFor(element))}|${classes}`;
-  }
-  function identifierShape(value) {
-    return value === void 0 ? "" : value.replace(/\d+/gu, "#");
+  function templateSignature(element) {
+    return webAutomationItemSignature({
+      tagName: element.tagName,
+      role: element.getAttribute("role"),
+      testId: testIdFor(element),
+      classes: element.classList
+    });
   }
   function describeRun(run) {
     const first = run.items[0];
@@ -2731,7 +2899,7 @@
     const fields = /* @__PURE__ */ new Set();
     for (const element of item.querySelectorAll("[data-testid],[data-test],[data-cy]")) {
       const id = testIdFor(element);
-      if (id) fields.add(identifierShape(id));
+      if (id) fields.add(webAutomationIdentifierShape(id));
       if (fields.size >= MAX_FIELDS) break;
     }
     return [...fields];
@@ -3664,8 +3832,9 @@
     try {
       const outcome = await deps.extractList(request, { timeoutMs: action.timeoutMs });
       const minItems = minimumItems(request.minItems);
-      const expected = `at least ${count2(minItems, "record")}, each carrying ${Object.keys(request.fields).join(", ")}`;
-      const evidence = { extracted: outcome.records, snapshot: deps.captureSnapshot() };
+      const fieldNames = includedFieldNames(request);
+      const expected = `at least ${count2(minItems, "record")}, each carrying ${fieldNames.join(", ")}`;
+      const evidence = { extracted: outcome.records, extraction: summaryOf(outcome, fieldNames), snapshot: deps.captureSnapshot() };
       if (outcome.timedOut) {
         return deps.timedOut(action, startedAt, `Timed out extracting the list after ${count2(outcome.pagesRead, "page")}.`, {
           status: "failed",
@@ -3680,6 +3849,18 @@
   }
   function minimumItems(requested) {
     return typeof requested === "number" && Number.isFinite(requested) ? Math.max(0, Math.trunc(requested)) : 1;
+  }
+  function includedFieldNames(request) {
+    return Object.entries(request.fields).filter(([, field]) => typeof field === "string" || field?.handling !== "exclude").map(([name]) => name);
+  }
+  function summaryOf(outcome, fieldNames) {
+    return {
+      recordCount: outcome.records.length,
+      pagesRead: outcome.pagesRead,
+      truncated: outcome.truncated,
+      missingFields: [...outcome.missingFields],
+      fieldNames: [...fieldNames]
+    };
   }
   function validationFor(outcome, minItems, expected) {
     const shortfalls = [
@@ -3733,7 +3914,7 @@
     const previous2 = deps.dialogControl.observed();
     const evidence = {
       snapshot: deps.captureSnapshot(),
-      ...previous2 ? { extracted: observedAsJson(previous2) } : {}
+      ...previous2 ? { dialog: observedDialogEvidence(previous2) } : {}
     };
     if (!armed) {
       return deps.rejected(action, startedAt, "dialog_override_missing", expected, "the page-world dialog override is not installed on this page", evidence);
@@ -3744,13 +3925,13 @@
       actual: "the response was armed and acknowledged by the page"
     }, evidence);
   }
-  function observedAsJson(observed) {
+  function observedDialogEvidence(observed) {
     return {
       kind: observed.kind,
       message: observed.message,
       response: observed.response,
       at: observed.at,
-      ...observed.promptText === void 0 ? {} : { promptText: observed.promptText }
+      ...observed.promptText === void 0 ? {} : { promptText: describeFieldValue(observed.promptText, true) }
     };
   }
 
@@ -4064,7 +4245,7 @@
 
   // src/content/action-runtime/extract.ts
   function extractElement(element, options) {
-    if (isSensitiveFormControl(element)) return { ok: false, refusal: "sensitive_value" };
+    if (isWithinSensitiveControl(element)) return { ok: false, refusal: "sensitive_value" };
     const mode = options?.mode;
     if (mode === "html") return { ok: true, value: htmlWithoutSensitiveContent(element) };
     if (mode === "attribute" && typeof options?.attribute === "string") return { ok: true, value: element.getAttribute(options.attribute) ?? "" };
@@ -4074,25 +4255,13 @@
     return { ok: true, value: readableText(element) };
   }
   function readableText(element) {
-    const text3 = hasSensitiveDescendant(element) ? textOutsideSensitiveControls(element) : element.textContent ?? "";
-    return text3.replace(/\s+/gu, " ").trim();
+    return textOutsideSensitiveControls(element).replace(/\s+/gu, " ").trim();
   }
   function hasSensitiveDescendant(root) {
     for (const descendant of root.querySelectorAll("*")) {
       if (isSensitiveFormControl(descendant)) return true;
     }
     return false;
-  }
-  function textOutsideSensitiveControls(root) {
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
-      acceptNode(node) {
-        if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
-        return isSensitiveFormControl(node) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP;
-      }
-    });
-    let text3 = "";
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) text3 += node.nodeValue ?? "";
-    return text3;
   }
   function htmlWithoutSensitiveContent(element) {
     if (!hasSensitiveDescendant(element)) return element.innerHTML;
@@ -4639,99 +4808,26 @@
     return `<${element.tagName.toLowerCase()}${type}>`;
   }
 
-  // src/content/action-runtime/list-extraction.ts
-  var EXTRACT_MAX_PAGES = 50;
-  var EXTRACT_MAX_ITEMS = 1e3;
-  var LIST_CHANGE_TIMEOUT_MS = 1e4;
-  var LIST_CHANGE_POLL_MS = 25;
-  var COLUMN_PREFIX = "column:";
-  var ATTRIBUTE_NAME = /^[A-Za-z_][-A-Za-z0-9_:.]*$/u;
-  function parseExtractField(spec) {
-    if (spec.startsWith(COLUMN_PREFIX)) {
-      const header = normalizeText4(spec.slice(COLUMN_PREFIX.length));
-      if (!header) throw new Error(`The extract_list field ${JSON.stringify(spec)} names no column header.`);
-      return { kind: "column", header };
-    }
-    const at = spec.lastIndexOf("@");
-    const candidate = at < 0 ? "" : spec.slice(at + 1);
-    const attribute = ATTRIBUTE_NAME.test(candidate) ? candidate : void 0;
-    const selector = (attribute === void 0 ? spec : spec.slice(0, at)).trim();
-    return {
-      kind: "element",
-      ...selector ? { selector } : {},
-      ...attribute === void 0 ? {} : { attribute }
-    };
+  // src/content/extraction/field-reader.ts
+  function readField(item, name, reader) {
+    const value = reader.kind === "column" ? readColumn(item, name, reader.header) : readElement(item, name, reader);
+    if (value !== void 0) return value;
+    return reader.required ? void 0 : null;
   }
-  async function extractList(request, options = {}) {
-    const item = request.item.trim();
-    if (!item) throw new Error("An extract_list request needs an item selector.");
-    const fields = Object.entries(request.fields).map(([name, spec]) => [name, parseExtractField(spec)]);
-    if (fields.length === 0) throw new Error("An extract_list request names no fields.");
-    const maxPages = request.paginate ? Math.min(Math.max(1, Math.trunc(request.paginate.maxPages)), EXTRACT_MAX_PAGES) : 1;
-    const maxItems = Math.min(Math.max(0, Math.trunc(request.maxItems ?? EXTRACT_MAX_ITEMS)), EXTRACT_MAX_ITEMS);
-    const deadline = deadlineFor(options.timeoutMs);
-    const records = [];
-    const missing = /* @__PURE__ */ new Set();
-    const read = /* @__PURE__ */ new Set();
-    let pagesRead = 0;
-    let truncated = false;
-    let timedOut = false;
-    for (; ; ) {
-      const items = Array.from(document.querySelectorAll(item));
-      pagesRead += 1;
-      for (const element of items) {
-        if (read.has(element)) continue;
-        if (records.length >= maxItems) {
-          truncated = true;
-          break;
-        }
-        read.add(element);
-        records.push(readRecord(element, fields, missing));
-      }
-      if (truncated) break;
-      const paginate = request.paginate;
-      const next = paginate ? document.querySelector(paginate.next) : null;
-      if (!paginate || !next) break;
-      if (pagesRead >= maxPages) {
-        truncated = true;
-        break;
-      }
-      if (!(next instanceof HTMLElement)) throw new Error(`The pagination control ${JSON.stringify(paginate.next)} is not a clickable element.`);
-      if (deadline !== void 0 && Date.now() >= deadline) {
-        timedOut = true;
-        break;
-      }
-      next.click();
-      const change = await waitForListChange(item, items, deadline);
-      if (change === "timed_out") {
-        timedOut = true;
-        break;
-      }
-      if (change === "unchanged") {
-        throw new Error(`The list did not change within ${LIST_CHANGE_TIMEOUT_MS}ms of following ${JSON.stringify(paginate.next)} to page ${pagesRead + 1}.`);
-      }
-    }
-    return { records, pagesRead, truncated, timedOut, missingFields: [...missing].sort() };
-  }
-  function deadlineFor(timeoutMs) {
-    return typeof timeoutMs === "number" && Number.isFinite(timeoutMs) && timeoutMs > 0 ? Date.now() + timeoutMs : void 0;
-  }
-  function readRecord(item, fields, missing) {
-    const record = {};
-    for (const [name, field] of fields) {
-      const value = readField(item, name, field);
-      if (value === void 0) missing.add(name);
-      else record[name] = value;
-    }
-    return record;
-  }
-  function readField(item, name, field) {
-    if (field.kind === "column") return readColumn(item, name, field.header);
-    const element = field.selector ? item.querySelector(field.selector) : item;
+  function readElement(item, name, reader) {
+    const element = reader.selector ? item.querySelector(reader.selector) : item;
     if (!element) return void 0;
-    if (isSensitiveFormControl(element)) throw sensitiveFieldRefusal(name);
-    if (field.attribute !== void 0) return element.getAttribute(field.attribute) ?? void 0;
-    return readableText(element);
+    if (isWithinSensitiveControl(element)) throw sensitiveFieldRefusal(name);
+    switch (reader.kind) {
+      case "text":
+        return readText(element);
+      case "attribute":
+        return element.getAttribute(reader.attribute) ?? void 0;
+      case "link":
+        return linkTarget(element);
+      case "value":
+        return controlValue(element);
+    }
   }
   function readColumn(item, name, header) {
     const row = item;
@@ -4742,8 +4838,24 @@
     if (index < 0) return void 0;
     const cell = row.cells[index];
     if (!cell) return void 0;
-    if (isSensitiveFormControl(cell)) throw sensitiveFieldRefusal(name);
-    return readableText(cell);
+    if (isWithinSensitiveControl(cell)) throw sensitiveFieldRefusal(name);
+    return readText(cell);
+  }
+  function readText(element) {
+    return normalizeText4(textOutsideSensitiveControls(element));
+  }
+  function linkTarget(element) {
+    const href = element.getAttribute("href");
+    if (href === null) return void 0;
+    try {
+      const url = new URL(href, element.baseURI);
+      return url.protocol === "http:" || url.protocol === "https:" ? url.href : void 0;
+    } catch {
+      return void 0;
+    }
+  }
+  function controlValue(element) {
+    return element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement ? element.value : void 0;
   }
   function sensitiveFieldRefusal(name) {
     const failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.ACTION_REJECTED, {
@@ -4755,16 +4867,179 @@
       { failure }
     );
   }
-  async function waitForListChange(itemSelector, previous2, actionDeadline) {
-    const changeDeadline = Date.now() + LIST_CHANGE_TIMEOUT_MS;
-    const commandEndsFirst = actionDeadline !== void 0 && actionDeadline <= changeDeadline;
-    const deadline = commandEndsFirst ? actionDeadline : changeDeadline;
-    while (!listChanged(itemSelector, previous2)) {
-      const now = Date.now();
-      if (now >= deadline) return commandEndsFirst ? "timed_out" : "unchanged";
-      await delay2(Math.min(LIST_CHANGE_POLL_MS, deadline - now));
+  function normalizeText4(text3) {
+    return text3.replace(/\s+/gu, " ").trim();
+  }
+
+  // src/content/extraction/field-spec.ts
+  var COLUMN_PREFIX = "column:";
+  var ATTRIBUTE_NAME = /^[A-Za-z_][-A-Za-z0-9_:.]*$/u;
+  function normalizeExtractField(name, field) {
+    if (typeof field === "string") return parseStringField(field);
+    if (typeof field !== "object" || field === null) {
+      throw new Error(`The extract_list field ${JSON.stringify(name)} is neither a selector nor a field spec.`);
     }
-    return "changed";
+    return normalizeSpec(name, field);
+  }
+  function parseStringField(spec) {
+    if (spec.startsWith(COLUMN_PREFIX)) {
+      const header = normalizeText5(spec.slice(COLUMN_PREFIX.length));
+      if (!header) throw new Error(`The extract_list field ${JSON.stringify(spec)} names no column header.`);
+      return { kind: "column", header, required: true };
+    }
+    const at = spec.lastIndexOf("@");
+    const candidate = at < 0 ? "" : spec.slice(at + 1);
+    const attribute = ATTRIBUTE_NAME.test(candidate) ? candidate : void 0;
+    const selector = (attribute === void 0 ? spec : spec.slice(0, at)).trim();
+    const where = selector ? { selector } : {};
+    return attribute === void 0 ? { kind: "text", ...where, required: true } : { kind: "attribute", ...where, attribute, required: true };
+  }
+  function normalizeSpec(name, spec) {
+    const handling = spec.handling ?? "include";
+    if (handling === "exclude") return void 0;
+    if (handling === "encrypt") throw encryptNotImplemented(name);
+    if (handling !== "include") throw new Error(`The extract_list field ${JSON.stringify(name)} asks for a handling the page does not know.`);
+    const required = spec.required !== false;
+    const selector = typeof spec.selector === "string" ? spec.selector.trim() : "";
+    const where = selector ? { selector } : {};
+    const kind = spec.kind;
+    switch (kind) {
+      case "text":
+      case "link":
+      case "value":
+        return { kind, ...where, required };
+      case "attribute": {
+        const attribute = typeof spec.attribute === "string" ? spec.attribute.trim() : "";
+        if (!attribute) throw new Error(`The extract_list field ${JSON.stringify(name)} reads an attribute but names none.`);
+        return { kind, ...where, attribute, required };
+      }
+      case "column": {
+        const header = normalizeText5(typeof spec.header === "string" ? spec.header : "");
+        if (!header) throw new Error(`The extract_list field ${JSON.stringify(name)} reads a column but names no header.`);
+        return { kind, header, required };
+      }
+      default:
+        throw new Error(`The extract_list field ${JSON.stringify(name)} asks for a kind of read the page does not know.`);
+    }
+  }
+  function encryptNotImplemented(name) {
+    const failure = webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.NOT_IMPLEMENTED, {
+      expected: "the Encrypt column to be implemented",
+      actual: `field ${name} asks for handling "encrypt", which the page does not read until the Encrypt column is built`
+    });
+    return Object.assign(new Error(`web.dom.extract_list does not encrypt a column yet: field ${name} asks for it.`), { failure });
+  }
+  function normalizeText5(text3) {
+    return text3.replace(/\s+/gu, " ").trim();
+  }
+
+  // src/content/extraction/pagination.ts
+  var LIST_CHANGE_TIMEOUT_MS = 1e4;
+  var LIST_CHANGE_POLL_MS = 25;
+  var SCROLL_GROWTH_WINDOW_MS = 900;
+  var SCROLL_POLL_MS = 50;
+  var BOTTOM_TOLERANCE_PX = 2;
+  function paginationBound(paginate) {
+    const requested = paginate.mode === "scroll" ? paginate.maxScrolls : paginate.maxPages;
+    const whole = typeof requested === "number" && !Number.isNaN(requested) ? Math.trunc(requested) : 1;
+    return Math.min(Math.max(1, whole), WEB_AUTOMATION_EXTRACT_MAX_PAGES);
+  }
+  function deadlineFor(timeoutMs) {
+    return typeof timeoutMs === "number" && Number.isFinite(timeoutMs) && timeoutMs > 0 ? Date.now() + timeoutMs : void 0;
+  }
+  async function advancePage(paginate, progress) {
+    switch (paginate.mode) {
+      case void 0:
+      case "next":
+        return await followNext(paginate, progress);
+      case "loadMore":
+        return await pressLoadMore(paginate, progress);
+      case "scroll":
+        return await scrollForMore(paginate, progress);
+      case "numbered":
+        return await visitNumberedPage(paginate, progress);
+      default: {
+        const mode = paginate.mode;
+        const named = typeof mode === "string" ? `pagination mode ${JSON.stringify(mode)}` : "a pagination mode that is not a string";
+        throw new Error(`web.dom.extract_list does not know ${named}.`);
+      }
+    }
+  }
+  async function followNext(paginate, progress) {
+    const next = document.querySelector(paginate.next);
+    if (!next) return "ended";
+    if (progress.pagesRead >= paginationBound(paginate)) return "truncated";
+    const control = clickable(next, paginate.next);
+    if (pastDeadline(progress.deadline)) return "timed_out";
+    control.click();
+    return await afterListChange(progress, `following ${JSON.stringify(paginate.next)} to page ${progress.pagesRead + 1}`);
+  }
+  async function pressLoadMore(paginate, progress) {
+    const found = document.querySelector(paginate.control);
+    if (!found || isDisabled4(found)) return "ended";
+    if (progress.pagesRead >= paginationBound(paginate)) return "truncated";
+    const control = clickable(found, paginate.control);
+    if (pastDeadline(progress.deadline)) return "timed_out";
+    control.click();
+    const outcome = await waitUntil(() => progress.hasUnreadItem() || !control.isConnected, LIST_CHANGE_TIMEOUT_MS, LIST_CHANGE_POLL_MS, progress.deadline);
+    if (outcome === "unchanged") {
+      throw new Error(`No new item appeared within ${LIST_CHANGE_TIMEOUT_MS}ms of pressing ${JSON.stringify(paginate.control)} for page ${progress.pagesRead + 1}.`);
+    }
+    return outcome === "changed" ? "advanced" : "timed_out";
+  }
+  async function scrollForMore(paginate, progress) {
+    const bound = paginationBound(paginate);
+    const scroller = scrollerOf(progress.shown[0]);
+    for (; ; ) {
+      if (progress.scrolls >= bound) return "truncated";
+      if (pastDeadline(progress.deadline)) return "timed_out";
+      scrollToBottom(scroller);
+      progress.scrolls += 1;
+      const outcome = await waitUntil(() => progress.hasUnreadItem(), SCROLL_GROWTH_WINDOW_MS, SCROLL_POLL_MS, progress.deadline);
+      if (outcome === "changed") return "advanced";
+      if (outcome === "timed_out") return "timed_out";
+      if (atBottom2(scroller)) return "ended";
+    }
+  }
+  async function visitNumberedPage(paginate, progress) {
+    const following = followingPageControl(Array.from(document.querySelectorAll(paginate.pages)), progress.pagesRead);
+    if (!following) return "ended";
+    if (progress.pagesRead >= paginationBound(paginate)) return "truncated";
+    const control = clickable(following, paginate.pages);
+    if (pastDeadline(progress.deadline)) return "timed_out";
+    control.click();
+    return await afterListChange(progress, `choosing page ${progress.pagesRead + 1} from ${JSON.stringify(paginate.pages)}`);
+  }
+  function followingPageControl(controls, pagesRead) {
+    const current = controls.find(isCurrentPage);
+    if (!current) return controls[pagesRead];
+    const number = pageNumber(current);
+    if (number === void 0) return controls[controls.indexOf(current) + 1];
+    return controls.find((control) => pageNumber(control) === number + 1);
+  }
+  function isCurrentPage(control) {
+    const current = control.getAttribute("aria-current");
+    return current !== null && current !== "false";
+  }
+  function pageNumber(control) {
+    const text3 = (control.textContent ?? "").trim();
+    return /^\d+$/u.test(text3) ? Number(text3) : void 0;
+  }
+  function isDisabled4(control) {
+    return control.matches(":disabled") || control.getAttribute("aria-disabled") === "true";
+  }
+  function clickable(element, selector) {
+    if (!(element instanceof HTMLElement)) throw new Error(`The pagination control ${JSON.stringify(selector)} is not a clickable element.`);
+    return element;
+  }
+  function pastDeadline(deadline) {
+    return deadline !== void 0 && Date.now() >= deadline;
+  }
+  async function afterListChange(progress, action) {
+    const { item, shown, deadline } = progress;
+    const outcome = await waitUntil(() => listChanged(item, shown), LIST_CHANGE_TIMEOUT_MS, LIST_CHANGE_POLL_MS, deadline);
+    if (outcome === "unchanged") throw new Error(`The list did not change within ${LIST_CHANGE_TIMEOUT_MS}ms of ${action}.`);
+    return outcome === "changed" ? "advanced" : "timed_out";
   }
   function listChanged(itemSelector, previous2) {
     const current = document.querySelectorAll(itemSelector);
@@ -4772,13 +5047,408 @@
     if (!first) return current.length > 0;
     return !first.isConnected || current.length !== previous2.length || current[0] !== first;
   }
+  async function waitUntil(condition, windowMs, pollMs, actionDeadline) {
+    const windowEnd = Date.now() + windowMs;
+    const commandEndsFirst = actionDeadline !== void 0 && actionDeadline <= windowEnd;
+    const end = commandEndsFirst ? actionDeadline : windowEnd;
+    while (!condition()) {
+      const now = Date.now();
+      if (now >= end) return commandEndsFirst ? "timed_out" : "unchanged";
+      await delay2(Math.min(pollMs, end - now));
+    }
+    return "changed";
+  }
+  function scrollerOf(element) {
+    for (let current = element?.parentElement ?? null; current; current = current.parentElement) {
+      if (current === document.body || current === document.documentElement) return null;
+      const overflow = getComputedStyle(current).overflowY;
+      if ((overflow === "auto" || overflow === "scroll" || overflow === "overlay") && current.scrollHeight > current.clientHeight) return current;
+    }
+    return null;
+  }
+  function scrollToBottom(scroller) {
+    if (scroller) scroller.scrollTop = scroller.scrollHeight;
+    else window.scrollTo({ left: window.scrollX, top: documentHeight2(), behavior: "instant" });
+  }
+  function atBottom2(scroller) {
+    if (scroller) return scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - BOTTOM_TOLERANCE_PX;
+    return window.scrollY + window.innerHeight >= documentHeight2() - BOTTOM_TOLERANCE_PX;
+  }
+  function documentHeight2() {
+    return Math.max(document.documentElement.scrollHeight, document.body?.scrollHeight ?? 0);
+  }
   function delay2(ms) {
     return new Promise((resolve) => {
       setTimeout(resolve, ms);
     });
   }
-  function normalizeText4(text3) {
+
+  // src/content/extraction/list-reader.ts
+  async function extractList(request, options = {}) {
+    const item = request.item.trim();
+    if (!item) throw new Error("An extract_list request needs an item selector.");
+    const fields = fieldReaders(request.fields);
+    const paginate = request.paginate;
+    const maxItems = itemBound(request.maxItems);
+    const contentAware = paginate?.mode === "scroll";
+    const records = [];
+    const missing = /* @__PURE__ */ new Set();
+    const read = /* @__PURE__ */ new Map();
+    const keyOf = (itemRead) => contentAware ? contentKey(itemRead.record, fields) : "";
+    const hasUnreadItem = () => Array.from(document.querySelectorAll(item)).some((element) => {
+      const seen = read.get(element);
+      return seen === void 0 || contentAware && seen !== keyOf(readRecord(element, fields));
+    });
+    const progress = { item, shown: [], pagesRead: 0, scrolls: 0, deadline: deadlineFor(options.timeoutMs), hasUnreadItem };
+    let truncated = false;
+    let timedOut = false;
+    for (; ; ) {
+      const shown = Array.from(document.querySelectorAll(item));
+      progress.shown = shown;
+      progress.pagesRead += 1;
+      for (const element of shown) {
+        const seen = read.get(element);
+        if (seen !== void 0 && !contentAware) continue;
+        if (seen === void 0 && records.length >= maxItems) {
+          truncated = true;
+          break;
+        }
+        const itemRead = readRecord(element, fields);
+        const key = keyOf(itemRead);
+        if (seen === key) continue;
+        if (records.length >= maxItems) {
+          truncated = true;
+          break;
+        }
+        read.set(element, key);
+        records.push(itemRead.record);
+        for (const name of itemRead.missing) missing.add(name);
+      }
+      if (truncated || !paginate) break;
+      const advance = await advancePage(paginate, progress);
+      if (advance === "advanced") continue;
+      truncated = advance === "truncated";
+      timedOut = advance === "timed_out";
+      break;
+    }
+    return { records, pagesRead: progress.pagesRead, truncated, timedOut, missingFields: [...missing].sort() };
+  }
+  function fieldReaders(fields) {
+    const declared = Object.entries(fields);
+    if (declared.length === 0) throw new Error("An extract_list request names no fields.");
+    const readers = declared.flatMap(([name, field]) => {
+      const reader = normalizeExtractField(name, field);
+      return reader === void 0 ? [] : [[name, reader]];
+    });
+    if (readers.length === 0) throw new Error("An extract_list request reads no fields: every field it names is excluded.");
+    return readers;
+  }
+  function itemBound(requested) {
+    const whole = typeof requested === "number" && !Number.isNaN(requested) ? Math.trunc(requested) : WEB_AUTOMATION_EXTRACT_MAX_ITEMS;
+    return Math.min(Math.max(0, whole), WEB_AUTOMATION_EXTRACT_MAX_ITEMS);
+  }
+  function readRecord(element, fields) {
+    const record = {};
+    const missing = [];
+    for (const [name, reader] of fields) {
+      const value = readField(element, name, reader);
+      if (value === void 0) missing.push(name);
+      else record[name] = value;
+    }
+    return { record, missing };
+  }
+  function contentKey(record, fields) {
+    return JSON.stringify(fields.map(([name]) => Object.prototype.hasOwnProperty.call(record, name) ? [record[name]] : []));
+  }
+
+  // src/content/extraction/item-selector.ts
+  var PLAIN_CLASS = /^[A-Za-z_-][\w-]*$/u;
+  var MAX_CANDIDATE_CLASSES = 3;
+  var MIN_SHAPE_PREFIX = 2;
+  function itemSelectorCandidates(parts) {
+    const tag = parts.tagName.toLowerCase();
+    const candidates = [];
+    const sharedId = sharedTestId(parts.testIds);
+    if (sharedId) candidates.push({ selector: attributeSelector(sharedId.attribute, sharedId.value), confidence: 1 });
+    const shape = sharedTestIdPrefix(parts.testIds);
+    if (shape) candidates.push({ selector: attributeSelector(shape.attribute, shape.value, "^"), confidence: 0.9 });
+    candidates.push({ selector: `${parts.container} > ${tag}${classSuffix(parts.classes)}`, confidence: 0.75 });
+    const role = parts.role?.trim();
+    if (role) candidates.push({ selector: `${parts.container} > [role="${quoted(role)}"]`, confidence: 0.6 });
+    return candidates;
+  }
+  function generalizedItemSelector(run, container) {
+    const first = run[0];
+    if (!first || run.length === 0) return void 0;
+    const parts = {
+      container,
+      tagName: first.tagName,
+      role: first.getAttribute("role") ?? void 0,
+      testIds: run.map(testIdOf),
+      classes: first.classList
+    };
+    return itemSelectorCandidates(parts).find((candidate) => selects(candidate.selector, run));
+  }
+  function selects(selector, run) {
+    let matched;
+    try {
+      matched = Array.from(document.querySelectorAll(selector));
+    } catch {
+      return false;
+    }
+    return matched.length === run.length && matched.every((element, index) => element === run[index]);
+  }
+  function testIdOf(element) {
+    for (const attribute of ["data-testid", "data-test", "data-cy"]) {
+      const value = element.getAttribute(attribute);
+      if (value !== null && value !== "") return { attribute, value };
+    }
+    return void 0;
+  }
+  function sharedTestId(testIds) {
+    const first = testIds[0];
+    if (!first || testIds.length === 0) return void 0;
+    return testIds.every((id) => id?.attribute === first.attribute && id.value === first.value) ? first : void 0;
+  }
+  function sharedTestIdPrefix(testIds) {
+    const first = testIds[0];
+    if (!first || testIds.length < 2) return void 0;
+    if (!testIds.every((id) => id?.attribute === first.attribute)) return void 0;
+    let length = first.value.search(/\d/u);
+    if (length < MIN_SHAPE_PREFIX) return void 0;
+    for (const id of testIds) {
+      const value = id?.value ?? "";
+      while (length >= MIN_SHAPE_PREFIX && !value.startsWith(first.value.slice(0, length))) length -= 1;
+    }
+    return length >= MIN_SHAPE_PREFIX ? { attribute: first.attribute, value: first.value.slice(0, length) } : void 0;
+  }
+  function classSuffix(classes) {
+    const named = [...classes].filter((name) => PLAIN_CLASS.test(name)).sort().slice(0, MAX_CANDIDATE_CLASSES);
+    return named.map((name) => `.${name}`).join("");
+  }
+  function attributeSelector(attribute, value, operator = "") {
+    return `[${attribute}${operator}="${quoted(value)}"]`;
+  }
+  function quoted(value) {
+    return value.replace(/\\/gu, "\\\\").replace(/"/gu, '\\"');
+  }
+
+  // src/content/extraction/detect-pagination.ts
+  var CONTROL_SELECTOR = 'a,button,[role="button"],[role="link"]';
+  var MAX_ANCESTOR_LEVELS = 6;
+  var NEXT_LABEL = /^next\b|\bnext\s+page\b/u;
+  var LOAD_MORE_LABEL = /\b(?:load|show|view)\s+more\b/u;
+  function paginationKindForLabel(label, rel) {
+    if (rel !== void 0 && rel.trim().toLowerCase().split(/\s+/u).includes("next")) return "next";
+    const text3 = label.replace(/\s+/gu, " ").trim().toLowerCase();
+    if (!text3) return void 0;
+    if (NEXT_LABEL.test(text3)) return "next";
+    if (LOAD_MORE_LABEL.test(text3)) return "loadMore";
+    return void 0;
+  }
+  function detectPagination(run, container) {
+    let level = container;
+    for (let depth = 0; level && depth < MAX_ANCESTOR_LEVELS; depth += 1, level = level.parentElement) {
+      const controls = Array.from(level.querySelectorAll(CONTROL_SELECTOR)).filter((control) => !run.some((item) => item === control || item.contains(control)));
+      if (controls.length === 0) continue;
+      const numbered = numberedControls(controls);
+      const maxPages = numbered.length > 0 ? numbered.length : WEB_AUTOMATION_EXTRACT_MAX_PAGES;
+      const next = controls.find((control) => kindOf2(control) === "next");
+      if (next) return { next: selectorFor(next), maxPages };
+      const loadMore = controls.find((control) => kindOf2(control) === "loadMore");
+      if (loadMore) return { mode: "loadMore", control: selectorFor(loadMore), maxPages };
+      const pages = numbered.length > 1 ? generalizedItemSelector(numbered, selectorFor(level)) : void 0;
+      if (pages) return { mode: "numbered", pages: pages.selector, maxPages: numbered.length };
+    }
+    return void 0;
+  }
+  function kindOf2(control) {
+    const label = control.getAttribute("aria-label") ?? textOutsideSensitiveControls(control);
+    return paginationKindForLabel(label, control.getAttribute("rel") ?? void 0);
+  }
+  function numberedControls(controls) {
+    const byTemplate = /* @__PURE__ */ new Map();
+    for (const control of controls) {
+      if (!isNumberLabelled(control)) continue;
+      const signature = webAutomationItemSignature({
+        tagName: control.tagName,
+        role: control.getAttribute("role"),
+        testId: testIdFor(control),
+        classes: control.classList
+      });
+      byTemplate.set(signature, [...byTemplate.get(signature) ?? [], control]);
+    }
+    return [...byTemplate.values()].sort((left, right) => right.length - left.length)[0] ?? [];
+  }
+  function isNumberLabelled(control) {
+    return /^\d+$/u.test(textOutsideSensitiveControls(control).trim());
+  }
+
+  // src/content/extraction/infer-fields.ts
+  var VALUE_TAGS = /* @__PURE__ */ new Set(["input", "textarea", "select"]);
+  var MAX_PROPOSED_FIELDS = 12;
+  function inferFields(item, run) {
+    const taken = /* @__PURE__ */ new Set();
+    return fieldSources(item).slice(0, MAX_PROPOSED_FIELDS).map((source) => {
+      const coverage = coverageOf(source, run);
+      const key = webAutomationExtractionFieldKey(source.label, taken);
+      taken.add(key);
+      return { key, label: source.label, spec: proposedFieldSpec(source, coverage), coverage };
+    });
+  }
+  function proposedFieldSpec(source, coverage) {
+    return {
+      kind: source.kind,
+      ...source.selector === void 0 ? {} : { selector: source.selector },
+      ...source.attribute === void 0 ? {} : { attribute: source.attribute },
+      ...source.header === void 0 ? {} : { header: source.header },
+      required: coverage >= 1,
+      ...source.sensitive ? { handling: "exclude" } : {}
+    };
+  }
+  function fieldSources(item) {
+    const columns = columnSources(item);
+    return columns.length > 0 ? columns : elementSources(item);
+  }
+  function columnSources(item) {
+    if (item.tagName !== "TR") return [];
+    const table = item.closest("table");
+    const headerRow = table?.tHead?.rows[0] ?? Array.from(table?.rows ?? []).find((row) => Array.from(row.cells).some((cell) => cell.tagName === "TH"));
+    if (!headerRow) return [];
+    return Array.from(headerRow.cells).flatMap((cell, columnIndex) => {
+      const header = collapsed(textOutsideSensitiveControls(cell));
+      if (!header) return [];
+      const bodyCell = item.cells[columnIndex];
+      return [{
+        kind: "column",
+        label: header,
+        header,
+        columnIndex,
+        sensitive: isWithinSensitiveControl(cell) || bodyCell !== void 0 && isWithinSensitiveControl(bodyCell)
+      }];
+    });
+  }
+  function elementSources(item) {
+    const sources = [];
+    const leafOrdinals = /* @__PURE__ */ new Map();
+    for (const element of item.querySelectorAll("*")) {
+      if (sources.length >= MAX_PROPOSED_FIELDS) break;
+      const tag = element.tagName.toLowerCase();
+      const testId = testIdFor(element);
+      const selector = selectorWithinItem(item, element, tag);
+      if (selector === void 0) continue;
+      const sensitive = isWithinSensitiveControl(element);
+      const named = testId ?? `${tag} ${nextOrdinal(leafOrdinals, tag)}`;
+      if (tag === "img") {
+        sources.push({ kind: "attribute", label: `${named} src`, selector, attribute: "src", sensitive });
+        sources.push({ kind: "attribute", label: `${named} alt`, selector, attribute: "alt", sensitive });
+      } else if (tag === "a" && element.getAttribute("href") !== null) {
+        sources.push({ kind: "link", label: named, selector, sensitive });
+      } else if (VALUE_TAGS.has(tag)) {
+        sources.push({ kind: "value", label: named, selector, sensitive });
+      } else if (testId || isTextLeaf(element)) {
+        sources.push({ kind: "text", label: named, selector, sensitive });
+      }
+    }
+    return sources;
+  }
+  function selectorWithinItem(item, element, tag) {
+    for (const candidate of [testIdSelector(element), positionSelector(element, tag)]) {
+      if (candidate && item.querySelectorAll(candidate).length === 1 && item.querySelector(candidate) === element) return candidate;
+    }
+    return void 0;
+  }
+  function testIdSelector(element) {
+    for (const attribute of ["data-testid", "data-test", "data-cy"]) {
+      const value = element.getAttribute(attribute);
+      if (value) return `[${attribute}="${value.replace(/\\/gu, "\\\\").replace(/"/gu, '\\"')}"]`;
+    }
+    return void 0;
+  }
+  function positionSelector(element, tag) {
+    const siblings = Array.from(element.parentElement?.children ?? []).filter((child) => child.tagName === element.tagName);
+    const index = siblings.indexOf(element) + 1;
+    if (index === 0) return void 0;
+    return siblings.length > 1 ? `${tag}:nth-of-type(${index})` : tag;
+  }
+  function isTextLeaf(element) {
+    return element.children.length === 0 && collapsed(textOutsideSensitiveControls(element)) !== "";
+  }
+  function coverageOf(source, run) {
+    if (run.length === 0) return 0;
+    const found = run.filter((item) => resolvesIn(source, item)).length;
+    return Math.round(found / run.length * 100) / 100;
+  }
+  function resolvesIn(source, item) {
+    if (source.kind === "column") {
+      const cells = item.cells;
+      return source.columnIndex !== void 0 && cells !== void 0 && cells[source.columnIndex] !== void 0;
+    }
+    const element = source.selector ? item.querySelector(source.selector) : item;
+    if (!element) return false;
+    if (source.kind === "attribute") return source.attribute !== void 0 && element.hasAttribute(source.attribute);
+    if (source.kind === "link") return element.getAttribute("href") !== null;
+    return true;
+  }
+  function nextOrdinal(ordinals, tag) {
+    const next = (ordinals.get(tag) ?? 0) + 1;
+    ordinals.set(tag, next);
+    return next;
+  }
+  function collapsed(text3) {
     return text3.replace(/\s+/gu, " ").trim();
+  }
+
+  // src/content/extraction/infer-list.ts
+  var MIN_ITEMS_PER_RUN2 = 3;
+  var FIELD_CELL_TAGS = /* @__PURE__ */ new Set(["TD", "TH"]);
+  function isRecordItemTag(tagName) {
+    return !FIELD_CELL_TAGS.has(tagName.toUpperCase());
+  }
+  function inferListFromElement(picked) {
+    for (let level = picked; level && level !== document.documentElement; level = level.parentElement) {
+      const proposal = proposalForLevel(level);
+      if (proposal) return proposal;
+    }
+    return void 0;
+  }
+  function proposalForLevel(level) {
+    if (!isRecordItemTag(level.tagName)) return void 0;
+    const container = level.parentElement;
+    if (!container || container === document.documentElement) return void 0;
+    const run = sameTemplateSiblings(level, container);
+    if (run.length < MIN_ITEMS_PER_RUN2) return void 0;
+    const containerSelector = selectorFor(container);
+    const item = generalizedItemSelector(run, containerSelector);
+    if (!item) return void 0;
+    const first = run[0];
+    if (!first) return void 0;
+    const fields = inferFields(first, run);
+    if (fields.length === 0) return void 0;
+    const pagination = detectPagination(run, container);
+    return {
+      container: containerSelector,
+      item: item.selector,
+      itemCount: run.length,
+      fields,
+      ...pagination === void 0 ? {} : { pagination },
+      confidence: Math.round(item.confidence * meanCoverage(fields) * 100) / 100
+    };
+  }
+  function sameTemplateSiblings(element, container) {
+    const signature = templateSignature2(element);
+    return Array.from(container.children).filter((child) => isRecordItemTag(child.tagName) && templateSignature2(child) === signature);
+  }
+  function templateSignature2(element) {
+    return webAutomationItemSignature({
+      tagName: element.tagName,
+      role: element.getAttribute("role"),
+      testId: testIdFor(element),
+      classes: element.classList
+    });
+  }
+  function meanCoverage(fields) {
+    return fields.reduce((total, field) => total + field.coverage, 0) / fields.length;
   }
 
   // src/content/action-runtime/file-input.ts
@@ -4915,7 +5585,7 @@
     const scope = target.selector || target.element ? found : document.body;
     const label = target.selector || target.element ? where : "the page";
     if (!scope) return { held: false, expected: `${label} contains "${wanted}"`, actual: `nothing matched ${where}`, verdict: "pending" };
-    const text3 = readText(scope);
+    const text3 = readText2(scope);
     return {
       held: text3.includes(wanted),
       expected: `${label} contains "${wanted}"`,
@@ -4923,7 +5593,7 @@
       verdict: "judged"
     };
   }
-  function readText(element) {
+  function readText2(element) {
     const tagName = element.tagName;
     const value = tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT" ? element.value : element.innerText ?? element.textContent ?? "";
     return value.replace(/\s+/gu, " ").trim();
@@ -4957,7 +5627,7 @@
   // src/content/action-runtime/waits.ts
   var POLL_INTERVAL_MS2 = 50;
   var DEFAULT_WAIT_TIMEOUT_MS = 1e4;
-  function waitUntil(evaluate, timeoutMs = DEFAULT_WAIT_TIMEOUT_MS) {
+  function waitUntil2(evaluate, timeoutMs = DEFAULT_WAIT_TIMEOUT_MS) {
     const startedAt = Date.now();
     const progress = { startedAt, lastChangeAt: startedAt };
     const immediate = evaluate(progress);
@@ -5004,7 +5674,7 @@
   var DEFAULT_STABLE_FOR_MS = 500;
   async function waitForCondition(request) {
     const startedAt = Date.now();
-    const hit = await waitUntil(evaluatorFor(request), request.timeoutMs ?? DEFAULT_WAIT_TIMEOUT_MS);
+    const hit = await waitUntil2(evaluatorFor(request), request.timeoutMs ?? DEFAULT_WAIT_TIMEOUT_MS);
     const waitedMs = Date.now() - startedAt;
     if (!hit) return { ok: false, condition: request.condition, actual: unmetActual(request), waitedMs };
     return {
@@ -5101,9 +5771,9 @@
   // src/content/action-runtime/validation-outcome.ts
   var VALIDATION_TEXT_MAX_LENGTH = 1024;
   function truncateValidationText(value) {
-    const collapsed = value.replace(/\s+/gu, " ").trim();
-    if (!collapsed) return "(none)";
-    return collapsed.length <= VALIDATION_TEXT_MAX_LENGTH ? collapsed : `${collapsed.slice(0, VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
+    const collapsed2 = value.replace(/\s+/gu, " ").trim();
+    if (!collapsed2) return "(none)";
+    return collapsed2.length <= VALIDATION_TEXT_MAX_LENGTH ? collapsed2 : `${collapsed2.slice(0, VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
   }
   function boundValidation(validation) {
     if (validation.status === "none") return validation;
@@ -5261,6 +5931,8 @@
     const snapshot = evidence.snapshot ?? (captureSettings.snapshots || core.status !== "succeeded" ? captureSnapshot() : void 0);
     if (snapshot) result.snapshot = snapshot;
     if (evidence.extracted !== void 0) result.extracted = evidence.extracted;
+    if (evidence.extraction) result.extraction = evidence.extraction;
+    if (evidence.dialog) result.dialog = evidence.dialog;
     if (evidence.resolution) result.resolution = evidence.resolution;
     return result;
   }
@@ -5290,6 +5962,9 @@
       notImplemented: actionNotImplemented
     });
   }
+
+  // src/shared/extraction-messages.ts
+  var EXTRACTION_PROPOSE_MESSAGE = "extraction.propose";
 
   // src/content/message-handler.ts
   var TOP_FRAME_ID = 0;
@@ -5323,8 +5998,27 @@
         void executeAction(typed.action).then(sendResponse).catch((error) => sendResponse(actionFailure(typed.action, error)));
         return true;
       }
+      if (typed.type === EXTRACTION_PROPOSE_MESSAGE) {
+        if (!isAddressedToThisFrame(typed)) return false;
+        sendResponse(proposeExtraction(typed.selector));
+        return false;
+      }
       return false;
     });
+  }
+  function proposeExtraction(selector) {
+    const picked = pickedElement(selector);
+    if (!picked) return { ok: false, refused: "target_not_found" };
+    const proposal = inferListFromElement(picked);
+    return proposal ? { ok: true, proposal } : { ok: false, refused: "no_repeating_run" };
+  }
+  function pickedElement(selector) {
+    if (typeof selector !== "string" || selector.trim() === "") return null;
+    try {
+      return document.querySelector(selector);
+    } catch {
+      return null;
+    }
   }
 
   // src/content/dom-events.ts
@@ -5446,7 +6140,7 @@
   }
   function recordableKey(key, target) {
     if (!target || [...key].length !== 1) return key;
-    return isSensitiveFormControl(target) ? void 0 : key;
+    return isWithinSensitiveControl(target) ? void 0 : key;
   }
   var TYPING_KEYS = /* @__PURE__ */ new Set([
     "Backspace",

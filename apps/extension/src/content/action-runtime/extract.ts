@@ -2,23 +2,33 @@
 // field's value, or the element's whitespace-collapsed text -- and never a
 // sensitive control's (decision D2).
 //
-// A target that is sensitive by the one shared rule (`isSensitiveFormControl`)
-// is refused in every mode, before anything is read: its live value, any
-// attribute, and its HTML alike. The refusal is a value the verb has to handle,
-// not a blank string, so a caller cannot mistake "withheld" for "empty".
+// A target that is sensitive by the one shared rule (`isSensitiveFormControl`),
+// or sits inside an element that is, is refused in every mode, before anything
+// is read: its live value, any attribute, and its HTML alike. An element inside
+// a sensitive control -- an `<option>` of a sensitive select, a span in a
+// marked editable region -- holds that control's contents, so it is refused as
+// the control is (`isWithinSensitiveControl`). The refusal is a value the verb
+// has to handle, not a blank string, so a caller cannot mistake "withheld" for
+// "empty".
 //
 // A container is not refused -- a form or a table row is ordinary page content
 // -- but what it holds is filtered by the same rule. A text read skips the
 // contents of every sensitive control inside it (a sensitive `<textarea>`'s
 // text, a sensitive `<select>`'s option labels), and an HTML read removes every
 // sensitive descendant's `value` attribute and contents. Both ask the rule of
-// every descendant rather than pre-selecting candidates by tag or attribute,
+// the descendants rather than pre-selecting candidates by tag or attribute,
 // which would be a second copy of the rule's inputs to keep in step with it.
+//
+// The text read is `textOutsideSensitiveControls` (`content/sensitive-text.ts`),
+// the one reader element descriptors and accessible names also go through, so
+// what extraction leaves out of a text and what a snapshot leaves out cannot
+// drift apart.
 //
 // A container holding no sensitive descendant is read exactly as before, so
 // the filtering costs one scan and changes nothing for ordinary content.
 
 import { isSensitiveFormControl } from "../element-traits";
+import { isWithinSensitiveControl, textOutsideSensitiveControls } from "../sensitive-text";
 import type { JsonObject, JsonValue } from "../types";
 
 /** A read that happened, or the reason it was refused. */
@@ -27,7 +37,7 @@ export type ExtractedElementValue =
   | { ok: false; refusal: "sensitive_value" };
 
 export function extractElement(element: Element, options?: JsonObject): ExtractedElementValue {
-  if (isSensitiveFormControl(element)) return { ok: false, refusal: "sensitive_value" };
+  if (isWithinSensitiveControl(element)) return { ok: false, refusal: "sensitive_value" };
   const mode = options?.mode;
   if (mode === "html") return { ok: true, value: htmlWithoutSensitiveContent(element) };
   if (mode === "attribute" && typeof options?.attribute === "string") return { ok: true, value: element.getAttribute(options.attribute) ?? "" };
@@ -39,12 +49,14 @@ export function extractElement(element: Element, options?: JsonObject): Extracte
 
 /**
  * The element's whitespace-collapsed text, with the contents of every
- * sensitive control inside it left out. The element itself is not judged: a
- * caller that reads a control asks the rule of it first.
+ * sensitive control inside it left out. An element that sits inside a
+ * sensitive control -- an `<option>` of a sensitive select -- reads as nothing,
+ * because its text is that control's contents. `extractElement` refuses such a
+ * target before it gets here; a caller reading fields inside a container asks
+ * the rule of each field element itself first, and refuses rather than reading.
  */
 export function readableText(element: Element): string {
-  const text = hasSensitiveDescendant(element) ? textOutsideSensitiveControls(element) : element.textContent ?? "";
-  return text.replace(/\s+/gu, " ").trim();
+  return textOutsideSensitiveControls(element).replace(/\s+/gu, " ").trim();
 }
 
 function hasSensitiveDescendant(root: Element): boolean {
@@ -52,19 +64,6 @@ function hasSensitiveDescendant(root: Element): boolean {
     if (isSensitiveFormControl(descendant)) return true;
   }
   return false;
-}
-
-/** `textContent`, less every subtree rooted at a sensitive control. */
-function textOutsideSensitiveControls(root: Element): string {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
-    acceptNode(node) {
-      if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
-      return isSensitiveFormControl(node as Element) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP;
-    }
-  });
-  let text = "";
-  for (let node = walker.nextNode(); node; node = walker.nextNode()) text += node.nodeValue ?? "";
-  return text;
 }
 
 /**

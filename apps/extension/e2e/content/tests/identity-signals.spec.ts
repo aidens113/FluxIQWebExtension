@@ -53,6 +53,20 @@ async function openToggles(openHarness: (scenarioId: string) => Promise<ContentH
   return harness;
 }
 
+/**
+ * The descriptor for one element, taken from the snapshot. Extraction refuses a
+ * sensitive control in every mode (decision D2 of the data-extraction plan), so
+ * `web.dom.extract` -- the route `describe` uses -- cannot describe one. The
+ * snapshot carries the same `describeElement` output, and is where the
+ * background worker reads it, so the rows below still judge the descriptor the
+ * recorder produces.
+ */
+async function describeInSnapshot(harness: ContentHarness, selector: string): Promise<DomElementDescriptor> {
+  const element = (await harness.capture()).interactiveElements.find((candidate) => candidate.selector === selector);
+  if (!element) throw new Error(`the snapshot of ${harness.scenarioId} carries no descriptor for ${selector}`);
+  return element;
+}
+
 /** A recorded change for one described element, as the content script sends it. */
 function recordedChange(harness: ContentHarness, element: DomElementDescriptor): RecordingEventPayload {
   return { kind: "dom.change", sequence: 1, url: harness.url, title: "B5", eventTimestampMs: 1, element };
@@ -90,13 +104,13 @@ test.describe("B5: a toggle's state and its landmark's name, from the page to th
   test("the recorder names the landmark around a control, by reference and by aria-label", async ({ openHarness }) => {
     const harness = await openToggles(openHarness);
     expect((await describe(harness, "#b5-agree")).context).toMatchObject({ landmark: "region", landmarkName: "Billing details" });
-    expect((await describe(harness, "#b5-secret")).context).toMatchObject({ landmark: "navigation", landmarkName: "Account" });
+    expect((await describeInSnapshot(harness, "#b5-secret")).context).toMatchObject({ landmark: "navigation", landmarkName: "Account" });
   });
 
   test("a sensitive checkbox is described without its state, and its toggle never becomes a guessed check", async ({ openHarness }) => {
     const harness = await openToggles(openHarness);
     expect(await harness.page.locator("#b5-secret").isChecked(), "the box really is checked").toBe(true);
-    const described = await describe(harness, "#b5-secret");
+    const described = await describeInSnapshot(harness, "#b5-secret");
     expect("checked" in described, "the recorder withholds a sensitive control's state").toBe(false);
     const recorded = recordedChange(harness, described);
     expect("checked" in wireElement(recorded)).toBe(false);

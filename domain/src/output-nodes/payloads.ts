@@ -1,4 +1,5 @@
 import type { JsonObject, JsonValue } from "fluxiq/core";
+import { webAutomationRecordedExtraction } from "../actions/extraction";
 import { isSensitiveElementDescriptor } from "../sensitivity";
 import { webAutomationRecordedElementKey } from "./recorded-element-key";
 import { webAutomationSecretBinding } from "./secret-binding";
@@ -83,14 +84,40 @@ function recordedOutputParameters(outputId: string, payload: JsonObject): JsonOb
   }
   if (outputId === "web.dom.wait_for_selector") return compact({ selector, ...(hasTarget ? target : {}) });
   if (outputId === "web.dom.wait_for_text") return compact({ text: stringValue(payload.inputValue) ?? stringValue(payload.title) });
-  if (outputId === "web.dom.extract") return compact({ selector, ...(hasTarget ? target : {}) });
+  if (outputId === "web.dom.extract") {
+    const read = recordedValueRead(payload);
+    return compact({ selector, ...(hasTarget ? target : {}), ...(read !== undefined ? { extract: read } : {}) });
+  }
+  if (outputId === "web.dom.extract_list") return recordedListExtractionParameters(payload);
   if (outputId === "web.dom.upload") return recordedUploadParameters(payload, selector, target);
   if (outputId === "web.browser.tab") return recordedTabParameters(payload);
   if (outputId === "web.dom.capture_snapshot") return {};
-  // The remaining Week 1 outputs — assert, extract_list, dialog and download —
-  // are dispatch-only: no recorded user event maps to one, so there is no
-  // recorded payload to normalize into their parameters.
+  // The remaining Week 1 outputs — assert, dialog and download — are
+  // dispatch-only: no recorded user event maps to one, so there is no recorded
+  // payload to normalize into their parameters.
   return {};
+}
+
+/**
+ * A recorded list extraction replays as the request the picker recorded, and
+ * nothing else of what it sent.
+ *
+ * The definition is rebuilt by `webAutomationRecordedExtraction` rather than
+ * read off the payload, so the node carries selectors, keys and counts and no
+ * value read from the page (D3). A payload whose definition the reader refuses
+ * builds nothing, and `hasExecutableParameters` then keeps the event as
+ * evidence rather than proposing a read of something other than what was
+ * picked. The single-value form builds nothing here: it is `web.dom.extract`.
+ */
+function recordedListExtractionParameters(payload: JsonObject): JsonObject {
+  const definition = webAutomationRecordedExtraction(payload.extraction);
+  return definition?.form === "list" ? { extractList: definition.request as unknown as JsonValue } : {};
+}
+
+/** The single value a recorded `web.dom.extract` reads, or nothing when the payload defines no value extraction. */
+function recordedValueRead(payload: JsonObject): JsonValue | undefined {
+  const definition = webAutomationRecordedExtraction(payload.extraction);
+  return definition?.form === "value" ? definition.read as unknown as JsonValue : undefined;
 }
 
 /**

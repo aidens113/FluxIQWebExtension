@@ -170,8 +170,12 @@ const bootstrapResolution = {
 };
 const bootstrapRegistry = new AutomationStudioNodeRegistry();
 for (const definition of outputNodeDefinitions) bootstrapRegistry.register(definition);
-assert.equal(new AutomationStudioNodeRegistry().list(bootstrapResolution).length, 39);
-assert.equal(bootstrapRegistry.list(bootstrapResolution).length, 57);
+// Derived, never hard-coded: Core adds builtin nodes over time (K6 added For Each and Write
+// Records), and a literal here fails the whole file to load without saying anything true. What
+// this domain actually guarantees is that registering its output nodes adds exactly that many.
+const coreBuiltinNodeCount = new AutomationStudioNodeRegistry().list(bootstrapResolution).length;
+assert.ok(coreBuiltinNodeCount > 0);
+assert.equal(bootstrapRegistry.list(bootstrapResolution).length, coreBuiltinNodeCount + outputNodeDefinitions.length);
 const bootstrapCatalogBudget = automationStudioFlowBootstrapCatalogByteBudget({
   maxInputTokens: 3_000,
   instructionBytes: Buffer.byteLength(bootstrapInstruction, "utf8")

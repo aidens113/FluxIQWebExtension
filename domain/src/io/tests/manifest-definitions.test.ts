@@ -1,15 +1,17 @@
-// The domain manifest is the registration Core reads at runtime, and element
-// targeting is declared in two places that must never disagree.
+// The domain manifest is the registration Core reads at runtime, and two things
+// declared on it are also declared on the output nodes and must never disagree:
+// element targeting and the records path.
 //
 // `runtime/io-policy.ts` `prepareElementTargetAction` resolves a recorded
 // fingerprint against the runtime candidates, and applies
 // `elementTargetMinimumConfidence`, only for an output whose
-// `DomainOutputDefinition` declares `metadata.elementTarget`. That definition is
-// the one registered here through `defineOutput` (`io/web-automation-io.ts`,
-// `web-panel-host.ts`). The `AutomationStudioNodeDefinition` in
-// `output-nodes/definitions.ts` declares the same thing for the authoring
-// surface, and Core does not read it for this. Both are derived from the
-// action's own schema row, and these tests hold them together.
+// `DomainOutputDefinition` declares `metadata.elementTarget`. Core's proposal
+// lift defaults a recorded node's records path from the same definition's
+// `metadata.recordsPath` (Core CD19). That definition is the one registered here
+// through `defineOutput` (`io/web-automation-io.ts`, `web-panel-host.ts`), which
+// both pass these objects through unchanged. The `AutomationStudioNodeDefinition`
+// in `output-nodes/definitions.ts` declares the same things for the authoring
+// surface, and Core does not read it for either. These tests hold them together.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -34,6 +36,12 @@ const ELEMENT_TARGETED_OUTPUTS: readonly WebAutomationActionType[] = [
   "web.dom.upload",
   "web.dom.wait_for_selector"
 ];
+
+// Restated by hand for the same reason: the path Core reads records at when it
+// lifts a recorded extraction into a node that saves them.
+const RECORD_OUTPUTS: Readonly<Partial<Record<WebAutomationActionType, string>>> = {
+  "web.dom.extract_list": "extracted"
+};
 
 function manifestOutput(outputId: WebAutomationActionType) {
   const output = webAutomationManifestOutputs.find((candidate) => candidate.id === outputId);
@@ -82,7 +90,11 @@ test("an output that is not element targeted declares no element-target metadata
   // action that never had a target to resolve.
   for (const outputId of WEB_AUTOMATION_ACTION_TYPES) {
     if (ELEMENT_TARGETED_OUTPUTS.includes(outputId)) continue;
-    assert.equal(manifestOutput(outputId).metadata, undefined, `${outputId} carries no element-target metadata`);
+    assert.equal(manifestOutput(outputId).metadata?.elementTarget, undefined, `${outputId} carries no element-target flag`);
+    // With no records path either, there is nothing to declare, so no metadata.
+    if (RECORD_OUTPUTS[outputId] === undefined) {
+      assert.equal(manifestOutput(outputId).metadata, undefined, `${outputId} carries no metadata`);
+    }
   }
 });
 
@@ -96,6 +108,31 @@ test("every element-targeted output carries the safety level Core turns into a c
     assert.ok(
       ["safe", "review", "privileged", "destructive"].includes(level),
       `${outputId}: safety.level ${level} is not one Core's confidence ladder recognizes`
+    );
+  }
+});
+
+// -- The records path Core's proposal lift reads ------------------------------
+
+test("the extract_list output Core reads declares where its records are, and no other output does", () => {
+  // Core resolves a recorded node's default `recordsPath` as
+  // `io.getOutput(domainId, outputId)?.definition.metadata?.recordsPath` and
+  // rejects the candidate when it is absent. `extract_list` has no element
+  // target, so the records path is the whole of its metadata.
+  assert.deepEqual(manifestOutput("web.dom.extract_list").metadata, { recordsPath: "extracted" });
+  for (const outputId of WEB_AUTOMATION_ACTION_TYPES) {
+    assert.equal(manifestOutput(outputId).metadata?.recordsPath, RECORD_OUTPUTS[outputId], `${outputId}: records path Core reads`);
+  }
+});
+
+test("the manifest and the output nodes name the same records path", () => {
+  // The manifest takes the path from the output node, so the authoring surface
+  // and the registration Core reads can never point a Flow at different keys.
+  for (const outputId of WEB_AUTOMATION_ACTION_TYPES) {
+    assert.equal(
+      manifestOutput(outputId).metadata?.recordsPath,
+      nodeDefinition(outputId).metadata?.recordsPath,
+      `${outputId}: the manifest output and the output node must name the same records path`
     );
   }
 });
