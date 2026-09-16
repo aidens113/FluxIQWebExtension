@@ -255,3 +255,71 @@ dt { color: var(--muted); font-size: 11px; } dd { margin: 0; font-size: 11px; }
 }
 @keyframes recording-pulse { 50% { transform: scale(.82); opacity: .7; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+/* Structured data extraction (X4): the entry point and the confirmation panel.
+   The panel is an absolute sheet over the shell rather than a block inside the
+   recorder view, so the Firefox popup's 380px column can scroll it without
+   fighting the recorder console's centred layout, and the Chrome side panel
+   gets the same sheet at its own width. */
+.extract-button { width: min(100%, 300px); }
+
+.extraction-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  min-height: 0;
+  padding: var(--space-3);
+  background: var(--canvas);
+}
+.extraction-panel[hidden], .extraction-body[hidden], .extraction-paginate[hidden] { display: none; }
+.extraction-header { display: flex; align-items: start; justify-content: space-between; gap: var(--space-2); }
+.extraction-header > div { display: grid; gap: 3px; min-width: 0; }
+.extraction-status { color: var(--muted); font-size: 12px; white-space: normal; }
+.extraction-body { display: grid; align-content: start; gap: var(--space-3); min-height: 0; overflow: auto; }
+.extraction-summary { color: #c8d6e4; font-size: 12px; font-weight: 700; }
+.extraction-panel input[type="text"], .extraction-panel select {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--divider);
+  border-radius: 7px;
+  background: var(--surface-muted);
+  color: var(--text);
+  padding: 6px 9px;
+  font-size: 12px;
+}
+
+.extraction-fields { display: grid; gap: var(--space-2); }
+.extraction-field { display: grid; gap: 6px; border: 1px solid var(--divider); border-radius: var(--radius); background: var(--surface); padding: 10px; }
+.extraction-field-name { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); }
+.extraction-field-remove { min-height: 28px; padding: 4px 8px; font-size: 11px; }
+.extraction-field-meta { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); }
+.extraction-field-coverage { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.extraction-field-handling { display: flex; align-items: center; gap: var(--space-3); color: #d5e0ea; font-size: 12px; }
+.extraction-field-handling label { display: flex; align-items: center; gap: 6px; }
+.extraction-field-reason { color: var(--warning); font-size: 11px; white-space: normal; }
+.info-hint {
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  border: 1px solid var(--divider);
+  border-radius: 50%;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  cursor: help;
+}
+
+.extraction-paginate { display: flex; align-items: center; gap: var(--space-2); color: #d5e0ea; font-size: 12px; }
+.extraction-preview-scroll { overflow: auto; border: 1px solid var(--divider); border-radius: var(--radius); background: var(--surface); }
+.extraction-preview { border-collapse: collapse; width: 100%; font-size: 11px; }
+.extraction-preview th, .extraction-preview td { border-bottom: 1px solid var(--divider); padding: 6px 8px; max-width: 140px; overflow: hidden; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.extraction-preview th { color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; }
+.extraction-preview-empty { color: var(--muted); }
+
+.extraction-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.extraction-confirm { border-color: #3f6fa8; background: var(--accent-soft); color: #dcebff; }

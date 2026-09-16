@@ -517,6 +517,31 @@ Recorded at dispatch on 2026-09-15, before the three investigations above.
 
 ## Work Ledger
 
+### 2026-09-15 — Graph rollback inverse fixed and verified
+- Agent: supervisor; worker `g-rollback-inverse`, resumed after the crash
+- Changed: Core `automation-studio/storage/project/graph-store.ts` and its tests
+- Why: a `delete_node` inverse omitted cascaded edges, so rolling back a
+  deletion did not restore the graph it removed. Rollback is the safety net
+  every later loop phase leans on — an autonomous change is only safe to propose
+  if a bad one can be truly reverted
+- Validation: the supervisor ran
+  `pnpm --filter fluxiq exec vitest run src/programs/automation-studio/storage/project/tests/graph-store.test.ts`
+  itself -> "Tests 9 passed (9)", including
+  "restores the graph exactly for every patch operation's inverse". The worker
+  reported the same suite with `graph-store.ts` restored from HEAD ->
+  3 failed / 4 passed, so the tests demonstrably catch the defect rather than
+  passing either way
+- Outcome: Accepted
+- Follow-up: the worker **rewrote the inherited rollback test**, which asserted
+  bookkeeping before it ever compared the graph and so would have passed without
+  proving the fix — worth noting as the same failure mode this plan exists to
+  correct, found in the plan's own test. It generalized to a table-driven
+  round-trip across all eight operation inverses (only `delete_node` failed on
+  HEAD) and fixed a second instance of the class in `restoreSnapshot`, which
+  restored only x/y and parameters while silently dropping label, definitionId,
+  ports, metadata, disabled and sizes. `restoreSnapshot` has no production
+  callers, so that change is exercised only by tests
+
 ### 2026-09-15 — Identity Access credential recheck fixed and verified
 - Agent: supervisor; worker `sec-create-session`, resumed after the crash
 - Changed: Core `identity-access/{api/contracts.ts, api/handlers.ts,

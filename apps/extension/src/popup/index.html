@@ -69,6 +69,7 @@
             <span>Queued</span>
           </div>
         </div>
+        <button id="extractDataButton" class="small-button extract-button" type="button" disabled>Extract Data From This Page</button>
         </section>
 
         <section id="eventsView" class="view-panel activity-section" role="tabpanel" aria-labelledby="eventsTab" hidden>
@@ -162,6 +163,58 @@
           <p id="recordingLockMessage">Open a FluxIQ project in the web panel before starting a recording.</p>
           <button id="recordingLockDismissButton" type="button">Got It</button>
         </div>
+      </section>
+
+      <section id="extractionPanel" class="extraction-panel" role="dialog" aria-modal="true" aria-labelledby="extractionTitle" hidden>
+        <header class="extraction-header">
+          <div>
+            <h2 id="extractionTitle">Extract Data From This Page</h2>
+            <p id="extractionStatus" class="extraction-status">Click one example item on the page.</p>
+          </div>
+          <button id="extractionCloseButton" class="icon-button" type="button" title="Close" aria-label="Close">x</button>
+        </header>
+
+        <p id="extractionNotice" class="notice warning" hidden></p>
+
+        <div id="extractionBody" class="extraction-body" hidden>
+          <label class="field">
+            <span>Dataset name</span>
+            <input id="extractionLabel" type="text" spellcheck="false" autocomplete="off">
+          </label>
+
+          <p id="extractionSummary" class="extraction-summary"></p>
+
+          <div class="section-heading">
+            <div>
+              <h2>Columns</h2>
+              <span>Rename, remove, or exclude a column.</span>
+            </div>
+          </div>
+          <div id="extractionFields" class="extraction-fields"></div>
+
+          <label id="extractionPaginateRow" class="extraction-paginate" hidden>
+            <input id="extractionPaginate" type="checkbox">
+            <span id="extractionPaginateLabel">Read every page</span>
+          </label>
+
+          <div class="section-heading">
+            <div>
+              <h2>Preview</h2>
+              <span id="extractionPreviewNote"></span>
+            </div>
+          </div>
+          <div class="extraction-preview-scroll">
+            <table class="extraction-preview">
+              <thead><tr id="extractionPreviewHead"></tr></thead>
+              <tbody id="extractionPreviewBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <footer class="extraction-actions">
+          <button id="extractionCancelButton" class="small-button" type="button">Cancel</button>
+          <button id="extractionConfirmButton" class="small-button extraction-confirm" type="button" disabled>Confirm</button>
+        </footer>
       </section>
     </main>
     <script type="module" src="./index.js"></script>

@@ -1,5 +1,6 @@
 import { RUNTIME_MESSAGES } from "../shared/constants";
 import { defaultSettings, runtimeSendMessage } from "../shared/browser";
+import { mountExtractionPanel } from "./extraction";
 import type {
   ActivityEntry,
   CoreRecordingsPage,
@@ -83,6 +84,9 @@ let recordingsPage = 1;
 let recordingsTotal: number | undefined;
 let timerHandle: ReturnType<typeof setInterval> | undefined;
 let settingsDraftDirty = false;
+// The extraction panel owns its own button, overlay and session polling; the
+// recorder tells it only whether a recording is running to extract into.
+const extractionPanel = mountExtractionPanel();
 
 void refresh();
 startTimerLoop();
@@ -243,6 +247,7 @@ function renderStatus(status: ExtensionStatus): void {
   recordLabel.textContent = recording ? "Stop recording" : "Start recording";
   recordButton.setAttribute("aria-label", recording ? "Stop recording" : "Start recording");
   recordButton.disabled = !connected || unsupported;
+  extractionPanel.setAvailable(connected && recording && !unsupported, unsupported ? "This page cannot be recorded." : "Start recording first.");
   connectButton.disabled = status.connectionState === "connected" || status.connectionState === "connecting";
   disconnectButton.disabled = status.connectionState === "disconnected";
 
