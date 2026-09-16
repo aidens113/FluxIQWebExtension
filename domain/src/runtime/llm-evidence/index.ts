@@ -7,6 +7,12 @@
 // is built, not part of its contract, and a consumer that reached for them
 // would be building a second packet shape by hand.
 
+export type {
+  WebLlmEvidenceGateway,
+  WebLlmEvidenceToolExecution,
+  WebLlmEvidenceToolRequest
+} from "./capture";
+export * from "./harness-options";
 export { WEB_LLM_EVIDENCE_BOUNDS, WEB_LLM_EVIDENCE_BYTE_BUDGETS } from "./limits";
 export type { ResolvedWebLlmEvidenceElement, WebLlmEvidenceElement } from "./elements";
 export type { WebLlmEvidenceDialog, WebLlmEvidenceFrame, WebLlmPageContext } from "./page-evidence";
@@ -51,8 +57,5 @@ export {
   bindWebAutomationLlmEvidenceRuntime,
   createWebAutomationLlmEvidenceRuntime,
   type WebAutomationLlmEvidenceRuntime,
-  type WebLlmEvidenceGateway,
-  type WebLlmEvidenceToolExecution,
-  type WebLlmEvidenceToolRequest,
   type WebLlmFailureEvidenceRequest
 } from "./tools";

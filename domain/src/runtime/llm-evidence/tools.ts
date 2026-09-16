@@ -16,6 +16,17 @@ import type {
 } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
+import {
+  actAndCapture,
+  assertActive,
+  captureEvidence,
+  selectSession,
+  toolExecution,
+  toolMetadata,
+  type WebLlmEvidenceGateway,
+  type WebLlmEvidenceToolExecution,
+  type WebLlmEvidenceToolRequest
+} from "./capture";
 import { WEB_LLM_EVIDENCE_BOUNDS } from "./limits";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
 import { present } from "./present";
@@ -41,23 +52,6 @@ import {
 
 const TARGET_HANDLE_PATTERN = "^target\\.[1-9][0-9]?$";
 
-export type WebLlmEvidenceToolExecution = {
-  kind: "llm_evidence_tool_execution";
-  evidence: JsonValue;
-  effectApplied: boolean;
-  resultCode?: string;
-};
-
-export type WebLlmEvidenceToolRequest = {
-  projectId: string;
-  flowId: string;
-  callId: string;
-  toolId: string;
-  value: JsonObject;
-  maxEvidenceBytes?: number;
-  signal?: AbortSignal;
-};
-
 export type WebLlmFailureEvidenceRequest = {
   projectId: string;
   flowId: string;
@@ -72,17 +66,6 @@ export type WebLlmFailureEvidenceRequest = {
   /** Core always names one; absent, the packet falls back to Core's own failure-evidence gate. */
   maxEvidenceBytes?: number;
   signal?: AbortSignal;
-};
-
-type ClientActionResult = {
-  status: string;
-  payload?: JsonObject;
-  error?: string;
-};
-
-export type WebLlmEvidenceGateway = {
-  eligibleSessionIds(): string[];
-  executeAction(sessionId: string, command: { actionType: string; parameters: JsonObject; metadata: JsonObject }): Promise<ClientActionResult>;
 };
 
 export type WebAutomationLlmEvidenceRuntime = {
@@ -164,13 +147,13 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       try {
         if (input.toolId === WEB_LLM_INSPECT_TOOL_ID) {
           exactToolKeys(input.value, []);
-          const snapshot = retain(await inspect(gateway, sessionId, input, input.signal));
+          const snapshot = retain(await captureEvidence(gateway, sessionId, input, input.signal));
           returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
           return toolExecution(snapshot.evidence, false, WEB_LLM_INSPECT_RESULT_CODE);
         }
         if (input.toolId === WEB_LLM_NAVIGATE_TOOL_ID) {
           exactToolKeys(input.value, ["url"]);
-          const current = await inspect(gateway, sessionId, input, input.signal);
+          const current = await captureEvidence(gateway, sessionId, input, input.signal);
           const currentUrl = new URL(current.evidence.location);
           const destination = requestedUrl(input.value.url);
           if (destination.origin !== currentUrl.origin) recoverable("cross_origin");
@@ -182,17 +165,17 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
           });
           assertActive(input.signal);
           if (result.status !== "succeeded") throw new Error("web evidence navigation failed");
-          const snapshot = retain(await inspect(gateway, sessionId, input, input.signal, destination.origin));
+          const snapshot = retain(await captureEvidence(gateway, sessionId, input, input.signal, destination.origin));
           returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
           return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE);
         }
         if (input.toolId === WEB_LLM_REVEAL_TOOL_ID) {
           exactToolKeys(input.value, ["target"]);
           const target = boundedTargetHandle(input.value.target);
-          const current = await inspect(gateway, sessionId, input, input.signal);
+          const current = await captureEvidence(gateway, sessionId, input, input.signal);
           const element = currentElementForReturnedTarget(returnedEvidence.get(evidenceScope(input, sessionId)), current, target);
           if (!safeRevealElement(element)) recoverable("target_unsafe");
-          const snapshot = retain(await executeAndInspect(gateway, sessionId, input, "web.dom.click", { selector: element.selector }, current, input.signal));
+          const snapshot = retain(await actAndCapture(gateway, sessionId, input, "web.dom.click", { selector: element.selector }, current, input.signal));
           if (JSON.stringify(snapshot.evidence) === JSON.stringify(current.evidence)) recoverable("no_progress");
           returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
           return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE);
@@ -260,46 +243,6 @@ export function bindWebAutomationLlmEvidenceRuntime(fluxiq: FluxIQ): void {
   }));
 }
 
-async function inspect(
-  gateway: WebLlmEvidenceGateway,
-  sessionId: string,
-  request: WebLlmEvidenceToolRequest,
-  signal?: AbortSignal,
-  expectedOrigin?: string
-): Promise<WebLlmSnapshotBinding> {
-  const result = await gateway.executeAction(sessionId, {
-    actionType: "web.dom.capture_snapshot",
-    parameters: {},
-    metadata: toolMetadata(request),
-  });
-  assertActive(signal);
-  if (result.status !== "succeeded") throw new Error("web evidence snapshot capture failed");
-  const payload = jsonRecord(result.payload, "web evidence action payload");
-  return sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({
-    budget: "exploration",
-    maxEvidenceBytes: request.maxEvidenceBytes,
-    expectedOrigin,
-    // An exploration packet is an observation, not a failure, so it marks no
-    // target at all -- neither a handle nor a "the target is gone".
-    failedAction: undefined,
-  }));
-}
-
-async function executeAndInspect(
-  gateway: WebLlmEvidenceGateway,
-  sessionId: string,
-  request: WebLlmEvidenceToolRequest,
-  actionType: string,
-  parameters: JsonObject,
-  current: WebLlmSnapshotBinding,
-  signal?: AbortSignal
-): Promise<WebLlmSnapshotBinding> {
-  const result = await gateway.executeAction(sessionId, { actionType, parameters, metadata: toolMetadata(request) });
-  assertActive(signal);
-  if (result.status !== "succeeded") throw new Error("web evidence interaction failed");
-  return await inspect(gateway, sessionId, request, signal, new URL(current.evidence.location).origin);
-}
-
 function eligibleWebSessionIds(fluxiq: FluxIQ): string[] {
   return fluxiq.programs.clientGateway.snapshot().sessions.filter((session) =>
     session.status === "ready" &&
@@ -310,16 +253,6 @@ function eligibleWebSessionIds(fluxiq: FluxIQ): string[] {
       (capability.metadata?.domainId === WEB_AUTOMATION_DOMAIN_ID || capability.actionTypes?.includes("web.dom.capture_snapshot"))
     )
   ).map((session) => session.sessionId);
-}
-
-function selectSession(sessionIds: string[]): string {
-  const unique = [...new Set(sessionIds)];
-  if (unique.length !== 1) throw new Error("exactly one connected web-automation client is required for LLM evidence");
-  return unique[0]!;
-}
-
-function toolMetadata(input: WebLlmEvidenceToolRequest): JsonObject {
-  return { source: "llm-evidence-runtime", projectId: input.projectId, flowId: input.flowId, callId: input.callId, domainId: WEB_AUTOMATION_DOMAIN_ID };
 }
 
 /**
@@ -335,10 +268,6 @@ function packetKey(evidence: WebLlmPageEvidence): string {
 
 function evidenceScope(input: WebLlmEvidenceToolRequest, sessionId: string): string {
   return `${sessionId}\0${input.projectId}\0${input.flowId}`;
-}
-
-function toolExecution(evidence: JsonValue, effectApplied: boolean, resultCode: string): WebLlmEvidenceToolExecution {
-  return { kind: "llm_evidence_tool_execution", evidence, effectApplied, resultCode };
 }
 
 function requestedUrl(input: unknown): URL {
@@ -357,8 +286,4 @@ function boundedTargetHandle(input: unknown): string {
 function exactToolKeys(input: JsonObject, allowed: string[]): void {
   const keys = new Set(allowed);
   if (Object.keys(input).some((key) => !keys.has(key)) || allowed.some((key) => !Object.prototype.hasOwnProperty.call(input, key))) recoverable("invalid_input");
-}
-
-function assertActive(signal?: AbortSignal): void {
-  if (signal?.aborted) throw signal.reason ?? new Error("web evidence operation was cancelled");
 }
