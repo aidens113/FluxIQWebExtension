@@ -35,3 +35,39 @@ export type ExtractionProposeRefusal = "target_not_found" | "no_repeating_run";
 export type ExtractionProposeResponse =
   | { ok: true; proposal: WebAutomationExtractionProposal }
   | { ok: false; refused: ExtractionProposeRefusal };
+
+// The picker's message names (X4). They live here, rather than in
+// `shared/constants.ts`, so that the content picker, the background control and
+// the popup UI can be built against one spelling without waiting on each other.
+// Payload types are added beside each name by the picker; a name is grouped
+// into a const object rather than exported one by one because this file is
+// budgeted at 15 exported values and the names alone would exhaust it.
+
+/** Messages the background worker sends into a frame's content script. */
+export const EXTRACTION_CONTENT_MESSAGES = {
+  /** Begin picking: show the overlay and capture the next click. */
+  pickStart: "extraction.pick_start",
+  /** Stop picking and remove the overlay, with nothing chosen. */
+  pickCancel: "extraction.pick_cancel",
+  /** Read at most `limit` (≤ 20) rows for the confirmation preview. */
+  preview: "extraction.preview",
+  /** Put `data.extract` in the recording for the confirmed definition. */
+  record: "extraction.record"
+} as const;
+
+/** The name a frame uses to tell the background worker what the user picked. */
+export const EXTRACTION_PICKED_MESSAGE = "fluxiq.extractionPicked";
+
+/**
+ * Runtime messages between the popup or side panel and the background worker.
+ * `testDefineExtraction` is accepted from the control page only and never from
+ * a page under test; it exists so the Testing Lab can drive the confirm path
+ * without a human pick.
+ */
+export const EXTRACTION_RUNTIME_MESSAGES = {
+  start: "fluxiq.extractionStart",
+  confirm: "fluxiq.extractionConfirm",
+  cancel: "fluxiq.extractionCancel",
+  getSession: "fluxiq.getExtractionSession",
+  testDefineExtraction: "fluxiq.test.defineExtraction"
+} as const;

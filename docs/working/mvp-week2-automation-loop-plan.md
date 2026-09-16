@@ -1,7 +1,7 @@
 # MVP Week 2 Automation Loop Plan
 
 Status: Active
-Status detail: Plan written 2026-09-15 from two scoping reports; nothing is built, and the user reviews the plan before any loop phase starts.
+Status detail: Executing 2026-09-15; the user gave the go and asked for maximum parallelism. Phases D, P, SEC and G are being built in Core; the loop phases follow once their prerequisites land.
 Created: 2026-09-15
 Last updated: 2026-09-15
 Owner: Senior supervisor agent
@@ -13,37 +13,28 @@ Related: [30-Day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 
 ## Current State
 
-**Phase, as of 2026-09-15: the user reshaped the plan as L12-L15; three
-read-only investigations are running; no loop code changed.** This is now a
-**flow-improvement loop with three entry points** — building a new flow, a run
-failing, and an edge case in an existing flow — not a recovery loop. Two earlier
-scoping reports cover Phases 2.1-2.4 and 2.5-2.9 with file:line evidence. Path
-prefix: `AS/` is Core's `packages/fluxiq/src/programs/automation-studio/`.
+**Phase, as of 2026-09-15: the user reshaped the plan as L12-L16; all four
+read-only investigations have reported and been supervisor-verified; no loop
+code changed.** This is now a **flow-improvement loop with three entry points** —
+building a new flow, a run failing, and an edge case in an existing flow — not a
+recovery loop. Two earlier scoping reports cover Phases 2.1-2.4 and 2.5-2.9 with
+file:line evidence. Path prefix: `AS/` is Core's
+`packages/fluxiq/src/programs/automation-studio/`.
 
-**The first investigation shrinks the work, and it is worth reading before
-planning anything.** `w2-c-harness-options-and-instructions` found that the loop
-L14 asks for **already exists and is already domain-neutral**
-(`AS/runtime/llm/evidence-loop.ts`). What is missing is far narrower than a new
-loop: a **registry** of harness options; any Core-owned neutral options at all,
-since Core ships **zero** and every tool today comes from the downstream
-repository; and the other **entry points** — the loop is reachable only from
-Flow creation, and `execution-grants.ts:493-511` explicitly forbids it to a
-recovery run. L12 is therefore mostly a matter of opening doors that are bolted.
+**L14 is far smaller than it looks.** `w2-c` found the loop already exists and
+is already domain-neutral (`AS/runtime/llm/evidence-loop.ts`). What is missing
+is a registry of harness options, any Core-owned neutral options at all (Core
+ships zero; every tool today comes from this repository), and the other entry
+points, which `execution-grants.ts:493-511` bolts shut. **Phase H** delivers it.
 
-**One leak blocks L14, and it is decision L2.** Core's repair target *is a CSS
-selector*: `AutomationStudioRuntimeTargetOverrideTarget = { selector: string }`
-(`structured-response.ts:14-16`), hard-required at five Core sites including the
-JSON schema and the prompt sent to the provider
-(`deepseek-provider.ts:38,57-73`) and the service options (`service.ts:356`).
-Its sibling `TargetOverrideFailedAction` (`live-patch.ts:34-37`) is commented
-"domain-neutral" and got it right, so the intent was always there and one type
-was missed. **L2 is a prerequisite for L14, not optional polish.** Three smaller
-leaks follow it: `llmEvidenceRuntime` is a single mutable slot with no domain id
-and no gate, passed to the loop unfiltered (`service.ts:352-357,769-772`), while
-the node registry does scoping correctly one directory away; the task-kind union
-is closed and the stage prose is hard-coded in the provider file, which blocks
-L15; and Core's sanitizers carry web nouns — an html, cookies and headers
-denylist, and a `selector` regex.
+**One leak blocked it, and it is now Phase T.** Core's repair target *is* a CSS
+selector (`structured-response.ts:14-16`), hard-required at five sites including
+the JSON schema, the provider prompt (`deepseek-provider.ts:38,57-73`) and the
+service options (`service.ts:356`) — while its sibling `TargetOverrideFailedAction`
+(`live-patch.ts:34-37`) is already domain-neutral, so the intent was there and
+one type was missed. Three smaller leaks follow: an unscoped `llmEvidenceRuntime`
+(`service.ts:352-357,769-772`); the closed task-kind union and hard-coded stage
+prose that block L15 (**Phase S**); and Core's sanitizers carrying web nouns.
 
 **What is true today:** no Week 2 exit criterion is met. The parts exist and
 are tested, but no runtime loop connects them.
@@ -65,17 +56,15 @@ are tested, but no runtime loop connects them.
 - 2.9: nothing records which adaptation a later run used; FluxBench has no
   adaptation lane, and its Week 2 metrics are typed `null`.
 
-**Defects: five, corrected to seven.** `w2-a-defect-fixes` proved two of them by
-running Core's own `live-patch.ts` unmodified in a scratch copy — 19 of 19
-expectations matched — and **corrected two of the five descriptions that were
-wrong as first written**. A never-executed proposal does *not* auto-apply, since
-the promotion gate refuses high risk; the harm is that its fabricated success is
-indistinguishable from a verified one to a reviewer. And the unwritten
-`failureSignature` is *not* why known-adaptation matching fails: the only
-production call site passes **no adaptations at all**, so the match set is always
-empty and writing the signature alone would have changed nothing. It also found
-a sixth instance (`temporary_recovery_subflow_call`) and a seventh path that
-skips the promotion gates entirely.
+**Defects: five, corrected to seven, now Phase D.** `w2-a` proved two by running
+Core's own `live-patch.ts` unmodified in a scratch copy — 19 of 19 expectations
+matched — and corrected two of the five descriptions that were wrong as written:
+a never-executed proposal does not auto-apply (the harm is that its fabricated
+success is indistinguishable from a verified one), and the unwritten
+`failureSignature` is not why matching fails (the only production call site
+passes no adaptations at all). It found a sixth instance
+(`temporary_recovery_subflow_call`) and a seventh path skipping the promotion
+gates. Detail: `reports/w2-a-defect-fixes.md`.
 
 **One cause explains all of them: success is recorded from the absence of
 contradicting evidence rather than from observed evidence.** The fixes, the
@@ -83,34 +72,30 @@ load-bearing order, and the reasoning are below under "The five fixes"; the
 per-defect evidence and regression lists are in
 `reports/w2-a-defect-fixes.md`.
 
-**L13 cannot be delivered by what exists, but its first increment can.**
-`w2-b-flow-authoring-surface` answered honestly: a flow is **six stores and only
-the graph is transactional**, with revisions, inverses and mutation records.
-Routers, subflows and instructions are JSON files with none of that; flow
-variables, errors and regions have **no write path anywhere**; interface and
-settings save only through a whole-document `saveFlow` that leaves no reviewable
-record. The sequencing gift is that **expected state, action targets, retries
-and wiring are already fully expressible and revertible as graph operations**,
-so the first loop increment needs **no new contract** — a new one is needed only
-for router, subflow, instruction and flow-field changes.
+**L13's first increment needs no new contract.** `w2-b` found a flow is six
+stores of which only the graph is transactional: routers, subflows and
+instructions have no revisions or inverses, and flow variables, errors and
+regions have no write path at all. But action targets, expected state, retries
+and wiring are already expressible and revertible as graph operations, so the
+first increment can proceed; only router, subflow, instruction and flow-field
+changes need a new contract.
 
-**Three things it found that are not merely design gaps:**
-1. A `delete_node` inverse **omits cascaded edges**, so rolling back a deletion
-   does not restore the graph it removed. Rollback is the safety net L13 leans
-   on, so this is a correctness defect, not a rough edge.
-2. **Structural adaptations cannot be applied at all today:** the promotion gate
-   requires a `proposalId` that no endpoint can create.
-3. **Two apply engines** sit behind the single `review-flow-adaptation`
-   endpoint, accepting different patch kinds with different rollback
-   guarantees, and which one runs is chosen by deployment configuration.
+**Three findings that are not merely design gaps, now Phase G:** a `delete_node`
+inverse omits cascaded edges, so rollback does not restore the graph it removed —
+and rollback is the safety net every later phase leans on; structural adaptations
+cannot be applied at all, because the promotion gate requires a `proposalId` no
+endpoint can create; and two apply engines sit behind the single
+`review-flow-adaptation` endpoint with different rollback guarantees, chosen by
+deployment configuration.
 
-**Two conflicts with the user's direction, for his decision, not mine:** every
-flow write endpoint requires a **PIN**, which an autonomous loop cannot supply —
-so either the loop writes through an internal path that bypasses the endpoint
-gate, or applying always waits for a person even outside approval mode. And
-flow bootstrap already demonstrates the right build-a-flow pattern but
-**refuses any flow that is not blank**, so the "improve an existing flow" entry
-point cannot reuse it unchanged.
+**The PIN conflict is resolved, and its premise was wrong.** `w2-b` reported
+that every flow write endpoint requires a PIN an autonomous loop cannot supply;
+`w2-d` disproved the general claim, and the supervisor confirmed it — the PIN
+guards *one program*, not writes as such, and several destructive endpoints have
+none (Phase P). The user settled the rest as L16. One conflict does remain: flow
+bootstrap already demonstrates the right build-a-flow pattern but **refuses any
+flow that is not blank**, so the "improve an existing flow" entry point cannot
+reuse it unchanged.
 
 **Done:** both scoping reports; this plan and its Core pair.
 
@@ -121,16 +106,26 @@ point cannot reuse it unchanged.
 started** — they are Phase D. He also decided the PIN question as L16.
 
 **Next steps, none of which is building anything:**
-1. Revise the phase table around what the investigations found: L2 moves to the
-   front as L14's prerequisite, and the exploration phases shrink because the
-   loop already exists and needs only a registry, Core-owned neutral options,
-   and its other entry points.
-2. Inventory every write endpoint so L16 can name the PIN-keeping set
-   explicitly rather than describing it.
-3. Fold `w2-b`'s finding into the phases: the first loop increment needs **no
-   new contract**, because targets, expected state, retries and wiring are
-   already expressible and revertible as graph operations. A new contract is
-   needed only for router, subflow, instruction and flow-field changes.
+1. **Done.** Every finding that had no phase to deliver it now has one: **T**
+   for L2's opaque repair target, **H** for L14's harness-option registry, its
+   Core-owned neutral options and the other two entry points, **S** for L15's
+   stage protocol, and **G** for the rollback-correctness defects. Phase 2.3 no
+   longer writes an exploration loop, because one already exists.
+2. **Done**, as `w2-d`, and it found more than an inventory. The PIN does not
+   guard destruction today, it guards *one program*: all ~58 checks live in
+   `automation-studio`, so moving a node on a canvas needs a PIN while deleting
+   a user's captured dataset rows does not. Phase P carries the mechanism.
+   Separately, `w2-d` found a **security defect unrelated to the loop** —
+   `identity-access/create-session` mints a session for any user id with no
+   credential recheck, at the handler and in the service alike. Admin-only to
+   reach, so not an unauthenticated escalation, but it sidesteps the recheck the
+   rest of the program enforces. Now Phase SEC, recommended for a fix ahead of
+   the loop rather than bundled into L16. Counts and the three code findings were
+   re-verified by the supervisor against the handler bodies; the worker's
+   220/57 is 223/58 by my own count, which changes no conclusion.
+3. **Done.** `w2-b`'s finding is folded into the Phases section: the first loop
+   increment needs no new authoring contract, so router, subflow, instruction
+   and flow-field contracts come after it rather than gating it.
 4. Nothing is built until the user says go.
 
 **Blockers:** none. The user's direction is recorded as L12-L16. The earlier
@@ -292,16 +287,29 @@ progress and would make the system worse. Fixes 1, 2 and 3 all edit
 
 Execution detail (files, tests, mutation targets, Lab proofs) is in the two
 scoping reports: 2.1-2.4 in `w2-scope-context-recovery`, 2.5-2.9 in
-`w2-scope-repair-reuse`.
+`w2-scope-repair-reuse`. Phases T, H, S, G and P come from the three
+investigations `w2-a`, `w2-b` and `w2-c`.
+
+**The first loop increment needs no new authoring contract.** Action targets,
+expected state, retries and wiring are already expressible — and revertible — as
+graph operations, the only transactional store of the six a flow is kept in. A
+new contract is needed only for router, subflow, instruction and flow-field
+changes, which is why those phases come after the first increment rather than
+gating it.
 
 | Phase | Work | Owner | Depends on |
 | --- | --- | --- | --- |
 | D | The five fixes, in the order **1 → 3 → 2 → 5 → 4**, each with a failing test first. Fixes 1-3 all edit `live-patch.ts` and are serial for one worker. Fixes 4 and 5 must come last: once adaptations reach classification, the loop starts skipping the model on the strength of the unverified `validated` records that 1-3 fabricate, so doing them early would look like progress and leave the system worse. Includes the sixth instance (`temporary_recovery_subflow_call`) and the typed-store path that skips the promotion gates entirely | Core | approved; not started |
-| P | PIN reclassification (L16): inventory every write endpoint, classify each as PIN-keeping or not, remove the PIN elsewhere, and add the test that fails when an endpoint is unclassified | Core | approved; not started |
+| P | PIN reclassification (L16). The inventory is done (`w2-d`, supervisor-verified): Core registers ~220-223 endpoints, of which 57-58 call `authorizeProgramPin`, and **every one is in `automation-studio`** — no other program uses it. It is **not middleware**: it is an inline `await` on the first line of ~58 handler bodies, and `register()` has no field in which an endpoint could declare it. **Make the classification declarative** — a required field on `register()`, enforced at the single `registry.call()` chokepoint and returned by `endpoints()` — so TypeScript fails the build when a new endpoint omits it and the scattered call sites disappear. Two limits to carry: the 7 write routes outside the program API (including `POST /api/framework/setup` migrate/rollback, the most destructive operation in Core) are **not** reachable from that chokepoint and need their own gate; and `secret-keys`, `database-manager` and parts of `identity-access` have their own stronger gates that L16 must be stated not to touch | Core | approved; not started |
+| SEC | **Security defects found by `w2-d`, independent of L16 and not to be bundled with it.** (a) `identity-access/create-session` (`api/handlers.ts:121-130`) mints a session for **any** `userId` with no credential recheck, while `disable-totp` twelve lines above calls `authorizeSessionCredentials` and returns `requiresRecheck` on failure — the pattern exists and this endpoint skips it. The supervisor traced `service.createSession` (`runtime/service.ts:291-306`): it checks only that the user exists and is enabled, then mints and persists a session, so nothing guards it below the handler either. **Scoped honestly:** the endpoint carries `permission: "identity.manage"`, which of the two built-in roles only `admin` holds (`runtime/roles.ts:3-20`), so this is not an unauthenticated escalation — the caller is already an authenticated admin. It still matters, because FluxIQ's whole recheck model (this program's `authorizeSessionCredentials`, and `authorizeProgramPin` at ~58 sites) verifies against in-process session state: an endpoint that mints arbitrary sessions lets an admin session act as any user without ever re-proving a password, PIN or TOTP, which is precisely what a recheck exists to prevent. (b) `delete-run-datasets` (`datasets.ts:73-87`) deletes a user's captured rows under `flows.write` alone, and (c) `save-project-hierarchy` (`projects.ts:176-189`) performs deletions through its `deletedHierarchyIds` payload with no PIN. (b) and (c) contradict Core's own `docs/architecture/automation-studio/persistence.md:515-521`, which states that endpoints which delete or edit user-authored state are privileged and should use the shared PIN path — so that document is wrong today whatever L16 decides | Core | not started; **recommend fixing (a) ahead of the loop** |
+| T | **L2, the opaque repair target.** Replace `AutomationStudioRuntimeTargetOverrideTarget = { selector: string }` (`structured-response.ts:14-16`) with an opaque, domain-owned target at all five Core sites: the type, the JSON schema, the provider prompt (`deepseek-provider.ts:38,57-73`), the service options (`service.ts:356`), and the validator seam. The domain fills it fingerprint-first with the selector as a hint, and evidence names elements by opaque `target.N` handles. Its sibling `TargetOverrideFailedAction` (`live-patch.ts:34-37`) is already domain-neutral and is the model to copy | Core, domain | **prerequisite for H, 2.1 and 2.5** |
+| H | **L14, harness options.** The exploration loop already exists and is already domain-neutral (`AS/runtime/llm/evidence-loop.ts`), so this phase opens bolted doors rather than building a loop: a registry of harness options; the first Core-owned domain-neutral options, since Core ships **zero** and every tool today comes from this repository; a domain registration path that **extends** the core set rather than replacing it; and the other two entry points, which means lifting the block at `execution-grants.ts:493-511` that forbids the loop to a recovery run. Also scopes `llmEvidenceRuntime` — today one mutable slot with no domain id and no gate (`service.ts:352-357,769-772`) — the way the node registry one directory away already does | Core, domain | T |
+| S | **L15, the stage protocol.** A fixed, non-overridable order — gather and explore, plan, implement, iterate, verify — with per-stage instructions a domain may add to or wholly override through Core's existing instruction system. Blocked today by a closed task-kind union and stage prose hard-coded in the provider file. Also de-webs Core's sanitizers, which carry an html, cookies and headers denylist and a `selector` regex | Core | H |
+| G | **Rollback correctness.** A `delete_node` inverse omits cascaded edges, so rolling back a deletion does not restore the graph it removed — and rollback is the safety net every later phase leans on. With it: structural adaptations cannot be applied at all today, because the promotion gate requires a `proposalId` no endpoint can create; and two apply engines sit behind the single `review-flow-adaptation` endpoint, taking different patch kinds with different rollback guarantees, with deployment configuration choosing which runs | Core | with D |
 | R0 | Move `maybeAnnotateRunDetailWithRuntimeLlm` out of `service.ts` into `AS/runtime/recovery/runtime-recovery-coordinator.ts`, no behaviour change | Core | review; extraction K4c.1-2 |
 | 2.1 | `recoveryContext` builder (fixed section priority, byte budget, withheld copy); packet slot with counts-only `contextSummary`; coordinator passes it; the domain marks the failed target as an opaque handle | Core, domain | R0, L2 |
 | 2.2 | Deterministic diagnosis gate (L5); structured LLM diagnosis; recovery plan; `recoveryTrace` stages (diagnosis, recovery_plan, exploration, resolution) and web UI; why W13 and W24 report `runtime.behavior` (W2-1, W2-3), then fixes | Core, domain | R0 |
-| 2.3 | Closed exploration outcomes; exploration budget (wall clock, actions, domain-enforced scope policy, destructive off, repeat window); runtime exploration loop; task kind; grant purpose (L6); domain recovery tools (inspect, reveal, safe dismiss or click, bounded wait, scoped navigation) | Core, domain | 2.2, L3, L6 |
+| 2.3 | Closed exploration outcomes; exploration budget (wall clock, actions, domain-enforced scope policy, destructive off, repeat window); the whole-recovery time limit; the web domain's own harness options, registered through H (inspect, reveal, safe dismiss or click, bounded wait, scoped navigation). **No new loop is written here** — H supplies the registry and the entry points, and this phase supplies the runtime budget, the closed outcomes, and the domain's options | Core, domain | 2.2, H, L3 |
 | 2.4 | The full recovery verdict: expected state, outputs including records completeness, required evidence, continuation; domain URL and presence conditions | Core, domain | D, R0; extraction X4 for records |
 | 2.5 | Adaptations record observed and expected state and `failureSignature` (defect 5); exploration reduction; a durable deterministic-path patch inserting real action nodes; the L2 target contract with `extract_list` compatibility | Core, domain | 2.3, L2 |
 | 2.6 | Validation kinds and a persisted confidence tier (L7); provisional replay promotion after two successes | Core | 2.5 |
@@ -440,9 +448,9 @@ built.
   measure on `member-directory` in the `week2` corpus.
 - Long Lab campaigns on this machine's faulty RAM carry an error bar.
 
-## Worker Briefs
+## Worker Briefs — initial scoping
 
-Recorded at dispatch on 2026-09-15.
+Recorded at dispatch on 2026-09-15, before the three investigations above.
 
 ### Brief: w2-scope-context-recovery
 - Repository: this repository and FluxIQ Core (`F:\!FluxIQ`), read-only
@@ -497,6 +505,25 @@ Recorded at dispatch on 2026-09-15.
 
 ## Work Ledger
 
+### 2026-09-15 — User gave the go; four Core phases dispatched, inventory verified
+- Agent: supervisor; worker `w2-d-write-endpoint-inventory`, then `d-five-fixes`,
+  `sec-create-session`, `p-pin-classification`, `g-rollback-inverse`
+- Changed: this document (Status detail, Current State, Phases T/H/S/G/P/SEC,
+  Open Questions)
+- Why: the user said to continue and to use maximum parallelism. The phase table
+  named findings it assigned to no phase — L2's opaque target, L14's harness
+  registry, L15's stage protocol, and the rollback defects — so each got one
+- Validation: `grep -rn "registry\.register(" packages` excluding tests -> 223,
+  and `authorizeProgramPin` sites -> 58, against the worker's 220/57; the
+  qualitative claim held, every site being under `programs/automation-studio`
+  or `_shared`. Read `identity-access/api/handlers.ts:121-130` directly:
+  `create-session` calls `service.createSession` with no recheck, and
+  `runtime/service.ts:291-306` adds none. `runtime/roles.ts:3-20` -> only
+  `admin` holds `identity.manage`, so the defect is admin-only to reach.
+  `persistence.md:515-521` confirmed to state the PIN rule the code violates
+- Outcome: Accepted; the worker's counts corrected rather than adopted
+- Follow-up: verify each dispatched worker's claim before treating it as done
+
 ### 2026-09-15 — Phased loop plan written from both scoping reports
 - Agent: supervisor; workers `w2-scope-context-recovery`,
   `w2-scope-repair-reuse`
@@ -521,8 +548,12 @@ Recorded at dispatch on 2026-09-15.
 
 ## Open Questions
 
-- **L2, L6, and L9 acceptance.** They change what repairs persist and what an
-  explicit grant may execute. Owner: the user, at the plan review.
+- ~~L2, L6, and L9 acceptance~~ — **closed, and not the user's to decide any
+  more.** L13 supersedes L6 and L9: the model is used freely, and approval mode
+  gates *applying* a proposal rather than producing one. L2 stopped being a
+  preference to accept when `w2-c` showed Core's repair target is a CSS
+  selector; L14's harness options cannot be domain-neutral while that is true,
+  so L2 is a prerequisite that Phase T delivers.
 - **E56 design A.** The corroboration predicate that exploration relies on has
   not been explicitly accepted. Owner: the user.
 - **Provider-resolver seam.** How the web-panel host supplies Core's provider

@@ -1,7 +1,7 @@
 # First-Class Data Extraction Plan
 
 Status: Active
-Status detail: Executing 2026-09-15; X0-X3, X4.1, and X5's contracts, measurement and fixtures are complete and verified in the working tree, and the picker (X4.2-X4.4) is deliberately held for the user's plan review (D15).
+Status detail: Executing 2026-09-15; X0-X3, X4.1 and X5 contracts/measurement/fixtures are complete, verified, committed and pushed, and the picker (X4.2-X4.4) is now being built after the user gave the go.
 Created: 2026-09-15
 Last updated: 2026-09-15
 Owner: Senior supervisor agent
@@ -14,8 +14,8 @@ Related: [30-Day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 ## Current State
 
 **Phase, as of 2026-09-15: X0-X3, X4.1 and X5's contracts, measurement and
-fixtures are complete and verified, Core is committed, every worker has
-reported, and this repository is at its commit gate.** The user decided
+fixtures are complete and verified, every worker has reported, and both
+repositories are committed and pushed.** The user decided
 that structured data extraction is a fundamental FluxIQ capability, Core
 included, and asked for the plan quickly using subagents. Four read-only
 investigations produced it: `ex-a-extension-domain`, `ex-c-plans-docs` and
@@ -50,8 +50,10 @@ positionally and matches `null` only against `null` (D16), and an expectation
 nothing can judge is now **refused** rather than silently passing. The fixtures
 across all six scenarios are 225 tests passing.
 
-**In progress:** nothing. Every worker in both repositories has reported and
-been verified by a run the supervisor made itself.
+**In progress:** the picker — X4.2, X4.3 and X4.4, with one worker each for the
+content picker, the background control, and the popup and side-panel UI.
+Everything before it has reported and been verified by a run the supervisor
+made itself.
 
 **The content harness is green, and that claim is worth stating precisely.** It
 ran to **267 passed, twice** (53.0s and 51.7s). It had been 261 passed with 6
@@ -72,45 +74,52 @@ files, and every new directory in the first commit was untracked when the
 pre-commit audit ran. A real import violation therefore appeared only after
 committing. **Stage this repository before believing its audit result** — all of
 its new extension, domain and scenario-lab files are untracked right now, so its
-audit is blind in exactly the same way. It is **not pushed**:
-`AGENTS.md` requires both `dev` branches to move in the same work unit when a
-change spans the two repositories, so the pair pushes together once this side is
-ready.
+audit is blind in exactly the same way.
 
-**Not done:** X4.2-X4.4 (the picker, background control, and page side), X5.3
-(the intent seam, which waits on X4-C), X5.5-X5.7 (Flow-lane judging and
-bench), X6 (with the Week 2 loop), and this repository's commit.
+**Both repositories are now committed and pushed.** This side landed as
+`e458692`, with `7f1f888` and `a9df420` on top for the Week 2 plan reshape and
+the excluded-column rule. Both `dev` branches are level with `origin/dev`, with
+nothing ahead and nothing uncommitted, verified by `git status -sb` and
+`git log origin/dev..dev` in each. `AGENTS.md` requires the two to move in the
+same work unit when a change spans them, and they did.
+
+**Not done:** X5.3 (the intent seam, which waits on X4-C), X5.5-X5.7 (Flow-lane
+judging and bench), and X6 (with the Week 2 loop).
 
 **Next steps:**
-1. `pnpm test` and `pnpm build` are green, and the full harness is green twice.
-   `pnpm check` fails on working-doc findings only: this document's length, now
-   compacted from 818 lines to 552, and the index, which
-   `pnpm structure:baseline` regenerates. Run the baseline, then `pnpm check`
-   again. **Measure length with `wc -l`, never PowerShell's
-   `Measure-Object -Line`** — the latter does not count blank lines, so it
-   under-reported this document by about 60 lines all session and let it breach
-   the limit three times while appearing to have headroom.
-2. Then a secret scan of the **staged** diff, this repository's commit, and the
-   paired push of both `dev` branches. Stage before auditing: the audit reads
+1. **The picker is being built.** The user gave the go on 2026-09-15 and asked
+   for maximum parallelism, so X4-B, X4-C and X4-D run concurrently. The
+   supervisor landed the picker's message names in
+   `shared/extraction-messages.ts` first, as the seam all three share, so they
+   did not have to run in a chain.
+2. **X5-H is done and verified**: nine files replace the two oversized specs,
+   the largest 292 lines, every one of the 45 test call sites preserved and all
+   eight new files collected by the harness. New harness specs cannot go
+   directly in `e2e/content/tests/` — that folder sits at the audit's hard
+   25-file limit, so a new spec belongs in a subject subfolder's `tests/`.
+   **Measure length with `wc -l`, never
+   PowerShell's `Measure-Object -Line`** — the latter does not count blank
+   lines, so it under-reported this document by about 60 lines all session and
+   let it breach the limit three times while appearing to have headroom.
+3. **Stage before believing an audit result.** The structure audit reads
    `git ls-files` and is blind to untracked files, which is what let a real
-   violation through on the Core side.
-3. **Then stop for the user's plan review (D15).** X4.2-X4.4 — the picker, the
-   background control, and the page side — are deliberately not started. They
-   are the visible half of the feature and a substantial body of work, and the
-   user asked to review the plan before more of it is built.
+   import violation through on the Core side. The same applies to scanning a
+   diff for secrets: scan what is staged.
 
-**Held for that review, rather than decided quietly:**
+**Settled since, and no longer held:**
 - Whether a value *lifted out of* a dataset row may reach the saved trace. The
-  identity markers protect a row passed along whole; they cannot protect one
-  taken apart. This is a product question about what "excluded" promises.
+  user decided it on 2026-09-15: an excluded column is never recorded at all,
+  the lifted-value path included, so that path is a **defect to close** rather
+  than a limit to document. D12 carries the full rule and Core's paired plan
+  carries the defect.
+- X5-H, the spec split, is complete and supervisor-verified.
+
+**Still open, and engineering judgement rather than product promise:**
 - `x3c`'s four open design questions: sharing `ITEM_SELECTOR` through the
   evidence barrel, the invented `maxPages` default, the two-value refusal
   vocabulary, and frame routing for X4.
 - `x5f`'s finding that a count-only entry scores a false 1.0 in a pooled rate,
   which X5.5 must settle before publishing an extraction accuracy number.
-- X5-H still needs to split `extract-list.spec.ts` (782 lines) and
-  `evidence.spec.ts` (776 lines) before fixture harness rows are added; the hard
-  limit is 800.
 
 **Blockers:** none. Sensitive data in saved and exported datasets (E53) is
 decided by D12.
@@ -467,6 +476,26 @@ Recorded at dispatch on 2026-09-15. Completed briefs are in the
 [archive](./first-class-data-extraction-plan/archive/2026-09-15-completed-briefs-and-ledger.md).
 
 ## Work Ledger
+
+### 2026-09-15 — X5-H verified; picker implementation started
+- Agent: supervisor; worker `x5h-spec-split`, then `x4b-content-picker`,
+  `x4c-background-control`, `x4d-picker-ui`
+- Changed: `apps/extension/e2e/content/tests/{evidence,extraction}/tests/`
+  (nine files replacing two oversized specs); `shared/extraction-messages.ts`
+  (the picker's message names, landed by the supervisor as the shared seam so
+  the three X4 workers could run concurrently instead of in a chain)
+- Why: the two specs stood at 790 and 782 lines against a hard 800-line limit,
+  blocking extraction fixture rows; then the user gave the go for the picker
+- Validation: `wc -l` -> largest resulting spec 292. Test call sites 15+30=45
+  before; 48 after, minus the 3 in the untouched `inference.spec.ts` = 45,
+  exactly preserved. `pnpm --filter @fluxiq-web-extension/extension check`
+  -> EXIT 0, no diagnostics. `npx playwright test --config=
+  e2e/playwright.content.config.ts --list` -> all eight new spec files
+  collected by name, "Total: 267 tests in 31 files", unchanged from the
+  pre-split baseline, which is what proves the nested paths are collected
+- Outcome: Accepted
+- Follow-up: the three X4 reports, then a harness run and manual browser
+  validation of the picker in Chrome side panel and Firefox popup
 
 ### 2026-09-15 — Why one test file is stored as binary, checked not assumed
 - Agent: supervisor
