@@ -55,6 +55,8 @@ test("a passing recording-lane run: oracle passed, FluxIQ's probe succeeded, fin
   assert.deepEqual(evaluation.evidence, { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 });
   assert.deepEqual(evaluation.metrics, { steps: 5 });
   assert.deepEqual([evaluation.harnessRecovery, evaluation.adaptationCost, evaluation.adaptationValidation, evaluation.adaptationPersistence, evaluation.adaptationReuse], [null, null, null, null, null]);
+  // Unmeasured, never an empty measurement: this lane asserts each extract step as it runs and keeps no per-step measurement, and `[]` here would put a lane that measured nothing into the bench's extraction block.
+  assert.equal(evaluation.extraction, null);
 });
 
 test("an assertion failure is an oracle failure; a failure before the oracle leaves it unconsulted", () => {
@@ -140,6 +142,18 @@ test("a Flow-lane run reports the lane's own observation, not an inference over 
   assert.deepEqual(evaluation.actions, [{ actionType: "web.dom.click", durationMs: 210 }, { actionType: "web.dom.type", durationMs: 340 }]);
   // The manifest carries the recording lane's probe action; the Flow lane does not read it.
   assert.equal(evaluation.actions.some((action) => action.actionType === "web.browser.navigate"), false);
+  // The lane's own per-step extraction measurements reach the evaluation, which is the only way a bench can state an extraction block at all.
+  assert.deepEqual(evaluation.extraction?.map((measurement) => [measurement.stepIndex, measurement.status, measurement.comparedRecords, measurement.matchedRecords]), [[1, "judged", 2, 2]]);
+});
+
+/**
+ * A run that never reached the Flow lane measured no extraction. `[]` would
+ * say the run measured extraction and found no extract step, which is what the
+ * bench's per-lane block is built on, so the two cannot be spelled the same.
+ */
+test("a Flow-lane run whose lane published nothing states extraction as unmeasured, not as an empty measurement", () => {
+  const evaluation = evaluateFlowRun(flowInput({ result: { runId: "run-none", verdict: "failed", failureCategory: "gateway.pairing", path: NO_BUNDLE } }));
+  assert.equal(evaluation.extraction, null);
 });
 
 test("a Flow-lane run that never reached the Flow lane is flowCreated false with nothing executed", () => {

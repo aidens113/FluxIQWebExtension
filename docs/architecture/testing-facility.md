@@ -738,8 +738,9 @@ A manifest contains:
 - a semantic recording script using the click, type, select, scroll,
   navigate, waitForState, checkpoint, press, check, upload, switchTab,
   closeTab, waitForDownload, and extract step operations, where an `extract`
-  step with `pagination` clicks its `next` control as trusted input to reach up
-  to `maxPages` pages (at most 50), and the extension records those clicks.
+  step with `pagination` declares up to `maxPages` pages (at most 50) and
+  FluxIQ's own extraction, not the Lab, follows them
+  ([the recording lane](#the-recording-lane)).
   A scripted `navigate` first arms an extension-internal, loopback-only intent,
   loads the fixture page, and waits for the extension to acknowledge that one
   executable navigation event reached its existing recording send path. The
@@ -776,9 +777,15 @@ its variants, whose type no step of that workflow's recording script can yield
 A variant never changes the recording, so its entries are judged against the
 same script. A `click` step, for example, can yield `web.dom.click`,
 `web.dom.check`, and a `web.dom.wait_for_selector` proposed before it. An
-`extract` step yields nothing unless it has `pagination`, whose recorded Next
-clicks yield what a click yields. A script with no steps is a playback goal and
-is not checked.
+`extract` step yields `web.dom.extract_list`, or `web.dom.extract` for a
+single-element read: the extraction intent puts one extract node in the
+recording, and its pagination belongs to that node, so a paginated step yields
+the same two types as an unpaginated one and no `web.dom.click`. A script with
+no steps is a playback goal and is not checked.
+
+This is why `flowLaneExclusion` excludes no `week1` workflow. It excludes a
+workflow whose script records no action at all, and before an `extract` was
+recordable that was W04 and W08, whose scripts only extract.
 
 The runner reports every contract rejection as `fixture.invalid`, whether the
 registry threw it while building a manifest or the runner's own validation
@@ -832,6 +839,37 @@ Three reproduce larger application pages and carry no Week 1 corpus row:
 | `storefront-checkout` | Store checkout with a consent dialog that owns every click until answered, a promotion, a late address lookup and delivery estimate, and payment inside a card iframe, whose fields are marked the way real card fields are, including a security code that is not marked. | Primary, variant `declined-card`. Declares five replay secrets. |
 | `admin-console` | CRM console with a virtualised customer list that scrolls inside its own pane, client-side routing, inline editing of a record, and a settings switch inside a web component's shadow root. | Primary, variant `read-only`; `extract-customer-list`, variant `short-book`; `browse-to-customer`; `switch-settings-tab`, variant `light-dom-toggle`. |
 | `member-directory` | Members dashboard whose table carries generated class names, row action menus, an edit dialog, filters, and a bulk remove behind a confirmation. | Primary, variants `restyled` and `member-left`; `filter-members`, variant `sorted-by-activity`; `remove-invitations`, variant `support-drawer`. |
+
+Six fixtures carry an **extraction catalog** beyond what the corpus asks of
+them: the shapes a real page takes, each with the expectation that judges it.
+None of these workflows or variants has a Week 1 corpus row, so a `lab run` and
+the fixtures' own page specs exercise them and the bench does not — which also
+means the only paginated extraction a `week1` bench measures is W05's `next`.
+
+| Fixture | Workflow or variant | What it pins |
+| --- | --- | --- |
+| `product-catalog` | variant `sparse-cards` | A card that carries no price, or no rating: the element is absent rather than empty, so the field reads as no value and the expectation names it in `optionalFields`. |
+| `product-catalog` | variant `absolute-links` | A link field returns the href exactly as the page writes it, absolute or not. |
+| `product-catalog` | `with-images`, variant `lazy-images` | Attribute reads over images: the loaded `src`, its `alt`, and the real source a deferred card keeps in `data-src`. Armed, the two attribute reads swap places. |
+| `product-catalog` | `numbered-pages` | `numbered` pagination: all 23 products by visiting each page control in turn, three pages, rather than by following Next. |
+| `product-catalog` | `paginated-extraction` variant `link-pagination` | The same catalog paged by a link rather than by a button control. |
+| `data-table` | variant `large-table` | A 2,000-row table past the 1,000-record extraction cap: the read returns 1,000 records and reports itself truncated, rather than passing a partial table off as the whole one. The variant lists no records deliberately — what matters is that the cap reported itself, not where it cut. |
+| `data-table` | `empty-table`, variant `no-rows` | `minItems: 0`, so an empty list is a valid answer instead of a failure; and `column:` fields still resolve against a table that kept its caption and headers and shows no rows. |
+| `infinite-feed` | `extract-until-end` | `scroll` pagination: every post in one read, loading more until the feed ends, rather than the posts that happen to be on screen. |
+| `infinite-feed` | `extract-by-load-more`, variant `load-more-button` | `loadMore` pagination. Unarmed the control does not exist, so the read returns the first page and stops instead of waiting for a button that is never coming; armed, every page after the first comes from pressing it. |
+| `sensitive-input` | `extract-card-secrets` | Reading a password control through its value attribute is refused in every mode: the workflow expects `blocked_by_capability_or_policy` / `web.action.rejected` and no records at all, rather than a blank that later looks like data. |
+| `sensitive-input` | `extract-card-labels` | The same list with that column left out, which is what excluding a column means: it is absent from the records rather than masked in them, and the read succeeds. |
+| `admin-console` | `extract-customer-list`, variant `short-book` | Every customer read off a virtualised list that scrolls inside its own pane; the variant shrinks the book below the list's render window, so every row is mounted and the same extraction returns all of them. |
+
+`iframe-checkout` has no extraction workflow. An extraction reads the document
+its action was delivered to, and the definition lane pins the top frame -- the
+picker takes a pick from frame 0 alone, and the confirm path dispatches with
+`frameId: 0` -- so FluxIQ cannot be asked to read the lines inside the checkout
+frame, and the intent seam refuses a `frame:` extract target. A workflow that
+read them anyway would be served by the reference reader through Playwright and
+would measure Playwright rather than FluxIQ. The frame still lists the order, so
+the workflow returns as soon as the confirm path can be given a frame's document
+path ([web capabilities](web-capabilities.md#recorded-actions)).
 
 Direct Node tests cover manifest validation, loopback-only policy, uniqueness,
 fail-fast mismatch handling, HTTP rendering/control behavior, deterministic
@@ -889,10 +927,30 @@ extension's own account of it, labels and reasons only, to
 
 Each recording-script step is then driven through Playwright as trusted input
 while the extension records. An `extract` step's records are asserted against
-`expected.extracted` as the step runs. An `extract` step with `pagination`
-reads a page, clicks `next`, waits until the page it read has been replaced (15
-seconds unless the step sets `timeoutMs`), and reads again, until `next` is
-absent or `maxPages` pages were read (`scenario-steps/extract-records.ts`).
+`expected.extracted` as the step runs.
+
+An `extract` step is **FluxIQ's read, not the Lab's**
+(`scenario-steps/extract-intent.ts`). The step is translated into a recorded
+extraction definition and sent to the extension's own control page as
+`fluxiq.test.defineExtraction`; the background worker records `data.extract`
+and runs `web.dom.extract_list` through the same command a replayed Flow uses,
+and answers with the records. Pagination is part of that definition, so FluxIQ
+follows `next`, `loadMore`, `scroll` or `numbered` itself, up to the step's
+`maxPages`, and the recording holds one extract node rather than a Next click
+per page. The step sends no timeout: the read is bounded by the domain's own
+budget, scaled by the pages the request may read, because a bound the harness
+imposed would be the harness deciding how long the product may take.
+
+A run with no extension control page falls back to the Lab's reference reader
+(`scenario-steps/extract-records.ts`), which reads a page with Playwright,
+clicks `next`, waits until the page it read has been replaced (15 seconds
+unless the step sets `timeoutMs`), and reads again until `next` is absent or
+`maxPages` pages were read. It exists for that case only: a run judged on what
+it returns measures the Lab, not FluxIQ. It reports no pages read, no
+truncation flag and no duration, so a step whose `expected.extracted` names
+`pages` or `truncated` is refused on such a run as `fixture.invalid` rather
+than passed on the half of the expectation it could still check.
+
 While still recording, the runner asserts `expected.recordingEvents` against
 the extension's own recording log and reads the extension's count of the
 executable actions it recorded. It then checks the final state, stops
@@ -938,11 +996,35 @@ The expectations are judged in this order:
   expected, fails as `runtime.behavior`. Nothing is read from a message.
 - `expected.actions`, by the rule in [Scenario lab and contract](#scenario-lab-and-contract),
   failing as `action.dispatch`.
-- `expected.extracted`, only when the Flow holds an extract node
-  (`web.dom.extract` or `web.dom.extract_list`). A recording's `extract` step is
-  the runner's own check and yields no extract node, and a paginated one's Next
-  clicks become click nodes, so a workflow's extraction is usually
-  `not_run` on this lane and is judged on the recording lane alone.
+- `expected.extracted`, against **the datasets Core stored for the run**
+  (`flow-lane/run-datasets.ts`). The lane reads `runDetail.datasets` and pages
+  `get-run-dataset-page` until Core advances no cursor, rebuilding each row over
+  the page's schema and restoring `null` for every field the row lacks, because
+  an expectation spells an optional miss as `null` and a `null` matches only a
+  `null`. A dataset whose rows do not add up to its summary's `recordCount` is
+  refused: a short read would turn a record regression into a missing one. A
+  stored attempt never carries its rows — Core replaces them with a `$dataset`
+  marker and keeps the count — so there is no other place to read them from.
+
+  Datasets pair with the script's `extract` steps by the recording's candidate
+  order, and one `RunExtractionMeasurement` per step is published on the
+  observation and in `snapshots/flow-lane.json` **before** any expectation is
+  judged. The assertions then run in this order: fewer extract nodes than
+  recorded extract steps fails as `recording.contract`; any non-string field
+  value fails as `runtime.behavior`; an expectation naming a step the script
+  does not extract from fails as `fixture.invalid`; an expected step for which
+  the Flow stored no dataset fails as `runtime.behavior`; and the records are
+  compared last.
+
+  Two members of the expectation are **stated as unjudged rather than judged or
+  refused**: the pages a read covered, and whether it hit the page's item cap.
+  Core's run detail and its datasets record neither, and a dataset's own
+  `truncated` is Core's per-run row cap, a different event. They are therefore
+  removed from the entry handed to the assertion, named on the step as
+  `unjudged`, and enter no rate — so `paginationAccuracy` on this lane has an
+  empty population and publishes no number. The records are still compared in
+  full, which is the stronger claim: a step that read only page 1 cannot
+  produce page 3's records.
 - The fixture oracle. A Flow whose expectations held but whose fixture did not
   reach its expected final state fails as `runtime.behavior`.
 
@@ -954,8 +1036,15 @@ never page content (`flowLaneSnapshot`):
 - the recording's id and entry count, and the lane's own wait on it;
 - the proposal's id, mapper, candidate count, and Core's own issues;
 - the Flow and runtime run ids, the run status, the number of LLM interventions
-  Core recorded (`harnessActivations`), the first failure record, and whether
-  extraction was `judged`, `not_run` or `not_expected`;
+  Core recorded (`harnessActivations`), and the first failure record;
+- an `extraction` block: whether the workflow's expectation applied, the extract
+  nodes against the recorded extract steps, datasets no step paired with, and
+  per step its position, its status (`judged`, `not_run` or `not_expected`), its
+  record, field and non-string counts, the expectation members this lane could
+  **not** judge, and Core's own dataset flags. No step id, field name or value
+  is in it. The `unjudged` list is the point of the block: a reader who sees a
+  green extraction must be able to see what was not compared without opening
+  the code;
 - per attempt, in order: its action type and status; its failure record; Core's
   transition comparison status when Core reported one, kept only when it is
   shaped like one of Core's names; Core's target resolution, narrowed to its
@@ -1252,10 +1341,13 @@ resumed.
   lanes: every unarmed workflow runs on the recording lane and on the Flow lane,
   and every variant runs on the Flow lane alone. A workflow whose script
   performs no action has no Flow lane, because no recording of it can become a
-  Flow, so W04's and W08's four Flow-lane entries are planned as skipped with
-  that reason. That leaves 63 runnable results per repeat: 23 on the recording
-  lane, and 40 on the Flow lane (21 unarmed and 19 variants). A `lab run --flow`
-  of such a workflow is refused as `fixture.invalid` before anything starts.
+  Flow, and a `lab run --flow` of one is refused as `fixture.invalid` before
+  anything starts — but no `week1` workflow is such a workflow any more. W04 and
+  W08 were, their scripts doing nothing but extract; an `extract` now records a
+  `web.dom.extract_list`, so their four Flow-lane entries run again and their
+  extraction is judged on the Flow lane. That leaves 67 runnable results per
+  repeat and 0 skipped: 23 on the recording lane, and 44 on the Flow lane
+  (23 unarmed and 21 variants).
   W19 to W23 and W29 are variants only. Because `week1` runs
   `auth-gate` on the Flow lane, it needs `FLUXIQ_TEST_SECRET_AUTH_GATE_PASSWORD`.
 - **Runs.** Each repeat is one pass over the corpus. `--target` must be
@@ -1296,6 +1388,32 @@ resumed.
   `actionsExecuted` counts the actions it did execute. The report also carries
   p50 and p95 distributions of per-action-type latency, run duration and
   sanitized packet bytes, and a truncation count.
+- **Extraction** (`metrics.extractionByLane`, `bench/extraction-metrics.ts`) is
+  also per lane, and a lane whose runs measured no extraction states **no block
+  at all** — absent is unmeasured, and a block of zeros would claim the bench
+  looked and found none. The recording lane is that lane today: it asserts each
+  extract step as it runs and keeps no per-step measurement, so `week1` states
+  extraction for the Flow lane alone. One rule governs every rate: a step that
+  could not judge something enters no rate for it, and a rate whose population
+  is empty publishes `rate: null`, printed as `n/a`.
+  `extractionRecordAccuracy` is pooled over the steps whose expectation listed
+  records (Σ matched ÷ Σ max(expected, observed)), and `extractionCountAccuracy`
+  over the count-only steps alone. The two populations never overlap, which is
+  the point: a step that stated a count and compared no value has no matched
+  record to pool, and counting one would let a single 1,000-row step publish a
+  near-perfect record accuracy over values nobody looked at;
+  `extractionFieldCompleteness` counts a field present only when the record
+  carried a **value** for it, since Core's stored schema guarantees the key and
+  a presence test would read 1.000 whatever happened; `paginationAccuracy`
+  needs both an expected page count and an observed one, which the Flow lane
+  cannot supply; and `extractionExactSuccess` and `extractionFalseSuccess` are
+  per run. Beside them, `judgedSteps` and `unjudgedSteps`, and the split of the
+  judged into `comparedSteps`, `countOnlySteps` and `unjudgeableSteps`, state
+  what each number stands on; `report.md` prints that split as a sentence and
+  each rate's own unit and population beside it, because no two of these rates
+  are counted over the same steps. Two distributions,
+  `extractionDurationMs` and `extractionMsPerPage`, complete the block; the
+  second has no samples on a lane that cannot observe pages.
 - **Causes.** A failed run's cause is the summary of its own last `error` event
   written under the category the runner returned (`bench/read-run-bundle.ts`),
   because the runner's result carries a category and no text. The outcome
@@ -1309,9 +1427,17 @@ resumed.
 
 For two reports, `lab compare <baseline> <candidate>` is also the durable Week
 1 closeout view. It uses the existing `BenchReport` contract comparison and
-adds every Metrics-table rate and latency, explicitly marked absent values and
+adds every Metrics-table rate and latency, every per-lane extraction rate
+(`extraction:<lane>:<metric>`), explicitly marked absent values and
 unstated tolerances, differing result/run verdicts, and count-only figures for
-all six exit criteria. It reads `recording.persistence` run events only to
+all six exit criteria. `extractionExactSuccess` and `extractionFalseSuccess`
+are compared under the same one-workflow tolerance as the Metrics-table rates;
+the four accuracy and completeness rates are compared within one unit of their
+own population — one record, one field, one step. A rate absent from one report,
+or `null` in both because nothing judged it, is disclosed rather than compared,
+so a lane that measured no extraction cannot read as a regression.
+
+It reads `recording.persistence` run events only to
 aggregate discard kinds, maxima, recording-presence/finalization counts, and
 window-exclusion counts; it cannot emit event messages, payloads, page data, or
 recording ids. Concurrent benches are labelled as shared-load measurements by
@@ -1414,11 +1540,16 @@ every frame, and each frame's `chrome.runtime` is replaced by a stub
 as the background worker does, and reads back every message it sent. The
 harness imports the Scenario Lab registry and server directly.
 
-Its 25 specs under `apps/extension/e2e/content/tests/` cover actions, clicks,
-keyboard, select, scroll and waits, checks and asserts, list extraction,
-evidence, failures (among them a target behind `auth-gate`'s sign-in form),
-child frames, the `identity-*` resolution family, large-page resolution, modal
-intervention, recorder trust, redaction, and the upload dialog.
+Its specs live under `apps/extension/e2e/content/tests/`. Directly in that
+directory are actions, clicks, keyboard, select, scroll and waits, checks and
+asserts, failures (among them a target behind `auth-gate`'s sign-in form), child
+frames, the `identity-*` resolution family, target resolution, large-page
+resolution, modal intervention, recorder trust, redaction and selection
+redaction, and the upload dialog. Two families have outgrown that directory and
+have their own: `extraction/tests/` holds list extraction split by what it
+exercises — the catalog fields, pagination, tables, sensitive controls, the
+picker, and inference — and `evidence/tests/` holds the page-evidence and
+snapshot specs.
 
 The harness loads no extension, starts no background worker and no FluxIQ Core,
 and does no tab or frame routing; the content script runs in the page's main
@@ -1631,8 +1762,11 @@ pnpm lab compare <report> --halves
 `compare` takes benchmark reports, not run ids: two reports, or one report's
 repeats split into halves, each metric judged `improved`, `regressed`, or
 `equivalent` within the report contract's tolerances. A rate is equivalent
-within one workflow of its lane's population, and a p95 latency within 25% of
-the baseline's; evidence sizes are reported, not compared. On a machine whose
+within one workflow of its lane's population, an extraction accuracy or
+completeness within one unit of its own — one record, one field, one step — and
+a p95 latency within 25% of the baseline's; evidence sizes are reported, not
+compared. A metric one report did not measure, including an extraction rate
+whose population was empty, is disclosed rather than compared. On a machine whose
 `.env.local` configures an existing installation, prefix an isolated command
 with `FLUXIQ_TEST_ENV_FILES=none` (in PowerShell,
 `$env:FLUXIQ_TEST_ENV_FILES = "none"`).

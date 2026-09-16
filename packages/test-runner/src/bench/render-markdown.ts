@@ -1,5 +1,6 @@
 import { benchExtractionRateMetrics, benchRateMetrics, evaluationLanes, type BenchDistribution, type BenchReport, type EvaluationLane } from "@fluxiq-web-extension/test-contracts";
 import { BENCH_RATE_DEFINITIONS } from "./aggregate-report.js";
+import { BENCH_EXTRACTION_RATE_DEFINITIONS } from "./extraction-metrics.js";
 import type { BenchExecutionCoverage } from "./execution-coverage.js";
 import { benchFailureCauses, describeFacilityFailure, type BenchFailureCause } from "./failure-cause.js";
 import type { BenchRunRecord, BenchRunsFile } from "./report-store.js";
@@ -179,14 +180,15 @@ function extractionLines(report: BenchReport): string[] {
   return [
     "## Extraction",
     "",
-    "Each rate is pooled over one lane's extraction steps in the unit its metric defines, and states the steps it stands on. A rate with no population prints n/a: nothing judged it, which is not the same as judging it and finding nothing.",
+    "Each rate is pooled over one lane's extraction steps in the unit its metric defines, and states the steps it stands on. Population is the rate's own, and no two of them are the same set of steps: reading one rate's number against another's basis is the mistake this column exists to stop. A rate with no population prints n/a: nothing judged it, which is not the same as judging it and finding nothing.",
     "",
     ...lanes.flatMap(([lane, measured]) => [
       `**${lane} lane.** ${measured.judgedSteps} step(s) judged and ${measured.unjudgedSteps} not: ${measured.comparedSteps} compared their records, ${measured.countOnlySteps} stated a count alone and compared no value, and ${measured.unjudgeableSteps} could judge neither. Only the compared steps are in the record accuracy.`,
       "",
-      table(["Metric", "Count", "Total", "Workflows", "Rate"], benchExtractionRateMetrics.map((metric) => {
+      table(["Metric", "Unit", "Count", "Total", "Workflows", "Rate", "Population"], benchExtractionRateMetrics.map((metric) => {
         const value = measured[metric];
-        return [metric, String(value.count), String(value.total), String(value.workflows), value.rate === null ? "n/a" : fixed(value.rate)];
+        const definition = BENCH_EXTRACTION_RATE_DEFINITIONS[metric];
+        return [metric, definition.unit, String(value.count), String(value.total), String(value.workflows), value.rate === null ? "n/a" : fixed(value.rate), definition.definition];
       })),
       "",
       table(["Distribution", "Samples", "p50", "p95"], ([["extractionDurationMs", measured.extractionDurationMs], ["extractionMsPerPage", measured.extractionMsPerPage]] as Array<[string, BenchDistribution]>)

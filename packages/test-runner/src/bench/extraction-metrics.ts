@@ -1,7 +1,58 @@
-import type { BenchDistribution, BenchExtractionMetrics, BenchRate, RunEvaluation, RunExtractionMeasurement } from "@fluxiq-web-extension/test-contracts";
+import type { BenchDistribution, BenchExtractionMetrics, BenchExtractionRateMetric, BenchRate, RunEvaluation, RunExtractionMeasurement } from "@fluxiq-web-extension/test-contracts";
 import type { BenchResultRuns } from "./aggregate-report.js";
 import { benchDistribution } from "./distribution.js";
 import { benchExtractionAccuracy } from "./extraction-accuracy.js";
+
+/** What one published extraction rate is counted in, and over which steps or runs. */
+export type BenchExtractionRateDefinition = { unit: string; definition: string };
+
+/**
+ * Each extraction rate's unit and population, published beside the number in
+ * `report.md`.
+ *
+ * It is here, in the module that computes the rates, for the reason
+ * `BENCH_RATE_DEFINITIONS` is in `aggregate-report.ts`: the definition and the
+ * counting rule have to move together, and a definition kept somewhere else is
+ * how the printed sentence comes to describe a rate that is no longer computed
+ * that way.
+ *
+ * Two of these populations are not what a reader assumes from the metric's
+ * name, which is exactly why they are printed rather than left in the code.
+ * `extractionCountAccuracy` is over the **count-only** steps, not over every
+ * step whose count was checked: a step that listed its records has its count
+ * judged inside the record accuracy's `max(expected, observed)` denominator
+ * instead, and counting it twice would let one step move two rates. And
+ * `extractionRecordAccuracy` is over the compared steps alone, so a lane with
+ * one compared step and twenty count-only ones can print a confident 1.000
+ * that stands on one step -- which the basis line beside the table says, in
+ * steps.
+ */
+export const BENCH_EXTRACTION_RATE_DEFINITIONS: Readonly<Record<BenchExtractionRateMetric, BenchExtractionRateDefinition>> = {
+  extractionRecordAccuracy: {
+    unit: "records",
+    definition: "judged steps whose expectation listed the records: the matched records over the pooled max(expected, observed). A count-only step is not in it",
+  },
+  extractionCountAccuracy: {
+    unit: "steps",
+    definition: "judged steps that stated a count and listed no records, whose observed count equals the expected one. A step that listed its records is judged in the record accuracy instead, never here",
+  },
+  extractionExactSuccess: {
+    unit: "runs",
+    definition: "runs that judged at least one extraction step, every judged step of which matched. A step whose expectation could judge nothing is a miss, not an exclusion",
+  },
+  extractionFieldCompleteness: {
+    unit: "fields",
+    definition: "the expected fields of judged steps, counted present when the record carried a value for the field. A field the extraction could not read arrives as null and carried none",
+  },
+  paginationAccuracy: {
+    unit: "steps",
+    definition: "judged steps stating both an expected page count and the pages the read followed, where the two are equal. A lane that cannot observe pages has an empty population and publishes no rate",
+  },
+  extractionFalseSuccess: {
+    unit: "runs",
+    definition: "positive runs that judged an extraction step and got a verdict, where FluxIQ reported success while a judged step did not match. Lower is better",
+  },
+};
 
 /**
  * One lane's `BenchExtractionMetrics`, or `undefined` when no run on the lane

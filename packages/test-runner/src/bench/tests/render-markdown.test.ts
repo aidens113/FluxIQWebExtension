@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { EvaluationLane, RunEvaluation, RunExtractionMeasurement } from "@fluxiq-web-extension/test-contracts";
+import { benchExtractionRateMetrics, type EvaluationLane, type RunEvaluation, type RunExtractionMeasurement } from "@fluxiq-web-extension/test-contracts";
 import { aggregateBenchReport, benchResultsByLane, groupBenchResults } from "../aggregate-report.js";
 import { benchExecutionCoverage } from "../execution-coverage.js";
+import { BENCH_EXTRACTION_RATE_DEFINITIONS } from "../extraction-metrics.js";
 import { renderBenchMarkdown, type BenchMarkdownCoverage } from "../render-markdown.js";
 import type { BenchRunsFile } from "../report-store.js";
 
@@ -94,10 +95,14 @@ test("report.md states each extraction rate with the steps it stands on, and pri
   };
   const extraction = section(renderBenchMarkdown(runs, report, coverage), "## Extraction");
   assert.ok(extraction.some((line) => line.includes("3 step(s) judged and 0 not: 1 compared their records, 1 stated a count alone")), extraction.join("\n"));
-  assert.ok(extraction.includes("| extractionRecordAccuracy | 1 | 2 | 1 | 0.500 |"), extraction.join("\n"));
-  assert.ok(extraction.includes("| extractionCountAccuracy | 1 | 1 | 1 | 1.000 |"), extraction.join("\n"));
+  assert.ok(extraction.some((line) => line.startsWith("| extractionRecordAccuracy | records | 1 | 2 | 1 | 0.500 | judged steps whose expectation listed the records")), extraction.join("\n"));
+  assert.ok(extraction.some((line) => line.startsWith("| extractionCountAccuracy | steps | 1 | 1 | 1 | 1.000 | judged steps that stated a count and listed no records")), extraction.join("\n"));
   // Declared pages nothing observed, so the rate has one side and publishes none.
-  assert.ok(extraction.includes("| paginationAccuracy | 0 | 0 | 0 | n/a |"), extraction.join("\n"));
+  assert.ok(extraction.some((line) => line.startsWith("| paginationAccuracy | steps | 0 | 0 | 0 | n/a | judged steps stating both an expected page count")), extraction.join("\n"));
+  // Every rate prints the population it was counted over, and it is the one the aggregator computed: a definition that drifts from the counting rule is how a reader comes to compare two rates over different sets of steps.
+  for (const metric of benchExtractionRateMetrics) {
+    assert.ok(extraction.some((line) => line.startsWith(`| ${metric} | `) && line.endsWith(` | ${BENCH_EXTRACTION_RATE_DEFINITIONS[metric].definition} |`)), `${metric} prints no population: ${extraction.join("\n")}`);
+  }
   // A bench that measured no extraction prints no section at all, rather than a table of zeros.
   const plain = groupBenchResults([{ corpusRowId: "W01", evaluation: run("flow", 50_000, 900) }]);
   const plainReport = aggregateBenchReport({ reportId: "bench-plain", generatedAt: "2026-09-15T10:00:00.000Z", corpusId: "week1", repeatCount: 1, target: "isolated", results: plain });

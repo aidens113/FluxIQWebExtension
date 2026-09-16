@@ -272,7 +272,7 @@ defined with the picker into a distinct action input. Each action input carries
 `metadata.inputId` and has exactly one registered output binding. FluxIQ uses that binding to persist the output ID
 and mapped payload in a policy action.
 
-Three of the thirteen action inputs come from a file choice or a tab change:
+Three of the twelve action inputs come from a file choice or a tab change:
 
 | Input | Output | Mapped from |
 | --- | --- | --- |
@@ -281,14 +281,13 @@ Three of the thirteen action inputs come from a file choice or a tab change:
 | `web.user.tab_closed` | `web.browser.tab` | a `browser.tab` event whose `tab.operation` is `close` |
 
 The two tab inputs share one output, so an input is never derived from
-`web.browser.tab` alone: it comes from the event's `tab.operation`. All thirteen
+`web.browser.tab` alone: it comes from the event's `tab.operation`. All twelve
 inputs and their outputs are listed in
 [web capabilities](web-capabilities.md#recorded-actions).
 
-Two more come from the extraction picker: `web.user.data_extraction_defined`
-maps to `web.dom.extract_list` and `web.user.value_extraction_defined` to
-`web.dom.extract`. Which of the two a recorded event resolves to is the form the
-definition declares, and nothing records the second today — see
+One more comes from the extraction picker: `web.user.data_extraction_defined`,
+which maps to `web.dom.extract_list`. A single-value definition has no input,
+because nothing can record one — see
 [Defining An Extraction](#defining-an-extraction).
 
 The extension never sends a generic executable action entry. Inputs without an
@@ -903,22 +902,31 @@ the domain's key rule and the dataset id against Core's, so a definition that is
 recorded cannot make Core refuse the whole candidate at approval. The activity
 log is told the form, the number of columns and the item count, and no more.
 
-A recorded extraction maps to one of two inputs, by the form its definition
-declares:
+A recorded extraction maps to one input, and only a list definition does:
 
 | Input | Output |
 | --- | --- |
 | `web.user.data_extraction_defined` | `web.dom.extract_list` |
-| `web.user.value_extraction_defined` | `web.dom.extract` |
 
-Nothing records the second today. The worker refuses to start a `value` pick and
+A single value has no input. The worker refuses to start a `value` pick and
 refuses one that arrives anyway, because a value extraction needs an element
 target that the picker's recorded event deliberately does not attach; accepted,
 it would be stored as passive evidence and never become the `web.dom.extract`
 node the user thinks they defined, and refusing at the pick is the only way they
-find that out. A definition `webAutomationRecordedExtraction` refuses stays
-evidence too, rather than becoming an extraction that reads something other than
-what was picked.
+find that out. An input was registered for it once, mapping to `web.dom.extract`.
+Nothing could reach it, so it named a capability the product does not have, and
+it was removed; the domain still reads a value definition, which stays evidence,
+and registering the input again is one row when the picker can record one. A
+definition `webAutomationRecordedExtraction` refuses stays evidence too, rather
+than becoming an extraction that reads something other than what was picked.
+
+Every extraction reads one document: the frame the action is delivered to. The
+request names no frame — a frame is addressed on the command, exactly as it is
+for a click, and `browserFrameId` and `browserFrameUrlPath` travel on a recorded
+node's parameters — and a request that names one is refused rather than read
+against another document. The picker takes a pick from the top frame alone, and
+the confirm path dispatches with `frameId: 0`, so no extraction defined today
+names a child frame.
 
 ## Recording Proposals
 

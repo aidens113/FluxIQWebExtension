@@ -23,10 +23,13 @@ export type BenchRateMetric = (typeof benchRateMetrics)[number];
 
 /**
  * The extraction rates of one lane. Each is a `BenchRate` whose `count` and
- * `total` are in the unit its metric defines (records for record accuracy),
- * over the lane's extraction steps. `extractionFalseSuccess` is lower-better.
- */
-/**
+ * `total` are in the unit its metric defines (records for record accuracy,
+ * fields for field completeness, steps or runs for the rest), over the lane's
+ * extraction steps. `extractionFalseSuccess` is lower-better. Each rate's unit
+ * and population are published beside it in `report.md`
+ * (`BENCH_EXTRACTION_RATE_DEFINITIONS`), because no two of them are counted
+ * over the same steps.
+ *
  * A rate whose population is empty reports `rate: null` -- a refusal to
  * publish a number, never a flattering one. `extractionRecordAccuracy` is
  * pooled over the lane's **compared** steps alone (Σ matched ÷ Σ max(expected,
