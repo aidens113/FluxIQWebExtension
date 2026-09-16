@@ -88,6 +88,8 @@ export type WebLlmEvidenceGateway = {
 export type WebAutomationLlmEvidenceRuntime = {
   /** Whose options these are. Core scopes the harness-option registry by it, so the slot cannot be bound anonymously. */
   domainId: string;
+  /** The keys Core refuses in evidence from this domain. Core carries no browser vocabulary of its own, so the domain that knows what these words mean declares them and Core enforces the declaration. Required here, because the producer always knows: an evidence runtime that declared nothing would silently deny nothing. */
+  deniedEvidenceKeys: readonly string[];
   tools: Array<{ toolId: string; description: string; inputSchema: JsonObject; effect?: "observe" | "mutate"; repeatPolicy?: "after_mutation"; initialObservation?: { input: JsonObject } }>;
   executeTool(input: WebLlmEvidenceToolRequest): Promise<WebLlmEvidenceToolExecution>;
   captureSanitizedFailureEvidence(input: WebLlmFailureEvidenceRequest): Promise<WebLlmPageEvidence>;
@@ -117,6 +119,15 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
   };
   return {
     domainId: WEB_AUTOMATION_DOMAIN_ID,
+    // The keys Core must refuse in evidence this domain supplies. Core used to
+    // hold this list itself, but every entry is a browser's or an HTTP
+    // client's noun and Core is meant to contain neither, so the domain that
+    // knows what they mean now declares them and Core enforces the declaration.
+    // `snapshot` is deliberately absent: that is Core's own word and its own
+    // state-snapshot option produces one -- the nested `html` is what is
+    // refused. `selector` is present because it is this domain's word for a
+    // target, and after the repair target became opaque it is ours to deny.
+    deniedEvidenceKeys: ["html", "innerHtml", "outerHtml", "pageSource", "cookies", "headers", "selector"],
     tools: [
       {
         toolId: WEB_LLM_INSPECT_TOOL_ID,
