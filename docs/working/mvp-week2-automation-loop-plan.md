@@ -517,6 +517,36 @@ Recorded at dispatch on 2026-09-15, before the three investigations above.
 
 ## Work Ledger
 
+### 2026-09-15 — Identity Access credential recheck fixed and verified
+- Agent: supervisor; worker `sec-create-session`, resumed after the crash
+- Changed: Core `identity-access/{api/contracts.ts, api/handlers.ts,
+  api/tests/handlers.test.ts (new), runtime/service.ts,
+  runtime/tests/service.test.ts}`
+- Why: `create-session` minted a session for any user id with no credential
+  recheck, at the handler and in the service alike. The worker found a second
+  defect in the same area: a user with **no credential record** unlocked the
+  vault with nothing proved, because `requireCredential` mints an empty
+  credential
+- Validation: the supervisor ran
+  `pnpm --filter fluxiq exec vitest run src/programs/identity-access` itself ->
+  "Test Files 3 passed (3)", "Tests 35 passed (35)", including the new
+  `api/tests/handlers.test.ts` (6 tests). The tests were read, not just counted:
+  each asserts the refusal (`ok:false, requiresRecheck:true`) **and** that the
+  side effect did not happen (`sessions` still length 1), so a refusal that
+  still minted a session would fail. Passwords in them are dummy values at a
+  test-only weak KDF setting
+- Outcome: Accepted
+- Follow-up: the same class survives in `create-user`, which mints a brand-new
+  **admin** with a chosen password and no recheck — worse than the original,
+  because the account outlives the session that made it — and in
+  `begin-totp`/`confirm-totp`, which re-enroll another user's authenticator.
+  Both are being closed now, with scope widened to the one web view they touch
+- Supervisor decision, so it is not re-argued: `revoke-session` and `lock-vault`
+  are **not** destructive and must never require a PIN. They remove access
+  rather than persisted user data, and gating revocation slows cutting off a
+  compromised session at the moment speed matters most. Phase P classifies them
+  as authoring
+
 ### 2026-09-15 — Machine crash killed nine workers; partial work triaged
 - Agent: supervisor
 - Changed: reverted `_shared/api.ts` and `_shared/runtime.ts` in Core; five
