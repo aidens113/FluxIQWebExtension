@@ -477,6 +477,37 @@ Recorded at dispatch on 2026-09-15. Completed briefs are in the
 
 ## Work Ledger
 
+### 2026-09-15 — Picker background control and panel UI landed
+- Agent: supervisor; workers `x4c-background-control`, `x4d-picker-ui`
+- Changed: `apps/extension/src/background/extraction/**`, `background/index.ts`,
+  `background/connection/gateway-payloads.ts`; `popup/extraction/**`,
+  `popup/index.{html,ts}`, `popup/styles.css`, `sidepanel/index.html`
+- Why: X4.3 and X4.4 — the session state machine behind the picker, and the
+  panel the user actually operates
+- Validation: the supervisor ran `node apps/extension/scripts/test-extension.mjs`
+  itself -> "# fail 0" over the full suite (619 rows after X4-C, 614 after X4-D
+  alone). `pnpm --filter @fluxiq-web-extension/extension check` -> exit 0
+- Outcome: Accepted, with three follow-ups dispatched
+- Follow-up (a), a real user-visible bug rather than tidiness: the extraction
+  timeout was a flat 60 s in `confirm.ts`, because four domain functions are not
+  re-exported to the extension. A read spanning more than about six pages would
+  hit that ceiling and return truncated or failed with nothing in the UI saying
+  why — on the feature's main path. Fixed by re-exporting the domain's
+  `maxPages`-scaled value and importing it, not by reimplementing the scaling
+- Follow-up (b): `isControlPage`, the predicate deciding which pages may drive
+  extraction, was written twice. Two copies of a security check are how a hole
+  appears — someone tightens one and nothing fails — so it moves to a single
+  `background/control-page.ts`
+- Follow-up (c): the confirm payload was declared twice after the two workers
+  converged mid-flight. The panel's shape is canonical (written and tested
+  first, and the origin check guarantees the sender is the user's own panel);
+  the content-picker worker folds it into `shared/extraction-messages.ts`
+- Note for whoever commits next: `apps/extension/build/` is tracked and is
+  currently dirty with a worker's in-flight code, because building is how that
+  directory is updated and a worker ran it mid-task. Regenerate it by running
+  the build once every extension worker has finished; never commit it from an
+  in-flight state
+
 ### 2026-09-15 — X5-H verified; picker implementation started
 - Agent: supervisor; worker `x5h-spec-split`, then `x4b-content-picker`,
   `x4c-background-control`, `x4d-picker-ui`

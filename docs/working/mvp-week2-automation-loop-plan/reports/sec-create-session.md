@@ -395,3 +395,171 @@ Nothing was committed or pushed, and no working document was edited.
    defect.
 3. **`update-user`'s split personality** under Phase P, described in the
    classification table above.
+
+---
+
+# Third round — `update-user` gated on authority, and answering `requiresRecheck`
+
+Your two decisions, implemented. Files touched: `identity-access/api/handlers.ts`,
+`identity-access/api/tests/handlers.test.ts`,
+`apps/web/src/features/programs/live-views/identity-access.tsx`, and
+`docs/operations/data-and-state.md`. Nothing else was needed, so nothing else
+was widened into.
+
+## Outcome
+
+Done. `update-user` now re-proves credentials whenever the update changes what
+an account can do, answers a failed recheck the way its siblings do, and still
+lets a rename through untouched. Three more tests; the identity-access suite is
+41 tests across 3 files.
+
+## What I changed
+
+**1. The gate is on the fields, not the endpoint** (`api/handlers.ts`). A new
+`changesAuthority(payload)` predicate returns true when `roleId` or `enabled` is
+present, and only then does the handler run the recheck. Your reasoning is
+recorded in a comment at the call site, in your terms: re-enabling grants
+access, disabling takes it from someone relying on it, and a disabled
+administrator that can be switched back on with nothing proved is a dormant
+escalation.
+
+Presence decides it, not comparison with the stored value, because the request
+carries only the fields being changed — that is also how the old `roleId` check
+behaved. One tightening came with it: the old condition was `if (payload.roleId)`,
+so a falsy-but-present `roleId` of `""` skipped the gate; it is now
+`!== undefined`.
+
+**2. It answers `requiresRecheck`** (`api/handlers.ts`). The handler used to let
+`authorizeSessionCredentials` throw and leave the registry to convert it, which
+produced `{ ok: false, error }` with nothing telling the client which kind of
+"no" it was. It now goes through the same `recheckCredentials` helper as every
+other gated endpoint, so all eleven refuse in one shape.
+
+**3. Three regression tests** (`api/tests/handlers.test.ts`, 12 there now):
+- enable and disable each refused without factors, the account observably
+  unchanged after the refusal, then each accepted with them;
+- a role change refused without factors and with wrong ones, the account still
+  a `viewer` afterwards, then accepted — this one also pins the new refusal
+  shape, since before the change it answered without `requiresRecheck`;
+- a rename and username change still accepted with no factors at all, and the
+  response confirming the role and enabled state came back untouched. That
+  third test is a guard against over-gating rather than a regression test: it
+  passes both with and without the fix, by design, and would fail if someone
+  later gated the endpoint as a whole.
+
+**4. The web view** (`live-views/identity-access.tsx`). The Disable/Enable menu
+action used to post the toggle immediately; it now opens an authorization step
+built from the same `AuthorizationFields` component and the same modal idiom as
+Change Role and Disable 2FA. It names the consequence in each direction — an
+enabled account can sign in again with its existing role and credentials, a
+disabled one leaves anyone relying on it without access — and the confirm button
+is styled danger for a disable and primary for an enable. It still runs through
+`operation.run("update-user")`, so the busy gate and the source-scanning test
+that enforces it are unaffected. The rename path still posts with no factors.
+
+**5. The one line you asked for, plus the helper it needs.** A new
+`refusalMessage(result, fallback)` appends "Enter your current security factors
+and try again." when the response carries `requiresRecheck`, and returns the
+plain error otherwise. Both the Change Role modal and the new enable/disable
+modal use it.
+
+One thing to know about that helper: `ApiResponse` in
+`apps/web/src/features/programs/program-api.ts` does not name `requiresRecheck`,
+and that file is outside what you opened to me. The field does arrive at the
+browser — `withWebRuntimeStatus` returns the program response untouched for
+`identity-access`, and `normalizeProgramApiResponse` spreads `...result` on both
+its branches — so the value is real and only the type is silent about it. I read
+it through a local cast inside my own file rather than editing the shared type.
+The clean fix is one line in `program-api.ts` adding `requiresRecheck?: boolean`
+to `ApiResponse`, which would also let every other program's view react to it;
+that is yours to place.
+
+**6. The doc entry for `update-user`** in `docs/operations/data-and-state.md` now
+covers `enabled` as well as `roleId`, states why each is an authority change, and
+says explicitly that the gate is on those two fields rather than on the endpoint,
+so routine profile maintenance does not ask for a password.
+
+## For the Phase P pass
+
+`update-user` is `program-gated` **on its authority-changing path only**. It runs
+its own password/PIN/2FA recheck when the request carries `roleId` or `enabled`,
+and deliberately runs nothing when it carries only `username` or `displayName`.
+A single `classification` on that registration therefore describes the gated
+branch and overstates the open one. Whoever writes that pass should know that the
+rename path is ungated by design, not by oversight — it is stated in the handler
+comment and in `data-and-state.md`. If the classification vocabulary is meant to
+be exact per registration, the honest resolutions are to split the endpoint into
+two registrations or to accept `program-gated` with this note attached; I have
+not chosen between them. The other eleven values are unchanged from the table in
+the previous round. No `classification` field was added anywhere.
+
+## Commands run and observed results (this round)
+
+All from `F:\!FluxIQ`.
+
+1. `pnpm --filter fluxiq exec vitest run src/programs/identity-access`
+   → `Test Files 3 passed (3)`, `Tests 41 passed (41)`
+   (`handlers.test.ts` 12, `service.test.ts` 24, `run-credential-change.test.ts` 5).
+
+2. **The new tests fail without the fix.** Same method: only `api/handlers.ts`
+   and `runtime/service.ts` restored to their committed content with
+   `git show HEAD:<path>`, tests left at the fixed version, no `git stash`.
+   Observed `Test Files 2 failed | 1 passed (3)`,
+   `Tests 10 failed | 31 passed (41)` — the eight from the earlier rounds plus:
+   - `refuses to enable or disable an account without a credential recheck`
+     → `expected { ok: true, payload: { …(8) } } to match object { ok: false, requiresRecheck: true }`
+     (without the gate the account really was disabled, and the updated user came
+     back as the payload)
+   - `refuses a role change without a credential recheck, and says a recheck is what is missing`
+     → `expected { ok: false, …(1) } to match object { ok: false, requiresRecheck: true }`
+     (the old shape: refused, but with no signal a client could act on)
+
+   As designed, `still renames an account without a recheck` passed in both
+   states. Fixed files restored, re-ran: `Tests 41 passed (41)`.
+
+3. `pnpm --filter fluxiq check` (`tsc --noEmit`) → no output, exit 0.
+
+4. `pnpm --filter @fluxiq/web check` (`tsc --noEmit`) → no output, exit 0.
+
+5. `pnpm --filter @fluxiq/web exec vitest run src/features/programs/live-views/tests/identity-access.test.ts src/lib/tests/program-route.test.ts`
+   → `Test Files 2 passed (2)`, `Tests 10 passed (10)`.
+
+6. `pnpm --filter fluxiq exec vitest run src/programs/tests/global-identity-access.test.ts src/programs/tests/permission-matrix.test.ts`
+   → `Test Files 2 passed (2)`, `Tests 12 passed (12)`.
+
+7. `node scripts/validate-docs.mjs` →
+   `Validated local links in 134 authored/reference Markdown files.`
+
+8. `node scripts/structure-audit.mjs` → **`1 violation(s) across 1 rule(s)`**,
+   and it is not mine:
+   `FAIL [file-lines] packages/fluxiq/src/programs/automation-studio/runtime/service.ts: 6775 lines exceeds the 800-line limit. Baseline for this entry is 6758; baselined entries may shrink, never grow.`
+   That file is another worker's in-flight edit — `git status` shows it modified,
+   and it grew 17 lines past its frozen baseline. It will fail `pnpm check` for
+   you until that worker shrinks it or the work justifies a baseline update. The
+   audit reported no violation in identity-access or in the web view; the run
+   before that worker's latest save passed with 136 warnings and 256 baselined.
+
+Nothing was committed or pushed, and no working document was edited.
+
+## Not verified (this round)
+
+- Still no live browser run. The new enable/disable modal, like the Add User and
+  2FA enrollment modals from the previous round, is proved by type check, the
+  view's own test and the endpoint tests, but nobody has clicked through it.
+  Together those three modals are the whole user-visible surface of this work,
+  and they remain the one thing I would want exercised before it ships.
+- I did not run Core's full `pnpm test`, `pnpm build`, or the web app's full test
+  suite, per your instruction to ignore the red automation-studio work. Note that
+  `pnpm check` currently fails for the structure reason above, which is unrelated
+  to this thread.
+
+## Final state of this thread
+
+Eleven Identity Access endpoints now refuse in one shape when the caller has not
+re-proved its own credentials, and the two that only withdraw access stay open by
+decision rather than by omission. Thirteen regression tests across the three
+rounds fail against the committed source and pass against the working tree. The
+rule is written down where the next person will look for it. The three things I
+would still put in front of you are the live click-through, the one-line
+`ApiResponse` addition in `program-api.ts`, and the `update-user` classification
+choice for Phase P.
