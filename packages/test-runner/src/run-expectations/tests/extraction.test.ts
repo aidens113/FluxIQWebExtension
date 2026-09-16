@@ -49,6 +49,7 @@ test("an optional field is left out of expectedFields, so an item lacking it is 
   assert.equal(measured.expectedFields, 1);
   assert.equal(measured.presentFields, 1);
   assert.equal(measured.matchedRecords, 1);
+  assert.equal(measured.comparedRecords, 1);
   assert.equal(measured.unexpectedFields, 0);
 });
 
@@ -62,25 +63,37 @@ test("a field the expectation names nowhere counts in unexpectedFields and fails
 test("records and non-optional fields are measured positionally, and what the step reported is carried through", () => {
   const observed = [{ name: "Kettle", price: "$25.00" }, { name: "Lamp", price: "$41.00" }];
   assert.deepEqual(measureExtraction({ step: "read", records }, observed, { pagesRead: 2, truncated: false, durationMs: 1_200, nonStringValues: 3 }), {
-    expectedRecords: 2, observedRecords: 2, matchedRecords: 1,
+    expectedRecords: 2, observedRecords: 2, recordsListed: true, countStated: false, comparedRecords: 2, matchedRecords: 1,
     expectedFields: 4, presentFields: 4, unexpectedFields: 0,
     pagesFollowed: 2, truncated: false, durationMs: 1_200, nonStringValues: 3,
   });
 });
 
-test("a count-only entry names no field, and what the step did not report is null", () => {
+test("a count-only entry compares nothing, so it reports no comparison and no match", () => {
+  // It counted 2 records and got 2. That is all it can say: no value of either was
+  // looked at, so `matchedRecords` is 0 and a record accuracy must leave it out
+  // rather than read the right count as two perfect records (x5f).
   assert.deepEqual(measureExtraction({ step: "read", count: 2 }, records, nothingReported), {
-    expectedRecords: 2, observedRecords: 2, matchedRecords: 2,
+    expectedRecords: 2, observedRecords: 2, recordsListed: false, countStated: true, comparedRecords: 0, matchedRecords: 0,
     expectedFields: 0, presentFields: 0, unexpectedFields: 0,
     pagesFollowed: null, truncated: null, durationMs: null, nonStringValues: 0,
   });
-  assert.equal(measureExtraction({ step: "read", count: 3 }, records, nothingReported).matchedRecords, 2);
+  assert.equal(measureExtraction({ step: "read", count: 3 }, records, nothingReported).matchedRecords, 0);
+});
+
+test("an entry stating neither a count nor records judges nothing and says so", () => {
+  const measured = measureExtraction({ step: "read" }, records, nothingReported);
+  // `expectedRecords` is adopted from what was observed, so it agrees with itself;
+  // `countStated` is what stops a count accuracy scoring that agreement as a hit.
+  assert.deepEqual({ expected: measured.expectedRecords, observed: measured.observedRecords }, { expected: 2, observed: 2 });
+  assert.deepEqual({ recordsListed: measured.recordsListed, countStated: measured.countStated, comparedRecords: measured.comparedRecords }, { recordsListed: false, countStated: false, comparedRecords: 0 });
 });
 
 test("a step that ran with no expectation expected nothing", () => {
   const measured = measureExtraction(undefined, records, nothingReported);
   assert.equal(measured.expectedRecords, 0);
   assert.equal(measured.matchedRecords, 0);
+  assert.deepEqual({ recordsListed: measured.recordsListed, countStated: measured.countStated, comparedRecords: measured.comparedRecords }, { recordsListed: false, countStated: false, comparedRecords: 0 });
   assert.equal(measured.observedRecords, 2);
   assert.equal(measured.unexpectedFields, 0);
 });

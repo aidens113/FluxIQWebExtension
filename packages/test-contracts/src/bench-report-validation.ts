@@ -16,7 +16,7 @@ const week2Keys = ["harnessRecovery", "adaptationCost", "adaptationValidation", 
 /** Optional: the eight benches on disk before these existed omit both, and an omission is an unmeasured count, not a zero one. */
 const coverageKeys = ["notExecutedRuns", "actionsExecuted"] as const;
 const distributionKeys = ["runDurationMs", "sanitizedPacketBytes", "rawSnapshotBytes"] as const;
-const extractionStepKeys = ["judgedSteps", "unjudgedSteps"] as const satisfies readonly (keyof BenchExtractionMetrics)[];
+const extractionStepKeys = ["judgedSteps", "unjudgedSteps", "comparedSteps", "countOnlySteps", "unjudgeableSteps"] as const satisfies readonly (keyof BenchExtractionMetrics)[];
 const extractionDistributionKeys = ["extractionDurationMs", "extractionMsPerPage"] as const satisfies readonly (keyof BenchExtractionMetrics)[];
 const extractionMetricKeys = [...extractionStepKeys, ...benchExtractionRateMetrics, ...extractionDistributionKeys] as const satisfies readonly (keyof BenchExtractionMetrics)[];
 /** What a set of counts is bounded by: how many workflow results, each run `repeatCount` times. */
@@ -208,8 +208,27 @@ function checkExtractionMetrics(input: unknown, path: string, laneResults: numbe
   const value = object(input, path, issues); if (!value) return;
   keys(value, extractionMetricKeys, path, issues);
   for (const key of extractionStepKeys) finite(value[key], `${path}.${key}`, issues, 0, Number.MAX_SAFE_INTEGER, true);
+  checkExtractionBasis(value, path, issues);
   for (const metric of benchExtractionRateMetrics) checkExtractionRate(value[metric], `${path}.${metric}`, laneResults, issues);
   for (const key of extractionDistributionKeys) checkDistribution(value[key], `${path}.${key}`, issues);
+}
+/**
+ * Every judged step is in exactly one basis, and the record accuracy is over
+ * the compared steps alone. A report that pools more steps than it compared
+ * has counted a step whose values no one looked at, which is the false 1.0
+ * this identity exists to refuse; `total` is in records, so it is bounded by
+ * the compared steps rather than equal to them, and zero compared steps can
+ * only pool zero records.
+ */
+function checkExtractionBasis(value: JsonObject, path: string, issues: ValidationIssue[]): void {
+  const { judgedSteps, comparedSteps, countOnlySteps, unjudgeableSteps } = value;
+  if ([judgedSteps, comparedSteps, countOnlySteps, unjudgeableSteps].some((count) => typeof count !== "number")) return;
+  const basis = (comparedSteps as number) + (countOnlySteps as number) + (unjudgeableSteps as number);
+  if (basis !== judgedSteps) add(issues, `${path}.judgedSteps`, `must equal comparedSteps + countOnlySteps + unjudgeableSteps (${basis}): every judged step is in exactly one basis`);
+  const recordAccuracy = value.extractionRecordAccuracy;
+  if (isObject(recordAccuracy) && typeof recordAccuracy.total === "number" && comparedSteps === 0 && recordAccuracy.total > 0) {
+    add(issues, `${path}.extractionRecordAccuracy.total`, "must be 0 when no step compared a record: a record accuracy over steps that compared nothing is a rate for values no one looked at");
+  }
 }
 /**
  * An extraction rate: `count` of `total` in its metric's unit, over `workflows`

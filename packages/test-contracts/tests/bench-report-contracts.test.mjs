@@ -299,9 +299,9 @@ test("the validator rejects a comparison that contradicts its tolerance or this 
   assert.throws(() => parseBenchReportJson("{"), ContractValidationError);
 });
 
-/** The Flow lane's extraction over two of its three results: six judged steps, three unjudged, 144 expected records. */
+/** The Flow lane's extraction over two of its three results: six judged steps -- four comparing records, two counting only -- three unjudged, 144 expected records. */
 const extractionMetrics = (overrides = {}) => ({
-  judgedSteps: 6, unjudgedSteps: 3,
+  judgedSteps: 6, unjudgedSteps: 3, comparedSteps: 4, countOnlySteps: 2, unjudgeableSteps: 0,
   extractionRecordAccuracy: rate(140, 144, 2), extractionCountAccuracy: rate(5, 6, 2), extractionExactSuccess: rate(4, 6, 2),
   extractionFieldCompleteness: rate(17, 18, 2), paginationAccuracy: rate(6, 6, 2), extractionFalseSuccess: rate(1, 6, 2),
   extractionDurationMs: spread(9, 300, 900), extractionMsPerPage: spread(9, 100, 250), ...overrides,
@@ -323,6 +323,7 @@ test("an extraction block validates and round-trips; a report without one is val
   // Absent: every report written before extraction was measured, laned or not.
   for (const older of [report(), legacy(), smoke(), covered()]) assert.equal(Object.hasOwn(parseBenchReportJson(JSON.stringify(older)).metrics, "extractionByLane"), false, older.reportId);
   assert.deepEqual(issuesOf(extracted({})), []); // an empty block measured nothing on either lane
+  assert.deepEqual(issuesOf(extracted({ flow: extractionMetrics({ comparedSteps: 0, countOnlySteps: 6, extractionRecordAccuracy: { count: 0, total: 0, workflows: 0, rate: null } }) })), []); // a lane that compared no record states no record accuracy at all, never the 1.0 pooling its count-only steps produced (x5f)
 });
 
 test("extraction rates are counts over totals: matched records never outnumber expected ones", () => {
@@ -331,7 +332,8 @@ test("extraction rates are counts over totals: matched records never outnumber e
     "rate not count over total": { extractionCountAccuracy: { ...rate(5, 6, 2), rate: 0.5 } }, "null rate with a total": { paginationAccuracy: { ...rate(6, 6, 2), rate: null } },
     "rate without a total": { extractionFalseSuccess: { count: 0, total: 0, workflows: 0, rate: 0 } }, "population beyond the lane's results": { extractionExactSuccess: rate(4, 6, 4) },
     "empty population with a total": { extractionFieldCompleteness: rate(17, 18, 0) }, "fractional count": { extractionRecordAccuracy: rate(140.5, 144, 2) },
-    "negative judged steps": { judgedSteps: -1 }, "fractional unjudged steps": { unjudgedSteps: 0.5 },
+    "negative judged steps": { judgedSteps: -1 }, "fractional unjudged steps": { unjudgedSteps: 0.5 }, "negative compared steps": { comparedSteps: -1, countOnlySteps: 3 },
+    "a basis that does not add up": { comparedSteps: 3 }, "a record accuracy over steps that compared nothing": { comparedSteps: 0, countOnlySteps: 6 },
     "p50 above p95": { extractionMsPerPage: spread(9, 300, 250) }, "percentiles without samples": { extractionDurationMs: spread(0, 1, 1) },
     "unknown rate": { extractionSpeed: rate(1, 1, 1) }, "a planted field value": { sampleValue: "4242424242424242" }, "a field name": { fieldNames: ["price"] },
     "missing rate": { extractionFalseSuccess: undefined }, "missing distribution": { extractionMsPerPage: undefined },

@@ -98,17 +98,38 @@ export type ExtractionMeasurementStatus = (typeof extractionMeasurementStatuses)
  * evaluation can be shared without carrying what a page showed. `status` is
  * the one string, and it is a closed vocabulary.
  *
- * `matchedRecords` never exceeds `expectedRecords` or `observedRecords`, and
- * `presentFields` never exceeds `expectedFields`. `pagesFollowed`,
- * `truncated`, and `durationMs` are `null` when the step did not report them.
+ * `recordsListed`, `countStated`, and `comparedRecords` say what the step's
+ * numbers are worth, and no reader of `matchedRecords` may skip them. An
+ * expectation that lists records is the only one whose values are compared; an
+ * expectation that states a count alone compares **nothing**, and one that
+ * states neither judges nothing at all. A count-only step therefore reports
+ * `comparedRecords: 0` and `matchedRecords: 0` -- it counted records, it did
+ * not judge them -- and a pooled record accuracy must exclude it rather than
+ * score it a perfect match for values no one looked at.
+ *
+ * `matchedRecords` never exceeds `comparedRecords`, which never exceeds
+ * `expectedRecords` or `observedRecords`, and `presentFields` never exceeds
+ * `expectedFields`. `pagesFollowed`, `truncated`, and `durationMs` are `null`
+ * when the step did not report them.
  */
 export type RunExtractionMeasurement = {
   /** The step's position in the workflow's script, from 0. */
   stepIndex: number;
   status: ExtractionMeasurementStatus;
+  /**
+   * The records the expectation required: the number it listed, else the count
+   * it stated, else -- with neither stated -- the number observed, which
+   * judges nothing and is why `countStated` exists.
+   */
   expectedRecords: number;
   observedRecords: number;
-  /** Observed records equal to an expected record. */
+  /** Whether the expectation listed the records themselves, the only thing that lets a value be compared. */
+  recordsListed: boolean;
+  /** Whether the expectation stated a record count of its own, rather than `expectedRecords` being adopted from what the step observed. */
+  countStated: boolean;
+  /** Record positions whose values were compared: `min(expectedRecords, observedRecords)` when `recordsListed`, 0 otherwise. */
+  comparedRecords: number;
+  /** Compared records equal to the expected record at their position, so 0 whenever `comparedRecords` is 0. */
   matchedRecords: number;
   expectedFields: number;
   /** Expected fields the observed records carried. */

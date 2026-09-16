@@ -34,9 +34,9 @@ const flowRun = () => ({
   evidence: { sanitizedPacketBytes: [2048, 1024], rawSnapshotBytes: [65536], truncationCount: 0 },
   llm: disabledLlm, extraction: null, ...week2,
 });
-// A paginated list extraction step, judged: 24 of 24 expected records read over three pages, every expected field present.
+// A paginated list extraction step, judged: 24 of 24 expected records read over three pages, every one of them compared, every expected field present.
 const measurement = (overrides = {}) => ({
-  stepIndex: 2, status: "judged", expectedRecords: 24, observedRecords: 24, matchedRecords: 24,
+  stepIndex: 2, status: "judged", expectedRecords: 24, observedRecords: 24, recordsListed: true, countStated: true, comparedRecords: 24, matchedRecords: 24,
   expectedFields: 3, presentFields: 3, unexpectedFields: 0, pagesFollowed: 3, truncated: false, durationMs: 412.5, nonStringValues: 0, ...overrides,
 });
 const extractionRun = (measurements = [measurement()]) => ({ ...flowRun(), extraction: measurements });
@@ -63,7 +63,7 @@ test("run evaluations write schema 0.3 while CandidateComparison remains 0.1", (
   assert.equal(CANDIDATE_COMPARISON_SCHEMA_VERSION, "0.1");
   assert.doesNotThrow(() => assertRunEvaluation(flowRun()));
   // Schema 0.3 carries one counts-only measurement per extraction step, and round-trips.
-  const notRun = measurement({ stepIndex: 5, status: "not_run", observedRecords: 0, matchedRecords: 0, presentFields: 0, pagesFollowed: null, truncated: null, durationMs: null });
+  const notRun = measurement({ stepIndex: 5, status: "not_run", observedRecords: 0, comparedRecords: 0, matchedRecords: 0, presentFields: 0, pagesFollowed: null, truncated: null, durationMs: null });
   const measured = extractionRun([measurement(), notRun]);
   assert.doesNotThrow(() => assertRunEvaluation(measured));
   assert.deepEqual(parseRunEvaluationJson(JSON.stringify(measured)), measured);
@@ -100,7 +100,7 @@ test("a schema 0.2 evaluation reads back as 0.3 with extraction null: unmeasured
 test("a string planted anywhere in an extraction measurement is refused as a page value (D6)", () => {
   const refusedAsString = (value, path) => messagesAt(value, path).some((message) => message.startsWith("must not be a string"));
   for (const key of [
-    "stepIndex", "expectedRecords", "observedRecords", "matchedRecords", "expectedFields", "presentFields", "unexpectedFields",
+    "stepIndex", "expectedRecords", "observedRecords", "recordsListed", "countStated", "comparedRecords", "matchedRecords", "expectedFields", "presentFields", "unexpectedFields",
     "pagesFollowed", "truncated", "durationMs", "nonStringValues", "status",
   ]) {
     const run = extractionRun([measurement(), measurement({ stepIndex: 3, [key]: PLANTED })]);
@@ -122,12 +122,12 @@ test("a string planted anywhere in an extraction measurement is refused as a pag
 
 test("extraction counts are bounded: matched records by expected and observed ones, present fields by expected ones", () => {
   // At every bound: a short read matched in full, every expected field present.
-  assert.equal(validateRunEvaluation(extractionRun([measurement({ observedRecords: 15, matchedRecords: 15 })])).valid, true);
+  assert.equal(validateRunEvaluation(extractionRun([measurement({ observedRecords: 15, comparedRecords: 15, matchedRecords: 15 })])).valid, true);
   assert.equal(validateRunEvaluation(extractionRun([measurement({ observedRecords: 30, matchedRecords: 24, unexpectedFields: 2 })])).valid, true);
-  // More matched records than expected, though no more than observed.
-  assert.deepEqual(issuesOf(extractionRun([measurement({ observedRecords: 30, matchedRecords: 25 })])), ["$.extraction[0].matchedRecords"]);
+  // More matched records than expected, though no more than observed. A Set: the compared bound refuses the same member, and one member refused twice is still one defect.
+  assert.deepEqual(new Set(issuesOf(extractionRun([measurement({ observedRecords: 30, matchedRecords: 25 })]))), new Set(["$.extraction[0].matchedRecords"]));
   // More matched records than observed, though no more than expected.
-  assert.deepEqual(issuesOf(extractionRun([measurement({ observedRecords: 15, matchedRecords: 16 })])), ["$.extraction[0].matchedRecords"]);
+  assert.deepEqual(new Set(issuesOf(extractionRun([measurement({ observedRecords: 15, comparedRecords: 15, matchedRecords: 16 })]))), new Set(["$.extraction[0].matchedRecords"]));
   assert.deepEqual(issuesOf(extractionRun([measurement({ presentFields: 4 })])), ["$.extraction[0].presentFields"]);
   for (const [label, override] of Object.entries({
     "negative step": { stepIndex: -1 },
@@ -145,6 +145,29 @@ test("extraction counts are bounded: matched records by expected and observed on
   assert.equal(validateRunEvaluation(extractionRun([measurement({ pagesFollowed: null, truncated: null, durationMs: null })])).valid, true);
   rejects({ ...flowRun(), extraction: { 0: measurement() } }, "extraction as an object");
   assert.deepEqual(issuesOf(without(flowRun(), "extraction")), ["$.extraction"]);
+});
+
+test("a step that compared nothing has no matches to pool: a count-only measurement cannot report one", () => {
+  // The step x5f found: 1,000 records counted, not one value compared, so not one matched.
+  const countOnly = measurement({
+    recordsListed: false, countStated: true, expectedRecords: 1000, observedRecords: 1000,
+    comparedRecords: 0, matchedRecords: 0, expectedFields: 0, presentFields: 0,
+  });
+  assert.equal(validateRunEvaluation(extractionRun([countOnly])).valid, true);
+  // The shape that scored a false 1.0: every counted record claimed as a match.
+  assert.deepEqual(issuesOf(extractionRun([{ ...countOnly, matchedRecords: 1000 }])), ["$.extraction[0].matchedRecords"]);
+  // A comparison claimed where the expectation listed no record to compare against.
+  assert.deepEqual(issuesOf(extractionRun([{ ...countOnly, comparedRecords: 1000 }])), ["$.extraction[0].comparedRecords"]);
+  assert.deepEqual(new Set(issuesOf(extractionRun([measurement({ comparedRecords: 25 })]))), new Set(["$.extraction[0].comparedRecords"]));
+  assert.deepEqual(issuesOf(extractionRun([measurement({ comparedRecords: 20, matchedRecords: 21 })])), ["$.extraction[0].matchedRecords"]);
+  for (const [label, override] of Object.entries({
+    "recordsListed as a number": { recordsListed: 1 },
+    "countStated as a number": { countStated: 0 },
+    "missing recordsListed": { recordsListed: undefined },
+    "missing countStated": { countStated: undefined },
+    "missing comparedRecords": { comparedRecords: undefined },
+    "fractional compared records": { comparedRecords: 23.5 },
+  })) rejects(extractionRun([measurement(override)]), label);
 });
 
 test("facility failures use only the closed diagnostic vocabulary", () => {

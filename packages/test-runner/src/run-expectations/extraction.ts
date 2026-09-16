@@ -45,20 +45,30 @@ const NOTHING_REPORTED: ObservedExtraction = { nonStringValues: 0 };
  * - `unexpectedFields` counts, over every observed record, the fields the
  *   expectation names nowhere -- neither in a record nor in `optionalFields`.
  *   It is counted, not asserted, and is separate from field completeness.
- * - An entry that lists `records` is the only one whose records are compared.
- *   An entry that states only a `count` names no fields and no record, so it
- *   contributes no field counts, and its `matchedRecords` is the number of
- *   records the two sides have in common by position
- *   (`min(expected, observed)`), which is exactly 1 per record when the count
- *   is right. An entry silent on both cannot contradict the records at all, so
- *   the observed count stands as the expected one.
+ * - An entry that lists `records` is the only one whose records are compared,
+ *   and it is the only one reporting `recordsListed`. `comparedRecords` is the
+ *   number of positions compared (`min(expected, observed)`) and
+ *   `matchedRecords` a subset of it.
+ * - An entry that states only a `count` names no field and no record, so it
+ *   compares nothing: `comparedRecords` and `matchedRecords` are both **0**,
+ *   and `countStated` marks it as a count to judge rather than a comparison.
+ *   Reporting `min(expected, observed)` matches instead -- which this did, and
+ *   which read as one match per record whenever the count was right -- scored a
+ *   pooled record accuracy of 1.0 for a step in which not one value was ever
+ *   looked at (x5f). A step that judged nothing must not be able to contribute
+ *   a success to a published number.
+ * - An entry silent on both cannot contradict the records at all, so the
+ *   observed count stands as the expected one and `countStated` is false:
+ *   `expectedRecords === observedRecords` then says nothing, and a count
+ *   accuracy that pooled it would score it a free hit.
  * - With no entry, the step ran unexpected: nothing was expected, so every
- *   expectation-derived count is 0.
+ *   expectation-derived count is 0 and both flags are false.
  */
 export function measureExtraction(entry: ExpectedExtraction | undefined, records: readonly ExtractionRecord[], observed: ObservedExtraction): ExtractionStepMeasurement {
   const optional = new Set(entry?.optionalFields ?? []);
   const expected = entry?.records;
   let expectedRecords = 0;
+  let comparedRecords = 0;
   let matchedRecords = 0;
   let expectedFields = 0;
   let presentFields = 0;
@@ -67,7 +77,8 @@ export function measureExtraction(entry: ExpectedExtraction | undefined, records
     expectedRecords = expected?.length ?? entry.count ?? records.length;
     if (expected) {
       const named = new Set([...expected.flatMap((record) => Object.keys(record)), ...optional]);
-      for (let position = 0; position < Math.min(expected.length, records.length); position += 1) {
+      comparedRecords = Math.min(expected.length, records.length);
+      for (let position = 0; position < comparedRecords; position += 1) {
         const wanted = expected[position]!;
         const actual = records[position]!;
         if (matchesRecord(wanted, actual, optional)) matchedRecords += 1;
@@ -78,12 +89,12 @@ export function measureExtraction(entry: ExpectedExtraction | undefined, records
         }
       }
       for (const record of records) unexpectedFields += Object.keys(record).filter((key) => !named.has(key)).length;
-    } else {
-      matchedRecords = Math.min(expectedRecords, records.length);
     }
   }
   return {
-    expectedRecords, observedRecords: records.length, matchedRecords,
+    expectedRecords, observedRecords: records.length,
+    recordsListed: expected !== undefined, countStated: entry?.count !== undefined,
+    comparedRecords, matchedRecords,
     expectedFields, presentFields, unexpectedFields,
     pagesFollowed: observed.pagesRead ?? null,
     truncated: observed.truncated ?? null,

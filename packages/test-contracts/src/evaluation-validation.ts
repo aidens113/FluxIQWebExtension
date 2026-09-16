@@ -17,9 +17,11 @@ const runEvaluationKeys = [
 ];
 /** The whole-number members of a `RunExtractionMeasurement`. */
 const extractionCountKeys = [
-  "stepIndex", "expectedRecords", "observedRecords", "matchedRecords", "expectedFields", "presentFields", "unexpectedFields", "nonStringValues",
+  "stepIndex", "expectedRecords", "observedRecords", "comparedRecords", "matchedRecords", "expectedFields", "presentFields", "unexpectedFields", "nonStringValues",
 ] as const satisfies readonly (keyof RunExtractionMeasurement)[];
-const extractionMeasurementKeys = [...extractionCountKeys, "status", "pagesFollowed", "truncated", "durationMs"] as const satisfies readonly (keyof RunExtractionMeasurement)[];
+/** What the expectation offered, which decides which rate a step may enter at all. */
+const extractionFlagKeys = ["recordsListed", "countStated"] as const satisfies readonly (keyof RunExtractionMeasurement)[];
+const extractionMeasurementKeys = [...extractionCountKeys, ...extractionFlagKeys, "status", "pagesFollowed", "truncated", "durationMs"] as const satisfies readonly (keyof RunExtractionMeasurement)[];
 const automationVerdicts = ["passed", "failed"] as const;
 const moduleCauseCodes = ["ERR_MODULE_NOT_FOUND", "MODULE_NOT_FOUND", "ERR_PACKAGE_PATH_NOT_EXPORTED", "ERR_PACKAGE_IMPORT_NOT_DEFINED", "ERR_UNSUPPORTED_DIR_IMPORT"] as const;
 const httpTransportCauseCodes = ["ECONNREFUSED", "ECONNRESET", "EPIPE", "ETIMEDOUT", "ENETUNREACH", "EHOSTUNREACH", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_SOCKET"] as const;
@@ -157,10 +159,22 @@ function checkExtractionMeasurement(input: unknown, path: string, issues: Valida
   if (value.pagesFollowed !== null) finite(value.pagesFollowed, `${path}.pagesFollowed`, issues, 0, Number.MAX_SAFE_INTEGER, true);
   if (value.truncated !== null && typeof value.truncated !== "boolean") add(issues, `${path}.truncated`, "must be a boolean or null");
   if (value.durationMs !== null) finite(value.durationMs, `${path}.durationMs`, issues);
-  const { matchedRecords, expectedRecords, observedRecords, presentFields, expectedFields } = value;
+  for (const key of extractionFlagKeys) if (typeof value[key] !== "boolean") add(issues, `${path}.${key}`, "must be a boolean");
+  const { comparedRecords, matchedRecords, expectedRecords, observedRecords, presentFields, expectedFields } = value;
   if (typeof matchedRecords === "number") {
     if (typeof expectedRecords === "number" && matchedRecords > expectedRecords) add(issues, `${path}.matchedRecords`, "must not exceed expectedRecords");
     if (typeof observedRecords === "number" && matchedRecords > observedRecords) add(issues, `${path}.matchedRecords`, "must not exceed observedRecords");
+    // The invariant that keeps a count-only step out of a record accuracy: a
+    // match is a compared position, so a step that compared nothing has no
+    // matches to pool. Enforced here rather than left to each producer,
+    // because the false 1.0 it refuses was written by a producer that meant
+    // `matchedRecords` as "records the two sides have in common".
+    if (typeof comparedRecords === "number" && matchedRecords > comparedRecords) add(issues, `${path}.matchedRecords`, "must not exceed comparedRecords: a match is a record whose values were compared");
+  }
+  if (typeof comparedRecords === "number") {
+    if (typeof expectedRecords === "number" && comparedRecords > expectedRecords) add(issues, `${path}.comparedRecords`, "must not exceed expectedRecords");
+    if (typeof observedRecords === "number" && comparedRecords > observedRecords) add(issues, `${path}.comparedRecords`, "must not exceed observedRecords");
+    if (value.recordsListed === false && comparedRecords > 0) add(issues, `${path}.comparedRecords`, "must be 0 when the expectation listed no records: nothing was there to compare against");
   }
   if (typeof presentFields === "number" && typeof expectedFields === "number" && presentFields > expectedFields) add(issues, `${path}.presentFields`, "must not exceed expectedFields");
 }

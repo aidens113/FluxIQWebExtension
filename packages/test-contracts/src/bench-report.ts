@@ -26,6 +26,14 @@ export type BenchRateMetric = (typeof benchRateMetrics)[number];
  * `total` are in the unit its metric defines (records for record accuracy),
  * over the lane's extraction steps. `extractionFalseSuccess` is lower-better.
  */
+/**
+ * A rate whose population is empty reports `rate: null` -- a refusal to
+ * publish a number, never a flattering one. `extractionRecordAccuracy` is
+ * pooled over the lane's **compared** steps alone (Σ matched ÷ Σ max(expected,
+ * observed)), and `extractionCountAccuracy` over its count-only steps alone;
+ * a bench whose extraction steps all stated counts therefore states no record
+ * accuracy at all, which is the truth about what it measured.
+ */
 export const benchExtractionRateMetrics = [
   "extractionRecordAccuracy", "extractionCountAccuracy", "extractionExactSuccess",
   "extractionFieldCompleteness", "paginationAccuracy", "extractionFalseSuccess",
@@ -80,10 +88,32 @@ export type BenchDistribution = { samples: number; p50: number | null; p95: numb
  * `RunEvaluation.extraction`. Counts only (D6): no field name or value.
  */
 export type BenchExtractionMetrics = {
-  /** Extraction steps judged against the workflow's expectation. */
+  /** Extraction steps judged against the workflow's expectation. Always `comparedSteps + countOnlySteps + unjudgeableSteps`. */
   judgedSteps: number;
   /** Extraction steps measured without a judgement: not run, or run with no expectation. */
   unjudgedSteps: number;
+  /**
+   * Judged steps whose expectation listed the records, so their values were
+   * compared. These are the **only** steps `extractionRecordAccuracy` pools,
+   * and stating the number is what lets a reader see the basis of that rate
+   * instead of trusting it.
+   */
+  comparedSteps: number;
+  /**
+   * Judged steps that stated a count and listed no records. Not one of their
+   * values was compared, so pooling them into `extractionRecordAccuracy` would
+   * score a perfect match for a step that judged nothing: they are excluded
+   * from it and are the population of `extractionCountAccuracy` instead.
+   */
+  countOnlySteps: number;
+  /**
+   * Judged steps that listed no records and stated no count, so nothing in
+   * them can be judged and they enter no rate. Stated rather than absorbed:
+   * an expectation nothing can judge is a gap to see, not a silent pass
+   * (the refusal `assertExtraction` raises for a `pages` or `truncated`
+   * expectation nothing reported).
+   */
+  unjudgeableSteps: number;
   /** Each step's extraction duration. */
   extractionDurationMs: BenchDistribution;
   /** Each step's extraction duration over the pages it followed. */
