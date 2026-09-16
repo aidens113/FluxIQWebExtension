@@ -184,6 +184,17 @@ extraction until it is a real, measured Flow capability.
   masked: the page never reads its values, so it is absent from the extraction
   node's output, the saved table, the preview, and CSV/JSON exports. Excluding
   rather than deleting a column stops field detection from proposing it again.
+  **Absent means absent — not recorded at all (the user, 2026-09-15).** The
+  value must appear in **no durable record FluxIQ writes**: not the dataset, the
+  preview or an export, and **not the saved run trace** — including when a later
+  step lifts the value *out of* a row instead of passing the row along whole.
+  Identity markers cover only the whole-row case, so the lifted-value path is a
+  **defect to close**, not a limit to document; Core's paired plan carries it.
+  A value may still be **used** in memory during a run, since otherwise the
+  option could not cover a password that has to be typed — but nothing FluxIQ
+  persists may contain it. The one boundary to settle when this is built is how
+  far a value is followed once the user deliberately transforms it before
+  writing it somewhere else; that boundary must be **stated**, never assumed.
   An info hover explains it: use it for private information such as passwords,
   card numbers, or personal details you don't want collected, saved, or
   exported. The picker pre-selects Exclude column when the
