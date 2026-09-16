@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { RunnerFailure } from "../../failure.js";
+import { LAB_PROJECT_DOMAIN_ID } from "../lab-project-domain.js";
 import { executeRecordedFlowRun, type PersistedFlowRunControl } from "../persisted-flow-run.js";
 
 const attempt = (overrides: Record<string, unknown> = {}) => ({ attemptId: "attempt.one", nodeId: "node.one", definitionId: "web.dom.type", order: 0, status: "succeeded", startedAt: 1_000, finishedAt: 1_030, ...overrides });
@@ -391,4 +392,47 @@ test("the run's start is the recording position of its first attempt on a record
   assert.equal(Object.hasOwn(await executeRecordedFlowRun(unordered, run), "startCandidateIndex"), false, "no order");
   const { client: controlOnly } = control({}, { actionAttempts: [attempt({ nodeId: "builtin.start" })] });
   assert.equal(Object.hasOwn(await executeRecordedFlowRun(controlOnly, { ...run, candidateOrder }), "startCandidateIndex"), false, "no attempt on a recorded node");
+});
+
+/**
+ * `w2-flow-lane-green`: the scope a run's datasets are read under.
+ *
+ * Core takes a request's domain from `?domainId=` on the URL and every dataset
+ * endpoint asserts it against the project's own domain before reading a row
+ * (`api/handlers/datasets.ts`), because a stored row is raw page content. A
+ * dataset read with no scope is refused — observed against a real isolated
+ * Core as `400 {"ok":false,"error":"Automation Studio project is unavailable
+ * in this domain scope."}` — so the run and its dataset read have to name the
+ * same domain, and one value now answers both.
+ */
+function scopeRecordingControl() {
+  const authorized: Array<string[] | undefined> = [];
+  const scopes: Array<string | undefined> = [];
+  const dataset = { summary: summary({ recordCount: 1 }), schema, rows: [{ name: "Alpha", price: "1.00" }], nextCursor: null };
+  const client = {
+    selectExistingContext: async () => undefined,
+    startPersistedFlow: async (input: { authorizedDomainIds?: string[] }) => { authorized.push(input.authorizedDomainIds); return { runId: "run.one" }; },
+    runPersistedFlow: async (input: { authorizedDomainIds?: string[] }) => { authorized.push(input.authorizedDomainIds); return { session: { runId: "run.one", status: "succeeded" } }; },
+    automationStudioCall: async (endpoint: string, _payload: Record<string, unknown>, _bounds: unknown, domainId?: string) => {
+      scopes.push(domainId);
+      return endpoint === "get-run-dataset-page"
+        ? { dataset }
+        : { runDetail: { summary: { runId: "run.one", status: "succeeded" }, interventions: [], actionAttempts: [attempt({ nodeId: "node.extract" })], datasets: [summary({ recordCount: 1 })] } };
+    },
+  } as unknown as PersistedFlowRunControl;
+  return { client, authorized, scopes };
+}
+
+test("a run authorizes and reads its datasets under one domain: the caller's when it read the project, the Lab's when it did not", async () => {
+  for (const supplied of [undefined, "another-domain"]) {
+    const expected = supplied ?? LAB_PROJECT_DOMAIN_ID;
+    const { client, authorized, scopes } = scopeRecordingControl();
+
+    const outcome = await executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab", ...(supplied === undefined ? {} : { domainId: supplied }) });
+
+    assert.equal(outcome.extracted[0]?.records.length, 1);
+    assert.deepEqual(authorized, [[expected], [expected]], "the run is authorized for the project's domain, once at start and once at run");
+    // The run detail is structure and Core asks for no scope on it; the dataset page is content and Core does.
+    assert.deepEqual(scopes, [undefined, expected], "get-flow-run-detail unscoped, get-run-dataset-page scoped");
+  }
 });

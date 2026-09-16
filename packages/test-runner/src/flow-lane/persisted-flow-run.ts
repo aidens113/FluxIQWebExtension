@@ -4,6 +4,7 @@ import type { AutomationNodeTargetResolution } from "fluxiq/automation-studio/no
 import { RunnerFailure } from "../failure.js";
 import { isBoundedHttpFailure, type FluxIQHttpOptions } from "../http-control/index.js";
 import { runActionStatus } from "../run-manifest/index.js";
+import { LAB_PROJECT_DOMAIN_ID } from "./lab-project-domain.js";
 import { readRunDatasets, runDatasetSummaries, type FlowRunDataset, type RunDatasetSummary } from "./run-datasets.js";
 
 /**
@@ -179,21 +180,28 @@ export type FlowStopWithoutFailedAttempt = { attemptedActions: number; unvisited
  * its expected failure is exactly what the run must report. This keeps the
  * run detail either way and reads Core's structured `failure` field, so a
  * category is never recovered by parsing a message.
+ *
+ * `domainId` is the domain the project is bound to. One value answers two
+ * questions that must agree: which domains the run is authorized to act in,
+ * and which domain scope its datasets are read under. They were separate
+ * literals, and the dataset read had none at all, which is how a run that
+ * finally stored rows died on a 400 the moment it tried to read them back.
  */
 export async function executeRecordedFlowRun(
   control: PersistedFlowRunControl,
-  input: { projectId: string; flowId: string; facilityRunId: string; inputs?: Record<string, unknown>; actionTypes?: ReadonlyMap<string, string>; candidateOrder?: ReadonlyMap<string, number> },
+  input: { projectId: string; flowId: string; facilityRunId: string; domainId?: string; inputs?: Record<string, unknown>; actionTypes?: ReadonlyMap<string, string>; candidateOrder?: ReadonlyMap<string, number> },
   bounds: FluxIQHttpOptions = {},
   terminalWait: PersistedFlowTerminalWait = {},
 ): Promise<PersistedFlowRunOutcome> {
+  const domainId = input.domainId ?? LAB_PROJECT_DOMAIN_ID;
   await control.selectExistingContext(input.projectId, undefined, bounds, input.flowId);
   const inputs = input.inputs ?? {};
-  const started = await control.startPersistedFlow({ projectId: input.projectId, flowId: input.flowId, inputs, authorizedDomainIds: ["web-automation"], ...bounds });
+  const started = await control.startPersistedFlow({ projectId: input.projectId, flowId: input.flowId, inputs, authorizedDomainIds: [domainId], ...bounds });
   const runId = started.runId;
   if (!runId) throw new RunnerFailure("runtime.behavior", "Core did not return a run id for the approved Flow");
   let sessionStatus = "unknown";
   try {
-    const result = await control.runPersistedFlow({ projectId: input.projectId, flowId: input.flowId, runId, inputs, authorizedDomainIds: ["web-automation"], idempotencyKey: `fluxiq-lab:${input.facilityRunId}:${randomUUID()}`, ...bounds });
+    const result = await control.runPersistedFlow({ projectId: input.projectId, flowId: input.flowId, runId, inputs, authorizedDomainIds: [domainId], idempotencyKey: `fluxiq-lab:${input.facilityRunId}:${randomUUID()}`, ...bounds });
     sessionStatus = result.session.status;
     if (result.session.runId !== runId) throw new RunnerFailure("runtime.behavior", "Core ran a different run than the one it started");
   } catch (error) {
@@ -201,10 +209,10 @@ export async function executeRecordedFlowRun(
     // away. An arbitrary runner failure is not evidence that a run completed.
     if (!isBoundedHttpFailure(error)) throw error;
     const detail = await awaitTerminalRunDetail(control, input.projectId, runId, input.actionTypes ?? new Map(), error, terminalWait);
-    return outcomeFromDetail(runId, detail, await datasetsOf(control, input.projectId, runId, detail, bounds), sessionStatus, input.actionTypes, input.candidateOrder);
+    return outcomeFromDetail(runId, detail, await datasetsOf(control, { projectId: input.projectId, runId, domainId }, detail, bounds), sessionStatus, input.actionTypes, input.candidateOrder);
   }
   const detail = await readRunDetail(control, input.projectId, runId, bounds, input.actionTypes ?? new Map());
-  return outcomeFromDetail(runId, detail, await datasetsOf(control, input.projectId, runId, detail, bounds), sessionStatus, input.actionTypes, input.candidateOrder);
+  return outcomeFromDetail(runId, detail, await datasetsOf(control, { projectId: input.projectId, runId, domainId }, detail, bounds), sessionStatus, input.actionTypes, input.candidateOrder);
 }
 
 /**
@@ -215,12 +223,11 @@ export async function executeRecordedFlowRun(
  */
 async function datasetsOf(
   control: PersistedFlowRunControl,
-  projectId: string,
-  runId: string,
+  scope: { projectId: string; runId: string; domainId: string },
   detail: Awaited<ReturnType<typeof readRunDetail>>,
   bounds: FluxIQHttpOptions,
 ): Promise<FlowRunDataset[]> {
-  return detail.datasets.length === 0 ? [] : await readRunDatasets(control, { projectId, runId, summaries: detail.datasets }, bounds);
+  return detail.datasets.length === 0 ? [] : await readRunDatasets(control, { ...scope, summaries: detail.datasets }, bounds);
 }
 
 function outcomeFromDetail(

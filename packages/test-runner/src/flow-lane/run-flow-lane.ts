@@ -17,6 +17,15 @@ export type FlowLaneControl = PersistedFlowRunControl & RecordingProposalControl
 export type FlowLaneInput = {
   control: FlowLaneControl;
   projectId: string;
+  /**
+   * The domain the project is bound to. Core scopes a request to a domain from
+   * `?domainId=` on the URL and refuses a dataset read whose scope is not the
+   * project's own, so the lane has to name it to read back what an extraction
+   * stored. Omitted by a caller that did not read the project: the Lab creates
+   * every project it runs against in `LAB_PROJECT_DOMAIN_ID`, which is then
+   * the default.
+   */
+  projectDomainId?: string;
   authorizationPin: string;
   /** The recording the run just produced; the Flow is generated from exactly this one. */
   recordingId: string;
@@ -145,6 +154,7 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
     projectId: input.projectId,
     flowId: approved.flowId,
     facilityRunId: input.facilityRunId,
+    ...(input.projectDomainId === undefined ? {} : { domainId: input.projectDomainId }),
     actionTypes,
     candidateOrder,
     // Each declared value and each supplied file once, under the path a node reads: Core persists a run's inputs, so any further copy is a copy on disk.

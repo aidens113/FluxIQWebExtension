@@ -16,7 +16,18 @@ import type { ExtractionRecord } from "../run-expectations/index.js";
  * return a record at all.
  */
 
-/** The one Core call this reader makes; `ExistingFluxIQControlClient` satisfies it. */
+/**
+ * The one Core call this reader makes; `ExistingFluxIQControlClient` satisfies it.
+ *
+ * The fourth argument is the domain scope, which Core reads from `?domainId=`
+ * on the request URL (`apps/web/src/lib/program-route.ts`,
+ * `programDomainScope`). Every dataset endpoint asserts it before it reads
+ * anything, because a stored row is raw page content (Core
+ * `api/handlers/datasets.ts`), so this reader has to present it. Observed
+ * against a real isolated Core: the same call with no scope answers
+ * `400 {"ok":false,"error":"Automation Studio project is unavailable in this
+ * domain scope."}`, and with the project's own domain answers `200`.
+ */
 export type RunDatasetControl = {
   automationStudioCall(endpoint: string, payload: Record<string, unknown>, bounds?: FluxIQHttpOptions, domainId?: string): Promise<unknown>;
 };
@@ -93,31 +104,37 @@ export function runDatasetSummaries(detail: Record<string, unknown>): RunDataset
  * The rows read are compared against the summary's own `recordCount`: a reader
  * that silently returned fewer rows than Core says it stored would understate
  * an extraction and could turn a real record regression into a missing one.
+ *
+ * `domainId` is the domain the project under test is bound to, and is required
+ * rather than optional: a dataset read with no scope is refused by Core with a
+ * 400, so a caller that could leave it out would only discover that against a
+ * run that actually stored rows — which is how it went unnoticed until one
+ * did.
  */
 export async function readRunDatasets(
   control: RunDatasetControl,
-  input: { projectId: string; runId: string; summaries: readonly RunDatasetSummary[] },
+  input: { projectId: string; runId: string; domainId: string; summaries: readonly RunDatasetSummary[] },
   bounds: FluxIQHttpOptions = {},
 ): Promise<FlowRunDataset[]> {
   const datasets: FlowRunDataset[] = [];
-  for (const summary of input.summaries) datasets.push(await readDataset(control, input.projectId, input.runId, summary, bounds));
+  for (const summary of input.summaries) datasets.push(await readDataset(control, input, summary, bounds));
   return datasets;
 }
 
 async function readDataset(
   control: RunDatasetControl,
-  projectId: string,
-  runId: string,
+  scope: { projectId: string; runId: string; domainId: string },
   summary: RunDatasetSummary,
   bounds: FluxIQHttpOptions,
 ): Promise<FlowRunDataset> {
+  const { projectId, runId, domainId } = scope;
   const records: ExtractionRecord[] = [];
   let nonStringValues = 0;
   let cursor: string | null = null;
   let pages = 0;
   while (pages < MAX_DATASET_PAGES) {
     const payload = asRecord(
-      await control.automationStudioCall("get-run-dataset-page", { projectId, runId, datasetId: summary.datasetId, limit: DATASET_PAGE_LIMIT, cursor }, bounds),
+      await control.automationStudioCall("get-run-dataset-page", { projectId, runId, datasetId: summary.datasetId, limit: DATASET_PAGE_LIMIT, cursor }, bounds, domainId),
       "run dataset page payload",
     );
     const page = asRecord(payload.dataset, "run dataset page");
