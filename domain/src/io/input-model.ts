@@ -19,11 +19,23 @@ export const WEB_AUTOMATION_INPUT_IDS = {
   filesChosen: "web.user.files_chosen",
   tabSwitched: "web.user.tab_switched",
   tabClosed: "web.user.tab_closed",
-  // Two inputs, because an input maps to exactly one output and the two forms
-  // of a recorded extraction run different verbs: a list saves a dataset, a
-  // single value answers with one value and saves none.
-  dataExtractionDefined: "web.user.data_extraction_defined",
-  valueExtractionDefined: "web.user.value_extraction_defined"
+  // One input, for the one form of extraction the product can define: a list,
+  // which saves a dataset.
+  //
+  // The single-value form had its own input -- an input maps to exactly one
+  // output, and the two forms run different verbs -- and nothing could ever
+  // produce it. The worker refuses to start a `value` pick and refuses one that
+  // arrives anyway (`background/extraction/control.ts`), `confirm.ts` refuses a
+  // `value` definition on the run path, and the picker's recorded event attaches
+  // no element for one. A registered action input that no event can reach
+  // advertises a trigger that never fires, which is the mirror of an unmapped
+  // input becoming executable, so it is not registered.
+  //
+  // The domain still *reads* a value definition
+  // (`actions/extraction/recorded-definition.ts`) and `web.dom.extract` remains
+  // an output a Flow may author; a recorded one stays passive evidence. When the
+  // picker can record a single value, this is one id and one row again.
+  dataExtractionDefined: "web.user.data_extraction_defined"
 } as const;
 
 export type WebAutomationInputId = typeof WEB_AUTOMATION_INPUT_IDS[keyof typeof WEB_AUTOMATION_INPUT_IDS];
@@ -113,8 +125,7 @@ export const actionInputDefinitions = [
   [WEB_AUTOMATION_INPUT_IDS.filesChosen, "Files chosen", "web.dom.upload"],
   [WEB_AUTOMATION_INPUT_IDS.tabSwitched, "Tab switched", "web.browser.tab"],
   [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"],
-  [WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined, "Data extraction defined", "web.dom.extract_list"],
-  [WEB_AUTOMATION_INPUT_IDS.valueExtractionDefined, "Value extraction defined", "web.dom.extract"]
+  [WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined, "Data extraction defined", "web.dom.extract_list"]
 ] as const;
 
 const OUTPUT_FOR_ACTION_INPUT = new Map<WebAutomationInputId, WebAutomationActionType>(
@@ -140,14 +151,14 @@ function recordedActionInputId(eventType: string, payload: JsonObject, metadata:
       return WEB_AUTOMATION_INPUT_IDS.pageScrolled;
     case WEB_AUTOMATION_EVENTS.tabStateChanged:
       return recordedTabInputId(payload);
-    // An extraction the user defined with the picker. Which input it is depends
-    // on the form the definition declares, and a definition the reader refuses
-    // is not one: it stays evidence rather than becoming an extraction that
-    // reads something other than what was picked.
+    // An extraction the user defined with the picker. A definition the reader
+    // refuses is not one: it stays evidence rather than becoming an extraction
+    // that reads something other than what was picked. A single-value
+    // definition stays evidence too -- no input is registered for it, because
+    // nothing can produce one (`WEB_AUTOMATION_INPUT_IDS`).
     case WEB_AUTOMATION_EVENTS.dataExtractionDefined: {
       const definition = webAutomationRecordedExtraction(payload.extraction);
-      if (definition === undefined) return undefined;
-      return definition.form === "value" ? WEB_AUTOMATION_INPUT_IDS.valueExtractionDefined : WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined;
+      return definition?.form === "list" ? WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined : undefined;
     }
     case WEB_AUTOMATION_EVENTS.elementInputChanged:
     case WEB_AUTOMATION_EVENTS.elementChanged: {

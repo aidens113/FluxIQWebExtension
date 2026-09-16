@@ -7,6 +7,7 @@
 import assert from "node:assert/strict";
 import { WEB_AUTOMATION_ACTION_TYPES } from "../../actions/types";
 import { WEB_AUTOMATION_EVENTS } from "../../constants";
+import { webAutomationRecordedExtraction } from "../../actions/extraction";
 import { listWebAutomationOutputNodeDefinitions, webAutomationOutputNodeId, webAutomationOutputPayload } from "../../output-nodes";
 import {
   WEB_AUTOMATION_INPUT_IDS,
@@ -172,10 +173,9 @@ rows.push(
   { row: "9i dom.input, file input recorded holding no files", event: recorded("dom.input", { element: { ...fileInput, hasValue: false } }), eventType: WEB_AUTOMATION_EVENTS.elementInputChanged }
 );
 
-// The rows X4 added: an extraction the user defined with the picker. The form
-// the definition declares decides which of the two inputs it is, because one
-// input maps to exactly one output and a list and a single value run different
-// verbs.
+// The rows X4 added: an extraction the user defined with the picker. A list is
+// the one form with a registered input; a single value has none, because
+// nothing can produce one (`io/input-model.ts`), so it stays evidence.
 const listExtraction = {
   form: "list",
   datasetId: "products:4f1c9a",
@@ -194,12 +194,13 @@ rows.push(
     inputId: WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined,
     outputId: "web.dom.extract_list"
   },
+  // A single value maps to no input. The picker refuses to start a `value` pick
+  // and refuses one that arrives anyway, and the confirm path refuses a `value`
+  // definition, so an input for it would be a trigger that never fires.
   {
     row: "20a data.extract, a single value",
     event: recorded("data.extract", { element: heading, extraction: valueExtraction }),
-    eventType: WEB_AUTOMATION_EVENTS.dataExtractionDefined,
-    inputId: WEB_AUTOMATION_INPUT_IDS.valueExtractionDefined,
-    outputId: "web.dom.extract"
+    eventType: WEB_AUTOMATION_EVENTS.dataExtractionDefined
   },
   // A request the lift would refuse at dispatch must not become a node here
   // either: the node would reach Core, dispatch, and be refused with the Flow
@@ -266,10 +267,11 @@ const dispatchOnlyOutputs = [
   // `web.browser.tab` from a tab switch or close. The rest are authored or
   // driven by a Flow and no recorded user event produces one.
   //
-  // X4 made both extraction verbs recordable: the picker records a definition,
-  // which maps to `web.dom.extract_list` for a list and `web.dom.extract` for a
-  // single value.
-  "web.dom.assert", "web.dom.dialog", "web.browser.download"
+  // X4 made `web.dom.extract_list` recordable: the picker records a list
+  // definition. `web.dom.extract` stayed dispatch-only -- the picker cannot
+  // define a single value, so no recorded event produces one, and no input is
+  // registered for it.
+  "web.dom.assert", "web.dom.dialog", "web.browser.download", "web.dom.extract"
 ];
 // Every action input names one output. Only the tab switch and the tab close
 // share theirs: both are `web.browser.tab`, told apart by the operation the node carries.
@@ -308,10 +310,11 @@ const recordedList = webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.dataExtra
 assert.equal(recordedList?.outputId, "web.dom.extract_list");
 assert.deepEqual(recordedList?.parameters.extractList, listExtraction.request, "the node carries the request it was recorded with");
 assert.equal(JSON.stringify(recordedList?.parameters).includes("SENTINEL-PAGE-VALUE"), false, "no sample value reaches the node");
-const recordedValue = webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.dataExtractionDefined, recorded("data.extract", { element: heading, extraction: valueExtraction }));
-assert.equal(recordedValue?.outputId, "web.dom.extract");
-assert.deepEqual(recordedValue?.parameters.extract, { mode: "text" }, "the node says which value to read");
-assert.equal(recordedValue?.parameters.selector, "h1.total");
+// A single-value definition is read by the domain and maps to nothing: no input
+// is registered for it, so it never becomes an executable read.
+assert.deepEqual(webAutomationRecordedExtraction({ ...valueExtraction }), { form: "value", label: "Order total", read: { mode: "text" } }, "the domain still reads a value definition");
+assert.equal(webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.dataExtractionDefined, recorded("data.extract", { element: heading, extraction: valueExtraction })), undefined, "and it resolves to no input");
+assert.equal(Object.values(WEB_AUTOMATION_INPUT_IDS as Record<string, string>).includes("web.user.value_extraction_defined"), false, "the input it had is not registered");
 
 // State and evidence inputs never become executable.
 assert.equal(stateInputDefinitions.every((input) => (input.role as string) !== "action"), true);

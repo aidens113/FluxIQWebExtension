@@ -158,6 +158,7 @@ function webAutomationExtractListRequestValue(value) {
   const item = nonEmptyString(request?.item);
   const fields = fieldMapValue(request?.fields);
   if (!request || item === void 0 || fields === void 0) return void 0;
+  if (FRAME_KEYS.some((key) => request[key] !== void 0)) return void 0;
   const itemElement = optionalValue(request.itemElement, fingerprintValue);
   if (itemElement === REFUSED) return void 0;
   const paginate = request.paginate === void 0 ? void 0 : paginationValue(request.paginate);
@@ -246,6 +247,7 @@ function paginationValue(value) {
   const pages = nonEmptyString(paginate.pages);
   return pages === void 0 ? void 0 : { mode, pages, maxPages };
 }
+var FRAME_KEYS = ["frame", "frameId", "frameSelector", "frameUrlPath"];
 var PAGINATION_KEYS = {
   next: ["next", "maxPages"],
   loadMore: ["control", "maxPages"],
@@ -1081,11 +1083,23 @@ var WEB_AUTOMATION_INPUT_IDS = {
   filesChosen: "web.user.files_chosen",
   tabSwitched: "web.user.tab_switched",
   tabClosed: "web.user.tab_closed",
-  // Two inputs, because an input maps to exactly one output and the two forms
-  // of a recorded extraction run different verbs: a list saves a dataset, a
-  // single value answers with one value and saves none.
-  dataExtractionDefined: "web.user.data_extraction_defined",
-  valueExtractionDefined: "web.user.value_extraction_defined"
+  // One input, for the one form of extraction the product can define: a list,
+  // which saves a dataset.
+  //
+  // The single-value form had its own input -- an input maps to exactly one
+  // output, and the two forms run different verbs -- and nothing could ever
+  // produce it. The worker refuses to start a `value` pick and refuses one that
+  // arrives anyway (`background/extraction/control.ts`), `confirm.ts` refuses a
+  // `value` definition on the run path, and the picker's recorded event attaches
+  // no element for one. A registered action input that no event can reach
+  // advertises a trigger that never fires, which is the mirror of an unmapped
+  // input becoming executable, so it is not registered.
+  //
+  // The domain still *reads* a value definition
+  // (`actions/extraction/recorded-definition.ts`) and `web.dom.extract` remains
+  // an output a Flow may author; a recorded one stays passive evidence. When the
+  // picker can record a single value, this is one id and one row again.
+  dataExtractionDefined: "web.user.data_extraction_defined"
 };
 function webAutomationEventTypeForClientKind(kind) {
   if (kind === "content.ready") return WEB_AUTOMATION_EVENTS.clientReady;
@@ -1133,8 +1147,7 @@ var actionInputDefinitions = [
   [WEB_AUTOMATION_INPUT_IDS.filesChosen, "Files chosen", "web.dom.upload"],
   [WEB_AUTOMATION_INPUT_IDS.tabSwitched, "Tab switched", "web.browser.tab"],
   [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"],
-  [WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined, "Data extraction defined", "web.dom.extract_list"],
-  [WEB_AUTOMATION_INPUT_IDS.valueExtractionDefined, "Value extraction defined", "web.dom.extract"]
+  [WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined, "Data extraction defined", "web.dom.extract_list"]
 ];
 var OUTPUT_FOR_ACTION_INPUT = new Map(
   actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
@@ -1154,14 +1167,14 @@ function recordedActionInputId(eventType, payload, metadata) {
       return WEB_AUTOMATION_INPUT_IDS.pageScrolled;
     case WEB_AUTOMATION_EVENTS.tabStateChanged:
       return recordedTabInputId(payload);
-    // An extraction the user defined with the picker. Which input it is depends
-    // on the form the definition declares, and a definition the reader refuses
-    // is not one: it stays evidence rather than becoming an extraction that
-    // reads something other than what was picked.
+    // An extraction the user defined with the picker. A definition the reader
+    // refuses is not one: it stays evidence rather than becoming an extraction
+    // that reads something other than what was picked. A single-value
+    // definition stays evidence too -- no input is registered for it, because
+    // nothing can produce one (`WEB_AUTOMATION_INPUT_IDS`).
     case WEB_AUTOMATION_EVENTS.dataExtractionDefined: {
       const definition = webAutomationRecordedExtraction(payload.extraction);
-      if (definition === void 0) return void 0;
-      return definition.form === "value" ? WEB_AUTOMATION_INPUT_IDS.valueExtractionDefined : WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined;
+      return definition?.form === "list" ? WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined : void 0;
     }
     case WEB_AUTOMATION_EVENTS.elementInputChanged:
     case WEB_AUTOMATION_EVENTS.elementChanged: {
@@ -2799,18 +2812,13 @@ var CANDIDATE_LABELS = {
   "web.dom.scroll": "Scroll",
   "web.dom.upload": "Upload files",
   "web.browser.tab": "Browser tab",
-  "web.dom.extract_list": "Extract list",
-  "web.dom.extract": "Extract value"
+  "web.dom.extract_list": "Extract list"
 };
-var EXTRACTION_INPUT_IDS = /* @__PURE__ */ new Set([
-  WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined,
-  WEB_AUTOMATION_INPUT_IDS.valueExtractionDefined
-]);
 function mapWebRecordingObservation(observation, context) {
   const step = recordedStep(observation);
   const action = webAutomationRecordedAction(step.eventType, step.payload, step.metadata);
   if (!action) return linkedClickEntry(observation, context?.following ?? []) ?? webAutomationLateTargetWait(step, (context?.following ?? []).map(recordedStep)) ?? null;
-  if (EXTRACTION_INPUT_IDS.has(action.inputId)) return extractionCandidate(action, step.payload);
+  if (action.inputId === WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined) return extractionCandidate(action, step.payload);
   const expectedState = action.outputId === "web.dom.click" ? webAutomationClickLandingExpectation(step, (context?.following ?? []).map(recordedStep)) : void 0;
   return candidate(action.outputId, action.parameters, action.inputId, CANDIDATE_LABELS[action.outputId] ?? action.outputId, expectedState);
 }
@@ -2837,7 +2845,7 @@ function extractionCandidate(action, payload) {
     outputId: action.outputId,
     parameters: compact2(action.parameters),
     // Action-role, which is what Core requires of a source input
-    // (`proposal-candidates.ts`); both extraction inputs are registered as one.
+    // (`proposal-candidates.ts`); the extraction input is registered as one.
     sourceInputIds: [action.inputId],
     ...list2 ? { recordOutput: webAutomationRecordOutput(list2), timeoutMs: webAutomationExtractListTimeoutMs(list2.request) } : {},
     confidence: 0.9,
@@ -3098,19 +3106,13 @@ test("a recorded list extraction proposes extract_list with a recordOutput Core 
   assert.equal(fields.fields.find((field) => field.id === "link")?.valueType, "url");
   assert.equal(JSON.stringify(candidate2).includes(EXTRACTION_SENTINEL), false, "no sample value reaches the proposal");
 });
-test("a recorded single-value extraction proposes extract_list's sibling, and saves no dataset", async () => {
+test("a recorded single-value extraction proposes nothing, because the product cannot define one", async () => {
   const event2 = createWebAutomationRecordingEvent(
     { kind: "data.extract", sequence: 3, url: "https://example.test/order", title: "Order", eventTimestampMs: 1100, element: { selector: "h1.total", tagName: "h1", id: "total" }, extraction: { form: "value", label: "Order total", read: { mode: "text" } } },
     { tabId: 7, frameId: 0 }
   );
   const { web } = await recordThroughCore([{ event: event2 }]);
-  assert.equal(web.length, 1);
-  const candidate2 = web[0];
-  assert.equal(candidate2.outputId, "web.dom.extract");
-  assert.deepEqual(candidate2.sourceInputIds, [WEB_AUTOMATION_INPUT_IDS.valueExtractionDefined]);
-  assert.equal("recordOutput" in candidate2, false, "a single value saves no dataset");
-  assert.equal("timeoutMs" in candidate2, false, "and reads one page, so it needs no scaled timeout");
-  assert.deepEqual(candidate2.parameters.extract, { mode: "text" });
+  assert.deepEqual(web, [], "a single-value definition is evidence, not a candidate");
 });
 test("a definition Core or the domain would refuse is proposed as nothing at all", async () => {
   for (const [why, extraction] of [

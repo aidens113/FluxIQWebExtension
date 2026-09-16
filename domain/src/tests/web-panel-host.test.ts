@@ -287,20 +287,18 @@ test("a recorded list extraction proposes extract_list with a recordOutput Core 
   assert.equal(JSON.stringify(candidate).includes(EXTRACTION_SENTINEL), false, "no sample value reaches the proposal");
 });
 
-test("a recorded single-value extraction proposes extract_list's sibling, and saves no dataset", async () => {
+test("a recorded single-value extraction proposes nothing, because the product cannot define one", async () => {
+  // The picker refuses to start a `value` pick and refuses one that arrives
+  // anyway (`background/extraction/control.ts`), and the confirm path refuses a
+  // `value` definition, so no input is registered for it (`io/input-model.ts`).
+  // Proposing a node from one would put a step into a Flow that nothing can
+  // record, and that a user could not reproduce by hand.
   const event = createWebAutomationRecordingEvent(
     { kind: "data.extract", sequence: 3, url: "https://example.test/order", title: "Order", eventTimestampMs: 1_100, element: { selector: "h1.total", tagName: "h1", id: "total" }, extraction: { form: "value", label: "Order total", read: { mode: "text" } } },
     { tabId: 7, frameId: 0 }
   );
   const { web } = await recordThroughCore([{ event }]);
-  assert.equal(web.length, 1);
-  const candidate = web[0] as { outputId: string; sourceInputIds?: string[]; recordOutput?: unknown; timeoutMs?: number; parameters: JsonObject };
-  assert.equal(candidate.outputId, "web.dom.extract");
-  assert.deepEqual(candidate.sourceInputIds, [WEB_AUTOMATION_INPUT_IDS.valueExtractionDefined]);
-  // Capture replaces an array at the records path, and one value is not a list.
-  assert.equal("recordOutput" in candidate, false, "a single value saves no dataset");
-  assert.equal("timeoutMs" in candidate, false, "and reads one page, so it needs no scaled timeout");
-  assert.deepEqual(candidate.parameters.extract, { mode: "text" });
+  assert.deepEqual(web, [], "a single-value definition is evidence, not a candidate");
 });
 
 test("a definition Core or the domain would refuse is proposed as nothing at all", async () => {

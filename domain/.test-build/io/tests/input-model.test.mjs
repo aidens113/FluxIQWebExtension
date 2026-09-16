@@ -123,6 +123,7 @@ function webAutomationExtractListRequestValue(value) {
   const item = nonEmptyString(request?.item);
   const fields = fieldMapValue(request?.fields);
   if (!request || item === void 0 || fields === void 0) return void 0;
+  if (FRAME_KEYS.some((key) => request[key] !== void 0)) return void 0;
   const itemElement = optionalValue(request.itemElement, fingerprintValue);
   if (itemElement === REFUSED) return void 0;
   const paginate = request.paginate === void 0 ? void 0 : paginationValue(request.paginate);
@@ -211,6 +212,7 @@ function paginationValue(value) {
   const pages = nonEmptyString(paginate.pages);
   return pages === void 0 ? void 0 : { mode, pages, maxPages };
 }
+var FRAME_KEYS = ["frame", "frameId", "frameSelector", "frameUrlPath"];
 var PAGINATION_KEYS = {
   next: ["next", "maxPages"],
   loadMore: ["control", "maxPages"],
@@ -1052,11 +1054,23 @@ var WEB_AUTOMATION_INPUT_IDS = {
   filesChosen: "web.user.files_chosen",
   tabSwitched: "web.user.tab_switched",
   tabClosed: "web.user.tab_closed",
-  // Two inputs, because an input maps to exactly one output and the two forms
-  // of a recorded extraction run different verbs: a list saves a dataset, a
-  // single value answers with one value and saves none.
-  dataExtractionDefined: "web.user.data_extraction_defined",
-  valueExtractionDefined: "web.user.value_extraction_defined"
+  // One input, for the one form of extraction the product can define: a list,
+  // which saves a dataset.
+  //
+  // The single-value form had its own input -- an input maps to exactly one
+  // output, and the two forms run different verbs -- and nothing could ever
+  // produce it. The worker refuses to start a `value` pick and refuses one that
+  // arrives anyway (`background/extraction/control.ts`), `confirm.ts` refuses a
+  // `value` definition on the run path, and the picker's recorded event attaches
+  // no element for one. A registered action input that no event can reach
+  // advertises a trigger that never fires, which is the mirror of an unmapped
+  // input becoming executable, so it is not registered.
+  //
+  // The domain still *reads* a value definition
+  // (`actions/extraction/recorded-definition.ts`) and `web.dom.extract` remains
+  // an output a Flow may author; a recorded one stays passive evidence. When the
+  // picker can record a single value, this is one id and one row again.
+  dataExtractionDefined: "web.user.data_extraction_defined"
 };
 function webAutomationEventTypeForClientKind(kind) {
   if (kind === "content.ready") return WEB_AUTOMATION_EVENTS.clientReady;
@@ -1104,8 +1118,7 @@ var actionInputDefinitions = [
   [WEB_AUTOMATION_INPUT_IDS.filesChosen, "Files chosen", "web.dom.upload"],
   [WEB_AUTOMATION_INPUT_IDS.tabSwitched, "Tab switched", "web.browser.tab"],
   [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"],
-  [WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined, "Data extraction defined", "web.dom.extract_list"],
-  [WEB_AUTOMATION_INPUT_IDS.valueExtractionDefined, "Value extraction defined", "web.dom.extract"]
+  [WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined, "Data extraction defined", "web.dom.extract_list"]
 ];
 var OUTPUT_FOR_ACTION_INPUT = new Map(
   actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
@@ -1125,14 +1138,14 @@ function recordedActionInputId(eventType, payload, metadata) {
       return WEB_AUTOMATION_INPUT_IDS.pageScrolled;
     case WEB_AUTOMATION_EVENTS.tabStateChanged:
       return recordedTabInputId(payload);
-    // An extraction the user defined with the picker. Which input it is depends
-    // on the form the definition declares, and a definition the reader refuses
-    // is not one: it stays evidence rather than becoming an extraction that
-    // reads something other than what was picked.
+    // An extraction the user defined with the picker. A definition the reader
+    // refuses is not one: it stays evidence rather than becoming an extraction
+    // that reads something other than what was picked. A single-value
+    // definition stays evidence too -- no input is registered for it, because
+    // nothing can produce one (`WEB_AUTOMATION_INPUT_IDS`).
     case WEB_AUTOMATION_EVENTS.dataExtractionDefined: {
       const definition = webAutomationRecordedExtraction(payload.extraction);
-      if (definition === void 0) return void 0;
-      return definition.form === "value" ? WEB_AUTOMATION_INPUT_IDS.valueExtractionDefined : WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined;
+      return definition?.form === "list" ? WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined : void 0;
     }
     case WEB_AUTOMATION_EVENTS.elementInputChanged:
     case WEB_AUTOMATION_EVENTS.elementChanged: {
@@ -1353,12 +1366,13 @@ rows.push(
     inputId: WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined,
     outputId: "web.dom.extract_list"
   },
+  // A single value maps to no input. The picker refuses to start a `value` pick
+  // and refuses one that arrives anyway, and the confirm path refuses a `value`
+  // definition, so an input for it would be a trigger that never fires.
   {
     row: "20a data.extract, a single value",
     event: recorded("data.extract", { element: heading, extraction: valueExtraction }),
-    eventType: WEB_AUTOMATION_EVENTS.dataExtractionDefined,
-    inputId: WEB_AUTOMATION_INPUT_IDS.valueExtractionDefined,
-    outputId: "web.dom.extract"
+    eventType: WEB_AUTOMATION_EVENTS.dataExtractionDefined
   },
   // A request the lift would refuse at dispatch must not become a node here
   // either: the node would reach Core, dispatch, and be refused with the Flow
@@ -1415,12 +1429,14 @@ var dispatchOnlyOutputs = [
   // `web.browser.tab` from a tab switch or close. The rest are authored or
   // driven by a Flow and no recorded user event produces one.
   //
-  // X4 made both extraction verbs recordable: the picker records a definition,
-  // which maps to `web.dom.extract_list` for a list and `web.dom.extract` for a
-  // single value.
+  // X4 made `web.dom.extract_list` recordable: the picker records a list
+  // definition. `web.dom.extract` stayed dispatch-only -- the picker cannot
+  // define a single value, so no recorded event produces one, and no input is
+  // registered for it.
   "web.dom.assert",
   "web.dom.dialog",
-  "web.browser.download"
+  "web.browser.download",
+  "web.dom.extract"
 ];
 assert.deepEqual(inputOutputs.filter((outputId, index) => inputOutputs.indexOf(outputId) !== index), ["web.browser.tab"], "only the tab operations share an output");
 assert.deepEqual([...recordableOutputs, ...dispatchOnlyOutputs].sort(), [...WEB_AUTOMATION_ACTION_TYPES].sort(), "every output is recordable or dispatch-only");
@@ -1444,10 +1460,9 @@ var recordedList = webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.dataExtract
 assert.equal(recordedList?.outputId, "web.dom.extract_list");
 assert.deepEqual(recordedList?.parameters.extractList, listExtraction.request, "the node carries the request it was recorded with");
 assert.equal(JSON.stringify(recordedList?.parameters).includes("SENTINEL-PAGE-VALUE"), false, "no sample value reaches the node");
-var recordedValue = webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.dataExtractionDefined, recorded("data.extract", { element: heading, extraction: valueExtraction }));
-assert.equal(recordedValue?.outputId, "web.dom.extract");
-assert.deepEqual(recordedValue?.parameters.extract, { mode: "text" }, "the node says which value to read");
-assert.equal(recordedValue?.parameters.selector, "h1.total");
+assert.deepEqual(webAutomationRecordedExtraction({ ...valueExtraction }), { form: "value", label: "Order total", read: { mode: "text" } }, "the domain still reads a value definition");
+assert.equal(webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.dataExtractionDefined, recorded("data.extract", { element: heading, extraction: valueExtraction })), void 0, "and it resolves to no input");
+assert.equal(Object.values(WEB_AUTOMATION_INPUT_IDS).includes("web.user.value_extraction_defined"), false, "the input it had is not registered");
 assert.equal(stateInputDefinitions.every((input) => input.role !== "action"), true);
 var stateInputIds = stateInputDefinitions.map((input) => input.id);
 for (const { event, eventType } of rows) {

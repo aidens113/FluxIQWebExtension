@@ -1,12 +1,32 @@
 import { fixtureClient, page } from "../../html.js";
 import { createScenarioManifest, defineScenario } from "../../types.js";
-import { orderLines, renderOrderLines } from "./order-lines.js";
+import { renderOrderLines } from "./order-lines.js";
 
 type State = { sameOriginClicks: number; crossOriginClicks: number };
 
 // The cross-origin frame is served from the second loopback port, so its
 // policy must let the main origin embed it.
 const CROSS_FRAME_CSP = "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors http://127.0.0.1:*";
+
+// **There is no extraction workflow here, and that is deliberate.**
+//
+// An extraction reads the document of the frame its action was delivered to.
+// The request names no frame (`domain/src/actions/extraction/request.ts`): a
+// frame is addressed on the command, exactly as a click's is. What pins this
+// fixture to the top document is the definition lane -- the picker takes a pick
+// from frame 0 alone, and `background/extraction/confirm.ts` dispatches both a
+// user's Confirm and the Lab's `fluxiq.test.defineExtraction` with `frameId: 0`.
+// So FluxIQ cannot be asked to read the lines in the frame, and the Lab's
+// translator refuses a `frame:` extract target as `fixture.invalid`
+// (`packages/test-runner/src/scenario-steps/extract-intent.ts`).
+//
+// A workflow that read them anyway would be served by the reference reader,
+// which resolves the frame through Playwright, so it would measure Playwright
+// rather than FluxIQ -- and would fail the run as an invalid fixture the day
+// `run-scenario.ts` passes the intent driver. The order lines stay in the frame,
+// so the workflow is a paste away: it needs `confirmExtraction` to accept the
+// frame's document path (`frameUrlPath`, which `runtime/action-runner.ts`
+// already resolves to a frame) and the intent seam to send one.
 
 export const iframeCheckoutScenario = defineScenario<State>({
   id: "iframe-checkout", title: "Iframe checkout", startPath: "/scenarios/iframe-checkout/",
@@ -25,21 +45,6 @@ export const iframeCheckoutScenario = defineScenario<State>({
       actions: [{ action: "web.dom.click", outcome: "succeeded" }],
       finalState: [{ id: "same-confirmed", subject: "same-frame", predicate: "text", value: "Confirmed" }, { id: "cross-confirmed", subject: "cross-frame", predicate: "text", value: "Confirmed" }],
     },
-    workflows: [{
-      id: "extract-order-lines",
-      description: "Extract the order lines listed inside the same-origin checkout frame. The intent names the frame, which is the only way this read reaches them: the picker runs in the top frame only, so nothing here could have been pointed at by hand.",
-      recordingScript: [
-        {
-          id: "extract-lines", operation: "extract", target: "frame:Same-origin checkout/testid:order-line",
-          fields: { item: "testid:order-line-item", quantity: "testid:order-line-quantity", amount: "testid:order-line-amount" },
-        },
-        { id: "lines-extracted", operation: "checkpoint" },
-      ],
-      expected: {
-        pageFacts: [{ id: "two-frames", subject: "document", predicate: "iframe-count", value: 2 }],
-        extracted: [{ step: "extract-lines", count: orderLines.length, records: orderLines.map((line) => ({ ...line })) }],
-      },
-    }],
   }),
   createState: () => ({ sameOriginClicks: 0, crossOriginClicks: 0 }),
   mutate(state, operation) {

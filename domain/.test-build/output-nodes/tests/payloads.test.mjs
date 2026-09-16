@@ -124,6 +124,7 @@ function webAutomationExtractListRequestValue(value) {
   const item = nonEmptyString(request?.item);
   const fields = fieldMapValue(request?.fields);
   if (!request || item === void 0 || fields === void 0) return void 0;
+  if (FRAME_KEYS.some((key) => request[key] !== void 0)) return void 0;
   const itemElement = optionalValue(request.itemElement, fingerprintValue);
   if (itemElement === REFUSED) return void 0;
   const paginate = request.paginate === void 0 ? void 0 : paginationValue(request.paginate);
@@ -212,6 +213,7 @@ function paginationValue(value) {
   const pages = nonEmptyString(paginate.pages);
   return pages === void 0 ? void 0 : { mode, pages, maxPages };
 }
+var FRAME_KEYS = ["frame", "frameId", "frameSelector", "frameUrlPath"];
 var PAGINATION_KEYS = {
   next: ["next", "maxPages"],
   loadMore: ["control", "maxPages"],

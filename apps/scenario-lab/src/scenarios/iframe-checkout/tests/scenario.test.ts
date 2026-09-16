@@ -21,18 +21,18 @@ test("manifest is valid and keeps the two-frame click workflow as its primary", 
   assert.equal(primary.expected.extracted, undefined, "the click workflow reads no data");
 });
 
-test("extract-order-lines reads the same-origin frame through a frame-qualified target", () => {
-  const workflow = resolveScenarioWorkflow(manifest, { workflowId: "extract-order-lines" });
-  const step = workflow.recordingScript.find(({ operation }) => operation === "extract");
-  assert.ok(step);
-  // The frame is carried by the intent: the picker is top-frame only, so a
-  // target without the frame prefix could never have reached these lines.
-  assert.equal(step.target, "frame:Same-origin checkout/testid:order-line");
-  assert.match(step.target, /^frame:[^/]+\/testid:[a-z-]+$/u);
-  assert.equal(step.target.slice("frame:".length).split("/")[0], "Same-origin checkout", "the frame is named by the title the document actually carries");
-  assert.deepEqual(step.fields, { item: "testid:order-line-item", quantity: "testid:order-line-quantity", amount: "testid:order-line-amount" });
-  assert.equal(step.pagination, undefined);
-  assert.deepEqual(workflow.expected.extracted, [{ step: "extract-lines", count: orderLines.length, records: orderLines.map((line) => ({ ...line })) }]);
+test("the fixture declares no extraction workflow, because FluxIQ cannot be asked to read a child frame", () => {
+  // An extraction reads the document its action was delivered to, and the
+  // definition lane pins the top frame: the picker takes a pick from frame 0
+  // alone, and `background/extraction/confirm.ts` dispatches with `frameId: 0`.
+  // A workflow whose extract step named this frame would be served by the
+  // reference reader, which resolves the frame through Playwright, so it would
+  // measure Playwright rather than FluxIQ -- and the intent seam refuses a
+  // `frame:` extract target outright. When the confirm path can be given a
+  // frame, the workflow and this row come back together.
+  assert.equal(manifest.workflows, undefined, "no workflow reads the frame FluxIQ cannot address");
+  assert.equal(JSON.stringify(manifest).includes("\"extract\""), false, "and no extract step survives anywhere in the manifest");
+  assert.equal(scenario.route?.(scenario.createState(105), request("same-frame"), context)?.body?.includes('data-testid="order-lines"'), true, "the lines stay in the frame, so the workflow is a paste away");
 });
 
 test("the same-origin frame lists every expected order line, each field in its own element", () => {

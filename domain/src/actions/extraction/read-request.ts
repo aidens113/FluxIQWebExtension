@@ -58,6 +58,13 @@ export function webAutomationExtractListRequestValue(value: unknown): WebAutomat
   const item = nonEmptyString(request?.item);
   const fields = fieldMapValue(request?.fields);
   if (!request || item === undefined || fields === undefined) return undefined;
+  // A request that names a frame is refused whole rather than read without it.
+  // Extraction takes its frame from the command, never from the request
+  // (`request.ts`), so none of these names is a request property. Dropped, the
+  // read would run against the document it was delivered to while its author
+  // believed it had named another, and report success having done it -- which
+  // is the silent answer every refusal in this file exists to avoid.
+  if (FRAME_KEYS.some((key) => request[key] !== undefined)) return undefined;
   // The element the item selector was generalized from. Sent but unreadable, the
   // request is refused whole: dropped, the page would lose the identity it was
   // recorded with and match on the selector alone.
@@ -178,6 +185,13 @@ function paginationValue(value: unknown): WebAutomationExtractListPagination | u
   const pages = nonEmptyString(paginate.pages);
   return pages === undefined ? undefined : { mode, pages, maxPages };
 }
+
+/**
+ * The names a caller reaches for when it means to aim an extraction at a frame.
+ * Every one of them is foreign to a request, because the frame is the
+ * command's (`request.ts`); a request carrying one is refused whole.
+ */
+const FRAME_KEYS = ["frame", "frameId", "frameSelector", "frameUrlPath"] as const;
 
 /** Each pagination mode's own keys. A key listed only under another mode is foreign to this one. */
 const PAGINATION_KEYS = {

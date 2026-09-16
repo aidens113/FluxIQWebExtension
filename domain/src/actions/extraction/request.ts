@@ -103,6 +103,27 @@ export type WebAutomationExtractRead = {
  *
  * There is no request `timeoutMs`: the command's own `timeoutMs` bounds the
  * read (D14).
+ *
+ * **There is no request frame either, and that is the contract rather than an
+ * omission.** A frame is addressed on the action, exactly as it is for a click
+ * or a type: the command's `frameId` and `frameUrlPath` name the document
+ * (`actions/types.ts`), `output-nodes/payloads.ts` carries both onto every
+ * recorded `web.dom.*` node's parameters, `client/gateway-action-parameters.ts`
+ * lifts them back off the dispatched command, and the extension delivers the
+ * action into that frame (`runtime/action-runner.ts`), where the content script
+ * reads its own `document` (`content/extraction/list-reader.ts`). So one
+ * extraction reads one document -- the frame it was delivered to -- and a
+ * recorded extraction already replays into the frame it was recorded in.
+ *
+ * A `frame` inside the request would be a second way to say what the command
+ * already says, read by nothing, so `read-request.ts` refuses a request that
+ * names one instead of dropping it and reading another document in silence.
+ *
+ * What is top-frame-only is the definition lane, not this contract: the picker
+ * takes a pick from frame 0 alone, and `background/extraction/confirm.ts`
+ * dispatches both the user's Confirm and the Lab's `fluxiq.test.defineExtraction`
+ * with `frameId: 0`. So nothing defines an extraction in a child frame today,
+ * and making one do so is a change there rather than here.
  */
 export type WebAutomationExtractListRequest = {
   item: string;

@@ -109,15 +109,8 @@ const CANDIDATE_LABELS: Partial<Record<string, string>> = {
   "web.dom.scroll": "Scroll",
   "web.dom.upload": "Upload files",
   "web.browser.tab": "Browser tab",
-  "web.dom.extract_list": "Extract list",
-  "web.dom.extract": "Extract value"
+  "web.dom.extract_list": "Extract list"
 };
-
-/** The two inputs a recorded extraction resolves to, which propose a candidate of their own. */
-const EXTRACTION_INPUT_IDS: ReadonlySet<string> = new Set([
-  WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined,
-  WEB_AUTOMATION_INPUT_IDS.valueExtractionDefined
-]);
 
 /**
  * Recording -> Subflow mapper. It resolves each observation through the same
@@ -142,7 +135,9 @@ export function mapWebRecordingObservation(observation: AutomationStudioRecordin
   const step = recordedStep(observation);
   const action = webAutomationRecordedAction(step.eventType, step.payload, step.metadata);
   if (!action) return linkedClickEntry(observation, context?.following ?? []) ?? webAutomationLateTargetWait(step, (context?.following ?? []).map(recordedStep)) ?? null;
-  if (EXTRACTION_INPUT_IDS.has(action.inputId)) return extractionCandidate(action, step.payload);
+  // A recorded extraction proposes a candidate of its own. There is one such
+  // input: the single-value form is registered as none (`io/input-model.ts`).
+  if (action.inputId === WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined) return extractionCandidate(action, step.payload);
   const expectedState = action.outputId === "web.dom.click" ? webAutomationClickLandingExpectation(step, (context?.following ?? []).map(recordedStep)) : undefined;
   return candidate(action.outputId, action.parameters, action.inputId, CANDIDATE_LABELS[action.outputId] ?? action.outputId, expectedState);
 }
@@ -176,12 +171,15 @@ function recordedEventPayload(observation: AutomationStudioRecordingMapperObserv
  *   input whenever one is set (`runtime/io-policy.ts`), and the extension
  *   confirms no extract action, so a confirmation would fail every replay after
  *   five seconds. The late-target wait omits it for the same reason.
- * - **A list carries a `recordOutput`**, which is what makes the approved node
- *   save its rows as a dataset. The single-value form carries none: capture
- *   replaces an array at the records path, and one value is not a list.
- * - **A list carries a scaled `timeoutMs`.** Core sends the node's timeout as
- *   the command timeout, defaulting to 5,000 ms, which would cut a paginated
- *   read short at its first page (D14).
+ * - **It carries a `recordOutput`**, which is what makes the approved node save
+ *   its rows as a dataset.
+ * - **It carries a scaled `timeoutMs`.** Core sends the node's timeout as the
+ *   command timeout, defaulting to 5,000 ms, which would cut a paginated read
+ *   short at its first page (D14).
+ *
+ * Only a list definition reaches here: it is the only form with a registered
+ * input, and a definition the reader refuses resolves to none at all. The
+ * `list` guard below is what tells the compiler so, not a second rule.
  */
 function extractionCandidate(action: WebAutomationRecordedAction, payload: JsonObject): AutomationStudioRecordingMapperCandidate {
   const definition = webAutomationRecordedExtraction(payload.extraction);
@@ -190,7 +188,7 @@ function extractionCandidate(action: WebAutomationRecordedAction, payload: JsonO
     outputId: action.outputId,
     parameters: compact(action.parameters),
     // Action-role, which is what Core requires of a source input
-    // (`proposal-candidates.ts`); both extraction inputs are registered as one.
+    // (`proposal-candidates.ts`); the extraction input is registered as one.
     sourceInputIds: [action.inputId],
     ...(list ? { recordOutput: webAutomationRecordOutput(list), timeoutMs: webAutomationExtractListTimeoutMs(list.request) } : {}),
     confidence: 0.9,

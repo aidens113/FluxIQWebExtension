@@ -1,5 +1,9 @@
-// domain/src/client/tests/gateway-command-parameters.test.ts
+// domain/src/actions/extraction/tests/frame-address.test.ts
 import assert from "node:assert/strict";
+import test from "node:test";
+
+// domain/src/constants.ts
+var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 
 // domain/src/actions/extraction/field-key.ts
 var FIELD_KEY_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
@@ -119,19 +123,19 @@ var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
 
 // domain/src/actions/extraction/read-request.ts
 function webAutomationExtractListRequestValue(value) {
-  const request = jsonObject(value);
-  const item = nonEmptyString(request?.item);
-  const fields = fieldMapValue(request?.fields);
-  if (!request || item === void 0 || fields === void 0) return void 0;
-  if (FRAME_KEYS.some((key) => request[key] !== void 0)) return void 0;
-  const itemElement = optionalValue(request.itemElement, fingerprintValue);
+  const request2 = jsonObject(value);
+  const item = nonEmptyString(request2?.item);
+  const fields = fieldMapValue(request2?.fields);
+  if (!request2 || item === void 0 || fields === void 0) return void 0;
+  if (FRAME_KEYS.some((key) => request2[key] !== void 0)) return void 0;
+  const itemElement = optionalValue(request2.itemElement, fingerprintValue);
   if (itemElement === REFUSED) return void 0;
-  const paginate = request.paginate === void 0 ? void 0 : paginationValue(request.paginate);
-  if (request.paginate !== void 0 && paginate === void 0) return void 0;
-  const namedMaxItems = positiveInteger(request.maxItems);
+  const paginate = request2.paginate === void 0 ? void 0 : paginationValue(request2.paginate);
+  if (request2.paginate !== void 0 && paginate === void 0) return void 0;
+  const namedMaxItems = positiveInteger(request2.maxItems);
   const maxItems = namedMaxItems === void 0 ? void 0 : Math.min(namedMaxItems, WEB_AUTOMATION_EXTRACT_MAX_ITEMS);
-  const minItems = nonNegativeInteger(request.minItems);
-  if (request.minItems !== void 0 && minItems === void 0) return void 0;
+  const minItems = nonNegativeInteger(request2.minItems);
+  if (request2.minItems !== void 0 && minItems === void 0) return void 0;
   if (minItems !== void 0 && minItems > (maxItems ?? WEB_AUTOMATION_EXTRACT_MAX_ITEMS)) return void 0;
   return {
     item,
@@ -248,6 +252,57 @@ function jsonObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
+// domain/src/actions/extraction/recorded-definition.ts
+var DATASET_ID_PATTERN = /^[A-Za-z0-9._:-]{1,200}$/u;
+var RESERVED_DATASET_IDS = /* @__PURE__ */ new Set([".", ".."]);
+var LABEL_MAX_LENGTH = 200;
+function webAutomationRecordedExtraction(value) {
+  const definition2 = jsonObject2(value);
+  if (!definition2) return void 0;
+  if (definition2.form === "value") return recordedValueExtraction(definition2);
+  return definition2.form === "list" ? recordedListExtraction(definition2) : void 0;
+}
+function recordedListExtraction(definition2) {
+  const datasetId = datasetIdValue(definition2.datasetId);
+  const label = labelValue(definition2.label);
+  const request2 = webAutomationExtractListRequestValue(definition2.request);
+  const itemCount = nonNegativeInteger2(definition2.itemCount);
+  if (datasetId === void 0 || label === void 0 || request2 === void 0 || itemCount === void 0) return void 0;
+  const fieldLabels = fieldLabelsValue(definition2.fieldLabels, request2);
+  if (fieldLabels === void 0) return void 0;
+  return { form: "list", datasetId, label, request: request2, fieldLabels, itemCount };
+}
+function recordedValueExtraction(definition2) {
+  const label = labelValue(definition2.label);
+  const read = webAutomationExtractReadValue(definition2.read);
+  return label === void 0 || read === void 0 ? void 0 : { form: "value", label, read };
+}
+function fieldLabelsValue(value, request2) {
+  if (value === void 0) return {};
+  const labels = jsonObject2(value);
+  if (!labels) return void 0;
+  const read = [];
+  for (const [key, entry] of Object.entries(labels)) {
+    if (!isWebAutomationExtractFieldKey(key) || !(key in request2.fields)) continue;
+    const label = labelValue(entry);
+    if (label === void 0) return void 0;
+    read.push([key, label]);
+  }
+  return Object.fromEntries(read);
+}
+function datasetIdValue(value) {
+  return typeof value === "string" && !RESERVED_DATASET_IDS.has(value) && DATASET_ID_PATTERN.test(value) ? value : void 0;
+}
+function labelValue(value) {
+  return typeof value === "string" && value.trim().length > 0 && value.length <= LABEL_MAX_LENGTH ? value : void 0;
+}
+function nonNegativeInteger2(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
+}
+function jsonObject2(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+
 // domain/src/actions/extraction/schema.ts
 function webAutomationExtractListSchema(elementFingerprintSchema2) {
   const pageBound = { type: "integer", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES };
@@ -344,34 +399,6 @@ var WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = {
   "web.dom.dialog": "dom.dialog",
   "web.browser.tab": "browser.tab",
   "web.browser.download": "browser.download"
-};
-
-// domain/src/constants.ts
-var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
-
-// domain/src/actions/safety.ts
-var WEB_AUTOMATION_ACTION_SAFETY = {
-  "web.browser.navigate": "review",
-  "web.dom.click": "review",
-  "web.dom.type": "review",
-  "web.dom.clear": "review",
-  "web.dom.select": "review",
-  "web.dom.scroll": "review",
-  "web.dom.keypress": "review",
-  "web.dom.wait_for_selector": "safe",
-  "web.dom.wait_for_text": "safe",
-  "web.dom.extract": "safe",
-  "web.dom.capture_snapshot": "safe",
-  // Added in Week 1 (decision D6). An assertion and a list extraction only read
-  // the page, so they are safe; check, upload, and dialog change it, and a tab
-  // or download acts on the browser, so all five need approval.
-  "web.dom.check": "review",
-  "web.dom.assert": "safe",
-  "web.dom.extract_list": "safe",
-  "web.dom.upload": "review",
-  "web.dom.dialog": "review",
-  "web.browser.tab": "review",
-  "web.browser.download": "review"
 };
 
 // domain/src/actions/schemas.ts
@@ -678,6 +705,31 @@ var webAutomationActionDefinitions = [
   }
 ];
 
+// domain/src/actions/safety.ts
+var WEB_AUTOMATION_ACTION_SAFETY = {
+  "web.browser.navigate": "review",
+  "web.dom.click": "review",
+  "web.dom.type": "review",
+  "web.dom.clear": "review",
+  "web.dom.select": "review",
+  "web.dom.scroll": "review",
+  "web.dom.keypress": "review",
+  "web.dom.wait_for_selector": "safe",
+  "web.dom.wait_for_text": "safe",
+  "web.dom.extract": "safe",
+  "web.dom.capture_snapshot": "safe",
+  // Added in Week 1 (decision D6). An assertion and a list extraction only read
+  // the page, so they are safe; check, upload, and dialog change it, and a tab
+  // or download acts on the browser, so all five need approval.
+  "web.dom.check": "review",
+  "web.dom.assert": "safe",
+  "web.dom.extract_list": "safe",
+  "web.dom.upload": "review",
+  "web.dom.dialog": "review",
+  "web.browser.tab": "review",
+  "web.browser.download": "review"
+};
+
 // domain/src/output-nodes/definitions.ts
 var controlInput = { id: "in", label: "In", valueType: "signal", role: "control" };
 var outputPorts = [
@@ -698,26 +750,26 @@ function webAutomationOutputNodeId(outputId) {
   return `web.output.${outputId.replace(/^web\./, "").replace(/\./g, "-")}`;
 }
 var webAutomationOutputNodeDefinitions = webAutomationActionDefinitions.map(
-  (definition) => createWebAutomationOutputNodeDefinition(definition)
+  (definition2) => createWebAutomationOutputNodeDefinition(definition2)
 );
-function createWebAutomationOutputNodeDefinition(definition) {
-  const safeOutput = WEB_AUTOMATION_ACTION_SAFETY[definition.actionType] === "safe";
+function createWebAutomationOutputNodeDefinition(definition2) {
+  const safeOutput = WEB_AUTOMATION_ACTION_SAFETY[definition2.actionType] === "safe";
   const requiredParameters2 = new Set(
-    Array.isArray(definition.parameterSchema.required) ? definition.parameterSchema.required.filter((value) => typeof value === "string") : []
+    Array.isArray(definition2.parameterSchema.required) ? definition2.parameterSchema.required.filter((value) => typeof value === "string") : []
   );
-  const recordsPath = recordsPathByOutput[definition.actionType];
+  const recordsPath = recordsPathByOutput[definition2.actionType];
   return {
     schemaVersion: "0.1",
-    id: webAutomationOutputNodeId(definition.actionType),
+    id: webAutomationOutputNodeId(definition2.actionType),
     version: "1.0.0",
-    label: definition.label,
-    description: definition.description,
+    label: definition2.label,
+    description: definition2.description,
     category: "web",
     source: {
       kind: "importer",
       domainId: WEB_AUTOMATION_DOMAIN_ID,
       packageId: "@fluxiq-web-extension/domain",
-      implementationKey: definition.actionType
+      implementationKey: definition2.actionType
     },
     availability: { kind: "domain", domainId: WEB_AUTOMATION_DOMAIN_ID },
     capabilities: { executable: true, stateAware: true, recordable: true },
@@ -727,20 +779,20 @@ function createWebAutomationOutputNodeDefinition(definition) {
       requiresOperatorApproval: !safeOutput,
       requiredPermissions: ["web-automation.action"]
     },
-    outputAction: { fixedOutputId: definition.actionType },
+    outputAction: { fixedOutputId: definition2.actionType },
     inputs: [controlInput],
     outputs: outputPorts,
-    parameters: [...parametersForOutput(definition.actionType), expectedStateParameter].map((parameter) => ({
+    parameters: [...parametersForOutput(definition2.actionType), expectedStateParameter].map((parameter) => ({
       ...parameter,
       ...requiredParameters2.has(parameter.id) ? { required: true } : {},
       allowStateBinding: true
     })),
-    icon: iconForOutput(definition.actionType),
+    icon: iconForOutput(definition2.actionType),
     tags: ["web-automation", "output"],
     metadata: {
       domainId: WEB_AUTOMATION_DOMAIN_ID,
-      outputId: definition.actionType,
-      parameterSchema: definition.parameterSchema,
+      outputId: definition2.actionType,
+      parameterSchema: definition2.parameterSchema,
       // Core's element-target preparation (`runtime/io-policy.ts`) resolves the
       // recorded fingerprint against the runtime candidates, and applies its
       // confidence floor, only for an output that declares this. The flag is
@@ -814,8 +866,60 @@ function iconForOutput(outputId) {
   return "square-dot";
 }
 
+// domain/src/sensitivity/signature.ts
+var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
+var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
+var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
+function isSensitiveFieldSignature(signature) {
+  if (isSensitiveControlType(signature.inputType) || isSensitiveControlType(signature.controlType)) return true;
+  if (signature.dataSensitive?.trim().toLowerCase() === "true") return true;
+  return (signature.autocomplete ?? "").toLowerCase().split(/\s+/u).some((token) => Boolean(token) && (SENSITIVE_AUTOCOMPLETE_TOKENS.has(token) || token.startsWith(SENSITIVE_AUTOCOMPLETE_PREFIX)));
+}
+function isSensitiveControlType(type) {
+  return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
+}
+
+// domain/src/sensitivity/descriptor.ts
+function sensitiveFieldSignatureOfDescriptor(descriptor) {
+  if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
+  const record = descriptor;
+  const attributes = record.attributes && typeof record.attributes === "object" && !Array.isArray(record.attributes) ? record.attributes : {};
+  return {
+    inputType: stringField(record.inputType),
+    controlType: stringField(attributes.type),
+    autocomplete: stringField(attributes.autocomplete),
+    dataSensitive: stringField(attributes["data-sensitive"])
+  };
+}
+function isSensitiveElementDescriptor(descriptor) {
+  return isSensitiveFieldSignature(sensitiveFieldSignatureOfDescriptor(descriptor));
+}
+function stringField(value) {
+  return typeof value === "string" ? value : void 0;
+}
+
+// domain/src/output-nodes/recorded-element-key.ts
+function webAutomationRecordedElementKey(payload) {
+  const element = objectValue(payload.element);
+  const attributes = objectValue(element?.attributes);
+  const statePath = stringValue(objectValue(payload.visualTarget)?.statePath);
+  const fromStatePath = statePath?.startsWith("web.elements.") ? statePath.slice("web.elements.".length) : void 0;
+  const identity = fromStatePath ?? stringValue(element?.testId) ?? stringValue(attributes?.["data-testid"]) ?? stringValue(attributes?.["data-test"]) ?? stringValue(attributes?.["data-cy"]) ?? stringValue(element?.id) ?? stringValue(attributes?.id) ?? stringValue(element?.name) ?? stringValue(attributes?.name) ?? stringValue(element?.selector) ?? stringValue(payload.selector);
+  const key = sanitizeRecordedElementKey(identity ?? "");
+  return key.length ? key : void 0;
+}
+function sanitizeRecordedElementKey(value) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 120);
+}
+
 // domain/src/output-nodes/secret-binding.ts
 var WEB_AUTOMATION_SECRET_STATE_PREFIX = "web.secret.";
+function webAutomationSecretStatePath(key) {
+  return `${WEB_AUTOMATION_SECRET_STATE_PREFIX}${key}`;
+}
+function webAutomationSecretBinding(key) {
+  return { $state: { path: webAutomationSecretStatePath(key) } };
+}
 function webAutomationSecretBindingPath(value) {
   const path = stringValue(objectValue(objectValue(value)?.$state)?.path);
   return path?.startsWith(WEB_AUTOMATION_SECRET_STATE_PREFIX) ? path : void 0;
@@ -829,6 +933,12 @@ function webAutomationUnresolvedSecretParameters(parameters) {
 
 // domain/src/output-nodes/upload-binding.ts
 var WEB_AUTOMATION_UPLOAD_STATE_PREFIX = "web.upload.";
+function webAutomationUploadStatePath(key) {
+  return `${WEB_AUTOMATION_UPLOAD_STATE_PREFIX}${key}`;
+}
+function webAutomationUploadBinding(key) {
+  return { $state: { path: webAutomationUploadStatePath(key) } };
+}
 function webAutomationUploadBindingPath(value) {
   const path = stringValue(objectValue(objectValue(value)?.$state)?.path);
   return path?.startsWith(WEB_AUTOMATION_UPLOAD_STATE_PREFIX) ? path : void 0;
@@ -838,6 +948,230 @@ function webAutomationUploadBindingPath(value) {
 function webAutomationUrlPath(value) {
   return typeof value === "string" && /^\/(?![/\\])[^?#]*$/u.test(value) ? value : void 0;
 }
+
+// domain/src/output-nodes/payloads.ts
+function webAutomationOutputPayload(outputId, payload) {
+  return withRecordedFrame(outputId, payload, recordedOutputParameters(outputId, payload));
+}
+function withRecordedFrame(outputId, payload, parameters) {
+  const browserFrameId = frameIdValue(payload.browserFrameId);
+  if (browserFrameId === void 0 || !outputId.startsWith("web.dom.")) return parameters;
+  if (Object.keys(parameters).length === 0) return parameters;
+  const browserFrameUrlPath = browserFrameId > 0 ? httpUrlPath(payload.url) : void 0;
+  return { ...parameters, browserFrameId, ...browserFrameUrlPath !== void 0 ? { browserFrameUrlPath } : {} };
+}
+function frameIdValue(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
+}
+function httpUrlPath(value) {
+  if (typeof value !== "string") return void 0;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.pathname : void 0;
+  } catch {
+    return void 0;
+  }
+}
+function recordedOutputParameters(outputId, payload) {
+  const element = elementFingerprint(payload.element);
+  const selector = stringValue(element?.selector);
+  const visualTarget = objectValue(payload.visualTarget);
+  const target = compact({ ...element ? { element } : {}, ...visualTarget ? { visualTarget } : {} });
+  const hasTarget = Object.keys(target).length > 0;
+  if (outputId === "web.browser.navigate") return compact({ url: stringValue(payload.url) });
+  if (outputId === "web.dom.click" || outputId === "web.dom.clear") return compact({ selector, ...hasTarget ? target : {} });
+  if (outputId === "web.dom.type") return compact({ selector, text: recordedTypedText(payload), ...hasTarget ? target : {} });
+  if (outputId === "web.dom.select") return compact({ selector, value: stringValue(payload.inputValue) ?? "", ...hasTarget ? target : {} });
+  if (outputId === "web.dom.keypress") return compact({ selector, key: stringValue(payload.key) ?? "", ...hasTarget ? target : {} });
+  if (outputId === "web.dom.scroll") {
+    const scroll = objectValue(payload.scroll);
+    return compact({ x: numberValue(scroll?.x), y: numberValue(scroll?.y) });
+  }
+  if (outputId === "web.dom.check") {
+    const checked = recordedCheckedState(payload);
+    return compact({ selector, checked, ...hasTarget ? target : {} });
+  }
+  if (outputId === "web.dom.wait_for_selector") return compact({ selector, ...hasTarget ? target : {} });
+  if (outputId === "web.dom.wait_for_text") return compact({ text: stringValue(payload.inputValue) ?? stringValue(payload.title) });
+  if (outputId === "web.dom.extract") {
+    const read = recordedValueRead(payload);
+    return compact({ selector, ...hasTarget ? target : {}, ...read !== void 0 ? { extract: read } : {} });
+  }
+  if (outputId === "web.dom.extract_list") return recordedListExtractionParameters(payload);
+  if (outputId === "web.dom.upload") return recordedUploadParameters(payload, selector, target);
+  if (outputId === "web.browser.tab") return recordedTabParameters(payload);
+  if (outputId === "web.dom.capture_snapshot") return {};
+  return {};
+}
+function recordedListExtractionParameters(payload) {
+  const definition2 = webAutomationRecordedExtraction(payload.extraction);
+  return definition2?.form === "list" ? { extractList: definition2.request } : {};
+}
+function recordedValueRead(payload) {
+  const definition2 = webAutomationRecordedExtraction(payload.extraction);
+  return definition2?.form === "value" ? definition2.read : void 0;
+}
+function recordedUploadParameters(payload, selector, target) {
+  const key = webAutomationRecordedElementKey(payload);
+  if (key === void 0) return {};
+  const element = objectValue(target.element);
+  const fileTarget = element === void 0 ? target : { ...target, element: Object.fromEntries(Object.entries(element).filter(([name]) => name !== "value")) };
+  return compact({ selector, upload: webAutomationUploadBinding(key), ...fileTarget });
+}
+function recordedTabParameters(payload) {
+  const tab = objectValue(payload.tab);
+  if (tab?.operation === "close") return { tab: { operation: "close" } };
+  if (tab?.operation !== "switch") return {};
+  const urlPath = webAutomationUrlPath(tab.urlPath);
+  return { tab: { operation: "switch", ...urlPath !== void 0 ? { urlPath } : {} } };
+}
+function recordedTypedText(payload) {
+  const recorded2 = stringValue(payload.inputValue);
+  if (recorded2 !== void 0) return recorded2;
+  if (!isSensitiveElementDescriptor(payload.element)) return "";
+  const key = webAutomationRecordedElementKey(payload);
+  return key === void 0 ? "" : webAutomationSecretBinding(key);
+}
+function recordedCheckedState(payload) {
+  const element = objectValue(payload.element);
+  if (!element) return void 0;
+  if (typeof element.checked === "boolean") return element.checked;
+  const ariaChecked = stringValue(objectValue(element.attributes)?.["aria-checked"]);
+  if (ariaChecked === "true") return true;
+  if (ariaChecked === "false") return false;
+  return isRadioElement(element) ? true : void 0;
+}
+function isRadioElement(element) {
+  return stringValue(element.inputType)?.toLowerCase() === "radio" || stringValue(element.role)?.toLowerCase() === "radio";
+}
+
+// domain/src/io/input-model.ts
+var WEB_AUTOMATION_INPUT_IDS = {
+  browserState: "web.browser.state",
+  recordingEvidence: "web.recording.evidence",
+  navigationRequested: "web.user.navigation_requested",
+  elementClicked: "web.user.element_clicked",
+  textEntered: "web.user.text_entered",
+  fieldCleared: "web.user.field_cleared",
+  optionSelected: "web.user.option_selected",
+  checkboxToggled: "web.user.checkbox_toggled",
+  keyPressed: "web.user.key_pressed",
+  pageScrolled: "web.user.page_scrolled",
+  filesChosen: "web.user.files_chosen",
+  tabSwitched: "web.user.tab_switched",
+  tabClosed: "web.user.tab_closed",
+  // One input, for the one form of extraction the product can define: a list,
+  // which saves a dataset.
+  //
+  // The single-value form had its own input -- an input maps to exactly one
+  // output, and the two forms run different verbs -- and nothing could ever
+  // produce it. The worker refuses to start a `value` pick and refuses one that
+  // arrives anyway (`background/extraction/control.ts`), `confirm.ts` refuses a
+  // `value` definition on the run path, and the picker's recorded event attaches
+  // no element for one. A registered action input that no event can reach
+  // advertises a trigger that never fires, which is the mirror of an unmapped
+  // input becoming executable, so it is not registered.
+  //
+  // The domain still *reads* a value definition
+  // (`actions/extraction/recorded-definition.ts`) and `web.dom.extract` remains
+  // an output a Flow may author; a recorded one stays passive evidence. When the
+  // picker can record a single value, this is one id and one row again.
+  dataExtractionDefined: "web.user.data_extraction_defined"
+};
+var stateInputDefinitions = [
+  { id: WEB_AUTOMATION_INPUT_IDS.browserState, title: "Browser state", description: "Current browser, tab, and compact DOM state available for policy conditions.", role: "state" },
+  { id: WEB_AUTOMATION_INPUT_IDS.recordingEvidence, title: "Web recording evidence", description: "Passive browser observations that may inform recordings but never execute a policy.", role: "event" }
+];
+var actionInputDefinitions = [
+  [WEB_AUTOMATION_INPUT_IDS.navigationRequested, "Navigation requested", "web.browser.navigate"],
+  [WEB_AUTOMATION_INPUT_IDS.elementClicked, "Element clicked", "web.dom.click"],
+  [WEB_AUTOMATION_INPUT_IDS.textEntered, "Text entered", "web.dom.type"],
+  [WEB_AUTOMATION_INPUT_IDS.fieldCleared, "Field cleared", "web.dom.clear"],
+  [WEB_AUTOMATION_INPUT_IDS.optionSelected, "Option selected", "web.dom.select"],
+  [WEB_AUTOMATION_INPUT_IDS.checkboxToggled, "Checkbox toggled", "web.dom.check"],
+  [WEB_AUTOMATION_INPUT_IDS.keyPressed, "Key pressed", "web.dom.keypress"],
+  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"],
+  [WEB_AUTOMATION_INPUT_IDS.filesChosen, "Files chosen", "web.dom.upload"],
+  [WEB_AUTOMATION_INPUT_IDS.tabSwitched, "Tab switched", "web.browser.tab"],
+  [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"],
+  [WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined, "Data extraction defined", "web.dom.extract_list"]
+];
+var OUTPUT_FOR_ACTION_INPUT = new Map(
+  actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
+);
+
+// domain/src/runtime/capabilities.ts
+var webAutomationRuntimeCapabilities = [
+  {
+    id: "web.actions",
+    label: "Web actions",
+    kind: "action",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    actionTypes: WEB_AUTOMATION_ACTION_TYPES,
+    outputIds: WEB_AUTOMATION_ACTION_TYPES
+  },
+  {
+    id: "web.snapshots",
+    label: "Web snapshots",
+    kind: "snapshot",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence]
+  },
+  {
+    id: "web.state",
+    label: "Web state",
+    kind: "state",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState, WEB_AUTOMATION_INPUT_IDS.recordingEvidence]
+  },
+  {
+    id: "web.flow-runtime",
+    label: "Web flow runtime",
+    kind: "flow",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    metadata: { executionHost: "fluxiq-core", actionTransport: "extension" }
+  }
+];
+var webAutomationGatewayCapabilities = [
+  {
+    id: "web.context.state",
+    label: "Web context state",
+    kind: "state",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState],
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState] }
+  },
+  {
+    id: "web.structured.snapshot",
+    label: "Structured web snapshots",
+    kind: "snapshot",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence],
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence] }
+  },
+  {
+    id: "web.recording.events",
+    label: "Web recording events",
+    kind: "recording",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID }
+  },
+  {
+    id: "web.actions",
+    label: "Web actions",
+    kind: "action",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    actionTypes: WEB_AUTOMATION_ACTION_TYPES,
+    outputIds: WEB_AUTOMATION_ACTION_TYPES,
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, outputIds: WEB_AUTOMATION_ACTION_TYPES }
+  }
+];
+
+// domain/src/extraction/dataset-id.ts
+var COMBINING_MARKS = new RegExp("\\p{M}+", "gu");
+
+// domain/src/extraction/label-key.ts
+var COMBINING_MARKS2 = new RegExp("\\p{M}+", "gu");
 
 // domain/src/runtime/failure/codes.ts
 var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
@@ -910,15 +1244,15 @@ var WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS = Object.freeze({
   "web.action.unknown": { category: "ambiguous_or_unknown", retryable: false, stage: "execution" }
 });
 function webAutomationFailureRecord(code, comparison = {}) {
-  const definition = WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[code];
+  const definition2 = WEB_AUTOMATION_FAILURE_CODE_DEFINITIONS[code];
   const expected = boundedText(comparison.expected);
   const actual = boundedText(comparison.actual);
   const evidenceDigest = comparison.evidenceDigest !== void 0 && EVIDENCE_DIGEST_PATTERN.test(comparison.evidenceDigest) ? comparison.evidenceDigest : void 0;
   return {
-    category: definition.category,
+    category: definition2.category,
     code,
-    retryable: definition.retryable,
-    stage: definition.stage,
+    retryable: definition2.retryable,
+    stage: definition2.stage,
     ...expected === void 0 ? {} : { expected },
     ...actual === void 0 ? {} : { actual },
     ...evidenceDigest === void 0 ? {} : { evidenceDigest }
@@ -933,13 +1267,18 @@ function boundedText(value) {
   return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
 }
 
+// domain/src/recording/web-state/evidence/project.ts
+var COLLECTION = { elementKind: "collection", comparable: false };
+var LIVE_COLLECTION = { ...COLLECTION, volatility: "rapid" };
+var SETTLED_COLLECTION = { ...COLLECTION, volatility: "slow" };
+
 // domain/src/client/gateway-action-parameters.ts
 function webAutomationReadActionParameters(parameters) {
   const lifted = {
     // Which tab and frame the action runs in, as opposed to the tab a
     // `web.browser.tab` operation acts on, which travels inside `tab`.
-    tabId: nonNegativeInteger2(parameters.browserTabId ?? parameters.tabId),
-    frameId: nonNegativeInteger2(parameters.browserFrameId ?? parameters.frameId),
+    tabId: nonNegativeInteger3(parameters.browserTabId ?? parameters.tabId),
+    frameId: nonNegativeInteger3(parameters.browserFrameId ?? parameters.frameId),
     // The child frame's document path, which finds the frame again after Chrome
     // renumbers it. Only the recorded node's name is read.
     frameUrlPath: webAutomationUrlPath(parameters.browserFrameUrlPath),
@@ -967,67 +1306,67 @@ function suppliedParameter(parameters, field) {
   return parameters[field];
 }
 function optionSelectorValue(value) {
-  const request = jsonObject2(value);
-  if (!request) return void 0;
-  if (request.by === "value") {
-    const optionValue = stringValue2(request.value);
+  const request2 = jsonObject3(value);
+  if (!request2) return void 0;
+  if (request2.by === "value") {
+    const optionValue = stringValue2(request2.value);
     return optionValue === void 0 ? void 0 : { by: "value", value: optionValue };
   }
-  if (request.by === "label") {
-    const label = stringValue2(request.label);
+  if (request2.by === "label") {
+    const label = stringValue2(request2.label);
     return label === void 0 ? void 0 : { by: "label", label };
   }
-  const index = nonNegativeInteger2(request.index);
-  return request.by === "index" && index !== void 0 ? { by: "index", index } : void 0;
+  const index = nonNegativeInteger3(request2.index);
+  return request2.by === "index" && index !== void 0 ? { by: "index", index } : void 0;
 }
 function scrollRequestValue(value) {
-  const request = jsonObject2(value);
-  const mode = memberOf2(request?.mode, ["by", "toElement", "untilStable"]);
-  if (!request || mode === void 0) return void 0;
+  const request2 = jsonObject3(value);
+  const mode = memberOf2(request2?.mode, ["by", "toElement", "untilStable"]);
+  if (!request2 || mode === void 0) return void 0;
   if (mode === "toElement") return { mode };
-  const y = finiteNumber(request.y);
+  const y = finiteNumber(request2.y);
   if (mode === "by") {
-    const x = finiteNumber(request.x);
+    const x = finiteNumber(request2.x);
     return { mode, ...x !== void 0 ? { x } : {}, ...y !== void 0 ? { y } : {} };
   }
-  const maxScrolls = positiveInteger2(request.maxScrolls);
+  const maxScrolls = positiveInteger2(request2.maxScrolls);
   return maxScrolls === void 0 ? void 0 : { mode, maxScrolls, ...y !== void 0 ? { y } : {} };
 }
 function waitRequestValue(value) {
-  const request = jsonObject2(value);
-  const condition = memberOf2(request?.condition, WAIT_CONDITIONS);
-  if (!request || condition === void 0) return void 0;
-  const url = nonEmptyString2(request.url);
-  const stableForMs = positiveInteger2(request.stableForMs);
+  const request2 = jsonObject3(value);
+  const condition = memberOf2(request2?.condition, WAIT_CONDITIONS);
+  if (!request2 || condition === void 0) return void 0;
+  const url = nonEmptyString2(request2.url);
+  const stableForMs = positiveInteger2(request2.stableForMs);
   return { condition, ...url !== void 0 ? { url } : {}, ...stableForMs !== void 0 ? { stableForMs } : {} };
 }
 function keyModifiersValue(value) {
-  const request = jsonObject2(value);
-  if (!request) return void 0;
+  const request2 = jsonObject3(value);
+  if (!request2) return void 0;
   const modifiers = {
-    ...typeof request.alt === "boolean" ? { alt: request.alt } : {},
-    ...typeof request.ctrl === "boolean" ? { ctrl: request.ctrl } : {},
-    ...typeof request.meta === "boolean" ? { meta: request.meta } : {},
-    ...typeof request.shift === "boolean" ? { shift: request.shift } : {}
+    ...typeof request2.alt === "boolean" ? { alt: request2.alt } : {},
+    ...typeof request2.ctrl === "boolean" ? { ctrl: request2.ctrl } : {},
+    ...typeof request2.meta === "boolean" ? { meta: request2.meta } : {},
+    ...typeof request2.shift === "boolean" ? { shift: request2.shift } : {}
   };
   return Object.keys(modifiers).length > 0 ? modifiers : void 0;
 }
 function assertRequestValue(value) {
-  const request = jsonObject2(value);
-  const kind = memberOf2(request?.kind, ASSERT_KINDS);
-  if (!request || kind === void 0) return void 0;
-  const expected = stringValue2(request.expected);
-  const timeoutMs = positiveInteger2(request.timeoutMs);
+  const request2 = jsonObject3(value);
+  const kind = memberOf2(request2?.kind, ASSERT_KINDS);
+  if (!request2 || kind === void 0) return void 0;
+  const expected = stringValue2(request2.expected);
+  const timeoutMs = positiveInteger2(request2.timeoutMs);
   return { kind, ...expected !== void 0 ? { expected } : {}, ...timeoutMs !== void 0 ? { timeoutMs } : {} };
 }
 function uploadRequestValue(value) {
-  const request = jsonObject2(value);
-  const supplied = Array.isArray(request?.files) ? request.files : void 0;
+  const request2 = jsonObject3(value);
+  const supplied = Array.isArray(request2?.files) ? request2.files : void 0;
   if (supplied === void 0 || supplied.length === 0) return void 0;
   const files = [];
   let totalBytes = 0;
   for (const entry of supplied) {
-    const file = jsonObject2(entry);
+    const file = jsonObject3(entry);
     const name = nonEmptyString2(file?.name);
     const mimeType = nonEmptyString2(file?.mimeType);
     const contentBase64 = typeof file?.contentBase64 === "string" ? file.contentBase64 : void 0;
@@ -1046,35 +1385,35 @@ function base64ByteLength(content) {
   return content.length / 4 * 3 - padding;
 }
 function dialogRequestValue(value) {
-  const request = jsonObject2(value);
-  const response = memberOf2(request?.response, ["accept", "dismiss"]);
-  if (!request || response === void 0) return void 0;
-  const promptText = response === "accept" ? stringValue2(request.promptText) : void 0;
+  const request2 = jsonObject3(value);
+  const response = memberOf2(request2?.response, ["accept", "dismiss"]);
+  if (!request2 || response === void 0) return void 0;
+  const promptText = response === "accept" ? stringValue2(request2.promptText) : void 0;
   return { response, ...promptText !== void 0 ? { promptText } : {} };
 }
 function tabRequestValue(value) {
-  const request = jsonObject2(value);
-  const operation = memberOf2(request?.operation, ["open", "switch", "close"]);
-  if (!request || operation === void 0) return void 0;
-  const tabId = nonNegativeInteger2(request.tabId);
+  const request2 = jsonObject3(value);
+  const operation = memberOf2(request2?.operation, ["open", "switch", "close"]);
+  if (!request2 || operation === void 0) return void 0;
+  const tabId = nonNegativeInteger3(request2.tabId);
   if (operation === "open") {
-    const url = nonEmptyString2(request.url);
-    const active = booleanValue3(request.active);
+    const url = nonEmptyString2(request2.url);
+    const active = booleanValue3(request2.active);
     return { operation, ...url !== void 0 ? { url } : {}, ...active !== void 0 ? { active } : {} };
   }
   if (operation === "switch") {
-    const urlPattern = nonEmptyString2(request.urlPattern);
-    const urlPath = webAutomationUrlPath(request.urlPath);
-    if (request.urlPath !== void 0 && urlPath === void 0) return void 0;
+    const urlPattern = nonEmptyString2(request2.urlPattern);
+    const urlPath = webAutomationUrlPath(request2.urlPath);
+    if (request2.urlPath !== void 0 && urlPath === void 0) return void 0;
     return { operation, ...tabId !== void 0 ? { tabId } : {}, ...urlPattern !== void 0 ? { urlPattern } : {}, ...urlPath !== void 0 ? { urlPath } : {} };
   }
   return { operation, ...tabId !== void 0 ? { tabId } : {} };
 }
 function downloadRequestValue(value) {
-  const request = jsonObject2(value);
-  if (!request) return void 0;
-  const filename = nonEmptyString2(request.filename);
-  const timeoutMs = positiveInteger2(request.timeoutMs);
+  const request2 = jsonObject3(value);
+  if (!request2) return void 0;
+  const filename = nonEmptyString2(request2.filename);
+  const timeoutMs = positiveInteger2(request2.timeoutMs);
   return { ...filename !== void 0 ? { filename } : {}, ...timeoutMs !== void 0 ? { timeoutMs } : {} };
 }
 var WAIT_CONDITIONS = ["present", "visible", "enabled", "absent", "url", "stable"];
@@ -1085,7 +1424,7 @@ function booleanValue3(value) {
 function finiteNumber(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : void 0;
 }
-function nonNegativeInteger2(value) {
+function nonNegativeInteger3(value) {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
 }
 function positiveInteger2(value) {
@@ -1100,69 +1439,9 @@ function nonEmptyString2(value) {
 function memberOf2(value, members) {
   return typeof value === "string" && members.includes(value) ? value : void 0;
 }
-function jsonObject2(value) {
+function jsonObject3(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
-
-// domain/src/io/input-model.ts
-var WEB_AUTOMATION_INPUT_IDS = {
-  browserState: "web.browser.state",
-  recordingEvidence: "web.recording.evidence",
-  navigationRequested: "web.user.navigation_requested",
-  elementClicked: "web.user.element_clicked",
-  textEntered: "web.user.text_entered",
-  fieldCleared: "web.user.field_cleared",
-  optionSelected: "web.user.option_selected",
-  checkboxToggled: "web.user.checkbox_toggled",
-  keyPressed: "web.user.key_pressed",
-  pageScrolled: "web.user.page_scrolled",
-  filesChosen: "web.user.files_chosen",
-  tabSwitched: "web.user.tab_switched",
-  tabClosed: "web.user.tab_closed",
-  // One input, for the one form of extraction the product can define: a list,
-  // which saves a dataset.
-  //
-  // The single-value form had its own input -- an input maps to exactly one
-  // output, and the two forms run different verbs -- and nothing could ever
-  // produce it. The worker refuses to start a `value` pick and refuses one that
-  // arrives anyway (`background/extraction/control.ts`), `confirm.ts` refuses a
-  // `value` definition on the run path, and the picker's recorded event attaches
-  // no element for one. A registered action input that no event can reach
-  // advertises a trigger that never fires, which is the mirror of an unmapped
-  // input becoming executable, so it is not registered.
-  //
-  // The domain still *reads* a value definition
-  // (`actions/extraction/recorded-definition.ts`) and `web.dom.extract` remains
-  // an output a Flow may author; a recorded one stays passive evidence. When the
-  // picker can record a single value, this is one id and one row again.
-  dataExtractionDefined: "web.user.data_extraction_defined"
-};
-var stateInputDefinitions = [
-  { id: WEB_AUTOMATION_INPUT_IDS.browserState, title: "Browser state", description: "Current browser, tab, and compact DOM state available for policy conditions.", role: "state" },
-  { id: WEB_AUTOMATION_INPUT_IDS.recordingEvidence, title: "Web recording evidence", description: "Passive browser observations that may inform recordings but never execute a policy.", role: "event" }
-];
-var actionInputDefinitions = [
-  [WEB_AUTOMATION_INPUT_IDS.navigationRequested, "Navigation requested", "web.browser.navigate"],
-  [WEB_AUTOMATION_INPUT_IDS.elementClicked, "Element clicked", "web.dom.click"],
-  [WEB_AUTOMATION_INPUT_IDS.textEntered, "Text entered", "web.dom.type"],
-  [WEB_AUTOMATION_INPUT_IDS.fieldCleared, "Field cleared", "web.dom.clear"],
-  [WEB_AUTOMATION_INPUT_IDS.optionSelected, "Option selected", "web.dom.select"],
-  [WEB_AUTOMATION_INPUT_IDS.checkboxToggled, "Checkbox toggled", "web.dom.check"],
-  [WEB_AUTOMATION_INPUT_IDS.keyPressed, "Key pressed", "web.dom.keypress"],
-  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"],
-  [WEB_AUTOMATION_INPUT_IDS.filesChosen, "Files chosen", "web.dom.upload"],
-  [WEB_AUTOMATION_INPUT_IDS.tabSwitched, "Tab switched", "web.browser.tab"],
-  [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"],
-  [WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined, "Data extraction defined", "web.dom.extract_list"]
-];
-var OUTPUT_FOR_ACTION_INPUT = new Map(
-  actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
-);
-
-// domain/src/recording/web-state/evidence/project.ts
-var COLLECTION = { elementKind: "collection", comparable: false };
-var LIVE_COLLECTION = { ...COLLECTION, volatility: "rapid" };
-var SETTLED_COLLECTION = { ...COLLECTION, volatility: "slow" };
 
 // domain/src/client/gateway-mapping.ts
 function webAutomationActionFromGatewayCommand(command) {
@@ -1197,7 +1476,7 @@ function webAutomationActionFromGatewayCommand(command) {
     url: stringValue3(parameters.url),
     timeoutMs: numberValue2(command.timeoutMs ?? parameters.timeoutMs),
     coordinates: pointValue(target.coordinates ?? parameters.coordinates),
-    visualTarget: jsonObject3(target.visualTarget ?? parameters.visualTarget),
+    visualTarget: jsonObject4(target.visualTarget ?? parameters.visualTarget),
     element: commandElementFingerprint(target, parameters),
     ...lifted,
     options: parameters
@@ -1211,7 +1490,7 @@ function commandElementFingerprint(target, parameters) {
   return void 0;
 }
 function elementFingerprintSources(target, parameters) {
-  const adaptedTarget = jsonObject3(parameters.target);
+  const adaptedTarget = jsonObject4(parameters.target);
   return adaptedTarget?.selectedCandidate !== void 0 ? [target.element, target.fingerprint, parameters.element] : [parameters.element, target.element, target.fingerprint];
 }
 function normalizeWebAutomationActionType(actionType) {
@@ -1240,9 +1519,9 @@ function unreadableFieldFailure(actionType, fields) {
 function unreadableFieldMessage(actionType, fields) {
   return `Not dispatched: ${actionType} requires ${fields.join(", ")}, and what was sent could not be read.`;
 }
-function encryptedFieldKeys(request) {
-  if (request === void 0) return [];
-  return Object.entries(request.fields).filter(([, field]) => typeof field !== "string" && field.handling === "encrypt").map(([key]) => key);
+function encryptedFieldKeys(request2) {
+  if (request2 === void 0) return [];
+  return Object.entries(request2.fields).filter(([, field]) => typeof field !== "string" && field.handling === "encrypt").map(([key]) => key);
 }
 function encryptedFieldFailure(keys) {
   return webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.NOT_IMPLEMENTED, {
@@ -1258,7 +1537,7 @@ function namedFieldKeys(keys) {
   return keys.length > 5 ? `${named} and ${keys.length - 5} more` : named;
 }
 function requiredParameters(actionType) {
-  const schema = webAutomationActionDefinitions.find((definition) => definition.actionType === actionType)?.parameterSchema;
+  const schema = webAutomationActionDefinitions.find((definition2) => definition2.actionType === actionType)?.parameterSchema;
   return Array.isArray(schema?.required) ? schema.required.filter((key) => typeof key === "string") : [];
 }
 var CANONICAL_ACTION_TYPES = new Set(WEB_AUTOMATION_ACTION_TYPES);
@@ -1276,230 +1555,56 @@ function pointValue(value) {
   const point = value;
   return typeof point.x === "number" && typeof point.y === "number" ? { x: point.x, y: point.y } : void 0;
 }
-function jsonObject3(value) {
+function jsonObject4(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 function compactJsonObject2(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
 
-// domain/src/client/tests/gateway-command-parameters.test.ts
-function mapped(actionType, parameters, extra = {}) {
-  const command = webAutomationActionFromGatewayCommand({
-    commandId: `command.${actionType}`,
-    actionType,
-    parameters,
-    ...extra.target !== void 0 ? { target: extra.target } : {},
-    ...extra.timeoutMs !== void 0 ? { timeoutMs: extra.timeoutMs } : {}
-  });
-  assert.equal("status" in command, false, `${actionType} was rejected`);
-  return command;
+// domain/src/actions/extraction/tests/frame-address.test.ts
+var request = { item: "tr.order-line", fields: { sku: "td.sku", qty: "td.qty" } };
+var definition = {
+  form: "list",
+  datasetId: "order-lines:4f1c9a",
+  label: "Order lines",
+  itemCount: 3,
+  request,
+  fieldLabels: { sku: "SKU", qty: "Quantity" }
+};
+function recorded(browserFrameId, url) {
+  return { kind: "data.extract", sequence: 3, url, title: "Checkout", eventTimestampMs: 1100, browserFrameId, extraction: definition };
 }
-function refusedWhole(actionType, parameters, fields, why) {
-  const command = webAutomationActionFromGatewayCommand({ commandId: `command.${actionType}`, actionType, parameters });
-  assert.equal("status" in command, true, `${actionType} was dispatched: ${why}`);
-  const rejection = command;
-  assert.equal(rejection.failure.code, WEB_AUTOMATION_FAILURE_CODES.INVALID_PARAMETER, why);
-  assert.equal(rejection.message, `Not dispatched: ${actionType} requires ${fields.join(", ")}, and what was sent could not be read.`, why);
-}
-function base64OfBytes(bytes) {
-  return "A".repeat(bytes / 3 * 4);
-}
-assert.equal(mapped("web.dom.click", { browserTabId: 12, browserFrameId: 3, selector: "#go" }).tabId, 12);
-assert.equal(mapped("web.dom.click", { browserTabId: 12, browserFrameId: 3, selector: "#go" }).frameId, 3);
-assert.equal(mapped("web.dom.click", { tabId: 7, frameId: 0, selector: "#go" }).tabId, 7);
-assert.equal(mapped("web.dom.click", { tabId: 7, frameId: 0, selector: "#go" }).frameId, 0, "frame 0 is the top frame, not an absent frame");
-assert.equal(mapped("web.dom.click", { browserTabId: -1, browserFrameId: 1.5, selector: "#go" }).tabId, void 0);
-assert.equal(mapped("web.dom.click", { browserTabId: -1, browserFrameId: 1.5, selector: "#go" }).frameId, void 0);
-assert.equal(mapped("web.dom.click", { selector: "#go" }).tabId, void 0);
-assert.equal(mapped("web.browser.navigate", { url: "https://example.test", newTab: true }).newTab, true);
-assert.equal(mapped("web.browser.navigate", { url: "https://example.test", newTab: false }).newTab, false, "an explicit false is a decision, not an absence");
-assert.equal(mapped("web.browser.navigate", { url: "https://example.test" }).newTab, void 0);
-assert.equal(mapped("web.browser.navigate", { url: "https://example.test", newTab: "yes" }).newTab, void 0);
-assert.equal(mapped("web.dom.check", { selector: "#terms", checked: false }).checked, false);
-assert.equal(mapped("web.dom.check", { selector: "#terms", checked: true }).checked, true);
-assert.equal(mapped("web.dom.check", { selector: "#terms", checked: "false" }).checked, void 0);
-assert.deepEqual(mapped("web.dom.assert", { assert: { kind: "text", expected: "Saved", timeoutMs: 2e3 } }).assert, { kind: "text", expected: "Saved", timeoutMs: 2e3 });
-assert.deepEqual(mapped("web.dom.assert", { assert: { kind: "visible" } }).assert, { kind: "visible" });
-for (const kind of ["exists", "absent", "text", "url", "visible", "enabled"]) {
-  assert.deepEqual(mapped("web.dom.assert", { assert: { kind } }).assert, { kind }, kind);
-}
-refusedWhole("web.dom.assert", { assert: { kind: "contains" } }, ["assert"], "an unknown kind is no assertion");
-refusedWhole("web.dom.assert", { assert: { expected: "Saved" } }, ["assert"], "an assertion with no kind claims nothing");
-assert.equal(mapped("web.dom.assert", { assert: { kind: "text", expected: "Saved", timeoutMs: 0 } }).assert?.timeoutMs, void 0, "a zero timeout is not a timeout");
-assert.deepEqual(mapped("web.dom.extract_list", {
-  extractList: { item: "tr.row", fields: { name: "td.name", href: "a@href", price: "column:Price" }, paginate: { next: "a.next", maxPages: 3 }, maxItems: 40 }
-}).extractList, { item: "tr.row", fields: { name: "td.name", href: "a@href", price: "column:Price" }, paginate: { next: "a.next", maxPages: 3 }, maxItems: 40 });
-assert.deepEqual(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" } } }).extractList, { item: "li", fields: { title: "h3" } });
-assert.deepEqual(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, paginate: { next: "a.next", maxPages: 5e3 } } }).extractList?.paginate, { next: "a.next", maxPages: WEB_AUTOMATION_EXTRACT_MAX_PAGES });
-refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: {} } }, ["extractList"], "no fields extracts nothing");
-refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "" } } }, ["extractList"], "a field naming no selector would extract a column of nothing");
-refusedWhole("web.dom.extract_list", { extractList: { fields: { title: "h3" } } }, ["extractList"], "no item selector selects no records");
-refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, paginate: { maxPages: 3 } } }, ["extractList"], "a paginate with no next link");
-assert.equal(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, maxItems: 5e3 } }).extractList?.maxItems, WEB_AUTOMATION_EXTRACT_MAX_ITEMS);
-assert.deepEqual(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: 0 } }).extractList, { item: "li", fields: { title: "h3" }, minItems: 0 }, "zero is a declaration, not an absent minimum");
-assert.equal(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: 3, maxItems: 3 } }).extractList?.minItems, 3, "a minimum equal to the maximum can be met");
-refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: -1 } }, ["extractList"], "a negative minimum");
-refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: "1" } }, ["extractList"], "a minimum sent as a string is not read as a number");
-refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: 5, maxItems: 3 } }, ["extractList"], "a minimum above the maximum");
-refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, minItems: WEB_AUTOMATION_EXTRACT_MAX_ITEMS + 1 } }, ["extractList"], "a minimum above the bound a request naming no maximum is held to");
-var specRows = [
-  ["text", { kind: "text", selector: "h3" }],
-  ["attribute", { kind: "attribute", selector: "a", attribute: "href" }],
-  ["link", { kind: "link", selector: "a.product" }],
-  ["value", { kind: "value", selector: "input[name=qty]" }],
-  ["column", { kind: "column", header: "Price" }],
-  ["a spec reading the item itself", { kind: "text" }],
-  ["an optional included field", { kind: "text", selector: "p.note", required: false, handling: "include" }]
-];
-for (const [what, spec] of specRows) {
-  assert.deepEqual(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { field: spec } } }).extractList, { item: "li", fields: { field: spec } }, what);
-}
-assert.deepEqual(
-  mapped("web.dom.extract_list", { extractList: { item: "tr", fields: { name: "td.name", card: { kind: "text", selector: "td.card", handling: "exclude" } } } }).extractList?.fields,
-  { name: "td.name", card: { kind: "text", selector: "td.card", handling: "exclude" } }
-);
-var recordedField = { selector: "td.price", tagName: "td", testId: "price", unrelated: "dropped by the normalizer" };
-assert.deepEqual(
-  mapped("web.dom.extract_list", { extractList: { item: "tr", fields: { price: { kind: "text", element: recordedField } } } }).extractList?.fields.price,
-  { kind: "text", element: elementFingerprint(recordedField) },
-  "a field's element is the fingerprint normalizer's output"
-);
-assert.deepEqual(
-  mapped("web.dom.extract_list", { extractList: { item: "tr.row", itemElement: { selector: "tr.row", tagName: "tr", testId: "row-1" }, fields: { name: "td.name" } } }).extractList?.itemElement,
-  elementFingerprint({ selector: "tr.row", tagName: "tr", testId: "row-1" }),
-  "the item element is the fingerprint normalizer's output"
-);
-assert.deepEqual(
-  webAutomationReadActionParameters({ extractList: { item: "li", fields: { card: { kind: "text", handling: "encrypt" } } } }).lifted.extractList?.fields,
-  { card: { kind: "text", handling: "encrypt" } }
-);
-var malformedSpecs = [
-  ["an attribute field naming no attribute", { href: { kind: "attribute", selector: "a" } }],
-  ["an attribute field naming an empty attribute", { href: { kind: "attribute", selector: "a", attribute: "" } }],
-  ["a column field naming no header", { price: { kind: "column" } }],
-  ["an attribute on a kind that reads none", { title: { kind: "text", selector: "h3", attribute: "title" } }],
-  ["a header on a kind that reads none", { title: { kind: "link", header: "Title" } }],
-  ["an unknown kind", { title: { kind: "html", selector: "h3" } }],
-  ["a spec with no kind", { title: { selector: "h3" } }],
-  ["an empty selector", { title: { kind: "text", selector: "" } }],
-  ["a required flag that is not a boolean", { title: { kind: "text", required: "yes" } }],
-  ["an unknown handling", { title: { kind: "text", handling: "mask" } }],
-  ["an element with no identity signal", { title: { kind: "text", element: { unrelated: true } } }],
-  ["an element that is not an object", { title: { kind: "text", element: "h3" } }],
-  ["a field that is neither a string nor a spec", { title: 3 }],
-  ["one malformed field among good ones", { name: "td.name", price: { kind: "column" } }],
-  ["every field excluded, which reads nothing", { card: { kind: "text", handling: "exclude" }, cvc: { kind: "value", selector: "input", handling: "exclude" } }]
-];
-for (const [why, fields] of malformedSpecs) {
-  refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields } }, ["extractList"], why);
-}
-refusedWhole("web.dom.extract_list", { extractList: { item: "tr", itemElement: { unrelated: true }, fields: { name: "td.name" } } }, ["extractList"], "an item element with no identity signal");
-refusedWhole("web.dom.extract_list", { extractList: { item: "tr", itemElement: "tr.row", fields: { name: "td.name" } } }, ["extractList"], "an item element that is not an object");
-assert.deepEqual(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { "product-name_2": "h3", [`k${"x".repeat(99)}`]: "p" } } }).extractList?.fields, { "product-name_2": "h3", [`k${"x".repeat(99)}`]: "p" }, "a 100-character key is a key");
-for (const key of ["Product name", "price.amount", "prix\u20AC", `k${"x".repeat(100)}`, "constructor", "prototype"]) {
-  refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { [key]: "h3" } } }, ["extractList"], `a field key Core would refuse: ${JSON.stringify(key)}`);
-}
-refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: JSON.parse('{"__proto__":"h3"}') } }, ["extractList"], "the __proto__ key");
-var paginationRows = [
-  ["next, named", { mode: "next", next: "a.next", maxPages: 3 }, { next: "a.next", maxPages: 3 }],
-  ["loadMore", { mode: "loadMore", control: "button.more", maxPages: 4 }, { mode: "loadMore", control: "button.more", maxPages: 4 }],
-  ["scroll", { mode: "scroll", maxScrolls: 6 }, { mode: "scroll", maxScrolls: 6 }],
-  ["numbered", { mode: "numbered", pages: "[data-testid^=pagination-page-]", maxPages: 2 }, { mode: "numbered", pages: "[data-testid^=pagination-page-]", maxPages: 2 }],
-  ["loadMore past the bound", { mode: "loadMore", control: "button.more", maxPages: 5e3 }, { mode: "loadMore", control: "button.more", maxPages: WEB_AUTOMATION_EXTRACT_MAX_PAGES }],
-  ["scroll past the bound", { mode: "scroll", maxScrolls: 5e3 }, { mode: "scroll", maxScrolls: WEB_AUTOMATION_EXTRACT_MAX_PAGES }]
-];
-for (const [what, sent, lifted] of paginationRows) {
-  assert.deepEqual(mapped("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, paginate: sent } }).extractList?.paginate, lifted, what);
-}
-var malformedPagination = [
-  ["an unknown mode", { mode: "infinite", maxScrolls: 3 }],
-  ["a mode that is not a string", { mode: 2, next: "a.next", maxPages: 3 }],
-  ["loadMore with no control", { mode: "loadMore", maxPages: 3 }],
-  ["numbered with no page controls", { mode: "numbered", maxPages: 3 }],
-  ["scroll with no bound", { mode: "scroll" }],
-  ["loadMore with no bound", { mode: "loadMore", control: "button.more" }],
-  ["scroll carrying another mode's key", { mode: "scroll", maxScrolls: 3, next: "a.next" }],
-  ["next carrying another mode's key", { next: "a.next", maxPages: 3, control: "button.more" }],
-  ["scroll carrying a page bound", { mode: "scroll", maxScrolls: 3, maxPages: 3 }]
-];
-for (const [why, paginate] of malformedPagination) {
-  refusedWhole("web.dom.extract_list", { extractList: { item: "li", fields: { title: "h3" }, paginate } }, ["extractList"], why);
-}
-assert.deepEqual(mapped("web.dom.upload", { selector: "input[type=file]", upload: { files: [{ name: "a.txt", mimeType: "text/plain", contentBase64: "aGk=" }] } }).upload, {
-  files: [{ name: "a.txt", mimeType: "text/plain", contentBase64: "aGk=" }]
+test("a request is read when it names no frame", () => {
+  assert.deepEqual(webAutomationExtractListRequestValue(request), request);
 });
-refusedWhole("web.dom.upload", { selector: "#f", upload: { files: [] } }, ["upload"], "an upload of no files");
-refusedWhole("web.dom.upload", { selector: "#f", upload: { files: [{ name: "a.txt", mimeType: "text/plain" }] } }, ["upload"], "a file with no content is not a file");
-refusedWhole("web.dom.upload", { selector: "#f", upload: { files: [{ name: "a.txt", mimeType: "text/plain", contentBase64: "not base64!" }] } }, ["upload"], "content that is not base64");
-var oversized = base64OfBytes(WEB_AUTOMATION_UPLOAD_MAX_FILE_BYTES + 2);
-refusedWhole("web.dom.upload", { selector: "#f", upload: { files: [{ name: "big.bin", mimeType: "application/octet-stream", contentBase64: oversized }] } }, ["upload"], "a file past the per-file bound");
-var nearLimit = { name: "part.bin", mimeType: "application/octet-stream", contentBase64: base64OfBytes(1048575) };
-assert.equal(mapped("web.dom.upload", { selector: "#f", upload: { files: [nearLimit] } }).upload?.files.length, 1, "a file inside the per-file bound is carried");
-refusedWhole("web.dom.upload", { selector: "#f", upload: { files: [nearLimit, nearLimit, nearLimit, nearLimit, nearLimit] } }, ["upload"], "five near-limit files exceed the total bound");
-assert.deepEqual(mapped("web.dom.dialog", { dialog: { response: "accept", promptText: "Ada" } }).dialog, { response: "accept", promptText: "Ada" });
-assert.deepEqual(mapped("web.dom.dialog", { dialog: { response: "dismiss" } }).dialog, { response: "dismiss" });
-assert.deepEqual(mapped("web.dom.dialog", { dialog: { response: "dismiss", promptText: "Ada" } }).dialog, { response: "dismiss" }, "a dismissal answers nothing, so it carries no reply");
-refusedWhole("web.dom.dialog", { dialog: { response: "ignore" } }, ["dialog"], "a response that is neither accept nor dismiss");
-assert.equal(mapped("web.dom.dialog", {}).dialog, void 0, "an absent field is not a refused one: the verb still decides what an empty request means");
-assert.deepEqual(mapped("web.browser.tab", { tab: { operation: "open", url: "https://example.test/report", active: true } }).tab, { operation: "open", url: "https://example.test/report", active: true });
-assert.deepEqual(mapped("web.browser.tab", { tab: { operation: "switch", urlPattern: "/report" } }).tab, { operation: "switch", urlPattern: "/report" });
-assert.deepEqual(mapped("web.browser.tab", { tab: { operation: "switch", tabId: 9 } }).tab, { operation: "switch", tabId: 9 });
-assert.deepEqual(mapped("web.browser.tab", { tab: { operation: "close", tabId: 9 } }).tab, { operation: "close", tabId: 9 });
-assert.deepEqual(mapped("web.browser.tab", { tab: { operation: "close", url: "https://example.test", active: true, tabId: 4 } }).tab, { operation: "close", tabId: 4 });
-refusedWhole("web.browser.tab", { tab: { operation: "reload" } }, ["tab"], "an operation that is not open, switch or close");
-assert.equal(mapped("web.browser.tab", { tab: { operation: "close", tabId: 9 } }).tabId, void 0);
-assert.deepEqual(mapped("web.browser.download", { download: { filename: "report.csv", timeoutMs: 3e4 } }).download, { filename: "report.csv", timeoutMs: 3e4 });
-assert.deepEqual(mapped("web.browser.download", { download: {} }).download, {}, "waiting for whichever download finishes next is a request");
-assert.equal(mapped("web.browser.download", {}).download, void 0);
-assert.deepEqual(mapped("web.browser.tab", { tab: { operation: "switch", urlPath: "/scenarios/multi-tab/list" } }).tab, { operation: "switch", urlPath: "/scenarios/multi-tab/list" });
-for (const urlPath of ["http://127.0.0.1:4173/scenarios/multi-tab/list", "/list?session=tok", "/list#top", "list", "", 7, null]) {
-  refusedWhole("web.browser.tab", { tab: { operation: "switch", urlPath } }, ["tab"], `a switch path that is not a bare pathname: ${JSON.stringify(urlPath)}`);
-}
-assert.deepEqual(mapped("web.browser.tab", { tab: { operation: "close", urlPath: "/list" } }).tab, { operation: "close" }, "a close names no tab, so it carries no path");
-var childFrameClick = mapped("web.dom.click", { browserFrameId: 4, browserFrameUrlPath: "/scenarios/iframe-checkout/payment", selector: "#pay" });
-assert.equal(childFrameClick.frameUrlPath, "/scenarios/iframe-checkout/payment");
-assert.equal(childFrameClick.frameId, 4, "the id still travels, as the tie-break");
-assert.equal(mapped("web.dom.click", { browserFrameId: 0, selector: "#pay" }).frameUrlPath, void 0, "a top-frame command names no path");
-assert.equal(mapped("web.dom.click", { frameUrlPath: "/payment", selector: "#pay" }).frameUrlPath, void 0, "only the recorded node's name is read");
-for (const browserFrameUrlPath of ["", "http://127.0.0.1:5174/payment", "/payment?session=tok", "payment", 4, null]) {
-  const command = mapped("web.dom.click", { browserFrameId: 4, browserFrameUrlPath, selector: "#pay" });
-  assert.equal(command.frameUrlPath, void 0, `refused: ${JSON.stringify(browserFrameUrlPath)}`);
-  assert.equal(command.frameId, 4, "a refused path does not take the frame id with it");
-}
-assert.deepEqual(mapped("web.dom.select", { selector: "#country", option: { by: "label", label: "Ireland" } }).option, { by: "label", label: "Ireland" });
-assert.deepEqual(mapped("web.dom.select", { selector: "#country", option: { by: "index", index: 0 } }).option, { by: "index", index: 0 }, "the first option is index 0");
-assert.deepEqual(mapped("web.dom.select", { selector: "#country", option: { by: "value", value: "" } }).option, { by: "value", value: "" }, "an option's value may legitimately be empty");
-assert.equal(mapped("web.dom.select", { selector: "#country", option: { by: "label" } }).option, void 0);
-assert.equal(mapped("web.dom.select", { selector: "#country", option: { label: "Ireland" } }).option, void 0, "without `by`, nothing says how to match");
-assert.deepEqual(mapped("web.dom.scroll", { scroll: { mode: "by", y: 640 } }).scroll, { mode: "by", y: 640 });
-assert.deepEqual(mapped("web.dom.scroll", { selector: "#row-40", scroll: { mode: "toElement" } }).scroll, { mode: "toElement" });
-assert.deepEqual(mapped("web.dom.scroll", { scroll: { mode: "untilStable", maxScrolls: 12, y: 800 } }).scroll, { mode: "untilStable", maxScrolls: 12, y: 800 });
-assert.equal(mapped("web.dom.scroll", { scroll: { mode: "untilStable" } }).scroll, void 0, "untilStable without maxScrolls would scroll forever");
-assert.equal(mapped("web.dom.scroll", { scroll: { mode: "down" } }).scroll, void 0);
-assert.deepEqual(mapped("web.dom.wait_for_selector", { selector: "#row", wait: { condition: "visible" } }).wait, { condition: "visible" });
-assert.deepEqual(mapped("web.dom.wait_for_selector", { selector: "#row", wait: { condition: "url", url: "https://example.test/done" } }).wait, { condition: "url", url: "https://example.test/done" });
-assert.deepEqual(mapped("web.dom.wait_for_text", { text: "Saved", wait: { condition: "stable", stableForMs: 500 } }).wait, { condition: "stable", stableForMs: 500 });
-assert.equal(mapped("web.dom.wait_for_selector", { selector: "#row", wait: { condition: "settled" } }).wait, void 0);
-assert.deepEqual(mapped("web.dom.keypress", { key: "Enter", modifiers: { ctrl: true, shift: false } }).modifiers, { ctrl: true, shift: false });
-assert.equal(mapped("web.dom.keypress", { key: "Enter", modifiers: {} }).modifiers, void 0, "a modifier set naming nothing is no modifier set");
-assert.deepEqual(mapped("web.dom.keypress", { key: "Enter", modifiers: { alt: true, meta: "yes" } }).modifiers, { alt: true }, "only the modifiers actually named are carried");
-var withBadScroll = mapped("web.dom.scroll", { scroll: { mode: "down" } });
-assert.equal(withBadScroll.scroll, void 0);
-assert.deepEqual(withBadScroll.options, { scroll: { mode: "down" } }, "a refused optional value stays in options rather than vanishing");
-assert.deepEqual(webAutomationActionFromGatewayCommand({ commandId: "command.type", actionType: "dom.type", target: { selector: "input[name=q]" }, parameters: { text: "ada" } }), {
-  commandId: "command.type",
-  actionType: "web.dom.type",
-  selector: "input[name=q]",
-  text: "ada",
-  options: { text: "ada" }
+test("a request that names a frame is refused whole, rather than read against another document", () => {
+  for (const key of ["frame", "frameId", "frameSelector", "frameUrlPath"]) {
+    assert.equal(
+      webAutomationExtractListRequestValue({ ...request, [key]: key === "frameId" ? 4 : "iframe#payment" }),
+      void 0,
+      `a request naming ${key} is not an extraction request`
+    );
+  }
+  assert.equal(webAutomationExtractListRequestValue({ ...request, frameId: 0 }), void 0);
 });
-assert.deepEqual(webAutomationActionFromGatewayCommand({ commandId: "command.snapshot", actionType: "web.dom.capture_snapshot" }), {
-  commandId: "command.snapshot",
-  actionType: "web.dom.capture_snapshot",
-  options: {}
+test("a recorded extraction replays into the frame it was recorded in, with no frame in its request", () => {
+  const parameters = webAutomationOutputPayload("web.dom.extract_list", recorded(4, "http://127.0.0.1:5174/scenarios/iframe-checkout/payment?session=tok-123"));
+  assert.deepEqual(parameters.extractList, request, "the node carries the request, and the request names no frame");
+  assert.equal(parameters.browserFrameId, 4, "the recorded frame is on the node");
+  assert.equal(parameters.browserFrameUrlPath, "/scenarios/iframe-checkout/payment", "and its document path, which finds the frame again after Chrome renumbers it");
+  assert.equal(JSON.stringify(parameters).includes("session=tok-123"), false, "the pathname alone, so a frame's query carries no token into the node");
+  const command = webAutomationActionFromGatewayCommand({ commandId: "command.order-lines", actionType: "web.dom.extract_list", parameters });
+  assert.equal("status" in command, false, "the command is not rejected");
+  if ("status" in command) return;
+  assert.equal(command.frameId, 4, "the dispatched command is addressed to that frame");
+  assert.equal(command.frameUrlPath, "/scenarios/iframe-checkout/payment");
+  assert.deepEqual(command.extractList, request, "and the read it runs there is the one that was recorded");
 });
-var LIFTED_PARAMETER_NAMES = ["browserTabId", "tabId", "browserFrameId", "frameId", "browserFrameUrlPath", "newTab", "option", "scroll", "wait", "modifiers", "checked", "assert", "extractList", "upload", "dialog", "tab", "download"];
-var refusedPairs = WEB_AUTOMATION_ACTION_TYPES.flatMap((actionType) => LIFTED_PARAMETER_NAMES.filter((name) => "status" in webAutomationActionFromGatewayCommand({ commandId: "command.matrix", actionType, parameters: { [name]: "unreadable" } })).map((name) => `${actionType} ${name}`));
-assert.deepEqual(refusedPairs.sort(), ["web.browser.tab tab", "web.dom.assert assert", "web.dom.dialog dialog", "web.dom.extract_list extractList", "web.dom.upload upload"]);
-console.log("Web automation gateway command parameter tests passed.");
+test("a top-frame extraction names no path, and frame 0 survives as a frame", () => {
+  const parameters = webAutomationOutputPayload("web.dom.extract_list", recorded(0, "http://127.0.0.1:5174/scenarios/iframe-checkout"));
+  assert.equal(parameters.browserFrameId, 0);
+  assert.equal(parameters.browserFrameUrlPath, void 0, "the top frame is never renumbered, so it needs no path");
+  const command = webAutomationActionFromGatewayCommand({ commandId: "command.top", actionType: "web.dom.extract_list", parameters });
+  assert.equal("status" in command ? void 0 : command.frameId, 0, "frame 0 is the top frame, not an absent frame");
+});
