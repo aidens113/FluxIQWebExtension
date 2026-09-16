@@ -13,9 +13,10 @@ Related: [30-Day MVP plan](../../FluxIQ%20Web%20Extension%20%E2%80%94%2030-Day%2
 
 ## Current State
 
-**Phase, as of 2026-09-15: the user reshaped the plan as L12-L16; all four
-read-only investigations have reported and been supervisor-verified; no loop
-code changed.** This is now a **flow-improvement loop with three entry points** —
+**Phase, as of 2026-09-15: the user gave the go, building is under way, and a
+machine crash killed the first nine workers mid-flight.** All four read-only
+investigations reported and were supervisor-verified before any code changed.
+This is a **flow-improvement loop with three entry points** —
 building a new flow, a run failing, and an edge case in an existing flow — not a
 recovery loop. Two earlier scoping reports cover Phases 2.1-2.4 and 2.5-2.9 with
 file:line evidence. Path prefix: `AS/` is Core's
@@ -97,15 +98,26 @@ bootstrap already demonstrates the right build-a-flow pattern but **refuses any
 flow that is not blank**, so the "improve an existing flow" entry point cannot
 reuse it unchanged.
 
-**Done:** both scoping reports; this plan and its Core pair.
+**Done:** both scoping reports; this plan and its Core pair; the four
+investigations, each supervisor-verified rather than taken on trust.
 
-**Not done:** every phase below.
+**In progress**, five workers resuming partial work the crash interrupted:
+Phase D (its failing test is on disk and its fix is not, so Core's only type
+errors are in that one file), Phase SEC, and Phase G in Core; X4-C and X4-D in
+the extension.
 
-**All three investigations have reported.** The user reviewed the five fixes and
-**approved them, with the explicit instruction that they be planned and not
-started** — they are Phase D. He also decided the PIN question as L16.
+**Not started:** Phase P — its partial edit was reverted, because making
+`classification` a required field is all-or-nothing across ~223 registration
+sites and half-applied it stopped Core compiling. That design survives as
+`phase-p-partial.patch` in the session scratchpad and must be redone as one
+atomic change. Also Phases T, H and S, the content picker X4-B, and the loop
+phases 2.1-2.9.
 
-**Next steps, none of which is building anything:**
+**Concurrency is five workers, not nine.** Both crashes happened with nine heavy
+workers running on a machine with a known memory fault, so this is recorded as a
+real resource limit rather than caution.
+
+**Next steps:**
 1. **Done.** Every finding that had no phase to deliver it now has one: **T**
    for L2's opaque repair target, **H** for L14's harness-option registry, its
    Core-owned neutral options and the other two entry points, **S** for L15's
@@ -504,6 +516,31 @@ Recorded at dispatch on 2026-09-15, before the three investigations above.
 - Report to: `F:\!FluxIQWebExtension\docs\working\mvp-week2-automation-loop-plan\reports\w2-scope-repair-reuse.md`
 
 ## Work Ledger
+
+### 2026-09-15 — Machine crash killed nine workers; partial work triaged
+- Agent: supervisor
+- Changed: reverted `_shared/api.ts` and `_shared/runtime.ts` in Core; five
+  workers re-dispatched to resume, not restart
+- Why: the machine crashed with nine workers in flight. None wrote a report, so
+  none completed, but ~418 lines survived in Core and ~408 in the extension.
+  Phase P's partial edit was the dangerous one: it had made `classification` a
+  **required** field on `register()`, which is the right design but is
+  all-or-nothing — every one of the ~223 registration sites must gain the field
+  in the same change, so half-applied it stopped Core compiling and would have
+  buried three freshly dispatched Core workers in type errors in files they do
+  not own. Its design work is preserved as a patch rather than discarded, at
+  `<scratchpad>/phase-p-partial.patch` (131 lines), and Phase P must be redone
+  as ONE atomic change
+- Validation: `git diff --stat` -> 418 insertions across 9 Core files before the
+  revert; `git status --short` after the revert -> only worker-owned files
+  remain modified; the patch file is 131 lines. Core type check run separately
+- Outcome: Accepted
+- Follow-up: Phase P re-dispatched atomically from the saved patch; T, X4-B and
+  the pooled-rate fix still to restart, none of which left anything on disk
+- Note: concurrency is now **five** workers, not nine. Two crashes have both
+  occurred with nine heavy workers running, and this machine has a known memory
+  fault, so the correlation is treated as a real resource limit rather than
+  caution
 
 ### 2026-09-15 — User gave the go; four Core phases dispatched, inventory verified
 - Agent: supervisor; worker `w2-d-write-endpoint-inventory`, then `d-five-fixes`,
