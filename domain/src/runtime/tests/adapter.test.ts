@@ -294,7 +294,12 @@ test("a failed command carries the sanitized evidence packet, digest-bound to it
 
   const diagnostics = metadata.failureDiagnostics as JsonObject;
   assert.equal(diagnostics.url, "https://fixture.test/checkout/pay", "no query string reaches the attempt trace");
-  assert.equal(diagnostics.selector, "#pay", "the target the client resolved rides with the failure");
+  // Phase T: what rides into Core is the handle the packet minted for the
+  // control, never the control's own selector.
+  assert.equal(diagnostics.selector, undefined, "no selector reaches Core on the attempt's metadata");
+  assert.equal(diagnostics.failedTarget, "target.1", "the target the client resolved rides with the failure, as a handle");
+  assert.equal((evidence as { failedTarget?: string }).failedTarget, "target.1", "and the packet the model reads marks the same element");
+  assert.doesNotMatch(JSON.stringify(metadata.failureDiagnostics), /#pay|#card/u);
   assert.equal(diagnostics.evidenceDigest, createHash("sha256").update(JSON.stringify(evidence)).digest("hex"));
   assert.equal(result.failure?.evidenceDigest, diagnostics.evidenceDigest, "the record names the packet it was captured with");
   assert.deepEqual(parseAutomationStudioFailureRecord(result.failure), result.failure, "the digest does not cost the record its validity");

@@ -130,7 +130,7 @@ Quoted in full as written into `docs/architecture/package-boundaries.md`:
 > identifiers they recorded, since that path is untouched. A host that filled
 > an absent identifier with a placeholder to dodge the old penalty should stop
 > doing so — a wrong value now costs far more than an absent one, as the
-> [importing-repos guide](../integrations/automation-studio-importing-repos.md)
+> importing-repos guide in FluxIQ Core (`docs/integrations/automation-studio-importing-repos.md`)
 > now explains.
 >
 > **Why a minor increment, and why `0.2.1` is ambiguous.** This behaviour

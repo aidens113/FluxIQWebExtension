@@ -120,7 +120,7 @@ contents never cross; the author's description of it does.**
 | Field | On a sensitive control | Why |
 | --- | --- | --- |
 | `value` | withheld | the contents themselves |
-| `visibleText`, `text` | withheld | a `contenteditable` the rule marks holds what was typed in its own text, and `describeElement` reads that text without asking the rule (see [the capture-side hole](#a-capture-side-hole-i-did-not-own)) |
+| `visibleText`, `text` | withheld | a `contenteditable` the rule marks holds what was typed in its own text, and `describeElement` reads that text without asking the rule (see [the capture-side hole](#what-is-still-lossy)) |
 | `accessibleName` | withheld | its specified derivation ends at a push button's `value`; the wire cannot verify the producer's gate ran |
 | `label`, `context` | **kept** | label text skips nested controls by construction and page context is chrome; neither can hold what a person typed |
 | `attributes` | **kept** | the recorder's allowlist deliberately excludes `value`, so an attribute cannot carry a control's content |

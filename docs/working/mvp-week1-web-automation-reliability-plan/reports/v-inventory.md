@@ -273,7 +273,7 @@ small on its own.
   detaches; assert which of TIMEOUT / STATE_MISMATCH comes back.
 - **Risk: silently wrong in classification, with a real consequence.** TIMEOUT is
   `retryable: true`; STATE_MISMATCH is `retryable: false`. The wrong one changes
-  whether Core retries. See also [F2](#f2--the-assert-verbs-new-timeout-status).
+  whether Core retries. See also [F2](#f2-the-assert-verbs-new-timeout-status).
 
 ### B8. `AUTH_REQUIRED` from an assert command
 
@@ -311,7 +311,7 @@ small on its own.
   scariest measured number in the wave.** With the text drifted away, the
   best-scoring candidate is **Discard at −0.360, ahead of the real Save at
   −0.375** — a 0.015 margin on a shared class prefix. The floor is the only thing
-  turning that into a refusal instead of a wrong click. See [D6](#d6--the-confidence-floor-and-margin-are-calibrated-on-four-data-points).
+  turning that into a refusal instead of a wrong click. See [D6](#d6-the-confidence-floor-and-margin-are-calibrated-on-four-data-points).
 
 ### B11. `MAX_SELECTION_SCAN` overflow
 
@@ -362,7 +362,7 @@ node executor. These items are only observable from a Flow.
   hold is now retryable, so a Flow that used to fail once now retries to its
   attempt limit. Bounded, but it will present as a hang. This is the
   highest-priority Flow item because it is a **direct consequence of a behaviour
-  change**, not a pre-existing gap. See [F2](#f2--the-assert-verbs-new-timeout-status).
+  change**, not a pre-existing gap. See [F2](#f2-the-assert-verbs-new-timeout-status).
 
 ### C2. The expectation evaluator being called for real
 
@@ -621,7 +621,7 @@ path**. Named by `w3-resolver` (open question 2) and restated by
 `w3-matcher-packaging`. Closing it touches `content/actions/types.ts`,
 `execute-action.ts` and the nine resolving verbs.
 
-**The consequence the reports do not draw out:** this is what makes [D6](#d6--the-confidence-floor-and-margin-are-calibrated-on-four-data-points)
+**The consequence the reports do not draw out:** this is what makes [D6](#d6-the-confidence-floor-and-margin-are-calibrated-on-four-data-points)
 unfixable by observation. You cannot calibrate a threshold from production data
 when the measurement is discarded on every success. Until this lands, the floor
 can only ever be tuned against fixtures.
@@ -877,7 +877,7 @@ So: the wire now carries **12 signals instead of 1** (measured, by
 `w3-target-signal-order`), the scorer compares nine of them (measured, by
 `w3-matcher-packaging`), and **no run has ever put the two together.** This is
 the wave's longest verified-rests-on-unverified chain, and the thing hanging off
-the end of it is [D6](#d6--the-confidence-floor-and-margin-are-calibrated-on-four-data-points) — the floor that decides whether a drifted page gets a
+the end of it is [D6](#d6-the-confidence-floor-and-margin-are-calibrated-on-four-data-points) — the floor that decides whether a drifted page gets a
 refusal or a wrong click. **One Lab run of an element-targeted replay against
 `ambiguous-targets` would close G1's residue, G2, F1 and half of D6 at once.
 That is the single highest-value live test in the inventory.**

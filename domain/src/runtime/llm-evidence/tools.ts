@@ -86,6 +86,8 @@ export type WebLlmEvidenceGateway = {
 };
 
 export type WebAutomationLlmEvidenceRuntime = {
+  /** Whose options these are. Core scopes the harness-option registry by it, so the slot cannot be bound anonymously. */
+  domainId: string;
   tools: Array<{ toolId: string; description: string; inputSchema: JsonObject; effect?: "observe" | "mutate"; repeatPolicy?: "after_mutation"; initialObservation?: { input: JsonObject } }>;
   executeTool(input: WebLlmEvidenceToolRequest): Promise<WebLlmEvidenceToolExecution>;
   captureSanitizedFailureEvidence(input: WebLlmFailureEvidenceRequest): Promise<WebLlmPageEvidence>;
@@ -114,6 +116,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
     return binding;
   };
   return {
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
     tools: [
       {
         toolId: WEB_LLM_INSPECT_TOOL_ID,
@@ -219,6 +222,11 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
         budget: "failure",
         maxEvidenceBytes: input.maxEvidenceBytes,
         expectedOrigin: undefined,
+        // Core's failed-action identity is an attempt, a node and a definition
+        // id, and carries nothing about the control -- so this recapture marks
+        // no target and says `failedTargetUnknown` rather than leaving the
+        // model to read the silence as "the target is still there".
+        failedAction: {},
       }))).evidence;
     },
     validateTargetOverrideEvidence(evidence, target, failedAction) {
@@ -260,6 +268,9 @@ async function inspect(
     budget: "exploration",
     maxEvidenceBytes: request.maxEvidenceBytes,
     expectedOrigin,
+    // An exploration packet is an observation, not a failure, so it marks no
+    // target at all -- neither a handle nor a "the target is gone".
+    failedAction: undefined,
   }));
 }
 

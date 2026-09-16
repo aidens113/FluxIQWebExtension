@@ -198,3 +198,56 @@ test("rejects a snapshot that is malformed or off the origin the caller expected
     /escaped the expected origin/u
   );
 });
+
+// A failure packet's one statement about its own target. The model is shown up
+// to forty elements and asked to repair one action; without a mark it has to
+// guess which element the action was aiming at. The mark is an opaque handle,
+// so it names the element and addresses nothing.
+test("a failure packet marks the failed action's element with its opaque handle, never with a selector", () => {
+  const evidence = sanitizeWebLlmSnapshot(failurePage(), { failedAction: { selector: "#pay" } });
+  assert.equal(evidence.failedTarget, "target.2");
+  assert.equal(evidence.elements[1]?.name, "Pay now", "the handle names the control the action addressed");
+  assert.equal(evidence.failedTargetMissing, undefined);
+  assert.equal(evidence.failedTargetUnknown, undefined);
+  assert.doesNotMatch(JSON.stringify(evidence), /#pay|selector/u);
+});
+
+test("a failure packet whose target has left the page says so, rather than marking nothing", () => {
+  const evidence = sanitizeWebLlmSnapshot(failurePage(), { failedAction: { selector: "#pay-now-v2" } });
+  assert.equal(evidence.failedTarget, undefined);
+  assert.equal(evidence.failedTargetMissing, true);
+  assert.equal(evidence.budgetTruncated, undefined, "nothing was trimmed, so the control is gone rather than cut");
+});
+
+test("a failure packet whose producer named no control says that, and it is not the same as the control being gone", () => {
+  const evidence = sanitizeWebLlmSnapshot(failurePage(), { failedAction: {} });
+  assert.equal(evidence.failedTargetUnknown, true);
+  assert.equal(evidence.failedTargetMissing, undefined);
+  assert.equal(evidence.failedTarget, undefined);
+});
+
+test("a packet that is not describing a failure marks no target at all", () => {
+  const evidence = sanitizeWebLlmSnapshot(failurePage());
+  assert.equal(evidence.failedTarget, undefined);
+  assert.equal(evidence.failedTargetMissing, undefined);
+  assert.equal(evidence.failedTargetUnknown, undefined);
+});
+
+test("a handle the byte budget trimmed away becomes a missing target rather than pointing at nothing", () => {
+  const evidence = sanitizeWebLlmSnapshot(failurePage(), { failedAction: { selector: "#pay" }, maxEvidenceBytes: 260 });
+  assert.equal(evidence.budgetTruncated, true);
+  assert.equal(evidence.failedTarget, undefined, "the element it named was popped");
+  assert.equal(evidence.failedTargetMissing, true);
+  assert.ok(!evidence.elements.some((element) => element.name === "Pay now"));
+});
+
+function failurePage(): Record<string, unknown> {
+  return {
+    url: "https://fixture.test/checkout",
+    title: "Checkout",
+    interactiveElements: [
+      { tagName: "a", selector: "#basket", visibleText: "Basket", href: "/basket" },
+      { tagName: "button", selector: "#pay", role: "button", name: "Pay now" },
+    ],
+  };
+}

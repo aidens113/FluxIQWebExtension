@@ -290,6 +290,32 @@ and `apps/extension/dist/firefox`, or under `FLUXIQ_LAB_EXTENSION_BUILD_ROOT`
 when a Lab instance owns the build. `pnpm lab:test` runs the launcher's own
 tests and is part of `pnpm check`.
 
+### Documentation Links
+
+`pnpm check` fails on a documentation link that no longer resolves, because a
+document's whole job is to hand the reader to the reason for something and a
+dead link loses that reason silently. The `docs-links` rule inside
+[`scripts/structure-audit.mjs`](../../scripts/structure-audit.mjs) reads every
+tracked Markdown file under the directories `docsLinkDirs` names in
+[`scripts/structure-audit/config.mjs`](../../scripts/structure-audit/config.mjs)
+— `docs/architecture/` here — and requires each local link to land on a tracked
+file, or on a directory holding a `README.md`, and each `#fragment` to name a
+heading that still exists, by GitHub's own anchor slug. Absolute URLs are not
+checked: the network is not the build's to resolve. Fenced code, inline code
+spans and HTML comments are blanked before matching, so a regular expression in
+an example is not read as a link.
+
+The finding does not ratchet. A directory joins `docsLinkDirs` once its links
+resolve and stays that way, rather than accumulating dead links behind a
+recorded number. `docs/working/` is not in scope yet; `config.mjs` records why
+and what widening it would take.
+
+The rule is
+[mirrored from FluxIQ Core](../../scripts/structure-audit/rules/docs-links.mjs),
+where it covers all of `docs/` and replaced that repository's standalone
+`scripts/validate-docs.mjs`, so there is one implementation rather than two.
+Change it in Core first, then mirror it down.
+
 ### Content Harness
 
 The content harness runs the real content-script and page-world bundles in

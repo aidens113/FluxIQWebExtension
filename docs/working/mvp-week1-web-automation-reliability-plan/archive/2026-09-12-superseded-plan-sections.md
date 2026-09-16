@@ -10,7 +10,7 @@ plan's `Current State` carries what remains.
 ### Phase 1.1 — Consolidate the web domain
 
 Steps 1–4 landed in Wave 1; the step plan is archived at
-[archive/2026-09-11-phase-1-1-plan.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-11-phase-1-1-plan.md).
+[archive/2026-09-11-phase-1-1-plan.md](./2026-09-11-phase-1-1-plan.md).
 Landed: the content script's `actions.ts` and `action-runtime.ts` split
 into directories (44 of 44 moved bodies identical); mapping fixes (scroll
 key, top-level `domainId`, unknown types rejected with `ACTION_REJECTED`,
@@ -29,14 +29,14 @@ Core: none.
 ### Phase 1.6a — FluxBench foundation
 
 Steps 1–3 and 5–7 landed in Wave 1; the step plan is archived at
-[archive/2026-09-11-phase-1-6a-plan.md](./mvp-week1-web-automation-reliability-plan/archive/2026-09-11-phase-1-6a-plan.md).
+[archive/2026-09-11-phase-1-6a-plan.md](./2026-09-11-phase-1-6a-plan.md).
 Landed: the T2 content-script harness (`test:content`); the runner asserting
 what manifests declare; the scenario contract's workflows, variants,
 extraction, and expected failures; the evaluation and benchmark contracts;
 `pnpm lab bench` with the `week1` and `smoke` corpora and report comparison;
 the registry-derived test-matrix catalog; ten new fixtures (22 in all). Step
 4, the provider-free Flow lane, is Wave 2 (`w2-flow-lane` in
-[briefs/wave-2.md](./mvp-week1-web-automation-reliability-plan/briefs/wave-2.md)).
+[briefs/wave-2.md](../briefs/wave-2.md)).
 
 Proof so far: the Scenario Lab suite green with 22 fixtures; `test:content`
 31 passed; `FLUXIQ_TEST_ENV_FILES=none pnpm lab bench --corpus smoke --repeat

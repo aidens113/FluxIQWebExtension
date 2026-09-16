@@ -12,7 +12,7 @@ D14's claim of exhaustiveness held over the candidate axis only. The plan's
 
 **Wave 3 is complete, integrated, verified and pushed.** Seventeen workers ran
 across Phases 1.3, 1.4 and 1.5; every report is under
-[reports/](./mvp-week1-web-automation-reliability-plan/reports/). Seven of the
+[reports/](../reports/). Seven of the
 seventeen were dispatched mid-wave to close gaps earlier workers found outside
 their own briefs, which is the wave's main lesson: the briefs were partitioned by
 file and the defects lived across them.

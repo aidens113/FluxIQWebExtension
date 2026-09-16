@@ -370,23 +370,37 @@ function failureDiagnostics(status: FluxIQRuntimeCommandStatus, payload: JsonObj
   if (status === "succeeded") return undefined;
   const actionResult = jsonObject(payload?.result);
   if (!actionResult) return undefined;
-  const evidence = sanitizedFailureEvidence(actionResult.snapshot);
+  const evidence = sanitizedFailureEvidence(actionResult.snapshot, boundedSelector(jsonObject(actionResult.element)?.selector));
   const evidenceDigest = evidence === undefined ? undefined : createHash("sha256").update(JSON.stringify(evidence)).digest("hex");
   const report = compact({
     url: safeLocation(actionResult.url),
     title: boundedTitle(actionResult.title),
-    selector: boundedSelector(jsonObject(actionResult.element)?.selector),
+    // The handle the packet minted for the control, never the control's own
+    // selector. This report rides into Core on the attempt's metadata, and a
+    // selector is a browser concept Core does not carry (Phase T); the handle
+    // says the same thing and addresses nothing.
+    failedTarget: evidence?.failedTarget,
+    failedTargetMissing: evidence?.failedTargetMissing,
     evidenceDigest
   });
   if (Object.keys(report).length === 0) return undefined;
   return { report, ...(evidence ? { evidence } : {}), ...(evidenceDigest ? { evidenceDigest } : {}) };
 }
 
-/** The packet, bounded by Core's failure-evidence gate rather than by the larger exploration budget. */
-function sanitizedFailureEvidence(snapshot: unknown): WebLlmPageEvidence | undefined {
+/**
+ * The packet, bounded by Core's failure-evidence gate rather than by the larger
+ * exploration budget, and told which control the action addressed so it can
+ * mark that element with its own opaque handle. `failedAction` is passed even
+ * when the client named no control, because `{}` is what makes the packet say
+ * `failedTargetUnknown` rather than say nothing.
+ */
+function sanitizedFailureEvidence(snapshot: unknown, failedSelector: string | undefined): WebLlmPageEvidence | undefined {
   if (!jsonObject(snapshot)) return undefined;
   try {
-    return sanitizeWebLlmSnapshot(snapshot, { maxEvidenceBytes: AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES });
+    return sanitizeWebLlmSnapshot(snapshot, {
+      maxEvidenceBytes: AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES,
+      failedAction: failedSelector === undefined ? {} : { selector: failedSelector }
+    });
   } catch {
     return undefined;
   }

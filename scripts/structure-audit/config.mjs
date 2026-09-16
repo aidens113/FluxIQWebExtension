@@ -80,6 +80,36 @@ export const CONFIG = {
   bannedBasenames: ["utils", "helpers", "misc", "common", "shared-ui"],
   bannedDirectoryNames: ["utils", "helpers", "misc", "common"],
 
+  // Directory prefixes whose Markdown the docs-links rule checks: every local
+  // link must resolve to a tracked file, and every `#fragment` to a heading
+  // that still exists. Like contractSpreadPaths, a prefix is configured once it
+  // is clean -- the finding does not ratchet, so a listed directory stays
+  // resolvable rather than accumulating dead links behind a recorded number.
+  //
+  // All of docs/ is in, and clean: docs/architecture/ and docs/working/ both.
+  // Architecture documents exist to tell the next engineer why a rule is there,
+  // and a link is how one hands the reader to that reason, so a moved file or a
+  // renamed heading loses the reason silently. Working documents are this
+  // repository's agent memory, where a link is the only way one agent's finding
+  // reaches the next, and they cross-reference far more heavily -- a plan to its
+  // briefs, a brief to its reports, a report to another report's finding -- so
+  // they rot faster and cost more when they do.
+  //
+  // docs/working/ was excluded while it held 15 breakages, all in the week-1
+  // plan's tree; they were fixed in x4h and this widened to ["docs"], which is
+  // what Core already runs. Their four shapes are worth knowing, because each
+  // recurs: a path written as if from docs/working/ by a document already inside
+  // archive/; a link to a directory holding no README.md; a link to a document
+  // that lives in FluxIQ Core, not here, which must read as a cross-repository
+  // reference rather than resolve to a local file that happens to exist; and a
+  // fragment spelling an em dash in a heading as a double hyphen, when GitHub's
+  // slug leaves one. The record is in
+  // docs/working/first-class-data-extraction-plan/reports/x4h-working-doc-links.md.
+  //
+  // The repository root's own Markdown stays out: AGENTS.md links sideways into
+  // the FluxIQ Core checkout, which is not this repository's to resolve.
+  docsLinkDirs: ["docs"],
+
   workingDocsDir: "docs/working",
   workingDocsIndexKind: "ext"
 };

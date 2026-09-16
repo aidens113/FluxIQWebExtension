@@ -9,6 +9,18 @@
 // exceed 12,000. Over budget, the packet is trimmed rather than refused --
 // lowest-value evidence first -- and says so in `truncated`.
 //
+// A failure packet also says which of its opaque handles the failed action was
+// aiming at. That is the one page fact Core cannot supply -- Core knows the
+// attempt, the node and the definition, and nothing about the control -- and
+// without it the model is shown forty elements and left to guess which one it
+// was asked to repair. It is a handle and never a selector, so the mark is
+// readable by the model and addresses nothing. When the target cannot be
+// marked the packet says so rather than staying silent: `failedTargetMissing`
+// when the action's control is not among the elements described (it left the
+// page, or `budgetTruncated` says the trim cut it), `failedTargetUnknown` when
+// the producer did not say which control the action addressed. Exactly one of
+// the three is present on a failure packet, and none of them on any other.
+//
 // Three limits can set `truncated`, and they are three different problems with
 // three different answers: the browser's capture already dropped elements
 // before the packet saw them, the packet's own element bound cut the ranked
@@ -49,6 +61,12 @@ export type WebLlmPageEvidence = WebLlmPageContext & {
   elementsTruncated?: true;
   /** The byte budget forced removals. A larger budget, or a narrower page, returns them. */
   budgetTruncated?: true;
+  /** The opaque handle of the element the failed action addressed. Only on a failure packet, and never a selector. */
+  failedTarget?: string;
+  /** The failed action's control is not among the elements described: it left the page, or, with `budgetTruncated`, the trim cut it. */
+  failedTargetMissing?: true;
+  /** The producer did not say which control the failed action addressed, so the packet marks none. Not the same as the control being gone. */
+  failedTargetUnknown?: true;
 };
 
 /**
@@ -67,6 +85,14 @@ export type WebLlmSanitizeOptions = {
   maxEvidenceBytes?: number;
   /** Which consumer's budget applies. `failure` is both defaulted and capped at Core's gate. */
   budget?: "exploration" | "failure";
+  /**
+   * Present when this packet describes a failed action, which is what makes it
+   * a failure packet rather than an observation. `selector` is the control the
+   * producer said the action addressed; it stays inside this module, and what
+   * leaves is the handle it maps to. Passing `{}` is the honest form of "the
+   * producer did not say", and marks the packet `failedTargetUnknown`.
+   */
+  failedAction?: { selector?: string };
 };
 
 export function sanitizeWebLlmSnapshot(input: unknown, options: WebLlmSanitizeOptions = {}): WebLlmPageEvidence {
@@ -124,10 +150,33 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
     elementsTruncated: elementsTruncated ? true : undefined,
     // Not written here: `trimToBudget` below sets it if and only if a removal
     // was needed. Mentioned so the packet's key set stays exhaustive.
-    budgetTruncated: undefined
+    budgetTruncated: undefined,
+    // Nor are these: `markFailedTarget` writes exactly one of them, and only
+    // for a packet that is describing a failure. Named for the same reason.
+    failedTarget: undefined,
+    failedTargetMissing: undefined,
+    failedTargetUnknown: undefined
   });
+  markFailedTarget(evidence, selectors, options.failedAction);
   trimToBudget(evidence, selectors, maxEvidenceBytes);
   return { evidence, selectors };
+}
+
+/**
+ * Writes the failure packet's one statement about its own target, before the
+ * trim runs so that the bytes it costs are inside the budget rather than
+ * pushing the packet over it afterwards. Nothing is written for a packet that
+ * is not describing a failure.
+ */
+function markFailedTarget(evidence: WebLlmPageEvidence, selectors: Map<string, string>, failedAction: WebLlmSanitizeOptions["failedAction"]): void {
+  if (!failedAction) return;
+  if (!failedAction.selector) {
+    evidence.failedTargetUnknown = true;
+    return;
+  }
+  const handle = [...selectors.entries()].find(([, selector]) => selector === failedAction.selector)?.[0];
+  if (handle === undefined) evidence.failedTargetMissing = true;
+  else evidence.failedTarget = handle;
 }
 
 function budgetFor(options: WebLlmSanitizeOptions): number {
@@ -160,6 +209,13 @@ function trimToBudget(evidence: WebLlmPageEvidence, selectors: Map<string, strin
   const popElement = (): void => {
     const removed = evidence.elements.pop();
     if (removed) selectors.delete(removed.target);
+    // A handle that named a popped element would point at nothing, so the mark
+    // becomes the honest one. `budgetTruncated`, set on the same line, is what
+    // separates "the trim cut it" from "it left the page".
+    if (removed && evidence.failedTarget === removed.target) {
+      delete evidence.failedTarget;
+      evidence.failedTargetMissing = true;
+    }
     markBudgetTruncated();
   };
   const droppable: DroppableEvidenceField[] = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame"];

@@ -409,10 +409,26 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
     elementsTruncated: elementsTruncated ? true : void 0,
     // Not written here: `trimToBudget` below sets it if and only if a removal
     // was needed. Mentioned so the packet's key set stays exhaustive.
-    budgetTruncated: void 0
+    budgetTruncated: void 0,
+    // Nor are these: `markFailedTarget` writes exactly one of them, and only
+    // for a packet that is describing a failure. Named for the same reason.
+    failedTarget: void 0,
+    failedTargetMissing: void 0,
+    failedTargetUnknown: void 0
   });
+  markFailedTarget(evidence, selectors, options.failedAction);
   trimToBudget(evidence, selectors, maxEvidenceBytes);
   return { evidence, selectors };
+}
+function markFailedTarget(evidence, selectors, failedAction) {
+  if (!failedAction) return;
+  if (!failedAction.selector) {
+    evidence.failedTargetUnknown = true;
+    return;
+  }
+  const handle = [...selectors.entries()].find(([, selector]) => selector === failedAction.selector)?.[0];
+  if (handle === void 0) evidence.failedTargetMissing = true;
+  else evidence.failedTarget = handle;
 }
 function budgetFor(options) {
   return options.budget === "failure" ? evidenceByteLimit(options.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure) : evidenceByteLimit(options.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration);
@@ -425,6 +441,10 @@ function trimToBudget(evidence, selectors, maxEvidenceBytes) {
   const popElement = () => {
     const removed = evidence.elements.pop();
     if (removed) selectors.delete(removed.target);
+    if (removed && evidence.failedTarget === removed.target) {
+      delete evidence.failedTarget;
+      evidence.failedTargetMissing = true;
+    }
     markBudgetTruncated();
   };
   const droppable = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame"];
@@ -669,3 +689,46 @@ test("rejects a snapshot that is malformed or off the origin the caller expected
     /escaped the expected origin/u
   );
 });
+test("a failure packet marks the failed action's element with its opaque handle, never with a selector", () => {
+  const evidence = sanitizeWebLlmSnapshot(failurePage(), { failedAction: { selector: "#pay" } });
+  assert.equal(evidence.failedTarget, "target.2");
+  assert.equal(evidence.elements[1]?.name, "Pay now", "the handle names the control the action addressed");
+  assert.equal(evidence.failedTargetMissing, void 0);
+  assert.equal(evidence.failedTargetUnknown, void 0);
+  assert.doesNotMatch(JSON.stringify(evidence), /#pay|selector/u);
+});
+test("a failure packet whose target has left the page says so, rather than marking nothing", () => {
+  const evidence = sanitizeWebLlmSnapshot(failurePage(), { failedAction: { selector: "#pay-now-v2" } });
+  assert.equal(evidence.failedTarget, void 0);
+  assert.equal(evidence.failedTargetMissing, true);
+  assert.equal(evidence.budgetTruncated, void 0, "nothing was trimmed, so the control is gone rather than cut");
+});
+test("a failure packet whose producer named no control says that, and it is not the same as the control being gone", () => {
+  const evidence = sanitizeWebLlmSnapshot(failurePage(), { failedAction: {} });
+  assert.equal(evidence.failedTargetUnknown, true);
+  assert.equal(evidence.failedTargetMissing, void 0);
+  assert.equal(evidence.failedTarget, void 0);
+});
+test("a packet that is not describing a failure marks no target at all", () => {
+  const evidence = sanitizeWebLlmSnapshot(failurePage());
+  assert.equal(evidence.failedTarget, void 0);
+  assert.equal(evidence.failedTargetMissing, void 0);
+  assert.equal(evidence.failedTargetUnknown, void 0);
+});
+test("a handle the byte budget trimmed away becomes a missing target rather than pointing at nothing", () => {
+  const evidence = sanitizeWebLlmSnapshot(failurePage(), { failedAction: { selector: "#pay" }, maxEvidenceBytes: 260 });
+  assert.equal(evidence.budgetTruncated, true);
+  assert.equal(evidence.failedTarget, void 0, "the element it named was popped");
+  assert.equal(evidence.failedTargetMissing, true);
+  assert.ok(!evidence.elements.some((element) => element.name === "Pay now"));
+});
+function failurePage() {
+  return {
+    url: "https://fixture.test/checkout",
+    title: "Checkout",
+    interactiveElements: [
+      { tagName: "a", selector: "#basket", visibleText: "Basket", href: "/basket" },
+      { tagName: "button", selector: "#pay", role: "button", name: "Pay now" }
+    ]
+  };
+}

@@ -414,10 +414,26 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
     elementsTruncated: elementsTruncated ? true : void 0,
     // Not written here: `trimToBudget` below sets it if and only if a removal
     // was needed. Mentioned so the packet's key set stays exhaustive.
-    budgetTruncated: void 0
+    budgetTruncated: void 0,
+    // Nor are these: `markFailedTarget` writes exactly one of them, and only
+    // for a packet that is describing a failure. Named for the same reason.
+    failedTarget: void 0,
+    failedTargetMissing: void 0,
+    failedTargetUnknown: void 0
   });
+  markFailedTarget(evidence, selectors, options.failedAction);
   trimToBudget(evidence, selectors, maxEvidenceBytes);
   return { evidence, selectors };
+}
+function markFailedTarget(evidence, selectors, failedAction) {
+  if (!failedAction) return;
+  if (!failedAction.selector) {
+    evidence.failedTargetUnknown = true;
+    return;
+  }
+  const handle = [...selectors.entries()].find(([, selector]) => selector === failedAction.selector)?.[0];
+  if (handle === void 0) evidence.failedTargetMissing = true;
+  else evidence.failedTarget = handle;
 }
 function budgetFor(options) {
   return options.budget === "failure" ? evidenceByteLimit(options.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure) : evidenceByteLimit(options.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration);
@@ -430,6 +446,10 @@ function trimToBudget(evidence, selectors, maxEvidenceBytes) {
   const popElement = () => {
     const removed = evidence.elements.pop();
     if (removed) selectors.delete(removed.target);
+    if (removed && evidence.failedTarget === removed.target) {
+      delete evidence.failedTarget;
+      evidence.failedTargetMissing = true;
+    }
     markBudgetTruncated();
   };
   const droppable = ["selectedText", "title", "navigation", "loading", "elementTotal", "dialogs", "blockedBy", "frame"];
