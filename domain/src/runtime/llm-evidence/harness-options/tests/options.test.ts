@@ -9,6 +9,8 @@ import {
 import type { JsonObject } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../../../constants";
 import type { WebLlmEvidenceGateway } from "../../capture";
+import { present } from "../../present";
+import type { WebRecoveryHarnessContext } from "../execute";
 import {
   webAutomationExplorationRefusalClassifier,
   webAutomationExplorationScope,
@@ -173,11 +175,11 @@ function registeredWith(overrides: { scopePolicy?: { kind: "same_scope" } | { ki
     },
   };
   const registry = new AutomationStudioHarnessOptionRegistry();
-  registry.register(webAutomationRecoveryHarnessOptionBundle({
+  registry.register(webAutomationRecoveryHarnessOptionBundle(present<WebRecoveryHarnessContext>({
     gateway,
     scopePolicy: overrides.scopePolicy ?? { kind: "same_scope" },
-    ...(overrides.sleep ? { sleep: overrides.sleep } : {})
-  }));
+    sleep: overrides.sleep
+  })));
   return { registry, commands, setTitle: (next) => { title = next; } };
 }
 

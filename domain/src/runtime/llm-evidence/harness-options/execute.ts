@@ -25,6 +25,7 @@ import {
   type WebLlmEvidenceToolExecution,
   type WebLlmEvidenceToolRequest
 } from "../capture";
+import { present } from "../present";
 import { evidenceLocation, safeEvidenceUrl } from "../location";
 import { currentElementForReturnedTarget, safeRevealElement } from "../reveal";
 import type { WebLlmSnapshotBinding } from "../sanitize";
@@ -130,15 +131,15 @@ function prepare(context: WebRecoveryHarnessContext, execution: AutomationStudio
   return {
     sessionId,
     scopeKey: `${sessionId}|${execution.projectId}|${execution.flowId}`,
-    request: {
+    request: present<WebLlmEvidenceToolRequest>({
       projectId: execution.projectId,
       flowId: execution.flowId,
       callId: execution.callId,
       toolId: execution.optionId,
       value: execution.value,
       maxEvidenceBytes: execution.maxEvidenceBytes,
-      ...(execution.signal !== undefined ? { signal: execution.signal } : {})
-    }
+      signal: execution.signal
+    })
   };
 }
 
