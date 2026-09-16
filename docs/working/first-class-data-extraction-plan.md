@@ -477,6 +477,42 @@ Recorded at dispatch on 2026-09-15. Completed briefs are in the
 
 ## Work Ledger
 
+### 2026-09-15 — Picker complete; a false accuracy score removed
+- Agent: supervisor; workers `x4b-content-picker`, `x5f-pooled-rate`
+- Changed: `apps/extension/src/content/picker/**`, `content/picker-host.ts`,
+  `shared/{protocol,extraction-messages}.ts`, the picker e2e spec;
+  `packages/test-contracts/src/**`, `packages/test-runner/src/bench/**` and
+  `run-expectations/extraction.ts`
+- Why: X4.2 completed the picker, and the pooled extraction accuracy rate
+  counted measurements that had compared nothing as perfect matches
+- Validation: the supervisor ran each itself. Content harness in real Chromium
+  -> "270 passed", up from 267. `node apps/extension/scripts/test-extension.mjs`
+  -> "# pass 621 # fail 0". `node domain/scripts/test-domain.mjs` -> "# pass 481
+  # fail 0". `pnpm --filter @fluxiq-web-extension/test-runner test` -> "# pass
+  866 # fail 0"; test-contracts -> "# pass 92 # fail 0". Core
+  `npx tsc -p packages/fluxiq/tsconfig.json --noEmit` -> exit 0
+- Outcome: Accepted
+- The capture order is now proved rather than reasoned: flipping the picker's
+  `window` capture to `document` fails the `dom.click` row with two click
+  events recorded, and removing the overlay filter fails the `dom.mutation`
+  row. Both were restored and re-run green. The plan had only argued this
+- The accuracy defect was worse than recorded and the naive fix would have
+  worsened it. Against the real producer a pooled rate read 0.999 where the
+  honest figure was 0.5. Restricting the population to steps that compared more
+  than zero records — the obvious fix — would have dropped a total extraction
+  failure out of the rate and raised it further; the population is now the steps
+  whose expectation listed records. A third case was found beyond the original
+  finding: an entry stating neither a count nor records adopts the observed
+  count as its expectation and scores a free 1.0
+- Follow-up: `x4e-picker-integration` is closing seams the three parallel picker
+  workers left wired at one end only — the clearest being that toggling a column
+  to Excluded never changed the preview, because the panel never told the
+  background. Nothing was persisted either way, so D12 held, but the user would
+  have watched values they had just marked private stay on screen
+- Noise, not a defect: `clone-cache.test.js` timed out once and did not
+  reproduce. Consistent with this machine's known memory fault; recorded so it
+  is not chased as a code defect
+
 ### 2026-09-15 — Picker background control and panel UI landed
 - Agent: supervisor; workers `x4c-background-control`, `x4d-picker-ui`
 - Changed: `apps/extension/src/background/extraction/**`, `background/index.ts`,
