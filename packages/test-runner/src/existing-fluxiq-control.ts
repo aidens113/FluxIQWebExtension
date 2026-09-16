@@ -410,10 +410,14 @@ function runIntervention(value: unknown, at: string): ExistingRunIntervention {
     if (value < 0) invalid(`${at}.tokenUsage.${key} must be non-negative`);
     return { [key]: value };
   };
+  // `+` is allowed because a staged prompt version reads
+  // `automation-studio.runtime-diagnosis.v1+stage.gather`. Without it this
+  // parser THREW on any run detail carrying a staged intervention - a break no
+  // unit test saw, because only a live run produces one.
   const optionalIdentifier = (value: unknown, field: string) => {
     if (value === undefined) return undefined;
     const parsed = text(value, `${at}.${field}`);
-    if (parsed.length > 200 || !/^[A-Za-z0-9][A-Za-z0-9._:-]*$/u.test(parsed)) invalid(`${at}.${field} is invalid`);
+    if (parsed.length > 200 || !/^[A-Za-z0-9][A-Za-z0-9._:+-]*$/u.test(parsed)) invalid(`${at}.${field} is invalid`);
     return parsed;
   };
   const metadata = optionalRecord(item.metadata, `${at}.metadata`);
@@ -464,6 +468,6 @@ function boolean(value: unknown, at: string): boolean { if (typeof value !== "bo
 function enumeration<const T extends readonly string[]>(value: unknown, allowed: T, at: string): T[number] { if (typeof value !== "string" || !allowed.includes(value)) invalid(`${at} is invalid`); return value as T[number]; }
 function nullableUrl(value: unknown, at: string): string | null { if (value === null || value === undefined) return null; const result = text(value, at); let url: URL; try { url = new URL(result); } catch { invalid(`${at} must be a URL`); } if (url!.protocol !== "ws:" && url!.protocol !== "wss:") invalid(`${at} must use ws or wss`); return url!.toString(); }
 function invalid(message: string): never { throw new RunnerFailure("environment.missing", `Malformed FluxIQ API response: ${message}`); }
-function safeId(value: string): string { return /^[A-Za-z0-9._:-]+$/.test(value) ? value : "[invalid-id]"; }
+function safeId(value: string): string { return /^[A-Za-z0-9._:+-]+$/.test(value) ? value : "[invalid-id]"; }
 function hashJson(value: unknown): string { return createHash("sha256").update(stableJson(value)).digest("hex"); }
 function stableJson(value: unknown): string { if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`; if (value && typeof value === "object") return `{${Object.entries(value as JsonRecord).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`).join(",")}}`; return JSON.stringify(value); }
