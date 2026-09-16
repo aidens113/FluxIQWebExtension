@@ -114,37 +114,39 @@ the new `runtime/loop-limits/`, which neither directory owns.
 files; this repository `pnpm check` exit 0, `test-runner` 940 passed / 0
 failed, `structure-audit` passed in both.
 
-**Deferred, not forgotten:** `deniedEvidenceKeys` is optional on Core's binding
-and `context-packet.ts:81` defaults a missing declaration to deny nothing — the
-same silent-no-protection shape this plan keeps finding. It should be required
-and fail closed. Measured cost: 8 call sites, 7 of them in
-`AS/runtime/tests/**`; the exact diff is in `reports/w2-harness-loose-ends.md`.
-Also outstanding: `recovery/structured-diagnosis.ts:131` still reads
-`response.metadata` rather than the new channel, and the two only mean anything
-together.
-
-**A module cycle has bitten twice in one day and wants a rule.**
-`llm/harness/intervention.ts` value-imports out of `AS/runtime/recovery/`, so a
-`recovery` module reading an `llm` constant at the top level gets `undefined` at
-run time with a completely clean type check. The same cycle silently emptied the
-opaque handle's `pattern`, `maxLength` and `maxProperties` from the schema sent
-to the provider. Both were found by a single failing test, not by the type
-checker. An `importBoundaries` entry would stop the third instance.
-
 **Concurrency is five workers, not nine.** Both crashes happened with nine heavy
 workers running on a machine with a known memory fault, so this is recorded as a
 real resource limit rather than caution.
 
+**Live-testing campaign (user direction, 2026-09-16):** "get to a point where
+we have at least basic automation able to be created & repaired by simply
+pointing the instructions at a demo, and having it explore and auto-create
+flows", across "lots of different demos", including flows that navigate demo
+sites and scrape data. Runs serving that goal need no per-run approval. Also in
+flight: `w2-creation-extraction-gap` (can creation emit extraction and
+navigation?) and `w2-live-campaign-catalog` (instruction catalog, campaign runner).
+
 **Next steps, in order:**
-1. Land `w2-deepseek-preflight-refusal`: the adapter refuses every real recovery
-   request before sending it. Nothing about the loop is demonstrated until a live
-   run gets a DeepSeek reply.
-2. Then the live `adapt` run on `identity-drift --variant save-and-exit`, read
-   call by call from `snapshots/live-llm.json`, not from the verdict.
-3. Integration cleanups: `live-patch.ts` policy required; Core settings save
-   accepting no `maxCalls`; the stale PIN comment in `runtime-session-grant.ts`;
+1. `w2-live-explore-create-repair` (live): drive the persistent demo pipeline
+   (`demo:llm:explore` -> apply -> baseline -> adapt -> apply -> validate) end
+   to end against DeepSeek, fixing what breaks.
+2. `w2-lab-live-create-flow` (code, no live calls): a Lab `--llm-task
+   create-flow` lane so creation can be tested live, isolated, per scenario.
+3. `w2-grant-survives-bad-reply` (Core): a bad reply or transient provider
+   error spends a call instead of revoking the grant.
+4. Scraping in created Flows (`reports/w2-creation-extraction-gap.md`: today a
+   created Flow cannot scrape). In flight: `w2-extract-node-dataset` (items
+   1-3, web domain), `w2-bootstrap-structured-params` (items 2-3, Core),
+   `w2-detect-repeating-structure-tool` (item 4). Queued: item 5, handle
+   resolution in Core `binding.ts` and `service.ts`, after the grant and tool
+   workers land. Later: item 7, following every link.
+5. Then live creation across several scenarios, and live repair on
+   `identity-drift --variant renamed-redesign` (a correct repair there is a
+   change proposal naming the renamed Save; the run itself still fails
+   `target_not_found` because `adapt` proposes and does not retry).
+6. Integration cleanups: `live-patch.ts` policy required; Core settings save
+   accepting no `maxCalls`; stale PIN comment in `runtime-session-grant.ts`;
    `registerAutomationStudioApi` ignoring `identityAccess`; `pnpm docs:reference`.
-4. Then Phase 2.4, and 2.5-2.9 after it.
 
 **Blockers:** none. The user's direction is recorded as L12-L16. The earlier
 request that he approve L6 and L9 is **withdrawn**: L13 supersedes both, because
