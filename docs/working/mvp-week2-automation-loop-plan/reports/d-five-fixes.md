@@ -254,10 +254,18 @@ occurrences across those four tests (`{ selector: "#submit-order" }` →
 `service.test.ts` is now 108/108 and still exactly 4787 lines. I converted the
 same fixtures in `live-patch.test.ts` (22 occurrences) because that file is mine.
 
-**One in `service-flow-bootstrap-adaptation.test.ts`** — `identityAccess.authorizeSessionPin`
-called 0 times instead of 2. The two assertions immediately before it pass, so
-the adaptation applied correctly; only the identity-access seam is missing. That
-is the concurrent identity-access worker's area, which my brief forbids me.
+**One in `service-flow-bootstrap-adaptation.test.ts` — Phase P fallout. Now fixed.**
+`identityAccess.authorizeSessionPin` was called 0 times instead of 2. Phase P
+(decision L16) moved the PIN check out of authoring endpoints, and reviewing an
+adaptation is authorship, so `review-flow-adaptation` is no longer PIN-gated. The
+two cumulative-count assertions (lines 383 and 414, both inside the same test) are
+now `expect(identityAccess.authorizeSessionPin).not.toHaveBeenCalled()` — asserting
+it is never called, so a PIN requirement returning to this path fails loudly rather
+than quietly satisfying a looser bound — and the test title no longer says
+"PIN-gated". I checked the rest of my files for stale PIN expectations: the only
+other hits are two `not.toHaveProperty("authorizationPin")` assertions in
+`runtime/llm/tests/execution-grants.test.ts`, which are about a stored grant's
+shape rather than endpoint gating, and they pass.
 
 **Eight in `storage/project/tests/runtime-stream-store.test.ts`** — environmental.
 The "million events" test timed out at 60s under concurrent load and left an
@@ -267,6 +275,29 @@ in `beforeEach` with `EBUSY: resource busy or locked, unlink
 `rm -rf` on that directory fails with "Device or resource busy". I changed
 nothing in that store, and this file passed in an earlier full-suite run in this
 same session.
+
+## Final state, as observed
+
+```
+npx vitest run src/programs/automation-studio/runtime
+                src/programs/automation-studio/storage/project/tests/adaptation-store.test.ts
+  → Test Files  54 passed | 1 failed (55)
+    Tests  681 passed | 1 failed (682)
+    The one failure is "turns mapped observations into reviewed Flow actions…"
+    at 15052ms — a load timeout. Run alone: 1 passed. Same for a second test
+    that timed out in an earlier pass. This machine's known behaviour.
+
+npx vitest run .../runtime/tests/service.test.ts                      → 108 passed (108)
+npx vitest run .../service-flow-bootstrap-adaptation.test.ts          → 9 passed (9)
+npx vitest run live-patch + adaptation-store + conversions
+                + runtime/recovery + service-flow-representation     → 53 passed (53)
+
+npx tsc --noEmit, filtered to automation-studio runtime/storage/model → 0 errors
+wc -l AS/runtime/service.ts                                          → 6757  (baseline 6758)
+wc -l AS/runtime/tests/service.test.ts                               → 4787  (baseline 4787)
+node scripts/structure-audit.mjs                                     → 1 violation, in
+  automation-studio/tests/opaque-target-execution.test.ts, another worker's file
+```
 
 ## What I changed, and where
 
@@ -282,7 +313,8 @@ same session.
 | `AS/storage/project/tests/adaptation-store.test.ts` | 1 test added |
 | `AS/runtime/service/summaries/tests/conversions.test.ts` | 2 tests added |
 | `AS/runtime/tests/service-flow-representation.test.ts` | 1 assertion made honest |
-| `AS/runtime/tests/service.test.ts` | 2 fixtures declare an expectation; 2 lines converted off `{ selector }` |
+| `AS/runtime/tests/service.test.ts` | 2 fixtures declare an expectation; 8 lines converted off `{ selector }` |
+| `AS/runtime/tests/service-flow-bootstrap-adaptation.test.ts` | Phase P: review is no longer PIN-gated |
 
 Files outside my brief's owned list that I edited, all because my own change
 required it: `conversions.ts` (fix 5's seam has nowhere else to live),

@@ -5,14 +5,16 @@ export type {
   ExtractionCommandResponse,
   ExtractionConfirmField,
   ExtractionConfirmRequest,
+  ExtractionPreviewColumn,
   ExtractionPreviewRow,
+  ExtractionSessionRefusal,
   ExtractionSessionResponse,
   ExtractionSessionState,
   ExtractionSessionView
 } from "./messages";
 export { mountExtractionPanel, type ExtractionPanelHandle } from "./panel";
 export { extractionPanelElements, type ExtractionPanelElements } from "./panel-elements";
-export { extractionPreviewColumns, retainExtractionPreview } from "./preview";
+export { extractionPreviewColumns, extractionPreviewSelection, retainExtractionPreview } from "./preview";
 export { renderExtractionPreview } from "./preview-table";
 export {
   extractionDraftFromProposal,

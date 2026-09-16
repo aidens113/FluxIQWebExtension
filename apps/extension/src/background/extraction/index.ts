@@ -5,7 +5,8 @@ export {
   recordedListExtraction,
   runnableExtractListRequest,
   type ExtractionConfirmField,
-  type ExtractionConfirmRequest
+  type ExtractionConfirmRequest,
+  type ExtractionPreviewColumn
 } from "./definition";
 export { extractionControlDeps, type ExtractionControlDeps } from "./deps";
 export {

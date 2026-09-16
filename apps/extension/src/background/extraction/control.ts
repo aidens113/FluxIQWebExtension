@@ -25,19 +25,23 @@
 
 import {
   EXTRACTION_CONTENT_MESSAGES,
+  EXTRACTION_PICK_CANCELLED_MESSAGE,
   EXTRACTION_PICKED_MESSAGE,
   EXTRACTION_RUNTIME_MESSAGES,
+  type ExtractionConfirmOutcome,
   type ExtractionContentMessage,
   type ExtractionContentResponse,
+  type ExtractionPickCancelledMessage,
   type ExtractionPickedMessage,
+  type ExtractionPreviewColumn,
   type ExtractionPreviewRow,
-  type ExtractionProposeRefusal
+  type ExtractionSessionRefusal
 } from "../../shared/extraction-messages";
 import type { WebAutomationExtractionProposal, WebAutomationRecordedExtraction } from "@fluxiq-web-extension/domain/client";
 import type { FluxIQConnection } from "../connection";
 import { isControlPage } from "../control-page";
 import { confirmExtraction } from "./confirm";
-import { extractionPreviewRequest, recordedListExtraction, type ExtractionConfirmField, type ExtractionConfirmRequest } from "./definition";
+import { extractionPreviewRequest, recordedListExtraction, type ExtractionConfirmRequest } from "./definition";
 import { extractionControlDeps, type ExtractionControlDeps } from "./deps";
 import { EXTRACTION_PREVIEW_MAX_ROWS, type ExtractionSession } from "./session-store";
 
@@ -52,8 +56,8 @@ export type ExtractionSessionView = {
   state: ExtractionSession["state"];
   form: ExtractionSession["form"];
   proposal?: WebAutomationExtractionProposal | undefined;
-  /** Why the frame proposed nothing for the element the user clicked, when it proposed nothing. */
-  refused?: ExtractionProposeRefusal | undefined;
+  /** Why there is nothing to confirm: the frame proposed nothing for the element, or the pick was for a form this worker cannot land. */
+  refused?: ExtractionSessionRefusal | undefined;
   preview: ExtractionPreviewRow[];
 };
 
@@ -66,7 +70,11 @@ const REFUSALS = {
   invalid_definition: "Those columns do not make an extraction FluxIQ can run.",
   page_refused: "The page did not answer the extraction request.",
   run_failed: "The extraction did not run.",
-  top_frame_only: "An extraction can only be picked in the page's main frame."
+  top_frame_only: "An extraction can only be picked in the page's main frame.",
+  // The one refusal that is about FluxIQ rather than the page or the sender.
+  // Its code is the word the session carries, so the panel's sentence and this
+  // one come from the same vocabulary (`ExtractionSessionRefusal`).
+  value_form_unsupported: "FluxIQ cannot record a single value yet. Pick an item in a repeating list."
 } as const;
 
 function refuse(code: keyof typeof REFUSALS, error?: string): { ok: false; code: string; error: string } {
@@ -80,7 +88,10 @@ export async function handleExtractionControl(
   deps: ExtractionControlDeps = extractionControlDeps
 ): Promise<ControlResult> {
   if (message.type === EXTRACTION_PICKED_MESSAGE) {
-    return { handled: true, response: acceptPick(message, sender, deps) };
+    return { handled: true, response: await acceptPick(message, sender, deps) };
+  }
+  if (message.type === EXTRACTION_PICK_CANCELLED_MESSAGE) {
+    return { handled: true, response: acceptPickCancelled(message, sender, deps) };
   }
   const runtime = Object.values(EXTRACTION_RUNTIME_MESSAGES).find((name) => name === message.type);
   if (runtime === undefined) return { handled: false };
@@ -100,11 +111,22 @@ export function clearExtractionTab(tabId: number, deps: ExtractionControlDeps = 
   deps.sessions.clearTab(tabId);
 }
 
-/** Opens a session on the automation tab and puts the overlay up in its top frame. */
+/**
+ * Opens a session on the automation tab and puts the overlay up in its top
+ * frame.
+ *
+ * A `value` pick is refused here rather than opened. Nothing downstream can
+ * land one -- `confirm.ts` refuses a `value` definition on the run path, and a
+ * recorded value extraction needs the element target the picker's recorded
+ * event does not attach -- so a value session could only ever end in a pick
+ * that did nothing. Refusing at the door is what makes that visible, and
+ * `acceptPick` refuses the pick itself for the same reason.
+ */
 async function startPick(message: ControlMessage, manager: FluxIQConnection, deps: ExtractionControlDeps): Promise<unknown> {
   const tabId = manager.status().activeTabId;
   if (tabId === undefined) return refuse("no_tab");
-  const form = message.form === "value" ? "value" : "list";
+  if (message.form === "value") return refuse("value_form_unsupported");
+  const form = "list";
   const sessionId = deps.newId();
   deps.sessions.start(sessionId, tabId, form);
   try {
@@ -126,29 +148,78 @@ async function startPick(message: ControlMessage, manager: FluxIQConnection, dep
  * What a frame picked. The sender's own tab and frame decide whether it is
  * accepted, never anything the message says: the frame id must be the top one,
  * and `ExtractionSessions.picked` refuses a tab that is not the session's.
+ *
+ * Three things can arrive, and every one of them is answered. A proposal fills
+ * the session. A refusal from the frame, and an `element` from a `value` pick
+ * this worker cannot land, both leave the session open carrying the word that
+ * says why -- and both re-arm the pick, because the frame closed its overlay on
+ * the press and the panel is about to tell the user to click again.
  */
-function acceptPick(message: ControlMessage, sender: chrome.runtime.MessageSender, deps: ExtractionControlDeps): unknown {
+async function acceptPick(message: ControlMessage, sender: chrome.runtime.MessageSender, deps: ExtractionControlDeps): Promise<unknown> {
   const tabId = sender.tab?.id;
   if (tabId === undefined || sender.frameId !== 0) return refuse("top_frame_only");
   const picked = message as unknown as ExtractionPickedMessage;
   if (typeof picked.sessionId !== "string") return refuse("no_session");
-  // A pick the page could propose nothing for is still a pick: the session stays
-  // open carrying the frame's own refusal word, so the panel can say why rather
-  // than waiting on a click that already happened.
-  const session = picked.proposal !== undefined
-    ? deps.sessions.picked(picked.sessionId, tabId, picked.proposal)
-    : (picked.refused !== undefined ? deps.sessions.refuse(picked.sessionId, tabId, picked.refused) : undefined);
-  return session === undefined ? refuse("no_session") : { ok: true, sessionId: picked.sessionId };
+  if (picked.proposal !== undefined) {
+    const filled = deps.sessions.picked(picked.sessionId, tabId, picked.proposal);
+    return filled === undefined ? refuse("no_session") : { ok: true, sessionId: picked.sessionId };
+  }
+  const refusal: ExtractionSessionRefusal | undefined = picked.refused ?? (picked.element !== undefined ? "value_form_unsupported" : undefined);
+  if (refusal === undefined) return refuse("no_session");
+  const session = deps.sessions.refuse(picked.sessionId, tabId, refusal);
+  if (session === undefined) return refuse("no_session");
+  await rearmPick(session, deps);
+  // The frame's own refusal is a pick this worker took: it was told, and it kept
+  // the session. A `value` pick is not, and is answered with the word the
+  // session now carries, so the reply a caller reads and the session the panel
+  // reads say the same thing rather than one of them saying nothing.
+  return refusal === "value_form_unsupported" ? refuse("value_form_unsupported") : { ok: true, sessionId: picked.sessionId };
+}
+
+/**
+ * The user pressed Escape in the page.
+ *
+ * Checked exactly as a pick is, and for the same reason: it arrives from a
+ * content script, so the sender's own tab and frame decide whether it is taken,
+ * never anything the message says. Cancelling a session that is not there, or
+ * not this tab's, is not an error -- Escape is allowed to be pressed twice.
+ */
+function acceptPickCancelled(message: ControlMessage, sender: chrome.runtime.MessageSender, deps: ExtractionControlDeps): unknown {
+  const tabId = sender.tab?.id;
+  if (tabId === undefined || sender.frameId !== 0) return refuse("top_frame_only");
+  const cancelled = message as unknown as ExtractionPickCancelledMessage;
+  if (typeof cancelled.sessionId !== "string") return refuse("no_session");
+  return { ok: true, cancelled: deps.sessions.cancelled(cancelled.sessionId, tabId) !== undefined };
+}
+
+/**
+ * Puts the overlay back up after a pick that left nothing to confirm.
+ *
+ * The frame closes its overlay on **every** pick and forgets its own session
+ * when the press finishes (`content/picker/session.ts`), so without this the
+ * panel would show "pick another item" over a page that can no longer be picked
+ * in, and the only way out would be Cancel. A frame that cannot be reached
+ * leaves the session refused, which is what the panel already displays.
+ */
+async function rearmPick(session: ExtractionSession, deps: ExtractionControlDeps): Promise<void> {
+  try {
+    const pickStart: ExtractionContentMessage = { type: EXTRACTION_CONTENT_MESSAGES.pickStart, sessionId: session.sessionId, form: session.form };
+    await deps.sendToTab(session.tabId, pickStart, 0);
+  } catch {
+    // The tab may be gone or navigating; the session keeps its refusal either way.
+  }
 }
 
 /**
  * The session, with the confirmation preview.
  *
- * The rows are read once, for the columns the proposal did not already mark
- * `exclude`, and are re-read rather than filtered if a caller names a different
- * set of columns -- so a column that is out is never read at all instead of
- * being read and hidden (D12). The panel, which knows about the user's later
- * edits, drops a column's values from its own copy the moment it is excluded.
+ * The first read is for the columns the proposal did not already mark
+ * `exclude`. After that the panel sends the columns it may still show
+ * (`fields`, keyed by proposal field key), and a set that differs from the one
+ * the rows were read under is **re-read rather than filtered** -- so a column
+ * the user excludes is not read at all from that moment, instead of being read
+ * and hidden (D12). The panel drops the values from its own copy in the same
+ * turn, so neither half is left holding them.
  */
 async function readSession(message: ControlMessage, deps: ExtractionControlDeps): Promise<unknown> {
   const session = deps.sessions.get(sessionIdOf(message));
@@ -171,7 +242,7 @@ async function readSession(message: ControlMessage, deps: ExtractionControlDeps)
 async function refreshPreview(
   session: ExtractionSession,
   proposal: WebAutomationExtractionProposal,
-  columns: readonly ExtractionConfirmField[] | undefined,
+  columns: readonly ExtractionPreviewColumn[] | undefined,
   deps: ExtractionControlDeps
 ): Promise<void> {
   const preview = extractionPreviewRequest(proposal, columns);
@@ -185,9 +256,15 @@ async function refreshPreview(
     };
     const answer = await deps.sendToTab<ExtractionContentResponse | undefined>(session.tabId, read, 0);
     if (answer?.ok === true) deps.sessions.setPreview(session.sessionId, preview.columnsKey, answer.rows ?? []);
+    else deps.sessions.clearPreview(session.sessionId);
   } catch {
-    // A frame that cannot answer leaves the session's rows as they were. The
-    // panel shows the session without a fresh preview rather than losing it.
+    // A frame that will not read the new columns leaves the worker holding rows
+    // read under the old ones, and the commonest reason the columns changed is
+    // that the user just excluded one. Keeping those rows would be keeping that
+    // column's values, so they go and the panel shows no preview rather than a
+    // stale one (D12). The key goes with them, so the next `getSession` asks
+    // again instead of treating the failure as the answer.
+    deps.sessions.clearPreview(session.sessionId);
   }
 }
 
@@ -224,8 +301,10 @@ async function confirmPick(message: ControlMessage, manager: FluxIQConnection, d
   const outcome = await confirmExtraction(definition, session.tabId, { sessionId: session.sessionId, recording: true }, deps);
   if (!outcome.ok) return refuse(outcome.code, outcome.message);
   deps.sessions.markRecorded(session.sessionId);
-  return {
-    ok: true,
+  // Written as the declared shape rather than a loose literal, because the panel
+  // now reads every one of these into a sentence: a field renamed here and read
+  // there is the defect `shared/extraction-messages.ts` exists to prevent.
+  const captured: ExtractionConfirmOutcome = {
     datasetId: definition.datasetId,
     label: definition.label,
     recordCount: Array.isArray(outcome.records) ? outcome.records.length : 0,
@@ -233,6 +312,7 @@ async function confirmPick(message: ControlMessage, manager: FluxIQConnection, d
     truncated: outcome.truncated,
     durationMs: outcome.durationMs
   };
+  return { ok: true, ...captured };
 }
 
 /**
@@ -276,13 +356,18 @@ function confirmRequestOf(message: ControlMessage): ExtractionConfirmRequest | u
   return typeof message.label === "string" ? message as unknown as ExtractionConfirmRequest : undefined;
 }
 
-/** The columns a caller names for the preview, when it names any. The panel names none and takes the proposal's. */
-function columnsOf(message: ControlMessage): readonly ExtractionConfirmField[] | undefined {
-  const request = message.request;
-  const fields = Array.isArray(message.fields)
-    ? message.fields
-    : (request !== null && typeof request === "object" && Array.isArray((request as { fields?: unknown }).fields)
-      ? (request as { fields: unknown[] }).fields
-      : undefined);
-  return fields as readonly ExtractionConfirmField[] | undefined;
+/**
+ * The columns a caller names for the preview, when it names any. A caller that
+ * names none gets the proposal's, which is the first read.
+ *
+ * Only `fields` on the message itself is read, and every key in it is a
+ * **proposal** field key (`ExtractionPreviewColumn`). A confirm payload nested
+ * under `request` is deliberately not accepted here: its keys are the record
+ * keys derived from the user's labels, so a renamed column would match no
+ * proposal field, fall back to "as proposed", and put a column the user had
+ * just excluded back into the read -- silently, and only for the columns they
+ * had renamed.
+ */
+function columnsOf(message: ControlMessage): readonly ExtractionPreviewColumn[] | undefined {
+  return Array.isArray(message.fields) ? message.fields as readonly ExtractionPreviewColumn[] : undefined;
 }

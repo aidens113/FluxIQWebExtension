@@ -237,18 +237,18 @@
     return null;
   }
   function xpathFor(element) {
-    const parts = [];
+    const parts2 = [];
     let current = element;
     while (current) {
       if (current.id) {
-        parts.unshift(`*[@id=${xpathString(current.id)}]`);
+        parts2.unshift(`*[@id=${xpathString(current.id)}]`);
         break;
       }
       const siblings = current.parentElement ? [...current.parentElement.children].filter((sibling) => sibling.tagName === current.tagName) : [];
-      parts.unshift(`${current.tagName.toLowerCase()}[${Math.max(1, siblings.indexOf(current) + 1)}]`);
+      parts2.unshift(`${current.tagName.toLowerCase()}[${Math.max(1, siblings.indexOf(current) + 1)}]`);
       current = current.parentElement;
     }
-    return `/${parts.join("/")}`;
+    return `/${parts2.join("/")}`;
   }
   function query(selector) {
     if (!selector) return null;
@@ -997,10 +997,10 @@
 
   // ../../domain/src/extraction/signature.ts
   var MAX_SIGNATURE_CLASSES = 3;
-  function webAutomationItemSignature(parts) {
-    const role = parts.role?.trim().toLowerCase() ?? "";
-    const classes = [...parts.classes].sort().slice(0, MAX_SIGNATURE_CLASSES).join(".");
-    return `${parts.tagName.toLowerCase()}|${role}|${webAutomationIdentifierShape(parts.testId)}|${classes}`;
+  function webAutomationItemSignature(parts2) {
+    const role = parts2.role?.trim().toLowerCase() ?? "";
+    const classes = [...parts2.classes].sort().slice(0, MAX_SIGNATURE_CLASSES).join(".");
+    return `${parts2.tagName.toLowerCase()}|${role}|${webAutomationIdentifierShape(parts2.testId)}|${classes}`;
   }
   function webAutomationIdentifierShape(value) {
     return value === void 0 ? "" : value.replace(/\d+/gu, "#");
@@ -1426,20 +1426,20 @@
   }
   function labelElementText(label, control) {
     if (isWithinSensitiveControl(label)) return "";
-    const parts = [];
-    collectLabelText(label, control, parts, 0);
-    return parts.join(" ").replace(/\s+/gu, " ").trim();
+    const parts2 = [];
+    collectLabelText(label, control, parts2, 0);
+    return parts2.join(" ").replace(/\s+/gu, " ").trim();
   }
-  function collectLabelText(node, control, parts, depth) {
-    if (parts.length > 40 || depth > 8) return;
+  function collectLabelText(node, control, parts2, depth) {
+    if (parts2.length > 40 || depth > 8) return;
     if (node.nodeType === Node.TEXT_NODE) {
       const text3 = node.textContent;
-      if (text3?.trim()) parts.push(text3);
+      if (text3?.trim()) parts2.push(text3);
       return;
     }
     if (!(node instanceof Element)) return;
     if (node === control || node.matches(NESTED_CONTROL_SELECTOR) || isSensitiveFormControl(node)) return;
-    for (const child of node.childNodes) collectLabelText(child, control, parts, depth + 1);
+    for (const child of node.childNodes) collectLabelText(child, control, parts2, depth + 1);
   }
   function nearbyLabel(element) {
     if (!isLabelableControl(element)) return void 0;
@@ -1528,12 +1528,12 @@
   function labelledByName(element) {
     const ids = (element.getAttribute("aria-labelledby") ?? "").split(/\s+/u).filter(Boolean).slice(0, MAX_LABELLEDBY_IDS);
     if (!ids.length) return void 0;
-    const parts = ids.flatMap((id) => {
+    const parts2 = ids.flatMap((id) => {
       const target = document.getElementById(id);
       const text3 = target && target !== element ? boundedText2(textOutsideSensitiveControls(target), MAX_NAME_LENGTH) : void 0;
       return text3 ? [text3] : [];
     });
-    return boundedText2(parts.join(" "), MAX_NAME_LENGTH);
+    return boundedText2(parts2.join(" "), MAX_NAME_LENGTH);
   }
   function buttonValueName(element) {
     if (!(element instanceof HTMLInputElement)) return void 0;
@@ -1876,13 +1876,13 @@
   }
   function labelledByText(landmark) {
     const ids = (landmark.getAttribute("aria-labelledby") ?? "").split(/\s+/u).filter(Boolean).slice(0, MAX_LABELLEDBY_IDS2);
-    const parts = ids.flatMap((id) => {
+    const parts2 = ids.flatMap((id) => {
       const target = landmark.ownerDocument?.getElementById(id);
       if (!target || target === landmark || holdsInput(target)) return [];
       const text3 = contextText(target);
       return text3 ? [text3] : [];
     });
-    return boundedText2(parts.join(" "), MAX_CONTEXT_TEXT);
+    return boundedText2(parts2.join(" "), MAX_CONTEXT_TEXT);
   }
   function holdsInput(element) {
     return FORM_CONTROL_TAGS.has(element.tagName.toLowerCase()) || element.isContentEditable === true;
@@ -2399,17 +2399,17 @@
     if (testId) return `[data-testid="${cssString3(testId)}"]`;
     const name = element.getAttribute("name");
     if (name) return `${element.tagName.toLowerCase()}[name="${cssString3(name)}"]`;
-    const parts = [];
+    const parts2 = [];
     let current = element;
-    while (current && current !== document.documentElement && parts.length < 5) {
+    while (current && current !== document.documentElement && parts2.length < 5) {
       const parent = current.parentElement;
       const tag = current.tagName.toLowerCase();
       const siblings = parent ? [...parent.children].filter((child) => child.tagName === current?.tagName) : [];
       const index = siblings.indexOf(current) + 1;
-      parts.unshift(siblings.length > 1 ? `${tag}:nth-of-type(${index})` : tag);
+      parts2.unshift(siblings.length > 1 ? `${tag}:nth-of-type(${index})` : tag);
       current = parent;
     }
-    return parts.join(" > ");
+    return parts2.join(" > ");
   }
   function visibleText(element) {
     const text3 = textOutsideSensitiveControls(element).replace(/\s+/g, " ").trim();
@@ -2508,8 +2508,8 @@
   function isShown(element) {
     if (element.closest("[hidden],[aria-hidden='true']")) return false;
     if (element instanceof HTMLDialogElement && !element.open) return false;
-    const style = getComputedStyle(element);
-    return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) !== 0;
+    const style2 = getComputedStyle(element);
+    return style2.display !== "none" && style2.visibility !== "hidden" && Number(style2.opacity) !== 0;
   }
   function lastNativeDialog() {
     const raw = document.documentElement?.getAttribute(DIALOG_OBSERVED_ATTRIBUTE);
@@ -2711,8 +2711,8 @@
   }
   function isPainted(element) {
     if (element.closest("[hidden],[aria-hidden='true']")) return false;
-    const style = getComputedStyle(element);
-    if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
+    const style2 = getComputedStyle(element);
+    if (style2.display === "none" || style2.visibility === "hidden" || Number(style2.opacity) === 0) return false;
     const rect2 = element.getBoundingClientRect();
     return rect2.width >= 1 && rect2.height >= 1;
   }
@@ -3037,8 +3037,8 @@
     if (element.closest("[hidden], [aria-hidden='true']")) return false;
     const bounds = visualDocumentBounds(element);
     if (!bounds) return false;
-    const style = getComputedStyle(element);
-    if (style.visibility === "hidden" || style.display === "none" || Number(style.opacity) === 0) return false;
+    const style2 = getComputedStyle(element);
+    if (style2.visibility === "hidden" || style2.display === "none" || Number(style2.opacity) === 0) return false;
     return isEventBackedElement(element) ? hasEventElementPresentation(element) : isInteractableUiElement(element) ? hasMeaningfulInteractableIdentity(element) : hasElementPresentation(element);
   }
   function snapshotElementBucket(element) {
@@ -3081,13 +3081,23 @@
     return left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
   }
 
+  // src/content/picker-host.ts
+  var PICKER_HOST_ATTRIBUTE = "data-fluxiq-picker";
+  function isPickerHostNode(node) {
+    for (let current = node; current; current = current.parentNode) {
+      const element = current;
+      if (typeof element.hasAttribute === "function" && element.hasAttribute(PICKER_HOST_ATTRIBUTE)) return true;
+    }
+    return false;
+  }
+
   // src/content/snapshots.ts
   function shouldAttachStateSnapshot(kind) {
-    return kind === "dom.click" || kind === "dom.input" || kind === "dom.change" || kind === "dom.submit" || kind === "dom.keydown";
+    return kind === "data.extract" || kind === "dom.click" || kind === "dom.input" || kind === "dom.change" || kind === "dom.submit" || kind === "dom.keydown";
   }
 
   // src/content/recorder.ts
-  var EXECUTABLE_KINDS = /* @__PURE__ */ new Set(["dom.click", "dom.input", "dom.change", "dom.submit", "dom.keydown"]);
+  var EXECUTABLE_KINDS = /* @__PURE__ */ new Set(["dom.click", "dom.input", "dom.change", "dom.submit", "dom.keydown", "data.extract"]);
   var recording = false;
   var sequence = 0;
   var mutationTimer;
@@ -3167,11 +3177,19 @@
   }
   function tallyMutations(mutations) {
     for (const mutation of mutations) {
-      pendingMutation.added += mutation.addedNodes.length;
-      pendingMutation.removed += mutation.removedNodes.length;
+      if (isPickerHostNode(mutation.target)) continue;
+      pendingMutation.added += countOutsidePicker(mutation.addedNodes);
+      pendingMutation.removed += countOutsidePicker(mutation.removedNodes);
       if (mutation.type === "attributes") pendingMutation.attributes += 1;
       if (mutation.type === "characterData") pendingMutation.text += 1;
     }
+  }
+  function countOutsidePicker(nodes) {
+    let count3 = 0;
+    for (const node of nodes) {
+      if (!isPickerHostNode(node)) count3 += 1;
+    }
+    return count3;
   }
   function basePayload(kind, details) {
     const payload = {
@@ -3190,6 +3208,7 @@
     if (details.key !== void 0) payload.key = details.key;
     if (details.scroll) payload.scroll = details.scroll;
     if (details.mutation) payload.mutation = details.mutation;
+    if (details.extraction) payload.extraction = details.extraction;
     if (details.actionResult) payload.actionResult = details.actionResult;
     if (details.metadata) payload.metadata = details.metadata;
     return payload;
@@ -3329,7 +3348,7 @@
   // src/content/actions/extract.ts
   function extractAction(action, deps, startedAt) {
     const { element, resolution } = deps.resolveTarget(action);
-    const read = deps.extractElement(element, action.options);
+    const read = deps.extractElement(element, readRequest(action));
     if (!read.ok) {
       return deps.rejected(
         action,
@@ -3346,6 +3365,11 @@
       extracted: read.value,
       resolution
     });
+  }
+  function readRequest(action) {
+    const extract = action.extract;
+    if (extract === void 0) return action.options;
+    return extract.attribute === void 0 ? { mode: extract.mode } : { mode: extract.mode, attribute: extract.attribute };
   }
 
   // src/content/actions/click.ts
@@ -4139,8 +4163,8 @@
     if (!element.isConnected) return false;
     const view = element.ownerDocument.defaultView;
     if (!view) return false;
-    const style = view.getComputedStyle(element);
-    if (style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse") return false;
+    const style2 = view.getComputedStyle(element);
+    if (style2.display === "none" || style2.visibility === "hidden" || style2.visibility === "collapse") return false;
     const rect2 = element.getBoundingClientRect();
     return rect2.width > 0 && rect2.height > 0;
   }
@@ -4317,10 +4341,10 @@
   }
   function hiddenReason(element, view) {
     if (element.closest("[inert]")) return "the element is inert";
-    const style = view.getComputedStyle(element);
-    if (style.display === "none") return "the element's display is none";
-    if (style.visibility !== "visible") return `the element's visibility is ${style.visibility}`;
-    if (style.opacity === "0") return "the element's opacity is 0";
+    const style2 = view.getComputedStyle(element);
+    if (style2.display === "none") return "the element's display is none";
+    if (style2.visibility !== "visible") return `the element's visibility is ${style2.visibility}`;
+    if (style2.opacity === "0") return "the element's opacity is 0";
     const rect2 = element.getBoundingClientRect();
     if (rect2.width <= 0 || rect2.height <= 0) return "the element has a zero-size box";
     const checkable = element;
@@ -5165,29 +5189,29 @@
   var PLAIN_CLASS = /^[A-Za-z_-][\w-]*$/u;
   var MAX_CANDIDATE_CLASSES = 3;
   var MIN_SHAPE_PREFIX = 2;
-  function itemSelectorCandidates(parts) {
-    const tag = parts.tagName.toLowerCase();
+  function itemSelectorCandidates(parts2) {
+    const tag = parts2.tagName.toLowerCase();
     const candidates = [];
-    const sharedId = sharedTestId(parts.testIds);
+    const sharedId = sharedTestId(parts2.testIds);
     if (sharedId) candidates.push({ selector: attributeSelector(sharedId.attribute, sharedId.value), confidence: 1 });
-    const shape = sharedTestIdPrefix(parts.testIds);
+    const shape = sharedTestIdPrefix(parts2.testIds);
     if (shape) candidates.push({ selector: attributeSelector(shape.attribute, shape.value, "^"), confidence: 0.9 });
-    candidates.push({ selector: `${parts.container} > ${tag}${classSuffix(parts.classes)}`, confidence: 0.75 });
-    const role = parts.role?.trim();
-    if (role) candidates.push({ selector: `${parts.container} > [role="${quoted(role)}"]`, confidence: 0.6 });
+    candidates.push({ selector: `${parts2.container} > ${tag}${classSuffix(parts2.classes)}`, confidence: 0.75 });
+    const role = parts2.role?.trim();
+    if (role) candidates.push({ selector: `${parts2.container} > [role="${quoted(role)}"]`, confidence: 0.6 });
     return candidates;
   }
   function generalizedItemSelector(run, container) {
     const first = run[0];
     if (!first || run.length === 0) return void 0;
-    const parts = {
+    const parts2 = {
       container,
       tagName: first.tagName,
       role: first.getAttribute("role") ?? void 0,
       testIds: run.map(testIdOf),
       classes: first.classList
     };
-    return itemSelectorCandidates(parts).find((candidate) => selects(candidate.selector, run));
+    return itemSelectorCandidates(parts2).find((candidate) => selects(candidate.selector, run));
   }
   function selects(selector, run) {
     let matched;
@@ -5614,8 +5638,8 @@
   function isVisible(element) {
     const rect2 = element.getBoundingClientRect();
     if (rect2.width <= 0 || rect2.height <= 0) return false;
-    const style = getComputedStyle(element);
-    return style.visibility !== "hidden" && style.display !== "none" && Number.parseFloat(style.opacity) !== 0;
+    const style2 = getComputedStyle(element);
+    return style2.visibility !== "hidden" && style2.display !== "none" && Number.parseFloat(style2.opacity) !== 0;
   }
   function isEnabled2(element) {
     return !element.matches(":disabled") && element.getAttribute("aria-disabled") !== "true";
@@ -5965,6 +5989,275 @@
 
   // src/shared/extraction-messages.ts
   var EXTRACTION_PROPOSE_MESSAGE = "extraction.propose";
+  var EXTRACTION_CONTENT_MESSAGES = {
+    /** Begin picking: show the overlay and capture the next click. */
+    pickStart: "extraction.pick_start",
+    /** Stop picking and remove the overlay, with nothing chosen. */
+    pickCancel: "extraction.pick_cancel",
+    /** Read at most `limit` (≤ 20) rows for the confirmation preview. */
+    preview: "extraction.preview",
+    /** Put `data.extract` in the recording for the confirmed definition. */
+    record: "extraction.record"
+  };
+  var EXTRACTION_PICKED_MESSAGE = "fluxiq.extractionPicked";
+  var EXTRACTION_PICK_CANCELLED_MESSAGE = "fluxiq.extractionPickCancelled";
+
+  // src/content/picker/preview.ts
+  var PICKER_PREVIEW_MAX_ROWS = 20;
+  async function readPreviewRows(request, limit) {
+    const outcome = await extractList({
+      item: request.item,
+      fields: request.fields,
+      maxItems: previewBound(limit, request.maxItems),
+      minItems: 0
+    });
+    return outcome.records;
+  }
+  function previewBound(limit, requested) {
+    const bounds = [PICKER_PREVIEW_MAX_ROWS, limit, requested].filter((bound) => typeof bound === "number" && Number.isFinite(bound) && bound > 0);
+    return Math.min(...bounds);
+  }
+
+  // src/content/picker/recorded-event.ts
+  function recordExtraction(definition) {
+    const extraction = recordableExtraction(definition);
+    if (!extraction) return "invalid_definition";
+    if (!isRecording()) return "not_recording";
+    emit("data.extract", { extraction });
+    return "recorded";
+  }
+  function recordableExtraction(value) {
+    if (!value || typeof value !== "object") return void 0;
+    const definition = value;
+    if (typeof definition.label !== "string" || definition.label.trim() === "") return void 0;
+    if (definition.form === "value") {
+      return typeof definition.read?.mode === "string" ? value : void 0;
+    }
+    if (definition.form !== "list") return void 0;
+    const readable = typeof definition.request?.item === "string" && typeof definition.request.fields === "object" && definition.request.fields !== null;
+    return readable ? value : void 0;
+  }
+
+  // src/content/picker/overlay.ts
+  var OVERLAY_Z_INDEX = "2147483647";
+  var HIGHLIGHT_COLOR = "#2f6df6";
+  var parts;
+  function openPickerOverlay() {
+    if (parts) return;
+    const host = document.createElement("div");
+    host.setAttribute(PICKER_HOST_ATTRIBUTE, "");
+    style(host, {
+      position: "fixed",
+      inset: "0",
+      // The page keeps every pointer event; see the header.
+      pointerEvents: "none",
+      zIndex: OVERLAY_Z_INDEX
+    });
+    const root = host.attachShadow({ mode: "open" });
+    const box = document.createElement("div");
+    style(box, {
+      position: "fixed",
+      display: "none",
+      boxSizing: "border-box",
+      border: `2px solid ${HIGHLIGHT_COLOR}`,
+      borderRadius: "2px",
+      background: "rgba(47, 109, 246, 0.12)",
+      pointerEvents: "none"
+    });
+    const label = document.createElement("div");
+    style(label, {
+      position: "fixed",
+      display: "none",
+      padding: "2px 6px",
+      borderRadius: "3px",
+      background: HIGHLIGHT_COLOR,
+      color: "#ffffff",
+      font: "600 11px/1.4 system-ui, sans-serif",
+      whiteSpace: "nowrap",
+      pointerEvents: "none"
+    });
+    root.append(box, label);
+    (document.body ?? document.documentElement).append(host);
+    parts = { host, box, label };
+  }
+  function pointPickerOverlay(target, caption2) {
+    if (!parts) return;
+    if (!target) {
+      parts.box.style.display = "none";
+      parts.label.style.display = "none";
+      return;
+    }
+    const rect2 = target.getBoundingClientRect();
+    style(parts.box, {
+      display: "block",
+      left: `${rect2.left}px`,
+      top: `${rect2.top}px`,
+      width: `${rect2.width}px`,
+      height: `${rect2.height}px`
+    });
+    parts.label.textContent = caption2;
+    style(parts.label, {
+      display: "block",
+      left: `${rect2.left}px`,
+      // Above the box where there is room, and inside its top edge where there is not.
+      top: rect2.top >= 20 ? `${rect2.top - 18}px` : `${rect2.top + 2}px`
+    });
+  }
+  function closePickerOverlay() {
+    parts?.host.remove();
+    parts = void 0;
+  }
+  function style(element, properties) {
+    for (const [property3, value] of Object.entries(properties)) {
+      element.style.setProperty(kebab(property3), value);
+    }
+  }
+  function kebab(property3) {
+    return property3.replace(/[A-Z]/gu, (letter) => `-${letter.toLowerCase()}`);
+  }
+
+  // src/content/picker/session.ts
+  var SWALLOWED_EVENTS = ["pointerdown", "mousedown", "pointerup", "mouseup", "click", "auxclick", "contextmenu"];
+  var DRAIN_TIMEOUT_MS = 1e4;
+  var session;
+  var hovered;
+  var drainTimer;
+  function startPick(sessionId, form) {
+    stopPick();
+    session = { sessionId, form, phase: "picking" };
+    openPickerOverlay();
+    for (const type of SWALLOWED_EVENTS) window.addEventListener(type, swallowEvent, true);
+    window.addEventListener("pointermove", trackPointer, true);
+    window.addEventListener("keydown", cancelOnEscape, true);
+  }
+  function stopPick() {
+    if (drainTimer) clearTimeout(drainTimer);
+    drainTimer = void 0;
+    if (session) {
+      for (const type of SWALLOWED_EVENTS) window.removeEventListener(type, swallowEvent, true);
+      window.removeEventListener("pointermove", trackPointer, true);
+      window.removeEventListener("keydown", cancelOnEscape, true);
+    }
+    session = void 0;
+    hovered = void 0;
+    closePickerOverlay();
+  }
+  function swallowEvent(event) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const current = session;
+    if (!current) return;
+    if (current.phase === "picking" && event.type === "pointerdown") {
+      takePick(current, event);
+      return;
+    }
+    if (current.phase === "draining" && (event.type === "click" || event.type === "auxclick")) {
+      stopPick();
+      return;
+    }
+    if (current.phase === "draining") restartDrainTimer();
+  }
+  function takePick(current, event) {
+    current.phase = "draining";
+    const target = pickTarget(event);
+    closePickerOverlay();
+    hovered = void 0;
+    restartDrainTimer();
+    void chrome.runtime.sendMessage(pickedMessage(current, target)).catch(() => void 0);
+  }
+  function restartDrainTimer() {
+    if (drainTimer) clearTimeout(drainTimer);
+    drainTimer = setTimeout(() => stopPick(), DRAIN_TIMEOUT_MS);
+  }
+  function pickedMessage(current, target) {
+    if (!target) return { type: EXTRACTION_PICKED_MESSAGE, sessionId: current.sessionId, refused: "target_not_found" };
+    if (current.form === "value") {
+      return { type: EXTRACTION_PICKED_MESSAGE, sessionId: current.sessionId, element: pickedElement(target) };
+    }
+    const proposal = inferListFromElement(target);
+    return proposal ? { type: EXTRACTION_PICKED_MESSAGE, sessionId: current.sessionId, proposal } : { type: EXTRACTION_PICKED_MESSAGE, sessionId: current.sessionId, refused: "no_repeating_run" };
+  }
+  function pickedElement(target) {
+    const selector = selectorFor(target);
+    const tagName = target.tagName.toLowerCase();
+    const testId = testIdFor(target);
+    return testId === void 0 ? { selector, tagName } : { selector, tagName, testId };
+  }
+  function pickTarget(event) {
+    const target = event.target;
+    if (target instanceof Element && !isPickerHostNode(target)) return target;
+    const under = document.elementFromPoint(event.clientX, event.clientY);
+    return under && !isPickerHostNode(under) ? under : null;
+  }
+  function trackPointer(event) {
+    if (session?.phase !== "picking") return;
+    const target = pickTarget(event);
+    if (target === (hovered ?? null)) return;
+    hovered = target ?? void 0;
+    pointPickerOverlay(target, caption(session.form, target));
+  }
+  function caption(form, target) {
+    if (!target) return "";
+    if (form === "value") return "1 value";
+    const proposal = inferListFromElement(target);
+    if (!proposal) return "no list here";
+    return proposal.itemCount === 1 ? "1 item" : `${proposal.itemCount} items`;
+  }
+  function cancelOnEscape(event) {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const current = session;
+    stopPick();
+    if (current?.phase !== "picking") return;
+    const cancelled = { type: EXTRACTION_PICK_CANCELLED_MESSAGE, sessionId: current.sessionId };
+    void chrome.runtime.sendMessage(cancelled).catch(() => void 0);
+  }
+
+  // src/content/picker/messages.ts
+  function extractionContentMessage(message) {
+    if (!message || typeof message !== "object") return void 0;
+    const typed = message;
+    if (typeof typed.type !== "string" || typeof typed.sessionId !== "string") return void 0;
+    const name = Object.values(EXTRACTION_CONTENT_MESSAGES).find((candidate) => candidate === typed.type);
+    if (name === void 0) return void 0;
+    if (name === EXTRACTION_CONTENT_MESSAGES.pickStart) {
+      return { type: name, sessionId: typed.sessionId, form: typed.form === "value" ? "value" : "list" };
+    }
+    if (name === EXTRACTION_CONTENT_MESSAGES.pickCancel) return { type: name, sessionId: typed.sessionId };
+    if (name === EXTRACTION_CONTENT_MESSAGES.record) {
+      return { type: name, sessionId: typed.sessionId, definition: typed.definition };
+    }
+    return previewMessage(name, typed.sessionId, typed.request, typed.limit);
+  }
+  function handleExtractionMessage(message, sendResponse) {
+    if (message.type === EXTRACTION_CONTENT_MESSAGES.pickStart) {
+      startPick(message.sessionId, message.form ?? "list");
+      sendResponse({ ok: true });
+      return "answered";
+    }
+    if (message.type === EXTRACTION_CONTENT_MESSAGES.pickCancel) {
+      stopPick();
+      sendResponse({ ok: true });
+      return "answered";
+    }
+    if (message.type === EXTRACTION_CONTENT_MESSAGES.record) {
+      stopPick();
+      const outcome = recordExtraction(message.definition);
+      sendResponse(outcome === "recorded" ? { ok: true } : { ok: false, refused: outcome });
+      return "answered";
+    }
+    void readPreviewRows(message.request, message.limit ?? PICKER_PREVIEW_MAX_ROWS).then((rows) => sendResponse({ ok: true, rows })).catch(() => sendResponse({ ok: false, refused: "unreadable_request" }));
+    return "open";
+  }
+  function previewMessage(name, sessionId, request, limit) {
+    if (name !== EXTRACTION_CONTENT_MESSAGES.preview) return void 0;
+    if (!request || typeof request !== "object") return void 0;
+    const typed = request;
+    if (typeof typed.item !== "string" || !typed.fields || typeof typed.fields !== "object") return void 0;
+    const read = request;
+    return typeof limit === "number" ? { type: name, sessionId, request: read, limit } : { type: name, sessionId, request: read };
+  }
 
   // src/content/message-handler.ts
   var TOP_FRAME_ID = 0;
@@ -5998,6 +6291,11 @@
         void executeAction(typed.action).then(sendResponse).catch((error) => sendResponse(actionFailure(typed.action, error)));
         return true;
       }
+      const extraction = extractionContentMessage(typed);
+      if (extraction) {
+        if (!isTopFrame()) return false;
+        return handleExtractionMessage(extraction, sendResponse) === "open";
+      }
       if (typed.type === EXTRACTION_PROPOSE_MESSAGE) {
         if (!isAddressedToThisFrame(typed)) return false;
         sendResponse(proposeExtraction(typed.selector));
@@ -6007,12 +6305,12 @@
     });
   }
   function proposeExtraction(selector) {
-    const picked = pickedElement(selector);
+    const picked = pickedElement2(selector);
     if (!picked) return { ok: false, refused: "target_not_found" };
     const proposal = inferListFromElement(picked);
     return proposal ? { ok: true, proposal } : { ok: false, refused: "no_repeating_run" };
   }
-  function pickedElement(selector) {
+  function pickedElement2(selector) {
     if (typeof selector !== "string" || selector.trim() === "") return null;
     try {
       return document.querySelector(selector);

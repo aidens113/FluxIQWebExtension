@@ -359,6 +359,12 @@ var WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS = ["include", "exclude", "encrypt"];
 var WEB_AUTOMATION_EXTRACT_READ_MODES = ["text", "attribute", "value", "html"];
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
 var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
+var WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS = 1e4;
+function webAutomationExtractListTimeoutMs(request) {
+  const paginate = request.paginate;
+  const pages = paginate === void 0 ? 1 : paginate.mode === "scroll" ? paginate.maxScrolls : paginate.maxPages;
+  return WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS * pages;
+}
 
 // ../../domain/src/actions/extraction/read-request.ts
 function webAutomationExtractListRequestValue(value) {
@@ -1536,7 +1542,20 @@ var webAutomationGatewayCapabilities = [
 var webAutomationClientCapabilities = webAutomationGatewayCapabilities;
 
 // ../../domain/src/extraction/dataset-id.ts
+var MAX_ID_LENGTH = 200;
+var NONCE_PATTERN = /^[A-Za-z0-9._-]{1,64}$/u;
+var SEPARATOR = ":";
+var FALLBACK_NAME = "dataset";
+var OUTSIDE_NAME_CHARACTERS = /[^a-z0-9._-]+/u;
 var COMBINING_MARKS = new RegExp("\\p{M}+", "gu");
+function webAutomationDatasetId(label, nonce) {
+  if (!NONCE_PATTERN.test(nonce)) {
+    throw new RangeError("A dataset id nonce must be 1 to 64 characters of A-Z, a-z, 0-9, '.', '_' or '-'.");
+  }
+  const words = label.toLowerCase().normalize("NFKD").replace(COMBINING_MARKS, "").split(OUTSIDE_NAME_CHARACTERS).filter((word) => word.length > 0);
+  const name = words.join("-").slice(0, MAX_ID_LENGTH - SEPARATOR.length - nonce.length) || FALLBACK_NAME;
+  return `${name}${SEPARATOR}${nonce}`;
+}
 
 // ../../domain/src/extraction/label-key.ts
 var COMBINING_MARKS2 = new RegExp("\\p{M}+", "gu");
@@ -5222,6 +5241,7 @@ var EventSequence = class {
 
 // src/background/connection/gateway-payloads.ts
 function recordedInputId(payload) {
+  const extraction = recordedExtraction(payload);
   return webAutomationInputIdForRecordedEvent({
     kind: payload.kind,
     url: payload.url,
@@ -5233,6 +5253,11 @@ function recordedInputId(payload) {
     ...payload.key !== void 0 ? { key: payload.key } : {},
     ...payload.scroll ? { scroll: payload.scroll } : {},
     ...payload.tab ? { tab: payload.tab } : {},
+    // Without this the domain sees an extraction event with no definition, and
+    // `webAutomationRecordedExtraction` refuses it -- so the one recorded event
+    // that maps to `web.dom.extract_list` would stay passive evidence and no
+    // Flow would ever hold an extraction.
+    ...extraction !== void 0 ? { extraction } : {},
     ...payload.metadata ? { metadata: payload.metadata } : {}
   });
 }
@@ -5253,6 +5278,7 @@ function recordingEvidencePayload(payload) {
     mutation: payload.mutation,
     actionResult: payload.actionResult,
     tab: payload.tab,
+    extraction: extractionEvidence(payload),
     metadata: payload.metadata
   });
 }
@@ -5274,6 +5300,10 @@ function gatewayRecordingEventFromPayload(payload, tabId, frameId, recordingId) 
     mutation: payload.mutation,
     actionResult: payload.actionResult ? webAutomationActionResultPayload(payload.actionResult) : void 0,
     tab: payload.tab,
+    // Passed whole because `createWebAutomationRecordingEvent` rebuilds it field
+    // by field through `webAutomationRecordedExtraction`, which is where the
+    // "no sample value, no unknown key" rule (D3) is enforced once.
+    extraction: recordedExtraction(payload),
     metadata: inputId === void 0 ? payload.metadata : { ...payload.metadata ?? {}, inputId, ...visualTarget ? { visualTarget } : {} }
   }, {
     ...recordingId !== void 0 ? { recordingId } : {},
@@ -5307,6 +5337,21 @@ function elementTarget(element) {
     label: element.label,
     implicitRole: element.implicitRole,
     context: element.context
+  });
+}
+function recordedExtraction(payload) {
+  return objectValue3(payload.extraction);
+}
+function extractionEvidence(payload) {
+  const extraction = recordedExtraction(payload);
+  if (extraction === void 0) return void 0;
+  const form = extraction.form === "list" || extraction.form === "value" ? extraction.form : void 0;
+  if (form === void 0) return void 0;
+  const fields = objectValue3(objectValue3(extraction.request)?.fields);
+  return compactObject2({
+    form,
+    fieldCount: fields === void 0 ? void 0 : Object.keys(fields).length,
+    itemCount: typeof extraction.itemCount === "number" ? extraction.itemCount : void 0
   });
 }
 function visualTargetFromPayload(payload) {
@@ -7002,11 +7047,14 @@ var FluxIQConnection = class {
   }
 };
 
-// src/background/scripted-navigation-control.ts
+// src/background/control-page.ts
+var CONTROL_PAGES = ["sidepanel/index.html", "popup/index.html"];
 function isControlPage(sender) {
   if (sender.id !== chrome.runtime.id || typeof sender.url !== "string") return false;
-  return sender.url === chrome.runtime.getURL("sidepanel/index.html") || sender.url === chrome.runtime.getURL("popup/index.html");
+  return CONTROL_PAGES.some((page) => sender.url === chrome.runtime.getURL(page));
 }
+
+// src/background/scripted-navigation-control.ts
 async function handleScriptedNavigationControl(message, sender, manager) {
   const arm = message.type === RUNTIME_MESSAGES.testArmScriptedNavigation;
   const awaitIntent = message.type === RUNTIME_MESSAGES.testAwaitScriptedNavigation;
@@ -7018,6 +7066,456 @@ async function handleScriptedNavigationControl(message, sender, manager) {
   if (arm) return { handled: true, response: manager.armScriptedNavigation(message.url) };
   if (awaitIntent) return { handled: true, response: await manager.awaitScriptedNavigation(message.intentId) };
   return { handled: true, response: { ok: true, cancelled: manager.cancelScriptedNavigation(message.intentId) } };
+}
+
+// src/shared/extraction-messages.ts
+var EXTRACTION_CONTENT_MESSAGES = {
+  /** Begin picking: show the overlay and capture the next click. */
+  pickStart: "extraction.pick_start",
+  /** Stop picking and remove the overlay, with nothing chosen. */
+  pickCancel: "extraction.pick_cancel",
+  /** Read at most `limit` (≤ 20) rows for the confirmation preview. */
+  preview: "extraction.preview",
+  /** Put `data.extract` in the recording for the confirmed definition. */
+  record: "extraction.record"
+};
+var EXTRACTION_PICKED_MESSAGE = "fluxiq.extractionPicked";
+var EXTRACTION_PICK_CANCELLED_MESSAGE = "fluxiq.extractionPickCancelled";
+var EXTRACTION_RUNTIME_MESSAGES = {
+  start: "fluxiq.extractionStart",
+  confirm: "fluxiq.extractionConfirm",
+  cancel: "fluxiq.extractionCancel",
+  getSession: "fluxiq.getExtractionSession",
+  testDefineExtraction: "fluxiq.test.defineExtraction"
+};
+
+// src/background/extraction/session-store.ts
+var EXTRACTION_PREVIEW_MAX_ROWS = 20;
+var ExtractionSessions = class {
+  sessions = /* @__PURE__ */ new Map();
+  latestId;
+  /** Begins a pick on `tabId`, replacing any session that tab already had. */
+  start(sessionId, tabId, form) {
+    this.clearTab(tabId);
+    const session = { sessionId, tabId, form, state: "picking", preview: [] };
+    this.sessions.set(sessionId, session);
+    this.latestId = sessionId;
+    return session;
+  }
+  /** The session named, or the most recently started one when the caller names none. */
+  get(sessionId) {
+    const id = sessionId ?? this.latestId;
+    return id === void 0 ? void 0 : this.sessions.get(id);
+  }
+  /**
+   * Records what a frame picked, or `undefined` when the pick belongs to no
+   * open session **of that tab**. A pick is the one message in this flow that
+   * arrives from a content script, so the tab it came from is checked here
+   * rather than trusted: another tab's script must not be able to fill a
+   * session the user opened against the automation tab.
+   */
+  picked(sessionId, tabId, proposal) {
+    const session = this.sessions.get(sessionId);
+    if (!session || session.tabId !== tabId || session.state !== "picking") return void 0;
+    session.proposal = proposal;
+    session.state = "picked";
+    session.refused = void 0;
+    session.preview = [];
+    session.previewKey = void 0;
+    return session;
+  }
+  /**
+   * There is nothing to confirm from what the user clicked. The session stays
+   * open and stays `picking`, and the panel reads `refused` and says why.
+   *
+   * The overlay is *not* still up: the frame closes it on every pick, refused
+   * or not, and forgets its own session when the press finishes. `control.ts`
+   * therefore re-arms the pick after calling this, which is what makes "the
+   * next click is still the pick" true rather than merely intended.
+   */
+  refuse(sessionId, tabId, refusal) {
+    const session = this.sessions.get(sessionId);
+    if (!session || session.tabId !== tabId || session.state !== "picking") return void 0;
+    session.refused = refusal;
+    return session;
+  }
+  /**
+   * The user pressed Escape in the page. The frame has already taken its overlay
+   * down and forgotten the pick, so the session goes with it and the panel finds
+   * nothing to show.
+   *
+   * Only a session still `picking` is cancelled, and only from its own tab: a
+   * press that had already taken a pick is not cancelled here, and the frame
+   * does not send this for one either.
+   */
+  cancelled(sessionId, tabId) {
+    const session = this.sessions.get(sessionId);
+    if (!session || session.tabId !== tabId || session.state !== "picking") return void 0;
+    return this.clear(sessionId);
+  }
+  /** Holds at most `EXTRACTION_PREVIEW_MAX_ROWS` rows, under the columns `previewKey` names. */
+  setPreview(sessionId, previewKey, rows) {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+    session.preview = rows.slice(0, EXTRACTION_PREVIEW_MAX_ROWS).map((row) => ({ ...row }));
+    session.previewKey = previewKey;
+  }
+  /**
+   * Drops the rows without putting any in their place: the page was asked to
+   * read a different set of columns and would not.
+   *
+   * What is held was read under columns the caller has since said it no longer
+   * wants -- the commonest reason being that the user just excluded one of them
+   * -- so keeping it would be keeping values for a column that is out (D12). The
+   * key goes too, so the next `getSession` asks again rather than treating a
+   * failed read as the answer.
+   */
+  clearPreview(sessionId) {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+    session.preview = [];
+    session.previewKey = void 0;
+  }
+  /** The extraction is in the recording; the preview it was confirmed from is dropped. */
+  markRecorded(sessionId) {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+    session.state = "recorded";
+    session.preview = [];
+    session.previewKey = void 0;
+  }
+  clear(sessionId) {
+    const session = this.sessions.get(sessionId);
+    if (session) this.sessions.delete(sessionId);
+    if (this.latestId === sessionId) this.latestId = void 0;
+    return session;
+  }
+  /** Drops every session against `tabId`: the tab closed, or its top frame navigated away. */
+  clearTab(tabId) {
+    for (const [id, session] of this.sessions) {
+      if (session.tabId === tabId) this.clear(id);
+    }
+  }
+};
+
+// src/background/extraction/definition.ts
+function recordedListExtraction2(proposal, confirm, nonce) {
+  const label = typeof confirm.label === "string" ? confirm.label.trim() : "";
+  const columns = buildColumns(proposal, confirm.fields);
+  if (label.length === 0 || columns === void 0) return void 0;
+  const request = {
+    item: proposal.item,
+    fields: columns.fields,
+    ...confirm.paginate !== void 0 ? { paginate: confirm.paginate } : {},
+    ...confirm.maxItems !== void 0 ? { maxItems: confirm.maxItems } : {}
+  };
+  const definition = {
+    form: "list",
+    datasetId: webAutomationDatasetId(label, nonce),
+    label,
+    request,
+    fieldLabels: columns.labels,
+    itemCount: typeof confirm.itemCount === "number" ? confirm.itemCount : proposal.itemCount
+  };
+  return runnableExtractListRequest(definition) === void 0 ? void 0 : definition;
+}
+function extractionPreviewRequest(proposal, columns) {
+  const fields = {};
+  for (const field of proposal.fields) {
+    const handling = columns?.find((column) => column.key === field.key)?.handling ?? field.spec.handling;
+    if (handling !== void 0 && handling !== "include") continue;
+    fields[field.key] = fieldSpec(field.spec.kind, field.spec, "include");
+  }
+  const names = Object.keys(fields);
+  if (names.length === 0) return void 0;
+  return {
+    request: { item: proposal.item, fields, maxItems: EXTRACTION_PREVIEW_MAX_ROWS, minItems: 0 },
+    columnsKey: names.join(",")
+  };
+}
+function runnableExtractListRequest(definition) {
+  const action = webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.dataExtractionDefined, { extraction: definition });
+  if (action === void 0 || action.inputId !== WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined) return void 0;
+  const request = action.parameters.extractList;
+  return request === void 0 ? void 0 : request;
+}
+function buildColumns(proposal, columns) {
+  const chosen = columns ?? proposedColumns(proposal);
+  if (chosen.length === 0) return void 0;
+  const fields = {};
+  const labels = {};
+  for (const column of chosen) {
+    const label = typeof column.label === "string" ? column.label.trim() : "";
+    if (typeof column.key !== "string" || column.key.length === 0 || label.length === 0) return void 0;
+    if (column.key in fields) return void 0;
+    fields[column.key] = fieldSpec(column.kind, column, column.handling);
+    labels[column.key] = label;
+  }
+  return { fields, labels };
+}
+function proposedColumns(proposal) {
+  return proposal.fields.map((field) => ({
+    key: field.key,
+    label: field.label,
+    kind: field.spec.kind,
+    ...field.spec.selector !== void 0 ? { selector: field.spec.selector } : {},
+    ...field.spec.attribute !== void 0 ? { attribute: field.spec.attribute } : {},
+    ...field.spec.header !== void 0 ? { header: field.spec.header } : {},
+    ...field.spec.required !== void 0 ? { required: field.spec.required } : {},
+    handling: field.spec.handling ?? "include"
+  }));
+}
+function fieldSpec(kind, source, handling) {
+  return {
+    kind,
+    ...source.selector !== void 0 ? { selector: source.selector } : {},
+    ...kind === "attribute" && source.attribute !== void 0 ? { attribute: source.attribute } : {},
+    ...kind === "column" && source.header !== void 0 ? { header: source.header } : {},
+    ...source.required !== void 0 ? { required: source.required } : {},
+    handling
+  };
+}
+
+// src/background/extraction/confirm.ts
+async function confirmExtraction(definition, tabId, options, deps) {
+  const request = definition.form === "list" ? runnableExtractListRequest(definition) : void 0;
+  if (request === void 0) return { ok: false, code: "invalid_definition", message: "The extraction definition is not one the domain can run." };
+  if (options.recording) {
+    const recorded = await recordDefinition(definition, tabId, options.sessionId, deps);
+    if (!recorded.ok) return recorded;
+  }
+  const action = {
+    commandId: `extraction:${options.sessionId}`,
+    actionType: "web.dom.extract_list",
+    extractList: request,
+    // D14 puts the bound on the command, not the request, and the page waits up
+    // to 10,000 ms for *each* page of a list -- so the budget is the domain's,
+    // scaled by the pages this request may read. It is imported rather than
+    // restated: a flat ceiling here truncated any read past six pages, and two
+    // definitions of the same rule would drift apart again.
+    timeoutMs: options.timeoutMs ?? webAutomationExtractListTimeoutMs(request),
+    tabId,
+    frameId: 0
+  };
+  const startedAt = Date.now();
+  try {
+    const { result } = await deps.runAction({ action, activeTabId: tabId, attachTabForRecording: (target) => deps.ensureContentScript(target) });
+    if (result.status !== "succeeded") {
+      return { ok: false, code: "run_failed", message: result.message ?? "The extraction did not run." };
+    }
+    return {
+      ok: true,
+      records: result.extracted ?? [],
+      pagesRead: result.extraction?.pagesRead ?? 1,
+      truncated: result.extraction?.truncated ?? false,
+      durationMs: Math.max(0, result.finishedAt - result.startedAt) || Date.now() - startedAt
+    };
+  } catch (error) {
+    return { ok: false, code: "run_failed", message: error instanceof Error ? error.message : "The extraction did not run." };
+  }
+}
+async function recordDefinition(definition, tabId, sessionId, deps) {
+  const record = { type: EXTRACTION_CONTENT_MESSAGES.record, sessionId, definition };
+  try {
+    const answer = await deps.sendToTab(tabId, record, 0);
+    if (answer?.ok === true) return { ok: true };
+    return { ok: false, code: "page_refused", message: `The page did not record the extraction (${answer?.refused ?? "no answer"}).` };
+  } catch (error) {
+    return { ok: false, code: "page_refused", message: error instanceof Error ? error.message : "The page did not record the extraction." };
+  }
+}
+
+// src/background/extraction/deps.ts
+var extractionControlDeps = {
+  sessions: new ExtractionSessions(),
+  sendToTab,
+  ensureContentScript,
+  runAction: runBrowserActionCommand,
+  newId: () => crypto.randomUUID()
+};
+
+// src/background/extraction/control.ts
+var REFUSALS = {
+  forbidden: "Only the FluxIQ panel can drive extraction.",
+  no_tab: "FluxIQ has no page to extract from. Open the page you want to record first.",
+  no_session: "There is no extraction waiting to be confirmed.",
+  not_recording: "Start recording before confirming an extraction.",
+  invalid_definition: "Those columns do not make an extraction FluxIQ can run.",
+  page_refused: "The page did not answer the extraction request.",
+  run_failed: "The extraction did not run.",
+  top_frame_only: "An extraction can only be picked in the page's main frame.",
+  // The one refusal that is about FluxIQ rather than the page or the sender.
+  // Its code is the word the session carries, so the panel's sentence and this
+  // one come from the same vocabulary (`ExtractionSessionRefusal`).
+  value_form_unsupported: "FluxIQ cannot record a single value yet. Pick an item in a repeating list."
+};
+function refuse(code, error) {
+  return { ok: false, code, error: error ?? REFUSALS[code] };
+}
+async function handleExtractionControl(message, sender, manager, deps = extractionControlDeps) {
+  if (message.type === EXTRACTION_PICKED_MESSAGE) {
+    return { handled: true, response: await acceptPick(message, sender, deps) };
+  }
+  if (message.type === EXTRACTION_PICK_CANCELLED_MESSAGE) {
+    return { handled: true, response: acceptPickCancelled(message, sender, deps) };
+  }
+  const runtime = Object.values(EXTRACTION_RUNTIME_MESSAGES).find((name) => name === message.type);
+  if (runtime === void 0) return { handled: false };
+  if (!isControlPage(sender)) return { handled: true, response: refuse("forbidden") };
+  if (runtime === EXTRACTION_RUNTIME_MESSAGES.start) return { handled: true, response: await startPick(message, manager, deps) };
+  if (runtime === EXTRACTION_RUNTIME_MESSAGES.getSession) return { handled: true, response: await readSession2(message, deps) };
+  if (runtime === EXTRACTION_RUNTIME_MESSAGES.cancel) return { handled: true, response: await cancelPick(message, deps) };
+  if (runtime === EXTRACTION_RUNTIME_MESSAGES.confirm) return { handled: true, response: await confirmPick(message, manager, deps) };
+  return { handled: true, response: await defineForTest(message, manager, deps) };
+}
+function clearExtractionTab(tabId, deps = extractionControlDeps) {
+  deps.sessions.clearTab(tabId);
+}
+async function startPick(message, manager, deps) {
+  const tabId = manager.status().activeTabId;
+  if (tabId === void 0) return refuse("no_tab");
+  if (message.form === "value") return refuse("value_form_unsupported");
+  const form = "list";
+  const sessionId = deps.newId();
+  deps.sessions.start(sessionId, tabId, form);
+  try {
+    await deps.ensureContentScript(tabId, 0);
+    const pickStart = { type: EXTRACTION_CONTENT_MESSAGES.pickStart, sessionId, form };
+    const answer = await deps.sendToTab(tabId, pickStart, 0);
+    if (answer?.ok !== true) {
+      deps.sessions.clear(sessionId);
+      return refuse("page_refused");
+    }
+  } catch (error) {
+    deps.sessions.clear(sessionId);
+    return refuse("page_refused", error instanceof Error ? error.message : void 0);
+  }
+  return { ok: true, sessionId, tabId };
+}
+async function acceptPick(message, sender, deps) {
+  const tabId = sender.tab?.id;
+  if (tabId === void 0 || sender.frameId !== 0) return refuse("top_frame_only");
+  const picked = message;
+  if (typeof picked.sessionId !== "string") return refuse("no_session");
+  if (picked.proposal !== void 0) {
+    const filled = deps.sessions.picked(picked.sessionId, tabId, picked.proposal);
+    return filled === void 0 ? refuse("no_session") : { ok: true, sessionId: picked.sessionId };
+  }
+  const refusal = picked.refused ?? (picked.element !== void 0 ? "value_form_unsupported" : void 0);
+  if (refusal === void 0) return refuse("no_session");
+  const session = deps.sessions.refuse(picked.sessionId, tabId, refusal);
+  if (session === void 0) return refuse("no_session");
+  await rearmPick(session, deps);
+  return refusal === "value_form_unsupported" ? refuse("value_form_unsupported") : { ok: true, sessionId: picked.sessionId };
+}
+function acceptPickCancelled(message, sender, deps) {
+  const tabId = sender.tab?.id;
+  if (tabId === void 0 || sender.frameId !== 0) return refuse("top_frame_only");
+  const cancelled = message;
+  if (typeof cancelled.sessionId !== "string") return refuse("no_session");
+  return { ok: true, cancelled: deps.sessions.cancelled(cancelled.sessionId, tabId) !== void 0 };
+}
+async function rearmPick(session, deps) {
+  try {
+    const pickStart = { type: EXTRACTION_CONTENT_MESSAGES.pickStart, sessionId: session.sessionId, form: session.form };
+    await deps.sendToTab(session.tabId, pickStart, 0);
+  } catch {
+  }
+}
+async function readSession2(message, deps) {
+  const session = deps.sessions.get(sessionIdOf(message));
+  if (session === void 0) return { ok: true };
+  if (session.state === "picked" && session.proposal !== void 0) {
+    await refreshPreview(session, session.proposal, columnsOf(message), deps);
+  }
+  const view = {
+    sessionId: session.sessionId,
+    tabId: session.tabId,
+    state: session.state,
+    form: session.form,
+    ...session.proposal !== void 0 ? { proposal: session.proposal } : {},
+    ...session.refused !== void 0 ? { refused: session.refused } : {},
+    preview: session.preview
+  };
+  return { ok: true, session: view };
+}
+async function refreshPreview(session, proposal, columns, deps) {
+  const preview = extractionPreviewRequest(proposal, columns);
+  if (preview === void 0 || preview.columnsKey === session.previewKey) return;
+  try {
+    const read = {
+      type: EXTRACTION_CONTENT_MESSAGES.preview,
+      sessionId: session.sessionId,
+      request: preview.request,
+      limit: EXTRACTION_PREVIEW_MAX_ROWS
+    };
+    const answer = await deps.sendToTab(session.tabId, read, 0);
+    if (answer?.ok === true) deps.sessions.setPreview(session.sessionId, preview.columnsKey, answer.rows ?? []);
+    else deps.sessions.clearPreview(session.sessionId);
+  } catch {
+    deps.sessions.clearPreview(session.sessionId);
+  }
+}
+async function cancelPick(message, deps) {
+  const session = deps.sessions.get(sessionIdOf(message));
+  if (session === void 0) return { ok: true, cancelled: false };
+  deps.sessions.clear(session.sessionId);
+  try {
+    const cancel = { type: EXTRACTION_CONTENT_MESSAGES.pickCancel, sessionId: session.sessionId };
+    await deps.sendToTab(session.tabId, cancel, 0);
+  } catch {
+  }
+  return { ok: true, cancelled: true };
+}
+async function confirmPick(message, manager, deps) {
+  if (manager.status().recordingState !== "recording") return refuse("not_recording");
+  const session = deps.sessions.get(sessionIdOf(message));
+  if (session === void 0 || session.state !== "picked" || session.proposal === void 0) return refuse("no_session");
+  const confirm = confirmRequestOf(message);
+  if (confirm === void 0) return refuse("invalid_definition");
+  const definition = recordedListExtraction2(session.proposal, confirm, deps.newId().slice(0, 8));
+  if (definition === void 0) return refuse("invalid_definition");
+  const outcome = await confirmExtraction(definition, session.tabId, { sessionId: session.sessionId, recording: true }, deps);
+  if (!outcome.ok) return refuse(outcome.code, outcome.message);
+  deps.sessions.markRecorded(session.sessionId);
+  const captured = {
+    datasetId: definition.datasetId,
+    label: definition.label,
+    recordCount: Array.isArray(outcome.records) ? outcome.records.length : 0,
+    pagesRead: outcome.pagesRead,
+    truncated: outcome.truncated,
+    durationMs: outcome.durationMs
+  };
+  return { ok: true, ...captured };
+}
+async function defineForTest(message, manager, deps) {
+  const status = manager.status();
+  if (status.activeTabId === void 0) return refuse("no_tab");
+  const definition = message.definition;
+  if (definition === null || typeof definition !== "object") return refuse("invalid_definition");
+  const outcome = await confirmExtraction(
+    definition,
+    status.activeTabId,
+    {
+      sessionId: deps.newId(),
+      recording: status.recordingState === "recording",
+      ...typeof message.timeoutMs === "number" ? { timeoutMs: message.timeoutMs } : {}
+    },
+    deps
+  );
+  if (!outcome.ok) return refuse(outcome.code, outcome.message);
+  return { ok: true, records: outcome.records, pagesRead: outcome.pagesRead, truncated: outcome.truncated, durationMs: outcome.durationMs };
+}
+function sessionIdOf(message) {
+  return typeof message.sessionId === "string" ? message.sessionId : void 0;
+}
+function confirmRequestOf(message) {
+  const nested = message.request;
+  if (nested !== null && typeof nested === "object") return nested;
+  return typeof message.label === "string" ? message : void 0;
+}
+function columnsOf(message) {
+  return Array.isArray(message.fields) ? message.fields : void 0;
 }
 
 // src/background/index.ts
@@ -7064,10 +7562,12 @@ chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
   }
 });
 chrome.tabs.onRemoved.addListener((tabId) => {
+  clearExtractionTab(tabId);
   void getConnection().then((manager) => manager.handleTabRemoved(tabId));
 });
 chrome.webNavigation.onCommitted.addListener((details) => {
   if (details.frameId !== 0) return;
+  clearExtractionTab(details.tabId);
   void getConnection().then((manager) => manager.handleNavigationCommitted(details));
 });
 chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
@@ -7085,6 +7585,8 @@ async function handleRuntimeMessage(message, sender) {
   const typed = message;
   const scriptedNavigation = await handleScriptedNavigationControl(typed, sender, manager);
   if (scriptedNavigation.handled) return scriptedNavigation.response;
+  const extraction = await handleExtractionControl(typed, sender, manager);
+  if (extraction.handled) return extraction.response;
   if (typed.type === RUNTIME_MESSAGES.getStatus) {
     return { ok: true, status: await statusWithQueue(manager) };
   }

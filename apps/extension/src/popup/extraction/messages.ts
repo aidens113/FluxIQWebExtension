@@ -15,9 +15,16 @@
 // values never reach a preview row at all (D12).
 
 import type { WebAutomationExtractionProposal } from "@fluxiq-web-extension/domain/client";
-import type { ExtractionPreviewRow } from "../../shared/extraction-messages";
+import type { ExtractionConfirmOutcome, ExtractionPreviewRow, ExtractionSessionRefusal } from "../../shared/extraction-messages";
 
-export type { ExtractionConfirmField, ExtractionConfirmRequest, ExtractionPreviewRow } from "../../shared/extraction-messages";
+export type {
+  ExtractionConfirmField,
+  ExtractionConfirmOutcome,
+  ExtractionConfirmRequest,
+  ExtractionPreviewColumn,
+  ExtractionPreviewRow,
+  ExtractionSessionRefusal
+} from "../../shared/extraction-messages";
 
 /**
  * How far the pick has got, as the background's session store reports it:
@@ -32,14 +39,37 @@ export type ExtractionSessionView = {
   state: ExtractionSessionState;
   /** What the picker inferred from the element the user clicked. Absent while picking. */
   proposal?: WebAutomationExtractionProposal | undefined;
-  /** At most 20 rows read for the confirmation preview, and never persisted. */
+  /**
+   * At most 20 rows read for the confirmation preview, and never persisted.
+   *
+   * They are read under the columns the panel last named on `getSession`, so
+   * excluding a column and re-reading is what removes its values from here --
+   * not a filter applied to rows that still hold them.
+   */
   preview?: ExtractionPreviewRow[] | undefined;
-  /** Why no proposal was made, in the content script's fixed refusal vocabulary. */
-  refused?: string | undefined;
+  /**
+   * Why there is nothing to confirm, in the one refusal vocabulary both halves
+   * share. It is typed rather than `string` so the panel's sentence for each
+   * word is a compile-time obligation: a word the background can send and the
+   * panel has no sentence for is a build error, not a blank notice.
+   */
+  refused?: ExtractionSessionRefusal | undefined;
 };
 
-/** What `start`, `confirm` and `cancel` answer. The panel re-reads the session afterwards rather than trusting a payload here. */
+/** What `start` and `cancel` answer. The panel re-reads the session afterwards rather than trusting a payload here. */
 export type ExtractionCommandResponse = { ok: true } | { ok: false; error: string };
+
+/**
+ * What `confirm` answers: the refusal, or what was captured.
+ *
+ * The counts arrive flat on the reply rather than nested, which is how the
+ * worker sends them. They are optional here because an older worker sends a
+ * bare `{ ok: true }`, and the panel says "recorded" rather than inventing a
+ * number when they are missing.
+ */
+export type ExtractionConfirmResponse =
+  | ({ ok: true } & Partial<ExtractionConfirmOutcome>)
+  | { ok: false; error: string };
 
 /** What `fluxiq.getExtractionSession` answers. `session` is absent when the tab has no pick in flight. */
 export type ExtractionSessionResponse =

@@ -32,14 +32,14 @@ import {
   type WebAutomationExtractListRequest,
   type WebAutomationRecordedListExtraction
 } from "@fluxiq-web-extension/domain/client";
-import type { ExtractionConfirmField, ExtractionConfirmRequest } from "../../shared/extraction-messages";
+import type { ExtractionConfirmField, ExtractionConfirmRequest, ExtractionPreviewColumn } from "../../shared/extraction-messages";
 import type { JsonObject } from "../../shared/protocol";
 import { EXTRACTION_PREVIEW_MAX_ROWS } from "./session-store";
 
 // The confirm payload is one declaration, in `shared/extraction-messages.ts`,
 // which the panel writes and this file reads; it is re-exported here so the
 // worker's own modules keep one local import.
-export type { ExtractionConfirmField, ExtractionConfirmRequest } from "../../shared/extraction-messages";
+export type { ExtractionConfirmField, ExtractionConfirmRequest, ExtractionPreviewColumn } from "../../shared/extraction-messages";
 
 type BuiltColumns = {
   fields: Record<string, WebAutomationExtractFieldSpec>;
@@ -97,7 +97,7 @@ export function recordedListExtraction(
  */
 export function extractionPreviewRequest(
   proposal: WebAutomationExtractionProposal,
-  columns: readonly ExtractionConfirmField[] | undefined
+  columns: readonly ExtractionPreviewColumn[] | undefined
 ): { request: WebAutomationExtractListRequest; columnsKey: string } | undefined {
   const fields: Record<string, WebAutomationExtractFieldSpec> = {};
   for (const field of proposal.fields) {

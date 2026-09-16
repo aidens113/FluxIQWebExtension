@@ -15,7 +15,7 @@
 // selectors were written against.
 
 import type { WebAutomationExtractionProposal } from "@fluxiq-web-extension/domain/client";
-import type { ExtractionPickForm, ExtractionPreviewRow, ExtractionProposeRefusal } from "../../shared/extraction-messages";
+import type { ExtractionPickForm, ExtractionPreviewRow, ExtractionSessionRefusal } from "../../shared/extraction-messages";
 
 /** How many rows the confirmation preview may hold. The content message's own bound is the same. */
 export const EXTRACTION_PREVIEW_MAX_ROWS = 20;
@@ -38,24 +38,21 @@ export type ExtractionSession = {
   readonly form: ExtractionSessionForm;
   state: ExtractionSessionState;
   proposal?: WebAutomationExtractionProposal | undefined;
-  /** Why the frame proposed no extraction for what the user clicked. Cleared by the next pick that succeeds. */
-  refused?: ExtractionProposeRefusal | undefined;
+  /** Why there is nothing to confirm: the frame proposed nothing, or the worker refused the form. Cleared by the next pick that succeeds. */
+  refused?: ExtractionSessionRefusal | undefined;
   /**
    * Which columns the stored rows were read under, as a stable string, so the
    * same columns are never read twice.
    *
-   * **What actually happens when the user excludes a column.** The rows are
-   * read once, under the columns the *proposal* named -- which already leave
-   * out every field inference marked sensitive, so those are never read at all
-   * (D12). A column the user then excludes in the panel was already in those
-   * rows: the panel stops showing it and drops it from the payload it
-   * confirms, and the recorded request never names it, so no value of it is
-   * stored, exported, recorded, or read again when the extraction runs. Nothing
-   * is persisted either way; the preview lives in this map and nowhere else.
-   *
-   * A true re-read needs no new message -- `fluxiq.getExtractionSession`
-   * already carries `columns`, and `control.ts` reads them -- only a panel that
-   * sends the columns it is showing. It does not today.
+   * **What happens when the user excludes a column.** The first read is under
+   * the columns the *proposal* named, which already leave out every field
+   * inference marked sensitive, so those are never read at all (D12). When the
+   * user then excludes a column, the panel sends the columns it may still show
+   * on `fluxiq.getExtractionSession` (`popup/extraction/panel.ts`), this key
+   * stops matching, and `control.ts` asks the page for a fresh read that does
+   * not name the excluded column -- so what this map holds for it is replaced,
+   * not filtered. Nothing is persisted either way; the preview lives here and
+   * nowhere else.
    */
   previewKey?: string | undefined;
   preview: ExtractionPreviewRow[];
@@ -99,15 +96,34 @@ export class ExtractionSessions {
   }
 
   /**
-   * The frame could propose nothing for what the user clicked. The session
-   * stays open and stays `picking`, because the overlay is still up and the
-   * next click is still the pick; the panel reads `refused` and says why.
+   * There is nothing to confirm from what the user clicked. The session stays
+   * open and stays `picking`, and the panel reads `refused` and says why.
+   *
+   * The overlay is *not* still up: the frame closes it on every pick, refused
+   * or not, and forgets its own session when the press finishes. `control.ts`
+   * therefore re-arms the pick after calling this, which is what makes "the
+   * next click is still the pick" true rather than merely intended.
    */
-  refuse(sessionId: string, tabId: number, refusal: ExtractionProposeRefusal): ExtractionSession | undefined {
+  refuse(sessionId: string, tabId: number, refusal: ExtractionSessionRefusal): ExtractionSession | undefined {
     const session = this.sessions.get(sessionId);
     if (!session || session.tabId !== tabId || session.state !== "picking") return undefined;
     session.refused = refusal;
     return session;
+  }
+
+  /**
+   * The user pressed Escape in the page. The frame has already taken its overlay
+   * down and forgotten the pick, so the session goes with it and the panel finds
+   * nothing to show.
+   *
+   * Only a session still `picking` is cancelled, and only from its own tab: a
+   * press that had already taken a pick is not cancelled here, and the frame
+   * does not send this for one either.
+   */
+  cancelled(sessionId: string, tabId: number): ExtractionSession | undefined {
+    const session = this.sessions.get(sessionId);
+    if (!session || session.tabId !== tabId || session.state !== "picking") return undefined;
+    return this.clear(sessionId);
   }
 
   /** Holds at most `EXTRACTION_PREVIEW_MAX_ROWS` rows, under the columns `previewKey` names. */
@@ -116,6 +132,23 @@ export class ExtractionSessions {
     if (!session) return;
     session.preview = rows.slice(0, EXTRACTION_PREVIEW_MAX_ROWS).map((row) => ({ ...row }));
     session.previewKey = previewKey;
+  }
+
+  /**
+   * Drops the rows without putting any in their place: the page was asked to
+   * read a different set of columns and would not.
+   *
+   * What is held was read under columns the caller has since said it no longer
+   * wants -- the commonest reason being that the user just excluded one of them
+   * -- so keeping it would be keeping values for a column that is out (D12). The
+   * key goes too, so the next `getSession` asks again rather than treating a
+   * failed read as the answer.
+   */
+  clearPreview(sessionId: string): void {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+    session.preview = [];
+    session.previewKey = undefined;
   }
 
   /** The extraction is in the recording; the preview it was confirmed from is dropped. */

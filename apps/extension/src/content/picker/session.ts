@@ -25,7 +25,14 @@
 // inference's proposal, which is selectors, labels and counts, and a value pick
 // sends where the element is, not what it says.
 
-import { EXTRACTION_PICKED_MESSAGE, type ExtractionPickForm, type ExtractionPickedElement, type ExtractionPickedMessage } from "../../shared/extraction-messages";
+import {
+  EXTRACTION_PICK_CANCELLED_MESSAGE,
+  EXTRACTION_PICKED_MESSAGE,
+  type ExtractionPickCancelledMessage,
+  type ExtractionPickForm,
+  type ExtractionPickedElement,
+  type ExtractionPickedMessage
+} from "../../shared/extraction-messages";
 import { selectorFor, testIdFor } from "../describe-element";
 import { inferListFromElement } from "../extraction";
 import { isPickerHostNode } from "../picker-host";
@@ -159,11 +166,26 @@ function caption(form: ExtractionPickForm, target: Element | null): string {
   return proposal.itemCount === 1 ? "1 item" : `${proposal.itemCount} items`;
 }
 
+/**
+ * Escape ends the pick here, and says so.
+ *
+ * The key cannot reach the panel: it is swallowed in this frame, because a key
+ * that cancelled the picker is not a key the page was sent and so not one the
+ * recording shows. That is why the worker has to be told -- otherwise its
+ * session stays `picking` with the overlay long gone, and the panel goes on
+ * asking for a click that can no longer happen.
+ *
+ * Only a pick still waiting for its press is cancelled. Once the press has taken
+ * a pick the proposal is already on its way, and the rest of that press is being
+ * drained; cancelling then would throw away what the user just chose.
+ */
 function cancelOnEscape(event: KeyboardEvent): void {
   if (event.key !== "Escape") return;
-  // Swallowed like a press: an Escape that cancels the picker is not a key the
-  // page was sent, so it is not a key the recording shows either.
   event.preventDefault();
   event.stopImmediatePropagation();
+  const current = session;
   stopPick();
+  if (current?.phase !== "picking") return;
+  const cancelled: ExtractionPickCancelledMessage = { type: EXTRACTION_PICK_CANCELLED_MESSAGE, sessionId: current.sessionId };
+  void chrome.runtime.sendMessage(cancelled).catch(() => undefined);
 }

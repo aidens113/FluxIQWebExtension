@@ -66,6 +66,18 @@ export const EXTRACTION_CONTENT_MESSAGES = {
 export const EXTRACTION_PICKED_MESSAGE = "fluxiq.extractionPicked";
 
 /**
+ * The name a frame uses to say the user cancelled the pick from the page.
+ *
+ * Escape is handled inside the frame -- it has to be, because the key is
+ * swallowed there so the recording does not show it -- and the frame then has no
+ * overlay and no session. Without this message the worker's session stays
+ * `picking` and the panel goes on saying "click an example item" over a page
+ * where no click can produce one: the page and the panel disagree about what the
+ * user just did, and only the user can see both.
+ */
+export const EXTRACTION_PICK_CANCELLED_MESSAGE = "fluxiq.extractionPickCancelled";
+
+/**
  * Runtime messages between the popup or side panel and the background worker.
  * `testDefineExtraction` is accepted from the control page only and never from
  * a page under test; it exists so the Testing Lab can drive the confirm path
@@ -81,6 +93,44 @@ export const EXTRACTION_RUNTIME_MESSAGES = {
 
 /** Which shape of extraction a pick is for: a list of records, or one value. */
 export type ExtractionPickForm = "list" | "value";
+
+/**
+ * Why a pick session has nothing to confirm, as the panel is told it.
+ *
+ * The first two are the frame's own words about page structure. The third is
+ * the background worker's, and it is the one word here that is about FluxIQ
+ * rather than the page: a `value` pick is refused rather than held, because
+ * nothing downstream can land one. `background/extraction/confirm.ts` already
+ * refuses a `value` definition on the run path, and a `value` extraction needs
+ * an element target that `content/picker/recorded-event.ts` deliberately does
+ * not attach, so a value pick that was accepted here would be recorded as
+ * passive evidence and never become the `web.dom.extract` node the user thinks
+ * they defined. Refusing it at the pick is the only way the user finds out.
+ */
+export type ExtractionSessionRefusal = ExtractionProposeRefusal | "value_form_unsupported";
+
+/**
+ * One column as the panel currently has it, sent with
+ * `fluxiq.getExtractionSession` so the preview is re-read under the columns the
+ * panel may actually display.
+ *
+ * `key` is the **proposal's** field key -- the key a preview row is keyed by and
+ * the key `ExtractionSessionView.proposal` names -- not the record key the
+ * confirm payload derives from the user's label. The two spaces differ the
+ * moment a column is renamed, and matching a renamed column against the
+ * proposal by its record key silently finds nothing, which reads as "as
+ * proposed" and would put an excluded column back into the read. The confirm
+ * payload's fields are therefore never accepted here (`control.ts`).
+ *
+ * `handling` is `include` only for a column whose values the panel may show
+ * right now. A column the user excluded, and a column whose read changed since
+ * the rows were taken, are both sent as `exclude`, so the page is not asked to
+ * read a value that could not be displayed (D12).
+ */
+export type ExtractionPreviewColumn = {
+  key: string;
+  handling: WebAutomationExtractFieldHandling;
+};
 
 /**
  * A picked element as structure alone: where it is, never what it says.
@@ -115,16 +165,21 @@ export type ExtractionContentMessage =
 
 /**
  * Why a frame did not do what it was asked, as a fact about the frame or the
- * request: `not_picking`, no pick is open for that session; `unreadable_request`,
- * the request names no readable field, or the page refused to read it;
- * `not_recording`, nothing is being recorded, so no event could be added;
- * `invalid_definition`, what arrived is not a recorded extraction.
+ * request: `unreadable_request`, the request names no readable field, or the
+ * page refused to read it; `not_recording`, nothing is being recorded, so no
+ * event could be added; `invalid_definition`, what arrived is not a recorded
+ * extraction.
+ *
+ * `not_picking` was here and is gone. No frame could produce it -- `pickStart`
+ * and `pickCancel` both answer `{ ok: true }` unconditionally -- so it was a
+ * word the vocabulary offered and nothing could ever say, which reads to the
+ * next person as a refusal the worker should handle.
  *
  * A fixed vocabulary, like `ExtractionProposeRefusal`'s: a refusal crosses the
  * same channel a proposal does, so it says why in words chosen here rather than
  * quoting anything the page holds (D3).
  */
-export type ExtractionContentRefusal = "not_picking" | "unreadable_request" | "not_recording" | "invalid_definition";
+export type ExtractionContentRefusal = "unreadable_request" | "not_recording" | "invalid_definition";
 
 /** What a frame answers an `ExtractionContentMessage` with. `rows` belongs to a preview alone. */
 export type ExtractionContentResponse =
@@ -138,6 +193,11 @@ export type ExtractionContentResponse =
  * element it was made on. A pick the page cannot propose an extraction for
  * carries `refused` and neither, so the panel can say why instead of waiting on
  * a pick that already happened.
+ *
+ * `element` is read and refused rather than ignored: the worker answers
+ * `value_form_unsupported` and puts that word on the session, so a pick the
+ * user made never quietly does nothing. The worker also refuses to *start* a
+ * `value` pick, so this branch is the belt to that brace.
  */
 export type ExtractionPickedMessage = {
   type: typeof EXTRACTION_PICKED_MESSAGE;
@@ -145,6 +205,19 @@ export type ExtractionPickedMessage = {
   proposal?: WebAutomationExtractionProposal | undefined;
   element?: ExtractionPickedElement | undefined;
   refused?: ExtractionProposeRefusal | undefined;
+};
+
+/**
+ * The user pressed Escape in the page, before any pick was taken.
+ *
+ * It carries the session and nothing else: the frame is reporting that the pick
+ * is over, not asking for anything, and the worker's answer is to drop the
+ * session so the panel closes. A press that had already taken a pick sends
+ * nothing -- that pick is on its way, and cancelling it here would discard it.
+ */
+export type ExtractionPickCancelledMessage = {
+  type: typeof EXTRACTION_PICK_CANCELLED_MESSAGE;
+  sessionId: string;
 };
 
 // The confirm payload. It is declared here because both halves of the panel
@@ -217,4 +290,32 @@ export type ExtractionConfirmRequest = {
   itemCount: number;
   /** At most this many records; absent, the domain's own bound applies. The panel sends none, and the Testing Lab's seam does. */
   maxItems?: number | undefined;
+};
+
+/**
+ * What a confirmed extraction captured, as the panel is told it.
+ *
+ * It is counts and names the user already gave, and nothing read off the page:
+ * no record, no cell, no selector. The records themselves go to the Testing
+ * Lab's seam and to nowhere else (`background/extraction/confirm.ts`), so this
+ * is what "did it actually get my rows?" can be answered with safely.
+ *
+ * It is declared here because both halves build it -- the worker writes it into
+ * the confirm reply and the panel reads it into a sentence -- and a count that
+ * is renamed on one side and read on the other is exactly the defect this file
+ * exists to prevent.
+ */
+export type ExtractionConfirmOutcome = {
+  /** The dataset the definition was recorded under. */
+  datasetId: string;
+  /** The name the user gave the dataset. */
+  label: string;
+  /** How many records the read returned. `0` is an answer, not a failure: the page had none to give. */
+  recordCount: number;
+  /** How many pages the read followed, which is `1` unless pagination was on. */
+  pagesRead: number;
+  /** `true` when the read stopped at a bound rather than at the end of the list. */
+  truncated: boolean;
+  /** How long the read took, which is what the Testing Lab measures. */
+  durationMs: number;
 };

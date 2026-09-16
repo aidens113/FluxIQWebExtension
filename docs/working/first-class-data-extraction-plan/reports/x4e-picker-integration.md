@@ -343,3 +343,251 @@ two-subject test, its home by the letter of AGENTS.md would be a new
    declaration now, but where it sits on the message is still convention. My new
    row 246 pins the *other* half of that envelope — that a confirm payload is not
    read as preview columns — and not this one.
+
+---
+
+# Round 2 — Escape, the confirm counts, and one more one-ended wire
+
+The coordinator widened the scope to `apps/extension/src/content/**` and asked
+for the two items this report had logged rather than fixed. Both are done, the
+sweep found a third of the same shape and a fourth smaller one, and the test file
+I had grown to 764 of its 800-line limit is split rather than left as a trap for
+whoever adds the next row.
+
+## 1. Escape now tells the worker, and the panel stops waiting
+
+**The disagreement, plainly.** The user presses Escape. The page's overlay
+disappears and the frame forgets the pick — `stopPick()` removes every listener.
+The worker's session stays `picking`, so the panel keeps polling and keeps saying
+"Click one example item on the page". Nothing the user clicks can produce a pick,
+because nothing is listening any more. The page and the panel disagree about what
+just happened, and only the user can see both sides.
+
+**Why the key cannot simply reach the panel.** Escape is swallowed in the frame
+with `preventDefault` and `stopImmediatePropagation`, deliberately: a key that
+cancelled the picker is not a key the page was sent, so it must not appear in the
+recording. The panel's own Escape handler listens on the panel document, which
+never sees it. A message is the only way across.
+
+**What was built.** `EXTRACTION_PICK_CANCELLED_MESSAGE`
+(`fluxiq.extractionPickCancelled`), sent by `content/picker/session.ts` and
+handled in `background/extraction/control.ts` by `acceptPickCancelled`, which
+checks the sender exactly as a pick is checked — top frame, and the session's own
+tab — and then drops the session. The panel's next poll finds no session and
+closes itself, which is what its own Cancel button and its own Escape already do.
+
+**The one judgement worth review.** A press that has *already taken a pick* sends
+nothing. The picker keeps listening after the press so the rest of that press is
+swallowed, which means Escape can arrive while the proposal is in flight;
+cancelling then would throw away what the user had just chosen. The frame sends
+only while its phase is still `picking`, and `ExtractionSessions.cancelled`
+refuses anything that is not `picking` as well, so the guard holds even if a
+later caller forgets it. Both halves are tested.
+
+## 2. The confirm counts: shown, not deleted
+
+**Chosen: show them.** Deleting would have been defensible only if the answer
+were unavailable or unsafe, and it is neither. The worker already runs the read
+at confirm time and already holds the counts; the reply carries no record and no
+cell, so there is nothing in it D3 forbids; and "did it actually get my rows?" is
+the question the person asks the moment they press Confirm. A panel that closes
+silently leaves them to find out by exporting later.
+
+**What the user now sees.** The panel no longer closes on a successful confirm.
+The draft and its preview rows are dropped exactly as `close()` drops them, and
+the panel stays up with one sentence:
+
+- `Captured 12 records from 3 pages into "Product catalog".`
+- `Captured 1 record into "Product catalog". It stopped at FluxIQ's limit, so the page may hold more.` — when the read was truncated.
+- `Recorded "Product catalog", but the page returned no records. Check the columns and pick again if that is wrong.` — a read that found nothing is an answer, not a success to dress up.
+- `The extraction is recorded.` — an older worker that sends no counts.
+
+They dismiss it with Close, or start another pick. It needed no new markup: the
+sentence goes in the panel's existing status line, which matters because
+`popup/index.html` and `sidepanel/index.html` are outside this brief's ownership.
+
+`ExtractionConfirmOutcome` is declared in `shared/extraction-messages.ts` and the
+worker builds its reply *as* that type, so a count renamed on one side and read
+on the other is a compile error rather than a blank in a sentence. The panel's
+client checks every field before phrasing anything, so a half-filled reply
+produces "recorded" rather than "Captured undefined records".
+
+## 3. Found in the sweep: a refused preview left the worker holding the rows
+
+`refreshPreview` runs only when the columns have changed, and it ignored a
+refusal from the page: its comment said keeping the rows beat losing the preview.
+But the commonest reason the columns change is that the user just excluded one,
+so "keep the rows" meant keeping that column's values after the worker had been
+told to stop reading it — the exact thing the panel-side re-read exists to
+prevent. The frame's `unreadable_request` had no reader, which is the shape this
+whole report is about.
+
+A failed or refused re-read now calls `ExtractionSessions.clearPreview`: the rows
+go and the key goes with them, so the panel shows "No preview was read for these
+columns" (true) and the next `getSession` asks again rather than treating the
+failure as the answer. Tested both ways, including that the retry recovers.
+
+## 4. `not_picking` deleted: a refusal word nothing could say
+
+`ExtractionContentRefusal` offered `not_picking`, and no frame could produce it —
+`pickStart` and `pickCancel` answer `{ ok: true }` unconditionally. A word in a
+refusal vocabulary that nothing can ever say reads to the next person as a case
+the worker ought to handle. Removed, with the reason recorded where it stood.
+
+I also checked `extraction.propose`, which has no sender in `src/`. It is not
+dead: the content harness sends it
+(`e2e/content/tests/extraction/tests/inference.spec.ts`), which is what its own
+header says. Left alone.
+
+## 5. The background test file is split, not left at 764/800
+
+I flagged this in round 1 and then added four more rows to it, so I split it
+rather than hand the next person a file 36 lines from the hard limit. By subject,
+each now well under the 400-line advisory:
+
+| File | Lines | Subject |
+| --- | --- | --- |
+| `background/tests/extraction-harness.ts` | 161 | the fake page, the fake runner, the `chrome` stub and the fixtures |
+| `background/tests/extraction-boundary.test.ts` | 140 | who may drive the picker, and what it refuses to keep |
+| `background/tests/extraction-control.test.ts` | 319 | the pick, the preview, and what it stops reading |
+| `background/tests/extraction-confirm.test.ts` | 239 | what a confirmed extraction records, runs and answers |
+
+**How I know nothing was lost.** The suite ran 638 tests before the split and 638
+after, and the sorted list of test names is byte-identical across the two runs
+(`diff` of the two lists is empty). Not one row was dropped, renamed or
+duplicated. The row *numbers* moved, so round 1's numbers above are the run as it
+was observed then; the names are the stable handle, and the post-split numbers
+are listed below.
+
+The harness trips one advisory warning — 13 exported values against an 8-value
+threshold — which is what a shared fixture module looks like in this repository;
+`e2e/content/tests/identity-fixtures.ts` carries the same warning at 14. The
+total warning count is unchanged at 56: this one replaces the file-lines warning
+the split removed.
+
+## How to write a `chrome` stub in a background test
+
+The coordinator asked for this in one place, because the next person to write one
+will hit it:
+
+> Define the global as `Object.defineProperty(globalThis, "chrome", {
+> configurable: true, **writable: true**, value: … })`. Every test bundle runs in
+> one Node process, and other test files install their stub by plain assignment
+> (`globalThis.chrome = …`). A property defined without `writable` is read-only,
+> so the moment your file has run, every later file that assigns dies with
+> `TypeError: Cannot assign to read only property 'chrome'` — 55 unrelated rows
+> in my case, in files I had not touched, with nothing in the failure pointing at
+> the cause. `configurable: true` is not enough: it lets a later
+> `defineProperty` through, but not a later assignment.
+
+Both stubs in this feature now do that, and both say why in a comment.
+
+## Commands run and observed results (round 2)
+
+1. `pnpm --filter @fluxiq-web-extension/extension check`
+
+   ```
+   > @fluxiq-web-extension/extension@0.1.0 check F:\!FluxIQWebExtension\apps\extension
+   > node scripts/check-extension.mjs
+   ```
+
+   No diagnostics, exit 0. The package's check is now the coordinator's
+   `check-extension.mjs` rather than the chained `tsc && tsc`, so the test project
+   is checked even when the source project fails — which is what hid the error I
+   found in round 1. It caught seven real errors of mine mid-split (imports the
+   two new test files needed) and they are fixed.
+
+2. `EXTENSION_TEST_BUILD_LABEL=x4e-picker-integration node scripts/test-extension.mjs`
+
+   ```
+   1..638
+   # tests 638
+   # pass 638
+   # fail 0
+   ```
+
+   The nine new rows, by name and by number in that run:
+
+   - 235 the confirm reply says what was captured, in counts and no page value
+   - 248 Escape in the page drops the session, so the panel stops waiting on a pick that is over
+   - 249 a cancel from another tab, from a child frame, or after the pick landed, leaves the session alone
+   - 250 a page that will not read the new columns leaves no rows behind, rather than the ones read under the old ones
+   - 451 Escape ends a pick that was waiting, and tells the worker so the panel does not wait on it
+   - 452 a key that is not Escape neither ends the pick nor says anything
+   - 453 Escape after the press has taken a pick cancels nothing: that pick is already on its way
+   - 454 Escape with no pick open says nothing at all
+   - 491 confirming answers what was captured, so the panel can say whether the rows arrived
+
+   Round 1's rows in the same run, for the record: 244, 245, 246, 247 (value form,
+   re-arm, key space) and 487-490 (the preview re-read).
+
+   Rows 451-454 are a new file, `content/picker/tests/session.test.ts`, which
+   drives the real `startPick`/`stopPick` against a stub page in Node: a `window`
+   that collects its capture listeners, a `document` whose `createElement` answers
+   the overlay's CSSOM calls, and a `chrome.runtime.sendMessage` that records what
+   the frame sent. It follows `content/tests/recorder.test.ts`'s pattern — stubs
+   in first, module imported dynamically, every global restored — because the
+   bundles share one process.
+
+3. **Mutation tests, each applied alone and then restored.** The suite is green
+   again afterwards (the 638/638 above is the post-restore, post-split run).
+
+   - The frame stops sending the cancel (`cancelOnEscape` no longer calls
+     `sendMessage`) → **1 fail**: "Escape ends a pick that was waiting…". That is
+     the defect itself.
+   - The worker stops routing it (`handleExtractionControl` loses the
+     `EXTRACTION_PICK_CANCELLED_MESSAGE` branch) → **2 fail**: "Escape in the page
+     drops the session…" and "a cancel from another tab…". This proves the other
+     half independently: the frame can send and still change nothing.
+   - The worker keeps the rows when the page refuses (both `clearPreview` calls
+     removed) → **1 fail**: "a page that will not read the new columns…".
+   - The client stops returning the counts (`confirmExtraction` returns
+     `undefined`) → **1 fail**: "confirming answers what was captured…".
+
+4. `node scripts/structure-audit.mjs`, with every file staged
+
+   ```
+   structure-audit: passed (56 warning(s), 17 baselined).
+   ```
+
+   exit 0, no `FAIL`. One warning names a file of mine, the harness's 13 exported
+   values, discussed above. No `imports`, `naming`, `directory-files`,
+   `test-placement` or `file-lines` finding names anything in this change.
+
+## Not verified (round 2)
+
+- **Still no browser.** In particular: that a real Escape in a real page produces
+  the message (the frame half is proved against a stub `window`), and that the
+  panel's new "Captured N records" line renders where I expect in the side panel
+  and the popup. Nothing in this round has been seen on screen.
+- **The panel's own call sites remain untested**, for the same reason as round 1:
+  the suite has no DOM, so `captured()` and the `edit()` re-read trigger are
+  driven by nothing. What each of them calls is tested; that they are called is
+  not.
+- **The stub page in `content/picker/tests/session.test.ts` is not a browser.** It
+  proves which messages the frame sends and when. That the overlay is really
+  gone, that the key really does not reach the page, and that the drain still
+  swallows the rest of the press belong to the content harness
+  (`e2e/content/tests/extraction/tests/extraction-picker.spec.ts`), and I did not
+  run Playwright.
+- **`pnpm build` was not run**, so `apps/extension/build/` is staler still, and
+  `content/` has now changed as well as `background/` and `popup/`.
+- Repository-scope `pnpm check`, `pnpm test` and `pnpm build` were not run.
+
+## Open questions (round 2)
+
+1. **The panel now has a fourth state — "done" — with no markup of its own.** The
+   captured sentence lives in the status line and the body is hidden. It reads
+   correctly, but if this becomes a place to show more (a link to the dataset, a
+   "record another" button), it wants its own section in `popup/index.html`,
+   which is outside this brief's ownership.
+2. **A cancelled session is dropped, not remembered.** Escape leaves no trace in
+   the worker, so a panel reopened after an Escape sees "no session" and closes,
+   which is right. If we ever want "your last pick was cancelled" in the panel,
+   that needs a session that outlives its own cancellation.
+3. **The value form remains half-present**, unchanged from round 1 and by
+   instruction: the page can pick one, and both entry points refuse it in words.
+4. **Two seams from round 1 are still open by choice**, and neither changed here:
+   the panel discards the session id and relies on "the most recently started
+   session", and `ExtractionSessionView.form` has no reader now that it is always
+   `"list"`.
