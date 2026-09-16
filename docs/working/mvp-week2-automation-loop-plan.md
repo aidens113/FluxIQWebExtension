@@ -526,11 +526,12 @@ Recorded at dispatch on 2026-09-15, before the three investigations above.
   if a bad one can be truly reverted
 - Validation: the supervisor ran
   `pnpm --filter fluxiq exec vitest run src/programs/automation-studio/storage/project/tests/graph-store.test.ts`
-  itself -> "Tests 9 passed (9)", including
-  "restores the graph exactly for every patch operation's inverse". The worker
-  reported the same suite with `graph-store.ts` restored from HEAD ->
-  3 failed / 4 passed, so the tests demonstrably catch the defect rather than
-  passing either way
+  itself -> "Test Files 1 passed (1)", "Tests 9 passed (9)", including the row
+  "restores the graph exactly for every patch operation's inverse"
+- Claimed but not independently reproduced: the worker ran the same suite with
+  `graph-store.ts` restored from HEAD and reported 3 failed / 4 passed. That
+  would show the tests catch the defect rather than passing either way, but the
+  supervisor did not re-run it, so it is the worker's claim and not evidence
 - Outcome: Accepted
 - Follow-up: the worker **rewrote the inherited rollback test**, which asserted
   bookkeeping before it ever compared the graph and so would have passed without
