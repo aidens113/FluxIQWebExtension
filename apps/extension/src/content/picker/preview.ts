@@ -20,11 +20,12 @@
 // the verb's own minimum is checked when the extraction runs, not here.
 
 import type { ExtractionPreviewRow } from "../../shared/extraction-messages";
+import { EXTRACTION_PREVIEW_MAX_ROWS } from "../../shared/extraction-messages";
 import { extractList } from "../extraction";
 import type { WebAutomationExtractListRequest } from "../types";
 
 /** How many rows a preview may hold. The worker's `EXTRACTION_PREVIEW_MAX_ROWS` is the same number. */
-export const PICKER_PREVIEW_MAX_ROWS = 20;
+export const PICKER_PREVIEW_MAX_ROWS = EXTRACTION_PREVIEW_MAX_ROWS;
 
 /**
  * The first rows `request` reads on this page, at most `limit` of them.

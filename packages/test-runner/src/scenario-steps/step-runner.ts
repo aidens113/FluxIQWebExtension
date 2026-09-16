@@ -2,8 +2,10 @@ import type { BrowserContext, Page } from "@playwright/test";
 import type { RunStepTiming, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../failure.js";
 import { selectOptionByKeyboard, uploadDeterministicFile } from "../trusted-input/index.js";
+import type { ExtractionRecord, ObservedExtraction } from "../run-expectations/index.js";
 import { DownloadWatch } from "./download-watch.js";
-import { extractRecords, type ExtractedRecord } from "./extract-records.js";
+import type { ExtractionIntentDriver } from "./extract-intent.js";
+import { extractRecords } from "./extract-records.js";
 import { locateTarget } from "./locate-target.js";
 import { parseScenarioTarget } from "./parse-target.js";
 import { ScenarioTabs } from "./scenario-tabs.js";
@@ -20,12 +22,29 @@ export type ScenarioStepRunnerOptions = {
   uploadDirectory: string;
   /** Scripted navigation bound to the extension control page after recording starts. */
   scriptedNavigation(page: Page, url: string, timeoutMs?: number): Promise<void>;
+  /**
+   * FluxIQ's own extraction, bound to the extension control page
+   * (`extract-intent.ts`). When it is present every `extract` step goes through
+   * it and the runner never reads the page itself, because a run judged on what
+   * the harness read measures the harness. It is absent only for a run with no
+   * extension control page, where `extract-records.ts` is the reference reader.
+   */
+  extractionIntent?: ExtractionIntentDriver;
   /** Test seam for the post-wheel recorder settlement delay. */
   settleScroll?: (delayMs: number) => Promise<void>;
   now?: () => number;
 };
 
-export type ScenarioStepResult = { extracted?: ExtractedRecord[] };
+export type ScenarioStepResult = {
+  extracted?: ExtractionRecord[];
+  /**
+   * What the extraction reported beside its records -- pages read, whether a
+   * cap cut it short, how long it took -- present only when FluxIQ's own
+   * extraction produced them. The reference reader reports none of it, which is
+   * why every member of `ObservedExtraction` but the count is optional.
+   */
+  observed?: ObservedExtraction;
+};
 
 const DEFAULT_WAIT_MS = 15_000;
 // The content recorder emits a scroll only after 400 ms without another scroll
@@ -113,7 +132,12 @@ export class ScenarioStepRunner {
       case "switchTab": await this.tabs.switchTo(requiredText(step, step.path), step.timeoutMs ?? DEFAULT_WAIT_MS); return {};
       case "closeTab": await this.tabs.closeActive(); return {};
       case "waitForDownload": await this.downloads.waitFor(requiredText(step, step.value), step.timeoutMs ?? DEFAULT_WAIT_MS); return {};
-      case "extract": return { extracted: await extractRecords(page, step) };
+      case "extract": {
+        const intent = this.options.extractionIntent;
+        if (intent === undefined) return { extracted: await extractRecords(page, step) };
+        const { records, ...observed } = await intent(page, step);
+        return { extracted: records, observed };
+      }
       default: {
         const unsupported: never = step.operation;
         throw new RunnerFailure("fixture.invalid", `Unsupported scenario step operation: ${String(unsupported)}`);

@@ -319,3 +319,14 @@ export type ExtractionConfirmOutcome = {
   /** How long the read took, which is what the Testing Lab measures. */
   durationMs: number;
 };
+
+/**
+ * How many rows a preview may carry, declared once.
+ *
+ * The picker prepares the rows and the background worker stores them, so two
+ * separate constants had to agree with nothing holding them together: if they
+ * drifted, the panel would show a different number of rows than were prepared
+ * and no test would fail. Both sides now derive from this, which makes them
+ * incapable of differing rather than merely tested for not having differed.
+ */
+export const EXTRACTION_PREVIEW_MAX_ROWS = 20;

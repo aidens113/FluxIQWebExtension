@@ -18,7 +18,8 @@ import type { WebAutomationExtractionProposal } from "@fluxiq-web-extension/doma
 import type { ExtractionPickForm, ExtractionPreviewRow, ExtractionSessionRefusal } from "../../shared/extraction-messages";
 
 /** How many rows the confirmation preview may hold. The content message's own bound is the same. */
-export const EXTRACTION_PREVIEW_MAX_ROWS = 20;
+export { EXTRACTION_PREVIEW_MAX_ROWS } from "../../shared/extraction-messages";
+import { EXTRACTION_PREVIEW_MAX_ROWS } from "../../shared/extraction-messages";
 
 /**
  * `picking`, the overlay is up and nothing has been chosen; `picked`, the frame

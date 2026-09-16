@@ -139,6 +139,32 @@ test("switchTab, closeTab, waitForDownload, and extract act on and read the acti
   runner.dispose();
 });
 
+test("with the extraction seam present the runner reads nothing off the page itself", async () => {
+  const { log, first, context, now, scriptedNavigation } = harness();
+  const asked: ScenarioStep[] = [];
+  const runner = new ScenarioStepRunner({
+    context, page: first, origin, isScenarioUrl: () => true, uploadDirectory: os.tmpdir(), scriptedNavigation, now,
+    extractionIntent: async (_page, step) => {
+      asked.push(step);
+      return { records: [{ name: "Chair", price: null }], nonStringValues: 0, pagesRead: 3, truncated: false, durationMs: 42 };
+    },
+  });
+
+  const step: ScenarioStep = { id: "read", operation: "extract", target: "testid:product-card", fields: { name: "testid:product-name" } };
+  const result = await runner.run(step);
+
+  // The fake page logs every locator it is asked for. FluxIQ did the reading,
+  // so the harness asked for none: a seam that fell back to `extractRecords`
+  // would leave the locator trail this asserts is empty.
+  assert.deepEqual(log, []);
+  assert.deepEqual(asked, [step]);
+  assert.deepEqual(result, {
+    extracted: [{ name: "Chair", price: null }],
+    observed: { nonStringValues: 0, pagesRead: 3, truncated: false, durationMs: 42 },
+  });
+  runner.dispose();
+});
+
 test("a failing step is timed as failed and rethrown; malformed steps are fixture errors", async () => {
   const { first, context, now, scriptedNavigation } = harness();
   const runner = new ScenarioStepRunner({ context, page: first, origin, isScenarioUrl: () => true, uploadDirectory: os.tmpdir(), scriptedNavigation, now });
