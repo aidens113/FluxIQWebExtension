@@ -37,25 +37,14 @@ one type was missed. Three smaller leaks follow: an unscoped `llmEvidenceRuntime
 (`service.ts:352-357,769-772`); the closed task-kind union and hard-coded stage
 prose that block L15 (**Phase S**); and Core's sanitizers carrying web nouns.
 
-**What is true today:** no Week 2 exit criterion is met. The parts exist and
-are tested, but no runtime loop connects them.
-- 2.1: Core's harness packet has slots for most of the MVP capture list, but
-  the one runtime caller fills only instructions, recent actions, a 3,000-byte
-  page snapshot, and policy. Expected state, the before/after state diff,
-  subflow and router context, prior adaptations, and recording context never
-  reach the model (`AS/runtime/service.ts:2865-3169`).
-- 2.2: a deterministic "is AI eligible" classifier exists but only decorates
-  run summaries; the LLM diagnosis is free text; there is no plan stage.
-- 2.3: there is no exploration loop at run time (the bounded evidence loop
-  serves Flow creation only), no whole-recovery time limit, and none of the
-  five required completion states.
-- 2.5-2.7: Core can test one LLM patch on a patched copy, save it, auto-apply
-  it when low-risk, persist it with rollback, and rerun once, proven only by a
-  mock-provider unit test. The shipped app saves one never-run, high-risk
-  target-override proposal that a person applies.
-- 2.8: "resume" reruns from the start, and is unreachable in the shipped app.
-- 2.9: nothing records which adaptation a later run used; FluxBench has no
-  adaptation lane, and its Week 2 metrics are typed `null`.
+**No loop exit criterion (2.1-2.9) is met yet.** The parts exist and are tested,
+but no runtime loop connects them: the harness packet fills four of its slots so
+expected state, the state diff, prior adaptations and recording context never
+reach the model; diagnosis is free text with no plan stage; exploration serves
+Flow creation only; patch validation is proven by a mock-provider unit test
+alone; "resume" restarts from the beginning; and nothing records which
+adaptation a later run used, so FluxBench's Week 2 metrics are typed `null`.
+Per-criterion detail with file:line evidence is in the two scoping reports.
 
 **Defects: five, corrected to seven, now Phase D.** `w2-a` proved two by running
 Core's own `live-patch.ts` unmodified in a scratch copy — 19 of 19 expectations
