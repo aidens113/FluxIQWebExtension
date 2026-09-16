@@ -226,7 +226,34 @@ test("the runner consults the lane rules: a Core identity and a built Flow on th
   assert.ok(source.includes('"The Core action probe was skipped"), details: { reason: choice.reason, stepIds: choice.stepIds } });'), "H3: a skipped probe is published with its reason");
   assert.ok(source.includes("await assertExpectedFacts(finalStateFacts(scenario, workflow), playwrightScenarioFactProbe(page));"), "H5: the final state is judged on the facts the rule chooses");
   assert.equal(/successFacts/u.test(source), false, "H5: the runner holds no second playback-goal rule");
-  assert.ok(source.includes("if (extracted) assertExtraction(recordingWorkflow.expected.extracted, step.id, extracted);"), "H1: a paginated extract step follows next, so the recording lane asserts every extract step");
+  assert.ok(source.includes("assertExtraction(recordingWorkflow.expected.extracted, step.id, extraction.records, extraction.observed);"), "H1: the recording lane asserts every extract step, against what the read itself reported");
+});
+
+/**
+ * The recording lane measures its own extraction, and nothing else can. Only
+ * the run knows which steps ran, and only FluxIQ's own read reports the pages
+ * it covered -- so a lane that dropped either would leave `paginationAccuracy`
+ * with no lane able to fill it, which is exactly the state this replaced.
+ *
+ * Pinned at the call site for the reason the evaluation above is: no unit of
+ * `runExtractionMeasurements` can show that the runner keeps each read, keeps
+ * it before the assertion that may throw, and publishes what it measured.
+ */
+test("the recording lane reads through FluxIQ's own extraction and publishes what it measured", async () => {
+  const source = await runnerSource();
+  assert.equal(source.match(/createExtractionIntentDriver\(/gu)?.length, 1, "one control-page-bound extraction seam for the recording lane");
+  assert.ok(source.includes("const extractionIntent = paired ? { extractionIntent: createExtractionIntentDriver(extensionControl) } : {};"), "FluxIQ reads only when the extension holds an automation tab to read from");
+  const at = {
+    bound: source.indexOf("const extractionIntent = paired ?"),
+    kept: source.indexOf("reads.set(step.id, extraction);"),
+    asserted: source.indexOf("assertExtraction(recordingWorkflow.expected.extracted, step.id, extraction.records, extraction.observed);"),
+    measured: source.indexOf("? runExtractionMeasurements({ script: recordingWorkflow.recordingScript, expected: recordingWorkflow.expected.extracted, read: extractionRead })"),
+    evaluated: source.indexOf("? singleRunEvaluation({"),
+  };
+  for (const [name, index] of Object.entries(at)) assert.ok(index > 0, `${name} is in the runner`);
+  assert.ok(at.bound < at.kept && at.kept < at.asserted, "a step's read is kept before the expectation that may throw, so a failing step is still measured");
+  assert.ok(at.asserted < at.measured && at.measured < at.evaluated, "the measurements reach the evaluation the run publishes");
+  assert.ok(source.includes("extraction: extractionRead"), "a run that never ran the script publishes null, which the contract reads as unmeasured");
 });
 
 test("the evaluation reaches the caller, so lab run reports it without a bench", async () => {

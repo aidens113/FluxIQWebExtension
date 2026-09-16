@@ -129,8 +129,10 @@ test("switchTab, closeTab, waitForDownload, and extract act on and read the acti
   pages.push(details);
   await runner.run({ id: "to-details", operation: "switchTab", path: "/scenarios/multi-tab/details" });
   assert.equal(runner.activePage(), details);
-  const { extracted } = await runner.run({ id: "read", operation: "extract", target: "testid:detail", fields: { title: "testid:title" } });
-  assert.deepEqual(extracted, [{ title: '[data-testid="detail"] item > [data-testid="title"] text' }]);
+  const { extraction } = await runner.run({ id: "read", operation: "extract", target: "testid:detail", fields: { title: "testid:title" } });
+  // The reference reader read the page, so it reports its own zero non-string
+  // values and nothing else: no pages, no truncation flag and no duration.
+  assert.deepEqual(extraction, { records: [{ title: '[data-testid="detail"] item > [data-testid="title"] text' }], observed: { nonStringValues: 0 } });
   first.emit("download", { suggestedFilename: () => "report-101.csv", failure: async () => null } as unknown as Download);
   await runner.run({ id: "saved", operation: "waitForDownload", value: "report-101.csv" });
   await runner.run({ id: "back", operation: "closeTab" });
@@ -159,8 +161,10 @@ test("with the extraction seam present the runner reads nothing off the page its
   assert.deepEqual(log, []);
   assert.deepEqual(asked, [step]);
   assert.deepEqual(result, {
-    extracted: [{ name: "Chair", price: null }],
-    observed: { nonStringValues: 0, pagesRead: 3, truncated: false, durationMs: 42 },
+    extraction: {
+      records: [{ name: "Chair", price: null }],
+      observed: { nonStringValues: 0, pagesRead: 3, truncated: false, durationMs: 42 },
+    },
   });
   runner.dispose();
 });

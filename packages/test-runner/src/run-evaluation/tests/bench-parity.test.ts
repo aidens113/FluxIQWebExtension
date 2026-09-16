@@ -105,6 +105,28 @@ test("a rig that broke after the oracle passed: they differ, in oracleVerdict an
   assert.equal(fromSingleRun(run).oracleVerdict, "passed", "the lane's observation, which is what actually happened");
 });
 
+test("the recording lane's own extraction measurements reach a single run and no bench row", () => {
+  // The lane measures its extraction now (`runExtractionMeasurements`): it ran
+  // the script, so it knows which extract steps ran, and FluxIQ's own read
+  // reports the pages it covered. The bench's substitute observation is built
+  // from `run.json`, which carries no measurement, so it still states `null`
+  // -- unmeasured, not "measured none". Closing this means taking the
+  // published observation's `extraction` in `bench/evaluate-run.ts`, and this
+  // row is what says it has not been closed yet.
+  const run: Run = { verdict: "passed", failureCategory: undefined, oracleVerdict: "passed" };
+  const measured = { ...fromSingleRun(run), extraction: MEASURED };
+  assert.deepEqual(differences(fromBench(run), measured), ["extraction"]);
+  assert.equal(fromBench(run).extraction, null, "a bench row on this lane measures no extraction yet");
+  assert.deepEqual(measured.extraction, MEASURED, "a single run publishes one measurement per extract step");
+});
+
+/** One judged extract step, as `runExtractionMeasurements` publishes it: counts and flags only. */
+const MEASURED: RunEvaluation["extraction"] = [{
+  stepIndex: 1, status: "judged", expectedRecords: 23, observedRecords: 23, recordsListed: true, countStated: true,
+  comparedRecords: 23, matchedRecords: 23, expectedFields: 92, presentFields: 92, unexpectedFields: 0,
+  expectedPages: 3, pagesFollowed: 3, truncated: false, durationMs: 1_400, nonStringValues: 0,
+}];
+
 test("an unreadable run.json costs the bench the automation fields a single run still has", () => {
   // The bench reads the automation back out of `run.json`; the lane never lost
   // it. This is not a divergence in judgement, it is the round trip, and it

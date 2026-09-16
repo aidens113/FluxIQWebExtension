@@ -29,11 +29,11 @@ import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant, scenarioLabOriginProof } from "./lab-control/index.js";
 import { awaitFinalizedRecording, declaredSecretValues, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneObservation, resolveDeclaredSecrets, runFlowLane, selectLaneObservation, type DeclaredSecret, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
 import { attestRunRedaction, runRedactionScopes, scenarioRedactionLiterals, type RunRedactionAttestation } from "./redaction-attestation/index.js";
-import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog, readRecordingCompleteness } from "./run-expectations/index.js";
+import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog, readRecordingCompleteness, runExtractionMeasurements, type ExtractionStepRead } from "./run-expectations/index.js";
 import { singleRunEvaluation } from "./run-evaluation/index.js";
 import { automationFailureFromActionResult, createRunManifest, flowActionTimings, runActionStatus, type CloneRunState } from "./run-manifest/index.js";
 import { assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, selectCoreProbeStep } from "./lane-rules/index.js";
-import { createScriptedNavigationDriver, ScenarioStepRunner } from "./scenario-steps/index.js";
+import { createExtractionIntentDriver, createScriptedNavigationDriver, ScenarioStepRunner } from "./scenario-steps/index.js";
 import { awaitExtensionWorker, cleanupFailureOutcome, pairingStatusWaitFailureDetails, pairExtensionWithColdEpochRecovery } from "./run-lifecycle/index.js";
 import { assertSafeScenarioRunId, createBenchReceipt, type BenchReceiptMetadata } from "./bench/index.js";
 import { projectFacilityFailure, ProjectedFacilityError } from "./facility-failure/index.js";
@@ -122,6 +122,18 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   // The extension's count of the executable actions it recorded, read before Stop and compared with Core's.
   let extensionActionCount: unknown;
   let flowObservation: RunLaneObservation | undefined;
+  // What each `extract` step of the recording script read, by step id, and
+  // `undefined` until the lane starts running the script at all.
+  //
+  // That difference is the measurement's own honesty: a run that never reached
+  // its first step measured no extraction and publishes `null` for it, which
+  // the contract reads as unmeasured, while a lane that ran the script
+  // publishes one measurement per extract step -- including `[]` for a
+  // workflow that extracts nothing, and `not_run` for an expected step the run
+  // failed before. A read is kept **before** its expectation is judged, so a
+  // step whose records did not match is measured rather than lost with the
+  // failure.
+  let extractionRead: Map<string, ExtractionStepRead> | undefined;
   // The first read of Core's discard audit, which `finally` reads again, in the same scope closed at the Flow lane's dispatch, and unions with it before the topology closes.
   let firstDiscardRead: { scope: RecordingDiscardScope; discards: RecordingDiscard[] } | undefined;
   // The window in which a discard Core audits is this recording's loss: from just before the extension is asked to start
@@ -302,13 +314,27 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
           throw new RunnerFailure("recording.persistence", `The extension recording did not start (${describeRecordingStartDiagnostic(diagnostic.observed)})`, { cause, details: diagnostic });
         });
       }
-      const runner = stepRunner = new ScenarioStepRunner({ context, page, origin: topology.scenarioOrigin, isScenarioUrl, uploadDirectory: path.join(topology.allocation.runRoot, "scenario-uploads"), scriptedNavigation: createScriptedNavigationDriver(extensionControl) });
+      // FluxIQ reads its own page. The seam is bound to the control page and
+      // needs the extension to hold an automation tab, which pairing and
+      // `activateScenarioTab` above are what give it; without one the reference
+      // reader runs instead, and says that it reported no pages, no truncation
+      // and no duration rather than defaulting them (`extract-intent.ts`).
+      const extractionIntent = paired ? { extractionIntent: createExtractionIntentDriver(extensionControl) } : {};
+      const runner = stepRunner = new ScenarioStepRunner({ context, page, origin: topology.scenarioOrigin, isScenarioUrl, uploadDirectory: path.join(topology.allocation.runRoot, "scenario-uploads"), scriptedNavigation: createScriptedNavigationDriver(extensionControl), ...extractionIntent });
+      const reads = extractionRead = new Map<string, ExtractionStepRead>();
       for (const step of recordingWorkflow.recordingScript) {
         await stepCapture.trigger(event(runId, scenario.id, step.id, "step.start", `Start ${step.operation}`));
-        const { extracted } = await runner.run(step);
-        // Every extract step is asserted here: one with `pagination` has followed `next` as recorded input and read each page (`extractRecords`).
-        if (extracted) assertExtraction(recordingWorkflow.expected.extracted, step.id, extracted);
-        await stepCapture.trigger({ ...event(runId, scenario.id, step.id, step.operation === "checkpoint" ? "checkpoint" : "step.complete", `Complete ${step.operation}`), ...(extracted ? { details: { recordCount: extracted.length } } : {}) });
+        const { extraction } = await runner.run(step);
+        if (extraction) {
+          // Kept before it is judged, so the run publishes what a failing step
+          // read (`runExtractionMeasurements`). Every extract step is then
+          // asserted against what the read itself reported: an expectation
+          // naming `pages` or `truncated` that nothing reported is refused as
+          // unjudgeable rather than passed on the rest of it.
+          reads.set(step.id, extraction);
+          assertExtraction(recordingWorkflow.expected.extracted, step.id, extraction.records, extraction.observed);
+        }
+        await stepCapture.trigger({ ...event(runId, scenario.id, step.id, step.operation === "checkpoint" ? "checkpoint" : "step.complete", `Complete ${step.operation}`), ...(extraction ? { details: { recordCount: extraction.records.length } } : {}) });
       }
       // Read while still recording: the extension's log is what it recorded.
       recordedEvents = await assertRecordedEvents(() => readExtensionRecordingLog(message => runtimeMessage(extensionControl, message)), recordingWorkflow.expected.recordingEvents ?? []);
@@ -530,10 +556,22 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       flowLane: options.flow === true,
       published: flowObservation,
       automationFailureExpected: workflow.expected.failure ?? null,
-      recordingLane: () => recordingLaneObservation({
-        oracleVerdict, ...probeOutcome(actions, automationFailure),
-        automationFailureExpected: workflow.expected.failure ?? null,
-        actions: actions.flatMap(action => action.durationMs === undefined ? [] : [{ actionType: action.actionType, durationMs: action.durationMs }]),
+      recordingLane: () => ({
+        ...recordingLaneObservation({
+          oracleVerdict, ...probeOutcome(actions, automationFailure),
+          automationFailureExpected: workflow.expected.failure ?? null,
+          actions: actions.flatMap(action => action.durationMs === undefined ? [] : [{ actionType: action.actionType, durationMs: action.durationMs }]),
+        }),
+        // The lane's own extraction measurements, which it publishes here
+        // because it is the run that knows which steps ran: one per `extract`
+        // step of the script it executed, or `null` when it executed no script
+        // at all. `recordingLaneObservation` still states `null`, so the run
+        // states what it measured over the top of it; folding this into that
+        // function is the tidier end state and belongs with whoever owns
+        // `flow-lane/lane-observation.ts` next.
+        extraction: extractionRead
+          ? runExtractionMeasurements({ script: recordingWorkflow.recordingScript, expected: recordingWorkflow.expected.extracted, read: extractionRead })
+          : null,
       }),
     });
     // The run's own `RunEvaluation`, built from the observation the lane just

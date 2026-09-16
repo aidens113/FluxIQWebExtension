@@ -2,7 +2,7 @@ import type { BrowserContext, Page } from "@playwright/test";
 import type { RunStepTiming, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../failure.js";
 import { selectOptionByKeyboard, uploadDeterministicFile } from "../trusted-input/index.js";
-import type { ExtractionRecord, ObservedExtraction } from "../run-expectations/index.js";
+import type { ExtractionStepRead } from "../run-expectations/index.js";
 import { DownloadWatch } from "./download-watch.js";
 import type { ExtractionIntentDriver } from "./extract-intent.js";
 import { extractRecords } from "./extract-records.js";
@@ -26,8 +26,9 @@ export type ScenarioStepRunnerOptions = {
    * FluxIQ's own extraction, bound to the extension control page
    * (`extract-intent.ts`). When it is present every `extract` step goes through
    * it and the runner never reads the page itself, because a run judged on what
-   * the harness read measures the harness. It is absent only for a run with no
-   * extension control page, where `extract-records.ts` is the reference reader.
+   * the harness read measures the harness. It is absent only for a run whose
+   * extension holds no automation tab to read from -- one that never paired --
+   * where `extract-records.ts` is the reference reader.
    */
   extractionIntent?: ExtractionIntentDriver;
   /** Test seam for the post-wheel recorder settlement delay. */
@@ -36,14 +37,18 @@ export type ScenarioStepRunnerOptions = {
 };
 
 export type ScenarioStepResult = {
-  extracted?: ExtractionRecord[];
   /**
-   * What the extraction reported beside its records -- pages read, whether a
-   * cap cut it short, how long it took -- present only when FluxIQ's own
-   * extraction produced them. The reference reader reports none of it, which is
-   * why every member of `ObservedExtraction` but the count is optional.
+   * What an `extract` step read, and nothing for any other operation.
+   *
+   * The records and the read's account of itself travel together because a
+   * measurement needs both (`runExtractionMeasurements`): records with no
+   * account of the read behind them would be a measurement whose pages,
+   * truncation and duration are silently absent rather than reported as
+   * unreported. Which members that account carries depends on who read: the
+   * intent seam reports pages, truncation and a duration, and the reference
+   * reader reports none of them.
    */
-  observed?: ObservedExtraction;
+  extraction?: ExtractionStepRead;
 };
 
 const DEFAULT_WAIT_MS = 15_000;
@@ -134,9 +139,17 @@ export class ScenarioStepRunner {
       case "waitForDownload": await this.downloads.waitFor(requiredText(step, step.value), step.timeoutMs ?? DEFAULT_WAIT_MS); return {};
       case "extract": {
         const intent = this.options.extractionIntent;
-        if (intent === undefined) return { extracted: await extractRecords(page, step) };
+        if (intent === undefined) {
+          // The reference reader keeps a field only as text or as `null`
+          // (`extract-records.ts`), so it carried no value that was not a
+          // string -- a fact about that reader, not a default. It reports no
+          // pages, no truncation flag and no duration, and says so by leaving
+          // them out: an expectation naming one is then refused as unjudgeable
+          // rather than passed on the half of it this reader could check.
+          return { extraction: { records: await extractRecords(page, step), observed: { nonStringValues: 0 } } };
+        }
         const { records, ...observed } = await intent(page, step);
-        return { extracted: records, observed };
+        return { extraction: { records, observed } };
       }
       default: {
         const unsupported: never = step.operation;

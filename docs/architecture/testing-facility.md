@@ -927,7 +927,15 @@ extension's own account of it, labels and reasons only, to
 
 Each recording-script step is then driven through Playwright as trusted input
 while the extension records. An `extract` step's records are asserted against
-`expected.extracted` as the step runs.
+`expected.extracted` as the step runs, and what the step read is kept before it
+is judged and published as one counts-only measurement per extract step in the
+run's `evaluation.json` (`run-expectations/extraction-measurements.ts`): the
+records compared, the fields that carried a value, the pages the read followed,
+whether it truncated, and how long it took. A step whose records did not match
+is measured too, which is the measurement worth having; a step an expectation
+named that never ran is `not_run`; a step nothing expected is `not_expected`;
+and a run that never reached its script publishes `null`, which reads as
+unmeasured rather than as "no extraction step".
 
 An `extract` step is **FluxIQ's read, not the Lab's**
 (`scenario-steps/extract-intent.ts`). The step is translated into a recorded
@@ -1391,9 +1399,13 @@ resumed.
 - **Extraction** (`metrics.extractionByLane`, `bench/extraction-metrics.ts`) is
   also per lane, and a lane whose runs measured no extraction states **no block
   at all** — absent is unmeasured, and a block of zeros would claim the bench
-  looked and found none. The recording lane is that lane today: it asserts each
-  extract step as it runs and keeps no per-step measurement, so `week1` states
-  extraction for the Flow lane alone. One rule governs every rate: a step that
+  looked and found none. The recording lane is that lane in a **bench** today,
+  though no longer in a single run: `lab run` publishes one measurement per
+  extract step in the run's `evaluation.json`, read from FluxIQ's own
+  extraction, but the bench builds its recording-lane observation from
+  `run.json` (`benchRecordingObservation`), which carries no measurement, so it
+  still states `null` and `week1` states an extraction block for the Flow lane
+  alone. One rule governs every rate: a step that
   could not judge something enters no rate for it, and a rate whose population
   is empty publishes `rate: null`, printed as `n/a`.
   `extractionRecordAccuracy` is pooled over the steps whose expectation listed
