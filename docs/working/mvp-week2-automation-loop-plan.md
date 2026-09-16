@@ -98,19 +98,26 @@ packet no longer describes selectors to the model, asserted on the serialized
 payload with an exhaustive key allowlist. **Phase P** — every endpoint declares
 whether it destroys, and omitting or misspelling that is a compile error.
 
-**Phase P is committed but deliberately NOT pushed.** Making
-`review-flow-adaptation` authoring leaves a stale assertion at
-`AS/runtime/tests/service-flow-bootstrap-adaptation.test.ts:383` still expecting
-a PIN. `AGENTS.md` forbids pushing a unit that includes something known to be
-broken, and the worker owning that file is correcting it.
+**Phase D** — success is constructible only from an executed-and-compared run,
+with a third vacuous path found beyond the two the plan named, and
+`edit_recovery` failing closed rather than reporting a repair that never
+happened. **Phase H** — a registry of harness options and Core's first neutral
+ones. **Phase S** — a fixed order of work a domain extends but cannot reorder,
+and Core's sanitizers no longer carrying browser nouns. **Phase 2.1** — the
+recovery context, which records what was withheld and why. All of it is pushed
+in both repositories.
 
-**In progress:** Phase D (the five fixes); Phase H (the harness registry, which
-Phase T unblocked); the picker's last one-ended seams; and the Phase P fallout —
-the two hierarchy endpoints reclassified to authoring, and the Data window
-taught to collect a PIN rather than routing around the gate.
+**In progress:** Phase 2.2 (diagnosis separated from exploration, and the first
+caller to drive Phase S's stages) and the Lab's Flow-lane extraction judging.
 
-**Not started:** Phase S (the stage protocol, which follows H) and the loop
-phases 2.1-2.9.
+**Not started:** loop phases 2.3-2.9.
+
+**Deferred, not forgotten:** `deniedEvidenceKeys` is optional on Core's binding,
+and `context-packet.ts:81` defaults a missing declaration to deny nothing — the
+same silent-no-protection shape this plan keeps finding. It should be required
+and should fail closed. It waits only because Phase 2.2 is mid-edit in two of
+the three files it touches, and forcing an all-or-nothing change into an active
+file is what broke the build during Phase P.
 
 **Concurrency is five workers, not nine.** Both crashes happened with nine heavy
 workers running on a machine with a known memory fault, so this is recorded as a
@@ -515,6 +522,53 @@ Recorded at dispatch on 2026-09-15, before the three investigations above.
 - Report to: `F:\!FluxIQWebExtension\docs\working\mvp-week2-automation-loop-plan\reports\w2-scope-repair-reuse.md`
 
 ## Work Ledger
+
+### 2026-09-15 — Stage protocol, de-webbed sanitizers, and the test split
+- Agent: supervisor; workers `s-stage-protocol`, `w2-test-split`, `h-harness-registry`
+- Changed: Core `AS/runtime/llm/stages/**` (new), `llm/harness/**`,
+  `deepseek-provider.ts`, `evidence-loop.ts`, `service.ts`,
+  `AS/runtime/tests/**` (split into four subject subfolders),
+  `.structure-baseline.json`; downstream `domain/src/runtime/llm-evidence/tools.ts`
+- Why: L15 (a fixed order of work the domain extends but cannot reorder), the
+  last of Phase T's leftovers (Core's sanitizers carried web nouns), and the
+  runtime test directory sitting at exactly its 25-file budget, which blocked
+  every remaining loop phase from adding a test
+- Validation: the supervisor ran each itself. Core `npx tsc --noEmit` -> exit 0.
+  `vitest run .../runtime/llm --no-file-parallelism` -> "Test Files 12 passed",
+  "Tests 127 passed". `vitest run .../runtime/tests/service.test.ts` -> 108
+  passed. Full `vitest run .../runtime` after the split -> "Test Files 84
+  passed", "Tests 726 passed", no timeouts. `node domain/scripts/test-domain.mjs`
+  -> 490 passed. Both structure audits pass
+- Outcome: Accepted
+- **Three pushes of mine were defective and each was caught by a worker reading
+  the result, not by me.** A broad `git add` of a *directory* swept another
+  phase's in-flight files three separate times; the third left HEAD unable to
+  build from a clean checkout, because a swept file imported a directory that
+  was still untracked. It compiled locally only because the directory existed in
+  a working tree. Staging explicit file paths prevents this; a directory
+  argument does not, because it takes whatever happens to be inside it
+- The de-webbing had a real interim cost, recorded because it is the kind of
+  thing that gets forgotten: Core stopped refusing `html`, `cookies` and the
+  rest by name before anything passed the domain's declaration, so raw page
+  payload could reach the provider on that path. Closed by wiring three
+  `service.ts` sites and the domain's declaration
+- Two deliberate choices in that list: `snapshot` is no longer denied, because
+  it is Core's own noun and Core's own state-snapshot option produces one — the
+  nested `html` is what is refused. `selector` is denied, because it is the
+  domain's word for a target and stopped being Core's business when the repair
+  target became opaque
+- **Still to do, deferred rather than forgotten:** `deniedEvidenceKeys` is
+  optional on Core's binding, and `context-packet.ts:81` defaults a missing
+  declaration to `[]` — deny nothing. That is the same silent-no-protection
+  shape this plan keeps finding, so the field should be required and the default
+  should fail closed. Deferred because it breaks nine call sites across three
+  files and Phase 2.2 is mid-edit in two of them; forcing an all-or-nothing
+  change into an active file is what broke the build during Phase P
+- The test split raised per-test contention and pushed two 10,000-item cases
+  past the suite's 15s timeout. They now carry their own 60s budget: raising the
+  global one would blunt a hang-detector for 700-odd tests to accommodate two,
+  and those two assert their own speed explicitly (under 500ms per page and
+  search), so the timeout was never what held performance honest
 
 ### 2026-09-15 — Endpoint classification landed; two supervisor corrections
 - Agent: supervisor; workers `p-pin-classification`, `x4f-extraction-docs`
