@@ -16,11 +16,12 @@ import {
 } from "@fluxiq-web-extension/domain/client";
 import type { ClientGatewayRecordingEvent, DomElementDescriptor, JsonObject, RecordingEventPayload, WireElementTarget } from "../../shared/protocol";
 import { present } from "../../shared/present";
-import { compactObject } from "./value-readers";
+import { compactObject, objectValue } from "./value-readers";
 
 // The registered web-automation input a recorded event maps to, or undefined
 // when the event is passive evidence rather than an executable action.
 export function recordedInputId(payload: RecordingEventPayload) {
+  const extraction = recordedExtraction(payload);
   return webAutomationInputIdForRecordedEvent({
     kind: payload.kind,
     url: payload.url,
@@ -32,6 +33,11 @@ export function recordedInputId(payload: RecordingEventPayload) {
     ...(payload.key !== undefined ? { key: payload.key } : {}),
     ...(payload.scroll ? { scroll: payload.scroll } : {}),
     ...(payload.tab ? { tab: payload.tab as unknown as JsonObject } : {}),
+    // Without this the domain sees an extraction event with no definition, and
+    // `webAutomationRecordedExtraction` refuses it -- so the one recorded event
+    // that maps to `web.dom.extract_list` would stay passive evidence and no
+    // Flow would ever hold an extraction.
+    ...(extraction !== undefined ? { extraction } : {}),
     ...(payload.metadata ? { metadata: payload.metadata } : {})
   });
 }
@@ -53,6 +59,7 @@ export function recordingEvidencePayload(payload: RecordingEventPayload): JsonOb
     mutation: payload.mutation as unknown as JsonObject,
     actionResult: payload.actionResult as unknown as JsonObject,
     tab: payload.tab as unknown as JsonObject,
+    extraction: extractionEvidence(payload),
     metadata: payload.metadata
   }) as JsonObject;
 }
@@ -75,6 +82,10 @@ export function gatewayRecordingEventFromPayload(payload: RecordingEventPayload,
     mutation: payload.mutation as unknown as JsonObject,
     actionResult: payload.actionResult ? webAutomationActionResultPayload(payload.actionResult as never) : undefined,
     tab: payload.tab,
+    // Passed whole because `createWebAutomationRecordingEvent` rebuilds it field
+    // by field through `webAutomationRecordedExtraction`, which is where the
+    // "no sample value, no unknown key" rule (D3) is enforced once.
+    extraction: recordedExtraction(payload),
     metadata: inputId === undefined
       ? payload.metadata
       : { ...(payload.metadata ?? {}), inputId, ...(visualTarget ? { visualTarget: visualTarget as unknown as JsonObject } : {}) }
@@ -148,6 +159,36 @@ function elementTarget(element: DomElementDescriptor): JsonObject {
     implicitRole: element.implicitRole,
     context: element.context
   }) as unknown as JsonObject;
+}
+
+/** The definition a recorded extraction carries, as the picker sent it and before the domain rebuilds it. */
+function recordedExtraction(payload: RecordingEventPayload): JsonObject | undefined {
+  return objectValue(payload.extraction) as JsonObject | undefined;
+}
+
+/**
+ * What the activity log is told about an extraction: its form, how many columns
+ * it declares, and how many items the list held. Counts and a fixed word.
+ *
+ * The evidence payload is the passive half of the recording -- it is stored and
+ * shown without ever being rebuilt by the domain's reader -- so the definition
+ * is *not* passed through here. A label the user typed, a selector and a field
+ * key are structure rather than page values, but none of them tells a person
+ * reading the activity log anything the three counts do not, and projecting
+ * instead of copying means a producer that later puts a sample row beside the
+ * definition cannot get it into this payload (D3, D12).
+ */
+function extractionEvidence(payload: RecordingEventPayload): JsonObject | undefined {
+  const extraction = recordedExtraction(payload);
+  if (extraction === undefined) return undefined;
+  const form = extraction.form === "list" || extraction.form === "value" ? extraction.form : undefined;
+  if (form === undefined) return undefined;
+  const fields = objectValue(objectValue(extraction.request)?.fields);
+  return compactObject({
+    form,
+    fieldCount: fields === undefined ? undefined : Object.keys(fields).length,
+    itemCount: typeof extraction.itemCount === "number" ? extraction.itemCount : undefined
+  }) as JsonObject;
 }
 
 function visualTargetFromPayload(payload: RecordingEventPayload) {

@@ -273,3 +273,169 @@ evidence payload gets three counts and no selector, label or row.
    specified the confirm refusal. The panel's Extract data button lives in
    `recorderView`, so a pick outside a recording should not be reachable
    anyway. Say so if it should be refused earlier.
+
+---
+
+# Follow-up: the scaled extraction timeout, and one copy of the control-page check
+
+Both items the coordinator returned are done. The payload-contract item needed
+no work: my call stands, and I left my local declaration alone for the
+content-picker worker to merge.
+
+## 1. The 60-second timeout is fixed, and the domain now exports what it owns
+
+`domain/src/actions/types.ts` now re-exports the four extraction readers that
+`domain/client` could not reach, not just the one I needed:
+`isWebAutomationExtractFieldKey`, `webAutomationExtractListRequestValue`,
+`webAutomationExtractListTimeoutMs` and `webAutomationRecordedExtraction`.
+
+No cycle is introduced. `actions/types.ts` already had a runtime edge to that
+directory (`WEB_AUTOMATION_EXTRACT_MAX_ITEMS` and
+`WEB_AUTOMATION_EXTRACT_MAX_PAGES` come through it), and `actions/extraction/`
+imports this module type-only, which is erased. The domain suite is identical
+with and without the block; the measurement is below.
+
+`background/extraction/confirm.ts` now asks the domain for the budget:
+`timeoutMs: options.timeoutMs ?? webAutomationExtractListTimeoutMs(request)`.
+The flat `EXTRACTION_RUN_TIMEOUT_MS = 60_000` is gone. Nothing is
+reimplemented — the scaling stays the domain's one definition, which is also
+the number the recorded node declares, so the read the worker runs now and the
+read a replayed Flow runs later share a single figure. An explicit `timeoutMs`
+on the test seam still wins, so the Lab can bound a measurement.
+
+What this changes in practice: a 20-page `loadMore` read used to get 60,000 ms
+and be cut off mid-read with nothing in the panel explaining why; it now gets
+200,000 ms. The page waits up to 10,000 ms per page, so the budget is 10,000 ms
+times the pages the request may follow (`maxScrolls` for `scroll`), capped by
+the domain's own 50-page bound.
+
+Two new tests, both passing:
+
+- `a paginated read gets a budget scaled by the pages it may follow, not a flat ceiling`
+  confirms an unpaginated read, a 5-page `next` read and a 20-page `loadMore`
+  read, reads `timeoutMs` off the command the runner actually received, asserts
+  each equals `webAutomationExtractListTimeoutMs` for the same request, asserts
+  five pages gets strictly more than one, and asserts the 20-page read exceeds
+  60,000 ms — that last row is the regression guard for the defect itself.
+- `a caller that names its own timeout keeps it` pins the test seam's override.
+
+I also removed the restated field-key pattern from the test. It now asks
+`isWebAutomationExtractFieldKey` directly, which is the point of exporting it.
+
+## 2. `isControlPage` exists once
+
+New `apps/extension/src/background/control-page.ts` holds it.
+`scripted-navigation-control.ts` and `background/extraction/control.ts` both
+import it and their local copies are gone; the only edit to the
+scripted-navigation file is the import and the deletion, with no behaviour
+change.
+
+**The two predicates were true duplicates** — character-for-character identical,
+because I had copied the original verbatim. Nothing differed, so nothing had to
+be reconciled and there was nothing to stop and report.
+
+The shared file documents why each of the three conditions is there, since that
+is the part a future tightening could get wrong: the extension id (another
+extension's messages arrive the same way), the `typeof sender.url === "string"`
+guard (an absent URL would otherwise compare equal to an absent URL), and the
+exact-URL comparison rather than a prefix or origin test (every page this
+extension serves shares the origin, and a prefix would accept
+`popup/index.html.evil`).
+
+Both call sites keep their existing coverage:
+`scripted-navigation-control.test.ts` still proves a content sender, another
+extension and a non-control extension page are refused, and
+`extraction-control.test.ts` proves the same across all five extraction
+messages.
+
+## Commands run and observed results
+
+1. `pnpm --filter @fluxiq-web-extension/extension check`
+
+   ```
+   > tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json
+   ../../domain/src/runtime/llm-evidence/target-override.ts(87,36): error TS2339: Property 'handles' does not exist on type 'AutomationStudioRuntimeTargetOverrideTarget'.
+   ../../domain/src/runtime/llm-evidence/target-override.ts(157,3): error TS2322: Type 'WebResolvedRepairTarget' is not assignable to type 'AutomationStudioRuntimeTargetOverrideTarget'.
+     Property 'selector' is optional in type 'WebResolvedRepairTarget' but required in type 'AutomationStudioRuntimeTargetOverrideTarget'.
+   Exit status 2
+   ```
+
+   **Not green, and none of it is mine.** Every diagnostic is in
+   `domain/src/runtime/llm-evidence/target-override.ts`, which another worker has
+   uncommitted and in flight (`tools.ts`, `index.ts` and a new
+   `repairable-parameters.ts` are modified beside it, and the sibling Core
+   checkout has a large uncommitted tree). The errors name a `handles` property
+   on Core's `AutomationStudioRuntimeTargetOverrideTarget` that Core has not
+   grown yet. Every errored line is a `+` line in their working diff. The error
+   list also changed between two runs minutes apart, which is what a file being
+   edited under you looks like. Zero diagnostics name any file I touched.
+
+   `pnpm --filter @fluxiq-web-extension/domain check` reports the same errors and
+   nothing else, which locates them in the domain package rather than in anything
+   I changed there.
+
+2. `EXTENSION_TEST_BUILD_LABEL=x4c-background-control node scripts/test-extension.mjs`
+   (in `apps/extension`)
+
+   ```
+   1..621
+   # tests 621
+   # pass 621
+   # fail 0
+   ```
+
+   The two new rows, by name and number in that run:
+
+   - 234 a paginated read gets a budget scaled by the pages it may follow, not a flat ceiling
+   - 235 a caller that names its own timeout keeps it
+
+3. `pnpm --filter @fluxiq-web-extension/domain test`, run twice to prove the
+   re-export is neutral — once with my block removed, once with it restored:
+
+   ```
+   # tests 472    # pass 469    # fail 3      (block removed)
+   # tests 472    # pass 469    # fail 3      (block restored)
+   ```
+
+   Identical, and the three failures are the same three names both times:
+   `validates target overrides only when one exact selector has semantics
+   compatible with the failed action`, `matches a child-frame target on the
+   selector that works inside its frame`, and `binds from the production host
+   seam and selects the sole trusted web client without requiring stale pairing
+   project metadata`. All three live in `runtime/llm-evidence/tests/`, the same
+   in-flight area as the type errors, and all three fail the same way
+   (`status: 'absent'` where `'matched'` was expected). They are not mine and
+   they pre-date my edit.
+
+4. `node scripts/structure-audit.mjs`, with everything staged
+
+   ```
+   FAIL  [working-docs] docs/working/README.md is out of date with the documents' header blocks. Run "pnpm structure:baseline" to regenerate it.
+   structure-audit: 1 violation(s) across 1 rule(s).
+   ```
+
+   **This one is yours, not mine, and I could not fix it.** It is the generated
+   working-document index, and it went stale when commit `f7374ef` changed the
+   working documents' headers. I staged no file under `docs/` and edited no
+   working document beyond appending to this report, which lives in `reports/`
+   and is not indexed. `pnpm structure:baseline` regenerates it. The audit passed
+   cleanly on my last run before that commit.
+
+   Two advisory warnings name files of mine, neither a violation:
+   `extraction-control.test.ts` at 548 lines and `domain/src/actions/types.ts` at
+   483, both past the 400-line advisory threshold and well under the 800-line
+   limit. `actions/types.ts` was already over it before I touched it.
+
+## Not verified
+
+- **Still no browser.** The scaled timeout is asserted on the command object the
+  stubbed runner receives; no real page has been given 200,000 ms to read twenty
+  pages. The number is right by construction — it is the same function the
+  recorded node declares — but the end-to-end behaviour is X4.4's manual list.
+- **The repository-wide `pnpm check` and `pnpm test` still do not pass**, for the
+  other worker's reason above. I did not run `pnpm build`.
+- **One edit to a file I own arrived mid-task from elsewhere.**
+  `session-store.ts` gained an expanded comment on `previewKey` describing the
+  exclusion behaviour while I worked. It is documentation only, it matches what I
+  reported in open question 2, and I kept it; the suite passes against the
+  on-disk version.

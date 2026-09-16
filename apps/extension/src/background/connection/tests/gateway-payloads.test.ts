@@ -305,3 +305,60 @@ test("a recorded tab switch or close maps to its input and crosses carrying its 
   assert.equal((event.metadata as { inputId?: unknown }).inputId, WEB_AUTOMATION_INPUT_IDS.tabSwitched);
   assert.deepEqual(recordingEvidencePayload(closed).tab, { operation: "close" });
 });
+
+// --- A recorded extraction (X4) ---------------------------------------------
+//
+// The definition the picker recorded has to cross whole, because the domain
+// rebuilds it field by field on the far side and refuses the event outright
+// when it is missing -- the one recorded event that becomes a
+// `web.dom.extract_list` node would otherwise stay passive evidence forever.
+// The evidence payload is the opposite: it is stored without ever being
+// rebuilt, so it gets three counts and nothing else.
+
+const productExtraction = {
+  form: "list",
+  datasetId: "product-catalog:9f2c1a7b",
+  label: "Product catalog",
+  itemCount: 8,
+  fieldLabels: { product_name: "Product name", price: "Price", card_number: "Card number" },
+  request: {
+    item: "ul.products > li",
+    fields: {
+      product_name: { kind: "text", selector: ".name" },
+      price: { kind: "text", selector: ".price" },
+      card_number: { kind: "text", selector: ".card", handling: "exclude" }
+    }
+  }
+};
+
+/** A recorded extraction, with the definition as the picker sent it: a literal is not the domain's union until the reader has rebuilt it. */
+function recordedExtractionEvent(extraction: unknown): RecordingEventPayload {
+  return { ...recorded("data.extract"), extraction } as unknown as RecordingEventPayload;
+}
+
+test("a recorded extraction maps to the data-extraction input and crosses carrying its definition", () => {
+  const payload = recordedExtractionEvent(productExtraction);
+  assert.equal(recordedInputId(payload), WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined);
+
+  const event = gatewayRecordingEventFromPayload(payload, 7, 0, "rec-1");
+  assert.equal(event.eventType, WEB_AUTOMATION_EVENTS.dataExtractionDefined);
+  assert.equal((event.metadata as { inputId?: unknown }).inputId, WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined);
+  const crossed = (event.payload as { extraction?: { datasetId: string; request: { fields: Record<string, unknown> } } }).extraction;
+  assert.equal(crossed?.datasetId, "product-catalog:9f2c1a7b");
+  assert.deepEqual(Object.keys(crossed?.request.fields ?? {}), ["product_name", "price", "card_number"]);
+});
+
+test("a definition the domain refuses stays evidence, and carries nothing", () => {
+  const refused = recordedExtractionEvent({ ...productExtraction, request: { item: "ul.products > li", fields: {} } });
+  assert.equal(recordedInputId(refused), undefined);
+  assert.equal((gatewayRecordingEventFromPayload(refused).payload as { extraction?: unknown }).extraction, undefined);
+  assert.equal(recordedInputId(recordedExtractionEvent(undefined)), undefined, "an extraction event with no definition");
+});
+
+test("the evidence payload is told three counts, and no selector, label or sample row", () => {
+  const evidence = recordingEvidencePayload(recordedExtractionEvent(productExtraction));
+  assert.deepEqual(evidence.extraction, { form: "list", fieldCount: 3, itemCount: 8 });
+  assert.equal(JSON.stringify(evidence).includes("ul.products"), false, "no selector");
+  assert.equal(JSON.stringify(evidence).includes("Product name"), false, "no column label");
+  assert.equal(recordingEvidencePayload(recorded("dom.click", { element: button })).extraction, undefined);
+});

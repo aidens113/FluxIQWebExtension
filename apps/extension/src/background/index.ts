@@ -6,6 +6,7 @@ import { describeTab } from "./tabs";
 import { clearSession, readOrCreateClientId, readQueuedEvents, readSession, readSettings, writeSession, writeSettings } from "./storage";
 import { acceptActionEvidencePort } from "./action-evidence";
 import { handleScriptedNavigationControl } from "./scripted-navigation-control";
+import { clearExtractionTab, handleExtractionControl } from "./extraction";
 
 let connection: FluxIQConnection | undefined;
 
@@ -59,11 +60,16 @@ chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
+  clearExtractionTab(tabId);
   void getConnection().then((manager) => manager.handleTabRemoved(tabId));
 });
 
 chrome.webNavigation.onCommitted.addListener((details) => {
   if (details.frameId !== 0) return;
+  // The proposal's selectors were written against the document that just went
+  // away, so the pick session goes with it rather than confirming against a
+  // page it never saw.
+  clearExtractionTab(details.tabId);
   void getConnection().then((manager) => manager.handleNavigationCommitted(details));
 });
 
@@ -87,6 +93,9 @@ async function handleRuntimeMessage(message: unknown, sender: chrome.runtime.Mes
 
   const scriptedNavigation = await handleScriptedNavigationControl(typed, sender, manager);
   if (scriptedNavigation.handled) return scriptedNavigation.response;
+
+  const extraction = await handleExtractionControl(typed, sender, manager);
+  if (extraction.handled) return extraction.response;
 
   if (typed.type === RUNTIME_MESSAGES.getStatus) {
     return { ok: true, status: await statusWithQueue(manager) };
