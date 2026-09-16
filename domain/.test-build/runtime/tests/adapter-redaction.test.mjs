@@ -603,7 +603,7 @@ var outputPorts = [
   { id: "failed", label: "Failed", valueType: "any", role: "failure" }
 ];
 var recordsPathByOutput = {
-  "web.dom.extract_list": "extracted"
+  "web.dom.extract_list": "result.extracted"
 };
 var expectedStateParameter = {
   id: "expectedState",

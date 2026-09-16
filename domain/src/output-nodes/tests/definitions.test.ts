@@ -167,7 +167,15 @@ test("the list extraction tells Core where its records are, and no other node cl
   // path from the output's `metadata.recordsPath` (Core CD19), rejecting a
   // candidate with none. Core never hard-codes `extracted`, so without this key
   // a recorded list extraction cannot become a node that saves its records.
-  assert.equal(nodeFor("web.dom.extract_list").metadata?.recordsPath, "extracted");
+  //
+  // Two segments, and the second is this domain's word. The dispatch answers
+  // `{ status, message, result }` with the client's action result under
+  // `result` (`io/gateway-output-dispatcher.ts`, carried through by
+  // `runtime/adapter.ts`), and Core puts that whole object at `outputs.result`.
+  // A one-segment path read `outputs.result.extracted`, which is never an
+  // array, and the first recorded extraction to reach the capture failed at
+  // `record_output.records_missing` having saved nothing.
+  assert.equal(nodeFor("web.dom.extract_list").metadata?.recordsPath, "result.extracted");
   // `web.dom.extract` answers on `extracted` too, but with one value rather than
   // a list, so a default path there could never capture anything.
   const declared = WEB_AUTOMATION_ACTION_TYPES.filter((outputId) => nodeFor(outputId).metadata?.recordsPath !== undefined);

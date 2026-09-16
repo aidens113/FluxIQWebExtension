@@ -132,6 +132,26 @@ const OUTPUT_FOR_ACTION_INPUT = new Map<WebAutomationInputId, WebAutomationActio
   actionInputDefinitions.map(([inputId, , outputId]): [WebAutomationInputId, WebAutomationActionType] => [inputId, outputId])
 );
 
+/**
+ * Whether the recording keeps this input's own event beside the command its
+ * binding derives (Core `InputOutputBinding.recordInputPayload`, which puts it
+ * on the action entry's `metadata.inputPayload`).
+ *
+ * One input needs it. Every other action input's command is everything the
+ * event carried: a click's target, a key, a URL. `web.dom.extract_list` carries
+ * the runnable request alone, and the picker's definition is more than that --
+ * the dataset it saves into, the name the user gave it, and the label of each
+ * column they kept or excluded. Without the event, the recording mapper cannot
+ * propose that dataset, so Core falls back to the command and an approved Flow
+ * reads the page and stores nothing.
+ *
+ * Safe to keep verbatim because `webAutomationRecordedExtraction` has already
+ * refused any sample value or unknown key on the definition (D3, D12).
+ */
+export function webAutomationRecordsInputPayload(inputId: string): boolean {
+  return inputId === WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined;
+}
+
 /** A navigation that only records where the recording began is not a user action. */
 const RECORDING_START_REASON = "recording_start";
 

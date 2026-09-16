@@ -428,7 +428,7 @@ var outputPorts = [
   { id: "failed", label: "Failed", valueType: "any", role: "failure" }
 ];
 var recordsPathByOutput = {
-  "web.dom.extract_list": "extracted"
+  "web.dom.extract_list": "result.extracted"
 };
 var expectedStateParameter = {
   id: "expectedState",
@@ -679,7 +679,7 @@ test("element targeting is declared by exactly the actions that cannot run witho
   }
 });
 test("the list extraction tells Core where its records are, and no other node claims to return records", () => {
-  assert.equal(nodeFor("web.dom.extract_list").metadata?.recordsPath, "extracted");
+  assert.equal(nodeFor("web.dom.extract_list").metadata?.recordsPath, "result.extracted");
   const declared = WEB_AUTOMATION_ACTION_TYPES.filter((outputId) => nodeFor(outputId).metadata?.recordsPath !== void 0);
   assert.deepEqual(declared, ["web.dom.extract_list"]);
 });

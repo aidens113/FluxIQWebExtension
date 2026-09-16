@@ -427,7 +427,7 @@ var outputPorts = [
   { id: "failed", label: "Failed", valueType: "any", role: "failure" }
 ];
 var recordsPathByOutput = {
-  "web.dom.extract_list": "extracted"
+  "web.dom.extract_list": "result.extracted"
 };
 var expectedStateParameter = {
   id: "expectedState",
@@ -656,7 +656,7 @@ var ELEMENT_TARGETED_OUTPUTS = [
   "web.dom.wait_for_selector"
 ];
 var RECORD_OUTPUTS = {
-  "web.dom.extract_list": "extracted"
+  "web.dom.extract_list": "result.extracted"
 };
 function manifestOutput(outputId) {
   const output = webAutomationManifestOutputs.find((candidate) => candidate.id === outputId);
@@ -707,7 +707,7 @@ test("every element-targeted output carries the safety level Core turns into a c
   }
 });
 test("the extract_list output Core reads declares where its records are, and no other output does", () => {
-  assert.deepEqual(manifestOutput("web.dom.extract_list").metadata, { recordsPath: "extracted" });
+  assert.deepEqual(manifestOutput("web.dom.extract_list").metadata, { recordsPath: "result.extracted" });
   for (const outputId of WEB_AUTOMATION_ACTION_TYPES) {
     assert.equal(manifestOutput(outputId).metadata?.recordsPath, RECORD_OUTPUTS[outputId], `${outputId}: records path Core reads`);
   }

@@ -10,6 +10,7 @@ import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionType } from "../ac
 import {
   actionInputDefinitions,
   stateInputDefinitions,
+  webAutomationRecordsInputPayload,
   type WebAutomationRecordedInputPayload
 } from "./input-model";
 import { webAutomationManifestInputs, webAutomationManifestOutputs } from "./manifest-definitions";
@@ -35,7 +36,11 @@ export function createWebAutomationDomainIo(fluxiq: FluxIQ): DomainIoRegistratio
         definition: { id, title, role: "action", outputId },
         mode: "stream",
         subscribe: (handler) => liveInputs.subscribe(id, handler),
-        outputBinding: { outputId, toPayload: (event) => webAutomationOutputPayload(outputId, event.payload) }
+        outputBinding: {
+          outputId,
+          toPayload: (event) => webAutomationOutputPayload(outputId, event.payload),
+          ...(webAutomationRecordsInputPayload(id) ? { recordInputPayload: true } : {})
+        }
       }))
     ],
     outputs: WEB_AUTOMATION_ACTION_TYPES.map((outputId) => defineOutput({

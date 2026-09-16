@@ -38,9 +38,11 @@ const ELEMENT_TARGETED_OUTPUTS: readonly WebAutomationActionType[] = [
 ];
 
 // Restated by hand for the same reason: the path Core reads records at when it
-// lifts a recorded extraction into a node that saves them.
+// lifts a recorded extraction into a node that saves them. Two segments: the
+// dispatch answers `{ status, message, result }` with the client's action
+// result under `result`, and Core puts that whole object at `outputs.result`.
 const RECORD_OUTPUTS: Readonly<Partial<Record<WebAutomationActionType, string>>> = {
-  "web.dom.extract_list": "extracted"
+  "web.dom.extract_list": "result.extracted"
 };
 
 function manifestOutput(outputId: WebAutomationActionType) {
@@ -119,7 +121,7 @@ test("the extract_list output Core reads declares where its records are, and no 
   // `io.getOutput(domainId, outputId)?.definition.metadata?.recordsPath` and
   // rejects the candidate when it is absent. `extract_list` has no element
   // target, so the records path is the whole of its metadata.
-  assert.deepEqual(manifestOutput("web.dom.extract_list").metadata, { recordsPath: "extracted" });
+  assert.deepEqual(manifestOutput("web.dom.extract_list").metadata, { recordsPath: "result.extracted" });
   for (const outputId of WEB_AUTOMATION_ACTION_TYPES) {
     assert.equal(manifestOutput(outputId).metadata?.recordsPath, RECORD_OUTPUTS[outputId], `${outputId}: records path Core reads`);
   }

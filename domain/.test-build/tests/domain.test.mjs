@@ -753,7 +753,7 @@ var outputPorts = [
   { id: "failed", label: "Failed", valueType: "any", role: "failure" }
 ];
 var recordsPathByOutput = {
-  "web.dom.extract_list": "extracted"
+  "web.dom.extract_list": "result.extracted"
 };
 var expectedStateParameter = {
   id: "expectedState",
@@ -1195,6 +1195,9 @@ var actionInputDefinitions = [
 var OUTPUT_FOR_ACTION_INPUT = new Map(
   actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
 );
+function webAutomationRecordsInputPayload(inputId) {
+  return inputId === WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined;
+}
 var RECORDING_START_REASON = "recording_start";
 function recordedActionInputId(eventType, payload, metadata) {
   switch (eventType) {
@@ -1449,7 +1452,11 @@ function createWebAutomationDomainIo(fluxiq2) {
         definition: { id, title, role: "action", outputId },
         mode: "stream",
         subscribe: (handler) => liveInputs.subscribe(id, handler),
-        outputBinding: { outputId, toPayload: (event3) => webAutomationOutputPayload(outputId, event3.payload) }
+        outputBinding: {
+          outputId,
+          toPayload: (event3) => webAutomationOutputPayload(outputId, event3.payload),
+          ...webAutomationRecordsInputPayload(id) ? { recordInputPayload: true } : {}
+        }
       }))
     ],
     outputs: WEB_AUTOMATION_ACTION_TYPES.map((outputId) => defineOutput({
@@ -4390,7 +4397,7 @@ var CANDIDATE_LABELS = {
 function mapWebRecordingObservation(observation, context) {
   const step = recordedStep(observation);
   const action = webAutomationRecordedAction(step.eventType, step.payload, step.metadata);
-  if (!action) return linkedClickEntry(observation, context?.following ?? []) ?? webAutomationLateTargetWait(step, (context?.following ?? []).map(recordedStep)) ?? null;
+  if (!action) return recordedExtractionEntry(observation) ?? linkedClickEntry(observation, context?.following ?? []) ?? webAutomationLateTargetWait(step, (context?.following ?? []).map(recordedStep)) ?? null;
   if (action.inputId === WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined) return extractionCandidate(action, step.payload);
   const expectedState = action.outputId === "web.dom.click" ? webAutomationClickLandingExpectation(step, (context?.following ?? []).map(recordedStep)) : void 0;
   return candidate(action.outputId, action.parameters, action.inputId, CANDIDATE_LABELS[action.outputId] ?? action.outputId, expectedState);
@@ -4448,6 +4455,17 @@ function linkedClickEntry(observation, following) {
     confidence: 0.95,
     label: FALLBACK_CLICK_LABEL
   };
+}
+function recordedExtractionEntry(observation) {
+  if (observation.type !== "action" || observation.metadata.policyEligible === false) return void 0;
+  const inputId = nonBlankString(observation.metadata.inputId);
+  if (inputId === void 0 || !webAutomationRecordsInputPayload(inputId)) return void 0;
+  const payload = readObject(observation.metadata.inputPayload);
+  if (payload === void 0) return void 0;
+  const metadata = { ...readObject(payload.metadata) ?? {}, ...observation.metadata };
+  const action = webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.dataExtractionDefined, payload, metadata);
+  if (action?.inputId !== WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined) return void 0;
+  return extractionCandidate(action, payload);
 }
 function storedStep(observation) {
   if (observation.type !== "domain_event") return recordedStep(observation);

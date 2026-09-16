@@ -723,7 +723,7 @@ var outputPorts = [
   { id: "failed", label: "Failed", valueType: "any", role: "failure" }
 ];
 var recordsPathByOutput = {
-  "web.dom.extract_list": "extracted"
+  "web.dom.extract_list": "result.extracted"
 };
 var expectedStateParameter = {
   id: "expectedState",
@@ -1152,6 +1152,9 @@ var actionInputDefinitions = [
 var OUTPUT_FOR_ACTION_INPUT = new Map(
   actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
 );
+function webAutomationRecordsInputPayload(inputId) {
+  return inputId === WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined;
+}
 var RECORDING_START_REASON = "recording_start";
 function recordedActionInputId(eventType, payload, metadata) {
   switch (eventType) {
@@ -2817,7 +2820,7 @@ var CANDIDATE_LABELS = {
 function mapWebRecordingObservation(observation, context) {
   const step = recordedStep(observation);
   const action = webAutomationRecordedAction(step.eventType, step.payload, step.metadata);
-  if (!action) return linkedClickEntry(observation, context?.following ?? []) ?? webAutomationLateTargetWait(step, (context?.following ?? []).map(recordedStep)) ?? null;
+  if (!action) return recordedExtractionEntry(observation) ?? linkedClickEntry(observation, context?.following ?? []) ?? webAutomationLateTargetWait(step, (context?.following ?? []).map(recordedStep)) ?? null;
   if (action.inputId === WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined) return extractionCandidate(action, step.payload);
   const expectedState = action.outputId === "web.dom.click" ? webAutomationClickLandingExpectation(step, (context?.following ?? []).map(recordedStep)) : void 0;
   return candidate(action.outputId, action.parameters, action.inputId, CANDIDATE_LABELS[action.outputId] ?? action.outputId, expectedState);
@@ -2876,6 +2879,17 @@ function linkedClickEntry(observation, following) {
     label: FALLBACK_CLICK_LABEL
   };
 }
+function recordedExtractionEntry(observation) {
+  if (observation.type !== "action" || observation.metadata.policyEligible === false) return void 0;
+  const inputId = nonBlankString(observation.metadata.inputId);
+  if (inputId === void 0 || !webAutomationRecordsInputPayload(inputId)) return void 0;
+  const payload = readObject(observation.metadata.inputPayload);
+  if (payload === void 0) return void 0;
+  const metadata = { ...readObject(payload.metadata) ?? {}, ...observation.metadata };
+  const action = webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.dataExtractionDefined, payload, metadata);
+  if (action?.inputId !== WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined) return void 0;
+  return extractionCandidate(action, payload);
+}
 function storedStep(observation) {
   if (observation.type !== "domain_event") return recordedStep(observation);
   const payload = readObject(readObject(observation.payload.payload)?.payload) ?? {};
@@ -2906,7 +2920,7 @@ async function recordThroughCore(sent) {
   const io = new IoRegistry();
   for (const definition of webAutomationManifestInputs) {
     const outputId = "outputId" in definition ? definition.outputId : void 0;
-    io.registerInput(WEB_AUTOMATION_DOMAIN_ID, { definition, mode: "stream", subscribe: () => () => void 0, ...typeof outputId === "string" ? { outputBinding: { outputId, toPayload: (event2) => webAutomationOutputPayload(outputId, event2.payload) } } : {} });
+    io.registerInput(WEB_AUTOMATION_DOMAIN_ID, { definition, mode: "stream", subscribe: () => () => void 0, ...typeof outputId === "string" ? { outputBinding: { outputId, toPayload: (event2) => webAutomationOutputPayload(outputId, event2.payload), ...webAutomationRecordsInputPayload(definition.id) ? { recordInputPayload: true } : {} } } : {} });
   }
   for (const definition of webAutomationManifestOutputs) {
     io.registerOutput(WEB_AUTOMATION_DOMAIN_ID, { definition, mode: "request", dispatch: (request) => ({ ok: true, domainId: WEB_AUTOMATION_DOMAIN_ID, outputId: request.outputId, payload: {} }) });
@@ -3096,7 +3110,7 @@ test("a recorded list extraction proposes extract_list with a recordOutput Core 
   assert.equal(recordOutput.datasetId, "products:4f1c9a");
   assert.equal(recordOutput.writeMode, "append");
   assert.equal(recordOutput.maxRecords, 200);
-  assert.equal(recordOutput.recordsPath, "extracted", "Core resolved the path from the output definition");
+  assert.equal(recordOutput.recordsPath, "result.extracted", "Core resolved the path from the output definition");
   const fields = recordOutput.schema;
   assert.deepEqual(fields.fields.map((field) => field.id), ["name", "link", "email"]);
   for (const field of fields.fields) {
@@ -3105,6 +3119,26 @@ test("a recorded list extraction proposes extract_list with a recordOutput Core 
   assert.equal(fields.fields.find((field) => field.id === "email")?.handling, "exclude", "the excluded column persists, so detection does not propose it again (D12)");
   assert.equal(fields.fields.find((field) => field.id === "link")?.valueType, "url");
   assert.equal(JSON.stringify(candidate2).includes(EXTRACTION_SENTINEL), false, "no sample value reaches the proposal");
+});
+function withExtractionInput(event2) {
+  return { ...event2, metadata: { ...event2.metadata ?? {}, inputId: WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined } };
+}
+test("an extraction recorded through its action input proposes the same candidate as one recorded as a domain event", async () => {
+  const extraction = { ...extractionDefinition, samples: [{ name: EXTRACTION_SENTINEL }] };
+  const { web: throughInput } = await recordThroughCore([{ event: withExtractionInput(definedExtraction(extraction)) }]);
+  const { web: asDomainEvent } = await recordThroughCore([{ event: definedExtraction(extraction) }]);
+  assert.equal(throughInput.length, 1, "Core proposes the extraction once");
+  const candidate2 = throughInput[0];
+  assert.equal(candidate2.outputId, "web.dom.extract_list");
+  assert.ok(candidate2.recordOutput, "the candidate proposes the dataset the picker named, so the approved Flow stores its rows");
+  assert.equal(candidate2.timeoutMs, 3e4, "10,000 ms a page, times the 3 pages the request may read (D14)");
+  assert.equal("expectedConfirmation" in candidate2, false, "no confirmation: the extension sends none while a Flow replays, and Core fails a node whose confirmation never arrives");
+  const proposed = (candidates) => candidates.map((value) => {
+    const { actionEntryId: _entry, sourceObservationIds: _sources, evidence: _evidence, ...rest } = value;
+    return rest;
+  });
+  assert.deepEqual(proposed(throughInput), proposed(asDomainEvent), "a recording is mapped the same way however Core stored it");
+  assert.equal(JSON.stringify(throughInput).includes(EXTRACTION_SENTINEL), false, "no sample value reaches the proposal");
 });
 test("a recorded single-value extraction proposes nothing, because the product cannot define one", async () => {
   const event2 = createWebAutomationRecordingEvent(

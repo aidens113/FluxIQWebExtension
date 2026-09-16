@@ -59,7 +59,7 @@ function definition(overrides = {}) {
     ...overrides
   };
 }
-var RECORDS_PATH = "extracted";
+var RECORDS_PATH = "result.extracted";
 test("the record output is one Core's own parser accepts", () => {
   const parsed = parseAutomationStudioRecordOutput({ ...webAutomationRecordOutput(definition()), recordsPath: RECORDS_PATH });
   assert.equal(parsed.ok, true, parsed.ok ? "" : parsed.issues.join(", "));

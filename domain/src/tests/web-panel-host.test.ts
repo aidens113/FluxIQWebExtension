@@ -27,7 +27,7 @@ import { IoRegistry, createEnvelope } from "fluxiq/io";
 import { WEB_AUTOMATION_DOMAIN_ID } from "..";
 import { WEB_AUTOMATION_ACTION_TYPES } from "../actions/types";
 import { createWebAutomationRecordingEvent } from "../client";
-import { WEB_AUTOMATION_INPUT_IDS, actionInputDefinitions, webAutomationInputIdForRecordedEvent } from "../io/input-model";
+import { WEB_AUTOMATION_INPUT_IDS, actionInputDefinitions, webAutomationInputIdForRecordedEvent, webAutomationRecordsInputPayload } from "../io/input-model";
 import { webAutomationManifestInputs, webAutomationManifestOutputs } from "../io/manifest-definitions";
 import { webAutomationOutputPayload } from "../output-nodes";
 import { webAutomationRecordingDomain } from "../recording/domain";
@@ -57,7 +57,10 @@ async function recordThroughCore(sent: readonly Sent[]) {
   const io = new IoRegistry();
   for (const definition of webAutomationManifestInputs) {
     const outputId = "outputId" in definition ? definition.outputId : undefined;
-    io.registerInput(WEB_AUTOMATION_DOMAIN_ID, { definition, mode: "stream", subscribe: () => () => undefined, ...(typeof outputId === "string" ? { outputBinding: { outputId, toPayload: (event) => webAutomationOutputPayload(outputId, event.payload as JsonObject) } } : {}) });
+    // Bound exactly as `registerFluxIQHost` binds it, `recordInputPayload`
+    // included: a harness that bound it otherwise would record a different
+    // timeline from the product's and could not see what the product proposes.
+    io.registerInput(WEB_AUTOMATION_DOMAIN_ID, { definition, mode: "stream", subscribe: () => () => undefined, ...(typeof outputId === "string" ? { outputBinding: { outputId, toPayload: (event) => webAutomationOutputPayload(outputId, event.payload as JsonObject), ...(webAutomationRecordsInputPayload(definition.id) ? { recordInputPayload: true } : {}) } } : {}) });
   }
   for (const definition of webAutomationManifestOutputs) {
     io.registerOutput(WEB_AUTOMATION_DOMAIN_ID, { definition, mode: "request", dispatch: (request) => ({ ok: true, domainId: WEB_AUTOMATION_DOMAIN_ID, outputId: request.outputId, payload: {} }) });
@@ -276,7 +279,7 @@ test("a recorded list extraction proposes extract_list with a recordOutput Core 
   assert.equal(recordOutput.writeMode, "append");
   assert.equal(recordOutput.maxRecords, 200);
   // Core fills the path from the output's own metadata, so the candidate names none.
-  assert.equal(recordOutput.recordsPath, "extracted", "Core resolved the path from the output definition");
+  assert.equal(recordOutput.recordsPath, "result.extracted", "Core resolved the path from the output definition");
   const fields = recordOutput.schema as { fields: Array<{ id: string; label: string; valueType: string; required?: boolean; handling?: string }> };
   assert.deepEqual(fields.fields.map((field) => field.id), ["name", "link", "email"]);
   for (const field of fields.fields) {
@@ -285,6 +288,40 @@ test("a recorded list extraction proposes extract_list with a recordOutput Core 
   assert.equal(fields.fields.find((field) => field.id === "email")?.handling, "exclude", "the excluded column persists, so detection does not propose it again (D12)");
   assert.equal(fields.fields.find((field) => field.id === "link")?.valueType, "url");
   assert.equal(JSON.stringify(candidate).includes(EXTRACTION_SENTINEL), false, "no sample value reaches the proposal");
+});
+
+/** An extraction as the extension actually sends one: its metadata names its input (`gateway-payloads.ts`), so Core records it as an `action` entry. */
+function withExtractionInput(event: RecordingEvent): RecordingEvent {
+  return { ...event, metadata: { ...(event.metadata ?? {}), inputId: WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined } };
+}
+
+test("an extraction recorded through its action input proposes the same candidate as one recorded as a domain event", async () => {
+  // The extension names the input on every recorded extraction, so this is the
+  // only route production takes. Core stores such an event as one `action`
+  // entry holding `web.dom.extract_list` and its request; the picker's dataset,
+  // its name and its column labels survive only on `metadata.inputPayload`.
+  // Before the mapper read them, Core's generic fallback stood for the entry and
+  // proposed the command alone: `run-mu3rah46-dcac7a7e` approved that Flow,
+  // dispatched the read, and failed it at `output_confirmation.not_received`
+  // having stored no records.
+  const extraction = { ...extractionDefinition, samples: [{ name: EXTRACTION_SENTINEL }] };
+  const { web: throughInput } = await recordThroughCore([{ event: withExtractionInput(definedExtraction(extraction)) }]);
+  const { web: asDomainEvent } = await recordThroughCore([{ event: definedExtraction(extraction) }]);
+  assert.equal(throughInput.length, 1, "Core proposes the extraction once");
+  const candidate = throughInput[0] as { outputId: string; expectedConfirmation?: unknown; recordOutput?: JsonObject; timeoutMs?: number };
+  assert.equal(candidate.outputId, "web.dom.extract_list");
+  // Each of the three is what the fallback candidate got wrong.
+  assert.ok(candidate.recordOutput, "the candidate proposes the dataset the picker named, so the approved Flow stores its rows");
+  assert.equal(candidate.timeoutMs, 30_000, "10,000 ms a page, times the 3 pages the request may read (D14)");
+  assert.equal("expectedConfirmation" in candidate, false, "no confirmation: the extension sends none while a Flow replays, and Core fails a node whose confirmation never arrives");
+  // Everything but the recording's own entry ids, which differ because the two
+  // routes store a different number of entries and nothing else.
+  const proposed = (candidates: readonly unknown[]) => candidates.map((value) => {
+    const { actionEntryId: _entry, sourceObservationIds: _sources, evidence: _evidence, ...rest } = value as Record<string, unknown>;
+    return rest;
+  });
+  assert.deepEqual(proposed(throughInput), proposed(asDomainEvent), "a recording is mapped the same way however Core stored it");
+  assert.equal(JSON.stringify(throughInput).includes(EXTRACTION_SENTINEL), false, "no sample value reaches the proposal");
 });
 
 test("a recorded single-value extraction proposes nothing, because the product cannot define one", async () => {

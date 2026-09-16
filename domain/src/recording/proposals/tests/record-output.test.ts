@@ -33,7 +33,7 @@ function definition(overrides: Partial<WebAutomationRecordedListExtraction> = {}
 }
 
 /** Core resolves the path from the output's own metadata, so a candidate names none. */
-const RECORDS_PATH = "extracted";
+const RECORDS_PATH = "result.extracted";
 
 test("the record output is one Core's own parser accepts", () => {
   const parsed = parseAutomationStudioRecordOutput({ ...webAutomationRecordOutput(definition()), recordsPath: RECORDS_PATH });

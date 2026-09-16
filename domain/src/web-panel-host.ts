@@ -3,10 +3,10 @@ import { AutomationStudioNativeNodeRuntime, type AutomationStudioRecordingMapper
 import type { JsonObject } from "fluxiq/core";
 import { webAutomationExtractListTimeoutMs, webAutomationRecordedExtraction } from "./actions/extraction";
 import { WEB_AUTOMATION_ACTION_TYPES } from "./actions/types";
-import { WEB_AUTOMATION_DOMAIN_ID } from "./constants";
+import { WEB_AUTOMATION_DOMAIN_ID, WEB_AUTOMATION_EVENTS } from "./constants";
 import { GatewayInputHub } from "./io/gateway-input-hub";
 import { dispatchWebAutomationOutput } from "./io/gateway-output-dispatcher";
-import { WEB_AUTOMATION_INPUT_IDS, webAutomationRecordedAction, type WebAutomationRecordedAction } from "./io/input-model";
+import { WEB_AUTOMATION_INPUT_IDS, webAutomationRecordedAction, webAutomationRecordsInputPayload, type WebAutomationRecordedAction } from "./io/input-model";
 import { webAutomationManifestInputs, webAutomationManifestOutputs } from "./io/manifest-definitions";
 import { webAutomationDomain } from "./manifest";
 import {
@@ -49,7 +49,8 @@ export function registerFluxIQHost(fluxiq: FluxIQ): FluxIQ {
           ...(typeof outputId === "string" ? {
             outputBinding: {
               outputId,
-              toPayload: (event) => webAutomationOutputPayload(outputId, event.payload)
+              toPayload: (event) => webAutomationOutputPayload(outputId, event.payload),
+              ...(webAutomationRecordsInputPayload(definition.id) ? { recordInputPayload: true } : {})
             }
           } : {})
         };
@@ -129,12 +130,14 @@ const CANDIDATE_LABELS: Partial<Record<string, string>> = {
  * A click recorded through its action input arrives as Core's `action` entry.
  * When a landing in `following` names the event id Core stored on it, it gives
  * the candidate Core's fallback would propose for that entry, plus the claim.
- * Every other `action` entry maps to `null`, so Core's fallback stands for it.
+ * An extraction arrives the same way and is mapped the same way, from the
+ * definition kept beside the command. Every other `action` entry maps to
+ * `null`, so Core's fallback stands for it.
  */
 export function mapWebRecordingObservation(observation: AutomationStudioRecordingMapperObservation, context?: Pick<AutomationStudioRecordingMapperContext, "following">): AutomationStudioRecordingMapperCandidate | null {
   const step = recordedStep(observation);
   const action = webAutomationRecordedAction(step.eventType, step.payload, step.metadata);
-  if (!action) return linkedClickEntry(observation, context?.following ?? []) ?? webAutomationLateTargetWait(step, (context?.following ?? []).map(recordedStep)) ?? null;
+  if (!action) return recordedExtractionEntry(observation) ?? linkedClickEntry(observation, context?.following ?? []) ?? webAutomationLateTargetWait(step, (context?.following ?? []).map(recordedStep)) ?? null;
   // A recorded extraction proposes a candidate of its own. There is one such
   // input: the single-value form is registered as none (`io/input-model.ts`).
   if (action.inputId === WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined) return extractionCandidate(action, step.payload);
@@ -230,6 +233,35 @@ function linkedClickEntry(observation: AutomationStudioRecordingMapperObservatio
     confidence: 0.95,
     label: FALLBACK_CLICK_LABEL
   };
+}
+
+/**
+ * A recorded extraction as Core stores it when the extension names its input,
+ * which is what the extension always does (`background/connection/gateway-payloads.ts`).
+ * Core routes such an event through its IO recorder, so the timeline holds one
+ * `action` entry carrying `web.dom.extract_list` and its request -- and nothing
+ * else the picker produced. Core's fallback then proposes that command alone:
+ * no `recordOutput`, so the approved Flow reads the page and stores nothing; no
+ * scaled `timeoutMs`, so a paginated read is cut short at its first page; and an
+ * `expectedConfirmation` on an input the extension never sends while replaying,
+ * so the node fails at `output_confirmation.not_received` after five seconds.
+ *
+ * The definition it needs is on `metadata.inputPayload`, which Core keeps
+ * because the binding asks it to (`io/input-model.ts`,
+ * `webAutomationRecordsInputPayload`). Read from there, the entry proposes
+ * exactly what the domain-event route proposes, so a recording is mapped the
+ * same way however Core stored it.
+ */
+function recordedExtractionEntry(observation: AutomationStudioRecordingMapperObservation): AutomationStudioRecordingMapperCandidate | undefined {
+  if (observation.type !== "action" || observation.metadata.policyEligible === false) return undefined;
+  const inputId = nonBlankString(observation.metadata.inputId);
+  if (inputId === undefined || !webAutomationRecordsInputPayload(inputId)) return undefined;
+  const payload = readObject(observation.metadata.inputPayload) as JsonObject | undefined;
+  if (payload === undefined) return undefined;
+  const metadata = { ...(readObject(payload.metadata) ?? {}), ...observation.metadata } as JsonObject;
+  const action = webAutomationRecordedAction(WEB_AUTOMATION_EVENTS.dataExtractionDefined, payload, metadata);
+  if (action?.inputId !== WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined) return undefined;
+  return extractionCandidate(action, payload);
 }
 
 /**
