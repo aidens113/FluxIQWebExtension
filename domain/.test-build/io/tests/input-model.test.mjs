@@ -1,14 +1,14 @@
-// src/io/tests/input-model.test.ts
+// domain/src/io/tests/input-model.test.ts
 import assert from "node:assert/strict";
 
-// src/actions/extraction/field-key.ts
+// domain/src/actions/extraction/field-key.ts
 var FIELD_KEY_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
 var RESERVED_FIELD_KEYS = /* @__PURE__ */ new Set(["__proto__", "constructor", "prototype"]);
 function isWebAutomationExtractFieldKey(key) {
   return typeof key === "string" && FIELD_KEY_PATTERN.test(key) && !RESERVED_FIELD_KEYS.has(key);
 }
 
-// src/output-nodes/targets/targets.ts
+// domain/src/output-nodes/targets/targets.ts
 function elementFingerprint(value) {
   const element = objectValue(value);
   if (!element) return void 0;
@@ -109,7 +109,7 @@ function booleanValue(value) {
   return typeof value === "boolean" ? value : void 0;
 }
 
-// src/actions/extraction/request.ts
+// domain/src/actions/extraction/request.ts
 var WEB_AUTOMATION_EXTRACT_PAGINATION_MODES = ["next", "loadMore", "scroll", "numbered"];
 var WEB_AUTOMATION_EXTRACT_FIELD_KINDS = ["text", "attribute", "link", "value", "column"];
 var WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS = ["include", "exclude", "encrypt"];
@@ -117,7 +117,7 @@ var WEB_AUTOMATION_EXTRACT_READ_MODES = ["text", "attribute", "value", "html"];
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
 var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
 
-// src/actions/extraction/read-request.ts
+// domain/src/actions/extraction/read-request.ts
 function webAutomationExtractListRequestValue(value) {
   const request = jsonObject(value);
   const item = nonEmptyString(request?.item);
@@ -246,7 +246,7 @@ function jsonObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// src/actions/extraction/recorded-definition.ts
+// domain/src/actions/extraction/recorded-definition.ts
 var DATASET_ID_PATTERN = /^[A-Za-z0-9._:-]{1,200}$/u;
 var RESERVED_DATASET_IDS = /* @__PURE__ */ new Set([".", ".."]);
 var LABEL_MAX_LENGTH = 200;
@@ -297,7 +297,7 @@ function jsonObject2(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// src/actions/extraction/schema.ts
+// domain/src/actions/extraction/schema.ts
 function webAutomationExtractListSchema(elementFingerprintSchema2) {
   const pageBound = { type: "integer", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES };
   const fieldSpecSchema = {
@@ -350,7 +350,7 @@ function webAutomationExtractListSchema(elementFingerprintSchema2) {
   };
 }
 
-// src/actions/types.ts
+// domain/src/actions/types.ts
 var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.navigate",
   "web.dom.click",
@@ -372,7 +372,7 @@ var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.download"
 ];
 
-// src/constants.ts
+// domain/src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 var WEB_AUTOMATION_EVENTS = {
   clientReady: "web.client.ready",
@@ -394,7 +394,7 @@ var WEB_AUTOMATION_EVENTS = {
   clientError: "web.client.error"
 };
 
-// src/actions/safety.ts
+// domain/src/actions/safety.ts
 var WEB_AUTOMATION_ACTION_SAFETY = {
   "web.browser.navigate": "review",
   "web.dom.click": "review",
@@ -419,7 +419,7 @@ var WEB_AUTOMATION_ACTION_SAFETY = {
   "web.browser.download": "review"
 };
 
-// src/actions/schemas.ts
+// domain/src/actions/schemas.ts
 var elementFingerprintSchema = {
   type: "object",
   label: "Element fingerprint",
@@ -723,7 +723,7 @@ var webAutomationActionDefinitions = [
   }
 ];
 
-// src/output-nodes/definitions.ts
+// domain/src/output-nodes/definitions.ts
 var controlInput = { id: "in", label: "In", valueType: "signal", role: "control" };
 var outputPorts = [
   { id: "success", label: "Success", valueType: "any", role: "success" },
@@ -859,7 +859,7 @@ function iconForOutput(outputId) {
   return "square-dot";
 }
 
-// src/sensitivity/signature.ts
+// domain/src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
 var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
 var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
@@ -872,7 +872,7 @@ function isSensitiveControlType(type) {
   return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
 }
 
-// src/sensitivity/descriptor.ts
+// domain/src/sensitivity/descriptor.ts
 function sensitiveFieldSignatureOfDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
   const record = descriptor;
@@ -891,7 +891,7 @@ function stringField(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// src/output-nodes/recorded-element-key.ts
+// domain/src/output-nodes/recorded-element-key.ts
 function webAutomationRecordedElementKey(payload) {
   const element = objectValue(payload.element);
   const attributes = objectValue(element?.attributes);
@@ -905,7 +905,7 @@ function sanitizeRecordedElementKey(value) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 120);
 }
 
-// src/output-nodes/secret-binding.ts
+// domain/src/output-nodes/secret-binding.ts
 var WEB_AUTOMATION_SECRET_STATE_PREFIX = "web.secret.";
 function webAutomationSecretStatePath(key) {
   return `${WEB_AUTOMATION_SECRET_STATE_PREFIX}${key}`;
@@ -918,7 +918,7 @@ function webAutomationSecretBindingPath(value) {
   return path?.startsWith(WEB_AUTOMATION_SECRET_STATE_PREFIX) ? path : void 0;
 }
 
-// src/output-nodes/upload-binding.ts
+// domain/src/output-nodes/upload-binding.ts
 var WEB_AUTOMATION_UPLOAD_STATE_PREFIX = "web.upload.";
 function webAutomationUploadStatePath(key) {
   return `${WEB_AUTOMATION_UPLOAD_STATE_PREFIX}${key}`;
@@ -931,12 +931,12 @@ function webAutomationUploadBindingPath(value) {
   return path?.startsWith(WEB_AUTOMATION_UPLOAD_STATE_PREFIX) ? path : void 0;
 }
 
-// src/output-nodes/url-path.ts
+// domain/src/output-nodes/url-path.ts
 function webAutomationUrlPath(value) {
   return typeof value === "string" && /^\/(?![/\\])[^?#]*$/u.test(value) ? value : void 0;
 }
 
-// src/output-nodes/payloads.ts
+// domain/src/output-nodes/payloads.ts
 function webAutomationOutputPayload(outputId, payload) {
   return withRecordedFrame(outputId, payload, recordedOutputParameters(outputId, payload));
 }
@@ -1032,12 +1032,12 @@ function isRadioElement(element) {
   return stringValue(element.inputType)?.toLowerCase() === "radio" || stringValue(element.role)?.toLowerCase() === "radio";
 }
 
-// src/output-nodes/registry.ts
+// domain/src/output-nodes/registry.ts
 function listWebAutomationOutputNodeDefinitions() {
   return webAutomationOutputNodeDefinitions.map((definition) => structuredClone(definition));
 }
 
-// src/io/input-model.ts
+// domain/src/io/input-model.ts
 var WEB_AUTOMATION_INPUT_IDS = {
   browserState: "web.browser.state",
   recordingEvidence: "web.recording.evidence",
@@ -1194,7 +1194,7 @@ function stringValue2(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// src/io/tests/input-model.test.ts
+// domain/src/io/tests/input-model.test.ts
 var button = { selector: "#save", tagName: "button", text: "Save", xpath: "/html/body/form/button", id: "save", role: "button" };
 var field = { selector: "input[name=q]", tagName: "input", inputType: "text", name: "q", xpath: "/html/body/form/input" };
 var planSelect = { selector: "select#plan", tagName: "select", id: "plan" };

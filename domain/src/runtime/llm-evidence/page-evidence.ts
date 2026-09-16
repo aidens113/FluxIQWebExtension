@@ -46,9 +46,7 @@
 // | `dialogs[].role`         | `evidence.dialogs.open[].role`                      | |
 // | `dialogs[].name`         | `evidence.dialogs.open[].label`                     | `name` is the packet's word for an accessible name, as on an element |
 // | `dialogs[].modal`        | `evidence.dialogs.open[].modal`                     | |
-// | `dialogs[].selector`     | `evidence.dialogs.open[].selector`                  | |
-// | `blockedBy.selector`     | `evidence.overlays.blockers[0].selector`            | the producer orders them most-blocking first |
-// | `blockedBy.role`         | `evidence.overlays.blockers[0].role`                | |
+// | `blockedBy.role`         | `evidence.overlays.blockers[0].role`                | the producer orders them most-blocking first |
 // | `blockedBy.name`         | `evidence.overlays.blockers[0].label`               | |
 // | `blockedBy.blocks`       | `evidence.overlays.blockers[0].blocks`              | how many controls it takes the hit for |
 //
@@ -105,11 +103,15 @@ export type WebLlmEvidenceFrame = {
   childFrameIds?: number[];
 };
 
+/**
+ * A dialog the model is told about so it can reason about what is on screen.
+ * It carries no selector: nothing the model may do names a dialog, and the
+ * packet is the one thing the model reads.
+ */
 export type WebLlmEvidenceDialog = {
   role?: string;
   name?: string;
   modal?: true;
-  selector?: string;
 };
 
 export type WebLlmPageContext = {
@@ -118,8 +120,12 @@ export type WebLlmPageContext = {
   /** How this document was reached, when that was anything other than an ordinary visit. */
   navigation?: { type?: string; redirects?: number; referrer?: string };
   dialogs?: WebLlmEvidenceDialog[];
-  /** What is painted over the page's controls, and how many of them it takes the click for. */
-  blockedBy?: { selector: string; role?: string; name?: string; blocks?: number };
+  /**
+   * What is painted over the page's controls, and how many of them it takes the
+   * click for. Described, never addressed: the model's answer to an overlay is
+   * to say so, not to be handed a way to reach into it.
+   */
+  blockedBy?: { role?: string; name?: string; blocks?: number };
   selectedText?: string;
   /** How many elements the page held before the capture's own filter, when that is more than the packet carries. */
   elementTotal?: number;
@@ -263,14 +269,12 @@ function evidenceDialogs(input: PageEvidenceWire<WebAutomationDialogEvidence> | 
     if (!raw) continue;
     const role = boundedText(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
     const name = boundedText(raw.label, WEB_LLM_EVIDENCE_BOUNDS.text);
-    const selector = boundedText(raw.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
     const modal = trueFlag(raw.modal);
-    if (!role && !name && !selector && !modal) continue;
+    if (!role && !name && !modal) continue;
     dialogs.push(present<WebLlmEvidenceDialog>({
       role: role || undefined,
       name: name || undefined,
-      modal,
-      selector: selector || undefined
+      modal
     }));
   }
   return dialogs.length ? dialogs : undefined;
@@ -287,13 +291,14 @@ function evidenceBlocker(input: PageEvidenceWire<WebAutomationOverlayEvidence> |
     .map((item) => pageEvidenceWire<WebAutomationOverlayEvidenceItem>(item))
     .find((item) => item !== undefined);
   if (!blocker) return undefined;
-  const selector = boundedText(blocker.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
-  if (!selector) return undefined;
   const role = boundedText(blocker.role, WEB_LLM_EVIDENCE_BOUNDS.role);
   const name = boundedText(blocker.label, WEB_LLM_EVIDENCE_BOUNDS.text);
   const blocks = boundedCount(blocker.blocks, MAX_BLOCKED_CONTROLS);
+  // The blocker used to be reported only when it had a selector, which is no
+  // longer a thing the packet may carry. It is reported when it says anything
+  // at all -- what it is, what it is called, or how much it covers.
+  if (!role && !name && !blocks) return undefined;
   return present<NonNullable<WebLlmPageContext["blockedBy"]>>({
-    selector,
     role: role || undefined,
     name: name || undefined,
     blocks: blocks || undefined

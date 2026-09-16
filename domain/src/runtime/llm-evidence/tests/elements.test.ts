@@ -55,10 +55,13 @@ test("an ordinary control is still described in full", () => {
     name: "Email",
     attributes: { autocomplete: "email" }
   });
-  assert.equal(element?.tag, "input");
+  assert.equal(element?.element.tag, "input");
+  assert.equal(element?.element.name, "Email");
+  assert.equal(element?.element.inputType, "email");
+  // Described and addressable, but the two are handed back separately: only the
+  // first of them may be published to a model.
+  assert.equal(Object.hasOwn(element!.element, "selector"), false);
   assert.equal(element?.selector, "#field");
-  assert.equal(element?.name, "Email");
-  assert.equal(element?.inputType, "email");
 });
 
 test("a hidden or file input is described here, because they are not secrets", () => {

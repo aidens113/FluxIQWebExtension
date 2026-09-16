@@ -1,8 +1,8 @@
-// src/output-nodes/targets/tests/targets.test.ts
+// domain/src/output-nodes/targets/tests/targets.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// src/output-nodes/targets/targets.ts
+// domain/src/output-nodes/targets/targets.ts
 function outputTargetFromPayload(payload) {
   const adaptedTarget = objectValue(payload.target);
   const adaptedFingerprint = objectValue(adaptedTarget?.fingerprint);
@@ -133,7 +133,7 @@ function booleanValue(value) {
   return typeof value === "boolean" ? value : void 0;
 }
 
-// src/output-nodes/targets/tests/targets.test.ts
+// domain/src/output-nodes/targets/tests/targets.test.ts
 test("identity signals are read from the descriptor's own fields", () => {
   const fingerprint = elementFingerprint({
     selector: "#save",

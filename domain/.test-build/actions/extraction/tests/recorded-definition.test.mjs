@@ -1,15 +1,15 @@
-// src/actions/extraction/tests/recorded-definition.test.ts
+// domain/src/actions/extraction/tests/recorded-definition.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// src/actions/extraction/field-key.ts
+// domain/src/actions/extraction/field-key.ts
 var FIELD_KEY_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
 var RESERVED_FIELD_KEYS = /* @__PURE__ */ new Set(["__proto__", "constructor", "prototype"]);
 function isWebAutomationExtractFieldKey(key) {
   return typeof key === "string" && FIELD_KEY_PATTERN.test(key) && !RESERVED_FIELD_KEYS.has(key);
 }
 
-// src/output-nodes/targets/targets.ts
+// domain/src/output-nodes/targets/targets.ts
 function elementFingerprint(value) {
   const element = objectValue(value);
   if (!element) return void 0;
@@ -110,7 +110,7 @@ function booleanValue(value) {
   return typeof value === "boolean" ? value : void 0;
 }
 
-// src/actions/extraction/request.ts
+// domain/src/actions/extraction/request.ts
 var WEB_AUTOMATION_EXTRACT_PAGINATION_MODES = ["next", "loadMore", "scroll", "numbered"];
 var WEB_AUTOMATION_EXTRACT_FIELD_KINDS = ["text", "attribute", "link", "value", "column"];
 var WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS = ["include", "exclude", "encrypt"];
@@ -118,7 +118,7 @@ var WEB_AUTOMATION_EXTRACT_READ_MODES = ["text", "attribute", "value", "html"];
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
 var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
 
-// src/actions/extraction/read-request.ts
+// domain/src/actions/extraction/read-request.ts
 function webAutomationExtractListRequestValue(value) {
   const request = jsonObject(value);
   const item = nonEmptyString(request?.item);
@@ -247,7 +247,7 @@ function jsonObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// src/actions/extraction/recorded-definition.ts
+// domain/src/actions/extraction/recorded-definition.ts
 var DATASET_ID_PATTERN = /^[A-Za-z0-9._:-]{1,200}$/u;
 var RESERVED_DATASET_IDS = /* @__PURE__ */ new Set([".", ".."]);
 var LABEL_MAX_LENGTH = 200;
@@ -298,7 +298,7 @@ function jsonObject2(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// src/actions/extraction/tests/recorded-definition.test.ts
+// domain/src/actions/extraction/tests/recorded-definition.test.ts
 var SAMPLE = "SENTINEL-PAGE-VALUE-A-RECORDING-MUST-NOT-CARRY";
 function listDefinition(overrides = {}) {
   return {

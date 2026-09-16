@@ -1,8 +1,8 @@
-// src/runtime/llm-evidence/tests/elements.test.ts
+// domain/src/runtime/llm-evidence/tests/elements.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// src/sensitivity/signature.ts
+// domain/src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
 var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
 var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
@@ -15,7 +15,7 @@ function isSensitiveControlType(type) {
   return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
 }
 
-// src/sensitivity/descriptor.ts
+// domain/src/sensitivity/descriptor.ts
 function sensitiveFieldSignatureOfDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
   const record = descriptor;
@@ -34,7 +34,7 @@ function stringField(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// src/runtime/llm-evidence/limits.ts
+// domain/src/runtime/llm-evidence/limits.ts
 import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES } from "fluxiq/automation-studio";
 var WEB_LLM_EVIDENCE_BYTE_BUDGETS = Object.freeze({
   ceiling: 12e3,
@@ -54,7 +54,7 @@ var WEB_LLM_EVIDENCE_BOUNDS = Object.freeze({
   dialogs: 3
 });
 
-// src/runtime/llm-evidence/location.ts
+// domain/src/runtime/llm-evidence/location.ts
 function evidenceLocation(url) {
   return `${url.origin}${url.pathname}`;
 }
@@ -68,7 +68,7 @@ function sameOriginHref(input, base) {
   }
 }
 
-// src/runtime/llm-evidence/present.ts
+// domain/src/runtime/llm-evidence/present.ts
 function present(fields) {
   const source = fields;
   const written = {};
@@ -79,7 +79,7 @@ function present(fields) {
   return written;
 }
 
-// src/runtime/llm-evidence/untrusted-json.ts
+// domain/src/runtime/llm-evidence/untrusted-json.ts
 function isJsonRecord(input) {
   return Boolean(input) && typeof input === "object" && !Array.isArray(input);
 }
@@ -96,7 +96,7 @@ function boundedCount(input, maximum) {
   return input;
 }
 
-// src/runtime/llm-evidence/elements.ts
+// domain/src/runtime/llm-evidence/elements.ts
 var FRAME_SELECTOR_PATTERN = /^frame\[(\d{1,6})\]\s*>>\s*(.+)$/u;
 var FRAME_ID_ATTRIBUTE = "data-fluxiq-frame-id";
 function sanitizedEvidenceElement(raw, context) {
@@ -121,10 +121,9 @@ function sanitizedEvidenceElement(raw, context) {
   const expanded = revealKind === "disclosure" ? semanticExpandedState(attributes) : void 0;
   const placement = elementPlacement(raw.context, { name, text });
   const focused = context.focusedSelector !== void 0 && context.focusedSelector === addressed.selector ? true : void 0;
-  return present({
+  const element = present({
     target: context.target,
     tag,
-    selector: addressed.selector,
     frameId: addressed.frameId,
     role: role || void 0,
     name: name || void 0,
@@ -146,6 +145,7 @@ function sanitizedEvidenceElement(raw, context) {
     item: placement.item,
     cell: placement.cell
   });
+  return { element, selector: addressed.selector };
 }
 function safeFillTag(tag, inputType) {
   return tag === "textarea" || tag === "input" && (!inputType || ["text", "search", "email", "tel", "url", "number"].includes(inputType));
@@ -219,7 +219,7 @@ function sanitizedSelectedValue(input, options) {
   return value && options.some((option) => option.value === value) ? value : void 0;
 }
 
-// src/runtime/llm-evidence/tests/elements.test.ts
+// domain/src/runtime/llm-evidence/tests/elements.test.ts
 var CONTEXT = { target: "tab.1", url: new URL("https://fixture.test/checkout") };
 function described(raw) {
   return sanitizedEvidenceElement({ tagName: "input", selector: "#field", ...raw }, CONTEXT);
@@ -250,10 +250,11 @@ test("an ordinary control is still described in full", () => {
     name: "Email",
     attributes: { autocomplete: "email" }
   });
-  assert.equal(element?.tag, "input");
+  assert.equal(element?.element.tag, "input");
+  assert.equal(element?.element.name, "Email");
+  assert.equal(element?.element.inputType, "email");
+  assert.equal(Object.hasOwn(element.element, "selector"), false);
   assert.equal(element?.selector, "#field");
-  assert.equal(element?.name, "Email");
-  assert.equal(element?.inputType, "email");
 });
 test("a hidden or file input is described here, because they are not secrets", () => {
   assert.notEqual(described({ inputType: "file", name: "Receipt" }), void 0);

@@ -2,7 +2,7 @@
 //
 // Phase 1.5 half: every command that did not succeed leaves the adapter with a
 // structured failure record drawn from the closed code set, and a failed one
-// carries the sanitized `web-llm-evidence.v1` packet built from the snapshot
+// carries the sanitized `web-llm-evidence.v2` packet built from the snapshot
 // the client captured at the instant of failure. Records are run through Core's
 // own `parseAutomationStudioFailureRecord`, because Core drops an inconsistent
 // record whole rather than repairing it -- a record that does not survive the
@@ -283,7 +283,7 @@ test("a failed command carries the sanitized evidence packet, digest-bound to it
   const result = await runCommand({ commandId: "client.command.ten", status: "failed", message: "Click failed.", payload: failedPayload() });
   const metadata = result.metadata as JsonObject;
   const evidence = metadata.failureEvidence as JsonObject;
-  assert.equal(evidence.schemaVersion, "web-llm-evidence.v1");
+  assert.equal(evidence.schemaVersion, "web-llm-evidence.v2");
   assert.equal(evidence.trust, "untrusted-page-evidence");
   assert.equal(evidence.location, "https://fixture.test/checkout/pay", "the packet's location drops the query, which is where a session token rides");
 
@@ -302,8 +302,13 @@ test("a failed command carries the sanitized evidence packet, digest-bound to it
 
 test("the evidence packet never carries a sensitive control", async () => {
   const result = await runCommand({ commandId: "client.command.eleven", status: "failed", message: "Click failed.", payload: failedPayload() });
-  const evidence = (result.metadata as JsonObject).failureEvidence as { elements: Array<{ selector: string }> };
-  assert.deepEqual(evidence.elements.map((element) => element.selector), ["#pay"], "the password control is dropped, not reported");
+  const evidence = (result.metadata as JsonObject).failureEvidence as { elements: Array<{ target: string; tag: string; name?: string }> };
+  // One element survives, and it is the pay button rather than the password
+  // field: the sensitive control is dropped whole, not described without its
+  // value. It is named by its opaque handle, because the packet an LLM reads has
+  // carried no selector since `.v2`.
+  assert.deepEqual(evidence.elements.map((element) => [element.target, element.tag]), [["target.1", "button"]], "the password control is dropped, not reported");
+  assert.doesNotMatch(JSON.stringify(evidence), /#pay|#password|selector/u);
 });
 
 test("a client's own failure record survives the hop and only gains the digest", async () => {

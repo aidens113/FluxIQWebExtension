@@ -1,14 +1,14 @@
-// src/client/tests/gateway-command-parameters.test.ts
+// domain/src/client/tests/gateway-command-parameters.test.ts
 import assert from "node:assert/strict";
 
-// src/actions/extraction/field-key.ts
+// domain/src/actions/extraction/field-key.ts
 var FIELD_KEY_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
 var RESERVED_FIELD_KEYS = /* @__PURE__ */ new Set(["__proto__", "constructor", "prototype"]);
 function isWebAutomationExtractFieldKey(key) {
   return typeof key === "string" && FIELD_KEY_PATTERN.test(key) && !RESERVED_FIELD_KEYS.has(key);
 }
 
-// src/output-nodes/targets/targets.ts
+// domain/src/output-nodes/targets/targets.ts
 function elementFingerprint(value) {
   const element = objectValue(value);
   if (!element) return void 0;
@@ -109,7 +109,7 @@ function booleanValue(value) {
   return typeof value === "boolean" ? value : void 0;
 }
 
-// src/actions/extraction/request.ts
+// domain/src/actions/extraction/request.ts
 var WEB_AUTOMATION_EXTRACT_PAGINATION_MODES = ["next", "loadMore", "scroll", "numbered"];
 var WEB_AUTOMATION_EXTRACT_FIELD_KINDS = ["text", "attribute", "link", "value", "column"];
 var WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS = ["include", "exclude", "encrypt"];
@@ -117,7 +117,7 @@ var WEB_AUTOMATION_EXTRACT_READ_MODES = ["text", "attribute", "value", "html"];
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
 var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
 
-// src/actions/extraction/read-request.ts
+// domain/src/actions/extraction/read-request.ts
 function webAutomationExtractListRequestValue(value) {
   const request = jsonObject(value);
   const item = nonEmptyString(request?.item);
@@ -246,7 +246,7 @@ function jsonObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// src/actions/extraction/schema.ts
+// domain/src/actions/extraction/schema.ts
 function webAutomationExtractListSchema(elementFingerprintSchema2) {
   const pageBound = { type: "integer", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES };
   const fieldSpecSchema = {
@@ -299,7 +299,7 @@ function webAutomationExtractListSchema(elementFingerprintSchema2) {
   };
 }
 
-// src/actions/types.ts
+// domain/src/actions/types.ts
 var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 var WEB_AUTOMATION_UPLOAD_MAX_FILE_BYTES = 1048576;
 var WEB_AUTOMATION_UPLOAD_MAX_TOTAL_BYTES = 4194304;
@@ -344,10 +344,10 @@ var WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = {
   "web.browser.download": "browser.download"
 };
 
-// src/constants.ts
+// domain/src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 
-// src/actions/safety.ts
+// domain/src/actions/safety.ts
 var WEB_AUTOMATION_ACTION_SAFETY = {
   "web.browser.navigate": "review",
   "web.dom.click": "review",
@@ -372,7 +372,7 @@ var WEB_AUTOMATION_ACTION_SAFETY = {
   "web.browser.download": "review"
 };
 
-// src/actions/schemas.ts
+// domain/src/actions/schemas.ts
 var elementFingerprintSchema = {
   type: "object",
   label: "Element fingerprint",
@@ -676,7 +676,7 @@ var webAutomationActionDefinitions = [
   }
 ];
 
-// src/output-nodes/definitions.ts
+// domain/src/output-nodes/definitions.ts
 var controlInput = { id: "in", label: "In", valueType: "signal", role: "control" };
 var outputPorts = [
   { id: "success", label: "Success", valueType: "any", role: "success" },
@@ -812,7 +812,7 @@ function iconForOutput(outputId) {
   return "square-dot";
 }
 
-// src/output-nodes/secret-binding.ts
+// domain/src/output-nodes/secret-binding.ts
 var WEB_AUTOMATION_SECRET_STATE_PREFIX = "web.secret.";
 function webAutomationSecretBindingPath(value) {
   const path = stringValue(objectValue(objectValue(value)?.$state)?.path);
@@ -825,19 +825,19 @@ function webAutomationUnresolvedSecretParameters(parameters) {
   });
 }
 
-// src/output-nodes/upload-binding.ts
+// domain/src/output-nodes/upload-binding.ts
 var WEB_AUTOMATION_UPLOAD_STATE_PREFIX = "web.upload.";
 function webAutomationUploadBindingPath(value) {
   const path = stringValue(objectValue(objectValue(value)?.$state)?.path);
   return path?.startsWith(WEB_AUTOMATION_UPLOAD_STATE_PREFIX) ? path : void 0;
 }
 
-// src/output-nodes/url-path.ts
+// domain/src/output-nodes/url-path.ts
 function webAutomationUrlPath(value) {
   return typeof value === "string" && /^\/(?![/\\])[^?#]*$/u.test(value) ? value : void 0;
 }
 
-// src/runtime/failure/codes.ts
+// domain/src/runtime/failure/codes.ts
 var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   /** The target was found but refused the action: disabled, hidden, or covered by another element. */
   ACTION_REJECTED: "web.action.rejected",
@@ -931,7 +931,7 @@ function boundedText(value) {
   return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
 }
 
-// src/client/gateway-action-parameters.ts
+// domain/src/client/gateway-action-parameters.ts
 function webAutomationReadActionParameters(parameters) {
   const lifted = {
     // Which tab and frame the action runs in, as opposed to the tab a
@@ -1102,7 +1102,7 @@ function jsonObject2(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// src/io/input-model.ts
+// domain/src/io/input-model.ts
 var WEB_AUTOMATION_INPUT_IDS = {
   browserState: "web.browser.state",
   recordingEvidence: "web.recording.evidence",
@@ -1146,12 +1146,12 @@ var OUTPUT_FOR_ACTION_INPUT = new Map(
   actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
 );
 
-// src/recording/web-state/evidence/project.ts
+// domain/src/recording/web-state/evidence/project.ts
 var COLLECTION = { elementKind: "collection", comparable: false };
 var LIVE_COLLECTION = { ...COLLECTION, volatility: "rapid" };
 var SETTLED_COLLECTION = { ...COLLECTION, volatility: "slow" };
 
-// src/client/gateway-mapping.ts
+// domain/src/client/gateway-mapping.ts
 function webAutomationActionFromGatewayCommand(command) {
   const normalized = normalizeWebAutomationActionType(command.actionType);
   if (!normalized.ok) {
@@ -1270,7 +1270,7 @@ function compactJsonObject2(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
 
-// src/client/tests/gateway-command-parameters.test.ts
+// domain/src/client/tests/gateway-command-parameters.test.ts
 function mapped(actionType, parameters, extra = {}) {
   const command = webAutomationActionFromGatewayCommand({
     commandId: `command.${actionType}`,

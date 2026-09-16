@@ -1,7 +1,6 @@
-// domain/src/runtime/llm-evidence/tests/limits.test.ts
+// domain/src/runtime/llm-evidence/tests/packet-carries-no-selector.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES as AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES2, sanitizeAutomationStudioLlmFailureEvidence } from "fluxiq/automation-studio";
 
 // domain/src/runtime/llm-evidence/limits.ts
 import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES } from "fluxiq/automation-studio";
@@ -477,157 +476,161 @@ var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
   ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
 ]);
 
-// domain/src/runtime/llm-evidence/tests/limits.test.ts
-var bytes = (value) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
-var largePage = (count, extra = {}) => ({
-  url: "https://example.test/large",
-  title: "Large fixture",
-  interactiveElements: Array.from({ length: count }, (_, index) => ({
-    tagName: "button",
-    selector: `[data-index="${index}"]`,
-    visibleText: `Item ${index} ${"x".repeat(120)}`
-  })),
-  ...extra
-});
-test("the failure budget is Core's own gate, and the exploration budget sits under the shared ceiling", () => {
-  assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES2);
-  assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, 3e3);
-  assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration, 6e3);
-  assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling, 12e3);
-  assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure < WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration, true);
-  assert.equal(WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration < WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling, true);
-});
-test("applies each path's default when the caller names no budget", () => {
-  const exploration = sanitizeWebLlmSnapshot(largePage(60));
-  assert.equal(bytes(exploration) <= WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration, true, `${bytes(exploration)} bytes`);
-  const failure = sanitizeWebLlmSnapshot(largePage(60), { budget: "failure" });
-  assert.equal(bytes(failure) <= WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, true, `${bytes(failure)} bytes`);
-  assert.equal(failure.elements.length < exploration.elements.length, true);
-});
-test("clamps a request above the path's ceiling instead of honouring it", () => {
-  const failure = sanitizeWebLlmSnapshot(largePage(60), { budget: "failure", maxEvidenceBytes: 9e3 });
-  assert.equal(bytes(failure) <= WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, true, `${bytes(failure)} bytes`);
-  const exploration = sanitizeWebLlmSnapshot(largePage(60), { maxEvidenceBytes: 5e4 });
-  assert.equal(bytes(exploration) <= WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling, true, `${bytes(exploration)} bytes`);
-});
-test("refuses a budget that is not a positive bounded integer rather than falling back silently", () => {
-  for (const maxEvidenceBytes of [0, -1, 1.5, 100001, Number.NaN]) {
-    assert.throws(() => sanitizeWebLlmSnapshot(largePage(2), { maxEvidenceBytes }), /positive bounded integer/u, `budget ${maxEvidenceBytes}`);
-  }
-});
-test("reports truncation and the element count exactly at the budget boundary", () => {
-  const page = largePage(12);
-  const whole = sanitizeWebLlmSnapshot(page, { maxEvidenceBytes: WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling });
-  assert.equal(whole.elements.length, 12);
-  assert.equal(whole.truncated, false);
-  const exact = sanitizeWebLlmSnapshot(page, { maxEvidenceBytes: bytes(whole) });
-  assert.equal(exact.elements.length, 12);
-  assert.equal(exact.truncated, false);
-  assert.equal(bytes(exact), bytes(whole));
-  const oneShort = sanitizeWebLlmSnapshot(page, { maxEvidenceBytes: bytes(whole) - 1 });
-  assert.equal(oneShort.elements.length, 11);
-  assert.equal(oneShort.truncated, true);
-  assert.equal(bytes(oneShort) <= bytes(whole) - 1, true);
-});
-test("names which limit truncated the packet, one row per limit", () => {
-  const budget = sanitizeWebLlmSnapshot(largePage(12), { maxEvidenceBytes: 900 });
-  assert.equal(budget.budgetTruncated, true, "the budget forced removals: ask again with more room");
-  assert.equal(budget.captureTruncated, void 0);
-  assert.equal(budget.elementsTruncated, void 0);
-  assert.equal(budget.truncated, true);
-  const bound = sanitizeWebLlmSnapshot(largePage(WEB_LLM_EVIDENCE_BOUNDS.elements + 1), { maxEvidenceBytes: WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling });
-  assert.equal(bound.elementsTruncated, true, "more elements were offered than the packet's bound carries");
-  assert.equal(bound.elements.length, WEB_LLM_EVIDENCE_BOUNDS.elements);
-  assert.equal(bound.captureTruncated, void 0);
-  assert.equal(bound.truncated, true);
-  const capture = sanitizeWebLlmSnapshot(largePage(2, { truncated: true }), { maxEvidenceBytes: WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling });
-  assert.equal(capture.captureTruncated, true, "the browser cut before sending: narrowing the capture is the remedy");
-  assert.equal(capture.elementsTruncated, void 0);
-  assert.equal(capture.budgetTruncated, void 0);
-  assert.equal(capture.truncated, true);
-  const whole = sanitizeWebLlmSnapshot(largePage(2), { maxEvidenceBytes: WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling });
-  assert.equal(whole.truncated, false);
-  assert.deepEqual([whole.captureTruncated, whole.elementsTruncated, whole.budgetTruncated], [void 0, void 0, void 0], "a whole packet carries none of the three");
-});
-test("all three limits can fire at once, and each stays separately readable", () => {
-  const page = largePage(WEB_LLM_EVIDENCE_BOUNDS.elements + 5, { truncated: true });
-  const evidence = sanitizeWebLlmSnapshot(page, { budget: "failure" });
-  assert.equal(evidence.captureTruncated, true);
-  assert.equal(evidence.elementsTruncated, true);
-  assert.equal(evidence.budgetTruncated, true);
-  assert.equal(evidence.truncated, true);
-  assert.equal(bytes(evidence) <= WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure, true, `${bytes(evidence)} bytes`);
-});
-test("gives up page facts before the last element, and refuses only when nothing is left to drop", () => {
-  const page = {
-    url: "https://example.test/checkout",
-    title: "Checkout",
-    selectedText: "order reference 4471",
-    // The producer's shape: one nested `evidence` object, written field for
-    // field as `apps/extension/src/content/evidence/types.ts` declares it. The
-    // packet reads only this shape, so a fixture in the old flat shape would
-    // silently carry no loading state and no dialog and prove nothing about
-    // the order they are given up in.
-    evidence: {
-      loading: { documentState: "interactive", busy: false, busyRegions: [], indicators: [], pendingNavigation: false },
-      dialogs: { open: [{ selector: "#confirm", role: "dialog", modal: true, native: false, label: "Confirm your order" }], modal: true }
-    },
-    interactiveElements: [
-      { tagName: "button", selector: "#place-order", visibleText: "Place order" },
-      { tagName: "button", selector: "#cancel", visibleText: "Cancel" }
-    ]
-  };
-  const rung = (budget) => sanitizeWebLlmSnapshot(page, { maxEvidenceBytes: budget });
-  const shape = (evidence) => ({
-    elements: evidence.elements.length,
-    selectedText: evidence.selectedText !== void 0,
-    title: evidence.title !== void 0,
-    loading: evidence.loading !== void 0,
-    dialogs: evidence.dialogs !== void 0,
-    truncated: evidence.truncated,
-    budget: evidence.budgetTruncated === true
-  });
-  const whole = rung(WEB_LLM_EVIDENCE_BYTE_BUDGETS.ceiling);
-  assert.deepEqual(shape(whole), { elements: 2, selectedText: true, title: true, loading: true, dialogs: true, truncated: false, budget: false });
-  const oneElement = rung(bytes(whole) - 1);
-  assert.deepEqual(shape(oneElement), { elements: 1, selectedText: true, title: true, loading: true, dialogs: true, truncated: true, budget: true });
-  const noSelection = rung(bytes(oneElement) - 1);
-  assert.deepEqual(shape(noSelection), { elements: 1, selectedText: false, title: true, loading: true, dialogs: true, truncated: true, budget: true });
-  const noTitle = rung(bytes(noSelection) - 1);
-  assert.deepEqual(shape(noTitle), { elements: 1, selectedText: false, title: false, loading: true, dialogs: true, truncated: true, budget: true });
-  const noLoading = rung(bytes(noTitle) - 1);
-  assert.deepEqual(shape(noLoading), { elements: 1, selectedText: false, title: false, loading: false, dialogs: true, truncated: true, budget: true });
-  const noDialogs = rung(bytes(noLoading) - 1);
-  assert.deepEqual(shape(noDialogs), { elements: 1, selectedText: false, title: false, loading: false, dialogs: false, truncated: true, budget: true });
-  const nothing = rung(bytes(noDialogs) - 1);
-  assert.deepEqual(shape(nothing), { elements: 0, selectedText: false, title: false, loading: false, dialogs: false, truncated: true, budget: true });
-  assert.throws(() => rung(bytes(nothing) - 1), /exceeds the evidence byte limit/u);
-});
-test("a failure packet passes Core's failure-evidence gate whole", () => {
-  const evidence = sanitizeWebLlmSnapshot({
-    url: "https://example.test/checkout?session=private",
+// domain/src/runtime/llm-evidence/tests/packet-carries-no-selector.test.ts
+var SELECTORS = [
+  "#place-order",
+  "input#coupon",
+  "form.checkout > .row:nth-child(2) input",
+  '[data-testid="quantity"]',
+  "frame[3] >> #card-name",
+  "#confirm-dialog",
+  "#session-warning",
+  "#cookie-wall",
+  "#cookie-wall h2",
+  "#spinner",
+  "#cart",
+  "//button[@id='legacy']"
+];
+var ALLOWED_ELEMENT_KEYS = /* @__PURE__ */ new Set([
+  "target",
+  "tag",
+  "frameId",
+  "role",
+  "name",
+  "text",
+  "inputType",
+  "controlType",
+  "hasValue",
+  "selectedValue",
+  "href",
+  "options",
+  "revealKind",
+  "expanded",
+  "focused",
+  "recent",
+  "changed",
+  "form",
+  "landmark",
+  "heading",
+  "item",
+  "cell"
+]);
+var ALLOWED_PACKET_KEYS = /* @__PURE__ */ new Set([
+  ...ALLOWED_ELEMENT_KEYS,
+  // The packet itself.
+  "schemaVersion",
+  "trust",
+  "location",
+  "title",
+  "elements",
+  "elementTotal",
+  "truncated",
+  "captureTruncated",
+  "elementsTruncated",
+  "budgetTruncated",
+  // Page context.
+  "frame",
+  "isTop",
+  "childFrameIds",
+  "loading",
+  "readyState",
+  "busy",
+  "spinner",
+  "pendingNavigation",
+  "navigation",
+  "type",
+  "redirects",
+  "referrer",
+  "dialogs",
+  "modal",
+  "blockedBy",
+  "blocks",
+  "selectedText",
+  // Nested values on an element.
+  "value",
+  "label",
+  "index",
+  "total",
+  "row",
+  "column",
+  "header"
+]);
+function realisticSnapshot() {
+  return {
+    url: "https://shop.example.test/checkout?session=private#fragment",
     title: "Checkout",
     frame: { isTop: true },
-    selectedText: "order reference 4471",
-    loading: { readyState: "interactive", busy: true },
-    navigation: { pending: true, to: "https://example.test/receipt" },
-    dialogs: [{ role: "dialog", name: "Confirm your order", modal: true, selector: "#confirm" }],
-    blockingOverlay: { selector: "#cookie-wall", tagName: "div", name: "We use cookies" },
-    elementTotal: 240,
-    focusedElement: { tagName: "input", selector: "#coupon", name: "Coupon" },
-    interactiveElements: Array.from({ length: 60 }, (_, index) => ({
-      tagName: "button",
-      selector: `[data-testid="row-${index}"]`,
-      name: `Add item ${index}`,
-      attributes: { "data-fluxiq-frame-id": index % 2 === 0 ? "0" : "4" },
-      context: { formId: "checkout", landmark: "main", heading: "Your basket", listPosition: { index, total: 240 } }
-    }))
-  }, { budget: "failure" });
-  const gated = sanitizeAutomationStudioLlmFailureEvidence("runtime_diagnosis", evidence);
-  assert.deepEqual(gated, JSON.parse(JSON.stringify(evidence)));
-  assert.equal(bytes(gated) <= AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES2, true, `${bytes(gated)} bytes`);
-  assert.equal(evidence.truncated, true);
-  assert.equal(evidence.elements.length > 0, true);
-  assert.equal(evidence.elements.length <= WEB_LLM_EVIDENCE_BOUNDS.elements, true);
-  assert.doesNotMatch(JSON.stringify(evidence), /session=private/u);
+    focusedElement: { tagName: "input", selector: "input#coupon", name: "Coupon code" },
+    interactiveElements: [
+      { tagName: "button", selector: "#place-order", visibleText: "Place order", attributes: { type: "submit" } },
+      { tagName: "input", selector: "input#coupon", name: "Coupon code", context: { formName: "discount", heading: "Have a code?" } },
+      { tagName: "input", selector: "form.checkout > .row:nth-child(2) input", name: "Postcode" },
+      { tagName: "input", selector: '[data-testid="quantity"]', name: "Quantity", inputType: "number", context: { listPosition: { index: 2, total: 6 } } },
+      { tagName: "input", selector: "frame[3] >> #card-name", name: "Name on card", attributes: { "data-fluxiq-frame-id": "3" } },
+      { tagName: "a", selector: "//button[@id='legacy']", visibleText: "Legacy checkout", href: "/legacy" },
+      { tagName: "input", selector: "#card-number", name: "Card number", inputType: "text", attributes: { autocomplete: "billing cc-number" } }
+    ],
+    // The page items sit under `evidence`, in the producer's own shape: that is
+    // where `apps/extension/src/content/evidence/` writes them.
+    evidence: {
+      dialogs: {
+        open: [
+          { selector: "#confirm-dialog", role: "dialog", modal: true, native: false, label: "Confirm your order" },
+          { selector: "#session-warning", role: "alertdialog", modal: false, native: false, label: "Session expiring" }
+        ],
+        modal: true
+      },
+      overlays: {
+        tested: 24,
+        blockedCount: 2,
+        blockers: [
+          { selector: "#cookie-wall", role: "dialog", label: "We use cookies", blocks: 2, blocked: ["#place-order", "input#coupon"] },
+          { selector: "#cookie-wall h2", role: "heading", label: "Cookies", blocks: 1, blocked: ["#place-order"] }
+        ]
+      },
+      loading: {
+        documentState: "interactive",
+        busy: true,
+        busyRegions: ["#cart"],
+        indicators: [{ selector: "#spinner", kind: "spinner", label: "Updating total" }]
+      }
+    }
+  };
+}
+test("no selector from a realistic page survives into the packet", () => {
+  const evidence = sanitizeWebLlmSnapshot(realisticSnapshot(), { maxEvidenceBytes: 12e3 });
+  const serialized = JSON.stringify(evidence);
+  assert.ok(evidence.elements.length >= 5, `the packet described only ${evidence.elements.length} elements`);
+  assert.ok(evidence.dialogs?.length, "the packet dropped the dialogs as well as their selectors");
+  assert.ok(evidence.blockedBy, "the packet dropped the overlay as well as its selector");
+  for (const selector of SELECTORS) {
+    assert.doesNotMatch(serialized, new RegExp(selector.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"), selector);
+  }
+  assert.doesNotMatch(serialized, /"(?:selector|selectors|xpath|queryPath|css|locator|cssSelector|path)"/u);
+  assert.deepEqual([...packetKeys(evidence)].filter((key) => !ALLOWED_PACKET_KEYS.has(key)), []);
+});
+function packetKeys(value, found = /* @__PURE__ */ new Set()) {
+  if (Array.isArray(value)) {
+    for (const item of value) packetKeys(item, found);
+    return found;
+  }
+  if (!value || typeof value !== "object") return found;
+  for (const [key, item] of Object.entries(value)) {
+    found.add(key);
+    packetKeys(item, found);
+  }
+  return found;
+}
+test("every element is named by an opaque handle, and by nothing else that could address it", () => {
+  const { evidence, selectors } = sanitizeWebLlmSnapshotWithBindings(realisticSnapshot(), { maxEvidenceBytes: 12e3 });
+  for (const element of evidence.elements) {
+    assert.match(element.target, /^target\.[1-9][0-9]?$/u, element.target);
+    const unexpected = Object.keys(element).filter((key) => !ALLOWED_ELEMENT_KEYS.has(key));
+    assert.deepEqual(unexpected, [], `the packet element gained ${unexpected.join(", ")}`);
+  }
+  assert.deepEqual([...selectors.keys()], evidence.elements.map((element) => element.target));
+  assert.equal(selectors.get("target.1"), "#place-order");
+  assert.equal([...selectors.values()].includes("#card-name"), true);
+  assert.equal(evidence.elements.some((element) => element.frameId === 3), true);
+  assert.equal([...selectors.values()].includes("#card-number"), false);
 });

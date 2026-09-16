@@ -1,4 +1,4 @@
-// `web-llm-evidence.v1`: the bounded, value-free packet that is the only page
+// `web-llm-evidence.v2`: the bounded, value-free packet that is the only page
 // data an LLM ever sees, the three tools that produce it, and the check that
 // keeps a target the model proposes inside what the model was actually shown.
 //
@@ -17,6 +17,16 @@ export {
   type WebLlmSanitizeOptions,
   type WebLlmSnapshotBinding
 } from "./sanitize";
+export {
+  elementFillsRepairableParameter,
+  webRepairableParameterFor,
+  webRepairableParameters,
+  WEB_REPAIRABLE_ELEMENT_PARAMETER,
+  WEB_REPAIRABLE_FIELD_PARAMETER_PREFIX,
+  WEB_REPAIRABLE_ITEM_PARAMETER,
+  type WebRepairableParameter,
+  type WebRepairableParameterRole
+} from "./repairable-parameters";
 export { validateWebRuntimeTargetOverrideEvidence } from "./target-override";
 export {
   WEB_LLM_TOOL_REJECTION_CODES,

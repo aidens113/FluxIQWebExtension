@@ -1,8 +1,8 @@
-// src/tests/page-evidence-joinery.test.ts
+// domain/src/tests/page-evidence-joinery.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// src/page-evidence/capture.ts
+// domain/src/page-evidence/capture.ts
 var WEB_AUTOMATION_PAGE_EVIDENCE_CAPTURES = {
   "modal-flows": {
     "elements": {
@@ -253,12 +253,12 @@ var WEB_AUTOMATION_PAGE_EVIDENCE_CAPTURES = {
   }
 };
 
-// src/page-evidence/wire.ts
+// domain/src/page-evidence/wire.ts
 function pageEvidenceWire(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// src/sensitivity/signature.ts
+// domain/src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
 var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
 var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
@@ -271,7 +271,7 @@ function isSensitiveControlType(type) {
   return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
 }
 
-// src/sensitivity/descriptor.ts
+// domain/src/sensitivity/descriptor.ts
 function sensitiveFieldSignatureOfDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
   const record = descriptor;
@@ -290,11 +290,11 @@ function stringField(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// src/constants.ts
+// domain/src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 var WEB_AUTOMATION_SCHEMA_VERSION = "0.1";
 
-// src/recording/state.ts
+// domain/src/recording/state.ts
 var WEB_AUTOMATION_STATE_NAMESPACE = "web";
 function createWebAutomationInitialState(timestamp = Date.now()) {
   return {
@@ -310,12 +310,12 @@ function createWebAutomationInitialState(timestamp = Date.now()) {
   };
 }
 
-// src/recording/web-state/compact-json-object.ts
+// domain/src/recording/web-state/compact-json-object.ts
 function compactJsonObject(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
 
-// src/recording/web-state/element/identity.ts
+// domain/src/recording/web-state/element/identity.ts
 var MAX_STATE_ID_LENGTH = 120;
 function meaningfulText(value) {
   return typeof value === "string" && value.trim().length >= 2;
@@ -357,7 +357,7 @@ function sanitizeStateId(value) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, MAX_STATE_ID_LENGTH) || "element";
 }
 
-// src/recording/web-state/element/kind.ts
+// domain/src/recording/web-state/element/kind.ts
 function isLikelyActionableElement(element) {
   const tagName = element.tagName.toLowerCase();
   const role = element.role?.toLowerCase();
@@ -380,7 +380,7 @@ function isEnabled(element) {
   return element.attributes?.disabled === void 0 && element.attributes?.["aria-disabled"] !== "true";
 }
 
-// src/recording/web-state/geometry.ts
+// domain/src/recording/web-state/geometry.ts
 function stateBounds(bounds) {
   if (!bounds) return void 0;
   const x = finite(bounds.x);
@@ -420,7 +420,7 @@ function finite(value) {
   return Number.isFinite(value) ? value : void 0;
 }
 
-// src/recording/web-state/element/selection.ts
+// domain/src/recording/web-state/element/selection.ts
 var MAX_STATE_ELEMENTS = 1500;
 var WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS = ["count", "captured", "truncated", "captureTruncated", "stateTruncated"];
 function shouldCaptureElementState(element) {
@@ -482,7 +482,7 @@ function hasElementBounds(element) {
   return stateBounds(element.documentBounds ?? element.bounds) !== void 0;
 }
 
-// src/recording/web-state/visual-frame.ts
+// domain/src/recording/web-state/visual-frame.ts
 var MAX_VISUAL_FRAME_ELEMENTS = 1e3;
 var WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID = "web-automation.viewport";
 var WEB_AUTOMATION_SCREEN_FRAME_ID = "screen";
@@ -645,7 +645,7 @@ function elementLayerLabel(element) {
   return element.name ?? element.visibleText ?? element.text ?? element.value ?? element.href ?? element.tagName;
 }
 
-// src/recording/web-state/action-target.ts
+// domain/src/recording/web-state/action-target.ts
 function webAutomationActionTargetFromElement(element) {
   const secret = isSensitiveElementDescriptor(element);
   const visibleText = secret ? void 0 : element.visibleText;
@@ -686,7 +686,7 @@ function webAutomationActionTargetFromElement(element) {
   });
 }
 
-// src/recording/web-state/evidence/read.ts
+// domain/src/recording/web-state/evidence/read.ts
 var MAX_TEXT = 200;
 function list(value) {
   return Array.isArray(value) ? value : [];
@@ -718,7 +718,7 @@ function finite2(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : void 0;
 }
 
-// src/recording/web-state/evidence/input.ts
+// domain/src/recording/web-state/evidence/input.ts
 function pageEvidenceOfSnapshot(snapshot2) {
   return pageEvidenceWire(snapshot2.evidence);
 }
@@ -726,7 +726,7 @@ function pageEvidenceTruncatedElements(evidence) {
   return pageEvidenceWire(evidence?.elements)?.truncated === true;
 }
 
-// src/recording/web-state/state-values.ts
+// domain/src/recording/web-state/state-values.ts
 function putStateValue(snapshot2, path, type, value, observedAt, sourceId, input = {}) {
   const namespace = snapshot2.namespaces[WEB_AUTOMATION_STATE_NAMESPACE] ?? {
     schemaId: WEB_AUTOMATION_DOMAIN_ID,
@@ -811,7 +811,7 @@ function elementStatePayload(element) {
   });
 }
 
-// src/recording/web-state/evidence/project.ts
+// domain/src/recording/web-state/evidence/project.ts
 var EVIDENCE_PATH_PREFIX = "evidence.";
 var MAX_DIALOGS = 5;
 var MAX_OVERLAY_BLOCKERS = 5;
@@ -1011,7 +1011,7 @@ function putText(put, path, value, input) {
   if (bounded !== void 0) put(path, "string", bounded, input);
 }
 
-// src/recording/web-state/snapshot.ts
+// domain/src/recording/web-state/snapshot.ts
 function createWebAutomationStateFromSnapshot(snapshot2, input = {}) {
   const timestamp = input.timestamp ?? Date.now();
   let state = createWebAutomationInitialState(timestamp);
@@ -1037,7 +1037,7 @@ function createWebAutomationStateFromSnapshot(snapshot2, input = {}) {
   return withScreenVisualFrame(state, snapshot2, selection.elements, input);
 }
 
-// src/runtime/llm-evidence/limits.ts
+// domain/src/runtime/llm-evidence/limits.ts
 import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES } from "fluxiq/automation-studio";
 var WEB_LLM_EVIDENCE_BYTE_BUDGETS = Object.freeze({
   ceiling: 12e3,
@@ -1066,7 +1066,7 @@ function evidenceByteLimit(input, fallback, ceiling = WEB_LLM_EVIDENCE_BYTE_BUDG
   return Math.min(Number(input), cap);
 }
 
-// src/runtime/llm-evidence/location.ts
+// domain/src/runtime/llm-evidence/location.ts
 function safeEvidenceUrl(input) {
   if (typeof input !== "string" || !input || input.length > WEB_LLM_EVIDENCE_BOUNDS.url) throw new Error("web evidence URL must be bounded");
   const url = new URL(input);
@@ -1086,7 +1086,7 @@ function sameOriginHref(input, base) {
   }
 }
 
-// src/runtime/llm-evidence/present.ts
+// domain/src/runtime/llm-evidence/present.ts
 function present(fields) {
   const source = fields;
   const written = {};
@@ -1097,7 +1097,7 @@ function present(fields) {
   return written;
 }
 
-// src/runtime/llm-evidence/untrusted-json.ts
+// domain/src/runtime/llm-evidence/untrusted-json.ts
 function isJsonRecord(input) {
   return Boolean(input) && typeof input === "object" && !Array.isArray(input);
 }
@@ -1118,7 +1118,7 @@ function boundedCount(input, maximum) {
   return input;
 }
 
-// src/runtime/llm-evidence/elements.ts
+// domain/src/runtime/llm-evidence/elements.ts
 var FRAME_SELECTOR_PATTERN = /^frame\[(\d{1,6})\]\s*>>\s*(.+)$/u;
 var FRAME_ID_ATTRIBUTE = "data-fluxiq-frame-id";
 function sanitizedEvidenceElement(raw, context) {
@@ -1143,10 +1143,9 @@ function sanitizedEvidenceElement(raw, context) {
   const expanded = revealKind === "disclosure" ? semanticExpandedState(attributes) : void 0;
   const placement = elementPlacement(raw.context, { name, text: text2 });
   const focused = context.focusedSelector !== void 0 && context.focusedSelector === addressed.selector ? true : void 0;
-  return present({
+  const element = present({
     target: context.target,
     tag,
-    selector: addressed.selector,
     frameId: addressed.frameId,
     role: role || void 0,
     name: name || void 0,
@@ -1168,6 +1167,7 @@ function sanitizedEvidenceElement(raw, context) {
     item: placement.item,
     cell: placement.cell
   });
+  return { element, selector: addressed.selector };
 }
 function safeFillTag(tag, inputType) {
   return tag === "textarea" || tag === "input" && (!inputType || ["text", "search", "email", "tel", "url", "number"].includes(inputType));
@@ -1241,7 +1241,7 @@ function sanitizedSelectedValue(input, options) {
   return value && options.some((option) => option.value === value) ? value : void 0;
 }
 
-// src/runtime/llm-evidence/page-evidence.ts
+// domain/src/runtime/llm-evidence/page-evidence.ts
 var READY_STATES = ["loading", "interactive", "complete"];
 var ORDINARY_NAVIGATION_TYPE = "navigate";
 var MAX_REDIRECTS = 100;
@@ -1335,14 +1335,12 @@ function evidenceDialogs(input) {
     if (!raw) continue;
     const role = boundedText(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
     const name = boundedText(raw.label, WEB_LLM_EVIDENCE_BOUNDS.text);
-    const selector = boundedText(raw.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
     const modal = trueFlag(raw.modal);
-    if (!role && !name && !selector && !modal) continue;
+    if (!role && !name && !modal) continue;
     dialogs.push(present({
       role: role || void 0,
       name: name || void 0,
-      modal,
-      selector: selector || void 0
+      modal
     }));
   }
   return dialogs.length ? dialogs : void 0;
@@ -1350,21 +1348,19 @@ function evidenceDialogs(input) {
 function evidenceBlocker(input) {
   const blocker = items(input?.blockers).map((item) => pageEvidenceWire(item)).find((item) => item !== void 0);
   if (!blocker) return void 0;
-  const selector = boundedText(blocker.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
-  if (!selector) return void 0;
   const role = boundedText(blocker.role, WEB_LLM_EVIDENCE_BOUNDS.role);
   const name = boundedText(blocker.label, WEB_LLM_EVIDENCE_BOUNDS.text);
   const blocks = boundedCount(blocker.blocks, MAX_BLOCKED_CONTROLS);
+  if (!role && !name && !blocks) return void 0;
   return present({
-    selector,
     role: role || void 0,
     name: name || void 0,
     blocks: blocks || void 0
   });
 }
 
-// src/runtime/llm-evidence/sanitize.ts
-var WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v1";
+// domain/src/runtime/llm-evidence/sanitize.ts
+var WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v2";
 function sanitizeWebLlmSnapshot(input, options = {}) {
   return sanitizeWebLlmSnapshotWithBindings(input, options).evidence;
 }
@@ -1379,10 +1375,10 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
   const selectors = /* @__PURE__ */ new Map();
   for (const raw of snapshot2.interactiveElements) {
     if (elements.length >= WEB_LLM_EVIDENCE_BOUNDS.elements) break;
-    const element = sanitizedEvidenceElement(raw, { target: `target.${elements.length + 1}`, url, focusedSelector });
-    if (!element) continue;
-    elements.push(element);
-    selectors.set(element.target, element.selector);
+    const described = sanitizedEvidenceElement(raw, { target: `target.${elements.length + 1}`, url, focusedSelector });
+    if (!described) continue;
+    elements.push(described.element);
+    selectors.set(described.element.target, described.selector);
   }
   const childFrameIds = [...new Set(elements.map((element) => element.frameId).filter((id) => id !== void 0))].sort((left, right) => left - right);
   const elementTotal = evidenceElementTotal(snapshot2, elements.length);
@@ -1451,7 +1447,7 @@ function trimToBudget(evidence, selectors, maxEvidenceBytes) {
   }
 }
 
-// src/runtime/llm-evidence/tool-rejection.ts
+// domain/src/runtime/llm-evidence/tool-rejection.ts
 var WEB_LLM_TOOL_REJECTION_CODES = [
   "invalid_input",
   "cross_origin",
@@ -1461,7 +1457,7 @@ var WEB_LLM_TOOL_REJECTION_CODES = [
   "sensitive_value"
 ];
 
-// src/runtime/llm-evidence/vocabulary.ts
+// domain/src/runtime/llm-evidence/vocabulary.ts
 var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe"];
 var WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
 var WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
@@ -1478,7 +1474,7 @@ var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
   ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
 ]);
 
-// src/tests/page-evidence-joinery.test.ts
+// domain/src/tests/page-evidence-joinery.test.ts
 var pageEvidence2 = {
   elements: { scanned: 4200, candidates: 900, matched: 812, returned: 2, truncated: true, changed: 1, recentlyInteracted: 1 },
   loading: {
@@ -1540,7 +1536,7 @@ test("both readers see the same dialog, under the producer's own field names", (
   const carried = evidence.dialogs?.[0];
   assert.ok(carried, "the packet reported no dialog at all: it is reading a path the producer does not write");
   assert.equal(values["evidence.dialogs.openCount"]?.value, 1);
-  assert.equal(carried.selector, open?.selector);
+  assert.equal(Object.hasOwn(carried, "selector"), false);
   assert.equal(carried.role, open?.role);
   assert.equal(carried.name, open?.label);
   assert.equal(carried.modal, true);
@@ -1551,7 +1547,7 @@ test("both readers see the same blocking overlay, and the packet takes the one t
   const evidence = packet(snapshot);
   const blocker = collection(values, "evidence.overlays.blockers").items[0];
   assert.ok(evidence.blockedBy, "the packet reported nothing covering the page");
-  assert.equal(evidence.blockedBy.selector, blocker?.selector);
+  assert.equal(Object.hasOwn(evidence.blockedBy, "selector"), false);
   assert.equal(evidence.blockedBy.role, blocker?.role);
   assert.equal(evidence.blockedBy.name, blocker?.label);
   assert.equal(evidence.blockedBy.blocks, blocker?.blocks);
@@ -1632,7 +1628,7 @@ test("real capture: the modal a page was actually showing reaches both readers",
   const carried = packeted.dialogs?.[0];
   assert.ok(carried, "the packet reported no dialog, and a real browser sent one");
   assert.equal(values["evidence.dialogs.openCount"]?.value, evidence.dialogs?.open.length);
-  assert.equal(carried.selector, open?.selector);
+  assert.equal(Object.hasOwn(carried, "selector"), false);
   assert.equal(carried.role, open?.role);
   assert.equal(carried.name, open?.label);
   assert.equal(carried.name, evidence.dialogs?.open[0]?.label);
@@ -1649,8 +1645,8 @@ test("real capture: what the page painted over its controls reaches both readers
   const blockedBy = packet(capture).blockedBy;
   const blocker = collection(values, "evidence.overlays.blockers").items[0];
   assert.ok(blockedBy, "the packet reported nothing covering a page whose every control was behind a backdrop");
-  assert.equal(blockedBy.selector, blocker?.selector);
-  assert.equal(blockedBy.selector, evidence.overlays?.blockers[0]?.selector);
+  assert.equal(Object.hasOwn(blockedBy, "selector"), false);
+  assert.ok(blocker?.selector, "the producer still records the selector: it is the packet that does not carry it");
   assert.equal(blockedBy.blocks, blocker?.blocks);
   assert.equal(values["evidence.overlays.blockedCount"]?.value, evidence.overlays?.blockedCount);
   assert.equal(values["evidence.overlays.tested"]?.value, evidence.overlays?.tested);

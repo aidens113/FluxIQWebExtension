@@ -1,14 +1,14 @@
-// src/runtime/tests/reusable-evidence.test.ts
+// domain/src/runtime/tests/reusable-evidence.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// src/runtime/adapter.ts
+// domain/src/runtime/adapter.ts
 import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES as AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES2 } from "fluxiq/automation-studio";
 
-// src/constants.ts
+// domain/src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 
-// src/actions/extraction/request.ts
+// domain/src/actions/extraction/request.ts
 var WEB_AUTOMATION_EXTRACT_PAGINATION_MODES = ["next", "loadMore", "scroll", "numbered"];
 var WEB_AUTOMATION_EXTRACT_FIELD_KINDS = ["text", "attribute", "link", "value", "column"];
 var WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS = ["include", "exclude", "encrypt"];
@@ -16,10 +16,10 @@ var WEB_AUTOMATION_EXTRACT_READ_MODES = ["text", "attribute", "value", "html"];
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
 var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
 
-// src/actions/extraction/read-request.ts
+// domain/src/actions/extraction/read-request.ts
 var REFUSED = Symbol("refused");
 
-// src/actions/extraction/schema.ts
+// domain/src/actions/extraction/schema.ts
 function webAutomationExtractListSchema(elementFingerprintSchema2) {
   const pageBound = { type: "integer", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES };
   const fieldSpecSchema = {
@@ -72,7 +72,7 @@ function webAutomationExtractListSchema(elementFingerprintSchema2) {
   };
 }
 
-// src/actions/types.ts
+// domain/src/actions/types.ts
 var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.navigate",
@@ -115,7 +115,7 @@ var WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = {
   "web.browser.download": "browser.download"
 };
 
-// src/actions/safety.ts
+// domain/src/actions/safety.ts
 var WEB_AUTOMATION_ACTION_SAFETY = {
   "web.browser.navigate": "review",
   "web.dom.click": "review",
@@ -140,7 +140,7 @@ var WEB_AUTOMATION_ACTION_SAFETY = {
   "web.browser.download": "review"
 };
 
-// src/actions/schemas.ts
+// domain/src/actions/schemas.ts
 var elementFingerprintSchema = {
   type: "object",
   label: "Element fingerprint",
@@ -444,7 +444,7 @@ var webAutomationActionDefinitions = [
   }
 ];
 
-// src/output-nodes/definitions.ts
+// domain/src/output-nodes/definitions.ts
 var controlInput = { id: "in", label: "In", valueType: "signal", role: "control" };
 var outputPorts = [
   { id: "success", label: "Success", valueType: "any", role: "success" },
@@ -580,7 +580,7 @@ function iconForOutput(outputId) {
   return "square-dot";
 }
 
-// src/sensitivity/signature.ts
+// domain/src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
 var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
 var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
@@ -593,7 +593,7 @@ function isSensitiveControlType(type) {
   return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
 }
 
-// src/io/input-model.ts
+// domain/src/io/input-model.ts
 var WEB_AUTOMATION_INPUT_IDS = {
   browserState: "web.browser.state",
   recordingEvidence: "web.recording.evidence",
@@ -637,7 +637,7 @@ var OUTPUT_FOR_ACTION_INPUT = new Map(
   actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
 );
 
-// src/runtime/capabilities.ts
+// domain/src/runtime/capabilities.ts
 var webAutomationRuntimeCapabilities = [
   {
     id: "web.actions",
@@ -704,7 +704,7 @@ var webAutomationGatewayCapabilities = [
   }
 ];
 
-// src/runtime/failure/codes.ts
+// domain/src/runtime/failure/codes.ts
 var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   /** The target was found but refused the action: disabled, hidden, or covered by another element. */
   ACTION_REJECTED: "web.action.rejected",
@@ -798,7 +798,7 @@ function boundedText(value) {
   return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
 }
 
-// src/runtime/llm-evidence/limits.ts
+// domain/src/runtime/llm-evidence/limits.ts
 import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES } from "fluxiq/automation-studio";
 var WEB_LLM_EVIDENCE_BYTE_BUDGETS = Object.freeze({
   ceiling: 12e3,
@@ -818,10 +818,10 @@ var WEB_LLM_EVIDENCE_BOUNDS = Object.freeze({
   dialogs: 3
 });
 
-// src/runtime/llm-evidence/sanitize.ts
-var WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v1";
+// domain/src/runtime/llm-evidence/sanitize.ts
+var WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v2";
 
-// src/runtime/llm-evidence/tool-rejection.ts
+// domain/src/runtime/llm-evidence/tool-rejection.ts
 var WEB_LLM_TOOL_REJECTION_CODES = [
   "invalid_input",
   "cross_origin",
@@ -831,7 +831,7 @@ var WEB_LLM_TOOL_REJECTION_CODES = [
   "sensitive_value"
 ];
 
-// src/runtime/llm-evidence/vocabulary.ts
+// domain/src/runtime/llm-evidence/vocabulary.ts
 var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe"];
 var WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
 var WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
@@ -848,25 +848,25 @@ var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
   ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
 ]);
 
-// src/extraction/dataset-id.ts
+// domain/src/extraction/dataset-id.ts
 var COMBINING_MARKS = new RegExp("\\p{M}+", "gu");
 
-// src/extraction/label-key.ts
+// domain/src/extraction/label-key.ts
 var COMBINING_MARKS2 = new RegExp("\\p{M}+", "gu");
 
-// src/recording/web-state/evidence/project.ts
+// domain/src/recording/web-state/evidence/project.ts
 var COLLECTION = { elementKind: "collection", comparable: false };
 var LIVE_COLLECTION = { ...COLLECTION, volatility: "rapid" };
 var SETTLED_COLLECTION = { ...COLLECTION, volatility: "slow" };
 
-// src/client/gateway-mapping.ts
+// domain/src/client/gateway-mapping.ts
 var UNSUPPORTED_ACTION_TYPE_FAILURE = Object.freeze(webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE));
 var CANONICAL_ACTION_TYPES = new Set(WEB_AUTOMATION_ACTION_TYPES);
 var LEGACY_ACTION_TYPE_ALIASES = new Map(
   Object.entries(WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER).map(([canonical, legacy]) => [legacy, canonical])
 );
 
-// src/runtime/expectation/conditions.ts
+// domain/src/runtime/expectation/conditions.ts
 var ASSERT_KINDS = Object.freeze({
   exists: true,
   absent: true,
@@ -876,16 +876,16 @@ var ASSERT_KINDS = Object.freeze({
   enabled: true
 });
 
-// src/runtime/host-runtime.ts
+// domain/src/runtime/host-runtime.ts
 var WEB_AUTOMATION_NODE_IDS = new Set(WEB_AUTOMATION_ACTION_TYPES.map(webAutomationOutputNodeId));
 var WEB_AUTOMATION_OUTPUT_IDS = new Set(WEB_AUTOMATION_ACTION_TYPES);
 var HOST_RUNTIME_CAPABILITIES = Object.freeze(["state-snapshot", "state-diff", "expectation-evaluation"]);
 
-// src/runtime/reusable-evidence.ts
+// domain/src/runtime/reusable-evidence.ts
 import { createHash } from "node:crypto";
 var WEB_REUSABLE_EVIDENCE_FINGERPRINT_SCHEMA_VERSION = "web-reusable-evidence-fingerprint.v1";
 var WEB_REUSABLE_EVIDENCE_PROJECTION_SCHEMA_VERSION = "web-reusable-evidence-projection.v1";
-var WEB_REUSABLE_EVIDENCE_SANITIZER_VERSION = "web-reusable-evidence-sanitizer.v1";
+var WEB_REUSABLE_EVIDENCE_SANITIZER_VERSION = "web-reusable-evidence-sanitizer.v2";
 var WEB_REUSABLE_EVIDENCE_CAPABILITY_SCHEMA_VERSION = "web-client-capabilities.v1";
 var WEB_REUSABLE_EVIDENCE_MAX_ELEMENTS = 40;
 var WEB_REUSABLE_EVIDENCE_MAX_ACTIONS = 20;
@@ -934,11 +934,9 @@ function normalizedElements(input, location) {
   const unique = /* @__PURE__ */ new Map();
   for (const element of input) {
     const tag = boundedToken(element.tag, 40);
-    const selector = boundedText3(element.selector, 500);
-    if (!tag || !selector || unshareableControl(element)) continue;
+    if (!tag || unshareableControl(element)) continue;
     const normalized = compact2({
       tag: tag.toLowerCase(),
-      selectorDigest: digest(selector),
       role: boundedToken(element.role, 80)?.toLowerCase(),
       name: boundedText3(element.name, 160),
       inputType: boundedToken(element.inputType, 40)?.toLowerCase(),
@@ -967,8 +965,7 @@ function normalizedCapabilities(input) {
   return [...new Set(values)].sort();
 }
 function promptElementFact(element) {
-  const { selectorDigest: _selectorDigest, ...fact } = element;
-  return { kind: "element", ...fact };
+  return { kind: "element", ...element };
 }
 function boundedProjection(fingerprint, candidates, options) {
   const maxBytes = boundedLimit(options.maxProjectionBytes, WEB_REUSABLE_EVIDENCE_MAX_PROJECTION_BYTES, "projection byte limit");
@@ -1062,17 +1059,17 @@ function canonicalJson(input) {
   return JSON.stringify(input);
 }
 
-// src/runtime/tests/reusable-evidence.test.ts
+// domain/src/runtime/tests/reusable-evidence.test.ts
 var evidence = (overrides = {}) => ({
-  schemaVersion: "web-llm-evidence.v1",
+  schemaVersion: "web-llm-evidence.v2",
   trust: "untrusted-page-evidence",
   location: "https://example.test/form?token=private#secret",
   elements: [
-    { target: "target.1", tag: "textarea", selector: '[data-testid="instruction-name-adapted"]', name: "Name", hasValue: true },
-    { target: "target.2", tag: "select", selector: "#plan", name: "Plan", selectedValue: "enterprise", options: [{ value: "starter", label: "Starter" }, { value: "enterprise", label: "Private enterprise choice" }] },
-    { target: "target.3", tag: "input", selector: "#password", inputType: "password", name: "Account password" },
-    { target: "target.4", tag: "a", selector: "#next", name: "Next", href: "https://example.test/next?ticket=private" },
-    { target: "target.5", tag: "a", selector: "#away", name: "Away", href: "https://outside.test/path?cross=private" }
+    { target: "target.1", tag: "textarea", name: "Name", hasValue: true },
+    { target: "target.2", tag: "select", name: "Plan", selectedValue: "enterprise", options: [{ value: "starter", label: "Starter" }, { value: "enterprise", label: "Private enterprise choice" }] },
+    { target: "target.3", tag: "input", inputType: "password", name: "Account password" },
+    { target: "target.4", tag: "a", name: "Next", href: "https://example.test/next?ticket=private" },
+    { target: "target.5", tag: "a", name: "Away", href: "https://outside.test/path?cross=private" }
   ],
   truncated: false,
   ...overrides
@@ -1102,7 +1099,7 @@ test("produces deterministic versioned compatibility and a non-executable bounde
 test("changes compatibility for relevant page, control, and capability revisions", () => {
   const baseline = produceWebReusableEvidence({ evidence: evidence(), clientCapabilities: ["web.actions.v1"] });
   const changedPath = produceWebReusableEvidence({ evidence: evidence({ location: "https://example.test/other" }), clientCapabilities: ["web.actions.v1"] });
-  const changedControl = produceWebReusableEvidence({ evidence: evidence({ elements: [{ target: "noise", tag: "textarea", selector: "#renamed", name: "Name" }] }), clientCapabilities: ["web.actions.v1"] });
+  const changedControl = produceWebReusableEvidence({ evidence: evidence({ elements: [{ target: "noise", tag: "textarea", name: "Name" }] }), clientCapabilities: ["web.actions.v1"] });
   const changedCapability = produceWebReusableEvidence({ evidence: evidence(), clientCapabilities: ["web.actions.v2"] });
   for (const candidate of [changedPath, changedControl, changedCapability]) assert.notEqual(candidate.fingerprint.digest, baseline.fingerprint.digest);
 });
@@ -1117,7 +1114,7 @@ test("keeps opposite run outcomes compatible while preserving them in prompt con
   assert.ok(failed.promptProjection.facts.some((fact) => fact.kind === "action" && fact.status === "failed"));
 });
 test("enforces exact item and byte bounds by deterministic trimming", () => {
-  const many = Array.from({ length: 40 }, (_, index) => ({ target: `target.${index + 1}`, tag: "button", selector: `[data-id="${index}"]`, name: `Action ${index} ${"x".repeat(100)}` }));
+  const many = Array.from({ length: 40 }, (_, index) => ({ target: `target.${index + 1}`, tag: "button", name: `Action ${index} ${"x".repeat(100)}` }));
   const first = produceWebReusableEvidence({ evidence: evidence({ elements: many }) }, { maxProjectionItems: 7, maxProjectionBytes: 900 });
   const second = produceWebReusableEvidence({ evidence: evidence({ elements: [...many].reverse() }) }, { maxProjectionItems: 7, maxProjectionBytes: 900 });
   assert.deepEqual(first, second);
@@ -1139,7 +1136,7 @@ test("rejects credentialed and non-http locations", () => {
 test("the fingerprint excludes every control it excluded before, by the shared rule plus its own two types", () => {
   const excluded = (element) => {
     const production = produceWebReusableEvidence({
-      evidence: evidence({ elements: [{ target: "target.1", tag: "input", selector: "#field", name: "Field name", ...element }] })
+      evidence: evidence({ elements: [{ target: "target.1", tag: "input", name: "Field name", ...element }] })
     });
     return !production.promptProjection.facts.some((fact) => fact.kind === "element");
   };

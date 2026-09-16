@@ -4,7 +4,11 @@ import { WEB_LLM_EVIDENCE_SCHEMA_VERSION, type WebLlmEvidenceElement, type WebLl
 
 export const WEB_REUSABLE_EVIDENCE_FINGERPRINT_SCHEMA_VERSION = "web-reusable-evidence-fingerprint.v1" as const;
 export const WEB_REUSABLE_EVIDENCE_PROJECTION_SCHEMA_VERSION = "web-reusable-evidence-projection.v1" as const;
-export const WEB_REUSABLE_EVIDENCE_SANITIZER_VERSION = "web-reusable-evidence-sanitizer.v1" as const;
+// `.v2`: the packet stopped carrying element selectors, so the structural
+// digest below is computed over a different set of facts. Bumping the version
+// keeps a `.v1` fingerprint from ever being treated as compatible with a `.v2`
+// one, which is what the digest is for.
+export const WEB_REUSABLE_EVIDENCE_SANITIZER_VERSION = "web-reusable-evidence-sanitizer.v2" as const;
 export const WEB_REUSABLE_EVIDENCE_CAPABILITY_SCHEMA_VERSION = "web-client-capabilities.v1" as const;
 export const WEB_REUSABLE_EVIDENCE_MAX_ELEMENTS = 40;
 export const WEB_REUSABLE_EVIDENCE_MAX_ACTIONS = 20;
@@ -95,7 +99,6 @@ export function produceWebReusableEvidence(input: Readonly<{
 
 type NormalizedElement = Readonly<{
   tag: string;
-  selectorDigest: string;
   role?: string;
   name?: string;
   inputType?: string;
@@ -108,11 +111,9 @@ function normalizedElements(input: readonly WebLlmEvidenceElement[], location: {
   const unique = new Map<string, NormalizedElement>();
   for (const element of input) {
     const tag = boundedToken(element.tag, 40);
-    const selector = boundedText(element.selector, 500);
-    if (!tag || !selector || unshareableControl(element)) continue;
+    if (!tag || unshareableControl(element)) continue;
     const normalized = compact({
       tag: tag.toLowerCase(),
-      selectorDigest: digest(selector),
       role: boundedToken(element.role, 80)?.toLowerCase(),
       name: boundedText(element.name, 160),
       inputType: boundedToken(element.inputType, 40)?.toLowerCase(),
@@ -143,9 +144,15 @@ function normalizedCapabilities(input: readonly string[]): string[] {
   return [...new Set(values)].sort();
 }
 
+/**
+ * The fact and the dedup key are now the same object, which they were not
+ * before: the key used to include a digest of the element's selector while the
+ * fact dropped it, so two controls that read identically but sat at different
+ * selectors produced two identical facts. Dropping the selector fixed the
+ * duplication as well as the leak.
+ */
 function promptElementFact(element: NormalizedElement): WebReusableEvidencePromptFact {
-  const { selectorDigest: _selectorDigest, ...fact } = element;
-  return { kind: "element", ...fact };
+  return { kind: "element", ...element };
 }
 
 function boundedProjection(fingerprint: WebReusableEvidenceFingerprint, candidates: WebReusableEvidencePromptFact[], options: Readonly<{ maxProjectionBytes?: number; maxProjectionItems?: number }>): WebReusableEvidencePromptProjection {

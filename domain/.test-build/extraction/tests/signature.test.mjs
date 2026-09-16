@@ -1,8 +1,8 @@
-// src/extraction/tests/signature.test.ts
+// domain/src/extraction/tests/signature.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// src/extraction/signature.ts
+// domain/src/extraction/signature.ts
 var MAX_SIGNATURE_CLASSES = 3;
 function webAutomationItemSignature(parts) {
   const role = parts.role?.trim().toLowerCase() ?? "";
@@ -13,7 +13,7 @@ function webAutomationIdentifierShape(value) {
   return value === void 0 ? "" : value.replace(/\d+/gu, "#");
 }
 
-// src/extraction/tests/signature.test.ts
+// domain/src/extraction/tests/signature.test.ts
 test("numbered test ids share one shape", () => {
   assert.equal(webAutomationIdentifierShape("row-1"), "row-#");
   assert.equal(webAutomationIdentifierShape("row-2"), webAutomationIdentifierShape("row-1"));

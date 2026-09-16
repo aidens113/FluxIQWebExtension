@@ -11,13 +11,13 @@ function input(overrides: Partial<CompletedWebReusableEvidenceInput> = {}): Comp
     subflowId: "subflow.one",
     evidenceKind: "runtime_failure",
     evidence: {
-      schemaVersion: "web-llm-evidence.v1",
+      schemaVersion: "web-llm-evidence.v2",
       trust: "untrusted-page-evidence",
       location: "https://example.test/form?secret=query#fragment",
       elements: [
-        { target: "target.1", tag: "textarea", selector: '[data-testid="adapted-name"]', name: "Name", hasValue: true },
-        { target: "target.2", tag: "input", selector: "#password", inputType: "password", name: "Password" },
-        { target: "target.3", tag: "select", selector: "#plan", name: "Plan", selectedValue: "private-value", options: [{ value: "private-value", label: "Private label" }] },
+        { target: "target.1", tag: "textarea", name: "Name", hasValue: true },
+        { target: "target.2", tag: "input", inputType: "password", name: "Password" },
+        { target: "target.3", tag: "select", name: "Plan", selectedValue: "private-value", options: [{ value: "private-value", label: "Private label" }] },
       ],
       truncated: false,
     },

@@ -1,15 +1,15 @@
-// src/runtime/failure/tests/carrier.test.ts
+// domain/src/runtime/failure/tests/carrier.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
 
-// src/actions/extraction/read-request.ts
+// domain/src/actions/extraction/read-request.ts
 var REFUSED = Symbol("refused");
 
-// src/actions/types.ts
+// domain/src/actions/types.ts
 var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 
-// src/runtime/failure/codes.ts
+// domain/src/runtime/failure/codes.ts
 var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   /** The target was found but refused the action: disabled, hidden, or covered by another element. */
   ACTION_REJECTED: "web.action.rejected",
@@ -106,7 +106,7 @@ function boundedText(value) {
   return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
 }
 
-// src/runtime/failure/carrier.ts
+// domain/src/runtime/failure/carrier.ts
 function carriedWebAutomationFailure(error, fallback = {}) {
   const carried2 = property(error, "failure");
   const code = property(carried2, "code");
@@ -130,7 +130,7 @@ function text(value) {
   return typeof value === "string" && value.length > 0 ? value : void 0;
 }
 
-// src/runtime/failure/tests/carrier.test.ts
+// domain/src/runtime/failure/tests/carrier.test.ts
 function carried(error, fallback) {
   const record = carriedWebAutomationFailure(error, fallback);
   if (record !== void 0) assert.deepEqual(parseAutomationStudioFailureRecord(record), record, `Core's parser accepts ${record.code}`);

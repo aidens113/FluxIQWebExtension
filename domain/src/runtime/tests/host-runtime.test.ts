@@ -68,7 +68,7 @@ test("a web attempt gets a bounded, sanitized state ref sourced from web.dom.cap
   assert.equal(ref.stateSnapshotId, "web.state.1");
   assert.equal(ref.stateRef, "web.state.1@node.1.attempt.1:before_action");
   assert.equal(typeof ref.capturedAt, "number");
-  assert.equal(ref.summary?.schemaVersion, "web-llm-evidence.v1");
+  assert.equal(ref.summary?.schemaVersion, "web-llm-evidence.v2");
   assert.equal(ref.summary?.location, "https://shop.test/cart");
   // The sanitized packet's own rules apply, which is the point of reusing it:
   // the URL query never travels and neither does a control's value.
@@ -84,7 +84,7 @@ test("a recorded action, Core's policy node naming web.dom.click, gets a state r
   assert.equal(calls.length, 1);
   assert.equal(calls[0]?.outputId, "web.dom.capture_snapshot");
   assert.equal(ref.stateRef, "web.state.1@node.1.attempt.1:before_action");
-  assert.equal(ref.summary?.schemaVersion, "web-llm-evidence.v1");
+  assert.equal(ref.summary?.schemaVersion, "web-llm-evidence.v2");
   assert.equal(typeof ref.summary?.truncated, "boolean");
 });
 
@@ -109,7 +109,7 @@ test("a policy node naming no web output, or a web output on another node, is de
 
 test("a diff with a side missing is declined, so no diff claims every element appeared or left", async () => {
   const boundary = createWebAutomationHostRuntime(gateway([]).gateway);
-  const summary = { schemaVersion: "web-llm-evidence.v1", location: "https://shop.test/cart", elements: [{ selector: "#pay" }] };
+  const summary = { schemaVersion: "web-llm-evidence.v2", location: "https://shop.test/cart", elements: [{ selector: "#pay" }] };
   const before = { stateSnapshotId: "web.state.1", stateRef: "web.state.1@a:before_action", capturedAt: 1, summary };
   const after = { stateSnapshotId: "web.state.2", stateRef: "web.state.2@a:after_action", capturedAt: 2, summary };
   const diff = async (sides: DiffSides) => boundary.inspectStateDiff!({ ...sides, node: { id: "node.1", definitionId: POLICY_ACTION_ID }, attemptId: "a" });
@@ -155,9 +155,13 @@ test("a snapshot that never arrived produces no ref rather than a ref pointing a
   await assert.rejects(() => Promise.resolve(emptyAnswer.captureStateSnapshot!(captureInput(CLICK_NODE_ID))));
 });
 
-test("the diff reports the move, the counts, and the selectors, and stays inside the schema", () => {
-  const before = { schemaVersion: "web-llm-evidence.v1", location: "https://shop.test/cart", title: "Cart", elements: [{ selector: "#pay" }, { selector: "#edit" }] };
-  const after = { schemaVersion: "web-llm-evidence.v1", location: "https://shop.test/thanks", title: "Thanks", elements: [{ selector: "#edit" }, { selector: "#receipt" }] };
+test("the diff reports the move, the counts, and which elements came and went, and stays inside the schema", () => {
+  // `.v2` identifies an element by what it is and what it is called. The packet
+  // stopped carrying selectors, and the opaque handle that replaced them is
+  // positional -- `target.1` is the first element of whichever capture it came
+  // from -- so a diff over handles would report that nothing ever changes.
+  const before = { schemaVersion: "web-llm-evidence.v2", location: "https://shop.test/cart", title: "Cart", elements: [{ target: "target.1", tag: "button", name: "Pay" }, { target: "target.2", tag: "a", name: "Edit" }] };
+  const after = { schemaVersion: "web-llm-evidence.v2", location: "https://shop.test/thanks", title: "Thanks", elements: [{ target: "target.1", tag: "a", name: "Edit" }, { target: "target.2", tag: "a", name: "Receipt" }] };
   const diff = webAutomationStateDiff(before, after, "web.state.1@a:before_action", "web.state.2@a:after_action");
   assert.deepEqual(diff, {
     schemaVersion: WEB_STATE_DIFF_SCHEMA_VERSION,
@@ -171,16 +175,16 @@ test("the diff reports the move, the counts, and the selectors, and stays inside
     afterElementCount: 2,
     addedElementCount: 1,
     removedElementCount: 1,
-    addedSelectors: ["#receipt"],
-    removedSelectors: ["#pay"]
+    addedElements: [{ tag: "a", name: "Receipt" }],
+    removedElements: [{ tag: "button", name: "Pay" }]
   });
 });
 
 test("the diff never lists more than the bound, and its counts stay exact", () => {
-  const many = { elements: Array.from({ length: 30 }, (_, index) => ({ selector: `#item-${index}` })) };
+  const many = { elements: Array.from({ length: 30 }, (_, index) => ({ target: `target.${index + 1}`, tag: "li", name: `Item ${index}` })) };
   const grown = webAutomationStateDiff({ elements: [] }, many);
   assert.equal(grown.addedElementCount, 30);
-  assert.equal((grown.addedSelectors as string[]).length, 10);
+  assert.equal((grown.addedElements as unknown[]).length, 10);
   assert.equal(grown.locationChanged, false);
   assert.equal(grown.beforeElementCount, 0);
 });

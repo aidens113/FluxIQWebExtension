@@ -132,7 +132,10 @@ test("both readers see the same dialog, under the producer's own field names", (
   const carried = evidence.dialogs?.[0];
   assert.ok(carried, "the packet reported no dialog at all: it is reading a path the producer does not write");
   assert.equal(values["evidence.dialogs.openCount"]?.value, 1);
-  assert.equal(carried.selector, open?.selector);
+  // The producer names a dialog with a selector and the packet does not carry
+  // one: the packet is what a language model reads, and nothing it may do names
+  // a dialog. Everything else is the same fact under the same name.
+  assert.equal(Object.hasOwn(carried, "selector"), false);
   assert.equal(carried.role, open?.role);
   // The producer calls a dialog's accessible name `label`; the packet calls one
   // `name`, as it does on an element. One fact, and this is where the rename is
@@ -147,7 +150,7 @@ test("both readers see the same blocking overlay, and the packet takes the one t
   const evidence = packet(snapshot);
   const blocker = collection(values, "evidence.overlays.blockers").items[0];
   assert.ok(evidence.blockedBy, "the packet reported nothing covering the page");
-  assert.equal(evidence.blockedBy.selector, blocker?.selector);
+  assert.equal(Object.hasOwn(evidence.blockedBy, "selector"), false);
   assert.equal(evidence.blockedBy.role, blocker?.role);
   assert.equal(evidence.blockedBy.name, blocker?.label);
   assert.equal(evidence.blockedBy.blocks, blocker?.blocks);
@@ -257,7 +260,7 @@ test("real capture: the modal a page was actually showing reaches both readers",
   const carried = packeted.dialogs?.[0];
   assert.ok(carried, "the packet reported no dialog, and a real browser sent one");
   assert.equal(values["evidence.dialogs.openCount"]?.value, evidence.dialogs?.open.length);
-  assert.equal(carried.selector, open?.selector);
+  assert.equal(Object.hasOwn(carried, "selector"), false);
   assert.equal(carried.role, open?.role);
   // The producer's word is `label` and the packet's is `name`. One fact, and
   // the browser's own value is what pins the rename.
@@ -280,8 +283,11 @@ test("real capture: what the page painted over its controls reaches both readers
   const blockedBy = packet(capture).blockedBy;
   const blocker = collection(values, "evidence.overlays.blockers").items[0];
   assert.ok(blockedBy, "the packet reported nothing covering a page whose every control was behind a backdrop");
-  assert.equal(blockedBy.selector, blocker?.selector);
-  assert.equal(blockedBy.selector, evidence.overlays?.blockers[0]?.selector);
+  // A bare backdrop div: no role, no accessible name, and no selector in the
+  // packet. What is left is how much of the page it takes the click for, which
+  // is the fact that explains the failure.
+  assert.equal(Object.hasOwn(blockedBy, "selector"), false);
+  assert.ok(blocker?.selector, "the producer still records the selector: it is the packet that does not carry it");
   assert.equal(blockedBy.blocks, blocker?.blocks);
   assert.equal(values["evidence.overlays.blockedCount"]?.value, evidence.overlays?.blockedCount);
   assert.equal(values["evidence.overlays.tested"]?.value, evidence.overlays?.tested);

@@ -1,9 +1,9 @@
-// src/recording/proposals/tests/record-output.test.ts
+// domain/src/recording/proposals/tests/record-output.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseAutomationStudioRecordOutput } from "fluxiq/automation-studio";
 
-// src/recording/proposals/record-output.ts
+// domain/src/recording/proposals/record-output.ts
 var DEFAULT_MAX_RECORDS = 1e3;
 var MAX_RECORDS_CEILING = 1e4;
 var LABEL_MAX_LENGTH = 200;
@@ -39,7 +39,7 @@ function distinctLabel(label, key, taken) {
   return unique;
 }
 
-// src/recording/proposals/tests/record-output.test.ts
+// domain/src/recording/proposals/tests/record-output.test.ts
 function definition(overrides = {}) {
   return {
     form: "list",

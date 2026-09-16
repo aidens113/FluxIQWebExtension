@@ -1,8 +1,8 @@
-// src/extraction/tests/dataset-id.test.ts
+// domain/src/extraction/tests/dataset-id.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// src/extraction/dataset-id.ts
+// domain/src/extraction/dataset-id.ts
 var MAX_ID_LENGTH = 200;
 var NONCE_PATTERN = /^[A-Za-z0-9._-]{1,64}$/u;
 var SEPARATOR = ":";
@@ -18,7 +18,7 @@ function webAutomationDatasetId(label, nonce) {
   return `${name}${SEPARATOR}${nonce}`;
 }
 
-// src/extraction/tests/dataset-id.test.ts
+// domain/src/extraction/tests/dataset-id.test.ts
 var CORE_DATASET_ID_PATTERN = /^[A-Za-z0-9._:-]{1,200}$/;
 var NONCE = "3f2c9a4e-6b1d-4c8e-9f0a-2d7e5b1c8a36";
 test("the id is the reduced name, a colon, and the nonce", () => {

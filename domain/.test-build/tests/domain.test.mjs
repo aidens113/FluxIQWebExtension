@@ -1,4 +1,4 @@
-// src/tests/domain.test.ts
+// domain/src/tests/domain.test.ts
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
@@ -7,7 +7,7 @@ import { AutomationStudioIoRecorder, AutomationStudioNativeNodeRuntime as Automa
 import { AutomationStudioNodeRegistry, validateAutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
 import { IoRegistry } from "fluxiq/io";
 
-// src/constants.ts
+// domain/src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 var WEB_AUTOMATION_SCHEMA_VERSION = "0.1";
 var WEB_AUTOMATION_EVENTS = {
@@ -30,14 +30,14 @@ var WEB_AUTOMATION_EVENTS = {
   clientError: "web.client.error"
 };
 
-// src/actions/extraction/field-key.ts
+// domain/src/actions/extraction/field-key.ts
 var FIELD_KEY_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
 var RESERVED_FIELD_KEYS = /* @__PURE__ */ new Set(["__proto__", "constructor", "prototype"]);
 function isWebAutomationExtractFieldKey(key) {
   return typeof key === "string" && FIELD_KEY_PATTERN.test(key) && !RESERVED_FIELD_KEYS.has(key);
 }
 
-// src/output-nodes/targets/targets.ts
+// domain/src/output-nodes/targets/targets.ts
 function outputTargetFromPayload(payload) {
   const adaptedTarget = objectValue(payload.target);
   const adaptedFingerprint = objectValue(adaptedTarget?.fingerprint);
@@ -168,7 +168,7 @@ function booleanValue(value) {
   return typeof value === "boolean" ? value : void 0;
 }
 
-// src/actions/extraction/request.ts
+// domain/src/actions/extraction/request.ts
 var WEB_AUTOMATION_EXTRACT_PAGINATION_MODES = ["next", "loadMore", "scroll", "numbered"];
 var WEB_AUTOMATION_EXTRACT_FIELD_KINDS = ["text", "attribute", "link", "value", "column"];
 var WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS = ["include", "exclude", "encrypt"];
@@ -182,7 +182,7 @@ function webAutomationExtractListTimeoutMs(request) {
   return WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS * pages;
 }
 
-// src/actions/extraction/read-request.ts
+// domain/src/actions/extraction/read-request.ts
 function webAutomationExtractListRequestValue(value) {
   const request = jsonObject(value);
   const item = nonEmptyString(request?.item);
@@ -311,7 +311,7 @@ function jsonObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// src/actions/extraction/recorded-definition.ts
+// domain/src/actions/extraction/recorded-definition.ts
 var DATASET_ID_PATTERN = /^[A-Za-z0-9._:-]{1,200}$/u;
 var RESERVED_DATASET_IDS = /* @__PURE__ */ new Set([".", ".."]);
 var LABEL_MAX_LENGTH = 200;
@@ -362,7 +362,7 @@ function jsonObject2(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// src/actions/extraction/schema.ts
+// domain/src/actions/extraction/schema.ts
 function webAutomationExtractListSchema(elementFingerprintSchema2) {
   const pageBound = { type: "integer", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES };
   const fieldSpecSchema = {
@@ -415,7 +415,7 @@ function webAutomationExtractListSchema(elementFingerprintSchema2) {
   };
 }
 
-// src/actions/schemas.ts
+// domain/src/actions/schemas.ts
 var elementFingerprintSchema = {
   type: "object",
   label: "Element fingerprint",
@@ -719,7 +719,7 @@ var webAutomationActionDefinitions = [
   }
 ];
 
-// src/actions/safety.ts
+// domain/src/actions/safety.ts
 var WEB_AUTOMATION_ACTION_SAFETY = {
   "web.browser.navigate": "review",
   "web.dom.click": "review",
@@ -744,7 +744,7 @@ var WEB_AUTOMATION_ACTION_SAFETY = {
   "web.browser.download": "review"
 };
 
-// src/output-nodes/definitions.ts
+// domain/src/output-nodes/definitions.ts
 var controlInput = { id: "in", label: "In", valueType: "signal", role: "control" };
 var outputPorts = [
   { id: "success", label: "Success", valueType: "any", role: "success" },
@@ -880,7 +880,7 @@ function iconForOutput(outputId) {
   return "square-dot";
 }
 
-// src/actions/types.ts
+// domain/src/actions/types.ts
 var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.navigate",
@@ -923,11 +923,11 @@ var WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = {
   "web.browser.download": "browser.download"
 };
 
-// src/output-nodes/native-runtime.ts
+// domain/src/output-nodes/native-runtime.ts
 var WEB_AUTOMATION_RUNTIME_CAPABILITIES = ["web.actions"];
 var WEB_AUTOMATION_RUNTIME_PERMISSIONS = ["web-automation.action"];
 
-// src/sensitivity/signature.ts
+// domain/src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
 var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
 var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
@@ -940,7 +940,7 @@ function isSensitiveControlType(type) {
   return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
 }
 
-// src/sensitivity/descriptor.ts
+// domain/src/sensitivity/descriptor.ts
 function sensitiveFieldSignatureOfDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
   const record = descriptor;
@@ -959,14 +959,14 @@ function stringField(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// src/sensitivity/redaction.ts
+// domain/src/sensitivity/redaction.ts
 var WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT = "(withheld: the action ran on a control that holds a secret)";
 function isProducerRedactedComparison(validation2) {
   if (!validation2 || typeof validation2 !== "object" || Array.isArray(validation2)) return false;
   return validation2.redacted === true;
 }
 
-// src/output-nodes/recorded-element-key.ts
+// domain/src/output-nodes/recorded-element-key.ts
 function webAutomationRecordedElementKey(payload) {
   const element = objectValue(payload.element);
   const attributes = objectValue(element?.attributes);
@@ -980,7 +980,7 @@ function sanitizeRecordedElementKey(value) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 120);
 }
 
-// src/output-nodes/secret-binding.ts
+// domain/src/output-nodes/secret-binding.ts
 var WEB_AUTOMATION_SECRET_STATE_PREFIX = "web.secret.";
 function webAutomationSecretStatePath(key) {
   return `${WEB_AUTOMATION_SECRET_STATE_PREFIX}${key}`;
@@ -993,7 +993,7 @@ function webAutomationSecretBindingPath(value) {
   return path2?.startsWith(WEB_AUTOMATION_SECRET_STATE_PREFIX) ? path2 : void 0;
 }
 
-// src/output-nodes/upload-binding.ts
+// domain/src/output-nodes/upload-binding.ts
 var WEB_AUTOMATION_UPLOAD_STATE_PREFIX = "web.upload.";
 function webAutomationUploadStatePath(key) {
   return `${WEB_AUTOMATION_UPLOAD_STATE_PREFIX}${key}`;
@@ -1006,12 +1006,12 @@ function webAutomationUploadBindingPath(value) {
   return path2?.startsWith(WEB_AUTOMATION_UPLOAD_STATE_PREFIX) ? path2 : void 0;
 }
 
-// src/output-nodes/url-path.ts
+// domain/src/output-nodes/url-path.ts
 function webAutomationUrlPath(value) {
   return typeof value === "string" && /^\/(?![/\\])[^?#]*$/u.test(value) ? value : void 0;
 }
 
-// src/output-nodes/payloads.ts
+// domain/src/output-nodes/payloads.ts
 function webAutomationOutputPayload(outputId, payload) {
   return withRecordedFrame(outputId, payload, recordedOutputParameters(outputId, payload));
 }
@@ -1107,12 +1107,12 @@ function isRadioElement(element) {
   return stringValue(element.inputType)?.toLowerCase() === "radio" || stringValue(element.role)?.toLowerCase() === "radio";
 }
 
-// src/output-nodes/registry.ts
+// domain/src/output-nodes/registry.ts
 function listWebAutomationOutputNodeDefinitions() {
   return webAutomationOutputNodeDefinitions.map((definition) => structuredClone(definition));
 }
 
-// src/io/input-model.ts
+// domain/src/io/input-model.ts
 var WEB_AUTOMATION_INPUT_IDS = {
   browserState: "web.browser.state",
   recordingEvidence: "web.recording.evidence",
@@ -1266,7 +1266,7 @@ function stringValue2(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// src/io/manifest-definitions.ts
+// domain/src/io/manifest-definitions.ts
 var webAutomationManifestInputs = [
   ...stateInputDefinitions,
   ...actionInputDefinitions.map(([id, title, outputId]) => ({ id, title, role: "action", outputId }))
@@ -1299,7 +1299,7 @@ function requiresElementTarget(parameterSchema) {
   return Array.isArray(parameterSchema.required) && parameterSchema.required.includes("selector");
 }
 
-// src/manifest.ts
+// domain/src/manifest.ts
 var webAutomationDomain = {
   manifest: {
     id: WEB_AUTOMATION_DOMAIN_ID,
@@ -1317,17 +1317,17 @@ var webAutomationDomain = {
   }
 };
 
-// src/host.ts
+// domain/src/host.ts
 import { FluxIQ } from "fluxiq";
 
-// src/io/web-automation-io.ts
+// domain/src/io/web-automation-io.ts
 import {
   defineDomainIo,
   defineInput,
   defineOutput
 } from "fluxiq";
 
-// src/io/gateway-input-hub.ts
+// domain/src/io/gateway-input-hub.ts
 var GatewayInputHub = class {
   listeners = /* @__PURE__ */ new Map();
   constructor(fluxiq2) {
@@ -1371,7 +1371,7 @@ function jsonObject3(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// src/io/gateway-output-dispatcher.ts
+// domain/src/io/gateway-output-dispatcher.ts
 async function dispatchWebAutomationOutput(fluxiq2, request) {
   const sessionId = targetSessionId(fluxiq2, request.metadata);
   if (!sessionId) return { ok: false, outputId: request.outputId, error: "A single paired web-automation client must be selected before dispatching an output." };
@@ -1421,7 +1421,7 @@ function stringValue4(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// src/io/web-automation-io.ts
+// domain/src/io/web-automation-io.ts
 function createWebAutomationDomainIo(fluxiq2) {
   const liveInputs = new GatewayInputHub(fluxiq2);
   return defineDomainIo({
@@ -1447,7 +1447,7 @@ function createWebAutomationDomainIo(fluxiq2) {
   });
 }
 
-// src/recording/observations.ts
+// domain/src/recording/observations.ts
 var webAutomationObservationExtractor = ({ event: event3 }) => ({
   observationType: event3.eventType,
   ...event3.payload !== void 0 ? { payload: event3.payload } : {},
@@ -1458,7 +1458,7 @@ var webAutomationObservationExtractor = ({ event: event3 }) => ({
   }
 });
 
-// src/recording/state.ts
+// domain/src/recording/state.ts
 var WEB_AUTOMATION_STATE_NAMESPACE = "web";
 function createWebAutomationInitialState(timestamp = Date.now()) {
   return {
@@ -1511,12 +1511,12 @@ function inferStateType(value) {
   return "json";
 }
 
-// src/recording/web-state/compact-json-object.ts
+// domain/src/recording/web-state/compact-json-object.ts
 function compactJsonObject(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
 
-// src/recording/web-state/element/identity.ts
+// domain/src/recording/web-state/element/identity.ts
 var MAX_STATE_ID_LENGTH = 120;
 function meaningfulText(value) {
   return typeof value === "string" && value.trim().length >= 2;
@@ -1558,7 +1558,7 @@ function sanitizeStateId(value) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, MAX_STATE_ID_LENGTH) || "element";
 }
 
-// src/recording/web-state/element/kind.ts
+// domain/src/recording/web-state/element/kind.ts
 function isLikelyActionableElement(element) {
   const tagName = element.tagName.toLowerCase();
   const role = element.role?.toLowerCase();
@@ -1581,7 +1581,7 @@ function isEnabled(element) {
   return element.attributes?.disabled === void 0 && element.attributes?.["aria-disabled"] !== "true";
 }
 
-// src/recording/web-state/geometry.ts
+// domain/src/recording/web-state/geometry.ts
 function stateBounds(bounds) {
   if (!bounds) return void 0;
   const x = finite(bounds.x);
@@ -1621,7 +1621,7 @@ function finite(value) {
   return Number.isFinite(value) ? value : void 0;
 }
 
-// src/recording/web-state/element/selection.ts
+// domain/src/recording/web-state/element/selection.ts
 var MAX_STATE_ELEMENTS = 1500;
 var WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS = ["count", "captured", "truncated", "captureTruncated", "stateTruncated"];
 function shouldCaptureElementState(element) {
@@ -1683,7 +1683,7 @@ function hasElementBounds(element) {
   return stateBounds(element.documentBounds ?? element.bounds) !== void 0;
 }
 
-// src/recording/web-state/visual-frame.ts
+// domain/src/recording/web-state/visual-frame.ts
 var MAX_VISUAL_FRAME_ELEMENTS = 1e3;
 var WEB_AUTOMATION_VIEWPORT_VISUALIZER_ID = "web-automation.viewport";
 var WEB_AUTOMATION_SCREEN_FRAME_ID = "screen";
@@ -1846,7 +1846,7 @@ function elementLayerLabel(element) {
   return element.name ?? element.visibleText ?? element.text ?? element.value ?? element.href ?? element.tagName;
 }
 
-// src/recording/web-state/action-target.ts
+// domain/src/recording/web-state/action-target.ts
 function webAutomationActionTargetFromElement(element) {
   const secret = isSensitiveElementDescriptor(element);
   const visibleText = secret ? void 0 : element.visibleText;
@@ -1920,12 +1920,12 @@ function webAutomationActionVisualTargetFromElement(element, input = {}) {
   });
 }
 
-// src/page-evidence/wire.ts
+// domain/src/page-evidence/wire.ts
 function pageEvidenceWire(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// src/recording/web-state/evidence/read.ts
+// domain/src/recording/web-state/evidence/read.ts
 var MAX_TEXT = 200;
 function list(value) {
   return Array.isArray(value) ? value : [];
@@ -1957,7 +1957,7 @@ function finite2(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : void 0;
 }
 
-// src/recording/web-state/evidence/input.ts
+// domain/src/recording/web-state/evidence/input.ts
 function pageEvidenceOfSnapshot(snapshot) {
   return pageEvidenceWire(snapshot.evidence);
 }
@@ -1965,7 +1965,7 @@ function pageEvidenceTruncatedElements(evidence) {
   return pageEvidenceWire(evidence?.elements)?.truncated === true;
 }
 
-// src/recording/web-state/state-values.ts
+// domain/src/recording/web-state/state-values.ts
 function putStateValue(snapshot, path2, type, value, observedAt, sourceId, input = {}) {
   const namespace = snapshot.namespaces[WEB_AUTOMATION_STATE_NAMESPACE] ?? {
     schemaId: WEB_AUTOMATION_DOMAIN_ID,
@@ -2050,7 +2050,7 @@ function elementStatePayload(element) {
   });
 }
 
-// src/recording/web-state/evidence/project.ts
+// domain/src/recording/web-state/evidence/project.ts
 var EVIDENCE_PATH_PREFIX = "evidence.";
 var MAX_DIALOGS = 5;
 var MAX_OVERLAY_BLOCKERS = 5;
@@ -2250,7 +2250,7 @@ function putText(put, path2, value, input) {
   if (bounded2 !== void 0) put(path2, "string", bounded2, input);
 }
 
-// src/recording/web-state/snapshot.ts
+// domain/src/recording/web-state/snapshot.ts
 function createWebAutomationStateFromSnapshot(snapshot, input = {}) {
   const timestamp = input.timestamp ?? Date.now();
   let state = createWebAutomationInitialState(timestamp);
@@ -2276,7 +2276,7 @@ function createWebAutomationStateFromSnapshot(snapshot, input = {}) {
   return withScreenVisualFrame(state, snapshot, selection.elements, input);
 }
 
-// src/recording/reducers.ts
+// domain/src/recording/reducers.ts
 var webAutomationStateReducer = ({ event: event3, previousState }) => {
   const payload = event3.payload ?? {};
   const timestamp = event3.timestamp ?? Date.now();
@@ -2336,7 +2336,7 @@ function mergeWebState(previous, incoming) {
   };
 }
 
-// src/recording/events.ts
+// domain/src/recording/events.ts
 var elementSchema = {
   type: "object",
   properties: {
@@ -2422,7 +2422,7 @@ var webAutomationRecordingEvents = [
   event(WEB_AUTOMATION_EVENTS.clientError, "Client error", "The client reported an error.")
 ];
 
-// src/recording/domain.ts
+// domain/src/recording/domain.ts
 var webAutomationRecordingDomain = {
   domainId: WEB_AUTOMATION_DOMAIN_ID,
   label: "Web Automation",
@@ -2523,11 +2523,11 @@ var webAutomationRecordingDomain = {
   }
 };
 
-// src/runtime/adapter.ts
+// domain/src/runtime/adapter.ts
 import { createHash } from "node:crypto";
 import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES as AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES2 } from "fluxiq/automation-studio";
 
-// src/runtime/capabilities.ts
+// domain/src/runtime/capabilities.ts
 var webAutomationRuntimeCapabilities = [
   {
     id: "web.actions",
@@ -2594,7 +2594,7 @@ var webAutomationGatewayCapabilities = [
   }
 ];
 
-// src/runtime/failure/codes.ts
+// domain/src/runtime/failure/codes.ts
 var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   /** The target was found but refused the action: disabled, hidden, or covered by another element. */
   ACTION_REJECTED: "web.action.rejected",
@@ -2691,7 +2691,7 @@ function boundedText(value) {
   return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
 }
 
-// src/runtime/failure/carrier.ts
+// domain/src/runtime/failure/carrier.ts
 function carriedWebAutomationFailure(error, fallback = {}) {
   const carried = property(error, "failure");
   const code = property(carried, "code");
@@ -2715,7 +2715,7 @@ function text2(value) {
   return typeof value === "string" && value.length > 0 ? value : void 0;
 }
 
-// src/runtime/failure/classify.ts
+// domain/src/runtime/failure/classify.ts
 function classifyWebAutomationFailure(error, outcome) {
   if (outcome.failure !== void 0) return outcome.failure;
   const carried = carriedWebAutomationFailure(error, withActual(comparedText(outcome.validation), errorMessage(error)));
@@ -2755,7 +2755,7 @@ function errorMessage(error) {
   return typeof message === "string" && message.length > 0 ? message : void 0;
 }
 
-// src/runtime/llm-evidence/limits.ts
+// domain/src/runtime/llm-evidence/limits.ts
 import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES } from "fluxiq/automation-studio";
 var WEB_LLM_EVIDENCE_BYTE_BUDGETS = Object.freeze({
   ceiling: 12e3,
@@ -2784,7 +2784,7 @@ function evidenceByteLimit(input, fallback, ceiling = WEB_LLM_EVIDENCE_BYTE_BUDG
   return Math.min(Number(input), cap);
 }
 
-// src/runtime/llm-evidence/location.ts
+// domain/src/runtime/llm-evidence/location.ts
 function safeEvidenceUrl(input) {
   if (typeof input !== "string" || !input || input.length > WEB_LLM_EVIDENCE_BOUNDS.url) throw new Error("web evidence URL must be bounded");
   const url = new URL(input);
@@ -2804,7 +2804,7 @@ function sameOriginHref(input, base) {
   }
 }
 
-// src/runtime/llm-evidence/present.ts
+// domain/src/runtime/llm-evidence/present.ts
 function present(fields) {
   const source = fields;
   const written = {};
@@ -2815,7 +2815,7 @@ function present(fields) {
   return written;
 }
 
-// src/runtime/llm-evidence/untrusted-json.ts
+// domain/src/runtime/llm-evidence/untrusted-json.ts
 function isJsonRecord(input) {
   return Boolean(input) && typeof input === "object" && !Array.isArray(input);
 }
@@ -2840,7 +2840,7 @@ function boundedCount(input, maximum) {
   return input;
 }
 
-// src/runtime/llm-evidence/elements.ts
+// domain/src/runtime/llm-evidence/elements.ts
 var FRAME_SELECTOR_PATTERN = /^frame\[(\d{1,6})\]\s*>>\s*(.+)$/u;
 var FRAME_ID_ATTRIBUTE = "data-fluxiq-frame-id";
 function sanitizedEvidenceElement(raw, context) {
@@ -2865,10 +2865,9 @@ function sanitizedEvidenceElement(raw, context) {
   const expanded = revealKind === "disclosure" ? semanticExpandedState(attributes) : void 0;
   const placement = elementPlacement(raw.context, { name, text: text3 });
   const focused = context.focusedSelector !== void 0 && context.focusedSelector === addressed.selector ? true : void 0;
-  return present({
+  const element = present({
     target: context.target,
     tag,
-    selector: addressed.selector,
     frameId: addressed.frameId,
     role: role || void 0,
     name: name || void 0,
@@ -2890,6 +2889,7 @@ function sanitizedEvidenceElement(raw, context) {
     item: placement.item,
     cell: placement.cell
   });
+  return { element, selector: addressed.selector };
 }
 function safeFillTag(tag, inputType) {
   return tag === "textarea" || tag === "input" && (!inputType || ["text", "search", "email", "tel", "url", "number"].includes(inputType));
@@ -2968,7 +2968,7 @@ function sanitizedSelectedValue(input, options) {
   return value && options.some((option) => option.value === value) ? value : void 0;
 }
 
-// src/runtime/llm-evidence/page-evidence.ts
+// domain/src/runtime/llm-evidence/page-evidence.ts
 var READY_STATES = ["loading", "interactive", "complete"];
 var ORDINARY_NAVIGATION_TYPE = "navigate";
 var MAX_REDIRECTS = 100;
@@ -3062,14 +3062,12 @@ function evidenceDialogs(input) {
     if (!raw) continue;
     const role = boundedText2(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
     const name = boundedText2(raw.label, WEB_LLM_EVIDENCE_BOUNDS.text);
-    const selector = boundedText2(raw.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
     const modal = trueFlag(raw.modal);
-    if (!role && !name && !selector && !modal) continue;
+    if (!role && !name && !modal) continue;
     dialogs.push(present({
       role: role || void 0,
       name: name || void 0,
-      modal,
-      selector: selector || void 0
+      modal
     }));
   }
   return dialogs.length ? dialogs : void 0;
@@ -3077,21 +3075,19 @@ function evidenceDialogs(input) {
 function evidenceBlocker(input) {
   const blocker = items(input?.blockers).map((item) => pageEvidenceWire(item)).find((item) => item !== void 0);
   if (!blocker) return void 0;
-  const selector = boundedText2(blocker.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
-  if (!selector) return void 0;
   const role = boundedText2(blocker.role, WEB_LLM_EVIDENCE_BOUNDS.role);
   const name = boundedText2(blocker.label, WEB_LLM_EVIDENCE_BOUNDS.text);
   const blocks = boundedCount(blocker.blocks, MAX_BLOCKED_CONTROLS);
+  if (!role && !name && !blocks) return void 0;
   return present({
-    selector,
     role: role || void 0,
     name: name || void 0,
     blocks: blocks || void 0
   });
 }
 
-// src/runtime/llm-evidence/sanitize.ts
-var WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v1";
+// domain/src/runtime/llm-evidence/sanitize.ts
+var WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v2";
 function sanitizeWebLlmSnapshot(input, options = {}) {
   return sanitizeWebLlmSnapshotWithBindings(input, options).evidence;
 }
@@ -3106,10 +3102,10 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
   const selectors = /* @__PURE__ */ new Map();
   for (const raw of snapshot.interactiveElements) {
     if (elements.length >= WEB_LLM_EVIDENCE_BOUNDS.elements) break;
-    const element = sanitizedEvidenceElement(raw, { target: `target.${elements.length + 1}`, url, focusedSelector });
-    if (!element) continue;
-    elements.push(element);
-    selectors.set(element.target, element.selector);
+    const described = sanitizedEvidenceElement(raw, { target: `target.${elements.length + 1}`, url, focusedSelector });
+    if (!described) continue;
+    elements.push(described.element);
+    selectors.set(described.element.target, described.selector);
   }
   const childFrameIds = [...new Set(elements.map((element) => element.frameId).filter((id) => id !== void 0))].sort((left, right) => left - right);
   const elementTotal = evidenceElementTotal(snapshot, elements.length);
@@ -3178,26 +3174,119 @@ function trimToBudget(evidence, selectors, maxEvidenceBytes) {
   }
 }
 
-// src/runtime/llm-evidence/target-override.ts
-function validateWebRuntimeTargetOverrideEvidence(evidence, target, failedAction) {
-  const matches = evidence.elements.filter((element) => element.selector === target.selector);
-  if (matches.length > 1) return { status: "ambiguous" };
-  if (matches.length === 1 && targetCompatibleWithFailedAction(matches[0], failedAction.definitionId)) return { status: "matched" };
-  const compatible = evidence.elements.filter((element) => targetCompatibleWithFailedAction(element, failedAction.definitionId));
-  if (compatible.length === 0) return { status: "absent" };
-  if (compatible.length > 1) return { status: "ambiguous" };
-  const resolved = compatible[0];
-  return evidence.elements.filter((element) => element.selector === resolved.selector).length === 1 ? { status: "resolved", target: { selector: resolved.selector } } : { status: "ambiguous" };
+// domain/src/runtime/llm-evidence/repairable-parameters.ts
+var WEB_REPAIRABLE_ELEMENT_PARAMETER = "element";
+var WEB_REPAIRABLE_ITEM_PARAMETER = "item";
+var WEB_REPAIRABLE_FIELD_PARAMETER_PREFIX = "field.";
+var ELEMENT_ROLE_BY_DEFINITION_ID = {
+  "web.output.dom-type": "fillable",
+  "web.output.dom-clear": "fillable",
+  "web.output.dom-select": "selectable",
+  "web.output.dom-click": "clickable",
+  "web.output.dom-keypress": "keyable",
+  "web.output.dom-wait_for_selector": "observable",
+  "web.output.dom-extract": "observable"
+};
+var LIST_EXTRACTION_DEFINITION_ID = "web.output.dom-extract_list";
+function webRepairableParameters(definitionId) {
+  const elementRole = ELEMENT_ROLE_BY_DEFINITION_ID[definitionId];
+  if (elementRole) return [{ name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role: elementRole, required: true }];
+  if (definitionId === LIST_EXTRACTION_DEFINITION_ID) return [{ name: WEB_REPAIRABLE_ITEM_PARAMETER, role: "list_item", required: true }];
+  return [];
 }
-function targetCompatibleWithFailedAction(element, definitionId) {
-  if (definitionId === "web.output.dom-type" || definitionId === "web.output.dom-clear") return safeFillTag(element.tag, element.inputType);
-  if (definitionId === "web.output.dom-select") return element.tag === "select";
-  if (definitionId === "web.output.dom-click") return actionableEvidenceElement(element);
-  if (definitionId === "web.output.dom-keypress") return safeFillTag(element.tag, element.inputType) || element.tag === "select" || actionableEvidenceElement(element);
-  return definitionId === "web.output.dom-wait_for_selector" || definitionId === "web.output.dom-extract";
+function webRepairableParameterFor(definitionId, name) {
+  const declared = webRepairableParameters(definitionId).find((parameter) => parameter.name === name);
+  if (declared) return declared;
+  if (definitionId !== LIST_EXTRACTION_DEFINITION_ID || !isFieldParameterName(name)) return void 0;
+  return { name, role: "observable", required: false };
+}
+function elementFillsRepairableParameter(element, role) {
+  if (role === "fillable") return safeFillTag(element.tag, element.inputType);
+  if (role === "selectable") return element.tag === "select";
+  if (role === "clickable") return actionableEvidenceElement(element);
+  if (role === "keyable") return safeFillTag(element.tag, element.inputType) || element.tag === "select" || actionableEvidenceElement(element);
+  if (role === "list_item") return element.item !== void 0;
+  return true;
+}
+function isFieldParameterName(name) {
+  if (!name.startsWith(WEB_REPAIRABLE_FIELD_PARAMETER_PREFIX)) return false;
+  const key = name.slice(WEB_REPAIRABLE_FIELD_PARAMETER_PREFIX.length);
+  return key.length > 0 && key.length <= 40 && /^[A-Za-z0-9](?:[A-Za-z0-9_.:-]*[A-Za-z0-9])?$/u.test(key);
 }
 
-// src/runtime/llm-evidence/tool-rejection.ts
+// domain/src/runtime/llm-evidence/target-override.ts
+function validateWebRuntimeTargetOverrideEvidence(evidence, target, failedAction, selectors) {
+  const declared = webRepairableParameters(failedAction.definitionId);
+  if (declared.length === 0) return { status: "absent" };
+  const handles = proposedHandles(target);
+  if (!handles) return { status: "absent" };
+  if (Object.keys(handles).some((name) => !webRepairableParameterFor(failedAction.definitionId, name))) return { status: "absent" };
+  if (declared.some((parameter) => parameter.required && handles[parameter.name] === void 0)) return { status: "absent" };
+  const resolved = /* @__PURE__ */ new Map();
+  for (const [name, handle] of Object.entries(handles)) {
+    const parameter = webRepairableParameterFor(failedAction.definitionId, name);
+    const candidates = evidence.elements.filter((element) => elementFillsRepairableParameter(element, parameter.role));
+    const named = evidence.elements.filter((element) => element.target === handle);
+    if (named.length > 1) return { status: "ambiguous" };
+    if (named.length === 1 && elementFillsRepairableParameter(named[0], parameter.role)) {
+      resolved.set(name, { element: named[0], named: true });
+      continue;
+    }
+    if (candidates.length === 0) return { status: "absent" };
+    if (candidates.length > 1) return { status: "ambiguous" };
+    resolved.set(name, { element: candidates[0], named: false });
+  }
+  return { status: "resolved", target: resolvedTarget(handles, resolved, selectors) };
+}
+function proposedHandles(target) {
+  const handles = target?.handles;
+  if (!handles || typeof handles !== "object" || Array.isArray(handles)) return void 0;
+  const entries = Object.entries(handles);
+  if (entries.length === 0) return void 0;
+  if (!entries.every(([name, handle]) => typeof handle === "string" && handle.length > 0 && name.length > 0)) return void 0;
+  return Object.fromEntries(entries);
+}
+function resolvedTarget(handles, resolved, selectors) {
+  const handleResolution = [...resolved.values()].every((entry) => entry.named) ? "named" : "inferred";
+  const single = resolved.size === 1 ? resolved.get(WEB_REPAIRABLE_ELEMENT_PARAMETER)?.element : void 0;
+  const flat = single ? elementFingerprint2(single, selectors) : void 0;
+  return present({
+    handles: Object.fromEntries([...resolved].map(([name, entry]) => [name, entry.element.target])),
+    handleResolution,
+    tagName: flat?.tagName,
+    role: flat?.role,
+    accessibleName: flat?.accessibleName,
+    visibleText: flat?.visibleText,
+    selector: flat?.selector,
+    metadata: flat?.metadata,
+    targets: flat ? void 0 : Object.fromEntries([...resolved].map(([name, entry]) => [name, elementFingerprint2(entry.element, selectors)])),
+    proposedHandles: handleResolution === "inferred" ? handles : void 0
+  });
+}
+function elementFingerprint2(element, selectors) {
+  const metadata = present({
+    browserFrameId: element.frameId,
+    inputType: element.inputType,
+    controlType: element.controlType,
+    formId: element.form,
+    listIndex: element.item?.index,
+    listTotal: element.item?.total
+  });
+  return present({
+    tagName: element.tag,
+    role: element.role,
+    accessibleName: element.name,
+    visibleText: element.text,
+    // The hint, and only where the caller still holds the binding that issued
+    // the handle. The packet has not carried a selector since `.v2`, so a repair
+    // resolved from a packet alone is fingerprint-only -- which is weaker, not
+    // wrong: the name, the role and the tag are what Core scores highest.
+    selector: selectors?.get(element.target),
+    metadata: Object.keys(metadata).length ? metadata : void 0
+  });
+}
+
+// domain/src/runtime/llm-evidence/tool-rejection.ts
 var WEB_LLM_TOOL_RESULT_SCHEMA_VERSION = "web-llm-tool-result.v1";
 var WEB_LLM_TOOL_REJECTION_CODES = [
   "invalid_input",
@@ -3220,7 +3309,7 @@ function toolRejection(code) {
   return { schemaVersion: WEB_LLM_TOOL_RESULT_SCHEMA_VERSION, ok: false, code };
 }
 
-// src/runtime/llm-evidence/vocabulary.ts
+// domain/src/runtime/llm-evidence/vocabulary.ts
 var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe"];
 var WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
 var WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
@@ -3237,7 +3326,7 @@ var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
   ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
 ]);
 
-// src/runtime/llm-evidence/reveal.ts
+// domain/src/runtime/llm-evidence/reveal.ts
 var COMMITTING_ACTION_WORDS = /\b(?:submit|purchase|buy|pay|checkout|order|delete|remove|destroy|unsubscribe|confirm|send|publish)\b/iu;
 function safeRevealElement(element) {
   const identity = [element.selector, element.name, element.text].filter(Boolean).join(" ");
@@ -3264,10 +3353,20 @@ function currentElementForReturnedTarget(returned, current, target) {
   return { ...matches[0], selector };
 }
 
-// src/runtime/llm-evidence/tools.ts
+// domain/src/runtime/llm-evidence/tools.ts
 var TARGET_HANDLE_PATTERN = "^target\\.[1-9][0-9]?$";
+var RETAINED_SELECTOR_BINDINGS = 8;
 function createWebAutomationLlmEvidenceRuntime(gateway) {
   const returnedEvidence = /* @__PURE__ */ new Map();
+  const retainedSelectors = /* @__PURE__ */ new Map();
+  const retain = (binding) => {
+    retainedSelectors.set(packetKey(binding.evidence), binding.selectors);
+    for (const key of retainedSelectors.keys()) {
+      if (retainedSelectors.size <= RETAINED_SELECTOR_BINDINGS) break;
+      retainedSelectors.delete(key);
+    }
+    return binding;
+  };
   return {
     tools: [
       {
@@ -3305,7 +3404,7 @@ function createWebAutomationLlmEvidenceRuntime(gateway) {
       try {
         if (input.toolId === WEB_LLM_INSPECT_TOOL_ID) {
           exactToolKeys(input.value, []);
-          const snapshot = await inspect(gateway, sessionId, input, input.signal);
+          const snapshot = retain(await inspect(gateway, sessionId, input, input.signal));
           returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
           return toolExecution(snapshot.evidence, false, WEB_LLM_INSPECT_RESULT_CODE);
         }
@@ -3323,7 +3422,7 @@ function createWebAutomationLlmEvidenceRuntime(gateway) {
           });
           assertActive(input.signal);
           if (result.status !== "succeeded") throw new Error("web evidence navigation failed");
-          const snapshot = await inspect(gateway, sessionId, input, input.signal, destination.origin);
+          const snapshot = retain(await inspect(gateway, sessionId, input, input.signal, destination.origin));
           returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
           return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE);
         }
@@ -3333,7 +3432,7 @@ function createWebAutomationLlmEvidenceRuntime(gateway) {
           const current = await inspect(gateway, sessionId, input, input.signal);
           const element = currentElementForReturnedTarget(returnedEvidence.get(evidenceScope(input, sessionId)), current, target);
           if (!safeRevealElement(element)) recoverable("target_unsafe");
-          const snapshot = await executeAndInspect(gateway, sessionId, input, "web.dom.click", { selector: element.selector }, current, input.signal);
+          const snapshot = retain(await executeAndInspect(gateway, sessionId, input, "web.dom.click", { selector: element.selector }, current, input.signal));
           if (JSON.stringify(snapshot.evidence) === JSON.stringify(current.evidence)) recoverable("no_progress");
           returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
           return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE);
@@ -3370,15 +3469,20 @@ function createWebAutomationLlmEvidenceRuntime(gateway) {
       assertActive(input.signal);
       if (result.status !== "succeeded") throw new Error("web failure evidence snapshot capture failed");
       const payload = jsonRecord(result.payload, "web failure evidence action payload");
-      return sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present({
+      return retain(sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present({
         budget: "failure",
         maxEvidenceBytes: input.maxEvidenceBytes,
         expectedOrigin: void 0
-      })).evidence;
+      }))).evidence;
     },
     validateTargetOverrideEvidence(evidence, target, failedAction) {
       if (evidence.schemaVersion !== WEB_LLM_EVIDENCE_SCHEMA_VERSION || !Array.isArray(evidence.elements)) return { status: "absent" };
-      return validateWebRuntimeTargetOverrideEvidence(evidence, target, failedAction);
+      return validateWebRuntimeTargetOverrideEvidence(
+        evidence,
+        target,
+        failedAction,
+        retainedSelectors.get(packetKey(evidence))
+      );
     }
   };
 }
@@ -3424,6 +3528,9 @@ function selectSession(sessionIds) {
 function toolMetadata(input) {
   return { source: "llm-evidence-runtime", projectId: input.projectId, flowId: input.flowId, callId: input.callId, domainId: WEB_AUTOMATION_DOMAIN_ID };
 }
+function packetKey(evidence) {
+  return `${evidence.location}\0${evidence.elements.map((element) => element.target).join(",")}`;
+}
 function evidenceScope(input, sessionId) {
   return `${sessionId}\0${input.projectId}\0${input.flowId}`;
 }
@@ -3449,7 +3556,7 @@ function assertActive(signal) {
   if (signal?.aborted) throw signal.reason ?? new Error("web evidence operation was cancelled");
 }
 
-// src/runtime/adapter.ts
+// domain/src/runtime/adapter.ts
 function createWebAutomationRuntimeAdapter(options) {
   return {
     adapterId: options.adapterId ?? "web-automation.gateway",
@@ -3660,16 +3767,16 @@ function compact3(value) {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== void 0));
 }
 
-// src/actions/capabilities.ts
+// domain/src/actions/capabilities.ts
 var webAutomationClientCapabilities = webAutomationGatewayCapabilities;
 
-// src/extraction/dataset-id.ts
+// domain/src/extraction/dataset-id.ts
 var COMBINING_MARKS = new RegExp("\\p{M}+", "gu");
 
-// src/extraction/label-key.ts
+// domain/src/extraction/label-key.ts
 var COMBINING_MARKS2 = new RegExp("\\p{M}+", "gu");
 
-// src/client/gateway-mapping.ts
+// domain/src/client/gateway-mapping.ts
 function createWebAutomationRecordingEvent(payload, input = {}) {
   const eventType = webAutomationEventTypeForClientKind(payload.kind);
   const target = payload.element;
@@ -3727,7 +3834,7 @@ function compactJsonObject2(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
 
-// src/runtime/expectation/click-landing.ts
+// domain/src/runtime/expectation/click-landing.ts
 var LANDING_WAIT_MS = 5e3;
 var EXPLAINED_TRANSITION = "explained";
 var ACTION_ENTRY = "action";
@@ -3779,7 +3886,7 @@ function urlPath(value) {
   }
 }
 
-// src/runtime/expectation/conditions.ts
+// domain/src/runtime/expectation/conditions.ts
 var ASSERT_KINDS = Object.freeze({
   exists: true,
   absent: true,
@@ -3854,7 +3961,7 @@ function bounded(value) {
   return collapsed.length <= MAX_DESCRIPTION_LENGTH ? collapsed : `${collapsed.slice(0, MAX_DESCRIPTION_LENGTH - 1)}\u2026`;
 }
 
-// src/runtime/expectation/evaluate.ts
+// domain/src/runtime/expectation/evaluate.ts
 var ASSERT_OUTPUT_ID = "web.dom.assert";
 var EXPECTATION_SOURCE = "web-automation-expectation";
 function createWebAutomationExpectationEvaluator(dispatch) {
@@ -3947,11 +4054,11 @@ function errorText(error) {
   return error instanceof Error && error.message.length > 0 ? error.message : "the reason was not reported";
 }
 
-// src/runtime/host-runtime.ts
-var WEB_STATE_DIFF_SCHEMA_VERSION = "web-state-diff.v1";
+// domain/src/runtime/host-runtime.ts
+var WEB_STATE_DIFF_SCHEMA_VERSION = "web-state-diff.v2";
 var SNAPSHOT_OUTPUT_ID = "web.dom.capture_snapshot";
 var HOST_RUNTIME_SOURCE = "web-automation-host-runtime";
-var MAX_DIFF_SELECTORS = 10;
+var MAX_DIFF_ELEMENTS = 10;
 var WEB_AUTOMATION_NODE_IDS = new Set(WEB_AUTOMATION_ACTION_TYPES.map(webAutomationOutputNodeId));
 var WEB_AUTOMATION_OUTPUT_IDS = new Set(WEB_AUTOMATION_ACTION_TYPES);
 var POLICY_ACTION_DEFINITION_ID = "builtin.policy.action";
@@ -3997,10 +4104,12 @@ function bindWebAutomationHostRuntime(fluxiq2) {
   }));
 }
 function webAutomationStateDiff(before, after, beforeStateRef, afterStateRef) {
-  const beforeSelectors = evidenceSelectors(before);
-  const afterSelectors = evidenceSelectors(after);
-  const added = afterSelectors.filter((selector) => !beforeSelectors.includes(selector));
-  const removed = beforeSelectors.filter((selector) => !afterSelectors.includes(selector));
+  const beforeElements = evidenceElements(before);
+  const afterElements = evidenceElements(after);
+  const beforeKeys = new Set(beforeElements.map(elementKey));
+  const afterKeys = new Set(afterElements.map(elementKey));
+  const added = afterElements.filter((element) => !beforeKeys.has(elementKey(element)));
+  const removed = beforeElements.filter((element) => !afterKeys.has(elementKey(element)));
   const beforeLocation = evidenceText(before, "location");
   const afterLocation = evidenceText(after, "location");
   return {
@@ -4011,12 +4120,12 @@ function webAutomationStateDiff(before, after, beforeStateRef, afterStateRef) {
     ...afterLocation === void 0 ? {} : { afterLocation },
     locationChanged: beforeLocation !== void 0 && afterLocation !== void 0 && beforeLocation !== afterLocation,
     titleChanged: evidenceText(before, "title") !== evidenceText(after, "title"),
-    beforeElementCount: beforeSelectors.length,
-    afterElementCount: afterSelectors.length,
+    beforeElementCount: beforeElements.length,
+    afterElementCount: afterElements.length,
     addedElementCount: added.length,
     removedElementCount: removed.length,
-    addedSelectors: added.slice(0, MAX_DIFF_SELECTORS),
-    removedSelectors: removed.slice(0, MAX_DIFF_SELECTORS)
+    addedElements: added.slice(0, MAX_DIFF_ELEMENTS),
+    removedElements: removed.slice(0, MAX_DIFF_ELEMENTS)
   };
 }
 function actionSnapshot(payload) {
@@ -4028,10 +4137,24 @@ function actsOnPage(node) {
   const outputId = node.parameterValues?.outputId;
   return node.definitionId === POLICY_ACTION_DEFINITION_ID && typeof outputId === "string" && WEB_AUTOMATION_OUTPUT_IDS.has(outputId);
 }
-function evidenceSelectors(summary) {
+function evidenceElements(summary) {
   const elements = summary?.elements;
   if (!Array.isArray(elements)) return [];
-  return elements.map((element) => isRecord(element) && typeof element.selector === "string" ? element.selector : void 0).filter((selector) => selector !== void 0);
+  const described = [];
+  for (const element of elements) {
+    if (!isRecord(element) || typeof element.tag !== "string" || !element.tag) continue;
+    described.push({
+      tag: element.tag,
+      ...typeof element.role === "string" ? { role: element.role } : {},
+      ...typeof element.name === "string" ? { name: element.name } : {},
+      ...typeof element.text === "string" ? { text: element.text } : {},
+      ...typeof element.form === "string" ? { form: element.form } : {}
+    });
+  }
+  return described;
+}
+function elementKey(element) {
+  return JSON.stringify([element.tag, element.role, element.name, element.text, element.form]);
 }
 function evidenceText(summary, field) {
   const value = summary?.[field];
@@ -4041,7 +4164,7 @@ function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-// src/runtime/service.ts
+// domain/src/runtime/service.ts
 function registerWebAutomationRuntime(fluxiq2) {
   registerWebAutomationRuntimeAdapter(fluxiq2);
   bindAutomationStudioRuntimeService(fluxiq2);
@@ -4067,7 +4190,7 @@ async function validateWebAutomationRuntime(fluxiq2) {
   return hasWebActions ? { ok: true, issues: [] } : { ok: false, issues: ["web-automation.runtime.missing_actions"] };
 }
 
-// src/host.ts
+// domain/src/host.ts
 function registerWebAutomationDomain(fluxiq2) {
   if (!fluxiq2.domains.maybeGet(webAutomationDomain.manifest.id)) {
     fluxiq2.registerDomain(webAutomationDomain);
@@ -4088,10 +4211,10 @@ function createWebAutomationFluxIQ(options = {}) {
   }));
 }
 
-// src/web-panel-host.ts
+// domain/src/web-panel-host.ts
 import { AutomationStudioNativeNodeRuntime } from "fluxiq/automation-studio";
 
-// src/recording/proposals/late-target-wait.ts
+// domain/src/recording/proposals/late-target-wait.ts
 var EVIDENCE_OBSERVATION = "input.event";
 var ACTION_ENTRY2 = "action";
 var MUTATION_KIND = "dom.mutation";
@@ -4156,7 +4279,7 @@ function stringValue5(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// src/recording/proposals/record-output.ts
+// domain/src/recording/proposals/record-output.ts
 var DEFAULT_MAX_RECORDS = 1e3;
 var MAX_RECORDS_CEILING = 1e4;
 var LABEL_MAX_LENGTH2 = 200;
@@ -4192,7 +4315,7 @@ function distinctLabel(label, key, taken) {
   return unique;
 }
 
-// src/web-panel-host.ts
+// domain/src/web-panel-host.ts
 var CANDIDATE_LABELS = {
   "web.browser.navigate": "Navigate",
   "web.dom.click": "Click",
@@ -4290,7 +4413,7 @@ function readString(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// src/tests/domain.test.ts
+// domain/src/tests/domain.test.ts
 var service = new AutomationStudioService({ seedFixture: false });
 service.registerRecordingDomain(webAutomationRecordingDomain);
 var validation = service.validateRecordingDomainEvent({
@@ -4484,7 +4607,7 @@ var evidenceCompletionSchema = {
   properties: { summary: { type: "string", minLength: 1, maxLength: 2e3 }, plan: bootstrapPlanSchema }
 };
 var evidencePage = {
-  schemaVersion: "web-llm-evidence.v1",
+  schemaVersion: "web-llm-evidence.v2",
   trust: "untrusted-page-evidence",
   location: "https://example.test/products",
   title: "Products",

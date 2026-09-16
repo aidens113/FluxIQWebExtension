@@ -1,8 +1,8 @@
-// src/runtime/llm-evidence/tests/page-evidence.test.ts
+// domain/src/runtime/llm-evidence/tests/page-evidence.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// src/runtime/llm-evidence/limits.ts
+// domain/src/runtime/llm-evidence/limits.ts
 import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES } from "fluxiq/automation-studio";
 var WEB_LLM_EVIDENCE_BYTE_BUDGETS = Object.freeze({
   ceiling: 12e3,
@@ -31,7 +31,7 @@ function evidenceByteLimit(input, fallback, ceiling = WEB_LLM_EVIDENCE_BYTE_BUDG
   return Math.min(Number(input), cap);
 }
 
-// src/sensitivity/signature.ts
+// domain/src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
 var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
 var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
@@ -44,7 +44,7 @@ function isSensitiveControlType(type) {
   return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
 }
 
-// src/sensitivity/descriptor.ts
+// domain/src/sensitivity/descriptor.ts
 function sensitiveFieldSignatureOfDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
   const record = descriptor;
@@ -63,7 +63,7 @@ function stringField(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// src/runtime/llm-evidence/location.ts
+// domain/src/runtime/llm-evidence/location.ts
 function safeEvidenceUrl(input) {
   if (typeof input !== "string" || !input || input.length > WEB_LLM_EVIDENCE_BOUNDS.url) throw new Error("web evidence URL must be bounded");
   const url = new URL(input);
@@ -83,7 +83,7 @@ function sameOriginHref(input, base) {
   }
 }
 
-// src/runtime/llm-evidence/present.ts
+// domain/src/runtime/llm-evidence/present.ts
 function present(fields) {
   const source = fields;
   const written = {};
@@ -94,7 +94,7 @@ function present(fields) {
   return written;
 }
 
-// src/runtime/llm-evidence/untrusted-json.ts
+// domain/src/runtime/llm-evidence/untrusted-json.ts
 function isJsonRecord(input) {
   return Boolean(input) && typeof input === "object" && !Array.isArray(input);
 }
@@ -115,7 +115,7 @@ function boundedCount(input, maximum) {
   return input;
 }
 
-// src/runtime/llm-evidence/elements.ts
+// domain/src/runtime/llm-evidence/elements.ts
 var FRAME_SELECTOR_PATTERN = /^frame\[(\d{1,6})\]\s*>>\s*(.+)$/u;
 var FRAME_ID_ATTRIBUTE = "data-fluxiq-frame-id";
 function sanitizedEvidenceElement(raw, context) {
@@ -140,10 +140,9 @@ function sanitizedEvidenceElement(raw, context) {
   const expanded = revealKind === "disclosure" ? semanticExpandedState(attributes) : void 0;
   const placement = elementPlacement(raw.context, { name, text });
   const focused = context.focusedSelector !== void 0 && context.focusedSelector === addressed.selector ? true : void 0;
-  return present({
+  const element = present({
     target: context.target,
     tag,
-    selector: addressed.selector,
     frameId: addressed.frameId,
     role: role || void 0,
     name: name || void 0,
@@ -165,6 +164,7 @@ function sanitizedEvidenceElement(raw, context) {
     item: placement.item,
     cell: placement.cell
   });
+  return { element, selector: addressed.selector };
 }
 function safeFillTag(tag, inputType) {
   return tag === "textarea" || tag === "input" && (!inputType || ["text", "search", "email", "tel", "url", "number"].includes(inputType));
@@ -238,12 +238,12 @@ function sanitizedSelectedValue(input, options) {
   return value && options.some((option) => option.value === value) ? value : void 0;
 }
 
-// src/page-evidence/wire.ts
+// domain/src/page-evidence/wire.ts
 function pageEvidenceWire(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// src/runtime/llm-evidence/page-evidence.ts
+// domain/src/runtime/llm-evidence/page-evidence.ts
 var READY_STATES = ["loading", "interactive", "complete"];
 var ORDINARY_NAVIGATION_TYPE = "navigate";
 var MAX_REDIRECTS = 100;
@@ -337,14 +337,12 @@ function evidenceDialogs(input) {
     if (!raw) continue;
     const role = boundedText(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
     const name = boundedText(raw.label, WEB_LLM_EVIDENCE_BOUNDS.text);
-    const selector = boundedText(raw.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
     const modal = trueFlag(raw.modal);
-    if (!role && !name && !selector && !modal) continue;
+    if (!role && !name && !modal) continue;
     dialogs.push(present({
       role: role || void 0,
       name: name || void 0,
-      modal,
-      selector: selector || void 0
+      modal
     }));
   }
   return dialogs.length ? dialogs : void 0;
@@ -352,21 +350,19 @@ function evidenceDialogs(input) {
 function evidenceBlocker(input) {
   const blocker = items(input?.blockers).map((item) => pageEvidenceWire(item)).find((item) => item !== void 0);
   if (!blocker) return void 0;
-  const selector = boundedText(blocker.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
-  if (!selector) return void 0;
   const role = boundedText(blocker.role, WEB_LLM_EVIDENCE_BOUNDS.role);
   const name = boundedText(blocker.label, WEB_LLM_EVIDENCE_BOUNDS.text);
   const blocks = boundedCount(blocker.blocks, MAX_BLOCKED_CONTROLS);
+  if (!role && !name && !blocks) return void 0;
   return present({
-    selector,
     role: role || void 0,
     name: name || void 0,
     blocks: blocks || void 0
   });
 }
 
-// src/runtime/llm-evidence/sanitize.ts
-var WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v1";
+// domain/src/runtime/llm-evidence/sanitize.ts
+var WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v2";
 function sanitizeWebLlmSnapshot(input, options = {}) {
   return sanitizeWebLlmSnapshotWithBindings(input, options).evidence;
 }
@@ -381,10 +377,10 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
   const selectors = /* @__PURE__ */ new Map();
   for (const raw of snapshot.interactiveElements) {
     if (elements.length >= WEB_LLM_EVIDENCE_BOUNDS.elements) break;
-    const element = sanitizedEvidenceElement(raw, { target: `target.${elements.length + 1}`, url, focusedSelector });
-    if (!element) continue;
-    elements.push(element);
-    selectors.set(element.target, element.selector);
+    const described = sanitizedEvidenceElement(raw, { target: `target.${elements.length + 1}`, url, focusedSelector });
+    if (!described) continue;
+    elements.push(described.element);
+    selectors.set(described.element.target, described.selector);
   }
   const childFrameIds = [...new Set(elements.map((element) => element.frameId).filter((id) => id !== void 0))].sort((left, right) => left - right);
   const elementTotal = evidenceElementTotal(snapshot, elements.length);
@@ -453,7 +449,7 @@ function trimToBudget(evidence, selectors, maxEvidenceBytes) {
   }
 }
 
-// src/runtime/llm-evidence/tool-rejection.ts
+// domain/src/runtime/llm-evidence/tool-rejection.ts
 var WEB_LLM_TOOL_REJECTION_CODES = [
   "invalid_input",
   "cross_origin",
@@ -463,7 +459,7 @@ var WEB_LLM_TOOL_REJECTION_CODES = [
   "sensitive_value"
 ];
 
-// src/runtime/llm-evidence/vocabulary.ts
+// domain/src/runtime/llm-evidence/vocabulary.ts
 var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe"];
 var WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
 var WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
@@ -480,7 +476,7 @@ var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
   ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
 ]);
 
-// src/runtime/llm-evidence/tests/page-evidence.test.ts
+// domain/src/runtime/llm-evidence/tests/page-evidence.test.ts
 var page = (evidence, extra = {}) => {
   const snapshot = {
     url: "https://example.test/checkout",
@@ -504,8 +500,8 @@ test("reports the open dialogs the producer lists, by the producer's own field n
     }
   }));
   assert.deepEqual(evidence.dialogs, [
-    { role: "dialog", name: "Confirm your order", modal: true, selector: "#confirm-dialog" },
-    { role: "alertdialog", name: "Session expiring", selector: "#session" }
+    { role: "dialog", name: "Confirm your order", modal: true },
+    { role: "alertdialog", name: "Session expiring" }
   ]);
 });
 test("reports the top-most blocking overlay so a click that cannot land is explicable", () => {
@@ -519,8 +515,10 @@ test("reports the top-most blocking overlay so a click that cannot land is expli
       ]
     }
   }));
-  assert.deepEqual(evidence.blockedBy, { selector: "#cookie-wall", role: "dialog", name: "We use cookies", blocks: 2 });
-  assert.equal(sanitizeWebLlmSnapshot(page({ overlays: { blockers: [{ label: "no selector" }] } })).blockedBy, void 0);
+  assert.deepEqual(evidence.blockedBy, { role: "dialog", name: "We use cookies", blocks: 2 });
+  assert.doesNotMatch(JSON.stringify(evidence.blockedBy), /cookie-wall/u);
+  assert.deepEqual(sanitizeWebLlmSnapshot(page({ overlays: { blockers: [{ label: "named only" }] } })).blockedBy, { name: "named only" });
+  assert.equal(sanitizeWebLlmSnapshot(page({ overlays: { blockers: [{ selector: "#anonymous" }] } })).blockedBy, void 0);
   assert.equal(sanitizeWebLlmSnapshot(page({ overlays: { tested: 24, blockedCount: 0, blockers: [] } })).blockedBy, void 0);
 });
 test("reports loading state only while the page is still settling", () => {
@@ -601,15 +599,15 @@ test("carries element-level recency and change flags as fields, not as ordering 
     ]
   }));
   assert.deepEqual(evidence.elements, [
-    { target: "target.1", tag: "input", selector: "#quantity", name: "Quantity", recent: true, changed: true },
-    { target: "target.2", tag: "button", selector: "#place-order", text: "Place order" }
+    { target: "target.1", tag: "input", name: "Quantity", recent: true, changed: true },
+    { target: "target.2", tag: "button", text: "Place order" }
   ]);
 });
 test("the flat shape the reader was first written against is not read at all", () => {
   const evidence = sanitizeWebLlmSnapshot(page({}, {
     loading: { readyState: "interactive", busy: true, spinner: true, pendingNavigation: true },
     navigation: { pending: true, from: "https://example.test/cart", to: "https://example.test/checkout" },
-    dialogs: [{ role: "dialog", name: "Confirm your order", modal: true, selector: "#confirm-dialog" }],
+    dialogs: [{ role: "dialog", name: "Confirm your order", modal: true }],
     blockingOverlay: { selector: "#cookie-wall", tagName: "DIV", role: "dialog", name: "We use cookies" },
     pendingNativeDialog: true
   }));

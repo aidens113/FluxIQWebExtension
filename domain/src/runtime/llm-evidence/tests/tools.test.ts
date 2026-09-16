@@ -98,8 +98,20 @@ test("binds from the production host seam and selects the sole trusted web clien
     interactiveElements: [{ tagName: "button", selector: "#continue", visibleText: "Continue" }],
   });
   const clickAction = { nodeId: "continue", definitionId: "web.output.dom-click" };
-  assert.deepEqual(bound?.validateTargetOverrideEvidence(validationEvidence, { selector: "#continue" }, clickAction), { status: "matched" });
-  assert.deepEqual(bound?.validateTargetOverrideEvidence(validationEvidence, { selector: "#missing" }, clickAction), { status: "resolved", target: { selector: "#continue" } });
+  // No selector: this packet was built by the test rather than issued by the
+  // runtime, so the runtime holds no binding for it and the repair resolves
+  // fingerprint-only. The retained-binding path is covered below.
+  const resolution = { tagName: "button", visibleText: "Continue" };
+  assert.deepEqual(bound?.validateTargetOverrideEvidence(validationEvidence, { handles: { element: "target.1" } }, clickAction), {
+    status: "resolved",
+    target: { handles: { element: "target.1" }, handleResolution: "named", ...resolution },
+  });
+  // A handle nobody minted resolves to the one compatible element, and the
+  // target says the model's own proposal was not the one used.
+  assert.deepEqual(bound?.validateTargetOverrideEvidence(validationEvidence, { handles: { element: "target.9" } }, clickAction), {
+    status: "resolved",
+    target: { handles: { element: "target.1" }, handleResolution: "inferred", ...resolution, proposedHandles: { element: "target.9" } },
+  });
   const result = await bound!.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.one", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
   assert.equal(result.effectApplied, false);
   assert.equal(result.resultCode, "web.inspect.succeeded");
@@ -136,7 +148,7 @@ test("captures bounded sanitized post-failure evidence without returning the raw
   });
 
   assert.equal(Buffer.byteLength(JSON.stringify(evidence), "utf8") <= 1_200, true);
-  assert.equal(evidence.schemaVersion, "web-llm-evidence.v1");
+  assert.equal(evidence.schemaVersion, "web-llm-evidence.v2");
   assert.equal(evidence.location, "https://example.test/form");
   assert.equal(evidence.truncated, true);
   assert.equal(JSON.stringify(evidence).includes(privateValue), false);
@@ -155,6 +167,45 @@ test("captures bounded sanitized post-failure evidence without returning the raw
       definitionId: "web.output.dom-click",
     },
   }]);
+});
+
+test("a repair on a packet this runtime issued gets its selector hint back, without the packet ever carrying one", async () => {
+  // The packet an LLM reads carries no selector. The runtime that issued it
+  // still holds the binding, so when Core hands that same packet back to be
+  // validated, the resolved repair can carry the selector as a hint beside the
+  // fingerprint. The hint travels domain-to-domain and is never shown to a model.
+  const runtime = createWebAutomationLlmEvidenceRuntime({
+    eligibleSessionIds: () => ["session.one"],
+    executeAction: async () => ({ status: "succeeded", payload: { snapshot: {
+      url: "https://example.test/form",
+      interactiveElements: [
+        { tagName: "button", selector: "#place-order", visibleText: "Place order" },
+        { tagName: "input", selector: "#coupon", name: "Coupon" },
+      ],
+    } } }),
+  });
+
+  const evidence = await runtime.captureSanitizedFailureEvidence({
+    projectId: "project.one",
+    flowId: "flow.one",
+    runId: "run.failed",
+    failedAction: { attemptId: "attempt.failed", nodeId: "node.click", definitionId: "web.output.dom-click", status: "failed", route: "failed" },
+  });
+  assert.doesNotMatch(JSON.stringify(evidence), /selector|#place-order|#coupon/u);
+
+  const clickAction = { nodeId: "node.click", definitionId: "web.output.dom-click" };
+  assert.deepEqual(runtime.validateTargetOverrideEvidence(evidence as unknown as JsonObject, { handles: { element: "target.1" } }, clickAction), {
+    status: "resolved",
+    target: { handles: { element: "target.1" }, handleResolution: "named", tagName: "button", visibleText: "Place order", selector: "#place-order" },
+  });
+
+  // A packet this runtime never issued has no binding, so the repair is
+  // resolved fingerprint-only rather than refused or guessed at.
+  const foreign = { ...evidence, location: "https://example.test/other" };
+  assert.deepEqual(runtime.validateTargetOverrideEvidence(foreign as unknown as JsonObject, { handles: { element: "target.1" } }, clickAction), {
+    status: "resolved",
+    target: { handles: { element: "target.1" }, handleResolution: "named", tagName: "button", visibleText: "Place order" },
+  });
 });
 
 test("bounds post-failure evidence to Core's gate when the host names no budget", async () => {
@@ -242,7 +293,7 @@ test("keeps an opaque reveal target bound to the returned element when fresh sna
   });
   const base = { projectId: "project.one", flowId: "flow.one", maxEvidenceBytes: 8_000 } as const;
   const inspected = await runtime.executeTool({ ...base, callId: "call.inspect", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
-  assert.deepEqual((inspected.evidence as any).elements[0], { target: "target.1", tag: "button", selector: "#details", text: "Details", controlType: "button", revealKind: "disclosure", expanded: false });
+  assert.deepEqual((inspected.evidence as any).elements[0], { target: "target.1", tag: "button", text: "Details", controlType: "button", revealKind: "disclosure", expanded: false });
   const revealed = await runtime.executeTool({ ...base, callId: "call.reveal", toolId: WEB_LLM_REVEAL_TOOL_ID, value: { target: "target.1" } });
   assert.equal(revealed.effectApplied, true);
   assert.deepEqual(parameters, [{ selector: "#details" }]);

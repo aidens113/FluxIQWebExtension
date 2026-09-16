@@ -1,15 +1,15 @@
-// src/runtime/expectation/tests/evaluate.test.ts
+// domain/src/runtime/expectation/tests/evaluate.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 import { getAutomationNodeDefinition, parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
 
-// src/actions/extraction/read-request.ts
+// domain/src/actions/extraction/read-request.ts
 var REFUSED = Symbol("refused");
 
-// src/actions/types.ts
+// domain/src/actions/types.ts
 var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 
-// src/runtime/failure/codes.ts
+// domain/src/runtime/failure/codes.ts
 var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   /** The target was found but refused the action: disabled, hidden, or covered by another element. */
   ACTION_REJECTED: "web.action.rejected",
@@ -106,10 +106,10 @@ function boundedText(value) {
   return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
 }
 
-// src/constants.ts
+// domain/src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 
-// src/runtime/expectation/conditions.ts
+// domain/src/runtime/expectation/conditions.ts
 var ASSERT_KINDS = Object.freeze({
   exists: true,
   absent: true,
@@ -184,7 +184,7 @@ function bounded(value) {
   return collapsed.length <= MAX_DESCRIPTION_LENGTH ? collapsed : `${collapsed.slice(0, MAX_DESCRIPTION_LENGTH - 1)}\u2026`;
 }
 
-// src/runtime/expectation/evaluate.ts
+// domain/src/runtime/expectation/evaluate.ts
 var ASSERT_OUTPUT_ID = "web.dom.assert";
 var EXPECTATION_SOURCE = "web-automation-expectation";
 function createWebAutomationExpectationEvaluator(dispatch) {
@@ -277,7 +277,7 @@ function errorText(error) {
   return error instanceof Error && error.message.length > 0 ? error.message : "the reason was not reported";
 }
 
-// src/runtime/expectation/tests/evaluate.test.ts
+// domain/src/runtime/expectation/tests/evaluate.test.ts
 function dispatcher(answers) {
   const calls = [];
   const dispatch = async (request) => {

@@ -1,11 +1,11 @@
-// src/runtime/tests/host-runtime.test.ts
+// domain/src/runtime/tests/host-runtime.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// src/constants.ts
+// domain/src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 
-// src/actions/safety.ts
+// domain/src/actions/safety.ts
 var WEB_AUTOMATION_ACTION_SAFETY = {
   "web.browser.navigate": "review",
   "web.dom.click": "review",
@@ -30,7 +30,7 @@ var WEB_AUTOMATION_ACTION_SAFETY = {
   "web.browser.download": "review"
 };
 
-// src/actions/extraction/request.ts
+// domain/src/actions/extraction/request.ts
 var WEB_AUTOMATION_EXTRACT_PAGINATION_MODES = ["next", "loadMore", "scroll", "numbered"];
 var WEB_AUTOMATION_EXTRACT_FIELD_KINDS = ["text", "attribute", "link", "value", "column"];
 var WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS = ["include", "exclude", "encrypt"];
@@ -38,10 +38,10 @@ var WEB_AUTOMATION_EXTRACT_READ_MODES = ["text", "attribute", "value", "html"];
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
 var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
 
-// src/actions/extraction/read-request.ts
+// domain/src/actions/extraction/read-request.ts
 var REFUSED = Symbol("refused");
 
-// src/actions/extraction/schema.ts
+// domain/src/actions/extraction/schema.ts
 function webAutomationExtractListSchema(elementFingerprintSchema2) {
   const pageBound = { type: "integer", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES };
   const fieldSpecSchema = {
@@ -94,7 +94,7 @@ function webAutomationExtractListSchema(elementFingerprintSchema2) {
   };
 }
 
-// src/actions/schemas.ts
+// domain/src/actions/schemas.ts
 var elementFingerprintSchema = {
   type: "object",
   label: "Element fingerprint",
@@ -398,7 +398,7 @@ var webAutomationActionDefinitions = [
   }
 ];
 
-// src/output-nodes/definitions.ts
+// domain/src/output-nodes/definitions.ts
 var controlInput = { id: "in", label: "In", valueType: "signal", role: "control" };
 var outputPorts = [
   { id: "success", label: "Success", valueType: "any", role: "success" },
@@ -534,7 +534,7 @@ function iconForOutput(outputId) {
   return "square-dot";
 }
 
-// src/actions/types.ts
+// domain/src/actions/types.ts
 var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.navigate",
@@ -577,7 +577,7 @@ var WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = {
   "web.browser.download": "browser.download"
 };
 
-// src/sensitivity/signature.ts
+// domain/src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
 var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
 var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
@@ -590,7 +590,7 @@ function isSensitiveControlType(type) {
   return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
 }
 
-// src/sensitivity/descriptor.ts
+// domain/src/sensitivity/descriptor.ts
 function sensitiveFieldSignatureOfDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
   const record = descriptor;
@@ -609,7 +609,7 @@ function stringField(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// src/io/input-model.ts
+// domain/src/io/input-model.ts
 var WEB_AUTOMATION_INPUT_IDS = {
   browserState: "web.browser.state",
   recordingEvidence: "web.recording.evidence",
@@ -653,7 +653,7 @@ var OUTPUT_FOR_ACTION_INPUT = new Map(
   actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
 );
 
-// src/runtime/capabilities.ts
+// domain/src/runtime/capabilities.ts
 var webAutomationRuntimeCapabilities = [
   {
     id: "web.actions",
@@ -720,13 +720,13 @@ var webAutomationGatewayCapabilities = [
   }
 ];
 
-// src/extraction/dataset-id.ts
+// domain/src/extraction/dataset-id.ts
 var COMBINING_MARKS = new RegExp("\\p{M}+", "gu");
 
-// src/extraction/label-key.ts
+// domain/src/extraction/label-key.ts
 var COMBINING_MARKS2 = new RegExp("\\p{M}+", "gu");
 
-// src/runtime/failure/codes.ts
+// domain/src/runtime/failure/codes.ts
 var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   /** The target was found but refused the action: disabled, hidden, or covered by another element. */
   ACTION_REJECTED: "web.action.rejected",
@@ -823,24 +823,24 @@ function boundedText(value) {
   return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
 }
 
-// src/page-evidence/wire.ts
+// domain/src/page-evidence/wire.ts
 function pageEvidenceWire(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// src/recording/web-state/evidence/project.ts
+// domain/src/recording/web-state/evidence/project.ts
 var COLLECTION = { elementKind: "collection", comparable: false };
 var LIVE_COLLECTION = { ...COLLECTION, volatility: "rapid" };
 var SETTLED_COLLECTION = { ...COLLECTION, volatility: "slow" };
 
-// src/client/gateway-mapping.ts
+// domain/src/client/gateway-mapping.ts
 var UNSUPPORTED_ACTION_TYPE_FAILURE = Object.freeze(webAutomationFailureRecord(WEB_AUTOMATION_FAILURE_CODES.UNSUPPORTED_TYPE));
 var CANONICAL_ACTION_TYPES = new Set(WEB_AUTOMATION_ACTION_TYPES);
 var LEGACY_ACTION_TYPE_ALIASES = new Map(
   Object.entries(WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER).map(([canonical, legacy]) => [legacy, canonical])
 );
 
-// src/runtime/expectation/conditions.ts
+// domain/src/runtime/expectation/conditions.ts
 var ASSERT_KINDS = Object.freeze({
   exists: true,
   absent: true,
@@ -915,7 +915,7 @@ function bounded(value) {
   return collapsed.length <= MAX_DESCRIPTION_LENGTH ? collapsed : `${collapsed.slice(0, MAX_DESCRIPTION_LENGTH - 1)}\u2026`;
 }
 
-// src/runtime/expectation/evaluate.ts
+// domain/src/runtime/expectation/evaluate.ts
 var ASSERT_OUTPUT_ID = "web.dom.assert";
 var EXPECTATION_SOURCE = "web-automation-expectation";
 function createWebAutomationExpectationEvaluator(dispatch) {
@@ -1008,7 +1008,7 @@ function errorText(error) {
   return error instanceof Error && error.message.length > 0 ? error.message : "the reason was not reported";
 }
 
-// src/runtime/llm-evidence/limits.ts
+// domain/src/runtime/llm-evidence/limits.ts
 import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES } from "fluxiq/automation-studio";
 var WEB_LLM_EVIDENCE_BYTE_BUDGETS = Object.freeze({
   ceiling: 12e3,
@@ -1037,7 +1037,7 @@ function evidenceByteLimit(input, fallback, ceiling = WEB_LLM_EVIDENCE_BYTE_BUDG
   return Math.min(Number(input), cap);
 }
 
-// src/runtime/llm-evidence/location.ts
+// domain/src/runtime/llm-evidence/location.ts
 function safeEvidenceUrl(input) {
   if (typeof input !== "string" || !input || input.length > WEB_LLM_EVIDENCE_BOUNDS.url) throw new Error("web evidence URL must be bounded");
   const url = new URL(input);
@@ -1057,7 +1057,7 @@ function sameOriginHref(input, base) {
   }
 }
 
-// src/runtime/llm-evidence/present.ts
+// domain/src/runtime/llm-evidence/present.ts
 function present(fields) {
   const source = fields;
   const written = {};
@@ -1068,7 +1068,7 @@ function present(fields) {
   return written;
 }
 
-// src/runtime/llm-evidence/untrusted-json.ts
+// domain/src/runtime/llm-evidence/untrusted-json.ts
 function isJsonRecord(input) {
   return Boolean(input) && typeof input === "object" && !Array.isArray(input);
 }
@@ -1089,7 +1089,7 @@ function boundedCount(input, maximum) {
   return input;
 }
 
-// src/runtime/llm-evidence/elements.ts
+// domain/src/runtime/llm-evidence/elements.ts
 var FRAME_SELECTOR_PATTERN = /^frame\[(\d{1,6})\]\s*>>\s*(.+)$/u;
 var FRAME_ID_ATTRIBUTE = "data-fluxiq-frame-id";
 function sanitizedEvidenceElement(raw, context) {
@@ -1114,10 +1114,9 @@ function sanitizedEvidenceElement(raw, context) {
   const expanded = revealKind === "disclosure" ? semanticExpandedState(attributes) : void 0;
   const placement = elementPlacement(raw.context, { name, text: text2 });
   const focused = context.focusedSelector !== void 0 && context.focusedSelector === addressed.selector ? true : void 0;
-  return present({
+  const element = present({
     target: context.target,
     tag,
-    selector: addressed.selector,
     frameId: addressed.frameId,
     role: role || void 0,
     name: name || void 0,
@@ -1139,6 +1138,7 @@ function sanitizedEvidenceElement(raw, context) {
     item: placement.item,
     cell: placement.cell
   });
+  return { element, selector: addressed.selector };
 }
 function safeFillTag(tag, inputType) {
   return tag === "textarea" || tag === "input" && (!inputType || ["text", "search", "email", "tel", "url", "number"].includes(inputType));
@@ -1212,7 +1212,7 @@ function sanitizedSelectedValue(input, options) {
   return value && options.some((option) => option.value === value) ? value : void 0;
 }
 
-// src/runtime/llm-evidence/page-evidence.ts
+// domain/src/runtime/llm-evidence/page-evidence.ts
 var READY_STATES = ["loading", "interactive", "complete"];
 var ORDINARY_NAVIGATION_TYPE = "navigate";
 var MAX_REDIRECTS = 100;
@@ -1306,14 +1306,12 @@ function evidenceDialogs(input) {
     if (!raw) continue;
     const role = boundedText2(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
     const name = boundedText2(raw.label, WEB_LLM_EVIDENCE_BOUNDS.text);
-    const selector = boundedText2(raw.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
     const modal = trueFlag(raw.modal);
-    if (!role && !name && !selector && !modal) continue;
+    if (!role && !name && !modal) continue;
     dialogs.push(present({
       role: role || void 0,
       name: name || void 0,
-      modal,
-      selector: selector || void 0
+      modal
     }));
   }
   return dialogs.length ? dialogs : void 0;
@@ -1321,21 +1319,19 @@ function evidenceDialogs(input) {
 function evidenceBlocker(input) {
   const blocker = items(input?.blockers).map((item) => pageEvidenceWire(item)).find((item) => item !== void 0);
   if (!blocker) return void 0;
-  const selector = boundedText2(blocker.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
-  if (!selector) return void 0;
   const role = boundedText2(blocker.role, WEB_LLM_EVIDENCE_BOUNDS.role);
   const name = boundedText2(blocker.label, WEB_LLM_EVIDENCE_BOUNDS.text);
   const blocks = boundedCount(blocker.blocks, MAX_BLOCKED_CONTROLS);
+  if (!role && !name && !blocks) return void 0;
   return present({
-    selector,
     role: role || void 0,
     name: name || void 0,
     blocks: blocks || void 0
   });
 }
 
-// src/runtime/llm-evidence/sanitize.ts
-var WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v1";
+// domain/src/runtime/llm-evidence/sanitize.ts
+var WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v2";
 function sanitizeWebLlmSnapshot(input, options = {}) {
   return sanitizeWebLlmSnapshotWithBindings(input, options).evidence;
 }
@@ -1350,10 +1346,10 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
   const selectors = /* @__PURE__ */ new Map();
   for (const raw of snapshot.interactiveElements) {
     if (elements.length >= WEB_LLM_EVIDENCE_BOUNDS.elements) break;
-    const element = sanitizedEvidenceElement(raw, { target: `target.${elements.length + 1}`, url, focusedSelector });
-    if (!element) continue;
-    elements.push(element);
-    selectors.set(element.target, element.selector);
+    const described = sanitizedEvidenceElement(raw, { target: `target.${elements.length + 1}`, url, focusedSelector });
+    if (!described) continue;
+    elements.push(described.element);
+    selectors.set(described.element.target, described.selector);
   }
   const childFrameIds = [...new Set(elements.map((element) => element.frameId).filter((id) => id !== void 0))].sort((left, right) => left - right);
   const elementTotal = evidenceElementTotal(snapshot, elements.length);
@@ -1422,7 +1418,7 @@ function trimToBudget(evidence, selectors, maxEvidenceBytes) {
   }
 }
 
-// src/runtime/llm-evidence/tool-rejection.ts
+// domain/src/runtime/llm-evidence/tool-rejection.ts
 var WEB_LLM_TOOL_REJECTION_CODES = [
   "invalid_input",
   "cross_origin",
@@ -1432,7 +1428,7 @@ var WEB_LLM_TOOL_REJECTION_CODES = [
   "sensitive_value"
 ];
 
-// src/runtime/llm-evidence/vocabulary.ts
+// domain/src/runtime/llm-evidence/vocabulary.ts
 var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe"];
 var WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
 var WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
@@ -1449,11 +1445,11 @@ var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
   ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
 ]);
 
-// src/runtime/host-runtime.ts
-var WEB_STATE_DIFF_SCHEMA_VERSION = "web-state-diff.v1";
+// domain/src/runtime/host-runtime.ts
+var WEB_STATE_DIFF_SCHEMA_VERSION = "web-state-diff.v2";
 var SNAPSHOT_OUTPUT_ID = "web.dom.capture_snapshot";
 var HOST_RUNTIME_SOURCE = "web-automation-host-runtime";
-var MAX_DIFF_SELECTORS = 10;
+var MAX_DIFF_ELEMENTS = 10;
 var WEB_AUTOMATION_NODE_IDS = new Set(WEB_AUTOMATION_ACTION_TYPES.map(webAutomationOutputNodeId));
 var WEB_AUTOMATION_OUTPUT_IDS = new Set(WEB_AUTOMATION_ACTION_TYPES);
 var POLICY_ACTION_DEFINITION_ID = "builtin.policy.action";
@@ -1494,10 +1490,12 @@ function createWebAutomationHostRuntime(gateway2) {
   };
 }
 function webAutomationStateDiff(before, after, beforeStateRef, afterStateRef) {
-  const beforeSelectors = evidenceSelectors(before);
-  const afterSelectors = evidenceSelectors(after);
-  const added = afterSelectors.filter((selector) => !beforeSelectors.includes(selector));
-  const removed = beforeSelectors.filter((selector) => !afterSelectors.includes(selector));
+  const beforeElements = evidenceElements(before);
+  const afterElements = evidenceElements(after);
+  const beforeKeys = new Set(beforeElements.map(elementKey));
+  const afterKeys = new Set(afterElements.map(elementKey));
+  const added = afterElements.filter((element) => !beforeKeys.has(elementKey(element)));
+  const removed = beforeElements.filter((element) => !afterKeys.has(elementKey(element)));
   const beforeLocation = evidenceText(before, "location");
   const afterLocation = evidenceText(after, "location");
   return {
@@ -1508,12 +1506,12 @@ function webAutomationStateDiff(before, after, beforeStateRef, afterStateRef) {
     ...afterLocation === void 0 ? {} : { afterLocation },
     locationChanged: beforeLocation !== void 0 && afterLocation !== void 0 && beforeLocation !== afterLocation,
     titleChanged: evidenceText(before, "title") !== evidenceText(after, "title"),
-    beforeElementCount: beforeSelectors.length,
-    afterElementCount: afterSelectors.length,
+    beforeElementCount: beforeElements.length,
+    afterElementCount: afterElements.length,
     addedElementCount: added.length,
     removedElementCount: removed.length,
-    addedSelectors: added.slice(0, MAX_DIFF_SELECTORS),
-    removedSelectors: removed.slice(0, MAX_DIFF_SELECTORS)
+    addedElements: added.slice(0, MAX_DIFF_ELEMENTS),
+    removedElements: removed.slice(0, MAX_DIFF_ELEMENTS)
   };
 }
 function actionSnapshot(payload) {
@@ -1525,10 +1523,24 @@ function actsOnPage(node) {
   const outputId = node.parameterValues?.outputId;
   return node.definitionId === POLICY_ACTION_DEFINITION_ID && typeof outputId === "string" && WEB_AUTOMATION_OUTPUT_IDS.has(outputId);
 }
-function evidenceSelectors(summary) {
+function evidenceElements(summary) {
   const elements = summary?.elements;
   if (!Array.isArray(elements)) return [];
-  return elements.map((element) => isRecord(element) && typeof element.selector === "string" ? element.selector : void 0).filter((selector) => selector !== void 0);
+  const described = [];
+  for (const element of elements) {
+    if (!isRecord(element) || typeof element.tag !== "string" || !element.tag) continue;
+    described.push({
+      tag: element.tag,
+      ...typeof element.role === "string" ? { role: element.role } : {},
+      ...typeof element.name === "string" ? { name: element.name } : {},
+      ...typeof element.text === "string" ? { text: element.text } : {},
+      ...typeof element.form === "string" ? { form: element.form } : {}
+    });
+  }
+  return described;
+}
+function elementKey(element) {
+  return JSON.stringify([element.tag, element.role, element.name, element.text, element.form]);
 }
 function evidenceText(summary, field) {
   const value = summary?.[field];
@@ -1538,7 +1550,7 @@ function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-// src/runtime/tests/host-runtime.test.ts
+// domain/src/runtime/tests/host-runtime.test.ts
 var CLICK_NODE_ID = webAutomationOutputNodeId("web.dom.click");
 var POLICY_ACTION_ID = "builtin.policy.action";
 function pageSnapshot(url, selectors, extra = {}) {
@@ -1578,7 +1590,7 @@ test("a web attempt gets a bounded, sanitized state ref sourced from web.dom.cap
   assert.equal(ref.stateSnapshotId, "web.state.1");
   assert.equal(ref.stateRef, "web.state.1@node.1.attempt.1:before_action");
   assert.equal(typeof ref.capturedAt, "number");
-  assert.equal(ref.summary?.schemaVersion, "web-llm-evidence.v1");
+  assert.equal(ref.summary?.schemaVersion, "web-llm-evidence.v2");
   assert.equal(ref.summary?.location, "https://shop.test/cart");
   assert.doesNotMatch(JSON.stringify(ref.summary), /leaked-token|4111111111111111/u);
 });
@@ -1590,7 +1602,7 @@ test("a recorded action, Core's policy node naming web.dom.click, gets a state r
   assert.equal(calls.length, 1);
   assert.equal(calls[0]?.outputId, "web.dom.capture_snapshot");
   assert.equal(ref.stateRef, "web.state.1@node.1.attempt.1:before_action");
-  assert.equal(ref.summary?.schemaVersion, "web-llm-evidence.v1");
+  assert.equal(ref.summary?.schemaVersion, "web-llm-evidence.v2");
   assert.equal(typeof ref.summary?.truncated, "boolean");
 });
 test("a policy node naming no web output, or a web output on another node, is declined without a gateway round trip", async () => {
@@ -1613,7 +1625,7 @@ test("a policy node naming no web output, or a web output on another node, is de
 });
 test("a diff with a side missing is declined, so no diff claims every element appeared or left", async () => {
   const boundary = createWebAutomationHostRuntime(gateway([]).gateway);
-  const summary = { schemaVersion: "web-llm-evidence.v1", location: "https://shop.test/cart", elements: [{ selector: "#pay" }] };
+  const summary = { schemaVersion: "web-llm-evidence.v2", location: "https://shop.test/cart", elements: [{ selector: "#pay" }] };
   const before = { stateSnapshotId: "web.state.1", stateRef: "web.state.1@a:before_action", capturedAt: 1, summary };
   const after = { stateSnapshotId: "web.state.2", stateRef: "web.state.2@a:after_action", capturedAt: 2, summary };
   const diff = async (sides) => boundary.inspectStateDiff({ ...sides, node: { id: "node.1", definitionId: POLICY_ACTION_ID }, attemptId: "a" });
@@ -1654,9 +1666,9 @@ test("a snapshot that never arrived produces no ref rather than a ref pointing a
   const emptyAnswer = createWebAutomationHostRuntime(gateway([{ ok: true, status: "succeeded", payload: { status: "succeeded" } }]).gateway);
   await assert.rejects(() => Promise.resolve(emptyAnswer.captureStateSnapshot(captureInput(CLICK_NODE_ID))));
 });
-test("the diff reports the move, the counts, and the selectors, and stays inside the schema", () => {
-  const before = { schemaVersion: "web-llm-evidence.v1", location: "https://shop.test/cart", title: "Cart", elements: [{ selector: "#pay" }, { selector: "#edit" }] };
-  const after = { schemaVersion: "web-llm-evidence.v1", location: "https://shop.test/thanks", title: "Thanks", elements: [{ selector: "#edit" }, { selector: "#receipt" }] };
+test("the diff reports the move, the counts, and which elements came and went, and stays inside the schema", () => {
+  const before = { schemaVersion: "web-llm-evidence.v2", location: "https://shop.test/cart", title: "Cart", elements: [{ target: "target.1", tag: "button", name: "Pay" }, { target: "target.2", tag: "a", name: "Edit" }] };
+  const after = { schemaVersion: "web-llm-evidence.v2", location: "https://shop.test/thanks", title: "Thanks", elements: [{ target: "target.1", tag: "a", name: "Edit" }, { target: "target.2", tag: "a", name: "Receipt" }] };
   const diff = webAutomationStateDiff(before, after, "web.state.1@a:before_action", "web.state.2@a:after_action");
   assert.deepEqual(diff, {
     schemaVersion: WEB_STATE_DIFF_SCHEMA_VERSION,
@@ -1670,15 +1682,15 @@ test("the diff reports the move, the counts, and the selectors, and stays inside
     afterElementCount: 2,
     addedElementCount: 1,
     removedElementCount: 1,
-    addedSelectors: ["#receipt"],
-    removedSelectors: ["#pay"]
+    addedElements: [{ tag: "a", name: "Receipt" }],
+    removedElements: [{ tag: "button", name: "Pay" }]
   });
 });
 test("the diff never lists more than the bound, and its counts stay exact", () => {
-  const many = { elements: Array.from({ length: 30 }, (_, index) => ({ selector: `#item-${index}` })) };
+  const many = { elements: Array.from({ length: 30 }, (_, index) => ({ target: `target.${index + 1}`, tag: "li", name: `Item ${index}` })) };
   const grown = webAutomationStateDiff({ elements: [] }, many);
   assert.equal(grown.addedElementCount, 30);
-  assert.equal(grown.addedSelectors.length, 10);
+  assert.equal(grown.addedElements.length, 10);
   assert.equal(grown.locationChanged, false);
   assert.equal(grown.beforeElementCount, 0);
 });

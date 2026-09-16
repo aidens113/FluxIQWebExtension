@@ -1,15 +1,15 @@
-// src/sensitivity/tests/redaction.test.ts
+// domain/src/sensitivity/tests/redaction.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// src/sensitivity/redaction.ts
+// domain/src/sensitivity/redaction.ts
 var WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT = "(withheld: the action ran on a control that holds a secret)";
 function isProducerRedactedComparison(validation) {
   if (!validation || typeof validation !== "object" || Array.isArray(validation)) return false;
   return validation.redacted === true;
 }
 
-// src/sensitivity/tests/redaction.test.ts
+// domain/src/sensitivity/tests/redaction.test.ts
 test("the marker's words are pinned, because both exits are grepped for them", () => {
   assert.equal(WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, "(withheld: the action ran on a control that holds a secret)");
   assert.equal(WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT.includes("withheld"), true, "an operator reading it must be able to tell withholding from an empty field");

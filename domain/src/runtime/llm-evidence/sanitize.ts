@@ -1,4 +1,4 @@
-// A raw page snapshot becomes `web-llm-evidence.v1`: the bounded, value-free,
+// A raw page snapshot becomes `web-llm-evidence.v2`: the bounded, value-free,
 // origin-checked packet that is the only page data an LLM ever sees.
 //
 // Two things make it safe to hand to a model. Nothing that could be a secret
@@ -27,7 +27,13 @@ import { capturedTruncated, evidenceElementTotal, webLlmPageContext, type WebLlm
 import { present } from "./present";
 import { boundedText, jsonRecord } from "./untrusted-json";
 
-export const WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v1" as const;
+/**
+ * `.v2` is not cosmetic. `.v1` described every element with its `selector`, so a
+ * stored `.v1` packet both leaks a browser concept to whatever reads it and has
+ * a shape no current reader expects. The version is the gate that keeps one out
+ * of the repair path and out of the reusable-evidence cache.
+ */
+export const WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v2" as const;
 
 export type WebLlmPageEvidence = WebLlmPageContext & {
   schemaVersion: typeof WEB_LLM_EVIDENCE_SCHEMA_VERSION;
@@ -52,6 +58,7 @@ export type WebLlmPageEvidence = WebLlmPageContext & {
  */
 export type WebLlmSnapshotBinding = {
   evidence: WebLlmPageEvidence;
+  /** Opaque handle to the selector that addresses it. The packet carries the keys; only this map carries the values. */
   selectors: Map<string, string>;
 };
 
@@ -83,10 +90,11 @@ export function sanitizeWebLlmSnapshotWithBindings(input: unknown, options: WebL
   const selectors = new Map<string, string>();
   for (const raw of snapshot.interactiveElements) {
     if (elements.length >= WEB_LLM_EVIDENCE_BOUNDS.elements) break;
-    const element = sanitizedEvidenceElement(raw, { target: `target.${elements.length + 1}`, url, focusedSelector });
-    if (!element) continue;
-    elements.push(element);
-    selectors.set(element.target, element.selector);
+    const described = sanitizedEvidenceElement(raw, { target: `target.${elements.length + 1}`, url, focusedSelector });
+    if (!described) continue;
+    elements.push(described.element);
+    // The one place a selector is written down, and it is not the packet.
+    selectors.set(described.element.target, described.selector);
   }
 
   const childFrameIds = [...new Set(elements.map((element) => element.frameId).filter((id): id is number => id !== undefined))].sort((left, right) => left - right);

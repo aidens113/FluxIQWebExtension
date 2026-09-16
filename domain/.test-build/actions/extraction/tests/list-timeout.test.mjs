@@ -1,8 +1,8 @@
-// src/actions/extraction/tests/list-timeout.test.ts
+// domain/src/actions/extraction/tests/list-timeout.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// src/actions/extraction/request.ts
+// domain/src/actions/extraction/request.ts
 var WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS = 1e4;
 function webAutomationExtractListTimeoutMs(request2) {
   const paginate = request2.paginate;
@@ -10,7 +10,7 @@ function webAutomationExtractListTimeoutMs(request2) {
   return WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS * pages;
 }
 
-// src/actions/extraction/tests/list-timeout.test.ts
+// domain/src/actions/extraction/tests/list-timeout.test.ts
 var fields = { name: "td.name" };
 function request(paginate) {
   return { item: "tr", fields, ...paginate === void 0 ? {} : { paginate } };

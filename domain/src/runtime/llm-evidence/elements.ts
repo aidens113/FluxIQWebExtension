@@ -31,9 +31,16 @@ const FRAME_SELECTOR_PATTERN = /^frame\[(\d{1,6})\]\s*>>\s*(.+)$/u;
 const FRAME_ID_ATTRIBUTE = "data-fluxiq-frame-id";
 
 export type WebLlmEvidenceElement = {
+  /**
+   * The opaque handle this element is named by, and the only way anything
+   * outside the domain may refer to it. There is deliberately no `selector`
+   * beside it: the packet is what a language model reads, and a selector in it
+   * is a browser concept reaching the model however neutral the types around it
+   * are. The selector lives in `WebLlmSnapshotBinding.selectors`, keyed by this
+   * handle, and never leaves the domain.
+   */
   target: string;
   tag: string;
-  selector: string;
   /** Present only for an element that lives in a child frame of the captured tab. */
   frameId?: number;
   role?: string;
@@ -65,7 +72,11 @@ export type WebLlmEvidenceElement = {
   cell?: { row: number; column: number; header?: string };
 };
 
+/** A packet element with its selector put back, which only domain code ever holds. */
 export type ResolvedWebLlmEvidenceElement = WebLlmEvidenceElement & { selector: string };
+
+/** One described element: what the packet carries, and the selector that stays behind. */
+export type DescribedEvidenceElement = { element: WebLlmEvidenceElement; selector: string };
 
 /** What the sanitizer needs from the page to describe one element. */
 export type EvidenceElementContext = {
@@ -75,11 +86,16 @@ export type EvidenceElementContext = {
 };
 
 /**
- * One raw snapshot element as a packet element, or `undefined` when it cannot
- * be addressed (no tag or no selector) or must not be described (a sensitive
- * control).
+ * One raw snapshot element as a packet element and the selector that addresses
+ * it, or `undefined` when it cannot be addressed (no tag or no selector) or
+ * must not be described (a sensitive control).
+ *
+ * The two are returned side by side rather than as one object because only one
+ * of them may be published: the caller puts the element in the packet and the
+ * selector in the binding. Returning them joined and deleting a key afterwards
+ * would be the silent-drop shape this directory is built against.
  */
-export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementContext): WebLlmEvidenceElement | undefined {
+export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementContext): DescribedEvidenceElement | undefined {
   if (!isJsonRecord(raw)) return undefined;
   const tag = boundedText(raw.tagName, WEB_LLM_EVIDENCE_BOUNDS.tag)?.toLowerCase();
   const addressed = frameAddressedSelector(raw);
@@ -103,10 +119,9 @@ export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementC
   const placement = elementPlacement(raw.context, { name, text });
   const focused = context.focusedSelector !== undefined && context.focusedSelector === addressed.selector ? true : undefined;
 
-  return present<WebLlmEvidenceElement>({
+  const element = present<WebLlmEvidenceElement>({
     target: context.target,
     tag,
-    selector: addressed.selector,
     frameId: addressed.frameId,
     role: role || undefined,
     name: name || undefined,
@@ -128,6 +143,7 @@ export function sanitizedEvidenceElement(raw: unknown, context: EvidenceElementC
     item: placement.item,
     cell: placement.cell
   });
+  return { element, selector: addressed.selector };
 }
 
 /** A tag whose value the page would let an automation type into. */

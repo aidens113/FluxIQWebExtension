@@ -1,4 +1,4 @@
-// src/runtime/failure/tests/codes.test.ts
+// domain/src/runtime/failure/tests/codes.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -7,13 +7,13 @@ import {
   parseAutomationStudioFailureRecord
 } from "fluxiq/automation-studio";
 
-// src/actions/extraction/read-request.ts
+// domain/src/actions/extraction/read-request.ts
 var REFUSED = Symbol("refused");
 
-// src/actions/types.ts
+// domain/src/actions/types.ts
 var WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH = 1024;
 
-// src/runtime/failure/codes.ts
+// domain/src/runtime/failure/codes.ts
 var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
   /** The target was found but refused the action: disabled, hidden, or covered by another element. */
   ACTION_REJECTED: "web.action.rejected",
@@ -110,7 +110,7 @@ function boundedText(value) {
   return `${collapsed.slice(0, WEB_AUTOMATION_VALIDATION_TEXT_MAX_LENGTH - 1)}\u2026`;
 }
 
-// src/runtime/failure/tests/codes.test.ts
+// domain/src/runtime/failure/tests/codes.test.ts
 var CODE_TABLE = [
   ["ACTION_REJECTED", "web.action.rejected", "blocked_by_capability_or_policy", false, "execution"],
   ["TARGET_NOT_FOUND", "web.target.not_found", "target_not_found", true, "target_resolution"],

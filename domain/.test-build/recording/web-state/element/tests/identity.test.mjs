@@ -1,8 +1,8 @@
-// src/recording/web-state/element/tests/identity.test.ts
+// domain/src/recording/web-state/element/tests/identity.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// src/recording/web-state/element/identity.ts
+// domain/src/recording/web-state/element/identity.ts
 var MAX_STATE_ID_LENGTH = 120;
 function meaningfulText(value) {
   return typeof value === "string" && value.trim().length >= 2;
@@ -44,7 +44,7 @@ function sanitizeStateId(value) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, MAX_STATE_ID_LENGTH) || "element";
 }
 
-// src/recording/web-state/element/tests/identity.test.ts
+// domain/src/recording/web-state/element/tests/identity.test.ts
 function element(input) {
   return { tagName: "button", ...input };
 }

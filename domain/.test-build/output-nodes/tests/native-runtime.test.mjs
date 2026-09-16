@@ -1,8 +1,8 @@
-// src/output-nodes/tests/native-runtime.test.ts
+// domain/src/output-nodes/tests/native-runtime.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// src/actions/extraction/request.ts
+// domain/src/actions/extraction/request.ts
 var WEB_AUTOMATION_EXTRACT_PAGINATION_MODES = ["next", "loadMore", "scroll", "numbered"];
 var WEB_AUTOMATION_EXTRACT_FIELD_KINDS = ["text", "attribute", "link", "value", "column"];
 var WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS = ["include", "exclude", "encrypt"];
@@ -10,10 +10,10 @@ var WEB_AUTOMATION_EXTRACT_READ_MODES = ["text", "attribute", "value", "html"];
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
 var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
 
-// src/actions/extraction/read-request.ts
+// domain/src/actions/extraction/read-request.ts
 var REFUSED = Symbol("refused");
 
-// src/actions/extraction/schema.ts
+// domain/src/actions/extraction/schema.ts
 function webAutomationExtractListSchema(elementFingerprintSchema2) {
   const pageBound = { type: "integer", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES };
   const fieldSpecSchema = {
@@ -66,7 +66,7 @@ function webAutomationExtractListSchema(elementFingerprintSchema2) {
   };
 }
 
-// src/actions/types.ts
+// domain/src/actions/types.ts
 var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.navigate",
   "web.dom.click",
@@ -88,10 +88,10 @@ var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.download"
 ];
 
-// src/constants.ts
+// domain/src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 
-// src/actions/safety.ts
+// domain/src/actions/safety.ts
 var WEB_AUTOMATION_ACTION_SAFETY = {
   "web.browser.navigate": "review",
   "web.dom.click": "review",
@@ -116,7 +116,7 @@ var WEB_AUTOMATION_ACTION_SAFETY = {
   "web.browser.download": "review"
 };
 
-// src/actions/schemas.ts
+// domain/src/actions/schemas.ts
 var elementFingerprintSchema = {
   type: "object",
   label: "Element fingerprint",
@@ -420,7 +420,7 @@ var webAutomationActionDefinitions = [
   }
 ];
 
-// src/output-nodes/definitions.ts
+// domain/src/output-nodes/definitions.ts
 var controlInput = { id: "in", label: "In", valueType: "signal", role: "control" };
 var outputPorts = [
   { id: "success", label: "Success", valueType: "any", role: "success" },
@@ -556,7 +556,7 @@ function iconForOutput(outputId) {
   return "square-dot";
 }
 
-// src/output-nodes/native-runtime.ts
+// domain/src/output-nodes/native-runtime.ts
 var WEB_AUTOMATION_IMPORTER_PACKAGE_ID = "@fluxiq-web-extension/domain";
 var WEB_AUTOMATION_IMPORTER_PACKAGE_VERSION = "0.1.0";
 function createWebAutomationOutputNodeImplementationBundle(extension = {}) {
@@ -592,7 +592,7 @@ function compactJsonObject(value) {
   );
 }
 
-// src/output-nodes/tests/native-runtime.test.ts
+// domain/src/output-nodes/tests/native-runtime.test.ts
 var bundle = createWebAutomationOutputNodeImplementationBundle();
 async function execute(outputId, parameters) {
   const implementation = bundle.implementations[outputId];

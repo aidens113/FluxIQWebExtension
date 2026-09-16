@@ -1,8 +1,8 @@
-// src/recording/web-state/element/tests/selection.test.ts
+// domain/src/recording/web-state/element/tests/selection.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// src/recording/web-state/geometry.ts
+// domain/src/recording/web-state/geometry.ts
 function stateBounds(bounds) {
   if (!bounds) return void 0;
   const x = finite(bounds.x);
@@ -18,7 +18,7 @@ function finite(value) {
   return Number.isFinite(value) ? value : void 0;
 }
 
-// src/recording/web-state/element/identity.ts
+// domain/src/recording/web-state/element/identity.ts
 var MAX_STATE_ID_LENGTH = 120;
 function meaningfulText(value) {
   return typeof value === "string" && value.trim().length >= 2;
@@ -57,7 +57,7 @@ function sanitizeStateId(value) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "").slice(0, MAX_STATE_ID_LENGTH) || "element";
 }
 
-// src/recording/web-state/element/kind.ts
+// domain/src/recording/web-state/element/kind.ts
 function isLikelyActionableElement(element) {
   const tagName = element.tagName.toLowerCase();
   const role = element.role?.toLowerCase();
@@ -77,7 +77,7 @@ function isSemanticTextElement(element) {
   return tagName === "p" || tagName === "li" || tagName === "td" || tagName === "th" || tagName === "dt" || tagName === "dd" || tagName === "figcaption" || tagName === "blockquote" || /^h[1-6]$/.test(tagName);
 }
 
-// src/recording/web-state/element/selection.ts
+// domain/src/recording/web-state/element/selection.ts
 var MAX_STATE_ELEMENTS = 1500;
 var WEB_AUTOMATION_ELEMENT_SUMMARY_STATE_IDS = ["count", "captured", "truncated", "captureTruncated", "stateTruncated"];
 function shouldCaptureElementState(element) {
@@ -139,7 +139,7 @@ function hasElementBounds(element) {
   return stateBounds(element.documentBounds ?? element.bounds) !== void 0;
 }
 
-// src/recording/web-state/element/tests/selection.test.ts
+// domain/src/recording/web-state/element/tests/selection.test.ts
 var page = [
   { tagName: "button", selector: "button.icon" },
   { tagName: "button", selector: "button.save", text: "Save", bounds: { x: 20, y: 30, width: 80, height: 32 } },

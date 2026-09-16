@@ -4,15 +4,15 @@ import { produceWebReusableEvidence, WEB_REUSABLE_EVIDENCE_MAX_PROJECTION_BYTES 
 import type { WebLlmPageEvidence } from "..";
 
 const evidence = (overrides: Partial<WebLlmPageEvidence> = {}): WebLlmPageEvidence => ({
-  schemaVersion: "web-llm-evidence.v1",
+  schemaVersion: "web-llm-evidence.v2",
   trust: "untrusted-page-evidence",
   location: "https://example.test/form?token=private#secret",
   elements: [
-    { target: "target.1", tag: "textarea", selector: '[data-testid="instruction-name-adapted"]', name: "Name", hasValue: true },
-    { target: "target.2", tag: "select", selector: "#plan", name: "Plan", selectedValue: "enterprise", options: [{ value: "starter", label: "Starter" }, { value: "enterprise", label: "Private enterprise choice" }] },
-    { target: "target.3", tag: "input", selector: "#password", inputType: "password", name: "Account password" },
-    { target: "target.4", tag: "a", selector: "#next", name: "Next", href: "https://example.test/next?ticket=private" },
-    { target: "target.5", tag: "a", selector: "#away", name: "Away", href: "https://outside.test/path?cross=private" },
+    { target: "target.1", tag: "textarea", name: "Name", hasValue: true },
+    { target: "target.2", tag: "select", name: "Plan", selectedValue: "enterprise", options: [{ value: "starter", label: "Starter" }, { value: "enterprise", label: "Private enterprise choice" }] },
+    { target: "target.3", tag: "input", inputType: "password", name: "Account password" },
+    { target: "target.4", tag: "a", name: "Next", href: "https://example.test/next?ticket=private" },
+    { target: "target.5", tag: "a", name: "Away", href: "https://outside.test/path?cross=private" },
   ],
   truncated: false,
   ...overrides,
@@ -44,7 +44,7 @@ test("produces deterministic versioned compatibility and a non-executable bounde
 test("changes compatibility for relevant page, control, and capability revisions", () => {
   const baseline = produceWebReusableEvidence({ evidence: evidence(), clientCapabilities: ["web.actions.v1"] });
   const changedPath = produceWebReusableEvidence({ evidence: evidence({ location: "https://example.test/other" }), clientCapabilities: ["web.actions.v1"] });
-  const changedControl = produceWebReusableEvidence({ evidence: evidence({ elements: [{ target: "noise", tag: "textarea", selector: "#renamed", name: "Name" }] }), clientCapabilities: ["web.actions.v1"] });
+  const changedControl = produceWebReusableEvidence({ evidence: evidence({ elements: [{ target: "noise", tag: "textarea", name: "Name" }] }), clientCapabilities: ["web.actions.v1"] });
   const changedCapability = produceWebReusableEvidence({ evidence: evidence(), clientCapabilities: ["web.actions.v2"] });
   for (const candidate of [changedPath, changedControl, changedCapability]) assert.notEqual(candidate.fingerprint.digest, baseline.fingerprint.digest);
 });
@@ -61,7 +61,7 @@ test("keeps opposite run outcomes compatible while preserving them in prompt con
 });
 
 test("enforces exact item and byte bounds by deterministic trimming", () => {
-  const many = Array.from({ length: 40 }, (_, index) => ({ target: `target.${index + 1}`, tag: "button", selector: `[data-id="${index}"]`, name: `Action ${index} ${"x".repeat(100)}` }));
+  const many = Array.from({ length: 40 }, (_, index) => ({ target: `target.${index + 1}`, tag: "button", name: `Action ${index} ${"x".repeat(100)}` }));
   const first = produceWebReusableEvidence({ evidence: evidence({ elements: many }) }, { maxProjectionItems: 7, maxProjectionBytes: 900 });
   const second = produceWebReusableEvidence({ evidence: evidence({ elements: [...many].reverse() }) }, { maxProjectionItems: 7, maxProjectionBytes: 900 });
   assert.deepEqual(first, second);
@@ -93,7 +93,7 @@ test("rejects credentialed and non-http locations", () => {
 test("the fingerprint excludes every control it excluded before, by the shared rule plus its own two types", () => {
   const excluded = (element: Partial<WebLlmPageEvidence["elements"][number]>): boolean => {
     const production = produceWebReusableEvidence({
-      evidence: evidence({ elements: [{ target: "target.1", tag: "input", selector: "#field", name: "Field name", ...element } as WebLlmPageEvidence["elements"][number]] }),
+      evidence: evidence({ elements: [{ target: "target.1", tag: "input", name: "Field name", ...element } as WebLlmPageEvidence["elements"][number]] }),
     });
     return !production.promptProjection.facts.some(fact => fact.kind === "element");
   };

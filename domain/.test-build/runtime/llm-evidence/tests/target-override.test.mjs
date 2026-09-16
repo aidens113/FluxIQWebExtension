@@ -1,8 +1,8 @@
-// src/runtime/llm-evidence/tests/target-override.test.ts
+// domain/src/runtime/llm-evidence/tests/target-override.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// src/runtime/llm-evidence/limits.ts
+// domain/src/runtime/llm-evidence/limits.ts
 import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES } from "fluxiq/automation-studio";
 var WEB_LLM_EVIDENCE_BYTE_BUDGETS = Object.freeze({
   ceiling: 12e3,
@@ -31,7 +31,7 @@ function evidenceByteLimit(input, fallback, ceiling = WEB_LLM_EVIDENCE_BYTE_BUDG
   return Math.min(Number(input), cap);
 }
 
-// src/sensitivity/signature.ts
+// domain/src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
 var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
 var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
@@ -44,7 +44,7 @@ function isSensitiveControlType(type) {
   return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
 }
 
-// src/sensitivity/descriptor.ts
+// domain/src/sensitivity/descriptor.ts
 function sensitiveFieldSignatureOfDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
   const record = descriptor;
@@ -63,7 +63,7 @@ function stringField(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// src/runtime/llm-evidence/location.ts
+// domain/src/runtime/llm-evidence/location.ts
 function safeEvidenceUrl(input) {
   if (typeof input !== "string" || !input || input.length > WEB_LLM_EVIDENCE_BOUNDS.url) throw new Error("web evidence URL must be bounded");
   const url = new URL(input);
@@ -83,7 +83,7 @@ function sameOriginHref(input, base) {
   }
 }
 
-// src/runtime/llm-evidence/present.ts
+// domain/src/runtime/llm-evidence/present.ts
 function present(fields) {
   const source = fields;
   const written = {};
@@ -94,7 +94,7 @@ function present(fields) {
   return written;
 }
 
-// src/runtime/llm-evidence/untrusted-json.ts
+// domain/src/runtime/llm-evidence/untrusted-json.ts
 function isJsonRecord(input) {
   return Boolean(input) && typeof input === "object" && !Array.isArray(input);
 }
@@ -115,7 +115,7 @@ function boundedCount(input, maximum) {
   return input;
 }
 
-// src/runtime/llm-evidence/elements.ts
+// domain/src/runtime/llm-evidence/elements.ts
 var FRAME_SELECTOR_PATTERN = /^frame\[(\d{1,6})\]\s*>>\s*(.+)$/u;
 var FRAME_ID_ATTRIBUTE = "data-fluxiq-frame-id";
 function sanitizedEvidenceElement(raw, context) {
@@ -140,10 +140,9 @@ function sanitizedEvidenceElement(raw, context) {
   const expanded = revealKind === "disclosure" ? semanticExpandedState(attributes) : void 0;
   const placement = elementPlacement(raw.context, { name, text });
   const focused = context.focusedSelector !== void 0 && context.focusedSelector === addressed.selector ? true : void 0;
-  return present({
+  const element = present({
     target: context.target,
     tag,
-    selector: addressed.selector,
     frameId: addressed.frameId,
     role: role || void 0,
     name: name || void 0,
@@ -165,6 +164,7 @@ function sanitizedEvidenceElement(raw, context) {
     item: placement.item,
     cell: placement.cell
   });
+  return { element, selector: addressed.selector };
 }
 function safeFillTag(tag, inputType) {
   return tag === "textarea" || tag === "input" && (!inputType || ["text", "search", "email", "tel", "url", "number"].includes(inputType));
@@ -243,12 +243,12 @@ function sanitizedSelectedValue(input, options) {
   return value && options.some((option) => option.value === value) ? value : void 0;
 }
 
-// src/page-evidence/wire.ts
+// domain/src/page-evidence/wire.ts
 function pageEvidenceWire(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// src/runtime/llm-evidence/page-evidence.ts
+// domain/src/runtime/llm-evidence/page-evidence.ts
 var READY_STATES = ["loading", "interactive", "complete"];
 var ORDINARY_NAVIGATION_TYPE = "navigate";
 var MAX_REDIRECTS = 100;
@@ -342,14 +342,12 @@ function evidenceDialogs(input) {
     if (!raw) continue;
     const role = boundedText(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
     const name = boundedText(raw.label, WEB_LLM_EVIDENCE_BOUNDS.text);
-    const selector = boundedText(raw.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
     const modal = trueFlag(raw.modal);
-    if (!role && !name && !selector && !modal) continue;
+    if (!role && !name && !modal) continue;
     dialogs.push(present({
       role: role || void 0,
       name: name || void 0,
-      modal,
-      selector: selector || void 0
+      modal
     }));
   }
   return dialogs.length ? dialogs : void 0;
@@ -357,21 +355,19 @@ function evidenceDialogs(input) {
 function evidenceBlocker(input) {
   const blocker = items(input?.blockers).map((item) => pageEvidenceWire(item)).find((item) => item !== void 0);
   if (!blocker) return void 0;
-  const selector = boundedText(blocker.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
-  if (!selector) return void 0;
   const role = boundedText(blocker.role, WEB_LLM_EVIDENCE_BOUNDS.role);
   const name = boundedText(blocker.label, WEB_LLM_EVIDENCE_BOUNDS.text);
   const blocks = boundedCount(blocker.blocks, MAX_BLOCKED_CONTROLS);
+  if (!role && !name && !blocks) return void 0;
   return present({
-    selector,
     role: role || void 0,
     name: name || void 0,
     blocks: blocks || void 0
   });
 }
 
-// src/runtime/llm-evidence/sanitize.ts
-var WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v1";
+// domain/src/runtime/llm-evidence/sanitize.ts
+var WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v2";
 function sanitizeWebLlmSnapshot(input, options = {}) {
   return sanitizeWebLlmSnapshotWithBindings(input, options).evidence;
 }
@@ -386,10 +382,10 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
   const selectors = /* @__PURE__ */ new Map();
   for (const raw of snapshot.interactiveElements) {
     if (elements.length >= WEB_LLM_EVIDENCE_BOUNDS.elements) break;
-    const element = sanitizedEvidenceElement(raw, { target: `target.${elements.length + 1}`, url, focusedSelector });
-    if (!element) continue;
-    elements.push(element);
-    selectors.set(element.target, element.selector);
+    const described = sanitizedEvidenceElement(raw, { target: `target.${elements.length + 1}`, url, focusedSelector });
+    if (!described) continue;
+    elements.push(described.element);
+    selectors.set(described.element.target, described.selector);
   }
   const childFrameIds = [...new Set(elements.map((element) => element.frameId).filter((id) => id !== void 0))].sort((left, right) => left - right);
   const elementTotal = evidenceElementTotal(snapshot, elements.length);
@@ -458,26 +454,119 @@ function trimToBudget(evidence, selectors, maxEvidenceBytes) {
   }
 }
 
-// src/runtime/llm-evidence/target-override.ts
-function validateWebRuntimeTargetOverrideEvidence(evidence, target, failedAction) {
-  const matches = evidence.elements.filter((element) => element.selector === target.selector);
-  if (matches.length > 1) return { status: "ambiguous" };
-  if (matches.length === 1 && targetCompatibleWithFailedAction(matches[0], failedAction.definitionId)) return { status: "matched" };
-  const compatible = evidence.elements.filter((element) => targetCompatibleWithFailedAction(element, failedAction.definitionId));
-  if (compatible.length === 0) return { status: "absent" };
-  if (compatible.length > 1) return { status: "ambiguous" };
-  const resolved = compatible[0];
-  return evidence.elements.filter((element) => element.selector === resolved.selector).length === 1 ? { status: "resolved", target: { selector: resolved.selector } } : { status: "ambiguous" };
+// domain/src/runtime/llm-evidence/repairable-parameters.ts
+var WEB_REPAIRABLE_ELEMENT_PARAMETER = "element";
+var WEB_REPAIRABLE_ITEM_PARAMETER = "item";
+var WEB_REPAIRABLE_FIELD_PARAMETER_PREFIX = "field.";
+var ELEMENT_ROLE_BY_DEFINITION_ID = {
+  "web.output.dom-type": "fillable",
+  "web.output.dom-clear": "fillable",
+  "web.output.dom-select": "selectable",
+  "web.output.dom-click": "clickable",
+  "web.output.dom-keypress": "keyable",
+  "web.output.dom-wait_for_selector": "observable",
+  "web.output.dom-extract": "observable"
+};
+var LIST_EXTRACTION_DEFINITION_ID = "web.output.dom-extract_list";
+function webRepairableParameters(definitionId) {
+  const elementRole = ELEMENT_ROLE_BY_DEFINITION_ID[definitionId];
+  if (elementRole) return [{ name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role: elementRole, required: true }];
+  if (definitionId === LIST_EXTRACTION_DEFINITION_ID) return [{ name: WEB_REPAIRABLE_ITEM_PARAMETER, role: "list_item", required: true }];
+  return [];
 }
-function targetCompatibleWithFailedAction(element, definitionId) {
-  if (definitionId === "web.output.dom-type" || definitionId === "web.output.dom-clear") return safeFillTag(element.tag, element.inputType);
-  if (definitionId === "web.output.dom-select") return element.tag === "select";
-  if (definitionId === "web.output.dom-click") return actionableEvidenceElement(element);
-  if (definitionId === "web.output.dom-keypress") return safeFillTag(element.tag, element.inputType) || element.tag === "select" || actionableEvidenceElement(element);
-  return definitionId === "web.output.dom-wait_for_selector" || definitionId === "web.output.dom-extract";
+function webRepairableParameterFor(definitionId, name) {
+  const declared = webRepairableParameters(definitionId).find((parameter) => parameter.name === name);
+  if (declared) return declared;
+  if (definitionId !== LIST_EXTRACTION_DEFINITION_ID || !isFieldParameterName(name)) return void 0;
+  return { name, role: "observable", required: false };
+}
+function elementFillsRepairableParameter(element, role) {
+  if (role === "fillable") return safeFillTag(element.tag, element.inputType);
+  if (role === "selectable") return element.tag === "select";
+  if (role === "clickable") return actionableEvidenceElement(element);
+  if (role === "keyable") return safeFillTag(element.tag, element.inputType) || element.tag === "select" || actionableEvidenceElement(element);
+  if (role === "list_item") return element.item !== void 0;
+  return true;
+}
+function isFieldParameterName(name) {
+  if (!name.startsWith(WEB_REPAIRABLE_FIELD_PARAMETER_PREFIX)) return false;
+  const key = name.slice(WEB_REPAIRABLE_FIELD_PARAMETER_PREFIX.length);
+  return key.length > 0 && key.length <= 40 && /^[A-Za-z0-9](?:[A-Za-z0-9_.:-]*[A-Za-z0-9])?$/u.test(key);
 }
 
-// src/runtime/llm-evidence/tool-rejection.ts
+// domain/src/runtime/llm-evidence/target-override.ts
+function validateWebRuntimeTargetOverrideEvidence(evidence, target2, failedAction, selectors) {
+  const declared = webRepairableParameters(failedAction.definitionId);
+  if (declared.length === 0) return { status: "absent" };
+  const handles = proposedHandles(target2);
+  if (!handles) return { status: "absent" };
+  if (Object.keys(handles).some((name) => !webRepairableParameterFor(failedAction.definitionId, name))) return { status: "absent" };
+  if (declared.some((parameter) => parameter.required && handles[parameter.name] === void 0)) return { status: "absent" };
+  const resolved = /* @__PURE__ */ new Map();
+  for (const [name, handle] of Object.entries(handles)) {
+    const parameter = webRepairableParameterFor(failedAction.definitionId, name);
+    const candidates = evidence.elements.filter((element) => elementFillsRepairableParameter(element, parameter.role));
+    const named = evidence.elements.filter((element) => element.target === handle);
+    if (named.length > 1) return { status: "ambiguous" };
+    if (named.length === 1 && elementFillsRepairableParameter(named[0], parameter.role)) {
+      resolved.set(name, { element: named[0], named: true });
+      continue;
+    }
+    if (candidates.length === 0) return { status: "absent" };
+    if (candidates.length > 1) return { status: "ambiguous" };
+    resolved.set(name, { element: candidates[0], named: false });
+  }
+  return { status: "resolved", target: resolvedTarget(handles, resolved, selectors) };
+}
+function proposedHandles(target2) {
+  const handles = target2?.handles;
+  if (!handles || typeof handles !== "object" || Array.isArray(handles)) return void 0;
+  const entries = Object.entries(handles);
+  if (entries.length === 0) return void 0;
+  if (!entries.every(([name, handle]) => typeof handle === "string" && handle.length > 0 && name.length > 0)) return void 0;
+  return Object.fromEntries(entries);
+}
+function resolvedTarget(handles, resolved, selectors) {
+  const handleResolution = [...resolved.values()].every((entry) => entry.named) ? "named" : "inferred";
+  const single = resolved.size === 1 ? resolved.get(WEB_REPAIRABLE_ELEMENT_PARAMETER)?.element : void 0;
+  const flat = single ? elementFingerprint(single, selectors) : void 0;
+  return present({
+    handles: Object.fromEntries([...resolved].map(([name, entry]) => [name, entry.element.target])),
+    handleResolution,
+    tagName: flat?.tagName,
+    role: flat?.role,
+    accessibleName: flat?.accessibleName,
+    visibleText: flat?.visibleText,
+    selector: flat?.selector,
+    metadata: flat?.metadata,
+    targets: flat ? void 0 : Object.fromEntries([...resolved].map(([name, entry]) => [name, elementFingerprint(entry.element, selectors)])),
+    proposedHandles: handleResolution === "inferred" ? handles : void 0
+  });
+}
+function elementFingerprint(element, selectors) {
+  const metadata = present({
+    browserFrameId: element.frameId,
+    inputType: element.inputType,
+    controlType: element.controlType,
+    formId: element.form,
+    listIndex: element.item?.index,
+    listTotal: element.item?.total
+  });
+  return present({
+    tagName: element.tag,
+    role: element.role,
+    accessibleName: element.name,
+    visibleText: element.text,
+    // The hint, and only where the caller still holds the binding that issued
+    // the handle. The packet has not carried a selector since `.v2`, so a repair
+    // resolved from a packet alone is fingerprint-only -- which is weaker, not
+    // wrong: the name, the role and the tag are what Core scores highest.
+    selector: selectors?.get(element.target),
+    metadata: Object.keys(metadata).length ? metadata : void 0
+  });
+}
+
+// domain/src/runtime/llm-evidence/tool-rejection.ts
 var WEB_LLM_TOOL_REJECTION_CODES = [
   "invalid_input",
   "cross_origin",
@@ -487,7 +576,7 @@ var WEB_LLM_TOOL_REJECTION_CODES = [
   "sensitive_value"
 ];
 
-// src/runtime/llm-evidence/vocabulary.ts
+// domain/src/runtime/llm-evidence/vocabulary.ts
 var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe"];
 var WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
 var WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
@@ -504,39 +593,142 @@ var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
   ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
 ]);
 
-// src/runtime/llm-evidence/tests/target-override.test.ts
-test("validates target overrides only when one exact selector has semantics compatible with the failed action", () => {
-  const evidence = sanitizeWebLlmSnapshot({
+// domain/src/runtime/llm-evidence/tests/target-override.test.ts
+var target = (handles) => ({ handles });
+var formBinding = () => sanitizeWebLlmSnapshotWithBindings({
+  url: "https://example.test/form",
+  interactiveElements: [
+    { tagName: "textarea", selector: "#name", name: "Name" },
+    { tagName: "select", selector: "#plan", name: "Plan", options: [{ value: "team", label: "Team" }] },
+    { tagName: "button", selector: "#unique", name: "Unique" }
+  ]
+});
+test("resolves a repair from the opaque handle the model was shown, fingerprint first", () => {
+  const { evidence, selectors } = formBinding();
+  const typeAction = { nodeId: "name", definitionId: "web.output.dom-type" };
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.1" }), typeAction, selectors), {
+    status: "resolved",
+    target: {
+      handles: { element: "target.1" },
+      handleResolution: "named",
+      tagName: "textarea",
+      accessibleName: "Name",
+      selector: "#name"
+    }
+  });
+  const resolved = validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3" }), { nodeId: "submit", definitionId: "web.output.dom-click" }, selectors);
+  assert.equal(resolved.status, "resolved");
+  assert.deepEqual(resolved.status === "resolved" ? resolved.target : void 0, {
+    handles: { element: "target.3" },
+    handleResolution: "named",
+    tagName: "button",
+    accessibleName: "Unique",
+    selector: "#unique"
+  });
+});
+test("falls back to the only compatible element when the handle is wrong, and says it did", () => {
+  const { evidence, selectors } = formBinding();
+  const typeAction = { nodeId: "name", definitionId: "web.output.dom-type" };
+  const wrongKind = validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.2" }), typeAction, selectors);
+  assert.deepEqual(wrongKind, {
+    status: "resolved",
+    target: {
+      handles: { element: "target.1" },
+      handleResolution: "inferred",
+      tagName: "textarea",
+      accessibleName: "Name",
+      selector: "#name",
+      proposedHandles: { element: "target.2" }
+    }
+  });
+});
+test("a string that is a valid CSS selector is just an unminted handle: it never addresses the page", () => {
+  const { evidence, selectors } = sanitizeWebLlmSnapshotWithBindings({
     url: "https://example.test/form",
     interactiveElements: [
-      { tagName: "textarea", selector: "#name", name: "Name" },
-      { tagName: "select", selector: "#plan", name: "Plan", options: [{ value: "team", label: "Team" }] },
-      { tagName: "button", selector: "#unique", name: "Unique" },
-      { tagName: "button", selector: ".duplicate", name: "First" },
-      { tagName: "button", selector: ".duplicate", name: "Second" }
+      { tagName: "button", selector: "#wanted", name: "Wanted" },
+      { tagName: "p", selector: "p.decoy", name: "Decoy" },
+      { tagName: "span", selector: "span", name: "Other" }
     ]
   });
-  const typeAction = { nodeId: "name", definitionId: "web.output.dom-type" };
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { selector: "#name" }, typeAction), { status: "matched" });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { selector: "#plan" }, typeAction), { status: "resolved", target: { selector: "#name" } });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { selector: "#unique" }, typeAction), { status: "resolved", target: { selector: "#name" } });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { selector: "#missing" }, typeAction), { status: "resolved", target: { selector: "#name" } });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { selector: ".duplicate" }, { nodeId: "submit", definitionId: "web.output.dom-click" }), { status: "ambiguous" });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { selector: "#plan" }, { nodeId: "plan", definitionId: "web.output.dom-select" }), { status: "matched" });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { selector: "#unique" }, { nodeId: "submit", definitionId: "web.output.dom-click" }), { status: "matched" });
-  const noTypeableTarget = sanitizeWebLlmSnapshot({ url: "https://example.test/form", interactiveElements: [{ tagName: "select", selector: "#plan" }] });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(noTypeableTarget, { selector: "#missing" }, typeAction), { status: "absent" });
-  const multipleTypeableTargets = sanitizeWebLlmSnapshot({ url: "https://example.test/form", interactiveElements: [{ tagName: "input", selector: "#first" }, { tagName: "textarea", selector: "#second" }] });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(multipleTypeableTargets, { selector: "#missing" }, typeAction), { status: "ambiguous" });
+  const clickAction = { nodeId: "submit", definitionId: "web.output.dom-click" };
+  for (const invented of ["p.decoy", "span", "wanted", "button", "div.btn", "b2"]) {
+    const validation = validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: invented }), clickAction, selectors);
+    assert.equal(validation.status, "resolved", invented);
+    const resolvedTarget2 = validation.status === "resolved" ? validation.target : void 0;
+    assert.deepEqual(resolvedTarget2?.handles, { element: "target.1" }, invented);
+    assert.equal(resolvedTarget2?.handleResolution, "inferred", invented);
+    assert.equal(resolvedTarget2?.selector, "#wanted", invented);
+  }
 });
-test("matches a child-frame target on the selector that works inside its frame", () => {
-  const evidence = sanitizeWebLlmSnapshot({
+test("refuses a parameter the action never declared, and an action with no repairable parameters", () => {
+  const { evidence, selectors } = formBinding();
+  const clickAction = { nodeId: "submit", definitionId: "web.output.dom-click" };
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ item: "target.3" }), clickAction, selectors), { status: "absent" });
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3", extra: "target.1" }), clickAction, selectors), { status: "absent" });
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.3" }), { nodeId: "n", definitionId: "web.output.browser-navigate" }, selectors), { status: "absent" });
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { handles: {} }, clickAction, selectors), { status: "absent" });
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, {}, clickAction, selectors), { status: "absent" });
+});
+test("without the binding the repair is fingerprint-only, which is weaker rather than wrong", () => {
+  const { evidence } = formBinding();
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.1" }), { nodeId: "name", definitionId: "web.output.dom-type" }), {
+    status: "resolved",
+    target: { handles: { element: "target.1" }, handleResolution: "named", tagName: "textarea", accessibleName: "Name" }
+  });
+});
+test("refuses a repair when nothing compatible was described, and refuses to guess between several", () => {
+  const typeAction = { nodeId: "name", definitionId: "web.output.dom-type" };
+  const noTypeable = sanitizeWebLlmSnapshot({ url: "https://example.test/form", interactiveElements: [{ tagName: "select", selector: "#plan" }] });
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(noTypeable, target({ element: "target.9" }), typeAction), { status: "absent" });
+  const twoTypeable = sanitizeWebLlmSnapshot({ url: "https://example.test/form", interactiveElements: [{ tagName: "input", selector: "#first" }, { tagName: "textarea", selector: "#second" }] });
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(twoTypeable, target({ element: "target.9" }), typeAction), { status: "ambiguous" });
+});
+test("carries a child-frame element's frame beside the selector that works inside it", () => {
+  const { evidence, selectors } = sanitizeWebLlmSnapshotWithBindings({
     url: "https://example.test/checkout",
     interactiveElements: [
       { tagName: "input", selector: "frame[3] >> #card-name", name: "Name on card", attributes: { "data-fluxiq-frame-id": "3" } }
     ]
   });
-  const typeAction = { nodeId: "card", definitionId: "web.output.dom-type" };
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { selector: "#card-name" }, typeAction), { status: "matched" });
-  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, { selector: "frame[3] >> #card-name" }, typeAction), { status: "resolved", target: { selector: "#card-name" } });
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ element: "target.1" }), { nodeId: "card", definitionId: "web.output.dom-type" }, selectors), {
+    status: "resolved",
+    target: {
+      handles: { element: "target.1" },
+      handleResolution: "named",
+      tagName: "input",
+      accessibleName: "Name on card",
+      selector: "#card-name",
+      metadata: { browserFrameId: 3 }
+    }
+  });
+});
+test("a list extraction repairs its row and its fields through the same contract", () => {
+  const { evidence, selectors } = sanitizeWebLlmSnapshotWithBindings({
+    url: "https://example.test/catalogue",
+    interactiveElements: [
+      { tagName: "a", selector: ".row:nth-child(1)", name: "Widget", context: { listPosition: { index: 1, total: 2 } } },
+      { tagName: "span", selector: ".row:nth-child(1) .price", name: "10.00" }
+    ]
+  });
+  const extraction = { nodeId: "rows", definitionId: "web.output.dom-extract_list" };
+  const validation = validateWebRuntimeTargetOverrideEvidence(evidence, target({ item: "target.1", "field.price": "target.2" }), extraction, selectors);
+  assert.equal(validation.status, "resolved");
+  const resolvedTarget2 = validation.status === "resolved" ? validation.target : void 0;
+  assert.deepEqual(resolvedTarget2?.handles, { item: "target.1", "field.price": "target.2" });
+  assert.equal(resolvedTarget2?.handleResolution, "named");
+  assert.equal(resolvedTarget2?.selector, void 0);
+  assert.deepEqual(resolvedTarget2?.targets, {
+    item: { tagName: "a", accessibleName: "Widget", selector: ".row:nth-child(1)", metadata: { listIndex: 1, listTotal: 2 } },
+    "field.price": { tagName: "span", accessibleName: "10.00", selector: ".row:nth-child(1) .price" }
+  });
+  assert.deepEqual(validateWebRuntimeTargetOverrideEvidence(evidence, target({ item: "target.2" }), extraction, selectors), {
+    status: "resolved",
+    target: {
+      handles: { item: "target.1" },
+      handleResolution: "inferred",
+      targets: { item: { tagName: "a", accessibleName: "Widget", selector: ".row:nth-child(1)", metadata: { listIndex: 1, listTotal: 2 } } },
+      proposedHandles: { item: "target.2" }
+    }
+  });
 });

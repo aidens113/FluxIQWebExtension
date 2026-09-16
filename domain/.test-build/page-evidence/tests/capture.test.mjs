@@ -1,8 +1,8 @@
-// src/page-evidence/tests/capture.test.ts
+// domain/src/page-evidence/tests/capture.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// src/page-evidence/capture.ts
+// domain/src/page-evidence/capture.ts
 var WEB_AUTOMATION_PAGE_EVIDENCE_CAPTURES = {
   "modal-flows": {
     "elements": {
@@ -253,7 +253,7 @@ var WEB_AUTOMATION_PAGE_EVIDENCE_CAPTURES = {
   }
 };
 
-// src/page-evidence/tests/capture.test.ts
+// domain/src/page-evidence/tests/capture.test.ts
 var CAPTURES = Object.entries(WEB_AUTOMATION_PAGE_EVIDENCE_CAPTURES);
 var EXERCISED = [
   { field: "elements.scanned", reach: (e) => e.elements.scanned },

@@ -1,9 +1,9 @@
-// src/recording/web-state/tests/action-target.test.ts
+// domain/src/recording/web-state/tests/action-target.test.ts
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio";
 
-// src/sensitivity/signature.ts
+// domain/src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
 var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
 var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
@@ -16,7 +16,7 @@ function isSensitiveControlType(type) {
   return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
 }
 
-// src/sensitivity/descriptor.ts
+// domain/src/sensitivity/descriptor.ts
 function sensitiveFieldSignatureOfDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
   const record = descriptor;
@@ -35,12 +35,12 @@ function stringField(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// src/recording/web-state/compact-json-object.ts
+// domain/src/recording/web-state/compact-json-object.ts
 function compactJsonObject(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== void 0));
 }
 
-// src/recording/web-state/element/identity.ts
+// domain/src/recording/web-state/element/identity.ts
 function meaningfulText(value) {
   return typeof value === "string" && value.trim().length >= 2;
 }
@@ -49,7 +49,7 @@ function stableAttribute(element, name) {
   return meaningfulText(value) ? value : void 0;
 }
 
-// src/recording/web-state/geometry.ts
+// domain/src/recording/web-state/geometry.ts
 function stateBounds(bounds) {
   if (!bounds) return void 0;
   const x = finite(bounds.x);
@@ -65,7 +65,7 @@ function finite(value) {
   return Number.isFinite(value) ? value : void 0;
 }
 
-// src/recording/web-state/action-target.ts
+// domain/src/recording/web-state/action-target.ts
 function webAutomationActionTargetFromElement(element) {
   const secret = isSensitiveElementDescriptor(element);
   const visibleText = secret ? void 0 : element.visibleText;
@@ -106,7 +106,7 @@ function webAutomationActionTargetFromElement(element) {
   });
 }
 
-// src/recording/web-state/tests/action-target.test.ts
+// domain/src/recording/web-state/tests/action-target.test.ts
 var TARGET_METADATA_FIELDS = [
   "tagName",
   "xpath",

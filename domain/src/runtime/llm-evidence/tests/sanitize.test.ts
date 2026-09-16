@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { sanitizeWebLlmSnapshot, WEB_LLM_EVIDENCE_BOUNDS } from "..";
+import { sanitizeWebLlmSnapshotWithBindings } from "../sanitize";
 
 test("sanitizes extension snapshots without values, sensitive controls, or URL secrets", () => {
   const evidence = sanitizeWebLlmSnapshot({
@@ -14,14 +15,14 @@ test("sanitizes extension snapshots without values, sensitive controls, or URL s
     ],
   });
   assert.deepEqual(evidence, {
-    schemaVersion: "web-llm-evidence.v1", trust: "untrusted-page-evidence", location: "https://example.test/form", title: "Example",
+    schemaVersion: "web-llm-evidence.v2", trust: "untrusted-page-evidence", location: "https://example.test/form", title: "Example",
     // Four elements were captured and three are described: the packet says so
     // rather than letting the model conclude the form has no password field.
     elementTotal: 4, truncated: false,
     elements: [
-      { target: "target.1", tag: "input", selector: "#name", name: "Name" },
-      { target: "target.2", tag: "a", selector: "#next", text: "Next", href: "https://example.test/next" },
-      { target: "target.3", tag: "a", selector: "#away", text: "Away" },
+      { target: "target.1", tag: "input", name: "Name" },
+      { target: "target.2", tag: "a", text: "Next", href: "https://example.test/next" },
+      { target: "target.3", tag: "a", text: "Away" },
     ],
   });
   assert.doesNotMatch(JSON.stringify(evidence), /Ada|private|token|ticket/u);
@@ -39,10 +40,10 @@ test("retains compact semantic labels, types, select options, and result text ne
     ],
   });
   assert.deepEqual(evidence.elements, [
-    { target: "target.1", tag: "input", selector: "[data-testid=instruction-name]", name: "Name", hasValue: true },
-    { target: "target.2", tag: "select", selector: "[data-testid=instruction-plan]", name: "Plan", selectedValue: "team", options: [{ value: "starter", label: "Starter" }, { value: "team", label: "Team" }, { value: "enterprise", label: "Enterprise" }] },
-    { target: "target.3", tag: "button", selector: "[data-testid=instruction-submit]", name: "Submit", controlType: "submit" },
-    { target: "target.4", tag: "p", selector: "[data-testid=result]", text: "Not submitted" },
+    { target: "target.1", tag: "input", name: "Name", hasValue: true },
+    { target: "target.2", tag: "select", name: "Plan", selectedValue: "team", options: [{ value: "starter", label: "Starter" }, { value: "team", label: "Team" }, { value: "enterprise", label: "Enterprise" }] },
+    { target: "target.3", tag: "button", name: "Submit", controlType: "submit" },
+    { target: "target.4", tag: "p", text: "Not submitted" },
   ]);
   assert.doesNotMatch(JSON.stringify(evidence), /Ada/u);
 });
@@ -58,9 +59,9 @@ test("exposes only bounded non-secret completion state", () => {
     ],
   });
   assert.deepEqual(evidence.elements, [
-    { target: "target.1", tag: "textarea", selector: "#notes", hasValue: false },
-    { target: "target.2", tag: "input", selector: "#hidden", inputType: "hidden" },
-    { target: "target.3", tag: "select", selector: "#plan", options: [{ value: "team", label: "Team" }] },
+    { target: "target.1", tag: "textarea", hasValue: false },
+    { target: "target.2", tag: "input", inputType: "hidden" },
+    { target: "target.3", tag: "select", options: [{ value: "team", label: "Team" }] },
   ]);
   assert.doesNotMatch(JSON.stringify(evidence), /private|unlisted/u);
 });
@@ -114,12 +115,12 @@ test("carries where an element sits: its form, landmark, heading, list position 
   });
   assert.deepEqual(evidence.elements, [
     {
-      target: "target.1", tag: "button", selector: "[data-testid=add-1]", name: "Add to cart",
+      target: "target.1", tag: "button", name: "Add to cart",
       form: "checkout", landmark: "main", heading: "Recommended for you", item: { index: 3, total: 24 },
     },
-    { target: "target.2", tag: "td", selector: "#row-2-total", text: "48.00", landmark: "main", heading: "Order summary", cell: { row: 2, column: 4, header: "Total" } },
+    { target: "target.2", tag: "td", text: "48.00", landmark: "main", heading: "Order summary", cell: { row: 2, column: 4, header: "Total" } },
     // The heading only repeats the control's own name, so it is not paid for twice.
-    { target: "target.3", tag: "input", selector: "#coupon", name: "Coupon", form: "discount" },
+    { target: "target.3", tag: "input", name: "Coupon", form: "discount" },
   ]);
 });
 
@@ -134,11 +135,24 @@ test("reports child-frame elements with a selector that works inside the frame a
     ],
   });
   assert.deepEqual(evidence.frame, { isTop: true, childFrameIds: [3, 7] });
-  assert.deepEqual(evidence.elements.map((element) => [element.selector, element.frameId]), [
-    ["#place-order", undefined],
-    ["#card-name", 3],
-    ["#zip", 7],
+  // The selector is the binding's, not the packet's: the packet names the
+  // element `target.2` and says which frame it belongs to, and the selector that
+  // works inside that frame is what the domain kept behind.
+  const bound = sanitizeWebLlmSnapshotWithBindings({
+    url: "https://example.test/checkout",
+    frame: { isTop: true },
+    interactiveElements: [
+      { tagName: "button", selector: "#place-order", visibleText: "Place order" },
+      { tagName: "input", selector: "frame[3] >> #card-name", name: "Name on card", attributes: { "data-fluxiq-frame-id": "3", "data-fluxiq-frame-url": "https://payments.example.test/f" } },
+      { tagName: "input", selector: "#zip", name: "Postcode", attributes: { "data-fluxiq-frame-id": "7" } },
+    ],
+  });
+  assert.deepEqual(evidence.elements.map((element) => [element.target, element.frameId]), [
+    ["target.1", undefined],
+    ["target.2", 3],
+    ["target.3", 7],
   ]);
+  assert.deepEqual([...bound.selectors], [["target.1", "#place-order"], ["target.2", "#card-name"], ["target.3", "#zip"]]);
   assert.doesNotMatch(JSON.stringify(evidence), /frame\[3\]/u);
 });
 
@@ -151,7 +165,7 @@ test("says the capture came from inside a child frame rather than presenting it 
   assert.deepEqual(evidence.frame, { isTop: false });
 });
 
-test("deduplicates representative 50-element semantic evidence without dropping executable selectors", () => {
+test("deduplicates representative 50-element semantic evidence without dropping what names each element", () => {
   const interactiveElements = Array.from({ length: 50 }, (_, index) => ({
     tagName: "button",
     selector: `[data-component="global-navigation-item-${index}"][data-instance="${"x".repeat(72)}"]`,
@@ -167,7 +181,11 @@ test("deduplicates representative 50-element semantic evidence without dropping 
   assert.equal(evidence.truncated, true);
   assert.equal(compactBytes <= 10_500, true, `compact evidence used ${compactBytes} bytes`);
   assert.equal(compactBytes < legacyBytes, true, `compact ${compactBytes} bytes versus duplicate-semantic ${legacyBytes} bytes`);
-  assert.match(JSON.stringify(evidence), /selector/u);
+  // Each element is still individually addressable -- by its opaque handle,
+  // which is what replaced the 100-character selector that used to be repeated
+  // fifty times and is most of why the packet got smaller.
+  assert.deepEqual(evidence.elements.map((element) => element.target).slice(0, 3), ["target.1", "target.2", "target.3"]);
+  assert.doesNotMatch(JSON.stringify(evidence), /selector|data-component/u);
 });
 
 test("rejects a snapshot that is malformed or off the origin the caller expected", () => {

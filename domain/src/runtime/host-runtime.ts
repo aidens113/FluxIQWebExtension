@@ -56,13 +56,13 @@ export type WebAutomationHostRuntimeBoundary = Parameters<FluxIQ["programs"]["au
 export type WebAutomationHostRuntimeGateway = { dispatch: WebAutomationExpectationDispatch };
 
 /** `web-state-diff.v1`, the shape `stateRefs.stateDiff` carries for a web attempt. */
-export const WEB_STATE_DIFF_SCHEMA_VERSION = "web-state-diff.v1" as const;
+export const WEB_STATE_DIFF_SCHEMA_VERSION = "web-state-diff.v2" as const;
 
 const SNAPSHOT_OUTPUT_ID = "web.dom.capture_snapshot";
 const HOST_RUNTIME_SOURCE = "web-automation-host-runtime";
 
-/** At most this many selectors are listed on each side of a diff; the counts stay exact. */
-const MAX_DIFF_SELECTORS = 10;
+/** At most this many elements are listed on each side of a diff; the counts stay exact. */
+const MAX_DIFF_ELEMENTS = 10;
 
 /**
  * Derived from the action vocabulary rather than from the `web.output.` string,
@@ -127,9 +127,15 @@ export function bindWebAutomationHostRuntime(fluxiq: FluxIQ): void {
 
 /**
  * What changed between two bounded page summaries: where the browser is, what
- * the document is called, and which interactive selectors appeared or left.
- * Selectors are element identity, not page content, so the diff says what moved
- * without restating what the page says.
+ * the document is called, and which interactive elements appeared or left.
+ *
+ * `.v2` identifies an element by what it is and what it is called rather than
+ * by a selector. The packet stopped carrying selectors when they stopped being
+ * something a language model may read, and the opaque handle that replaced them
+ * is positional -- `target.1` names the first element of whichever capture it
+ * came from, so diffing handles would report that nothing ever changes. What is
+ * listed is still element identity rather than page content, so the diff says
+ * what moved without restating what the page says.
  */
 export function webAutomationStateDiff(
   before: JsonObject | undefined,
@@ -137,10 +143,12 @@ export function webAutomationStateDiff(
   beforeStateRef?: string,
   afterStateRef?: string
 ): JsonObject {
-  const beforeSelectors = evidenceSelectors(before);
-  const afterSelectors = evidenceSelectors(after);
-  const added = afterSelectors.filter((selector) => !beforeSelectors.includes(selector));
-  const removed = beforeSelectors.filter((selector) => !afterSelectors.includes(selector));
+  const beforeElements = evidenceElements(before);
+  const afterElements = evidenceElements(after);
+  const beforeKeys = new Set(beforeElements.map(elementKey));
+  const afterKeys = new Set(afterElements.map(elementKey));
+  const added = afterElements.filter((element) => !beforeKeys.has(elementKey(element)));
+  const removed = beforeElements.filter((element) => !afterKeys.has(elementKey(element)));
   const beforeLocation = evidenceText(before, "location");
   const afterLocation = evidenceText(after, "location");
   return {
@@ -151,12 +159,12 @@ export function webAutomationStateDiff(
     ...(afterLocation === undefined ? {} : { afterLocation }),
     locationChanged: beforeLocation !== undefined && afterLocation !== undefined && beforeLocation !== afterLocation,
     titleChanged: evidenceText(before, "title") !== evidenceText(after, "title"),
-    beforeElementCount: beforeSelectors.length,
-    afterElementCount: afterSelectors.length,
+    beforeElementCount: beforeElements.length,
+    afterElementCount: afterElements.length,
     addedElementCount: added.length,
     removedElementCount: removed.length,
-    addedSelectors: added.slice(0, MAX_DIFF_SELECTORS),
-    removedSelectors: removed.slice(0, MAX_DIFF_SELECTORS)
+    addedElements: added.slice(0, MAX_DIFF_ELEMENTS),
+    removedElements: removed.slice(0, MAX_DIFF_ELEMENTS)
   };
 }
 
@@ -173,12 +181,33 @@ function actsOnPage(node: { definitionId: string; parameterValues?: JsonObject }
   return node.definitionId === POLICY_ACTION_DEFINITION_ID && typeof outputId === "string" && WEB_AUTOMATION_OUTPUT_IDS.has(outputId);
 }
 
-function evidenceSelectors(summary: JsonObject | undefined): string[] {
+/**
+ * How an element is identified across two captures: by what it is and what it
+ * is called. Never by the opaque handle, which is positional and would make
+ * every element look unchanged, and never by a selector, which the packet no
+ * longer carries.
+ */
+type WebStateDiffElement = { tag: string; role?: string; name?: string; text?: string; form?: string };
+
+function evidenceElements(summary: JsonObject | undefined): WebStateDiffElement[] {
   const elements = summary?.elements;
   if (!Array.isArray(elements)) return [];
-  return elements
-    .map((element) => (isRecord(element) && typeof element.selector === "string" ? element.selector : undefined))
-    .filter((selector): selector is string => selector !== undefined);
+  const described: WebStateDiffElement[] = [];
+  for (const element of elements) {
+    if (!isRecord(element) || typeof element.tag !== "string" || !element.tag) continue;
+    described.push({
+      tag: element.tag,
+      ...(typeof element.role === "string" ? { role: element.role } : {}),
+      ...(typeof element.name === "string" ? { name: element.name } : {}),
+      ...(typeof element.text === "string" ? { text: element.text } : {}),
+      ...(typeof element.form === "string" ? { form: element.form } : {})
+    });
+  }
+  return described;
+}
+
+function elementKey(element: WebStateDiffElement): string {
+  return JSON.stringify([element.tag, element.role, element.name, element.text, element.form]);
 }
 
 function evidenceText(summary: JsonObject | undefined, field: string): string | undefined {

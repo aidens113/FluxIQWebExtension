@@ -1,8 +1,8 @@
-// src/actions/tests/schemas.test.ts
+// domain/src/actions/tests/schemas.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// src/actions/extraction/request.ts
+// domain/src/actions/extraction/request.ts
 var WEB_AUTOMATION_EXTRACT_PAGINATION_MODES = ["next", "loadMore", "scroll", "numbered"];
 var WEB_AUTOMATION_EXTRACT_FIELD_KINDS = ["text", "attribute", "link", "value", "column"];
 var WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS = ["include", "exclude", "encrypt"];
@@ -10,10 +10,10 @@ var WEB_AUTOMATION_EXTRACT_READ_MODES = ["text", "attribute", "value", "html"];
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
 var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
 
-// src/actions/extraction/read-request.ts
+// domain/src/actions/extraction/read-request.ts
 var REFUSED = Symbol("refused");
 
-// src/actions/extraction/schema.ts
+// domain/src/actions/extraction/schema.ts
 function webAutomationExtractListSchema(elementFingerprintSchema2) {
   const pageBound = { type: "integer", minimum: 1, maximum: WEB_AUTOMATION_EXTRACT_MAX_PAGES };
   const fieldSpecSchema = {
@@ -66,7 +66,7 @@ function webAutomationExtractListSchema(elementFingerprintSchema2) {
   };
 }
 
-// src/actions/schemas.ts
+// domain/src/actions/schemas.ts
 var elementFingerprintSchema = {
   type: "object",
   label: "Element fingerprint",
@@ -370,7 +370,7 @@ var webAutomationActionDefinitions = [
   }
 ];
 
-// src/actions/types.ts
+// domain/src/actions/types.ts
 var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.navigate",
   "web.dom.click",
@@ -392,7 +392,7 @@ var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.download"
 ];
 
-// src/actions/tests/schemas.test.ts
+// domain/src/actions/tests/schemas.test.ts
 function definitionFor(actionType) {
   const definition = webAutomationActionDefinitions.find((candidate) => candidate.actionType === actionType);
   assert.ok(definition, `${actionType} has no parameter definition`);

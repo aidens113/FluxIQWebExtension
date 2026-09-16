@@ -1,8 +1,8 @@
-// src/runtime/llm-evidence/tests/sanitize.test.ts
+// domain/src/runtime/llm-evidence/tests/sanitize.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// src/runtime/llm-evidence/limits.ts
+// domain/src/runtime/llm-evidence/limits.ts
 import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES } from "fluxiq/automation-studio";
 var WEB_LLM_EVIDENCE_BYTE_BUDGETS = Object.freeze({
   ceiling: 12e3,
@@ -31,7 +31,7 @@ function evidenceByteLimit(input, fallback, ceiling = WEB_LLM_EVIDENCE_BYTE_BUDG
   return Math.min(Number(input), cap);
 }
 
-// src/sensitivity/signature.ts
+// domain/src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
 var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
 var SENSITIVE_AUTOCOMPLETE_PREFIX = "cc-";
@@ -44,7 +44,7 @@ function isSensitiveControlType(type) {
   return type !== void 0 && SENSITIVE_CONTROL_TYPES.has(type.trim().toLowerCase());
 }
 
-// src/sensitivity/descriptor.ts
+// domain/src/sensitivity/descriptor.ts
 function sensitiveFieldSignatureOfDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
   const record = descriptor;
@@ -63,7 +63,7 @@ function stringField(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// src/runtime/llm-evidence/location.ts
+// domain/src/runtime/llm-evidence/location.ts
 function safeEvidenceUrl(input) {
   if (typeof input !== "string" || !input || input.length > WEB_LLM_EVIDENCE_BOUNDS.url) throw new Error("web evidence URL must be bounded");
   const url = new URL(input);
@@ -83,7 +83,7 @@ function sameOriginHref(input, base) {
   }
 }
 
-// src/runtime/llm-evidence/present.ts
+// domain/src/runtime/llm-evidence/present.ts
 function present(fields) {
   const source = fields;
   const written = {};
@@ -94,7 +94,7 @@ function present(fields) {
   return written;
 }
 
-// src/runtime/llm-evidence/untrusted-json.ts
+// domain/src/runtime/llm-evidence/untrusted-json.ts
 function isJsonRecord(input) {
   return Boolean(input) && typeof input === "object" && !Array.isArray(input);
 }
@@ -115,7 +115,7 @@ function boundedCount(input, maximum) {
   return input;
 }
 
-// src/runtime/llm-evidence/elements.ts
+// domain/src/runtime/llm-evidence/elements.ts
 var FRAME_SELECTOR_PATTERN = /^frame\[(\d{1,6})\]\s*>>\s*(.+)$/u;
 var FRAME_ID_ATTRIBUTE = "data-fluxiq-frame-id";
 function sanitizedEvidenceElement(raw, context) {
@@ -140,10 +140,9 @@ function sanitizedEvidenceElement(raw, context) {
   const expanded = revealKind === "disclosure" ? semanticExpandedState(attributes) : void 0;
   const placement = elementPlacement(raw.context, { name, text });
   const focused = context.focusedSelector !== void 0 && context.focusedSelector === addressed.selector ? true : void 0;
-  return present({
+  const element = present({
     target: context.target,
     tag,
-    selector: addressed.selector,
     frameId: addressed.frameId,
     role: role || void 0,
     name: name || void 0,
@@ -165,6 +164,7 @@ function sanitizedEvidenceElement(raw, context) {
     item: placement.item,
     cell: placement.cell
   });
+  return { element, selector: addressed.selector };
 }
 function safeFillTag(tag, inputType) {
   return tag === "textarea" || tag === "input" && (!inputType || ["text", "search", "email", "tel", "url", "number"].includes(inputType));
@@ -238,12 +238,12 @@ function sanitizedSelectedValue(input, options) {
   return value && options.some((option) => option.value === value) ? value : void 0;
 }
 
-// src/page-evidence/wire.ts
+// domain/src/page-evidence/wire.ts
 function pageEvidenceWire(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 
-// src/runtime/llm-evidence/page-evidence.ts
+// domain/src/runtime/llm-evidence/page-evidence.ts
 var READY_STATES = ["loading", "interactive", "complete"];
 var ORDINARY_NAVIGATION_TYPE = "navigate";
 var MAX_REDIRECTS = 100;
@@ -337,14 +337,12 @@ function evidenceDialogs(input) {
     if (!raw) continue;
     const role = boundedText(raw.role, WEB_LLM_EVIDENCE_BOUNDS.role);
     const name = boundedText(raw.label, WEB_LLM_EVIDENCE_BOUNDS.text);
-    const selector = boundedText(raw.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
     const modal = trueFlag(raw.modal);
-    if (!role && !name && !selector && !modal) continue;
+    if (!role && !name && !modal) continue;
     dialogs.push(present({
       role: role || void 0,
       name: name || void 0,
-      modal,
-      selector: selector || void 0
+      modal
     }));
   }
   return dialogs.length ? dialogs : void 0;
@@ -352,21 +350,19 @@ function evidenceDialogs(input) {
 function evidenceBlocker(input) {
   const blocker = items(input?.blockers).map((item) => pageEvidenceWire(item)).find((item) => item !== void 0);
   if (!blocker) return void 0;
-  const selector = boundedText(blocker.selector, WEB_LLM_EVIDENCE_BOUNDS.selector);
-  if (!selector) return void 0;
   const role = boundedText(blocker.role, WEB_LLM_EVIDENCE_BOUNDS.role);
   const name = boundedText(blocker.label, WEB_LLM_EVIDENCE_BOUNDS.text);
   const blocks = boundedCount(blocker.blocks, MAX_BLOCKED_CONTROLS);
+  if (!role && !name && !blocks) return void 0;
   return present({
-    selector,
     role: role || void 0,
     name: name || void 0,
     blocks: blocks || void 0
   });
 }
 
-// src/runtime/llm-evidence/sanitize.ts
-var WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v1";
+// domain/src/runtime/llm-evidence/sanitize.ts
+var WEB_LLM_EVIDENCE_SCHEMA_VERSION = "web-llm-evidence.v2";
 function sanitizeWebLlmSnapshot(input, options = {}) {
   return sanitizeWebLlmSnapshotWithBindings(input, options).evidence;
 }
@@ -381,10 +377,10 @@ function sanitizeWebLlmSnapshotWithBindings(input, options = {}) {
   const selectors = /* @__PURE__ */ new Map();
   for (const raw of snapshot.interactiveElements) {
     if (elements.length >= WEB_LLM_EVIDENCE_BOUNDS.elements) break;
-    const element = sanitizedEvidenceElement(raw, { target: `target.${elements.length + 1}`, url, focusedSelector });
-    if (!element) continue;
-    elements.push(element);
-    selectors.set(element.target, element.selector);
+    const described = sanitizedEvidenceElement(raw, { target: `target.${elements.length + 1}`, url, focusedSelector });
+    if (!described) continue;
+    elements.push(described.element);
+    selectors.set(described.element.target, described.selector);
   }
   const childFrameIds = [...new Set(elements.map((element) => element.frameId).filter((id) => id !== void 0))].sort((left, right) => left - right);
   const elementTotal = evidenceElementTotal(snapshot, elements.length);
@@ -453,7 +449,7 @@ function trimToBudget(evidence, selectors, maxEvidenceBytes) {
   }
 }
 
-// src/runtime/llm-evidence/tool-rejection.ts
+// domain/src/runtime/llm-evidence/tool-rejection.ts
 var WEB_LLM_TOOL_REJECTION_CODES = [
   "invalid_input",
   "cross_origin",
@@ -463,7 +459,7 @@ var WEB_LLM_TOOL_REJECTION_CODES = [
   "sensitive_value"
 ];
 
-// src/runtime/llm-evidence/vocabulary.ts
+// domain/src/runtime/llm-evidence/vocabulary.ts
 var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe"];
 var WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
 var WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
@@ -480,7 +476,7 @@ var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
   ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
 ]);
 
-// src/runtime/llm-evidence/tests/sanitize.test.ts
+// domain/src/runtime/llm-evidence/tests/sanitize.test.ts
 test("sanitizes extension snapshots without values, sensitive controls, or URL secrets", () => {
   const evidence = sanitizeWebLlmSnapshot({
     url: "https://example.test/form?token=private#secret",
@@ -493,7 +489,7 @@ test("sanitizes extension snapshots without values, sensitive controls, or URL s
     ]
   });
   assert.deepEqual(evidence, {
-    schemaVersion: "web-llm-evidence.v1",
+    schemaVersion: "web-llm-evidence.v2",
     trust: "untrusted-page-evidence",
     location: "https://example.test/form",
     title: "Example",
@@ -502,9 +498,9 @@ test("sanitizes extension snapshots without values, sensitive controls, or URL s
     elementTotal: 4,
     truncated: false,
     elements: [
-      { target: "target.1", tag: "input", selector: "#name", name: "Name" },
-      { target: "target.2", tag: "a", selector: "#next", text: "Next", href: "https://example.test/next" },
-      { target: "target.3", tag: "a", selector: "#away", text: "Away" }
+      { target: "target.1", tag: "input", name: "Name" },
+      { target: "target.2", tag: "a", text: "Next", href: "https://example.test/next" },
+      { target: "target.3", tag: "a", text: "Away" }
     ]
   });
   assert.doesNotMatch(JSON.stringify(evidence), /Ada|private|token|ticket/u);
@@ -521,10 +517,10 @@ test("retains compact semantic labels, types, select options, and result text ne
     ]
   });
   assert.deepEqual(evidence.elements, [
-    { target: "target.1", tag: "input", selector: "[data-testid=instruction-name]", name: "Name", hasValue: true },
-    { target: "target.2", tag: "select", selector: "[data-testid=instruction-plan]", name: "Plan", selectedValue: "team", options: [{ value: "starter", label: "Starter" }, { value: "team", label: "Team" }, { value: "enterprise", label: "Enterprise" }] },
-    { target: "target.3", tag: "button", selector: "[data-testid=instruction-submit]", name: "Submit", controlType: "submit" },
-    { target: "target.4", tag: "p", selector: "[data-testid=result]", text: "Not submitted" }
+    { target: "target.1", tag: "input", name: "Name", hasValue: true },
+    { target: "target.2", tag: "select", name: "Plan", selectedValue: "team", options: [{ value: "starter", label: "Starter" }, { value: "team", label: "Team" }, { value: "enterprise", label: "Enterprise" }] },
+    { target: "target.3", tag: "button", name: "Submit", controlType: "submit" },
+    { target: "target.4", tag: "p", text: "Not submitted" }
   ]);
   assert.doesNotMatch(JSON.stringify(evidence), /Ada/u);
 });
@@ -539,9 +535,9 @@ test("exposes only bounded non-secret completion state", () => {
     ]
   });
   assert.deepEqual(evidence.elements, [
-    { target: "target.1", tag: "textarea", selector: "#notes", hasValue: false },
-    { target: "target.2", tag: "input", selector: "#hidden", inputType: "hidden" },
-    { target: "target.3", tag: "select", selector: "#plan", options: [{ value: "team", label: "Team" }] }
+    { target: "target.1", tag: "textarea", hasValue: false },
+    { target: "target.2", tag: "input", inputType: "hidden" },
+    { target: "target.3", tag: "select", options: [{ value: "team", label: "Team" }] }
   ]);
   assert.doesNotMatch(JSON.stringify(evidence), /private|unlisted/u);
 });
@@ -597,16 +593,15 @@ test("carries where an element sits: its form, landmark, heading, list position 
     {
       target: "target.1",
       tag: "button",
-      selector: "[data-testid=add-1]",
       name: "Add to cart",
       form: "checkout",
       landmark: "main",
       heading: "Recommended for you",
       item: { index: 3, total: 24 }
     },
-    { target: "target.2", tag: "td", selector: "#row-2-total", text: "48.00", landmark: "main", heading: "Order summary", cell: { row: 2, column: 4, header: "Total" } },
+    { target: "target.2", tag: "td", text: "48.00", landmark: "main", heading: "Order summary", cell: { row: 2, column: 4, header: "Total" } },
     // The heading only repeats the control's own name, so it is not paid for twice.
-    { target: "target.3", tag: "input", selector: "#coupon", name: "Coupon", form: "discount" }
+    { target: "target.3", tag: "input", name: "Coupon", form: "discount" }
   ]);
 });
 test("reports child-frame elements with a selector that works inside the frame and the frame that owns it", () => {
@@ -620,11 +615,21 @@ test("reports child-frame elements with a selector that works inside the frame a
     ]
   });
   assert.deepEqual(evidence.frame, { isTop: true, childFrameIds: [3, 7] });
-  assert.deepEqual(evidence.elements.map((element) => [element.selector, element.frameId]), [
-    ["#place-order", void 0],
-    ["#card-name", 3],
-    ["#zip", 7]
+  const bound = sanitizeWebLlmSnapshotWithBindings({
+    url: "https://example.test/checkout",
+    frame: { isTop: true },
+    interactiveElements: [
+      { tagName: "button", selector: "#place-order", visibleText: "Place order" },
+      { tagName: "input", selector: "frame[3] >> #card-name", name: "Name on card", attributes: { "data-fluxiq-frame-id": "3", "data-fluxiq-frame-url": "https://payments.example.test/f" } },
+      { tagName: "input", selector: "#zip", name: "Postcode", attributes: { "data-fluxiq-frame-id": "7" } }
+    ]
+  });
+  assert.deepEqual(evidence.elements.map((element) => [element.target, element.frameId]), [
+    ["target.1", void 0],
+    ["target.2", 3],
+    ["target.3", 7]
   ]);
+  assert.deepEqual([...bound.selectors], [["target.1", "#place-order"], ["target.2", "#card-name"], ["target.3", "#zip"]]);
   assert.doesNotMatch(JSON.stringify(evidence), /frame\[3\]/u);
 });
 test("says the capture came from inside a child frame rather than presenting it as the whole page", () => {
@@ -635,7 +640,7 @@ test("says the capture came from inside a child frame rather than presenting it 
   });
   assert.deepEqual(evidence.frame, { isTop: false });
 });
-test("deduplicates representative 50-element semantic evidence without dropping executable selectors", () => {
+test("deduplicates representative 50-element semantic evidence without dropping what names each element", () => {
   const interactiveElements = Array.from({ length: 50 }, (_, index) => ({
     tagName: "button",
     selector: `[data-component="global-navigation-item-${index}"][data-instance="${"x".repeat(72)}"]`,
@@ -651,7 +656,8 @@ test("deduplicates representative 50-element semantic evidence without dropping 
   assert.equal(evidence.truncated, true);
   assert.equal(compactBytes <= 10500, true, `compact evidence used ${compactBytes} bytes`);
   assert.equal(compactBytes < legacyBytes, true, `compact ${compactBytes} bytes versus duplicate-semantic ${legacyBytes} bytes`);
-  assert.match(JSON.stringify(evidence), /selector/u);
+  assert.deepEqual(evidence.elements.map((element) => element.target).slice(0, 3), ["target.1", "target.2", "target.3"]);
+  assert.doesNotMatch(JSON.stringify(evidence), /selector|data-component/u);
 });
 test("rejects a snapshot that is malformed or off the origin the caller expected", () => {
   assert.throws(() => sanitizeWebLlmSnapshot("not a snapshot"), /must be an object/u);

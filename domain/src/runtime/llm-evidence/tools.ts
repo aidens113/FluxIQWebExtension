@@ -11,7 +11,8 @@
 import type { FluxIQ } from "fluxiq";
 import type {
   AutomationStudioRuntimeTargetOverrideEvidenceValidation,
-  AutomationStudioRuntimeTargetOverrideFailedAction
+  AutomationStudioRuntimeTargetOverrideFailedAction,
+  AutomationStudioRuntimeTargetOverrideTarget
 } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
@@ -88,11 +89,30 @@ export type WebAutomationLlmEvidenceRuntime = {
   tools: Array<{ toolId: string; description: string; inputSchema: JsonObject; effect?: "observe" | "mutate"; repeatPolicy?: "after_mutation"; initialObservation?: { input: JsonObject } }>;
   executeTool(input: WebLlmEvidenceToolRequest): Promise<WebLlmEvidenceToolExecution>;
   captureSanitizedFailureEvidence(input: WebLlmFailureEvidenceRequest): Promise<WebLlmPageEvidence>;
-  validateTargetOverrideEvidence(evidence: JsonObject, target: { selector: string }, failedAction: AutomationStudioRuntimeTargetOverrideFailedAction): AutomationStudioRuntimeTargetOverrideEvidenceValidation;
+  validateTargetOverrideEvidence(evidence: JsonObject, target: AutomationStudioRuntimeTargetOverrideTarget, failedAction: AutomationStudioRuntimeTargetOverrideFailedAction): AutomationStudioRuntimeTargetOverrideEvidenceValidation;
 };
+
+/**
+ * How many packets' selector bindings are kept so a later repair can still put
+ * the selector hint back. Small on purpose: this is a convenience for the
+ * in-flight diagnosis, not a store, and a repair that finds no binding is
+ * resolved fingerprint-only rather than refused.
+ */
+const RETAINED_SELECTOR_BINDINGS = 8;
 
 export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGateway): WebAutomationLlmEvidenceRuntime {
   const returnedEvidence = new Map<string, WebLlmSnapshotBinding>();
+  // Keyed by the packet itself, because Core hands the packet back to
+  // `validateTargetOverrideEvidence` without the project or flow it came from.
+  const retainedSelectors = new Map<string, Map<string, string>>();
+  const retain = (binding: WebLlmSnapshotBinding): WebLlmSnapshotBinding => {
+    retainedSelectors.set(packetKey(binding.evidence), binding.selectors);
+    for (const key of retainedSelectors.keys()) {
+      if (retainedSelectors.size <= RETAINED_SELECTOR_BINDINGS) break;
+      retainedSelectors.delete(key);
+    }
+    return binding;
+  };
   return {
     tools: [
       {
@@ -130,7 +150,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       try {
         if (input.toolId === WEB_LLM_INSPECT_TOOL_ID) {
           exactToolKeys(input.value, []);
-          const snapshot = await inspect(gateway, sessionId, input, input.signal);
+          const snapshot = retain(await inspect(gateway, sessionId, input, input.signal));
           returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
           return toolExecution(snapshot.evidence, false, WEB_LLM_INSPECT_RESULT_CODE);
         }
@@ -148,7 +168,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
           });
           assertActive(input.signal);
           if (result.status !== "succeeded") throw new Error("web evidence navigation failed");
-          const snapshot = await inspect(gateway, sessionId, input, input.signal, destination.origin);
+          const snapshot = retain(await inspect(gateway, sessionId, input, input.signal, destination.origin));
           returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
           return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE);
         }
@@ -158,7 +178,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
           const current = await inspect(gateway, sessionId, input, input.signal);
           const element = currentElementForReturnedTarget(returnedEvidence.get(evidenceScope(input, sessionId)), current, target);
           if (!safeRevealElement(element)) recoverable("target_unsafe");
-          const snapshot = await executeAndInspect(gateway, sessionId, input, "web.dom.click", { selector: element.selector }, current, input.signal);
+          const snapshot = retain(await executeAndInspect(gateway, sessionId, input, "web.dom.click", { selector: element.selector }, current, input.signal));
           if (JSON.stringify(snapshot.evidence) === JSON.stringify(current.evidence)) recoverable("no_progress");
           returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
           return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE);
@@ -195,15 +215,20 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
       assertActive(input.signal);
       if (result.status !== "succeeded") throw new Error("web failure evidence snapshot capture failed");
       const payload = jsonRecord(result.payload, "web failure evidence action payload");
-      return sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({
+      return retain(sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present<WebLlmSanitizeOptions>({
         budget: "failure",
         maxEvidenceBytes: input.maxEvidenceBytes,
         expectedOrigin: undefined,
-      })).evidence;
+      }))).evidence;
     },
     validateTargetOverrideEvidence(evidence, target, failedAction) {
       if (evidence.schemaVersion !== WEB_LLM_EVIDENCE_SCHEMA_VERSION || !Array.isArray(evidence.elements)) return { status: "absent" };
-      return validateWebRuntimeTargetOverrideEvidence(evidence as WebLlmPageEvidence, target, failedAction);
+      return validateWebRuntimeTargetOverrideEvidence(
+        evidence as WebLlmPageEvidence,
+        target,
+        failedAction,
+        retainedSelectors.get(packetKey(evidence as WebLlmPageEvidence))
+      );
     },
   };
 }
@@ -273,6 +298,17 @@ function selectSession(sessionIds: string[]): string {
 
 function toolMetadata(input: WebLlmEvidenceToolRequest): JsonObject {
   return { source: "llm-evidence-runtime", projectId: input.projectId, flowId: input.flowId, callId: input.callId, domainId: WEB_AUTOMATION_DOMAIN_ID };
+}
+
+/**
+ * A packet's identity for the binding lookup: its location and the exact
+ * handles it describes. Core round-trips the packet through JSON, so this is
+ * matched on what the packet says rather than on object identity, and a packet
+ * that was trimmed, recaptured or re-ranked no longer matches -- which is the
+ * intent, because its handles would then mean something else.
+ */
+function packetKey(evidence: WebLlmPageEvidence): string {
+  return `${evidence.location} ${evidence.elements.map((element) => element.target).join(",")}`;
 }
 
 function evidenceScope(input: WebLlmEvidenceToolRequest, sessionId: string): string {

@@ -235,7 +235,7 @@ const evidenceCompletionSchema: JsonObject = {
   properties: { summary: { type: "string", minLength: 1, maxLength: 2_000 }, plan: bootstrapPlanSchema }
 };
 const evidencePage = {
-  schemaVersion: "web-llm-evidence.v1", trust: "untrusted-page-evidence", location: "https://example.test/products", title: "Products",
+  schemaVersion: "web-llm-evidence.v2", trust: "untrusted-page-evidence", location: "https://example.test/products", title: "Products",
   elements: Array.from({ length: 40 }, (_, index) => ({ tag: "button", selector: `[data-product='${index}']`, role: "button", name: `Product ${index}`, text: "Open this bounded product result and inspect its available non-sensitive details." })),
   truncated: false
 };

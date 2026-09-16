@@ -11,7 +11,7 @@
 // status to classify from.
 //
 // And a failed command carries the page it failed on: the sanitized
-// `web-llm-evidence.v1` packet is built here from the snapshot the content
+// `web-llm-evidence.v2` packet is built here from the snapshot the content
 // script captured at the instant of failure, bounded to Core's own
 // failure-evidence gate, with the URL and the resolved target beside it. The
 // alternative -- Core's `captureSanitizedFailureEvidence`, which opens a fresh

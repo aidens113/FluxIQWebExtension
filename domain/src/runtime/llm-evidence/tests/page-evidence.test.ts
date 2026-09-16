@@ -45,8 +45,8 @@ test("reports the open dialogs the producer lists, by the producer's own field n
   // `label` is what the producer calls the dialog's accessible name; `name` is
   // what the packet calls one, on a dialog as on an element.
   assert.deepEqual(evidence.dialogs, [
-    { role: "dialog", name: "Confirm your order", modal: true, selector: "#confirm-dialog" },
-    { role: "alertdialog", name: "Session expiring", selector: "#session" }
+    { role: "dialog", name: "Confirm your order", modal: true },
+    { role: "alertdialog", name: "Session expiring" }
   ]);
 });
 
@@ -64,8 +64,12 @@ test("reports the top-most blocking overlay so a click that cannot land is expli
   // The producer orders its blockers most-blocking first, and the rest are
   // usually the head's own ancestors and descendants, so only the head is what
   // a click actually has to get past.
-  assert.deepEqual(evidence.blockedBy, { selector: "#cookie-wall", role: "dialog", name: "We use cookies", blocks: 2 });
-  assert.equal(sanitizeWebLlmSnapshot(page({ overlays: { blockers: [{ label: "no selector" }] } })).blockedBy, undefined);
+  assert.deepEqual(evidence.blockedBy, { role: "dialog", name: "We use cookies", blocks: 2 });
+  // The blocker is described, never addressed: a model's answer to an overlay is
+  // to say it is there, not to be handed a way to reach into it.
+  assert.doesNotMatch(JSON.stringify(evidence.blockedBy), /cookie-wall/u);
+  assert.deepEqual(sanitizeWebLlmSnapshot(page({ overlays: { blockers: [{ label: "named only" }] } })).blockedBy, { name: "named only" });
+  assert.equal(sanitizeWebLlmSnapshot(page({ overlays: { blockers: [{ selector: "#anonymous" }] } })).blockedBy, undefined);
   assert.equal(sanitizeWebLlmSnapshot(page({ overlays: { tested: 24, blockedCount: 0, blockers: [] } })).blockedBy, undefined);
 });
 
@@ -162,8 +166,8 @@ test("carries element-level recency and change flags as fields, not as ordering 
     ]
   }));
   assert.deepEqual(evidence.elements, [
-    { target: "target.1", tag: "input", selector: "#quantity", name: "Quantity", recent: true, changed: true },
-    { target: "target.2", tag: "button", selector: "#place-order", text: "Place order" }
+    { target: "target.1", tag: "input", name: "Quantity", recent: true, changed: true },
+    { target: "target.2", tag: "button", text: "Place order" }
   ]);
 });
 
@@ -175,7 +179,7 @@ test("the flat shape the reader was first written against is not read at all", (
   const evidence = sanitizeWebLlmSnapshot(page({}, {
     loading: { readyState: "interactive", busy: true, spinner: true, pendingNavigation: true },
     navigation: { pending: true, from: "https://example.test/cart", to: "https://example.test/checkout" },
-    dialogs: [{ role: "dialog", name: "Confirm your order", modal: true, selector: "#confirm-dialog" }],
+    dialogs: [{ role: "dialog", name: "Confirm your order", modal: true }],
     blockingOverlay: { selector: "#cookie-wall", tagName: "DIV", role: "dialog", name: "We use cookies" },
     pendingNativeDialog: true
   }));

@@ -296,3 +296,219 @@ two harness files, so it wants its own brief.
 - The Core structure audit reports "1 baseline entries can be lowered", which
   is an improvement someone can record with `pnpm structure:baseline`. I did
   not run it, since baselines are not mine to move.
+
+---
+
+# Follow-up: the leak closed, and the execution read-back covered
+
+The first pass made the type opaque and left the packet still describing every
+element's selector to the model. That state was worse than it looked: every
+gate was green and the browser concept was still reaching the model, one layer
+down. Both follow-ups are done.
+
+## 1. No selector reaches the model
+
+### What the packet carries now
+
+`WebLlmEvidenceElement.selector` is gone. So is `WebLlmEvidenceDialog.selector`
+and `WebLlmPageContext.blockedBy.selector`. An element is named by its opaque
+`target.N` handle and nothing else; the selector lives in
+`WebLlmSnapshotBinding.selectors`, keyed by that handle, and never leaves the
+domain.
+
+`sanitizedEvidenceElement` now returns `{ element, selector }` rather than one
+joined object. That shape is deliberate: only one of the two may be published,
+and returning them joined and deleting a key afterwards is exactly the silent
+drop this directory is built against.
+
+The packet version is `web-llm-evidence.v2`. That is not cosmetic. A stored
+`.v1` packet both leaks and has a shape no current reader expects, and the
+version is what keeps one out of the repair path and the reusable-evidence
+cache. `WEB_REUSABLE_EVIDENCE_SANITIZER_VERSION` went to `.v2` for the same
+reason: its structural digest is now computed over a different set of facts.
+
+### The selector hint is kept, on the domain's side of the line
+
+Decision L2 wants the repair fingerprint-first *with* the selector as a hint,
+and the hint had to survive the packet losing it. The evidence runtime now
+retains the binding for the last eight packets it issued, keyed by the packet's
+own location and handle list, because Core hands the packet back to
+`validateTargetOverrideEvidence` without the project or flow it came from. A
+repair on a packet this runtime issued carries the selector; a repair on a
+packet it did not, one reloaded from a stored run say, resolves
+fingerprint-only, which is weaker rather than wrong, and is tested as such.
+
+### Three consumers had to move, and one was carrying a real bug
+
+- `reusable-evidence.ts` keyed its element dedup on a digest of the selector
+  while the prompt fact dropped it, so two controls that read identically but
+  sat at different selectors produced two identical prompt facts. Removing the
+  selector removed the duplication as well as the leak: the fact and the dedup
+  key are now the same object.
+- `host-runtime.ts`'s state diff identified elements by selector. Handles are
+  positional, `target.1` is the first element of whichever capture it came
+  from, so a diff over handles would have reported that nothing ever changes.
+  It now identifies an element by what it is and what it is called (`tag`,
+  `role`, `name`, `text`, `form`), and reports `addedElements` /
+  `removedElements` instead of `addedSelectors` / `removedSelectors`.
+  `WEB_STATE_DIFF_SCHEMA_VERSION` went to `web-state-diff.v2`. Nothing outside
+  that file and its test read those fields.
+- The blocking overlay used to be reported only when it had a selector. It is
+  now reported when it says anything at all: what it is, what it is called, or
+  how much of the page it covers.
+
+`adapter.ts` needed no change: it produces the packet through
+`sanitizeWebLlmSnapshot`, so it is fixed by the producer. Its failure *report*
+still carries `report.selector` into the attempt's trace metadata, which is
+operator-facing and is not part of the LLM context (Core's
+`compactRecentActionForLlm` allowlists `attemptId`, `nodeId`, `definitionId`,
+`order`, `status`, `route`). The serialized-payload test below is what holds
+that claim, rather than my reading of it.
+
+`domain/src/page-evidence/**` was not touched. It is the wire contract the
+extension produces, where a selector belongs; it is only the packet built from
+it that may not carry one.
+
+### The tests a stranger will find
+
+Two halves, in the two places the two claims live.
+
+**Producer** - `domain/src/runtime/llm-evidence/tests/packet-carries-no-selector.test.ts`.
+A realistic checkout capture with a selector in every place the wire contract
+allows one: elements, the focused element, a child frame, two dialogs, two
+overlay blockers, a loading indicator, a busy region, and a sensitive card
+field. Then, against the **serialized packet**:
+
+- none of the twelve selectors the page contained appears;
+- no key named `selector`, `selectors`, `xpath`, `queryPath`, `css`, `locator`,
+  `cssSelector` or `path`;
+- and the guarantee that outlives the file - *every key the packet carries, at
+  any depth, is one written down in the test*. A field added later fails this
+  line whatever it is called and however deeply it is nested. That replaced a
+  regex scan for locator-shaped strings, which I wrote first and removed: it
+  matched `web-llm-evidence.v2` and would have gone on catching innocent text.
+
+It also asserts the packet is worth reading - six elements, both dialogs, the
+overlay - so it cannot pass by describing nothing, and that the binding still
+holds every selector, including the child-frame one, and holds nothing for the
+sensitive control.
+
+**Transport** - `packages/fluxiq/.../runtime/llm/tests/opaque-target-override.test.ts`,
+new case "sends a realistic page to the provider with no way of addressing it
+anywhere in the body". The packet in it is that sanitizer's actual output,
+pasted rather than imagined. It runs the real DeepSeek provider against a
+stubbed fetch and asserts on the **serialized request body**: none of the
+page's selectors, no locator-named field, and no occurrence of the substring
+`selector` in any case. It then asserts the request is still worth sending:
+six elements, the first one exactly, and the overlay.
+
+## 2. The execution read-back
+
+`packages/fluxiq/src/programs/automation-studio/tests/opaque-target-execution.test.ts`,
+three cases. `live-patch.ts` and `runtime/tests/live-patch.test.ts` were not
+touched.
+
+The round trip is driven through the public path: a real
+`temporary_target_override` patch, carrying the exact object the web domain's
+`validateWebRuntimeTargetOverrideEvidence` returns, applied by
+`executeAutomationStudioRuntimePatch` to a real Flow. The observation point is
+the host runtime, because Core hands the host the node it is about to run,
+parameters resolved, which is the same object `applyRuntimePatchToFlow` wrote
+the target into. A web host reads exactly this. Nothing in the test reaches
+into a private function or asserts on a copy of the patch.
+
+What it proves: the target arrives unchanged; the canonical Flow was not
+mutated; `normalizeAutomationStudioElementTarget` reads it with no
+domain-specific branch and `validateAutomationStudioElementTarget` reports no
+errors; the handles ride along untouched; and Core's element matcher picks the
+right element out of a candidate set with a decoy, **including after every
+selector on the page has changed**, which is the fingerprint-first claim made
+concrete rather than asserted.
+
+The third case is the one that makes the other two worth having. A target
+carrying only its handles passes
+`isAutomationStudioRuntimeTargetOverrideTarget`, is carried, is written into
+the node, is executed, and the rerun succeeds - and
+`normalizeAutomationStudioElementTarget` returns `null` for it. That is the
+failure mode you named: a repair that applies, reports success and points at
+nothing. The test pins it, so the round trip cannot pass vacuously.
+
+## Commands run and observed results
+
+Core, `F:\!FluxIQ\packages\fluxiq`:
+
+```
+npx tsc --noEmit                                        -> CORE_TSC_EXIT=0 (no output)
+npx vitest run src/.../runtime/llm/tests                -> Test Files 7 passed (7)
+                                                           Tests 98 passed (98)
+npx vitest run src/programs/automation-studio/tests      -> Test Files 1 passed (1)
+                                                           Tests 3 passed (3)
+npx vitest run .../runtime/tests/live-patch.test.ts      -> Test Files 1 passed (1)
+                                                           Tests 23 passed (23)
+npx tsc -b tsconfig.build.json                           -> BUILD_EXIT=0
+node ../../scripts/rewrite-declaration-imports.mjs dist  -> REWRITE_EXIT=0
+```
+
+`F:\!FluxIQ`, `node scripts/structure-audit.mjs`:
+
+```
+structure-audit: 1 baseline entries can be lowered. Run "pnpm structure:baseline" to record the improvement.
+structure-audit: passed (137 warning(s), 256 baselined).
+AUDIT_EXIT=0
+```
+
+Web extension, `F:\!FluxIQWebExtension\domain`:
+
+```
+npx tsc -p tsconfig.json --noEmit    -> SRC_EXIT=0
+npx tsc -p tsconfig.test.json        -> TEST_EXIT=0
+DOMAIN_TEST_BUILD_LABEL=t-opaque-target node scripts/test-domain.mjs
+  -> # tests 485   # pass 485   # fail 0   # duration_ms 7804.2188
+```
+
+`F:\!FluxIQWebExtension`, `node scripts/structure-audit.mjs`:
+
+```
+structure-audit: passed (56 warning(s), 17 baselined).
+AUDIT_EXIT=0
+```
+
+`contract-spread` is clean, and so is `working-docs` - the index was
+regenerated on your side between my two runs. No path was added to the audit
+config and no baseline was updated in either repository.
+
+The domain suite went from 481 tests to 485. Thirty-five of the existing 481
+failed the moment the field was removed, and every one was a fixture or an
+assertion rather than a defect: `present<T>()` turned the deletion into a
+compile error in eleven files, which is the mechanism working as designed and
+is why none of them could be missed.
+
+## Not verified
+
+- **Still no live browser and no live provider run.** Everything here is
+  offline.
+- **The extension side was not exercised.** Nothing under `apps/extension`
+  reads `WebLlmEvidenceElement`, which I checked by grep, and the wire contract
+  it produces is unchanged, but no extension test was run for this.
+- **The retained binding is in-memory and per-runtime-instance.** A repair
+  validated by a different process, or more than eight packets after the one it
+  belongs to, resolves fingerprint-only. That is the designed fallback and it
+  is tested, but the eviction bound itself is a judgement rather than a
+  measurement.
+- **The `web-state-diff.v2` field rename.** I searched both repositories for
+  `addedSelectors` / `removedSelectors` and found only `host-runtime.ts`, its
+  test, and stale `.test-build` output. If a consumer exists outside these two
+  repositories, it will break.
+
+## Open questions
+
+- `runtime/llm/tests/evidence-loop-provider.test.ts:142-144` still declares
+  hypothetical domain tools (`web.click_safe`, `web.fill_safe`) whose input
+  schemas take a `selector`. That is a Core test of Core carrying whatever tool
+  schema a domain declares, so it is not a leak - Core must carry them - but it
+  now teaches a shape the web domain does not use (its tools are `inspect`,
+  `navigate` and `reveal`, and only `reveal` takes an argument, an opaque
+  handle). Worth renaming when someone is next in that file; I left it rather
+  than perturb its token-budget assertions.
+- The Core sanitizer de-webbing scoped in the first half of this report is
+  unchanged and still wants its own brief.
