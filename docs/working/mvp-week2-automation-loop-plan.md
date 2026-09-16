@@ -517,6 +517,47 @@ Recorded at dispatch on 2026-09-15, before the three investigations above.
 
 ## Work Ledger
 
+### 2026-09-15 — Endpoint classification landed; two supervisor corrections
+- Agent: supervisor; workers `p-pin-classification`, `x4f-extraction-docs`
+- Changed: Core `_shared/{api,runtime,docs-generators}.ts`, all 26 `*/api/**`
+  registration files, `programs/tests/endpoint-classification.test.ts` (new),
+  `_shared/tests/api.test.ts` (new), `persistence.md`; this repository's
+  `docs/architecture/{extension-client,web-capabilities,sensitive-values}.md`
+- Why: L16 — the PIN guards destruction, not authorship — and the extraction
+  feature was built without its authored documentation following
+- Validation: the supervisor ran the classification suites itself ->
+  "Test Files 2 passed", "Tests 14 passed". The worker's `pnpm check` -> exit 0
+  and `pnpm --filter fluxiq test` -> 1445 passed / 6 failed, of which one is the
+  stale assertion below and five pass when their file runs alone
+- Outcome: Accepted, with one known-red assertion and the push withheld
+- **The commit is deliberately not pushed.** Making `review-flow-adaptation`
+  authoring leaves a test in `AS/runtime/tests/service-flow-bootstrap-adaptation.test.ts:383`
+  still expecting a PIN. It is stale rather than wrong-headed, and the worker
+  owning that file is correcting it; `AGENTS.md` forbids pushing a unit that
+  includes something known to be broken
+- **Supervisor correction, recorded because it reverses an earlier decision of
+  mine.** I previously classed `save-project-hierarchy` and
+  `delete-project-hierarchy-node` as destructive, from the inventory's
+  description. Reading `service.ts:4972` shows they touch only
+  `customHierarchyNodes`: no flow, recording, project or dataset is removed, so
+  the user's work survives and merely becomes unfiled. They destroy
+  organization, not data, and the granular one is an **autosave** path that
+  fires while the user drags items around — gating it would put a PIN prompt in
+  the middle of ordinary editing, which trains reflexive PIN entry and weakens
+  the PIN everywhere it actually matters. Both are now `authoring`, and they
+  move together because leaving the bulk save gated while the granular delete is
+  not would simply be a bypass
+- `delete-run-datasets` keeps its PIN: it really does delete captured rows. The
+  Data window's delete is correctly refused today, and the fix is in the panel,
+  which must collect a PIN rather than route around the gate
+- Four findings from the docs worker, none fixed: there is **no mechanical
+  link or anchor check for `docs/architecture/`** (only `docs/working/` has
+  one); both documents had stale action-input counts, now corrected;
+  `web.user.value_extraction_defined` is registered but unreachable, since the
+  worker refuses a `value` pick at two points; and `PICKER_PREVIEW_MAX_ROWS` and
+  `EXTRACTION_PREVIEW_MAX_ROWS` are two constants that must agree, both 20, with
+  no test holding them equal
+
 ### 2026-09-15 — Graph rollback inverse fixed and verified
 - Agent: supervisor; worker `g-rollback-inverse`, resumed after the crash
 - Changed: Core `automation-studio/storage/project/graph-store.ts` and its tests

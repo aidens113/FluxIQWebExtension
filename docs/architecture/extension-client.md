@@ -39,6 +39,8 @@ The extension:
   `javascript:` pages, and the Chrome, Edge, and Firefox extension galleries;
 - reports browser, tab, and DOM state as FluxIQ `StateSnapshot` values;
 - captures compact recording evidence from pages;
+- lets the user pick one example item on a page and records an extraction of
+  the list it belongs to;
 - executes browser actions requested by FluxIQ;
 - returns action results with evidence and timing;
 - stores only lightweight settings, pairing/session data, and unsent events.
@@ -265,12 +267,12 @@ fallbacks.
 The domain registers browser state and passive recording evidence as unmapped
 inputs. They can be used as observations and policy conditions only. The
 extension classifies an operator navigation, click, text entry, clear, select,
-check, key press, scroll, file choice, tab switch, or tab close into a distinct
-action input. Each action input carries `metadata.inputId` and has exactly one
-registered output binding. FluxIQ uses that binding to persist the output ID
+check, key press, scroll, file choice, tab switch, tab close, or extraction
+defined with the picker into a distinct action input. Each action input carries
+`metadata.inputId` and has exactly one registered output binding. FluxIQ uses that binding to persist the output ID
 and mapped payload in a policy action.
 
-Three of the eleven action inputs come from a file choice or a tab change:
+Three of the thirteen action inputs come from a file choice or a tab change:
 
 | Input | Output | Mapped from |
 | --- | --- | --- |
@@ -279,9 +281,15 @@ Three of the eleven action inputs come from a file choice or a tab change:
 | `web.user.tab_closed` | `web.browser.tab` | a `browser.tab` event whose `tab.operation` is `close` |
 
 The two tab inputs share one output, so an input is never derived from
-`web.browser.tab` alone: it comes from the event's `tab.operation`. All eleven
+`web.browser.tab` alone: it comes from the event's `tab.operation`. All thirteen
 inputs and their outputs are listed in
 [web capabilities](web-capabilities.md#recorded-actions).
+
+Two more come from the extraction picker: `web.user.data_extraction_defined`
+maps to `web.dom.extract_list` and `web.user.value_extraction_defined` to
+`web.dom.extract`. Which of the two a recorded event resolves to is the form the
+definition declares, and nothing records the second today — see
+[Defining An Extraction](#defining-an-extraction).
 
 The extension never sends a generic executable action entry. Inputs without an
 output mapping remain non-executable even when they were captured during a
@@ -341,12 +349,18 @@ changes and text changes. The batch is sent once the page has been quiet for
 500 ms. A DOM change made before an action is never recorded after it:
 - **An action sends the batch first.** A batch still pending goes out ahead of
   any event of a kind that can become an action: `dom.click`, `dom.input`,
-  `dom.change`, `dom.submit` or `dom.keydown`.
+  `dom.change`, `dom.submit`, `dom.keydown` or `data.extract`.
 - **Undelivered changes count.** That early send also counts the changes the
   page's observer has queued but not yet delivered, so a change made in the same
   task as the action is not left behind.
 - **Other kinds wait.** A scroll or a navigation leaves the batch to its quiet
   period.
+- **The extension's own overlay is not a page change.** A node carrying
+  `data-fluxiq-picker`, and anything inside it, is skipped
+  ([`content/picker-host.ts`](../../apps/extension/src/content/picker-host.ts)),
+  so raising the element picker's highlight mid-recording counts nothing. Left
+  in, the recording would hold a `dom.mutation` no page behaviour produced, and
+  a replay would wait for it ([Defining An Extraction](#defining-an-extraction)).
 
 A batch is evidence only. It carries no DOM snapshot, so the background worker
 sends it as a `client.state_update` under the `web.recording.evidence` input,
@@ -642,6 +656,270 @@ available.
 The extension keeps only transient recorder UI state for the active browser
 session. It does not persist canonical recordings locally.
 
+## Defining An Extraction
+
+While a recording is running, the user picks one example item on the page — a
+product card, a table row — and FluxIQ records an extraction of the whole list it
+belongs to. Three parts share the work, and one file,
+[`shared/extraction-messages.ts`](../../apps/extension/src/shared/extraction-messages.ts),
+is the message contract between them:
+
+- **the page** ([`content/picker/`](../../apps/extension/src/content/picker/index.ts)):
+  the overlay, the pick, the confirmation preview, and the `data.extract` event
+  the recorder emits;
+- **the worker** ([`background/extraction/`](../../apps/extension/src/background/extraction/index.ts)):
+  the session, who may drive it, the confirm path, and the one read;
+- **the panel** ([`popup/extraction/`](../../apps/extension/src/popup/extraction/index.ts)):
+  where columns are renamed, removed or excluded. The Chrome side panel and the
+  Firefox popup are the same module, so this is one flow in both browsers.
+
+The entry point is enabled only while the extension is connected and a recording
+is running on a page it can drive, because an extraction is recorded into a
+recording. The feature needed no new manifest permission: the picker runs in the
+content script the recorder is already in.
+
+### The Pick Is Not An Action
+
+The picker's listeners are on `window` in the capture phase. The recorder's are
+on `document` in the capture phase
+([`content/dom-events.ts`](../../apps/extension/src/content/dom-events.ts)), and
+the DOM's capture path runs window first, so the picker's
+`stopImmediatePropagation()` runs before the recorder's listener does and the
+press that chose the list is not also recorded as a click on it.
+`preventDefault()` is the other half: without it the press activates what it
+landed on, so picking a product name follows its link and leaves the page the
+proposal describes. Both are needed, and neither substitutes for the other.
+
+The whole press sequence is swallowed, not just its first event
+([`content/picker/session.ts`](../../apps/extension/src/content/picker/session.ts)).
+A browser sends `pointerdown`, `mousedown`, `pointerup`, `mouseup` and `click`
+for one press, and `contextmenu` or `auxclick` for the other buttons. The pick is
+taken on `pointerdown`, and the listeners stay up draining the rest until the
+sequence ends at `click` or `auxclick`, with a 10 s backstop so a sequence that
+never ends cannot leave the page unable to be clicked. Tearing them down on the
+press would let the tail of that same press through to the recorder, which is the
+bug the arrangement exists to prevent. Escape cancels the pick and is swallowed
+likewise, so it is not recorded as a key the page was sent.
+
+**That ordering is observed, not assumed.** It is a claim about the DOM's capture
+path, and a claim of that kind is exactly what stops being true without anything
+failing.
+`apps/extension/e2e/content/tests/extraction/tests/extraction-picker.spec.ts`
+runs the picker in real Chromium: a trusted click on a product link must leave
+the recording holding no `dom.click`, the page must not navigate, and the overlay
+going up and coming down must produce no `dom.mutation`, and a second row proves
+that Escape hands the page back, since the same click then follows the link. The
+two rules those rows rest on were each proved by mutating the source and watching
+the row fail: registering the listeners on `document` records the pick as a
+second `dom.click`, and removing the recorder's overlay filter counts the
+highlight as a page change. Both mutations were reverted and the suite re-run
+green.
+
+The overlay is extension UI inside someone else's page, and three properties keep
+it out of the page's way
+([`content/picker/overlay.ts`](../../apps/extension/src/content/picker/overlay.ts)):
+
+- **it takes no pointer event.** The host is `pointer-events: none`, so every
+  press and move reaches the page element underneath and the picker reads the
+  real target rather than its own highlight;
+- **it is not part of the page.** Everything visible lives in a shadow root, so
+  no page stylesheet reaches it and it adds no class or id a page could collide
+  with. Styles are set through the CSSOM, because a page with a `style-src`
+  policy blocks an inline `style` attribute and a `<style>` element alike, and
+  nothing uses `innerHTML`, which a page requiring Trusted Types makes throw;
+- **it is not a page change.** The host carries `data-fluxiq-picker`, which
+  `isPickerHostNode`
+  ([`content/picker-host.ts`](../../apps/extension/src/content/picker-host.ts))
+  tests for and the recorder's mutation counter skips — the host arriving and
+  leaving, and anything the overlay does inside itself.
+
+### What Crosses The Channel
+
+**A proposal carries selectors, names and counts only**, never a value read from
+the page. It crosses a message channel and is shown before the user has decided
+anything, including which columns hold something private, so it has to be safe to
+show whatever the page happens to hold. That is why a proposed field's spec
+cannot carry an element fingerprint at all
+([`domain/src/extraction/proposal.ts`](../../domain/src/extraction/proposal.ts)):
+the one fingerprint normalizer records an element's text, value and link target.
+A *recorded* definition may carry one, because by then the user has seen the
+columns and chosen which to exclude. A label is a test id, a column header, an
+attribute name, or the item's own tag and position; text read inside an item is
+never a label.
+
+**A refusal names a reason from a fixed vocabulary** rather than quoting page
+content. A pick is refused as `target_not_found` or `no_repeating_run`, a content
+message as `not_picking`, `unreadable_request`, `not_recording` or
+`invalid_definition`, and a `value` pick as `value_form_unsupported`, which is the
+one word here about FluxIQ rather than about the page. `unreadable_request` is
+what the worker is told when a field resolved to a sensitive control — not which
+field, and not what it held.
+
+**The confirmation preview is the one extraction payload that carries page
+values.** At most 20 rows are read for the panel to show while the user chooses
+columns. They travel from the frame to the extension's own UI and nowhere else:
+never recorded, never stored, never exported, and never written to
+`chrome.storage`. The read is of the page as it stands, with no pagination, so
+the user confirms against the page they picked on, and its minimum is 0 because
+an empty preview is a fact to show rather than a failure.
+
+### An Excluded Column Is Never Read
+
+Excluding a column is not masking it afterwards. The column is absent from the
+request, so no value of it is ever read: none reaches the preview, the records,
+the dataset, an export, or Core's saved run trace. The rule is enforced at three
+points rather than one, because a single point is one refactor away from becoming
+a filter over rows already read:
+
+- **inference pre-selects it.** A field whose element is, or sits inside, a
+  sensitive control is proposed `handling: "exclude"` and can be proposed nothing
+  else (`content/extraction/infer-fields.ts`). The user may change it in the
+  picker, which is where that decision belongs;
+- **the preview is re-read, not filtered.** An edit changes which columns the
+  panel may show; the panel sends that set with `fluxiq.getExtractionSession`,
+  the worker's stored rows no longer match it, and the page is asked for a fresh
+  read that does not name the excluded column
+  (`background/extraction/control.ts`). The panel drops the values from its own
+  copy in the same turn, so neither half is left holding them, and un-excluding
+  brings nothing back, because there is nothing left to bring;
+- **the page drops it before reading.** `normalizeExtractField`
+  (`content/extraction/field-spec.ts`) answers `undefined` for an excluded field,
+  so nothing on the page is read for it.
+
+What *is* recorded is the exclusion itself: the field stays in the recorded
+request as `handling: "exclude"`, and Core's record schema declares it the same
+way. That is the record of a decision the user made — drop it, and the next field
+detection proposes the column again and the user excludes their card-number
+column a second time. Core then copies captured rows by allowlist, so an excluded
+field's value reaches neither the values map, nor a later node's inputs, nor the
+saved trace. What the guarantee covers, and what it does not, is in
+[sensitive values](sensitive-values.md).
+
+### Who May Drive It
+
+Every message in `EXTRACTION_RUNTIME_MESSAGES` is accepted from the extension's
+own side panel or popup and from nothing else. `isControlPage`
+([`background/control-page.ts`](../../apps/extension/src/background/control-page.ts))
+asks three things, and all three matter: the sender is this extension, because
+another extension may send to this one and its messages arrive the same way; the
+sender has a URL at all, because `undefined === undefined` would otherwise pass
+an absent one as a match; and the URL is **exactly** `sidepanel/index.html` or
+`popup/index.html` as `chrome.runtime.getURL` spells it. Not a prefix and not an
+origin: every page this extension serves shares one origin, so an origin test
+would accept any of them, and a prefix test would accept `popup/index.html.evil`.
+The same predicate gates scripted navigation, and it lives in one file because it
+was briefly written twice — two copies of a check like this is how a hole appears
+later, when someone tightens one of them and nothing fails.
+
+`fluxiq.test.defineExtraction`, the seam the Testing Lab drives a read through
+without a human pick, is the sharpest case: it runs an extraction and answers
+with the records, so a page under test that could send it would be able to drive
+FluxIQ's own reader and read the page back out of it. It is refused like the
+rest, and `background/tests/extraction-control.test.ts` proves the refusal — from
+a page sender, from another extension, and from an extension URL that is not one
+of the two control pages.
+
+The pick itself is the one message that comes from a content script by
+definition, and it is checked no less strictly: it is accepted only from frame 0
+of the very tab the session was opened against, so neither another page nor a
+child frame of the page under test can fill a session the user opened elsewhere.
+
+### The Session
+
+A session lives in the worker's memory and nowhere else
+([`background/extraction/session-store.ts`](../../apps/extension/src/background/extraction/session-store.ts)):
+one per tab, replaced by the next pick on that tab, and dropped when the tab
+closes or its top frame navigates away, since both leave the page the proposal's
+selectors were written against. Nothing is written to `chrome.storage`, because a
+session holds a preview, and a durable preview is exactly the artefact an
+excluded column must never reach. A service worker torn down loses the session
+and the panel starts the pick again; that is the intended trade.
+
+The panel owns no truth about the pick. It reads the session back on mount and on
+a timer while the user is still choosing an item, because in Firefox the popup is
+destroyed the moment the user clicks the page, so a panel that remembered its own
+pick would have nothing to remember. The Chrome side panel, which is never
+destroyed, takes the same path.
+
+A pick that proposed nothing leaves the session open carrying the word that says
+why, and the worker puts the overlay back up. The frame closes its own overlay on
+every press and forgets its own session when the press finishes, so without that
+re-arm the panel would say "pick another item" over a page that could no longer
+be picked in, and the only way out would be Cancel.
+
+### Confirm: Record First, Then Read
+
+Confirm is refused outside a recording, because a definition nothing keeps is a
+silent no-op to the person who just confirmed it. Then the recording comes first
+and the read second
+([`background/extraction/confirm.ts`](../../apps/extension/src/background/extraction/confirm.ts)).
+The recorded `data.extract` is what a Flow is later built from and it must land
+whether or not the read succeeds: a list that came up short of its minimum is a
+failed read of an extraction the user really did define, and recording after the
+read would lose the definition every such time.
+
+Nothing the read returns is stored. The records go back to the caller in the
+reply and are held nowhere else — not in the session, which drops its preview
+when the extraction is recorded, not in `chrome.storage`, and not in the recorded
+event, which carries the definition and counts alone.
+
+Two rules keep the worker honest about what it runs:
+
+- **the definition is the domain's, rebuilt.** `runnableExtractListRequest`
+  (`background/extraction/definition.ts`) puts the finished definition through
+  `webAutomationRecordedAction`, the one reader that decides whether a recorded
+  extraction becomes an executable node, and runs the request that reader
+  rebuilt. A definition the domain refuses is neither recorded nor run, so the
+  worker cannot run a read the replayed Flow would not;
+- **the timeout is the domain's number.** The page waits up to 10 s for *each*
+  page of a list, so the budget is `webAutomationExtractListTimeoutMs`
+  ([`domain/src/actions/extraction/request.ts`](../../domain/src/actions/extraction/request.ts)):
+  the per-page wait times the pages the request may follow, which is `maxPages`
+  for every mode that follows pages and `maxScrolls` for a scrolling list. It is
+  imported rather than restated. The worker once carried a flat 60,000 ms ceiling
+  of its own, because the function could not be reached from `domain/client`, and
+  that truncated every read past six pages; the function is exported there now,
+  so the worker's budget and the recorded node's declared budget are one number.
+
+### What The Recording Holds
+
+The frame records the extraction, not the worker, because the frame is where the
+recording is sequenced: `data.extract` is an executable kind, so a pending
+mutation batch is flushed ahead of it and the event lands after the changes that
+preceded it and before whatever follows, exactly as a click does. An event
+injected from the worker would have no place in that order.
+
+The event carries the definition and nothing else. No element descriptor is
+attached, although the recorder's other kinds carry one: a descriptor holds the
+element's text, and the element a list extraction was defined on is the list, so
+its text is the records. The definition is checked for shape in the frame and
+then rebuilt field by field by `webAutomationRecordedExtraction`
+([`domain/src/actions/extraction/recorded-definition.ts`](../../domain/src/actions/extraction/recorded-definition.ts))
+when the gateway event is built, so what is stored is selectors, field keys,
+labels, counts, and the dataset's own id and name. An unknown key a producer put
+beside the definition is never copied — refusing it would make a stray key break
+recording, while copying it would be the leak. Every field key is checked against
+the domain's key rule and the dataset id against Core's, so a definition that is
+recorded cannot make Core refuse the whole candidate at approval. The activity
+log is told the form, the number of columns and the item count, and no more.
+
+A recorded extraction maps to one of two inputs, by the form its definition
+declares:
+
+| Input | Output |
+| --- | --- |
+| `web.user.data_extraction_defined` | `web.dom.extract_list` |
+| `web.user.value_extraction_defined` | `web.dom.extract` |
+
+Nothing records the second today. The worker refuses to start a `value` pick and
+refuses one that arrives anyway, because a value extraction needs an element
+target that the picker's recorded event deliberately does not attach; accepted,
+it would be stored as passive evidence and never become the `web.dom.extract`
+node the user thinks they defined, and refusing at the pick is the only way they
+find that out. A definition `webAutomationRecordedExtraction` refuses stays
+evidence too, rather than becoming an extraction that reads something other than
+what was picked.
+
 ## Recording Proposals
 
 When Core turns a recording into a proposal, it shows the web recording mapper,
@@ -761,6 +1039,28 @@ pins this end to end. It sends the eight messages of a live `delayed-ui`
 recording through Core's own client gateway, concurrently, and requires the
 proposal click, wait, click. The rule's own cases are in
 `domain/src/recording/proposals/tests/late-target-wait.test.ts`.
+
+### An Extraction's Dataset And Budget
+
+A recorded extraction's candidate (`extractionCandidate` in
+[`domain/src/web-panel-host.ts`](../../domain/src/web-panel-host.ts)) differs
+from every other action's in three ways:
+
+- **it carries no `expectedConfirmation`.** Core waits for the confirmation input
+  whenever one is set, and the extension confirms no extract action, so a
+  confirmation would fail every replay after five seconds. The late-target wait
+  omits it for the same reason;
+- **a list carries a `recordOutput`**, which is what makes the approved node save
+  its rows as a dataset: the dataset's id and name, a schema over every field the
+  request declares — the excluded ones included, carrying their `handling` — and
+  `writeMode: "append"`, so a paginated read's later pages add to the rows the
+  earlier ones stored
+  ([`domain/src/recording/proposals/record-output.ts`](../../domain/src/recording/proposals/record-output.ts)).
+  The single-value form carries none: one value is not a list of records;
+- **a list carries a scaled `timeoutMs`**, the same
+  `webAutomationExtractListTimeoutMs` the picker's own run uses. Core otherwise
+  sends the node's 5,000 ms default as the command timeout, which would cut a
+  paginated read short at its first page.
 
 ## Default Endpoint
 

@@ -2,7 +2,7 @@
 
 Which controls hold a secret, who asks, and what the guards around them are —
 and are not — a boundary against. Current-state design, verified against
-source on 2026-09-13.
+source on 2026-09-15.
 
 ## One Rule
 
@@ -218,6 +218,70 @@ neither guard stamps one, and the adapter strips any flag it did not honour.
   The tokens are carried on purpose, so a consumer can ask the rule itself
   instead of inheriting whatever the producer concluded.
 
+## Extraction: Structure Crosses, Values Are Not Kept
+
+Extraction exists to read the page, so what each part of it may carry is stated
+rather than left to judgement. How a pick becomes a recorded extraction is in
+[the extension client architecture](extension-client.md#defining-an-extraction);
+what follows is what the one rule, and the guards around it, mean on that
+path.
+
+- **A sensitive control is refused, not redacted.** Every field kind asks
+  `isWithinSensitiveControl` before it reads, so a field resolving to a sensitive
+  control, or to anything inside one such as an `<option>` of a sensitive select,
+  refuses the **whole** read with an ACTION_REJECTED record that names the
+  author's field key and quotes no value
+  (`content/extraction/field-reader.ts`). The `value` kind needs it most, since a
+  control's live value is the secret itself.
+- **A proposal carries selectors, names and counts.** It crosses a message
+  channel and is shown before the user has judged anything, so it carries no
+  value read from the page, and a proposed field's spec cannot carry an element
+  fingerprint at all — the one fingerprint normalizer records an element's text,
+  value and link target
+  ([`domain/src/extraction/proposal.ts`](../../domain/src/extraction/proposal.ts)).
+  A label is a test id, a column header or an attribute name. A column header is
+  page structure rather than a sample value, which is why it may be a label while
+  text read inside an item may not.
+- **A refusal names a reason, never page content.** `target_not_found`,
+  `no_repeating_run`, `not_picking`, `unreadable_request`, `not_recording`,
+  `invalid_definition` and `value_form_unsupported` are a closed vocabulary, so
+  the worker learns that a field resolved to a sensitive control without learning
+  which field it was or what it held.
+- **The confirmation preview is the one extraction payload carrying page
+  values.** At most 20 rows are read for the panel to show while the user chooses
+  columns, and they travel from the frame to the extension's own UI and nowhere
+  else. The session holding them is in the background worker's memory, never in
+  `chrome.storage`, and it drops them when the extraction is recorded. No
+  recording, stored definition or export ever contains one.
+
+**Excluding a column is not masking it.** A column marked `exclude` is left out
+of the request, so no value of it is ever read: it is absent from the preview,
+the records, the summary's `fieldNames`, the dataset, every export and Core's
+saved run trace. Three places enforce that, so no single refactor can turn it
+into a filter over rows already read: inference pre-selects `exclude` for a field
+whose element is, or sits inside, a sensitive control, and can propose nothing
+else (`content/extraction/infer-fields.ts`); an edit in the panel makes the
+worker ask the page for a fresh read without the column rather than narrow the
+rows it already holds (`background/extraction/control.ts`); and
+`normalizeExtractField` (`content/extraction/field-spec.ts`) drops the field
+before anything on the page is read.
+
+The column's *declaration* is kept — in the recorded request and in Core's record
+schema, as `handling: "exclude"` — because it is the record of a decision the
+user made. Drop it, and the next field detection proposes the column again and
+the user excludes their card-number column a second time. Core copies captured
+rows by allowlist, so an excluded field's value reaches neither the values map,
+nor a later node's inputs, nor the saved trace.
+
+What the promise covers is what FluxIQ **keeps**. A run may hold a secret in
+memory while it uses one — a recorded entry into a sensitive control comes back
+as a run input and is typed into the page
+([run time](#run-time-the-value-returns-as-a-run-input)) — and that is exactly why
+exclusion is decided before the read rather than applied afterwards: a mask
+applied to rows already read leaves a copy, and a copy is what ends up persisted.
+On the extraction path there is not even an in-memory copy, because the page is
+never asked for the column.
+
 ## Run Time: The Value Returns As A Run Input
 
 A recording holds no secret, so a Flow built from one must be given it. A
@@ -303,10 +367,10 @@ pairing that fails stops the run before the Flow starts
   `content/extraction/field-spec.ts` before anything on the page is read, so
   its values are never read rather than read and removed, and the column is
   absent from the output, the summary's `fieldNames`, the saved table and every
-  export (decision D12). Inference pre-selects it for a field whose element is,
-  or sits inside, a sensitive control and can propose nothing else
-  (`content/extraction/infer-fields.ts`); the user may change it in the picker,
-  which is where that decision belongs.
+  export (decision D12). The user picks which columns are excluded, and
+  inference pre-selects one for a field whose element is, or sits inside, a
+  sensitive control; the whole path is under
+  [extraction](#extraction-structure-crosses-values-are-not-kept).
 
   Everything else is ordinary content. A page that displays a secret as
   unmarked text puts it into every state snapshot, into the snapshot each
