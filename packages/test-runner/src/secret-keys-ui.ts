@@ -1,5 +1,6 @@
 import type { Page, Response } from "@playwright/test";
 import type { BrowserEvidenceRecorder } from "./browser-evidence.js";
+import { redactText } from "@fluxiq-web-extension/test-evidence";
 import { RunnerFailure } from "./failure.js";
 
 export const TESTING_LAB_DEEPSEEK_KEY_NAME = "FluxIQ Testing Lab DeepSeek";
@@ -70,8 +71,24 @@ export async function ensureDeepSeekKeyViaUi(input: EnsureDeepSeekKeyInput): Pro
     }
 
     return await createDeepSeekKey(page, evidence, origin, keyName, secretValue, authorizationPassword, authorizationPin, redactionLiterals);
-  } catch {
-    throw new RunnerFailure("environment.missing", "The DeepSeek key could not be safely created or reused through the FluxIQ Secret Keys UI");
+  } catch (cause) {
+    // Carry the cause, but never in the message. Discarding it entirely made
+    // every UI failure here -- a missing button, a rejected response, a
+    // timeout -- arrive as the same one sentence, which is why
+    // `pnpm demo:llm:setup` could not be diagnosed without rerunning it by
+    // hand. Putting it in the message instead would echo untrusted response
+    // metadata, which is the exact property the snapshot-metadata tests pin by
+    // asserting this message equals its constant. So the message stays fixed
+    // and the detail travels structurally, with the secret and the run's other
+    // literals stripped first.
+    const detail = redactText(cause instanceof Error ? cause.message : String(cause), {
+      secrets: [...redactionLiterals, secretValue].filter(literal => literal.length > 0)
+    });
+    throw new RunnerFailure(
+      "environment.missing",
+      "The DeepSeek key could not be safely created or reused through the FluxIQ Secret Keys UI",
+      { cause, details: { detail } }
+    );
   }
 }
 

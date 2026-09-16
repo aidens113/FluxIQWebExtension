@@ -10,6 +10,8 @@
 
 import type { FluxIQ } from "fluxiq";
 import type {
+  AutomationStudioExplorationStopReason,
+  AutomationStudioHarnessOptionBundle,
   AutomationStudioRuntimeTargetOverrideEvidenceValidation,
   AutomationStudioRuntimeTargetOverrideFailedAction,
   AutomationStudioRuntimeTargetOverrideTarget
@@ -27,6 +29,10 @@ import {
   type WebLlmEvidenceToolExecution,
   type WebLlmEvidenceToolRequest
 } from "./capture";
+import {
+  webAutomationExplorationRefusalClassifier,
+  webAutomationRecoveryHarnessOptionBundle
+} from "./harness-options";
 import { WEB_LLM_EVIDENCE_BOUNDS } from "./limits";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
 import { present } from "./present";
@@ -74,6 +80,10 @@ export type WebAutomationLlmEvidenceRuntime = {
   /** The keys Core refuses in evidence from this domain. Core carries no browser vocabulary of its own, so the domain that knows what these words mean declares them and Core enforces the declaration. Required here, because the producer always knows: an evidence runtime that declared nothing would silently deny nothing. */
   deniedEvidenceKeys: readonly string[];
   tools: Array<{ toolId: string; description: string; inputSchema: JsonObject; effect?: "observe" | "mutate"; repeatPolicy?: "after_mutation"; initialObservation?: { input: JsonObject } }>;
+  /** Options declared in full rather than as bare tools, so a runtime-only recovery option never reaches Flow authoring. */
+  harnessOptions: AutomationStudioHarnessOptionBundle;
+  /** How Core reads one of this domain's result codes as a refusal, without learning any of them. */
+  classifyRefusal: (resultCode: string) => AutomationStudioExplorationStopReason | undefined;
   executeTool(input: WebLlmEvidenceToolRequest): Promise<WebLlmEvidenceToolExecution>;
   captureSanitizedFailureEvidence(input: WebLlmFailureEvidenceRequest): Promise<WebLlmPageEvidence>;
   validateTargetOverrideEvidence(evidence: JsonObject, target: AutomationStudioRuntimeTargetOverrideTarget, failedAction: AutomationStudioRuntimeTargetOverrideFailedAction): AutomationStudioRuntimeTargetOverrideEvidenceValidation;
@@ -111,6 +121,16 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
     // refused. `selector` is present because it is this domain's word for a
     // target, and after the repair target became opaque it is ours to deny.
     deniedEvidenceKeys: ["html", "innerHtml", "outerHtml", "pageSource", "cookies", "headers", "selector"],
+    // The options a runtime recovery may explore with, declared in full so
+    // they carry their own availability, safety and stages and never reach
+    // Flow authoring. `same_scope` is the safe default and matches what the
+    // authoring `navigate` tool below already enforces; a per-run allowlist
+    // is per-exploration, so threading one needs the coordinator, not this
+    // line.
+    harnessOptions: webAutomationRecoveryHarnessOptionBundle({ gateway, scopePolicy: { kind: "same_scope" } }),
+    // How Core reads a refusal without learning any of this domain's result
+    // codes.
+    classifyRefusal: webAutomationExplorationRefusalClassifier,
     tools: [
       {
         toolId: WEB_LLM_INSPECT_TOOL_ID,

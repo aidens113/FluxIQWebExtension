@@ -76,13 +76,41 @@ diagnosis was staged and never validated, since `diagnose` authorizes exactly
 one call; the token and cost figures are the reserved cap rather than measured,
 because DeepSeek reported no usage; and it is one run, not a repeatable result.
 
-**Not started:** loop phases 2.4-2.9, and X6.
+**Not started:** loop phases 2.4-2.9, and X6. Phase 2.4 depends on R0, which is now done, so it is unblocked.
 
-**Nothing drives the exploration in production yet.** Phase 2.3 is built and
-tested but inert: three diffs are worked out in `reports/w2-3-bounded-exploration.md`
-and not applied. Two are about fifteen lines and need no registration change;
-the third needs ~11 lines in `service.ts`, which sits at exactly its frozen 6757
-baseline, so it needs a baseline decision or R0 first.
+**The exploration now runs in production, as of 2026-09-16.** All three diffs
+in `reports/w2-3-bounded-exploration.md` are applied and four negative probes
+confirm the wiring is load-bearing: removing the exploration call fails four
+tests, dropping it from the trace fails two, and dropping either
+`recoveryDeadline` or `classifyRefusal` fails one each. R0 was taken rather
+than raising the frozen baseline — `maybeAnnotateRunDetailWithRuntimeLlm` moved
+into `AS/runtime/recovery/annotation/`, and `service.ts` went 6757 -> 6468 with
+the baseline lowered to match, so it can never silently grow back.
+
+**Two silent-no-protection defects were closed, and one of them was live.**
+Making `deniedEvidenceKeys` required and fail-closed exposed that Flow
+Bootstrap never forwarded the bound domain's declared keys at all: its reusable
+context had been reaching the model with only Core's own `target` family
+denied, so the web domain's `html`, `innerHtml`, `outerHtml`, `pageSource`,
+`cookies`, `headers` and `selector` were not enforced on that path. Fixed by
+`automationStudioHarnessInputWithDeniedEvidenceKeys`, forwarded and never
+defaulted — a `?? []` there would restore the same hole. Separately, the
+structured diagnosis now reads `response.diagnosis` and *refuses* a
+diagnosis-shaped key found in `response.metadata`, recording it by field name
+and never by value, so a metadata-only `patchNeeded: false` can no longer
+cancel a billed patch call.
+
+**The `llm` / `recovery` module cycle is now a build failure, not a comment.**
+`runtime/llm` may not import a value out of `runtime/recovery`; type-only
+imports stay legal because they are erased and cannot cause the fault. Verified
+by the supervisor reintroducing the exact cycle, observing the audit fail with
+a message naming the three ways out, and reverting. The shared values live in
+the new `runtime/loop-limits/`, which neither directory owns.
+
+**Both repositories are green at this point.** Core `pnpm check` exit 0,
+`vitest run src/programs/automation-studio/runtime` 884 passed / 884 across 97
+files; this repository `pnpm check` exit 0, `test-runner` 940 passed / 0
+failed, `structure-audit` passed in both.
 
 **Deferred, not forgotten:** `deniedEvidenceKeys` is optional on Core's binding
 and `context-packet.ts:81` defaults a missing declaration to deny nothing — the
@@ -134,148 +162,15 @@ export".
 
 ## Decisions (recommended, for the user's review)
 
-- **L1. The loop comes first in Week 2.** If capacity runs short, extraction
-  beyond X4 and Core's Data window move to Week 3 rather than delay 2.1-2.9;
-  Core's credential hardening continues.
-- **L2. One repair-target contract for the loop and extraction (E2, X6).**
-  Core carries an opaque, domain-owned target object instead of `{selector}`.
-  The web domain fills it fingerprint-first, with the selector as a hint, and
-  evidence names elements by opaque `target.N` handles. List item and field
-  selectors become domain-declared repairable parameters, so an `extract_list`
-  repair uses the same contract.
-- **L3. E54, option 3.** A candidate missing only an identifier clears the
-  `destructive` rung only with a second agreeing signal, and exploration's
-  destructive refusal is semantic (submit, delete-like, control role and type),
-  never a similarity score.
-- **L4. Names.** The harness context contract is `recoveryContext`, in a new
-  Core `AS/runtime/recovery/` directory; the existing
-  `AutomationStudioRuntimeAdaptationContext` (policy and budget) is untouched.
-- **L5. Deterministic first is enforced.** The classifier gates the LLM: no
-  provider call when a deterministic path or a known adaptation applies, or the
-  failure is policy, auth, user intervention, or graph; no patch request unless
-  the diagnosis says a patch or exploration is needed.
-- **L6. A distinct grant purpose for runtime recovery,** explicit grant only,
-  with its own call count and wall-clock budget, documented as an
-  authorization boundary in Core's `automation-studio.md`.
-- **L7. Confidence tiers.** An executed in-run success is Medium (used now,
-  kept provisional); High only after a zero-LLM replay passes; a structural,
-  never-executed validation never counts as success; Low asks a person.
-- **L8. Resume, not restart.** Continue from the failed node, or the patch's
-  start node, with accumulated values, after a host check that the node's input
-  state still holds; restart only when no side-effecting node has run.
-- **L9. In-run use on the explicit-grant lane.** A target override the domain
-  validator matched or resolved against sanitized evidence may execute once in
-  the current run without persisting, never for submit-like actions.
-- **L10. Lab.** A provider-free scripted provider (Core test-only, loopback and
-  a grant required) drives loop cells; loop lanes are their own lane class so
-  deliberate harness activations do not read as Week 1 regressions; a `week2`
-  corpus; a new A/B baseline after the loop phases, plus one live DeepSeek
-  checkpoint through the existing demo lane.
-- **L11. Recent browser events** are captured only if the W13 and W24
-  dry-run diagnoses show the state diff is not enough; 2.1's Lab proof decides.
-
-### Decisions the user gave on 2026-09-15, which reshape the plan
-
-These are the user's instructions, not recommendations, and they supersede parts
-of L5, L6, and L9 above.
-
-- **L12. One improvement loop, three entry points.** This is not a recovery
-  loop. The same machinery runs when a user asks for a **new** flow, when a run
-  fails, and when an existing flow meets an edge case. The entry points differ
-  only in what seeds the context and in what counts as done; they must not fork
-  into separate systems. Everything below that says "recovery" is the failure
-  entry point of this one loop.
-- **L13. The model's action surface is the whole flow-authoring surface.**
-  Anything a person can do to a flow — add and remove nodes, wire them, set
-  parameter values, create subflows and routers, attach instructions, declare
-  expected state — the loop may propose. FluxIQ should use the model **freely**
-  to improve a flow in real time, first build or later failure alike.
-  **Approval mode gates applying a proposal, never producing one:** in approval
-  mode the loop still explores, iterates, and presents a complete proposed
-  solution, and only the final application waits for a person. This replaces
-  L6's restrictive separate grant as the default posture, and widens L9.
-- **L14. Exploration is a Core framework capability, not a web one.** Core owns
-  the exploration loop, its budget, its outcomes, and a **registry of harness
-  options** — the actions the loop may take to gather information. Core ships
-  the domain-neutral ones. An **imported domain package registers additional
-  harness options that extend the core set rather than replacing it**, so a
-  non-browser domain gets the same loop. No DOM, selector, tab, or browser
-  concept may appear in Core to serve this.
-- **L15. A fixed order of work, with domain-extensible instructions.** The loop
-  follows an explicit protocol — gather information and explore, plan,
-  implement, iterate, verify — and the model is instructed in that order rather
-  than left to choose one. An importing domain may **add** instructions to any
-  stage or **completely override** that stage's instructions, through Core's
-  existing instruction system. The ordering itself is Core's and is not
-  overridable; what happens inside a stage is the domain's to extend.
-- **L16. The PIN guards destruction, not authorship.** The user's decision:
-  **remove the PIN from most writes; only deleting and genuinely destructive
-  actions keep it.** This resolves the conflict `w2-b` surfaced, where every
-  flow-write endpoint required a PIN that an automatic loop cannot supply, which
-  would otherwise have forced the loop to wait for a person even with approval
-  mode off. Two things keep this a bounded loosening rather than an open one:
-  1. **Destructive is an explicit, exhaustive classification of every write
-     endpoint**, decided in one place rather than judged at each call site.
-     Deleting a flow, project, recording or dataset, anything that removes
-     persisted user data, and anything taking an irreversible external action
-     keep the PIN. Creating and editing flow content does not.
-  2. **A test fails the build when any write endpoint has no classification**, so
-     the default can never quietly become "no PIN" as endpoints are added. Per
-     the standing rule, this is enforced by a check rather than by a note.
-  The first step of this work is an inventory of every write endpoint; the plan
-  must name the PIN-keeping set explicitly rather than describing it.
+Settled and archived on 2026-09-16 to
+[archive/settled-decisions.md](./mvp-week2-automation-loop-plan/archive/settled-decisions.md).
+The user's direction is L12-L16; L6 and L9 were withdrawn because L13
+supersedes both.
 
 ## The five fixes — approved by the user, to be built as Phase D
 
-The user approved these on 2026-09-15 and asked that they be **planned, not
-started**: they are Phase D below, and no code changes until he says go.
-
-Detail, including the executed reproductions and the per-fix regression lists,
-is in `reports/w2-a-defect-fixes.md`. Summary:
-
-- **Fix 1 — stop inferring success from silence.** Replace the boolean
-  `runtimePatchRestoredExpectedState` with an outcome that can say *I could not
-  tell*: `verified`, `unverifiable`, `contradicted`, `not_executed`. Only
-  `verified` writes a `validationResults` entry; `unverifiable` writes none and
-  leaves the adaptation `testing`. There are **two** vacuous-true paths, not one
-  — `!comparison` and `[].every()` on an empty expectation — so fixing only the
-  first leaves the defect alive.
-- **Fix 2 — stop writing a success that declares itself not to have run.** Delete
-  the fabricated `validationResults` entry from
-  `targetOverrideProposalAdaptation` and record the structural check as
-  `metadata.structuralChecks`. Count only executed validations in
-  `adaptation-store.ts:161`.
-- **Fix 3 — make patch application total and fail closed.** `applyRuntimePatchToFlow`
-  has **no branch at all** for `temporary_action_sequence`, so it silently
-  returns the unmodified flow and the rerun validates the *original* flow.
-  Make the switch exhaustive, return `not_executed` for an unapplied kind, and
-  only then implement real application. Stop writing the dead
-  `parameterValues.recovery`.
-- **Fix 4 — wire the gate that already exists.** `decideAutomationStudioLlmInvocationGate`
-  implements L5 correctly, is tested, and has **zero production callers**. Call
-  it before resolving the provider, and chain the patch call on the diagnosis
-  actually succeeding and calling for a patch — today the two calls are
-  independent and the second bills even when the first failed.
-- **Fix 5 — thread the adaptations into classification.** The signature is
-  genuinely never written, but that is not why matching fails: the only
-  production call site passes **no adaptations at all**, so the match set is
-  always empty. This is a seam change, not a one-line edit.
-
-**The single underlying cause, which is why these are one job and not five:**
-success is recorded from the *absence of contradicting evidence* rather than
-from observed evidence of the intended effect. Making `validationResults`
-constructible **only** from an executed-and-compared run dissolves fixes 1-3 and
-leaves every downstream gate correct as written — those gates already ask "is
-there a succeeded validation?", and the question becomes trustworthy for free.
-That is also exactly what L7's confidence tiers require.
-
-**Order: 1 → 3 → 2 → 5 → 4, and the order is load-bearing.** Fixes 4 and 5 must
-come **last**. Once adaptations are actually passed to classification, matches
-start returning results, which flips the model's eligibility to false — so doing
-4 and 5 first would make the loop skip the model on the strength of exactly the
-unverified `validated` records that defects 1-3 fabricate. It would look like
-progress and would make the system worse. Fixes 1, 2 and 3 all edit
-`live-patch.ts` and are serial for one worker.
+Built as Phase D and supervisor-verified; archived on 2026-09-16 to
+[archive/settled-phase-d-and-initial-scoping.md](./mvp-week2-automation-loop-plan/archive/settled-phase-d-and-initial-scoping.md).
 
 ## Phases
 
@@ -417,6 +312,84 @@ built.
 - Must not touch: every source file in both repositories
 - Report to: `F:\!FluxIQWebExtension\docs\working\mvp-week2-automation-loop-plan\reports\w2-c-harness-options-and-instructions.md`
 
+### Dispatched 2026-09-16 — applying the four written-up next steps
+
+Partitioned by file across Core. Concurrency held at five per the recorded
+resource limit. The supervisor kept two edits it already understood from the
+reports rather than dispatching them, and holds the live provider run until
+Core is green, because `pnpm lab` builds Core's web panel from the sibling
+checkout and would otherwise build a half-edited Core.
+
+**Supervisor, done before dispatch (not delegated).**
+`AS/runtime/llm/harness-options/binding.ts` gained `harnessOptions?` and
+`classifyRefusal?` on `AutomationStudioLlmEvidenceRuntimeBinding`, the declared
+bundle merges in `automationStudioHarnessOptionBundleFromBinding` with its two
+throws, and `automationStudioHarnessOptionRegistry` now registers a binding
+carrying options but no bare tools — hunk 1 of `w2-3-bounded-exploration`.
+Downstream, hunk 2: `domain/src/runtime/llm-evidence/tools.ts` declares
+`harnessOptions` (`same_scope`) and `classifyRefusal`, and its
+`WebAutomationLlmEvidenceRuntime` type carries both. Core and domain
+`tsc --noEmit` exit 0; `node scripts/structure-audit.mjs` passes.
+`deniedEvidenceKeys` was deliberately left optional here so one worker owns the
+breaking moment end to end rather than leaving Core red for the others.
+
+**Structural decision taken, not asked.** The ~11 lines the exploration wiring
+needs land in `service.ts`, which sits at exactly its frozen 6757-line
+baseline. Of the report's two options — raise the baseline, or R0 the method
+out — R0 was taken. Raising a frozen baseline to fit eleven lines is the
+deferral this repository's standards forbid.
+
+### Brief: w2-r0-service-exploration
+- Repository: Core
+- Task: move `maybeAnnotateRunDetailWithRuntimeLlm` (`service.ts` ~2872-3185)
+  into its own module under `AS/runtime/recovery/` with no behaviour change and
+  re-baseline downward; then apply hunk 3 — recovery deadline started once per
+  recovery, `runAutomationStudioRuntimeExploration` where
+  `plan.explorationRequested`, `exploration` into the recovery trace, and the
+  `decide` helper modelled on the Flow-bootstrap path at `service.ts:1917`
+- Owns: `AS/runtime/service.ts`, new modules under `AS/runtime/recovery/`,
+  `recovery/index.ts`, their tests, Core `.structure-baseline.json`
+- Must not touch: `harness-options/**`, `recovery/structured-diagnosis.ts`,
+  `llm/harness/intervention.ts`, `llm/context-packet.ts`, this repository
+- Report to: `.../reports/w2-r0-service-exploration.md`
+
+### Brief: w2-denied-evidence-keys
+- Repository: Core
+- Task: make `deniedEvidenceKeys` required on the binding, make
+  `context-packet.ts:81` fail closed instead of defaulting to deny-nothing, and
+  update all 8 call sites (7 under `AS/runtime/tests/**`) in one work unit so
+  the tree is never left red
+- Owns: `harness-options/binding.ts`, `llm/context-packet.ts`, the listed call
+  sites, new fail-closed tests
+- Must not touch: `service.ts`, `recovery/**`, `llm/harness/intervention.ts`,
+  `domain/src/runtime/llm-evidence/tools.ts`
+- Report to: `.../reports/w2-denied-evidence-keys.md`
+
+### Brief: w2-diagnosis-channel
+- Repository: Core
+- Task: point `recovery/structured-diagnosis.ts:131` at the named diagnosis
+  channel Phase 2.2 added instead of scraping `response.metadata`, and stop a
+  metadata-only diagnosis passing as validated
+- Owns: `recovery/structured-diagnosis.ts` and its tests
+- Must not touch: any other `recovery/` file including `index.ts`,
+  `service.ts`, `harness-options/**`, `llm/harness/intervention.ts`,
+  `llm/context-packet.ts`
+- Report to: `.../reports/w2-diagnosis-channel.md`
+
+### Brief: w2-import-cycle
+- Repository: Core
+- Task: break the `llm/harness/intervention.ts` -> `AS/runtime/recovery/` value
+  import that has caused two run-time defects under a clean type check, by
+  moving the shared values to a neutral module outside `recovery/`; then forbid
+  it mechanically with an `importBoundaries` rule in
+  `scripts/structure-audit/config.mjs`, proven by reintroducing the cycle once
+  and observing the audit fail
+- Owns: `llm/harness/intervention.ts`, the new neutral module and its barrel,
+  `scripts/structure-audit/config.mjs`
+- Must not touch: `service.ts`, `recovery/**`, `harness-options/**`,
+  `llm/context-packet.ts`, `.structure-baseline.json`, this repository
+- Report to: `.../reports/w2-import-cycle.md`
+
 ## Validation
 
 - Every step: the test and mutation targets its report names, rerun by the
@@ -444,60 +417,85 @@ built.
 
 ## Worker Briefs — initial scoping
 
-Recorded at dispatch on 2026-09-15, before the three investigations above.
-
-### Brief: w2-scope-context-recovery
-- Repository: this repository and FluxIQ Core (`F:\!FluxIQ`), read-only
-- Task: for MVP Phases 2.1-2.4 (Standardize Adaptation Context, Separate
-  Diagnosis From Exploration, Bounded Harness Exploration, Recovery Success
-  Detection), read each phase's build items and exit criteria, then document
-  with file:line what already exists in this repository and in Core
-  (adaptation context, diagnosis, exploration harness, recovery detection,
-  their tests, and Testing Lab coverage), what is missing against each exit
-  criterion, and which Week 1 carry-overs bear on them (the Week 1 plan's Next
-  steps and open questions E2, E54, and E56). Recommend concrete steps per
-  phase, partitioned by file, with tests, mutation targets, the Lab proof, and
-  repository ownership (Core or here), and note where the extraction plan's
-  phases interact (X4 lands before Phase 2.4).
-- Required reads: `AGENTS.md`; `MVP_AGENT_INSTRUCTIONS.md`; the MVP plan's
-  "Week 2 Objective" and Phases 2.1-2.4; the Current State of
-  `mvp-week1-web-automation-reliability-plan.md` and the named entries in its
-  `open-questions.md`; D1 of `first-class-data-extraction-plan.md`; the Current
-  State of `llm-production-automation-plan.md`; the code those lead to
-- Owns (may edit): its report only
-- Must not touch: all source and documents; no builds, test suites, Lab runs,
-  or web panel
-- Definition of done: every exit criterion of 2.1-2.4 mapped to what exists
-  and what is missing, with file:line and recommended steps
-- Report to: `F:\!FluxIQWebExtension\docs\working\mvp-week2-automation-loop-plan\reports\w2-scope-context-recovery.md`
-
-### Brief: w2-scope-repair-reuse
-- Repository: this repository and FluxIQ Core (`F:\!FluxIQ`), read-only
-- Task: for MVP Phases 2.5-2.9 (Convert Exploration Into Reusable Automation,
-  Validate Proposed Adaptations, Persist Adaptations, Resume Current Execution,
-  Prove Deterministic Reuse), read each phase's build items and exit criteria,
-  then document with file:line what already exists in this repository and in
-  Core (proposal and patch flow, adaptation validation, persistence, resume,
-  reuse proof, their tests, and Testing Lab and FluxBench coverage), what is
-  missing against each exit criterion, and which Week 1 carry-overs bear on
-  them (the Week 1 plan's Next steps and open questions E2, E57, and E58).
-  Recommend concrete steps per phase, partitioned by file, with tests,
-  mutation targets, the Lab proof, and repository ownership (Core or here), and
-  note where the extraction plan's X6 (drift variants through adaptation, an
-  extraction workflow in Phase 2.9's reuse proof) interacts.
-- Required reads: `AGENTS.md`; `MVP_AGENT_INSTRUCTIONS.md`; the MVP plan's
-  "Week 2 Objective" and Phases 2.5-2.9; the Current State of
-  `mvp-week1-web-automation-reliability-plan.md` and the named entries in its
-  `open-questions.md`; X6 and D1 of `first-class-data-extraction-plan.md`; the
-  Current State of `llm-production-automation-plan.md`; the code those lead to
-- Owns (may edit): its report only
-- Must not touch: all source and documents; no builds, test suites, Lab runs,
-  or web panel
-- Definition of done: every exit criterion of 2.5-2.9 mapped to what exists
-  and what is missing, with file:line and recommended steps
-- Report to: `F:\!FluxIQWebExtension\docs\working\mvp-week2-automation-loop-plan\reports\w2-scope-repair-reuse.md`
+Delivered and archived on 2026-09-16: see
+[archive/settled-phase-d-and-initial-scoping.md](./mvp-week2-automation-loop-plan/archive/settled-phase-d-and-initial-scoping.md).
+The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
 
 ## Work Ledger
+
+### 2026-09-16 — Four workers integrated; the exploration runs and two holes close
+- Agent: supervisor, integrating workers `w2-r0-service-exploration`,
+  `w2-denied-evidence-keys`, `w2-diagnosis-channel`, `w2-import-cycle`
+- Changed: Core `AS/runtime/recovery/annotation/**` (new), `recovery/index.ts`,
+  `recovery/structured-diagnosis.ts`, `recovery/tests/{plan,stages,runtime-exploration}.test.ts`,
+  `service.ts`, `llm/harness-options/{binding.ts,index.ts}`,
+  `llm/harness/{context-packet.ts,intervention.ts,task-request.ts}`,
+  `llm/evidence-loop.ts`, `runtime/loop-limits/**` (new), `llm/tests/**`,
+  `tests/service-adaptation/**`, `tests/service-bootstrap/**`,
+  `.structure-baseline.json`, `scripts/structure-audit/{config.mjs,rules/imports.mjs,rules/tests/imports.test.mjs}`;
+  this repository `scripts/structure-audit/rules/imports.mjs` and its test
+  (mirrored from Core, which was identical at HEAD before today)
+- Supervisor's own integration work, not a worker's: the two fixture helpers in
+  `recovery/tests/{plan,stages}.test.ts` that still built the abandoned
+  `metadata` route (the diagnosis worker was forbidden to touch them and
+  returned Partial); the Flow Bootstrap forwarding fix; and moving that fix out
+  of `service.ts` into `automationStudioHarnessInputWithDeniedEvidenceKeys` in
+  `binding.ts`, because six lines in `service.ts` breached the freshly lowered
+  6468 baseline and the audit refused them — which is the ratchet working.
+- Validation: supervisor-run, after all four landed. Core `pnpm check` -> exit 0
+  (audit passed, all four packages typecheck). Core
+  `vitest run src/programs/automation-studio/runtime` -> "Test Files 97 passed
+  (97)", "Tests 884 passed (884)". This repository `pnpm check` -> exit 0;
+  `test-runner` -> "# pass 940", "# fail 0"; `structure-audit` -> passed.
+  The import rule was verified adversarially, not read: the exact cycle was
+  reintroduced as a value import, the audit failed naming it, and it was
+  reverted. Restoring the probe also revealed that `git checkout --` on that
+  file had discarded the worker's comment edit; it was restored from a backup
+  taken before the probe.
+- Not verified: no live provider run and no browser. The user asked on
+  2026-09-16 to stop for review before the real DeepSeek step, so that is a
+  deliberate stop, not a blocker.
+- Open, needs the user: the run budget's default of 2 provider calls leaves no
+  allowance for an exploration, so a real recovery that explores would record
+  `budget_exhausted`. The recommendation is an explicit exploration allowance
+  rather than borrowing from the diagnosis/patch pair. Raised at the review gate
+  because it changes what a live run costs.
+
+### 2026-09-16 — The binding contract, two swallowed causes, and compaction
+- Agent: supervisor (not delegated; four Core workers dispatched in parallel
+  alongside this and still in flight at the time of writing)
+- Changed: Core `AS/runtime/llm/harness-options/binding.ts`; downstream
+  `domain/src/runtime/llm-evidence/tools.ts`,
+  `packages/test-runner/src/secret-keys-ui.ts`,
+  `scripts/setup-demo-llm-key.mjs`; this document and its new `archive/`
+- Why: hunks 1 and 2 of `w2-3-bounded-exploration` are the contract every other
+  pending diff depends on, so the supervisor kept them rather than serializing
+  four workers behind one file. `deniedEvidenceKeys` was deliberately left
+  optional here so that a single worker owns the breaking moment end to end
+  rather than leaving Core red for the other three.
+- Also: the two bare `catch` blocks `w2-live-provider` identified as the reason
+  `pnpm demo:llm:setup` reports one uninformative sentence now carry the cause.
+  The first attempt put the cause in the failure's message and broke the test
+  "rejects secret-bearing or unsafe response metadata without echoing it" —
+  which is a real property, not a stale assertion: that test pins the message to
+  its exact constant so untrusted snapshot metadata can never reach it. The
+  message is therefore fixed again and the redacted detail travels on `cause`
+  and `details`, with `setup-demo-llm-key.mjs` walking the chain to surface it.
+- Validation: supervisor-run. Core `npx tsc --noEmit -p packages/fluxiq` ->
+  exit 0. Downstream `npx tsc --noEmit -p domain` and `-p packages/test-runner`
+  -> exit 0. `node --check scripts/setup-demo-llm-key.mjs` -> ok.
+  `pnpm --filter @fluxiq-web-extension/test-runner test` -> "# pass 940",
+  "# fail 0" (939/1 before the message was pinned back).
+  `node scripts/structure-audit.mjs` -> "passed (57 warning(s), 17 baselined)".
+- Compaction: recording the four briefs took this document to 803 lines and the
+  audit refused to baseline a compaction-threshold violation, which is the rule
+  working as intended. Phase D's five approved fixes and the initial scoping
+  briefs are settled, so both moved to
+  `archive/settled-phase-d-and-initial-scoping.md`; 803 -> 707 lines.
+- Not verified: nothing about the exploration actually running, which is the
+  four workers' subject; and no live provider run — the user asked on
+  2026-09-16 to stop for review before the real DeepSeek step, so that run is
+  held deliberately rather than blocked.
 
 ### 2026-09-15 — Stage protocol, de-webbed sanitizers, and the test split
 - Agent: supervisor; workers `s-stage-protocol`, `w2-test-split`, `h-harness-registry`
