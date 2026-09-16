@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
+import { FIRST_LIVE_ADAPTATION_PROFILE } from "../demo-llm-adaptation.js";
 import { rejectExactPendingExplorationTargetAdaptation, revertExactAppliedExplorationTargetAdaptation } from "../demo-llm-exploration-adaptation-revert.js";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "../../../..");
@@ -92,7 +93,34 @@ test("fails closed on ambiguous, cross-Subflow, and wrong-patch applied state", 
   }
 });
 
-test("rejects exactly one inert proposed target edit with a bounded two-call source run", async () => {
+test("reverts and rejects when the source run iterated past two calls within its grant", async () => {
+  const iterating = async (calls: number) => ({ ...(await fixture().control.getRunDetail()), providerCallCount: calls });
+  for (const calls of [3, FIRST_LIVE_ADAPTATION_PROFILE.budget.maxCallsPerRun]) {
+    const applied = fixture();
+    applied.control.getRunDetail = () => iterating(calls);
+    assert.equal((await revertExactAppliedExplorationTargetAdaptation(applied.control as any, "project.one", "pin")).status, "reverted");
+
+    const pending = fixture();
+    pending.target.status = "proposed";
+    pending.target.appliedMutationCount = 0;
+    pending.bootstrap.bootstrapBinding.currentExecutionDigest = "digest.created";
+    pending.control.getRunDetail = () => iterating(calls);
+    pending.control.rejectFlowAdaptation = async input => {
+      pending.calls.push(input);
+      return { ...pending.target, status: "rejected" };
+    };
+    assert.equal((await rejectExactPendingExplorationTargetAdaptation(pending.control as any, "project.one", "pin")).status, "rejected");
+  }
+});
+
+test("revert fails closed before mutation when the source run spent more than its grant", async () => {
+  const over = fixture();
+  over.control.getRunDetail = async () => ({ ...(await fixture().control.getRunDetail()), providerCallCount: FIRST_LIVE_ADAPTATION_PROFILE.budget.maxCallsPerRun + 1 });
+  await assert.rejects(() => revertExactAppliedExplorationTargetAdaptation(over.control as any, "project.one", "pin"), /source run/u);
+  assert.equal(over.calls.length, 0);
+});
+
+test("rejects exactly one inert proposed target edit with a bounded diagnosis-and-patch source run", async () => {
   const pending = fixture();
   pending.target.status = "proposed";
   pending.target.appliedMutationCount = 0;

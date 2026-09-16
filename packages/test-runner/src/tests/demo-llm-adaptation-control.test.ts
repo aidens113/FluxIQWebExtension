@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
-import { controlExistingLlmTargetAdaptation, type ExistingTargetAdaptationControl } from "../demo-llm-adaptation-control.js";
+import { DEFAULT_LLM_LAB_BUDGET } from "@fluxiq-web-extension/test-contracts";
+import { FIRST_LIVE_ADAPTATION_PROFILE } from "../demo-llm-adaptation.js";
+import { adaptationCallCountWithinGrant, controlExistingLlmTargetAdaptation, type ExistingTargetAdaptationControl } from "../demo-llm-adaptation-control.js";
 import type { ExistingFlowAdaptation, ExistingRunDetail } from "../existing-fluxiq-control.js";
 
 const scope = { projectId: "project.web", flowId: "flow.parent", subflowId: "subflow.owned" };
@@ -96,11 +100,63 @@ test("fails closed on owned Subflow or source-run contract mismatch", async () =
   ), /exactly one active LLM target adaptation/);
   assert.ok(!calls.includes("approve") && !calls.includes("apply"));
 
+  // One call cannot have produced both a diagnosis and a patch.
   const badRun = sourceRun();
   badRun.providerCallCount = 1;
   await assert.rejects(() => controlExistingLlmTargetAdaptation(
     fakeControl(target, [], undefined, badRun), scope, "private-pin", "continue",
   ), /source run does not match/);
+});
+
+test("accepts a source run that iterated past two calls within its grant", async () => {
+  for (const calls of [3, 9, FIRST_LIVE_ADAPTATION_PROFILE.budget.maxCallsPerRun]) {
+    const run = sourceRun();
+    run.providerCallCount = calls;
+    const result = await controlExistingLlmTargetAdaptation(fakeControl(target, [], undefined, run), scope, "private-pin", "continue");
+    assert.equal(result.status, "applied");
+    assert.equal(result.providerCallCount, 0);
+  }
+});
+
+test("refuses a source run above its grant or with no call count", async () => {
+  const over = sourceRun();
+  over.providerCallCount = FIRST_LIVE_ADAPTATION_PROFILE.budget.maxCallsPerRun + 1;
+  const unaccounted = sourceRun();
+  delete unaccounted.providerCallCount;
+  for (const run of [over, unaccounted]) {
+    const calls: string[] = [];
+    await assert.rejects(() => controlExistingLlmTargetAdaptation(
+      fakeControl(target, calls, undefined, run), scope, "private-pin", "continue",
+    ), /source run does not match/);
+    assert.ok(!calls.includes("approve") && !calls.includes("apply"));
+  }
+});
+
+test("an adapting run's call count is bounded by its interventions and its grant, not a fixed number", () => {
+  const interventions = sourceRun().interventions ?? [];
+  assert.equal(interventions.length, 2);
+  const ceiling = FIRST_LIVE_ADAPTATION_PROFILE.budget.maxCallsPerRun;
+  assert.equal(ceiling, DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun);
+  for (const calls of [2, 3, ceiling]) assert.equal(adaptationCallCountWithinGrant({ interventions, providerCallCount: calls }), true, `${calls} calls`);
+  for (const calls of [0, 1, ceiling + 1, 2.5, Number.NaN]) assert.equal(adaptationCallCountWithinGrant({ interventions, providerCallCount: calls }), false, `${calls} calls`);
+  assert.equal(adaptationCallCountWithinGrant({ interventions }), false);
+  assert.equal(adaptationCallCountWithinGrant({ interventions: [], providerCallCount: 1 }), true);
+  assert.equal(adaptationCallCountWithinGrant({ providerCallCount: 0 }), false);
+  // The adaptation certificate passes its diagnosis and patch records as the
+  // run's interventions; only their number is read.
+  const certified = [{ purpose: "runtime_diagnosis" }, { purpose: "runtime_patch" }];
+  for (const calls of [2, 5, ceiling]) assert.equal(adaptationCallCountWithinGrant({ interventions: certified, providerCallCount: calls }), true, `${calls} certified calls`);
+  for (const calls of [1, ceiling + 1]) assert.equal(adaptationCallCountWithinGrant({ interventions: certified, providerCallCount: calls }), false, `${calls} certified calls`);
+});
+
+test("the grant rule does not import the adaptation certificate that applies it", async () => {
+  // `demo-llm-adaptation.ts` imports this module to check the call count it
+  // certifies. An import back would close a module cycle, in which a value read
+  // at module load time is silently undefined.
+  const source = await readFile(path.resolve(import.meta.dirname, "../../src/demo-llm-adaptation-control.ts"), "utf8");
+  assert.doesNotMatch(source, /from\s+["']\.\/demo-llm-adaptation\.js["']/u);
+  const certificate = await readFile(path.resolve(import.meta.dirname, "../../src/demo-llm-adaptation.ts"), "utf8");
+  assert.match(certificate, /import \{ adaptationCallCountWithinGrant \} from "\.\/demo-llm-adaptation-control\.js";/u);
 });
 
 function fakeControl(

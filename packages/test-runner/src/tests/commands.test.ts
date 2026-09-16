@@ -62,9 +62,30 @@ test("parses explicit live LLM mode with conservative defaults", () => {
     retainRawPrompts: false, retainRawResponses: false, maxConcurrentRuns: 1,
     budget: {
       maxInputTokens: 8_000, maxOutputTokens: 2_000, maxTotalTokensPerRequest: 10_000,
-      maxCallsPerRun: 2, timeoutMs: 30_000, maxRetries: 0, maxEstimatedCostUsd: 0.25,
+      maxCallsPerRun: 26, timeoutMs: 30_000, maxRetries: 0, maxEstimatedCostUsd: 0.25,
     },
   });
+});
+
+test("live LLM CLI lets an adaptation iterate: any call count up to Core's backstop of 64", () => {
+  const adapt = ["--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "m", "--llm-task", "adapt"];
+  for (const calls of ["1", "3", "10", "64"]) {
+    const command = parseLabCommand(["run", "basic-form", ...adapt, "--llm-max-calls", calls]);
+    assert.equal(command.command === "run" ? command.llm?.budget.maxCallsPerRun : undefined, Number(calls));
+  }
+  assert.throws(() => parseLabCommand(["run", "basic-form", ...adapt, "--llm-max-calls", "65"]), /maxCallsPerRun.*from 1 to 64/su);
+  assert.throws(() => parseLabCommand(["run", "basic-form", ...adapt, "--llm-max-calls", "0"]), /maxCallsPerRun.*from 1 to 64/su);
+});
+
+test("live LLM CLI takes a run token budget only when one is typed", () => {
+  const adapt = ["--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "m", "--llm-task", "adapt"];
+  const untyped = parseLabCommand(["run", "basic-form", ...adapt]);
+  assert.equal(untyped.command === "run" && untyped.llm ? "maxTotalTokensPerRun" in untyped.llm.budget : true, false);
+  const typed = parseLabCommand(["run", "basic-form", ...adapt, "--llm-max-run-tokens", "150000"]);
+  assert.equal(typed.command === "run" ? typed.llm?.budget.maxTotalTokensPerRun : undefined, 150_000);
+  assert.throws(() => parseLabCommand(["run", "basic-form", ...adapt, "--llm-max-run-tokens", "9999"]), /maxTotalTokensPerRun.*at least one maxTotalTokensPerRequest/su);
+  assert.throws(() => parseLabCommand(["run", "basic-form", ...adapt, "--llm-max-run-tokens", "many"]), /--llm-max-run-tokens must be an integer/u);
+  assert.throws(() => parseLabCommand(["run", "basic-form", "--llm-max-run-tokens", "150000"]), /explicit --live-llm/u);
 });
 
 test("live LLM CLI fails closed without opt-in or required non-secret identity", () => {
@@ -80,7 +101,7 @@ test("live LLM CLI rejects unsafe budgets and multi-run matrices", () => {
   const base = ["--live-llm", "--llm-profile", "p", "--llm-provider", "deepseek", "--llm-model", "m", "--llm-task", "diagnose"];
   assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-total-tokens", "50001"]), /50000/);
   assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-input-tokens", "9000"]), /must cover/);
-  assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-calls", "3"]), /from 1 to 2/);
+  assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-calls", "65"]), /from 1 to 64/);
   assert.throws(() => parseLabCommand(["run", "basic-form", ...base, "--llm-max-cost-usd", "0.26"]), /0.25/);
   const lowerCost = parseLabCommand(["run", "basic-form", ...base, "--llm-max-cost-usd", "0.10"]);
   assert.equal(lowerCost.command === "run" ? lowerCost.llm?.budget.maxEstimatedCostUsd : undefined, 0.1);

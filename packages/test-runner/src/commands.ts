@@ -117,7 +117,7 @@ export function expandMatrix(command: Extract<LabCommand, { command: "matrix" }>
 const llmOptionNames = [
   "--live-llm", "--llm-profile", "--llm-provider", "--llm-model", "--llm-task",
   "--llm-max-input-tokens", "--llm-max-output-tokens", "--llm-max-total-tokens",
-  "--llm-max-calls", "--llm-timeout-ms", "--llm-max-retries", "--llm-max-cost-usd",
+  "--llm-max-calls", "--llm-max-run-tokens", "--llm-timeout-ms", "--llm-max-retries", "--llm-max-cost-usd",
 ] as const;
 
 function llmOptions(args: string[]): LlmExecutionProfile | undefined {
@@ -137,6 +137,9 @@ function llmOptions(args: string[]): LlmExecutionProfile | undefined {
   const cost = option(args, "--llm-max-cost-usd");
   const maxEstimatedCostUsd = cost === undefined ? undefined : Number(cost);
   if (maxEstimatedCostUsd !== undefined && (!Number.isFinite(maxEstimatedCostUsd) || maxEstimatedCostUsd < 0)) throw new Error("--llm-max-cost-usd must be a non-negative number");
+  // Absent unless typed: the run token budget then defaults where it is
+  // enforced, so an unset option cannot be mistaken for a chosen number.
+  const maxTotalTokensPerRun = optionalIntegerOption(args, "--llm-max-run-tokens");
   const profile: LlmExecutionProfile = {
     schemaVersion: "0.1",
     profileId,
@@ -156,6 +159,7 @@ function llmOptions(args: string[]): LlmExecutionProfile | undefined {
       maxOutputTokens: integerOption(args, "--llm-max-output-tokens", DEFAULT_LLM_LAB_BUDGET.maxOutputTokens),
       maxTotalTokensPerRequest: integerOption(args, "--llm-max-total-tokens", DEFAULT_LLM_LAB_BUDGET.maxTotalTokensPerRequest),
       maxCallsPerRun: integerOption(args, "--llm-max-calls", DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun),
+      ...(maxTotalTokensPerRun === undefined ? {} : { maxTotalTokensPerRun }),
       timeoutMs: integerOption(args, "--llm-timeout-ms", DEFAULT_LLM_LAB_BUDGET.timeoutMs),
       maxRetries: integerOption(args, "--llm-max-retries", DEFAULT_LLM_LAB_BUDGET.maxRetries),
       maxEstimatedCostUsd: maxEstimatedCostUsd ?? DEFAULT_LLM_LAB_BUDGET.maxEstimatedCostUsd,

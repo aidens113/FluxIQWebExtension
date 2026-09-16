@@ -1,6 +1,18 @@
 export const LLM_LAB_SCHEMA_VERSION = "0.1" as const;
 export const LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST = 50_000 as const;
-export const LLM_LAB_MAX_CALLS_PER_RUN = 2 as const;
+/**
+ * The most provider calls any Lab run may declare: FluxIQ Core's absolute
+ * backstop against a runaway loop (`AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_MAX_CALLS`
+ * in Core's `runtime/llm/execution-grants.ts`), mirrored because this package
+ * depends only on Core's public contracts.
+ *
+ * It is deliberately far above what an adaptation needs and is not a per-task
+ * count. An adaptation iterates for as many calls as it needs; what is meant to
+ * stop it is cost, tokens, the recovery deadline and a lack of progress. A
+ * two-call ceiling used to live here, and it made every real recovery that
+ * asked for evidence unreachable.
+ */
+export const LLM_LAB_MAX_CALLS_PER_RUN = 64 as const;
 export const LLM_LAB_MAX_ESTIMATED_COST_USD = 0.25 as const;
 
 export const llmTaskKinds = ["create-flow", "refine-recording", "edit-flow", "diagnose", "adapt"] as const;
@@ -17,6 +29,12 @@ export type LlmTokenBudget = {
   maxOutputTokens: number;
   maxTotalTokensPerRequest: number;
   maxCallsPerRun: number;
+  /**
+   * The tokens the whole run may use, across every call. Absent means the
+   * provider-side default: the smaller of `maxTotalTokensPerRequest *
+   * maxCallsPerRun` and Core's high-token confirmation threshold.
+   */
+  maxTotalTokensPerRun?: number;
   timeoutMs: number;
   maxRetries: number;
   maxEstimatedCostUsd: number;
@@ -43,7 +61,12 @@ export const DEFAULT_LLM_LAB_BUDGET: Readonly<LlmTokenBudget> = Object.freeze({
   maxInputTokens: 8_000,
   maxOutputTokens: 2_000,
   maxTotalTokensPerRequest: 10_000,
-  maxCallsPerRun: 2,
+  // What an iterating run declares when the operator names no call count:
+  // Core's `AUTOMATION_STUDIO_LLM_EXECUTION_GRANT_DEFAULT_MAX_CALLS` -- a
+  // diagnosis, a patch, and the exploration's own default ceiling of 24
+  // decisions. Tokens are bounded separately, by `maxTotalTokensPerRun`, so a
+  // larger count does not by itself raise what a run may spend.
+  maxCallsPerRun: 26,
   timeoutMs: 30_000,
   maxRetries: 0,
   maxEstimatedCostUsd: LLM_LAB_MAX_ESTIMATED_COST_USD,

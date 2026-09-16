@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
+import { LLM_LAB_MAX_CALLS_PER_RUN } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "./failure.js";
+import type { PersistedFlowLlmExecution } from "./flow-lane/index.js";
 import { FluxIQControlClient, type FluxIQHttpOptions } from "./http-control/index.js";
 
 type JsonRecord = Record<string, unknown>;
@@ -26,7 +28,40 @@ export type ExistingRunLlmGate = { invoked: boolean; reason?: string; code?: str
  * intervention record can omit its token usage, this does not.
  */
 export type ExistingRunLlmAccounting = { calls: number; inputTokens: number; outputTokens: number; totalTokens: number; estimatedCostUsd: number; budgetBreaches: number; pendingCalls: number };
-export type ExistingRunDetail = { summary: ExistingRunSummary; routeDecisions: ExistingRouteDecision[]; subflows: ExistingSubflowExecution[]; actionAttempts: ExistingRunAction[]; interventions?: ExistingRunIntervention[]; runtimePatchAttempts?: ExistingRuntimePatchAttempt[]; adaptationIds?: string[]; changeProposalIds?: string[]; providerCallCount?: number; llmGate?: ExistingRunLlmGate; llmAccounting?: ExistingRunLlmAccounting };
+/**
+ * One provider call, as Core itemizes it on the run
+ * (`metadata.llmGate.providerCalls`), in the order Core counted the calls.
+ * Identifiers, codes and numbers only. `inputTokens` through
+ * `estimatedCostUsd` are what the provider reported, `null` wherever it
+ * reported nothing; `charged` is what Core put on the run's account, which is
+ * the call's reservation wherever `charged.tokens` or `charged.cost` says
+ * `reserved`. The `charged` figures add up to `ExistingRunLlmAccounting`.
+ */
+export type ExistingRunProviderCall = {
+  sequence: number;
+  requestId: string;
+  taskKind: string | null;
+  stage: string | null;
+  allowance: "run" | "exploration";
+  promptVersion: string | null;
+  provider: string | null;
+  model: string | null;
+  validationOk: boolean | null;
+  validationCodes: string[];
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+  estimatedCostUsd: number | null;
+  charged: { inputTokens: number; outputTokens: number; totalTokens: number; estimatedCostUsd: number; tokens: "reported" | "reserved"; cost: "reported" | "reserved" };
+  budgetBreach: boolean;
+};
+/**
+ * `providerCalls` is absent when Core itemized no calls -- a run that never
+ * reached the model, or a Core older than per-call records -- and then nothing
+ * here says what each call was. `providerCallsOmitted` is present exactly when
+ * `providerCalls` is: the calls Core counted past its own record limit.
+ */
+export type ExistingRunDetail = { summary: ExistingRunSummary; routeDecisions: ExistingRouteDecision[]; subflows: ExistingSubflowExecution[]; actionAttempts: ExistingRunAction[]; interventions?: ExistingRunIntervention[]; runtimePatchAttempts?: ExistingRuntimePatchAttempt[]; adaptationIds?: string[]; changeProposalIds?: string[]; providerCallCount?: number; llmGate?: ExistingRunLlmGate; llmAccounting?: ExistingRunLlmAccounting; providerCalls?: ExistingRunProviderCall[]; providerCallsOmitted?: number };
 export type ExistingFlowSubflow = { subflowId: string; flowId: string; projectId: string; graphFlowId?: string; name: string; status: string; role: string };
 export type ExistingFlowRouter = { routerId: string; flowId: string; projectId: string; fallback?: { kind: string; subflowId?: string }; rules: Array<{ ruleId: string; target?: { kind?: string; subflowId?: string } }> };
 export type ExistingFlowAdaptationSummary = { adaptationId: string; flowId: string; projectId: string; status: string };
@@ -275,7 +310,7 @@ export class ExistingFluxIQControlClient extends FluxIQControlClient {
    * any adaptive mode but `manual_approval`, and revokes the grant when it sees
    * one, so those fields are omitted here rather than left to a caller.
    */
-  async runPersistedFlow(input: { projectId: string; flowId: string; runId?: string; inputs?: JsonRecord; maxSteps?: number; authorizedDomainIds?: string[]; idempotencyKey?: string; llmExecution?: { grantId: string; purpose: "diagnosis_only" | "diagnose_and_adapt" } } & FluxIQHttpOptions): Promise<{ session: ExistingRuntimeSession; summary?: ExistingRunSummary }> {
+  async runPersistedFlow(input: { projectId: string; flowId: string; runId?: string; inputs?: JsonRecord; maxSteps?: number; authorizedDomainIds?: string[]; idempotencyKey?: string; llmExecution?: PersistedFlowLlmExecution } & FluxIQHttpOptions): Promise<{ session: ExistingRuntimeSession; summary?: ExistingRunSummary }> {
     if (input.llmExecution && (input.runId || input.idempotencyKey || input.authorizedDomainIds?.length)) {
       throw new RunnerFailure("runtime.behavior", "A live LLM run cannot carry a pre-started run id, an idempotency key, or an authorized domain");
     }
@@ -315,8 +350,9 @@ export class ExistingFluxIQControlClient extends FluxIQControlClient {
     const providerCallCount = costAccounting?.calls === undefined ? undefined : integer(costAccounting.calls, "runDetail.metadata.llmGate.costAccounting.calls");
     const gate = llmGate === undefined ? undefined : runLlmGate(llmGate);
     const accounting = costAccounting === undefined ? undefined : runLlmAccounting(costAccounting);
+    const callRecords = llmGate === undefined ? undefined : runProviderCalls(llmGate);
     const runtimePatchAttempts = array(metadata?.runtimePatchAttempts ?? [], "runDetail.metadata.runtimePatchAttempts").map((value, index) => runtimePatchAttempt(value, `runDetail.metadata.runtimePatchAttempts[${index}]`));
-    return { summary, routeDecisions, subflows, actionAttempts: actions, interventions, runtimePatchAttempts, adaptationIds, changeProposalIds, ...(providerCallCount === undefined ? {} : { providerCallCount }), ...(gate === undefined ? {} : { llmGate: gate }), ...(accounting === undefined ? {} : { llmAccounting: accounting }) };
+    return { summary, routeDecisions, subflows, actionAttempts: actions, interventions, runtimePatchAttempts, adaptationIds, changeProposalIds, ...(providerCallCount === undefined ? {} : { providerCallCount }), ...(gate === undefined ? {} : { llmGate: gate }), ...(accounting === undefined ? {} : { llmAccounting: accounting }), ...(callRecords === undefined ? {} : { providerCalls: callRecords.calls, providerCallsOmitted: callRecords.omitted }) };
   }
 
   async listFlowRuns(projectId: string, flowId: string): Promise<ExistingRunSummary[]> {
@@ -381,7 +417,9 @@ function flowAdaptation(value: unknown, at: string, projectId: string, flowId: s
   } : undefined;
   if (evidenceLoop && (
     (evidenceLoop.providerCallCount === undefined) !== (evidenceLoop.decisionCount === undefined)
-    || (evidenceLoop.providerCallCount !== undefined && (evidenceLoop.providerCallCount < 1 || evidenceLoop.providerCallCount > 16))
+    // Evidence-guided creation iterates for as many calls as it needs, so the
+    // only call ceiling a record can be held to is Core's runaway backstop.
+    || (evidenceLoop.providerCallCount !== undefined && (evidenceLoop.providerCallCount < 1 || evidenceLoop.providerCallCount > LLM_LAB_MAX_CALLS_PER_RUN))
     || (evidenceLoop.providerCallCount !== undefined && evidenceLoop.decisionCount !== evidenceLoop.providerCallCount)
     || (evidenceLoop.traceStepCount !== undefined && evidenceLoop.traceStepCount !== evidenceLoop.iterationCount)
     || (evidenceLoop.providerCallCount !== undefined && (evidenceLoop.iterationCount < evidenceLoop.providerCallCount || evidenceLoop.iterationCount > evidenceLoop.providerCallCount + 1))
@@ -480,6 +518,78 @@ function runLlmAccounting(value: JsonRecord): ExistingRunLlmAccounting {
     budgetBreaches: integer(value.budgetBreaches ?? 0, `${at}.budgetBreaches`),
     pendingCalls: integer(value.pendingCalls ?? 0, `${at}.pendingCalls`),
   };
+}
+
+/**
+ * The most per-call lines one run detail may carry: Core's own record limit
+ * (`AUTOMATION_STUDIO_LLM_RUN_CALL_RECORD_LIMIT`, equal to its call backstop).
+ */
+const MAX_RUN_PROVIDER_CALLS = 250;
+
+/**
+ * Core's per-call lines, or `undefined` when it published none. A line that
+ * is out of order, out of bounds, or carries anything but identifiers, codes
+ * and numbers makes the whole response malformed rather than being skipped: a
+ * skipped call is exactly the silent gap these lines exist to close.
+ */
+function runProviderCalls(gate: JsonRecord): { calls: ExistingRunProviderCall[]; omitted: number } | undefined {
+  const at = "runDetail.metadata.llmGate.providerCalls";
+  if (gate.providerCalls === undefined && gate.providerCallsOmitted === undefined) return undefined;
+  const lines = array(gate.providerCalls, at);
+  if (lines.length > MAX_RUN_PROVIDER_CALLS) invalid(`${at} exceeds ${MAX_RUN_PROVIDER_CALLS} entries`);
+  const omitted = integer(gate.providerCallsOmitted, "runDetail.metadata.llmGate.providerCallsOmitted");
+  const identifier = (value: unknown, field: string): string | null => {
+    if (value === null) return null;
+    const parsed = text(value, field);
+    if (parsed.length > 200 || !/^[A-Za-z0-9][A-Za-z0-9._:+-]*$/u.test(parsed)) invalid(`${field} is invalid`);
+    return parsed;
+  };
+  const nullableCount = (value: unknown, field: string): number | null => value === null ? null : integer(value, field);
+  const nonNegative = (value: unknown, field: string): number => {
+    const parsed = finite(value, field);
+    if (parsed < 0) invalid(`${field} must be non-negative`);
+    return parsed;
+  };
+  const basis = (value: unknown, field: string) => enumeration(value, ["reported", "reserved"] as const, field);
+  const calls = lines.map((value, index): ExistingRunProviderCall => {
+    const path = `${at}[${index}]`;
+    const line = record(value, path);
+    if (integer(line.sequence, `${path}.sequence`) !== index + 1) invalid(`${path}.sequence is out of order`);
+    const requestId = identifier(line.requestId, `${path}.requestId`);
+    if (requestId === null) invalid(`${path}.requestId is required`);
+    const validation = line.validation === null ? null : record(line.validation, `${path}.validation`);
+    const codes = validation === null ? [] : stringArray(validation.issueCodes, `${path}.validation.issueCodes`);
+    if (codes.length > 16 || codes.some(code => !/^[a-z][a-z0-9_.-]{0,127}$/u.test(code))) invalid(`${path}.validation.issueCodes is invalid`);
+    const reported = record(line.reported, `${path}.reported`);
+    const charged = record(line.charged, `${path}.charged`);
+    return {
+      sequence: index + 1,
+      requestId,
+      taskKind: identifier(line.taskKind, `${path}.taskKind`),
+      stage: identifier(line.stage, `${path}.stage`),
+      allowance: enumeration(line.allowance, ["run", "exploration"] as const, `${path}.allowance`),
+      promptVersion: identifier(line.promptVersion, `${path}.promptVersion`),
+      provider: identifier(line.provider, `${path}.provider`),
+      model: identifier(line.model, `${path}.model`),
+      validationOk: validation === null ? null : boolean(validation.ok, `${path}.validation.ok`),
+      validationCodes: codes,
+      inputTokens: nullableCount(reported.inputTokens, `${path}.reported.inputTokens`),
+      outputTokens: nullableCount(reported.outputTokens, `${path}.reported.outputTokens`),
+      totalTokens: nullableCount(reported.totalTokens, `${path}.reported.totalTokens`),
+      estimatedCostUsd: reported.estimatedCostUsd === null ? null : nonNegative(reported.estimatedCostUsd, `${path}.reported.estimatedCostUsd`),
+      charged: {
+        inputTokens: integer(charged.inputTokens, `${path}.charged.inputTokens`),
+        outputTokens: integer(charged.outputTokens, `${path}.charged.outputTokens`),
+        totalTokens: integer(charged.totalTokens, `${path}.charged.totalTokens`),
+        estimatedCostUsd: nonNegative(charged.estimatedCostUsd, `${path}.charged.estimatedCostUsd`),
+        tokens: basis(charged.tokens, `${path}.charged.tokens`),
+        cost: basis(charged.cost, `${path}.charged.cost`),
+      },
+      budgetBreach: boolean(line.budgetBreach, `${path}.budgetBreach`),
+    };
+  });
+  if (new Set(calls.map(call => call.requestId)).size !== calls.length) invalid(`${at} repeats a request`);
+  return { calls, omitted };
 }
 
 /**

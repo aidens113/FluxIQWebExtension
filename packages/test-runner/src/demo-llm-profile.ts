@@ -1,4 +1,5 @@
 import {
+  DEFAULT_LLM_LAB_BUDGET,
   LLM_LAB_SCHEMA_VERSION,
   assertLlmExecutionProfile,
   type LlmExecutionProfile,
@@ -8,9 +9,12 @@ import {
 export const DEMO_LLM_PROFILE_NAMES = ["production", "conservative"] as const;
 export type DemoLlmProfileName = (typeof DEMO_LLM_PROFILE_NAMES)[number];
 
+// A profile's call count is a ceiling a run may iterate up to, not a count it
+// must make, so both take the Lab's default rather than a fixed two. Cost and
+// tokens are what these profiles differ on, and what is meant to bound a run.
 const PROFILE_BUDGETS: Readonly<Record<DemoLlmProfileName, Readonly<LlmTokenBudget>>> = Object.freeze({
-  production: Object.freeze({ maxInputTokens: 42_000, maxOutputTokens: 8_000, maxTotalTokensPerRequest: 50_000, maxCallsPerRun: 2, timeoutMs: 60_000, maxRetries: 0, maxEstimatedCostUsd: 0.25 }),
-  conservative: Object.freeze({ maxInputTokens: 12_000, maxOutputTokens: 4_000, maxTotalTokensPerRequest: 16_000, maxCallsPerRun: 2, timeoutMs: 60_000, maxRetries: 0, maxEstimatedCostUsd: 0.25 }),
+  production: Object.freeze({ maxInputTokens: 42_000, maxOutputTokens: 8_000, maxTotalTokensPerRequest: 50_000, maxCallsPerRun: DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun, timeoutMs: 60_000, maxRetries: 0, maxEstimatedCostUsd: 0.25 }),
+  conservative: Object.freeze({ maxInputTokens: 12_000, maxOutputTokens: 4_000, maxTotalTokensPerRequest: 16_000, maxCallsPerRun: DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun, timeoutMs: 60_000, maxRetries: 0, maxEstimatedCostUsd: 0.25 }),
 });
 
 export const DEFAULT_DEMO_LLM_CREATION_PROFILE = createProfile("production", PROFILE_BUDGETS.production);

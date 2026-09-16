@@ -5,17 +5,35 @@
 // limit below is at or inside the profile's own, so a cap the operator typed
 // can only ever bind harder, never less.
 
-import { type LlmExecutionProfile, type LlmTaskKind, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
+import { LLM_LAB_MAX_CALLS_PER_RUN, type LlmExecutionProfile, type LlmTaskKind, type LlmTokenBudget } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../failure.js";
 
-/** Core's grant purposes the Lab can ask for, and the exact call count each one authorizes. */
-const PURPOSE_CALLS = { diagnosis_only: 1, diagnose_and_adapt: 2 } as const;
-export type LiveLlmPurpose = keyof typeof PURPOSE_CALLS;
+/**
+ * The grant purposes a Core runtime session accepts
+ * (`AUTOMATION_STUDIO_RUNTIME_SESSION_GRANT_PURPOSES`), and whether each one
+ * iterates. That yes-or-no is all a purpose says about call counts, as it is in
+ * Core: `diagnosis_only` asks one question, and everything else takes its count
+ * from the operator. The purposes differ in what a run may *change*, which is
+ * Core's to enforce, not in how many times it may ask.
+ */
+const PURPOSE_ITERATES = { diagnosis_only: false, diagnose_and_adapt: true, explore_and_adapt: true } as const;
+export type LiveLlmPurpose = keyof typeof PURPOSE_ITERATES;
 
 /** Core's own ceilings (`assertFlowLlmExecutionSettings`, `AutomationStudioLlmExecutionGrantService`). */
 const CORE_MAX_TOKENS = 50_000;
 const CORE_MAX_TIMEOUT_MS = 25_000;
 const CORE_MAX_COST_USD = 0.25;
+/** Core's ceiling on a grant's total estimated cost (`MAX_TOTAL_COST_USD`), whatever its call count. */
+const CORE_MAX_TOTAL_COST_USD = 2;
+/** Core's runaway backstop on a grant's calls; the Lab contract carries the same number. */
+const CORE_MAX_CALLS = LLM_LAB_MAX_CALLS_PER_RUN;
+/**
+ * `AUTOMATION_STUDIO_LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD`. Core issues a grant
+ * whose run token budget (`maxTotalTokensPerRun`) is above this only when the
+ * request confirms the exposure, and it also caps the budget Core chooses when a
+ * request names none.
+ */
+const CORE_HIGH_TOKEN_CONFIRMATION_THRESHOLD = 100_000;
 
 export type LiveLlmPlan = {
   profileId: string;
@@ -23,11 +41,46 @@ export type LiveLlmPlan = {
   model: "deepseek-chat";
   task: LlmTaskKind;
   purpose: LiveLlmPurpose;
-  /** The grant's call count: exactly what the purpose authorizes, never more than the profile allows. */
+  /**
+   * The grant's call count. One for a purpose that does not iterate; otherwise
+   * exactly the operator's `--llm-max-calls`, which is never above Core's
+   * backstop. Never more than the profile allows.
+   */
   maxCalls: number;
   tokenLimits: { maxInputTokens: number; maxOutputTokens: number; maxTotalTokens: number };
+  /**
+   * The tokens the whole run may use, sent to Core as the grant's
+   * `maxTotalTokensPerRun`: the operator's `--llm-max-run-tokens`, held to what
+   * the authorized calls could use, or without one Core's own default -- the
+   * smaller of that and Core's confirmation threshold. Always sent, so the
+   * post-run check judges the number Core was asked for rather than a guess at
+   * the one it chose.
+   */
+  maxTotalTokensPerRun: number;
   timeoutMs: number;
   maxEstimatedCostUsd: number;
+  /**
+   * The estimated cost the whole run may reach, sent to Core as the grant's
+   * `maxTotalEstimatedCostUsd`: the per-call limit across the authorized calls,
+   * held to Core's ceiling -- Core's own default, made explicit so the post-run
+   * check judges the number Core enforces rather than a larger product of it.
+   */
+  maxTotalEstimatedCostUsd: number;
+  /**
+   * Core's high-token consent, decided from the run token budget above. The
+   * explicit `--live-llm` and the budget typed with it are the confirmation, so
+   * the grant request carries it exactly when Core would otherwise refuse, and
+   * never when it would not.
+   */
+  highTokenConfirmation: {
+    /** Whether the grant request carries `highTokenConfirmation: true`. */
+    required: boolean;
+    /** `maxTotalTokensPerRun`, the figure Core compares. */
+    authorizedTokens: number;
+    threshold: number;
+    /** One sentence saying why, for the run's live-LLM snapshot. */
+    reason: string;
+  };
   /** The budget the operator asked for, kept verbatim so the post-run check judges their numbers, not Core's. */
   declared: LlmTokenBudget;
 };
@@ -45,8 +98,10 @@ export function planLiveLlmExecution(profile: LlmExecutionProfile): LiveLlmPlan 
   const purpose = purposeOf(profile.task);
   const budget = profile.budget;
   if (budget.maxRetries !== 0) throw refusal(`--llm-max-retries ${budget.maxRetries} is unsupported; a live provider run permits no retries`);
-  const maxCalls = PURPOSE_CALLS[purpose];
-  if (budget.maxCallsPerRun < maxCalls) throw refusal(`--llm-max-calls ${budget.maxCallsPerRun} cannot authorize the ${maxCalls} provider call(s) --llm-task ${profile.task} requires`);
+  // The operator's number is checked whatever the purpose, so a cap outside
+  // Core's range is refused even where the purpose then asks for less.
+  const declaredCalls = bounded(budget.maxCallsPerRun, "--llm-max-calls", CORE_MAX_CALLS);
+  const maxCalls = PURPOSE_ITERATES[purpose] ? declaredCalls : 1;
   const tokenLimits = {
     maxInputTokens: bounded(budget.maxInputTokens, "--llm-max-input-tokens", CORE_MAX_TOKENS),
     maxOutputTokens: bounded(budget.maxOutputTokens, "--llm-max-output-tokens", CORE_MAX_TOKENS),
@@ -55,10 +110,12 @@ export function planLiveLlmExecution(profile: LlmExecutionProfile): LiveLlmPlan 
   if (tokenLimits.maxInputTokens + tokenLimits.maxOutputTokens > tokenLimits.maxTotalTokens) {
     throw refusal("--llm-max-input-tokens plus --llm-max-output-tokens exceeds --llm-max-total-tokens");
   }
+  const runTokens = runTokenBudget(budget.maxTotalTokensPerRun, tokenLimits.maxTotalTokens, maxCalls);
   if (!Number.isSafeInteger(budget.timeoutMs) || budget.timeoutMs < 1) throw refusal(`--llm-timeout-ms ${budget.timeoutMs} must be a positive integer`);
   if (!Number.isFinite(budget.maxEstimatedCostUsd) || budget.maxEstimatedCostUsd <= 0) {
     throw refusal(`--llm-max-cost-usd ${budget.maxEstimatedCostUsd} cannot authorize a live provider call; give a positive limit at or below ${CORE_MAX_COST_USD}`);
   }
+  const maxEstimatedCostUsd = Math.min(budget.maxEstimatedCostUsd, CORE_MAX_COST_USD);
   return {
     profileId: profile.profileId,
     provider: "deepseek",
@@ -67,14 +124,57 @@ export function planLiveLlmExecution(profile: LlmExecutionProfile): LiveLlmPlan 
     purpose,
     maxCalls,
     tokenLimits,
+    maxTotalTokensPerRun: runTokens.tokens,
     // Both clamp downward only: Core refuses anything above its own ceiling,
     // and an operator who asked for less than the ceiling keeps their number.
     timeoutMs: Math.min(budget.timeoutMs, CORE_MAX_TIMEOUT_MS),
-    maxEstimatedCostUsd: Math.min(budget.maxEstimatedCostUsd, CORE_MAX_COST_USD),
+    maxEstimatedCostUsd,
+    maxTotalEstimatedCostUsd: Math.min(CORE_MAX_TOTAL_COST_USD, maxEstimatedCostUsd * maxCalls),
+    highTokenConfirmation: highTokenConfirmation(runTokens),
     declared: { ...budget },
   };
 }
 
+type RunTokenBudget = { tokens: number; source: string };
+
+/**
+ * The run's token budget and where it came from. It only ever moves down: a
+ * typed budget above what the authorized calls could use is held to that, and
+ * one that cannot cover a single request is refused rather than raised.
+ */
+function runTokenBudget(declared: number | undefined, perCall: number, calls: number): RunTokenBudget {
+  const exposure = perCall * calls;
+  const exposureText = `--llm-max-total-tokens ${perCall} x ${calls} authorized call(s) = ${exposure}`;
+  if (declared === undefined) {
+    // Core's formula, exactly. The outer `max` cannot bind here, since a
+    // request is at most 50,000 tokens, but a copy that differs is a copy that
+    // will drift.
+    return {
+      tokens: Math.max(perCall, Math.min(exposure, CORE_HIGH_TOKEN_CONFIRMATION_THRESHOLD)),
+      source: `Core's default: the smaller of ${exposureText} and ${CORE_HIGH_TOKEN_CONFIRMATION_THRESHOLD}`,
+    };
+  }
+  if (!Number.isSafeInteger(declared) || declared < perCall) {
+    throw refusal(`--llm-max-run-tokens ${declared} must be a whole number of at least --llm-max-total-tokens ${perCall}`);
+  }
+  if (declared > exposure) return { tokens: exposure, source: `--llm-max-run-tokens ${declared}, held to ${exposureText}` };
+  return { tokens: declared, source: `--llm-max-run-tokens ${declared}` };
+}
+
+function highTokenConfirmation(budget: RunTokenBudget): LiveLlmPlan["highTokenConfirmation"] {
+  const threshold = CORE_HIGH_TOKEN_CONFIRMATION_THRESHOLD;
+  const required = budget.tokens > threshold;
+  const subject = `The run token budget of ${budget.tokens} (${budget.source})`;
+  const reason = required
+    ? `${subject} is above Core's ${threshold}-token confirmation threshold; the explicit --live-llm budget is the operator's confirmation.`
+    : `${subject} is within Core's ${threshold}-token confirmation threshold; no confirmation is needed.`;
+  return { required, authorizedTokens: budget.tokens, threshold, reason };
+}
+
+// `adapt` stays the narrow `diagnose_and_adapt` grant, which now iterates and
+// may gather evidence but may still change only one target, as a proposal.
+// `explore_and_adapt` is a purpose the Lab can plan and carry, and no
+// `--llm-task` selects it yet.
 function purposeOf(task: LlmTaskKind): LiveLlmPurpose {
   if (task === "diagnose") return "diagnosis_only";
   if (task === "adapt") return "diagnose_and_adapt";

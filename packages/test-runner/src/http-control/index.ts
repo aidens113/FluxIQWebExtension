@@ -147,7 +147,15 @@ export class FluxIQControlClient {
   protected async request(path: string, body?: unknown, category: RunnerFailureCategory = "process.startup", method = "POST", bounds: FluxIQHttpOptions = {}, operationStage: FluxIQHttpOperationStage = "control.request"): Promise<unknown> {
     const response = await this.authenticatedResponse(path, body, method, bounds, category, true, operationStage);
     const payload = await response.json().catch(() => undefined);
-    if (!response.ok) throw new RunnerFailure(category, `FluxIQ control request failed: ${path} (${response.status})`, { details: { path, status: response.status } });
+    if (!response.ok) {
+      // Core answers a refusal with `{ ok: false, error }`. Discarding it left a
+      // refused grant reading as a bare "(400)", so a live run that failed
+      // before its first provider call could not say why. The reason is kept,
+      // bounded, and travels with the failure; the run's redaction attestation
+      // still scans everything a failure writes.
+      const reason = controlRefusalReason(payload);
+      throw new RunnerFailure(category, `FluxIQ control request failed: ${path} (${response.status})${reason ? `: ${reason}` : ""}`, { details: { path, status: response.status, ...(reason ? { reason } : {}) } });
+    }
     return payload;
   }
 
@@ -262,4 +270,17 @@ function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
     const timer = setTimeout(resolve, ms);
     signal?.addEventListener("abort", () => { clearTimeout(timer); reject(signal.reason); }, { once: true });
   });
+}
+
+/** The longest refusal reason a control failure carries. Core's are one sentence. */
+const CONTROL_REFUSAL_REASON_MAX_LENGTH = 300;
+
+/** Core's refusal sentence from an error response, bounded, or `undefined` when it gave none. */
+export function controlRefusalReason(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return undefined;
+  const error = (payload as { error?: unknown }).error;
+  if (typeof error !== "string") return undefined;
+  const reason = error.replace(/\s+/gu, " ").trim();
+  if (!reason) return undefined;
+  return reason.length > CONTROL_REFUSAL_REASON_MAX_LENGTH ? `${reason.slice(0, CONTROL_REFUSAL_REASON_MAX_LENGTH)}...` : reason;
 }

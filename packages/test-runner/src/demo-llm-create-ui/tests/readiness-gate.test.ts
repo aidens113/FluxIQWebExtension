@@ -26,7 +26,9 @@ test("Phase 3 UI driver pins exact one-call limits and explicit review actions",
   assert.doesNotMatch(source, /key\.fill\("Testing Lab DeepSeek"\)/u);
   assert.doesNotMatch(source, /rawPrompt|rawResponse|DEEPSEEK_API_KEY|recordDemoWorkspace/u);
   assert.match(source, /configureCreationLimitsViaUi\(page, flowTreeItemId, pin, evidence, FIRST_LIVE_CREATION_LIMITS\)/u);
-  for (const limit of ["maxInputTokens", "maxOutputTokens", "maxTotalTokens", "maxCalls", "timeoutSeconds", "maxEstimatedCostUsd", "providerRetries"]) assert.match(source, new RegExp(`limits\\.${limit}`, "u"));
+  for (const limit of ["maxInputTokens", "maxOutputTokens", "maxTotalTokens", "timeoutSeconds", "maxEstimatedCostUsd", "providerRetries"]) assert.match(source, new RegExp(`limits\\.${limit}`, "u"));
+  // Flow Settings has no call limit, so the driver never types or reads one.
+  assert.doesNotMatch(source, /limits\.maxCalls|max calls/iu);
   assert.doesNotMatch(source, /\["Output tokens", "512"\]|outputTokens > 512|totalTokens > 3000/u);
   const readinessGate = source.indexOf("assertProviderFreeGenerationReadiness(input.page, input.evidence)");
   const sessionSync = source.indexOf("generation-session-sync");

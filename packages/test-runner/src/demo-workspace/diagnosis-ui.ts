@@ -156,7 +156,14 @@ export async function ensureLlmDiagnosisInstructionViaUi(page: Page, flowTreeIte
   });
 }
 
-export async function configureFirstLiveDiagnosisViaUi(page: Page, flowTreeItemId: string, pin: string, evidence: BrowserEvidenceRecorder, maxCalls = "1"): Promise<void> {
+/**
+ * Saves the Flow's LLM connection and per-request limits through Flow Settings.
+ * The form has no call limit: a diagnosis is always exactly one provider call,
+ * and an adapting run iterates for as many calls as it needs within Core's
+ * cost, token, deadline and no-progress guards. The two paths differ only in
+ * their per-request token limits.
+ */
+export async function configureFirstLiveDiagnosisViaUi(page: Page, flowTreeItemId: string, pin: string, evidence: BrowserEvidenceRecorder, run: "diagnosis" | "adaptation" = "diagnosis"): Promise<void> {
   const hierarchy = page.getByRole("complementary", { name: "Project hierarchy" });
   const search = hierarchy.getByRole("searchbox", { name: "Search project hierarchy" });
   await evidence.step("panel", "llm-settings-search", "Search the exact Flow hierarchy for Settings", () => search.fill("Settings"));
@@ -195,10 +202,10 @@ export async function configureFirstLiveDiagnosisViaUi(page: Page, flowTreeItemI
     await key.fill(TESTING_LAB_DEEPSEEK_KEY_NAME);
     await workspace.getByRole("option", { name: new RegExp("^" + escapeRegExp(TESTING_LAB_DEEPSEEK_KEY_NAME)) }).click();
   });
-  const tokenValues = maxCalls === "2"
-    ? [String(FIRST_LIVE_ADAPTATION_PROFILE.budget.maxInputTokens), String(FIRST_LIVE_ADAPTATION_PROFILE.budget.maxOutputTokens), String(FIRST_LIVE_ADAPTATION_PROFILE.budget.maxTotalTokensPerRequest)] as const
-    : ["2000", "512", "3000"] as const;
-  for (const [label, value] of [["Input tokens", tokenValues[0]], ["Output tokens", tokenValues[1]], ["Total tokens", tokenValues[2]], ["Max calls", maxCalls], ["Timeout (seconds)", "20"], ["Max cost (USD)", "0.25"], ["Provider retries", "0"]] as const) {
+  const runLimits: ReadonlyArray<readonly [string, string]> = run === "adaptation"
+    ? [["Input tokens", String(FIRST_LIVE_ADAPTATION_PROFILE.budget.maxInputTokens)], ["Output tokens", String(FIRST_LIVE_ADAPTATION_PROFILE.budget.maxOutputTokens)], ["Total tokens", String(FIRST_LIVE_ADAPTATION_PROFILE.budget.maxTotalTokensPerRequest)]]
+    : [["Input tokens", "2000"], ["Output tokens", "512"], ["Total tokens", "3000"]];
+  for (const [label, value] of [...runLimits, ["Timeout (seconds)", "20"], ["Max cost (USD)", "0.25"], ["Provider retries", "0"]] as const) {
     const input = llmSection.getByLabel(label, { exact: true });
     if (await input.count() !== 1) throw new RunnerFailure("runtime.behavior", "An exact bounded LLM setting field is unavailable");
     await evidence.step("panel", "llm-settings-" + label.toLowerCase().replace(/[^a-z]+/gu, "-"), `Set ${label} to its first-live bound`, () => input.fill(value));

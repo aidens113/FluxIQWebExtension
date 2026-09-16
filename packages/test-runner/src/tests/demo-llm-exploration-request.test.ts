@@ -21,7 +21,9 @@ test("defaults to the certified instruction-only fixture and emits content-free 
   assert.equal(readiness.exactOriginRequired, true);
   assert.equal(readiness.recorderRequiredIdle, true);
   assert.equal(readiness.manualReviewRequired, true);
-  assert.equal(readiness.providerBudget.maxCalls, 4);
+  assert.equal("maxCalls" in readiness.providerBudget, false);
+  assert.equal(readiness.providerBudget.maxTotalTokensPerRun, 100_000);
+  assert.equal(readiness.providerBudget.runLeaseSeconds, 600);
   assert.equal(readiness.providerBudget.maxTotalEstimatedCostUsd, 1);
   assert.equal(JSON.stringify(readiness).includes(BLANK_LLM_INSTRUCTION_BODY), false);
 });

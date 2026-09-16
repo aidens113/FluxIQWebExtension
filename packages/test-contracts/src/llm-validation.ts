@@ -154,7 +154,7 @@ export function validateLlmRunEvaluation(input: unknown): ValidationResult<LlmRu
 
 function checkBudget(input: unknown, path: string, issues: ValidationIssue[], dry: boolean): void {
   const value = object(input, path, issues); if (!value) return;
-  keys(value, ["maxInputTokens", "maxOutputTokens", "maxTotalTokensPerRequest", "maxCallsPerRun", "timeoutMs", "maxRetries", "maxEstimatedCostUsd"], path, issues);
+  keys(value, ["maxInputTokens", "maxOutputTokens", "maxTotalTokensPerRequest", "maxCallsPerRun", "maxTotalTokensPerRun", "timeoutMs", "maxRetries", "maxEstimatedCostUsd"], path, issues);
   finite(value.maxInputTokens, path + ".maxInputTokens", issues, 1, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, true);
   finite(value.maxOutputTokens, path + ".maxOutputTokens", issues, 1, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, true);
   finite(value.maxTotalTokensPerRequest, path + ".maxTotalTokensPerRequest", issues, 1, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST, true);
@@ -164,7 +164,18 @@ function checkBudget(input: unknown, path: string, issues: ValidationIssue[], dr
   finite(value.maxEstimatedCostUsd, path + ".maxEstimatedCostUsd", issues, 0, LLM_LAB_MAX_ESTIMATED_COST_USD);
   if (typeof value.maxInputTokens === "number" && typeof value.maxOutputTokens === "number" && typeof value.maxTotalTokensPerRequest === "number" && value.maxInputTokens + value.maxOutputTokens > value.maxTotalTokensPerRequest) add(issues, path + ".maxTotalTokensPerRequest", "must cover maxInputTokens plus maxOutputTokens");
   if (dry && value.maxCallsPerRun !== 0) add(issues, path + ".maxCallsPerRun", "must equal 0 in deterministic-dry mode");
+  if (value.maxTotalTokensPerRun !== undefined) {
+    if (dry) add(issues, path + ".maxTotalTokensPerRun", "must be absent in deterministic-dry mode");
+    else checkRunTokens(value.maxTotalTokensPerRun, value.maxTotalTokensPerRequest, value.maxCallsPerRun, path + ".maxTotalTokensPerRun", issues);
+  }
   if (!dry && typeof value.maxCallsPerRun === "number" && typeof value.maxRetries === "number" && 1 + value.maxRetries > value.maxCallsPerRun) add(issues, path + ".maxRetries", "retries must fit within maxCallsPerRun");
+}
+/** A run's token budget covers at least one full request and no more than every authorized request could use. */
+function checkRunTokens(input: unknown, perRequest: unknown, calls: unknown, path: string, issues: ValidationIssue[]): void {
+  finite(input, path, issues, 1, LLM_ABSOLUTE_MAX_TOTAL_TOKENS_PER_REQUEST * LLM_LAB_MAX_CALLS_PER_RUN, true);
+  if (typeof input !== "number" || typeof perRequest !== "number" || typeof calls !== "number") return;
+  if (input < perRequest) add(issues, path, "must cover at least one maxTotalTokensPerRequest");
+  if (input > perRequest * calls) add(issues, path, "must not exceed maxTotalTokensPerRequest times maxCallsPerRun");
 }
 const safeIdentifierPattern = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/u;
 const secretLikeIdentifierPattern = /^(?:(?:sk|dsk|key|token|secret)[-_][A-Za-z0-9_-]{8,}|(?:bearer|basic):)/iu;

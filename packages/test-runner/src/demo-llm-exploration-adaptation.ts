@@ -1,13 +1,15 @@
 import type { ExistingFlowAdaptation, ExistingRunDetail } from "./existing-fluxiq-control.js";
 import type { DemoLlmAdaptationReadiness } from "./demo-llm-adaptation-readiness.js";
 import { FIRST_LIVE_ADAPTATION_PROFILE } from "./demo-llm-adaptation.js";
+import { adaptationCallCountWithinGrant } from "./demo-llm-adaptation-control.js";
 import { RunnerFailure } from "./failure.js";
 
 export type ExplorationAdaptationProposalCheckpoint = Readonly<{
   status: "proposed";
   provider: "deepseek";
   model: "deepseek-chat";
-  providerCallCount: 2;
+  /** What the adapting run spent: it iterates, so this is not a fixed number. */
+  providerCallCount: number;
   retryCount: 0;
   projectId: string;
   flowId: string;
@@ -26,7 +28,7 @@ export type ExplorationAdaptationProposalCheckpoint = Readonly<{
 export type ExplorationAdaptationApplyCheckpoint = Readonly<{
   status: "passed";
   providerCallCount: 0;
-  sourceProviderCallCount: 2;
+  sourceProviderCallCount: number;
   projectId: string;
   flowId: string;
   sourceRunId: string;
@@ -43,7 +45,7 @@ export type ExplorationAdaptationApplyCheckpoint = Readonly<{
 export type ExplorationAdaptationValidationCheckpoint = Readonly<{
   status: "passed";
   providerCallCount: 0;
-  sourceProviderCallCount: 2;
+  sourceProviderCallCount: number;
   projectId: string;
   flowId: string;
   sourceRunId: string;
@@ -67,9 +69,10 @@ export function evaluateExplorationAdaptationProposal(input: Readonly<{
   if (run.summary.projectId !== readiness.projectId || run.summary.flowId !== readiness.flowId) fail("scope_mismatch");
   const failed = run.actionAttempts.filter(item => item.status === "failed");
   if (failed.length !== 1) fail("failed_action_invalid");
-  if ((run.providerCallCount ?? 0) !== 2) fail("provider_accounting_invalid");
   const interventions = run.interventions ?? [];
   if (interventions.length !== 2 || interventions[0]?.kind !== "diagnosis" || interventions[1]?.kind !== "runtime_patch") fail("interventions_invalid");
+  if (!adaptationCallCountWithinGrant(run)) fail("provider_accounting_invalid");
+  const providerCallCount = run.providerCallCount!;
   for (const [index, intervention] of interventions.entries()) {
     const prompt = index === 0 ? "automation-studio.runtime-diagnosis.v1" : "automation-studio.runtime-patch.v1";
     if (!intervention.requestId || intervention.provider !== "deepseek" || intervention.model !== "deepseek-chat"
@@ -98,7 +101,7 @@ export function evaluateExplorationAdaptationProposal(input: Readonly<{
     status: "proposed" as const,
     provider: "deepseek" as const,
     model: "deepseek-chat" as const,
-    providerCallCount: 2 as const,
+    providerCallCount,
     retryCount: 0 as const,
     projectId: readiness.projectId,
     flowId: readiness.flowId,
@@ -144,7 +147,7 @@ export function evaluateExplorationAdaptationApply(input: Readonly<{
   return Object.freeze({
     status: "passed" as const,
     providerCallCount: 0 as const,
-    sourceProviderCallCount: 2 as const,
+    sourceProviderCallCount: source.providerCallCount,
     projectId: readiness.projectId,
     flowId: readiness.flowId,
     sourceRunId: source.runId,
@@ -176,7 +179,7 @@ export function evaluateExplorationAdaptationValidation(input: Readonly<{
     || applied.patchKinds?.length !== 1 || applied.patchKinds[0] !== "edit_action_target"
     || applied.appliedMutationCount !== 1) fail("validation_target_invalid");
   if (sourceRun.summary.projectId !== readiness.projectId || sourceRun.summary.flowId !== readiness.flowId
-    || sourceRun.summary.runId !== applied.sourceRunId || sourceRun.providerCallCount !== 2
+    || sourceRun.summary.runId !== applied.sourceRunId || !adaptationCallCountWithinGrant(sourceRun)
     || sourceRun.interventions?.length !== 2
     || sourceRun.interventions[0]?.kind !== "diagnosis" || sourceRun.interventions[1]?.kind !== "runtime_patch"
     || sourceRun.adaptationIds?.length !== 1 || sourceRun.adaptationIds[0] !== applied.adaptationId
@@ -192,7 +195,7 @@ export function evaluateExplorationAdaptationValidation(input: Readonly<{
   return Object.freeze({
     status: "passed" as const,
     providerCallCount: 0 as const,
-    sourceProviderCallCount: 2 as const,
+    sourceProviderCallCount: sourceRun.providerCallCount!,
     projectId: readiness.projectId,
     flowId: readiness.flowId,
     sourceRunId: sourceRun.summary.runId,

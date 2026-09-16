@@ -32,7 +32,7 @@ export type PersistedFlowTerminalWait = {
  * domain, an idempotency key -- so a run holding one takes a different path
  * through `executeRecordedFlowRun` rather than adding a flag to the usual one.
  */
-export type PersistedFlowLlmExecution = { grantId: string; purpose: "diagnosis_only" | "diagnose_and_adapt" };
+export type PersistedFlowLlmExecution = { grantId: string; purpose: "diagnosis_only" | "diagnose_and_adapt" | "explore_and_adapt" };
 
 export type PersistedFlowRunControl = {
   selectExistingContext(projectId: string, clientId?: string, bounds?: FluxIQHttpOptions, flowId?: string): Promise<void>;

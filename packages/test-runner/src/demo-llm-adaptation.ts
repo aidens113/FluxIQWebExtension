@@ -2,6 +2,7 @@
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
+  DEFAULT_LLM_LAB_BUDGET,
   LLM_LAB_SCHEMA_VERSION,
   assertLlmExecutionProfile,
   validateLlmRunEvaluation,
@@ -9,6 +10,7 @@ import {
   type LlmInvocationProvenance,
   type LlmRunEvaluation,
 } from "@fluxiq-web-extension/test-contracts";
+import { adaptationCallCountWithinGrant } from "./demo-llm-adaptation-control.js";
 import { RunnerFailure } from "./failure.js";
 import { attestWorkspaceSecretAbsence } from "./secret-leak-attestation.js";
 import { hardenWindowsPrivatePath } from "./windows-acl.js";
@@ -31,7 +33,9 @@ export const FIRST_LIVE_ADAPTATION_PROFILE: Readonly<LlmExecutionProfile> = Obje
     maxInputTokens: 4_000,
     maxOutputTokens: 1_000,
     maxTotalTokensPerRequest: 5_000,
-    maxCallsPerRun: 2,
+    // A ceiling, not the count this demo certifies: an adaptation iterates for
+    // as many calls as it needs, and the certificate below records what it made.
+    maxCallsPerRun: DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun,
     timeoutMs: 20_000,
     maxRetries: 0,
     maxEstimatedCostUsd: 0.25,
@@ -69,9 +73,15 @@ type FailedAction = Readonly<{
   providerCallCountBeforeFailure: 0;
 }>;
 
-type AdaptationInvocation = Readonly<{
+/** Each purpose's pinned prompt schema, and the loop stage Core stages it at as `<schema>+stage.<stage>`. */
+const PROMPTS = { runtime_diagnosis: ["automation-studio.runtime-diagnosis.v1", "gather"], runtime_evidence: ["automation-studio.evidence-tool-decision.v1", "gather"], runtime_patch: ["automation-studio.runtime-patch.v1", "implement"] } as const;
+
+type AdaptationInvocationPurpose = keyof typeof PROMPTS;
+
+/** One provider call the adapting run made. Each record is exactly one call, never a retry. */
+export type DemoLlmAdaptationInvocation<Purpose extends AdaptationInvocationPurpose = AdaptationInvocationPurpose> = Readonly<{
   requestId: string;
-  purpose: "runtime_diagnosis" | "runtime_patch";
+  purpose: Purpose;
   provider: "deepseek";
   model: "deepseek-chat";
   promptSchemaVersion: string;
@@ -131,13 +141,24 @@ type FinalReplay = Readonly<{
   succeededActionCount: number;
 }>;
 
+/** The diagnosis, every evidence-gathering call in order, then the patch. */
+export type DemoLlmAdaptationInvocations = readonly [DemoLlmAdaptationInvocation<"runtime_diagnosis">, ...DemoLlmAdaptationInvocation<"runtime_evidence">[], DemoLlmAdaptationInvocation<"runtime_patch">];
+
 export type DemoLlmAdaptationCertificationInput = Readonly<{
   schemaVersion: "0.1";
   operationId: string;
   startingGraph: StartingGraph;
   drift: SemanticDrift;
   failedAction: FailedAction;
-  invocations: readonly [AdaptationInvocation, AdaptationInvocation];
+  /** Every provider call the adapting run made, exactly as Core's run detail reports it. */
+  providerCallCount: number;
+  /**
+   * One record for every one of those calls, in order: the diagnosis, any
+   * calls that gathered evidence, then the patch. A run that iterated is
+   * described in full, so a certificate can never report fewer calls than the
+   * run spent.
+   */
+  invocations: DemoLlmAdaptationInvocations;
   adaptation: AppliedAdaptation;
   postApplyValidation: PostApplyValidation;
   finalReplay: FinalReplay;
@@ -156,7 +177,9 @@ export type DemoLlmAdaptationResult = Readonly<{
   resultingExecutionDigest: string;
   failedActionAttemptId: string;
   adaptationId: string;
-  providerCallCount: 2;
+  /** What the run spent: one diagnosis, `evidenceCallCount` evidence calls, and one patch. */
+  providerCallCount: number;
+  evidenceCallCount: number;
   retryCount: 0;
   reviewOutcome: "approved";
   applyOutcome: "applied";
@@ -170,9 +193,19 @@ export type DemoLlmAdaptationResult = Readonly<{
   leakAttestation: { status: "passed"; scannedFiles: number; scannedBytes: number; findingCount: 0 };
 }>;
 
-export function evaluateDemoLlmAdaptation(input: unknown): Omit<DemoLlmAdaptationResult, "leakAttestation"> {
+// Typed, so a caller that leaves a field out -- the run's call count, say -- fails
+// to compile; it took `unknown` and so accepted anything. Parsed as well, since
+// every value in it was read from a live run.
+export function evaluateDemoLlmAdaptation(input: DemoLlmAdaptationCertificationInput): Omit<DemoLlmAdaptationResult, "leakAttestation"> {
   const parsed = parseAdaptationInput(input);
-  const [diagnosisInvocation, patchInvocation] = parsed.invocations;
+  const diagnosisInvocation = parsed.invocations[0];
+  const patchInvocation = parsed.invocations[parsed.invocations.length - 1]!;
+  const evidenceCallCount = parsed.invocations.length - 2;
+  // The diagnosis and the patch are the run's two interventions; a call that
+  // gathered evidence leaves none behind.
+  if (!adaptationCallCountWithinGrant({ providerCallCount: parsed.providerCallCount, interventions: [diagnosisInvocation, patchInvocation] })) {
+    fail("Runtime adaptation made a provider call count its grant could not have produced");
+  }
   const budget = FIRST_LIVE_ADAPTATION_PROFILE.budget;
   for (const invocation of parsed.invocations) {
     if (invocation.inputTokens > budget.maxInputTokens
@@ -184,10 +217,10 @@ export function evaluateDemoLlmAdaptation(input: unknown): Omit<DemoLlmAdaptatio
   if (parsed.startingGraph.nodeCount < 1 || parsed.startingGraph.executableNodeCount !== parsed.startingGraph.nodeCount) fail("Runtime adaptation did not start from a creation-certified executable graph");
   if (parsed.startingGraph.recordingCount !== 0 || parsed.adaptation.recordingCount !== 0) fail("Instruction-only runtime adaptation must remain recording-free");
   if (parsed.drift.beforeTargetFingerprint === parsed.drift.afterTargetFingerprint) fail("Runtime adaptation requires an observed semantic target change");
-  if (!(parsed.failedAction.sequence < diagnosisInvocation.sequence
-    && diagnosisInvocation.sequence < patchInvocation.sequence
-    && patchInvocation.sequence < parsed.adaptation.applySequence
-    && parsed.adaptation.applySequence < parsed.postApplyValidation.completionSequence)) fail("Runtime adaptation event ordering is invalid");
+  // Failure, then every provider call in the order recorded, then apply, then
+  // the first deterministic validation run, each strictly after the last.
+  const sequences = [parsed.failedAction.sequence, ...parsed.invocations.map(invocation => invocation.sequence), parsed.adaptation.applySequence, parsed.postApplyValidation.completionSequence];
+  if (sequences.some((sequence, index) => index > 0 && sequence <= sequences[index - 1]!)) fail("Runtime adaptation event ordering is invalid");
   if (parsed.adaptation.requestId !== patchInvocation.requestId
     || parsed.adaptation.baseExecutionDigest !== parsed.startingGraph.startingExecutionDigest
     || parsed.adaptation.resultingExecutionDigest === parsed.startingGraph.startingExecutionDigest) fail("Runtime adaptation was stale, unbound, concurrent, or unchanged");
@@ -209,7 +242,7 @@ export function evaluateDemoLlmAdaptation(input: unknown): Omit<DemoLlmAdaptatio
     provider: invocation.provider,
     model: invocation.model,
     task: "adapt",
-    promptSchemaVersion: invocation.promptSchemaVersion,
+    promptSchemaVersion: PROMPTS[invocation.purpose][0],
     attempt: 1,
     inputTokens: invocation.inputTokens,
     outputTokens: invocation.outputTokens,
@@ -228,7 +261,7 @@ export function evaluateDemoLlmAdaptation(input: unknown): Omit<DemoLlmAdaptatio
     profileId: FIRST_LIVE_ADAPTATION_PROFILE.profileId,
     task: "adapt",
     invocations: provenance,
-    maxCallsPerRun: 2,
+    maxCallsPerRun: FIRST_LIVE_ADAPTATION_PROFILE.budget.maxCallsPerRun,
     proposalValidated: true,
     reviewOutcome: "approved",
     applyOutcome: "applied",
@@ -236,7 +269,7 @@ export function evaluateDemoLlmAdaptation(input: unknown): Omit<DemoLlmAdaptatio
     safetyPassed: true,
     verdict: "passed",
     reasons: [
-      "A failed action preceded one bounded reviewed runtime adaptation bound to the exact starting digest.",
+      `A failed action preceded one reviewed runtime adaptation bound to the exact starting digest, reached in ${parsed.providerCallCount} provider calls: one diagnosis, ${evidenceCallCount} gathering evidence, and one patch.`,
       "The manually applied change passed two separate deterministic validation runs without recording provenance or additional LLM calls.",
     ],
   };
@@ -254,7 +287,8 @@ export function evaluateDemoLlmAdaptation(input: unknown): Omit<DemoLlmAdaptatio
     resultingExecutionDigest: parsed.adaptation.resultingExecutionDigest,
     failedActionAttemptId: parsed.failedAction.attemptId,
     adaptationId: parsed.adaptation.adaptationId,
-    providerCallCount: 2,
+    providerCallCount: parsed.providerCallCount,
+    evidenceCallCount,
     retryCount: 0,
     reviewOutcome: "approved",
     applyOutcome: "applied",
@@ -294,7 +328,7 @@ export async function persistDemoLlmAdaptationResult(workspaceDirectory: string,
 
 function parseAdaptationInput(input: unknown): DemoLlmAdaptationCertificationInput {
   rejectForbiddenFields(input);
-  const root = exact(input, ["schemaVersion", "operationId", "startingGraph", "drift", "failedAction", "invocations", "adaptation", "postApplyValidation", "finalReplay"]);
+  const root = exact(input, ["schemaVersion", "operationId", "startingGraph", "drift", "failedAction", "providerCallCount", "invocations", "adaptation", "postApplyValidation", "finalReplay"]);
   requireLiteral(root.schemaVersion, "0.1");
   const start = exact(root.startingGraph, ["creationCertified", "projectId", "flowId", "startingExecutionDigest", "ownedSubflowCount", "routerSubflowRouteCount", "nodeCount", "executableNodeCount", "recordingCount", "recordingProvenanceAbsent"]);
   requireLiteral(start.creationCertified, true); requireLiteral(start.ownedSubflowCount, 1); requireLiteral(start.routerSubflowRouteCount, 1); requireLiteral(start.recordingProvenanceAbsent, true);
@@ -302,11 +336,25 @@ function parseAdaptationInput(input: unknown): DemoLlmAdaptationCertificationInp
   requireLiteral(drift.kind, "semantic-target"); requireLiteral(drift.introducedBeforeRun, true); requireLiteral(drift.observed, true);
   const failure = exact(root.failedAction, ["runId", "attemptId", "sequence", "status", "providerCallCountBeforeFailure"]);
   requireLiteral(failure.status, "failed"); requireLiteral(failure.providerCallCountBeforeFailure, 0);
-  if (!Array.isArray(root.invocations) || root.invocations.length !== 2) fail("Runtime adaptation requires exactly two provider invocations");
-  const invocations = root.invocations.map((value, index) => exact(value, ["requestId", "purpose", "provider", "model", "promptSchemaVersion", "sequence", "attempt", "retryCount", "providerCallCount", "inputTokens", "outputTokens", "totalTokens", "estimatedCostUsd", "latencyMs"]));
-  requireLiteral(invocations[0]!.purpose, "runtime_diagnosis"); requireLiteral(invocations[1]!.purpose, "runtime_patch");
-  requireLiteral(invocations[0]!.promptSchemaVersion, "automation-studio.runtime-diagnosis.v1"); requireLiteral(invocations[1]!.promptSchemaVersion, "automation-studio.runtime-patch.v1");
-  if (invocations[0]!.requestId === invocations[1]!.requestId) fail("Runtime adaptation provider invocations must have distinct request identities");
+  // An adaptation iterates for as many calls as it needs, so the certificate
+  // holds one record for every call the run reported rather than a fixed pair.
+  // A run whose calls are not all recorded is refused, never understated.
+  integer(root.providerCallCount);
+  if (!Array.isArray(root.invocations) || root.invocations.length < 2) fail("Runtime adaptation requires a diagnosis invocation and a patch invocation");
+  if (root.invocations.length !== root.providerCallCount) {
+    fail(`Runtime adaptation certificate records ${root.invocations.length} provider invocations, but the run made ${root.providerCallCount} provider calls; every call must be recorded`);
+  }
+  const invocations = root.invocations.map(value => exact(value, ["requestId", "purpose", "provider", "model", "promptSchemaVersion", "sequence", "attempt", "retryCount", "providerCallCount", "inputTokens", "outputTokens", "totalTokens", "estimatedCostUsd", "latencyMs"]));
+  const last = invocations.length - 1;
+  invocations.forEach((invocation, index) => {
+    const purpose: AdaptationInvocationPurpose = index === 0 ? "runtime_diagnosis" : index === last ? "runtime_patch" : "runtime_evidence";
+    if (invocation.purpose !== purpose) fail("Runtime adaptation requires exactly one diagnosis first, exactly one patch last, and only evidence-gathering calls between them");
+    const [schema, stage] = PROMPTS[purpose];
+    const base = typeof invocation.promptSchemaVersion === "string" ? invocation.promptSchemaVersion.split("+")[0] : undefined;
+    if (purpose === "runtime_evidence" && (base === PROMPTS.runtime_diagnosis[0] || base === PROMPTS.runtime_patch[0])) fail("An evidence-gathering invocation must not carry the diagnosis or patch prompt");
+    if (invocation.promptSchemaVersion !== schema && invocation.promptSchemaVersion !== `${schema}+stage.${stage}`) requireLiteral(invocation.promptSchemaVersion, schema);
+  });
+  if (new Set(invocations.map(invocation => invocation.requestId)).size !== invocations.length) fail("Runtime adaptation provider invocations must have distinct request identities");
   for (const invocation of invocations) { requireLiteral(invocation.provider, "deepseek"); requireLiteral(invocation.model, "deepseek-chat"); requireLiteral(invocation.attempt, 1); requireLiteral(invocation.retryCount, 0); requireLiteral(invocation.providerCallCount, 1); }
   const adaptation = exact(root.adaptation, ["adaptationId", "requestId", "baseExecutionDigest", "resultingExecutionDigest", "validationOk", "stale", "concurrentMutationDetected", "reviewOutcome", "approvalChannel", "mutationObservedBeforeApproval", "outcome", "applySequence", "structuralChange", "externalSideEffectEscalation", "authorizationExpansion", "unsupportedOutputCount", "recordingCount", "recordingProvenanceAbsent"]);
   requireLiteral(adaptation.validationOk, true); requireLiteral(adaptation.stale, false); requireLiteral(adaptation.concurrentMutationDetected, false); requireLiteral(adaptation.reviewOutcome, "approved"); requireLiteral(adaptation.approvalChannel, "human-ui"); requireLiteral(adaptation.mutationObservedBeforeApproval, false); requireLiteral(adaptation.outcome, "applied"); requireLiteral(adaptation.structuralChange, false); requireLiteral(adaptation.externalSideEffectEscalation, false); requireLiteral(adaptation.authorizationExpansion, false); requireLiteral(adaptation.unsupportedOutputCount, 0); requireLiteral(adaptation.recordingProvenanceAbsent, true);
@@ -314,7 +362,7 @@ function parseAdaptationInput(input: unknown): DemoLlmAdaptationCertificationInp
   requireLiteral(validation.status, "succeeded"); requireLiteral(validation.providerCallCount, 0); requireLiteral(validation.interventionCount, 0); requireLiteral(validation.diagnosisCount, 0); requireLiteral(validation.adaptationCount, 0);
   const replay = exact(root.finalReplay, ["runId", "status", "executionDigest", "providerCallCount", "interventionCount", "adaptationCount", "actionAttemptCount", "succeededActionCount"]);
   requireLiteral(replay.status, "succeeded"); requireLiteral(replay.providerCallCount, 0); requireLiteral(replay.interventionCount, 0); requireLiteral(replay.adaptationCount, 0);
-  for (const value of [root.operationId, start.projectId, start.flowId, start.startingExecutionDigest, drift.scenarioId, drift.beforeTargetFingerprint, drift.afterTargetFingerprint, failure.runId, failure.attemptId, ...invocations.flatMap(invocation => [invocation.requestId, invocation.promptSchemaVersion]), adaptation.adaptationId, adaptation.requestId, adaptation.baseExecutionDigest, adaptation.resultingExecutionDigest, validation.runId, validation.executionDigest, replay.runId, replay.executionDigest]) identifier(value);
+  for (const value of [root.operationId, start.projectId, start.flowId, start.startingExecutionDigest, drift.scenarioId, drift.beforeTargetFingerprint, drift.afterTargetFingerprint, failure.runId, failure.attemptId, ...invocations.map(invocation => invocation.requestId), adaptation.adaptationId, adaptation.requestId, adaptation.baseExecutionDigest, adaptation.resultingExecutionDigest, validation.runId, validation.executionDigest, replay.runId, replay.executionDigest]) identifier(value);
   for (const value of [start.nodeCount, start.executableNodeCount, start.recordingCount, failure.sequence, ...invocations.flatMap(invocation => [invocation.sequence, invocation.inputTokens, invocation.outputTokens, invocation.totalTokens, invocation.latencyMs]), adaptation.applySequence, adaptation.recordingCount, validation.completionSequence, validation.actionAttemptCount, validation.succeededActionCount, replay.actionAttemptCount, replay.succeededActionCount]) integer(value);
   for (const invocation of invocations) finite(invocation.estimatedCostUsd);
   return input as DemoLlmAdaptationCertificationInput;

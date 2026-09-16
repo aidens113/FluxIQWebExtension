@@ -22,61 +22,63 @@ recovery loop. Two earlier scoping reports cover Phases 2.1-2.4 and 2.5-2.9 with
 file:line evidence. Path prefix: `AS/` is Core's
 `packages/fluxiq/src/programs/automation-studio/`.
 
-**The four investigations are delivered, not just recorded.** Their findings —
-that the exploration loop already existed and only needed a registry and its
-other entry points, that Core's repair target was a CSS selector, that success
-was inferred from silence in seven places, that a `delete_node` inverse dropped
-cascaded edges, and that the PIN guarded one program rather than destruction —
-are all now built as Phases H, T, D, G and P. The evidence, with file:line
-detail, is in `reports/w2-a` through `w2-d` and the two scoping reports. One
-finding is still open: flow bootstrap refuses any flow that is not blank, so the
-"improve an existing flow" entry point cannot reuse it unchanged.
+**Phases SEC, G, T, P, D, H, S and 2.1-2.3 are built, supervisor-verified and
+pushed in both repositories.** What each established is archived in
+[archive/completed-phase-narrative.md](./mvp-week2-automation-loop-plan/archive/completed-phase-narrative.md);
+the file:line evidence is in `reports/w2-a` through `w2-d` and the two scoping
+reports. One finding from those investigations is still open: flow bootstrap
+refuses any flow that is not blank, so the "improve an existing flow" entry
+point cannot reuse it unchanged.
 
-**Done and supervisor-verified** (each re-run by the supervisor, not accepted
-from a report): both scoping reports, this plan and its Core pair, and the four
-investigations. **Phase SEC** — three rounds, closing `create-session`,
-`create-user`, the TOTP pair, `update-user` on its authority-changing path, and
-a vault unlock that proved nothing. **Phase G** — rollback restores the whole
-graph, with all eight operation inverses audited and a second instance fixed in
-`restoreSnapshot`. **Phase T** — the repair target is opaque and the evidence
-packet no longer describes selectors to the model, asserted on the serialized
-payload with an exhaustive key allowlist. **Phase P** — every endpoint declares
-whether it destroys, and omitting or misspelling that is a compile error.
-
-**Phase D** — success is constructible only from an executed-and-compared run,
-with a third vacuous path found beyond the two the plan named, and
-`edit_recovery` failing closed rather than reporting a repair that never
-happened. **Phase H** — a registry of harness options and Core's first neutral
-ones. **Phase S** — a fixed order of work a domain extends but cannot reorder,
-and Core's sanitizers no longer carrying browser nouns. **Phase 2.1** — the
-recovery context, which records what was withheld and why. All of it is pushed
-in both repositories.
-
-**Phase 2.2** — a deterministic diagnosis gate, a structured diagnosis, a plan
-stage and a recovery trace. **Phase 2.3** — closed exploration outcomes, a
-budget over wall clock and actions, a whole-recovery deadline, and the web
-domain's own harness options refused semantically per L3. The model now actually
-receives the recovery context, and there is a named channel for a structured
-diagnosis. Everything above is pushed in both repositories and both audits pass.
-
-**THE LAB REACHES A REAL PROVIDER, and that is new.** Live LLM execution had
-been fail-closed with "until the Phase 1 provider runner is enabled", and the
-line under that guard never passed the parsed configuration into the run — every
-`--live-llm` flag was read and dropped. It is wired now, proved by a real call:
-`pnpm lab run identity-drift --variant save-and-exit --flow --live-llm
---llm-task diagnose --llm-max-calls 1 --llm-max-cost-usd 0.25` → passed, with
-`"llm":{"mode":"live","profileId":"lab-diagnose","calls":1}`. Read
-`reports/w2-live-provider.md` before running it again. The user's standing
-instruction is that a feature is not demonstrated until it has run against the
-real DeepSeek key in `.env.local`; a mock or a green unit suite is preparation,
-not evidence.
-
-**What that live run does NOT show**, because a green is easy to over-read: the
-diagnosis was staged and never validated, since `diagnose` authorizes exactly
-one call; the token and cost figures are the reserved cap rather than measured,
-because DeepSeek reported no usage; and it is one run, not a repeatable result.
+**CORRECTION (2026-09-16): no live run has yet received a DeepSeek response.**
+Earlier this document said the Lab reaches a real provider. That was read from
+Core's gate reporting `invoked: true` and an intervention naming
+`deepseek`/`deepseek-chat`, never from an actual reply. Once the Lab kept Core's
+per-call issue codes, every live run showed the same thing: one
+`runtime_diagnosis` call at stage `gather`, `validationOk: false`, issue code
+`llm.provider_configuration_invalid`, and no reported tokens -- the DeepSeek
+adapter refuses the request **before sending it**. Reproduced with per-call
+limits of 8,000/2,000/10,000 and 42,000/8,000/50,000, a valid 26-call grant and a
+600,000-token run budget (`run-mu4mqftg-...` for the codes,
+`run-mu4mwjqi-5757ede8` for the large budget), so the budget is not the cause.
+The code is thrown from seven places in `AS/runtime/llm/deepseek-provider.ts`,
+and the runtime tests drive recovery through a scripted provider that bypasses
+the real adapter, which is why nothing caught it. Worker
+`w2-deepseek-preflight-refusal` is reproducing it offline. The Lab's wiring
+itself (`reports/w2-live-provider.md`) -- key installation, grant issue,
+budgets, redaction -- does work: the redaction attestation passes on every run.
+The user's standing instruction is unchanged: a feature is not demonstrated
+until it has run against the real DeepSeek key in `.env.local`.
 
 **Not started:** loop phases 2.4-2.9, and X6. Phase 2.4 depends on R0, which is now done, so it is unblocked.
+
+**The fixed call limit is now understood as the defect, not a constraint to
+design around (user decision, 2026-09-16).** His words: "I want you to allow as
+many calls as are needed for iteration of adaptations! Stop setting hard limits
+like this. It should be allowed to automatically explore and whatnot within
+reason. Ofc we'll work to reduce tokens where needed, but this hard limit is
+causing a lot of problems." Every live blocker recorded above traces back to it:
+a runtime recovery ran in a mode hard-capped at exactly two provider calls,
+which also forbade the `evidence_tool_decision` task kind, so the model's first
+move -- asking to gather more evidence -- had no call available to serve it.
+Two real DeepSeek runs (`run-mu3we5jm-38461449`, `run-mu4hob80-7876a32e`)
+reached the provider and passed their scenario while diagnosing nothing, both
+ending `validationOk: false` at `+stage.gather`. The bounded exploration was
+built, wired, tested and still inert for the same reason, and the exploration
+allowance added earlier the same day was necessary but could not help, because
+the request was never reachable.
+
+The replacement model: an adaptation iterates while it is making progress, and
+stops on a guard that means something -- the per-run estimated cost ceiling, the
+per-run token budget, the recovery deadline in wall-clock time, or a new
+no-progress guard for a loop that is repeating itself or returning no new
+evidence. A call ceiling survives only as a far-away, configurable backstop
+against a runaway loop, never as a per-mode constant. Token efficiency is a
+separate exercise; starving the loop of calls is not how cost is controlled.
+
+The generalizable lesson, recorded because it was missed for most of a day: when
+a designed-in limit keeps generating blockers, the limit is the defect. Report
+it as such instead of engineering successive workarounds inside it.
 
 **The exploration now runs in production, as of 2026-09-16.** All three diffs
 in `reports/w2-3-bounded-exploration.md` are applied and four negative probes
@@ -134,21 +136,15 @@ workers running on a machine with a known memory fault, so this is recorded as a
 real resource limit rather than caution.
 
 **Next steps, in order:**
-1. **A validated diagnosis against the real provider.** Today's live call was
-   staged and never validated, because `diagnose` authorizes exactly one call.
-   Run `--llm-task adapt` (two calls) and record the verdict, the call count and
-   real token and cost figures. Until that lands, "the loop works" is not a
-   claim anyone should make.
-2. Apply the three diffs in `reports/w2-3-bounded-exploration.md` so Phase 2.3
-   actually runs in production. The third needs a `service.ts` baseline decision
-   or R0 first.
-3. Point `recovery/structured-diagnosis.ts:131` at the new diagnosis channel,
-   and make `deniedEvidenceKeys` required and fail-closed. Both are measured and
-   written up; neither is a judgement call any more.
-4. Add the `importBoundaries` rule for the `llm` / `recovery` cycle before it
-   costs a third person an afternoon.
-5. Then Phase 2.4, and 2.5-2.9 after it.
-
+1. Land `w2-deepseek-preflight-refusal`: the adapter refuses every real recovery
+   request before sending it. Nothing about the loop is demonstrated until a live
+   run gets a DeepSeek reply.
+2. Then the live `adapt` run on `identity-drift --variant save-and-exit`, read
+   call by call from `snapshots/live-llm.json`, not from the verdict.
+3. Integration cleanups: `live-patch.ts` policy required; Core settings save
+   accepting no `maxCalls`; the stale PIN comment in `runtime-session-grant.ts`;
+   `registerAutomationStudioApi` ignoring `identityAccess`; `pnpm docs:reference`.
+4. Then Phase 2.4, and 2.5-2.9 after it.
 
 **Blockers:** none. The user's direction is recorded as L12-L16. The earlier
 request that he approve L6 and L9 is **withdrawn**: L13 supersedes both, because
@@ -422,6 +418,55 @@ Delivered and archived on 2026-09-16: see
 The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
 
 ## Work Ledger
+
+### 2026-09-16 — Iteration replaces fixed call counts (in progress)
+- Agent: supervisor; workers `w2-iterating-recovery-session`,
+  `w2-guards-not-call-counts`, `w2-lab-iterating-calls`,
+  `w2-demo-iterating-calls`, `w2-grant-budget-integration`; in flight at the
+  time of writing: `w2-adaptation-certificate-calls`,
+  `w2-flow-creation-iterates`, `w2-core-contracts-and-docs`
+- Why: the user's decision recorded in Current State. A Claude Code crash
+  stopped the first two workers mid-task with two workers running — well
+  under the recorded five-worker limit, so not a load crash; both were resumed
+  from their transcripts with their partial work intact.
+- The same fixed limit turned up in seven places, each of which alone would
+  have stopped an iterating recovery: Core's two-call runtime purpose; Core's
+  per-mode grant constants; the web panel's runtime request; the web panel's
+  Flow-creation request (4 calls) and Core's Flow Bootstrap loop (4, capped at
+  8); the Lab's contract ceiling and live-run planner; six demo scripts and the
+  adaptation certificate; and -- the least visible -- grant expiry, checked on
+  every call, defaulting to 60 s and capped at 5 minutes, which would have cut
+  a recovery off regardless of its deadline. A saved per-Flow `maxCalls: 1`
+  written by the authoring defaults was a further trap: honouring it would have
+  pinned every adapting run to a single call, so the panel no longer uses it
+  for adapting runs.
+- Model now in the tree: iterating purposes default to 26 calls (a diagnosis,
+  a patch, and exploration's 24-decision default) with a 64 backstop; a grant
+  token budget `maxTotalTokensPerRun` (default min(per-call x calls, 100,000))
+  on which the high-token confirmation is judged; a call and a token/cost
+  margin held back for the patch; `explore_and_adapt` given its grant's budget
+  rather than the $0.25 no-grant one; a 600 s recovery deadline; a
+  no-progress guard with its own outcome; and a grant `ttlMs` that is only a
+  claim window, with claimed grants under a 600 s lease that exchanges expired
+  key authorizations one for one. Worst case for one default recovery: 26
+  calls, 100,000 tokens, $2.00 estimated, 600 s; about $0.09 at DeepSeek peak
+  prices.
+- Validation: supervisor-run, not taken from reports. The grant-lifetime design
+  was reviewed as authorization behaviour before acceptance. Its seven tests
+  pin that an unclaimed grant expires and is revoked, a claimed grant is
+  refused at the end of its lease, the exchange never reveals more keys than
+  the call count, revocation wins at any point, the grant dies with the
+  actor's session and Secret Keys unlock (the test asserts refusal,
+  `activeGrantCount() === 0` and zero reveals), and a revocation racing a mint
+  revokes the fresh authorization. `vitest run .../execution-grant-lifetime.test.ts`
+  -> "Tests 7 passed (7)". Web panel: `vitest run
+  src/features/automation-studio/runtime` -> "Tests 44 passed (44)",
+  `tsc --noEmit` exit 0. Lab: `test-contracts` -> "# pass 94", "# fail 0";
+  `test-runner` -> "# pass 976", "# fail 0"; audit passed. Core
+  `.structure-baseline.json` lowered `service.ts` 6468 -> 6434.
+- Not verified yet: no live provider run since the change; no browser; Core
+  must be rebuilt before a Lab run because the Lab loads Core's compiled
+  output, which still carried the old limits mid-task.
 
 ### 2026-09-16 — Four workers integrated; the exploration runs and two holes close
 - Agent: supervisor, integrating workers `w2-r0-service-exploration`,

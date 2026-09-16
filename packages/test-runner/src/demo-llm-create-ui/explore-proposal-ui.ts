@@ -48,7 +48,8 @@ export async function proposeEvidenceGuidedCreationViaUi(input: Omit<BuildApprov
     fail("Evidence-guided Flow generation reached a terminal UI failure");
   }
   if (terminal.kind === "high_token_confirmation") {
-    const aggregateAuthorizedTokens = EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokens * EVIDENCE_GUIDED_CREATION_LIMITS.maxCalls;
+    // Core's own rule: the run's token budget, or one call's limit if larger. Not calls times tokens.
+    const aggregateAuthorizedTokens = Math.max(EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokensPerRun, EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokens);
     await evidence.diagnostic("panel", "exploration-high-token-confirmation", "exploration.high-token-confirmation-required", {
       apiRequestObserved: terminal.requestObserved,
       aggregateAuthorizedTokens,
@@ -117,7 +118,7 @@ export function parseEvidenceGuidedCreationProposal(body: unknown, projectId: st
   const value = record(record(root.payload).adaptation), accounting = record(value.accounting);
   if (text(value.projectId) !== projectId || text(value.flowId) !== flowId || value.status !== "proposed") fail("Evidence-guided proposal escaped its checkpoint scope");
   const inputTokens = integer(accounting.inputTokens), outputTokens = integer(accounting.outputTokens), totalTokens = integer(accounting.totalTokens), estimatedCostUsd = finite(accounting.estimatedCostUsd);
-  if (inputTokens + outputTokens !== totalTokens || totalTokens > EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokens * EVIDENCE_GUIDED_CREATION_LIMITS.maxCalls || estimatedCostUsd > EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalEstimatedCostUsd) fail("Evidence-guided accounting exceeded its aggregate bounds");
+  if (inputTokens + outputTokens !== totalTokens || totalTokens > EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokensPerRun || estimatedCostUsd > EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalEstimatedCostUsd) fail("Evidence-guided accounting exceeded its aggregate bounds");
   if (text(accounting.provider) !== "deepseek" || text(accounting.model) !== "deepseek-chat") fail("Evidence-guided proposal used an unexpected provider or model");
   return Object.freeze({ adaptationId: identifier(value.adaptationId), status: "proposed" as const, provider: "deepseek" as const, model: "deepseek-chat" as const, inputTokens, outputTokens, totalTokens, estimatedCostUsd });
 }

@@ -1,3 +1,4 @@
+import { DEFAULT_LLM_LAB_BUDGET } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "./failure.js";
 import type { ExistingFlowAdaptation, ExistingFlowAdaptationSummary, ExistingFluxIQControlClient, ExistingRunDetail } from "./existing-fluxiq-control.js";
 
@@ -136,6 +137,29 @@ function requireTargetShape(adaptation: ExistingFlowAdaptation, scope: ExistingT
   }
 }
 
+/**
+ * Whether an adapting source run spent a provider call count its grant could
+ * have produced. An adaptation iterates for as many calls as it needs, and a
+ * call spent gathering evidence between the diagnosis and the patch leaves no
+ * intervention behind, so the count is not a fixed number. It is at least one
+ * call per recorded intervention, each being a model output, and at most what
+ * the grant authorized. The panel sends Core no call count for an adapting run,
+ * so Core authorizes its default, which the Lab's drift test
+ * (`live-llm/tests/live-llm-plan.test.ts`) holds equal to
+ * `DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun`, the adaptation profile's ceiling too.
+ *
+ * The adaptation certificate (`demo-llm-adaptation.ts`) applies this rule to
+ * the run it certifies, which is why this module reads the ceiling from the
+ * Lab's default rather than importing the certificate's profile: that import
+ * would close a module cycle. Only the length of `interventions` is read.
+ */
+export function adaptationCallCountWithinGrant(run: Readonly<{ providerCallCount?: number; interventions?: readonly unknown[] }>): boolean {
+  const calls = run.providerCallCount;
+  return typeof calls === "number" && Number.isSafeInteger(calls)
+    && calls >= Math.max(1, run.interventions?.length ?? 0)
+    && calls <= DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun;
+}
+
 function requireSourceRun(run: ExistingRunDetail, scope: ExistingTargetAdaptationScope, adaptationId: string): void {
   const interventions = run.interventions ?? [];
   if (run.summary.projectId !== scope.projectId || run.summary.flowId !== scope.flowId
@@ -144,7 +168,7 @@ function requireSourceRun(run: ExistingRunDetail, scope: ExistingTargetAdaptatio
     || interventions.length !== 2
     || interventions[0]?.kind !== "diagnosis"
     || interventions[1]?.kind !== "runtime_patch"
-    || run.providerCallCount !== 2) {
+    || !adaptationCallCountWithinGrant(run)) {
     fail("The target adaptation source run does not match the bounded diagnosis-and-patch contract");
   }
 }

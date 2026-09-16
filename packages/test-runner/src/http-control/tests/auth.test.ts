@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { WebPanelAuthSessionCache } from "../../auth-session.js";
-import { FluxIQControlClient, httpTransportFailureDetails } from "../index.js";
+import { controlRefusalReason, FluxIQControlClient, httpTransportFailureDetails } from "../index.js";
 import { RunnerFailure } from "../../failure.js";
 
 const origin = "https://panel.example.test";
@@ -201,4 +201,12 @@ test("HTTP abort and timeout diagnostics keep precedence over transport wrapping
     && error.details.operationStage === "auth.login"
     && error.details.timeoutMs === 1
     && error.details.transportCode === undefined);
+});
+
+test("a refused control request carries Core's reason instead of a bare status", () => {
+  // A live run whose grant Core refused used to report only "(400)".
+  assert.equal(controlRefusalReason({ ok: false, error: "LLM key changed during grant authorization." }), "LLM key changed during grant authorization.");
+  assert.equal(controlRefusalReason({ ok: false, error: "  two\n lines  " }), "two lines");
+  assert.equal(controlRefusalReason({ ok: false, error: "x".repeat(400) })?.length, 303);
+  for (const none of [undefined, null, "text", [], {}, { error: 7 }, { error: "   " }]) assert.equal(controlRefusalReason(none), undefined);
 });

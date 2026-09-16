@@ -37,13 +37,14 @@ function validInput(): any {
 function clone<T>(value: T): T { return structuredClone(value); }
 
 test("first creation profile enforces the one-call strict live ceiling", () => {
-  // The alias is the production profile, at the lab contract's two-call ceiling
-  // (llm-production-automation-plan.md). The one-call live ceiling is the creation
-  // UI's FIRST_LIVE_CREATION_LIMITS, and the evaluator certifies exactly one call.
+  // The alias is the production profile, whose call count is the lab's
+  // iterating default rather than a fixed ceiling. The one-call live ceiling is
+  // the creation UI's FIRST_LIVE_CREATION_LIMITS, and the evaluator certifies
+  // exactly one call.
   assert.equal(FIRST_LIVE_CREATION_PROFILE, DEFAULT_DEMO_LLM_CREATION_PROFILE);
   assert.deepEqual(FIRST_LIVE_CREATION_PROFILE.budget, {
     maxInputTokens: 42_000, maxOutputTokens: 8_000, maxTotalTokensPerRequest: 50_000,
-    maxCallsPerRun: 2, timeoutMs: 60_000, maxRetries: 0, maxEstimatedCostUsd: 0.25,
+    maxCallsPerRun: 26, timeoutMs: 60_000, maxRetries: 0, maxEstimatedCostUsd: 0.25,
   });
   assert.deepEqual(FIRST_LIVE_CREATION_LIMITS, {
     provider: "deepseek", model: "deepseek-chat", maxInputTokens: 4_000, maxOutputTokens: 1_000,

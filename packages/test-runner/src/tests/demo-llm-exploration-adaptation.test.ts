@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
+import { FIRST_LIVE_ADAPTATION_PROFILE } from "../demo-llm-adaptation.js";
 import { evaluateExplorationAdaptationApply, evaluateExplorationAdaptationProposal, evaluateExplorationAdaptationValidation } from "../demo-llm-exploration-adaptation.js";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "../../../..");
@@ -24,13 +25,58 @@ function fixture() {
   return { readiness, existingAdaptationIds: new Set(["adaptation.bootstrap"]), run, proposal };
 }
 
-test("accepts exactly one bounded diagnosis+patch attempt and leaves it pending", () => {
+test("accepts exactly one diagnosis+patch attempt and leaves it pending", () => {
   const result = evaluateExplorationAdaptationProposal(fixture() as any);
   assert.equal(result.status, "proposed");
   assert.equal(result.providerCallCount, 2);
   assert.equal(result.reviewOutcome, "pending");
   assert.equal(result.applyOutcome, "not_attempted");
   assert.deepEqual(result.patchKinds, ["edit_action_target"]);
+});
+
+test("reports what an iterating proposal run actually spent, through apply and validation", () => {
+  for (const calls of [3, FIRST_LIVE_ADAPTATION_PROFILE.budget.maxCallsPerRun]) {
+    const base = fixture();
+    base.run.providerCallCount = calls;
+    const source = evaluateExplorationAdaptationProposal(base as any);
+    assert.equal(source.providerCallCount, calls);
+    const applied = { ...base.proposal, status: "applied", appliedMutationCount: 1 };
+    const validation = {
+      ...base.run,
+      summary: { ...base.run.summary, runId: "run.validation", status: "succeeded", interventionCount: 0, adaptationCount: 0 },
+      actionAttempts: Array.from({ length: 6 }, (_, index) => ({ attemptId: `i.${index}`, nodeId: `n.${index}`, definitionId: "web.output.dom-click", sequence: index, status: "succeeded" })),
+      interventions: [], adaptationIds: [], changeProposalIds: [], providerCallCount: 0,
+    };
+    const ids = new Set(["adaptation.bootstrap", "adaptation.target"]);
+    const apply = evaluateExplorationAdaptationApply({
+      readiness: base.readiness as any, source, applied: applied as any, resultingExecutionDigest: "digest.changed",
+      validation: validation as any, expectedAdaptationIds: ids, adaptationIdsAfter: ids,
+    });
+    assert.equal(apply.sourceProviderCallCount, calls);
+    const later = evaluateExplorationAdaptationValidation({
+      readiness: base.readiness as any, applied: applied as any, sourceRun: base.run as any, validation: validation as any,
+      adaptationIdsBefore: ids, adaptationIdsAfter: ids,
+    });
+    assert.equal(later.sourceProviderCallCount, calls);
+  }
+});
+
+test("refuses a proposal run whose call count its grant could not have produced", () => {
+  for (const calls of [undefined, 0, 1, FIRST_LIVE_ADAPTATION_PROFILE.budget.maxCallsPerRun + 1]) {
+    const base = fixture() as any;
+    base.run.providerCallCount = calls;
+    assert.throws(() => evaluateExplorationAdaptationProposal(base), (error: any) => /strict contract/u.test(error.message)
+      && error.details?.reasonCode === "exploration_adaptation_run.provider_accounting_invalid", `${calls} calls`);
+  }
+  const base = fixture();
+  const applied = { ...base.proposal, status: "applied", appliedMutationCount: 1 };
+  const validation = { ...base.run, summary: { ...base.run.summary, runId: "run.validation", status: "succeeded", interventionCount: 0, adaptationCount: 0 }, actionAttempts: Array.from({ length: 6 }, (_, index) => ({ attemptId: `o.${index}`, nodeId: `n.${index}`, definitionId: "web.output.dom-click", sequence: index, status: "succeeded" })), interventions: [], adaptationIds: [], changeProposalIds: [], providerCallCount: 0 };
+  const ids = new Set(["adaptation.bootstrap", "adaptation.target"]);
+  const overSource = { ...base.run, providerCallCount: FIRST_LIVE_ADAPTATION_PROFILE.budget.maxCallsPerRun + 1 };
+  assert.throws(() => evaluateExplorationAdaptationValidation({
+    readiness: base.readiness as any, applied: applied as any, sourceRun: overSource as any, validation: validation as any,
+    adaptationIdsBefore: ids, adaptationIdsAfter: ids,
+  }), /strict contract/u);
 });
 
 test("rejects reused, applied, cross-scope, and over-budget proposals", () => {
@@ -118,7 +164,7 @@ test("apply launcher is secret-stripped and workspace command performs only one 
   assert.doesNotMatch(body, /runAdaptationFromPanel|configureFirstLiveDiagnosisViaUi|buildApproveApplyCreationViaUi/u);
 });
 
-test("accepts exactly six clean actions for an already-applied two-call target adaptation", () => {
+test("accepts exactly six clean actions for an already-applied diagnosis-and-patch target adaptation", () => {
   const base = fixture();
   const applied = { ...base.proposal, status: "applied", appliedMutationCount: 1 };
   base.run.changeProposalIds = ["proposal.separate-public-identity"];

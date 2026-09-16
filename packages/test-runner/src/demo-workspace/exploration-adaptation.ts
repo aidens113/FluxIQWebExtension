@@ -3,6 +3,7 @@
 import type { ExistingFlowAdaptation } from "../existing-fluxiq-control.js";
 import { RunnerFailure } from "../failure.js";
 import { assertRecordingSetUnchanged, BLANK_LLM_SCENARIO_PATH, loadBlankLlmPreparationState } from "../demo-llm-blank-workspace.js";
+import { adaptationCallCountWithinGrant } from "../demo-llm-adaptation-control.js";
 import { type DemoLlmAdaptationReadiness, inspectDemoLlmAdaptationReadiness } from "../demo-llm-adaptation-readiness.js";
 import { inspectExactExplorationAdaptationReadiness, locateExactAppliedEvidenceGuidedCreation } from "../demo-llm-exploration-adaptation-readiness.js";
 import { evaluateExplorationAdaptationApply, evaluateExplorationAdaptationProposal, evaluateExplorationAdaptationValidation, type ExplorationAdaptationApplyCheckpoint, type ExplorationAdaptationProposalCheckpoint, type ExplorationAdaptationValidationCheckpoint } from "../demo-llm-exploration-adaptation.js";
@@ -130,7 +131,7 @@ export async function runDemoLlmExplorationAdaptationProposal(config: DemoWorksp
     return withDemoBrowser(config, panelCookie, "demo-llm-exploration-adaptation", async ({ extensionPage, panelPage, scenarioPage, scenarioUrl, evidence }) => {
       await openProjectInPanel(panelPage, config.origin, state.projectName, evidence);
       let flowTreeItemId = await selectFlowInCurrentProject(panelPage, state.flowName, evidence);
-      await configureFirstLiveDiagnosisViaUi(panelPage, flowTreeItemId, config.pin, evidence, "2");
+      await configureFirstLiveDiagnosisViaUi(panelPage, flowTreeItemId, config.pin, evidence, "adaptation");
       await connectExtension(extensionPage, panelPage, control, gatewayUrl, config.origin, state.projectId, state.flowId, scenarioUrl, evidence);
       await evidence.step("scenario", "exploration-adaptation-introduce-drift", "Introduce one semantic target drift", () => scenarioPage.getByTestId("instruction-introduce-target-drift").click());
       await scenarioPage.getByTestId("instruction-target-drift-status").filter({ hasText: "Target mode: drifted" }).waitFor({ timeout: 10_000 });
@@ -238,7 +239,7 @@ export async function runDemoLlmExplorationAdaptationValidation(config: DemoWork
     const applied = appliedTargets[0]!;
     if (!applied.sourceRunId) throw new RunnerFailure("runtime.behavior", "Applied exploration adaptation has no source run", { details: { reasonCode: "exploration_adaptation_validation.source_invalid" } });
     const sourceRun = await control.getRunDetail(target.projectId, applied.sourceRunId);
-    if (sourceRun.providerCallCount !== 2) throw new RunnerFailure("runtime.behavior", "Applied exploration adaptation was not produced by the exact two-call source run", { details: { reasonCode: "exploration_adaptation_validation.source_invalid" } });
+    if (!adaptationCallCountWithinGrant(sourceRun)) throw new RunnerFailure("runtime.behavior", "Applied exploration adaptation's source run made a provider call count its grant could not have produced", { details: { reasonCode: "exploration_adaptation_validation.source_invalid" } });
     const adaptationIdsBefore = new Set(summaries.map(item => item.adaptationId));
     const recordingsBefore = recordingIds(await control.listRecordings(target.projectId));
     const project = await control.requireProject(target.projectId, "web-automation");

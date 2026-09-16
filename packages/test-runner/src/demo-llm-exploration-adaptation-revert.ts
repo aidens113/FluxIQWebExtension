@@ -2,6 +2,7 @@ import type {
   ExistingFlowAdaptation,
   ExistingFluxIQControlClient,
 } from "./existing-fluxiq-control.js";
+import { adaptationCallCountWithinGrant } from "./demo-llm-adaptation-control.js";
 import { locateExactAppliedEvidenceGuidedCreation } from "./demo-llm-exploration-adaptation-readiness.js";
 import { RunnerFailure } from "./failure.js";
 
@@ -116,7 +117,7 @@ async function requireExactTarget(
     || !(run.adaptationIds ?? []).includes(adaptation.adaptationId)
     || run.actionAttempts.filter(item => item.status === "failed").length !== 1
     || interventions.length !== 2 || interventions[0]?.kind !== "diagnosis"
-    || interventions[1]?.kind !== "runtime_patch" || run.providerCallCount !== 2) {
+    || interventions[1]?.kind !== "runtime_patch" || !adaptationCallCountWithinGrant(run)) {
     fail("Exploration target adaptation source run does not match the bounded diagnosis-and-patch contract");
   }
   return { target, subflowId, adaptation };

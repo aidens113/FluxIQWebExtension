@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { LLM_LAB_MAX_CALLS_PER_RUN } from "@fluxiq-web-extension/test-contracts";
 import { ExistingFluxIQControlClient } from "../existing-fluxiq-control.js";
+import type { PersistedFlowLlmExecution } from "../flow-lane/index.js";
 
 const origin = "https://panel.example.test";
 const credentials = { username: "runner", password: "password-value", totp: "123456", pin: "654321" };
@@ -263,6 +265,48 @@ test("starts and runs the exact persisted Flow with deterministic non-adaptive c
   assert.equal(serialized.includes(credentials.totp), false);
 });
 
+test("forwards every live purpose, explore_and_adapt included, as Core's run intent", async (t) => {
+  const bodies: Array<Record<string, unknown>> = [];
+  const client = await mockedClient(t, async (url, init) => {
+    if (endpoint(url) !== "run-runtime-session") throw new Error(`unexpected ${url.pathname}`);
+    bodies.push(JSON.parse(String(init.body ?? "{}")));
+    return json({ ok: true, payload: { runtimeSession: session, runSummary: summary } });
+  });
+  // Typed through the lane's own execution shape, so the client's parameter can
+  // never again be narrower than the purposes the lane hands it.
+  const purposes: Array<PersistedFlowLlmExecution["purpose"]> = ["diagnosis_only", "diagnose_and_adapt", "explore_and_adapt"];
+  for (const purpose of purposes) {
+    await client.runPersistedFlow({ projectId: "project.web", flowId: "flow.main", llmExecution: { grantId: "grant.one", purpose } });
+  }
+  assert.deepEqual(bodies.map(body => body.runIntent), purposes);
+  for (const body of bodies) {
+    assert.equal(body.adaptiveMode, "manual_approval");
+    assert.equal(body.llmExecutionGrantId, "grant.one");
+  }
+});
+
+test("holds an evidence-guided creation's provider calls to Core's backstop, not a small fixed count", async (t) => {
+  const withCalls = (calls: number) => ({
+    adaptationId: "adaptation.pending", projectId: "project.web", flowId: "flow.main", status: "proposed",
+    metadata: { adaptationKind: "flow_bootstrap", phase9: { auditEvents: [{ eventType: "created", detail: {
+      evidenceGuided: true, providerCallCount: calls, decisionCount: calls, iterationCount: calls, traceStepCount: calls,
+      toolCallCount: 1, evidenceBytes: 100, toolIds: ["web.inspect_current_page"],
+    } }] } },
+  });
+  let calls = 0;
+  const client = await mockedClient(t, url => endpoint(url) === "get-flow-adaptation"
+    ? json({ ok: true, payload: { adaptation: withCalls(calls) } })
+    : (() => { throw new Error(`unexpected ${url.pathname}`); })());
+  for (const accepted of [17, LLM_LAB_MAX_CALLS_PER_RUN]) {
+    calls = accepted;
+    assert.equal((await client.getFlowAdaptation("project.web", "flow.main", "adaptation.pending")).evidenceLoop?.providerCallCount, accepted);
+  }
+  for (const refused of [0, LLM_LAB_MAX_CALLS_PER_RUN + 1]) {
+    calls = refused;
+    await assert.rejects(() => client.getFlowAdaptation("project.web", "flow.main", "adaptation.pending"), /bounded contract/u);
+  }
+});
+
 test("parses cancellation, run detail, action, and event DTOs without returning raw event payloads", async (t) => {
   const client = await mockedClient(t, url => {
     if (endpoint(url) === "cancel-runtime-session") return json({ ok: true, payload: { runtimeSession: { ...session, status: "cancelled" } } });
@@ -285,6 +329,37 @@ test("parses cancellation, run detail, action, and event DTOs without returning 
   const parsedEvent = (await client.listRunEvents("project.web", "run.one"))[0];
   assert.equal(parsedEvent?.eventId, "event.one");
   assert.equal("payload" in parsedEvent!, false);
+});
+
+// Core's per-call lines: every call itemized, evidence calls included, parsed strictly or not at all.
+test("reads Core's per-call lines exactly, and refuses a malformed one rather than skip it", async (t) => {
+  const reported = { inputTokens: 10, outputTokens: 5, totalTokens: 15, estimatedCostUsd: 0.01 };
+  const line = (sequence: number, taskKind: string, extra: Record<string, unknown> = {}) => ({ sequence, requestId: `llm.${taskKind}.${sequence}`, taskKind, stage: "gather", allowance: "run", promptVersion: `automation-studio.${taskKind}.v1+stage.gather`, provider: "deepseek", model: "deepseek-chat", validation: { ok: true, issueCodes: [] }, reported, charged: { ...reported, tokens: "reported", cost: "reported" }, budgetBreach: false, ...extra });
+  const unreported = { reported: { inputTokens: null, outputTokens: null, totalTokens: null, estimatedCostUsd: null }, charged: { inputTokens: 8_000, outputTokens: 2_000, totalTokens: 10_000, estimatedCostUsd: 0.08, tokens: "reserved", cost: "reserved" }, validation: null, allowance: "exploration", stage: null };
+  let gate: Record<string, unknown> = {};
+  const client = await mockedClient(t, () => json({ ok: true, payload: { runDetail: { summary, routeDecisions: [], subflows: [], interventions: [], metadata: { llmGate: { invoked: true, ...gate } } } } }));
+  gate = { providerCalls: [line(1, "runtime_diagnosis"), line(2, "evidence_tool_decision", unreported), line(3, "runtime_patch")], providerCallsOmitted: 0 };
+  const detail = await client.getRunDetail("project.web", "run.one");
+  assert.equal(detail.providerCallsOmitted, 0);
+  assert.deepEqual(detail.providerCalls?.map(call => [call.sequence, call.taskKind, call.allowance, call.validationOk, call.totalTokens, call.charged.tokens]), [[1, "runtime_diagnosis", "run", true, 15, "reported"], [2, "evidence_tool_decision", "exploration", null, null, "reserved"], [3, "runtime_patch", "run", true, 15, "reported"]]);
+  assert.deepEqual(detail.providerCalls?.[1], { sequence: 2, requestId: "llm.evidence_tool_decision.2", taskKind: "evidence_tool_decision", stage: null, allowance: "exploration", promptVersion: "automation-studio.evidence_tool_decision.v1+stage.gather", provider: "deepseek", model: "deepseek-chat", validationOk: null, validationCodes: [], inputTokens: null, outputTokens: null, totalTokens: null, estimatedCostUsd: null, charged: { inputTokens: 8_000, outputTokens: 2_000, totalTokens: 10_000, estimatedCostUsd: 0.08, tokens: "reserved", cost: "reserved" }, budgetBreach: false });
+  gate = {};
+  const older = await client.getRunDetail("project.web", "run.one");
+  assert.equal("providerCalls" in older || "providerCallsOmitted" in older, false, "a Core without per-call lines is reported as having none, not as zero calls");
+  for (const [name, bad] of Object.entries({
+    outOfOrder: { providerCalls: [line(2, "runtime_diagnosis")], providerCallsOmitted: 0 },
+    omittedMissing: { providerCalls: [line(1, "runtime_diagnosis")] },
+    linesMissing: { providerCallsOmitted: 0 },
+    repeatedRequest: { providerCalls: [line(1, "runtime_diagnosis"), { ...line(2, "runtime_patch"), requestId: "llm.runtime_diagnosis.1" }], providerCallsOmitted: 0 },
+    messageAsCode: { providerCalls: [line(1, "runtime_diagnosis", { validation: { ok: false, issueCodes: ["The provider said: private"] } })], providerCallsOmitted: 0 },
+    negativeTokens: { providerCalls: [line(1, "runtime_diagnosis", { reported: { ...reported, inputTokens: -1 } })], providerCallsOmitted: 0 },
+    unknownBasis: { providerCalls: [line(1, "runtime_diagnosis", { charged: { ...reported, tokens: "guessed", cost: "reported" } })], providerCallsOmitted: 0 },
+    unsafeProvider: { providerCalls: [line(1, "runtime_diagnosis", { provider: "deep seek" })], providerCallsOmitted: 0 },
+    tooMany: { providerCalls: Array.from({ length: 251 }, (_, index) => line(index + 1, "evidence_tool_decision")), providerCallsOmitted: 0 },
+  })) {
+    gate = bad;
+    await assert.rejects(() => client.getRunDetail("project.web", "run.one"), /Malformed FluxIQ API response/u, name);
+  }
 });
 
 test("strict DTO parsing rejects malformed responses before orchestration", async (t) => {

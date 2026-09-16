@@ -14,6 +14,13 @@ export type LiveLlmExecutionGrant = Readonly<{
   maxEstimatedCostUsd: number;
   maxTotalEstimatedCostUsd: number;
   timeoutMs: number;
+  /**
+   * The run token budget Core reports for the grant, never above the one this
+   * run asked for; `null` where Core reports none.
+   */
+  maxTotalTokensPerRun: number | null;
+  /** Whether the issue request carried Core's high-token confirmation. */
+  highTokenConfirmationSent: boolean;
 }>;
 
 export type LiveLlmGrantControl = {
@@ -31,38 +38,57 @@ export async function issueLiveLlmExecutionGrant(control: LiveLlmGrantControl, i
   secretKeyId: string;
   plan: LiveLlmPlan;
 }): Promise<LiveLlmExecutionGrant> {
-  const request = {
+  const { plan } = input;
+  const limits = () => ({
     projectId: input.projectId,
     flowId: input.flowId,
     keyId: input.secretKeyId,
-    provider: input.plan.provider,
-    model: input.plan.model,
-    purpose: input.plan.purpose,
-    tokenLimits: { ...input.plan.tokenLimits },
-    maxCalls: input.plan.maxCalls,
-    timeoutMs: input.plan.timeoutMs,
-    maxEstimatedCostUsd: input.plan.maxEstimatedCostUsd,
+    provider: plan.provider,
+    model: plan.model,
+    purpose: plan.purpose,
+    tokenLimits: { maxInputTokens: plan.tokenLimits.maxInputTokens, maxOutputTokens: plan.tokenLimits.maxOutputTokens, maxTotalTokens: plan.tokenLimits.maxTotalTokens },
+    maxCalls: plan.maxCalls,
+    maxTotalTokensPerRun: plan.maxTotalTokensPerRun,
+    timeoutMs: plan.timeoutMs,
+    maxEstimatedCostUsd: plan.maxEstimatedCostUsd,
+    maxTotalEstimatedCostUsd: plan.maxTotalEstimatedCostUsd,
     providerRetryCount: 0,
-  };
-  await control.automationStudioCall("preflight-llm-execution", request);
-  const issued = await control.automationStudioCall("issue-llm-execution-grant", { ...request, maxUses: input.plan.maxCalls });
+  });
+  await control.automationStudioCall("preflight-llm-execution", limits());
+  // Core's preflight takes no confirmation; only the issue call weighs it. It is
+  // sent only when the plan's run token budget is above Core's threshold, so a
+  // grant Core would issue anyway is never issued as a confirmed high-token one.
+  const highTokenConfirmationSent = plan.highTokenConfirmation.required;
+  const issueRequest: Record<string, unknown> = limits();
+  issueRequest.maxUses = plan.maxCalls;
+  if (highTokenConfirmationSent) issueRequest.highTokenConfirmation = true;
+  const issued = await control.automationStudioCall("issue-llm-execution-grant", issueRequest);
   const grant = isRecord(issued) ? issued.grant : undefined;
   if (!isRecord(grant)) throw refusal("Core returned no execution grant");
   const grantId = grant.grantId;
   if (typeof grantId !== "string" || !grantId || grantId.length > 256) throw refusal("Core returned an invalid execution grant id");
-  if (grant.purpose !== input.plan.purpose) throw refusal("Core issued a grant for a different purpose");
+  if (grant.purpose !== plan.purpose) throw refusal("Core issued a grant for a different purpose");
   const maxCalls = wholeNumber(grant.maxCalls, "call limit");
-  if (maxCalls > input.plan.maxCalls) throw refusal("Core issued a grant authorizing more calls than this run asked for");
+  if (maxCalls > plan.maxCalls) throw refusal("Core issued a grant authorizing more calls than this run asked for");
   const maxEstimatedCostUsd = positiveNumber(grant.maxEstimatedCostUsd, "per-call cost limit");
-  if (maxEstimatedCostUsd > input.plan.maxEstimatedCostUsd) throw refusal("Core issued a grant authorizing more cost per call than this run asked for");
+  if (maxEstimatedCostUsd > plan.maxEstimatedCostUsd) throw refusal("Core issued a grant authorizing more cost per call than this run asked for");
   const maxTotalEstimatedCostUsd = positiveNumber(grant.maxTotalEstimatedCostUsd, "total cost limit");
-  if (maxTotalEstimatedCostUsd > input.plan.declared.maxEstimatedCostUsd * input.plan.maxCalls) {
+  // Judged against the total this run asked Core for, which Core's own ceiling
+  // already holds, so a larger call count cannot loosen the bound.
+  if (maxTotalEstimatedCostUsd > plan.maxTotalEstimatedCostUsd) {
     throw refusal("Core issued a grant authorizing more total cost than this run asked for");
   }
+  // Optional because a Core that predates run token budgets reports none, and
+  // its own run ledger then bounds the tokens. A budget it does report must not
+  // exceed the one asked for.
+  const maxTotalTokensPerRun = grant.maxTotalTokensPerRun === undefined ? null : wholeNumber(grant.maxTotalTokensPerRun, "run token budget");
+  if (maxTotalTokensPerRun !== null && maxTotalTokensPerRun > plan.maxTotalTokensPerRun) {
+    throw refusal("Core issued a grant authorizing a larger run token budget than this run asked for");
+  }
   const timeoutMs = wholeNumber(grant.timeoutMs, "timeout");
-  if (timeoutMs > input.plan.timeoutMs) throw refusal("Core issued a grant authorizing a longer call timeout than this run asked for");
+  if (timeoutMs > plan.timeoutMs) throw refusal("Core issued a grant authorizing a longer call timeout than this run asked for");
   if (grant.providerRetryCount !== 0) throw refusal("Core issued a grant permitting provider retries");
-  return Object.freeze({ grantId, purpose: input.plan.purpose, maxCalls, maxEstimatedCostUsd, maxTotalEstimatedCostUsd, timeoutMs });
+  return Object.freeze({ grantId, purpose: plan.purpose, maxCalls, maxEstimatedCostUsd, maxTotalEstimatedCostUsd, timeoutMs, maxTotalTokensPerRun, highTokenConfirmationSent });
 }
 
 function wholeNumber(value: unknown, label: string): number {

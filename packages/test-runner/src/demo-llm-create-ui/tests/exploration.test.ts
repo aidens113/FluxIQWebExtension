@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS, EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS, EVIDENCE_GUIDED_CREATION_LIMITS, LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD, classifyExplorationUiTerminal, creationSettingsFields, parseEvidenceGuidedCreationProposal, proposeEvidenceGuidedCreationViaUi } from "../index.js";
+import { EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS, EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS, EVIDENCE_GUIDED_CREATION_LIMITS, FIRST_LIVE_CREATION_LIMITS, LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD, classifyExplorationUiTerminal, creationSettingsFields, parseEvidenceGuidedCreationProposal, proposeEvidenceGuidedCreationViaUi } from "../index.js";
 import { readCreateUiSource } from "./module-source.js";
 
 const root = path.resolve(import.meta.dirname, "..", "..", "..", "..", "..");
@@ -17,9 +17,26 @@ const root = path.resolve(import.meta.dirname, "..", "..", "..", "..", "..");
 test("evidence-guided proposal parser retains only bounded proposal accounting", () => {
   const response = { ok: true, payload: { adaptation: { projectId: "project.one", flowId: "flow.one", adaptationId: "adaptation.one", status: "proposed", accounting: { provider: "deepseek", model: "deepseek-chat", inputTokens: 30_000, outputTokens: 4_000, totalTokens: 34_000, estimatedCostUsd: 0.4, raw: "discard-me" }, topology: { raw: "discard-me" } } } };
   assert.deepEqual(parseEvidenceGuidedCreationProposal(response, "project.one", "flow.one"), { adaptationId: "adaptation.one", status: "proposed", provider: "deepseek", model: "deepseek-chat", inputTokens: 30_000, outputTokens: 4_000, totalTokens: 34_000, estimatedCostUsd: 0.4 });
-  assert.equal(EVIDENCE_GUIDED_CREATION_LIMITS.maxCalls, 4);
+  assert.equal("maxCalls" in EVIDENCE_GUIDED_CREATION_LIMITS, false);
   assert.throws(() => parseEvidenceGuidedCreationProposal({ ...response, payload: { adaptation: { ...response.payload.adaptation, status: "applied" } } }, "project.one", "flow.one"), /escaped its checkpoint scope/u);
-  assert.throws(() => parseEvidenceGuidedCreationProposal({ ...response, payload: { adaptation: { ...response.payload.adaptation, accounting: { ...response.payload.adaptation.accounting, inputTokens: 48_000, outputTokens: 1, totalTokens: 48_001 } } } }, "project.one", "flow.one"), /aggregate bounds/u);
+  // The aggregate bound is the run's token budget, not per-call tokens times a call count.
+  const atBudget = { ...response, payload: { adaptation: { ...response.payload.adaptation, accounting: { ...response.payload.adaptation.accounting, inputTokens: 60_000, outputTokens: 40_000, totalTokens: 100_000 } } } };
+  assert.equal(parseEvidenceGuidedCreationProposal(atBudget, "project.one", "flow.one").totalTokens, 100_000);
+  assert.throws(() => parseEvidenceGuidedCreationProposal({ ...response, payload: { adaptation: { ...response.payload.adaptation, accounting: { ...response.payload.adaptation.accounting, inputTokens: 96_000, outputTokens: 4_001, totalTokens: 100_001 } } } }, "project.one", "flow.one"), /aggregate bounds/u);
+  assert.throws(() => parseEvidenceGuidedCreationProposal({ ...response, payload: { adaptation: { ...response.payload.adaptation, accounting: { ...response.payload.adaptation.accounting, estimatedCostUsd: 1.01 } } } }, "project.one", "flow.one"), /aggregate bounds/u);
+});
+
+test("no creation profile types a call count into Flow Settings", async () => {
+  assert.equal("maxCalls" in EVIDENCE_GUIDED_CREATION_LIMITS, false);
+  assert.equal("maxUses" in EVIDENCE_GUIDED_CREATION_LIMITS, false);
+  assert.equal("maxCalls" in EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS, false);
+  assert.deepEqual(creationSettingsFields(EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS).map(([label]) => label), ["Input tokens", "Output tokens", "Total tokens", "Timeout (seconds)", "Max cost (USD)", "Provider retries"]);
+  // The single-call build is one call by construction; the form has no field for it.
+  assert.equal(FIRST_LIVE_CREATION_LIMITS.maxCalls, 1);
+  assert.deepEqual(creationSettingsFields(FIRST_LIVE_CREATION_LIMITS), [["Input tokens", "4000"], ["Output tokens", "1000"], ["Total tokens", "5000"], ["Timeout (seconds)", "20"], ["Max cost (USD)", "0.25"], ["Provider retries", "0"]]);
+  const explorationSource = await readFile(path.join(root, "packages", "test-runner", "src", "demo-llm-create-ui", "explore-proposal-ui.ts"), "utf8");
+  assert.doesNotMatch(explorationSource, /maxCalls|maxUses/u);
+  assert.doesNotMatch(await readCreateUiSource(), /max calls/iu);
 });
 
 test("proposal-only exploration launcher and UI driver stop before review mutation", async () => {
@@ -38,12 +55,13 @@ test("proposal-only exploration launcher and UI driver stop before review mutati
   assert.ok(driver.indexOf("targetPage.bringToFront") < driver.indexOf("waitForExplorationTerminal"));
   assert.match(driver, /listFlowAdaptations/u);
   assert.doesNotMatch(driver, /Approve Adaptation|Apply Adaptation|authorizationPin/u);
-  assert.deepEqual(EVIDENCE_GUIDED_CREATION_LIMITS, { provider: "deepseek", model: "deepseek-chat", maxInputTokens: 8_000, maxOutputTokens: 4_000, maxTotalTokens: 12_000, maxCalls: 4, maxUses: 4, timeoutSeconds: 45, maxEstimatedCostUsd: 0.25, maxTotalEstimatedCostUsd: 1, providerRetries: 0 });
-  assert.deepEqual(EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS, { provider: "deepseek", model: "deepseek-chat", maxInputTokens: 8_000, maxOutputTokens: 4_000, maxTotalTokens: 12_000, maxCalls: 4, timeoutSeconds: 25, maxEstimatedCostUsd: 0.25, providerRetries: 0 });
+  assert.deepEqual(EVIDENCE_GUIDED_CREATION_LIMITS, { provider: "deepseek", model: "deepseek-chat", maxInputTokens: 8_000, maxOutputTokens: 4_000, maxTotalTokens: 12_000, maxTotalTokensPerRun: 100_000, timeoutSeconds: 45, grantClaimWindowSeconds: 60, runLeaseSeconds: 600, maxEstimatedCostUsd: 0.25, maxTotalEstimatedCostUsd: 1, providerRetries: 0 });
+  assert.deepEqual(EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS, { provider: "deepseek", model: "deepseek-chat", maxInputTokens: 8_000, maxOutputTokens: 4_000, maxTotalTokens: 12_000, timeoutSeconds: 25, maxEstimatedCostUsd: 0.25, providerRetries: 0 });
   assert.deepEqual(creationSettingsFields(EVIDENCE_GUIDED_CREATION_FLOW_SETTINGS).find(([label]) => label === "Timeout (seconds)"), ["Timeout (seconds)", "25"]);
   assert.equal(EVIDENCE_GUIDED_CREATION_LIMITS.timeoutSeconds, 45);
-  assert.equal(EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS, 195_000);
-  assert.equal(EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokens * EVIDENCE_GUIDED_CREATION_LIMITS.maxCalls, 48_000);
+  // The panel's command timeout: a 60 s claim window, Core's 600 s run lease, and 15 s for the reply.
+  assert.equal(EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS, 675_000);
+  assert.equal(EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokensPerRun, 100_000);
   assert.equal(LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD, 100_000);
   const workspace = await readFile(path.join(root, "packages", "test-runner", "src", "demo-workspace", "exploration-checkpoints.ts"), "utf8");
   assert.match(workspace, /configureEvidenceGuidedCreationViaUi\(panelPage, fixture\.flowTreeItemId, flowName/u);
@@ -91,5 +109,5 @@ test("exploration UI terminal classifier stops at high-token confirmation withou
     requestObserved: true,
   });
   assert.equal(classifyExplorationUiTerminal({ highTokenConfirmationVisible: false, alertVisible: false, requestObserved: false }), undefined);
-  assert.equal(EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokens * EVIDENCE_GUIDED_CREATION_LIMITS.maxCalls > LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD, false);
+  assert.equal(Math.max(EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokensPerRun, EVIDENCE_GUIDED_CREATION_LIMITS.maxTotalTokens) > LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD, false);
 });

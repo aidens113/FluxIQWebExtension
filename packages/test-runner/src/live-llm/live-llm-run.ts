@@ -12,6 +12,7 @@ import { RunnerFailure } from "../failure.js";
 import type { PersistedFlowLlmExecution } from "../flow-lane/index.js";
 import { authorizeFlowLiveLlmExecution, type LiveLlmAuthorizationControl } from "./authorize-flow.js";
 import { assertLiveLlmBudgetHeld, assertLiveLlmProviderWasReached } from "./budget.js";
+import type { LiveLlmExecutionGrant } from "./execution-grant.js";
 import { planLiveLlmExecution, type LiveLlmPlan } from "./live-llm-plan.js";
 import { liveLlmObservedUsage, type LiveLlmObservedUsage } from "./observed-usage.js";
 import { resolveLiveLlmProviderCredential, type LiveLlmProviderCredential } from "./provider-credential.js";
@@ -46,6 +47,8 @@ export async function beginLiveLlmRun(input: {
 
 export class LiveLlmRun {
   private observed: LiveLlmObservedUsage | undefined;
+  /** The grant Core issued for this run, and what its request sent; `undefined` before that. */
+  private grant: LiveLlmExecutionGrant | undefined;
 
   constructor(private readonly plan: LiveLlmPlan, private readonly credential: LiveLlmProviderCredential) {}
 
@@ -80,6 +83,7 @@ export class LiveLlmRun {
         authorizationPassword: core.authorizationPassword,
         ...(core.authorizationPin ? { authorizationPin: core.authorizationPin } : {}),
       });
+      this.grant = authorization.grant;
       return { grantId: authorization.grant.grantId, purpose: authorization.grant.purpose };
     };
   }
@@ -108,7 +112,28 @@ export class LiveLlmRun {
       task: this.plan.task,
       purpose: this.plan.purpose,
       credentialSource: { name: this.credential.name, from: this.credential.source },
-      authorized: { maxCalls: this.plan.maxCalls, tokenLimits: this.plan.tokenLimits, timeoutMs: this.plan.timeoutMs, maxEstimatedCostUsd: this.plan.maxEstimatedCostUsd },
+      authorized: {
+        maxCalls: this.plan.maxCalls,
+        tokenLimits: this.plan.tokenLimits,
+        maxTotalTokensPerRun: this.plan.maxTotalTokensPerRun,
+        timeoutMs: this.plan.timeoutMs,
+        maxEstimatedCostUsd: this.plan.maxEstimatedCostUsd,
+        maxTotalEstimatedCostUsd: this.plan.maxTotalEstimatedCostUsd,
+      },
+      // What Core actually issued, where it said. `null` for a run token budget
+      // Core did not report.
+      granted: this.grant
+        ? { maxCalls: this.grant.maxCalls, maxTotalTokensPerRun: this.grant.maxTotalTokensPerRun, maxEstimatedCostUsd: this.grant.maxEstimatedCostUsd, maxTotalEstimatedCostUsd: this.grant.maxTotalEstimatedCostUsd, timeoutMs: this.grant.timeoutMs }
+        : null,
+      // Whether this run confirmed Core's high-token exposure on its own
+      // behalf, and why: a confirmation nobody can see afterwards is consent
+      // nobody can check.
+      highTokenConfirmation: {
+        sent: this.grant?.highTokenConfirmationSent === true,
+        authorizedTokens: this.plan.highTokenConfirmation.authorizedTokens,
+        threshold: this.plan.highTokenConfirmation.threshold,
+        reason: this.plan.highTokenConfirmation.reason,
+      },
       declared: this.plan.declared,
       observed,
     });
