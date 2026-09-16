@@ -2542,10 +2542,14 @@ var WEB_LLM_EVIDENCE_BOUNDS = Object.freeze({
   dialogs: 3
 });
 
+// domain/src/runtime/llm-evidence/harness-options/execute.ts
+import { automationStudioExplorationScopeAllows } from "fluxiq/automation-studio";
+
 // domain/src/runtime/llm-evidence/tool-rejection.ts
 var WEB_LLM_TOOL_REJECTION_CODES = [
   "invalid_input",
   "cross_origin",
+  "out_of_scope",
   "no_progress",
   "target_unobserved",
   "target_unsafe",
@@ -2568,6 +2572,23 @@ var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
   WEB_LLM_ACTION_RESULT_CODE,
   ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
 ]);
+
+// domain/src/runtime/llm-evidence/harness-options/vocabulary.ts
+var WEB_RECOVERY_HARNESS_OPTION_IDS = [
+  "web.recovery.inspect",
+  "web.recovery.reveal",
+  "web.recovery.act_safe",
+  "web.recovery.wait_for_change",
+  "web.recovery.navigate_in_scope"
+];
+var WEB_RECOVERY_INSPECT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[0];
+var WEB_RECOVERY_REVEAL_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[1];
+var WEB_RECOVERY_ACT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[2];
+var WEB_RECOVERY_WAIT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[3];
+var WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
+
+// domain/src/runtime/llm-evidence/harness-options/execute.ts
+var WEB_RECOVERY_WAIT_BOUNDS = Object.freeze({ minMs: 100, maxMs: 5e3, defaultMs: 1e3 });
 
 // domain/src/extraction/dataset-id.ts
 var COMBINING_MARKS = new RegExp("\\p{M}+", "gu");

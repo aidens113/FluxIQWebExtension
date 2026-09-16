@@ -2804,6 +2804,20 @@ function evidenceByteLimit(input, fallback, ceiling = WEB_LLM_EVIDENCE_BYTE_BUDG
   return Math.min(Number(input), cap);
 }
 
+// domain/src/runtime/llm-evidence/harness-options/execute.ts
+import { automationStudioExplorationScopeAllows } from "fluxiq/automation-studio";
+
+// domain/src/runtime/llm-evidence/present.ts
+function present(fields) {
+  const source = fields;
+  const written = {};
+  for (const key of Object.keys(source)) {
+    const value = source[key];
+    if (value !== void 0) written[key] = value;
+  }
+  return written;
+}
+
 // domain/src/runtime/llm-evidence/location.ts
 function safeEvidenceUrl(input) {
   if (typeof input !== "string" || !input || input.length > WEB_LLM_EVIDENCE_BOUNDS.url) throw new Error("web evidence URL must be bounded");
@@ -2822,17 +2836,6 @@ function sameOriginHref(input, base) {
   } catch {
     return void 0;
   }
-}
-
-// domain/src/runtime/llm-evidence/present.ts
-function present(fields) {
-  const source = fields;
-  const written = {};
-  for (const key of Object.keys(source)) {
-    const value = source[key];
-    if (value !== void 0) written[key] = value;
-  }
-  return written;
 }
 
 // domain/src/runtime/llm-evidence/untrusted-json.ts
@@ -3214,6 +3217,131 @@ function trimToBudget(evidence, selectors, maxEvidenceBytes) {
   }
 }
 
+// domain/src/runtime/llm-evidence/capture.ts
+function selectSession(sessionIds) {
+  const unique = [...new Set(sessionIds)];
+  if (unique.length !== 1) throw new Error("exactly one connected web-automation client is required for LLM evidence");
+  return unique[0];
+}
+function toolMetadata(input) {
+  return { source: "llm-evidence-runtime", projectId: input.projectId, flowId: input.flowId, callId: input.callId, domainId: WEB_AUTOMATION_DOMAIN_ID };
+}
+function toolExecution(evidence, effectApplied, resultCode) {
+  return { kind: "llm_evidence_tool_execution", evidence, effectApplied, resultCode };
+}
+function assertActive(signal) {
+  if (signal?.aborted) throw signal.reason ?? new Error("web evidence operation was cancelled");
+}
+async function captureEvidence(gateway, sessionId, request, signal, expectedOrigin) {
+  const result = await gateway.executeAction(sessionId, {
+    actionType: "web.dom.capture_snapshot",
+    parameters: {},
+    metadata: toolMetadata(request)
+  });
+  assertActive(signal);
+  if (result.status !== "succeeded") throw new Error("web evidence snapshot capture failed");
+  const payload = jsonRecord(result.payload, "web evidence action payload");
+  return sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present({
+    budget: "exploration",
+    maxEvidenceBytes: request.maxEvidenceBytes,
+    expectedOrigin,
+    // An exploration packet is an observation, not a failure, so it marks no
+    // target at all -- neither a handle nor a "the target is gone".
+    failedAction: void 0
+  }));
+}
+async function actAndCapture(gateway, sessionId, request, actionType, parameters, current, signal, expectedOrigin) {
+  const result = await gateway.executeAction(sessionId, { actionType, parameters, metadata: toolMetadata(request) });
+  assertActive(signal);
+  if (result.status !== "succeeded") throw new Error("web evidence interaction failed");
+  return await captureEvidence(gateway, sessionId, request, signal, expectedOrigin ?? new URL(current.evidence.location).origin);
+}
+
+// domain/src/runtime/llm-evidence/tool-rejection.ts
+var WEB_LLM_TOOL_RESULT_SCHEMA_VERSION = "web-llm-tool-result.v1";
+var WEB_LLM_TOOL_REJECTION_CODES = [
+  "invalid_input",
+  "cross_origin",
+  "out_of_scope",
+  "no_progress",
+  "target_unobserved",
+  "target_unsafe",
+  "sensitive_value"
+];
+var RecoverableToolRejection = class extends Error {
+  constructor(code) {
+    super(code);
+    this.code = code;
+  }
+};
+function recoverable(code) {
+  throw new RecoverableToolRejection(code);
+}
+function toolRejection(code) {
+  return { schemaVersion: WEB_LLM_TOOL_RESULT_SCHEMA_VERSION, ok: false, code };
+}
+
+// domain/src/runtime/llm-evidence/reveal.ts
+var COMMITTING_ACTION_WORDS = /\b(?:submit|purchase|buy|pay|checkout|order|delete|remove|destroy|unsubscribe|confirm|send|publish)\b/iu;
+function safeRevealElement(element) {
+  const identity = [element.selector, element.name, element.text].filter(Boolean).join(" ");
+  if (COMMITTING_ACTION_WORDS.test(identity)) return false;
+  if (element.revealKind === "view") return element.role === "tab" || element.role === "menuitem" || element.role === "treeitem";
+  if (element.revealKind !== "disclosure") return false;
+  if (element.tag === "summary") return true;
+  if (element.controlType === "submit" || element.inputType === "submit") return false;
+  return element.tag === "button" || element.role === "button" || element.tag === "input" && (element.controlType === "button" || element.inputType === "button");
+}
+function observedElement(evidence, target) {
+  const matches = evidence.elements.filter((element) => element.target === target);
+  if (matches.length !== 1) recoverable("target_unobserved");
+  return matches[0];
+}
+function currentElementForReturnedTarget(returned, current, target) {
+  const observedSnapshot = returned ?? current;
+  if (observedSnapshot.evidence.location !== current.evidence.location) recoverable("target_unobserved");
+  observedElement(observedSnapshot.evidence, target);
+  const selector = observedSnapshot.selectors.get(target);
+  if (!selector) recoverable("target_unobserved");
+  const matches = current.evidence.elements.filter((element) => current.selectors.get(element.target) === selector);
+  if (matches.length !== 1) recoverable("target_unobserved");
+  return { ...matches[0], selector };
+}
+
+// domain/src/runtime/llm-evidence/vocabulary.ts
+var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe"];
+var WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
+var WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
+var WEB_LLM_REVEAL_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[2];
+var WEB_LLM_INSPECT_RESULT_CODE = "web.inspect.succeeded";
+var WEB_LLM_ACTION_RESULT_CODE = "web.action.succeeded";
+var REJECTION_RESULT_CODE_PREFIX = "web.action.rejected.";
+function webLlmToolRejectionResultCode(code) {
+  return `${REJECTION_RESULT_CODE_PREFIX}${code}`;
+}
+var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
+  WEB_LLM_INSPECT_RESULT_CODE,
+  WEB_LLM_ACTION_RESULT_CODE,
+  ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
+]);
+
+// domain/src/runtime/llm-evidence/harness-options/vocabulary.ts
+var WEB_RECOVERY_HARNESS_OPTION_IDS = [
+  "web.recovery.inspect",
+  "web.recovery.reveal",
+  "web.recovery.act_safe",
+  "web.recovery.wait_for_change",
+  "web.recovery.navigate_in_scope"
+];
+var WEB_RECOVERY_INSPECT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[0];
+var WEB_RECOVERY_REVEAL_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[1];
+var WEB_RECOVERY_ACT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[2];
+var WEB_RECOVERY_WAIT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[3];
+var WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
+
+// domain/src/runtime/llm-evidence/harness-options/execute.ts
+var WEB_RECOVERY_WAIT_BOUNDS = Object.freeze({ minMs: 100, maxMs: 5e3, defaultMs: 1e3 });
+
 // domain/src/runtime/llm-evidence/repairable-parameters.ts
 var WEB_REPAIRABLE_ELEMENT_PARAMETER = "element";
 var WEB_REPAIRABLE_ITEM_PARAMETER = "item";
@@ -3326,73 +3454,6 @@ function elementFingerprint2(element, selectors) {
   });
 }
 
-// domain/src/runtime/llm-evidence/tool-rejection.ts
-var WEB_LLM_TOOL_RESULT_SCHEMA_VERSION = "web-llm-tool-result.v1";
-var WEB_LLM_TOOL_REJECTION_CODES = [
-  "invalid_input",
-  "cross_origin",
-  "no_progress",
-  "target_unobserved",
-  "target_unsafe",
-  "sensitive_value"
-];
-var RecoverableToolRejection = class extends Error {
-  constructor(code) {
-    super(code);
-    this.code = code;
-  }
-};
-function recoverable(code) {
-  throw new RecoverableToolRejection(code);
-}
-function toolRejection(code) {
-  return { schemaVersion: WEB_LLM_TOOL_RESULT_SCHEMA_VERSION, ok: false, code };
-}
-
-// domain/src/runtime/llm-evidence/vocabulary.ts
-var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe"];
-var WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
-var WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
-var WEB_LLM_REVEAL_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[2];
-var WEB_LLM_INSPECT_RESULT_CODE = "web.inspect.succeeded";
-var WEB_LLM_ACTION_RESULT_CODE = "web.action.succeeded";
-var REJECTION_RESULT_CODE_PREFIX = "web.action.rejected.";
-function webLlmToolRejectionResultCode(code) {
-  return `${REJECTION_RESULT_CODE_PREFIX}${code}`;
-}
-var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
-  WEB_LLM_INSPECT_RESULT_CODE,
-  WEB_LLM_ACTION_RESULT_CODE,
-  ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
-]);
-
-// domain/src/runtime/llm-evidence/reveal.ts
-var COMMITTING_ACTION_WORDS = /\b(?:submit|purchase|buy|pay|checkout|order|delete|remove|destroy|unsubscribe|confirm|send|publish)\b/iu;
-function safeRevealElement(element) {
-  const identity = [element.selector, element.name, element.text].filter(Boolean).join(" ");
-  if (COMMITTING_ACTION_WORDS.test(identity)) return false;
-  if (element.revealKind === "view") return element.role === "tab" || element.role === "menuitem" || element.role === "treeitem";
-  if (element.revealKind !== "disclosure") return false;
-  if (element.tag === "summary") return true;
-  if (element.controlType === "submit" || element.inputType === "submit") return false;
-  return element.tag === "button" || element.role === "button" || element.tag === "input" && (element.controlType === "button" || element.inputType === "button");
-}
-function observedElement(evidence, target) {
-  const matches = evidence.elements.filter((element) => element.target === target);
-  if (matches.length !== 1) recoverable("target_unobserved");
-  return matches[0];
-}
-function currentElementForReturnedTarget(returned, current, target) {
-  const observedSnapshot = returned ?? current;
-  if (observedSnapshot.evidence.location !== current.evidence.location) recoverable("target_unobserved");
-  observedElement(observedSnapshot.evidence, target);
-  const selector = observedSnapshot.selectors.get(target);
-  if (!selector) recoverable("target_unobserved");
-  const matches = current.evidence.elements.filter((element) => current.selectors.get(element.target) === selector);
-  if (matches.length !== 1) recoverable("target_unobserved");
-  return { ...matches[0], selector };
-}
-
 // domain/src/runtime/llm-evidence/tools.ts
 var TARGET_HANDLE_PATTERN = "^target\\.[1-9][0-9]?$";
 var RETAINED_SELECTOR_BINDINGS = 8;
@@ -3454,13 +3515,13 @@ function createWebAutomationLlmEvidenceRuntime(gateway) {
       try {
         if (input.toolId === WEB_LLM_INSPECT_TOOL_ID) {
           exactToolKeys(input.value, []);
-          const snapshot = retain(await inspect(gateway, sessionId, input, input.signal));
+          const snapshot = retain(await captureEvidence(gateway, sessionId, input, input.signal));
           returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
           return toolExecution(snapshot.evidence, false, WEB_LLM_INSPECT_RESULT_CODE);
         }
         if (input.toolId === WEB_LLM_NAVIGATE_TOOL_ID) {
           exactToolKeys(input.value, ["url"]);
-          const current = await inspect(gateway, sessionId, input, input.signal);
+          const current = await captureEvidence(gateway, sessionId, input, input.signal);
           const currentUrl = new URL(current.evidence.location);
           const destination = requestedUrl(input.value.url);
           if (destination.origin !== currentUrl.origin) recoverable("cross_origin");
@@ -3472,17 +3533,17 @@ function createWebAutomationLlmEvidenceRuntime(gateway) {
           });
           assertActive(input.signal);
           if (result.status !== "succeeded") throw new Error("web evidence navigation failed");
-          const snapshot = retain(await inspect(gateway, sessionId, input, input.signal, destination.origin));
+          const snapshot = retain(await captureEvidence(gateway, sessionId, input, input.signal, destination.origin));
           returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
           return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE);
         }
         if (input.toolId === WEB_LLM_REVEAL_TOOL_ID) {
           exactToolKeys(input.value, ["target"]);
           const target = boundedTargetHandle(input.value.target);
-          const current = await inspect(gateway, sessionId, input, input.signal);
+          const current = await captureEvidence(gateway, sessionId, input, input.signal);
           const element = currentElementForReturnedTarget(returnedEvidence.get(evidenceScope(input, sessionId)), current, target);
           if (!safeRevealElement(element)) recoverable("target_unsafe");
-          const snapshot = retain(await executeAndInspect(gateway, sessionId, input, "web.dom.click", { selector: element.selector }, current, input.signal));
+          const snapshot = retain(await actAndCapture(gateway, sessionId, input, "web.dom.click", { selector: element.selector }, current, input.signal));
           if (JSON.stringify(snapshot.evidence) === JSON.stringify(current.evidence)) recoverable("no_progress");
           returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
           return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE);
@@ -3547,30 +3608,6 @@ function bindWebAutomationLlmEvidenceRuntime(fluxiq2) {
     executeAction: (sessionId, command) => fluxiq2.programs.automationStudioClientGateway.executeAction(sessionId, command)
   }));
 }
-async function inspect(gateway, sessionId, request, signal, expectedOrigin) {
-  const result = await gateway.executeAction(sessionId, {
-    actionType: "web.dom.capture_snapshot",
-    parameters: {},
-    metadata: toolMetadata(request)
-  });
-  assertActive(signal);
-  if (result.status !== "succeeded") throw new Error("web evidence snapshot capture failed");
-  const payload = jsonRecord(result.payload, "web evidence action payload");
-  return sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present({
-    budget: "exploration",
-    maxEvidenceBytes: request.maxEvidenceBytes,
-    expectedOrigin,
-    // An exploration packet is an observation, not a failure, so it marks no
-    // target at all -- neither a handle nor a "the target is gone".
-    failedAction: void 0
-  }));
-}
-async function executeAndInspect(gateway, sessionId, request, actionType, parameters, current, signal) {
-  const result = await gateway.executeAction(sessionId, { actionType, parameters, metadata: toolMetadata(request) });
-  assertActive(signal);
-  if (result.status !== "succeeded") throw new Error("web evidence interaction failed");
-  return await inspect(gateway, sessionId, request, signal, new URL(current.evidence.location).origin);
-}
 function eligibleWebSessionIds(fluxiq2) {
   return fluxiq2.programs.clientGateway.snapshot().sessions.filter(
     (session) => session.status === "ready" && session.clientType === "extension" && !session.activeRecordingId && session.capabilities.some(
@@ -3578,22 +3615,11 @@ function eligibleWebSessionIds(fluxiq2) {
     )
   ).map((session) => session.sessionId);
 }
-function selectSession(sessionIds) {
-  const unique = [...new Set(sessionIds)];
-  if (unique.length !== 1) throw new Error("exactly one connected web-automation client is required for LLM evidence");
-  return unique[0];
-}
-function toolMetadata(input) {
-  return { source: "llm-evidence-runtime", projectId: input.projectId, flowId: input.flowId, callId: input.callId, domainId: WEB_AUTOMATION_DOMAIN_ID };
-}
 function packetKey(evidence) {
   return `${evidence.location}\0${evidence.elements.map((element) => element.target).join(",")}`;
 }
 function evidenceScope(input, sessionId) {
   return `${sessionId}\0${input.projectId}\0${input.flowId}`;
-}
-function toolExecution(evidence, effectApplied, resultCode) {
-  return { kind: "llm_evidence_tool_execution", evidence, effectApplied, resultCode };
 }
 function requestedUrl(input) {
   try {
@@ -3609,9 +3635,6 @@ function boundedTargetHandle(input) {
 function exactToolKeys(input, allowed) {
   const keys = new Set(allowed);
   if (Object.keys(input).some((key) => !keys.has(key)) || allowed.some((key) => !Object.prototype.hasOwnProperty.call(input, key))) recoverable("invalid_input");
-}
-function assertActive(signal) {
-  if (signal?.aborted) throw signal.reason ?? new Error("web evidence operation was cancelled");
 }
 
 // domain/src/runtime/adapter.ts

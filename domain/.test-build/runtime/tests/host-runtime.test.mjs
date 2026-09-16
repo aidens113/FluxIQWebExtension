@@ -1048,6 +1048,20 @@ function evidenceByteLimit(input, fallback, ceiling = WEB_LLM_EVIDENCE_BYTE_BUDG
   return Math.min(Number(input), cap);
 }
 
+// domain/src/runtime/llm-evidence/harness-options/execute.ts
+import { automationStudioExplorationScopeAllows } from "fluxiq/automation-studio";
+
+// domain/src/runtime/llm-evidence/present.ts
+function present(fields) {
+  const source = fields;
+  const written = {};
+  for (const key of Object.keys(source)) {
+    const value = source[key];
+    if (value !== void 0) written[key] = value;
+  }
+  return written;
+}
+
 // domain/src/runtime/llm-evidence/location.ts
 function safeEvidenceUrl(input) {
   if (typeof input !== "string" || !input || input.length > WEB_LLM_EVIDENCE_BOUNDS.url) throw new Error("web evidence URL must be bounded");
@@ -1066,17 +1080,6 @@ function sameOriginHref(input, base) {
   } catch {
     return void 0;
   }
-}
-
-// domain/src/runtime/llm-evidence/present.ts
-function present(fields) {
-  const source = fields;
-  const written = {};
-  for (const key of Object.keys(source)) {
-    const value = source[key];
-    if (value !== void 0) written[key] = value;
-  }
-  return written;
 }
 
 // domain/src/runtime/llm-evidence/untrusted-json.ts
@@ -1453,6 +1456,7 @@ function trimToBudget(evidence, selectors, maxEvidenceBytes) {
 var WEB_LLM_TOOL_REJECTION_CODES = [
   "invalid_input",
   "cross_origin",
+  "out_of_scope",
   "no_progress",
   "target_unobserved",
   "target_unsafe",
@@ -1475,6 +1479,23 @@ var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
   WEB_LLM_ACTION_RESULT_CODE,
   ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
 ]);
+
+// domain/src/runtime/llm-evidence/harness-options/vocabulary.ts
+var WEB_RECOVERY_HARNESS_OPTION_IDS = [
+  "web.recovery.inspect",
+  "web.recovery.reveal",
+  "web.recovery.act_safe",
+  "web.recovery.wait_for_change",
+  "web.recovery.navigate_in_scope"
+];
+var WEB_RECOVERY_INSPECT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[0];
+var WEB_RECOVERY_REVEAL_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[1];
+var WEB_RECOVERY_ACT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[2];
+var WEB_RECOVERY_WAIT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[3];
+var WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
+
+// domain/src/runtime/llm-evidence/harness-options/execute.ts
+var WEB_RECOVERY_WAIT_BOUNDS = Object.freeze({ minMs: 100, maxMs: 5e3, defaultMs: 1e3 });
 
 // domain/src/runtime/host-runtime.ts
 var WEB_STATE_DIFF_SCHEMA_VERSION = "web-state-diff.v2";
