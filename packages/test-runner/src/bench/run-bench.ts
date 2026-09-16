@@ -444,7 +444,7 @@ function reconstructBenchEvaluation(cell: CampaignPlanCell, active: ActiveCampai
   const result = { runId: active.runId, verdict: source.verdict === "passed" ? "passed" as const : "failed" as const, ...(source.failureCategory ? { failureCategory: source.failureCategory } : {}) };
   const observed = { ...identity, facilityFailure: source.facilityFailure, result, manifest: bundle.manifest, metrics: bundle.metrics, finalSequence: bundle.finalSequence, errorSequence: bundle.errorSequence, wallClockMs: source.durationMs };
   if (cell.lane === "recording") return evaluateRecordingRun(observed);
-  return evaluateFlowRun({ ...observed, result: { ...result, path: bundlePath, observation: { lane: "flow", flowCreated: source.flowCreated === true, oracleVerdict: source.oracleVerdict, reportedVerdict: source.reportedVerdict, automationFailureReported: source.automationFailureReported, automationFailureExpected: source.automationFailureExpected, harnessActivations: source.harnessActivations, actions: source.actions } } });
+  return evaluateFlowRun({ ...observed, result: { ...result, path: bundlePath, observation: { lane: "flow", flowCreated: source.flowCreated === true, oracleVerdict: source.oracleVerdict, reportedVerdict: source.reportedVerdict, automationFailureReported: source.automationFailureReported, automationFailureExpected: source.automationFailureExpected, harnessActivations: source.harnessActivations, actions: source.actions, extraction: source.extraction } } });
 }
 
 async function persistEvaluation(directory: string, cell: CampaignPlanCell, evaluation: RunEvaluation, observed: { problems: string[]; cause?: string }): Promise<Omit<AcceptedCell, "bundle">> {

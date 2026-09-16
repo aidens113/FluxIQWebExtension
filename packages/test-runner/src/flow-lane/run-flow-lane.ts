@@ -3,7 +3,7 @@ import { RunnerFailure } from "../failure.js";
 import type { FluxIQHttpOptions } from "../http-control/index.js";
 import { declaredSecretBindingInputs, flowSecretRequests, type DeclaredSecret } from "./declared-secrets.js";
 import { declaredUploadInputs, flowUploadRequests } from "./declared-uploads.js";
-import { assertFlowActions, assertFlowExtraction, assertFlowFailure, flowExtractionExpectation, type FlowExtractionExpectation } from "./expectations.js";
+import { assertFlowActions, assertFlowExtraction, assertFlowFailure, judgeFlowExtraction, type FlowExtractionJudgement } from "./expectations.js";
 import { awaitFinalizedRecording, type FinalizedRecording, type FinalizedRecordingWait } from "./finalized-recording.js";
 import { flowActionTypes, readFlowNodes, type FlowNodeRecord } from "./flow-action-types.js";
 import { flowLaneObservation, type RunLaneObservation } from "./lane-observation.js";
@@ -68,7 +68,7 @@ export type FlowLaneInput = {
  * `extraction` says whether the workflow's extraction expectation applied to
  * this Flow, and so whether it is judged.
  */
-export type FlowLaneEvidence = { recording: FinalizedRecording; proposal: RecordingFlowProposal; flowId: string; run: PersistedFlowRunOutcome; observation: RunLaneObservation; extraction: FlowExtractionExpectation; startCandidateIndex: number | null };
+export type FlowLaneEvidence = { recording: FinalizedRecording; proposal: RecordingFlowProposal; flowId: string; run: PersistedFlowRunOutcome; observation: RunLaneObservation; extraction: FlowExtractionJudgement; startCandidateIndex: number | null };
 
 /**
  * `startCandidateIndex` is where the run started in the recording's candidate
@@ -81,7 +81,7 @@ export type FlowLaneOutcome = {
   flowId: string;
   run: PersistedFlowRunOutcome;
   observation: RunLaneObservation;
-  extraction: FlowExtractionExpectation;
+  extraction: FlowExtractionJudgement;
   startCandidateIndex: number | null;
 };
 
@@ -151,8 +151,17 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
     inputs: { ...secretInputs, ...uploadInputs, scenarioId: input.scenario.id, facilityRunId: input.facilityRunId },
   }, bounds);
   const expected = input.workflow.expected;
-  // A Flow with no extract node cannot yield the records a recording's `extract` step checked, so that expectation is not judged here.
-  const extraction = flowExtractionExpectation(expected.extracted, actionTypes);
+  // Judged before the oracle and the publish, and never throwing: the
+  // measurements are what the bench's extraction numbers are computed from, so
+  // a run whose expectations fail must still publish them.
+  const extraction = judgeFlowExtraction({
+    expected: expected.extracted,
+    script: input.workflow.recordingScript,
+    datasets: run.extracted,
+    actionTypes,
+    candidateOrder,
+    durationsByNode: run.extractionDurationsByNode,
+  });
   // The oracle and the publish both come before the asserts. An assert throws
   // on any mismatch, and a run that failed one used to leave the runner with no
   // Flow observation at all, so the category Core reported never reached the
@@ -164,6 +173,7 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
     oracleVerdict: oracleHeld ? "passed" : "failed",
     run,
     automationFailureExpected: expected.failure ?? null,
+    extraction: extraction.measurements,
   });
   // Where the run started, in the recording's order: 0 is the recording's first
   // action. Null when no attempt landed on an action node.
@@ -177,7 +187,7 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
   assertFlowDidNotStopEarly(run);
   assertFlowFailure(expected.failure, run.failure);
   assertFlowActions(expected.actions, run.actions);
-  assertFlowExtraction(expected.extracted, run.extracted, actionTypes, run.extractedNonStringValues);
+  assertFlowExtraction(extraction);
   return { recording, proposal, flowId: approved.flowId, run, observation, extraction, startCandidateIndex };
 }
 
@@ -189,6 +199,42 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
  * candidate this proposal does not hold, leaves the lane unable to say where
  * the recording begins, so the run is refused before it starts.
  */
+/**
+ * The extraction judgement as the snapshot states it: counts, statuses, and the
+ * names of the expectation members this lane could not observe.
+ *
+ * `unjudged` is the point of the block. A reader who sees a green extraction
+ * must be able to see what was *not* compared -- the pages an entry declared
+ * and Core's run datasets do not record -- without opening this code, because
+ * the alternative is a number that looks like a full judgement and is not.
+ */
+function extractionSnapshot(judgement: FlowExtractionJudgement) {
+  return {
+    expectation: judgement.expectation,
+    extractNodes: judgement.extractNodes,
+    extractSteps: judgement.steps.length,
+    unpairedDatasets: judgement.unpairedDatasets,
+    nonStringValues: judgement.nonStringValues,
+    steps: judgement.steps.map((step) => ({
+      stepIndex: step.stepIndex,
+      status: step.measurement.status,
+      expectedRecords: step.measurement.expectedRecords,
+      observedRecords: step.measurement.observedRecords,
+      comparedRecords: step.measurement.comparedRecords,
+      matchedRecords: step.measurement.matchedRecords,
+      expectedFields: step.measurement.expectedFields,
+      presentFields: step.measurement.presentFields,
+      unexpectedFields: step.measurement.unexpectedFields,
+      nonStringValues: step.measurement.nonStringValues,
+      unjudged: [...step.unjudged],
+      // Core's own dataset flags, which are not the extraction's: `storeTruncated` is Core's per-run row cap.
+      storeTruncated: step.dataset?.storeTruncated ?? null,
+      invalidRows: step.dataset?.invalidCount ?? null,
+      datasetPages: step.dataset?.pages ?? null,
+    })),
+  };
+}
+
 function recordedCandidateOrder(nodes: readonly FlowNodeRecord[], actionTypes: ReadonlyMap<string, string>, proposal: RecordingFlowProposal, flowId: string): Map<string, number> {
   const positions = new Map(proposal.candidateIds.map((candidateId, index) => [candidateId, index] as const));
   const order = new Map<string, number>();
@@ -249,10 +295,12 @@ function assertFlowDidNotStopEarly(run: PersistedFlowRunOutcome): void {
  * run ends and this file is then the only record of how a target was found.
  * For the same reason each action carries the size and truncation flag of the
  * sanitized evidence packets Core captured around it -- measurements, never the
- * packets. `extractionExpectation` says whether the workflow's extraction was
- * judged against this Flow, and `extractionNonStringValues` counts the values
- * its extract attempts carried that are not strings, never the values. Each
- * action carries Core's transition comparison status when Core reported one.
+ * packets. `extraction` is what the lane made of the workflow's extraction:
+ * whether it was judged, how many extract nodes the Flow held against how many
+ * recorded extract steps, and one entry per step with its counts, the members
+ * this lane could not observe, and Core's own dataset flags -- counts and
+ * closed names only, never a field name or a record. Each action carries
+ * Core's transition comparison status when Core reported one.
  * `stoppedWithoutFailedAttempt` is the run's early stop, by counts, or null
  * when it did not stop that way.
  */
@@ -264,7 +312,7 @@ export function flowLaneSnapshot(evidence: FlowLaneEvidence) {
     harnessActivations: evidence.run.harnessActivations, failure: evidence.run.failure, stoppedWithoutFailedAttempt: evidence.run.stoppedWithoutFailedAttempt ?? null,
     // Where the run started in the recording's candidate order: 0 for its first action, null when no attempt landed on an action node.
     startCandidateIndex: evidence.startCandidateIndex ?? null,
-    extractionCount: evidence.run.extracted.length, extractionNonStringValues: evidence.run.extractedNonStringValues, extractionExpectation: evidence.extraction,
+    extraction: extractionSnapshot(evidence.extraction),
     actions: evidence.run.actions.map((action) => ({
       actionType: action.actionType,
       status: action.status,

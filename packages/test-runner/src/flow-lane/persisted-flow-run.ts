@@ -4,6 +4,7 @@ import type { AutomationNodeTargetResolution } from "fluxiq/automation-studio/no
 import { RunnerFailure } from "../failure.js";
 import { isBoundedHttpFailure, type FluxIQHttpOptions } from "../http-control/index.js";
 import { runActionStatus } from "../run-manifest/index.js";
+import { readRunDatasets, runDatasetSummaries, type FlowRunDataset, type RunDatasetSummary } from "./run-datasets.js";
 
 /**
  * A timed-out synchronous Core run can keep executing after its HTTP client has
@@ -38,14 +39,14 @@ export type PersistedFlowAction = {
   startedAt: string;
   durationMs?: number;
   failure: AutomationStudioFailureRecord | null;
-  extracted?: Array<Record<string, string>>;
   /**
-   * How many values the attempt's extracted list carried that `extracted`
-   * leaves out: each field value that is not a string, and each entry that is
-   * not a record. Present exactly when `extracted` is. A count, never the
-   * values (D6).
+   * Rows the attempt captured, from Core's `metadata.recordCount` (K5). Core
+   * replaces a stored attempt's captured rows with a `$dataset` marker holding
+   * this count, so it is the only thing an attempt says about an extraction —
+   * the rows themselves are in the run's datasets. Absent when the attempt
+   * captured none.
    */
-  extractedNonStringValues?: number;
+  recordCount?: number;
   /**
    * Core's comparison of what the attempt did against the transition its node
    * expected, by Core's name for it (`matched`, `blocked`, ...; Core
@@ -131,10 +132,19 @@ export type PersistedFlowRunOutcome = {
   failure: AutomationStudioFailureRecord | null;
   /** LLM interventions Core recorded for the run. Week 1 runs provider-free, so this must stay 0. */
   harnessActivations: number;
-  /** Records every extract attempt yielded, in attempt order. Proves paginated extraction. */
-  extracted: Array<Array<Record<string, string>>>;
-  /** Every extract attempt's `extractedNonStringValues`, summed: the values `extracted` leaves out. Counts only (D6). */
+  /**
+   * The datasets the run stored, read whole from Core (K5, K8). This is where
+   * a Flow run's extracted records are: an attempt carries a record count and
+   * a `$dataset` marker, never the rows.
+   */
+  extracted: FlowRunDataset[];
+  /** Every dataset's `nonStringValues`, summed: the values its records leave out. Counts only (D6). */
   extractedNonStringValues: number;
+  /**
+   * How long each node's attempts took, summed per node, so an extraction's
+   * duration can be attributed to the dataset its node wrote.
+   */
+  extractionDurationsByNode: Map<string, number>;
   /**
    * Set only when Core failed the run, every attempt succeeded, and at least one
    * of the Flow's action nodes was never attempted: the run stopped early rather
@@ -191,15 +201,32 @@ export async function executeRecordedFlowRun(
     // away. An arbitrary runner failure is not evidence that a run completed.
     if (!isBoundedHttpFailure(error)) throw error;
     const detail = await awaitTerminalRunDetail(control, input.projectId, runId, input.actionTypes ?? new Map(), error, terminalWait);
-    return outcomeFromDetail(runId, detail, sessionStatus, input.actionTypes, input.candidateOrder);
+    return outcomeFromDetail(runId, detail, await datasetsOf(control, input.projectId, runId, detail, bounds), sessionStatus, input.actionTypes, input.candidateOrder);
   }
   const detail = await readRunDetail(control, input.projectId, runId, bounds, input.actionTypes ?? new Map());
-  return outcomeFromDetail(runId, detail, sessionStatus, input.actionTypes, input.candidateOrder);
+  return outcomeFromDetail(runId, detail, await datasetsOf(control, input.projectId, runId, detail, bounds), sessionStatus, input.actionTypes, input.candidateOrder);
+}
+
+/**
+ * The run's datasets, read once the detail is terminal. Reading them from the
+ * detail's summaries keeps the two consistent: a dataset the run detail does
+ * not list is one this run did not store, whoever else's rows are in the
+ * project.
+ */
+async function datasetsOf(
+  control: PersistedFlowRunControl,
+  projectId: string,
+  runId: string,
+  detail: Awaited<ReturnType<typeof readRunDetail>>,
+  bounds: FluxIQHttpOptions,
+): Promise<FlowRunDataset[]> {
+  return detail.datasets.length === 0 ? [] : await readRunDatasets(control, { projectId, runId, summaries: detail.datasets }, bounds);
 }
 
 function outcomeFromDetail(
   runId: string,
   detail: Awaited<ReturnType<typeof readRunDetail>>,
+  datasets: FlowRunDataset[],
   sessionStatus: string,
   actionTypes: ReadonlyMap<string, string> | undefined,
   candidateOrder: ReadonlyMap<string, number> | undefined,
@@ -218,8 +245,9 @@ function outcomeFromDetail(
     actions,
     failure,
     harnessActivations: detail.harnessActivations,
-    extracted: actions.flatMap((action) => (action.extracted ? [action.extracted] : [])),
-    extractedNonStringValues: actions.reduce((sum, action) => sum + (action.extractedNonStringValues ?? 0), 0),
+    extracted: datasets,
+    extractedNonStringValues: datasets.reduce((sum, dataset) => sum + dataset.nonStringValues, 0),
+    extractionDurationsByNode: detail.durationsByNode,
     ...(stop ? { stoppedWithoutFailedAttempt: stop } : {}),
     ...(startCandidateIndex === undefined ? {} : { startCandidateIndex }),
   };
@@ -282,7 +310,7 @@ async function readRunDetail(
   runId: string,
   bounds: FluxIQHttpOptions,
   actionTypes: ReadonlyMap<string, string>,
-): Promise<{ summaryStatus: string | undefined; actions: PersistedFlowAction[]; attemptNodeIds: readonly string[]; harnessActivations: number }> {
+): Promise<{ summaryStatus: string | undefined; actions: PersistedFlowAction[]; attemptNodeIds: readonly string[]; harnessActivations: number; datasets: RunDatasetSummary[]; durationsByNode: Map<string, number> }> {
   const payload = asRecord(await control.automationStudioCall("get-flow-run-detail", { projectId, runId }, bounds), "run detail payload");
   const detail = asRecord(payload.runDetail, "runDetail");
   const summary = asRecord(detail.summary, "runDetail.summary");
@@ -294,7 +322,7 @@ async function readRunDetail(
   const actions = attempts.map((attempt) => flowAction(attempt, actionTypes));
   // In attempt order, one entry per attempt that names a node, so a retried node appears once per attempt.
   const attemptNodeIds = attempts.flatMap((attempt) => (typeof attempt.nodeId === "string" ? [attempt.nodeId] : []));
-  return { summaryStatus: typeof summary.status === "string" ? summary.status : undefined, actions, attemptNodeIds, harnessActivations: interventions.length };
+  return { summaryStatus: typeof summary.status === "string" ? summary.status : undefined, actions, attemptNodeIds, harnessActivations: interventions.length, datasets: runDatasetSummaries(detail), durationsByNode: attemptDurationsByNode(attempts) };
 }
 
 /**
@@ -306,8 +334,8 @@ async function readRunDetail(
 function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<string, string>): PersistedFlowAction {
   const startedAt = numberOf(attempt.startedAt);
   const finishedAt = typeof attempt.finishedAt === "number" && Number.isFinite(attempt.finishedAt) ? attempt.finishedAt : undefined;
-  const extracted = extractedRecords(attempt);
   const nodeId = typeof attempt.nodeId === "string" ? attempt.nodeId : "";
+  const recordCount = optionalRecord(attempt.metadata)?.recordCount;
   const targetResolution = targetResolutionOf(attempt);
   const evidencePackets = evidencePacketsOf(attempt);
   const comparisonStatus = comparisonStatusOf(attempt);
@@ -318,7 +346,7 @@ function flowAction(attempt: Record<string, unknown>, actionTypes: ReadonlyMap<s
     ...(finishedAt === undefined ? {} : { durationMs: Math.max(0, Math.round(finishedAt - startedAt)) }),
     // Core's own record, parsed by Core's parser. A record Core would reject is treated as absent.
     failure: parseAutomationStudioFailureRecord(attempt.failure) ?? null,
-    ...(extracted ? { extracted: extracted.records, extractedNonStringValues: extracted.nonStringValues } : {}),
+    ...(isFiniteNumber(recordCount) ? { recordCount } : {}),
     ...(comparisonStatus ? { comparisonStatus } : {}),
     ...(targetResolution ? { targetResolution } : {}),
     ...(evidencePackets.length ? { evidencePackets } : {}),
@@ -392,30 +420,23 @@ function isFiniteNumber(value: unknown): value is number {
 }
 
 /**
- * Records an extract action reported, wherever Core carried the action result,
- * and how many values they leave out: each field value that is not a string,
- * and each entry that is not a record. Dropping those silently let a record
- * missing a value it did carry match an expectation that omits that field.
+ * Each node's attempts summed, from Core's raw attempts rather than from the
+ * lane's actions: an action carries no node id, so that a node id cannot reach
+ * a judgement, a failure's details, or the bundle. A `Map` keyed by node id is
+ * how the id stays available to pair a dataset with its step and still leaves
+ * nothing in what the lane serializes. An attempt with no finish time
+ * contributes nothing, as it does to every other latency the lane reports.
  */
-function extractedRecords(attempt: Record<string, unknown>): { records: Array<Record<string, string>>; nonStringValues: number } | undefined {
-  const metadata = attempt.metadata && typeof attempt.metadata === "object" ? attempt.metadata as Record<string, unknown> : undefined;
-  const candidates = [attempt.structuredResult, metadata?.result, metadata?.structuredResult, metadata]
-    .map((value) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>).extracted : undefined))
-    .find((value) => Array.isArray(value));
-  if (!Array.isArray(candidates)) return undefined;
-  const records: Array<Record<string, string>> = [];
-  let nonStringValues = 0;
-  for (const entry of candidates) {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-      nonStringValues += 1;
-      continue;
-    }
-    const values = Object.entries(entry as Record<string, unknown>);
-    const strings = values.filter((pair): pair is [string, string] => typeof pair[1] === "string");
-    nonStringValues += values.length - strings.length;
-    records.push(Object.fromEntries(strings));
+function attemptDurationsByNode(attempts: readonly Record<string, unknown>[]): Map<string, number> {
+  const durations = new Map<string, number>();
+  for (const attempt of attempts) {
+    const nodeId = attempt.nodeId;
+    const startedAt = numberOf(attempt.startedAt);
+    const finishedAt = attempt.finishedAt;
+    if (typeof nodeId !== "string" || !nodeId || typeof finishedAt !== "number" || !Number.isFinite(finishedAt)) continue;
+    durations.set(nodeId, (durations.get(nodeId) ?? 0) + Math.max(0, Math.round(finishedAt - startedAt)));
   }
-  return { records, nonStringValues };
+  return durations;
 }
 
 function runStatus(value: string): PersistedFlowRunOutcome["status"] {

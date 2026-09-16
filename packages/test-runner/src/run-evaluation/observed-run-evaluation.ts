@@ -94,7 +94,11 @@ export function evaluateObservedRun(input: ObservedRun): RunEvaluation {
       ? { sanitizedPacketBytes: [...evidence.sanitizedPacketBytes], rawSnapshotBytes: [...evidence.rawSnapshotBytes], truncationCount: evidence.truncationCount }
       : { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 },
     llm: { mode: "disabled", profileId: null, calls: 0 },
-    extraction: null,
+    // The lane's own measurements, or `null` when the lane measured no
+    // extraction -- which the contract reads as unmeasured, never as "no
+    // extraction step". Only the lane that ran can tell those apart, so it is
+    // taken from the observation rather than derived here.
+    extraction: observation.extraction === null ? null : [...observation.extraction],
     harnessRecovery: null,
     adaptationCost: null,
     adaptationValidation: null,

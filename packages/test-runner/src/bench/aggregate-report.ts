@@ -4,6 +4,7 @@ import {
   type EvaluationLane, type LlmUsage, type RunEvaluation,
 } from "@fluxiq-web-extension/test-contracts";
 import { benchDistribution } from "./distribution.js";
+import { benchExtractionMetrics } from "./extraction-metrics.js";
 
 /**
  * One bench result, a corpus row's workflow unarmed or one of its variants, on
@@ -225,6 +226,13 @@ function laneRates(results: readonly BenchResultRuns[]): BenchRates {
 
 function corpusMetrics(results: readonly BenchResultRuns[]): BenchCorpusMetrics {
   const runs = results.flatMap((result) => result.evaluations);
+  // Per lane like the rates, and only for a lane whose runs measured
+  // extraction: a lane that measured none states nothing, because the contract
+  // reads an absent block as unmeasured and a block of zeros as a measurement.
+  const extractionByLane = Object.fromEntries(benchResultsByLane(results).flatMap(([lane, onLane]) => {
+    const measured = benchExtractionMetrics(onLane);
+    return measured ? [[lane, measured] as const] : [];
+  }));
   const latency = new Map<string, number[]>();
   for (const action of runs.flatMap((run) => run.actions)) latency.set(action.actionType, [...(latency.get(action.actionType) ?? []), action.durationMs]);
   return {
@@ -241,6 +249,7 @@ function corpusMetrics(results: readonly BenchResultRuns[]): BenchCorpusMetrics 
     // the contract reads as unmeasured rather than as zero.
     notExecutedRuns: runs.filter(executedNothing).length,
     actionsExecuted: runs.reduce((sum, run) => sum + actionsExecuted(run), 0),
+    ...(Object.keys(extractionByLane).length === 0 ? {} : { extractionByLane }),
     harnessRecovery: null,
     adaptationCost: null,
     adaptationValidation: null,

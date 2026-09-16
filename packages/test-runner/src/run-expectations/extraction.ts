@@ -85,7 +85,7 @@ export function measureExtraction(entry: ExpectedExtraction | undefined, records
         for (const key of Object.keys(wanted)) {
           if (optional.has(key)) continue;
           expectedFields += 1;
-          if (Object.hasOwn(actual, key)) presentFields += 1;
+          if (carriesField(actual, key, wanted[key]!)) presentFields += 1;
         }
       }
       for (const record of records) unexpectedFields += Object.keys(record).filter((key) => !named.has(key)).length;
@@ -96,6 +96,11 @@ export function measureExtraction(entry: ExpectedExtraction | undefined, records
     recordsListed: expected !== undefined, countStated: entry?.count !== undefined,
     comparedRecords, matchedRecords,
     expectedFields, presentFields, unexpectedFields,
+    // The declared pages, so a pagination accuracy has both sides of its
+    // comparison. Null when the entry declared none, and independent of
+    // whether anything reported `pagesRead`: a step whose expectation named
+    // pages and whose lane could not observe them is a stated gap, not a hit.
+    expectedPages: entry?.pages ?? null,
     pagesFollowed: observed.pagesRead ?? null,
     truncated: observed.truncated ?? null,
     durationMs: observed.durationMs ?? null,
@@ -111,15 +116,21 @@ export function measureExtraction(entry: ExpectedExtraction | undefined, records
  * present with `null`, never a field left out of the record or an empty string
  * (D16). A field named in `optionalFields` may be absent from an item, or
  * present on one the expectation omits it from; a field outside it must be
- * present on every item the expectation names it on.
+ * present on every item the expectation names it on, carrying a value: a field
+ * present with `null` carried none, and fails as a field the record did not
+ * carry unless the expectation asked for `null` there.
  *
  * `pages` and `truncated` are asserted against what the step reported, and an
  * entry declaring either while the caller reported neither is **refused**
  * rather than passed. `observed` still defaults to nothing reported, because
- * the two callers are pinned three-argument call sites (`run-scenario.ts` and
- * `flow-lane/expectations.ts`), but an expectation nothing can judge must not
- * read as a met one: it would be a green run asserting less than the fixture
- * says, which is worse than declaring no expectation at all. The refusal is
+ * `run-scenario.ts` is a pinned three-argument call site, but an expectation
+ * nothing can judge must not read as a met one: it would be a green run
+ * asserting less than the fixture says, which is worse than declaring no
+ * expectation at all. The Flow lane is the other caller and passes an
+ * `observed`; a member its Core datasets cannot report is removed from the
+ * entry there and published as unjudged, rather than reaching this refusal,
+ * which would blame the fixture for a limit of that lane
+ * (`flow-lane/expectations.ts`, `LANE_UNOBSERVABLE`). The refusal is
  * `fixture.invalid` -- the facility could not produce a trustworthy judgement
  * of this entry -- never `runtime.behavior`, which would blame the automation
  * for the runner's missing observation. It is raised before any content
@@ -155,9 +166,10 @@ export function assertExtraction(expected: readonly ExpectedExtraction[] | undef
       throw new RunnerFailure("runtime.behavior", `Extract step ${stepId} yielded ${records.length} record(s), expected the ${entry.records.length} listed`, { details: { stepId, expectedCount: entry.records.length, actualCount: records.length } });
     }
     if (measured.presentFields < measured.expectedFields) {
-      const index = entry.records.findIndex((wanted, position) => Object.keys(wanted).some((key) => !optional.has(key) && !Object.hasOwn(records[position]!, key)));
-      const missing = Object.keys(entry.records[index]!).filter((key) => !optional.has(key) && !Object.hasOwn(records[index]!, key));
-      throw new RunnerFailure("runtime.behavior", `Extract step ${stepId} record ${index} is missing ${missing.length} required field(s) no optionalFields entry names`, { details: { stepId, index, missingFields: missing } });
+      const index = entry.records.findIndex((wanted, position) => Object.keys(wanted).some((key) => !optional.has(key) && !carriesField(records[position]!, key, wanted[key]!)));
+      const wanted = entry.records[index]!;
+      const missing = Object.keys(wanted).filter((key) => !optional.has(key) && !carriesField(records[index]!, key, wanted[key]!));
+      throw new RunnerFailure("runtime.behavior", `Extract step ${stepId} record ${index} carried no value for ${missing.length} required field(s) no optionalFields entry names`, { details: { stepId, index, missingFields: missing } });
     }
     if (measured.matchedRecords !== entry.records.length) {
       const index = entry.records.findIndex((wanted, position) => !matchesRecord(wanted, records[position]!, optional));
@@ -177,6 +189,28 @@ function unjudgeableFields(entry: ExpectedExtraction, observed: ObservedExtracti
   if (entry.pages !== undefined && observed.pagesRead === undefined) fields.push("pages");
   if (entry.truncated !== undefined && observed.truncated === undefined) fields.push("truncated");
   return fields;
+}
+
+/**
+ * Whether an observed record **carried a value** for one expected field, which
+ * is what field completeness counts.
+ *
+ * A field present with `null` carried no value: `null` is how both readers
+ * spell "the item held nothing here" -- FluxIQ's own extraction returns it for
+ * an optional field it cannot read, and the Flow lane's dataset reader
+ * restores it for every schema field a stored row lacks (D16). Counting such a
+ * field as present would make `extractionFieldCompleteness` read 1.000 on the
+ * Flow lane for every run, since Core's stored schema guarantees the key: a
+ * rate that can only be perfect measures nothing.
+ *
+ * An expectation that **expects** `null` expects that absence, so a record
+ * holding `null` there carried exactly what was asked for and counts as
+ * present. Otherwise a correct read of an item with no value would be scored
+ * as an incomplete one.
+ */
+function carriesField(actual: ExtractionRecord, key: string, expected: string | null): boolean {
+  if (!Object.hasOwn(actual, key)) return false;
+  return actual[key] !== null || expected === null;
 }
 
 /**

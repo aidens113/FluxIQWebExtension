@@ -19,7 +19,7 @@ const evidenceOf = (packets: MeasuredEvidencePacket[]): FlowLaneEvidence => ({ s
 
 const identity: ObservedRun["identity"] = { scenarioId: "product-catalog", workflowId: null, variantId: null, repeatIndex: 0, expectedFailure: null };
 const passedOutcome: ObservedRun["outcome"] = { runId: "run-a", verdict: "passed", invariants: [{ id: "runner-verdict", passed: true, expected: "passed", actual: "passed", evidenceSequences: [9] }], metrics: {}, durationMs: 1_000 };
-const flow: RunLaneObservation = { lane: "flow", flowCreated: true, oracleVerdict: "passed", reportedVerdict: "passed", automationFailureReported: null, automationFailureExpected: null, harnessActivations: 0, actions: [] };
+const flow: RunLaneObservation = { lane: "flow", flowCreated: true, oracleVerdict: "passed", reportedVerdict: "passed", automationFailureReported: null, automationFailureExpected: null, harnessActivations: 0, actions: [], extraction: null };
 
 test("a packet exactly at the budget passes", () => {
   const invariant = evidenceBudgetInvariant([packet(1, "beforeAction", 512), packet(2, "afterAction", BUDGET, true)]);

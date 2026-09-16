@@ -1,4 +1,4 @@
-import { benchRateMetrics, evaluationLanes, type BenchMetricComparison, type BenchReport, type BenchRate, type EvaluationLane } from "@fluxiq-web-extension/test-contracts";
+import { benchExtractionRateMetrics, benchRateMetrics, evaluationLanes, type BenchMetricComparison, type BenchReport, type BenchRate, type EvaluationLane } from "@fluxiq-web-extension/test-contracts";
 import type { BenchResultRuns } from "./aggregate-report.js";
 
 export type ComparisonMetricRow = { metric: string; baseline: number | null; candidate: number | null; tolerance: number | null; verdict: "improved" | "regressed" | "equivalent" | "not-compared" | "not-applicable" | "no-tolerance-stated"; note?: string };
@@ -11,15 +11,32 @@ const rateValue = (report: BenchReport, lane: EvaluationLane, metric: typeof ben
   return lane === "recording" && recordingAlone ? report.metrics.rates?.[metric] : undefined;
 };
 
+/**
+ * One extraction rate of one lane, or `undefined` when that report did not
+ * measure it: a report written before extraction was measured states no block
+ * at all, and a rate whose population was empty states `rate: null`. Neither
+ * is a zero, so neither may be compared as one.
+ */
+const extractionValue = (report: BenchReport, lane: EvaluationLane, metric: typeof benchExtractionRateMetrics[number]): BenchRate | undefined =>
+  report.metrics.extractionByLane?.[lane]?.[metric];
+
 export function comparisonMetricRows(baseline: BenchReport, candidate: BenchReport, compared: readonly BenchMetricComparison[]): ComparisonMetricRow[] {
   const byName = new Map(compared.map(item => [item.metric, item]));
-  const names = [...evaluationLanes.flatMap(lane => benchRateMetrics.map(metric => `rate:${lane}:${metric}`)), ...[...new Set([...Object.keys(baseline.metrics.actionLatencyMs), ...Object.keys(candidate.metrics.actionLatencyMs)])].sort().map(type => `action-latency-p95:${type}`), "run-duration-p95"];
+  const names = [
+    ...evaluationLanes.flatMap(lane => benchRateMetrics.map(metric => `rate:${lane}:${metric}`)),
+    ...evaluationLanes.flatMap(lane => benchExtractionRateMetrics.map(metric => `extraction:${lane}:${metric}`)),
+    ...[...new Set([...Object.keys(baseline.metrics.actionLatencyMs), ...Object.keys(candidate.metrics.actionLatencyMs)])].sort().map(type => `action-latency-p95:${type}`), "run-duration-p95"];
   const rows = names.map((metric): ComparisonMetricRow => {
     const value = byName.get(metric);
     if (value) return { metric: value.metric, baseline: value.baseline, candidate: value.candidate, tolerance: value.tolerance, verdict: value.outcome };
     const [kind, lane, name] = metric.split(":");
-    const base = kind === "rate" ? rateValue(baseline, lane as EvaluationLane, name as typeof benchRateMetrics[number])?.rate : metric === "run-duration-p95" ? baseline.metrics.runDurationMs.p95 : baseline.metrics.actionLatencyMs[metric.slice("action-latency-p95:".length)]?.p95;
-    const next = kind === "rate" ? rateValue(candidate, lane as EvaluationLane, name as typeof benchRateMetrics[number])?.rate : metric === "run-duration-p95" ? candidate.metrics.runDurationMs.p95 : candidate.metrics.actionLatencyMs[metric.slice("action-latency-p95:".length)]?.p95;
+    const measured = (report: BenchReport): number | null | undefined => kind === "rate"
+      ? rateValue(report, lane as EvaluationLane, name as typeof benchRateMetrics[number])?.rate
+      : kind === "extraction"
+        ? extractionValue(report, lane as EvaluationLane, name as typeof benchExtractionRateMetrics[number])?.rate
+        : metric === "run-duration-p95" ? report.metrics.runDurationMs.p95 : report.metrics.actionLatencyMs[metric.slice("action-latency-p95:".length)]?.p95;
+    const base = measured(baseline);
+    const next = measured(candidate);
     if ((base === null || base === undefined) && (next === null || next === undefined)) return { metric, baseline: null, candidate: null, tolerance: null, verdict: "not-applicable", note: "neither report has a population or measurement for this metric" };
     return { metric, baseline: base ?? null, candidate: next ?? null, tolerance: null, verdict: "not-compared", note: "absent or unmeasured in exactly one report" };
   });

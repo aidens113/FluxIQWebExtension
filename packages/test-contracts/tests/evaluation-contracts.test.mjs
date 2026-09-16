@@ -37,7 +37,7 @@ const flowRun = () => ({
 // A paginated list extraction step, judged: 24 of 24 expected records read over three pages, every one of them compared, every expected field present.
 const measurement = (overrides = {}) => ({
   stepIndex: 2, status: "judged", expectedRecords: 24, observedRecords: 24, recordsListed: true, countStated: true, comparedRecords: 24, matchedRecords: 24,
-  expectedFields: 3, presentFields: 3, unexpectedFields: 0, pagesFollowed: 3, truncated: false, durationMs: 412.5, nonStringValues: 0, ...overrides,
+  expectedFields: 3, presentFields: 3, unexpectedFields: 0, expectedPages: 3, pagesFollowed: 3, truncated: false, durationMs: 412.5, nonStringValues: 0, ...overrides,
 });
 const extractionRun = (measurements = [measurement()]) => ({ ...flowRun(), extraction: measurements });
 // A card number: the kind of page value D6 keeps out of every evaluation.
@@ -101,7 +101,7 @@ test("a string planted anywhere in an extraction measurement is refused as a pag
   const refusedAsString = (value, path) => messagesAt(value, path).some((message) => message.startsWith("must not be a string"));
   for (const key of [
     "stepIndex", "expectedRecords", "observedRecords", "recordsListed", "countStated", "comparedRecords", "matchedRecords", "expectedFields", "presentFields", "unexpectedFields",
-    "pagesFollowed", "truncated", "durationMs", "nonStringValues", "status",
+    "expectedPages", "pagesFollowed", "truncated", "durationMs", "nonStringValues", "status",
   ]) {
     const run = extractionRun([measurement(), measurement({ stepIndex: 3, [key]: PLANTED })]);
     assert.equal(validateRunEvaluation(run).valid, false, key);
@@ -137,12 +137,16 @@ test("extraction counts are bounded: matched records by expected and observed on
     "numeric status": { status: 1 },
     "negative pages": { pagesFollowed: -1 },
     "fractional pages": { pagesFollowed: 1.5 },
+    "negative expected pages": { expectedPages: -1 },
+    "fractional expected pages": { expectedPages: 1.5 },
     "numeric truncated": { truncated: 1 },
     "negative duration": { durationMs: -1 },
     "missing member": { nonStringValues: undefined },
     "extra numeric member": { recordBytes: 2048 },
   })) rejects(extractionRun([measurement(override)]), label);
-  assert.equal(validateRunEvaluation(extractionRun([measurement({ pagesFollowed: null, truncated: null, durationMs: null })])).valid, true);
+  assert.equal(validateRunEvaluation(extractionRun([measurement({ expectedPages: null, pagesFollowed: null, truncated: null, durationMs: null })])).valid, true);
+  // A lane that cannot observe the pages a read covered states the expectation's side alone; the rate built on it then has one side and publishes nothing.
+  assert.equal(validateRunEvaluation(extractionRun([measurement({ expectedPages: 3, pagesFollowed: null })])).valid, true);
   rejects({ ...flowRun(), extraction: { 0: measurement() } }, "extraction as an object");
   assert.deepEqual(issuesOf(without(flowRun(), "extraction")), ["$.extraction"]);
 });

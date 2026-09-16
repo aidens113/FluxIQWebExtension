@@ -136,6 +136,18 @@ export type RunExtractionMeasurement = {
   presentFields: number;
   /** Fields the observed records carried that the expectation does not name. */
   unexpectedFields: number;
+  /**
+   * The pages the expectation declared, `null` when it declared none.
+   *
+   * It is stated because a pagination accuracy is a comparison, and a
+   * measurement carrying only `pagesFollowed` cannot be compared against
+   * anything: pooling it would either invent an expectation or score a step
+   * for agreeing with itself. A step enters `paginationAccuracy` only when
+   * both this and `pagesFollowed` are stated; a lane that cannot observe the
+   * pages a read covered leaves `pagesFollowed` null, and the step enters no
+   * rate rather than a flattering one.
+   */
+  expectedPages: number | null;
   pagesFollowed: number | null;
   truncated: boolean | null;
   durationMs: number | null;

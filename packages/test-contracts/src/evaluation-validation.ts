@@ -21,7 +21,7 @@ const extractionCountKeys = [
 ] as const satisfies readonly (keyof RunExtractionMeasurement)[];
 /** What the expectation offered, which decides which rate a step may enter at all. */
 const extractionFlagKeys = ["recordsListed", "countStated"] as const satisfies readonly (keyof RunExtractionMeasurement)[];
-const extractionMeasurementKeys = [...extractionCountKeys, ...extractionFlagKeys, "status", "pagesFollowed", "truncated", "durationMs"] as const satisfies readonly (keyof RunExtractionMeasurement)[];
+const extractionMeasurementKeys = [...extractionCountKeys, ...extractionFlagKeys, "status", "expectedPages", "pagesFollowed", "truncated", "durationMs"] as const satisfies readonly (keyof RunExtractionMeasurement)[];
 const automationVerdicts = ["passed", "failed"] as const;
 const moduleCauseCodes = ["ERR_MODULE_NOT_FOUND", "MODULE_NOT_FOUND", "ERR_PACKAGE_PATH_NOT_EXPORTED", "ERR_PACKAGE_IMPORT_NOT_DEFINED", "ERR_UNSUPPORTED_DIR_IMPORT"] as const;
 const httpTransportCauseCodes = ["ECONNREFUSED", "ECONNRESET", "EPIPE", "ETIMEDOUT", "ENETUNREACH", "EHOSTUNREACH", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_SOCKET"] as const;
@@ -156,6 +156,7 @@ function checkExtractionMeasurement(input: unknown, path: string, issues: Valida
   keys(value, extractionMeasurementKeys, path, issues);
   for (const key of extractionCountKeys) finite(value[key], `${path}.${key}`, issues, 0, Number.MAX_SAFE_INTEGER, true);
   enumeration(value.status, extractionMeasurementStatuses, `${path}.status`, issues);
+  if (value.expectedPages !== null) finite(value.expectedPages, `${path}.expectedPages`, issues, 0, Number.MAX_SAFE_INTEGER, true);
   if (value.pagesFollowed !== null) finite(value.pagesFollowed, `${path}.pagesFollowed`, issues, 0, Number.MAX_SAFE_INTEGER, true);
   if (value.truncated !== null && typeof value.truncated !== "boolean") add(issues, `${path}.truncated`, "must be a boolean or null");
   if (value.durationMs !== null) finite(value.durationMs, `${path}.durationMs`, issues);

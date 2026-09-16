@@ -6,7 +6,7 @@ import { evaluateObservedRun, type ObservedRun } from "../observed-run-evaluatio
 
 const identity: ObservedRun["identity"] = { scenarioId: "basic-form", workflowId: null, variantId: null, repeatIndex: 0, expectedFailure: null };
 const outcome: ObservedRun["outcome"] = { runId: "run-a", verdict: "passed", invariants: [{ id: "runner-verdict", passed: true, expected: "passed", actual: "passed", evidenceSequences: [3] }], metrics: {}, durationMs: 1_000 };
-const flow: RunLaneObservation = { lane: "flow", flowCreated: true, oracleVerdict: "passed", reportedVerdict: "passed", automationFailureReported: null, automationFailureExpected: null, harnessActivations: 0, actions: [] };
+const flow: RunLaneObservation = { lane: "flow", flowCreated: true, oracleVerdict: "passed", reportedVerdict: "passed", automationFailureReported: null, automationFailureExpected: null, harnessActivations: 0, actions: [], extraction: null };
 const recording: RunLaneObservation = { ...flow, lane: "recording", flowCreated: null };
 
 test("the evidence sizes a lane measured reach the evaluation, copied rather than shared", () => {

@@ -55,6 +55,7 @@ const flowObservation = (): RunLaneObservation => ({
   lane: "flow", flowCreated: true, oracleVerdict: "passed", reportedVerdict: "passed",
   automationFailureReported: null, automationFailureExpected: null, harnessActivations: 0,
   actions: [{ actionType: "web.dom.click", durationMs: 210 }, { actionType: "web.dom.type", durationMs: 340 }],
+  extraction: null,
 });
 
 /** A runner that writes a minimal finalized bundle for each run and records what it was asked to run. */

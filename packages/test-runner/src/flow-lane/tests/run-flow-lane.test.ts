@@ -31,7 +31,7 @@ import { flowLaneSnapshot, runFlowLane, type FlowLaneControl, type FlowLaneEvide
  * attempt the run detail reports. `flowReads` lists every read of the approved
  * Flow's structure, in order.
  */
-function fakeCore(options: { appendsAt: readonly number[]; finalizedAt?: number; graphNodes?: readonly unknown[]; lostCandidates?: number; attempt?: Record<string, unknown>; runStatus?: string }) {
+function fakeCore(options: { appendsAt: readonly number[]; finalizedAt?: number; graphNodes?: readonly unknown[]; lostCandidates?: number; attempt?: Record<string, unknown>; runStatus?: string; datasets?: ReadonlyArray<{ datasetId: string; nodeIds: string[]; rows: Array<Record<string, unknown>> }> }) {
   const clock = { value: 0 };
   const proposalRequestedAt: number[] = [];
   const reviewedProposals: string[] = [];
@@ -83,7 +83,14 @@ function fakeCore(options: { appendsAt: readonly number[]; finalizedAt?: number;
       }
       if (endpoint === "get-flow-run-detail") {
         const attempt = { attemptId: "attempt.one", nodeId: "node.one", definitionId: "builtin.policy.action", order: 1, status: "succeeded", startedAt: 10, finishedAt: 20, ...options.attempt };
-        return { runDetail: { summary: { runId: "run.one", status: options.runStatus ?? "succeeded" }, actionAttempts: [attempt], interventions: [] } };
+        const datasets = (options.datasets ?? []).map(({ datasetId, nodeIds, rows }) => ({ runId: "run.one", datasetId, nodeIds, recordCount: rows.length, truncated: false, invalidCount: 0 }));
+        return { runDetail: { summary: { runId: "run.one", status: options.runStatus ?? "succeeded" }, actionAttempts: [attempt], interventions: [], ...(datasets.length ? { datasets } : {}) } };
+      }
+      if (endpoint === "get-run-dataset-page") {
+        const stored = (options.datasets ?? []).find((dataset) => dataset.datasetId === payload.datasetId);
+        if (!stored) throw new Error(`unknown dataset ${String(payload.datasetId)}`);
+        const fields = [...new Set(stored.rows.flatMap((row) => Object.keys(row)))].map((id) => ({ id, label: id, valueType: "string" }));
+        return { dataset: { summary: { runId: "run.one", datasetId: stored.datasetId, nodeIds: stored.nodeIds, recordCount: stored.rows.length, truncated: false, invalidCount: 0 }, schema: { schemaVersion: "0.1", fields }, rows: stored.rows, nextCursor: null } };
       }
       throw new Error(`unexpected endpoint ${endpoint}`);
     },
@@ -257,13 +264,20 @@ test("the flow-lane snapshot carries Core's target resolution on each action tha
     proposal: { proposalId: "proposal.one", recordingId: "recording.one", mapperId: "web-recording-actions", status: "approved", candidateCount: 2, issues: [] },
     flowId: "flow.new",
     run: {
-      runId: "run.one", status: "succeeded", failure: null, harnessActivations: 0, extracted: [], extractedNonStringValues: 2,
+      runId: "run.one", status: "succeeded", failure: null, harnessActivations: 0, extracted: [], extractedNonStringValues: 2, extractionDurationsByNode: new Map(),
       actions: [
         { actionType: "web.dom.type", status: "succeeded", startedAt: new Date(0).toISOString(), failure: null, targetResolution },
         { actionType: "web.dom.click", status: "succeeded", startedAt: new Date(0).toISOString(), failure: null },
       ],
     },
     observation: {},
+    extraction: {
+      expectation: "judged", extractNodes: 1, unpairedDatasets: 0, nonStringValues: 2, declaredSteps: ["read-catalog"], measurements: [],
+      steps: [{
+        stepIndex: 1, stepId: "read-catalog", entries: [], dataset: undefined, unjudged: ["pages"], observed: { nonStringValues: 2 },
+        measurement: { stepIndex: 1, status: "judged", expectedRecords: 2, observedRecords: 2, recordsListed: true, countStated: false, comparedRecords: 2, matchedRecords: 2, expectedFields: 2, presentFields: 2, unexpectedFields: 0, expectedPages: 3, pagesFollowed: null, truncated: null, durationMs: 40, nonStringValues: 2 },
+      }],
+    },
   } as unknown as FlowLaneEvidence;
   const snapshot = flowLaneSnapshot(evidence);
   assert.deepEqual(snapshot.actions, [
@@ -272,8 +286,15 @@ test("the flow-lane snapshot carries Core's target resolution on each action tha
   ]);
   assert.equal(snapshot.candidateCount, 2);
   assert.equal(snapshot.recording.entryCount, 2);
-  // X0.7: the run's count of extracted values that are not strings is published beside the extraction count, as a count only.
-  assert.equal(snapshot.extractionNonStringValues, 2);
+  // X0.7: the run's count of extracted values that are not strings is published with the extraction block, as a count only.
+  assert.equal(snapshot.extraction.nonStringValues, 2);
+  // The block states its basis and what it could not judge, and carries no field name, value or step id.
+  assert.deepEqual(snapshot.extraction.steps, [{
+    stepIndex: 1, status: "judged", expectedRecords: 2, observedRecords: 2, comparedRecords: 2, matchedRecords: 2,
+    expectedFields: 2, presentFields: 2, unexpectedFields: 0, nonStringValues: 2, unjudged: ["pages"],
+    storeTruncated: null, invalidRows: null, datasetPages: null,
+  }]);
+  assert.ok(!JSON.stringify(snapshot).includes("read-catalog"), "a step id is fixture vocabulary, and the snapshot states positions instead");
 });
 
 /**
@@ -401,24 +422,46 @@ test("the lane reports the time just before it dispatches the Flow run, and a la
   assert.deepEqual(neverDispatched, [], "a proposal refused before approval dispatches nothing, so nothing is reported");
 });
 
-/** Lab Stage 2, W18 and W09: a recording's `extract` step is the runner's own check, so Core proposed no extract node to yield records. */
-test("a Flow with no extract node is not judged on the workflow's extraction, and its evidence says the expectation did not apply", async () => {
-  const expected: ResolvedScenarioWorkflow["expected"] = { extracted: [{ step: "read-account", count: 1 }] };
-  const evidence: FlowLaneEvidence[] = [];
-  const { outcome } = await runLane(fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500 }), evidence, { expected });
-  assert.equal(outcome.extraction, "not_applicable");
-  assert.equal(evidence[0]?.extraction, "not_applicable");
-  assert.equal(flowLaneSnapshot(evidence[0]!).extractionExpectation, "not_applicable");
+/**
+ * Before X4 a recording's `extract` step was the runner's own read, so Core
+ * proposed no extract node and the lane published `not_applicable`: W18's and
+ * W09's extraction expectations were never judged on this lane at all. An
+ * `extract` step now records a data-extraction action, so a Flow without an
+ * extract node is a recording defect, and the records come from the dataset
+ * Core stored for the run.
+ */
+test("the workflow's extraction is judged against Core's run datasets, and a Flow with no extract node fails as a recording defect", async () => {
+  const recordingScript: ScenarioStep[] = [{ id: "read-account", operation: "extract", target: ".account", fields: { name: ".name" } }];
+  const expected: ResolvedScenarioWorkflow["expected"] = { extracted: [{ step: "read-account", count: 1, records: [{ name: "Ada" }] }] };
+  const missingNode: FlowLaneEvidence[] = [];
+  await assert.rejects(
+    () => runLane(fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500 }), missingNode, { expected, recordingScript }),
+    (error: unknown) => error instanceof RunnerFailure && error.category === "recording.contract" && /0 extract node\(s\) for the workflow's 1 recorded extract step/.test(error.message),
+  );
+  // Published before the expectation is judged, so the run that failed still carries its measurements.
+  assert.equal(missingNode[0]?.extraction.expectation, "judged");
+  assert.deepEqual(missingNode[0]?.extraction.measurements.map(measurement => measurement.status), ["not_run"]);
+  assert.deepEqual(missingNode[0]?.observation.extraction?.map(measurement => measurement.status), ["not_run"]);
 
-  const extracting = fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500, graphNodes: [{ id: "node.extract", parameterValues: { outputId: "web.dom.extract" } }] });
   const judged: FlowLaneEvidence[] = [];
-  await assert.rejects(() => runLane(extracting, judged, { expected }), /produced 0 extraction result\(s\), expected 1/);
-  assert.equal(judged[0]?.extraction, "judged", "published before the expectation is judged");
-  assert.equal(flowLaneSnapshot(judged[0]!).extractionExpectation, "judged");
-
+  const { outcome } = await runLane(
+    fakeCore({
+      appendsAt: [0, 300, 600, 900], finalizedAt: 1_500,
+      graphNodes: [{ id: "node.extract", parameterValues: { outputId: "web.dom.extract_list" } }],
+      datasets: [{ datasetId: "accounts", nodeIds: ["node.extract"], rows: [{ name: "Ada" }] }],
+    }),
+    judged,
+    { expected, recordingScript },
+  );
+  assert.equal(outcome.extraction.expectation, "judged");
+  assert.deepEqual(outcome.extraction.measurements.map(measurement => [measurement.status, measurement.comparedRecords, measurement.matchedRecords]), [["judged", 1, 1]]);
+  assert.deepEqual(outcome.run.extracted.map(dataset => dataset.records), [[{ name: "Ada" }]]);
+  assert.deepEqual(judged[0]?.observation.extraction, outcome.extraction.measurements);
+  // A workflow that declares no extraction is not judged, and measures each extract step as unexpected.
   const undeclared: FlowLaneEvidence[] = [];
-  await runLane(fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500 }), undeclared);
-  assert.equal(undeclared[0]?.extraction, "not_expected");
+  const plain = await runLane(fakeCore({ appendsAt: [0, 300, 600, 900], finalizedAt: 1_500 }), undeclared);
+  assert.equal(plain.outcome.extraction.expectation, "not_expected");
+  assert.deepEqual(undeclared[0]?.observation.extraction, []);
 });
 
 /**

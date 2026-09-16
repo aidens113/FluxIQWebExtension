@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { EvaluationLane, RunEvaluation } from "@fluxiq-web-extension/test-contracts";
+import type { EvaluationLane, RunEvaluation, RunExtractionMeasurement } from "@fluxiq-web-extension/test-contracts";
 import { aggregateBenchReport, benchResultsByLane, groupBenchResults } from "../aggregate-report.js";
 import { benchExecutionCoverage } from "../execution-coverage.js";
 import { renderBenchMarkdown, type BenchMarkdownCoverage } from "../render-markdown.js";
@@ -61,4 +61,45 @@ test("report.md labels every distribution and the truncation count all lanes, an
   const rates = tableRows(section(markdown, "## Rates"));
   assert.ok(rates.length > 0, "report.md prints no rate");
   assert.deepEqual([...new Set(rates.map((line) => line.split(" | ")[0]))], ["| recording", "| flow"], "every rate names one lane, never all lanes");
+});
+
+/**
+ * A reader of an extraction rate must be able to see what it stands on. The
+ * Flow-lane run below judges three steps: one compares two records and gets
+ * one right, one states a count alone and compares nothing, and one judges
+ * neither. The record accuracy is 0.5 over the compared step, the count
+ * accuracy 1.000 over the count-only step, and the basis line says so.
+ */
+test("report.md states each extraction rate with the steps it stands on, and prints n/a for a rate nothing judged", () => {
+  const step = (fields: Partial<RunExtractionMeasurement>): RunExtractionMeasurement => ({
+    stepIndex: 1, status: "judged", expectedRecords: 0, observedRecords: 0, recordsListed: false, countStated: false,
+    comparedRecords: 0, matchedRecords: 0, expectedFields: 0, presentFields: 0, unexpectedFields: 0,
+    expectedPages: null, pagesFollowed: null, truncated: null, durationMs: null, nonStringValues: 0, ...fields,
+  });
+  const evaluation: RunEvaluation = {
+    ...run("flow", 50_000, 900),
+    extraction: [
+      step({ recordsListed: true, expectedRecords: 2, observedRecords: 2, comparedRecords: 2, matchedRecords: 1, expectedFields: 2, presentFields: 1, expectedPages: 3 }),
+      step({ countStated: true, expectedRecords: 1_000, observedRecords: 1_000 }),
+      step({}),
+    ],
+  };
+  const results = groupBenchResults([{ corpusRowId: "W04", evaluation }]);
+  const report = aggregateBenchReport({ reportId: "bench-extraction", generatedAt: "2026-09-15T10:00:00.000Z", corpusId: "week1", repeatCount: 1, target: "isolated", results });
+  const coverage: BenchMarkdownCoverage = { total: benchExecutionCoverage(results), byLane: Object.fromEntries(benchResultsByLane(results).map(([lane, onLane]) => [lane, benchExecutionCoverage(onLane)])) };
+  const runs: BenchRunsFile = {
+    schemaVersion: "0.1", benchId: "bench-extraction", corpusId: "week1", repeatCount: 1, target: "isolated", lanes: ["flow"],
+    startedAt: "2026-09-15T09:00:00.000Z", finishedAt: "2026-09-15T10:00:00.000Z", sources: {}, flowSources: {},
+    runs: [{ corpusRowId: "W04", scenarioId: "basic-form", workflowId: null, variantId: null, repeatIndex: 0, lane: "flow", status: "evaluated", runId: "run-flow", verdict: "passed", actionsExecuted: 1 }],
+  };
+  const extraction = section(renderBenchMarkdown(runs, report, coverage), "## Extraction");
+  assert.ok(extraction.some((line) => line.includes("3 step(s) judged and 0 not: 1 compared their records, 1 stated a count alone")), extraction.join("\n"));
+  assert.ok(extraction.includes("| extractionRecordAccuracy | 1 | 2 | 1 | 0.500 |"), extraction.join("\n"));
+  assert.ok(extraction.includes("| extractionCountAccuracy | 1 | 1 | 1 | 1.000 |"), extraction.join("\n"));
+  // Declared pages nothing observed, so the rate has one side and publishes none.
+  assert.ok(extraction.includes("| paginationAccuracy | 0 | 0 | 0 | n/a |"), extraction.join("\n"));
+  // A bench that measured no extraction prints no section at all, rather than a table of zeros.
+  const plain = groupBenchResults([{ corpusRowId: "W01", evaluation: run("flow", 50_000, 900) }]);
+  const plainReport = aggregateBenchReport({ reportId: "bench-plain", generatedAt: "2026-09-15T10:00:00.000Z", corpusId: "week1", repeatCount: 1, target: "isolated", results: plain });
+  assert.equal(renderBenchMarkdown(runs, plainReport, coverage).includes("## Extraction"), false);
 });

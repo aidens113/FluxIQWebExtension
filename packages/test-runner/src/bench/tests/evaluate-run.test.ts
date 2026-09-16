@@ -20,7 +20,7 @@ const NO_BUNDLE = path.join(tmpdir(), `fluxbench-no-bundle-${process.pid}-${Date
 const flowInput = (fields: Partial<FlowRunInput> = {}): FlowRunInput => ({ ...input(), result: { runId: "run-a", verdict: "passed", path: NO_BUNDLE }, manifest: manifest({ actions: [action("web.browser.navigate", 1_911)] }), ...fields });
 const createdFlow: RunLaneObservation = {
   lane: "flow", flowCreated: true, oracleVerdict: "passed", reportedVerdict: "passed",
-  automationFailureReported: null, automationFailureExpected: null, harnessActivations: 0, actions: [{ actionType: "web.dom.click", durationMs: 120 }],
+  automationFailureReported: null, automationFailureExpected: null, harnessActivations: 0, actions: [{ actionType: "web.dom.click", durationMs: 120 }], extraction: null,
 };
 
 /** A finalized bundle holding only `snapshots/flow-lane.json`: `snapshot` as written by `flowLaneSnapshot`, or raw text. */
@@ -132,6 +132,7 @@ test("a Flow-lane run reports the lane's own observation, not an inference over 
         lane: "flow", flowCreated: true, oracleVerdict: "passed", reportedVerdict: "passed",
         automationFailureReported: null, automationFailureExpected: null, harnessActivations: 2,
         actions: [{ actionType: "web.dom.click", durationMs: 210 }, { actionType: "web.dom.type", durationMs: 340 }],
+        extraction: [{ stepIndex: 1, status: "judged", expectedRecords: 2, observedRecords: 2, recordsListed: true, countStated: true, comparedRecords: 2, matchedRecords: 2, expectedFields: 2, presentFields: 2, unexpectedFields: 0, expectedPages: null, pagesFollowed: null, truncated: null, durationMs: 40, nonStringValues: 0 }],
       },
     },
   }));
@@ -146,7 +147,7 @@ test("a Flow-lane run that never reached the Flow lane is flowCreated false with
     result: {
       runId: "run-early", verdict: "failed", failureCategory: "recording.persistence", path: NO_BUNDLE,
       // What runScenario publishes when a --flow run fails before the Flow lane: the recording lane's observation.
-      observation: { lane: "recording", flowCreated: null, oracleVerdict: null, reportedVerdict: null, automationFailureReported: null, automationFailureExpected: null, harnessActivations: 0, actions: [] },
+      observation: { lane: "recording", flowCreated: null, oracleVerdict: null, reportedVerdict: null, automationFailureReported: null, automationFailureExpected: null, harnessActivations: 0, actions: [], extraction: null },
     },
     errorSequence: 4,
   }));
@@ -163,7 +164,7 @@ test("a Flow that was created but failed carries the reported category and the c
       observation: {
         lane: "flow", flowCreated: true, oracleVerdict: "passed", reportedVerdict: "failed",
         automationFailureReported: { category: "auth_required", code: "web.auth.required" },
-        automationFailureExpected: null, harnessActivations: 0, actions: [{ actionType: "web.browser.navigate", durationMs: 90 }],
+        automationFailureExpected: null, harnessActivations: 0, actions: [{ actionType: "web.browser.navigate", durationMs: 90 }], extraction: null,
       },
     },
   }));

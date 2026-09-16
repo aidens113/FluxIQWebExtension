@@ -942,7 +942,7 @@ The expectations are judged in this order:
   (`web.dom.extract` or `web.dom.extract_list`). A recording's `extract` step is
   the runner's own check and yields no extract node, and a paginated one's Next
   clicks become click nodes, so a workflow's extraction is usually
-  `not_applicable` on this lane and is judged on the recording lane alone.
+  `not_run` on this lane and is judged on the recording lane alone.
 - The fixture oracle. A Flow whose expectations held but whose fixture did not
   reach its expected final state fails as `runtime.behavior`.
 
@@ -955,7 +955,7 @@ never page content (`flowLaneSnapshot`):
 - the proposal's id, mapper, candidate count, and Core's own issues;
 - the Flow and runtime run ids, the run status, the number of LLM interventions
   Core recorded (`harnessActivations`), the first failure record, and whether
-  extraction was `judged`, `not_applicable` or `not_expected`;
+  extraction was `judged`, `not_run` or `not_expected`;
 - per attempt, in order: its action type and status; its failure record; Core's
   transition comparison status when Core reported one, kept only when it is
   shaped like one of Core's names; Core's target resolution, narrowed to its

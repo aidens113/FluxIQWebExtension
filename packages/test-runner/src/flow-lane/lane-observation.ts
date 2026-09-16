@@ -1,4 +1,4 @@
-import type { AutomationStudioFailureRecord, EvaluationLane, ExpectedFailure, RunActionLatency, RunEvaluation } from "@fluxiq-web-extension/test-contracts";
+import type { AutomationStudioFailureRecord, EvaluationLane, ExpectedFailure, RunActionLatency, RunEvaluation, RunExtractionMeasurement } from "@fluxiq-web-extension/test-contracts";
 import type { PersistedFlowRunOutcome } from "./persisted-flow-run.js";
 
 /**
@@ -9,10 +9,19 @@ import type { PersistedFlowRunOutcome } from "./persisted-flow-run.js";
  */
 export type RunLaneObservation = Pick<
   RunEvaluation,
-  "lane" | "flowCreated" | "oracleVerdict" | "reportedVerdict" | "automationFailureReported" | "automationFailureExpected" | "harnessActivations" | "actions"
+  "lane" | "flowCreated" | "oracleVerdict" | "reportedVerdict" | "automationFailureReported" | "automationFailureExpected" | "harnessActivations" | "actions" | "extraction"
 >;
 
-/** The recording lane: it creates no Flow, so `flowCreated` is null and FluxIQ's verdict comes from the Core probe. */
+/**
+ * The recording lane: it creates no Flow, so `flowCreated` is null and
+ * FluxIQ's verdict comes from the Core probe.
+ *
+ * `extraction` is `null`, which the contract reads as **not measured** rather
+ * than as "no extraction step": this lane asserts each extract step as it runs
+ * (`run-scenario.ts`) and publishes no per-step measurement, so a bench states
+ * no extraction block for it. Stating `[]` would claim the lane measured
+ * extraction and found none, which is a different and false statement.
+ */
 export function recordingLaneObservation(input: {
   oracleVerdict: RunEvaluation["oracleVerdict"];
   reportedVerdict: RunEvaluation["reportedVerdict"];
@@ -29,6 +38,7 @@ export function recordingLaneObservation(input: {
     automationFailureExpected: input.automationFailureExpected,
     harnessActivations: 0,
     actions: [...input.actions],
+    extraction: null,
   };
 }
 
@@ -42,6 +52,12 @@ export function flowLaneObservation(input: {
   oracleVerdict: RunEvaluation["oracleVerdict"];
   run: PersistedFlowRunOutcome | undefined;
   automationFailureExpected: ExpectedFailure | null;
+  /**
+   * One measurement per extract step of the workflow, as the lane judged them
+   * against Core's run datasets; `[]` for a workflow with no extract step, and
+   * `null` when no Flow ran, since a run that never happened measured nothing.
+   */
+  extraction?: readonly RunExtractionMeasurement[];
 }): RunLaneObservation {
   const run = input.flowCreated ? input.run : undefined;
   return {
@@ -53,6 +69,7 @@ export function flowLaneObservation(input: {
     automationFailureExpected: input.automationFailureExpected,
     harnessActivations: run?.harnessActivations ?? 0,
     actions: run ? run.actions.flatMap((action) => (action.durationMs === undefined ? [] : [{ actionType: action.actionType, durationMs: action.durationMs }])) : [],
+    extraction: run && input.extraction ? [...input.extraction] : null,
   };
 }
 

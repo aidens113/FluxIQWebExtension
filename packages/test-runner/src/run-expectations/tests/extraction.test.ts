@@ -28,7 +28,8 @@ test("an expected null matches only a field present with null, never a missing f
   assert.doesNotThrow(() => assertExtraction([{ step: "read", count: 1, records: withNull }], "read", withNull));
   assert.throws(() => assertExtraction([{ step: "read", records: withNull }], "read", [{ name: "Kettle" }]), /record 0/);
   assert.throws(() => assertExtraction([{ step: "read", records: withNull }], "read", [{ name: "Kettle", price: "" }]), /record 0 does not match/);
-  assert.throws(() => assertExtraction([{ step: "read", records: [{ name: "Kettle", price: "" }] }], "read", withNull), /record 0 does not match/);
+  // A record holding `null` where a value was expected carried no value for that field, and fails as exactly that: `null` is the absence of a value, not a value that differs.
+  assert.throws(() => assertExtraction([{ step: "read", records: [{ name: "Kettle", price: "" }] }], "read", withNull), /record 0 carried no value for 1 required field/);
 });
 
 test("only entries naming this step apply, and no entries means nothing to assert", () => {
@@ -40,8 +41,8 @@ test("a field optionalFields names may be absent from either side; one outside i
   const withRating = [{ name: "Kettle", price: "$25.00", rating: "4" }, { name: "Lamp", price: "$40.00" }];
   assert.doesNotThrow(() => assertExtraction([{ step: "read", records: withRating, optionalFields: ["rating"] }], "read", records));
   assert.doesNotThrow(() => assertExtraction([{ step: "read", records, optionalFields: ["rating"] }], "read", withRating));
-  assert.throws(() => assertExtraction([{ step: "read", records: withRating }], "read", records), /record 0 is missing 1 required field\(s\)/);
-  assert.throws(() => assertExtraction([{ step: "read", records: withRating, optionalFields: ["price"] }], "read", records), /record 0 is missing 1 required field\(s\)/);
+  assert.throws(() => assertExtraction([{ step: "read", records: withRating }], "read", records), /record 0 carried no value for 1 required field\(s\)/);
+  assert.throws(() => assertExtraction([{ step: "read", records: withRating, optionalFields: ["price"] }], "read", records), /record 0 carried no value for 1 required field\(s\)/);
 });
 
 test("an optional field is left out of expectedFields, so an item lacking it is still complete", () => {
@@ -65,7 +66,7 @@ test("records and non-optional fields are measured positionally, and what the st
   assert.deepEqual(measureExtraction({ step: "read", records }, observed, { pagesRead: 2, truncated: false, durationMs: 1_200, nonStringValues: 3 }), {
     expectedRecords: 2, observedRecords: 2, recordsListed: true, countStated: false, comparedRecords: 2, matchedRecords: 1,
     expectedFields: 4, presentFields: 4, unexpectedFields: 0,
-    pagesFollowed: 2, truncated: false, durationMs: 1_200, nonStringValues: 3,
+    expectedPages: null, pagesFollowed: 2, truncated: false, durationMs: 1_200, nonStringValues: 3,
   });
 });
 
@@ -76,7 +77,7 @@ test("a count-only entry compares nothing, so it reports no comparison and no ma
   assert.deepEqual(measureExtraction({ step: "read", count: 2 }, records, nothingReported), {
     expectedRecords: 2, observedRecords: 2, recordsListed: false, countStated: true, comparedRecords: 0, matchedRecords: 0,
     expectedFields: 0, presentFields: 0, unexpectedFields: 0,
-    pagesFollowed: null, truncated: null, durationMs: null, nonStringValues: 0,
+    expectedPages: null, pagesFollowed: null, truncated: null, durationMs: null, nonStringValues: 0,
   });
   assert.equal(measureExtraction({ step: "read", count: 3 }, records, nothingReported).matchedRecords, 0);
 });

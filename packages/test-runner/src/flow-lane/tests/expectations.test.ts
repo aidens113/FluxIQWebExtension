@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { RunnerFailure } from "../../failure.js";
-import { assertFlowActions, assertFlowExtraction, assertFlowFailure, flowExtractionExpectation } from "../expectations.js";
+import type { ExpectedExtraction, ScenarioStep } from "@fluxiq-web-extension/test-contracts";
+import { assertFlowActions, assertFlowExtraction, assertFlowFailure, judgeFlowExtraction } from "../expectations.js";
 import type { PersistedFlowAction } from "../persisted-flow-run.js";
+import type { FlowRunDataset } from "../run-datasets.js";
 
 const action = (actionType: string, status: PersistedFlowAction["status"]): PersistedFlowAction => ({ actionType, status, startedAt: new Date(0).toISOString(), durationMs: 1, failure: null });
 
@@ -58,44 +60,133 @@ test("a workflow expecting no failure fails on any reported failure, so a differ
   );
 });
 
-test("extraction is compared per extract attempt, in order, so pagination is proven not assumed", () => {
-  const page = [{ name: "Alpha" }, { name: "Beta" }];
-  assertFlowExtraction([{ step: "read-catalog", count: 2, records: page }], [page], extractingFlow, 0);
-  assertFlowExtraction(undefined, [], extractingFlow, 0);
-  assertFlowExtraction([], [page], extractingFlow, 0);
-  assert.throws(() => assertFlowExtraction([{ step: "read-catalog", count: 2 }], [], extractingFlow, 0), /expected 1/);
-  assert.throws(() => assertFlowExtraction([{ step: "read-catalog", count: 3 }], [page], extractingFlow, 0), /expected 3/);
-  assert.throws(() => assertFlowExtraction([{ step: "read-catalog", records: [{ name: "Beta" }, { name: "Alpha" }] }], [page], extractingFlow, 0), /record 0 does not match/);
+/** The recording's candidate order, as `recordedCandidateOrder` builds it. */
+const candidateOrder = new Map([["node.open", 0], ["node.extract", 1], ["node.extract.second", 2]]);
+
+const script = (...stepIds: string[]): ScenarioStep[] => [
+  { id: "open", operation: "click", target: "#open" },
+  ...stepIds.map((id): ScenarioStep => ({ id, operation: "extract", target: ".item", fields: { name: ".name" } })),
+];
+
+const dataset = (nodeId: string, records: Array<Record<string, string | null>>, overrides: Partial<FlowRunDataset> = {}): FlowRunDataset => ({
+  datasetId: `dataset.${nodeId}`, nodeIds: [nodeId], records, recordCount: records.length,
+  storeTruncated: false, invalidCount: 0, nonStringValues: 0, pages: 1, ...overrides,
 });
 
-/** X0.7: a value the Flow's reader leaves out of a record can make that record match, so the count is judged before the records. */
-test("a judged extraction whose attempts carried a value that is not a string fails as that, even when the records match", () => {
+/** A Flow holding one extract node per recorded extract step, which is what an approved Flow of that recording has. */
+const extractingFlowOf = (steps: number) => new Map([["node.open", "web.dom.click"], ...Array.from({ length: steps }, (_value, index) => [`node.extract.${index}`, "web.dom.extract_list"] as const)]);
+
+const judge = (expected: ExpectedExtraction[] | undefined, steps: string[], datasets: FlowRunDataset[], actionTypes = extractingFlow) =>
+  judgeFlowExtraction({ expected, script: script(...steps), datasets, actionTypes, candidateOrder, durationsByNode: new Map([["node.extract", 40]]) });
+
+test("a step's records are compared against the dataset Core stored for it, and its measurement states the basis", () => {
   const page = [{ name: "Alpha" }, { name: "Beta" }];
-  assert.throws(() => assertFlowExtraction([{ step: "read-catalog", count: 2, records: page }], [page], extractingFlow, 1), (error: unknown) => {
-    assert.ok(error instanceof RunnerFailure);
-    assert.equal(error.category, "runtime.behavior");
-    assert.equal(error.message, "The Flow's extract attempts carried 1 field value(s) that are not strings");
-    assert.deepEqual(error.details, { nonStringValues: 1 });
-    return true;
-  });
-  // An extraction that is not judged is not failed on the count either.
-  assertFlowExtraction([{ step: "read-catalog", count: 2, records: page }], [page], clickOnlyFlow, 1);
+  const judged = judge([{ step: "read-catalog", count: 2, records: page }], ["read-catalog"], [dataset("node.extract", page)]);
+  assert.equal(judged.expectation, "judged");
+  assert.deepEqual(judged.measurements.map(measurement => [measurement.stepIndex, measurement.status, measurement.comparedRecords, measurement.matchedRecords, measurement.durationMs]), [[1, "judged", 2, 2, 40]]);
+  assertFlowExtraction(judged);
+
+  const wrong = judge([{ step: "read-catalog", records: [{ name: "Beta" }, { name: "Alpha" }] }], ["read-catalog"], [dataset("node.extract", page)]);
+  assert.equal(wrong.measurements[0]?.matchedRecords, 0);
+  assert.throws(() => assertFlowExtraction(wrong), /record 0 does not match/);
+  assert.throws(() => assertFlowExtraction(judge([{ step: "read-catalog", count: 3 }], ["read-catalog"], [dataset("node.extract", page)])), /expected 3/);
 });
 
 /**
- * Lab Stage 2: a recording's `extract` step is the runner's own check, not a
- * user action, so W18's and W09's generated Flows held no extract node, and
- * every Flow-lane run failed with `0 extraction result(s), expected 1`.
+ * Pairing by attempt index mis-aligned the moment any node retried, and
+ * pairing by node id would read Core's ids into the judgement. The datasets
+ * arrive here in Core's own order, which is the reverse of the recording's.
  */
-test("a Flow with no extract node is not judged on the workflow's extraction, and the expectation is named as not applying", () => {
-  const expected = [{ step: "read-account", count: 1 }];
-  assert.equal(flowExtractionExpectation(expected, clickOnlyFlow), "not_applicable");
-  assertFlowExtraction(expected, [], clickOnlyFlow, 0);
-  // Either extract output makes the expectation apply, and it is then judged.
-  assert.equal(flowExtractionExpectation(expected, extractingFlow), "judged");
-  assert.equal(flowExtractionExpectation(expected, new Map([["node.extract", "web.dom.extract"]])), "judged");
-  assert.throws(() => assertFlowExtraction(expected, [], new Map([["node.extract", "web.dom.extract"]]), 0), /produced 0 extraction result\(s\), expected 1/);
-  // A workflow that declares no extraction has nothing to apply, whatever the Flow holds.
-  assert.equal(flowExtractionExpectation(undefined, extractingFlow), "not_expected");
-  assert.equal(flowExtractionExpectation([], clickOnlyFlow), "not_expected");
+test("datasets pair with extract steps by candidate order, not by the order Core listed them", () => {
+  const first = [{ name: "Alpha" }];
+  const second = [{ name: "Beta" }];
+  const judged = judge(
+    [{ step: "read-first", records: first }, { step: "read-second", records: second }],
+    ["read-first", "read-second"],
+    [dataset("node.extract.second", second), dataset("node.extract", first)],
+    extractingFlowOf(2),
+  );
+  assert.deepEqual(judged.measurements.map(measurement => measurement.matchedRecords), [1, 1]);
+  assertFlowExtraction(judged);
+});
+
+/**
+ * An `extract` step now records a data-extraction action, so a Flow without an
+ * extract node is a recording defect. The lane used to publish
+ * `not_applicable` here and judge nothing at all.
+ */
+test("a Flow with fewer extract nodes than recorded extract steps fails as a recording defect, never as an unjudged expectation", () => {
+  const judged = judge([{ step: "read-catalog", count: 1 }], ["read-catalog"], [], clickOnlyFlow);
+  assert.equal(judged.expectation, "judged");
+  assert.equal(judged.extractNodes, 0);
+  assert.throws(() => assertFlowExtraction(judged), (error: unknown) => {
+    assert.ok(error instanceof RunnerFailure);
+    assert.equal(error.category, "recording.contract");
+    assert.deepEqual(error.details, { extractNodes: 0, extractSteps: 1 });
+    return true;
+  });
+  // A workflow that declares no extraction has nothing to judge, whatever the Flow holds.
+  assert.equal(judge(undefined, ["read-catalog"], []).expectation, "not_expected");
+  assertFlowExtraction(judge([], ["read-catalog"], [], clickOnlyFlow));
+});
+
+test("an expected step the run stored no dataset for is measured as not run, and fails as a missing extraction", () => {
+  const judged = judge([{ step: "read-catalog", count: 2, records: [{ name: "Alpha" }, { name: "Beta" }] }], ["read-catalog"], []);
+  assert.deepEqual(judged.measurements.map(measurement => [measurement.status, measurement.expectedRecords, measurement.observedRecords, measurement.comparedRecords]), [["not_run", 2, 0, 0]]);
+  assert.throws(() => assertFlowExtraction(judged), /stored no extraction records for expected extract step read-catalog/);
+});
+
+test("an extract step no expectation names is measured as not expected, so it enters no rate", () => {
+  const judged = judge([], ["read-catalog"], [dataset("node.extract", [{ name: "Alpha" }])]);
+  assert.deepEqual(judged.measurements.map(measurement => [measurement.status, measurement.recordsListed, measurement.countStated, measurement.observedRecords]), [["not_expected", false, false, 1]]);
+});
+
+/** X0.7: a value the reader leaves out of a record can make that record match, so it is judged before the records. */
+test("a judged extraction whose datasets carried a value that is not a string fails as that, even when the records match", () => {
+  const page = [{ name: "Alpha" }];
+  const judged = judge([{ step: "read-catalog", records: page }], ["read-catalog"], [dataset("node.extract", page, { nonStringValues: 1 })]);
+  assert.equal(judged.nonStringValues, 1);
+  assert.throws(() => assertFlowExtraction(judged), (error: unknown) => {
+    assert.ok(error instanceof RunnerFailure);
+    assert.equal(error.category, "runtime.behavior");
+    assert.equal(error.message, "The Flow's extract attempts carried 1 field value(s) that are not strings");
+    return true;
+  });
+});
+
+/**
+ * Core's run detail and its run datasets record no page count for an
+ * extraction, and a dataset's `truncated` is Core's own row cap rather than
+ * the page's item cap. Neither may be read as the other, and neither may pass
+ * silently: the step names them as unjudged, the measurement reports
+ * `pagesFollowed: null`, and `expectedPages` keeps the declared side so a
+ * pagination accuracy has both or neither.
+ */
+test("pages and truncated are named as unjudged on this lane rather than refused or quietly met", () => {
+  const page = [{ name: "Alpha" }, { name: "Beta" }];
+  const judged = judge([{ step: "read-catalog", records: page, pages: 3, truncated: false }], ["read-catalog"], [dataset("node.extract", page, { storeTruncated: true })]);
+  assert.deepEqual(judged.steps[0]?.unjudged, ["pages", "truncated"]);
+  assert.equal(judged.steps[0]?.measurement.expectedPages, 3);
+  assert.equal(judged.steps[0]?.measurement.pagesFollowed, null);
+  assert.equal(judged.steps[0]?.measurement.truncated, null);
+  // The entry handed to the assertion no longer declares them, so it is neither refused as unjudgeable nor judged against Core's row cap.
+  assert.deepEqual(judged.steps[0]?.entries, [{ step: "read-catalog", records: page }]);
+  assertFlowExtraction(judged);
+});
+
+/**
+ * D16: Core stores a field the page could not read as an absent key, the
+ * reader restores it as `null`, and an expectation matches `null` only against
+ * `null`. A restored null carried no value, so it is not a present field.
+ */
+test("a restored null matches an expected null and is not counted as a field the record carried", () => {
+  const records = [{ name: "Alpha", price: null }];
+  const matching = judge([{ step: "read-catalog", records: [{ name: "Alpha", price: null }] }], ["read-catalog"], [dataset("node.extract", records)]);
+  assert.equal(matching.measurements[0]?.matchedRecords, 1);
+  assert.equal(matching.measurements[0]?.presentFields, 2, "an expected null is carried when the record holds null");
+  assertFlowExtraction(matching);
+
+  const wanted = judge([{ step: "read-catalog", records: [{ name: "Alpha", price: "12.00" }] }], ["read-catalog"], [dataset("node.extract", records)]);
+  assert.deepEqual([wanted.measurements[0]?.expectedFields, wanted.measurements[0]?.presentFields], [2, 1]);
+  assert.throws(() => assertFlowExtraction(wanted), /carried no value for 1 required field/);
 });

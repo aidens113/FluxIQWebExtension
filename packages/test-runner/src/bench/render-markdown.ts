@@ -1,4 +1,4 @@
-import { benchRateMetrics, evaluationLanes, type BenchDistribution, type BenchReport, type EvaluationLane } from "@fluxiq-web-extension/test-contracts";
+import { benchExtractionRateMetrics, benchRateMetrics, evaluationLanes, type BenchDistribution, type BenchReport, type EvaluationLane } from "@fluxiq-web-extension/test-contracts";
 import { BENCH_RATE_DEFINITIONS } from "./aggregate-report.js";
 import type { BenchExecutionCoverage } from "./execution-coverage.js";
 import { benchFailureCauses, describeFacilityFailure, type BenchFailureCause } from "./failure-cause.js";
@@ -151,8 +151,48 @@ function metricLines(report: BenchReport, coverage: BenchMarkdownCoverage): stri
     "",
     table(["Lane", "Metric", "Samples", "p50", "p95"], distributions.map(([name, distribution]) => [ALL_LANES, name, String(distribution.samples), distribution.p50 === null ? "n/a" : String(distribution.p50), distribution.p95 === null ? "n/a" : String(distribution.p95)])),
     "",
+    ...extractionLines(report),
     `Truncation count, ${ALL_LANES}: ${metrics.truncationCount}. Sanitized packet bytes and the truncation count come from Flow-lane runs only: a recording-lane run runs no Flow, so Core captures no sanitized packet for it. Raw snapshot bytes has no samples on any lane: no producer measures raw snapshots, and they are not a Week 1 metric. Week 2 metrics (harness recovery; adaptation cost, validation, persistence, and reuse) are null.`,
     "",
+  ];
+}
+
+/**
+ * Extraction, per lane, with the basis of every rate beside it.
+ *
+ * The basis line is not decoration. A record accuracy is pooled over the steps
+ * whose expectation listed records and nothing else, so a lane with one
+ * compared step and twenty count-only ones can print a confident 1.000 that
+ * stands on one step; and a step that judged nothing at all is stated
+ * separately rather than absorbed. A rate whose population is empty prints
+ * `n/a`, never 0 or 1: it was not measured.
+ *
+ * A lane that measured no extraction states nothing here, which is why this
+ * section is absent from a bench of recording-lane runs rather than a table of
+ * zeros.
+ */
+function extractionLines(report: BenchReport): string[] {
+  const byLane = report.metrics.extractionByLane;
+  if (!byLane) return [];
+  const lanes = evaluationLanes.flatMap((lane) => { const measured = byLane[lane]; return measured ? [[lane, measured] as const] : []; });
+  if (lanes.length === 0) return [];
+  return [
+    "## Extraction",
+    "",
+    "Each rate is pooled over one lane's extraction steps in the unit its metric defines, and states the steps it stands on. A rate with no population prints n/a: nothing judged it, which is not the same as judging it and finding nothing.",
+    "",
+    ...lanes.flatMap(([lane, measured]) => [
+      `**${lane} lane.** ${measured.judgedSteps} step(s) judged and ${measured.unjudgedSteps} not: ${measured.comparedSteps} compared their records, ${measured.countOnlySteps} stated a count alone and compared no value, and ${measured.unjudgeableSteps} could judge neither. Only the compared steps are in the record accuracy.`,
+      "",
+      table(["Metric", "Count", "Total", "Workflows", "Rate"], benchExtractionRateMetrics.map((metric) => {
+        const value = measured[metric];
+        return [metric, String(value.count), String(value.total), String(value.workflows), value.rate === null ? "n/a" : fixed(value.rate)];
+      })),
+      "",
+      table(["Distribution", "Samples", "p50", "p95"], ([["extractionDurationMs", measured.extractionDurationMs], ["extractionMsPerPage", measured.extractionMsPerPage]] as Array<[string, BenchDistribution]>)
+        .map(([name, distribution]) => [name, String(distribution.samples), distribution.p50 === null ? "n/a" : String(distribution.p50), distribution.p95 === null ? "n/a" : String(distribution.p95)])),
+      "",
+    ]),
   ];
 }
 

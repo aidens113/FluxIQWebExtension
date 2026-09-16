@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assertRunEvaluation, EVALUATION_SCHEMA_VERSION, type RunEvaluation } from "@fluxiq-web-extension/test-contracts";
+import { assertRunEvaluation, EVALUATION_SCHEMA_VERSION, type RunEvaluation, type RunExtractionMeasurement } from "@fluxiq-web-extension/test-contracts";
 import { flowLaneObservation, recordingLaneObservation, selectLaneObservation, type RunLaneObservation } from "../lane-observation.js";
 import type { PersistedFlowRunOutcome } from "../persisted-flow-run.js";
 
 const run = (overrides: Partial<PersistedFlowRunOutcome> = {}): PersistedFlowRunOutcome => ({
-  runId: "run.one", status: "succeeded", harnessActivations: 0, failure: null, extracted: [], extractedNonStringValues: 0,
+  runId: "run.one", status: "succeeded", harnessActivations: 0, failure: null, extracted: [], extractedNonStringValues: 0, extractionDurationsByNode: new Map(),
   actions: [{ actionType: "web.dom.type", status: "succeeded", startedAt: new Date(0).toISOString(), durationMs: 12, failure: null }],
   ...overrides,
 });
@@ -17,7 +17,6 @@ function evaluationFrom(observation: RunLaneObservation): RunEvaluation {
     scenarioId: "auth-gate", workflowId: null, variantId: null, repeatIndex: 0, durationMs: 10,
     evidence: { sanitizedPacketBytes: [], rawSnapshotBytes: [], truncationCount: 0 },
     llm: { mode: "disabled", profileId: null, calls: 0 },
-    extraction: null,
     harnessRecovery: null, adaptationCost: null, adaptationValidation: null, adaptationPersistence: null, adaptationReuse: null,
     ...observation,
   };
@@ -66,6 +65,30 @@ test("no Flow was created, so FluxIQ reported no verdict", () => {
 
 test("harness activations come from Core's run detail", () => {
   assert.equal(flowLaneObservation({ flowCreated: true, oracleVerdict: "passed", run: run({ harnessActivations: 2 }), automationFailureExpected: null }).harnessActivations, 2);
+});
+
+/**
+ * The lane's own per-step measurements are what the bench's extraction numbers
+ * are pooled from, so they travel on the observation rather than being
+ * re-derived from the bundle. `null` is unmeasured and `[]` is measured with no
+ * extraction step: a run that never created a Flow measured nothing, and
+ * publishing `[]` for it would state that its extraction was fine.
+ */
+test("the Flow lane's extraction measurements travel on the observation, and a run that created no Flow measures none", () => {
+  const measurement: RunExtractionMeasurement = {
+    stepIndex: 1, status: "judged", expectedRecords: 2, observedRecords: 2, recordsListed: true, countStated: false,
+    comparedRecords: 2, matchedRecords: 2, expectedFields: 2, presentFields: 2, unexpectedFields: 0,
+    expectedPages: 3, pagesFollowed: null, truncated: null, durationMs: 40, nonStringValues: 0,
+  };
+  const judged = flowLaneObservation({ flowCreated: true, oracleVerdict: "passed", run: run(), automationFailureExpected: null, extraction: [measurement] });
+  assert.deepEqual(judged.extraction, [measurement]);
+  assertRunEvaluation(evaluationFrom(judged));
+
+  assert.deepEqual(flowLaneObservation({ flowCreated: true, oracleVerdict: "passed", run: run(), automationFailureExpected: null, extraction: [] }).extraction, []);
+  assert.equal(flowLaneObservation({ flowCreated: true, oracleVerdict: "passed", run: run(), automationFailureExpected: null }).extraction, null);
+  assert.equal(flowLaneObservation({ flowCreated: false, oracleVerdict: null, run: run(), automationFailureExpected: null, extraction: [measurement] }).extraction, null);
+  // The recording lane asserts each extract step as it runs and keeps no measurement, so it states unmeasured.
+  assert.equal(recordingLaneObservation({ oracleVerdict: "passed", reportedVerdict: "passed", automationFailureReported: null, automationFailureExpected: null, actions: [] }).extraction, null);
 });
 
 /**

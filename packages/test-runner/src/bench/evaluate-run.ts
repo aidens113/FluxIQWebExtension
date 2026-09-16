@@ -16,6 +16,7 @@ export const RECORDING_LANE_SOURCES = {
   durationMs: "run.json finishedAt minus startedAt; the bench's wall clock when run.json is unreadable",
   actionLatency: "run.json actions[].durationMs; an unfinished action has none and is left out",
   evidenceSizes: "none: the recording lane runs no Flow, so Core captures no sanitized packet for it; sanitizedPacketBytes is empty and truncationCount is 0. rawSnapshotBytes is empty on every lane: no producer measures raw snapshots, and they are not a Week 1 metric",
+  extraction: "unmeasured: the lane asserts each extract step as it runs and publishes no per-step measurement, so the report states no extraction block for this lane. It is not a measurement of zero",
   llm: "disabled: Week 1 benches run provider-free",
 } as const;
 
@@ -35,6 +36,7 @@ export const FLOW_LANE_SOURCES = {
   harnessActivations: "the persisted Core run's harness activations",
   durationMs: "run.json finishedAt minus startedAt; the bench's wall clock when run.json is unreadable",
   actionLatency: "the persisted Core run's actions[].durationMs; an unfinished action has none and is left out",
+  extraction: "the lane's own judgement of the workflow's expected.extracted against the datasets Core stored for the run (K5 runDetail.datasets, K8 get-run-dataset-page), one measurement per recorded extract step, paired with the steps by the recording's candidate order. Records are compared in full; the pages a read covered and whether it hit the page's item cap are not observable from Core's run detail or its datasets, so those members are reported as unjudged and enter no rate",
   evidenceSizes: "the run bundle's snapshots/flow-lane.json actions[].evidencePackets: sanitizedPacketBytes holds the UTF-8 size of each state-snapshot packet Core captured before and after a web action attempt, one entry per measured packet, and truncationCount counts those the domain trimmed. The failure packet is not in Core's run detail and is not measured. Both are empty and 0 when that file is absent, which is a run in which no Flow ran, and also when it is unreadable. rawSnapshotBytes is empty: no producer measures raw snapshots, and they are not a Week 1 metric. A measured packet over the domain's exploration budget fails the run's evidence-packet-budget invariant",
   llm: "disabled: Week 1 benches run provider-free",
 } as const;
@@ -105,6 +107,10 @@ export function evaluateFlowRun(input: FlowRunInput): RunEvaluation {
       automationFailureExpected: input.expectedFailure,
       harnessActivations: observed?.harnessActivations ?? 0,
       actions: observed ? [...observed.actions] : [],
+      // The lane's own per-step extraction measurements, or null when it
+      // published none: a run that never reached the Flow lane measured no
+      // extraction, which is not the same as measuring none.
+      extraction: observed?.extraction ?? null,
     },
     evidence: flowLaneEvidenceSizes(input.result.path),
   });
@@ -133,6 +139,7 @@ export function evaluateFailedAttempt(input: RunEvaluationIdentity & { lane: Eva
       automationFailureExpected: input.expectedFailure,
       harnessActivations: 0,
       actions: [],
+      extraction: null,
     },
   });
 }
@@ -187,6 +194,9 @@ function benchRecordingObservation(input: RecordingRunInput): RunLaneObservation
     automationFailureExpected: input.expectedFailure,
     harnessActivations: 0,
     actions: (input.manifest?.actions ?? []).flatMap((action) => action.durationMs === undefined ? [] : [{ actionType: action.actionType, durationMs: action.durationMs }]),
+    // The recording lane asserts each extract step as it runs and keeps no
+    // per-step measurement, so this bench measures no extraction on it.
+    extraction: null,
   };
 }
 

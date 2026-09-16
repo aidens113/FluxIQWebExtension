@@ -120,33 +120,91 @@ test("a failure record Core's own parser rejects is treated as absent, never hal
   assert.equal(outcome.failure, null);
 });
 
-test("harness activations and extracted records come from Core's run detail", async () => {
-  const { client } = control({}, {
-    interventions: [{ interventionId: "one" }, { interventionId: "two" }],
-    actionAttempts: [attempt({ definitionId: "web.dom.extract_list", metadata: { result: { extracted: [{ name: "Alpha" }, { name: "Beta" }] } } })],
+/**
+ * A run's extracted records are in Core's run datasets, never in its run
+ * detail: Core replaces a stored attempt's rows with a `$dataset` marker
+ * holding their count (`service/summaries/conversions.ts`). The detail names
+ * the datasets (K5) and `get-run-dataset-page` returns their rows (K8).
+ */
+function datasetControl(pages: Array<Record<string, unknown>>, detail: Record<string, unknown> = {}) {
+  const requests: Array<Record<string, unknown>> = [];
+  const { client } = control({
+    automationStudioCall: async (endpoint: string, payload: Record<string, unknown>) => {
+      if (endpoint !== "get-run-dataset-page") {
+        return { runDetail: { summary: { runId: "run.one", status: "succeeded" }, interventions: [], actionAttempts: [attempt({ definitionId: "builtin.policy.action", nodeId: "node.extract", metadata: { recordCount: 3 } })], ...detail } };
+      }
+      requests.push(payload);
+      const page = pages[requests.length - 1];
+      if (!page) throw new Error("The reader asked for a page Core does not have");
+      return { dataset: page };
+    },
   });
+  return { client, requests };
+}
+
+const summary = (overrides: Record<string, unknown> = {}) => ({ runId: "run.one", datasetId: "catalog", nodeIds: ["node.extract"], recordCount: 3, truncated: false, invalidCount: 0, ...overrides });
+const schema = { schemaVersion: "0.1", fields: [{ id: "name", label: "Name", valueType: "string" }, { id: "price", label: "Price", valueType: "string" }] };
+
+test("a run's records are read from its datasets, every page of them, with a missing field restored as null", async () => {
+  const { client, requests } = datasetControl(
+    [
+      { summary: summary(), schema, rows: [{ name: "Alpha", price: "1.00" }, { name: "Beta" }], nextCursor: "cursor.two" },
+      { summary: summary(), schema, rows: [{ name: "Gamma", price: "3.00" }], nextCursor: null },
+    ],
+    { datasets: [summary()] },
+  );
   const outcome = await executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
-  assert.equal(outcome.harnessActivations, 2);
-  assert.deepEqual(outcome.extracted, [[{ name: "Alpha" }, { name: "Beta" }]]);
+  assert.equal(outcome.extracted.length, 1);
+  // The second page is read only because the first page's cursor was followed.
+  assert.deepEqual(outcome.extracted[0]?.records, [{ name: "Alpha", price: "1.00" }, { name: "Beta", price: null }, { name: "Gamma", price: "3.00" }]);
+  assert.deepEqual(requests.map(request => request.cursor), [null, "cursor.two"]);
+  assert.deepEqual(requests.map(request => request.limit), [200, 200]);
+  assert.equal(outcome.extracted[0]?.pages, 2);
   assert.equal(outcome.extractedNonStringValues, 0);
-  assert.equal(outcome.actions[0]?.extractedNonStringValues, 0);
+  // The attempt says how many rows it captured, and how long it took, so a duration can be attributed to the dataset its node wrote.
+  assert.equal(outcome.actions[0]?.recordCount, 3);
+  assert.deepEqual([...outcome.extractionDurationsByNode], [["node.extract", 30]]);
 });
 
-/** X0.7: this reader used to drop a value that is not a string silently, so a record missing a value it did carry could still match. */
-test("an extracted value that is not a string, or an entry that is not a record, is left out of the records and counted", async () => {
-  const extract = (order: number, extracted: unknown[]) => attempt({ attemptId: `attempt.${order}`, nodeId: `node.${order}`, order, definitionId: "web.dom.extract_list", metadata: { result: { extracted } } });
-  const { client } = control({}, { actionAttempts: [extract(0, [{ name: "Alpha", price: null }, "stray", { name: "Beta", tags: ["x"] }])] });
+/** X0.7 on this lane: a stored cell that is not a string is left out of the record and counted, never read as text. */
+test("a dataset cell that is not a string is counted rather than carried, and a repeated cursor ends the read", async () => {
+  const { client, requests } = datasetControl(
+    [
+      { summary: summary({ recordCount: 2 }), schema, rows: [{ name: "Alpha", price: 4 }, { name: "Beta", price: "2.00", extra: "seen" }], nextCursor: "cursor.same" },
+      { summary: summary({ recordCount: 2 }), schema, rows: [], nextCursor: "cursor.same" },
+    ],
+    { datasets: [summary({ recordCount: 2 })] },
+  );
   const outcome = await executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
-  assert.deepEqual(outcome.extracted, [[{ name: "Alpha" }, { name: "Beta" }]]);
-  assert.equal(outcome.extractedNonStringValues, 3);
-  assert.equal(outcome.actions[0]?.extractedNonStringValues, 3);
+  // The number cell is left out of the record entirely rather than restored as null: `null` means the page held no value, and a cell the reader could not carry is not that.
+  assert.deepEqual(outcome.extracted[0]?.records, [{ name: "Alpha" }, { name: "Beta", price: "2.00", extra: "seen" }]);
+  assert.equal(outcome.extractedNonStringValues, 1, "the number cell is counted, and the extra string column is carried so it can be reported as unexpected");
+  assert.equal(requests.length, 2, "a cursor Core did not advance ends the read instead of looping forever");
+});
 
-  // The run's count is every attempt's, summed, and an attempt with no extracted list carries none.
-  const { client: several } = control({}, { actionAttempts: [extract(0, [{ name: "Alpha", price: 4 }]), attempt({ attemptId: "attempt.click", order: 1 }), extract(2, [null, { name: "Gamma" }])] });
-  const summed = await executeRecordedFlowRun(several, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
-  assert.deepEqual(summed.extracted, [[{ name: "Alpha" }], [{ name: "Gamma" }]]);
-  assert.deepEqual(summed.actions.map((action) => action.extractedNonStringValues), [1, undefined, 1]);
-  assert.equal(summed.extractedNonStringValues, 2);
+/** A reader that returned fewer rows than Core stored would understate an extraction, turning a record regression into a missing one. */
+test("a dataset whose rows do not add up to the count Core stored is refused", async () => {
+  const { client } = datasetControl(
+    [{ summary: summary(), schema, rows: [{ name: "Alpha" }], nextCursor: null }],
+    { datasets: [summary()] },
+  );
+  await assert.rejects(
+    () => executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" }),
+    (error: unknown) => error instanceof RunnerFailure && error.category === "runtime.behavior" && /stored 3 record\(s\) .* and returned 1/.test(error.message),
+  );
+});
+
+test("a run whose detail lists no dataset reads none, and asks Core for none", async () => {
+  const { client, calls } = control();
+  const outcome = await executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" });
+  assert.deepEqual(outcome.extracted, []);
+  assert.equal(outcome.extractedNonStringValues, 0);
+  assert.deepEqual(calls, ["select", "start", "run", "get-flow-run-detail"]);
+});
+
+test("harness activations come from the run detail's interventions", async () => {
+  const { client } = control({}, { interventions: [{ interventionId: "one" }, { interventionId: "two" }] });
+  assert.equal((await executeRecordedFlowRun(client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab" })).harnessActivations, 2);
 });
 
 test("a run with no durable action, or a detail for another run, is refused", async () => {
