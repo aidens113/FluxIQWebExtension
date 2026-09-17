@@ -409,6 +409,31 @@ The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
 
 ## Work Ledger
 
+### 2026-09-16 — A created scraper reads every field
+- Agent: `w2-created-scrape-fields` (`d9d23e3`), verified by the supervisor.
+- Cause: the resolver accepted only a bare extraction handle (7 columns
+  under the page's names, plus pagination), and the node text showed only
+  literal CSS, so the model guessed selectors that matched every card and no
+  field. The handle now takes a column map, a page switch and a location;
+  literal extraction after a detection is refused; handle refusals name the
+  accepted slot and the position. `reveal_safe` refuses feed scrolling by
+  design (`reveal.ts:17-27`); detection carries scroll pagination.
+- Live: `run-mu4yk4u1-60a1c3a4` extracted 8/8 records and 32/32 fields
+  (before: no fields), but matched 0 records, most likely an absolute `url`
+  against a root-relative fixture. Supervisor decision: the Lab judge
+  resolves a root-relative expected URL against the scenario origin
+  (`w2-judge-same-origin-urls`). Core wording diffs went to
+  `w2-creation-loop-keeps-going` (also: a record output that passes plan
+  validation failed at run time as `record_output.invalid`); the detection
+  tool's description line went to W-3a.
+- Validation: verified alone in `F:/fxlab/verify-ext` (a worktree at
+  `5d96ba2` plus only this worker's files; `node_modules` and
+  `domain/node_modules` joined from the main checkout, so Core is its built
+  `dist`): `pnpm --filter @fluxiq-web-extension/domain check` -> exit 0;
+  `... domain test` -> "# tests 624", "# pass 624", "# fail 0". The 44
+  `domain/.test-build` bundles committed are that worktree's output, not the
+  main checkout's, which other workers' runs had rewritten.
+
 ### 2026-09-16 — First full live campaign: forms pass, scraping and refusals do not
 - Agent: supervisor; `pnpm lab:campaign --all --max-attempts 4` from this
   checkout against Core `8409ca2` (`F:/fxlab/lab-core`), DeepSeek.
