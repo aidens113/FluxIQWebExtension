@@ -388,3 +388,44 @@ test("a landmark's name reaches the dispatched target beside the role it names",
   assert.deepEqual((target?.element as { context?: unknown }).context, { landmark: "region", landmarkName: "Billing details" });
   assert.equal("context" in (elementFingerprint({ selector: "#agree", context: { landmarkName: 7 } }) ?? {}), false, "a name that is not text is no context at all");
 });
+
+// --- Which record the element sat in -----------------------------------------
+//
+// The one field of `context` the page acts on rather than merely carries. A
+// position says where a control was and a fingerprint says what it was; on a
+// table of 240 identical row actions neither says *which*, so a replay resolved
+// the recorded selector's positional answer, agreed with it on every signal,
+// promoted the wrong member and reported success. The extension refuses a match
+// in another record now (`content/identity/record.ts`), and it can only do that
+// if the record reaches it -- which is exactly what `context` itself failed to
+// do for a week, one layer above these rows.
+
+test("the record the element sat in survives into the fingerprint", () => {
+  const record = { keyAttribute: "data-member-id", key: "usr_a91", text: "Priya Iqbal" };
+  const fingerprint = elementFingerprint({ selector: "#row-action", tagName: "button", context: { record } });
+  assert.deepEqual(fingerprint?.context, { record });
+});
+
+test("and into the dispatched target, which is where the page reads it", () => {
+  const target = outputTargetFromPayload({
+    selector: "#row-action",
+    element: { selector: "#row-action", context: { record: { keyAttribute: "data-member-id", key: "usr_a91" } } }
+  });
+  assert.deepEqual(
+    (target?.element as { context?: { record?: unknown } }).context?.record,
+    { keyAttribute: "data-member-id", key: "usr_a91" }
+  );
+});
+
+test("a record is read with the same closed vocabulary as the context around it", () => {
+  const fingerprint = elementFingerprint({
+    selector: "#row-action",
+    context: { record: { key: "usr_a91", rowIndex: 92, text: 7 } }
+  });
+  assert.deepEqual(fingerprint?.context, { record: { key: "usr_a91" } }, "an unknown key and a mistyped one are both dropped");
+});
+
+test("a record with nothing in it is absent, not an empty object", () => {
+  assert.equal("context" in (elementFingerprint({ selector: "#plain", context: { record: {} } }) ?? {}), false);
+  assert.equal("context" in (elementFingerprint({ selector: "#plain", context: { record: "row 92" } }) ?? {}), false, "a record that is not an object is no context at all");
+});

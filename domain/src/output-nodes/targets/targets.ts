@@ -287,7 +287,8 @@ function elementContext(value: unknown): WebAutomationElementContext | undefined
     landmarkName: stringValue(context.landmarkName),
     heading: stringValue(context.heading),
     listPosition: listPosition(context.listPosition),
-    tablePosition: tablePosition(context.tablePosition)
+    tablePosition: tablePosition(context.tablePosition),
+    record: elementRecord(context.record)
   } satisfies ElementContextFields);
   return Object.keys(fields).length > 0 ? fields as WebAutomationElementContext : undefined;
 }
@@ -298,6 +299,27 @@ function listPosition(value: unknown): WebAutomationElementContext["listPosition
   const index = numberValue(position?.index);
   const total = numberValue(position?.total);
   return index === undefined || total === undefined ? undefined : { index, total };
+}
+
+/**
+ * Which record the element sat in. The one field of `context` the page acts on
+ * rather than merely carries: `content/action-runtime/resolve-target.ts` refuses
+ * a match in another record, so dropping it here would not lose a hint, it would
+ * put the wrong-record click back.
+ *
+ * A record with nothing in it is `undefined`, for the reason the context around
+ * it is: an empty object reads as "asked, and the page said nothing", and the
+ * recorder emits no record at all for a control that sits in none.
+ */
+function elementRecord(value: unknown): WebAutomationElementContext["record"] {
+  const record = objectValue(value);
+  if (!record) return undefined;
+  const fields = compact({
+    keyAttribute: stringValue(record.keyAttribute),
+    key: stringValue(record.key),
+    text: stringValue(record.text)
+  } satisfies ContractFields<NonNullable<WebAutomationElementContext["record"]>>);
+  return Object.keys(fields).length > 0 ? fields as NonNullable<WebAutomationElementContext["record"]> : undefined;
 }
 
 /** A cell in a table. The column header is the part a person reads, and is absent where the table has none. */

@@ -42,6 +42,7 @@ import {
 } from "fluxiq/automation-studio/fingerprinting";
 import type { TargetCandidate } from "./candidates";
 import { corroboratesExactly } from "./corroboration";
+import { agreesWithRecordedRecord, type RecordIdentity } from "./record";
 
 /** A candidate and what Core made of it. */
 export type ScoredCandidate = {
@@ -71,6 +72,14 @@ export type CandidateSelection =
  * inside it.
  */
 export type RecordedIdentity = {
+  /**
+   * Where the element sat, of which one field is read here: `context.record`,
+   * the record it belonged to. Nothing in it is *scored* -- Core's matcher has
+   * no positional or structural signal, as `candidates.ts` measures -- but the
+   * record is a gate applied before ranking, because a candidate in another row
+   * is not the recorded control at any score.
+   */
+  context?: { record?: RecordIdentity | undefined } | undefined;
   visibleText?: string | undefined;
   accessibleName?: string | undefined;
   label?: string | undefined;
@@ -147,13 +156,22 @@ const matcher = createAutomationStudioElementMatcher();
  */
 export function scoreTargetCandidates(target: RecordedIdentity, candidates: TargetCandidate[]): CandidateSelection {
   if (!candidates.length) return { outcome: "unmatched", ranked: [] };
-  const elements = new Map(candidates.map((candidate) => [candidate.fingerprint, candidate.element]));
+  // The record gate, before the ranking rather than after it. A candidate in
+  // another row is not the recorded control, so it must not be ranked, reported
+  // as a near miss, or allowed to tie with one that is: on a 240-row table it
+  // would otherwise fill the pool and turn "the recorded row is gone" into "239
+  // candidates tied". Applied here rather than at the two call sites so a third
+  // one cannot forget it. When the recording named no record this returns every
+  // candidate without reading the page.
+  const eligible = candidates.filter((candidate) => agreesWithRecordedRecord(target.context?.record, candidate.element));
+  if (!eligible.length) return { outcome: "unmatched", ranked: [] };
+  const elements = new Map(eligible.map((candidate) => [candidate.fingerprint, candidate.element]));
   const fingerprint = comparableFingerprint(target);
   if (!hasIdentitySignal(fingerprint)) return { outcome: "unmatched", ranked: [] };
   const ranked = matcher
     // Core drops anything below zero by default. The full ranking is kept so a
     // refusal can report what it weighed; the floor below is what decides.
-    .scoreCandidates(fingerprint, candidates.map((candidate) => candidate.fingerprint), { minimumNormalizedScore: -1 })
+    .scoreCandidates(fingerprint, eligible.map((candidate) => candidate.fingerprint), { minimumNormalizedScore: -1 })
     .flatMap((score) => {
       const element = elements.get(score.candidate);
       return element ? [{ element, score }] : [];

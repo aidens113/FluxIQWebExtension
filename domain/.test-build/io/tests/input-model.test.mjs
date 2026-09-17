@@ -63,7 +63,8 @@ function elementContext(value) {
     landmarkName: stringValue(context.landmarkName),
     heading: stringValue(context.heading),
     listPosition: listPosition(context.listPosition),
-    tablePosition: tablePosition(context.tablePosition)
+    tablePosition: tablePosition(context.tablePosition),
+    record: elementRecord(context.record)
   });
   return Object.keys(fields).length > 0 ? fields : void 0;
 }
@@ -72,6 +73,16 @@ function listPosition(value) {
   const index = numberValue(position?.index);
   const total = numberValue(position?.total);
   return index === void 0 || total === void 0 ? void 0 : { index, total };
+}
+function elementRecord(value) {
+  const record = objectValue(value);
+  if (!record) return void 0;
+  const fields = compact({
+    keyAttribute: stringValue(record.keyAttribute),
+    key: stringValue(record.key),
+    text: stringValue(record.text)
+  });
+  return Object.keys(fields).length > 0 ? fields : void 0;
 }
 function tablePosition(value) {
   const position = objectValue(value);

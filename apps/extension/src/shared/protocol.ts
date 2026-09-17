@@ -248,6 +248,25 @@ export type DomElementContext = {
   heading?: string | undefined;
   listPosition?: { index: number; total: number } | undefined;
   tablePosition?: { row: number; column: number; columnHeader?: string | undefined } | undefined;
+  /**
+   * The record -- a table row, a list item, a card -- the element belonged to,
+   * where the page repeats one. A position says *where* the control was and a
+   * fingerprint says *what* it was; on a page of 240 identical row actions
+   * neither says *which*, so a replay resolved the recorded selector's
+   * positional answer, agreed with it on every signal, and acted on another
+   * record (`content/identity/record.ts`). This is what a replay checks the
+   * answer against.
+   *
+   * `keyAttribute` travels with `key` so the page asks the candidate's record
+   * for the same attribute rather than guessing. `text` is the fallback for a
+   * record the author keyed by nothing, and is present only when the page held
+   * more than one such record at capture time.
+   */
+  record?: {
+    keyAttribute?: string | undefined;
+    key?: string | undefined;
+    text?: string | undefined;
+  } | undefined;
 };
 
 /**

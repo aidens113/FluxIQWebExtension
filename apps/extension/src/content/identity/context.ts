@@ -33,6 +33,7 @@ import { present } from "../../shared/present";
 import { textOutsideSensitiveControls } from "../sensitive-text";
 import type { DomElementContext } from "../types";
 import { boundedText } from "./bounded-text";
+import { recordIdentity } from "./record";
 
 const MAX_CONTEXT_TEXT = 200;
 const HEADING_SELECTOR = "h1,h2,h3,h4,h5,h6,[role='heading']";
@@ -76,7 +77,12 @@ export function elementContext(element: Element): DomElementContext | undefined 
     landmarkName: landmark ? landmarkName(landmark.element) : undefined,
     heading: nearestHeading(element),
     listPosition: listPosition(element),
-    tablePosition: tablePosition(element)
+    tablePosition: tablePosition(element),
+    // Where the other eight say where the element sat, this one says *which of
+    // the repeated things* it sat in -- the only signal that separates 240
+    // identical row actions, and the one a replay checks its answer against
+    // before acting (`record.ts`).
+    record: recordIdentity(element)
   });
   return Object.keys(context).length ? context : undefined;
 }

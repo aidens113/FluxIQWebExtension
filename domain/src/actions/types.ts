@@ -64,6 +64,26 @@ export type WebAutomationElementContext = {
   heading?: string | undefined;
   listPosition?: { index: number; total: number } | undefined;
   tablePosition?: { row: number; column: number; columnHeader?: string | undefined } | undefined;
+  /**
+   * The record -- a table row, a list item, a card -- the recorded element
+   * belonged to, where the page repeats one. The extension derives it in
+   * `content/identity/record.ts` and checks a replay's answer against it: a
+   * position and a fingerprint together still cannot say *which* of 240
+   * identical row actions was recorded, which is how a replay acted on another
+   * record and reported success.
+   *
+   * Core's matcher does not score it, as it does not score the positions beside
+   * it. It is a gate the page applies, not a weight: a candidate in another
+   * record is not the recorded control at any score.
+   */
+  record?: {
+    /** The attribute the key was read from, so the page asks the candidate's record for the same one. */
+    keyAttribute?: string | undefined;
+    /** That attribute's value: `usr_9f31`, `PO-4472`. */
+    key?: string | undefined;
+    /** The record's own bounded text, for a record the author keyed by nothing. */
+    text?: string | undefined;
+  } | undefined;
 };
 
 /**

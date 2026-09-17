@@ -97,6 +97,25 @@
 // corroborates, and it does. Nothing in a fingerprint can distinguish two
 // controls a page has made identical.
 //
+// ## Rule 0: the record, which is what that last paragraph cost
+//
+// A page that repeats a template makes its controls identical *by design*. The
+// member directory renders 240 rows, each with one action button carrying the
+// design system's constant `aria-label="Row actions"` and a generated class
+// shared by all of them. A recording of one of those buttons can only be
+// addressed positionally, and replaying it against a page the recorded member
+// had left resolved the button of *another member*: the two rules above then
+// agreed on every signal, exactly, and the Flow promoted the wrong person and
+// reported success (`reports/w2-wrong-row-acted-on.md`).
+//
+// So a third rule runs before the other two, and it is not a score. The
+// recording carries which **record** -- which row, list item or card -- the
+// control sat in (`record.ts`), and a candidate in another one is refused
+// whatever it weighs. It fails closed: a candidate in no record at all, when
+// the recording named one, disagrees. Nothing in a fingerprint can separate two
+// identical controls; what is *around* them can, and this is the only rule here
+// that reads it.
+//
 // ## What the veto reports back, and why an accept now reports it too
 //
 // The veto scores every Level 1 match. Until 2026-09-12 it returned that number
@@ -121,6 +140,7 @@
 
 import { candidateFingerprint, candidateLabel, type TargetCandidate } from "./candidates";
 import { corroboratesExactly } from "./corroboration";
+import { agreesWithRecordedRecord } from "./record";
 import { scoreTargetCandidate, type RecordedIdentity } from "./score";
 
 /**
@@ -129,12 +149,14 @@ import { scoreTargetCandidate, type RecordedIdentity } from "./score";
  */
 export const TARGET_VETO_FLOOR = 0;
 
-/** Which of the two rules refused a match. */
+/** Which of the three rules refused a match. */
 export type TargetVetoReason =
   /** Rule 1: Core weighed more contradiction than agreement. */
   | "contradicted"
   /** Rule 2: nothing the recording named agreed exactly, whatever the score was. */
-  | "uncorroborated";
+  | "uncorroborated"
+  /** Rule 0: the right kind of control, in the wrong record. */
+  | "other-record";
 
 /**
  * What Core made of a match: the number rule 1 reads, and Core's own confidence
@@ -165,18 +187,23 @@ export type TargetMeasurement = {
  * cost on every action for a number already computed. Nothing here is measured
  * that was not measured before; one small object outlives the call.
  *
- * Three shapes, as a union, so a refusal cannot be read without the number
- * behind it:
+ * Four shapes, as a union, so a refusal a *score* produced cannot be read
+ * without the number behind it:
  *
  * - **nothing weighed** -- the recording named nothing distinguishing, or Core
  *   found no comparable signal, so there was no question to ask;
- * - **weighed and acted on** -- both rules passed, and the score says how well;
- * - **weighed and refused** -- `refusedBecause` names which rule fired.
+ * - **weighed and acted on** -- every rule passed, and the score says how well;
+ * - **weighed and refused** -- `refusedBecause` names which scoring rule fired;
+ * - **refused unweighed** -- the record rule, which is the one refusal no
+ *   number stands behind. It is a gate and not a measurement: the candidate is
+ *   in another record, so there is nothing to weigh and nothing a higher score
+ *   could have changed. Writing a number here would invent one.
  */
 export type TargetVerdict =
   | { measurement?: undefined; refusedBecause?: undefined }
   | { measurement: TargetMeasurement; refusedBecause?: undefined }
-  | { measurement: TargetMeasurement; refusedBecause: TargetVetoReason };
+  | { measurement: TargetMeasurement; refusedBecause: "contradicted" | "uncorroborated" }
+  | { measurement?: undefined; refusedBecause: "other-record" };
 
 /** The same verdict, with the sentence a failure record carries. Present only on a refusal. */
 export type ExactMatchVerdict = TargetVerdict & {
@@ -194,6 +221,12 @@ export type ExactMatchVerdict = TargetVerdict & {
  * `tests/veto.test.ts` pins both populations against.
  */
 export function vetoCandidate(target: RecordedIdentity, candidate: TargetCandidate): TargetVerdict {
+  // Asked first, and asked whether or not the recording named a distinguisher.
+  // A row action labelled "Row actions" on all 240 rows names one -- it is just
+  // the same one every time -- so the rules below cannot separate it from its
+  // neighbours and only this rule can. It costs nothing when the recording
+  // named no record: the check returns before it reads the page.
+  if (!agreesWithRecordedRecord(target.context?.record, candidate.element)) return { refusedBecause: "other-record" };
   if (!recordedDistinguisher(target)) return {};
   const score = scoreTargetCandidate(target, candidate);
   if (!score) return {};
@@ -212,6 +245,10 @@ export function vetoCandidate(target: RecordedIdentity, candidate: TargetCandida
  * found at least one thing the recording named agreeing on it exactly.
  */
 export function vetoExactMatch(target: RecordedIdentity, element: Element): ExactMatchVerdict {
+  // The record rule is asked before the fingerprint is built, because a
+  // candidate in another record is refused whatever it scores and
+  // `candidateFingerprint` reads layout.
+  if (!agreesWithRecordedRecord(target.context?.record, element)) return refusedRecord(element);
   // The precondition is asked here as well as inside `vetoCandidate`, and not
   // for tidiness: `candidateFingerprint` reads layout, and this runs on the
   // critical path of every action. A recording that named nothing must cost
@@ -219,10 +256,26 @@ export function vetoExactMatch(target: RecordedIdentity, element: Element): Exac
   if (!recordedDistinguisher(target)) return {};
   const verdict = vetoCandidate(target, { element, fingerprint: candidateFingerprint(element, 0) });
   if (!verdict.refusedBecause) return verdict;
+  // Unreachable: the record rule ran above and passed, so `vetoCandidate`
+  // cannot refuse for it. Written out rather than asserted, because the
+  // alternative is a non-null assertion on the measurement below.
+  if (verdict.refusedBecause === "other-record") return refusedRecord(element);
   // `candidateLabel` reads the page, so it is built on the refusal path only --
   // the accepted path returns numbers and never a string.
   const because = verdict.refusedBecause === "uncorroborated" ? " with nothing the recording named agreeing exactly" : "";
   return { ...verdict, summary: `refused ${candidateLabel(element)} scoring ${verdict.measurement.score.toFixed(2)}${because}` };
+}
+
+/**
+ * The record refusal, said the way a failure record may repeat it.
+ *
+ * `candidateLabel` is the same bounded, redaction-safe name every other refusal
+ * quotes. What the *recording* said its record was is deliberately not here: it
+ * is a row's words, it did not come from this page, and a failure message is not
+ * where a recorded page's contents should surface.
+ */
+function refusedRecord(element: Element): ExactMatchVerdict {
+  return { refusedBecause: "other-record", summary: `refused ${candidateLabel(element)} in another record` };
 }
 
 /**

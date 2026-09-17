@@ -157,7 +157,8 @@ function elementContext(value) {
     landmarkName: stringValue(context.landmarkName),
     heading: stringValue(context.heading),
     listPosition: listPosition(context.listPosition),
-    tablePosition: tablePosition(context.tablePosition)
+    tablePosition: tablePosition(context.tablePosition),
+    record: elementRecord(context.record)
   });
   return Object.keys(fields).length > 0 ? fields : void 0;
 }
@@ -166,6 +167,16 @@ function listPosition(value) {
   const index = numberValue(position?.index);
   const total = numberValue(position?.total);
   return index === void 0 || total === void 0 ? void 0 : { index, total };
+}
+function elementRecord(value) {
+  const record = objectValue(value);
+  if (!record) return void 0;
+  const fields = compact({
+    keyAttribute: stringValue(record.keyAttribute),
+    key: stringValue(record.key),
+    text: stringValue(record.text)
+  });
+  return Object.keys(fields).length > 0 ? fields : void 0;
 }
 function tablePosition(value) {
   const position = objectValue(value);
@@ -1518,4 +1529,30 @@ test("a landmark's name reaches the dispatched target beside the role it names",
   });
   assert.deepEqual((target?.element).context, { landmark: "region", landmarkName: "Billing details" });
   assert.equal("context" in (elementFingerprint({ selector: "#agree", context: { landmarkName: 7 } }) ?? {}), false, "a name that is not text is no context at all");
+});
+test("the record the element sat in survives into the fingerprint", () => {
+  const record = { keyAttribute: "data-member-id", key: "usr_a91", text: "Priya Iqbal" };
+  const fingerprint = elementFingerprint({ selector: "#row-action", tagName: "button", context: { record } });
+  assert.deepEqual(fingerprint?.context, { record });
+});
+test("and into the dispatched target, which is where the page reads it", () => {
+  const target = outputTargetFromPayload({
+    selector: "#row-action",
+    element: { selector: "#row-action", context: { record: { keyAttribute: "data-member-id", key: "usr_a91" } } }
+  });
+  assert.deepEqual(
+    (target?.element).context?.record,
+    { keyAttribute: "data-member-id", key: "usr_a91" }
+  );
+});
+test("a record is read with the same closed vocabulary as the context around it", () => {
+  const fingerprint = elementFingerprint({
+    selector: "#row-action",
+    context: { record: { key: "usr_a91", rowIndex: 92, text: 7 } }
+  });
+  assert.deepEqual(fingerprint?.context, { record: { key: "usr_a91" } }, "an unknown key and a mistyped one are both dropped");
+});
+test("a record with nothing in it is absent, not an empty object", () => {
+  assert.equal("context" in (elementFingerprint({ selector: "#plain", context: { record: {} } }) ?? {}), false);
+  assert.equal("context" in (elementFingerprint({ selector: "#plain", context: { record: "row 92" } }) ?? {}), false, "a record that is not an object is no context at all");
 });

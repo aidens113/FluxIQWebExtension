@@ -28,6 +28,13 @@
 // measured either way, which is what lets an accepted exact match report a
 // confidence it did not have to be scored twice for.
 //
+// `record.ts` is the one signal that is not about the control at all. Every
+// other module here describes what an element *is*, and a page built from a
+// repeated template makes 240 of them identical on purpose -- so the recording
+// also carries which row, card or list item the control sat in, and both acting
+// paths refuse a candidate in another one. It is a gate, not a weight: no score
+// makes a different record the right one.
+//
 // `corroboration.ts` is the one test both acting paths put to Core's score
 // before acting on it: something that says which control this is -- the text,
 // the name, the label, the id or the test id -- must agree exactly, because a
@@ -40,10 +47,12 @@ export { corroboratesExactly } from "./corroboration";
 export { elementContext, landmarkRole } from "./context";
 export { implicitRole } from "./implicit-role";
 export { associatedLabel, labelText } from "./label";
+export { agreesWithRecordedRecord, recordIdentity } from "./record";
 export { reportableText } from "./reportable-text";
 export { TARGET_SCORE_FLOOR, TARGET_SCORE_MARGIN, scoreTargetCandidate, scoreTargetCandidates } from "./score";
 export { TARGET_VETO_FLOOR, vetoCandidate, vetoExactMatch } from "./veto";
 
 export type { CandidateFamily, TargetCandidate, TargetCandidatePool } from "./candidates";
+export type { RecordIdentity } from "./record";
 export type { CandidateSelection, RecordedIdentity, ScoredCandidate } from "./score";
 export type { ExactMatchVerdict, TargetMeasurement, TargetVerdict, TargetVetoReason } from "./veto";

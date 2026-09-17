@@ -30,6 +30,17 @@
 // a control that merely moved into another slot is recovered rather than only
 // not clicked.
 //
+// The veto now asks one question before it scores anything, and it is the
+// question no fingerprint could answer. A page built from a repeated template
+// makes its controls identical on purpose -- 240 rows, 240 action buttons, one
+// constant accessible name -- so a recorded selector can only name one of them
+// positionally, and replaying it against a page that lost the recorded row
+// resolved *another member's* button, agreed with it on every signal, clicked
+// it and reported success. `identity/record.ts` carries which record the
+// control sat in and refuses a candidate in a different one, at Level 1 and
+// again before Level 2 ranks anything. It fails closed: a candidate in no
+// record at all, when the recording named one, disagrees.
+//
 // A point is checked once more. `coordinates` and `visual-target` land on one
 // element by construction, so a page holding that element's identical twin
 // never shows in their count: on `ambiguous-targets` `no-context` the recorded
@@ -112,7 +123,7 @@ import {
   type TargetCandidatePool,
   type TargetMeasurement
 } from "../identity";
-import type { BrowserActionCommand, BrowserActionTargetResolution, BrowserActionTargetStrategy, RectDescriptor } from "../types";
+import type { BrowserActionCommand, BrowserActionTargetResolution, BrowserActionTargetStrategy, DomElementContext, RectDescriptor } from "../types";
 
 /** The element an action will act on, with the measurement that chose it. */
 export type ResolvedTarget = {
@@ -133,6 +144,13 @@ type RecordedTarget = ElementFingerprint & {
   testId?: string | undefined;
   accessibleName?: string | undefined;
   label?: string | undefined;
+  /**
+   * Where the element sat, of which one field is acted on: `context.record`,
+   * the row, card or list item it belonged to. The veto refuses a match in
+   * another record and the scorer will not rank one, so a page of identical
+   * controls can be told apart by something other than their position.
+   */
+  context?: DomElementContext | undefined;
 };
 
 /** One exact strategy's result: what it was asked for, and everything it matched. */
