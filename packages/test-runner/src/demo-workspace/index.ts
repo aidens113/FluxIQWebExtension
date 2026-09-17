@@ -9,6 +9,8 @@ export { runDemoLlmCreationSettingsProbe, runDemoLlmCreationReadinessProbe, runD
 export { prepareDemoLlmWorkspace, runDemoLlmDiagnosis } from "./diagnosis-lanes.js";
 export { runDemoLlmAdaptationReadinessProbe, runDemoLlmExplorationAdaptationReadinessProbe, runDemoLlmExplorationAdaptationRevert, runDemoLlmExplorationAdaptationReject, runDemoLlmExplorationAdaptationProposal, runDemoLlmExplorationAdaptationApply, runDemoLlmExplorationAdaptationValidation } from "./exploration-adaptation.js";
 export { runDemoLlmExplorationBaselineProbe, runDemoLlmExplorationCheckpoint, explorationFlowName, resolveExplorationFlowNameForRecovery, type EvidenceGuidedCreationApplyCheckpoint, runDemoLlmExplorationApplyCheckpoint } from "./exploration-checkpoints.js";
+export { ADAPTING_RUN_TIMEOUT_MS, type TargetProposalStructure, readTargetProposalStructure } from "./adapting-run/index.js";
+export { type DemoLauncherFailure, describeDemoLauncherFailure } from "./launcher/index.js";
 export { createDemoFlowDocument, assertDemoParentDocument, assertDemoRecordingDerivedFlow, assertLlmDiagnosisRecordingDerivedFlow, assertDemoSubflowOwnership, assertDemoFlowDocument, demoGraphReconciliationOperations } from "./flow-document.js";
 export { type DemoLlmPreparationState, parseDemoLlmPreparationState, assertDemoLlmPreparationStateDoesNotContainSecrets } from "./preparation-state.js";
 export { startPersistentScenarioLabWithRecovery, requireDemoScenarioUrl } from "./scenario-lab.js";

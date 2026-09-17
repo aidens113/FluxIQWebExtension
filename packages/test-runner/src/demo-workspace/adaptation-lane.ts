@@ -6,6 +6,7 @@ import type { ExistingRunDetail, ExistingRunIntervention } from "../existing-flu
 import { RunnerFailure } from "../failure.js";
 import { assertRecordingSetUnchanged, BLANK_LLM_FLOW_NAME, BLANK_LLM_SCENARIO_PATH, loadBlankLlmPreparationState } from "../demo-llm-blank-workspace.js";
 import { inspectDemoLlmAdaptationReadiness } from "../demo-llm-adaptation-readiness.js";
+import { unexecutedTargetProposalIsSound } from "../demo-llm-exploration-adaptation.js";
 import { type DemoLlmAdaptationInvocation, type DemoLlmAdaptationInvocations, type DemoLlmAdaptationResult, evaluateDemoLlmAdaptation, persistDemoLlmAdaptationResult } from "../demo-llm-adaptation.js";
 import { adaptationCallCountWithinGrant, controlExistingLlmTargetAdaptation, type ExistingTargetAdaptationAction, type ExistingTargetAdaptationControlResult, type ExistingTargetAdaptationSelector } from "../demo-llm-adaptation-control.js";
 import { assertAdaptationFlowsRemainRecordingFree, openAdaptationFromPanel, requireRunEventSequence, reviewAndApplyAdaptationViaUi, runAdaptationFromPanel, runZeroLlmAdaptationValidation, waitForAdaptationRun } from "./adaptation-ui.js";
@@ -15,6 +16,7 @@ import { recordingIds } from "./control-waits.js";
 import { authenticatedControl, withPersistentDemoCore } from "./core-process.js";
 import { configureFirstLiveDiagnosisViaUi } from "./diagnosis-ui.js";
 import { openFlowInCurrentProject, openProjectInPanel } from "./panel-navigation.js";
+import { readTargetProposalStructure } from "./adapting-run/index.js";
 import { type DemoWorkspaceState, SCHEMA_VERSION, withWorkspaceLock } from "./workspace-state.js";
 
 export async function runDemoLlmAdaptation(config: DemoWorkspaceConfiguration): Promise<DemoLlmAdaptationResult> {
@@ -100,9 +102,10 @@ export async function runDemoLlmAdaptation(config: DemoWorkspaceConfiguration): 
         throw new RunnerFailure("runtime.behavior", "Adaptation run did not create exactly one new manual-review proposal in the exact Flow scope");
       }
       const proposal = await control.getFlowAdaptation(state.projectId, state.flowId, adaptationIds[0]!);
+      const structure = await readTargetProposalStructure(control, state.projectId, state.flowId, proposal.adaptationId);
       if (!(["proposed", "validated", "applied"] as string[]).includes(proposal.status) || proposal.sourceRunId !== started.runId || proposal.subflowId !== state.subflowId
         || proposal.patchKinds?.length !== 1 || proposal.patchKinds[0] !== "edit_action_target"
-        || proposal.validationSucceededCount !== 1 || proposal.validationFailedCount !== 0) {
+        || !unexecutedTargetProposalIsSound(proposal, structure)) {
         throw new RunnerFailure("runtime.behavior", "The generated manual adaptation was not one validated action-target change scoped to the failed run and owned Subflow");
       }
       if (proposal.status !== "applied" && resumableAdaptation) {

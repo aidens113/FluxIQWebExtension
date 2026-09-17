@@ -77,3 +77,21 @@ test("each node carries the recorded candidate its metadata names, and a node wi
   assert.deepEqual(nodes.filter((node) => Object.hasOwn(node, "recordingCandidateId")).map((node) => node.id), ["recorded.candidate.entry.10.one"]);
   assert.deepEqual(client.calls, ["get-flow:flow.parent", "list-flow-subflows:flow.parent", "get-flow:flow.graph"], "carried by the one read");
 });
+
+test("a bootstrap node's fixed output is read from its metadata, and a recorded node carries none", async () => {
+  const bootstrapNode = (id: string, metadata: unknown) => ({ id, definitionId: "web.output.dom-click", parameterValues: { selector: "#go" }, metadata });
+  const client = control({
+    "flow.parent": [],
+    "flow.graph": [
+      bootstrapNode("created.click", { bootstrapAdaptationId: "adaptation.one", outputActionId: "web.dom.click" }),
+      bootstrapNode("created.blank", { outputActionId: "" }),
+      bootstrapNode("created.number", { outputActionId: 3 }),
+      recordedNode("recorded.plain", "web.dom.type"),
+    ],
+  }, [{ subflowId: "subflow.primary", graphFlowId: "flow.graph" }]);
+  const nodes = await readFlowNodes(client, { projectId: "project.web", flowId: "flow.parent" });
+  assert.deepEqual(nodes.map((node) => node.outputActionId), ["web.dom.click", undefined, undefined, undefined]);
+  assert.deepEqual(nodes.filter((node) => Object.hasOwn(node, "outputActionId")).map((node) => node.id), ["created.click"]);
+  // The recorded lane's own map still reads only what a recorded node carries.
+  assert.deepEqual([...await readFlowActionTypes(client, { projectId: "project.web", flowId: "flow.parent" })], [["recorded.plain", "web.dom.type"]]);
+});

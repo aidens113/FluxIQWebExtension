@@ -74,7 +74,7 @@ export async function waitForSubmittedDemoPage(seedPage: Page): Promise<void> {
   throw new RunnerFailure("runtime.behavior", "Recording-generated Flow completed without producing the submitted demo result in any extension-controlled tab");
 }
 
-export async function waitForPanelRunResponse(page: Page, dispatch: () => Promise<void>): Promise<import("@playwright/test").Response> {
+export async function waitForPanelRunResponse(page: Page, dispatch: () => Promise<void>, timeoutMs = 60_000): Promise<import("@playwright/test").Response> {
   let resolveResponse!: (response: import("@playwright/test").Response) => void;
   const responsePromise = new Promise<import("@playwright/test").Response>(resolve => { resolveResponse = resolve; });
   let rejectResponse!: (error: Error) => void;
@@ -96,7 +96,7 @@ export async function waitForPanelRunResponse(page: Page, dispatch: () => Promis
     return await Promise.race([
       responsePromise,
       rejectedResponsePromise,
-      new Promise<never>((_resolve, reject) => { timeout = setTimeout(() => reject(new Error("Timed out waiting for the panel Flow run response")), 60_000); }),
+      new Promise<never>((_resolve, reject) => { timeout = setTimeout(() => reject(new Error("Timed out waiting for the panel Flow run response")), timeoutMs); }),
     ]);
   } finally {
     if (timeout) clearTimeout(timeout);

@@ -17,7 +17,8 @@ const target: ExistingFlowAdaptation = {
   status: "validated",
   adaptationKind: "runtime_patch",
   patchKinds: ["edit_action_target"],
-  validationSucceededCount: 1,
+  // A repair that has not run carries no validation result (Core a2de143).
+  validationSucceededCount: 0,
   validationFailedCount: 0,
   appliedMutationCount: 0,
 };
@@ -217,3 +218,20 @@ function sourceRun(): ExistingRunDetail {
     providerCallCount: 2,
   };
 }
+
+// Core `a2de143`: a target repair that has only been checked carries no
+// validation result, and a live repair applied and replayed at 17:09 still
+// carried none at 17:18. Revert and continue must accept that, and still
+// refuse a recorded failure or a success claimed before the repair ran.
+test("controls a repair Core recorded no validation for, and refuses a claimed or failed one", async () => {
+  const unvalidated = { ...target, validationSucceededCount: 0, validationFailedCount: 0 };
+  const applied = await controlExistingLlmTargetAdaptation(fakeControl({ ...unvalidated, status: "applied", appliedMutationCount: 1 }, []), scope, "private-pin", "revert");
+  assert.equal(applied.status, "reverted");
+  const absent = { ...target } as Partial<ExistingFlowAdaptation>;
+  delete absent.validationSucceededCount; delete absent.validationFailedCount;
+  assert.equal((await controlExistingLlmTargetAdaptation(fakeControl(absent as ExistingFlowAdaptation, []), scope, "private-pin", "continue")).status, "applied");
+  for (const adaptation of [{ ...target, validationSucceededCount: 1 }, { ...unvalidated, status: "applied", appliedMutationCount: 1, validationFailedCount: 1 }]) {
+    await assert.rejects(() => controlExistingLlmTargetAdaptation(fakeControl(adaptation, []), scope, "private-pin", "state"), /exactly one active LLM target adaptation/);
+  }
+  assert.equal((await controlExistingLlmTargetAdaptation(fakeControl({ ...target, status: "applied", appliedMutationCount: 1, validationSucceededCount: 1 }, []), scope, "private-pin", "state")).status, "applied");
+});

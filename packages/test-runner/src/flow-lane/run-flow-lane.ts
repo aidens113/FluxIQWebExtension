@@ -9,6 +9,7 @@ import { flowActionTypes, readFlowNodes, type FlowNodeRecord } from "./flow-acti
 import { flowLaneObservation, type RunLaneObservation } from "./lane-observation.js";
 import { approveRecordingFlowProposal, assertProposalCoversRecording, createRecordingFlowProposal, type RecordingFlowProposal } from "./recording-flow-proposal.js";
 import { executeRecordedFlowRun, type PersistedFlowLlmExecution, type PersistedFlowRunControl, type PersistedFlowRunOutcome } from "./persisted-flow-run.js";
+import { assertFlowRepair, judgeFlowRepair, type FlowRepairExpectation, type FlowRepairJudgement } from "./repair/index.js";
 import { resetScenarioLab } from "./reset-scenario-lab.js";
 import type { RecordingProposalControl } from "./recording-flow-proposal.js";
 
@@ -76,6 +77,19 @@ export type FlowLaneInput = {
    * because Core expires it within the minute.
    */
   authorizeLiveLlm?: (flowId: string) => Promise<PersistedFlowLlmExecution>;
+  /**
+   * Told Core's run id for the Flow run the moment Core names it, and before
+   * any read of the run or any expectation can fail the lane. A live run's
+   * provider accounting is read from that run, and has to be read however the
+   * lane then ends.
+   */
+  flowRunIdentified?: (runId: string) => void;
+  /**
+   * What a correct repair of this run looks like, where the workflow declares
+   * one, judged against the proposal Core saved only when the run was
+   * authorized to propose one (`judgeFlowRepair`). Absent, no repair is judged.
+   */
+  repairExpectation?: FlowRepairExpectation;
   bounds?: FluxIQHttpOptions;
 };
 
@@ -86,7 +100,7 @@ export type FlowLaneInput = {
  * `extraction` says whether the workflow's extraction expectation applied to
  * this Flow, and so whether it is judged.
  */
-export type FlowLaneEvidence = { recording: FinalizedRecording; proposal: RecordingFlowProposal; flowId: string; run: PersistedFlowRunOutcome; observation: RunLaneObservation; extraction: FlowExtractionJudgement; startCandidateIndex: number | null };
+export type FlowLaneEvidence = { recording: FinalizedRecording; proposal: RecordingFlowProposal; flowId: string; run: PersistedFlowRunOutcome; observation: RunLaneObservation; extraction: FlowExtractionJudgement; startCandidateIndex: number | null; repair?: FlowRepairJudgement };
 
 /**
  * `startCandidateIndex` is where the run started in the recording's candidate
@@ -101,6 +115,7 @@ export type FlowLaneOutcome = {
   observation: RunLaneObservation;
   extraction: FlowExtractionJudgement;
   startCandidateIndex: number | null;
+  repair?: FlowRepairJudgement;
 };
 
 /**
@@ -169,6 +184,7 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
     facilityRunId: input.facilityRunId,
     ...(llmExecution ? { llmExecution } : {}),
     ...(input.projectDomainId === undefined ? {} : { domainId: input.projectDomainId }),
+    ...(input.flowRunIdentified ? { onRunIdentified: input.flowRunIdentified } : {}),
     actionTypes,
     candidateOrder,
     // Each declared value and each supplied file once, under the path a node reads: Core persists a run's inputs, so any further copy is a copy on disk.
@@ -202,7 +218,12 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
   // Where the run started, in the recording's order: 0 is the recording's first
   // action. Null when no attempt landed on an action node.
   const startCandidateIndex = run.startCandidateIndex ?? null;
-  await input.recordEvidence({ recording, proposal, flowId: approved.flowId, run, observation, extraction, startCandidateIndex });
+  // Judged only for a run whose grant could propose a repair, and published
+  // with the rest before any expectation is asserted.
+  const repair = input.repairExpectation && llmExecution && llmExecution.purpose !== "diagnosis_only"
+    ? await judgeFlowRepair(input.control, { projectId: input.projectId, flowId: approved.flowId, run, expectation: input.repairExpectation }, bounds)
+    : undefined;
+  await input.recordEvidence({ recording, proposal, flowId: approved.flowId, run, observation, extraction, startCandidateIndex, ...(repair ? { repair } : {}) });
   // Before the expectations, which would otherwise blame whichever later action
   // they name ("did not produce a web.dom.click action", W28 run 2). The start
   // comes first: a run that began at a later action also stops short of the
@@ -212,7 +233,8 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
   assertFlowFailure(expected.failure, run.failure);
   assertFlowActions(expected.actions, run.actions);
   assertFlowExtraction(extraction);
-  return { recording, proposal, flowId: approved.flowId, run, observation, extraction, startCandidateIndex };
+  assertFlowRepair(repair);
+  return { recording, proposal, flowId: approved.flowId, run, observation, extraction, startCandidateIndex, ...(repair ? { repair } : {}) };
 }
 
 /**
@@ -232,7 +254,7 @@ export async function runFlowLane(input: FlowLaneInput): Promise<FlowLaneOutcome
  * and Core's run datasets do not record -- without opening this code, because
  * the alternative is a number that looks like a full judgement and is not.
  */
-function extractionSnapshot(judgement: FlowExtractionJudgement) {
+export function flowExtractionSnapshot(judgement: FlowExtractionJudgement) {
   return {
     expectation: judgement.expectation,
     extractNodes: judgement.extractNodes,
@@ -295,7 +317,7 @@ function assertFlowStartedAtFirstAction(startCandidateIndex: number | null, cand
  * never attempted is a stop, not an action failure. It fails as exactly that,
  * by counts: node ids and Core's message are not part of it.
  */
-function assertFlowDidNotStopEarly(run: PersistedFlowRunOutcome): void {
+export function assertFlowDidNotStopEarly(run: PersistedFlowRunOutcome): void {
   const stop = run.stoppedWithoutFailedAttempt;
   if (!stop) return;
   throw new RunnerFailure(
@@ -342,14 +364,25 @@ export function flowLaneSnapshot(evidence: FlowLaneEvidence) {
     harnessRecovery: evidence.run.harnessRecovery,
     // Where the run started in the recording's candidate order: 0 for its first action, null when no attempt landed on an action node.
     startCandidateIndex: evidence.startCandidateIndex ?? null,
-    extraction: extractionSnapshot(evidence.extraction),
-    actions: evidence.run.actions.map((action) => ({
-      actionType: action.actionType,
-      status: action.status,
-      ...(action.failure ? { failure: action.failure } : {}),
-      ...(action.comparisonStatus ? { comparisonStatus: action.comparisonStatus } : {}),
-      ...(action.targetResolution ? { targetResolution: action.targetResolution } : {}),
-      ...(action.evidencePackets ? { evidencePackets: action.evidencePackets } : {}),
-    })),
+    extraction: flowExtractionSnapshot(evidence.extraction),
+    // The declared repair's judgement: a verdict, field names and codes, never the proposal's target. Null when none was judged.
+    repair: evidence.repair ?? null,
+    actions: flowActionsSnapshot(evidence.run),
   };
+}
+
+/**
+ * Each attempt as a Flow-lane snapshot states it. `evidencePackets` is where
+ * the evaluation reads evidence sizes from (`run-evaluation/flow-lane-evidence-sizes.ts`),
+ * so every lane that writes `snapshots/flow-lane.json` writes its actions here.
+ */
+export function flowActionsSnapshot(run: PersistedFlowRunOutcome) {
+  return run.actions.map((action) => ({
+    actionType: action.actionType,
+    status: action.status,
+    ...(action.failure ? { failure: action.failure } : {}),
+    ...(action.comparisonStatus ? { comparisonStatus: action.comparisonStatus } : {}),
+    ...(action.targetResolution ? { targetResolution: action.targetResolution } : {}),
+    ...(action.evidencePackets ? { evidencePackets: action.evidencePackets } : {}),
+  }));
 }

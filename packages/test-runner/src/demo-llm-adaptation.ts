@@ -215,7 +215,9 @@ export function evaluateDemoLlmAdaptation(input: DemoLlmAdaptationCertificationI
       || invocation.estimatedCostUsd > budget.maxEstimatedCostUsd) fail("Runtime adaptation provider accounting violated its strict budget");
   }
   if (parsed.startingGraph.nodeCount < 1 || parsed.startingGraph.executableNodeCount !== parsed.startingGraph.nodeCount) fail("Runtime adaptation did not start from a creation-certified executable graph");
-  if (parsed.startingGraph.recordingCount !== 0 || parsed.adaptation.recordingCount !== 0) fail("Instruction-only runtime adaptation must remain recording-free");
+  // The project may hold other Flows' recordings (the demo's recording-driven
+  // diagnosis Flow lives beside this one); a repair must add none, and the
+  // repaired Flow must carry no recording provenance. Both are checked below.
   if (parsed.drift.beforeTargetFingerprint === parsed.drift.afterTargetFingerprint) fail("Runtime adaptation requires an observed semantic target change");
   // Failure, then every provider call in the order recorded, then apply, then
   // the first deterministic validation run, each strictly after the last.

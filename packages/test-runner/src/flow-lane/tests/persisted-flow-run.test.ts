@@ -43,6 +43,25 @@ test("a clean Flow run reports its actions and no failure", async () => {
   assert.deepEqual(calls, ["select", "start", "run", "get-flow-run-detail"]);
 });
 
+// A live run's provider accounting is read from its run, so the caller has to
+// learn the id before any read that could fail the run: `run-mu4rpka7-845d919a`
+// lost its call records because the id only arrived with a returned outcome.
+test("the run id is reported the moment Core names it, before anything reads the run back", async () => {
+  const identified: string[] = [];
+  const unreadable = { automationStudioCall: async () => { identified.push("read"); throw new RunnerFailure("runtime.behavior", "run detail unavailable"); } };
+  const deterministic = control(unreadable);
+  await assert.rejects(executeRecordedFlowRun(deterministic.client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab", onRunIdentified: (runId) => identified.push(runId) }), /run detail unavailable/u);
+  // The deterministic lane names the run when it starts it, and the run confirms the same id.
+  assert.deepEqual(identified, ["run.one", "read"]);
+
+  identified.length = 0;
+  const live = control({ ...unreadable, runPersistedFlow: async () => { identified.push("run"); return { session: { runId: "run.live", status: "failed" } }; } });
+  await assert.rejects(executeRecordedFlowRun(live.client, { projectId: "project.web", flowId: "flow.new", facilityRunId: "run-lab", llmExecution: { grantId: "llm-grant:test", purpose: "diagnose_and_adapt" }, onRunIdentified: (runId) => identified.push(runId) }), /run detail unavailable/u);
+  // A live run starts no session of its own, so its id arrives with the run.
+  assert.deepEqual(identified, ["run", "run.live", "read"]);
+  assert.deepEqual(live.calls, ["select"]);
+});
+
 test("a failed Flow is a result, not a runner fault: the structured failure survives to be asserted", async () => {
   const failure = { category: "auth_required", code: "session.expired", retryable: false };
   const { client } = control(

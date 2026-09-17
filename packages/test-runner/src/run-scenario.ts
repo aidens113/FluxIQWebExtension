@@ -27,9 +27,9 @@ import { createRunOwnedCloneFlowId, createRunOwnedCloneProject, importClonePacka
 import { effectiveEvidencePolicy } from "./evidence-policy/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
 import { armScenarioVariant, scenarioLabOriginProof } from "./lab-control/index.js";
-import { awaitFinalizedRecording, declaredSecretValues, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneObservation, resolveDeclaredSecrets, runFlowLane, selectLaneObservation, type DeclaredSecret, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
+import { awaitFinalizedRecording, createdFlowLaneSnapshot, declaredSecretValues, finalizedRecordingWaitFailureDetails, flowLaneSnapshot, readRecordingDiscards, recordingLaneProbeObservation, resolveCreatedFlowSecrets, withDeclaredFlowRepair, resolveDeclaredSecrets, runCreatedFlowLane, runFlowLane, selectLaneObservation, type CreatedFlowRequest, type DeclaredSecret, type PersistedFlowRunOutcome, type RecordingDiscard, type RecordingDiscardScope, type RunLaneObservation } from "./flow-lane/index.js";
 import { attestRunRedaction, runRedactionScopes, scenarioRedactionLiterals, type RunRedactionAttestation } from "./redaction-attestation/index.js";
-import type { LiveLlmRun } from "./live-llm/index.js";
+import { runLaneWithLiveLlmSettlement, type LiveLlmRun } from "./live-llm/index.js";
 import { assertExtraction, assertRecordedEvents, ConsoleErrorWatch, readExtensionRecordingLog, readRecordingCompleteness, runExtractionMeasurements, type ExtractionStepRead } from "./run-expectations/index.js";
 import { singleRunEvaluation } from "./run-evaluation/index.js";
 import { automationFailureFromActionResult, createRunManifest, flowActionTimings, runActionStatus, type CloneRunState } from "./run-manifest/index.js";
@@ -39,8 +39,8 @@ import { awaitExtensionWorker, cleanupFailureOutcome, pairingStatusWaitFailureDe
 import { assertSafeScenarioRunId, createBenchReceipt, type BenchReceiptMetadata } from "./bench/index.js";
 import { projectFacilityFailure, ProjectedFacilityError } from "./facility-failure/index.js";
 
-/** `evidence` overrides the manifest's `evidencePolicy`; `workflowId` and `variantId` select what `resolveScenarioWorkflow` resolves. */
-export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flow?: boolean; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration; runId?: string; benchReceipt?: BenchReceiptMetadata; live?: LiveLlmRun };
+/** `evidence` overrides the manifest's `evidencePolicy`; `workflowId` and `variantId` select what `resolveScenarioWorkflow` resolves, and a `creation` run passes its request's own. */
+export type RunScenarioOptions = { repositoryRoot: string; fluxiqRepositoryRoot: string; runsDirectory: string; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flow?: boolean; creation?: CreatedFlowRequest; environment?: NodeJS.ProcessEnv; target?: FluxIQTargetConfiguration; runId?: string; benchReceipt?: BenchReceiptMetadata; live?: LiveLlmRun };
 /**
  * `observation` carries the `RunEvaluation` fields only the lane that ran can
  * know, and `evaluation` is the run's own `RunEvaluation` built from it — the
@@ -69,7 +69,9 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   const labPaths = resolveLabPaths(options.repositoryRoot, options.environment);
   const scenario = await loadScenarioManifest(options.repositoryRoot, options.scenarioId, labPaths.scenarioLabDist);
   const target = options.target ?? { mode: "isolated" as const };
+  // A Flow-lane run whose grant only proposes a repair is held to what the scenario declares such a run ends with, and judged on the proposal.
   const workflow = resolveWorkflow(scenario, options, target);
+  const { workflow: flowWorkflow, repair } = await withDeclaredFlowRepair(workflow, { scenario, scenarioLabDist: labPaths.scenarioLabDist, flowLane: options.flow === true, proposalOnly: options.live?.proposesRepairOnly === true });
   // A variant never changes the recording: on the Flow lane the script runs
   // unarmed, so the recording lane checks the workflow's own expectations while
   // the variant's govern the Flow run alone. Judging the unarmed recording by
@@ -84,13 +86,14 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
   const pageFacts = scenarioPageFactSchedule(scenario, workflowSelection(options), armingOf(options, workflow));
   const seed = options.seed ?? scenario.seed;
   const environment = options.environment ?? process.env;
-  // Declared replay secrets resolve before the bundle so their values join the
-  // redaction list; only the Flow lane supplies them, so a recording-lane run
-  // of the same scenario does not require them to be configured.
-  const declaredSecrets: DeclaredSecret[] = options.flow ? resolveDeclaredSecrets(scenario, environment) : [];
-  const secrets = [environment.FLUXIQ_TEST_PASSWORD, environment.FLUXIQ_TEST_PIN, environment.FLUXIQ_TEST_TOTP, ...declaredSecretValues(declaredSecrets)].filter((value): value is string => Boolean(value));
   // A live provider run is planned and credentialed before this is reached (`beginLiveLlmRun`), so that an unexecutable profile or an absent key refuses at the command line rather than inside a run.
-  const live = options.live; if (live && options.flow !== true) throw new RunnerFailure("fixture.invalid", "A live LLM run needs the Flow lane: pass --flow, which is what builds the Flow the provider is authorized against");
+  const live = options.live; const creation = options.creation; const flowLane = options.flow === true || creation !== undefined;
+  if (live) live.assertLane({ flowLane: options.flow === true, creation: creation !== undefined }); else if (creation) throw new RunnerFailure("fixture.invalid", "An instruction task is built only by a live run: pass --live-llm --llm-task create-flow");
+  // Declared replay secrets resolve before the bundle so their values join the
+  // redaction list; only the two Flow lanes supply them, so a recording-lane run
+  // of the same scenario does not require them to be configured.
+  const declaredSecrets: DeclaredSecret[] = options.flow ? resolveDeclaredSecrets(scenario, environment) : creation ? resolveCreatedFlowSecrets(scenario, workflow, environment) : [];
+  const secrets = [environment.FLUXIQ_TEST_PASSWORD, environment.FLUXIQ_TEST_PIN, environment.FLUXIQ_TEST_TOTP, ...declaredSecretValues(declaredSecrets)].filter((value): value is string => Boolean(value));
   // What the redaction attestation scans for once Core has stopped -- the scenario's declared
   // literals and a live run's provider credential -- read here so a bad declaration fails before
   // the bundle. Never added to `secrets`: the bundle's redactor would scrub them on write and hide
@@ -172,7 +175,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       ? options.runsDirectory
       : path.join(options.runsDirectory, ".work");
     const ownsIsolatedCore = topologyTarget.mode === "isolated" || topologyTarget.mode === "persistent-isolated";
-    topology = await startTopology({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, runsDirectory: topologyRunsDirectory, coreWebBuildRunsDirectory: options.runsDirectory, runId, seed, target: topologyTarget, scenarioEntrypoint: labPaths.scenarioEntrypoint, hostModulePath: labPaths.hostModulePath, copyStartupFailureLogs: logsDirectory => copyProcessLogs(bundle, logsDirectory), ...(ownsIsolatedCore && labPaths.hostPrebuilt ? { prepareHost: false } : {}), ...(ownsIsolatedCore ? { bootstrapIdentity: coreIdentityRequired({ clone: target.mode === "clone", flowLane: options.flow === true, scenario, recorded: recordingWorkflow.expected }), ...(credentials ? { credentials } : {}) } : {}) });
+    topology = await startTopology({ repositoryRoot: options.repositoryRoot, fluxiqRepositoryRoot: options.fluxiqRepositoryRoot, runsDirectory: topologyRunsDirectory, coreWebBuildRunsDirectory: options.runsDirectory, runId, seed, target: topologyTarget, scenarioEntrypoint: labPaths.scenarioEntrypoint, hostModulePath: labPaths.hostModulePath, copyStartupFailureLogs: logsDirectory => copyProcessLogs(bundle, logsDirectory), ...(ownsIsolatedCore && labPaths.hostPrebuilt ? { prepareHost: false } : {}), ...(ownsIsolatedCore ? { bootstrapIdentity: coreIdentityRequired({ clone: target.mode === "clone", flowLane, scenario, recorded: recordingWorkflow.expected }), ...(credentials ? { credentials } : {}) } : {}) });
     let existingControl: ExistingFluxIQControlClient | undefined;
     if (target.mode === "existing") {
       existingControl = new ExistingFluxIQControlClient(target.baseUrl);
@@ -235,14 +238,40 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     const extensionControl = extensionPage = await extensionControlPage(context);
     browserVersion = await browserVersionFromCdp(context, extensionPage);
     // The existing and clone lanes replay a pre-existing Flow, so their variant
-    // is armed before the page opens. The Flow lane must not arm here: it
-    // records the workflow unarmed and arms after its reset, or the drift the
-    // variant introduces would break the recording it is about to build a Flow from.
-    if (workflow.variant && !options.flow) await armScenarioVariant(topology.scenarioOrigin, topology.allocation.controllerToken, scenario.id, workflow.variant);
+    // is armed before the page opens. The two Flow lanes must not arm here: each
+    // presents the unarmed rendering first and arms when it prepares the page it
+    // explores or runs, or the drift would break the recording it builds a Flow from.
+    if (workflow.variant && !flowLane) await armScenarioVariant(topology.scenarioOrigin, topology.allocation.controllerToken, scenario.id, workflow.variant);
     const page = scenarioPage = await context.newPage();
     await openScenarioStart(page, topology.scenarioOrigin, scenario);
     await page.bringToFront();
     await assertExpectedFacts(pageFacts.atLoad, playwrightScenarioFactProbe(page));
+    // What either Flow lane is handed: present the page, publish what the Flow did, and consult the fixture oracle.
+    const flowRunHooks = <E extends { observation: RunLaneObservation; run: PersistedFlowRunOutcome }>(activeTopology: RunningTopology, publish: (evidence: E) => Promise<void>) => ({
+      prepareFlowPage: async () => {
+        if (workflow.variant) await armScenarioVariant(activeTopology.scenarioOrigin, activeTopology.allocation.controllerToken, scenario.id, workflow.variant);
+        // Runs before every Flow run and every exploration. The reset and any arm are server-side, and the tab still shows
+        // wherever the recording or the exploration ended, so it is loaded again: unarmed, or the Flow starts on that last
+        // page; armed, or a drift variant is judged against a page that never drifted. Load the entry point, not a reload.
+        await openScenarioStart(page, activeTopology.scenarioOrigin, scenario);
+        // The rendering the Flow meets is now on screen. Check the armed facts here (none for an unarmed run), so
+        // "the fixture did not arm as declared" cannot arrive disguised as "the generated Flow failed".
+        await assertExpectedFacts(pageFacts.afterArm, playwrightScenarioFactProbe(page));
+      },
+      recordEvidence: async (evidence: E) => {
+        // The lane publishes before it judges any expectation, so these are set even when an expectation then throws:
+        // the run is evaluated as the Flow run it was, with the category Core actually reported.
+        flowObservation = evidence.observation;
+        oracleVerdict = evidence.observation.oracleVerdict;
+        automationFailure = evidence.observation.automationFailureReported;
+        actions.push(...evidence.run.actions.map(action => ({ actionType: action.actionType, startedAt: action.startedAt, ...(action.durationMs === undefined ? {} : { durationMs: action.durationMs }), status: action.status })));
+        await publish(evidence);
+      },
+      checkFinalState: async () => {
+        try { scenarioPage = await findScenarioPageWithExpectedState(context!, page, activeTopology.scenarioOrigin, scenario, flowWorkflow); return true; }
+        catch { return false; }
+      },
+    });
     const paired = topology.control ? await pairExtension(extensionPage, topology) : undefined;
     if (paired) await activateScenarioTab(extensionPage, topology.scenarioOrigin);
     const screenshotAdapter = scenario.id === "sensitive-input" ? undefined : { capture: async () => ({ bytes: await (stepRunner?.activePage() ?? page).screenshot({ type: "png" }), mediaType: "image/png" as const, redactionVerified: true as const }) };
@@ -299,6 +328,19 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       panelVerification = await verifyAuthenticatedFluxIQPanel({ context, origin: topology.fluxiqOrigin, sessionCookieValue: topology.control.sessionCookieValue(), projectId: cloneState.destination.projectId, flowId: cloneState.destination.flowId, runId: cloneState.execution.runId });
       if (panelVerification.status !== "verified") throw new RunnerFailure("runtime.behavior", "Isolated FluxIQ panel could not verify the exact cloned Flow run");
       await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "Cloned Flow and browser state succeeded in isolation"), details: { runtimeRunId: cloneState.execution.runId, actionCount: cloneState.execution.actions.length, eventCount: cloneState.execution.events.length, recordingCount: outcome.recordingCount, sourceHashUnchanged: true, panelVerification: panelVerification.status } });
+    } else if (creation) {
+      // No recording: FluxIQ explores the page the task's variant renders, which the lane presents, and builds the Flow from the instruction.
+      if (!paired || !live || !topology.control || !topology.projectId || !topology.authorizationPin) throw new RunnerFailure("environment.missing", "The created-Flow lane needs a paired extension, a live run, and an authenticated isolated Core with an authorization PIN");
+      const control = topology.control; const activeTopology = topology;
+      await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.dispatch", "Build a Flow from the live instruction task and run it"), details: { taskId: creation.task.id, judgeBy: creation.judgement.judgeBy, variantId: workflow.variant?.id ?? null, declaredSecrets: declaredSecrets.map(secret => secret.id) } });
+      const lane = await runCreatedFlowLane({
+        control, projectId: topology.projectId, authorizationPin: topology.authorizationPin, request: creation, workflow, facilityRunId: runId,
+        scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, secrets: declaredSecrets,
+        authorizeBuild: live.buildAuthorizer(control, activeTopology),
+        settleBuild: build => live.settleBuild(build, bundle, details => capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The live Flow build finished"), details })),
+        ...flowRunHooks(activeTopology, async evidence => { await bundle.writeStructured("snapshots/flow-lane.json", createdFlowLaneSnapshot(evidence)); }),
+      });
+      await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The created Flow ran and met the task's judgement"), details: { runtimeRunId: lane.run.runId, actionCount: lane.run.actions.length, flowShape: lane.shape } });
     } else {
       if (paired && topology.authorizationPin) await proveCoreActionRoundTrip(page, topology, paired.sessionId, scenario.id, workflow, capture, runId, (timing, result) => { actions.push(timing); automationFailure ??= automationFailureFromActionResult(result); });
       if (topology.control && topology.projectId) recordingBaseline = recordingIds(await topology.control.listRecordings(topology.projectId));
@@ -346,7 +388,7 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
       try { await assertFinalState(scenarioPage, scenario, recordingWorkflow); oracleVerdict = "passed"; }
       catch (error) { oracleVerdict = "failed"; throw error; }
     }
-    if (topology.control && (target.mode === "isolated" || target.mode === "persistent-isolated")) {
+    if (topology.control && !creation && (target.mode === "isolated" || target.mode === "persistent-isolated")) {
       await runtimeMessage(extensionPage, { type: "fluxiq.stopRecording" });
       recordingStarted = false;
       const outcome = await assertCoreRoundTrip(topology, paired?.sessionId, recordingBaseline);
@@ -368,55 +410,27 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
         const control = topology.control;
         const activeTopology = topology;
         const recordingId = outcome.newRecordingIds[0];
-        if (!topology.projectId || !topology.authorizationPin) throw new RunnerFailure("environment.missing", "The Flow lane needs an authenticated isolated Core with an authorization PIN");
+        const { projectId, authorizationPin } = topology; if (!projectId || !authorizationPin) throw new RunnerFailure("environment.missing", "The Flow lane needs an authenticated isolated Core with an authorization PIN");
         if (outcome.newRecordingIds.length !== 1 || !recordingId) throw new RunnerFailure("recording.persistence", `The Flow lane builds a Flow from exactly the recording this run produced, and observed ${outcome.newRecordingIds.length} new recordings`);
         await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.dispatch", "Build a Flow from the run's own recording and run it"), details: { variantId: workflow.variant?.id ?? null, declaredSecrets: declaredSecrets.map(secret => secret.id) } });
-        const lane = await runFlowLane({
-          control, projectId: topology.projectId, authorizationPin: topology.authorizationPin, recordingId,
-          scenario, workflow, facilityRunId: runId,
+        // Settled however the lane ends: an overspend or an unreached provider fails a finished run, and a failed lane still leaves its provider calls itemized.
+        const lane = await runLaneWithLiveLlmSettlement({ live, control, projectId, bundle, publish: details => capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The live provider run finished"), details }) }, async flowRunIdentified => await runFlowLane({
+          control, projectId, authorizationPin, recordingId,
+          scenario, workflow: flowWorkflow, facilityRunId: runId, flowRunIdentified, ...(repair ? { repairExpectation: repair } : {}),
           // The unarmed workflow's, which the recording lane asserted above.
           recordingEvents: recordingWorkflow.expected.recordingEvents ?? [],
-          scenarioOrigin: topology.scenarioOrigin, runToken: topology.allocation.controllerToken, secrets: declaredSecrets,
+          scenarioOrigin: activeTopology.scenarioOrigin, runToken: activeTopology.allocation.controllerToken, secrets: declaredSecrets,
           ...(live ? { authorizeLiveLlm: live.authorizer(control, activeTopology) } : {}),
           // Closes the discard window for the second read: Core audits the Flow's runtime confirmations against the finalized recording.
           flowDispatchStarting: at => { discardWindowUntil = at; },
-          prepareFlowPage: async () => {
-            if (workflow.variant) await armScenarioVariant(activeTopology.scenarioOrigin, activeTopology.allocation.controllerToken, scenario.id, workflow.variant);
-            // Runs on every Flow run. The reset and any arm are server-side, and
-            // the tab still shows wherever the recording ended, so it is loaded
-            // again: unarmed, or the Flow starts on the recording's last page;
-            // armed, or a drift variant is judged against a page that never
-            // drifted. Load the entry point, not a reload: see `openScenarioStart`.
-            await openScenarioStart(page, activeTopology.scenarioOrigin, scenario);
-            // The rendering the Flow will run against is now on screen. Check
-            // the armed facts here (none for an unarmed run), before the Flow runs, so
-            // "the fixture did not arm as declared" cannot arrive disguised as
-            // "the generated Flow failed".
-            await assertExpectedFacts(pageFacts.afterArm, playwrightScenarioFactProbe(page));
-          },
-          recordEvidence: async (evidence) => {
-            // The lane publishes before it judges any expectation, so these are
-            // set even when an expectation then throws: the run is evaluated as
-            // the Flow run it was, with the category Core actually reported.
-            flowObservation = evidence.observation;
-            oracleVerdict = evidence.observation.oracleVerdict;
-            automationFailure = evidence.observation.automationFailureReported;
-            actions.push(...evidence.run.actions.map(action => ({ actionType: action.actionType, startedAt: action.startedAt, ...(action.durationMs === undefined ? {} : { durationMs: action.durationMs }), status: action.status })));
-            await bundle.writeStructured("snapshots/flow-lane.json", flowLaneSnapshot(evidence));
-          },
-          checkFinalState: async () => {
-            try { scenarioPage = await findScenarioPageWithExpectedState(context!, page, activeTopology.scenarioOrigin, scenario, workflow); return true; }
-            catch { return false; }
-          },
-        });
-        // Settled before any expectation is judged: a run that overspent its budget or reached no provider failed at what was asked of it, whatever the automation then did.
-        if (live) await live.settle(control, { projectId: topology.projectId, runId: lane.run.runId }, bundle, details => capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The live provider run finished"), details }));
+          ...flowRunHooks(activeTopology, async evidence => { await bundle.writeStructured("snapshots/flow-lane.json", flowLaneSnapshot(evidence)); }),
+        }));
         if (lane.observation.oracleVerdict === "failed") throw new RunnerFailure("runtime.behavior", "The generated Flow ran, but the fixture's expected final state did not hold afterwards");
         await capture.trigger({ ...event(runId, scenario.id, undefined, "runtime.settle", "The generated Flow ran and met the workflow's expectations"), details: { runtimeRunId: lane.run.runId, actionCount: lane.run.actions.length, harnessActivations: lane.run.harnessActivations } });
       }
     }
     // A Flow-lane run that never reached the lane built no Flow, and does not pass on the recording's checks alone.
-    assertFlowLaneBuiltFlow({ flowLane: options.flow === true, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation });
+    assertFlowLaneBuiltFlow({ flowLane, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation });
     consoleWatch.assertOnlyAllowed(workflow.expected.allowedConsoleErrors);
     networkGuard.assertNoViolations();
     await capture.trigger(event(runId, scenario.id, undefined, "final", "Scenario completed"));
@@ -559,25 +573,14 @@ async function runScenarioImplementation(options: RunScenarioOptions, setFacilit
     // no Flow, not a recording-lane run: see `selectLaneObservation`.
     const observation = selectLaneObservation({
       evaluated: target.mode === "isolated" || target.mode === "persistent-isolated",
-      flowLane: options.flow === true,
+      flowLane,
       published: flowObservation,
-      automationFailureExpected: workflow.expected.failure ?? null,
-      recordingLane: () => ({
-        ...recordingLaneObservation({
-          oracleVerdict, ...probeOutcome(actions, automationFailure),
-          automationFailureExpected: workflow.expected.failure ?? null,
-          actions: actions.flatMap(action => action.durationMs === undefined ? [] : [{ actionType: action.actionType, durationMs: action.durationMs }]),
-        }),
-        // The lane's own extraction measurements, which it publishes here
-        // because it is the run that knows which steps ran: one per `extract`
-        // step of the script it executed, or `null` when it executed no script
-        // at all. `recordingLaneObservation` still states `null`, so the run
-        // states what it measured over the top of it; folding this into that
-        // function is the tidier end state and belongs with whoever owns
-        // `flow-lane/lane-observation.ts` next.
-        extraction: extractionRead
-          ? runExtractionMeasurements({ script: recordingWorkflow.recordingScript, expected: recordingWorkflow.expected.extracted, read: extractionRead })
-          : null,
+      automationFailureExpected: flowWorkflow.expected.failure ?? null,
+      recordingLane: () => recordingLaneProbeObservation({
+        oracleVerdict, actions, automationFailure,
+        automationFailureExpected: workflow.expected.failure ?? null,
+        // The run knows which steps ran: one measurement per `extract` step of the script it executed, or `null` when it executed none.
+        extraction: extractionRead ? runExtractionMeasurements({ script: recordingWorkflow.recordingScript, expected: recordingWorkflow.expected.extracted, read: extractionRead }) : null,
       }),
     });
     // The run's own `RunEvaluation`, built from the observation the lane just
@@ -764,37 +767,27 @@ function workflowSelection(options: RunScenarioOptions): { workflowId?: string; 
 }
 /**
  * When this run arms its variant relative to the first page load, which is all
- * the page-fact schedule needs to know about the lane. `resolveWorkflow` has
- * already refused a variant on any other combination, so a resolved variant
- * without `flow` is the existing or clone lane, which arms before it opens the
- * fixture and never presents the unarmed rendering.
+ * the page-fact schedule needs to know about the lane. Both Flow lanes present
+ * the unarmed rendering first and arm before the page they explore or run.
+ * `resolveWorkflow` has already refused a variant on any other combination, so
+ * a resolved variant on neither is the existing or clone lane, which arms
+ * before it opens the fixture and never presents the unarmed rendering.
  */
 function armingOf(options: RunScenarioOptions, workflow: ResolvedScenarioWorkflow): ScenarioArming {
-  if (options.flow) return "arms-after-loading";
+  if (options.flow || options.creation) return "arms-after-loading";
   return workflow.variant ? "arms-before-loading" : "unarmed";
 }
 function resolveWorkflow(scenario: WebScenario, options: RunScenarioOptions, target: FluxIQTargetConfiguration): ResolvedScenarioWorkflow {
   let workflow: ResolvedScenarioWorkflow;
   try { workflow = resolveScenarioWorkflow(scenario, { ...(options.workflowId === undefined ? {} : { workflowId: options.workflowId }), ...(options.variantId === undefined ? {} : { variantId: options.variantId }) }); }
   catch (cause) { throw new RunnerFailure("fixture.invalid", cause instanceof Error ? cause.message : String(cause), { cause }); }
-  if (workflow.variant && !options.flow && target.mode !== "existing" && target.mode !== "clone") throw new RunnerFailure("fixture.invalid", "A variant is armed only before a Flow run; the recording lane always records the workflow unarmed");
+  if (workflow.variant && !options.flow && !options.creation && target.mode !== "existing" && target.mode !== "clone") throw new RunnerFailure("fixture.invalid", "A variant is armed only before a Flow run; the recording lane always records the workflow unarmed");
   // A script that records no action yields no Flow on any product: refused before the bundle, Core or a browser exists, with the reason the bench skips it for.
   const noFlowLane = options.flow ? flowLaneExclusion(workflow.recordingScript) : undefined;
   if (noFlowLane !== undefined) throw new RunnerFailure("fixture.invalid", `A Flow run was refused: ${noFlowLane}`);
   return workflow;
 }
 function probeTiming(actionType: string, startedAt: number, result: any): RunActionTiming { return { actionType, startedAt: new Date(startedAt).toISOString(), durationMs: Math.max(0, Date.now() - startedAt), status: runActionStatus(result?.status) }; }
-/**
- * What FluxIQ reported, from the actions it executed. No action, or a lane
- * that could not observe the failure, leaves the verdict unknown rather than
- * passing: a run that reported nothing has not reported success.
- */
-function probeOutcome(actions: readonly RunActionTiming[], automationFailure: RunAutomationFailure | null | undefined): Pick<RunLaneObservation, "reportedVerdict" | "automationFailureReported"> {
-  if (!actions.length || automationFailure === undefined) return { reportedVerdict: null, automationFailureReported: null };
-  if (automationFailure) return { reportedVerdict: "failed", automationFailureReported: { category: automationFailure.category, ...(automationFailure.code === undefined ? {} : { code: automationFailure.code }) } };
-  if (actions.every(action => action.status === "succeeded")) return { reportedVerdict: "passed", automationFailureReported: null };
-  return { reportedVerdict: "failed", automationFailureReported: { category: "ambiguous_or_unknown" } };
-}
 function event(runId: string, scenarioId: string, stepId: string | undefined, trigger: "step.start" | "step.complete" | "gateway.action" | "runtime.dispatch" | "runtime.settle" | "checkpoint" | "error" | "final", summary: string) { return { trigger, summary, correlation: { runId, scenarioId, ...(stepId ? { stepId } : {}), correlationId: createCorrelationId() } }; }
 
 async function copyProcessLogs(bundle: EvidenceBundle, logsDir: string) { try { for (const name of await readdir(logsDir)) if (name.endsWith(".log")) await bundle.writeText(`logs/${name}`, await readFile(path.join(logsDir, name), "utf8")); } catch {} }

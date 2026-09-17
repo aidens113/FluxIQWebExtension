@@ -105,6 +105,9 @@ export type ExistingNodeDefinition = {
   externalSideEffect: boolean;
 };
 
+/** Core's answer to a Flow bootstrap generation, kept whole on failure because Core's diagnostic travels in `payload`. */
+export type FlowBootstrapGenerationEnvelope = { status: number; ok: boolean; payload: unknown };
+
 export class ExistingFluxIQControlClient extends FluxIQControlClient {
   async automationStudioCall(endpoint: string, payload: JsonRecord = {}, bounds: FluxIQHttpOptions = {}, domainId?: string): Promise<unknown> {
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(endpoint)) throw new Error("Automation Studio endpoint is malformed");
@@ -251,6 +254,21 @@ export class ExistingFluxIQControlClient extends FluxIQControlClient {
     const adaptation = flowAdaptation(payload.adaptation, "adaptation", input.projectId, input.flowId, input.adaptationId);
     if (adaptation.status !== "applied") throw new RunnerFailure("runtime.behavior", "FluxIQ did not apply the validated Flow adaptation");
     return adaptation;
+  }
+
+  /**
+   * One Flow bootstrap generation, answered with Core's envelope whether or not
+   * it succeeded. A refused generation carries Core's structured diagnostic in
+   * `payload` -- the stage, whether a provider was attempted, the evidence
+   * loop's counts -- which `automationStudioCall` would throw away with the
+   * response. The payload is returned unread: the caller parses it with Core's
+   * own parser and keeps only what that parser admits.
+   */
+  async generateFlowBootstrapAdaptation(input: { projectId: string; flowId: string; llmExecutionGrantId: string; evidenceGuided: true }, bounds: FluxIQHttpOptions = {}): Promise<FlowBootstrapGenerationEnvelope> {
+    const response = await this.authenticatedResponse("/api/programs/automation-studio/generate-flow-bootstrap-adaptation", input, "POST", bounds, "runtime.behavior");
+    const body: unknown = await response.json().catch(() => undefined);
+    const envelope = body && typeof body === "object" && !Array.isArray(body) ? body as JsonRecord : {};
+    return { status: response.status, ok: response.ok && envelope.ok === true, payload: envelope.payload };
   }
 
   async revertFlowAdaptation(input: { projectId: string; flowId: string; adaptationId: string; authorizationPin: string; reason: string }): Promise<ExistingFlowAdaptation> {

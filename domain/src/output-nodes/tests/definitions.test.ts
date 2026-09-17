@@ -193,6 +193,25 @@ test("the list extraction tells Core where its records are, and no other node cl
   assert.deepEqual(declared, ["web.dom.extract_list"]);
 });
 
+test("exactly the verbs that prove the page's state tell Core their success verifies a change", () => {
+  // Core's change verdict counts a later node as a downstream assertion only
+  // when its definition's `metadata.verifiesState` is exactly `true` (Core
+  // `AUTOMATION_STUDIO_NODE_VERIFIES_STATE_METADATA_KEY`). The key is spelled
+  // out here rather than read from the domain, so a misspelt constant fails.
+  const declared = WEB_AUTOMATION_ACTION_TYPES.filter((outputId) => nodeFor(outputId).metadata?.verifiesState === true);
+  assert.deepEqual(declared.slice().sort(), ["web.dom.assert", "web.dom.wait_for_selector", "web.dom.wait_for_text"]);
+  for (const outputId of declared) {
+    const validation = validateAutomationStudioNodeDefinition(nodeFor(outputId));
+    assert.equal(validation.ok, true, `${outputId}: ${validation.issues.map((issue) => issue.code).join(", ")}`);
+  }
+  // Every other node leaves the key out entirely: an action succeeding, or a
+  // read returning whatever it found, proves nothing about the page, and a
+  // stray `false` or `"true"` would be one edit away from counting.
+  for (const outputId of WEB_AUTOMATION_ACTION_TYPES.filter((candidate) => !declared.includes(candidate))) {
+    assert.equal(Object.hasOwn(nodeFor(outputId).metadata ?? {}, "verifiesState"), false, `${outputId} must not declare verifiesState`);
+  }
+});
+
 test("the list extraction offers a timeout, because a paginated read outlasts Core's default (D14)", () => {
   // The request carries no timeout of its own: the command's `timeoutMs` is the
   // one the page honours, and this parameter is where a node states it.

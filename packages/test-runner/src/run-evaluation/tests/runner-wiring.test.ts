@@ -214,10 +214,12 @@ test("Core's discard audit is read a second time, after the Flow lane and the br
 test("the runner consults the lane rules: a Core identity and a built Flow on the Flow lane, the probe's start-page step, and the final-state facts", async () => {
   const source = await runnerSource();
   assert.match(source, /import \{ assertFlowLaneBuiltFlow, coreIdentityRequired, finalStateFacts, selectCoreProbeStep \} from "\.\/lane-rules\/index\.js";/u);
-  assert.ok(source.includes('bootstrapIdentity: coreIdentityRequired({ clone: target.mode === "clone", flowLane: options.flow === true, scenario, recorded: recordingWorkflow.expected })'), "H2: every Flow-lane run bootstraps a Core identity");
+  // Both Flow lanes -- the one built from the run's recording and the one built from a live instruction task -- are the Flow lane here.
+  assert.ok(source.includes("const flowLane = options.flow === true || creation !== undefined;"), "H2: a created-Flow run is a Flow-lane run");
+  assert.ok(source.includes('bootstrapIdentity: coreIdentityRequired({ clone: target.mode === "clone", flowLane, scenario, recorded: recordingWorkflow.expected })'), "H2: every Flow-lane run bootstraps a Core identity");
   const at = {
     flowLane: source.indexOf("await runFlowLane({"),
-    built: source.indexOf('assertFlowLaneBuiltFlow({ flowLane: options.flow === true, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation });'),
+    built: source.indexOf('assertFlowLaneBuiltFlow({ flowLane, evaluated: target.mode === "isolated" || target.mode === "persistent-isolated", published: flowObservation });'),
     passed: source.indexOf('verdict = "passed";'),
   };
   for (const [name, index] of Object.entries(at)) assert.ok(index > 0, `${name} is in the runner`);

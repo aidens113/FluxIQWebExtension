@@ -1,8 +1,9 @@
 import type { ExistingFlowAdaptation, ExistingRunDetail } from "./existing-fluxiq-control.js";
 import type { DemoLlmAdaptationReadiness } from "./demo-llm-adaptation-readiness.js";
 import { FIRST_LIVE_ADAPTATION_PROFILE } from "./demo-llm-adaptation.js";
-import { adaptationCallCountWithinGrant } from "./demo-llm-adaptation-control.js";
+import { adaptationCallCountWithinGrant, targetRepairValidationIsHonest } from "./demo-llm-adaptation-control.js";
 import { RunnerFailure } from "./failure.js";
+import type { TargetProposalStructure } from "./demo-workspace/index.js";
 
 export type ExplorationAdaptationProposalCheckpoint = Readonly<{
   status: "proposed";
@@ -18,8 +19,11 @@ export type ExplorationAdaptationProposalCheckpoint = Readonly<{
   failedActionCount: 1;
   interventionKinds: readonly ["diagnosis", "runtime_patch"];
   patchKinds: readonly ["edit_action_target"];
-  validationSucceededCount: 1;
+  /** A proposal has not run, so Core records no validation for it (Core `a2de143`). */
+  validationSucceededCount: 0;
   validationFailedCount: 0;
+  /** Core resolved its target and every structural check it recorded passed. */
+  structurallyChecked: true;
   reviewOutcome: "pending";
   applyOutcome: "not_attempted";
   recordingCount: 0;
@@ -51,7 +55,8 @@ export type ExplorationAdaptationValidationCheckpoint = Readonly<{
   sourceRunId: string;
   validationRunId: string;
   adaptationId: string;
-  actionAttemptCount: 6;
+  /** The explored Flow's own deterministic baseline count: the model chooses the Flow's shape. */
+  actionAttemptCount: number;
   recordingCount: 0;
 }>;
 
@@ -64,6 +69,7 @@ export function evaluateExplorationAdaptationProposal(input: Readonly<{
   existingAdaptationIds: ReadonlySet<string>;
   run: ExistingRunDetail;
   proposal: ExistingFlowAdaptation;
+  structure: TargetProposalStructure;
 }>): ExplorationAdaptationProposalCheckpoint {
   const { readiness, run, proposal } = input;
   if (run.summary.projectId !== readiness.projectId || run.summary.flowId !== readiness.flowId) fail("scope_mismatch");
@@ -94,7 +100,7 @@ export function evaluateExplorationAdaptationProposal(input: Readonly<{
     || proposal.sourceRunId !== run.summary.runId || proposal.subflowId !== readiness.subflowId) fail("scope_mismatch");
   if (proposal.status !== "proposed" || proposal.adaptationKind === "flow_bootstrap"
     || proposal.patchKinds?.length !== 1 || proposal.patchKinds[0] !== "edit_action_target"
-    || proposal.validationSucceededCount !== 1 || proposal.validationFailedCount !== 0
+    || !unexecutedTargetProposalIsSound(proposal, input.structure)
     || (proposal.appliedMutationCount ?? 0) !== 0) fail("proposal_shape_invalid");
 
   return Object.freeze({
@@ -110,12 +116,27 @@ export function evaluateExplorationAdaptationProposal(input: Readonly<{
     failedActionCount: 1 as const,
     interventionKinds: Object.freeze(["diagnosis", "runtime_patch"] as const),
     patchKinds: Object.freeze(["edit_action_target"] as const),
-    validationSucceededCount: 1 as const,
+    validationSucceededCount: 0 as const,
     validationFailedCount: 0 as const,
+    structurallyChecked: true as const,
     reviewOutcome: "pending" as const,
     applyOutcome: "not_attempted" as const,
     recordingCount: 0 as const,
   });
+}
+
+/**
+ * Whether a target-override repair is one Core checked and, unless it has
+ * been applied, never claims to have run. Since Core `a2de143` a proposal
+ * carries no validation result -- that would mean it ran and was compared --
+ * and the check that did happen is its target resolution and structural
+ * checks. A proposal claiming a success before it ran is refused, as is any
+ * recorded failure, an unresolved target, or no passed structural check.
+ */
+export function unexecutedTargetProposalIsSound(proposal: ExistingFlowAdaptation, structure: TargetProposalStructure): boolean {
+  if (!targetRepairValidationIsHonest(proposal)) return false;
+  if (structure.targetResolution !== "resolved" && structure.targetResolution !== "matched") return false;
+  return structure.structuralCheckStatuses.length > 0 && structure.structuralCheckStatuses.every(status => status === "passed");
 }
 
 /** Validates the provider-free apply + single deterministic validation half. */
@@ -172,7 +193,7 @@ export function evaluateExplorationAdaptationValidation(input: Readonly<{
   adaptationIdsAfter: ReadonlySet<string>;
 }>): ExplorationAdaptationValidationCheckpoint {
   const { readiness, applied, sourceRun, validation } = input;
-  if (readiness.nodeCount !== 6 || readiness.actionAttemptCount !== 6
+  if (readiness.nodeCount < 1 || readiness.actionAttemptCount < 1
     || applied.projectId !== readiness.projectId || applied.flowId !== readiness.flowId
     || applied.status !== "applied" || applied.adaptationKind === "flow_bootstrap"
     || applied.subflowId !== readiness.subflowId || !applied.sourceRunId
@@ -186,7 +207,7 @@ export function evaluateExplorationAdaptationValidation(input: Readonly<{
     || sourceRun.changeProposalIds?.length !== 1) fail("validation_source_invalid");
   if (validation.summary.projectId !== readiness.projectId || validation.summary.flowId !== readiness.flowId
     || validation.summary.runId === sourceRun.summary.runId || validation.summary.status !== "succeeded"
-    || validation.actionAttempts.length !== 6 || validation.actionAttempts.some(item => item.status !== "succeeded")
+    || validation.actionAttempts.length !== readiness.actionAttemptCount || validation.actionAttempts.some(item => item.status !== "succeeded")
     || (validation.providerCallCount ?? 0) !== 0 || (validation.interventions?.length ?? 0) !== 0
     || (validation.adaptationIds?.length ?? 0) !== 0 || (validation.changeProposalIds?.length ?? 0) !== 0
     || (validation.summary.adaptationCount ?? 0) !== 0) fail("validation_run_invalid");
@@ -201,7 +222,7 @@ export function evaluateExplorationAdaptationValidation(input: Readonly<{
     sourceRunId: sourceRun.summary.runId,
     validationRunId: validation.summary.runId,
     adaptationId: applied.adaptationId,
-    actionAttemptCount: 6 as const,
+    actionAttemptCount: validation.actionAttempts.length,
     recordingCount: 0 as const,
   });
 }

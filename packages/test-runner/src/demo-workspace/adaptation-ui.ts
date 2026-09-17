@@ -9,6 +9,7 @@ import { explorationAdaptationRunIsComplete } from "../demo-llm-exploration-adap
 import { isTerminalRuntimeStatus, waitForRoutedRunDetail } from "./control-waits.js";
 import { selectFlowInCurrentProject } from "./panel-navigation.js";
 import { runDemoFlowFromPanel, waitForPanelMutationResponse, waitForPanelRunResponse } from "./panel-run.js";
+import { ADAPTING_RUN_TIMEOUT_MS } from "./adapting-run/index.js";
 import type { DemoWorkspaceState } from "./workspace-state.js";
 
 export async function reviewAndApplyAdaptationViaUi(
@@ -103,7 +104,7 @@ export async function runAdaptationFromPanel(page: Page, flowTreeItemId: string,
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline && await runButton.isDisabled()) await page.waitForTimeout(100);
   if (await runButton.isDisabled()) throw new RunnerFailure("runtime.behavior", "Diagnose and propose adaptation mode was not ready to run");
-  const response = await evidence.step("panel", "adaptation-runtime-run", "Run one bounded diagnosis and adaptation proposal", () => waitForPanelRunResponse(page, () => runButton.click()));
+  const response = await evidence.step("panel", "adaptation-runtime-run", "Run one bounded diagnosis and adaptation proposal", () => waitForPanelRunResponse(page, () => runButton.click(), ADAPTING_RUN_TIMEOUT_MS));
   const body = await response.json() as any;
   if (!response.ok()) throw new RunnerFailure("runtime.behavior", "The authenticated adaptation run request was rejected", { details: { reasonCode: adaptationRunRejectionCode(body?.error) } });
   const runId = body?.payload?.runtimeSession?.runId;
@@ -123,7 +124,7 @@ export function adaptationRunRejectionCode(value: unknown): string {
 }
 
 export async function waitForAdaptationRun(control: ExistingFluxIQControlClient, projectId: string, runId: string): Promise<ExistingRunDetail> {
-  const deadline = Date.now() + 60_000;
+  const deadline = Date.now() + ADAPTING_RUN_TIMEOUT_MS;
   let detail = await control.getRunDetail(projectId, runId);
   // A terminal diagnosis+patch run may intentionally create no adaptation
   // when deterministic evidence validation rejects the model's target. Do not

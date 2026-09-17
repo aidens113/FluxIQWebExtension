@@ -9,6 +9,7 @@ import {
 } from "./demo-llm-adaptation-readiness.js";
 import { locateLatestAppliedEvidenceGuidedCreation } from "./demo-llm-exploration-apply.js";
 import { RunnerFailure } from "./failure.js";
+import { targetRepairValidationIsHonest } from "./demo-llm-adaptation-control.js";
 import { isActiveRuntimeAdaptationStatus, resolveAuthoritativeAdaptationStatus } from "./authoritative-adaptation-status.js";
 
 export const explorationAdaptationReadinessFailureCodes = [
@@ -55,7 +56,7 @@ export async function requireExplorationBaselineDriftExplanation(
     && item.subflowId === ownedSubflowId
     && Boolean(item.sourceRunId)
     && item.patchKinds?.length === 1 && item.patchKinds[0] === "edit_action_target"
-    && item.validationSucceededCount === 1 && item.validationFailedCount === 0
+    && targetRepairValidationIsHonest(item)
     && item.appliedMutationCount === 1);
   const active = ordinary.filter(item => isActiveRuntimeAdaptationStatus(statusFor(item)));
   if (revertedTargets.length !== 1 || active.length !== 0) {

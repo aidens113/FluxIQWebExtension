@@ -189,6 +189,35 @@ test("--variant arms one variant and requires the Flow lane", () => {
   assert.throws(() => parseLabCommand(["matrix", "--all", "--variant", "selector-only"]), /Unknown option/);
 });
 
+test("create-flow runs one instruction task without the recorded Flow lane, with its variant, and can be dry-run", () => {
+  const live = ["--live-llm", "--llm-profile", "lab-create-flow", "--llm-provider", "deepseek", "--llm-model", "deepseek-chat", "--llm-task", "create-flow"];
+  const plain = parseLabCommand(["run", "product-catalog", ...live]);
+  assert.equal(plain.command === "run" && plain.llm?.task, "create-flow");
+  assert.equal(plain.command === "run" && ("instructionTaskId" in plain || "dryRun" in plain || "flowLane" in plain), false);
+  // The campaign's command: a task, the task's variant, and no --flow.
+  const campaign = parseLabCommand(["run", "product-catalog", "--variant", "short-catalog", ...live, "--instruction-task", "product-catalog-all-pages-short-catalog"]);
+  assert.ok(campaign.command === "run");
+  assert.equal(campaign.variantId, "short-catalog");
+  assert.equal(campaign.instructionTaskId, "product-catalog-all-pages-short-catalog");
+  assert.equal(campaign.flowLane, undefined);
+  // --dry-run takes no value, wherever it stands.
+  const dry = parseLabCommand(["run", "--dry-run", "product-catalog", ...live, "--workflow", "paginated-extraction"]);
+  assert.ok(dry.command === "run");
+  assert.equal(dry.scenarioId, "product-catalog");
+  assert.equal(dry.dryRun, true);
+  assert.equal(dry.workflowId, "paginated-extraction");
+
+  assert.throws(() => parseLabCommand(["run", "product-catalog", "--flow", ...live]), /create-flow builds its Flow from an instruction task, not from the run's recording: drop --flow/u);
+  assert.throws(() => parseLabCommand(["run", "product-catalog", ...live, "--instruction-task", "Not Kebab"]), /--instruction-task must be a lowercase kebab-case task ID/u);
+  assert.throws(() => parseLabCommand(["run", "product-catalog", ...live, "--dry-run", "--dry-run"]), /--dry-run may only be specified once/u);
+  // The creation options belong to create-flow alone, and a variant still needs a Flow lane.
+  const adapt = live.map((value) => (value === "create-flow" ? "adapt" : value));
+  assert.throws(() => parseLabCommand(["run", "product-catalog", "--flow", ...adapt, "--instruction-task", "product-catalog-first-page"]), /require --live-llm --llm-task create-flow/u);
+  assert.throws(() => parseLabCommand(["run", "product-catalog", "--dry-run"]), /require --live-llm --llm-task create-flow/u);
+  assert.throws(() => parseLabCommand(["run", "product-catalog", "--variant", "short-catalog", ...adapt]), /--variant requires --flow/u);
+  assert.throws(() => parseLabCommand(["matrix", "--scenarios-json", '["product-catalog"]', ...live]), /create-flow builds one instruction task per run: use lab run/u);
+});
+
 test("compare takes two bench reports, or one report with --halves", () => {
   assert.deepEqual(parseLabCommand(["compare", "bench-a", "bench-b"]), { command: "compare", baselineReport: "bench-a", candidateReport: "bench-b", sharedLoad: true });
   assert.deepEqual(parseLabCommand(["compare", "bench-a", "bench-b", "--sequential"]), { command: "compare", baselineReport: "bench-a", candidateReport: "bench-b", sharedLoad: false });

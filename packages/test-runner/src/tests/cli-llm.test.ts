@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { runCli } from "../cli.js";
+import { catalogScenario, datasetTask } from "../flow-lane/creation/tests/scenario-fixture.js";
 
 const sourceRoot = path.resolve(import.meta.dirname, "..", "..", "src");
 const source = (relative: string) => readFile(path.join(sourceRoot, relative), "utf8");
@@ -54,6 +55,83 @@ async function liveRun(argv: readonly string[]): Promise<{ code: number; stderr:
     await rm(repositoryRoot, { recursive: true, force: true });
   }
 }
+
+/**
+ * The created-Flow lane is gated closed the same way, and it has a dry run
+ * that proves a command would start without starting anything: it plans the
+ * grant, finds the credential, resolves the instruction task against the run's
+ * scenario lab build, prints what it would do, and exits. A stub build stands
+ * in for the scenario lab, so these read no real catalog and no real key.
+ */
+const CREATE_FLOW = ["--live-llm", "--llm-profile", "lab-create-flow", "--llm-provider", "deepseek", "--llm-model", "deepseek-chat", "--llm-task", "create-flow"];
+const DUMMY_KEY = "dummy-provider-key-for-a-dry-run";
+
+async function stubLab(t: test.TestContext): Promise<{ root: string; env: NodeJS.ProcessEnv }> {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-create-flow-cli-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const dist = path.join(root, "scenario-lab-dist");
+  await mkdir(path.join(dist, "scenarios"), { recursive: true });
+  await writeFile(path.join(dist, "registry.js"), `export function listScenarioManifests() { return [${JSON.stringify(catalogScenario)}]; }\n`);
+  await writeFile(path.join(dist, "scenarios", "live-instructions.js"), `export const LIVE_INSTRUCTION_TASKS = ${JSON.stringify([datasetTask(), datasetTask({ id: "catalog-reworded", variantId: "text-variant" })])};\n`);
+  return { root, env: { FLUXIQ_WEB_EXTENSION_ROOT: root, FLUXIQ_TEST_ENV_FILES: "none", FLUXIQ_LAB_SCENARIO_ENTRYPOINT: path.join(dist, "server.js") } };
+}
+
+async function captureCli(argv: readonly string[], env: NodeJS.ProcessEnv): Promise<{ code: number; stdout: string; stderr: string }> {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  const originalOut = process.stdout.write;
+  const originalErr = process.stderr.write;
+  process.stdout.write = ((chunk: string | Uint8Array) => { stdout.push(String(chunk)); return true; }) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: string | Uint8Array) => { stderr.push(String(chunk)); return true; }) as typeof process.stderr.write;
+  try {
+    const code = await runCli([...argv], env);
+    return { code, stdout: stdout.join(""), stderr: stderr.join("") };
+  } finally {
+    process.stdout.write = originalOut;
+    process.stderr.write = originalErr;
+  }
+}
+
+test("a create-flow run fails closed before anything starts: no credential, or a recorded Flow lane", async (t) => {
+  const lab = await stubLab(t);
+  const noKey = await captureCli(["run", "product-catalog", ...CREATE_FLOW, "--instruction-task", "catalog-first-page"], lab.env);
+  assert.equal(noKey.code, 1);
+  assert.match(noKey.stderr, /Live LLM execution needs a provider credential: DEEPSEEK_API_KEY is not set in the environment/u);
+  assert.equal(noKey.stdout, "");
+  const withFlow = await captureCli(["run", "product-catalog", "--flow", ...CREATE_FLOW], { ...lab.env, DEEPSEEK_API_KEY: DUMMY_KEY });
+  assert.equal(withFlow.code, 1);
+  assert.match(withFlow.stderr, /drop --flow/u);
+  // Neither refusal reached a run: nothing was written where runs go.
+  await assert.rejects(access(path.join(lab.root, "test-runs")));
+});
+
+test("a create-flow dry run resolves the task, plans the build grant and starts nothing", async (t) => {
+  const lab = await stubLab(t);
+  const env = { ...lab.env, DEEPSEEK_API_KEY: DUMMY_KEY };
+  const result = await captureCli(["run", "product-catalog", "--variant", "text-variant", ...CREATE_FLOW, "--instruction-task", "catalog-reworded", "--llm-max-output-tokens", "4000", "--llm-max-total-tokens", "12000", "--dry-run"], env);
+  assert.equal(result.code, 0, result.stderr);
+  const printed = JSON.parse(result.stdout) as Record<string, any>;
+  assert.equal(printed.status, "ready");
+  assert.equal(printed.providerCallCount, 0);
+  assert.equal(printed.lane, "created-flow");
+  assert.equal(printed.target, "isolated");
+  assert.equal(printed.request.taskId, "catalog-reworded");
+  assert.equal(printed.request.variantId, "text-variant");
+  assert.deepEqual(printed.request.judgement, { judgeBy: "expected-dataset", stepId: "extract-page-one", stepIndex: 1 });
+  assert.equal(printed.live.purpose, "build_and_adapt");
+  assert.equal(printed.live.authorized.maxCalls, 26);
+  assert.deepEqual(printed.live.authorized.tokenLimits, { maxInputTokens: 8_000, maxOutputTokens: 4_000, maxTotalTokens: 12_000 });
+  assert.deepEqual(printed.live.credentialSource, { name: "DEEPSEEK_API_KEY", from: "the process environment" });
+  assert.equal(result.stdout.includes(DUMMY_KEY), false, "the dry run printed the credential");
+  assert.equal(result.stdout.includes("Scrape"), false, "the dry run printed the instruction");
+  await assert.rejects(access(path.join(lab.root, "test-runs")), "a dry run wrote no run");
+  // The task's scenario and variant are held to the command's.
+  const wrongVariant = await captureCli(["run", "product-catalog", "--variant", "broken", ...CREATE_FLOW, "--instruction-task", "catalog-reworded", "--dry-run"], env);
+  assert.equal(wrongVariant.code, 1);
+  assert.match(wrongVariant.stderr, /names variant text-variant, not --variant broken/u);
+  const unknownTask = await captureCli(["run", "product-catalog", ...CREATE_FLOW, "--instruction-task", "no-such-task", "--dry-run"], env);
+  assert.match(unknownTask.stderr, /"category":"fixture.invalid".*Unknown live instruction task: no-such-task/u);
+});
 
 test("CLI creation and resume discriminate serial from saved logical-shard authority without overrides", async () => {
   const cli = await source("cli.ts");

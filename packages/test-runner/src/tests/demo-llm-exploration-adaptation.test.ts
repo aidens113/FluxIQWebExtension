@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { FIRST_LIVE_ADAPTATION_PROFILE } from "../demo-llm-adaptation.js";
-import { evaluateExplorationAdaptationApply, evaluateExplorationAdaptationProposal, evaluateExplorationAdaptationValidation } from "../demo-llm-exploration-adaptation.js";
+import { evaluateExplorationAdaptationApply, evaluateExplorationAdaptationProposal, evaluateExplorationAdaptationValidation, unexecutedTargetProposalIsSound } from "../demo-llm-exploration-adaptation.js";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "../../../..");
 
@@ -21,8 +21,10 @@ function fixture() {
   });
   const summary = { runId: "run.failed", projectId: "project.one", flowId: "flow.checkpoint", status: "failed", updatedAt: 1, actionAttemptCount: 1, routeDecisionCount: 1, subflowEntryCount: 1, interventionCount: 2, adaptationCount: 1 };
   const run = { summary, routeDecisions: [], subflows: [], actionAttempts: [{ attemptId: "attempt.one", nodeId: "node.click", definitionId: "web.output.dom-click", sequence: 1, status: "failed" }], interventions: [intervention("diagnosis", 1), intervention("runtime_patch", 2)], adaptationIds: ["adaptation.target"], changeProposalIds: ["adaptation.target"], providerCallCount: 2 };
-  const proposal = { adaptationId: "adaptation.target", projectId: "project.one", flowId: "flow.checkpoint", subflowId: "subflow.one", sourceRunId: "run.failed", status: "proposed", adaptationKind: "runtime_patch", patchKinds: ["edit_action_target"], validationSucceededCount: 1, validationFailedCount: 0, appliedMutationCount: 0 };
-  return { readiness, existingAdaptationIds: new Set(["adaptation.bootstrap"]), run, proposal };
+  const proposal = { adaptationId: "adaptation.target", projectId: "project.one", flowId: "flow.checkpoint", subflowId: "subflow.one", sourceRunId: "run.failed", status: "proposed", adaptationKind: "runtime_patch", patchKinds: ["edit_action_target"], validationSucceededCount: 0, validationFailedCount: 0, appliedMutationCount: 0 };
+  // What Core records for a proposal it has only checked, never run (Core a2de143).
+  const structure = { targetResolution: "resolved", structuralCheckStatuses: ["passed"] };
+  return { readiness, existingAdaptationIds: new Set(["adaptation.bootstrap"]), run, proposal, structure };
 }
 
 test("accepts exactly one diagnosis+patch attempt and leaves it pending", () => {
@@ -210,4 +212,56 @@ test("validate launcher is secret-stripped and command is one provider-free exac
   assert.equal((body.match(/runZeroLlmAdaptationValidation/g) ?? []).length, 1);
   assert.match(body, /generate-flow-bootstrap-adaptation[\s\S]*preflight-llm-execution[\s\S]*issue-llm-execution-grant/u);
   assert.doesNotMatch(body, /reviewAndApplyAdaptationViaUi|runAdaptationFromPanel|configureFirstLiveDiagnosisViaUi/u);
+});
+
+// The shape of an explored Flow is the model's to choose. A live exploration
+// built seven nodes, five of them actions, and a later repair has to validate
+// against that Flow's own deterministic baseline, not a fixed six.
+test("validation accepts the explored Flow's own baseline action count, whatever it is", () => {
+  const base = fixture();
+  const readiness = { ...base.readiness, nodeCount: 7, edgeCount: 6, actionAttemptCount: 5 };
+  const applied = { ...base.proposal, status: "applied", appliedMutationCount: 1 };
+  const validation = {
+    ...base.run,
+    summary: { ...base.run.summary, runId: "run.validation.seven", status: "succeeded", interventionCount: 0, adaptationCount: 0 },
+    actionAttempts: Array.from({ length: 5 }, (_, index) => ({ attemptId: `seven.${index}`, nodeId: `node.${index}`, definitionId: "web.output.dom-click", sequence: index, status: "succeeded" })),
+    interventions: [], adaptationIds: [], changeProposalIds: [], providerCallCount: 0,
+  };
+  const common = {
+    readiness: readiness as any, applied: applied as any, sourceRun: base.run as any,
+    adaptationIdsBefore: new Set(["adaptation.bootstrap", "adaptation.target"]),
+    adaptationIdsAfter: new Set(["adaptation.bootstrap", "adaptation.target"]),
+  };
+  assert.equal(evaluateExplorationAdaptationValidation({ ...common, validation: validation as any }).actionAttemptCount, 5);
+  const six = { ...validation, actionAttempts: [...validation.actionAttempts, { ...validation.actionAttempts[0]!, attemptId: "seven.extra" }] };
+  assert.throws(() => evaluateExplorationAdaptationValidation({ ...common, validation: six as any }), /strict contract/u);
+  assert.throws(() => evaluateExplorationAdaptationValidation({ ...common, readiness: { ...readiness, nodeCount: 0 } as any, validation: validation as any }), /strict contract/u);
+});
+
+// Core records no validation for a repair it has checked but not run: a
+// validation entry means "it ran and was compared". A live repair was refused
+// for lacking the one success the lane used to demand at proposal time.
+test("a proposal is sound when it claims no run and its structural check passed", () => {
+  const base = fixture();
+  assert.equal(evaluateExplorationAdaptationProposal(base as any).validationSucceededCount, 0);
+  const absent = fixture() as any; delete absent.proposal.validationSucceededCount; delete absent.proposal.validationFailedCount;
+  assert.equal(evaluateExplorationAdaptationProposal(absent).structurallyChecked, true);
+  const claimed = fixture(); claimed.proposal.validationSucceededCount = 1;
+  const failedRun = fixture(); failedRun.proposal.validationFailedCount = 1;
+  const failedCheck = fixture(); failedCheck.structure.structuralCheckStatuses = ["passed", "failed"];
+  const noCheck = fixture(); noCheck.structure.structuralCheckStatuses = [];
+  const unresolved = fixture() as any; delete unresolved.structure.targetResolution;
+  for (const [label, value] of Object.entries({ claimed, failedRun, failedCheck, noCheck, unresolved })) {
+    assert.throws(() => evaluateExplorationAdaptationProposal(value as any), (error: any) => error.details?.reasonCode === "exploration_adaptation_run.proposal_shape_invalid", label);
+  }
+  assert.equal(unexecutedTargetProposalIsSound({ status: "applied", validationSucceededCount: 1, validationFailedCount: 0 } as any, base.structure), true);
+  assert.equal(unexecutedTargetProposalIsSound({ status: "validated" } as any, { targetResolution: "matched", structuralCheckStatuses: ["passed"] }), true);
+});
+
+test("both adaptation lanes read Core's structural record before judging a proposal", async () => {
+  for (const file of ["demo-workspace/adaptation-lane.ts", "demo-workspace/exploration-adaptation.ts"]) {
+    const source = await readFile(path.join(repositoryRoot, "packages/test-runner/src", file), "utf8");
+    assert.match(source, /readTargetProposalStructure\(/u, file);
+    assert.doesNotMatch(source, /validationSucceededCount !== 1/u, file);
+  }
 });

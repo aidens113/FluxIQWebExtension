@@ -118,6 +118,15 @@ test("a declared secret answers its control's request under the path the node as
   assert.deepEqual(declaredSecretBindingInputs({ scenarioId: "basic-form", secrets: [], steps: [], requests: [] }), {});
 });
 
+test("a test-id declaration pairs with a node naming the control by that target's own CSS form, and no looser form", () => {
+  // How a Flow FluxIQ built from an instruction names the control: a selector, and no recorded element.
+  const built: FlowSecretRequest = { nodeId: "node.built", parameter: "text", path: "web.secret.password", selector: "[data-testid=\"password\"]", element: undefined };
+  assert.deepEqual(declaredSecretBindingInputs({ scenarioId: "auth-gate", secrets: [passwordSecret], steps, requests: [built] }), { "web.secret.password": SUPPLIED });
+  for (const selector of ["[data-testid='password']", "input[data-testid=\"password\"]", "#password"]) {
+    assertPairingFailure(() => declaredSecretBindingInputs({ scenarioId: "auth-gate", secrets: [passwordSecret], steps, requests: [{ ...built, selector }] }), ["web.secret.password", "auth-gate-password"]);
+  }
+});
+
 test("a request no declaration answers fails the run, naming the path and never a value", () => {
   assertPairingFailure(() => declaredSecretBindingInputs({ scenarioId: "auth-gate", secrets: [], steps, requests: [passwordRequest] }), ["web.secret.password", "parameter text"]);
 });

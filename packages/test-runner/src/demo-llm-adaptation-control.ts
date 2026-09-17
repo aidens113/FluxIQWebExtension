@@ -113,6 +113,19 @@ async function requireExactActiveTargetAdaptation(
   return adaptation;
 }
 
+/**
+ * Whether a target repair's recorded validation is one Core could have
+ * written. Since Core `a2de143` a repair that has only been checked carries no
+ * validation result -- one means it ran and was compared -- and a live repair
+ * applied and replayed still carried none. So: never a recorded failure, and a
+ * success only on a repair that has been applied (or applied and reverted).
+ */
+export function targetRepairValidationIsHonest(adaptation: Pick<ExistingFlowAdaptation, "status" | "validationSucceededCount" | "validationFailedCount">): boolean {
+  if ((adaptation.validationFailedCount ?? 0) !== 0) return false;
+  const succeeded = adaptation.validationSucceededCount ?? 0;
+  return succeeded === 0 || (succeeded === 1 && (adaptation.status === "applied" || adaptation.status === "reverted"));
+}
+
 function isActive(item: ExistingFlowAdaptationSummary): boolean {
   return item.status === "proposed" || item.status === "validated" || item.status === "applied";
 }
@@ -126,8 +139,7 @@ function isExactTargetShape(adaptation: ExistingFlowAdaptation, scope: ExistingT
     && adaptation.sourceRunId.length > 0
     && adaptation.patchKinds?.length === 1
     && adaptation.patchKinds[0] === "edit_action_target"
-    && adaptation.validationSucceededCount === 1
-    && adaptation.validationFailedCount === 0
+    && targetRepairValidationIsHonest(adaptation)
     && (selector.sourceRunId === undefined || adaptation.sourceRunId === selector.sourceRunId);
 }
 

@@ -7,7 +7,7 @@ import { benchDirectory, buildCampaignCompatibility, compareBenchCloseoutCommand
 import { ClonePackageCache } from "./clone-cache.js";
 import { parseLabCommand, expandMatrix } from "./commands.js";
 import { classifyRunnerFailure } from "./failure.js";
-
+import { describeCreatedFlowRequest, loadCreatedFlowRequest } from "./flow-lane/index.js";
 import { inspectRun } from "./inspect.js";
 import { beginLiveLlmRun } from "./live-llm/index.js";
 import { resolveLabPaths } from "./lab-instance/index.js";
@@ -89,7 +89,15 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv = process.en
       // refusal an operator can read, rather than a sanitized facility failure
       // reported from inside a run that had already started a browser.
       const live = command.llm ? await beginLiveLlmRun({ profile: command.llm, repositoryRoot, environment: resolvedEnvironment, flowLane: command.flowLane === true, targetMode: target.mode }) : undefined;
-      const result = await runScenario({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: command.scenarioId, ...(command.seed === undefined ? {} : { seed: command.seed }), ...(command.workflowId ? { workflowId: command.workflowId } : {}), ...(command.variantId ? { variantId: command.variantId } : {}), ...(command.flowLane ? { flow: true } : {}), ...(command.evidence ? { evidence: command.evidence } : {}), ...(live ? { live } : {}), environment: resolvedEnvironment, target });
+      // After the live refusals, so a missing key is reported before a missing catalog: the task, its workflow and variant, and what judges it.
+      const creation = live?.createsFlow ? await loadCreatedFlowRequest({ repositoryRoot, scenarioLabDist: labPaths.scenarioLabDist, scenarioId: command.scenarioId, ...(command.instructionTaskId ? { taskId: command.instructionTaskId } : {}), ...(command.workflowId ? { workflowId: command.workflowId } : {}), ...(command.variantId ? { variantId: command.variantId } : {}) }) : undefined;
+      if (command.dryRun) {
+        // Everything a live build would check before it starts, and nothing after: no topology, no browser, no provider call.
+        process.stdout.write(`${JSON.stringify({ status: "ready", providerCallCount: 0, lane: "created-flow", target: target.mode, request: creation ? describeCreatedFlowRequest(creation) : null, live: live?.describe() ?? null })}\n`);
+        return 0;
+      }
+      const selection = creation ? { ...(creation.workflowId ? { workflowId: creation.workflowId } : {}), ...(creation.variantId ? { variantId: creation.variantId } : {}), creation } : { ...(command.workflowId ? { workflowId: command.workflowId } : {}), ...(command.variantId ? { variantId: command.variantId } : {}) };
+      const result = await runScenario({ repositoryRoot, fluxiqRepositoryRoot, runsDirectory, scenarioId: command.scenarioId, ...(command.seed === undefined ? {} : { seed: command.seed }), ...selection, ...(command.flowLane ? { flow: true } : {}), ...(command.evidence ? { evidence: command.evidence } : {}), ...(live ? { live } : {}), environment: resolvedEnvironment, target });
       process.stdout.write(`${JSON.stringify(result)}\n`); return result.verdict === "passed" ? 0 : 1;
     }
     const target = resolveTargetConfiguration({ ...(command.target ? { cliTarget: command.target } : {}), ...(command.flowId ? { cliFlowId: command.flowId } : {}), ...(command.workspace ? { cliWorkspace: command.workspace } : {}), ...(command.freshLogin ? { cliFreshLogin: true } : {}), env: resolvedEnvironment });

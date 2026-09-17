@@ -147,3 +147,22 @@ test("single-run baseline is exact-scoped and rejects assisted or mutating execu
   assert.match(body, /assertRecordingSetUnchanged/u);
   assert.doesNotMatch(body, /for \(|while \(|generate-flow-bootstrap-adaptation/u);
 });
+
+// Core `a2de143` records no validation result for a checked target repair, and
+// a repair applied and replayed live still carried none afterwards.
+test("a reverted repair with no recorded validation still explains baseline drift, and a failed one does not", async () => {
+  const target = { projectId: "project.one", flowId: "flow.checkpoint", flowName: "Checkpoint", bootstrapAdaptationId: "adaptation.bootstrap", appliedExecutionDigest: "digest.applied", currentExecutionDigest: "digest.adapted", providerCallCount: 1, toolCallCount: 1, evidenceBytes: 10 };
+  const repair = (overrides: Record<string, unknown>) => ({
+    listFlowAdaptations: async () => [
+      { projectId: "project.one", flowId: target.flowId, adaptationId: "adaptation.bootstrap", status: "applied" },
+      { projectId: "project.one", flowId: target.flowId, adaptationId: "adaptation.target", status: "reverted" },
+    ],
+    getFlowAdaptation: async (_projectId: string, _flowId: string, adaptationId: string) => adaptationId === "adaptation.bootstrap"
+      ? { projectId: "project.one", flowId: target.flowId, adaptationId, status: "applied", adaptationKind: "flow_bootstrap" }
+      : { projectId: "project.one", flowId: target.flowId, adaptationId, status: "reverted", adaptationKind: "runtime_patch", subflowId: "subflow.one", sourceRunId: "run.failed", patchKinds: ["edit_action_target"], appliedMutationCount: 1, ...overrides },
+  });
+  await assert.doesNotReject(() => requireExplorationBaselineDriftExplanation(repair({ validationSucceededCount: 0, validationFailedCount: 0 }) as any, target, "subflow.one"));
+  await assert.doesNotReject(() => requireExplorationBaselineDriftExplanation(repair({}) as any, target, "subflow.one"));
+  await assert.rejects(() => requireExplorationBaselineDriftExplanation(repair({ validationSucceededCount: 0, validationFailedCount: 1 }) as any, target, "subflow.one"),
+    (error: any) => error?.details?.reasonCode === "exploration_baseline.binding_drift_unexplained");
+});

@@ -14,8 +14,14 @@ import type { RecordingProposalControl } from "./recording-flow-proposal.js";
  * `recordings/proposal-candidates.ts`) and the graph index keeps. It places the
  * node in the proposal's candidate order without reading anything into the
  * node's id. Absent on a node no recording produced.
+ *
+ * `outputActionId` is the node's `metadata.outputActionId`, which Core writes
+ * onto every node a Flow bootstrap created with an output action (Core
+ * `runtime/flow-bootstrap/adaptation.ts`). A bootstrap node whose definition
+ * fixes its output carries it only there, not as a `parameterValues.outputId`.
+ * Absent on a recorded node.
  */
-export type FlowNodeRecord = { id: string; parameterValues: Readonly<Record<string, unknown>> | undefined; recordingCandidateId?: string };
+export type FlowNodeRecord = { id: string; parameterValues: Readonly<Record<string, unknown>> | undefined; recordingCandidateId?: string; outputActionId?: string };
 
 /**
  * Every node of the approved Flow, read once: the parent Flow first and every
@@ -74,8 +80,15 @@ async function flowNodes(control: RecordingProposalControl, projectId: string, f
   return (Array.isArray(flow.nodes) ? flow.nodes : []).flatMap((value) => {
     const node = optionalRecord(value);
     if (typeof node?.id !== "string") return [];
-    const recordingCandidateId = optionalRecord(node.metadata)?.recordingCandidateId;
-    return [{ id: node.id, parameterValues: optionalRecord(node.parameterValues), ...(typeof recordingCandidateId === "string" && recordingCandidateId ? { recordingCandidateId } : {}) }];
+    const metadata = optionalRecord(node.metadata);
+    const recordingCandidateId = metadata?.recordingCandidateId;
+    const outputActionId = metadata?.outputActionId;
+    return [{
+      id: node.id,
+      parameterValues: optionalRecord(node.parameterValues),
+      ...(typeof recordingCandidateId === "string" && recordingCandidateId ? { recordingCandidateId } : {}),
+      ...(typeof outputActionId === "string" && outputActionId ? { outputActionId } : {}),
+    }];
   });
 }
 

@@ -206,7 +206,16 @@ export type FlowStopWithoutFailedAttempt = { attemptedActions: number; unvisited
  */
 export async function executeRecordedFlowRun(
   control: PersistedFlowRunControl,
-  input: { projectId: string; flowId: string; facilityRunId: string; domainId?: string; inputs?: Record<string, unknown>; actionTypes?: ReadonlyMap<string, string>; candidateOrder?: ReadonlyMap<string, number>; llmExecution?: PersistedFlowLlmExecution },
+  input: {
+    projectId: string; flowId: string; facilityRunId: string; domainId?: string; inputs?: Record<string, unknown>; actionTypes?: ReadonlyMap<string, string>; candidateOrder?: ReadonlyMap<string, number>; llmExecution?: PersistedFlowLlmExecution;
+    /**
+     * Told Core's run id as soon as Core names one, before anything that can
+     * throw reads the run back. A live run's provider calls are accounted from
+     * that run, so a caller that only learned the id from a returned outcome
+     * lost the accounting of every run this function then failed.
+     */
+    onRunIdentified?: (runId: string) => void;
+  },
   bounds: FluxIQHttpOptions = {},
   terminalWait: PersistedFlowTerminalWait = {},
 ): Promise<PersistedFlowRunOutcome> {
@@ -221,6 +230,7 @@ export async function executeRecordedFlowRun(
   const started = input.llmExecution ? undefined : await control.startPersistedFlow({ projectId: input.projectId, flowId: input.flowId, inputs, authorizedDomainIds: [domainId], ...bounds });
   const runId = started?.runId;
   if (!input.llmExecution && !runId) throw new RunnerFailure("runtime.behavior", "Core did not return a run id for the approved Flow");
+  if (runId) input.onRunIdentified?.(runId);
   let sessionStatus = "unknown";
   let executedRunId = runId;
   try {
@@ -229,6 +239,7 @@ export async function executeRecordedFlowRun(
       : { projectId: input.projectId, flowId: input.flowId, runId: runId!, inputs, authorizedDomainIds: [domainId], idempotencyKey: `fluxiq-lab:${input.facilityRunId}:${randomUUID()}`, ...bounds });
     sessionStatus = result.session.status;
     executedRunId = result.session.runId;
+    if (executedRunId && executedRunId !== runId) input.onRunIdentified?.(executedRunId);
     if (runId !== undefined && result.session.runId !== runId) throw new RunnerFailure("runtime.behavior", "Core ran a different run than the one it started");
     if (!executedRunId) throw new RunnerFailure("runtime.behavior", "Core did not return a run id for the approved Flow");
   } catch (error) {

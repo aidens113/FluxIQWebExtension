@@ -307,6 +307,26 @@ test("holds an evidence-guided creation's provider calls to Core's backstop, not
   }
 });
 
+test("a Flow build answers with Core's whole envelope, so a refusal's diagnostic survives the HTTP status", async (t) => {
+  const requests: Array<{ path: string; body: unknown }> = [];
+  const diagnostic = { code: "flow_bootstrap.evidence_iteration_limit", stage: "provider_output_validation" };
+  let answer: Response = json({ ok: true, payload: { adaptation: { adaptationId: "adaptation.new", status: "proposed" } } });
+  const client = await mockedClient(t, (url, init) => {
+    requests.push({ path: url.pathname, body: JSON.parse(String(init.body)) });
+    return answer;
+  });
+  const input = { projectId: "project.web", flowId: "flow.blank", llmExecutionGrantId: "llm-grant:build", evidenceGuided: true as const };
+  assert.deepEqual(await client.generateFlowBootstrapAdaptation(input), { status: 200, ok: true, payload: { adaptation: { adaptationId: "adaptation.new", status: "proposed" } } });
+  answer = json({ ok: false, error: "Flow Bootstrap generation failed (flow_bootstrap.evidence_iteration_limit).", payload: { diagnostic } }, 400);
+  assert.deepEqual(await client.generateFlowBootstrapAdaptation(input), { status: 400, ok: false, payload: { diagnostic } });
+  // An envelope that says ok on a failed status is not a success, and a body that is not JSON is an empty refusal.
+  answer = json({ ok: true, payload: {} }, 500);
+  assert.equal((await client.generateFlowBootstrapAdaptation(input)).ok, false);
+  answer = new Response("<html>gateway error</html>", { status: 502 });
+  assert.deepEqual(await client.generateFlowBootstrapAdaptation(input), { status: 502, ok: false, payload: undefined });
+  assert.deepEqual(requests[0], { path: "/api/programs/automation-studio/generate-flow-bootstrap-adaptation", body: input });
+});
+
 test("parses cancellation, run detail, action, and event DTOs without returning raw event payloads", async (t) => {
   const client = await mockedClient(t, url => {
     if (endpoint(url) === "cancel-runtime-session") return json({ ok: true, payload: { runtimeSession: { ...session, status: "cancelled" } } });

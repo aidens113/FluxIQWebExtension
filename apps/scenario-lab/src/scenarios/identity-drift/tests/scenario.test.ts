@@ -3,6 +3,7 @@ import test from "node:test";
 import { resolveScenarioWorkflow, validateWebScenario } from "@fluxiq-web-extension/test-contracts";
 import type { RenderContext } from "../../../types.js";
 import { identityDriftModes, type IdentityDriftMode } from "../modes.js";
+import { SCENARIO_REPAIRS } from "../repair.js";
 import { renderSaveAction } from "../save-action.js";
 import { identityDriftScenario as scenario } from "../scenario.js";
 
@@ -242,6 +243,42 @@ test("renamed-redesign expects the repaired run, says a provider-free run fails,
     assert.notEqual(discarded.status, fact.value, fact.id);
     assert.notEqual(armed.status, fact.value, fact.id);
   }
+});
+
+test("renamed-redesign declares its repair: a proposal-only run ends target_not_found, and is judged by a proposal naming Apply changes", () => {
+  // Every declared repair belongs to a variant this manifest has.
+  const variantIds = (manifest.variants ?? []).map((variant) => variant.id);
+  for (const repair of SCENARIO_REPAIRS) assert.ok(variantIds.includes(repair.variantId), repair.variantId);
+  const repairs = SCENARIO_REPAIRS.filter((repair) => repair.variantId === "renamed-redesign");
+  assert.equal(repairs.length, 1);
+  const repair = repairs[0]!;
+  assert.deepEqual(repair.proposalOnlyOutcome.failure, { category: "target_not_found", code: "web.target.not_found" });
+  assert.deepEqual(repair.proposalOnlyOutcome.actions, [{ action: "web.dom.type", outcome: "succeeded" }, { action: "web.dom.click", outcome: "failed" }]);
+
+  // Held to it in place of the variant's own fields, the manifest is still a
+  // valid one: the lane judges a proposal-only run by exactly this.
+  const heldTo = {
+    ...manifest,
+    variants: (manifest.variants ?? []).map((variant) => variant.id === repair.variantId ? { ...variant, expected: { ...variant.expected, ...repair.proposalOnlyOutcome } } : variant),
+  };
+  assert.equal(validateWebScenario(heldTo).valid, true);
+
+  // The armed page with nothing pressed meets the proposal-only outcome; the
+  // save the variant's own expectations want does not.
+  const armed = scenario.mutate(scenario.createState(42), "set-mode", { mode: "renamed-redesign" });
+  const saved = scenario.mutate(armed, "save", { displayName: workspaceName });
+  for (const fact of repair.proposalOnlyOutcome.finalState ?? []) {
+    assert.equal(armed.status, fact.value, fact.id);
+    assert.notEqual(saved.status, fact.value, fact.id);
+  }
+
+  // The target a correct proposal names is the rendering's one submit
+  // control, and not Discard: the other button a click could land on.
+  assert.deepEqual(repair.proposal, { patchKind: "temporary_target_override", target: { tagName: "button", accessibleName: "Apply changes", controlType: "submit" } });
+  const html = pageIn("renamed-redesign");
+  assert.deepEqual(submitButton(region(html, "primary-actions", "div")).text, repair.proposal.target.accessibleName);
+  assert.match(html, /<button type="reset"[^>]*>Discard changes<\/button>/);
+  assert.notEqual(repair.proposal.target.accessibleName, "Discard changes");
 });
 
 test("the fixture serves no documents beyond its start page", () => {

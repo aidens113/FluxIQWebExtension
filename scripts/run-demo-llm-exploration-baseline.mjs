@@ -1,13 +1,15 @@
 import path from "node:path";
 import { withoutProviderSecrets } from "./provider-secret-environment.mjs";
+import { demoCredentialLiterals, demoLauncherFailureDetail } from "./demo/launcher-failure.mjs";
 
 const repositoryRoot = path.resolve(process.env.FLUXIQ_WEB_EXTENSION_ROOT ?? process.cwd());
 const names = [
   "FLUXIQ_WEB_EXTENSION_ROOT", "FLUXIQ_TEST_RUNS_DIR", "FLUXIQ_DEMO_RUN_DIR", "FLUXIQ_CORE_ROOT",
   "FLUXIQ_DEMO_BASE_URL", "FLUXIQ_DEMO_GATEWAY_URL", "FLUXIQ_TEST_USERNAME", "FLUXIQ_TEST_PASSWORD",
   "FLUXIQ_TEST_PIN", "FLUXIQ_TEST_TOTP", "FLUXIQ_DEMO_PROJECT_ID", "FLUXIQ_DEMO_PROJECT_NAME",
-  "FLUXIQ_DEMO_HEADLESS",
+  "FLUXIQ_DEMO_HEADLESS", "FLUXIQ_DEMO_EXTENSION_DIR",
 ];
+let secretLiterals = [];
 
 try {
   const [{ loadAllowlistedTestEnvironment }, { resolveDemoWorkspaceConfiguration, runDemoLlmExplorationBaselineProbe }] = await Promise.all([
@@ -15,6 +17,7 @@ try {
     import("../packages/test-runner/dist/demo-workspace.js"),
   ]);
   const environment = await loadAllowlistedTestEnvironment(repositoryRoot, withoutProviderSecrets(process.env), names);
+  secretLiterals = demoCredentialLiterals(environment);
   const result = await runDemoLlmExplorationBaselineProbe(resolveDemoWorkspaceConfiguration(repositoryRoot, environment));
   process.stdout.write(JSON.stringify(result) + "\n");
 } catch (error) {
@@ -29,6 +32,6 @@ try {
     : error && typeof error === "object" && error.name === "TimeoutError"
       ? "playwright.timeout"
       : "unknown";
-  process.stderr.write(JSON.stringify({ status: "failed", message: "Provider-free exploration deterministic baseline failed", failureCode, reasonCode, providerCallCount: 0 }) + "\n");
+  process.stderr.write(JSON.stringify({ status: "failed", message: "Provider-free exploration deterministic baseline failed", failureCode, reasonCode, providerCallCount: 0, ...await demoLauncherFailureDetail(error, secretLiterals) }) + "\n");
   process.exitCode = 1;
 }

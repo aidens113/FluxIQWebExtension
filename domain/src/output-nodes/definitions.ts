@@ -65,6 +65,33 @@ const catalogTextByOutput: Partial<Record<WebAutomationActionType, { description
  * It carries no default: an empty condition list would ask the host to prove
  * nothing and report a pass.
  */
+/**
+ * Core's node-definition metadata key for a verb whose success proves the page
+ * is in a stated state (Core `AUTOMATION_STUDIO_NODE_VERIFIES_STATE_METADATA_KEY`,
+ * `runtime/flow-change/contracts.ts`). Core's change verdict counts a later
+ * node whose definition sets it to `true` as a downstream assertion, which is
+ * how a web repair can be verified at all: web outputs declare no route and no
+ * outputs, so without it a repaired step that merely succeeded is unverifiable.
+ *
+ * The literal stands in for Core's constant until Core's built output exports
+ * it; then this line becomes an import of that name from
+ * `fluxiq/automation-studio`.
+ */
+const VERIFIES_STATE_METADATA_KEY = "verifiesState";
+
+/**
+ * The outputs that prove state rather than change it: each succeeds only when
+ * the page shows what the node asked for. A click, a typed value or a
+ * navigation succeeding says nothing about whether the page then looked right,
+ * and a read (`extract`, `extract_list`, `capture_snapshot`) succeeds on
+ * whatever it finds.
+ */
+const stateVerifyingOutputs: ReadonlySet<WebAutomationActionType> = new Set<WebAutomationActionType>([
+  "web.dom.assert",
+  "web.dom.wait_for_text",
+  "web.dom.wait_for_selector"
+]);
+
 const expectedStateParameter: AutomationNodeParameter = {
   id: "expectedState",
   label: "Expected State",
@@ -138,7 +165,8 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
       // must not declare it, because Core fails an action outright when a
       // declared element target has no fingerprint to resolve.
       ...(requiredParameters.has("selector") ? { elementTarget: true } : {}),
-      ...(recordsPath ? { recordsPath } : {})
+      ...(recordsPath ? { recordsPath } : {}),
+      ...(stateVerifyingOutputs.has(definition.actionType) ? { [VERIFIES_STATE_METADATA_KEY]: true } : {})
     }
   };
 }

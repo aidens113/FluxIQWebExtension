@@ -9,6 +9,8 @@ export type DemoWorkspaceConfiguration = {
   runsDirectory: string;
   workspaceDirectory: string;
   fluxiqRepositoryRoot: string;
+  /** The built unpacked extension a run copies and loads; `FLUXIQ_DEMO_EXTENSION_DIR` pins one that other builds cannot rewrite. */
+  extensionSourceDirectory: string;
   fluxiqRoot: string;
   storageDirectory: string;
   origin: string;
@@ -34,6 +36,9 @@ export function resolveDemoWorkspaceConfiguration(repositoryRoot: string, env: N
   }
   const fluxiqRepositoryRoot = path.resolve(env.FLUXIQ_CORE_ROOT?.trim() || path.join(root, "..", "!FluxIQ"));
   const fluxiqRoot = path.join(workspaceDirectory, "fluxiq-root");
+  const extensionOverride = env.FLUXIQ_DEMO_EXTENSION_DIR?.trim();
+  if (extensionOverride && !path.isAbsolute(extensionOverride)) throw new Error("FLUXIQ_DEMO_EXTENSION_DIR must be an absolute path");
+  const extensionSourceDirectory = extensionOverride ? path.resolve(extensionOverride) : path.join(root, "apps", "extension", "dist", "chrome");
   const origin = exactHttpOrigin(env.FLUXIQ_DEMO_BASE_URL?.trim() || "http://127.0.0.1:3300", "FLUXIQ_DEMO_BASE_URL");
   const gatewayUrl = requireSecureGatewayUrl(env.FLUXIQ_DEMO_GATEWAY_URL?.trim() || "ws://127.0.0.1:4877/client", "FLUXIQ_DEMO_GATEWAY_URL");
   requireLoopbackEndpoint(origin, "FLUXIQ_DEMO_BASE_URL");
@@ -43,6 +48,7 @@ export function resolveDemoWorkspaceConfiguration(repositoryRoot: string, env: N
     runsDirectory,
     workspaceDirectory,
     fluxiqRepositoryRoot,
+    extensionSourceDirectory,
     fluxiqRoot,
     storageDirectory: path.join(fluxiqRoot, ".fluxiq"),
     origin,

@@ -44,7 +44,7 @@ export async function withDemoBrowser<T>(
     const scenarioOrigin = "http://127.0.0.1:" + scenario.port;
     const scenarioUrl = requireDemoScenarioUrl(scenarioOrigin, scenarioPath);
     phaseTracker?.set("scenario-ready");
-    const extensionSourcePath = path.join(config.repositoryRoot, "apps", "extension", "dist", "chrome");
+    const extensionSourcePath = config.extensionSourceDirectory;
     const extensionPath = path.join(config.workspaceDirectory, "extension-under-test");
     await rm(extensionPath, { recursive: true, force: true });
     await cp(extensionSourcePath, extensionPath, { recursive: true, force: true });

@@ -194,6 +194,37 @@ test("a recovery field Core wrote malformed fails the reader, naming its path", 
   }
 });
 
+// `run-mu4rpka7-845d919a` recorded only `runtime_patch.target_override_rejected`,
+// which reads the same whether the domain could not repair the action at all,
+// the model invented a parameter, or it named a handle it was never shown.
+// Core now records why, in its own closed words; the code carries the case.
+test("a refused target override says which case it was, by Core's closed reason, never by its sentence", async (t) => {
+  const refused = (refusal: unknown) => () => {
+    const detail = recoveredDetail();
+    const attempts = (detail.metadata as { runtimePatchAttempts: Array<Record<string, unknown>> }).runtimePatchAttempts;
+    attempts[0] = { kind: "temporary_target_override", proposalOnly: true, executed: false, preflightOk: false, issues: ["Target override is absent from current sanitized evidence: PRIVATE-ISSUE"], targetOverrideRefusal: refusal, traceStatus: "not-run" };
+    return detail;
+  };
+  const { control, serve } = await core(t);
+  const codesFor = async (refusal: unknown) => {
+    serve(refused(refusal));
+    return (await run(control)).harnessRecovery.runtimePatchAttempts[0]?.issueCodes;
+  };
+  assert.deepEqual(await codesFor({ status: "absent", reason: "action_not_repairable" }), ["runtime_patch.target_override_rejected", "runtime_patch.target_override_rejected.action_not_repairable"]);
+  assert.deepEqual(await codesFor({ status: "ambiguous", reason: "handle_not_issued" }), ["runtime_patch.target_override_rejected", "runtime_patch.target_override_rejected.handle_not_issued"]);
+  // No reason: the domain's status is the case.
+  assert.deepEqual(await codesFor({ status: "absent" }), ["runtime_patch.target_override_rejected", "runtime_patch.target_override_rejected.absent"]);
+  // Anything that is not one of Core's words adds nothing, and nothing of it travels.
+  for (const malformed of [{ status: "absent", reason: "PRIVATE-PAGE-TEXT with spaces" }, { status: "PRIVATE-PAGE-TEXT" }, "PRIVATE-PAGE-TEXT", null]) {
+    const codes = await codesFor(malformed);
+    assert.deepEqual(codes, ["runtime_patch.target_override_rejected"], JSON.stringify(malformed));
+  }
+  serve(refused({ status: "absent", reason: "action_not_repairable" }));
+  const outcome = await run(control);
+  assert.deepEqual(validateRunHarnessRecovery(outcome.harnessRecovery), { valid: true, value: outcome.harnessRecovery });
+  assert.equal(JSON.stringify(snapshotOf(outcome)).includes("PRIVATE"), false);
+});
+
 test("a recovery the parser admits but the contract refuses fails before it reaches the bundle", async () => {
   // The parser's kinds and codes are closed today; this pins what happens if the two ever drift apart.
   const control = {

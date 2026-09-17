@@ -9,14 +9,17 @@ import { LLM_LAB_MAX_CALLS_PER_RUN, type LlmExecutionProfile, type LlmTaskKind, 
 import { RunnerFailure } from "../failure.js";
 
 /**
- * The grant purposes a Core runtime session accepts
- * (`AUTOMATION_STUDIO_RUNTIME_SESSION_GRANT_PURPOSES`), and whether each one
- * iterates. That yes-or-no is all a purpose says about call counts, as it is in
- * Core: `diagnosis_only` asks one question, and everything else takes its count
- * from the operator. The purposes differ in what a run may *change*, which is
- * Core's to enforce, not in how many times it may ask.
+ * The grant purposes the Lab can plan, and whether each one iterates. That
+ * yes-or-no is all a purpose says about call counts, as it is in Core
+ * (`runtime/llm/grant-capabilities.ts`): `diagnosis_only` asks one question,
+ * and everything else takes its count from the operator. The purposes differ
+ * in what a run may *change*, which is Core's to enforce, not in how many
+ * times it may ask. The first three are the ones a Core runtime session
+ * accepts (`AUTOMATION_STUDIO_RUNTIME_SESSION_GRANT_PURPOSES`);
+ * `build_and_adapt` is a person asking for a new Flow, and only a Flow build
+ * accepts it.
  */
-const PURPOSE_ITERATES = { diagnosis_only: false, diagnose_and_adapt: true, explore_and_adapt: true } as const;
+const PURPOSE_ITERATES = { diagnosis_only: false, diagnose_and_adapt: true, explore_and_adapt: true, build_and_adapt: true } as const;
 export type LiveLlmPurpose = keyof typeof PURPOSE_ITERATES;
 
 /** Core's own ceilings (`assertFlowLlmExecutionSettings`, `AutomationStudioLlmExecutionGrantService`). */
@@ -173,12 +176,14 @@ function highTokenConfirmation(budget: RunTokenBudget): LiveLlmPlan["highTokenCo
 
 // `adapt` stays the narrow `diagnose_and_adapt` grant, which now iterates and
 // may gather evidence but may still change only one target, as a proposal.
-// `explore_and_adapt` is a purpose the Lab can plan and carry, and no
-// `--llm-task` selects it yet.
+// `create-flow` is the web panel's "Explore and create proposal": an iterating
+// `build_and_adapt` grant for one Flow build. `explore_and_adapt` is a purpose
+// the Lab can plan and carry, and no `--llm-task` selects it yet.
 function purposeOf(task: LlmTaskKind): LiveLlmPurpose {
   if (task === "diagnose") return "diagnosis_only";
   if (task === "adapt") return "diagnose_and_adapt";
-  throw refusal(`--llm-task ${task} has no live Flow-lane runner; use diagnose or adapt`);
+  if (task === "create-flow") return "build_and_adapt";
+  throw refusal(`--llm-task ${task} has no live runner; use diagnose, adapt or create-flow`);
 }
 
 function bounded(value: number, option: string, maximum: number): number {

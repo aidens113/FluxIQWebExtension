@@ -102,6 +102,7 @@ test("reverts and rejects when the source run iterated past two calls within its
 
     const pending = fixture();
     pending.target.status = "proposed";
+  pending.target.validationSucceededCount = 0; // A proposal has not run (Core a2de143).
     pending.target.appliedMutationCount = 0;
     pending.bootstrap.bootstrapBinding.currentExecutionDigest = "digest.created";
     pending.control.getRunDetail = () => iterating(calls);
@@ -123,6 +124,7 @@ test("revert fails closed before mutation when the source run spent more than it
 test("rejects exactly one inert proposed target edit with a bounded diagnosis-and-patch source run", async () => {
   const pending = fixture();
   pending.target.status = "proposed";
+  pending.target.validationSucceededCount = 0; // A proposal has not run (Core a2de143).
   pending.target.appliedMutationCount = 0;
   pending.bootstrap.bootstrapBinding.currentExecutionDigest = "digest.created";
   pending.control.rejectFlowAdaptation = async input => {
@@ -141,6 +143,7 @@ test("rejects exactly one inert proposed target edit with a bounded diagnosis-an
 test("reject fails closed before mutation on bad source-run or nonzero mutation state", async () => {
   const badRun = fixture();
   badRun.target.status = "proposed";
+  badRun.target.validationSucceededCount = 0; // A proposal has not run (Core a2de143).
   badRun.target.appliedMutationCount = 0;
   badRun.control.getRunDetail = async () => ({ ...(await fixture().control.getRunDetail()), providerCallCount: 1 });
   await assert.rejects(() => rejectExactPendingExplorationTargetAdaptation(badRun.control as any, "project.one", "pin"), /source run/u);
@@ -148,6 +151,7 @@ test("reject fails closed before mutation on bad source-run or nonzero mutation 
 
   const mutated = fixture();
   mutated.target.status = "proposed";
+  mutated.target.validationSucceededCount = 0; // A proposal has not run (Core a2de143).
   await assert.rejects(() => rejectExactPendingExplorationTargetAdaptation(mutated.control as any, "project.one", "pin"), /unexpected scope/u);
   assert.equal(mutated.calls.length, 0);
 });
@@ -182,4 +186,14 @@ test("reject launcher is provider-free and does not use prepared or saved Flow s
   assert.match(body, /listProjects\("web-automation"\)/u);
   assert.match(body, /rejectExactPendingExplorationTargetAdaptation/u);
   assert.doesNotMatch(body, /loadBlankLlmPreparationState|loadDemoWorkspaceState|runAdaptationFromPanel|DeepSeek/u);
+});
+
+test("reverts a target edit Core recorded no validation for (Core a2de143), and refuses one with a recorded failure", async () => {
+  const unvalidated = fixture();
+  Object.assign(unvalidated.target, { validationSucceededCount: 0, validationFailedCount: 0 });
+  assert.equal((await revertExactAppliedExplorationTargetAdaptation(unvalidated.control as any, "project.one", "test-pin")).status, "reverted");
+  const failed = fixture();
+  Object.assign(failed.target, { validationSucceededCount: 0, validationFailedCount: 1 });
+  await assert.rejects(() => revertExactAppliedExplorationTargetAdaptation(failed.control as any, "project.one", "test-pin"), (error: any) => error?.details?.reasonCode === "exploration_adaptation_revert.scope_invalid");
+  assert.equal(failed.calls.length, 0);
 });

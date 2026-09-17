@@ -332,7 +332,7 @@ test("rejects missing semantic drift, non-creation graph, failed post-apply vali
     (input: any) => { input.postApplyValidation.runId = "run.adapt.one"; },
     (input: any) => { input.postApplyValidation.status = "failed"; },
     (input: any) => { input.postApplyValidation.succeededActionCount = 1; },
-    (input: any) => { input.startingGraph.recordingCount = 1; input.adaptation.recordingCount = 1; },
+    (input: any) => { input.startingGraph.recordingCount = 2; input.adaptation.recordingCount = 3; },
     (input: any) => { input.adaptation.recordingCount = 1; },
     (input: any) => { input.adaptation.recordingProvenanceAbsent = false; },
     (input: any) => { input.finalReplay.providerCallCount = 1; },
@@ -380,4 +380,18 @@ test("persists only sanitized adaptation certification with leak attestation", a
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+// The demo project also holds the recording-driven diagnosis Flow, so it is
+// never recording-free. What an instruction-only repair must not do is add a
+// recording or put recording provenance in the repaired Flow; a live repair
+// was refused only because the project already had recordings of its own.
+test("a project that already holds other Flows' recordings passes when the repair adds none", () => {
+  const input = validInput();
+  input.startingGraph.recordingCount = 2;
+  input.adaptation.recordingCount = 2;
+  const result = evaluateDemoLlmAdaptation(input);
+  assert.equal(result.recordingCountBefore, 2);
+  assert.equal(result.recordingCountAfter, 2);
+  assert.equal(result.recordingProvenanceAbsent, true);
 });

@@ -48,12 +48,13 @@ export async function readHarnessRecovery(
   if (!recoveryRecorded(runDetail)) return { attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [] };
   const detail = await control.getRunDetail(scope.projectId, scope.runId, bounds);
   const interventions = (detail.interventions ?? []).map((item) => ({ kind: item.kind, validationOk: item.validationOk ?? null, validationCodes: [...(item.validationCodes ?? [])] }));
-  const runtimePatchAttempts = (detail.runtimePatchAttempts ?? []).map((attempt): RunHarnessPatchAttempt => ({
+  const refusals = targetOverrideRefusalCases(runDetail);
+  const runtimePatchAttempts = (detail.runtimePatchAttempts ?? []).map((attempt, index): RunHarnessPatchAttempt => ({
     kind: attempt.kind ?? null,
     proposalOnly: attempt.proposalOnly ?? null,
     executed: attempt.executed ?? null,
     preflightOk: attempt.preflightOk ?? null,
-    issueCodes: [...attempt.issueCodes],
+    issueCodes: withRefusalCase(attempt.issueCodes, refusals[index]),
     adaptationCreated: attempt.adaptationCreated,
     changeProposalCreated: attempt.changeProposalCreated,
   }));
@@ -85,6 +86,46 @@ function recoveryRecorded(detail: Readonly<Record<string, unknown>>): boolean {
   const patchAttemptsRecorded = metadata !== undefined && metadata !== null
     && (typeof metadata !== "object" || Array.isArray(metadata) || !emptyList((metadata as Record<string, unknown>).runtimePatchAttempts));
   return patchAttemptsRecorded || !emptyList(detail.interventions) || !emptyList(detail.adaptationIds) || !emptyList(detail.changeProposalIds);
+}
+
+const TARGET_OVERRIDE_REJECTED = "runtime_patch.target_override_rejected";
+/** Core's refusal reasons and the domain's two statuses: lowercase words joined by underscores. */
+const REFUSAL_CASE = /^[a-z]+(?:_[a-z]+)*$/u;
+const REFUSAL_CASE_MAX_LENGTH = 64;
+
+/**
+ * Which case each refused target override was, by position in Core's
+ * `runtimePatchAttempts`, which the control client's parser keeps in order.
+ *
+ * Core records the domain's refusal beside the issue as
+ * `targetOverrideRefusal: { status, reason? }` (`live-patch.ts`), where
+ * `reason` is one of Core's own closed words. The control client reduces the
+ * issue sentence to `runtime_patch.target_override_rejected` alone, which reads
+ * the same for an action the domain cannot repair, an invented parameter and a
+ * handle the model was never shown. The case is read from the structured field
+ * rather than the sentence, and only a word of the reason's shape is kept, so
+ * nothing the sentence carries can reach the record.
+ */
+function targetOverrideRefusalCases(runDetail: Readonly<Record<string, unknown>>): Array<string | undefined> {
+  const metadata = runDetail.metadata;
+  const attempts = metadata && typeof metadata === "object" && !Array.isArray(metadata) ? (metadata as Record<string, unknown>).runtimePatchAttempts : undefined;
+  if (!Array.isArray(attempts)) return [];
+  return attempts.map((attempt) => {
+    const refusal = attempt && typeof attempt === "object" && !Array.isArray(attempt) ? (attempt as Record<string, unknown>).targetOverrideRefusal : undefined;
+    if (!refusal || typeof refusal !== "object" || Array.isArray(refusal)) return undefined;
+    const { status, reason } = refusal as Record<string, unknown>;
+    if (status !== "absent" && status !== "ambiguous") return undefined;
+    if (reason === undefined) return status;
+    return typeof reason === "string" && reason.length <= REFUSAL_CASE_MAX_LENGTH && REFUSAL_CASE.test(reason) ? reason : undefined;
+  });
+}
+
+/** The parser's codes, and the refusal's case beside the rejection it explains. */
+function withRefusalCase(issueCodes: readonly string[], refusalCase: string | undefined): string[] {
+  const codes = [...issueCodes];
+  if (refusalCase === undefined || !codes.includes(TARGET_OVERRIDE_REJECTED)) return codes;
+  const specific = `${TARGET_OVERRIDE_REJECTED}.${refusalCase}`;
+  return codes.includes(specific) ? codes : [...codes, specific];
 }
 
 function emptyList(value: unknown): boolean {

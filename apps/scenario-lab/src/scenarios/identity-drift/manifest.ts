@@ -35,7 +35,9 @@ function driftVariant(mode: Exclude<IdentityDriftMode, "baseline" | "renamed-red
  * grant (`diagnose_and_adapt`) Core only *proposes* a target, so that attempt
  * is `proposalOnly: true`, `executed: false`, with an adaptation and a change
  * proposal, and the run itself still ends `target_not_found` with nothing
- * saved. These expectations are met only once the repair is applied: an
+ * saved. Such a run is therefore held to `repair.ts` instead: the declared
+ * `target_not_found`, and a change proposal whose target names Apply changes.
+ * These expectations are met only once the repair is applied: an
  * executed override, or the approved adaptation replayed, whose run shows the
  * failed click beside a succeeded one and ends `Saved: <name>` with
  * `savedInMode: "renamed-redesign"`, `saveCount: 1` and `discardCount: 0`.
@@ -44,7 +46,7 @@ function driftVariant(mode: Exclude<IdentityDriftMode, "baseline" | "renamed-red
  */
 const repairableVariant: ScenarioVariant = {
   id: "renamed-redesign",
-  description: "Only a repair can pass this row. Save is redesigned with no id or test id, a new class, and the label and accessible name renamed to Apply changes, so the element matcher refuses it and a provider-free run fails with target_not_found. The expectations are the repaired run's: a model that re-points the click at the one submit control, Apply changes, saves the name, and pressing Discard changes instead fails the oracle.",
+  description: "Only a repair can pass this row. Save is redesigned with no id or test id, a new class, and the label and accessible name renamed to Apply changes, so the element matcher refuses it and a provider-free run fails with target_not_found. The expectations are the repaired run's: a model that re-points the click at the one submit control, Apply changes, saves the name, and pressing Discard changes instead fails the oracle. A live run that may only propose the repair is judged by its proposal instead (repair.ts): the click still fails with target_not_found, and the change proposal must name Apply changes.",
   arm: { operation: "set-mode", payload: { mode: "renamed-redesign" } },
   expected: {
     pageFacts: [

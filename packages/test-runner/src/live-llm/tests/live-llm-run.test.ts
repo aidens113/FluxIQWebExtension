@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { DEFAULT_LLM_LAB_BUDGET, LLM_LAB_SCHEMA_VERSION, type LlmExecutionProfile } from "@fluxiq-web-extension/test-contracts";
 import type { ExistingRunDetail } from "../../existing-fluxiq-control.js";
+import { RunnerFailure } from "../../failure.js";
+import type { CreatedFlowBuild } from "../../flow-lane/index.js";
 import { planLiveLlmExecution } from "../live-llm-plan.js";
-import { LiveLlmRun } from "../live-llm-run.js";
+import { beginLiveLlmRun, LiveLlmRun } from "../live-llm-run.js";
 
 /**
  * A run that confirms Core's high-token exposure on the operator's behalf must
@@ -123,4 +128,108 @@ test("a run whose typed token budget is above the threshold records that it sent
   assert.equal(snapshot.highTokenConfirmation.authorizedTokens, 150_000);
   assert.match(snapshot.highTokenConfirmation.reason, /--llm-max-run-tokens 150000\) is above Core's 100000-token confirmation threshold; the explicit --live-llm budget is the operator's confirmation/u);
   assert.equal(snapshot.declared.maxTotalTokensPerRun, 150_000);
+});
+
+async function noKeyRepository(t: test.TestContext): Promise<string> {
+  const root = await mkdtemp(path.join(os.tmpdir(), "fluxiq-live-run-no-key-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  return root;
+}
+
+test("a live run refuses before a credential is read when its lane or target does not fit the task", async (t) => {
+  const repositoryRoot = await noKeyRepository(t);
+  const begin = (task: LlmExecutionProfile["task"], flowLane: boolean, targetMode: string) => beginLiveLlmRun({ profile: { ...profile({}), task }, repositoryRoot, environment: {}, flowLane, targetMode });
+  await assert.rejects(begin("create-flow", true, "isolated"), /--llm-task create-flow builds its Flow from an instruction task, not from the run's recording: drop --flow/u);
+  await assert.rejects(begin("adapt", false, "isolated"), /A live LLM run needs the Flow lane: pass --flow/u);
+  for (const targetMode of ["existing", "clone"]) {
+    await assert.rejects(begin("create-flow", false, targetMode), new RegExp(`the ${targetMode} target's is not; use --target isolated or persistent-isolated`, "u"));
+  }
+  // Only once the lane and the target fit does the missing credential refuse.
+  await assert.rejects(begin("create-flow", false, "isolated"), (error: unknown) => error instanceof RunnerFailure && error.category === "environment.missing" && /DEEPSEEK_API_KEY is not set/u.test(error.message));
+});
+
+test("a create-flow run fits only a scenario run that carries an instruction task and no recorded Flow lane", () => {
+  const create = new LiveLlmRun(planLiveLlmExecution({ ...profile({}), task: "create-flow" }), CREDENTIAL);
+  assert.equal(create.createsFlow, true);
+  create.assertLane({ flowLane: false, creation: true });
+  assert.throws(() => create.assertLane({ flowLane: false, creation: false }), /needs an instruction task to build from/u);
+  assert.throws(() => create.assertLane({ flowLane: true, creation: true }), /drop --flow/u);
+  const adapt = new LiveLlmRun(planLiveLlmExecution(profile({})), CREDENTIAL);
+  assert.equal(adapt.createsFlow, false);
+  adapt.assertLane({ flowLane: true, creation: false });
+  assert.throws(() => adapt.assertLane({ flowLane: true, creation: true }), /An instruction task is built only by --llm-task create-flow, not adapt/u);
+  // A dry run's description names where the key was found, never the key.
+  const described = create.describe();
+  assert.equal(described.purpose, "build_and_adapt");
+  assert.deepEqual(described.credentialSource, { name: "DEEPSEEK_API_KEY", from: "test" });
+  assert.equal(JSON.stringify(described).includes(CREDENTIAL.value), false);
+});
+
+test("a build grant authorizes only a build, and a run grant only a run", async () => {
+  const create = new LiveLlmRun(planLiveLlmExecution({ ...profile({}), task: "create-flow" }), CREDENTIAL);
+  await assert.rejects(create.authorizer(fakeCore().control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1"), /A build_and_adapt grant authorizes a Flow build, never a Flow run/u);
+  const adapt = new LiveLlmRun(planLiveLlmExecution(profile({})), CREDENTIAL);
+  await assert.rejects(adapt.buildAuthorizer(fakeCore().control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1"), /A diagnose_and_adapt grant cannot authorize a Flow build/u);
+});
+
+const proposedBuild: CreatedFlowBuild = {
+  outcome: "proposed",
+  adaptationId: "adaptation-1",
+  providerCalls: 5,
+  providerInvocation: "attempted",
+  accounting: { provider: "deepseek", model: "deepseek-chat", inputTokens: 20_000, outputTokens: 3_000, totalTokens: 23_000, estimatedCostUsd: 0.02 },
+  evidenceLoop: { decisionCount: 5, toolCallCount: 4, evidenceBytes: 9_000, toolIds: ["web.recovery.inspect"], steps: null },
+  failure: null,
+  recoveredAfterTimeout: false,
+  durationMs: 40_000,
+};
+
+async function settleBuildOnce(build: CreatedFlowBuild) {
+  const core = fakeCore();
+  const run = new LiveLlmRun(planLiveLlmExecution({ ...profile({ maxOutputTokens: 4_000, maxTotalTokensPerRequest: 12_000 }), task: "create-flow" }), CREDENTIAL);
+  const grant = await run.buildAuthorizer(core.control, { projectId: "project-1", authorizationPassword: "account-password" })("flow-1");
+  const written: Array<{ path: string; value: unknown }> = [];
+  const published: Record<string, unknown>[] = [];
+  const settle = () => run.settleBuild(build, { writeStructured: async (bundlePath, value) => { written.push({ path: bundlePath, value }); } }, async (details) => { published.push(details); });
+  return { core, run, grant, written, published, settle };
+}
+
+test("a create-flow run authorizes a build_and_adapt grant and records the build it settled", async () => {
+  const { core, run, grant, written, published, settle } = await settleBuildOnce(proposedBuild);
+  await settle();
+  assert.deepEqual(grant, { grantId: "llm-grant:test" });
+  assert.equal(core.issueRequests[0]?.purpose, "build_and_adapt");
+  assert.equal(core.issueRequests[0]?.maxCalls, 26);
+  const snapshot = written.find(entry => entry.path === "snapshots/live-llm.json")?.value as Record<string, any>;
+  assert.equal(snapshot.purpose, "build_and_adapt");
+  assert.deepEqual(snapshot.build, proposedBuild);
+  // Core counts a build's calls and reports its totals; it does not itemize them, and the record says so.
+  assert.equal(snapshot.observed.calls, 5);
+  assert.equal(snapshot.observed.perCallRecords, "not recorded");
+  assert.deepEqual(snapshot.observed.observedCalls, []);
+  assert.equal(snapshot.observed.accounting.totalTokens, 23_000);
+  assert.equal(JSON.stringify(snapshot).includes(CREDENTIAL.value), false);
+  assert.deepEqual(published, [{ calls: 5, interventions: 0, totalEstimatedCostUsd: 0.02, llmGate: { invoked: true } }]);
+  assert.equal(run.usage.calls, 5);
+});
+
+test("a build that reached no provider fails the run closed, after its evidence is written, and says where Core stopped", async () => {
+  const refused: CreatedFlowBuild = { ...proposedBuild, outcome: "failed", adaptationId: null, providerCalls: 0, providerInvocation: "not_attempted", accounting: null, evidenceLoop: null, failure: { code: "flow_bootstrap.provider_resolution_failed", stage: "provider_resolution", httpStatus: 400 } };
+  const { written, settle } = await settleBuildOnce(refused);
+  await assert.rejects(settle(), (error: unknown) => error instanceof RunnerFailure && error.category === "runtime.behavior"
+    && /Live LLM run reached no provider: --live-llm authorized 26 deepseek call\(s\) for --llm-task create-flow and Core made none\. Core's Flow build stopped at provider_resolution before a provider answered\. \(flow_bootstrap\.provider_resolution_failed\)/u.test(error.message));
+  assert.ok(written.some(entry => entry.path === "snapshots/live-llm.json"), "the refusal's evidence is written first");
+  // A build that outlived its request with nothing to show counts as having called, so it fails on its own code, never as spend-free.
+  const unfinished = await settleBuildOnce({ ...refused, providerCalls: null, providerInvocation: "unknown", failure: { code: "lab.generation_unfinished", stage: null, httpStatus: null } });
+  await unfinished.settle();
+  assert.equal(unfinished.run.usage.calls, 1);
+});
+
+test("a build over its run budget, over its call count, or run on another model fails the run", async () => {
+  const overspent = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, totalTokens: 120_000 } });
+  await assert.rejects(overspent.settle(), (error: unknown) => error instanceof RunnerFailure && error.category === "performance.budget" && /the run used 120000 total tokens against its run token budget of 100000/u.test(error.message));
+  const tooManyCalls = await settleBuildOnce({ ...proposedBuild, providerCalls: 27 });
+  await assert.rejects(tooManyCalls.settle(), /the run made 27 provider call\(s\) against an authorized 26/u);
+  const otherModel = await settleBuildOnce({ ...proposedBuild, accounting: { ...proposedBuild.accounting!, model: "deepseek-reasoner" } });
+  await assert.rejects(otherModel.settle(), /Core's Flow build ran on deepseek\/deepseek-reasoner, not the authorized deepseek\/deepseek-chat/u);
 });

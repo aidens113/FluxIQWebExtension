@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { assertRunEvaluation, EVALUATION_SCHEMA_VERSION, type RunEvaluation, type RunExtractionMeasurement, type RunHarnessRecovery } from "@fluxiq-web-extension/test-contracts";
-import { flowLaneObservation, recordingLaneObservation, selectLaneObservation, type RunLaneObservation } from "../lane-observation.js";
+import { flowLaneObservation, recordingLaneObservation, recordingLaneProbeObservation, selectLaneObservation, type RunLaneObservation } from "../lane-observation.js";
 import type { PersistedFlowRunOutcome } from "../persisted-flow-run.js";
 
 const NO_RECOVERY: RunHarnessRecovery = { attempted: false, interventions: [], runtimePatchAttempts: [], adaptationIds: [], changeProposalIds: [] };
@@ -30,6 +30,26 @@ test("the recording lane creates no Flow and runs no harness", () => {
   assert.equal(observation.flowCreated, null);
   assert.equal(observation.harnessActivations, 0);
   assertRunEvaluation(evaluationFrom(observation));
+});
+
+test("the recording lane's probe observation reads FluxIQ's verdict from the actions it ran, and never passes on silence", () => {
+  const timing = (status: "succeeded" | "failed", durationMs?: number) => ({ actionType: "web.dom.type", startedAt: new Date(0).toISOString(), status, ...(durationMs === undefined ? {} : { durationMs }) });
+  const probe = (actions: ReturnType<typeof timing>[], automationFailure: { category: "target_not_found"; code?: string } | null | undefined, extraction: RunExtractionMeasurement[] | null = null) =>
+    recordingLaneProbeObservation({ oracleVerdict: "passed", actions, automationFailure, automationFailureExpected: null, extraction });
+  const clean = probe([timing("succeeded", 7), timing("succeeded")], null, []);
+  assert.equal(clean.lane, "recording");
+  assert.equal(clean.reportedVerdict, "passed");
+  assert.deepEqual(clean.actions, [{ actionType: "web.dom.type", durationMs: 7 }], "an action with no duration is not a latency");
+  assert.deepEqual(clean.extraction, [], "a lane that ran a script with no extract step measured none");
+  assertRunEvaluation(evaluationFrom(clean));
+  assert.deepEqual([probe([timing("failed", 1)], { category: "target_not_found", code: "web.target.not_found" }).automationFailureReported, probe([timing("failed", 1)], { category: "target_not_found", code: "web.target.not_found" }).reportedVerdict], [{ category: "target_not_found", code: "web.target.not_found" }, "failed"]);
+  assert.deepEqual(probe([timing("failed", 1)], null).automationFailureReported, { category: "ambiguous_or_unknown" });
+  // No action, or a failure the lane could not observe, is no verdict at all.
+  for (const unknown of [probe([], null), probe([timing("succeeded", 1)], undefined)]) {
+    assert.equal(unknown.reportedVerdict, null);
+    assert.equal(unknown.automationFailureReported, null);
+    assert.equal(unknown.extraction, null, "a lane that ran no script measured nothing");
+  }
 });
 
 test("a Flow that ran clean reports passed with no failure", () => {

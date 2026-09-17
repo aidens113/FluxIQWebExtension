@@ -1,4 +1,4 @@
-import type { AutomationStudioFailureRecord, EvaluationLane, ExpectedFailure, RunActionLatency, RunEvaluation, RunExtractionMeasurement } from "@fluxiq-web-extension/test-contracts";
+import type { AutomationStudioFailureRecord, EvaluationLane, ExpectedFailure, RunActionLatency, RunActionTiming, RunAutomationFailure, RunEvaluation, RunExtractionMeasurement } from "@fluxiq-web-extension/test-contracts";
 import type { PersistedFlowRunOutcome } from "./persisted-flow-run.js";
 
 /**
@@ -50,6 +50,45 @@ export function recordingLaneObservation(input: {
     extraction: null,
     // No Flow ran, so nothing was there for Core to recover.
     harnessRecovery: null,
+  };
+}
+
+/**
+ * The recording lane's observation from what the runner holds when the run
+ * ends: the Core action probe's timings, the first failure FluxIQ reported for
+ * them, and the lane's own extraction measurements.
+ *
+ * FluxIQ's verdict is read from the actions it executed. No action, or a lane
+ * that could not observe the failure (`automationFailure` undefined), leaves
+ * the verdict unknown rather than passing: a run that reported nothing has not
+ * reported success. `extraction` is one measurement per `extract` step of the
+ * script the lane ran, or `null` when it ran no script at all, which the
+ * contract reads as unmeasured; it replaces the `null` `recordingLaneObservation`
+ * states because only the run knows which steps ran.
+ */
+export function recordingLaneProbeObservation(input: {
+  oracleVerdict: RunEvaluation["oracleVerdict"];
+  actions: readonly RunActionTiming[];
+  automationFailure: RunAutomationFailure | null | undefined;
+  automationFailureExpected: ExpectedFailure | null;
+  extraction: readonly RunExtractionMeasurement[] | null;
+}): RunLaneObservation {
+  const { actions, automationFailure } = input;
+  const reported: Pick<RunLaneObservation, "reportedVerdict" | "automationFailureReported"> = !actions.length || automationFailure === undefined
+    ? { reportedVerdict: null, automationFailureReported: null }
+    : automationFailure
+      ? { reportedVerdict: "failed", automationFailureReported: { category: automationFailure.category, ...(automationFailure.code === undefined ? {} : { code: automationFailure.code }) } }
+      : actions.every((action) => action.status === "succeeded")
+        ? { reportedVerdict: "passed", automationFailureReported: null }
+        : { reportedVerdict: "failed", automationFailureReported: { category: "ambiguous_or_unknown" } };
+  return {
+    ...recordingLaneObservation({
+      oracleVerdict: input.oracleVerdict,
+      ...reported,
+      automationFailureExpected: input.automationFailureExpected,
+      actions: actions.flatMap((action) => (action.durationMs === undefined ? [] : [{ actionType: action.actionType, durationMs: action.durationMs }])),
+    }),
+    extraction: input.extraction === null ? null : [...input.extraction],
   };
 }
 

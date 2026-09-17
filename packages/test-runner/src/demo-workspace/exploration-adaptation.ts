@@ -18,6 +18,7 @@ import { recordingIds } from "./control-waits.js";
 import { authenticatedControl, withPersistentDemoCore } from "./core-process.js";
 import { configureFirstLiveDiagnosisViaUi } from "./diagnosis-ui.js";
 import { openProjectInPanel, selectFlowInCurrentProject } from "./panel-navigation.js";
+import { readTargetProposalStructure } from "./adapting-run/index.js";
 import { type DemoWorkspaceState, SCHEMA_VERSION, withWorkspaceLock } from "./workspace-state.js";
 
 export async function runDemoLlmAdaptationReadinessProbe(config: DemoWorkspaceConfiguration): Promise<DemoLlmAdaptationReadiness> {
@@ -140,7 +141,8 @@ export async function runDemoLlmExplorationAdaptationProposal(config: DemoWorksp
       const run = await waitForAdaptationRun(control, state.projectId, started.runId);
       const adaptationId = requireExactExplorationProposalIdentity(run);
       const proposal = await control.getFlowAdaptation(state.projectId, state.flowId, adaptationId);
-      const result = evaluateExplorationAdaptationProposal({ readiness, existingAdaptationIds, run, proposal });
+      const structure = await readTargetProposalStructure(control, state.projectId, state.flowId, adaptationId);
+      const result = evaluateExplorationAdaptationProposal({ readiness, existingAdaptationIds, run, proposal, structure });
       const review = panelPage.getByRole("button", { name: `Review ${proposal.adaptationId}`, exact: true });
       await review.waitFor({ state: "visible", timeout: 30_000 });
       if (await panelPage.getByRole("dialog").count() !== 0) throw new RunnerFailure("runtime.behavior", "Authenticated adaptation request unexpectedly left an authorization dialog open", { details: { reasonCode: "exploration_adaptation_run.authorization_prompt" } });
@@ -175,6 +177,7 @@ export async function runDemoLlmExplorationAdaptationApply(config: DemoWorkspace
       existingAdaptationIds: new Set(summaries.map(item => item.adaptationId).filter(id => id !== proposal.adaptationId)),
       run: sourceRun,
       proposal,
+      structure: await readTargetProposalStructure(control, target.projectId, target.flowId, proposal.adaptationId),
     });
     const expectedAdaptationIds = new Set(summaries.map(item => item.adaptationId));
     const recordingsBefore = recordingIds(await control.listRecordings(target.projectId));

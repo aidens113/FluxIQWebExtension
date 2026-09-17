@@ -1,7 +1,7 @@
 import { webAutomationUnresolvedSecretParameters } from "@fluxiq-web-extension/domain/node";
 import type { ScenarioSecret, ScenarioStep, WebScenario } from "@fluxiq-web-extension/test-contracts";
 import { RunnerFailure } from "../failure.js";
-import { parseScenarioTarget, type ScenarioTarget } from "../scenario-steps/index.js";
+import { cssSelectorForTarget, parseScenarioTarget, type ScenarioTarget } from "../scenario-steps/index.js";
 import type { FlowNodeRecord } from "./flow-action-types.js";
 
 export type DeclaredSecret = ScenarioSecret & { value: string };
@@ -156,14 +156,17 @@ export function declaredSecretBindingInputs(input: {
  * frame part of a target is not recorded on the node, so the inner target is
  * what is compared. A raw CSS target pairs only with the identical recorded
  * selector, which a recorder rarely writes; such a declaration fails to pair
- * loudly rather than guessing.
+ * loudly rather than guessing. A test-id target also pairs with a node whose
+ * selector is exactly that target's own CSS form (`cssSelectorForTarget`),
+ * which is how a Flow FluxIQ built from an instruction names the control: it
+ * carries a selector and no recorded element.
  */
 function targetMatchesRequest(target: ScenarioTarget, request: FlowSecretRequest): boolean {
   const element = request.element ?? {};
   const attributes = optionalRecord(element.attributes) ?? {};
   switch (target.kind) {
     case "testid":
-      return element.testId === target.id || attributes["data-testid"] === target.id;
+      return element.testId === target.id || attributes["data-testid"] === target.id || request.selector === cssSelectorForTarget(target);
     case "role":
       return (element.role === target.role || element.implicitRole === target.role)
         && (target.name === undefined || element.accessibleName === target.name || element.label === target.name);

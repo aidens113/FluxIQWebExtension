@@ -8,7 +8,8 @@ export type BenchTargetMode = Extract<TargetMode, "isolated" | "persistent-isola
 // `evidence` is absent unless `--evidence` is given, so a scenario manifest's `evidencePolicy` drives capture.
 // A compare report is a bench id under `<runs>/bench/`, or a path to its `report.json` or bench directory.
 export type LabCommand =
-  | { command: "run"; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flowLane?: true; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile }
+  // `instructionTaskId` and `dryRun` exist only with `llm.task` `create-flow`: the live instruction task to build from, and a provider-free check that the run would start.
+  | { command: "run"; scenarioId: string; seed?: number; evidence?: EvidenceMode; workflowId?: string; variantId?: string; flowLane?: true; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile; instructionTaskId?: string; dryRun?: true }
   | { command: "matrix"; scenarioIds?: string[]; all: boolean; repeat: number; evidence?: EvidenceMode; target?: TargetMode; workspace?: string; flowId?: string; freshLogin?: true; llm?: LlmExecutionProfile }
   | { command: "bench"; resumeBenchId: string }
   | { command: "bench"; corpusId: string; repeat: number; evidence?: EvidenceMode; target?: BenchTargetMode; workspace?: string; shards?: number; jobs?: number }
@@ -33,15 +34,18 @@ export function parseLabCommand(argv: string[]): LabCommand {
     return { command, scenarioId, ...optionalSeed(args), ...(target.target ? { target: target.target } : {}), ...(target.workspace ? { workspace: target.workspace } : {}), ...(target.freshLogin ? { freshLogin: true } : {}) };
   }
   if (command === "run") {
-    rejectUnknownOptions(args, ["--seed", "--evidence", "--workflow", "--variant", "--target", "--workspace", "--flow", "--fresh-login", ...llmOptionNames]);
-    const { flowLane, rest } = flowLaneOption(args);
+    rejectUnknownOptions(args, ["--seed", "--evidence", "--workflow", "--variant", "--target", "--workspace", "--flow", "--fresh-login", "--instruction-task", "--dry-run", ...llmOptionNames]);
+    const { flowLane, rest: withoutFlow } = flowLaneOption(args);
+    const { dryRun, rest } = dryRunOption(withoutFlow);
     const scenarioId = positional(rest, 0, "scenario ID");
     const llm = llmOptions(rest);
     const target = targetOptions(rest);
     if (flowLane && (target.target === "existing" || target.target === "clone")) throw new Error("--flow builds a Flow from the run's own recording; existing and clone targets run a pre-existing Flow");
     const variant = optionalVariant(rest);
-    if (variant.variantId && !flowLane) throw new Error("--variant requires --flow: a variant is armed only before a Flow run");
-    return { command, scenarioId, ...optionalSeed(rest), ...optionalEvidence(rest), ...optionalWorkflow(rest), ...variant, ...target, ...(flowLane ? { flowLane: true as const } : {}), ...(llm ? { llm } : {}) };
+    const creation = creationOptions(rest, llm, { flowLane, dryRun });
+    // A created Flow is built for the task's variant and run on it, so the variant needs no recorded Flow lane.
+    if (variant.variantId && !flowLane && !creation) throw new Error("--variant requires --flow: a variant is armed only before a Flow run");
+    return { command, scenarioId, ...optionalSeed(rest), ...optionalEvidence(rest), ...optionalWorkflow(rest), ...variant, ...target, ...(flowLane ? { flowLane: true as const } : {}), ...(llm ? { llm } : {}), ...creation };
   }
   if (command === "matrix") {
     rejectUnknownOptions(args, ["--all", "--scenarios-json", "--repeat", "--evidence", "--target", "--workspace", "--flow", "--fresh-login", ...llmOptionNames]);
@@ -57,6 +61,7 @@ export function parseLabCommand(argv: string[]): LabCommand {
       scenarioIds = parsed;
     }
     const llm = llmOptions(args);
+    if (llm?.task === "create-flow") throw new Error("--llm-task create-flow builds one instruction task per run: use lab run <scenario> --instruction-task ID");
     if (llm && (all || scenarioIds?.length !== 1)) throw new Error("live LLM matrix mode requires exactly one explicit scenario");
     if (llm && repeat !== 1) throw new Error("live LLM matrix mode requires --repeat 1");
     return { command, all, repeat, ...optionalEvidence(args), ...targetOptions(args), ...(scenarioIds ? { scenarioIds } : {}), ...(llm ? { llm } : {}) };
@@ -187,6 +192,32 @@ function flowLaneOption(args: string[]): { flowLane: boolean; rest: string[] } {
   const next = args[index + 1];
   if (next !== undefined && !next.startsWith("--")) return { flowLane: false, rest: args };
   return { flowLane: true, rest: [...args.slice(0, index), ...args.slice(index + 1)] };
+}
+/**
+ * `--dry-run` takes no value, so it is removed from the arguments before a
+ * positional is read, as the lane flag is, or a scenario id after it would be
+ * read as its value.
+ */
+function dryRunOption(args: string[]): { dryRun: boolean; rest: string[] } {
+  const count = args.filter(value => value === "--dry-run").length;
+  if (count > 1) throw new Error("--dry-run may only be specified once");
+  return { dryRun: count === 1, rest: args.filter(value => value !== "--dry-run") };
+}
+/**
+ * The created-Flow lane's options, `undefined` when the run is not one. They
+ * belong to `--llm-task create-flow` alone, and that task builds its Flow from
+ * an instruction task rather than from the run's recording, so the lane flag
+ * is refused with it.
+ */
+function creationOptions(args: string[], llm: LlmExecutionProfile | undefined, flags: { flowLane: boolean; dryRun: boolean }): { instructionTaskId?: string; dryRun?: true } | undefined {
+  const taskId = option(args, "--instruction-task");
+  if (llm?.task !== "create-flow") {
+    if (taskId !== undefined || flags.dryRun) throw new Error("--instruction-task and --dry-run require --live-llm --llm-task create-flow");
+    return undefined;
+  }
+  if (flags.flowLane) throw new Error("--llm-task create-flow builds its Flow from an instruction task, not from the run's recording: drop --flow");
+  if (taskId !== undefined && !KEBAB_ID.test(taskId)) throw new Error("--instruction-task must be a lowercase kebab-case task ID");
+  return { ...(taskId === undefined ? {} : { instructionTaskId: taskId }), ...(flags.dryRun ? { dryRun: true as const } : {}) };
 }
 /** The variant of the resolved workflow the Flow lane arms before its run. */
 function optionalVariant(args: string[]): { variantId?: string } { const value = option(args, "--variant"); if (value === undefined) return {}; if (!KEBAB_ID.test(value)) throw new Error("--variant must be a lowercase kebab-case variant ID"); return { variantId: value }; }

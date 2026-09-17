@@ -93,6 +93,20 @@ test("explore_and_adapt is a purpose the Lab can type and carry into a Flow run"
   assert.equal(planLiveLlmExecution(profile({ task: "adapt" })).purpose, "diagnose_and_adapt");
 });
 
+test("create-flow plans the web panel's iterating build_and_adapt grant, with the operator's call count and Core's default run budget", () => {
+  const byDefault = planLiveLlmExecution(profile({ task: "create-flow" }, { maxOutputTokens: 4_000, maxTotalTokensPerRequest: 12_000 }));
+  assert.equal(byDefault.purpose, "build_and_adapt");
+  assert.equal(byDefault.task, "create-flow");
+  // Core's own iterating default, not a one-call build.
+  assert.equal(byDefault.maxCalls, DEFAULT_LLM_LAB_BUDGET.maxCallsPerRun);
+  assert.equal(byDefault.maxTotalTokensPerRun, 100_000);
+  assert.equal(byDefault.highTokenConfirmation.required, false);
+  assert.equal(planLiveLlmExecution(profile({ task: "create-flow" }, { maxCallsPerRun: 40 })).maxCalls, 40);
+  // A build grant is never one a Flow run carries: the Flow lane's type has no room for it.
+  const runPurposes: ReadonlyArray<PersistedFlowLlmExecution["purpose"]> = ["diagnosis_only", "diagnose_and_adapt", "explore_and_adapt"];
+  assert.equal((runPurposes as readonly string[]).includes(byDefault.purpose), false);
+});
+
 test("without --llm-max-run-tokens the run token budget is Core's default, so a default adapt run needs no confirmation", () => {
   // 26 calls at 10,000 tokens could use 260,000; Core's default budget holds the run to 100,000.
   const byDefault = planLiveLlmExecution(profile({ task: "adapt" }));
@@ -162,7 +176,8 @@ test("the operator's own budget is carried through untouched for the post-run ch
 test("an unsupported provider, model, task or retry count is refused", () => {
   assert.throws(() => planLiveLlmExecution(profile({ provider: "openai" })), /--llm-provider openai is unsupported/u);
   assert.throws(() => planLiveLlmExecution(profile({ model: "gpt-4" })), /--llm-model gpt-4 is unsupported/u);
-  assert.throws(() => planLiveLlmExecution(profile({ task: "create-flow" })), /--llm-task create-flow has no live Flow-lane runner/u);
+  assert.throws(() => planLiveLlmExecution(profile({ task: "refine-recording" })), /--llm-task refine-recording has no live runner; use diagnose, adapt or create-flow/u);
+  assert.throws(() => planLiveLlmExecution(profile({ task: "edit-flow" })), /--llm-task edit-flow has no live runner/u);
   assert.throws(() => planLiveLlmExecution(profile({}, { maxRetries: 1 })), /--llm-max-retries 1 is unsupported/u);
 });
 

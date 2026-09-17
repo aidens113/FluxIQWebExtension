@@ -53,7 +53,7 @@ export function assertFlowFailure(expected: ExpectedFailure | undefined, failure
 }
 
 /** The domain outputs whose nodes yield extracted records (`domain/src/actions/types.ts`). */
-const EXTRACT_OUTPUT_IDS: ReadonlySet<string> = new Set(["web.dom.extract", "web.dom.extract_list"]);
+export const EXTRACT_OUTPUT_IDS: ReadonlySet<string> = new Set(["web.dom.extract", "web.dom.extract_list"]);
 
 /**
  * The members of an `ExpectedExtraction` the Flow lane cannot observe, which

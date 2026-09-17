@@ -2,7 +2,7 @@ import type {
   ExistingFlowAdaptation,
   ExistingFluxIQControlClient,
 } from "./existing-fluxiq-control.js";
-import { adaptationCallCountWithinGrant } from "./demo-llm-adaptation-control.js";
+import { adaptationCallCountWithinGrant, targetRepairValidationIsHonest } from "./demo-llm-adaptation-control.js";
 import { locateExactAppliedEvidenceGuidedCreation } from "./demo-llm-exploration-adaptation-readiness.js";
 import { RunnerFailure } from "./failure.js";
 
@@ -137,7 +137,7 @@ function requireExactTargetShape(
     || adaptation.patchKinds?.length !== 1 || adaptation.patchKinds[0] !== "edit_action_target"
     || typeof adaptation.sourceRunId !== "string" || adaptation.sourceRunId.length === 0
     || (adaptation.appliedMutationCount ?? 0) !== appliedMutationCount
-    || adaptation.validationSucceededCount !== 1 || adaptation.validationFailedCount !== 0) {
+    || !targetRepairValidationIsHonest(adaptation)) {
     fail("Applied exploration adaptation has an unexpected scope, Subflow, patch, or mutation shape");
   }
 }

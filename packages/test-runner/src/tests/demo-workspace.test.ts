@@ -233,3 +233,22 @@ test("keeps a healthy persisted Scenario Lab port and refreshes an early EACCES 
     await rm(runs, { recursive: true, force: true });
   }
 });
+
+// Other agents rebuild apps/extension/dist from their own in-flight source; a
+// demo run that copies from there loads their half-finished extension, or none.
+test("loads the extension from apps/extension/dist/chrome unless an absolute override names another build", () => {
+  assert.equal(resolveDemoWorkspaceConfiguration(root, required).extensionSourceDirectory, path.join(root, "apps", "extension", "dist", "chrome"));
+  const pinned = path.join(root, "pinned-extension", "chrome");
+  assert.equal(resolveDemoWorkspaceConfiguration(root, { ...required, FLUXIQ_DEMO_EXTENSION_DIR: pinned }).extensionSourceDirectory, pinned);
+  assert.throws(() => resolveDemoWorkspaceConfiguration(root, { ...required, FLUXIQ_DEMO_EXTENSION_DIR: "relative/chrome" }), /FLUXIQ_DEMO_EXTENSION_DIR must be an absolute path/u);
+});
+
+test("the browser session copies the configured extension build, and every demo launcher passes the override through", async () => {
+  const session = await readFile(path.join(repositoryRoot, "packages/test-runner/src/demo-workspace/browser-session.ts"), "utf8");
+  assert.match(session, /const extensionSourcePath = config\.extensionSourceDirectory;/u);
+  const { readdir } = await import("node:fs/promises");
+  for (const name of (await readdir(path.join(repositoryRoot, "scripts"))).filter(file => /demo/u.test(file) && file.endsWith(".mjs"))) {
+    const launcher = await readFile(path.join(repositoryRoot, "scripts", name), "utf8");
+    if (launcher.includes('"FLUXIQ_DEMO_HEADLESS"')) assert.match(launcher, /"FLUXIQ_DEMO_EXTENSION_DIR"/u, name);
+  }
+});

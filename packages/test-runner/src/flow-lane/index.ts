@@ -12,6 +12,8 @@ export * from "./lane-observation.js";
 export * from "./persisted-flow-run.js";
 export * from "./recording-discards.js";
 export * from "./recording-flow-proposal.js";
+export * from "./repair/index.js";
 export * from "./run-datasets.js";
 export * from "./reset-scenario-lab.js";
 export * from "./run-flow-lane.js";
+export * from "./creation/index.js";
