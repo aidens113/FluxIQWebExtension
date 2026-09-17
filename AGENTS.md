@@ -296,6 +296,13 @@ worktree with `pnpm task abandon` or `pnpm task finish`, never with
 `git worktree remove --force`, which fails on `node_modules` and partly deletes
 the tree before aborting.
 
+Neither lifecycle can reclaim everything. A per-label test build directory is
+cleared only when its own label runs again, and the shared Core is used by every
+task beside it at once, so no task knows it was the last. `pnpm task prune`
+removes both once nothing has touched them for three days and no process is
+working inside them; `--dry-run` decides every refusal and changes nothing. It
+never touches `test-runs/`, which holds evidence rather than build output.
+
 Commits on a task branch carry `Task: t<NNN>`, and `Worker: <agent-label>` where
 a worker produced the change. A task merges with `--no-ff` and the subject
 `Merge task t<NNN>: <title>`, so first-parent history reads as a list of tasks
