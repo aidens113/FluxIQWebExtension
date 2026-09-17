@@ -8,6 +8,7 @@
 //   pnpm task finish <id> [title words...] [--skip-checks] [--allow-running]
 //   pnpm task abandon <id> [--force] [--allow-running]
 //   pnpm task list
+//   pnpm task prune [--days N] [--base DIR] [--allow-running]
 //
 // Every command takes --dry-run, which decides all refusals and reports what it
 // would do without changing anything.

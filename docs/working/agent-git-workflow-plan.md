@@ -38,9 +38,18 @@ were tracked.
 (`eff5097`), which would have made `pnpm task finish` refuse every task; and the
 domain test runner never cleaned its outdir.
 
-**Not done.** The Core-side paired-branch half; an age-based prune for the
-1.6 GB of abandoned scratch directories; `pnpm task prune` for an orphaned
-shared Core. All three are in Open Questions.
+**Reclaim, done.** `pnpm task prune` removes both kinds of leak the lifecycles
+cannot reach: a per-label build directory whose label nobody uses again, and a
+Core worktree under the disposable base with no task beside it. Run on
+2026-09-17 it removed 263 directories and `F:/fxwork/!FluxIQ`, reclaiming about
+1.9 GB and leaving `F:/fxwork` empty. Two guards must both pass — nothing
+touched for `--days` (default 3, read as the newest mtime anywhere in the tree)
+and no running process working inside it — and the process guard was proven by
+holding a live process in a stale directory and watching it drop out of the
+removal set.
+
+**Not done.** The Core-side paired-branch half, which is the last piece of this
+plan and is in Open Questions.
 
 Before this work, every agent worked in the single checkout at
 `F:\!FluxIQWebExtension` on `dev`. Workers edit that shared working tree and
@@ -420,6 +429,11 @@ New here, because `lab:pair` never had it:
   the worktree.
 - `pnpm task abandon <id>` — delete branch and worktree without merging.
 - `pnpm task list` — open tasks, their worktrees, and how far behind `dev`.
+- `pnpm task prune [--days N]` — reclaim what no task owns any more: label
+  directories under `.test-build-scratch/` and `.lab-instances/` that nothing
+  has touched for `--days` and nothing is running inside, and Core worktrees
+  under the disposable base with no task worktree in the same directory. Never
+  `test-runs/`, which is evidence rather than build output.
 
 Every command decides all refusals before changing anything, supports
 `--dry-run`, prints one JSON line on stdout with progress on stderr, and never
@@ -491,6 +505,28 @@ The only hook proposed is a `commit-msg` hook requiring the `Task:` trailer on
 - Outcome: Accepted
 - Follow-up: prune the shared Core and the 1.6 GB of scratch; see Open Questions.
 
+### 2026-09-17 — Reclaim built, and 1.9 GB reclaimed
+- Agent: supervisor, task t002
+- Changed: scripts/task/{prune,scratch-roots,stale-directories,orphaned-cores}.mjs,
+  scripts/task/{arguments,command-line,index,run-task}.mjs,
+  scripts/task/tests/{scratch-roots,stale-directories,orphaned-cores}.test.mjs,
+  AGENTS.md, docs/architecture/repository-layout.md
+- Why: both leaks are correct local behaviour that nothing closes globally. A
+  label directory is cleared only when its own label runs again, and the shared
+  Core is used by every flat task at once, so no task can know it was the last.
+  The scratch roots are discovered rather than listed, because a hard-coded list
+  would silently stop covering a package added later.
+- Validation: `pnpm task prune --dry-run` -> 263 directories, 1,275,919,503
+  bytes, one orphaned Core, none skipped. Process guard proven live: a node
+  process holding `.test-build-scratch/sv` moved that directory out of the
+  removal set (138 -> 137) and into `skipped` with reason `in use`. `pnpm task
+  prune` applied -> extension scratch 1429->447 MB, domain scratch 178->62 MB,
+  lab instances 298->140 MB, `F:/fxwork/!FluxIQ` 650 MB removed, `F:/fxwork`
+  empty. `pnpm task:test` -> 76 pass 0 fail (61 before). `pnpm check` -> exit 0.
+  `pnpm test` -> exit 0, 0 failures, scratch directories regenerated.
+- Outcome: Accepted
+- Follow-up: none. The Core-side paired-branch half remains, separately.
+
 ## Open Questions
 
 - Does Core adopt the paired-branch half? A cross-repository task needs the same
@@ -499,15 +535,20 @@ The only hook proposed is a `commit-msg` hook requiring the `Task:` trailer on
 - Should `pnpm task finish` refuse without observed check output, or only warn?
   Refusing is mechanical enforcement; warning keeps Tier 1 at two commands.
   Owner: supervisor, settled once worktree cost is known.
-- Scratch directories from past worker runs are never reclaimed: measured
-  2026-09-17, `apps/extension/.test-build-scratch` holds 1.4 GB across 162
-  label directories and `domain/.test-build-scratch` 178 MB across 99, plus the
-  `.lab-instances` directories. Each self-cleans when its label is reused, but
-  an abandoned label is never removed. All of it is ignored space, so this is
-  disk cost rather than repository cost. A blind sweep is unsafe because a
-  running worker owns one; the fix is an age-based prune, which fits naturally
-  as a `pnpm task prune` alongside `git worktree prune`. Owner: supervisor, once
-  the task tooling is verified.
+- ~~Scratch directories and the shared Core are never reclaimed.~~ **Answered
+  2026-09-17 by `pnpm task prune`**, which reclaimed 1.9 GB on its first run.
+  The blind-sweep hazard is handled by requiring two independent guards rather
+  than one: age alone would delete the build a long-running Lab browser has
+  loaded, and the running-process check alone would delete a tree whose owning
+  worker is merely idle between builds. What remains a judgement rather than a
+  rule is the three-day default, which is set so that it cannot collide with an
+  agent session; lower it with `--days` when reclaiming matters more than the
+  rebuild it costs.
+- `test-runs/` is deliberately outside the prune's scope and is now the largest
+  reclaimable thing left: it is ignored and disposable in the same sense, but it
+  holds evidence bundles somebody may still want to read and a
+  `persistent-isolated` topology whose whole point is that it survives. Deleting
+  it is a decision about evidence, not about build output. Owner: user.
 - `packages/agent-orchestrator` is dormant — no importer anywhere — yet its 16
   tests run inside every `pnpm check` and `pnpm test`. This plan does not build
   on it, which leaves it with no prospective consumer either. Keep it, wire it

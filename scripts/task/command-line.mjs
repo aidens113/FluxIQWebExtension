@@ -8,13 +8,14 @@ import { parseTaskArguments } from "./arguments.mjs";
 import { abandonTask } from "./abandon.mjs";
 import { finishTask } from "./finish.mjs";
 import { listTasks } from "./list.mjs";
+import { pruneTasks } from "./prune.mjs";
 import { startTask } from "./start.mjs";
 
-const COMMANDS = new Set(["start", "finish", "abandon", "list"]);
+const COMMANDS = new Set(["start", "finish", "abandon", "list", "prune"]);
 
 export async function runTaskCommandLine({ argv, repositoryRoot, coreRepositoryRoot }) {
   const { command, positional, flags, values } = parseTaskArguments(argv);
-  if (!COMMANDS.has(command)) throw new Error(`Unknown command "${command}". Use start, finish, abandon or list.`);
+  if (!COMMANDS.has(command)) throw new Error(`Unknown command "${command}". Use start, finish, abandon, list or prune.`);
 
   const shared = {
     repositoryRoot,
@@ -24,6 +25,12 @@ export async function runTaskCommandLine({ argv, repositoryRoot, coreRepositoryR
   };
 
   if (command === "list") return { command, tasks: await listTasks(repositoryRoot) };
+
+  // Prune takes no id: it works across everything the lifecycles leave behind,
+  // which is precisely the material no single task owns any more.
+  if (command === "prune") {
+    return { command, ...await pruneTasks({ ...shared, base: values.base, days: values.days === undefined ? undefined : Number(values.days) }) };
+  }
 
   if (command === "start") {
     return {

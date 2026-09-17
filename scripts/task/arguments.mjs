@@ -3,7 +3,7 @@
 // put a task's edits in the shared checkout that the flag existed to avoid.
 
 const FLAGS = new Set(["--worktree", "--core", "--dry-run", "--skip-checks", "--allow-running", "--force", "--json"]);
-const VALUES = new Set(["--base", "--from"]);
+const VALUES = new Set(["--base", "--from", "--days"]);
 
 export function parseTaskArguments(argv) {
   const [command, ...rest] = argv;
