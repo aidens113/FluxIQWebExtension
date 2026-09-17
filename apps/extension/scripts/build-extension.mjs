@@ -1,5 +1,6 @@
 import { realpathSync } from "node:fs";
 import { copyFile, cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { builtinModules } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
@@ -61,6 +62,9 @@ const extensionEntries = {
   sidepanel: { source: "src/sidepanel/index.ts", outfile: "sidepanel/index.js", format: "esm" }
 };
 
+/** Every entry's name, in build order: what `check-extension.mjs` bundles to prove the browser graph. */
+export const EXTENSION_ENTRY_NAMES = Object.freeze(Object.keys(extensionEntries));
+
 async function buildTarget(target, manifestName) {
   const out = path.join(distDir, target);
   await mkdir(out, { recursive: true });
@@ -80,12 +84,14 @@ async function bundleExtension() {
 /**
  * Bundles one extension entry with the extension's own esbuild settings into
  * `outputDir`, at the relative path the extension build uses, and returns the
- * bundle's path. Only the log level may differ from the extension build, so a
- * caller cannot drift from the bundle the extension ships.
+ * bundle's path. Only the log level, and whether the bundle is written at all,
+ * may differ from the extension build, so a caller cannot drift from the bundle
+ * the extension ships. `write: false` keeps the bundle in memory: that is how
+ * `check-extension.mjs` walks the real import graph without touching `build/`.
  *
  * @param {"background" | "content" | "page-world" | "popup" | "sidepanel"} name
  * @param {string} outputDir
- * @param {{ logLevel?: import("esbuild").LogLevel }} [options]
+ * @param {{ logLevel?: import("esbuild").LogLevel, write?: boolean }} [options]
  * @returns {Promise<string>}
  */
 export async function bundleExtensionEntry(name, outputDir, options = {}) {
@@ -101,12 +107,114 @@ export async function bundleExtensionEntry(name, outputDir, options = {}) {
     sourcemap: true,
     legalComments: "none",
     logLevel: options.logLevel ?? "info",
-    plugins: [browserSafeWorkspacePlugin()],
+    write: options.write ?? true,
+    // The guard goes first so it sees every import, including the ones the
+    // workspace plugin answers.
+    plugins: [nodeOnlyImportGuardPlugin(name), browserSafeWorkspacePlugin()],
     entryPoints: [path.join(root, entry.source)],
     outfile,
     format: entry.format
   });
   return outfile;
+}
+
+const NODE_BUILTINS = new Set(builtinModules.flatMap((name) => name.startsWith("node:") ? [name] : [name, `node:${name}`]));
+
+/** Marks the guard's own look-ahead resolution, so the guard does not recurse into itself. */
+const GUARD_LOOKAHEAD = Object.freeze({ nodeOnlyImportGuard: "lookahead" });
+
+/**
+ * Fails a browser bundle that reaches a Node built-in, naming the built-in and
+ * the chain of imports that reached it from the entry.
+ *
+ * esbuild already refuses `node:crypto` on the browser platform, but only by
+ * naming the file that imports it -- which is deep inside a dependency's
+ * compiled output, not the line in this repository that pulled that dependency
+ * in. That line is what a developer has to change: on 2026-09-16 a web-domain
+ * module value-imported `fluxiq/automation-studio`, whose barrel reaches
+ * `node:crypto`, and the domain client barrel carried it into the content
+ * script. So every resolved import is recorded against the first file that
+ * imported it, and the refusal walks that record back to the entry.
+ *
+ * Only an import the build could not resolve is refused, so a package whose
+ * `browser` field stubs a built-in out still bundles exactly as before. The
+ * recording costs a second resolution of each import; it changes nothing the
+ * bundle contains.
+ *
+ * One refusal per crossing. A dependency's barrel can reach a hundred built-in
+ * imports, and printing each buried the one line that matters, so the guard
+ * refuses the first built-in reached through each import from this repository
+ * into a dependency, and lets that crossing's other built-ins through as
+ * external: the build has already failed on the first.
+ *
+ * @param {string} entryName
+ * @returns {import("esbuild").Plugin}
+ */
+function nodeOnlyImportGuardPlugin(entryName) {
+  return {
+    name: "node-only-import-guard",
+    setup(buildContext) {
+      /** @type {Map<string, string>} resolved file -> the first file that imported it */
+      const importedBy = new Map();
+      /** @type {Set<string>} the crossings already refused */
+      const refused = new Set();
+      buildContext.onResolve({ filter: /.*/ }, async (args) => {
+        if (args.pluginData === GUARD_LOOKAHEAD || args.kind === "entry-point") return undefined;
+        const resolved = await buildContext.resolve(args.path, {
+          kind: args.kind,
+          importer: args.importer,
+          namespace: args.namespace,
+          resolveDir: args.resolveDir,
+          pluginData: GUARD_LOOKAHEAD
+        });
+        if (resolved.errors.length === 0) {
+          if (resolved.path && !importedBy.has(resolved.path)) importedBy.set(resolved.path, args.importer);
+          return undefined;
+        }
+        if (!NODE_BUILTINS.has(args.path)) return undefined;
+        const chain = importChain(importedBy, args.importer);
+        const crossing = repositoryCrossing(chain) ?? `${args.importer} imports ${args.path}`;
+        if (refused.has(crossing)) return { path: args.path, external: true };
+        refused.add(crossing);
+        return { errors: [{ text: nodeOnlyImportMessage(entryName, args.path, chain) }] };
+      });
+    }
+  };
+}
+
+/** The files from the entry down to `importer`, entry first, as the first import of each reached it. */
+function importChain(importedBy, importer) {
+  const chain = [];
+  const seen = new Set();
+  for (let file = importer; file && !seen.has(file); file = importedBy.get(file)) {
+    seen.add(file);
+    chain.unshift(file);
+  }
+  return chain;
+}
+
+/** Where `chain` leaves this repository, as "<repository file> imports <dependency file>", or `undefined` when it never does. */
+function repositoryCrossing(chain) {
+  const outside = chain.findIndex((file) => !isRepositorySource(file));
+  return outside > 0 ? `${chain[outside - 1]} imports ${chain[outside]}` : undefined;
+}
+
+function isRepositorySource(file) {
+  const relative = path.relative(repoRoot, file);
+  return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative) &&
+    !relative.split(path.sep).includes("node_modules");
+}
+
+function nodeOnlyImportMessage(entryName, builtin, chain) {
+  const shown = chain.map((file, index) => `${index === 0 ? "   " : "-> "}${path.relative(repoRoot, file).replaceAll("\\", "/")}`);
+  return [
+    `Node-only module "${builtin}" is reachable from the browser bundle "${entryName}", which cannot load it. Import chain:`,
+    ...shown.map((line) => `  ${line}`),
+    `  -> ${builtin}`,
+    "Find the first file in this chain that belongs to this repository and change its import: take a browser-safe subpath",
+    "(for example fluxiq/automation-studio/nodes rather than fluxiq/automation-studio), or make the import type-only.",
+    "Other Node-only modules reached through the same import are not listed again."
+  ].join("\n");
 }
 
 /**

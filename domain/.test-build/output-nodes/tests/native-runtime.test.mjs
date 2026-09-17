@@ -226,8 +226,8 @@ function fingerprintValue(value) {
 var REFUSED = Symbol("refused");
 function optionalValue(value, read) {
   if (value === void 0) return void 0;
-  const readable = read(value);
-  return readable === void 0 ? REFUSED : readable;
+  const readable2 = read(value);
+  return readable2 === void 0 ? REFUSED : readable2;
 }
 function booleanValue2(value) {
   return typeof value === "boolean" ? value : void 0;
@@ -456,9 +456,9 @@ function webAutomationExtractListDispatch(nodeParameters) {
   const { recordOutput: authored, ...rest } = nodeParameters;
   const request = webAutomationExtractListRequestValue(rest.extractList);
   const parameters = request !== void 0 && leftDefault(rest.timeoutMs) ? { ...rest, timeoutMs: webAutomationExtractListTimeoutMs(request) } : rest;
-  const declared = authored === void 0 || authored === null ? request === void 0 ? void 0 : webAutomationDerivedRecordOutput(request) : withRecordsPath(authored);
-  if (declared === void 0) return { ok: true, payload: { parameters } };
-  const parsed = parseAutomationStudioRecordOutput(declared);
+  const declared2 = authored === void 0 || authored === null ? request === void 0 ? void 0 : webAutomationDerivedRecordOutput(request) : withRecordsPath(authored);
+  if (declared2 === void 0) return { ok: true, payload: { parameters } };
+  const parsed = parseAutomationStudioRecordOutput(declared2);
   if (!parsed.ok) return { ok: false, result: recordOutputRefusal(parsed.issues) };
   return { ok: true, payload: { parameters, recordOutput: parsed.output } };
 }
@@ -486,6 +486,97 @@ function recordOutputRefusal(issues) {
     message: encryptUnavailable ? "Save extracted records asks to encrypt a field, which is not available yet, so the list was not read." : "Save extracted records is not a valid record output, so the list was not read.",
     failure
   };
+}
+
+// src/output-nodes/extract-list/issues.ts
+var PROBE_REQUEST = { item: "*", fields: { probe: "*" } };
+function webAutomationExtractListIssues(value) {
+  if (!isPlainObject(value)) return ["web.extract_list.not_object"];
+  const keys = declaredKeys();
+  const issues = /* @__PURE__ */ new Set();
+  if (Object.keys(value).some((key) => !keys.request.has(key))) issues.add("web.extract_list.unknown_key");
+  if (!readable({ item: value.item ?? null })) issues.add("web.extract_list.invalid_item");
+  if (value.itemElement !== void 0 && !readable({ itemElement: value.itemElement })) issues.add("web.extract_list.invalid_item_element");
+  addFieldIssues(value.fields, keys.fieldSpec, issues);
+  addPaginateIssues(value.paginate, keys.paginate, issues);
+  addItemBoundIssues(value, issues);
+  if (issues.size === 0 && webAutomationExtractListRequestValue(value) === void 0) issues.add("web.extract_list.unreadable");
+  return [...issues];
+}
+function addFieldIssues(fields, specKeys, issues) {
+  if (!isPlainObject(fields)) {
+    issues.add("web.extract_list.invalid_fields");
+    return;
+  }
+  const entries = Object.entries(fields);
+  if (entries.length === 0) {
+    issues.add("web.extract_list.no_fields");
+    return;
+  }
+  let fieldRefused = false;
+  for (const [key, field] of entries) {
+    if (isPlainObject(field) && Object.keys(field).some((specKey) => !specKeys.has(specKey))) issues.add("web.extract_list.unknown_field_key");
+    if (!isWebAutomationExtractFieldKey(key)) {
+      issues.add("web.extract_list.invalid_field_key");
+      fieldRefused = true;
+    } else if (!readable({ fields: { [key]: field, [key === "probe" ? "probe_2" : "probe"]: "*" } })) {
+      issues.add("web.extract_list.invalid_field");
+      fieldRefused = true;
+    }
+  }
+  if (!fieldRefused && !readable({ fields })) issues.add("web.extract_list.all_fields_excluded");
+}
+function addPaginateIssues(paginate, paginateKeys, issues) {
+  if (paginate === void 0) return;
+  if (isPlainObject(paginate) && Object.keys(paginate).some((key) => !paginateKeys.has(key))) issues.add("web.extract_list.unknown_paginate_key");
+  if (!readable({ paginate })) issues.add("web.extract_list.invalid_paginate");
+}
+function addItemBoundIssues(value, issues) {
+  const { maxItems, minItems } = value;
+  const maxItemsReadable = maxItems === void 0 || isPositiveInteger(maxItems);
+  if (!maxItemsReadable) issues.add("web.extract_list.invalid_max_items");
+  if (minItems === void 0) return;
+  if (!isNonNegativeInteger(minItems)) {
+    issues.add("web.extract_list.invalid_min_items");
+    return;
+  }
+  if (!readable(maxItemsReadable && maxItems !== void 0 ? { minItems, maxItems } : { minItems })) issues.add("web.extract_list.min_items_exceed_max");
+}
+function readable(overrides) {
+  return webAutomationExtractListRequestValue({ ...PROBE_REQUEST, ...overrides }) !== void 0;
+}
+var declared;
+function declaredKeys() {
+  if (declared) return declared;
+  const schema = webAutomationExtractListSchema({});
+  const properties = child(schema, "properties");
+  declared = {
+    request: propertyNames(schema),
+    paginate: propertyNames(child(properties, "paginate")),
+    fieldSpec: propertyNames(child(child(child(properties, "fields"), "metadata"), "fieldSpec"))
+  };
+  return declared;
+}
+function propertyNames(schema) {
+  return new Set(Object.keys(child(schema, "properties") ?? {}));
+}
+function child(value, key) {
+  const next = value?.[key];
+  return isPlainObject(next) ? next : void 0;
+}
+function isPlainObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isPositiveInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
+function isNonNegativeInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+// src/output-nodes/extract-list/parameter-contract.ts
+function webAutomationExtractListParameterContract(input) {
+  return input.parameterId === "extractList" ? webAutomationExtractListIssues(input.value) : [];
 }
 
 // src/output-nodes/extract-list/parameters.ts
@@ -991,6 +1082,11 @@ function iconForOutput(outputId) {
   return "square-dot";
 }
 
+// src/output-nodes/parameter-contracts.ts
+var webAutomationOutputNodeParameterContracts = {
+  [webAutomationOutputNodeId("web.dom.extract_list")]: webAutomationExtractListParameterContract
+};
+
 // src/output-nodes/native-runtime.ts
 var WEB_AUTOMATION_IMPORTER_PACKAGE_ID = "@fluxiq-web-extension/domain";
 var WEB_AUTOMATION_IMPORTER_PACKAGE_VERSION = "0.1.0";
@@ -1001,6 +1097,9 @@ function createWebAutomationOutputNodeImplementationBundle(extension = {}) {
     implementations: Object.fromEntries(
       WEB_AUTOMATION_ACTION_TYPES.map((outputId) => [outputId, createOutputNodeImplementation(outputId)])
     ),
+    // Core checks these when a Flow is planned, so a malformed extraction a
+    // model wrote is refused before anything runs rather than at dispatch.
+    parameterContracts: { ...webAutomationOutputNodeParameterContracts },
     ...extension
   };
 }

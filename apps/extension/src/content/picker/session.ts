@@ -33,7 +33,8 @@ import {
   type ExtractionPickedElement,
   type ExtractionPickedMessage
 } from "../../shared/extraction-messages";
-import { selectorFor, testIdFor } from "../describe-element";
+import { testIdFor } from "../describe-element";
+import { selectorFor } from "../selector";
 import { inferListFromElement } from "../extraction";
 import { isPickerHostNode } from "../picker-host";
 import { closePickerOverlay, openPickerOverlay, pointPickerOverlay } from "./overlay";

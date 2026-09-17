@@ -14,7 +14,7 @@
 // target -- the banner rather than the word inside it -- because that is the
 // thing a reader has to deal with.
 
-import { selectorFor } from "../describe-element";
+import { selectorFor } from "../selector";
 import { isInteractableUiElement } from "../element-traits";
 import { accessibleNameFor } from "../identity";
 import { visualViewportBounds } from "../visual-bounds";

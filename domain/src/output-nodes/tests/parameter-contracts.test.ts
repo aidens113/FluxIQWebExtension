@@ -56,3 +56,14 @@ test("every code the contract can return has the form Core accepts", () => {
     assert.equal(code.startsWith("web.extract_list."), true);
   }
 });
+
+test("the implementation bundle hands Core the extraction contract, so a bad plan is refused before it runs", async () => {
+  const { createWebAutomationOutputNodeImplementationBundle } = await import("../native-runtime");
+  const bundle = createWebAutomationOutputNodeImplementationBundle();
+  const id = webAutomationOutputNodeId("web.dom.extract_list");
+  assert.equal(bundle.parameterContracts?.[id], webAutomationExtractListParameterContract);
+  // Only the list extraction declares one; nothing else is silently bound.
+  assert.deepEqual(Object.keys(bundle.parameterContracts ?? {}), [id]);
+  // A host extension may add to the bundle, but the contracts are still there.
+  assert.equal(createWebAutomationOutputNodeImplementationBundle({}).parameterContracts?.[id], webAutomationExtractListParameterContract);
+});

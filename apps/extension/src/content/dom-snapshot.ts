@@ -40,13 +40,24 @@ import {
   isSensitiveFormControl,
   meaningfulText
 } from "./element-traits";
+import { withSelectorMemo } from "./selector";
 import { visualDocumentBounds } from "./visual-bounds";
 import type { DomSnapshot } from "./types";
 
 const MAX_SNAPSHOT_CANDIDATES = 2_000;
 const MAX_SNAPSHOT_SCAN_ELEMENTS = 50_000;
 
+/**
+ * The snapshot as the page is now. It only reads, so every selector it writes
+ * -- the element list's and the evidence's -- shares one memo
+ * (`selector/selector-memo.ts`): a list's rows build on one container selector
+ * instead of each rebuilding it.
+ */
 export function captureSnapshot(): DomSnapshot {
+  return withSelectorMemo(captureSnapshotNow);
+}
+
+function captureSnapshotNow(): DomSnapshot {
   const { entries, counts } = snapshotElements();
   // Before the descriptors are read out: the evidence pass sets each one's
   // `changed` and `recentlyInteracted`, and the same objects go on the wire.

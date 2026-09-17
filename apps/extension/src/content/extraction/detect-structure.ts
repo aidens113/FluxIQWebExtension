@@ -37,11 +37,13 @@ export function detectStructure(request: WebAutomationStructureDetectionRequest)
 }
 
 /**
- * The run around what the selector names. A snapshot's selectors are not
- * always unique -- every product card's link can share one -- and for a read
- * that is fine as long as every match sits in the one run: the answer is the
- * same whichever match was meant. Matches spread over different runs, or over
- * a run and something outside it, are `ambiguous_target`.
+ * The run around what the selector names. A snapshot's own selectors now name
+ * one element each (`selector/unique-selector.ts`), but a selector sent here
+ * need not be one of them -- `[data-testid="product-link"]` names every card's
+ * link -- and for a read that is fine as long as every match sits in the one
+ * run: the answer is the same whichever match was meant. Matches spread over
+ * different runs, or over a run and something outside it, are
+ * `ambiguous_target`.
  */
 function detectAround(selector: string): WebAutomationStructureDetection {
   const elements = queryAll(selector);

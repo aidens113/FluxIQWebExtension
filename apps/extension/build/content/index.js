@@ -204,68 +204,147 @@
     return value === "alert" || value === "confirm" || value === "prompt" || value === "beforeunload" ? value : void 0;
   }
 
-  // src/content/element-finder.ts
-  function findClosestFingerprint(fingerprint) {
-    const bySelector = query(fingerprint.selector);
-    if (bySelector) return bySelector;
-    if (fingerprint.xpath) {
-      const result = document.evaluate(fingerprint.xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-      if (result instanceof Element) return result;
+  // src/content/selector/element-anchors.ts
+  var TEST_ID_ATTRIBUTES = ["data-testid", "data-test", "data-cy"];
+  function elementAnchors(element) {
+    const anchors = [];
+    const id = element.getAttribute("id");
+    if (id) {
+      const byId = `#${CSS.escape(id)}`;
+      anchors.push({ selector: byId, qualifier: byId });
     }
-    if (fingerprint.id) {
-      const byId = document.getElementById(fingerprint.id);
-      if (byId) return byId;
+    for (const attribute of TEST_ID_ATTRIBUTES) {
+      const testId = element.getAttribute(attribute);
+      if (!testId) continue;
+      const byTestId = `[${attribute}="${CSS.escape(testId)}"]`;
+      anchors.push({ selector: byTestId, qualifier: byTestId });
     }
-    const tag = fingerprint.tagName || "*";
-    const testId = fingerprint.attributes?.["data-testid"];
-    if (testId) {
-      const byTestId = query(`[data-testid="${cssString(testId)}"]`);
-      if (byTestId) return byTestId;
+    const name = element.getAttribute("name");
+    if (name) {
+      const byName = `[name="${CSS.escape(name)}"]`;
+      anchors.push({ selector: `${CSS.escape(element.localName)}${byName}`, qualifier: byName });
     }
-    if (fingerprint.name) {
-      const byName = query(`${tag}[aria-label="${cssString(fingerprint.name)}"], ${tag}[name="${cssString(fingerprint.name)}"]`);
-      if (byName) return byName;
-    }
-    if (fingerprint.classNames?.length) {
-      const byClass = query(`${tag}${fingerprint.classNames.map((className) => `.${CSS.escape(className)}`).join("")}`);
-      if (byClass) return byClass;
-    }
-    if (fingerprint.visibleText) {
-      const normalized = normalizeText(fingerprint.visibleText);
-      return [...document.querySelectorAll(tag)].find((element) => normalizeText(element.textContent ?? "") === normalized) ?? null;
-    }
-    return null;
+    return anchors;
   }
-  function xpathFor(element) {
-    const parts2 = [];
-    let current = element;
-    while (current) {
-      if (current.id) {
-        parts2.unshift(`*[@id=${xpathString(current.id)}]`);
-        break;
-      }
-      const siblings = current.parentElement ? [...current.parentElement.children].filter((sibling) => sibling.tagName === current.tagName) : [];
-      parts2.unshift(`${current.tagName.toLowerCase()}[${Math.max(1, siblings.indexOf(current) + 1)}]`);
-      current = current.parentElement;
-    }
-    return `/${parts2.join("/")}`;
-  }
-  function query(selector) {
-    if (!selector) return null;
+
+  // src/content/selector/selector-memo.ts
+  var active;
+  function withSelectorMemo(capture) {
+    if (active) return capture();
+    active = { selectors: /* @__PURE__ */ new Map(), soleMatches: /* @__PURE__ */ new Map() };
     try {
-      return document.querySelector(selector);
-    } catch {
-      return null;
+      return capture();
+    } finally {
+      active = void 0;
     }
   }
-  function normalizeText(value) {
-    return value.replace(/\s+/g, " ").trim();
+  function activeSelectorMemo() {
+    return active;
   }
-  function cssString(value) {
-    return CSS.escape(value).replace(/"/g, '\\"');
+
+  // src/content/selector/unique-selector.ts
+  var DOCUMENT_NODE = 9;
+  var DOCUMENT_FRAGMENT_NODE = 11;
+  var HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
+  var SINGLETON_TAGS = /* @__PURE__ */ new Set(["body", "main"]);
+  var MAX_DETACHED_STEPS = 5;
+  function selectorFor(element) {
+    const memo = activeSelectorMemo();
+    const known = memo?.selectors.get(element);
+    if (known !== void 0) return known;
+    const selector = buildSelector(element, memo);
+    memo?.selectors.set(element, selector);
+    return selector;
   }
-  function xpathString(value) {
-    return `"${value.replace(/"/g, '\\"')}"`;
+  function buildSelector(element, memo) {
+    const anchors = elementAnchors(element);
+    const root = searchRoot(element);
+    if (!root) return anchors[0]?.selector ?? detachedPath(element);
+    if (root.nodeType === DOCUMENT_NODE && element === root.documentElement) return ":root";
+    for (const anchor of anchors) {
+      if (soleMatch(root, anchor.selector, memo) === element) return anchor.selector;
+    }
+    if (SINGLETON_TAGS.has(element.localName) && element.namespaceURI === HTML_NAMESPACE) {
+      const tag = typeSelector(element);
+      if (soleMatch(root, tag, memo) === element) return tag;
+    }
+    const first = anchors[0];
+    const parent = element.parentElement;
+    if (!parent) return step(element, first);
+    if (first) {
+      const holder = soleHolder(element, first.selector);
+      if (holder) return `${selectorFor(holder)} ${first.selector}`;
+    }
+    return `${selectorFor(parent)} > ${step(element, first)}`;
+  }
+  function searchRoot(element) {
+    if (!element.isConnected) return void 0;
+    const root = element.getRootNode();
+    if (root.nodeType === DOCUMENT_NODE) return root;
+    if (root.nodeType === DOCUMENT_FRAGMENT_NODE && "host" in root) return root;
+    return void 0;
+  }
+  function soleMatch(root, selector, memo) {
+    let known = memo?.soleMatches.get(root);
+    const cached = known?.get(selector);
+    if (cached !== void 0) return cached;
+    let sole = null;
+    try {
+      const matches = root.querySelectorAll(selector);
+      sole = matches.length === 1 ? matches[0] ?? null : null;
+    } catch {
+      sole = null;
+    }
+    if (memo) {
+      if (!known) {
+        known = /* @__PURE__ */ new Map();
+        memo.soleMatches.set(root, known);
+      }
+      known.set(selector, sole);
+    }
+    return sole;
+  }
+  function soleHolder(element, selector) {
+    let holder;
+    for (let ancestor = element.parentElement; ancestor; ancestor = ancestor.parentElement) {
+      if (matchCountWithin(ancestor, selector) !== 1) break;
+      holder = ancestor;
+    }
+    return holder;
+  }
+  function matchCountWithin(ancestor, selector) {
+    try {
+      return ancestor.querySelectorAll(selector).length;
+    } catch {
+      return Number.POSITIVE_INFINITY;
+    }
+  }
+  function step(element, anchor) {
+    return `${typeSelector(element)}${anchor?.qualifier ?? ""}${position(element)}`;
+  }
+  function typeSelector(element) {
+    return CSS.escape(element.localName);
+  }
+  function position(element) {
+    let index = 1;
+    for (let sibling = element.previousElementSibling; sibling; sibling = sibling.previousElementSibling) {
+      if (sameType(sibling, element)) index += 1;
+    }
+    let shared = index > 1;
+    for (let sibling = element.nextElementSibling; sibling && !shared; sibling = sibling.nextElementSibling) {
+      if (sameType(sibling, element)) shared = true;
+    }
+    return shared ? `:nth-of-type(${index})` : "";
+  }
+  function sameType(left, right) {
+    return left.localName === right.localName && left.namespaceURI === right.namespaceURI;
+  }
+  function detachedPath(element) {
+    const steps = [];
+    for (let current = element; current && steps.length < MAX_DETACHED_STEPS; current = current.parentElement) {
+      steps.unshift(`${typeSelector(current)}${position(current)}`);
+    }
+    return steps.join(" > ");
   }
 
   // ../../domain/src/constants.ts
@@ -338,17 +417,17 @@
     return Object.keys(fields).length > 0 ? fields : void 0;
   }
   function listPosition(value) {
-    const position = objectValue(value);
-    const index = numberValue(position?.index);
-    const total = numberValue(position?.total);
+    const position2 = objectValue(value);
+    const index = numberValue(position2?.index);
+    const total = numberValue(position2?.total);
     return index === void 0 || total === void 0 ? void 0 : { index, total };
   }
   function tablePosition(value) {
-    const position = objectValue(value);
-    const row = numberValue(position?.row);
-    const column = numberValue(position?.column);
+    const position2 = objectValue(value);
+    const row = numberValue(position2?.row);
+    const column = numberValue(position2?.column);
     if (row === void 0 || column === void 0) return void 0;
-    const columnHeader2 = stringValue(position?.columnHeader);
+    const columnHeader2 = stringValue(position2?.columnHeader);
     return columnHeader2 === void 0 ? { row, column } : { row, column, columnHeader: columnHeader2 };
   }
   function elementAttributes(value) {
@@ -3646,122 +3725,6 @@
     return typeof value === "string" && value.trim().length > 0;
   }
 
-  // src/content/visual-bounds.ts
-  function visualViewportBounds(element) {
-    return visibleViewportBounds(element) ?? (isInteractableUiElement(element) ? renderedTextViewportBounds(element) : directTextViewportBounds(element));
-  }
-  function visualDocumentBounds(element) {
-    return documentBounds(element) ?? (isInteractableUiElement(element) ? renderedTextBounds(element) : directTextBounds(element));
-  }
-  function visibleViewportBounds(element) {
-    const rect2 = element.getBoundingClientRect();
-    const fallbackBounds = !hasUsableRect(rect2) ? directTextViewportBounds(element) : void 0;
-    if (fallbackBounds) return fallbackBounds;
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    const left = Math.max(0, rect2.left);
-    const top = Math.max(0, rect2.top);
-    const right = Math.min(viewportWidth, rect2.right);
-    const bottom = Math.min(viewportHeight, rect2.bottom);
-    const width = right - left;
-    const height = bottom - top;
-    if (!Number.isFinite(width) || !Number.isFinite(height) || width < 2 || height < 2) return void 0;
-    return {
-      x: Math.round(left * 100) / 100,
-      y: Math.round(top * 100) / 100,
-      width: Math.round(width * 100) / 100,
-      height: Math.round(height * 100) / 100
-    };
-  }
-  function documentBounds(element) {
-    const rect2 = element.getBoundingClientRect();
-    if (!hasUsableRect(rect2)) return void 0;
-    const width = rect2.width;
-    const height = rect2.height;
-    if (!Number.isFinite(width) || !Number.isFinite(height) || width < 2 || height < 2) return void 0;
-    return {
-      x: Math.round((rect2.left + window.scrollX) * 100) / 100,
-      y: Math.round((rect2.top + window.scrollY) * 100) / 100,
-      width: Math.round(width * 100) / 100,
-      height: Math.round(height * 100) / 100
-    };
-  }
-  function directTextBounds(element) {
-    return textRangeBounds(element, "document", "direct");
-  }
-  function renderedTextBounds(element) {
-    return textRangeBounds(element, "document", "descendant");
-  }
-  function directTextViewportBounds(element) {
-    return textRangeBounds(element, "viewport", "direct");
-  }
-  function renderedTextViewportBounds(element) {
-    return textRangeBounds(element, "viewport", "descendant");
-  }
-  function textRangeBounds(element, coordinateSpace, scope) {
-    const textNodes = scope === "direct" ? directTextNodes(element) : descendantTextNodes(element);
-    if (!textNodes.length) return void 0;
-    const rects = [];
-    for (const node of textNodes) {
-      const range = document.createRange();
-      range.selectNodeContents(node);
-      for (const rect2 of range.getClientRects()) {
-        if (hasUsableRect(rect2)) rects.push(rect2);
-      }
-      range.detach();
-    }
-    return mergedBounds(rects, coordinateSpace);
-  }
-  function directTextNodes(element) {
-    return [...element.childNodes].filter(
-      (node) => node.nodeType === Node.TEXT_NODE && meaningfulText2(node.textContent)
-    );
-  }
-  function descendantTextNodes(element) {
-    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
-      acceptNode: (node) => meaningfulText2(node.textContent) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
-    });
-    const nodes = [];
-    let current = walker.nextNode();
-    while (current) {
-      nodes.push(current);
-      current = walker.nextNode();
-    }
-    return nodes;
-  }
-  function mergedBounds(rects, coordinateSpace) {
-    if (!rects.length) return void 0;
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    let left = Number.POSITIVE_INFINITY;
-    let top = Number.POSITIVE_INFINITY;
-    let right = Number.NEGATIVE_INFINITY;
-    let bottom = Number.NEGATIVE_INFINITY;
-    for (const rect2 of rects) {
-      const rectLeft = coordinateSpace === "viewport" ? Math.max(0, rect2.left) : rect2.left + window.scrollX;
-      const rectTop = coordinateSpace === "viewport" ? Math.max(0, rect2.top) : rect2.top + window.scrollY;
-      const rectRight = coordinateSpace === "viewport" ? Math.min(viewportWidth, rect2.right) : rect2.right + window.scrollX;
-      const rectBottom = coordinateSpace === "viewport" ? Math.min(viewportHeight, rect2.bottom) : rect2.bottom + window.scrollY;
-      if (rectRight - rectLeft < 2 || rectBottom - rectTop < 2) continue;
-      left = Math.min(left, rectLeft);
-      top = Math.min(top, rectTop);
-      right = Math.max(right, rectRight);
-      bottom = Math.max(bottom, rectBottom);
-    }
-    const width = right - left;
-    const height = bottom - top;
-    if (!Number.isFinite(width) || !Number.isFinite(height) || width < 2 || height < 2) return void 0;
-    return {
-      x: Math.round(left * 100) / 100,
-      y: Math.round(top * 100) / 100,
-      width: Math.round(width * 100) / 100,
-      height: Math.round(height * 100) / 100
-    };
-  }
-  function hasUsableRect(rect2) {
-    return Number.isFinite(rect2.width) && Number.isFinite(rect2.height) && rect2.width >= 2 && rect2.height >= 2;
-  }
-
   // src/content/sensitive-text.ts
   function textOutsideSensitiveControls(element, extent = "all") {
     const text3 = extent === "own" ? ownText(element) : element.textContent ?? "";
@@ -3827,7 +3790,7 @@
     if (native) return [...native].slice(0, MAX_ASSOCIATED_LABELS);
     const labels = [];
     if (element.id) {
-      for (const label of document.querySelectorAll(`label[for="${cssString2(element.id)}"]`)) labels.push(label);
+      for (const label of document.querySelectorAll(`label[for="${cssString(element.id)}"]`)) labels.push(label);
     }
     const ancestor = element.closest("label");
     if (ancestor && !labels.includes(ancestor)) labels.push(ancestor);
@@ -3878,7 +3841,7 @@
     if (element instanceof HTMLSelectElement || element instanceof HTMLTextAreaElement) return true;
     return element instanceof HTMLElement && element.isContentEditable;
   }
-  function cssString2(value) {
+  function cssString(value) {
     return CSS.escape(value).replace(/"/gu, '\\"');
   }
 
@@ -4529,7 +4492,7 @@
       return;
     }
     const similarity = textSimilarity(expected, actual);
-    contribute(signalPath, similarity >= 0.35 ? similarity : -0.55, similarity >= 0.92 ? "text matched exactly" : "text compared by normalized overlap", { expected: normalizeText2(expected), actual: normalizeText2(actual) });
+    contribute(signalPath, similarity >= 0.35 ? similarity : -0.55, similarity >= 0.92 ? "text matched exactly" : "text compared by normalized overlap", { expected: normalizeText(expected), actual: normalizeText(actual) });
   }
   var MISSING_STABLE_IDENTIFIER_SIMILARITY = -0.1;
   var CONTRADICTED_STABLE_IDENTIFIER_SIMILARITY = -0.8;
@@ -4600,8 +4563,8 @@
     contribute("bounds", similarity, "bounds proximity comparison", { distance: round(distance), sizeRatio: round(sizeRatio) });
   }
   function textSimilarity(left, right) {
-    const normalizedLeft = normalizeText2(left);
-    const normalizedRight = normalizeText2(right);
+    const normalizedLeft = normalizeText(left);
+    const normalizedRight = normalizeText(right);
     if (normalizedLeft === normalizedRight) return 1;
     if (normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft)) return 0.82;
     return jaccard(normalizedLeft.split(" "), normalizedRight.split(" "));
@@ -4647,9 +4610,9 @@
     return typeof value === "string" && value.trim().length > 0;
   }
   function normalizeCase(value) {
-    return normalizeText2(value ?? "");
+    return normalizeText(value ?? "");
   }
-  function normalizeText2(value) {
+  function normalizeText(value) {
     return value.trim().replace(/\s+/g, " ").toLowerCase();
   }
   function statePathKey(value) {
@@ -4745,127 +4708,120 @@
     );
   }
 
-  // src/content/describe-element.ts
-  function describeElement(element) {
-    const bounds = visualViewportBounds(element);
-    const docBounds = visualDocumentBounds(element);
-    const descriptor = {
-      tagName: element.tagName.toLowerCase(),
-      selector: selectorFor(element),
-      isVisibleOnViewport: Boolean(bounds)
+  // src/content/visual-bounds.ts
+  function visualViewportBounds(element) {
+    return visibleViewportBounds(element) ?? (isInteractableUiElement(element) ? renderedTextViewportBounds(element) : directTextViewportBounds(element));
+  }
+  function visualDocumentBounds(element) {
+    return documentBounds(element) ?? (isInteractableUiElement(element) ? renderedTextBounds(element) : directTextBounds(element));
+  }
+  function visibleViewportBounds(element) {
+    const rect2 = element.getBoundingClientRect();
+    const fallbackBounds = !hasUsableRect(rect2) ? directTextViewportBounds(element) : void 0;
+    if (fallbackBounds) return fallbackBounds;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const left = Math.max(0, rect2.left);
+    const top = Math.max(0, rect2.top);
+    const right = Math.min(viewportWidth, rect2.right);
+    const bottom = Math.min(viewportHeight, rect2.bottom);
+    const width = right - left;
+    const height = bottom - top;
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width < 2 || height < 2) return void 0;
+    return {
+      x: Math.round(left * 100) / 100,
+      y: Math.round(top * 100) / 100,
+      width: Math.round(width * 100) / 100,
+      height: Math.round(height * 100) / 100
     };
-    if (bounds) descriptor.bounds = bounds;
-    if (docBounds) descriptor.documentBounds = docBounds;
-    if (hasClickHandler(element)) descriptor.hasClickHandler = true;
-    const text3 = isInteractableUiElement(element) || isSemanticTextElement2(element) ? visibleText(element) : directVisibleText(element);
-    if (text3) {
-      descriptor.text = text3;
-      descriptor.visibleText = text3;
+  }
+  function documentBounds(element) {
+    const rect2 = element.getBoundingClientRect();
+    if (!hasUsableRect(rect2)) return void 0;
+    const width = rect2.width;
+    const height = rect2.height;
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width < 2 || height < 2) return void 0;
+    return {
+      x: Math.round((rect2.left + window.scrollX) * 100) / 100,
+      y: Math.round((rect2.top + window.scrollY) * 100) / 100,
+      width: Math.round(width * 100) / 100,
+      height: Math.round(height * 100) / 100
+    };
+  }
+  function directTextBounds(element) {
+    return textRangeBounds(element, "document", "direct");
+  }
+  function renderedTextBounds(element) {
+    return textRangeBounds(element, "document", "descendant");
+  }
+  function directTextViewportBounds(element) {
+    return textRangeBounds(element, "viewport", "direct");
+  }
+  function renderedTextViewportBounds(element) {
+    return textRangeBounds(element, "viewport", "descendant");
+  }
+  function textRangeBounds(element, coordinateSpace, scope) {
+    const textNodes = scope === "direct" ? directTextNodes(element) : descendantTextNodes(element);
+    if (!textNodes.length) return void 0;
+    const rects = [];
+    for (const node of textNodes) {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      for (const rect2 of range.getClientRects()) {
+        if (hasUsableRect(rect2)) rects.push(rect2);
+      }
+      range.detach();
     }
-    if (element.id) descriptor.id = element.id;
-    const classNames = [...element.classList];
-    if (classNames.length) descriptor.classNames = classNames;
-    descriptor.xpath = xpathFor(element);
-    const value = readElementValue(element);
-    if (value !== void 0 && captureSettings.inputValues) descriptor.value = value;
-    const role = element.getAttribute("role");
-    if (role) descriptor.role = role;
-    const name = authoredNameAttribute(element);
-    if (name) descriptor.name = name;
-    const href = linkHref(element);
-    if (href) descriptor.href = href;
-    if (element instanceof HTMLInputElement && element.type) descriptor.inputType = element.type;
-    const checked = checkedState(element);
-    if (checked !== void 0) descriptor.checked = checked;
-    const valuePresent = hasEnteredValue(element);
-    if (valuePresent !== void 0) descriptor.hasValue = valuePresent;
-    const testId = testIdFor(element);
-    if (testId) descriptor.testId = testId;
-    const computedName = accessibleNameFor(element);
-    if (computedName) descriptor.accessibleName = computedName;
-    const label = labelText(element);
-    if (label) descriptor.label = label;
-    const markupRole = implicitRole(element);
-    if (markupRole) descriptor.implicitRole = markupRole;
-    const context = elementContext2(element);
-    if (context) descriptor.context = context;
-    const select = selectState(element);
-    if (select) {
-      descriptor.options = select.options;
-      if (select.selectedValue !== void 0) descriptor.selectedValue = select.selectedValue;
+    return mergedBounds(rects, coordinateSpace);
+  }
+  function directTextNodes(element) {
+    return [...element.childNodes].filter(
+      (node) => node.nodeType === Node.TEXT_NODE && meaningfulText2(node.textContent)
+    );
+  }
+  function descendantTextNodes(element) {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node) => meaningfulText2(node.textContent) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
+    });
+    const nodes = [];
+    let current = walker.nextNode();
+    while (current) {
+      nodes.push(current);
+      current = walker.nextNode();
     }
-    const attributes = {};
-    for (const attribute of ["id", "class", "name", "type", "autocomplete", "data-sensitive", "placeholder", "title", "alt", "href", "tabindex", "aria-label", "aria-labelledby", "aria-describedby", "for", "aria-disabled", "aria-expanded", "aria-controls", "aria-pressed", "aria-selected", "data-testid", "data-test", "data-cy", "disabled", "onclick"]) {
-      const value2 = element.getAttribute(attribute);
-      if (value2 !== null) attributes[attribute] = value2.slice(0, 500);
+    return nodes;
+  }
+  function mergedBounds(rects, coordinateSpace) {
+    if (!rects.length) return void 0;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    let left = Number.POSITIVE_INFINITY;
+    let top = Number.POSITIVE_INFINITY;
+    let right = Number.NEGATIVE_INFINITY;
+    let bottom = Number.NEGATIVE_INFINITY;
+    for (const rect2 of rects) {
+      const rectLeft = coordinateSpace === "viewport" ? Math.max(0, rect2.left) : rect2.left + window.scrollX;
+      const rectTop = coordinateSpace === "viewport" ? Math.max(0, rect2.top) : rect2.top + window.scrollY;
+      const rectRight = coordinateSpace === "viewport" ? Math.min(viewportWidth, rect2.right) : rect2.right + window.scrollX;
+      const rectBottom = coordinateSpace === "viewport" ? Math.min(viewportHeight, rect2.bottom) : rect2.bottom + window.scrollY;
+      if (rectRight - rectLeft < 2 || rectBottom - rectTop < 2) continue;
+      left = Math.min(left, rectLeft);
+      top = Math.min(top, rectTop);
+      right = Math.max(right, rectRight);
+      bottom = Math.max(bottom, rectBottom);
     }
-    if (Object.keys(attributes).length) descriptor.attributes = attributes;
-    return descriptor;
+    const width = right - left;
+    const height = bottom - top;
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width < 2 || height < 2) return void 0;
+    return {
+      x: Math.round(left * 100) / 100,
+      y: Math.round(top * 100) / 100,
+      width: Math.round(width * 100) / 100,
+      height: Math.round(height * 100) / 100
+    };
   }
-  function selectorFor(element) {
-    if (element.id) return `#${CSS.escape(element.id)}`;
-    const testId = element.getAttribute("data-testid");
-    if (testId) return `[data-testid="${cssString3(testId)}"]`;
-    const name = element.getAttribute("name");
-    if (name) return `${element.tagName.toLowerCase()}[name="${cssString3(name)}"]`;
-    const parts2 = [];
-    let current = element;
-    while (current && current !== document.documentElement && parts2.length < 5) {
-      const parent = current.parentElement;
-      const tag = current.tagName.toLowerCase();
-      const siblings = parent ? [...parent.children].filter((child2) => child2.tagName === current?.tagName) : [];
-      const index = siblings.indexOf(current) + 1;
-      parts2.unshift(siblings.length > 1 ? `${tag}:nth-of-type(${index})` : tag);
-      current = parent;
-    }
-    return parts2.join(" > ");
-  }
-  function visibleText(element) {
-    const text3 = textOutsideSensitiveControls(element).replace(/\s+/g, " ").trim();
-    return text3 ? text3.slice(0, 500) : void 0;
-  }
-  function directVisibleText(element) {
-    const text3 = textOutsideSensitiveControls(element, "own").replace(/\s+/g, " ").trim();
-    return text3 ? text3.slice(0, 500) : void 0;
-  }
-  function readElementValue(element) {
-    if (!element) return void 0;
-    if (isWithinSensitiveControl(element)) return void 0;
-    if (element instanceof HTMLInputElement && element.type.toLowerCase() === "file") return void 0;
-    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) {
-      return element.value.slice(0, 2e3);
-    }
-    if (element instanceof HTMLElement && element.isContentEditable) return element.innerText.slice(0, 2e3);
-    return void 0;
-  }
-  function checkedState(element) {
-    if (!(element instanceof HTMLInputElement)) return void 0;
-    const type = element.type.toLowerCase();
-    if (type !== "checkbox" && type !== "radio") return void 0;
-    return isWithinSensitiveControl(element) ? void 0 : element.checked;
-  }
-  function selectState(element) {
-    if (!(element instanceof HTMLSelectElement) || isWithinSensitiveControl(element)) return void 0;
-    const options = [...element.options].slice(0, 20).map((option) => ({
-      value: option.value.slice(0, 200),
-      label: (option.label || option.textContent || "").replace(/\s+/gu, " ").trim().slice(0, 200)
-    }));
-    const state = { options };
-    if (options.some((option) => option.value === element.value)) state.selectedValue = element.value.slice(0, 200);
-    return state;
-  }
-  function testIdFor(element) {
-    return element.getAttribute("data-testid") ?? element.getAttribute("data-test") ?? element.getAttribute("data-cy") ?? void 0;
-  }
-  function linkHref(element) {
-    if (element instanceof HTMLAnchorElement && element.href) return element.href;
-    return element.getAttribute("href") ?? element.getAttribute("xlink:href") ?? void 0;
-  }
-  function stableElementId2(element) {
-    return testIdFor(element) ?? element.getAttribute("id") ?? element.getAttribute("name") ?? void 0;
-  }
-  function cssString3(value) {
-    return CSS.escape(value).replace(/"/g, '\\"');
+  function hasUsableRect(rect2) {
+    return Number.isFinite(rect2.width) && Number.isFinite(rect2.height) && rect2.width >= 2 && rect2.height >= 2;
   }
 
   // src/content/evidence/dialogs.ts
@@ -5241,6 +5197,172 @@
     return regions.length ? regions : void 0;
   }
 
+  // src/content/element-finder.ts
+  function findClosestFingerprint(fingerprint) {
+    const bySelector = query(fingerprint.selector);
+    if (bySelector) return bySelector;
+    if (fingerprint.xpath) {
+      const result = document.evaluate(fingerprint.xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+      if (result instanceof Element) return result;
+    }
+    if (fingerprint.id) {
+      const byId = document.getElementById(fingerprint.id);
+      if (byId) return byId;
+    }
+    const tag = fingerprint.tagName || "*";
+    const testId = fingerprint.attributes?.["data-testid"];
+    if (testId) {
+      const byTestId = query(`[data-testid="${cssString2(testId)}"]`);
+      if (byTestId) return byTestId;
+    }
+    if (fingerprint.name) {
+      const byName = query(`${tag}[aria-label="${cssString2(fingerprint.name)}"], ${tag}[name="${cssString2(fingerprint.name)}"]`);
+      if (byName) return byName;
+    }
+    if (fingerprint.classNames?.length) {
+      const byClass = query(`${tag}${fingerprint.classNames.map((className) => `.${CSS.escape(className)}`).join("")}`);
+      if (byClass) return byClass;
+    }
+    if (fingerprint.visibleText) {
+      const normalized = normalizeText2(fingerprint.visibleText);
+      return [...document.querySelectorAll(tag)].find((element) => normalizeText2(element.textContent ?? "") === normalized) ?? null;
+    }
+    return null;
+  }
+  function xpathFor(element) {
+    const parts2 = [];
+    let current = element;
+    while (current) {
+      if (current.id) {
+        parts2.unshift(`*[@id=${xpathString(current.id)}]`);
+        break;
+      }
+      const siblings = current.parentElement ? [...current.parentElement.children].filter((sibling) => sibling.tagName === current.tagName) : [];
+      parts2.unshift(`${current.tagName.toLowerCase()}[${Math.max(1, siblings.indexOf(current) + 1)}]`);
+      current = current.parentElement;
+    }
+    return `/${parts2.join("/")}`;
+  }
+  function query(selector) {
+    if (!selector) return null;
+    try {
+      return document.querySelector(selector);
+    } catch {
+      return null;
+    }
+  }
+  function normalizeText2(value) {
+    return value.replace(/\s+/g, " ").trim();
+  }
+  function cssString2(value) {
+    return CSS.escape(value).replace(/"/g, '\\"');
+  }
+  function xpathString(value) {
+    return `"${value.replace(/"/g, '\\"')}"`;
+  }
+
+  // src/content/describe-element.ts
+  function describeElement(element) {
+    const bounds = visualViewportBounds(element);
+    const docBounds = visualDocumentBounds(element);
+    const descriptor = {
+      tagName: element.tagName.toLowerCase(),
+      selector: selectorFor(element),
+      isVisibleOnViewport: Boolean(bounds)
+    };
+    if (bounds) descriptor.bounds = bounds;
+    if (docBounds) descriptor.documentBounds = docBounds;
+    if (hasClickHandler(element)) descriptor.hasClickHandler = true;
+    const text3 = isInteractableUiElement(element) || isSemanticTextElement2(element) ? visibleText(element) : directVisibleText(element);
+    if (text3) {
+      descriptor.text = text3;
+      descriptor.visibleText = text3;
+    }
+    if (element.id) descriptor.id = element.id;
+    const classNames = [...element.classList];
+    if (classNames.length) descriptor.classNames = classNames;
+    descriptor.xpath = xpathFor(element);
+    const value = readElementValue(element);
+    if (value !== void 0 && captureSettings.inputValues) descriptor.value = value;
+    const role = element.getAttribute("role");
+    if (role) descriptor.role = role;
+    const name = authoredNameAttribute(element);
+    if (name) descriptor.name = name;
+    const href = linkHref(element);
+    if (href) descriptor.href = href;
+    if (element instanceof HTMLInputElement && element.type) descriptor.inputType = element.type;
+    const checked = checkedState(element);
+    if (checked !== void 0) descriptor.checked = checked;
+    const valuePresent = hasEnteredValue(element);
+    if (valuePresent !== void 0) descriptor.hasValue = valuePresent;
+    const testId = testIdFor(element);
+    if (testId) descriptor.testId = testId;
+    const computedName = accessibleNameFor(element);
+    if (computedName) descriptor.accessibleName = computedName;
+    const label = labelText(element);
+    if (label) descriptor.label = label;
+    const markupRole = implicitRole(element);
+    if (markupRole) descriptor.implicitRole = markupRole;
+    const context = elementContext2(element);
+    if (context) descriptor.context = context;
+    const select = selectState(element);
+    if (select) {
+      descriptor.options = select.options;
+      if (select.selectedValue !== void 0) descriptor.selectedValue = select.selectedValue;
+    }
+    const attributes = {};
+    for (const attribute of ["id", "class", "name", "type", "autocomplete", "data-sensitive", "placeholder", "title", "alt", "href", "tabindex", "aria-label", "aria-labelledby", "aria-describedby", "for", "aria-disabled", "aria-expanded", "aria-controls", "aria-pressed", "aria-selected", "data-testid", "data-test", "data-cy", "disabled", "onclick"]) {
+      const value2 = element.getAttribute(attribute);
+      if (value2 !== null) attributes[attribute] = value2.slice(0, 500);
+    }
+    if (Object.keys(attributes).length) descriptor.attributes = attributes;
+    return descriptor;
+  }
+  function visibleText(element) {
+    const text3 = textOutsideSensitiveControls(element).replace(/\s+/g, " ").trim();
+    return text3 ? text3.slice(0, 500) : void 0;
+  }
+  function directVisibleText(element) {
+    const text3 = textOutsideSensitiveControls(element, "own").replace(/\s+/g, " ").trim();
+    return text3 ? text3.slice(0, 500) : void 0;
+  }
+  function readElementValue(element) {
+    if (!element) return void 0;
+    if (isWithinSensitiveControl(element)) return void 0;
+    if (element instanceof HTMLInputElement && element.type.toLowerCase() === "file") return void 0;
+    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) {
+      return element.value.slice(0, 2e3);
+    }
+    if (element instanceof HTMLElement && element.isContentEditable) return element.innerText.slice(0, 2e3);
+    return void 0;
+  }
+  function checkedState(element) {
+    if (!(element instanceof HTMLInputElement)) return void 0;
+    const type = element.type.toLowerCase();
+    if (type !== "checkbox" && type !== "radio") return void 0;
+    return isWithinSensitiveControl(element) ? void 0 : element.checked;
+  }
+  function selectState(element) {
+    if (!(element instanceof HTMLSelectElement) || isWithinSensitiveControl(element)) return void 0;
+    const options = [...element.options].slice(0, 20).map((option) => ({
+      value: option.value.slice(0, 200),
+      label: (option.label || option.textContent || "").replace(/\s+/gu, " ").trim().slice(0, 200)
+    }));
+    const state = { options };
+    if (options.some((option) => option.value === element.value)) state.selectedValue = element.value.slice(0, 200);
+    return state;
+  }
+  function testIdFor(element) {
+    return element.getAttribute("data-testid") ?? element.getAttribute("data-test") ?? element.getAttribute("data-cy") ?? void 0;
+  }
+  function linkHref(element) {
+    if (element instanceof HTMLAnchorElement && element.href) return element.href;
+    return element.getAttribute("href") ?? element.getAttribute("xlink:href") ?? void 0;
+  }
+  function stableElementId2(element) {
+    return testIdFor(element) ?? element.getAttribute("id") ?? element.getAttribute("name") ?? void 0;
+  }
+
   // src/content/evidence/repeating.ts
   var ITEM_SELECTOR = "li,tr,article,[data-testid],[role='listitem'],[role='row'],[role='option'],[role='article'],[role='treeitem']";
   var MAX_SCANNED_ITEMS = 2e3;
@@ -5346,6 +5468,9 @@
   var MAX_SNAPSHOT_CANDIDATES = 2e3;
   var MAX_SNAPSHOT_SCAN_ELEMENTS = 5e4;
   function captureSnapshot() {
+    return withSelectorMemo(captureSnapshotNow);
+  }
+  function captureSnapshotNow() {
     const { entries, counts } = snapshotElements();
     const evidence = pageEvidence(entries, counts);
     const snapshot = {
@@ -6085,7 +6210,7 @@
   }
   async function scrollUntilStable(action, request, deps, startedAt) {
     const cap = Math.max(1, Math.floor(finiteNumber(request.maxScrolls, 1)));
-    const step = request.y === void 0 ? void 0 : finiteNumber(request.y, 0);
+    const step2 = request.y === void 0 ? void 0 : finiteNumber(request.y, 0);
     const startHeight = documentHeight();
     let height = startHeight;
     let scrolls = 0;
@@ -6093,7 +6218,7 @@
     while (scrolls < cap) {
       const from = currentPosition();
       const bottom = scrollLimits().y;
-      window.scrollTo({ left: from.x, top: step === void 0 ? bottom : Math.min(from.y + step, bottom), behavior: "instant" });
+      window.scrollTo({ left: from.x, top: step2 === void 0 ? bottom : Math.min(from.y + step2, bottom), behavior: "instant" });
       scrolls += 1;
       const grown = await waitForGrowth(height);
       if (grown !== void 0) {
@@ -6137,8 +6262,8 @@
   async function settleAt(target) {
     const deadline = Date.now() + SMOOTH_SETTLE_MS;
     do {
-      const position = currentPosition();
-      if (Math.abs(position.x - target.x) <= POSITION_TOLERANCE_PX && Math.abs(position.y - target.y) <= POSITION_TOLERANCE_PX) return;
+      const position2 = currentPosition();
+      if (Math.abs(position2.x - target.x) <= POSITION_TOLERANCE_PX && Math.abs(position2.y - target.y) <= POSITION_TOLERANCE_PX) return;
       await delay(GROWTH_POLL_MS);
     } while (Date.now() < deadline);
   }
@@ -6480,8 +6605,8 @@
       throw ambiguous(attempt, pool, decided2);
     }
     if (!misses.length) {
-      const active = document.activeElement;
-      if (active) return { element: active, resolution: { strategy: "active-element", candidateCount: 1 } };
+      const active2 = document.activeElement;
+      if (active2) return { element: active2, resolution: { strategy: "active-element", candidateCount: 1 } };
       throw notFound("No selector, coordinates, or active element was available.", [], NO_POOL);
     }
     const { nearby, decided } = target ? scoredFamily(target) : NO_FAMILY;
@@ -7039,8 +7164,8 @@
     const order = tabOrder();
     if (order.length === 0) return void 0;
     const index = order.indexOf(from);
-    const step = backwards ? -1 : 1;
-    const next = index === -1 ? order[backwards ? order.length - 1 : 0] : order[(index + step + order.length) % order.length];
+    const step2 = backwards ? -1 : 1;
+    const next = index === -1 ? order[backwards ? order.length - 1 : 0] : order[(index + step2 + order.length) % order.length];
     if (!next) return void 0;
     next.focus();
     return document.activeElement === next ? next : void 0;

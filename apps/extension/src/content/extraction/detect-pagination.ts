@@ -26,7 +26,8 @@
 // reaches the proposal (decision D3): what travels is the selector.
 
 import { WEB_AUTOMATION_EXTRACT_MAX_PAGES, webAutomationItemSignature, type WebAutomationExtractListPagination } from "@fluxiq-web-extension/domain/client";
-import { selectorFor, testIdFor } from "../describe-element";
+import { testIdFor } from "../describe-element";
+import { selectorFor } from "../selector";
 import { textOutsideSensitiveControls } from "../sensitive-text";
 import { generalizedItemSelector } from "./item-selector";
 

@@ -1192,14 +1192,14 @@ var WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = {
   "web.browser.download": "browser.download"
 };
 
-// src/output-nodes/native-runtime.ts
-var WEB_AUTOMATION_RUNTIME_CAPABILITIES = ["web.actions"];
-var WEB_AUTOMATION_RUNTIME_PERMISSIONS = ["web-automation.action"];
-
 // src/output-nodes/parameter-contracts.ts
 var webAutomationOutputNodeParameterContracts = {
   [webAutomationOutputNodeId("web.dom.extract_list")]: webAutomationExtractListParameterContract
 };
+
+// src/output-nodes/native-runtime.ts
+var WEB_AUTOMATION_RUNTIME_CAPABILITIES = ["web.actions"];
+var WEB_AUTOMATION_RUNTIME_PERMISSIONS = ["web-automation.action"];
 
 // src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);

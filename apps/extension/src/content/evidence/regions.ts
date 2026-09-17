@@ -16,7 +16,7 @@
 // would name a region this list does not contain -- and the fix is the same
 // one, a single rule with a single home.
 
-import { selectorFor } from "../describe-element";
+import { selectorFor } from "../selector";
 import { accessibleNameFor, landmarkRole } from "../identity";
 import { visualDocumentBounds } from "../visual-bounds";
 import { present } from "../../shared/present";

@@ -28,7 +28,8 @@
 // selectors, labels built from structure, counts and coverage.
 
 import { webAutomationItemSignature, type WebAutomationExtractionProposal } from "@fluxiq-web-extension/domain/client";
-import { selectorFor, testIdFor } from "../describe-element";
+import { testIdFor } from "../describe-element";
+import { selectorFor } from "../selector";
 import { detectPagination } from "./detect-pagination";
 import { inferFields } from "./infer-fields";
 import { generalizedItemSelector } from "./item-selector";

@@ -12,7 +12,7 @@
 // it is actually painted, which keeps the permanently-present-but-empty
 // progress container of a fixture or a real page out of the evidence.
 
-import { selectorFor } from "../describe-element";
+import { selectorFor } from "../selector";
 import { accessibleNameFor, boundedText } from "../identity";
 import { present } from "../../shared/present";
 import type { LoadingEvidence, LoadingIndicator } from "./types";

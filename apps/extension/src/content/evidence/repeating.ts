@@ -16,7 +16,8 @@
 
 import { webAutomationIdentifierShape, webAutomationItemSignature } from "@fluxiq-web-extension/domain/client";
 import { boundedText } from "../identity";
-import { selectorFor, testIdFor } from "../describe-element";
+import { testIdFor } from "../describe-element";
+import { selectorFor } from "../selector";
 import { present } from "../../shared/present";
 import type { RepeatingStructureEvidence } from "./types";
 

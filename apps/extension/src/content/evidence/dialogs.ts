@@ -19,7 +19,7 @@ import {
   DIALOG_OBSERVED_ATTRIBUTE,
   decodeDialogObserved
 } from "../../shared/dialog-channel";
-import { selectorFor } from "../describe-element";
+import { selectorFor } from "../selector";
 import { accessibleNameFor } from "../identity";
 import { visualViewportBounds } from "../visual-bounds";
 import { present } from "../../shared/present";

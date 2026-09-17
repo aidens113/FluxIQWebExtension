@@ -5,7 +5,8 @@
 //
 // The identity signals Core's fingerprint normalizer scores -- `testId`,
 // `accessibleName`, `label`, `implicitRole` and `context` -- are derived in
-// `identity/`, one rule per module, and only assembled here (Phase 1.3).
+// `identity/`, one rule per module, and only assembled here (Phase 1.3). The
+// selector is built in `selector/`, which names this element and no other.
 //
 // Sensitivity is handled at the source (Phase 1.4): `readElementValue` is the
 // one value reader every capture path goes through -- this descriptor, the
@@ -51,6 +52,7 @@ import {
   isSemanticTextElement
 } from "./element-traits";
 import { accessibleNameFor, authoredNameAttribute, elementContext, implicitRole, labelText } from "./identity";
+import { selectorFor } from "./selector";
 import { isWithinSensitiveControl, textOutsideSensitiveControls } from "./sensitive-text";
 import type { DomElementDescriptor } from "./types";
 
@@ -113,26 +115,6 @@ export function describeElement(element: Element): DomElementDescriptor {
   }
   if (Object.keys(attributes).length) descriptor.attributes = attributes;
   return descriptor;
-}
-
-/** The most stable CSS selector available, preferring id, then test id, then name. */
-export function selectorFor(element: Element): string {
-  if (element.id) return `#${CSS.escape(element.id)}`;
-  const testId = element.getAttribute("data-testid");
-  if (testId) return `[data-testid="${cssString(testId)}"]`;
-  const name = element.getAttribute("name");
-  if (name) return `${element.tagName.toLowerCase()}[name="${cssString(name)}"]`;
-  const parts: string[] = [];
-  let current: Element | null = element;
-  while (current && current !== document.documentElement && parts.length < 5) {
-    const parent: Element | null = current.parentElement;
-    const tag = current.tagName.toLowerCase();
-    const siblings = parent ? [...parent.children].filter((child) => child.tagName === current?.tagName) : [];
-    const index = siblings.indexOf(current) + 1;
-    parts.unshift(siblings.length > 1 ? `${tag}:nth-of-type(${index})` : tag);
-    current = parent;
-  }
-  return parts.join(" > ");
 }
 
 /**
@@ -253,8 +235,4 @@ export function stableElementId(element: Element): string | undefined {
     element.getAttribute("id") ??
     element.getAttribute("name") ??
     undefined;
-}
-
-function cssString(value: string): string {
-  return CSS.escape(value).replace(/"/g, '\\"');
 }

@@ -27,10 +27,17 @@ class StubElement {
   readonly children: readonly Element[] = [];
   readonly textContent = "";
   readonly labels: undefined;
+  // In the page, so a selector is checked against the stub document.
+  readonly isConnected = true;
   private readonly attributes: Map<string, string>;
 
   constructor(readonly tagName: string, readonly id: string, attributes: Record<string, string>) {
-    this.attributes = new Map(Object.entries(attributes));
+    // The id is an attribute as well as a property, as a browser reflects it.
+    this.attributes = new Map(Object.entries({ ...attributes, id }));
+  }
+
+  getRootNode(): unknown {
+    return (globalThis as unknown as Record<string, unknown>)["document"];
   }
 
   getAttribute(name: string): string | null {
@@ -112,11 +119,16 @@ test("neither call site is answering from a rule of its own", () => {
 function installStubDom(): void {
   const globals = globalThis as unknown as Record<string, unknown>;
   globals["document"] = {
+    nodeType: 9,
     documentElement: {},
     getElementById: () => null,
     // The sweep asks for the landmark candidates; `associatedLabel` asks for a
-    // `<label for>` of a control, which none of these are.
-    querySelectorAll: (selector: string) => (selector.startsWith("label[") ? [] : fixtures.map((fixture) => fixture.element))
+    // `<label for>` of a control, which none of these are; `selectorFor` asks
+    // whether an element's `#id` names it alone.
+    querySelectorAll: (selector: string) =>
+      selector.startsWith("label[") ? [] :
+        selector.startsWith("#") ? fixtures.filter((fixture) => `#${fixture.element.id}` === selector).map((fixture) => fixture.element) :
+          fixtures.map((fixture) => fixture.element)
   };
   globals["window"] = { innerWidth: 1280, innerHeight: 800, scrollX: 0, scrollY: 0 };
   globals["CSS"] = { escape: (value: string) => value };

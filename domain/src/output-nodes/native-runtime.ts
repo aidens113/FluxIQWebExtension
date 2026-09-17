@@ -10,6 +10,7 @@ import { WEB_AUTOMATION_ACTION_TYPES } from "../actions/types";
 import type { WebAutomationActionType } from "../actions/types";
 import { webAutomationOutputNodeDefinitions } from "./definitions";
 import { webAutomationExtractListDispatch } from "./extract-list";
+import { webAutomationOutputNodeParameterContracts } from "./parameter-contracts";
 
 export const WEB_AUTOMATION_IMPORTER_PACKAGE_ID = "@fluxiq-web-extension/domain";
 export const WEB_AUTOMATION_IMPORTER_PACKAGE_VERSION = "0.1.0";
@@ -39,6 +40,9 @@ export function createWebAutomationOutputNodeImplementationBundle(
     implementations: Object.fromEntries(
       WEB_AUTOMATION_ACTION_TYPES.map((outputId) => [outputId, createOutputNodeImplementation(outputId)])
     ),
+    // Core checks these when a Flow is planned, so a malformed extraction a
+    // model wrote is refused before anything runs rather than at dispatch.
+    parameterContracts: { ...webAutomationOutputNodeParameterContracts },
     ...extension
   };
 }

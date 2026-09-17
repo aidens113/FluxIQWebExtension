@@ -24,7 +24,7 @@
 // one flag and nothing else -- and that exact token list has slipped past a
 // copy of the rule twice in this plan.
 
-import { selectorFor } from "../describe-element";
+import { selectorFor } from "../selector";
 import { hasEnteredValue, isSensitiveFormControl } from "../element-traits";
 import { accessibleNameFor, boundedText } from "../identity";
 import { present } from "../../shared/present";
