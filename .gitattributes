@@ -1,0 +1,6 @@
+# Normalize line endings. Without this, core.autocrlf=true lets git checkout
+# write a source file with CRLF while a tool-written one keeps LF -- both clean
+# to git -- and esbuild embeds those bytes verbatim into sourcemap
+# sourcesContent, so the same commit builds different bytes in different
+# checkouts. See docs/working/agent-git-workflow-plan.md.
+* text=auto eol=lf

@@ -31,3 +31,14 @@ apps/extension/.test-build-scratch/
 # docs/architecture/repository-layout.md.
 .lab-instances/
 .lab-locks/
+
+# Generated bundles, untracked 2026-09-17. They were tracked without a recorded
+# reason and nothing reads the committed copies: apps/extension/build/ has no
+# manifest, icons or HTML and is not loadable -- browsers and the Lab load
+# apps/extension/dist/<target>/, already ignored -- and domain/.test-build/ is
+# written and imported inside one test-domain.mjs process. Tracking them made 55
+# of every 100 commits carry generated output, and the sourcemaps are single
+# 438KB-995KB lines that cannot be merged. Regenerate with the extension build
+# and the domain test run. See docs/working/agent-git-workflow-plan.md.
+apps/extension/build/
+domain/.test-build/
