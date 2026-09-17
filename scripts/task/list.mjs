@@ -3,7 +3,7 @@
 // reading -- a task many commits behind `dev` is the one whose merge is about
 // to surface a conflict, or worse, a semantic clash git will not report at all.
 
-import { runGit } from "../worktree/index.mjs";
+import { runGit, samePath } from "../worktree/index.mjs";
 import { parseTaskBranch } from "./branch-name.mjs";
 import { listWorktrees } from "./locate.mjs";
 
@@ -21,7 +21,7 @@ export async function listTasks(repositoryRoot, { integrationBranch = "dev" } = 
       id: parsed?.id ?? null,
       slug: parsed?.slug ?? null,
       branch,
-      worktree: worktrees.find((entry) => entry.branch === branch)?.root ?? null,
+      worktree: worktrees.find((entry) => entry.branch === branch && !samePath(entry.root, repositoryRoot))?.root ?? null,
       ahead,
       behind
     };
