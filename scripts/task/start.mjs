@@ -9,7 +9,7 @@
 
 import { stat } from "node:fs/promises";
 
-import { assertDisposable, buildCore, copyEnvLocal, coreDistPaths, createWorktree, readSideState, runGit } from "../worktree/index.mjs";
+import { assertDisposable, buildCore, copyEnvLocal, coreDistPaths, createWorktree, readSideState, runGit, runPnpm } from "../worktree/index.mjs";
 import { withoutProviderSecrets } from "../provider-secret-environment.mjs";
 import { taskBranchName } from "./branch-name.mjs";
 import { resolveTaskRoots } from "./roots.mjs";
@@ -51,6 +51,14 @@ export async function startTask({ repositoryRoot, coreRepositoryRoot, slug, work
     if (created.coreCreated || !await built(created.coreRoot)) {
       await buildCore(created.coreRoot, { env });
     }
+
+    // The workspace's own packages need building for the same reason Core does:
+    // every `dist/` is gitignored, so a fresh worktree resolves
+    // `@fluxiq-web-extension/test-evidence` and its siblings to nothing and
+    // `pnpm check` dies with TS2307 on a worktree that installed perfectly.
+    // Measured at 16.5s, which is the price of a worktree that can actually be
+    // validated in.
+    await runPnpm(created.root, ["build"], { env });
 
     const env_local = await copyEnvLocal({ fromRoot: repositoryRoot, toRoot: roots.extRoot });
     return { id, branch, from, worktree: created.root, core: created.coreRoot, coreCreated: created.coreCreated, envLocal: env_local, applied: true };
