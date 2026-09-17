@@ -108,3 +108,44 @@ test("a Core that is not a git checkout is refused before anything is created", 
     assert.equal(await present(path.join(trees, "task-a")), false);
   });
 });
+
+test("a Core-paired task gets a Core branch of its own, not the detached shared Core", async () => {
+  // The detached default is right for a task that only builds against Core.
+  // A task that CHANGES Core needs a branch there, or its Core side has no
+  // merge boundary, no revert, and no way to carry the task id.
+  await withRepository(async ({ ext, core, trees, coreGit }) => {
+    const calls = [];
+    const created = await createWorktree(base(ext, core, trees, {
+      coreBranch: "task-a", coreStartPoint: "main", runInstall: installer(calls)
+    }));
+
+    assert.equal(created.coreBranch, "task-a");
+    assert.equal(coreGit("-C", created.coreRoot, "rev-parse", "--abbrev-ref", "HEAD"), "task-a");
+    assert.match(coreGit("branch", "--list", "task-a"), /task-a/u);
+  });
+});
+
+test("without a Core branch the sibling stays detached, so tasks can share one Core", async () => {
+  await withRepository(async ({ ext, core, trees, coreGit }) => {
+    const created = await createWorktree(base(ext, core, trees, { runInstall: installer([]) }));
+
+    assert.equal(created.coreBranch, null);
+    assert.equal(coreGit("-C", created.coreRoot, "rev-parse", "--abbrev-ref", "HEAD"), "HEAD");
+  });
+});
+
+test("a Core branch that already exists refuses the whole pair, leaving nothing behind", async () => {
+  // Decided before `git worktree add`, because a Core branch clash discovered
+  // afterwards would leave this repository's worktree and branch already made.
+  await withRepository(async ({ ext, core, trees, git, coreGit }) => {
+    coreGit("branch", "task-a", "main");
+
+    await assert.rejects(
+      createWorktree(base(ext, core, trees, { coreBranch: "task-a", coreStartPoint: "main", runInstall: installer([]) })),
+      /already exists in Core/u
+    );
+
+    assert.equal(await present(path.join(trees, "task-a")), false);
+    assert.equal(git("branch", "--list", "task-a"), "");
+  });
+});

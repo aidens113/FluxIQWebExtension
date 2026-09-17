@@ -15,9 +15,10 @@ import { taskBranchName } from "./branch-name.mjs";
 import { resolveTaskRoots } from "./roots.mjs";
 import { nextTaskId } from "./task-id.mjs";
 
-export async function startTask({ repositoryRoot, coreRepositoryRoot, slug, worktree = false, core = false, base, from = "dev", dryRun = false }) {
+export async function startTask({ repositoryRoot, coreRepositoryRoot, slug, worktree = false, core = false, base, from = "dev", coreFrom = "dev", dryRun = false }) {
   if (!slug) throw new Error('Name the work: pnpm task start <slug>, for example "flow-editor-cleanup".');
   if (core && !worktree) throw new Error("--core needs --worktree: a Core-paired task takes a nested worktree with a Core of its own, because the shared Core is detached and every other task builds against it.");
+  if (core && !coreRepositoryRoot) throw new Error("--core needs a Core checkout beside this one; none was resolved, so the paired branch has nowhere to be created.");
 
   const id = await nextTaskId(repositoryRoot, { integrationBranch: from });
   const branch = taskBranchName(id, slug);
@@ -37,11 +38,18 @@ export async function startTask({ repositoryRoot, coreRepositoryRoot, slug, work
     }
   }
 
-  if (dryRun) return { id, branch, from, worktree: roots?.extRoot ?? null, core: roots?.coreRoot ?? null, applied: false };
+  if (dryRun) return { id, branch, from, worktree: roots?.extRoot ?? null, core: roots?.coreRoot ?? null, coreBranch: core ? branch : null, applied: false };
 
   if (worktree) {
     const env = { ...withoutProviderSecrets(process.env), npm_config_workspace_concurrency: "1" };
-    const created = await createWorktree({ repositoryRoot, branch, root: roots.extRoot, startPoint: from, coreRepositoryRoot, env });
+    // A Core-paired task branches Core under the SAME name, so one id names the
+    // unit of work in both histories and each side keeps its own merge boundary.
+    // A task that only builds against Core passes no branch and keeps the shared
+    // detached Core, which is what makes it cost seconds rather than a minute.
+    const created = await createWorktree({
+      repositoryRoot, branch, root: roots.extRoot, startPoint: from, coreRepositoryRoot, env,
+      ...core ? { coreBranch: branch, coreStartPoint: coreFrom } : {}
+    });
 
     // createWorktree installs both sides but deliberately builds neither, and
     // Core's dist/ is gitignored. Without this the worktree installs cleanly
@@ -61,11 +69,11 @@ export async function startTask({ repositoryRoot, coreRepositoryRoot, slug, work
     await runPnpm(created.root, ["build"], { env });
 
     const env_local = await copyEnvLocal({ fromRoot: repositoryRoot, toRoot: roots.extRoot });
-    return { id, branch, from, worktree: created.root, core: created.coreRoot, coreCreated: created.coreCreated, envLocal: env_local, applied: true };
+    return { id, branch, from, worktree: created.root, core: created.coreRoot, coreCreated: created.coreCreated, coreBranch: created.coreBranch, envLocal: env_local, applied: true };
   }
 
   await runGit(repositoryRoot, ["checkout", "-b", branch, from]);
-  return { id, branch, from, worktree: null, core: null, applied: true };
+  return { id, branch, from, worktree: null, core: null, coreBranch: null, applied: true };
 }
 
 async function built(coreRoot) {

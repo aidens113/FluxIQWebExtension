@@ -291,7 +291,18 @@ Lab's pinned test worktrees. `domain/package.json` links Core by a relative path
 out of the repository, so Core must be the worktree's sibling; sibling worktrees
 therefore share one Core, which is what makes a second worktree cost about four
 seconds instead of fifty. A task that edits Core takes a nested layout with its
-own Core worktree, because the shared one is detached and read-only. Remove a
+own Core worktree, and that worktree is on a branch of the same name rather
+than detached, so one id names the unit of work in both histories and each side
+keeps its own merge boundary. The shared Core stays detached and read-only,
+which is what lets every other task share it.
+
+A Core-paired task finishes here first, because this repository's checks build
+against the Core worktree beside it and would fail the moment it went away;
+`pnpm task finish` then names Core's branch and the command that closes it.
+Core's merge runs in Core, under Core's own gates — merging it from here would
+put a commit on Core's `dev` that Core's checks never saw. Abandoning, by
+contrast, discards both sides at once, and refuses if either has commits that
+never reached `dev`. Remove a
 worktree with `pnpm task abandon` or `pnpm task finish`, never with
 `git worktree remove --force`, which fails on `node_modules` and partly deletes
 the tree before aborting.
