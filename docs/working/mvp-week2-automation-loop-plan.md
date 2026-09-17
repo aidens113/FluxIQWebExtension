@@ -22,22 +22,18 @@ and 2.5-2.9 with file:line evidence. Path prefix: `AS/` is Core's
 `packages/fluxiq/src/programs/automation-studio/`.
 
 **Standing direction on what the model must emit (user, 2026-09-17):** make it
-as easy as possible to produce. Required fields are the ones that carry intent;
-Core derives versions, keys, linear edges, ids and a parameter's default. A
-reply is normalized before it is validated, and validation after that stays
-strict and fail-closed. His words: the model "shouldnt have to output perfect
-json with a million different perfectly formatted attributes"; for a large
-payload he wants "a custom format that isnt json", so a Flow plan is asked for
-as a line-oriented format, with JSON still accepted. Being built as
-`w2-easy-model-output`.
+as easy as possible to produce. Required fields carry intent; Core derives
+versions, keys, linear edges, ids and defaults. A reply is normalized before
+validation, which then stays strict and fail-closed. His words: the model
+"shouldnt have to output perfect json with a million different perfectly
+formatted attributes". Built as `w2-easy-model-output`.
 
-**Verify a worker's change alone, not in the shared tree.** Several workers
-edit both repositories at once, so a shared run reports their state. Use
-`F:/fxlab/verify-core` and `F:/fxlab/verify-ext` — a worktree at the commit
-under test with only that worker's files copied in and the main checkout's
-`node_modules` joined in — then commit from the main checkout after a `cmp`.
-Run Core tests from inside `packages/fluxiq`, never the repository root, or
-they take vitest's 5,000 ms default instead of the configured 15,000 ms.
+**Give a worker its own worktree, not the shared tree.** `pnpm task start <slug>
+--worktree --core` provisions an isolated pair in ~50s. A shared run reports
+other workers' state: on 2026-09-17 that produced three different whole-suite
+results in a row, none of them real. Run Core tests from inside
+`packages/fluxiq`, never the repository root, or they take vitest's 5,000 ms
+default instead of the configured 15,000 ms.
 
 **Phases SEC, G, T, P, D, H, S and 2.1-2.3 are built, supervisor-verified and
 pushed in both repositories.** What each established is archived in
@@ -54,33 +50,39 @@ pre-send (fixed `5300d47`), and earlier reports had read "gate invoked" as
 `snapshots/live-llm.json`, never from the verdict. The user's standing rule
 holds: nothing is demonstrated until it runs against the real key.
 
-**The two scoping reports are stale; verify before briefing from them.**
-`w2-scope-context-recovery` and `w2-scope-repair-reuse` describe `ee25ac9`, not
-HEAD. Five briefs drawn from them on 2026-09-17 sent workers at two defects
-already fixed. Re-check any file:line they give.
+**The two scoping reports describe `ee25ac9`, not HEAD.** Five briefs drawn from
+them sent workers at defects already fixed; re-verify any file:line they give.
 
-**2.4's stated defect does not reproduce, proven by execution.**
-`runtimePatchRestoredExpectedState` was deleted in Core `a2de143`. Two guards
-now hold it: `expectedRouteCheck` (`flow-change/verdict.ts:138`) and
-`failedDeclaredRoute` (`flow-change/trial.ts:167`). Remove either alone and the
-test still passes; remove both and it fails. The test pinning this is in
-`runtime/tests/live-patch.test.ts`. **2.4's real remaining work** is that
-`decideAutomationStudioChangeVerdict` answers "was this change proved?", not
-"can the run resume, and where?": there is no `resumable`, and `resumeFrom` is
-emitted only on a `verified` verdict, so an `unverifiable` change with a
-well-defined continuation yields no resume point. Extend that verdict; do not
-build a second one under `recovery/`. `records.minimum` has a reader
-(`verdict.ts:165`) and no writer — the inert X4 seam, not a defect.
+**2.4 is built, and two live fail-opens were closed on the way.** A recovery
+whose required evidence was never looked at reported as verified and resumable,
+on both sides at once: Core's `trial.ts` read the host's `passed` and never
+`checkedConditionCount`, and the browser's `absent` with no selector answered
+"the banner is gone" with nothing queried. `flow-change/resume.ts` now decides
+`resumable` from the checks and never from the outcome, fail-closed on any
+unknown check. **Nothing consumes `resumable` yet**, so a run does not stop on
+it — the next brief is a caller that refuses to continue.
 
-**The opaque target landed and extract-list refusal is deliberate.** Core's
-target is `{handles}` (`runtime/llm/harness/structured-response.ts:127`) and the
-domain resolves fingerprint-first. `webAutomationExtractListDispatch` never
-reads `target`, so a repaired extract-list target is written where nothing reads
-it and the run proceeds unchanged — which is why `4f4efde` removed the
-compatibility. Restoring it fails 6 tests. **X6's real shape** is an
-`extractList` parameter-override re-issue path, not a target-map entry.
+**2.5 is built except for wiring.** A learned recovery is real inserted nodes
+(`insert_deterministic_path`) rather than a write nothing read. Its gating was
+the defect that mattered: three hand-written gate lists let a kind that inserts
+executable nodes pass all three, and they are now one compile-checked record
+(`runtime/service/adaptations/gates.ts`). The exploration reducer collapses the
+canonical sequence to `Correct Click -> Wait` by taking the earliest matching
+moment, not the latest.
 
-**Not started:** 2.4's resume point, 2.6, 2.7, 2.8, 2.9, X6.
+**The live blocker: 2.3's trace carries no state digest and no action input**,
+so the reducer cannot be switched on. The digest that exists digests the
+evidence a step returned rather than the state, and never reaches the trace; the
+action value is discarded after signing. **Decided:** the runner records a
+caller-supplied state digest and the input per step, because the alternative is
+two records of one run that disagree. In flight as t005.
+
+**X6's real shape** is an `extractList` parameter-override re-issue path.
+`webAutomationExtractListDispatch` never reads `target`, so a repaired
+extract-list target lands where nothing reads it; restoring the old
+compatibility fails 6 tests.
+
+**Not started:** a caller that honours `resumable`, 2.6, 2.7, 2.8, 2.9, X6.
 
 **The fixed call limit was the defect, not a constraint to design around (user
 decision, 2026-09-16).** An adaptation iterates while it is making progress and
@@ -110,9 +112,8 @@ by the supervisor reintroducing the exact cycle, observing the audit fail with
 a message naming the three ways out, and reverting. The shared values live in
 the new `runtime/loop-limits/`, which neither directory owns.
 
-**Concurrency is five workers, not nine.** Both crashes happened with nine heavy
-workers running on a machine with a known memory fault, so this is recorded as a
-real resource limit rather than caution.
+**Concurrency is five workers, not nine.** Nine heavy workers crashed this
+machine twice; the memory fault makes that a real limit, not caution.
 
 **Live-testing campaign (user direction, 2026-09-16):** "get to a point where
 we have at least basic automation able to be created & repaired by simply
@@ -272,6 +273,34 @@ Delivered and archived on 2026-09-16: see
 The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
 
 ## Work Ledger
+
+### 2026-09-17 — Phase 2.4 built, two live fail-opens closed, 2.5 built unwired
+- Agent: supervisor, tasks t003 and t004, five workers
+- Changed: Core `runtime/flow-change/{resume,verdict,trial,contracts,index}.ts`,
+  `runtime/service/adaptations/{gates,durable,patches}.ts`,
+  `runtime/exploration-reduction/`, `runtime/training-modes.ts`,
+  `storage/project/adaptation-store.ts`, `model/{flow-adaptation,validation}`;
+  here `domain/src/runtime/expectation/{conditions,evaluate}.ts`
+- Why: the briefs were drawn from scoping reports describing Core at `ee25ac9`,
+  and two of the five defects they named were already fixed. Verifying that
+  turned up a worse one underneath, live on both sides: nothing judged returned
+  `{passed: true, checkedConditionCount: 0}`, Core read only `passed`, and a
+  recovery with unlooked-at evidence came out verified and resumable. The
+  browser half answered "the banner is gone" from an `absent` check with no
+  selector to query. Separately, `insert_deterministic_path` inserted executable
+  nodes while passing none of the three review gates, because each gate kept a
+  hand-written list of kinds and a new kind defaulted to ungated.
+- Validation: Core `pnpm task finish t004` -> `pnpm check` passed; flow-change
+  and live-patch 148/148; subflow, training-modes and adaptations 21/21; here
+  `pnpm check` exit 0 and domain tests 675/675. Mutations, each applied and
+  reverted: unknown-check resumable -> 12 failed; resumeFrom only on verified ->
+  6 failed; drop the subflow -> 2 failed; revert the judged guard -> 2 failed;
+  insert without the entry edge -> the apply is refused, and without the guard
+  too the next run fails because the node becomes a second root; keep
+  observation-only steps -> 2 failed; latest-moment instead of earliest -> 9
+  failed including the canonical reduction.
+- Outcome: Accepted
+- Follow-up: a caller that honours `resumable`; t005 for the state digest.
 
 ### 2026-09-17 — A Flow is written as plain lines, and the day's work is committed
 - Agent: `w2-easy-model-output` (Core `1be6c9e`), plus the supervisor's
