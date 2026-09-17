@@ -413,6 +413,25 @@ The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
 
 ## Work Ledger
 
+### 2026-09-16 — First live repair applied and replayed without the model
+- Agent: `w2-live-explore-create-repair` (live), reported to the supervisor;
+  Core was `fcc5423` plus the private `applyFlowBootstrapAdaptation` index fix
+  in an uncommitted worktree, so this result rests on that fix until it lands.
+- What happened, on the demo pipeline's recording-derived Flow: the page
+  drifted; DeepSeek diagnosed (3,205 tokens) and returned a patch (3,163
+  tokens); Core resolved the target to a `target.N` handle; a proposal was
+  created, reviewed, **applied**, and the Flow was **replayed without the
+  model**. That is fail -> diagnose -> repair -> apply -> deterministic re-run,
+  live, once.
+- Validation: from the worker's report only; to be rerun by the supervisor on
+  shared code once the index fix lands.
+- Found: **silent loss of run audit.** After that apply and replay, and two
+  Core restarts, both earlier runs' stored details lost `llmGate`,
+  `runtimeAdaptationContext`, `trainingMode`, `runtimePatchAttempts` and
+  `summary.tokenUsage`; the remaining shape equals a detail rebuilt from the
+  raw session. Candidate: an unreadable run index treated as empty and every
+  run re-saved. Assigned to `w2-run-detail-annotation-loss`.
+
 ### 2026-09-16 — Live Lab creation and live repair on a repairable drift
 - Agent: supervisor, against a clean Core worktree at `59dbb22`
   (`FLUXIQ_CORE_ROOT=F:/fxlab/lab-core`, never committed).

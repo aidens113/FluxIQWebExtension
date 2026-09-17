@@ -3079,6 +3079,12 @@ function captured(name) {
   const capture2 = CAPTURED_DETECTIONS[name];
   return { url: capture2.url, title: capture2.title, structure: structuredClone(capture2.structure) };
 }
+function withElements(page, elements) {
+  const next = { url: page.url, elements };
+  if (page.title !== void 0) next.title = page.title;
+  if (page.structure !== void 0) next.structure = page.structure;
+  return next;
+}
 function proposalOf(structure) {
   assert.equal(structure.ok, true);
   if (!structure.ok) throw new Error("not a detection");
@@ -3087,8 +3093,9 @@ function proposalOf(structure) {
 var callCount = 0;
 async function detect(runtime, value = {}, options = {}) {
   callCount += 1;
-  const request = { ...options.scope ?? SCOPE, callId: `call.detect.${callCount}`, toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value };
-  return await runtime.executeTool(options.maxEvidenceBytes === void 0 ? request : { ...request, maxEvidenceBytes: options.maxEvidenceBytes });
+  const scope = options.scope ?? SCOPE;
+  const callId = `call.detect.${callCount}`;
+  return await runtime.executeTool(options.maxEvidenceBytes === void 0 ? { projectId: scope.projectId, flowId: scope.flowId, callId, toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value } : { projectId: scope.projectId, flowId: scope.flowId, callId, toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value, maxEvidenceBytes: options.maxEvidenceBytes });
 }
 function rejection(code) {
   return { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code }, effectApplied: false, resultCode: `web.action.rejected.${code}` };
@@ -3164,11 +3171,9 @@ test("every real detection becomes a selector-free packet and a handle that reso
     assert.equal(resolved.ok, true, name);
     if (!resolved.ok) continue;
     const expectedPaginate = detection.proposal.pagination ?? (detection.infiniteScroll ? { mode: "scroll", maxScrolls: WEB_AUTOMATION_EXTRACT_MAX_PAGES } : void 0);
-    const expected = {
-      item: detection.proposal.item,
-      fields: Object.fromEntries(detection.proposal.fields.map((field) => [field.key, readableSpec2(field.spec)])),
-      ...expectedPaginate === void 0 ? {} : { paginate: expectedPaginate }
-    };
+    const item = detection.proposal.item;
+    const fields = Object.fromEntries(detection.proposal.fields.map((field) => [field.key, readableSpec2(field.spec)]));
+    const expected = expectedPaginate === void 0 ? { item, fields } : { item, fields, paginate: expectedPaginate };
     assert.deepEqual(resolved.binding, { handle: packet.extraction, location: page.url, extractList: expected, itemCount: detection.proposal.itemCount }, name);
     assert.deepEqual(webAutomationExtractListRequestValue(resolved.binding.extractList), resolved.binding.extractList, name);
   }
@@ -3176,7 +3181,7 @@ test("every real detection becomes a selector-free packet and a handle that reso
 test("a target handle an inspect issued is bound through its selector, even one every card shares", async () => {
   const link = (frame) => frame === void 0 ? { tagName: "a", selector: '[data-testid="product-link"]', accessibleName: "A product", attributes: { href: "/scenarios/product-catalog/products/a", "data-testid": "product-link" } } : { tagName: "a", selector: `frame[${frame}] >> [data-testid="product-link"]`, accessibleName: "A product", attributes: { href: "/p", "data-testid": "product-link", "data-fluxiq-frame-id": String(frame) } };
   const next = { tagName: "button", selector: '[data-testid="pagination-next"]', visibleText: "Next" };
-  let page = { ...captured("product-catalog-largest"), elements: [next, link(), link()] };
+  let page = withElements(captured("product-catalog-largest"), [next, link(), link()]);
   const { gateway, commands } = fakeGateway(() => page);
   const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
   const inspected = await runtime.executeTool({ ...SCOPE, callId: "call.inspect", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
@@ -3196,7 +3201,7 @@ test("a target handle an inspect issued is bound through its selector, even one 
   assert.deepEqual(await detect(runtime, { target: "target.2" }), rejection("target_unobserved"));
   page = { ...page, url: "http://127.0.0.1:4173/scenarios/product-catalog/page/2", elements: [next, link(), link()] };
   assert.deepEqual(await detect(runtime, { target: "target.2" }), rejection("target_unobserved"));
-  page = { ...captured("product-catalog-largest"), elements: [link(7)] };
+  page = withElements(captured("product-catalog-largest"), [link(7)]);
   await runtime.executeTool({ ...SCOPE, callId: "call.inspect.frame", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
   commands.length = 0;
   const framed = await detect(runtime, { target: "target.1" });
