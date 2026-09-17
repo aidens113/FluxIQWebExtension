@@ -21,17 +21,23 @@ export function runCommandLine(argv) {
 async function campaignCommand(argv) {
   const options = parseCampaignArgs(argv);
   if (options.help) { process.stdout.write(`${CAMPAIGN_USAGE}\n`); return 0; }
-  const tasks = selectTasks(await loadCatalog(options), options);
+  const { tasks: catalog, secretsFor } = await loadCatalog(options);
+  const tasks = selectTasks(catalog, options);
   if (options.dryRun) {
     process.stdout.write(`# ${tasks.length} task(s), one at a time, npm_config_workspace_concurrency=1; each spawned as node scripts/lab/run-lab.mjs with these arguments\n`);
-    for (const task of tasks) process.stdout.write(`${displayCommand(labRunArguments(task, options))}\n`);
+    for (const task of tasks) {
+      process.stdout.write(`${displayCommand(labRunArguments(task, options))}\n`);
+      // Names only: the values are the fixture's, and a dry run prints none.
+      const secrets = Object.keys(secretsFor(task.scenarioId));
+      if (secrets.length > 0) process.stdout.write(`#   with ${secrets.join(", ")} from the ${task.scenarioId} fixture\n`);
+    }
     return 0;
   }
   const stamp = new Date().toISOString().replace(/[:.]/gu, "-");
   const runsDirectory = process.env.FLUXIQ_TEST_RUNS_DIR?.trim() || path.join(repositoryRoot, "test-runs");
   const outputDir = path.resolve(options.output ?? path.join(runsDirectory, "campaigns", stamp));
   const labScript = process.env.FLUXIQ_LAB_CAMPAIGN_LAB_SCRIPT?.trim() || path.join(repositoryRoot, "scripts", "lab", "run-lab.mjs");
-  const summary = await runCampaign({ tasks, options, outputDir, execute: spawnLab(labScript) });
+  const summary = await runCampaign({ tasks, options, outputDir, execute: spawnLab(labScript), secretsFor });
   process.stdout.write(`${JSON.stringify({ campaign: summary.campaignId, summary: path.join(outputDir, "summary.md"), totals: summary.totals })}\n`);
   return summary.totals.succeeded === summary.totals.tasks ? 0 : 1;
 }

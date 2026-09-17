@@ -7,7 +7,8 @@ export function renderSummaryMarkdown(summary) {
   const cell = (value) => (value === null || value === undefined || value === "" ? "—" : String(value).replace(/\|/gu, "\\|").replace(/\s+/gu, " "));
   const yesNo = (value) => (value === null || value === undefined ? "—" : value ? "yes" : "no");
   const tableRow = (values) => `| ${values.map(cell).join(" | ")} |`;
-  const failureOf = (row) => [row.failureCategory, row.automationFailure].filter(Boolean).join("; ");
+  // The category, then what the runner said stopped the run, then how the automation failed.
+  const failureOf = (row) => [row.failureCategory, row.runnerMessage, row.automationFailure].filter(Boolean).join("; ");
   const attemptsOf = (row) => (row.ramFaults.length > 0 ? `${row.attempts} (${row.ramFaults.join(", ")})` : row.attempts);
   const spent = (value, row) => value ?? (row.spendSource === "not recorded" ? "not recorded" : null);
   const nodesOf = ({ createdFlowShape: shape }) => (shape ? `${shape.nodeCount ?? "?"} nodes${Object.keys(shape.nodeTypes).length > 0 ? `: ${Object.entries(shape.nodeTypes).map(([name, n]) => `${name} ×${n}`).join(", ")}` : ""}` : null);

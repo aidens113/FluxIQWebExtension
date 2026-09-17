@@ -17,6 +17,8 @@ const EXCLUDED_ROWS: Readonly<Record<string, string>> = {
   "delayed-ui/primary/too-slow": "The content still arrives, twenty seconds late, so a longer wait is a legitimate repair, yet the variant declares the unrepaired timeout as its outcome. A refusal task would fail a correct wait-and-retry proposal, and a repair task has no repaired run to judge by.",
   "intermediate-state/primary/unannounced": "The manifest does not say whether ticking and continuing past a confirmation step the recording never saw is an acceptable repair or a trap, so neither outcome can be judged.",
   "member-directory/remove-invitations/support-drawer": "The refusal this row declares is the actionability gate's. Closing the support widget and pressing Remove again is a legitimate repair a model could propose, and the variant declares no repaired run to judge it by.",
+  // Measured provider-free on 2026-09-17 (run-mu4zicud-5a23f269): the Flow lane stopped at the recording step.
+  "sensitive-input/extract-card-secrets/-": "The refusal is the extension's, while the Flow lane records the extract step: the unlock code is a password control, so the recording stops and no Flow is ever built, and a repair task has no failing Flow run for a model to be consulted on. The model-facing side of this fixture is the creation task that leaves the codes out.",
 };
 
 type Expected = WebScenario["expected"];

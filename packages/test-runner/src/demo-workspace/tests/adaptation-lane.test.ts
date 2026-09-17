@@ -108,7 +108,10 @@ test("refuses, by name, any run the certificate could not record honestly", () =
   }
 });
 
-function laneBody(text: string): string {
+// Read line by line rather than byte for byte: a fresh Windows checkout holds
+// this source with CRLF, and every scan below looks for a bare newline.
+function laneBody(source: string): string {
+  const text = source.replace(/\r\n/gu, "\n");
   const start = text.indexOf("export async function runDemoLlmAdaptation");
   assert.notEqual(start, -1);
   // The lane's own body ends at the first closing brace in the first column.

@@ -98,3 +98,34 @@ test("a campaign with repair tasks counts a repair as succeeded on its judgement
   const repairsOnly = renderSummaryMarkdown({ ...summary, tasks: summary.tasks.slice(1) });
   assert.equal((repairsOnly.match(/^\| Task \|/gmu) ?? []).length, 1, "no empty creation table");
 }));
+
+// Four tasks of the 2026-09-17 campaign ended "environment.missing" with no
+// run: their scenarios declare replay secrets that nothing supplied, and the
+// summary could not say so.
+test("each Lab run gets its own scenario's fixture secrets, and a refusal's reason reaches the summary", () => withTemp(async (directory) => {
+  const machineOnly = "FLUXIQ_TEST_SECRET_MACHINE_ONLY";
+  process.env[machineOnly] = "machine-value";
+  try {
+    const seen = [];
+    const refusal = "Scenario attempt failed outside a finalized bundle: Scenario identity-drift declares the replay secret drift-password, so FLUXIQ_TEST_SECRET_DRIFT_PASSWORD must be set";
+    const execute = async ({ taskId, env }) => {
+      seen.push([taskId, Object.fromEntries(Object.entries(env).filter(([key]) => key.startsWith("FLUXIQ_TEST_SECRET_")))]);
+      return taskId === "drift-refuse"
+        ? attempt({ code: 1, stderr: `{"lab":"paths"}\n${JSON.stringify({ status: "failed", category: "environment.missing", message: refusal })}\n` })
+        : attempt({ stdout: resultLine({ runId: `run-${taskId}`, path: path.join(directory, taskId) }) });
+    };
+    const secretsFor = (scenarioId) => (scenarioId === "sensitive-input" ? { FLUXIQ_TEST_SECRET_SENSITIVE_INPUT_PASSWORD: "fixture-value" } : {});
+    const outputDir = path.join(directory, "campaigns", "secrets");
+    const summary = await runCampaign({ tasks: [REPAIRS[2], REPAIRS[1]], options: parseCampaignArgs(["--all"]), outputDir, execute, secretsFor, readBundle: async () => ({ evaluation: null, run: null, liveLlm: null, flowLane: null }), log: () => {} });
+
+    assert.deepEqual(seen, [["secrets-refuse", { FLUXIQ_TEST_SECRET_SENSITIVE_INPUT_PASSWORD: "fixture-value" }], ["drift-refuse", {}]], "a scenario's own secrets, and never the machine's");
+    const refused = summary.tasks[1];
+    assert.deepEqual([refused.verdict, refused.failureCategory, refused.runnerMessage], ["no-result", "environment.missing", refusal], "the variable name is kept whole");
+    const markdown = await readFile(path.join(outputDir, "summary.md"), "utf8");
+    assert.ok(markdown.includes(`| environment.missing; ${refusal} |`), "the Failure column says what was missing");
+    const written = await readFile(path.join(outputDir, "summary.json"), "utf8");
+    assert.equal(written.includes("fixture-value") || written.includes("machine-value"), false, "no secret value reaches the summary");
+  } finally {
+    delete process.env[machineOnly];
+  }
+}));

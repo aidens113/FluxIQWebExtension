@@ -2,6 +2,7 @@ import { distinct } from "../distinct.mjs";
 import { parseLabResult, parseRunnerRefusal } from "../lab-run/index.mjs";
 import { createdFlowShape } from "./created-flow-shape.mjs";
 import { datasetJudgement } from "./dataset-judgement.mjs";
+import { describeFacilityFailure } from "./facility-failure.mjs";
 import { isIssueCode } from "./issue-code.mjs";
 import { repairJudgement } from "./repair-judgement.mjs";
 import { repairOutcome } from "./repair-outcome.mjs";
@@ -63,11 +64,24 @@ export function summarizeTask(task, attempts, final, bundle) {
       flowLane?.failure?.code, liveLlm?.build?.failure?.code, automationFailure?.code,
     ].filter(isIssueCode)).sort(),
     runPath: result?.path ?? null,
-    runnerMessage: result ? null : shortMessage(refusal?.message),
+    // What stopped the run, when the run itself did not say: the runner's
+    // refusal for an attempt with no result, or the facility failure a
+    // finished bundle recorded.
+    runnerMessage: result ? (result.verdict === "passed" ? null : describeFacilityFailure(evaluation?.facilityFailure)) : shortMessage(refusal?.message),
   };
 }
 
+const MAX_MESSAGE_CHARS = 320;
+
+/**
+ * The refusal as printed, on one line and bounded, with any long token that
+ * mixes letters and digits (a key, a hash, an id) redacted. A long name with
+ * no digit, such as the environment variable a run was refused for, is kept:
+ * it is what the reader needs.
+ */
 function shortMessage(message) {
   if (typeof message !== "string") return null;
-  return message.replace(/[A-Za-z0-9_-]{32,}/gu, "[redacted]").slice(0, 240);
+  const line = message.replace(/\s+/gu, " ").trim()
+    .replace(/[A-Za-z0-9_-]{32,}/gu, (token) => (/[0-9]/u.test(token) && /[A-Za-z]/u.test(token) ? "[redacted]" : token));
+  return line.length <= MAX_MESSAGE_CHARS ? line : line.slice(0, MAX_MESSAGE_CHARS);
 }

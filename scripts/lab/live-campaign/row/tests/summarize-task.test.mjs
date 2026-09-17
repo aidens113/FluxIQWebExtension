@@ -46,3 +46,22 @@ test("a row reports provider-reported spend only, codes only, and the judgement 
   const unmeasured = summarizeTask(CATALOG[1], [], attempt({ code: 1 }), { evaluation: null, run: null, liveLlm: null, flowLane: null });
   assert.deepEqual([unmeasured.verdict, unmeasured.judgement.passed, unmeasured.reportedTokens, unmeasured.reportedCostUsd, unmeasured.runId], ["no-result", null, null, null, null]);
 });
+
+// run-mu4y52hs-943d1c8d: a finished bundle whose run failed on the facility
+// (a control request timed out) read only "environment.missing" in the summary.
+test("a run that failed on the facility says where, and a refusal keeps its variable names but not its tokens", () => {
+  const facilityFailure = { boundary: "finalized-bundle", stage: "scenario.execute", reason: "http.timeout", operationStage: "control.request", timeoutMs: 30000 };
+  const bundle = { evaluation: { verdict: "failed", failureCategory: "environment.missing", facilityFailure, flowCreated: false, actions: [], extraction: null, llm: { mode: "live", calls: 0 } }, run: null, liveLlm: null, flowLane: null };
+  const timedOut = summarizeTask(CATALOG[0], [], attempt({ code: 1, stdout: resultLine({ verdict: "failed", failureCategory: "environment.missing" }) }), bundle);
+  assert.equal(timedOut.failureCategory, "environment.missing");
+  assert.equal(timedOut.runnerMessage, "http.timeout at control.request after 30000 ms (finalized-bundle, scenario.execute)");
+  const transport = summarizeTask(CATALOG[0], [], attempt({ code: 1, stdout: resultLine({ verdict: "failed" }) }), { ...bundle, evaluation: { ...bundle.evaluation, facilityFailure: { boundary: "finalized-bundle", stage: "scenario.execute", reason: "http.transport", operationStage: "control.request", causeCode: "ECONNRESET", note: "free text is never read" } } });
+  assert.equal(transport.runnerMessage, "http.transport at control.request, ECONNRESET (finalized-bundle, scenario.execute)");
+  const passed = summarizeTask(CATALOG[0], [], attempt({ stdout: resultLine({}) }), { ...bundle, evaluation: { ...bundle.evaluation, facilityFailure: null } });
+  assert.equal(passed.runnerMessage, null);
+
+  const refusal = (message) => summarizeTask(CATALOG[0], [], attempt({ code: 1, stderr: JSON.stringify({ status: "failed", category: "environment.missing", message }) }), { evaluation: null, run: null, liveLlm: null, flowLane: null }).runnerMessage;
+  assert.equal(refusal("so FLUXIQ_TEST_SECRET_STOREFRONT_CHECKOUT_BILLING_CARD must be set"), "so FLUXIQ_TEST_SECRET_STOREFRONT_CHECKOUT_BILLING_CARD must be set");
+  assert.equal(refusal("key 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08 refused"), "key [redacted] refused");
+  assert.equal(refusal(`${"word ".repeat(100)}end`).length, 320);
+});

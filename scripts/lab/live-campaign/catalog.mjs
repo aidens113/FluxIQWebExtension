@@ -3,13 +3,19 @@ import { pathToFileURL } from "node:url";
 import { withBuildLock } from "../build-lock.mjs";
 import { repositoryRoot, resolveLabInstancePaths } from "../lab-instance.mjs";
 import { distinct } from "./distinct.mjs";
-import { labEnvironment, ramFaultSignature, runNode } from "./lab-run/index.mjs";
+import { fixtureSecretEnvironment, labEnvironment, ramFaultSignature, runNode } from "./lab-run/index.mjs";
 
 /**
  * Compiles the scenario lab into this instance's output, under the Lab's build
  * lock, and imports both task lists from the scenarios barrel: creation tasks
  * first, then repair tasks, with ids unique across the two.
  * `FLUXIQ_LAB_CAMPAIGN_CATALOG` names a module to import instead, unbuilt.
+ *
+ * Returns the tasks and `secretsFor(scenarioId)`, the replay secrets that
+ * scenario's manifest declares, valued from its own fixture
+ * (`fixtureSecretEnvironment`). The manifests come from the scenario lab's
+ * registry beside the barrel, or from the override module's own
+ * `listScenarioManifests` when it has one.
  */
 export async function loadCatalog(options) {
   const override = process.env.FLUXIQ_LAB_CAMPAIGN_CATALOG?.trim();
@@ -28,7 +34,8 @@ export async function loadCatalog(options) {
       }
     }, { onWait: (owner) => process.stderr.write(`[campaign] waiting for the build lock held by process ${owner?.pid ?? "unknown"}\n`) });
   }
-  const { LIVE_INSTRUCTION_TASKS: creations, LIVE_REPAIR_TASKS: repairs } = await import(pathToFileURL(modulePath).href);
+  const catalogModule = await import(pathToFileURL(modulePath).href);
+  const { LIVE_INSTRUCTION_TASKS: creations, LIVE_REPAIR_TASKS: repairs } = catalogModule;
   if (!Array.isArray(creations)) throw new Error(`${modulePath} exports no LIVE_INSTRUCTION_TASKS`);
   if (!Array.isArray(repairs)) throw new Error(`${modulePath} exports no LIVE_REPAIR_TASKS`);
   const misfiled = [...creations.filter((task) => task.kind === "repair"), ...repairs.filter((task) => task.kind !== "repair")].map((task) => task.id);
@@ -37,5 +44,7 @@ export async function loadCatalog(options) {
   const ids = catalog.map((task) => task.id);
   const repeated = distinct(ids.filter((id, index) => ids.indexOf(id) !== index));
   if (repeated.length > 0) throw new Error(`Task ids used twice across the catalog: ${repeated.join(", ")}`);
-  return catalog;
+  const registry = override ? catalogModule : await import(pathToFileURL(path.join(paths.scenarioOutDir, "registry.js")).href);
+  const manifests = new Map((typeof registry.listScenarioManifests === "function" ? registry.listScenarioManifests() : []).map((manifest) => [manifest.id, manifest]));
+  return { tasks: catalog, secretsFor: (scenarioId) => fixtureSecretEnvironment(manifests.get(scenarioId)) };
 }

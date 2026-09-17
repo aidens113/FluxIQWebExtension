@@ -9,6 +9,14 @@ import { fileURLToPath } from "node:url";
 import { CATALOG, REPAIR_LIMIT_ARGS, REPAIRS } from "./tasks.mjs";
 import { withTemp } from "./temp-directory.mjs";
 
+/** The one stub scenario that declares replay secrets, shaped like sensitive-input: typed on the primary script, run with a workflow that types neither. */
+const MANIFESTS = [{
+  id: "sensitive-input",
+  recordingScript: [{ id: "replace-password", operation: "type", target: "testid:password", value: "fixture-password" }, { id: "replace-payment", operation: "type", target: "testid:payment", value: "fixture-card" }],
+  workflows: [{ id: "extract-card-secrets", recordingScript: [{ id: "cards", operation: "checkpoint" }] }],
+  secrets: [{ id: "sensitive-input-password", step: "replace-password" }, { id: "sensitive-input-payment", step: "replace-payment" }],
+}];
+
 const CAMPAIGN = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "live-campaign.mjs");
 
 function runCli(args, env) {
@@ -25,7 +33,7 @@ function runCli(args, env) {
 
 async function writeStubCatalog(directory) {
   const file = path.join(directory, "catalog.mjs");
-  await writeFile(file, `export const LIVE_INSTRUCTION_TASKS = ${JSON.stringify(CATALOG)};\nexport const LIVE_REPAIR_TASKS = ${JSON.stringify(REPAIRS)};\n`);
+  await writeFile(file, `export const LIVE_INSTRUCTION_TASKS = ${JSON.stringify(CATALOG)};\nexport const LIVE_REPAIR_TASKS = ${JSON.stringify(REPAIRS)};\nexport const listScenarioManifests = () => ${JSON.stringify(MANIFESTS)};\n`);
   return file;
 }
 
@@ -36,7 +44,7 @@ async function writeStubLab(directory) {
     "import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';",
     "import path from 'node:path';",
     `const directory = ${JSON.stringify(directory)};`,
-    "appendFileSync(path.join(directory, 'invocations.ndjson'), JSON.stringify({ args: process.argv.slice(2), concurrency: process.env.npm_config_workspace_concurrency }) + '\\n');",
+    "appendFileSync(path.join(directory, 'invocations.ndjson'), JSON.stringify({ args: process.argv.slice(2), concurrency: process.env.npm_config_workspace_concurrency, secrets: Object.fromEntries(Object.entries(process.env).filter(([key]) => key.startsWith('FLUXIQ_TEST_SECRET_'))) }) + '\\n');",
     "const run = path.join(directory, 'run-stub');",
     "mkdirSync(run, { recursive: true });",
     "writeFileSync(path.join(run, 'evaluation.json'), JSON.stringify({ flowCreated: true, oracleVerdict: 'passed', actions: [{ actionType: 'web.dom.click' }], extraction: null, llm: { calls: 1 } }));",
@@ -121,4 +129,27 @@ test("the command line refuses an unknown task before running anything", () => w
   assert.equal(refused.code, 1);
   assert.match(refused.stderr, /Unknown task id no-such-task/u);
   assert.deepEqual(await readdir(path.join(directory, "empty")), []);
+}));
+
+test("the command line gives each run its scenario's fixture secrets, drops the machine's, and a dry run names them without their values", () => withTemp(async (directory) => {
+  const env = { FLUXIQ_LAB_CAMPAIGN_CATALOG: await writeStubCatalog(directory), FLUXIQ_LAB_CAMPAIGN_LAB_SCRIPT: await writeStubLab(directory), FLUXIQ_TEST_RUNS_DIR: directory, FLUXIQ_TEST_SECRET_SENSITIVE_INPUT_PASSWORD: "machine-value", FLUXIQ_TEST_SECRET_ANYTHING: "machine-value" };
+  const leaked = /fixture-password|fixture-card|machine-value/u;
+  const dry = await runCli(["--dry-run", "secrets-refuse", "form-goal"], env);
+  assert.equal(dry.code, 0, dry.stderr);
+  const lines = dry.stdout.trim().split("\n");
+  const secretsAt = lines.findIndex((line) => line.startsWith("pnpm lab run sensitive-input "));
+  assert.equal(lines[secretsAt + 1], "#   with FLUXIQ_TEST_SECRET_SENSITIVE_INPUT_PASSWORD, FLUXIQ_TEST_SECRET_SENSITIVE_INPUT_PAYMENT from the sensitive-input fixture");
+  assert.equal(lines[lines.findIndex((line) => line.startsWith("pnpm lab run instruction-only-form ")) + 1], undefined, "a scenario with no secrets gets no note");
+  assert.equal(leaked.test(dry.stdout + dry.stderr), false, "a dry run prints names, never values");
+
+  const live = await runCli(["secrets-refuse", "form-goal"], env);
+  // 1: the stub's bundle holds no recovery record, so the repair task is not judged a success; both tasks still ran.
+  assert.equal(live.code, 1, live.stderr);
+  assert.doesNotMatch(live.stderr, /campaign\.usage/u);
+  const invocations = (await readFile(path.join(directory, "invocations.ndjson"), "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+  assert.deepEqual(invocations.map(({ secrets }) => secrets), [
+    { FLUXIQ_TEST_SECRET_SENSITIVE_INPUT_PASSWORD: "fixture-password", FLUXIQ_TEST_SECRET_SENSITIVE_INPUT_PAYMENT: "fixture-card" },
+    {},
+  ]);
+  assert.equal(leaked.test(live.stdout + live.stderr), false, "the campaign prints no secret value");
 }));

@@ -330,7 +330,8 @@ test("a Flow-lane run of a workflow whose script records no action is refused as
     const outcome: unknown = await runScenario({ repositoryRoot: root, fluxiqRepositoryRoot: path.join(runsDirectory, "no-core"), runsDirectory, scenarioId: NO_ACTION_SCENARIO.id, flow: true, environment: { FLUXIQ_LAB_SCENARIO_ENTRYPOINT: path.join(scenarioLab, "server.js"), FLUXIQ_LAB_EXTENSION_PATH: path.join(runsDirectory, "no-extension") } }).then((result) => result, (error: unknown) => error);
     assert.ok(outcome instanceof ProjectedFacilityError, `the run is refused, not run: ${outcome instanceof Error ? outcome.message : JSON.stringify(outcome)}`);
     assert.equal(outcome.category, "fixture.invalid");
-    assert.equal(outcome.message, "Scenario attempt failed outside a finalized bundle");
+    // What the command line prints: the generic sentence, then the runner's own reason.
+    assert.match(outcome.message, /^Scenario attempt failed outside a finalized bundle: A Flow run was refused: /u);
     assert.deepEqual(outcome.facilityFailure, { boundary: "no-final-bundle", stage: "scenario.load", reason: "unclassified" });
     // The reason is the no-action one, so a refusal for any other fixture defect -- an
     // unknown scenario, or a manifest this test built wrong -- cannot pass as this case.
