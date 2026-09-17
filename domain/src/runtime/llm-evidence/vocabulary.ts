@@ -13,18 +13,21 @@
 import { WEB_LLM_TOOL_REJECTION_CODES, type WebLlmToolRejectionCode } from "./tool-rejection";
 
 /** Every tool `createWebAutomationLlmEvidenceRuntime` offers, in the order it offers them. */
-export const WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe"] as const;
+export const WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe", "web.detect_repeating_structure"] as const;
 
 export type WebLlmEvidenceToolId = (typeof WEB_LLM_EVIDENCE_TOOL_IDS)[number];
 
 export const WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
 export const WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
 export const WEB_LLM_REVEAL_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[2];
+export const WEB_LLM_DETECT_STRUCTURE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[3];
 
 /** An observation succeeded: evidence was captured and nothing on the page moved. */
 export const WEB_LLM_INSPECT_RESULT_CODE = "web.inspect.succeeded" as const;
 /** A tool that changes the page succeeded, and the evidence is from after the change. */
 export const WEB_LLM_ACTION_RESULT_CODE = "web.action.succeeded" as const;
+/** A repeating structure was detected and an extraction handle issued for it; nothing on the page moved. */
+export const WEB_LLM_STRUCTURE_RESULT_CODE = "web.structure.detected" as const;
 
 const REJECTION_RESULT_CODE_PREFIX = "web.action.rejected.";
 
@@ -38,11 +41,13 @@ export function webLlmToolRejectionResultCode(code: WebLlmToolRejectionCode): We
 export type WebLlmEvidenceResultCode =
   | typeof WEB_LLM_INSPECT_RESULT_CODE
   | typeof WEB_LLM_ACTION_RESULT_CODE
+  | typeof WEB_LLM_STRUCTURE_RESULT_CODE
   | WebLlmToolRejectionResultCode;
 
-/** Every result code a tool execution can carry: the two successes, and one per rejection. */
+/** Every result code a tool execution can carry: the three successes, and one per rejection. */
 export const WEB_LLM_EVIDENCE_RESULT_CODES: readonly WebLlmEvidenceResultCode[] = Object.freeze([
   WEB_LLM_INSPECT_RESULT_CODE,
   WEB_LLM_ACTION_RESULT_CODE,
+  WEB_LLM_STRUCTURE_RESULT_CODE,
   ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
 ]);

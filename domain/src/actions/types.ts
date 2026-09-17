@@ -13,6 +13,9 @@ import type { JsonObject, JsonValue } from "fluxiq/core";
 // no cycle exists in the bundle.
 import type { WebAutomationFailureRecord } from "../runtime/failure";
 import type { WebAutomationExtractionSummary, WebAutomationExtractListRequest, WebAutomationExtractRead } from "./extraction";
+// The structure-detection pair is declared beside the picker's proposal, which
+// it carries. Type-only, as the imports above are, so no cycle exists.
+import type { WebAutomationStructureDetection, WebAutomationStructureDetectionRequest } from "../extraction";
 
 export type WebAutomationActionType =
   | "web.browser.navigate"
@@ -289,6 +292,12 @@ export type WebAutomationActionCommand = {
   extract?: WebAutomationExtractRead | undefined;
   /** `web.dom.extract_list`. */
   extractList?: WebAutomationExtractListRequest | undefined;
+  /**
+   * `web.dom.capture_snapshot`: also detect a repeating structure, answered on
+   * the result's `structure`. Only the domain's authoring runtime sends it,
+   * straight through the gateway; a Flow's snapshot node sends no parameters.
+   */
+  detectStructure?: WebAutomationStructureDetectionRequest | undefined;
   /** `web.dom.assert`. */
   assert?: WebAutomationAssertRequest | undefined;
   /** `web.dom.upload`. */
@@ -414,6 +423,8 @@ export type WebAutomationActionResult<TElement = JsonObject, TSnapshot = JsonObj
   extraction?: WebAutomationExtractionSummary | undefined;
   /** The native dialog handled before this action, when there was one. */
   dialog?: WebAutomationObservedDialog | undefined;
+  /** `web.dom.capture_snapshot` asked with `detectStructure`: the structure the page detected, or why none. Selectors, labels and counts only (D3). */
+  structure?: WebAutomationStructureDetection | undefined;
   resolution?: WebAutomationTargetResolution | undefined;
   failure?: WebAutomationFailureRecord | undefined;
   startedAt: number;

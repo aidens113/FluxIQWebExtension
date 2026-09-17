@@ -9,9 +9,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { validateAutomationStudioNodeDefinition } from "fluxiq/automation-studio/nodes";
+import {
+  WEB_AUTOMATION_EXTRACT_FIELD_KINDS,
+  WEB_AUTOMATION_EXTRACT_MAX_ITEMS,
+  WEB_AUTOMATION_EXTRACT_MAX_PAGES,
+  WEB_AUTOMATION_EXTRACT_PAGINATION_MODES,
+  webAutomationExtractListRequestValue
+} from "../../actions/extraction";
 import { webAutomationActionDefinitions } from "../../actions/schemas";
 import { WEB_AUTOMATION_ACTION_TYPES, type WebAutomationActionType } from "../../actions/types";
-import { webAutomationOutputNodeDefinitions, webAutomationOutputNodeId } from "../definitions";
+import { createWebAutomationOutputNodeDefinition, webAutomationOutputNodeDefinitions, webAutomationOutputNodeId } from "../definitions";
+import { webAutomationExtractListIssues } from "../extract-list";
 
 const nodes = webAutomationOutputNodeDefinitions;
 
@@ -40,7 +48,10 @@ test("every action type has one valid output node, derived from its own schema r
     const definition = webAutomationActionDefinitions.find((candidate) => candidate.actionType === outputId);
     assert.equal(node.label, definition?.label, `${outputId} label`);
     assert.deepEqual(node.metadata?.parameterSchema, definition?.parameterSchema, `${outputId} carries its own parameter schema`);
-    assert.equal(node.parameters.every((parameter) => parameter.allowStateBinding === true), true, `${outputId} parameters must be state-bindable`);
+    // Every parameter is state-bindable but a record output, which Core
+    // requires to be a literal (see the list extraction's own test below).
+    const bindable = node.parameters.filter((parameter) => parameter.id !== "recordOutput");
+    assert.equal(bindable.every((parameter) => parameter.allowStateBinding === true), true, `${outputId} parameters must be state-bindable`);
     assert.equal(typeof node.icon === "string" && node.icon.length > 0, true, `${outputId} needs an icon`);
   }
 });
@@ -191,4 +202,71 @@ test("the list extraction offers a timeout, because a paginated read outlasts Co
   assert.equal(parameter.defaultValue, 10_000, "the same default as every element-scoped action");
   assert.equal(parameter.required, undefined, "a timeout is optional");
   assert.equal(parameter.allowStateBinding, true);
+});
+
+// -- A list extraction a model builds from an instruction ---------------------
+
+test("the list extraction can save a dataset, declared as Core's policy action declares it", () => {
+  const node = nodeFor("web.dom.extract_list");
+  const parameter = node.parameters.find((candidate) => candidate.id === "recordOutput");
+  assert.ok(parameter, "web.dom.extract_list offers no recordOutput parameter");
+  assert.equal(parameter.valueType, "json");
+  assert.equal(parameter.defaultValue, null);
+  assert.equal(parameter.ui?.control, "record-output");
+  // A binding could replace the schema, and with it the excluded fields, at run time.
+  assert.equal(parameter.allowStateBinding, false);
+  assert.equal(parameter.required, undefined, "left empty, the node derives one");
+  // No other node offers one: only the list extraction returns records.
+  const offering = WEB_AUTOMATION_ACTION_TYPES.filter((outputId) => parameterIds(outputId).includes("recordOutput"));
+  assert.deepEqual(offering, ["web.dom.extract_list"]);
+});
+
+test("the nodes that return records declare a records port for a later node to read", () => {
+  const records = nodeFor("web.dom.extract_list").outputs.find((port) => port.id === "records");
+  assert.deepEqual(records, { id: "records", label: "Records", valueType: "array", role: "data" });
+  for (const outputId of WEB_AUTOMATION_ACTION_TYPES) {
+    const node = nodeFor(outputId);
+    assert.equal(node.outputs.some((port) => port.id === "records"), node.metadata?.recordsPath !== undefined, `${outputId}: a records port follows a records path`);
+    assert.deepEqual(node.outputs.slice(0, 2).map((port) => port.id), ["success", "failed"]);
+  }
+});
+
+test("the list extraction carries the words of a scraping request, and no other node does", () => {
+  const tags = nodeFor("web.dom.extract_list").tags ?? [];
+  for (const tag of ["web-automation", "output", "scrape", "collect", "extract", "list", "table", "rows", "every page", "next page", "load more"]) {
+    assert.equal(tags.includes(tag), true, `web.dom.extract_list is missing tag ${tag}`);
+  }
+  for (const outputId of WEB_AUTOMATION_ACTION_TYPES.filter((candidate) => candidate !== "web.dom.extract_list")) {
+    assert.deepEqual(nodeFor(outputId).tags, ["web-automation", "output"], `${outputId} tags`);
+  }
+});
+
+test("the list extraction describes its request for a model to write one", () => {
+  const node = nodeFor("web.dom.extract_list");
+  // Core's catalog keeps 240 characters of a node description, and cut it at
+  // 80 before, so the first sentence says what the node is for on its own.
+  assert.equal(node.description.length <= 240, true, `${node.description.length} characters`);
+  const firstSentence = node.description.slice(0, node.description.indexOf(".") + 1);
+  assert.equal(firstSentence.length > 0 && firstSentence.length <= 80, true, firstSentence);
+  assert.match(firstSentence, /scrape/iu);
+  // The grammar goes with the parameter, whose description Core keeps to 600.
+  const extractList = node.parameters.find((candidate) => candidate.id === "extractList");
+  const grammar = extractList?.description ?? "";
+  assert.equal(grammar.length <= 600, true, `${grammar.length} characters`);
+  for (const term of ["item", "fields", "css@attr", "column:", "paginate", "minItems", "maxItems", ...WEB_AUTOMATION_EXTRACT_PAGINATION_MODES, ...WEB_AUTOMATION_EXTRACT_FIELD_KINDS]) {
+    assert.equal(grammar.includes(term), true, `the extractList description does not mention ${term}`);
+  }
+  assert.equal(grammar.includes(String(WEB_AUTOMATION_EXTRACT_MAX_PAGES)), true);
+  assert.equal(grammar.includes(String(WEB_AUTOMATION_EXTRACT_MAX_ITEMS)), true);
+  // Its example is a request the page would run, and one with no issues.
+  assert.notEqual(webAutomationExtractListRequestValue(extractList?.example), undefined);
+  assert.deepEqual(webAutomationExtractListIssues(extractList?.example), []);
+  // Every definition gets its own copy, so no caller can change another's.
+  const again = createWebAutomationOutputNodeDefinition(webAutomationActionDefinitions.find((candidate) => candidate.actionType === "web.dom.extract_list")!);
+  assert.notEqual(again.parameters.find((candidate) => candidate.id === "extractList")?.example, extractList?.example);
+  // Every other node keeps its action's own description.
+  for (const outputId of WEB_AUTOMATION_ACTION_TYPES.filter((candidate) => candidate !== "web.dom.extract_list")) {
+    const definition = webAutomationActionDefinitions.find((candidate) => candidate.actionType === outputId);
+    assert.equal(nodeFor(outputId).description, definition?.description, `${outputId} description`);
+  }
 });

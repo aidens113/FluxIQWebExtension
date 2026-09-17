@@ -5,6 +5,7 @@ import {
   bindWebAutomationLlmEvidenceRuntime,
   createWebAutomationLlmEvidenceRuntime,
   sanitizeWebLlmSnapshot,
+  WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
   WEB_LLM_EVIDENCE_BYTE_BUDGETS,
   WEB_LLM_INSPECT_TOOL_ID,
   WEB_LLM_NAVIGATE_TOOL_ID,
@@ -83,11 +84,13 @@ test("binds from the production host seam and selects the sole trusted web clien
     },
   };
   bindWebAutomationLlmEvidenceRuntime(fluxiq as never);
-  assert.deepEqual(bound?.tools.map(tool => tool.toolId), [WEB_LLM_INSPECT_TOOL_ID, WEB_LLM_NAVIGATE_TOOL_ID, WEB_LLM_REVEAL_TOOL_ID]);
+  assert.deepEqual(bound?.tools.map(tool => tool.toolId), [WEB_LLM_INSPECT_TOOL_ID, WEB_LLM_NAVIGATE_TOOL_ID, WEB_LLM_REVEAL_TOOL_ID, WEB_LLM_DETECT_STRUCTURE_TOOL_ID]);
   assert.deepEqual(bound?.tools.map(tool => ({ toolId: tool.toolId, effect: tool.effect, repeatPolicy: tool.repeatPolicy, initialObservation: tool.initialObservation })), [
     { toolId: WEB_LLM_INSPECT_TOOL_ID, effect: "observe", repeatPolicy: "after_mutation", initialObservation: { input: {} } },
     { toolId: WEB_LLM_NAVIGATE_TOOL_ID, effect: "mutate", repeatPolicy: undefined, initialObservation: undefined },
     { toolId: WEB_LLM_REVEAL_TOOL_ID, effect: "mutate", repeatPolicy: undefined, initialObservation: undefined },
+    // Observe-only, and deliberately without a repeat policy: a second target is a different request, and Core refuses an identical one.
+    { toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, effect: "observe", repeatPolicy: undefined, initialObservation: undefined },
   ]);
   const revealDescription = bound?.tools.find(tool => tool.toolId === WEB_LLM_REVEAL_TOOL_ID)?.description ?? "";
   assert.match(revealDescription, /otherwise unavailable page structure/u);

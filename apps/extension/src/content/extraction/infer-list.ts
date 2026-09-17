@@ -84,11 +84,12 @@ function proposalForLevel(level: Element): WebAutomationExtractionProposal | und
 
 /** The element's siblings rendered from the same template, itself included, in document order. */
 function sameTemplateSiblings(element: Element, container: Element): Element[] {
-  const signature = templateSignature(element);
-  return Array.from(container.children).filter((child) => isRecordItemTag(child.tagName) && templateSignature(child) === signature);
+  const signature = itemTemplateSignature(element);
+  return Array.from(container.children).filter((child) => isRecordItemTag(child.tagName) && itemTemplateSignature(child) === signature);
 }
 
-function templateSignature(element: Element): string {
+/** The template an item is rendered from, as every grouping of siblings in this directory spells it. */
+export function itemTemplateSignature(element: Element): string {
   return webAutomationItemSignature({
     tagName: element.tagName,
     role: element.getAttribute("role"),

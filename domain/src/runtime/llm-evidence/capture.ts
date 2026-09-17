@@ -23,6 +23,13 @@ type ClientActionResult = {
 
 export type WebLlmEvidenceGateway = {
   eligibleSessionIds(): string[];
+  /**
+   * The eligible sessions whose client declares repeating-structure detection
+   * (`WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID`). Absent, no session
+   * does, and the detection tool refuses to run: a client that ignored the flag
+   * would answer with a bare snapshot, which is not an answer.
+   */
+  structureDetectionSessionIds?(): string[];
   executeAction(sessionId: string, command: { actionType: string; parameters: JsonObject; metadata: JsonObject }): Promise<ClientActionResult>;
 };
 

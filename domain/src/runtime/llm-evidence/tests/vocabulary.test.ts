@@ -12,12 +12,14 @@ import {
   createWebAutomationLlmEvidenceRuntime,
   webLlmToolRejectionResultCode,
   WEB_LLM_ACTION_RESULT_CODE,
+  WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
   WEB_LLM_EVIDENCE_RESULT_CODES,
   WEB_LLM_EVIDENCE_TOOL_IDS,
   WEB_LLM_INSPECT_RESULT_CODE,
   WEB_LLM_INSPECT_TOOL_ID,
   WEB_LLM_NAVIGATE_TOOL_ID,
   WEB_LLM_REVEAL_TOOL_ID,
+  WEB_LLM_STRUCTURE_RESULT_CODE,
   WEB_LLM_TOOL_REJECTION_CODES,
   type WebLlmEvidenceGateway
 } from "..";
@@ -26,26 +28,30 @@ const page = (url: string) => ({ url, title: "Fixture", interactiveElements: [{ 
 
 const gatewayFor = (url: string): WebLlmEvidenceGateway => ({
   eligibleSessionIds: () => ["session.one"],
+  structureDetectionSessionIds: () => ["session.one"],
   executeAction: async (_sessionId, command) => command.actionType === "web.dom.capture_snapshot"
-    ? { status: "succeeded", payload: { snapshot: page(url) } }
+    ? { status: "succeeded", payload: command.parameters.detectStructure === undefined ? { snapshot: page(url) } : { snapshot: page(url), structure: { ok: false, refused: "no_repeating_run" } } }
     : { status: "succeeded" },
 });
 
 test("the published tool ids are exactly the tools the runtime offers, in order", () => {
   const runtime = createWebAutomationLlmEvidenceRuntime(gatewayFor("https://example.test/start"));
   assert.deepEqual(runtime.tools.map((tool) => tool.toolId), [...WEB_LLM_EVIDENCE_TOOL_IDS]);
-  assert.deepEqual([...WEB_LLM_EVIDENCE_TOOL_IDS], [WEB_LLM_INSPECT_TOOL_ID, WEB_LLM_NAVIGATE_TOOL_ID, WEB_LLM_REVEAL_TOOL_ID]);
+  assert.deepEqual([...WEB_LLM_EVIDENCE_TOOL_IDS], [WEB_LLM_INSPECT_TOOL_ID, WEB_LLM_NAVIGATE_TOOL_ID, WEB_LLM_REVEAL_TOOL_ID, WEB_LLM_DETECT_STRUCTURE_TOOL_ID]);
+  assert.equal(WEB_LLM_EVIDENCE_TOOL_IDS.includes("web.detect_repeating_structure"), true);
   assert.equal(WEB_LLM_EVIDENCE_TOOL_IDS.includes("web.reveal_safe"), true);
   assert.equal(new Set(WEB_LLM_EVIDENCE_TOOL_IDS).size, WEB_LLM_EVIDENCE_TOOL_IDS.length);
 });
 
-test("the published result codes cover both successes and every rejection, with none left over", () => {
+test("the published result codes cover every success and every rejection, with none left over", () => {
   assert.deepEqual([...WEB_LLM_EVIDENCE_RESULT_CODES], [
     WEB_LLM_INSPECT_RESULT_CODE,
     WEB_LLM_ACTION_RESULT_CODE,
+    WEB_LLM_STRUCTURE_RESULT_CODE,
     ...WEB_LLM_TOOL_REJECTION_CODES.map((code) => `web.action.rejected.${code}`),
   ]);
-  assert.equal(WEB_LLM_EVIDENCE_RESULT_CODES.length, WEB_LLM_TOOL_REJECTION_CODES.length + 2);
+  assert.equal(WEB_LLM_EVIDENCE_RESULT_CODES.length, WEB_LLM_TOOL_REJECTION_CODES.length + 3);
+  assert.equal(WEB_LLM_EVIDENCE_RESULT_CODES.includes("web.action.rejected.no_repeating_structure"), true);
   assert.equal(WEB_LLM_EVIDENCE_RESULT_CODES.includes("web.action.rejected.no_progress"), true);
   for (const code of WEB_LLM_TOOL_REJECTION_CODES) {
     assert.equal(WEB_LLM_EVIDENCE_RESULT_CODES.includes(webLlmToolRejectionResultCode(code)), true, code);
@@ -61,6 +67,7 @@ test("every result code the runtime actually emits is one the published set cont
     (await runtime.executeTool({ ...base, callId: "call.three", toolId: WEB_LLM_NAVIGATE_TOOL_ID, value: { url: "https://outside.test/" } })).resultCode,
     (await runtime.executeTool({ ...base, callId: "call.four", toolId: WEB_LLM_INSPECT_TOOL_ID, value: { extra: 1 } })).resultCode,
     (await runtime.executeTool({ ...base, callId: "call.five", toolId: WEB_LLM_REVEAL_TOOL_ID, value: { target: "target.9" } })).resultCode,
+    (await runtime.executeTool({ ...base, callId: "call.six", toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} })).resultCode,
   ];
   assert.deepEqual(emitted, [
     "web.inspect.succeeded",
@@ -68,6 +75,7 @@ test("every result code the runtime actually emits is one the published set cont
     "web.action.rejected.cross_origin",
     "web.action.rejected.invalid_input",
     "web.action.rejected.target_unobserved",
+    "web.action.rejected.no_repeating_structure",
   ]);
   for (const code of emitted) assert.equal(WEB_LLM_EVIDENCE_RESULT_CODES.includes(code as never), true, code);
 });

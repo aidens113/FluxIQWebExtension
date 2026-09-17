@@ -23,6 +23,7 @@ import { test } from "node:test";
 import { parseAutomationStudioFailureRecord } from "fluxiq/automation-studio";
 import type { BrowserActionCommand, BrowserActionResult } from "../../shared/protocol";
 import { browserActionFailure, runBrowserActionCommand } from "../action-runner";
+import { browserActionFromGatewayCommand } from "../result-mapping";
 import type { ListedFrame } from "../frame-address";
 
 test("a failure is reported against its command, finished the moment it started", (t) => {
@@ -254,6 +255,24 @@ test("the frame may be named by the raw browserFrameId parameter, which is how i
     [0, 3]
   );
   assert.equal(sent[0]?.frameId, 3);
+  assert.equal(run.frameId, 3);
+});
+
+test("a structure detection arrives from the gateway as an observation for the frame it names, its flag intact", async () => {
+  // The domain's authoring tool sends the flag and the frame as parameters;
+  // the lift puts them on the command, and the runner delivers that command
+  // unchanged to the frame, where `capture-snapshot.ts` answers it.
+  const action = browserActionFromGatewayCommand({
+    commandId: "c-detect",
+    actionType: "web.dom.capture_snapshot",
+    parameters: { detectStructure: { selector: '[data-testid="product-link"]' }, browserFrameId: 3, browserTabId: TAB_ID }
+  }) as BrowserActionCommand;
+  const { run, sent } = await runAgainstStub(action, [0, 3]);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0]?.frameId, 3);
+  const delivered = sent[0]?.message["action"] as BrowserActionCommand;
+  assert.deepEqual(delivered.detectStructure, { selector: '[data-testid="product-link"]' });
+  assert.equal(delivered.actionType, "web.dom.capture_snapshot");
   assert.equal(run.frameId, 3);
 });
 

@@ -32,6 +32,8 @@ import type {
   WebAutomationAssertRequest,
   WebAutomationDialogRequest,
   WebAutomationExtractListRequest,
+  WebAutomationStructureDetection,
+  WebAutomationStructureDetectionRequest,
   WebAutomationUploadFile
 } from "../types";
 
@@ -61,6 +63,8 @@ export type ContentActionDependencies = {
   keyboard: KeyboardCapability;
   /** Sets a checkbox or radio to a state rather than toggling it. */
   setCheckedState(element: Element, checked: boolean): CheckableStateOutcome;
+  /** Detects the repeating structure around an element, or the page's largest, as the picker would propose it. Reads nothing but structure. */
+  detectStructure(request: WebAutomationStructureDetectionRequest): WebAutomationStructureDetection;
   /** Reads a repeating structure into records, following pagination, within the command's `timeoutMs` when it names one. */
   extractList(request: WebAutomationExtractListRequest, options?: ListExtractionOptions): Promise<ListExtractionOutcome>;
   /** Puts files into a file input through a `DataTransfer`. */

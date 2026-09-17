@@ -1,9 +1,11 @@
 // The web-only evidence tools bound into Core's domain-neutral LLM harness,
 // and the post-failure capture the runtime diagnosis path calls.
 //
-// Three tools, in increasing order of what they are allowed to do: inspect
+// Four tools. Three in increasing order of what they are allowed to do: inspect
 // observes, navigate moves within the page's own origin, reveal uncovers
-// structure through one narrowly safe interaction. Everything they return is a
+// structure through one narrowly safe interaction. The fourth, detect, observes
+// too: it finds the repeating structure a scraping step needs and hands back an
+// opaque extraction handle for it (`structure/`). Everything they return is a
 // sanitized packet; everything they refuse returns a bare code. Form entry,
 // option selection and submission are deliberately absent -- authoring a Flow
 // never requires the model to drive the page.
@@ -18,6 +20,7 @@ import type {
 } from "fluxiq/automation-studio";
 import type { JsonObject, JsonValue } from "fluxiq/core";
 import { WEB_AUTOMATION_DOMAIN_ID } from "../../constants";
+import { WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID } from "../capabilities";
 import {
   actAndCapture,
   assertActive,
@@ -35,8 +38,20 @@ import {
 } from "./harness-options";
 import { WEB_LLM_EVIDENCE_BOUNDS } from "./limits";
 import { evidenceLocation, safeEvidenceUrl } from "./location";
+import {
+  createWebLlmTargetPackets,
+  resolveWebPlanNodeParameters,
+  type WebPlanNodeResolution,
+  type WebPlanNodeResolutionInput
+} from "./plan-resolution";
 import { present } from "./present";
 import { currentElementForReturnedTarget, safeRevealElement } from "./reveal";
+import {
+  createWebLlmExtractionHandles,
+  detectRepeatingStructure,
+  type WebLlmExtractionHandleResolution,
+  type WebLlmExtractionHandleScope
+} from "./structure";
 import {
   sanitizeWebLlmSnapshotWithBindings,
   WEB_LLM_EVIDENCE_SCHEMA_VERSION,
@@ -50,6 +65,7 @@ import { boundedIdentifier, jsonRecord } from "./untrusted-json";
 import {
   webLlmToolRejectionResultCode,
   WEB_LLM_ACTION_RESULT_CODE,
+  WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
   WEB_LLM_INSPECT_RESULT_CODE,
   WEB_LLM_INSPECT_TOOL_ID,
   WEB_LLM_NAVIGATE_TOOL_ID,
@@ -87,6 +103,24 @@ export type WebAutomationLlmEvidenceRuntime = {
   executeTool(input: WebLlmEvidenceToolRequest): Promise<WebLlmEvidenceToolExecution>;
   captureSanitizedFailureEvidence(input: WebLlmFailureEvidenceRequest): Promise<WebLlmPageEvidence>;
   validateTargetOverrideEvidence(evidence: JsonObject, target: AutomationStudioRuntimeTargetOverrideTarget, failedAction: AutomationStudioRuntimeTargetOverrideFailedAction): AutomationStudioRuntimeTargetOverrideEvidenceValidation;
+  /**
+   * What an extraction handle the detection tool issued stands for: the
+   * `web.dom.extract_list` request, the page and the frame. The one way to turn
+   * a handle a model put in a plan into real parameters. A handle is resolved
+   * only for the project and Flow it was issued to; any other answer is
+   * `unknown_handle`, and one the bounded store has let go is `stale_handle`.
+   */
+  resolveExtractionHandle(input: WebLlmExtractionHandleScope & { handle: string }): WebLlmExtractionHandleResolution;
+  /**
+   * A plan node's parameters with the handles the model wrote in them made
+   * real: a `selector` written `{ handle: "target.N" }` becomes the selector
+   * behind the handle this project and Flow's exploration was shown, and the
+   * extraction node's `extractList` written `{ handle: "extraction.N" }`
+   * becomes the request behind it (`plan-resolution/`). A node with no handle
+   * is `unchanged`; any handle that cannot be made real refuses the node with
+   * named codes. Core calls it before a plan is validated.
+   */
+  resolvePlanNodeParameters(input: WebPlanNodeResolutionInput): WebPlanNodeResolution;
 };
 
 /**
@@ -99,6 +133,14 @@ const RETAINED_SELECTOR_BINDINGS = 8;
 
 export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGateway): WebAutomationLlmEvidenceRuntime {
   const returnedEvidence = new Map<string, WebLlmSnapshotBinding>();
+  const extractionHandles = createWebLlmExtractionHandles();
+  const targetPackets = createWebLlmTargetPackets();
+  // Every packet an authoring tool shows the model: kept for the next repair
+  // (`retain`), for the next reveal or detection, and for resolving the plan.
+  const shown = (input: WebLlmEvidenceToolRequest, sessionId: string, snapshot: WebLlmSnapshotBinding): void => {
+    returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
+    targetPackets.remember({ projectId: input.projectId, flowId: input.flowId }, snapshot);
+  };
   // Keyed by the packet itself, because Core hands the packet back to
   // `validateTargetOverrideEvidence` without the project or flow it came from.
   const retainedSelectors = new Map<string, Map<string, string>>();
@@ -157,6 +199,12 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
         inputSchema: { type: "object", required: ["target"], properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN } }, additionalProperties: false },
         effect: "mutate",
       },
+      {
+        toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
+        description: "Detect the repeating list or table an extraction would read: around an observed element when given its opaque target handle, else the page's largest list. Returns an opaque extraction handle naming it, each field's key, label, kind and coverage, the item count, and how the list continues. Returns no values or selectors. Observes only.",
+        inputSchema: { type: "object", properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN } }, additionalProperties: false },
+        effect: "observe",
+      },
     ],
     async executeTool(input) {
       assertActive(input.signal);
@@ -168,7 +216,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
         if (input.toolId === WEB_LLM_INSPECT_TOOL_ID) {
           exactToolKeys(input.value, []);
           const snapshot = retain(await captureEvidence(gateway, sessionId, input, input.signal));
-          returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
+          shown(input, sessionId, snapshot);
           return toolExecution(snapshot.evidence, false, WEB_LLM_INSPECT_RESULT_CODE);
         }
         if (input.toolId === WEB_LLM_NAVIGATE_TOOL_ID) {
@@ -186,7 +234,7 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
           assertActive(input.signal);
           if (result.status !== "succeeded") throw new Error("web evidence navigation failed");
           const snapshot = retain(await captureEvidence(gateway, sessionId, input, input.signal, destination.origin));
-          returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
+          shown(input, sessionId, snapshot);
           return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE);
         }
         if (input.toolId === WEB_LLM_REVEAL_TOOL_ID) {
@@ -197,8 +245,17 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
           if (!safeRevealElement(element)) recoverable("target_unsafe");
           const snapshot = retain(await actAndCapture(gateway, sessionId, input, "web.dom.click", { selector: element.selector }, current, input.signal));
           if (JSON.stringify(snapshot.evidence) === JSON.stringify(current.evidence)) recoverable("no_progress");
-          returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
+          shown(input, sessionId, snapshot);
           return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE);
+        }
+        if (input.toolId === WEB_LLM_DETECT_STRUCTURE_TOOL_ID) {
+          return await detectRepeatingStructure({
+            gateway,
+            sessionId,
+            request: input,
+            returned: returnedEvidence.get(evidenceScope(input, sessionId)),
+            handles: extractionHandles,
+          });
         }
         throw new Error("web evidence tool is not registered");
       } catch (error) {
@@ -252,6 +309,12 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
         retainedSelectors.get(packetKey(evidence as WebLlmPageEvidence))
       );
     },
+    resolveExtractionHandle(input) {
+      return extractionHandles.resolve({ projectId: input.projectId, flowId: input.flowId }, input.handle);
+    },
+    resolvePlanNodeParameters(input) {
+      return resolveWebPlanNodeParameters(input, { targets: targetPackets, extractions: extractionHandles });
+    },
   };
 }
 
@@ -259,11 +322,13 @@ export function createWebAutomationLlmEvidenceRuntime(gateway: WebLlmEvidenceGat
 export function bindWebAutomationLlmEvidenceRuntime(fluxiq: FluxIQ): void {
   fluxiq.programs.automationStudio.bindLlmEvidenceRuntime(createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => eligibleWebSessionIds(fluxiq),
+    structureDetectionSessionIds: () => eligibleWebSessionIds(fluxiq, WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID),
     executeAction: (sessionId, command) => fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, command),
   }));
 }
 
-function eligibleWebSessionIds(fluxiq: FluxIQ): string[] {
+/** The sessions every evidence tool may use, narrowed to those that also declare `alsoDeclaring` when it is named. */
+function eligibleWebSessionIds(fluxiq: FluxIQ, alsoDeclaring?: string): string[] {
   return fluxiq.programs.clientGateway.snapshot().sessions.filter((session) =>
     session.status === "ready" &&
     session.clientType === "extension" &&
@@ -271,7 +336,8 @@ function eligibleWebSessionIds(fluxiq: FluxIQ): string[] {
     session.capabilities.some((capability) =>
       capability.id === "web.actions" &&
       (capability.metadata?.domainId === WEB_AUTOMATION_DOMAIN_ID || capability.actionTypes?.includes("web.dom.capture_snapshot"))
-    )
+    ) &&
+    (alsoDeclaring === undefined || session.capabilities.some((capability) => capability.id === alsoDeclaring))
   ).map((session) => session.sessionId);
 }
 

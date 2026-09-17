@@ -83,6 +83,8 @@ export type ActionResultEvidence = {
   extracted?: JsonValue | undefined;
   extraction?: BrowserActionResult["extraction"];
   dialog?: BrowserActionResult["dialog"];
+  /** A snapshot asked to detect a structure: what it found, or why nothing. Structure only, never a value (D3). */
+  structure?: BrowserActionResult["structure"];
   resolution?: BrowserActionTargetResolution | undefined;
 };
 
@@ -424,6 +426,7 @@ function buildResult(
   if (evidence.extracted !== undefined) result.extracted = evidence.extracted;
   if (evidence.extraction) result.extraction = evidence.extraction;
   if (evidence.dialog) result.dialog = evidence.dialog;
+  if (evidence.structure) result.structure = evidence.structure;
   if (evidence.resolution) result.resolution = evidence.resolution;
   return result;
 }

@@ -283,9 +283,15 @@ assert.equal(incompleteHarness.ok, false);
 assert.equal(incompleteHarness.diagnostics.some((diagnostic) => diagnostic.code === "bootstrap.catalog_essentials_missing"), true);
 assert.equal(incompleteProviderCalls, 0);
 
-assert.equal(
-  outputNodeDefinitions.every((definition) => definition.parameters.every((parameter) => parameter.allowStateBinding === true)),
-  true
+// Every web parameter is state-bindable except the list extraction's
+// `recordOutput`. Core requires a record output to be a literal, because a
+// binding could swap its schema, and with it the excluded fields, at run time.
+// A new exception must be added here on purpose.
+assert.deepEqual(
+  outputNodeDefinitions.flatMap((definition) => definition.parameters
+    .filter((parameter) => parameter.allowStateBinding !== true)
+    .map((parameter) => `${definition.id}:${parameter.id}:${String(parameter.allowStateBinding)}`)),
+  ["web.output.dom-extract_list:recordOutput:false"]
 );
 for (const outputId of ["web.dom.type", "web.dom.select", "web.dom.click", "web.dom.clear", "web.dom.wait_for_selector", "web.dom.extract"]) {
   const definition = outputNodeDefinitions.find((candidate) => candidate.outputAction?.fixedOutputId === outputId);

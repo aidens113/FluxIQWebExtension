@@ -291,8 +291,8 @@ function fingerprintValue(value) {
 var REFUSED = Symbol("refused");
 function optionalValue(value, read) {
   if (value === void 0) return void 0;
-  const readable = read(value);
-  return readable === void 0 ? REFUSED : readable;
+  const readable2 = read(value);
+  return readable2 === void 0 ? REFUSED : readable2;
 }
 function booleanValue2(value) {
   return typeof value === "boolean" ? value : void 0;
@@ -746,14 +746,280 @@ var WEB_AUTOMATION_ACTION_SAFETY = {
   "web.browser.download": "review"
 };
 
+// src/output-nodes/extract-list/catalog-text.ts
+var WEB_AUTOMATION_EXTRACT_LIST_TAGS = [
+  "scrape",
+  "collect",
+  "extract",
+  "list",
+  "table",
+  "rows",
+  "records",
+  "dataset",
+  "every page",
+  "next page",
+  "load more",
+  "infinite scroll",
+  "pagination"
+];
+var WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
+  "Scrape every item of a repeating list or table into a dataset, across pages.",
+  "The rows are saved without a recordOutput."
+].join(" ");
+var WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
+  "{ item, fields, paginate?, minItems?, maxItems? }. item: CSS selector of each record.",
+  'fields: { key: "css" (text) | "css@attr" | "column:Header" (table cell)',
+  `| { kind: ${WEB_AUTOMATION_EXTRACT_FIELD_KINDS.join("|")}, selector?, attribute?, header?, required?: false } };`,
+  "keys use A-Za-z0-9_-; field selectors are read inside each item.",
+  'paginate: { mode: "next", next: css, maxPages } | { mode: "loadMore", control: css, maxPages }',
+  `| { mode: "scroll", maxScrolls } | { mode: "numbered", pages: css, maxPages }, at most ${WEB_AUTOMATION_EXTRACT_MAX_PAGES}.`,
+  `minItems: default 1; 0 allows an empty list. maxItems: at most ${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}.`
+].join(" ");
+var WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE = {
+  item: "li.product",
+  fields: { name: ".name", price: ".price", url: "a@href" },
+  paginate: { mode: "next", next: "a.next", maxPages: 5 }
+};
+
+// src/extraction/dataset-id.ts
+var COMBINING_MARKS = new RegExp("\\p{M}+", "gu");
+
+// src/extraction/label-key.ts
+var COMBINING_MARKS2 = new RegExp("\\p{M}+", "gu");
+
+// src/extraction/structure-detection.ts
+var WEB_AUTOMATION_STRUCTURE_DETECTION_REFUSALS = ["target_not_found", "ambiguous_target", "no_repeating_run", "sensitive_region"];
+function webAutomationStructureDetectionValue(value) {
+  const detection = record(value);
+  if (!detection) return void 0;
+  if (detection.ok === false) {
+    const refused2 = WEB_AUTOMATION_STRUCTURE_DETECTION_REFUSALS.find((code) => code === detection.refused);
+    return refused2 === void 0 ? void 0 : { ok: false, refused: refused2 };
+  }
+  if (detection.ok !== true) return void 0;
+  if (detection.infiniteScroll !== void 0 && detection.infiniteScroll !== true) return void 0;
+  const proposal = proposalValue(detection.proposal);
+  if (!proposal) return void 0;
+  return detection.infiniteScroll === true ? { ok: true, proposal, infiniteScroll: true } : { ok: true, proposal };
+}
+function proposalValue(value) {
+  const proposal = record(value);
+  if (!proposal || typeof proposal.container !== "string" || proposal.container === "") return void 0;
+  if (!Array.isArray(proposal.fields) || proposal.fields.length === 0) return void 0;
+  const itemCount = count(proposal.itemCount);
+  const confidence = unitInterval(proposal.confidence);
+  const fields = proposal.fields.map(fieldValue2);
+  if (itemCount === void 0 || confidence === void 0) return void 0;
+  const named = fields.filter((field) => field !== void 0);
+  if (named.length !== fields.length || new Set(named.map((field) => field.key)).size !== named.length) return void 0;
+  const request = webAutomationExtractListRequestValue({
+    item: proposal.item,
+    fields: Object.fromEntries(named.map((field) => [field.key, field.spec])),
+    paginate: proposal.pagination
+  });
+  if (!request) return void 0;
+  const copied = [];
+  for (const field of named) {
+    const spec = request.fields[field.key];
+    if (spec === void 0 || typeof spec === "string") return void 0;
+    copied.push({ key: field.key, label: field.label, spec, coverage: field.coverage });
+  }
+  const pagination = request.paginate;
+  return pagination === void 0 ? { container: proposal.container, item: request.item, itemCount, fields: copied, confidence } : { container: proposal.container, item: request.item, itemCount, fields: copied, pagination, confidence };
+}
+function fieldValue2(value) {
+  const field = record(value);
+  const spec = record(field?.spec);
+  if (!field || !spec || spec.element !== void 0) return void 0;
+  if (typeof field.key !== "string" || typeof field.label !== "string") return void 0;
+  const coverage = unitInterval(field.coverage);
+  return coverage === void 0 ? void 0 : { key: field.key, label: field.label, spec, coverage };
+}
+function record(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+function count(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
+}
+function unitInterval(value) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1 ? value : void 0;
+}
+
+// src/output-nodes/extract-list/record-output.ts
+var DEFAULT_MAX_RECORDS = 1e3;
+var MAX_RECORDS_CEILING = 1e4;
+var LABEL_MAX_LENGTH2 = 200;
+function webAutomationRecordOutput(definition) {
+  const taken = /* @__PURE__ */ new Set();
+  const fields = Object.entries(definition.request.fields).map(([key, field]) => {
+    const spec = typeof field === "string" ? void 0 : field;
+    return {
+      id: key,
+      label: distinctLabel(definition.fieldLabels[key] ?? key, key, taken),
+      // A link's target is a URL; everything else the page reads is text. A
+      // number on the page is text too, because nothing has parsed it.
+      valueType: spec?.kind === "link" ? "url" : "string",
+      // A field is required unless it was picked as optional: an optional field
+      // the page cannot read is `null`, which Core stores as an absent key (D16).
+      required: spec?.required !== false,
+      ...spec?.handling !== void 0 ? { handling: spec.handling } : {}
+    };
+  });
+  return {
+    datasetId: definition.datasetId,
+    label: definition.label,
+    schema: { schemaVersion: "0.1", fields },
+    writeMode: "append",
+    maxRecords: Math.min(definition.request.maxItems ?? DEFAULT_MAX_RECORDS, MAX_RECORDS_CEILING)
+  };
+}
+function distinctLabel(label, key, taken) {
+  const preferred = label.slice(0, LABEL_MAX_LENGTH2);
+  const distinct = taken.has(preferred) ? `${preferred} (${key})`.slice(0, LABEL_MAX_LENGTH2) : preferred;
+  const unique = taken.has(distinct) ? key.slice(0, LABEL_MAX_LENGTH2) : distinct;
+  taken.add(unique);
+  return unique;
+}
+
+// src/output-nodes/extract-list/records-path.ts
+var WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH = "result.extracted";
+
+// src/output-nodes/extract-list/dispatch.ts
+import { parseAutomationStudioRecordOutput } from "fluxiq/automation-studio/nodes";
+
+// src/output-nodes/extract-list/issues.ts
+var PROBE_REQUEST = { item: "*", fields: { probe: "*" } };
+function webAutomationExtractListIssues(value) {
+  if (!isPlainObject(value)) return ["web.extract_list.not_object"];
+  const keys = declaredKeys();
+  const issues = /* @__PURE__ */ new Set();
+  if (Object.keys(value).some((key) => !keys.request.has(key))) issues.add("web.extract_list.unknown_key");
+  if (!readable({ item: value.item ?? null })) issues.add("web.extract_list.invalid_item");
+  if (value.itemElement !== void 0 && !readable({ itemElement: value.itemElement })) issues.add("web.extract_list.invalid_item_element");
+  addFieldIssues(value.fields, keys.fieldSpec, issues);
+  addPaginateIssues(value.paginate, keys.paginate, issues);
+  addItemBoundIssues(value, issues);
+  if (issues.size === 0 && webAutomationExtractListRequestValue(value) === void 0) issues.add("web.extract_list.unreadable");
+  return [...issues];
+}
+function addFieldIssues(fields, specKeys, issues) {
+  if (!isPlainObject(fields)) {
+    issues.add("web.extract_list.invalid_fields");
+    return;
+  }
+  const entries = Object.entries(fields);
+  if (entries.length === 0) {
+    issues.add("web.extract_list.no_fields");
+    return;
+  }
+  let fieldRefused = false;
+  for (const [key, field] of entries) {
+    if (isPlainObject(field) && Object.keys(field).some((specKey) => !specKeys.has(specKey))) issues.add("web.extract_list.unknown_field_key");
+    if (!isWebAutomationExtractFieldKey(key)) {
+      issues.add("web.extract_list.invalid_field_key");
+      fieldRefused = true;
+    } else if (!readable({ fields: { [key]: field, [key === "probe" ? "probe_2" : "probe"]: "*" } })) {
+      issues.add("web.extract_list.invalid_field");
+      fieldRefused = true;
+    }
+  }
+  if (!fieldRefused && !readable({ fields })) issues.add("web.extract_list.all_fields_excluded");
+}
+function addPaginateIssues(paginate, paginateKeys, issues) {
+  if (paginate === void 0) return;
+  if (isPlainObject(paginate) && Object.keys(paginate).some((key) => !paginateKeys.has(key))) issues.add("web.extract_list.unknown_paginate_key");
+  if (!readable({ paginate })) issues.add("web.extract_list.invalid_paginate");
+}
+function addItemBoundIssues(value, issues) {
+  const { maxItems, minItems } = value;
+  const maxItemsReadable = maxItems === void 0 || isPositiveInteger(maxItems);
+  if (!maxItemsReadable) issues.add("web.extract_list.invalid_max_items");
+  if (minItems === void 0) return;
+  if (!isNonNegativeInteger(minItems)) {
+    issues.add("web.extract_list.invalid_min_items");
+    return;
+  }
+  if (!readable(maxItemsReadable && maxItems !== void 0 ? { minItems, maxItems } : { minItems })) issues.add("web.extract_list.min_items_exceed_max");
+}
+function readable(overrides) {
+  return webAutomationExtractListRequestValue({ ...PROBE_REQUEST, ...overrides }) !== void 0;
+}
+var declared;
+function declaredKeys() {
+  if (declared) return declared;
+  const schema = webAutomationExtractListSchema({});
+  const properties = child(schema, "properties");
+  declared = {
+    request: propertyNames(schema),
+    paginate: propertyNames(child(properties, "paginate")),
+    fieldSpec: propertyNames(child(child(child(properties, "fields"), "metadata"), "fieldSpec"))
+  };
+  return declared;
+}
+function propertyNames(schema) {
+  return new Set(Object.keys(child(schema, "properties") ?? {}));
+}
+function child(value, key) {
+  const next = value?.[key];
+  return isPlainObject(next) ? next : void 0;
+}
+function isPlainObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isPositiveInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
+function isNonNegativeInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+// src/output-nodes/extract-list/parameter-contract.ts
+function webAutomationExtractListParameterContract(input) {
+  return input.parameterId === "extractList" ? webAutomationExtractListIssues(input.value) : [];
+}
+
+// src/output-nodes/extract-list/parameters.ts
+function webAutomationExtractListParameters() {
+  return [
+    {
+      id: "extractList",
+      label: "List",
+      description: WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR,
+      valueType: "object",
+      example: structuredClone(WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE),
+      ui: { control: "value" }
+    },
+    {
+      id: "timeoutMs",
+      label: "Timeout",
+      description: "Milliseconds for the whole read. Left at the default, it grows with the pages the list may read.",
+      valueType: "number",
+      defaultValue: WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS
+    },
+    {
+      id: "recordOutput",
+      label: "Save extracted records",
+      description: "The dataset the rows are saved into. Leave empty to save every field of the list under a dataset named after its fields.",
+      valueType: "json",
+      defaultValue: null,
+      allowStateBinding: false,
+      ui: { control: "record-output" }
+    }
+  ];
+}
+
 // src/output-nodes/definitions.ts
 var controlInput = { id: "in", label: "In", valueType: "signal", role: "control" };
 var outputPorts = [
   { id: "success", label: "Success", valueType: "any", role: "success" },
   { id: "failed", label: "Failed", valueType: "any", role: "failure" }
 ];
+var recordsPort = { id: "records", label: "Records", valueType: "array", role: "data" };
 var recordsPathByOutput = {
-  "web.dom.extract_list": "result.extracted"
+  "web.dom.extract_list": WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH
+};
+var catalogTextByOutput = {
+  "web.dom.extract_list": { description: WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, tags: WEB_AUTOMATION_EXTRACT_LIST_TAGS }
 };
 var expectedStateParameter = {
   id: "expectedState",
@@ -774,12 +1040,13 @@ function createWebAutomationOutputNodeDefinition(definition) {
     Array.isArray(definition.parameterSchema.required) ? definition.parameterSchema.required.filter((value) => typeof value === "string") : []
   );
   const recordsPath = recordsPathByOutput[definition.actionType];
+  const catalogText = catalogTextByOutput[definition.actionType];
   return {
     schemaVersion: "0.1",
     id: webAutomationOutputNodeId(definition.actionType),
     version: "1.0.0",
     label: definition.label,
-    description: definition.description,
+    description: catalogText?.description ?? definition.description,
     category: "web",
     source: {
       kind: "importer",
@@ -797,14 +1064,17 @@ function createWebAutomationOutputNodeDefinition(definition) {
     },
     outputAction: { fixedOutputId: definition.actionType },
     inputs: [controlInput],
-    outputs: outputPorts,
+    outputs: recordsPath ? [...outputPorts, recordsPort] : outputPorts,
+    // Every web parameter may be filled from state unless it says otherwise.
+    // Only `recordOutput` does, for the reason Core gives its own: a binding
+    // could replace the dataset schema, and with it the excluded fields.
     parameters: [...parametersForOutput(definition.actionType), expectedStateParameter].map((parameter) => ({
       ...parameter,
       ...requiredParameters.has(parameter.id) ? { required: true } : {},
-      allowStateBinding: true
+      allowStateBinding: parameter.allowStateBinding ?? true
     })),
     icon: iconForOutput(definition.actionType),
-    tags: ["web-automation", "output"],
+    tags: ["web-automation", "output", ...catalogText?.tags ?? []],
     metadata: {
       domainId: WEB_AUTOMATION_DOMAIN_ID,
       outputId: definition.actionType,
@@ -856,10 +1126,7 @@ function parametersForOutput(outputId) {
   if (outputId === "web.dom.capture_snapshot") return [];
   if (outputId === "web.dom.check") return [...selectorParameters, { id: "checked", label: "Checked", valueType: "boolean", defaultValue: true }];
   if (outputId === "web.dom.assert") return [...selectorParameters, structured("assert", "Assertion")];
-  if (outputId === "web.dom.extract_list") return [
-    structured("extractList", "List"),
-    { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 1e4 }
-  ];
+  if (outputId === "web.dom.extract_list") return webAutomationExtractListParameters();
   if (outputId === "web.dom.upload") return [...selectorParameters, structured("upload", "Files")];
   if (outputId === "web.dom.dialog") return [structured("dialog", "Dialog")];
   if (outputId === "web.browser.tab") return [structured("tab", "Tab")];
@@ -929,6 +1196,11 @@ var WEB_AUTOMATION_ACTION_TO_LEGACY_BROWSER = {
 var WEB_AUTOMATION_RUNTIME_CAPABILITIES = ["web.actions"];
 var WEB_AUTOMATION_RUNTIME_PERMISSIONS = ["web-automation.action"];
 
+// src/output-nodes/parameter-contracts.ts
+var webAutomationOutputNodeParameterContracts = {
+  [webAutomationOutputNodeId("web.dom.extract_list")]: webAutomationExtractListParameterContract
+};
+
 // src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
 var SENSITIVE_AUTOCOMPLETE_TOKENS = /* @__PURE__ */ new Set(["current-password", "new-password", "one-time-code"]);
@@ -945,10 +1217,10 @@ function isSensitiveControlType(type) {
 // src/sensitivity/descriptor.ts
 function sensitiveFieldSignatureOfDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object" || Array.isArray(descriptor)) return {};
-  const record = descriptor;
-  const attributes = record.attributes && typeof record.attributes === "object" && !Array.isArray(record.attributes) ? record.attributes : {};
+  const record2 = descriptor;
+  const attributes = record2.attributes && typeof record2.attributes === "object" && !Array.isArray(record2.attributes) ? record2.attributes : {};
   return {
-    inputType: stringField(record.inputType),
+    inputType: stringField(record2.inputType),
     controlType: stringField(attributes.type),
     autocomplete: stringField(attributes.autocomplete),
     dataSensitive: stringField(attributes["data-sensitive"])
@@ -1955,7 +2227,7 @@ function text(value) {
   const collapsed = value.replace(/\s+/gu, " ").trim();
   return collapsed ? collapsed.slice(0, MAX_TEXT) : void 0;
 }
-function count(value) {
+function count2(value) {
   return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : void 0;
 }
 function flag(value) {
@@ -2162,7 +2434,7 @@ function addDialogs(put, dialogs) {
       kind: text(native.kind),
       message: text(native.message),
       response: text(native.response),
-      at: count(native.at)
+      at: count2(native.at)
     }), { elementKind: "json", comparable: false, volatility: "rapid" });
   }
 }
@@ -2178,7 +2450,7 @@ function addOverlays(put, overlays) {
       role: text(blocker?.role),
       label: text(blocker?.label),
       bounds: rect(blocker?.bounds),
-      blocks: count(blocker?.blocks),
+      blocks: count2(blocker?.blocks),
       blockedCount: blocked.length,
       blocked: blocked.slice(0, MAX_BLOCKED_SELECTORS).map(text).filter(isPresent)
     });
@@ -2202,7 +2474,7 @@ function addRepeating(put, repeating) {
     return compactJsonObject({
       containerSelector: text(structure?.containerSelector),
       signature: text(structure?.signature),
-      itemCount: count(structure?.itemCount),
+      itemCount: count2(structure?.itemCount),
       representative: representative ? compactJsonObject({
         selector: text(representative.selector),
         testId: text(representative.testId),
@@ -2224,7 +2496,7 @@ function addForms(put, forms) {
       method: text(form?.method),
       // The producer's own pre-cap total, kept beside the controls that
       // survived: the same count-plus-kept-list convention as everywhere else.
-      controlCount: count(form?.controlCount) ?? controls.length,
+      controlCount: count2(form?.controlCount) ?? controls.length,
       controls: controls.slice(0, MAX_FORM_CONTROLS).map(formControl),
       submit: text(form?.submit)
     });
@@ -2258,7 +2530,7 @@ function putCollection(put, path2, items2, cap, describe, input) {
   }, input);
 }
 function putCount(put, path2, value, input) {
-  const total = count(value);
+  const total = count2(value);
   if (total !== void 0) put(path2, "integer", total, input);
 }
 function putFlag(put, path2, value, input) {
@@ -2548,6 +2820,7 @@ import { createHash } from "node:crypto";
 import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES as AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES2 } from "fluxiq/automation-studio";
 
 // src/runtime/capabilities.ts
+var WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID = "web.structure.detection";
 var webAutomationRuntimeCapabilities = [
   {
     id: "web.actions",
@@ -2595,6 +2868,18 @@ var webAutomationGatewayCapabilities = [
     domainId: WEB_AUTOMATION_DOMAIN_ID,
     inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence],
     metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence] }
+  },
+  {
+    // `web.dom.capture_snapshot` answers `detectStructure` with the repeating
+    // structure it found (`extraction/structure-detection.ts`). A flag on an
+    // existing observe-only action rather than an action of its own, so it
+    // lists no action type: nothing new is executable. The authoring evidence
+    // runtime refuses its detection tool for a client that does not declare it.
+    id: WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID,
+    label: "Repeating-structure detection",
+    kind: "snapshot",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, actionType: "web.dom.capture_snapshot", parameter: "detectStructure" }
   },
   {
     id: "web.recording.events",
@@ -3019,9 +3304,9 @@ function webLlmPageContext(snapshot, childFrameIds) {
   });
 }
 function evidenceElementTotal(snapshot, carried) {
-  const declared = boundedCount(snapshot.elementTotal, 1e7) ?? boundedCount(captureElementTotals(snapshot)?.matched, 1e7);
+  const declared2 = boundedCount(snapshot.elementTotal, 1e7) ?? boundedCount(captureElementTotals(snapshot)?.matched, 1e7);
   const received = Array.isArray(snapshot.interactiveElements) ? snapshot.interactiveElements.length : 0;
-  const total = Math.max(declared ?? 0, received);
+  const total = Math.max(declared2 ?? 0, received);
   return total > carried ? total : void 0;
 }
 function capturedTruncated(snapshot) {
@@ -3038,8 +3323,8 @@ function items(input) {
   return Array.isArray(input) ? input : [];
 }
 function evidenceFrame(input, childFrameIds) {
-  const declared = isJsonRecord(input) ? input : void 0;
-  const isTop = typeof declared?.isTop === "boolean" ? declared.isTop : void 0;
+  const declared2 = isJsonRecord(input) ? input : void 0;
+  const isTop = typeof declared2?.isTop === "boolean" ? declared2.isTop : void 0;
   if (isTop === void 0 && !childFrameIds.length) return void 0;
   return present({
     isTop: isTop ?? true,
@@ -3266,7 +3551,8 @@ var WEB_LLM_TOOL_REJECTION_CODES = [
   "no_progress",
   "target_unobserved",
   "target_unsafe",
-  "sensitive_value"
+  "sensitive_value",
+  "no_repeating_structure"
 ];
 var RecoverableToolRejection = class extends Error {
   constructor(code) {
@@ -3309,12 +3595,14 @@ function currentElementForReturnedTarget(returned, current, target) {
 }
 
 // src/runtime/llm-evidence/vocabulary.ts
-var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe"];
+var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe", "web.detect_repeating_structure"];
 var WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
 var WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
 var WEB_LLM_REVEAL_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[2];
+var WEB_LLM_DETECT_STRUCTURE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[3];
 var WEB_LLM_INSPECT_RESULT_CODE = "web.inspect.succeeded";
 var WEB_LLM_ACTION_RESULT_CODE = "web.action.succeeded";
+var WEB_LLM_STRUCTURE_RESULT_CODE = "web.structure.detected";
 var REJECTION_RESULT_CODE_PREFIX = "web.action.rejected.";
 function webLlmToolRejectionResultCode(code) {
   return `${REJECTION_RESULT_CODE_PREFIX}${code}`;
@@ -3322,6 +3610,7 @@ function webLlmToolRejectionResultCode(code) {
 var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
   WEB_LLM_INSPECT_RESULT_CODE,
   WEB_LLM_ACTION_RESULT_CODE,
+  WEB_LLM_STRUCTURE_RESULT_CODE,
   ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
 ]);
 
@@ -3606,8 +3895,8 @@ function webRepairableParameters(definitionId) {
   return [];
 }
 function webRepairableParameterFor(definitionId, name) {
-  const declared = webRepairableParameters(definitionId).find((parameter) => parameter.name === name);
-  if (declared) return declared;
+  const declared2 = webRepairableParameters(definitionId).find((parameter) => parameter.name === name);
+  if (declared2) return declared2;
   if (definitionId !== LIST_EXTRACTION_DEFINITION_ID || !isFieldParameterName(name)) return void 0;
   return { name, role: "observable", required: false };
 }
@@ -3625,14 +3914,373 @@ function isFieldParameterName(name) {
   return key.length > 0 && key.length <= 40 && /^[A-Za-z0-9](?:[A-Za-z0-9_.:-]*[A-Za-z0-9])?$/u.test(key);
 }
 
+// src/runtime/llm-evidence/plan-resolution/resolve-plan-node.ts
+var WEB_PLAN_HANDLE_ISSUE_CODES = [
+  "web.handle.malformed",
+  "web.handle.misplaced",
+  "web.handle.unknown",
+  "web.handle.stale",
+  "web.handle.ambiguous",
+  "web.handle.not_unique",
+  "web.handle.frame_mismatch"
+];
+var TARGET_HANDLE = /^target\.[1-9][0-9]?$/u;
+var EXTRACTION_HANDLE = /^extraction\.[1-9][0-9]{0,8}$/u;
+var MAX_SEARCH_DEPTH = 8;
+var SELECTOR_NODE_IDS = new Set(
+  webAutomationActionDefinitions.filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "selector" in definition.parameterSchema.properties).map((definition) => webAutomationOutputNodeId(definition.actionType))
+);
+var EXTRACT_LIST_NODE_ID = webAutomationOutputNodeId("web.dom.extract_list");
+var TARGET_ISSUES = {
+  unknown: "web.handle.unknown",
+  stale: "web.handle.stale",
+  ambiguous: "web.handle.ambiguous",
+  not_unique: "web.handle.not_unique"
+};
+function resolveWebPlanNodeParameters(input, stores) {
+  const scope = { projectId: input.projectId, flowId: input.flowId };
+  const issues = /* @__PURE__ */ new Set();
+  const replaced = /* @__PURE__ */ new Map();
+  for (const [key, value] of Object.entries(input.parameters)) {
+    const slot = key === "selector" && SELECTOR_NODE_IDS.has(input.nodeDefinitionId) ? "target" : key === "extractList" && input.nodeDefinitionId === EXTRACT_LIST_NODE_ID ? "extraction" : void 0;
+    if (slot === void 0 || !isHandleObject(value)) {
+      if (containsRecognisableHandle(value, 0)) issues.add("web.handle.misplaced");
+      continue;
+    }
+    const outcome = slot === "target" ? resolveTarget(value, scope, stores.targets) : resolveExtraction(value, scope, stores.extractions);
+    if (typeof outcome === "string") issues.add(outcome);
+    else replaced.set(key, outcome);
+  }
+  if (issues.size > 0) return refused(issues);
+  if (replaced.size === 0) return { status: "unchanged" };
+  const frameId = handleFrame([...replaced.values()]);
+  const declared2 = declaredFrame(input.parameters.browserFrameId);
+  if (frameId === "mixed" || declared2 !== void 0 && declared2 !== (frameId ?? 0)) return refused(/* @__PURE__ */ new Set(["web.handle.frame_mismatch"]));
+  const parameters = {};
+  for (const [key, value] of Object.entries(input.parameters)) parameters[key] = replaced.get(key)?.value ?? value;
+  if (frameId !== void 0 && frameId !== 0) parameters.browserFrameId = frameId;
+  return { status: "resolved", parameters };
+}
+function resolveTarget(value, scope, targets) {
+  if (Object.keys(value).some((key) => key !== "handle" && key !== "location")) return "web.handle.malformed";
+  const handle = value.handle;
+  if (typeof handle !== "string") return "web.handle.malformed";
+  if (EXTRACTION_HANDLE.test(handle)) return "web.handle.misplaced";
+  if (!TARGET_HANDLE.test(handle)) return "web.handle.malformed";
+  if (value.location !== void 0 && (typeof value.location !== "string" || value.location === "")) return "web.handle.malformed";
+  const resolution = targets.resolve(scope, handle, value.location);
+  if (!resolution.ok) return TARGET_ISSUES[resolution.code];
+  return { value: resolution.selector, frameId: resolution.frameId };
+}
+function resolveExtraction(value, scope, extractions) {
+  if (Object.keys(value).some((key) => key !== "handle" && key !== "minItems" && key !== "maxItems")) return "web.handle.malformed";
+  const handle = value.handle;
+  if (typeof handle !== "string") return "web.handle.malformed";
+  if (TARGET_HANDLE.test(handle)) return "web.handle.misplaced";
+  if (!EXTRACTION_HANDLE.test(handle)) return "web.handle.malformed";
+  const resolution = extractions.resolve(scope, handle);
+  if (!resolution.ok) return resolution.code === "stale_handle" ? "web.handle.stale" : "web.handle.unknown";
+  const request = resolution.binding.extractList;
+  if (value.minItems !== void 0) request.minItems = value.minItems;
+  if (value.maxItems !== void 0) request.maxItems = value.maxItems;
+  const checked = webAutomationExtractListRequestValue(request);
+  if (checked === void 0 || checked.minItems !== request.minItems || checked.maxItems !== request.maxItems) return "web.handle.malformed";
+  return { value: request, frameId: resolution.binding.frameId };
+}
+function isHandleObject(value) {
+  return isJsonRecord(value) && Object.prototype.hasOwnProperty.call(value, "handle");
+}
+function containsRecognisableHandle(value, depth) {
+  if (depth > MAX_SEARCH_DEPTH) return false;
+  if (Array.isArray(value)) return value.some((entry) => containsRecognisableHandle(entry, depth + 1));
+  if (!isJsonRecord(value)) return false;
+  if (typeof value.handle === "string" && (TARGET_HANDLE.test(value.handle) || EXTRACTION_HANDLE.test(value.handle))) return true;
+  return Object.values(value).some((entry) => containsRecognisableHandle(entry, depth + 1));
+}
+function handleFrame(resolved) {
+  const frames = new Set(resolved.map((entry) => entry.frameId ?? 0));
+  if (frames.size > 1) return "mixed";
+  const only = [...frames][0];
+  return only === 0 ? void 0 : only;
+}
+function declaredFrame(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
+}
+function refused(issues) {
+  return { status: "refused", issueCodes: WEB_PLAN_HANDLE_ISSUE_CODES.filter((code) => issues.has(code)) };
+}
+
+// src/runtime/llm-evidence/plan-resolution/target-packets.ts
+var RETAINED_PAGES_PER_FLOW = 8;
+var RETAINED_FLOWS = 32;
+var REMEMBERED_STALE_PAGES = 64;
+function createWebLlmTargetPackets() {
+  const flows = /* @__PURE__ */ new Map();
+  return {
+    remember(scope, binding) {
+      const key = scopeKey(scope);
+      const flow = flows.get(key) ?? { pages: /* @__PURE__ */ new Map(), letGo: /* @__PURE__ */ new Set() };
+      flows.delete(key);
+      flows.set(key, flow);
+      for (const oldest of flows.keys()) {
+        if (flows.size <= RETAINED_FLOWS) break;
+        flows.delete(oldest);
+      }
+      const location = binding.evidence.location;
+      const targets = /* @__PURE__ */ new Map();
+      const uses = /* @__PURE__ */ new Map();
+      for (const element of binding.evidence.elements) {
+        const selector = binding.selectors.get(element.target);
+        if (selector === void 0) continue;
+        const address = `${element.frameId ?? 0}\0${selector}`;
+        uses.set(address, (uses.get(address) ?? 0) + 1);
+        targets.set(element.target, { selector, frameId: element.frameId, shared: false });
+      }
+      for (const target of targets.values()) target.shared = (uses.get(`${target.frameId ?? 0}\0${target.selector}`) ?? 0) > 1;
+      flow.pages.delete(location);
+      flow.pages.set(location, targets);
+      flow.letGo.delete(location);
+      for (const oldest of flow.pages.keys()) {
+        if (flow.pages.size <= RETAINED_PAGES_PER_FLOW) break;
+        flow.pages.delete(oldest);
+        flow.letGo.add(oldest);
+      }
+      for (const oldest of flow.letGo) {
+        if (flow.letGo.size <= REMEMBERED_STALE_PAGES) break;
+        flow.letGo.delete(oldest);
+      }
+    },
+    resolve(scope, handle, location) {
+      const flow = flows.get(scopeKey(scope));
+      if (!flow) return { ok: false, code: "unknown" };
+      if (location !== void 0) {
+        const page = flow.pages.get(location);
+        if (!page) return { ok: false, code: flow.letGo.has(location) ? "stale" : "unknown" };
+        const target = page.get(handle);
+        if (target === void 0) return { ok: false, code: "unknown" };
+        return target.shared ? { ok: false, code: "not_unique" } : { ok: true, selector: target.selector, frameId: target.frameId };
+      }
+      const seen = /* @__PURE__ */ new Map();
+      for (const page of flow.pages.values()) {
+        const target = page.get(handle);
+        if (target === void 0) continue;
+        const address = `${target.frameId ?? 0}\0${target.selector}`;
+        const known = seen.get(address);
+        seen.set(address, known?.shared ? known : target);
+      }
+      if (seen.size > 1) return { ok: false, code: "ambiguous" };
+      const only = [...seen.values()][0];
+      if (only?.shared) return { ok: false, code: "not_unique" };
+      if (only !== void 0) return { ok: true, selector: only.selector, frameId: only.frameId };
+      return { ok: false, code: flow.letGo.size > 0 ? "stale" : "unknown" };
+    }
+  };
+}
+function scopeKey(scope) {
+  return `${scope.projectId}\0${scope.flowId}`;
+}
+
+// src/runtime/llm-evidence/structure/packet.ts
+var WEB_LLM_STRUCTURE_SCHEMA_VERSION = "web-llm-structure.v1";
+function splitDetectedStructure(input) {
+  const proposal = input.detection.proposal;
+  const readable2 = proposal.fields.filter((field) => field.spec.handling !== "exclude").map((field) => ({ key: field.key, spec: field.spec, shown: shownField(field.key, field.label, field.spec.kind, field.coverage) }));
+  if (readable2.length === 0) return void 0;
+  const packet = present({
+    schemaVersion: WEB_LLM_STRUCTURE_SCHEMA_VERSION,
+    trust: "untrusted-page-evidence",
+    location: input.location,
+    extraction: input.handle,
+    target: input.target,
+    itemCount: proposal.itemCount,
+    fields: readable2.map((field) => field.shown),
+    pagination: paginationMode(proposal.pagination, input.detection.infiniteScroll === true),
+    confidence: proposal.confidence,
+    // Written by the trim below if and only if it removed a field.
+    fieldsTruncated: void 0
+  });
+  const limit = evidenceByteLimit(input.maxEvidenceBytes, WEB_LLM_EVIDENCE_BYTE_BUDGETS.exploration);
+  while (serializedBytes(packet) > limit) {
+    if (packet.fields.length <= 1) throw new Error("web structure detection exceeds the evidence byte limit");
+    packet.fields.pop();
+    packet.fieldsTruncated = true;
+  }
+  const kept = readable2.slice(0, packet.fields.length);
+  const paginate = boundPagination(proposal.pagination, input.detection.infiniteScroll === true);
+  const binding = present({
+    handle: input.handle,
+    location: input.location,
+    frameId: input.frameId,
+    extractList: present({
+      item: proposal.item,
+      itemElement: void 0,
+      fields: Object.fromEntries(kept.map((field) => [field.key, readableSpec(field.spec)])),
+      paginate,
+      maxItems: void 0,
+      minItems: void 0
+    }),
+    itemCount: proposal.itemCount
+  });
+  return { packet, binding };
+}
+function shownField(key, label, kind, coverage) {
+  return {
+    key,
+    // A label is page structure, but it is still page text: one line, bounded,
+    // and the key when nothing readable is left of it.
+    label: boundedText2(label, WEB_LLM_EVIDENCE_BOUNDS.placement) ?? key,
+    kind,
+    coverage: Math.round(coverage * 100) / 100
+  };
+}
+function readableSpec(spec) {
+  return present({
+    kind: spec.kind,
+    selector: spec.selector,
+    attribute: spec.attribute,
+    header: spec.header,
+    required: spec.required,
+    handling: void 0,
+    element: void 0
+  });
+}
+function paginationMode(pagination, infiniteScroll) {
+  if (pagination === void 0) return infiniteScroll ? "infinite_scroll" : "none";
+  if (pagination.mode === "loadMore") return "load_more_button";
+  if (pagination.mode === "numbered") return "numbered_pages";
+  if (pagination.mode === "scroll") return "infinite_scroll";
+  return "next_link";
+}
+function boundPagination(pagination, infiniteScroll) {
+  if (pagination !== void 0) return structuredClone(pagination);
+  return infiniteScroll ? { mode: "scroll", maxScrolls: WEB_AUTOMATION_EXTRACT_MAX_PAGES } : void 0;
+}
+
+// src/runtime/llm-evidence/structure/detect.ts
+var TARGET_HANDLE2 = /^target\.[1-9][0-9]?$/u;
+var REFUSAL_CODES = {
+  target_not_found: "target_unobserved",
+  ambiguous_target: "target_unobserved",
+  no_repeating_run: "no_repeating_structure",
+  sensitive_region: "sensitive_value"
+};
+async function detectRepeatingStructure(context) {
+  const { gateway, sessionId, request } = context;
+  const target = requestedTarget(request.value);
+  if (!(gateway.structureDetectionSessionIds?.() ?? []).includes(sessionId)) {
+    throw new Error("the connected web client does not declare repeating-structure detection");
+  }
+  const current = target === void 0 ? void 0 : await captureEvidence(gateway, sessionId, request, request.signal);
+  const element = current === void 0 || target === void 0 ? void 0 : boundTarget(context.returned, current, target);
+  const detectStructure = element === void 0 ? {} : { selector: element.selector };
+  const parameters = element?.frameId === void 0 ? { detectStructure } : { detectStructure, browserFrameId: element.frameId };
+  const result = await gateway.executeAction(sessionId, { actionType: "web.dom.capture_snapshot", parameters, metadata: toolMetadata(request) });
+  assertActive(request.signal);
+  if (result.status !== "succeeded") throw new Error("web structure detection capture failed");
+  const payload = jsonRecord(result.payload, "web structure detection payload");
+  const expectedOrigin = current === void 0 ? void 0 : new URL(current.evidence.location).origin;
+  const page = sanitizeWebLlmSnapshotWithBindings(payload.snapshot, present({
+    budget: "exploration",
+    maxEvidenceBytes: void 0,
+    expectedOrigin,
+    failedAction: void 0
+  }));
+  if (current !== void 0 && element?.frameId === void 0 && page.evidence.location !== current.evidence.location) recoverable("target_unobserved");
+  const detection = webAutomationStructureDetectionValue(payload.structure);
+  if (detection === void 0) throw new Error("the web client answered the capture without a structure detection");
+  if (!detection.ok) recoverable(REFUSAL_CODES[detection.refused]);
+  const handle = context.handles.reserve();
+  const split = splitDetectedStructure({
+    detection,
+    handle,
+    location: page.evidence.location,
+    target,
+    frameId: element?.frameId,
+    maxEvidenceBytes: request.maxEvidenceBytes
+  });
+  if (!split) recoverable("sensitive_value");
+  context.handles.retain({ projectId: request.projectId, flowId: request.flowId }, split.binding);
+  return toolExecution(split.packet, false, WEB_LLM_STRUCTURE_RESULT_CODE);
+}
+function boundTarget(returned, current, target) {
+  const observed = returned ?? current;
+  if (observed.evidence.location !== current.evidence.location) recoverable("target_unobserved");
+  const element = observedElement(observed.evidence, target);
+  const selector = observed.selectors.get(target);
+  if (!selector) recoverable("target_unobserved");
+  const stillThere = current.evidence.elements.some((candidate2) => candidate2.frameId === element.frameId && current.selectors.get(candidate2.target) === selector);
+  if (!stillThere) recoverable("target_unobserved");
+  return { selector, frameId: element.frameId };
+}
+function requestedTarget(value) {
+  const keys = Object.keys(value);
+  if (keys.some((key) => key !== "target")) recoverable("invalid_input");
+  if (!keys.includes("target")) return void 0;
+  const target = value.target;
+  if (typeof target !== "string" || !TARGET_HANDLE2.test(target)) recoverable("invalid_input");
+  return target;
+}
+
+// src/runtime/llm-evidence/structure/handles.ts
+var RETAINED_EXTRACTION_HANDLES = 16;
+var REMEMBERED_STALE_HANDLES = 256;
+var WEB_LLM_EXTRACTION_HANDLE_PATTERN = "^extraction\\.[1-9][0-9]{0,8}$";
+var HANDLE_PATTERN = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");
+function createWebLlmExtractionHandles() {
+  let reserved = 0;
+  const retained = /* @__PURE__ */ new Map();
+  const letGo = /* @__PURE__ */ new Map();
+  const forget = (handle, scope) => {
+    retained.delete(handle);
+    letGo.set(handle, scope);
+    for (const oldest of letGo.keys()) {
+      if (letGo.size <= REMEMBERED_STALE_HANDLES) break;
+      letGo.delete(oldest);
+    }
+  };
+  return {
+    reserve() {
+      reserved += 1;
+      return `extraction.${reserved}`;
+    },
+    retain(scope, binding) {
+      if (!HANDLE_PATTERN.test(binding.handle) || retained.has(binding.handle)) throw new Error("extraction handle was not reserved for this binding");
+      retained.set(binding.handle, { scope: scopeKey2(scope), binding: copyBinding(binding) });
+      for (const [oldest, entry] of retained) {
+        if (retained.size <= RETAINED_EXTRACTION_HANDLES) break;
+        forget(oldest, entry.scope);
+      }
+    },
+    resolve(scope, handle) {
+      if (typeof handle !== "string" || !HANDLE_PATTERN.test(handle)) return { ok: false, code: "unknown_handle" };
+      const key = scopeKey2(scope);
+      const entry = retained.get(handle);
+      if (entry?.scope === key) return { ok: true, binding: copyBinding(entry.binding) };
+      return letGo.get(handle) === key ? { ok: false, code: "stale_handle" } : { ok: false, code: "unknown_handle" };
+    }
+  };
+}
+function scopeKey2(scope) {
+  return `${scope.projectId}\0${scope.flowId}`;
+}
+function copyBinding(binding) {
+  return present({
+    handle: binding.handle,
+    location: binding.location,
+    frameId: binding.frameId,
+    extractList: structuredClone(binding.extractList),
+    itemCount: binding.itemCount
+  });
+}
+
 // src/runtime/llm-evidence/target-override.ts
 function validateWebRuntimeTargetOverrideEvidence(evidence, target, failedAction, selectors) {
-  const declared = webRepairableParameters(failedAction.definitionId);
-  if (declared.length === 0) return { status: "absent" };
+  const declared2 = webRepairableParameters(failedAction.definitionId);
+  if (declared2.length === 0) return { status: "absent" };
   const handles = proposedHandles(target);
   if (!handles) return { status: "absent" };
   if (Object.keys(handles).some((name) => !webRepairableParameterFor(failedAction.definitionId, name))) return { status: "absent" };
-  if (declared.some((parameter) => parameter.required && handles[parameter.name] === void 0)) return { status: "absent" };
+  if (declared2.some((parameter) => parameter.required && handles[parameter.name] === void 0)) return { status: "absent" };
   const resolved = /* @__PURE__ */ new Map();
   for (const [name, handle] of Object.entries(handles)) {
     const parameter = webRepairableParameterFor(failedAction.definitionId, name);
@@ -3702,6 +4350,12 @@ var TARGET_HANDLE_PATTERN2 = "^target\\.[1-9][0-9]?$";
 var RETAINED_SELECTOR_BINDINGS = 8;
 function createWebAutomationLlmEvidenceRuntime(gateway) {
   const returnedEvidence = /* @__PURE__ */ new Map();
+  const extractionHandles = createWebLlmExtractionHandles();
+  const targetPackets = createWebLlmTargetPackets();
+  const shown = (input, sessionId, snapshot) => {
+    returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
+    targetPackets.remember({ projectId: input.projectId, flowId: input.flowId }, snapshot);
+  };
   const retainedSelectors = /* @__PURE__ */ new Map();
   const retain = (binding) => {
     retainedSelectors.set(packetKey(binding.evidence), binding.selectors);
@@ -3757,6 +4411,12 @@ function createWebAutomationLlmEvidenceRuntime(gateway) {
         description: "Reveal otherwise unavailable page structure through an observed semantic disclosure, tab, menu item, or tree item by copying its opaque target handle exactly. Use only when the missing structure is required to author the requested Flow. Form entry, option selection, submission, generic action buttons, and unrelated exploration are unavailable. Recaptures the page after success.",
         inputSchema: { type: "object", required: ["target"], properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN2 } }, additionalProperties: false },
         effect: "mutate"
+      },
+      {
+        toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
+        description: "Detect the repeating list or table an extraction would read: around an observed element when given its opaque target handle, else the page's largest list. Returns an opaque extraction handle naming it, each field's key, label, kind and coverage, the item count, and how the list continues. Returns no values or selectors. Observes only.",
+        inputSchema: { type: "object", properties: { target: { type: "string", pattern: TARGET_HANDLE_PATTERN2 } }, additionalProperties: false },
+        effect: "observe"
       }
     ],
     async executeTool(input) {
@@ -3769,7 +4429,7 @@ function createWebAutomationLlmEvidenceRuntime(gateway) {
         if (input.toolId === WEB_LLM_INSPECT_TOOL_ID) {
           exactToolKeys(input.value, []);
           const snapshot = retain(await captureEvidence(gateway, sessionId, input, input.signal));
-          returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
+          shown(input, sessionId, snapshot);
           return toolExecution(snapshot.evidence, false, WEB_LLM_INSPECT_RESULT_CODE);
         }
         if (input.toolId === WEB_LLM_NAVIGATE_TOOL_ID) {
@@ -3787,7 +4447,7 @@ function createWebAutomationLlmEvidenceRuntime(gateway) {
           assertActive(input.signal);
           if (result.status !== "succeeded") throw new Error("web evidence navigation failed");
           const snapshot = retain(await captureEvidence(gateway, sessionId, input, input.signal, destination.origin));
-          returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
+          shown(input, sessionId, snapshot);
           return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE);
         }
         if (input.toolId === WEB_LLM_REVEAL_TOOL_ID) {
@@ -3798,8 +4458,17 @@ function createWebAutomationLlmEvidenceRuntime(gateway) {
           if (!safeRevealElement(element)) recoverable("target_unsafe");
           const snapshot = retain(await actAndCapture(gateway, sessionId, input, "web.dom.click", { selector: element.selector }, current, input.signal));
           if (JSON.stringify(snapshot.evidence) === JSON.stringify(current.evidence)) recoverable("no_progress");
-          returnedEvidence.set(evidenceScope(input, sessionId), snapshot);
+          shown(input, sessionId, snapshot);
           return toolExecution(snapshot.evidence, true, WEB_LLM_ACTION_RESULT_CODE);
+        }
+        if (input.toolId === WEB_LLM_DETECT_STRUCTURE_TOOL_ID) {
+          return await detectRepeatingStructure({
+            gateway,
+            sessionId,
+            request: input,
+            returned: returnedEvidence.get(evidenceScope(input, sessionId)),
+            handles: extractionHandles
+          });
         }
         throw new Error("web evidence tool is not registered");
       } catch (error) {
@@ -3852,20 +4521,27 @@ function createWebAutomationLlmEvidenceRuntime(gateway) {
         failedAction,
         retainedSelectors.get(packetKey(evidence))
       );
+    },
+    resolveExtractionHandle(input) {
+      return extractionHandles.resolve({ projectId: input.projectId, flowId: input.flowId }, input.handle);
+    },
+    resolvePlanNodeParameters(input) {
+      return resolveWebPlanNodeParameters(input, { targets: targetPackets, extractions: extractionHandles });
     }
   };
 }
 function bindWebAutomationLlmEvidenceRuntime(fluxiq2) {
   fluxiq2.programs.automationStudio.bindLlmEvidenceRuntime(createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => eligibleWebSessionIds(fluxiq2),
+    structureDetectionSessionIds: () => eligibleWebSessionIds(fluxiq2, WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID),
     executeAction: (sessionId, command) => fluxiq2.programs.automationStudioClientGateway.executeAction(sessionId, command)
   }));
 }
-function eligibleWebSessionIds(fluxiq2) {
+function eligibleWebSessionIds(fluxiq2, alsoDeclaring) {
   return fluxiq2.programs.clientGateway.snapshot().sessions.filter(
     (session) => session.status === "ready" && session.clientType === "extension" && !session.activeRecordingId && session.capabilities.some(
       (capability) => capability.id === "web.actions" && (capability.metadata?.domainId === WEB_AUTOMATION_DOMAIN_ID || capability.actionTypes?.includes("web.dom.capture_snapshot"))
-    )
+    ) && (alsoDeclaring === void 0 || session.capabilities.some((capability) => capability.id === alsoDeclaring))
   ).map((session) => session.sessionId);
 }
 function packetKey(evidence) {
@@ -3948,8 +4624,8 @@ async function executeWebAutomationRuntimeCommand(fluxiq2, command) {
     })
   };
   if (result.payload !== void 0) {
-    const readable = sensitiveTarget ? dispatchPayloadWithoutExtracted(result.payload) : result.payload;
-    runtimeResult.payload = withholdComparison ? secretSafeDispatchPayload(readable) : readable;
+    const readable2 = sensitiveTarget ? dispatchPayloadWithoutExtracted(result.payload) : result.payload;
+    runtimeResult.payload = withholdComparison ? secretSafeDispatchPayload(readable2) : readable2;
   }
   const target = outputTargetFromPayload(payload);
   if (target) runtimeResult.target = target;
@@ -4111,12 +4787,6 @@ function compact3(value) {
 
 // src/actions/capabilities.ts
 var webAutomationClientCapabilities = webAutomationGatewayCapabilities;
-
-// src/extraction/dataset-id.ts
-var COMBINING_MARKS = new RegExp("\\p{M}+", "gu");
-
-// src/extraction/label-key.ts
-var COMBINING_MARKS2 = new RegExp("\\p{M}+", "gu");
 
 // src/client/gateway-mapping.ts
 function createWebAutomationRecordingEvent(payload, input = {}) {
@@ -4621,42 +5291,6 @@ function stringValue5(value) {
   return typeof value === "string" ? value : void 0;
 }
 
-// src/recording/proposals/record-output.ts
-var DEFAULT_MAX_RECORDS = 1e3;
-var MAX_RECORDS_CEILING = 1e4;
-var LABEL_MAX_LENGTH2 = 200;
-function webAutomationRecordOutput(definition) {
-  const taken = /* @__PURE__ */ new Set();
-  const fields = Object.entries(definition.request.fields).map(([key, field]) => {
-    const spec = typeof field === "string" ? void 0 : field;
-    return {
-      id: key,
-      label: distinctLabel(definition.fieldLabels[key] ?? key, key, taken),
-      // A link's target is a URL; everything else the page reads is text. A
-      // number on the page is text too, because nothing has parsed it.
-      valueType: spec?.kind === "link" ? "url" : "string",
-      // A field is required unless it was picked as optional: an optional field
-      // the page cannot read is `null`, which Core stores as an absent key (D16).
-      required: spec?.required !== false,
-      ...spec?.handling !== void 0 ? { handling: spec.handling } : {}
-    };
-  });
-  return {
-    datasetId: definition.datasetId,
-    label: definition.label,
-    schema: { schemaVersion: "0.1", fields },
-    writeMode: "append",
-    maxRecords: Math.min(definition.request.maxItems ?? DEFAULT_MAX_RECORDS, MAX_RECORDS_CEILING)
-  };
-}
-function distinctLabel(label, key, taken) {
-  const preferred = label.slice(0, LABEL_MAX_LENGTH2);
-  const distinct = taken.has(preferred) ? `${preferred} (${key})`.slice(0, LABEL_MAX_LENGTH2) : preferred;
-  const unique = taken.has(distinct) ? key.slice(0, LABEL_MAX_LENGTH2) : distinct;
-  taken.add(unique);
-  return unique;
-}
-
 // src/web-panel-host.ts
 var CANDIDATE_LABELS = {
   "web.browser.navigate": "Navigate",
@@ -5008,9 +5642,9 @@ var incompleteHarness = await runAutomationStudioLlmHarness({
 assert.equal(incompleteHarness.ok, false);
 assert.equal(incompleteHarness.diagnostics.some((diagnostic) => diagnostic.code === "bootstrap.catalog_essentials_missing"), true);
 assert.equal(incompleteProviderCalls, 0);
-assert.equal(
-  outputNodeDefinitions.every((definition) => definition.parameters.every((parameter) => parameter.allowStateBinding === true)),
-  true
+assert.deepEqual(
+  outputNodeDefinitions.flatMap((definition) => definition.parameters.filter((parameter) => parameter.allowStateBinding !== true).map((parameter) => `${definition.id}:${parameter.id}:${String(parameter.allowStateBinding)}`)),
+  ["web.output.dom-extract_list:recordOutput:false"]
 );
 for (const outputId of ["web.dom.type", "web.dom.select", "web.dom.click", "web.dom.clear", "web.dom.wait_for_selector", "web.dom.extract"]) {
   const definition = outputNodeDefinitions.find((candidate2) => candidate2.outputAction?.fixedOutputId === outputId);

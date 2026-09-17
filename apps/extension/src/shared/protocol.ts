@@ -442,6 +442,8 @@ export type {
   WebAutomationKeyModifiers,
   WebAutomationOptionSelector,
   WebAutomationScrollRequest,
+  WebAutomationStructureDetection,
+  WebAutomationStructureDetectionRequest,
   WebAutomationTabRequest,
   WebAutomationUploadFile,
   WebAutomationUploadRequest,

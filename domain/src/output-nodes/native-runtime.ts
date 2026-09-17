@@ -9,6 +9,7 @@ import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { WEB_AUTOMATION_ACTION_TYPES } from "../actions/types";
 import type { WebAutomationActionType } from "../actions/types";
 import { webAutomationOutputNodeDefinitions } from "./definitions";
+import { webAutomationExtractListDispatch } from "./extract-list";
 
 export const WEB_AUTOMATION_IMPORTER_PACKAGE_ID = "@fluxiq-web-extension/domain";
 export const WEB_AUTOMATION_IMPORTER_PACKAGE_VERSION = "0.1.0";
@@ -53,22 +54,27 @@ export function createWebAutomationOutputNodeImplementationBundle(
  * `runtime/adapter.ts` on the runtime path. What this file owes Core is one
  * dispatch effect naming its own output, which `tests/native-runtime.test.ts`
  * pins.
+ *
+ * The list extraction also owes Core the dataset its rows are saved into, and
+ * refuses to read a list it could not save (`extract-list/dispatch.ts`). That
+ * refusal is about the node's own configuration, decided before anything runs,
+ * not a guess at the command's outcome.
  */
 function createOutputNodeImplementation(outputId: WebAutomationActionType): AutomationStudioNativeNodeImplementation {
   return (context): AutomationNodeExecutionResult => {
     const parameters = compactJsonObject(context.parameters);
-    return {
-      status: "success",
-      route: "success",
-      outputs: { success: true },
-      effects: [{
-        type: "policy.output.dispatch",
-        payload: {
-          outputId,
-          parameters
-        }
-      }]
-    };
+    if (outputId !== "web.dom.extract_list") return dispatching({ outputId, parameters });
+    const extraction = webAutomationExtractListDispatch(parameters);
+    return extraction.ok ? dispatching({ outputId, ...extraction.payload }) : extraction.result;
+  };
+}
+
+function dispatching(payload: JsonObject): AutomationNodeExecutionResult {
+  return {
+    status: "success",
+    route: "success",
+    outputs: { success: true },
+    effects: [{ type: "policy.output.dispatch", payload }]
   };
 }
 

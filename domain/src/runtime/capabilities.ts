@@ -4,6 +4,9 @@ import { WEB_AUTOMATION_DOMAIN_ID } from "../constants";
 import { WEB_AUTOMATION_ACTION_TYPES } from "../actions/types";
 import { WEB_AUTOMATION_INPUT_IDS } from "../io/input-model";
 
+/** The gateway capability a client declares when its snapshot answers `detectStructure`. */
+export const WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID = "web.structure.detection";
+
 export type WebAutomationClientGatewayCapability = ClientGatewayCapability & {
   domainId?: string | null;
   inputIds?: string[];
@@ -58,6 +61,18 @@ export const webAutomationGatewayCapabilities: WebAutomationClientGatewayCapabil
     domainId: WEB_AUTOMATION_DOMAIN_ID,
     inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence],
     metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence] }
+  },
+  {
+    // `web.dom.capture_snapshot` answers `detectStructure` with the repeating
+    // structure it found (`extraction/structure-detection.ts`). A flag on an
+    // existing observe-only action rather than an action of its own, so it
+    // lists no action type: nothing new is executable. The authoring evidence
+    // runtime refuses its detection tool for a client that does not declare it.
+    id: WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID,
+    label: "Repeating-structure detection",
+    kind: "snapshot",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, actionType: "web.dom.capture_snapshot", parameter: "detectStructure" }
   },
   {
     id: "web.recording.events",

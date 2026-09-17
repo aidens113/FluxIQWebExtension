@@ -16,6 +16,11 @@ export const WEB_LLM_TOOL_RESULT_SCHEMA_VERSION = "web-llm-tool-result.v1" as co
  * origin. The second is a refusal under the scope policy Core gave the
  * exploration, which may be an allowlist of several places and so cannot be
  * described as crossing an origin at all.
+ *
+ * `no_repeating_structure` is the structure-detection tool's answer when the
+ * page has nothing there that repeats readably. It is a fact about the page
+ * rather than a policy, but it is reported the same way, as a bare code, so the
+ * answer can carry nothing from the page either.
  */
 export const WEB_LLM_TOOL_REJECTION_CODES = [
   "invalid_input",
@@ -24,7 +29,8 @@ export const WEB_LLM_TOOL_REJECTION_CODES = [
   "no_progress",
   "target_unobserved",
   "target_unsafe",
-  "sensitive_value"
+  "sensitive_value",
+  "no_repeating_structure"
 ] as const;
 
 export type WebLlmToolRejectionCode = (typeof WEB_LLM_TOOL_REJECTION_CODES)[number];

@@ -33,6 +33,24 @@ export {
   type WebRepairableParameter,
   type WebRepairableParameterRole
 } from "./repairable-parameters";
+export {
+  WEB_PLAN_HANDLE_ISSUE_CODES,
+  type WebPlanHandleIssueCode,
+  type WebPlanNodeResolution,
+  type WebPlanNodeResolutionInput
+} from "./plan-resolution";
+export {
+  RETAINED_EXTRACTION_HANDLES,
+  WEB_LLM_EXTRACTION_HANDLE_PATTERN,
+  WEB_LLM_STRUCTURE_PAGINATION_MODES,
+  WEB_LLM_STRUCTURE_SCHEMA_VERSION,
+  type WebLlmExtractionBinding,
+  type WebLlmExtractionHandleResolution,
+  type WebLlmExtractionHandleScope,
+  type WebLlmRepeatingStructure,
+  type WebLlmStructureField,
+  type WebLlmStructurePaginationMode
+} from "./structure";
 export { validateWebRuntimeTargetOverrideEvidence } from "./target-override";
 export {
   WEB_LLM_TOOL_REJECTION_CODES,
@@ -49,6 +67,8 @@ export {
   WEB_LLM_INSPECT_TOOL_ID,
   WEB_LLM_NAVIGATE_TOOL_ID,
   WEB_LLM_REVEAL_TOOL_ID,
+  WEB_LLM_DETECT_STRUCTURE_TOOL_ID,
+  WEB_LLM_STRUCTURE_RESULT_CODE,
   type WebLlmEvidenceResultCode,
   type WebLlmEvidenceToolId,
   type WebLlmToolRejectionResultCode

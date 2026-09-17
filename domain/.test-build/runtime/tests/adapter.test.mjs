@@ -15,6 +15,13 @@ import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES as AUTOMATION_STUDIO_L
 // src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 
+// src/actions/extraction/field-key.ts
+var FIELD_KEY_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
+var RESERVED_FIELD_KEYS = /* @__PURE__ */ new Set(["__proto__", "constructor", "prototype"]);
+function isWebAutomationExtractFieldKey(key) {
+  return typeof key === "string" && FIELD_KEY_PATTERN.test(key) && !RESERVED_FIELD_KEYS.has(key);
+}
+
 // src/output-nodes/targets/targets.ts
 function outputTargetFromPayload(payload) {
   const adaptedTarget = objectValue(payload.target);
@@ -153,9 +160,130 @@ var WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS = ["include", "exclude", "encrypt"];
 var WEB_AUTOMATION_EXTRACT_READ_MODES = ["text", "attribute", "value", "html"];
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
 var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
+var WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS = 1e4;
 
 // src/actions/extraction/read-request.ts
+function webAutomationExtractListRequestValue(value) {
+  const request = jsonObject(value);
+  const item = nonEmptyString(request?.item);
+  const fields = fieldMapValue(request?.fields);
+  if (!request || item === void 0 || fields === void 0) return void 0;
+  if (FRAME_KEYS.some((key) => request[key] !== void 0)) return void 0;
+  const itemElement = optionalValue(request.itemElement, fingerprintValue);
+  if (itemElement === REFUSED) return void 0;
+  const paginate = request.paginate === void 0 ? void 0 : paginationValue(request.paginate);
+  if (request.paginate !== void 0 && paginate === void 0) return void 0;
+  const namedMaxItems = positiveInteger(request.maxItems);
+  const maxItems = namedMaxItems === void 0 ? void 0 : Math.min(namedMaxItems, WEB_AUTOMATION_EXTRACT_MAX_ITEMS);
+  const minItems = nonNegativeInteger(request.minItems);
+  if (request.minItems !== void 0 && minItems === void 0) return void 0;
+  if (minItems !== void 0 && minItems > (maxItems ?? WEB_AUTOMATION_EXTRACT_MAX_ITEMS)) return void 0;
+  return {
+    item,
+    ...itemElement !== void 0 ? { itemElement } : {},
+    fields,
+    ...paginate !== void 0 ? { paginate } : {},
+    ...maxItems !== void 0 ? { maxItems } : {},
+    ...minItems !== void 0 ? { minItems } : {}
+  };
+}
+function fieldMapValue(value) {
+  const fields = jsonObject(value);
+  if (!fields) return void 0;
+  const read = [];
+  for (const [key, entry] of Object.entries(fields)) {
+    const field = isWebAutomationExtractFieldKey(key) ? fieldValue(entry) : void 0;
+    if (field === void 0) return void 0;
+    read.push([key, field]);
+  }
+  if (read.length === 0 || read.every(([, field]) => typeof field !== "string" && field.handling === "exclude")) return void 0;
+  return Object.fromEntries(read);
+}
+function fieldValue(value) {
+  if (typeof value === "string") return value.length > 0 ? value : void 0;
+  const spec = jsonObject(value);
+  const kind = memberOf(spec?.kind, WEB_AUTOMATION_EXTRACT_FIELD_KINDS);
+  if (!spec || kind === void 0) return void 0;
+  const attribute = kind === "attribute" ? nonEmptyString(spec.attribute) : void 0;
+  const header = kind === "column" ? nonEmptyString(spec.header) : void 0;
+  if (kind === "attribute" ? attribute === void 0 : spec.attribute !== void 0) return void 0;
+  if (kind === "column" ? header === void 0 : spec.header !== void 0) return void 0;
+  const selector = optionalValue(spec.selector, nonEmptyString);
+  const required = optionalValue(spec.required, booleanValue2);
+  const handling = optionalValue(spec.handling, (entry) => memberOf(entry, WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS));
+  const element = optionalValue(spec.element, fingerprintValue);
+  if (selector === REFUSED || required === REFUSED || handling === REFUSED || element === REFUSED) return void 0;
+  const field = {
+    kind,
+    ...selector !== void 0 ? { selector } : {},
+    ...attribute !== void 0 ? { attribute } : {},
+    ...header !== void 0 ? { header } : {},
+    ...required !== void 0 ? { required } : {},
+    ...handling !== void 0 ? { handling } : {},
+    ...element !== void 0 ? { element } : {}
+  };
+  return field;
+}
+function paginationValue(value) {
+  const paginate = jsonObject(value);
+  if (!paginate) return void 0;
+  const mode = paginate.mode === void 0 ? "next" : memberOf(paginate.mode, WEB_AUTOMATION_EXTRACT_PAGINATION_MODES);
+  if (mode === void 0) return void 0;
+  const ownKeys = PAGINATION_KEYS[mode];
+  if (Object.values(PAGINATION_KEYS).flat().some((key) => !ownKeys.includes(key) && paginate[key] !== void 0)) return void 0;
+  if (mode === "scroll") {
+    const maxScrolls = positiveInteger(paginate.maxScrolls);
+    return maxScrolls === void 0 ? void 0 : { mode, maxScrolls: Math.min(maxScrolls, WEB_AUTOMATION_EXTRACT_MAX_PAGES) };
+  }
+  const requestedPages = positiveInteger(paginate.maxPages);
+  if (requestedPages === void 0) return void 0;
+  const maxPages = Math.min(requestedPages, WEB_AUTOMATION_EXTRACT_MAX_PAGES);
+  if (mode === "next") {
+    const next = nonEmptyString(paginate.next);
+    return next === void 0 ? void 0 : { next, maxPages };
+  }
+  if (mode === "loadMore") {
+    const control = nonEmptyString(paginate.control);
+    return control === void 0 ? void 0 : { mode, control, maxPages };
+  }
+  const pages = nonEmptyString(paginate.pages);
+  return pages === void 0 ? void 0 : { mode, pages, maxPages };
+}
+var FRAME_KEYS = ["frame", "frameId", "frameSelector", "frameUrlPath"];
+var PAGINATION_KEYS = {
+  next: ["next", "maxPages"],
+  loadMore: ["control", "maxPages"],
+  scroll: ["maxScrolls"],
+  numbered: ["pages", "maxPages"]
+};
+function fingerprintValue(value) {
+  const fingerprint = elementFingerprint(value);
+  return fingerprint !== void 0 && Object.keys(fingerprint).length > 0 ? fingerprint : void 0;
+}
 var REFUSED = Symbol("refused");
+function optionalValue(value, read) {
+  if (value === void 0) return void 0;
+  const readable2 = read(value);
+  return readable2 === void 0 ? REFUSED : readable2;
+}
+function booleanValue2(value) {
+  return typeof value === "boolean" ? value : void 0;
+}
+function nonNegativeInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
+}
+function positiveInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : void 0;
+}
+function nonEmptyString(value) {
+  return typeof value === "string" && value.length > 0 ? value : void 0;
+}
+function memberOf(value, members) {
+  return typeof value === "string" && members.includes(value) ? value : void 0;
+}
+function jsonObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
 
 // src/actions/extraction/schema.ts
 function webAutomationExtractListSchema(elementFingerprintSchema2) {
@@ -562,14 +690,186 @@ var webAutomationActionDefinitions = [
   }
 ];
 
+// src/output-nodes/extract-list/catalog-text.ts
+var WEB_AUTOMATION_EXTRACT_LIST_TAGS = [
+  "scrape",
+  "collect",
+  "extract",
+  "list",
+  "table",
+  "rows",
+  "records",
+  "dataset",
+  "every page",
+  "next page",
+  "load more",
+  "infinite scroll",
+  "pagination"
+];
+var WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
+  "Scrape every item of a repeating list or table into a dataset, across pages.",
+  "The rows are saved without a recordOutput."
+].join(" ");
+var WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
+  "{ item, fields, paginate?, minItems?, maxItems? }. item: CSS selector of each record.",
+  'fields: { key: "css" (text) | "css@attr" | "column:Header" (table cell)',
+  `| { kind: ${WEB_AUTOMATION_EXTRACT_FIELD_KINDS.join("|")}, selector?, attribute?, header?, required?: false } };`,
+  "keys use A-Za-z0-9_-; field selectors are read inside each item.",
+  'paginate: { mode: "next", next: css, maxPages } | { mode: "loadMore", control: css, maxPages }',
+  `| { mode: "scroll", maxScrolls } | { mode: "numbered", pages: css, maxPages }, at most ${WEB_AUTOMATION_EXTRACT_MAX_PAGES}.`,
+  `minItems: default 1; 0 allows an empty list. maxItems: at most ${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}.`
+].join(" ");
+var WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE = {
+  item: "li.product",
+  fields: { name: ".name", price: ".price", url: "a@href" },
+  paginate: { mode: "next", next: "a.next", maxPages: 5 }
+};
+
+// src/extraction/dataset-id.ts
+var COMBINING_MARKS = new RegExp("\\p{M}+", "gu");
+
+// src/extraction/label-key.ts
+var COMBINING_MARKS2 = new RegExp("\\p{M}+", "gu");
+
+// src/output-nodes/extract-list/records-path.ts
+var WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH = "result.extracted";
+
+// src/output-nodes/extract-list/dispatch.ts
+import { parseAutomationStudioRecordOutput } from "fluxiq/automation-studio/nodes";
+
+// src/output-nodes/extract-list/issues.ts
+var PROBE_REQUEST = { item: "*", fields: { probe: "*" } };
+function webAutomationExtractListIssues(value) {
+  if (!isPlainObject(value)) return ["web.extract_list.not_object"];
+  const keys = declaredKeys();
+  const issues = /* @__PURE__ */ new Set();
+  if (Object.keys(value).some((key) => !keys.request.has(key))) issues.add("web.extract_list.unknown_key");
+  if (!readable({ item: value.item ?? null })) issues.add("web.extract_list.invalid_item");
+  if (value.itemElement !== void 0 && !readable({ itemElement: value.itemElement })) issues.add("web.extract_list.invalid_item_element");
+  addFieldIssues(value.fields, keys.fieldSpec, issues);
+  addPaginateIssues(value.paginate, keys.paginate, issues);
+  addItemBoundIssues(value, issues);
+  if (issues.size === 0 && webAutomationExtractListRequestValue(value) === void 0) issues.add("web.extract_list.unreadable");
+  return [...issues];
+}
+function addFieldIssues(fields, specKeys, issues) {
+  if (!isPlainObject(fields)) {
+    issues.add("web.extract_list.invalid_fields");
+    return;
+  }
+  const entries = Object.entries(fields);
+  if (entries.length === 0) {
+    issues.add("web.extract_list.no_fields");
+    return;
+  }
+  let fieldRefused = false;
+  for (const [key, field] of entries) {
+    if (isPlainObject(field) && Object.keys(field).some((specKey) => !specKeys.has(specKey))) issues.add("web.extract_list.unknown_field_key");
+    if (!isWebAutomationExtractFieldKey(key)) {
+      issues.add("web.extract_list.invalid_field_key");
+      fieldRefused = true;
+    } else if (!readable({ fields: { [key]: field, [key === "probe" ? "probe_2" : "probe"]: "*" } })) {
+      issues.add("web.extract_list.invalid_field");
+      fieldRefused = true;
+    }
+  }
+  if (!fieldRefused && !readable({ fields })) issues.add("web.extract_list.all_fields_excluded");
+}
+function addPaginateIssues(paginate, paginateKeys, issues) {
+  if (paginate === void 0) return;
+  if (isPlainObject(paginate) && Object.keys(paginate).some((key) => !paginateKeys.has(key))) issues.add("web.extract_list.unknown_paginate_key");
+  if (!readable({ paginate })) issues.add("web.extract_list.invalid_paginate");
+}
+function addItemBoundIssues(value, issues) {
+  const { maxItems, minItems } = value;
+  const maxItemsReadable = maxItems === void 0 || isPositiveInteger(maxItems);
+  if (!maxItemsReadable) issues.add("web.extract_list.invalid_max_items");
+  if (minItems === void 0) return;
+  if (!isNonNegativeInteger(minItems)) {
+    issues.add("web.extract_list.invalid_min_items");
+    return;
+  }
+  if (!readable(maxItemsReadable && maxItems !== void 0 ? { minItems, maxItems } : { minItems })) issues.add("web.extract_list.min_items_exceed_max");
+}
+function readable(overrides) {
+  return webAutomationExtractListRequestValue({ ...PROBE_REQUEST, ...overrides }) !== void 0;
+}
+var declared;
+function declaredKeys() {
+  if (declared) return declared;
+  const schema = webAutomationExtractListSchema({});
+  const properties = child(schema, "properties");
+  declared = {
+    request: propertyNames(schema),
+    paginate: propertyNames(child(properties, "paginate")),
+    fieldSpec: propertyNames(child(child(child(properties, "fields"), "metadata"), "fieldSpec"))
+  };
+  return declared;
+}
+function propertyNames(schema) {
+  return new Set(Object.keys(child(schema, "properties") ?? {}));
+}
+function child(value, key) {
+  const next = value?.[key];
+  return isPlainObject(next) ? next : void 0;
+}
+function isPlainObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isPositiveInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
+function isNonNegativeInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+// src/output-nodes/extract-list/parameter-contract.ts
+function webAutomationExtractListParameterContract(input) {
+  return input.parameterId === "extractList" ? webAutomationExtractListIssues(input.value) : [];
+}
+
+// src/output-nodes/extract-list/parameters.ts
+function webAutomationExtractListParameters() {
+  return [
+    {
+      id: "extractList",
+      label: "List",
+      description: WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR,
+      valueType: "object",
+      example: structuredClone(WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE),
+      ui: { control: "value" }
+    },
+    {
+      id: "timeoutMs",
+      label: "Timeout",
+      description: "Milliseconds for the whole read. Left at the default, it grows with the pages the list may read.",
+      valueType: "number",
+      defaultValue: WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS
+    },
+    {
+      id: "recordOutput",
+      label: "Save extracted records",
+      description: "The dataset the rows are saved into. Leave empty to save every field of the list under a dataset named after its fields.",
+      valueType: "json",
+      defaultValue: null,
+      allowStateBinding: false,
+      ui: { control: "record-output" }
+    }
+  ];
+}
+
 // src/output-nodes/definitions.ts
 var controlInput = { id: "in", label: "In", valueType: "signal", role: "control" };
 var outputPorts = [
   { id: "success", label: "Success", valueType: "any", role: "success" },
   { id: "failed", label: "Failed", valueType: "any", role: "failure" }
 ];
+var recordsPort = { id: "records", label: "Records", valueType: "array", role: "data" };
 var recordsPathByOutput = {
-  "web.dom.extract_list": "result.extracted"
+  "web.dom.extract_list": WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH
+};
+var catalogTextByOutput = {
+  "web.dom.extract_list": { description: WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, tags: WEB_AUTOMATION_EXTRACT_LIST_TAGS }
 };
 var expectedStateParameter = {
   id: "expectedState",
@@ -590,12 +890,13 @@ function createWebAutomationOutputNodeDefinition(definition) {
     Array.isArray(definition.parameterSchema.required) ? definition.parameterSchema.required.filter((value) => typeof value === "string") : []
   );
   const recordsPath = recordsPathByOutput[definition.actionType];
+  const catalogText = catalogTextByOutput[definition.actionType];
   return {
     schemaVersion: "0.1",
     id: webAutomationOutputNodeId(definition.actionType),
     version: "1.0.0",
     label: definition.label,
-    description: definition.description,
+    description: catalogText?.description ?? definition.description,
     category: "web",
     source: {
       kind: "importer",
@@ -613,14 +914,17 @@ function createWebAutomationOutputNodeDefinition(definition) {
     },
     outputAction: { fixedOutputId: definition.actionType },
     inputs: [controlInput],
-    outputs: outputPorts,
+    outputs: recordsPath ? [...outputPorts, recordsPort] : outputPorts,
+    // Every web parameter may be filled from state unless it says otherwise.
+    // Only `recordOutput` does, for the reason Core gives its own: a binding
+    // could replace the dataset schema, and with it the excluded fields.
     parameters: [...parametersForOutput(definition.actionType), expectedStateParameter].map((parameter) => ({
       ...parameter,
       ...requiredParameters.has(parameter.id) ? { required: true } : {},
-      allowStateBinding: true
+      allowStateBinding: parameter.allowStateBinding ?? true
     })),
     icon: iconForOutput(definition.actionType),
-    tags: ["web-automation", "output"],
+    tags: ["web-automation", "output", ...catalogText?.tags ?? []],
     metadata: {
       domainId: WEB_AUTOMATION_DOMAIN_ID,
       outputId: definition.actionType,
@@ -672,10 +976,7 @@ function parametersForOutput(outputId) {
   if (outputId === "web.dom.capture_snapshot") return [];
   if (outputId === "web.dom.check") return [...selectorParameters, { id: "checked", label: "Checked", valueType: "boolean", defaultValue: true }];
   if (outputId === "web.dom.assert") return [...selectorParameters, structured("assert", "Assertion")];
-  if (outputId === "web.dom.extract_list") return [
-    structured("extractList", "List"),
-    { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 1e4 }
-  ];
+  if (outputId === "web.dom.extract_list") return webAutomationExtractListParameters();
   if (outputId === "web.dom.upload") return [...selectorParameters, structured("upload", "Files")];
   if (outputId === "web.dom.dialog") return [structured("dialog", "Dialog")];
   if (outputId === "web.browser.tab") return [structured("tab", "Tab")];
@@ -697,6 +998,11 @@ function iconForOutput(outputId) {
   if (outputId === "web.browser.download") return "download";
   return "square-dot";
 }
+
+// src/output-nodes/parameter-contracts.ts
+var webAutomationOutputNodeParameterContracts = {
+  [webAutomationOutputNodeId("web.dom.extract_list")]: webAutomationExtractListParameterContract
+};
 
 // src/sensitivity/signature.ts
 var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
@@ -843,6 +1149,7 @@ var OUTPUT_FOR_ACTION_INPUT = new Map(
 );
 
 // src/runtime/capabilities.ts
+var WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID = "web.structure.detection";
 var webAutomationRuntimeCapabilities = [
   {
     id: "web.actions",
@@ -890,6 +1197,18 @@ var webAutomationGatewayCapabilities = [
     domainId: WEB_AUTOMATION_DOMAIN_ID,
     inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence],
     metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence] }
+  },
+  {
+    // `web.dom.capture_snapshot` answers `detectStructure` with the repeating
+    // structure it found (`extraction/structure-detection.ts`). A flag on an
+    // existing observe-only action rather than an action of its own, so it
+    // lists no action type: nothing new is executable. The authoring evidence
+    // runtime refuses its detection tool for a client that does not declare it.
+    id: WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID,
+    label: "Repeating-structure detection",
+    kind: "snapshot",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, actionType: "web.dom.capture_snapshot", parameter: "detectStructure" }
   },
   {
     id: "web.recording.events",
@@ -1310,9 +1629,9 @@ function webLlmPageContext(snapshot, childFrameIds) {
   });
 }
 function evidenceElementTotal(snapshot, carried) {
-  const declared = boundedCount(snapshot.elementTotal, 1e7) ?? boundedCount(captureElementTotals(snapshot)?.matched, 1e7);
+  const declared2 = boundedCount(snapshot.elementTotal, 1e7) ?? boundedCount(captureElementTotals(snapshot)?.matched, 1e7);
   const received = Array.isArray(snapshot.interactiveElements) ? snapshot.interactiveElements.length : 0;
-  const total = Math.max(declared ?? 0, received);
+  const total = Math.max(declared2 ?? 0, received);
   return total > carried ? total : void 0;
 }
 function capturedTruncated(snapshot) {
@@ -1329,8 +1648,8 @@ function items(input) {
   return Array.isArray(input) ? input : [];
 }
 function evidenceFrame(input, childFrameIds) {
-  const declared = isJsonRecord(input) ? input : void 0;
-  const isTop = typeof declared?.isTop === "boolean" ? declared.isTop : void 0;
+  const declared2 = isJsonRecord(input) ? input : void 0;
+  const isTop = typeof declared2?.isTop === "boolean" ? declared2.isTop : void 0;
   if (isTop === void 0 && !childFrameIds.length) return void 0;
   return present({
     isTop: isTop ?? true,
@@ -1516,16 +1835,19 @@ var WEB_LLM_TOOL_REJECTION_CODES = [
   "no_progress",
   "target_unobserved",
   "target_unsafe",
-  "sensitive_value"
+  "sensitive_value",
+  "no_repeating_structure"
 ];
 
 // src/runtime/llm-evidence/vocabulary.ts
-var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe"];
+var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe", "web.detect_repeating_structure"];
 var WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
 var WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
 var WEB_LLM_REVEAL_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[2];
+var WEB_LLM_DETECT_STRUCTURE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[3];
 var WEB_LLM_INSPECT_RESULT_CODE = "web.inspect.succeeded";
 var WEB_LLM_ACTION_RESULT_CODE = "web.action.succeeded";
+var WEB_LLM_STRUCTURE_RESULT_CODE = "web.structure.detected";
 var REJECTION_RESULT_CODE_PREFIX = "web.action.rejected.";
 function webLlmToolRejectionResultCode(code) {
   return `${REJECTION_RESULT_CODE_PREFIX}${code}`;
@@ -1533,6 +1855,7 @@ function webLlmToolRejectionResultCode(code) {
 var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
   WEB_LLM_INSPECT_RESULT_CODE,
   WEB_LLM_ACTION_RESULT_CODE,
+  WEB_LLM_STRUCTURE_RESULT_CODE,
   ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
 ]);
 
@@ -1552,6 +1875,16 @@ var WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
 
 // src/runtime/llm-evidence/harness-options/execute.ts
 var WEB_RECOVERY_WAIT_BOUNDS = Object.freeze({ minMs: 100, maxMs: 5e3, defaultMs: 1e3 });
+
+// src/runtime/llm-evidence/plan-resolution/resolve-plan-node.ts
+var SELECTOR_NODE_IDS = new Set(
+  webAutomationActionDefinitions.filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "selector" in definition.parameterSchema.properties).map((definition) => webAutomationOutputNodeId(definition.actionType))
+);
+var EXTRACT_LIST_NODE_ID = webAutomationOutputNodeId("web.dom.extract_list");
+
+// src/runtime/llm-evidence/structure/handles.ts
+var WEB_LLM_EXTRACTION_HANDLE_PATTERN = "^extraction\\.[1-9][0-9]{0,8}$";
+var HANDLE_PATTERN = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");
 
 // src/runtime/adapter.ts
 function createWebAutomationRuntimeAdapter(options) {
@@ -1592,7 +1925,7 @@ async function executeWebAutomationRuntimeCommand(fluxiq, command) {
   const message = result.error ?? dispatchPayloadMessage(result.payload);
   const status = result.status ?? (result.ok ? "succeeded" : "failed");
   const diagnostics = failureDiagnostics(status, result.payload);
-  const clientResult = jsonObject(result.payload?.result);
+  const clientResult = jsonObject2(result.payload?.result);
   const sensitiveTarget = isSensitiveElementDescriptor(clientResult?.element);
   const withholdComparison = sensitiveTarget && !producerDeclaredRedaction(clientResult?.validation);
   const failure = commandFailure(status, outputId, message, result.failure, diagnostics?.evidenceDigest, withholdComparison);
@@ -1611,8 +1944,8 @@ async function executeWebAutomationRuntimeCommand(fluxiq, command) {
     })
   };
   if (result.payload !== void 0) {
-    const readable = sensitiveTarget ? dispatchPayloadWithoutExtracted(result.payload) : result.payload;
-    runtimeResult.payload = withholdComparison ? secretSafeDispatchPayload(readable) : readable;
+    const readable2 = sensitiveTarget ? dispatchPayloadWithoutExtracted(result.payload) : result.payload;
+    runtimeResult.payload = withholdComparison ? secretSafeDispatchPayload(readable2) : readable2;
   }
   const target = outputTargetFromPayload(payload);
   if (target) runtimeResult.target = target;
@@ -1692,14 +2025,14 @@ function producerDeclaredRedaction(validation) {
   return expected !== WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT && actual !== WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT;
 }
 function dispatchPayloadWithoutExtracted(payload) {
-  const actionResult = jsonObject(payload.result);
+  const actionResult = jsonObject2(payload.result);
   if (!actionResult || !("extracted" in actionResult)) return payload;
   const { extracted: _withheld, ...rest } = actionResult;
   return { ...payload, result: rest };
 }
 function secretSafeDispatchPayload(payload) {
-  const actionResult = jsonObject(payload.result);
-  const validation = jsonObject(actionResult?.validation);
+  const actionResult = jsonObject2(payload.result);
+  const validation = jsonObject2(actionResult?.validation);
   if (!actionResult || !validation || validation.status === "none") return payload;
   const { redacted: _stamp, ...unstamped } = validation;
   return {
@@ -1716,9 +2049,9 @@ function secretSafeDispatchPayload(payload) {
 }
 function failureDiagnostics(status, payload) {
   if (status === "succeeded") return void 0;
-  const actionResult = jsonObject(payload?.result);
+  const actionResult = jsonObject2(payload?.result);
   if (!actionResult) return void 0;
-  const evidence = sanitizedFailureEvidence(actionResult.snapshot, boundedSelector(jsonObject(actionResult.element)?.selector));
+  const evidence = sanitizedFailureEvidence(actionResult.snapshot, boundedSelector(jsonObject2(actionResult.element)?.selector));
   const evidenceDigest = evidence === void 0 ? void 0 : createHash("sha256").update(JSON.stringify(evidence)).digest("hex");
   const report = compact3({
     url: safeLocation2(actionResult.url),
@@ -1735,7 +2068,7 @@ function failureDiagnostics(status, payload) {
   return { report, ...evidence ? { evidence } : {}, ...evidenceDigest ? { evidenceDigest } : {} };
 }
 function sanitizedFailureEvidence(snapshot, failedSelector) {
-  if (!jsonObject(snapshot)) return void 0;
+  if (!jsonObject2(snapshot)) return void 0;
   try {
     return sanitizeWebLlmSnapshot(snapshot, {
       maxEvidenceBytes: AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES2,
@@ -1765,7 +2098,7 @@ function boundedTitle(value) {
 function boundedSelector(value) {
   return typeof value === "string" && value.length > 0 ? value.slice(0, 500) : void 0;
 }
-function jsonObject(value) {
+function jsonObject2(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : void 0;
 }
 function compact3(value) {

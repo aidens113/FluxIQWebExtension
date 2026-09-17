@@ -30,25 +30,12 @@ reports. One finding from those investigations is still open: flow bootstrap
 refuses any flow that is not blank, so the "improve an existing flow" entry
 point cannot reuse it unchanged.
 
-**CORRECTION (2026-09-16): no live run has yet received a DeepSeek response.**
-Earlier this document said the Lab reaches a real provider. That was read from
-Core's gate reporting `invoked: true` and an intervention naming
-`deepseek`/`deepseek-chat`, never from an actual reply. Once the Lab kept Core's
-per-call issue codes, every live run showed the same thing: one
-`runtime_diagnosis` call at stage `gather`, `validationOk: false`, issue code
-`llm.provider_configuration_invalid`, and no reported tokens -- the DeepSeek
-adapter refuses the request **before sending it**. Reproduced with per-call
-limits of 8,000/2,000/10,000 and 42,000/8,000/50,000, a valid 26-call grant and a
-600,000-token run budget (`run-mu4mqftg-...` for the codes,
-`run-mu4mwjqi-5757ede8` for the large budget), so the budget is not the cause.
-The code is thrown from seven places in `AS/runtime/llm/deepseek-provider.ts`,
-and the runtime tests drive recovery through a scripted provider that bypasses
-the real adapter, which is why nothing caught it. Worker
-`w2-deepseek-preflight-refusal` is reproducing it offline. The Lab's wiring
-itself (`reports/w2-live-provider.md`) -- key installation, grant issue,
-budgets, redaction -- does work: the redaction attestation passes on every run.
-The user's standing instruction is unchanged: a feature is not demonstrated
-until it has run against the real DeepSeek key in `.env.local`.
+**Live DeepSeek replies since 2026-09-16 (`run-mu4nxysj-3234c535`).** Before
+that no live run had received one: the adapter refused every recovery request
+pre-send (fixed `5300d47`), and earlier reports had read "gate invoked" as
+"provider reached". Read live results call by call from
+`snapshots/live-llm.json`, never from the verdict. The user's standing rule
+holds: nothing is demonstrated until it runs against the real key.
 
 **Not started:** loop phases 2.4-2.9, and X6. Phase 2.4 depends on R0, which is now done, so it is unblocked.
 
@@ -144,7 +131,12 @@ navigation?) and `w2-live-campaign-catalog` (instruction catalog, campaign runne
    `identity-drift --variant renamed-redesign` (a correct repair there is a
    change proposal naming the renamed Save; the run itself still fails
    `target_not_found` because `adapt` proposes and does not retry).
-6. Integration cleanups: `live-patch.ts` policy required; Core settings save
+6. Found live: an applied created Flow's Subflow graphs are saved without their
+   canonical index, so the first view of one moves the dependency digest and
+   makes the Flow un-validatable and un-revertable. Fix assigned to
+   `w2-bootstrap-survives-and-resolves`; audit every other graph write without
+   an index afterwards.
+7. Integration cleanups: `live-patch.ts` policy required; Core settings save
    accepting no `maxCalls`; stale PIN comment in `runtime-session-grant.ts`;
    `registerAutomationStudioApi` ignoring `identityAccess`; `pnpm docs:reference`.
 
@@ -420,6 +412,34 @@ Delivered and archived on 2026-09-16: see
 The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
 
 ## Work Ledger
+
+### 2026-09-16 — Live Lab creation and live repair on a repairable drift
+- Agent: supervisor, against a clean Core worktree at `59dbb22`
+  (`FLUXIQ_CORE_ROOT=F:/fxlab/lab-core`, never committed).
+- Why: the campaign's first live runs through the new Lab creation lane and
+  on `identity-drift --variant renamed-redesign`.
+- Validation: `pnpm lab run instruction-only-form --live-llm --llm-task
+  create-flow --instruction-task instruction-only-form-submit
+  --llm-max-output-tokens 4000 --llm-max-total-tokens 12000` ->
+  `run-mu4rmgsm-5e9d930f`, one DeepSeek call, 3,822 in / 469 out, $0.00230076,
+  build `failed`, `flow_bootstrap.evidence_completion_plan_invalid`, stage
+  `provider_output_validation`, `evidenceLoop: null`, no issue codes;
+  redaction `passed`. `pnpm lab run identity-drift --variant renamed-redesign
+  --flow --live-llm --llm-task adapt ...` -> `run-mu4rpka7-845d919a`: a
+  validated diagnosis and a validated `runtime_patch` reply proposing a
+  `temporary_target_override`, refused at preflight with
+  `runtime_patch.target_override_rejected`; no change proposal; redaction
+  `passed`; `snapshots/live-llm.json` **not written** because the Flow lane
+  threw first.
+- Not verified: why the correct override was refused (the domain check accepts
+  it when called directly) -- `w2-renamed-repair-rejected`; why the plan was
+  invalid -- `w2-bootstrap-survives-and-resolves` now feeds invalid plans back
+  to the model and records their issue codes.
+- Also found and fixed by the supervisor: the extension build broke because
+  `domain/src/output-nodes/extract-list/dispatch.ts` value-imported the whole
+  `fluxiq/automation-studio` entry point, which reaches `node:crypto`; it now
+  imports from `fluxiq/automation-studio/nodes`. `pnpm --filter
+  @fluxiq-web-extension/extension test:e2e:build` -> exit 0.
 
 ### 2026-09-16 — First live DeepSeek reply; pushed in both repositories
 - Agent: supervisor; workers `w2-deepseek-preflight-refusal`,

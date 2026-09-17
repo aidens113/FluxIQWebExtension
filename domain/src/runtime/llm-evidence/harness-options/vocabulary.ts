@@ -33,9 +33,9 @@ export const WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4
  * This domain's refusals, in Core's vocabulary.
  *
  * Only the two that are genuinely terminal are classified. The rest --
- * `invalid_input`, `no_progress`, `target_unobserved` and `sensitive_value` --
- * are deliberately left unclassified and listed here so the omission is a
- * decision a reader can see rather than a gap:
+ * `invalid_input`, `no_progress`, `target_unobserved`, `sensitive_value` and
+ * `no_repeating_structure` -- are deliberately left unclassified and listed
+ * here so the omission is a decision a reader can see rather than a gap:
  *
  * - `invalid_input` and `target_unobserved` are the model getting it wrong, and
  *   it can get it right on the next turn.
@@ -44,7 +44,12 @@ export const WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4
  * - `sensitive_value` is not raised by any option in this bundle today; the
  *   sanitizer drops a secret-bearing control before the model can name it, so
  *   there is nothing to refuse. If an option ever does raise it, it belongs in
- *   the classified set.
+ *   the classified set. The authoring structure-detection tool does raise it,
+ *   for a list whose every field is sensitive, but that tool is a Flow
+ *   authoring tool and never a recovery option, so this classifier never sees
+ *   its codes.
+ * - `no_repeating_structure` is that same authoring tool saying the page has
+ *   no readable list there, which is an answer, not a stop.
  *
  * Every unclassified refusal is still charged against the action budget, so a
  * model that does nothing but get refused ends in `budget_exhausted` rather

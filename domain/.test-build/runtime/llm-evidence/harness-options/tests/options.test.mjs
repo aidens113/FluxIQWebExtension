@@ -530,7 +530,8 @@ var WEB_LLM_TOOL_REJECTION_CODES = [
   "no_progress",
   "target_unobserved",
   "target_unsafe",
-  "sensitive_value"
+  "sensitive_value",
+  "no_repeating_structure"
 ];
 var RecoverableToolRejection = class extends Error {
   constructor(code) {
@@ -573,12 +574,14 @@ function currentElementForReturnedTarget(returned, current, target) {
 }
 
 // src/runtime/llm-evidence/vocabulary.ts
-var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe"];
+var WEB_LLM_EVIDENCE_TOOL_IDS = ["web.inspect_current_page", "web.navigate_same_origin", "web.reveal_safe", "web.detect_repeating_structure"];
 var WEB_LLM_INSPECT_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[0];
 var WEB_LLM_NAVIGATE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[1];
 var WEB_LLM_REVEAL_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[2];
+var WEB_LLM_DETECT_STRUCTURE_TOOL_ID = WEB_LLM_EVIDENCE_TOOL_IDS[3];
 var WEB_LLM_INSPECT_RESULT_CODE = "web.inspect.succeeded";
 var WEB_LLM_ACTION_RESULT_CODE = "web.action.succeeded";
+var WEB_LLM_STRUCTURE_RESULT_CODE = "web.structure.detected";
 var REJECTION_RESULT_CODE_PREFIX = "web.action.rejected.";
 function webLlmToolRejectionResultCode(code) {
   return `${REJECTION_RESULT_CODE_PREFIX}${code}`;
@@ -586,6 +589,7 @@ function webLlmToolRejectionResultCode(code) {
 var WEB_LLM_EVIDENCE_RESULT_CODES = Object.freeze([
   WEB_LLM_INSPECT_RESULT_CODE,
   WEB_LLM_ACTION_RESULT_CODE,
+  WEB_LLM_STRUCTURE_RESULT_CODE,
   ...WEB_LLM_TOOL_REJECTION_CODES.map(webLlmToolRejectionResultCode)
 ]);
 

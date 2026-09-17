@@ -12,3 +12,7 @@ export { extractList } from "./list-reader";
 export type { ExtractedListRecord, ListExtractionOptions, ListExtractionOutcome } from "./list-reader";
 
 export { inferListFromElement } from "./infer-list";
+
+// And without a pick: the domain's authoring runtime asks `capture_snapshot`
+// to detect a structure around an element it names, or the page's largest.
+export { detectStructure } from "./detect-structure";

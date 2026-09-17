@@ -17,6 +17,7 @@ import {
   type WebAutomationObservedDialog
 } from "../actions/types";
 import { webAutomationExtractionSummaryValue, webAutomationRecordedExtraction, type WebAutomationExtractListRequest } from "../actions/extraction";
+import { webAutomationStructureDetectionValue } from "../extraction";
 import { webAutomationActionDefinitions } from "../actions/schemas";
 import { elementFingerprint, webAutomationUnresolvedSecretParameters, webAutomationUploadBindingPath } from "../output-nodes";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "../runtime/failure";
@@ -286,7 +287,9 @@ function elementFingerprintSources(target: JsonObject, parameters: JsonObject): 
  * The summary admits only counts, a flag and well-formed field keys
  * (`actions/extraction/summary.ts`), so a producer that put page text beside
  * them sends none of it. The dialog keeps its five declared fields and nothing
- * else a producer added.
+ * else a producer added. `structure` is copied the same way
+ * (`extraction/structure-detection.ts`): selectors, structural labels, counts
+ * and coverage, and nothing else a producer put beside them.
  */
 export function webAutomationActionResultPayload(result: WebAutomationActionResult): JsonObject {
   return compactJsonObject({
@@ -303,6 +306,7 @@ export function webAutomationActionResultPayload(result: WebAutomationActionResu
     extracted: secretSafeExtracted(result.extracted, result.element),
     extraction: webAutomationExtractionSummaryValue(result.extraction),
     dialog: observedDialogValue(result.dialog),
+    structure: webAutomationStructureDetectionValue(result.structure),
     resolution: result.resolution,
     startedAt: result.startedAt,
     finishedAt: result.finishedAt

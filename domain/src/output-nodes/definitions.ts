@@ -5,6 +5,12 @@ import { WEB_AUTOMATION_ACTION_SAFETY } from "../actions/safety";
 import { webAutomationActionDefinitions } from "../actions/schemas";
 import type { WebAutomationActionDefinition } from "../actions/schemas";
 import type { WebAutomationActionType } from "../actions/types";
+import {
+  WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION,
+  WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH,
+  WEB_AUTOMATION_EXTRACT_LIST_TAGS,
+  webAutomationExtractListParameters
+} from "./extract-list";
 
 const controlInput: AutomationNodePort = { id: "in", label: "In", valueType: "signal", role: "control" };
 const outputPorts: AutomationNodePort[] = [
@@ -13,28 +19,31 @@ const outputPorts: AutomationNodePort[] = [
 ];
 
 /**
- * Where in an action's result the page puts a list of records.
- *
- * Core's record capture reads a node's `outputs.result` at `recordsPath`
- * (`runtime/executor/record-capture.ts`), and its proposal lift defaults that
- * path from the output's `metadata.recordsPath` (Core CD19), rejecting a
- * candidate that has none. Core never hard-codes `extracted`, because the key is
- * this domain's vocabulary. Only the list extraction returns records:
- * `web.dom.extract` also answers on `extracted`, but with one value, so a path
- * declared there would be a default that can never capture.
- *
- * **Two segments, because the dispatch wraps the client's answer.**
- * `io/gateway-output-dispatcher.ts` returns `{ status, message, result }` with
- * the client's action result under `result`, and `runtime/adapter.ts` carries
- * that same object through on the runtime path. Core then puts it at
- * `outputs.result` whole (`runtime/io-policy.ts`), so the rows the client sent
- * on `extracted` sit at `result.extracted` and a one-segment path finds
- * nothing. It found nothing in run `run-mu3rnmt9-fed2c3dc`, where the first
- * recorded extraction ever to reach the capture read the page and failed at
- * `record_output.records_missing` having saved no rows.
+ * The port a later node is wired to for the rows an output saved: the one
+ * Core's `builtin.policy.action` and a recording-derived definition declare
+ * (Core K3). Core's capture writes `outputs.records` after the dispatch, and a
+ * node can only be wired to a port its definition declares, so an output that
+ * saves rows declares it -- exactly the outputs that say where their records are.
+ */
+const recordsPort: AutomationNodePort = { id: "records", label: "Records", valueType: "array", role: "data" };
+
+/**
+ * Where in an action's result the page puts a list of records, which Core's
+ * record capture and proposal lift read (CD19). Only the list extraction
+ * returns records; `./extract-list/records-path.ts` says why the path has two
+ * segments and why `web.dom.extract` declares none.
  */
 const recordsPathByOutput: Partial<Record<WebAutomationActionType, string>> = {
-  "web.dom.extract_list": "result.extracted"
+  "web.dom.extract_list": WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH
+};
+
+/**
+ * What a model building a Flow reads about an output beyond the action's own
+ * label and description (`./extract-list/catalog-text.ts`). Only the list
+ * extraction has a request whose shape the catalog cannot otherwise show.
+ */
+const catalogTextByOutput: Partial<Record<WebAutomationActionType, { description: string; tags: readonly string[] }>> = {
+  "web.dom.extract_list": { description: WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, tags: WEB_AUTOMATION_EXTRACT_LIST_TAGS }
 };
 
 /**
@@ -80,12 +89,13 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
       : []
   );
   const recordsPath = recordsPathByOutput[definition.actionType];
+  const catalogText = catalogTextByOutput[definition.actionType];
   return {
     schemaVersion: "0.1",
     id: webAutomationOutputNodeId(definition.actionType),
     version: "1.0.0",
     label: definition.label,
-    description: definition.description,
+    description: catalogText?.description ?? definition.description,
     category: "web",
     source: {
       kind: "importer",
@@ -103,14 +113,17 @@ export function createWebAutomationOutputNodeDefinition(definition: WebAutomatio
     },
     outputAction: { fixedOutputId: definition.actionType },
     inputs: [controlInput],
-    outputs: outputPorts,
+    outputs: recordsPath ? [...outputPorts, recordsPort] : outputPorts,
+    // Every web parameter may be filled from state unless it says otherwise.
+    // Only `recordOutput` does, for the reason Core gives its own: a binding
+    // could replace the dataset schema, and with it the excluded fields.
     parameters: [...parametersForOutput(definition.actionType), expectedStateParameter].map((parameter) => ({
       ...parameter,
       ...(requiredParameters.has(parameter.id) ? { required: true } : {}),
-      allowStateBinding: true
+      allowStateBinding: parameter.allowStateBinding ?? true
     })),
     icon: iconForOutput(definition.actionType),
-    tags: ["web-automation", "output"],
+    tags: ["web-automation", "output", ...(catalogText?.tags ?? [])],
     metadata: {
       domainId: WEB_AUTOMATION_DOMAIN_ID,
       outputId: definition.actionType,
@@ -166,13 +179,7 @@ function parametersForOutput(outputId: WebAutomationActionType): AutomationNodeP
   if (outputId === "web.dom.capture_snapshot") return [];
   if (outputId === "web.dom.check") return [...selectorParameters, { id: "checked", label: "Checked", valueType: "boolean", defaultValue: true }];
   if (outputId === "web.dom.assert") return [...selectorParameters, structured("assert", "Assertion")];
-  // D14: the request carries no timeout of its own. The command's `timeoutMs` is
-  // the one the page honours, and a paginated read outlasts Core's 5,000 ms
-  // default, so the node states one; a recorded node scales it by `maxPages`.
-  if (outputId === "web.dom.extract_list") return [
-    structured("extractList", "List"),
-    { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 10_000 }
-  ];
+  if (outputId === "web.dom.extract_list") return webAutomationExtractListParameters();
   if (outputId === "web.dom.upload") return [...selectorParameters, structured("upload", "Files")];
   if (outputId === "web.dom.dialog") return [structured("dialog", "Dialog")];
   if (outputId === "web.browser.tab") return [structured("tab", "Tab")];

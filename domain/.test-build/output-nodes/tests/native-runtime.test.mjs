@@ -1,6 +1,115 @@
 // src/output-nodes/tests/native-runtime.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
+import { parseAutomationStudioRecordOutput as parseAutomationStudioRecordOutput2 } from "fluxiq/automation-studio";
+
+// src/actions/extraction/field-key.ts
+var FIELD_KEY_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
+var RESERVED_FIELD_KEYS = /* @__PURE__ */ new Set(["__proto__", "constructor", "prototype"]);
+function isWebAutomationExtractFieldKey(key) {
+  return typeof key === "string" && FIELD_KEY_PATTERN.test(key) && !RESERVED_FIELD_KEYS.has(key);
+}
+
+// src/output-nodes/targets/targets.ts
+function elementFingerprint(value) {
+  const element = objectValue(value);
+  if (!element) return void 0;
+  const attributes = elementAttributes(element.attributes);
+  return compact({
+    selector: stringValue(element.selector),
+    xpath: stringValue(element.xpath),
+    id: stringValue(element.id),
+    classNames: Array.isArray(element.classNames) ? element.classNames.filter((item) => typeof item === "string") : void 0,
+    visibleText: stringValue(element.visibleText),
+    tagName: stringValue(element.tagName),
+    text: stringValue(element.text),
+    value: stringValue(element.value),
+    role: stringValue(element.role),
+    implicitRole: stringValue(element.implicitRole),
+    name: stringValue(element.name),
+    href: stringValue(element.href),
+    inputType: stringValue(element.inputType),
+    checked: booleanValue(element.checked),
+    testId: elementTestId(element, attributes),
+    accessibleName: stringValue(element.accessibleName) ?? stringValue(attributes?.["aria-label"]),
+    label: stringValue(element.label),
+    attributes,
+    context: elementContext(element.context),
+    // Core's remaining fingerprint signals, named so their absence is a
+    // decision and so a signal Core adds stops this producer compiling. A
+    // browser recording has no source for any of them: the first four are a
+    // host application's own identifiers and a Core state path, `url` names
+    // the page rather than the control, `bounds` are the capture's viewport
+    // and not this instant's (which is why `content/identity/score.ts` refuses
+    // to compare them), and `metadata` is Core's own passthrough slot, which
+    // this normalizer must not start writing into behind the declared fields.
+    automationId: void 0,
+    entityId: void 0,
+    entityKind: void 0,
+    statePath: void 0,
+    queryPath: void 0,
+    url: void 0,
+    bounds: void 0,
+    metadata: void 0
+  });
+}
+function elementContext(value) {
+  const context = objectValue(value);
+  if (!context) return void 0;
+  const fields = compact({
+    formId: stringValue(context.formId),
+    formName: stringValue(context.formName),
+    formAction: stringValue(context.formAction),
+    fieldsetLegend: stringValue(context.fieldsetLegend),
+    landmark: stringValue(context.landmark),
+    landmarkName: stringValue(context.landmarkName),
+    heading: stringValue(context.heading),
+    listPosition: listPosition(context.listPosition),
+    tablePosition: tablePosition(context.tablePosition)
+  });
+  return Object.keys(fields).length > 0 ? fields : void 0;
+}
+function listPosition(value) {
+  const position = objectValue(value);
+  const index = numberValue(position?.index);
+  const total = numberValue(position?.total);
+  return index === void 0 || total === void 0 ? void 0 : { index, total };
+}
+function tablePosition(value) {
+  const position = objectValue(value);
+  const row = numberValue(position?.row);
+  const column = numberValue(position?.column);
+  if (row === void 0 || column === void 0) return void 0;
+  const columnHeader = stringValue(position?.columnHeader);
+  return columnHeader === void 0 ? { row, column } : { row, column, columnHeader };
+}
+function elementAttributes(value) {
+  const attributes = objectValue(value);
+  if (!attributes) return void 0;
+  const strings = {};
+  for (const [name, item] of Object.entries(attributes)) {
+    if (typeof item === "string") strings[name] = item;
+  }
+  return strings;
+}
+function elementTestId(element, attributes) {
+  return stringValue(element.testId) ?? stringValue(attributes?.["data-testid"]) ?? stringValue(attributes?.["data-test"]) ?? stringValue(attributes?.["data-cy"]);
+}
+function compact(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== void 0));
+}
+function objectValue(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+function stringValue(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function numberValue(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+function booleanValue(value) {
+  return typeof value === "boolean" ? value : void 0;
+}
 
 // src/actions/extraction/request.ts
 var WEB_AUTOMATION_EXTRACT_PAGINATION_MODES = ["next", "loadMore", "scroll", "numbered"];
@@ -9,9 +118,135 @@ var WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS = ["include", "exclude", "encrypt"];
 var WEB_AUTOMATION_EXTRACT_READ_MODES = ["text", "attribute", "value", "html"];
 var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
 var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
+var WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS = 1e4;
+function webAutomationExtractListTimeoutMs(request) {
+  const paginate = request.paginate;
+  const pages = paginate === void 0 ? 1 : paginate.mode === "scroll" ? paginate.maxScrolls : paginate.maxPages;
+  return WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS * pages;
+}
 
 // src/actions/extraction/read-request.ts
+function webAutomationExtractListRequestValue(value) {
+  const request = jsonObject(value);
+  const item = nonEmptyString(request?.item);
+  const fields = fieldMapValue(request?.fields);
+  if (!request || item === void 0 || fields === void 0) return void 0;
+  if (FRAME_KEYS.some((key) => request[key] !== void 0)) return void 0;
+  const itemElement = optionalValue(request.itemElement, fingerprintValue);
+  if (itemElement === REFUSED) return void 0;
+  const paginate = request.paginate === void 0 ? void 0 : paginationValue(request.paginate);
+  if (request.paginate !== void 0 && paginate === void 0) return void 0;
+  const namedMaxItems = positiveInteger(request.maxItems);
+  const maxItems = namedMaxItems === void 0 ? void 0 : Math.min(namedMaxItems, WEB_AUTOMATION_EXTRACT_MAX_ITEMS);
+  const minItems = nonNegativeInteger(request.minItems);
+  if (request.minItems !== void 0 && minItems === void 0) return void 0;
+  if (minItems !== void 0 && minItems > (maxItems ?? WEB_AUTOMATION_EXTRACT_MAX_ITEMS)) return void 0;
+  return {
+    item,
+    ...itemElement !== void 0 ? { itemElement } : {},
+    fields,
+    ...paginate !== void 0 ? { paginate } : {},
+    ...maxItems !== void 0 ? { maxItems } : {},
+    ...minItems !== void 0 ? { minItems } : {}
+  };
+}
+function fieldMapValue(value) {
+  const fields = jsonObject(value);
+  if (!fields) return void 0;
+  const read = [];
+  for (const [key, entry] of Object.entries(fields)) {
+    const field = isWebAutomationExtractFieldKey(key) ? fieldValue(entry) : void 0;
+    if (field === void 0) return void 0;
+    read.push([key, field]);
+  }
+  if (read.length === 0 || read.every(([, field]) => typeof field !== "string" && field.handling === "exclude")) return void 0;
+  return Object.fromEntries(read);
+}
+function fieldValue(value) {
+  if (typeof value === "string") return value.length > 0 ? value : void 0;
+  const spec = jsonObject(value);
+  const kind = memberOf(spec?.kind, WEB_AUTOMATION_EXTRACT_FIELD_KINDS);
+  if (!spec || kind === void 0) return void 0;
+  const attribute = kind === "attribute" ? nonEmptyString(spec.attribute) : void 0;
+  const header = kind === "column" ? nonEmptyString(spec.header) : void 0;
+  if (kind === "attribute" ? attribute === void 0 : spec.attribute !== void 0) return void 0;
+  if (kind === "column" ? header === void 0 : spec.header !== void 0) return void 0;
+  const selector = optionalValue(spec.selector, nonEmptyString);
+  const required = optionalValue(spec.required, booleanValue2);
+  const handling = optionalValue(spec.handling, (entry) => memberOf(entry, WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS));
+  const element = optionalValue(spec.element, fingerprintValue);
+  if (selector === REFUSED || required === REFUSED || handling === REFUSED || element === REFUSED) return void 0;
+  const field = {
+    kind,
+    ...selector !== void 0 ? { selector } : {},
+    ...attribute !== void 0 ? { attribute } : {},
+    ...header !== void 0 ? { header } : {},
+    ...required !== void 0 ? { required } : {},
+    ...handling !== void 0 ? { handling } : {},
+    ...element !== void 0 ? { element } : {}
+  };
+  return field;
+}
+function paginationValue(value) {
+  const paginate = jsonObject(value);
+  if (!paginate) return void 0;
+  const mode = paginate.mode === void 0 ? "next" : memberOf(paginate.mode, WEB_AUTOMATION_EXTRACT_PAGINATION_MODES);
+  if (mode === void 0) return void 0;
+  const ownKeys = PAGINATION_KEYS[mode];
+  if (Object.values(PAGINATION_KEYS).flat().some((key) => !ownKeys.includes(key) && paginate[key] !== void 0)) return void 0;
+  if (mode === "scroll") {
+    const maxScrolls = positiveInteger(paginate.maxScrolls);
+    return maxScrolls === void 0 ? void 0 : { mode, maxScrolls: Math.min(maxScrolls, WEB_AUTOMATION_EXTRACT_MAX_PAGES) };
+  }
+  const requestedPages = positiveInteger(paginate.maxPages);
+  if (requestedPages === void 0) return void 0;
+  const maxPages = Math.min(requestedPages, WEB_AUTOMATION_EXTRACT_MAX_PAGES);
+  if (mode === "next") {
+    const next = nonEmptyString(paginate.next);
+    return next === void 0 ? void 0 : { next, maxPages };
+  }
+  if (mode === "loadMore") {
+    const control = nonEmptyString(paginate.control);
+    return control === void 0 ? void 0 : { mode, control, maxPages };
+  }
+  const pages = nonEmptyString(paginate.pages);
+  return pages === void 0 ? void 0 : { mode, pages, maxPages };
+}
+var FRAME_KEYS = ["frame", "frameId", "frameSelector", "frameUrlPath"];
+var PAGINATION_KEYS = {
+  next: ["next", "maxPages"],
+  loadMore: ["control", "maxPages"],
+  scroll: ["maxScrolls"],
+  numbered: ["pages", "maxPages"]
+};
+function fingerprintValue(value) {
+  const fingerprint = elementFingerprint(value);
+  return fingerprint !== void 0 && Object.keys(fingerprint).length > 0 ? fingerprint : void 0;
+}
 var REFUSED = Symbol("refused");
+function optionalValue(value, read) {
+  if (value === void 0) return void 0;
+  const readable = read(value);
+  return readable === void 0 ? REFUSED : readable;
+}
+function booleanValue2(value) {
+  return typeof value === "boolean" ? value : void 0;
+}
+function nonNegativeInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
+}
+function positiveInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : void 0;
+}
+function nonEmptyString(value) {
+  return typeof value === "string" && value.length > 0 ? value : void 0;
+}
+function memberOf(value, members) {
+  return typeof value === "string" && members.includes(value) ? value : void 0;
+}
+function jsonObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
 
 // src/actions/extraction/schema.ts
 function webAutomationExtractListSchema(elementFingerprintSchema2) {
@@ -87,6 +322,201 @@ var WEB_AUTOMATION_ACTION_TYPES = [
   "web.browser.tab",
   "web.browser.download"
 ];
+
+// src/output-nodes/extract-list/catalog-text.ts
+var WEB_AUTOMATION_EXTRACT_LIST_TAGS = [
+  "scrape",
+  "collect",
+  "extract",
+  "list",
+  "table",
+  "rows",
+  "records",
+  "dataset",
+  "every page",
+  "next page",
+  "load more",
+  "infinite scroll",
+  "pagination"
+];
+var WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
+  "Scrape every item of a repeating list or table into a dataset, across pages.",
+  "The rows are saved without a recordOutput."
+].join(" ");
+var WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
+  "{ item, fields, paginate?, minItems?, maxItems? }. item: CSS selector of each record.",
+  'fields: { key: "css" (text) | "css@attr" | "column:Header" (table cell)',
+  `| { kind: ${WEB_AUTOMATION_EXTRACT_FIELD_KINDS.join("|")}, selector?, attribute?, header?, required?: false } };`,
+  "keys use A-Za-z0-9_-; field selectors are read inside each item.",
+  'paginate: { mode: "next", next: css, maxPages } | { mode: "loadMore", control: css, maxPages }',
+  `| { mode: "scroll", maxScrolls } | { mode: "numbered", pages: css, maxPages }, at most ${WEB_AUTOMATION_EXTRACT_MAX_PAGES}.`,
+  `minItems: default 1; 0 allows an empty list. maxItems: at most ${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}.`
+].join(" ");
+var WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE = {
+  item: "li.product",
+  fields: { name: ".name", price: ".price", url: "a@href" },
+  paginate: { mode: "next", next: "a.next", maxPages: 5 }
+};
+
+// src/extraction/dataset-id.ts
+var MAX_ID_LENGTH = 200;
+var NONCE_PATTERN = /^[A-Za-z0-9._-]{1,64}$/u;
+var SEPARATOR = ":";
+var FALLBACK_NAME = "dataset";
+var OUTSIDE_NAME_CHARACTERS = /[^a-z0-9._-]+/u;
+var COMBINING_MARKS = new RegExp("\\p{M}+", "gu");
+function webAutomationDatasetId(label, nonce) {
+  if (!NONCE_PATTERN.test(nonce)) {
+    throw new RangeError("A dataset id nonce must be 1 to 64 characters of A-Z, a-z, 0-9, '.', '_' or '-'.");
+  }
+  const words = label.toLowerCase().normalize("NFKD").replace(COMBINING_MARKS, "").split(OUTSIDE_NAME_CHARACTERS).filter((word) => word.length > 0);
+  const name = words.join("-").slice(0, MAX_ID_LENGTH - SEPARATOR.length - nonce.length) || FALLBACK_NAME;
+  return `${name}${SEPARATOR}${nonce}`;
+}
+
+// src/extraction/label-key.ts
+var COMBINING_MARKS2 = new RegExp("\\p{M}+", "gu");
+
+// src/output-nodes/extract-list/record-output.ts
+var DEFAULT_MAX_RECORDS = 1e3;
+var MAX_RECORDS_CEILING = 1e4;
+var LABEL_MAX_LENGTH = 200;
+function webAutomationRecordOutput(definition) {
+  const taken = /* @__PURE__ */ new Set();
+  const fields = Object.entries(definition.request.fields).map(([key, field]) => {
+    const spec = typeof field === "string" ? void 0 : field;
+    return {
+      id: key,
+      label: distinctLabel(definition.fieldLabels[key] ?? key, key, taken),
+      // A link's target is a URL; everything else the page reads is text. A
+      // number on the page is text too, because nothing has parsed it.
+      valueType: spec?.kind === "link" ? "url" : "string",
+      // A field is required unless it was picked as optional: an optional field
+      // the page cannot read is `null`, which Core stores as an absent key (D16).
+      required: spec?.required !== false,
+      ...spec?.handling !== void 0 ? { handling: spec.handling } : {}
+    };
+  });
+  return {
+    datasetId: definition.datasetId,
+    label: definition.label,
+    schema: { schemaVersion: "0.1", fields },
+    writeMode: "append",
+    maxRecords: Math.min(definition.request.maxItems ?? DEFAULT_MAX_RECORDS, MAX_RECORDS_CEILING)
+  };
+}
+function distinctLabel(label, key, taken) {
+  const preferred = label.slice(0, LABEL_MAX_LENGTH);
+  const distinct = taken.has(preferred) ? `${preferred} (${key})`.slice(0, LABEL_MAX_LENGTH) : preferred;
+  const unique = taken.has(distinct) ? key.slice(0, LABEL_MAX_LENGTH) : distinct;
+  taken.add(unique);
+  return unique;
+}
+
+// src/output-nodes/extract-list/records-path.ts
+var WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH = "result.extracted";
+
+// src/output-nodes/extract-list/derived-record-output.ts
+var LABEL_MAX_LENGTH2 = 200;
+var LABEL_PREFIX = "Extracted list: ";
+var DIGEST_SEEDS = [2166136261, 84696351];
+var FNV_PRIME = 16777619;
+function webAutomationDerivedRecordOutput(request) {
+  const label = derivedLabel(request);
+  return {
+    ...webAutomationRecordOutput({ datasetId: webAutomationDatasetId(label, shapeDigest(request)), label, request, fieldLabels: {} }),
+    recordsPath: WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH
+  };
+}
+function derivedLabel(request) {
+  const kept = Object.entries(request.fields).filter(([, field]) => typeof field === "string" || field.handling !== "exclude").map(([key]) => key);
+  return `${LABEL_PREFIX}${kept.join(", ")}`.slice(0, LABEL_MAX_LENGTH2);
+}
+function shapeDigest(request) {
+  const shape = JSON.stringify([request.item, Object.entries(request.fields).map(([key, field]) => [key, fieldShape(field)])]);
+  return DIGEST_SEEDS.map((seed) => fnv1a(shape, seed)).join("");
+}
+function fieldShape(field) {
+  if (typeof field === "string") return field;
+  return [field.kind, field.selector ?? null, field.attribute ?? null, field.header ?? null, field.required ?? null, field.handling ?? null];
+}
+function fnv1a(text, seed) {
+  let hash = seed >>> 0;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, FNV_PRIME) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+}
+
+// src/output-nodes/extract-list/dispatch.ts
+import { parseAutomationStudioRecordOutput } from "fluxiq/automation-studio/nodes";
+var ENCRYPT_UNAVAILABLE_ISSUE = "record_schema.encrypt_unavailable";
+function webAutomationExtractListDispatch(nodeParameters) {
+  const { recordOutput: authored, ...rest } = nodeParameters;
+  const request = webAutomationExtractListRequestValue(rest.extractList);
+  const parameters = request !== void 0 && leftDefault(rest.timeoutMs) ? { ...rest, timeoutMs: webAutomationExtractListTimeoutMs(request) } : rest;
+  const declared = authored === void 0 || authored === null ? request === void 0 ? void 0 : webAutomationDerivedRecordOutput(request) : withRecordsPath(authored);
+  if (declared === void 0) return { ok: true, payload: { parameters } };
+  const parsed = parseAutomationStudioRecordOutput(declared);
+  if (!parsed.ok) return { ok: false, result: recordOutputRefusal(parsed.issues) };
+  return { ok: true, payload: { parameters, recordOutput: parsed.output } };
+}
+function leftDefault(timeoutMs) {
+  return timeoutMs === void 0 || timeoutMs === WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS;
+}
+function withRecordsPath(authored) {
+  if (typeof authored !== "object" || authored === null || Array.isArray(authored) || Object.hasOwn(authored, "recordsPath")) return authored;
+  return { ...authored, recordsPath: WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH };
+}
+function recordOutputRefusal(issues) {
+  const encryptUnavailable = issues.includes(ENCRYPT_UNAVAILABLE_ISSUE);
+  const code = encryptUnavailable ? "record_output.encrypt_unavailable" : "record_output.invalid";
+  const failure = {
+    category: "graph_validation_or_unknown_node",
+    code,
+    retryable: false,
+    stage: "dispatch"
+  };
+  return {
+    status: "failed",
+    route: "failed",
+    effects: [],
+    outputs: { error: { code, issues: [...issues] } },
+    message: encryptUnavailable ? "Save extracted records asks to encrypt a field, which is not available yet, so the list was not read." : "Save extracted records is not a valid record output, so the list was not read.",
+    failure
+  };
+}
+
+// src/output-nodes/extract-list/parameters.ts
+function webAutomationExtractListParameters() {
+  return [
+    {
+      id: "extractList",
+      label: "List",
+      description: WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR,
+      valueType: "object",
+      example: structuredClone(WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE),
+      ui: { control: "value" }
+    },
+    {
+      id: "timeoutMs",
+      label: "Timeout",
+      description: "Milliseconds for the whole read. Left at the default, it grows with the pages the list may read.",
+      valueType: "number",
+      defaultValue: WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS
+    },
+    {
+      id: "recordOutput",
+      label: "Save extracted records",
+      description: "The dataset the rows are saved into. Leave empty to save every field of the list under a dataset named after its fields.",
+      valueType: "json",
+      defaultValue: null,
+      allowStateBinding: false,
+      ui: { control: "record-output" }
+    }
+  ];
+}
 
 // src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
@@ -426,8 +856,12 @@ var outputPorts = [
   { id: "success", label: "Success", valueType: "any", role: "success" },
   { id: "failed", label: "Failed", valueType: "any", role: "failure" }
 ];
+var recordsPort = { id: "records", label: "Records", valueType: "array", role: "data" };
 var recordsPathByOutput = {
-  "web.dom.extract_list": "result.extracted"
+  "web.dom.extract_list": WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH
+};
+var catalogTextByOutput = {
+  "web.dom.extract_list": { description: WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, tags: WEB_AUTOMATION_EXTRACT_LIST_TAGS }
 };
 var expectedStateParameter = {
   id: "expectedState",
@@ -448,12 +882,13 @@ function createWebAutomationOutputNodeDefinition(definition) {
     Array.isArray(definition.parameterSchema.required) ? definition.parameterSchema.required.filter((value) => typeof value === "string") : []
   );
   const recordsPath = recordsPathByOutput[definition.actionType];
+  const catalogText = catalogTextByOutput[definition.actionType];
   return {
     schemaVersion: "0.1",
     id: webAutomationOutputNodeId(definition.actionType),
     version: "1.0.0",
     label: definition.label,
-    description: definition.description,
+    description: catalogText?.description ?? definition.description,
     category: "web",
     source: {
       kind: "importer",
@@ -471,14 +906,17 @@ function createWebAutomationOutputNodeDefinition(definition) {
     },
     outputAction: { fixedOutputId: definition.actionType },
     inputs: [controlInput],
-    outputs: outputPorts,
+    outputs: recordsPath ? [...outputPorts, recordsPort] : outputPorts,
+    // Every web parameter may be filled from state unless it says otherwise.
+    // Only `recordOutput` does, for the reason Core gives its own: a binding
+    // could replace the dataset schema, and with it the excluded fields.
     parameters: [...parametersForOutput(definition.actionType), expectedStateParameter].map((parameter) => ({
       ...parameter,
       ...requiredParameters.has(parameter.id) ? { required: true } : {},
-      allowStateBinding: true
+      allowStateBinding: parameter.allowStateBinding ?? true
     })),
     icon: iconForOutput(definition.actionType),
-    tags: ["web-automation", "output"],
+    tags: ["web-automation", "output", ...catalogText?.tags ?? []],
     metadata: {
       domainId: WEB_AUTOMATION_DOMAIN_ID,
       outputId: definition.actionType,
@@ -530,10 +968,7 @@ function parametersForOutput(outputId) {
   if (outputId === "web.dom.capture_snapshot") return [];
   if (outputId === "web.dom.check") return [...selectorParameters, { id: "checked", label: "Checked", valueType: "boolean", defaultValue: true }];
   if (outputId === "web.dom.assert") return [...selectorParameters, structured("assert", "Assertion")];
-  if (outputId === "web.dom.extract_list") return [
-    structured("extractList", "List"),
-    { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 1e4 }
-  ];
+  if (outputId === "web.dom.extract_list") return webAutomationExtractListParameters();
   if (outputId === "web.dom.upload") return [...selectorParameters, structured("upload", "Files")];
   if (outputId === "web.dom.dialog") return [structured("dialog", "Dialog")];
   if (outputId === "web.browser.tab") return [structured("tab", "Tab")];
@@ -572,18 +1007,17 @@ function createWebAutomationOutputNodeImplementationBundle(extension = {}) {
 function createOutputNodeImplementation(outputId) {
   return (context) => {
     const parameters = compactJsonObject(context.parameters);
-    return {
-      status: "success",
-      route: "success",
-      outputs: { success: true },
-      effects: [{
-        type: "policy.output.dispatch",
-        payload: {
-          outputId,
-          parameters
-        }
-      }]
-    };
+    if (outputId !== "web.dom.extract_list") return dispatching({ outputId, parameters });
+    const extraction = webAutomationExtractListDispatch(parameters);
+    return extraction.ok ? dispatching({ outputId, ...extraction.payload }) : extraction.result;
+  };
+}
+function dispatching(payload) {
+  return {
+    status: "success",
+    route: "success",
+    outputs: { success: true },
+    effects: [{ type: "policy.output.dispatch", payload }]
   };
 }
 function compactJsonObject(value) {
@@ -617,6 +1051,88 @@ test("an implementation reports no status of its own for Core to trust", async (
   assert.equal(result.route, "success");
   assert.equal(result.message, void 0);
   assert.equal(result.failure, void 0);
+});
+var extractList = {
+  item: "li.product",
+  fields: {
+    name: ".name",
+    link: { kind: "link", selector: "a" },
+    email: { kind: "text", selector: ".email", handling: "exclude" },
+    stock: { kind: "text", selector: ".stock", required: false }
+  }
+};
+function dispatchedPayload(result) {
+  assert.equal(result.effects?.length, 1);
+  const effect = result.effects?.[0];
+  assert.equal(effect?.type, "policy.output.dispatch");
+  return effect?.payload;
+}
+test("a created list extraction with no record output dispatches one derived from its fields", async () => {
+  const payload = dispatchedPayload(await execute("web.dom.extract_list", { extractList }));
+  const parsed = parseAutomationStudioRecordOutput2(payload.recordOutput);
+  assert.equal(parsed.ok, true, JSON.stringify(parsed));
+  if (!parsed.ok) return;
+  assert.deepEqual(parsed.output.schema.fields.map((field) => field.id), Object.keys(extractList.fields));
+  assert.deepEqual(parsed.output.schema.fields.map((field) => [field.valueType, field.required, field.handling ?? "include"]), [
+    ["string", true, "include"],
+    ["url", true, "include"],
+    ["string", true, "exclude"],
+    ["string", false, "include"]
+  ]);
+  assert.equal(parsed.output.recordsPath, WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH);
+  assert.equal(parsed.output.writeMode, "append");
+  assert.deepEqual(payload.parameters, { extractList, timeoutMs: 1e4 });
+  assert.equal(payload.outputId, "web.dom.extract_list");
+});
+test("an explicit null record output is the same as none", async () => {
+  const absent = dispatchedPayload(await execute("web.dom.extract_list", { extractList }));
+  const explicit = dispatchedPayload(await execute("web.dom.extract_list", { extractList, recordOutput: null }));
+  assert.deepEqual(explicit, absent);
+});
+test("a created list extraction dispatches the record output its author set, with the output's records path", async () => {
+  const recordOutput = {
+    datasetId: "catalog",
+    label: "Catalog",
+    writeMode: "replace",
+    schema: { schemaVersion: "0.1", fields: [{ id: "name", label: "Name", valueType: "string", required: true }] }
+  };
+  const payload = dispatchedPayload(await execute("web.dom.extract_list", { extractList: { item: "li", fields: { name: ".name" } }, recordOutput }));
+  assert.deepEqual(payload.recordOutput, { ...recordOutput, recordsPath: WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH });
+  assert.equal("recordOutput" in payload.parameters, false);
+  const parsed = parseAutomationStudioRecordOutput2(payload.recordOutput);
+  assert.equal(parsed.ok, true, JSON.stringify(parsed));
+});
+test("a list extraction whose record output does not parse fails before the page is read", async () => {
+  const result = await execute("web.dom.extract_list", { extractList, recordOutput: { nonsense: true } });
+  assert.deepEqual(result.effects, []);
+  assert.equal(result.status, "failed");
+  assert.equal(result.route, "failed");
+  assert.equal(result.failure?.code, "record_output.invalid");
+  assert.equal(result.failure?.category, "graph_validation_or_unknown_node");
+  assert.equal(result.failure?.retryable, false);
+});
+test("a list extraction whose field asks to be encrypted fails with Core's own code", async () => {
+  const result = await execute("web.dom.extract_list", {
+    extractList: { item: "li", fields: { name: ".name", card: { kind: "text", selector: ".card", handling: "encrypt" } } }
+  });
+  assert.deepEqual(result.effects, []);
+  assert.equal(result.failure?.code, "record_output.encrypt_unavailable");
+});
+test("a list extraction left at the default timeout is given one per page it may read", async () => {
+  const paged = { ...extractList, paginate: { mode: "next", next: "a.next", maxPages: 3 } };
+  for (const timeoutMs of [void 0, 1e4]) {
+    const parameters = timeoutMs === void 0 ? { extractList: paged } : { extractList: paged, timeoutMs };
+    const payload = dispatchedPayload(await execute("web.dom.extract_list", parameters));
+    assert.equal(payload.parameters.timeoutMs, 3e4);
+  }
+  const scrolled = dispatchedPayload(await execute("web.dom.extract_list", { extractList: { ...extractList, paginate: { mode: "scroll", maxScrolls: 20 } } }));
+  assert.equal(scrolled.parameters.timeoutMs, 2e5);
+  const authored = dispatchedPayload(await execute("web.dom.extract_list", { extractList: paged, timeoutMs: 12e3 }));
+  assert.equal(authored.parameters.timeoutMs, 12e3);
+});
+test("a list extraction whose request does not parse is sent as authored, for the dispatch to refuse", async () => {
+  const payload = dispatchedPayload(await execute("web.dom.extract_list", { extractList: { nonsense: true } }));
+  assert.deepEqual(payload, { outputId: "web.dom.extract_list", parameters: { extractList: { nonsense: true } } });
 });
 test("each of the seven new action types dispatches under its own output id", async () => {
   for (const outputId of ["web.dom.check", "web.dom.assert", "web.dom.extract_list", "web.dom.upload", "web.dom.dialog", "web.browser.tab", "web.browser.download"]) {

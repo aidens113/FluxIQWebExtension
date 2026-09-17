@@ -278,6 +278,107 @@
     return typeof key === "string" && FIELD_KEY_PATTERN.test(key) && !RESERVED_FIELD_KEYS.has(key);
   }
 
+  // ../../domain/src/output-nodes/targets/targets.ts
+  function elementFingerprint2(value) {
+    const element = objectValue(value);
+    if (!element) return void 0;
+    const attributes = elementAttributes(element.attributes);
+    return compact({
+      selector: stringValue(element.selector),
+      xpath: stringValue(element.xpath),
+      id: stringValue(element.id),
+      classNames: Array.isArray(element.classNames) ? element.classNames.filter((item) => typeof item === "string") : void 0,
+      visibleText: stringValue(element.visibleText),
+      tagName: stringValue(element.tagName),
+      text: stringValue(element.text),
+      value: stringValue(element.value),
+      role: stringValue(element.role),
+      implicitRole: stringValue(element.implicitRole),
+      name: stringValue(element.name),
+      href: stringValue(element.href),
+      inputType: stringValue(element.inputType),
+      checked: booleanValue(element.checked),
+      testId: elementTestId(element, attributes),
+      accessibleName: stringValue(element.accessibleName) ?? stringValue(attributes?.["aria-label"]),
+      label: stringValue(element.label),
+      attributes,
+      context: elementContext(element.context),
+      // Core's remaining fingerprint signals, named so their absence is a
+      // decision and so a signal Core adds stops this producer compiling. A
+      // browser recording has no source for any of them: the first four are a
+      // host application's own identifiers and a Core state path, `url` names
+      // the page rather than the control, `bounds` are the capture's viewport
+      // and not this instant's (which is why `content/identity/score.ts` refuses
+      // to compare them), and `metadata` is Core's own passthrough slot, which
+      // this normalizer must not start writing into behind the declared fields.
+      automationId: void 0,
+      entityId: void 0,
+      entityKind: void 0,
+      statePath: void 0,
+      queryPath: void 0,
+      url: void 0,
+      bounds: void 0,
+      metadata: void 0
+    });
+  }
+  function elementContext(value) {
+    const context = objectValue(value);
+    if (!context) return void 0;
+    const fields = compact({
+      formId: stringValue(context.formId),
+      formName: stringValue(context.formName),
+      formAction: stringValue(context.formAction),
+      fieldsetLegend: stringValue(context.fieldsetLegend),
+      landmark: stringValue(context.landmark),
+      landmarkName: stringValue(context.landmarkName),
+      heading: stringValue(context.heading),
+      listPosition: listPosition(context.listPosition),
+      tablePosition: tablePosition(context.tablePosition)
+    });
+    return Object.keys(fields).length > 0 ? fields : void 0;
+  }
+  function listPosition(value) {
+    const position = objectValue(value);
+    const index = numberValue(position?.index);
+    const total = numberValue(position?.total);
+    return index === void 0 || total === void 0 ? void 0 : { index, total };
+  }
+  function tablePosition(value) {
+    const position = objectValue(value);
+    const row = numberValue(position?.row);
+    const column = numberValue(position?.column);
+    if (row === void 0 || column === void 0) return void 0;
+    const columnHeader2 = stringValue(position?.columnHeader);
+    return columnHeader2 === void 0 ? { row, column } : { row, column, columnHeader: columnHeader2 };
+  }
+  function elementAttributes(value) {
+    const attributes = objectValue(value);
+    if (!attributes) return void 0;
+    const strings = {};
+    for (const [name, item] of Object.entries(attributes)) {
+      if (typeof item === "string") strings[name] = item;
+    }
+    return strings;
+  }
+  function elementTestId(element, attributes) {
+    return stringValue(element.testId) ?? stringValue(attributes?.["data-testid"]) ?? stringValue(attributes?.["data-test"]) ?? stringValue(attributes?.["data-cy"]);
+  }
+  function compact(value) {
+    return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== void 0));
+  }
+  function objectValue(value) {
+    return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+  }
+  function stringValue(value) {
+    return typeof value === "string" ? value : void 0;
+  }
+  function numberValue(value) {
+    return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+  }
+  function booleanValue(value) {
+    return typeof value === "boolean" ? value : void 0;
+  }
+
   // ../../domain/src/actions/extraction/request.ts
   var WEB_AUTOMATION_EXTRACT_PAGINATION_MODES = ["next", "loadMore", "scroll", "numbered"];
   var WEB_AUTOMATION_EXTRACT_FIELD_KINDS = ["text", "attribute", "link", "value", "column"];
@@ -285,9 +386,130 @@
   var WEB_AUTOMATION_EXTRACT_READ_MODES = ["text", "attribute", "value", "html"];
   var WEB_AUTOMATION_EXTRACT_MAX_PAGES = 50;
   var WEB_AUTOMATION_EXTRACT_MAX_ITEMS = 1e3;
+  var WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS = 1e4;
 
   // ../../domain/src/actions/extraction/read-request.ts
+  function webAutomationExtractListRequestValue(value) {
+    const request = jsonObject(value);
+    const item = nonEmptyString(request?.item);
+    const fields = fieldMapValue(request?.fields);
+    if (!request || item === void 0 || fields === void 0) return void 0;
+    if (FRAME_KEYS.some((key) => request[key] !== void 0)) return void 0;
+    const itemElement = optionalValue(request.itemElement, fingerprintValue);
+    if (itemElement === REFUSED) return void 0;
+    const paginate = request.paginate === void 0 ? void 0 : paginationValue(request.paginate);
+    if (request.paginate !== void 0 && paginate === void 0) return void 0;
+    const namedMaxItems = positiveInteger(request.maxItems);
+    const maxItems = namedMaxItems === void 0 ? void 0 : Math.min(namedMaxItems, WEB_AUTOMATION_EXTRACT_MAX_ITEMS);
+    const minItems = nonNegativeInteger(request.minItems);
+    if (request.minItems !== void 0 && minItems === void 0) return void 0;
+    if (minItems !== void 0 && minItems > (maxItems ?? WEB_AUTOMATION_EXTRACT_MAX_ITEMS)) return void 0;
+    return {
+      item,
+      ...itemElement !== void 0 ? { itemElement } : {},
+      fields,
+      ...paginate !== void 0 ? { paginate } : {},
+      ...maxItems !== void 0 ? { maxItems } : {},
+      ...minItems !== void 0 ? { minItems } : {}
+    };
+  }
+  function fieldMapValue(value) {
+    const fields = jsonObject(value);
+    if (!fields) return void 0;
+    const read = [];
+    for (const [key, entry] of Object.entries(fields)) {
+      const field = isWebAutomationExtractFieldKey(key) ? fieldValue(entry) : void 0;
+      if (field === void 0) return void 0;
+      read.push([key, field]);
+    }
+    if (read.length === 0 || read.every(([, field]) => typeof field !== "string" && field.handling === "exclude")) return void 0;
+    return Object.fromEntries(read);
+  }
+  function fieldValue(value) {
+    if (typeof value === "string") return value.length > 0 ? value : void 0;
+    const spec = jsonObject(value);
+    const kind = memberOf(spec?.kind, WEB_AUTOMATION_EXTRACT_FIELD_KINDS);
+    if (!spec || kind === void 0) return void 0;
+    const attribute = kind === "attribute" ? nonEmptyString(spec.attribute) : void 0;
+    const header = kind === "column" ? nonEmptyString(spec.header) : void 0;
+    if (kind === "attribute" ? attribute === void 0 : spec.attribute !== void 0) return void 0;
+    if (kind === "column" ? header === void 0 : spec.header !== void 0) return void 0;
+    const selector = optionalValue(spec.selector, nonEmptyString);
+    const required = optionalValue(spec.required, booleanValue2);
+    const handling = optionalValue(spec.handling, (entry) => memberOf(entry, WEB_AUTOMATION_EXTRACT_FIELD_HANDLINGS));
+    const element = optionalValue(spec.element, fingerprintValue);
+    if (selector === REFUSED || required === REFUSED || handling === REFUSED || element === REFUSED) return void 0;
+    const field = {
+      kind,
+      ...selector !== void 0 ? { selector } : {},
+      ...attribute !== void 0 ? { attribute } : {},
+      ...header !== void 0 ? { header } : {},
+      ...required !== void 0 ? { required } : {},
+      ...handling !== void 0 ? { handling } : {},
+      ...element !== void 0 ? { element } : {}
+    };
+    return field;
+  }
+  function paginationValue(value) {
+    const paginate = jsonObject(value);
+    if (!paginate) return void 0;
+    const mode = paginate.mode === void 0 ? "next" : memberOf(paginate.mode, WEB_AUTOMATION_EXTRACT_PAGINATION_MODES);
+    if (mode === void 0) return void 0;
+    const ownKeys = PAGINATION_KEYS[mode];
+    if (Object.values(PAGINATION_KEYS).flat().some((key) => !ownKeys.includes(key) && paginate[key] !== void 0)) return void 0;
+    if (mode === "scroll") {
+      const maxScrolls = positiveInteger(paginate.maxScrolls);
+      return maxScrolls === void 0 ? void 0 : { mode, maxScrolls: Math.min(maxScrolls, WEB_AUTOMATION_EXTRACT_MAX_PAGES) };
+    }
+    const requestedPages = positiveInteger(paginate.maxPages);
+    if (requestedPages === void 0) return void 0;
+    const maxPages = Math.min(requestedPages, WEB_AUTOMATION_EXTRACT_MAX_PAGES);
+    if (mode === "next") {
+      const next = nonEmptyString(paginate.next);
+      return next === void 0 ? void 0 : { next, maxPages };
+    }
+    if (mode === "loadMore") {
+      const control = nonEmptyString(paginate.control);
+      return control === void 0 ? void 0 : { mode, control, maxPages };
+    }
+    const pages = nonEmptyString(paginate.pages);
+    return pages === void 0 ? void 0 : { mode, pages, maxPages };
+  }
+  var FRAME_KEYS = ["frame", "frameId", "frameSelector", "frameUrlPath"];
+  var PAGINATION_KEYS = {
+    next: ["next", "maxPages"],
+    loadMore: ["control", "maxPages"],
+    scroll: ["maxScrolls"],
+    numbered: ["pages", "maxPages"]
+  };
+  function fingerprintValue(value) {
+    const fingerprint = elementFingerprint2(value);
+    return fingerprint !== void 0 && Object.keys(fingerprint).length > 0 ? fingerprint : void 0;
+  }
   var REFUSED = Symbol("refused");
+  function optionalValue(value, read) {
+    if (value === void 0) return void 0;
+    const readable2 = read(value);
+    return readable2 === void 0 ? REFUSED : readable2;
+  }
+  function booleanValue2(value) {
+    return typeof value === "boolean" ? value : void 0;
+  }
+  function nonNegativeInteger(value) {
+    return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
+  }
+  function positiveInteger(value) {
+    return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : void 0;
+  }
+  function nonEmptyString(value) {
+    return typeof value === "string" && value.length > 0 ? value : void 0;
+  }
+  function memberOf(value, members) {
+    return typeof value === "string" && members.includes(value) ? value : void 0;
+  }
+  function jsonObject(value) {
+    return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+  }
 
   // ../../domain/src/actions/extraction/schema.ts
   function webAutomationExtractListSchema(elementFingerprintSchema2) {
@@ -714,14 +936,2203 @@
     "web.browser.download": "review"
   };
 
+  // ../../domain/src/output-nodes/extract-list/catalog-text.ts
+  var WEB_AUTOMATION_EXTRACT_LIST_TAGS = [
+    "scrape",
+    "collect",
+    "extract",
+    "list",
+    "table",
+    "rows",
+    "records",
+    "dataset",
+    "every page",
+    "next page",
+    "load more",
+    "infinite scroll",
+    "pagination"
+  ];
+  var WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
+    "Scrape every item of a repeating list or table into a dataset, across pages.",
+    "The rows are saved without a recordOutput."
+  ].join(" ");
+  var WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
+    "{ item, fields, paginate?, minItems?, maxItems? }. item: CSS selector of each record.",
+    'fields: { key: "css" (text) | "css@attr" | "column:Header" (table cell)',
+    `| { kind: ${WEB_AUTOMATION_EXTRACT_FIELD_KINDS.join("|")}, selector?, attribute?, header?, required?: false } };`,
+    "keys use A-Za-z0-9_-; field selectors are read inside each item.",
+    'paginate: { mode: "next", next: css, maxPages } | { mode: "loadMore", control: css, maxPages }',
+    `| { mode: "scroll", maxScrolls } | { mode: "numbered", pages: css, maxPages }, at most ${WEB_AUTOMATION_EXTRACT_MAX_PAGES}.`,
+    `minItems: default 1; 0 allows an empty list. maxItems: at most ${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}.`
+  ].join(" ");
+  var WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE = {
+    item: "li.product",
+    fields: { name: ".name", price: ".price", url: "a@href" },
+    paginate: { mode: "next", next: "a.next", maxPages: 5 }
+  };
+
+  // ../../domain/src/extraction/dataset-id.ts
+  var COMBINING_MARKS = new RegExp("\\p{M}+", "gu");
+
+  // ../../domain/src/extraction/label-key.ts
+  var MAX_KEY_LENGTH = 100;
+  var FALLBACK_KEY = "field";
+  var RESERVED_KEY_SUFFIX = "_field";
+  var OUTSIDE_KEY_CHARACTERS = /[^a-z0-9_-]+/u;
+  var COMBINING_MARKS2 = new RegExp("\\p{M}+", "gu");
+  function webAutomationExtractionFieldKey(label, taken) {
+    const words = label.toLowerCase().normalize("NFKD").replace(COMBINING_MARKS2, "").split(OUTSIDE_KEY_CHARACTERS).filter((word) => word.length > 0);
+    let key = words.join("_").slice(0, MAX_KEY_LENGTH) || FALLBACK_KEY;
+    if (!isWebAutomationExtractFieldKey(key)) key = `${key}${RESERVED_KEY_SUFFIX}`;
+    if (!taken.has(key)) return key;
+    for (let ordinal = 2; ; ordinal += 1) {
+      const suffix = `_${ordinal}`;
+      const candidate = `${key.slice(0, MAX_KEY_LENGTH - suffix.length)}${suffix}`;
+      if (!taken.has(candidate)) return candidate;
+    }
+  }
+
+  // ../../domain/src/extraction/signature.ts
+  var MAX_SIGNATURE_CLASSES = 3;
+  function webAutomationItemSignature(parts2) {
+    const role = parts2.role?.trim().toLowerCase() ?? "";
+    const classes = [...parts2.classes].sort().slice(0, MAX_SIGNATURE_CLASSES).join(".");
+    return `${parts2.tagName.toLowerCase()}|${role}|${webAutomationIdentifierShape(parts2.testId)}|${classes}`;
+  }
+  function webAutomationIdentifierShape(value) {
+    return value === void 0 ? "" : value.replace(/\d+/gu, "#");
+  }
+
+  // ../../domain/src/output-nodes/extract-list/records-path.ts
+  var WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH = "result.extracted";
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/definitions.js
+  function adaptBuiltinAutomationNodeDefinition(definition) {
+    return {
+      schemaVersion: "0.1",
+      id: definition.id,
+      version: "1.0.0",
+      label: definition.label,
+      description: definition.description,
+      category: definition.class === "routine" ? "flow" : definition.class,
+      source: { kind: "builtin", implementationKey: definition.implementationKey },
+      availability: { kind: "both" },
+      capabilities: builtinCapabilities(definition),
+      ...definition.privileged ? { safety: { privileged: true } } : {},
+      inputs: definition.inputs,
+      outputs: definition.outputs,
+      parameters: definition.parameters,
+      ...definition.icon !== void 0 ? { icon: definition.icon } : {},
+      ...definition.tags !== void 0 ? { tags: definition.tags } : {},
+      legacyScope: definition.scope
+    };
+  }
+  function builtinCapabilities(definition) {
+    return {
+      executable: true,
+      ...definition.class === "policy" ? { stateAware: true, recoverable: true } : {},
+      ...definition.class === "timing" ? { asynchronous: true, retryable: true } : {},
+      ...definition.class === "routine" ? { composite: true } : {}
+    };
+  }
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/shared/definition.js
+  function defineBuiltinNode(definition) {
+    const normalized = normalizeVisualPorts(definition);
+    return {
+      ...normalized,
+      origin: "builtin",
+      implementationKey: definition.implementationKey ?? definition.id
+    };
+  }
+  function normalizeVisualPorts(definition) {
+    const inputs = normalizeVisualInputs(definition);
+    const outputs = normalizeVisualOutputs(definition);
+    return { ...definition, inputs, outputs };
+  }
+  function normalizeVisualInputs(definition) {
+    const inputs = definition.inputs.map((port) => normalizePortRole(port, "target"));
+    if (definition.id === "builtin.control.start")
+      return inputs;
+    if (inputs.some((port) => port.id === "in" || port.role === "control"))
+      return inputs;
+    return [controlInput(), ...inputs];
+  }
+  function normalizeVisualOutputs(definition) {
+    if (definition.id === "builtin.control.end")
+      return definition.outputs.map((port) => normalizePortRole(port, "source"));
+    const outputs = definition.outputs.map((port) => normalizePortRole(port, "source"));
+    if (outputs.some((port) => port.role === "branch"))
+      return outputs;
+    if (!outputs.some((port) => port.id === "success" || port.role === "success"))
+      outputs.unshift(successOutput());
+    if (!outputs.some((port) => port.id === "failed" || port.role === "failure")) {
+      const insertAt = outputs.some((port) => port.id === "success") ? 1 : outputs.length;
+      outputs.splice(insertAt, 0, failedOutput());
+    }
+    return outputs;
+  }
+  function normalizePortRole(port, direction) {
+    if (port.role)
+      return port;
+    if (port.id === "in")
+      return { ...port, role: "control" };
+    if (port.id === "success")
+      return { ...port, role: "success" };
+    if (port.id === "failed" || port.id === "failure")
+      return { ...port, role: "failure" };
+    if (port.id === "error")
+      return { ...port, role: "error" };
+    if (direction === "source" && ["true", "false", "body", "done", "case", "default", "approved", "rejected", "timeout", "recovered"].includes(port.id))
+      return { ...port, role: "branch" };
+    if (direction === "source")
+      return { ...port, role: "data" };
+    return port;
+  }
+  function emptyResult(outputs = {}) {
+    return { status: "success", route: "success", outputs };
+  }
+  function controlInput(label = "In") {
+    return { id: "in", label, valueType: "any", role: "control" };
+  }
+  function successOutput(label = "Success") {
+    return { id: "success", label, valueType: "any", role: "success" };
+  }
+  function failedOutput(label = "Failed") {
+    return { id: "failed", label, valueType: "any", role: "failure" };
+  }
+  function inputValue(context, id) {
+    return context.inputs[id] ?? context.parameters[id];
+  }
+  function numberValue2(value, fallback = 0) {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : fallback;
+  }
+  function booleanValue3(value) {
+    if (typeof value === "boolean")
+      return value;
+    if (typeof value === "number")
+      return value !== 0;
+    if (typeof value === "string")
+      return ["true", "yes", "1", "on"].includes(value.trim().toLowerCase());
+    return Boolean(value);
+  }
+  function arrayValue(value) {
+    return Array.isArray(value) ? value : [];
+  }
+  function stringValue2(value, fallback = "") {
+    if (value === void 0 || value === null)
+      return fallback;
+    return String(value);
+  }
+  function objectValue2(value) {
+    if (value && typeof value === "object" && !Array.isArray(value))
+      return value;
+    return {};
+  }
+  function getPathValue(source, path) {
+    const parts2 = stringValue2(path).split(".").map((part) => part.trim()).filter(Boolean);
+    let current = source;
+    for (const part of parts2) {
+      if (current && typeof current === "object" && part in current)
+        current = current[part];
+      else
+        return void 0;
+    }
+    return current;
+  }
+  function compareBasic(left, right, operator) {
+    switch (stringValue2(operator, "equals")) {
+      case "not-equals":
+        return left !== right;
+      case "greater-than":
+        return numberValue2(left) > numberValue2(right);
+      case "greater-than-or-equal":
+        return numberValue2(left) >= numberValue2(right);
+      case "less-than":
+        return numberValue2(left) < numberValue2(right);
+      case "less-than-or-equal":
+        return numberValue2(left) <= numberValue2(right);
+      case "contains":
+        return String(left ?? "").includes(String(right ?? ""));
+      case "starts-with":
+        return String(left ?? "").startsWith(String(right ?? ""));
+      case "ends-with":
+        return String(left ?? "").endsWith(String(right ?? ""));
+      case "exists":
+        return left !== void 0 && left !== null && left !== "";
+      case "equals":
+      default:
+        return left === right;
+    }
+  }
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/control-flow/shared.js
+  function routeFromCondition(context, trueRoute = "true", falseRoute = "false") {
+    return booleanValue3(context.inputs.condition ?? context.parameters.condition) ? trueRoute : falseRoute;
+  }
+  function maxIterations(context) {
+    return Math.max(0, Math.floor(numberValue2(context.parameters.maxIterations, 25)));
+  }
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/control-flow/branch.js
+  var branchNode = defineBuiltinNode({
+    id: "builtin.control.branch",
+    label: "Branch",
+    description: "Choose one of two paths from a yes/no condition.",
+    class: "control-flow",
+    scope: "both",
+    inputs: [{ id: "condition", label: "Condition", valueType: "boolean", required: true }],
+    outputs: [
+      { id: "true", label: "True", valueType: "any" },
+      { id: "false", label: "False", valueType: "any" }
+    ],
+    parameters: [
+      { id: "invert", label: "Swap Yes and No paths", description: "When enabled, true goes to No and false goes to Yes.", valueType: "boolean", defaultValue: false }
+    ],
+    icon: "git-branch",
+    execute: (context) => {
+      const route = routeFromCondition(context, "true", "false");
+      const finalRoute = context.parameters.invert === true ? route === "true" ? "false" : "true" : route;
+      return { status: "success", route: String(finalRoute), outputs: {} };
+    }
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/control-flow/end.js
+  var endNode = defineBuiltinNode({
+    id: "builtin.control.end",
+    label: "End",
+    description: "Terminal point for a policy or routine graph.",
+    class: "control-flow",
+    scope: "both",
+    inputs: [{ id: "in", label: "In", valueType: "any" }],
+    outputs: [],
+    parameters: [
+      {
+        id: "resultStatus",
+        label: "Final result",
+        description: "How this policy or routine should be marked when execution reaches this End node.",
+        valueType: "string",
+        defaultValue: "success",
+        options: [
+          { label: "Success", value: "success" },
+          { label: "Failed", value: "failed" },
+          { label: "Skipped", value: "skipped" }
+        ]
+      },
+      { id: "message", label: "End note", description: "Optional text saved with the final result.", valueType: "string", defaultValue: "", ui: { control: "textarea", placeholder: "Optional note for this ending" } }
+    ],
+    icon: "circle-stop",
+    execute: (context) => ({ status: context.parameters.resultStatus === "failed" ? "failed" : context.parameters.resultStatus === "skipped" ? "skipped" : "success", route: "end", outputs: { message: context.parameters.message ?? "" } })
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/control-flow/for-each.js
+  var DEFAULT_MAX_ITERATIONS = 100;
+  var MAX_ITERATIONS_CEILING = 1e4;
+  var forEachNode = defineBuiltinNode({
+    id: "builtin.control.for-each",
+    label: "For Each",
+    description: "Run a section once for every item in a list.",
+    class: "control-flow",
+    scope: "both",
+    inputs: [{ id: "items", label: "Items", valueType: "array", required: true }],
+    outputs: [
+      { id: "body", label: "Each item", valueType: "any" },
+      { id: "done", label: "Done", valueType: "any" },
+      { id: "item", label: "Item", valueType: "any" },
+      { id: "index", label: "Index", valueType: "number" },
+      { id: "count", label: "Count", valueType: "number" }
+    ],
+    parameters: [
+      {
+        id: "maxIterations",
+        label: "Maximum items",
+        description: "Safety limit: a list with more items than this fails instead of running. At most 10,000.",
+        valueType: "number",
+        defaultValue: DEFAULT_MAX_ITERATIONS,
+        constraints: { minimum: 1, maximum: MAX_ITERATIONS_CEILING, integer: true }
+      },
+      {
+        id: "maxStepsPerIteration",
+        label: "Steps per item",
+        description: "How many more steps the run may take for each item. A whole run stops at 100,000 steps.",
+        valueType: "number",
+        defaultValue: 50,
+        // The executor reads the authored value to grant the steps, before any binding could be resolved.
+        allowStateBinding: false,
+        constraints: { minimum: 1, integer: true }
+      }
+    ],
+    icon: "repeat",
+    execute: (context) => forEachPass(context)
+  });
+  function forEachPass(context) {
+    const { iteration } = context;
+    if (!iteration)
+      return failedPass("for_each.iteration_unavailable", "blocked_by_capability_or_policy", "For Each runs only inside a Flow run, which keeps its place in the list.");
+    let state = iteration.get();
+    if (!state) {
+      const items = context.inputs.items;
+      if (!Array.isArray(items))
+        return failedPass("for_each.items_invalid", "graph_validation_or_unknown_node", "For Each needs a list in Items.");
+      const limit = maxIterations2(context);
+      if (items.length > limit)
+        return failedPass("for_each.max_iterations_exceeded", "blocked_by_capability_or_policy", `For Each was given ${items.length} items, more than its limit of ${limit}.`);
+      state = { items, index: 0 };
+    }
+    const count3 = state.items.length;
+    if (state.index < count3) {
+      const index = state.index;
+      iteration.set({ items: state.items, index: index + 1 });
+      return { status: "success", route: "body", outputs: { item: state.items[index] ?? null, index, count: count3 } };
+    }
+    iteration.set();
+    return { status: "success", route: "done", outputs: { count: count3 } };
+  }
+  function maxIterations2(context) {
+    const authored = Math.floor(numberValue2(context.parameters.maxIterations, DEFAULT_MAX_ITERATIONS));
+    return Math.min(MAX_ITERATIONS_CEILING, Math.max(1, authored));
+  }
+  function failedPass(code, category, message) {
+    return { status: "failed", route: "failed", outputs: {}, message, failure: { category, code, retryable: false } };
+  }
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/control-flow/loop.js
+  var loopNode = defineBuiltinNode({
+    id: "builtin.control.loop",
+    label: "Loop",
+    description: "Repeat a section while a condition is still true.",
+    class: "control-flow",
+    scope: "routine",
+    inputs: [{ id: "condition", label: "Condition", valueType: "boolean", required: true }],
+    outputs: [
+      { id: "body", label: "Repeat", valueType: "any" },
+      { id: "done", label: "Done", valueType: "any" }
+    ],
+    parameters: [
+      { id: "maxIterations", label: "Maximum repeats", description: "Safety limit for how many times this loop may run.", valueType: "number", defaultValue: 25 },
+      { id: "startIndex", label: "Starting count", description: "The first count value exposed to the loop body.", valueType: "number", defaultValue: 0 },
+      { id: "increment", label: "Count by", description: "How much the loop count changes after each repeat.", valueType: "number", defaultValue: 1 }
+    ],
+    icon: "repeat",
+    execute: (context) => ({ status: "success", route: routeFromCondition(context, "body", "done"), outputs: { maxIterations: maxIterations(context), startIndex: context.parameters.startIndex ?? 0, increment: context.parameters.increment ?? 1 } })
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/control-flow/merge.js
+  var mergeNode = defineBuiltinNode({
+    id: "builtin.control.merge",
+    label: "Merge",
+    description: "Join several branches back into one path.",
+    class: "control-flow",
+    scope: "routine",
+    inputs: [{ id: "branches", label: "Branches", valueType: "any", multiple: true }],
+    outputs: [{ id: "next", label: "Next", valueType: "any" }],
+    parameters: [
+      {
+        id: "mergeMode",
+        label: "When to continue",
+        description: "Choose whether this node continues after the first branch finishes, after all branches finish, or only with successful branch results.",
+        valueType: "string",
+        defaultValue: "first",
+        options: [
+          { label: "As soon as one branch finishes", value: "first" },
+          { label: "After every branch finishes", value: "all" },
+          { label: "After successful branches only", value: "successful" }
+        ]
+      }
+    ],
+    icon: "merge",
+    execute: (context) => emptyResult({ next: context.inputs.branches ?? null, mergeMode: context.parameters.mergeMode ?? "first" })
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/control-flow/parallel.js
+  var parallelNode = defineBuiltinNode({
+    id: "builtin.control.parallel",
+    label: "Parallel",
+    description: "Start multiple branches at the same time.",
+    class: "control-flow",
+    scope: "routine",
+    inputs: [{ id: "in", label: "In", valueType: "any" }],
+    outputs: [{ id: "branches", label: "Branches", valueType: "any", multiple: true }],
+    parameters: [
+      { id: "branchCount", label: "Number of branches", description: "How many parallel paths this node should create.", valueType: "number", defaultValue: 2 },
+      {
+        id: "failureMode",
+        label: "If one branch fails",
+        description: "Choose whether the routine stops immediately or waits to collect every branch result.",
+        valueType: "string",
+        defaultValue: "fail-fast",
+        options: [
+          { label: "Stop the others", value: "fail-fast" },
+          { label: "Wait for all results", value: "collect-all" }
+        ]
+      }
+    ],
+    icon: "workflow",
+    execute: (context) => emptyResult({ branches: context.inputs.in ?? null, branchCount: context.parameters.branchCount ?? 2, failureMode: context.parameters.failureMode ?? "fail-fast" })
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/control-flow/start.js
+  var startNode = defineBuiltinNode({
+    id: "builtin.control.start",
+    label: "Start",
+    description: "Entry point for a policy or routine graph.",
+    class: "control-flow",
+    scope: "both",
+    inputs: [],
+    outputs: [{ id: "next", label: "Next", valueType: "any" }],
+    parameters: [
+      { id: "label", label: "Start label", description: "Friendly name shown for this run entry.", valueType: "string", defaultValue: "Start", ui: { control: "text", placeholder: "Start label" } },
+      { id: "emitTimestamp", label: "Include start time", description: "Attach the current time to the value sent from this node.", valueType: "boolean", defaultValue: true }
+    ],
+    icon: "play",
+    execute: (context) => emptyResult({ next: true, label: context.parameters.label ?? "Start", startedAt: context.parameters.emitTimestamp === false ? null : context.now?.() ?? Date.now() })
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/control-flow/switch.js
+  var switchNode = defineBuiltinNode({
+    id: "builtin.control.switch",
+    label: "Switch",
+    description: "Choose a path by matching one value against a list of cases.",
+    class: "control-flow",
+    scope: "both",
+    inputs: [{ id: "value", label: "Value", valueType: "any", required: true }],
+    outputs: [
+      { id: "case", label: "Cases", valueType: "any", multiple: true },
+      { id: "default", label: "Default", valueType: "any" },
+      { id: "value", label: "Matched value", valueType: "any" }
+    ],
+    parameters: [
+      { id: "cases", label: "Case list", description: "Values to match. Each item can include a value and optional route name.", valueType: "array", defaultValue: [] },
+      { id: "caseSensitive", label: "Match capitalization exactly", description: "When disabled, text like Ready and ready are treated the same.", valueType: "boolean", defaultValue: true },
+      {
+        id: "matchMode",
+        label: "How to match",
+        description: "Equals requires an exact match. Contains matches when the input text includes the case text.",
+        valueType: "string",
+        defaultValue: "equals",
+        options: [
+          { label: "Equals", value: "equals" },
+          { label: "Contains", value: "contains" }
+        ]
+      }
+    ],
+    icon: "split",
+    execute: (context) => {
+      const cases = Array.isArray(context.parameters.cases) ? context.parameters.cases : [];
+      const value = context.parameters.caseSensitive === false ? String(context.inputs.value ?? "").toLowerCase() : context.inputs.value;
+      const match = cases.find((item) => {
+        if (!(typeof item === "object" && item !== null && "value" in item))
+          return false;
+        const candidate = context.parameters.caseSensitive === false ? String(item.value ?? "").toLowerCase() : item.value;
+        return context.parameters.matchMode === "contains" ? String(value ?? "").includes(String(candidate ?? "")) : candidate === value;
+      });
+      return { status: "success", route: match ? "case" : "default", outputs: { value: context.inputs.value ?? null, matched: match ?? null } };
+    }
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/control-flow/index.js
+  var controlFlowNodes = [startNode, endNode, branchNode, switchNode, parallelNode, mergeNode, loopNode, forEachNode];
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/data/constant.js
+  var constantNode = defineBuiltinNode({
+    id: "builtin.data.constant",
+    label: "Constant",
+    description: "Provide a fixed value to the graph.",
+    class: "data",
+    scope: "both",
+    inputs: [],
+    outputs: [{ id: "value", label: "Value", valueType: "any" }],
+    parameters: [
+      { id: "value", label: "Value to send", description: "The fixed value this node outputs every time it runs.", valueType: "any", defaultValue: null, ui: { control: "value" } },
+      {
+        id: "valueLabel",
+        label: "Display name",
+        description: "Friendly label shown on the node for this constant.",
+        valueType: "string",
+        defaultValue: "Constant",
+        ui: { control: "text", placeholder: "Display name" }
+      }
+    ],
+    icon: "braces",
+    execute: (context) => emptyResult({ value: context.parameters.value ?? null })
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/data/filter-list.js
+  var filterListNode = defineBuiltinNode({
+    id: "builtin.data.filter-list",
+    label: "Filter List",
+    description: "Keep only list items that match a simple rule.",
+    class: "data",
+    scope: "both",
+    inputs: [{ id: "items", label: "Items", valueType: "array", required: true }],
+    outputs: [{ id: "items", label: "Items", valueType: "array" }],
+    parameters: [
+      { id: "path", label: "Field to check", description: "Optional field inside each item, such as status or user.name. Leave blank to check the whole item.", valueType: "string", defaultValue: "", ui: { control: "path", placeholder: "field.path" } },
+      {
+        id: "operator",
+        label: "Match rule",
+        description: "How each item is compared with the value below.",
+        valueType: "string",
+        defaultValue: "exists",
+        options: [
+          { label: "Field exists", value: "exists" },
+          { label: "Equals", value: "equals" },
+          { label: "Does not equal", value: "not-equals" },
+          { label: "Greater than", value: "greater-than" },
+          { label: "Less than", value: "less-than" },
+          { label: "Contains", value: "contains" }
+        ]
+      },
+      { id: "value", label: "Value to compare", description: "The value each item is checked against.", valueType: "any", defaultValue: null, ui: { control: "value" } },
+      {
+        id: "onInvalid",
+        label: "If the field is missing",
+        description: "Choose whether items with no matching field should stay in the list.",
+        valueType: "string",
+        defaultValue: "exclude",
+        options: [
+          { label: "Remove item", value: "exclude" },
+          { label: "Keep item", value: "include" }
+        ]
+      }
+    ],
+    icon: "list-filter",
+    execute: (context) => {
+      const items = arrayValue(context.inputs.items);
+      const path = context.parameters.path;
+      const filtered = items.filter((item) => {
+        const left = path ? getPathValue(item, path) : item;
+        const result = compareBasic(left, context.parameters.value, context.parameters.operator);
+        return result || left === void 0 && context.parameters.onInvalid === "include";
+      });
+      return emptyResult({ items: filtered });
+    }
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/data/shared.js
+  function variableName(value) {
+    return String(value ?? "").trim();
+  }
+  function readVariable(variables, name) {
+    return variables?.get(name) ?? null;
+  }
+  function writeVariable(variables, name, value) {
+    variables?.set(name, value);
+  }
+  function keptJsonValue(value) {
+    if (value === void 0)
+      return null;
+    if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean")
+      return value;
+    if (Array.isArray(value)) {
+      let changed = false;
+      const items = value.map((item) => {
+        const kept = keptJsonValue(item);
+        if (kept !== item)
+          changed = true;
+        return kept;
+      });
+      return changed ? items : value;
+    }
+    if (typeof value === "object") {
+      let changed = false;
+      const record = {};
+      for (const [key, item] of Object.entries(value)) {
+        const kept = keptJsonValue(item);
+        if (kept !== item)
+          changed = true;
+        record[key] = kept;
+      }
+      return changed ? record : value;
+    }
+    return String(value);
+  }
+  function setKeptPathValue(source, path, value) {
+    const parts2 = String(path ?? "").split(".").map((part) => part.trim()).filter(Boolean);
+    if (!parts2.length)
+      return source;
+    const next = { ...source };
+    let cursor = next;
+    for (const part of parts2.slice(0, -1)) {
+      const existing = cursor[part];
+      const child2 = existing && typeof existing === "object" && !Array.isArray(existing) ? { ...existing } : {};
+      cursor[part] = child2;
+      cursor = child2;
+    }
+    cursor[parts2[parts2.length - 1]] = keptJsonValue(value);
+    return next;
+  }
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/data/get-variable.js
+  var getVariableNode = defineBuiltinNode({
+    id: "builtin.data.get-variable",
+    label: "Get Variable",
+    description: "Read a named runtime variable.",
+    class: "data",
+    scope: "both",
+    inputs: [],
+    outputs: [{ id: "value", label: "Value", valueType: "any" }],
+    parameters: [
+      { id: "name", label: "Variable name", description: "The saved workflow value to read.", valueType: "string", required: true, ui: { control: "reference", referenceType: "variable", placeholder: "variableName" } },
+      { id: "defaultValue", label: "If variable is missing", description: "Value to use when the variable has not been set yet.", valueType: "any", defaultValue: null, ui: { control: "value" } },
+      { id: "required", label: "Fail when missing", description: "When enabled, a missing variable sends execution to the failed path.", valueType: "boolean", defaultValue: false }
+    ],
+    icon: "database",
+    execute: (context) => {
+      const name = variableName(context.parameters.name);
+      const value = readVariable(context.variables, name);
+      if (value === null && context.parameters.required === true)
+        return { status: "failed", route: "failed", outputs: { value: context.parameters.defaultValue ?? null } };
+      return emptyResult({ value: value ?? context.parameters.defaultValue ?? null });
+    }
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/data/map-object.js
+  var mapObjectNode = defineBuiltinNode({
+    id: "builtin.data.map-object",
+    label: "Map Object",
+    description: "Create or reshape fields on an object.",
+    class: "data",
+    scope: "both",
+    inputs: [{ id: "object", label: "Object", valueType: "object", required: true }],
+    outputs: [{ id: "object", label: "Object", valueType: "object" }],
+    parameters: [
+      { id: "mapping", label: "Field changes", description: "Fields to add, pick, or rename depending on the selected mode.", valueType: "object", defaultValue: {} },
+      {
+        id: "mode",
+        label: "How to change the object",
+        description: "Choose whether to add fields, keep selected fields, or copy values into new field paths.",
+        valueType: "string",
+        defaultValue: "merge",
+        options: [
+          { label: "Add or replace fields", value: "merge" },
+          { label: "Keep only selected fields", value: "pick" },
+          { label: "Copy fields to new names", value: "rename" }
+        ]
+      }
+    ],
+    icon: "file-json",
+    execute: (context) => {
+      const source = objectValue2(context.inputs.object);
+      const mapping = objectValue2(context.parameters.mapping);
+      if (context.parameters.mode === "pick") {
+        return emptyResult({ object: Object.fromEntries(Object.entries(mapping).map(([target, path]) => [target, getPathValue(source, path)])) });
+      }
+      if (context.parameters.mode === "rename") {
+        let next = { ...source };
+        for (const [target, path] of Object.entries(mapping))
+          next = setKeptPathValue(next, target, getPathValue(source, path));
+        return emptyResult({ object: next });
+      }
+      return emptyResult({ object: { ...source, ...mapping } });
+    }
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/data/set-variable.js
+  var setVariableNode = defineBuiltinNode({
+    id: "builtin.data.set-variable",
+    label: "Set Variable",
+    description: "Write a named runtime variable.",
+    class: "data",
+    scope: "both",
+    inputs: [{ id: "value", label: "Value", valueType: "any", required: true }],
+    outputs: [{ id: "next", label: "Next", valueType: "any" }],
+    parameters: [
+      { id: "name", label: "Variable name", description: "The saved workflow value to create or update.", valueType: "string", required: true, ui: { control: "reference", referenceType: "variable", placeholder: "variableName" } },
+      {
+        id: "writeMode",
+        label: "How to save the value",
+        description: "Choose whether to replace the old value, merge object fields, or append to a list.",
+        valueType: "string",
+        defaultValue: "replace",
+        options: [
+          { label: "Replace existing value", value: "replace" },
+          { label: "Merge into object", value: "merge-object" },
+          { label: "Add to list", value: "append-list" }
+        ]
+      }
+    ],
+    icon: "save",
+    execute: (context) => {
+      const name = variableName(context.parameters.name);
+      const current = context.variables?.get(name);
+      const incoming = keptJsonValue(context.inputs.value);
+      let value = incoming;
+      if (context.parameters.writeMode === "merge-object")
+        value = { ...typeof current === "object" && current && !Array.isArray(current) ? current : {}, ...typeof incoming === "object" && incoming && !Array.isArray(incoming) ? incoming : {} };
+      if (context.parameters.writeMode === "append-list")
+        value = [...Array.isArray(current) ? current : [], incoming];
+      writeVariable(context.variables, name, value);
+      return emptyResult({ next: value });
+    }
+  });
+
+  // ../../../!FluxIQ/packages/contracts/src/record-sets/output.ts
+  var AUTOMATION_STUDIO_RECORD_WRITE_MODES = Object.freeze(["append", "replace"]);
+  var AUTOMATION_STUDIO_RECORD_OUTPUT_LIMITS = Object.freeze({
+    /** Letters, digits, `.`, `_`, `:`, and `-`, 1-200 characters; `.` and `..` are refused. */
+    datasetIdPattern: /^[A-Za-z0-9._:-]{1,200}$/u,
+    labelMaxLength: 200,
+    /** Dot-separated segments of letters, digits, `_`, and `-`. */
+    recordsPathMaxLength: 200,
+    recordsPathMaxSegments: 8,
+    /** Rows kept from one capture when `maxRecords` is not set. */
+    maxRecordsDefault: 1e3,
+    /** The highest `maxRecords` a record output may set. */
+    maxRecordsCeiling: 1e4,
+    /** UTF-8 bytes of a row's JSON. A larger row is invalid. */
+    rowMaxBytes: 64 * 1024,
+    /** Nesting depth of a `json` cell. A deeper value is invalid. */
+    jsonCellMaxDepth: 32,
+    /** Rows stored per dataset per run; later rows are dropped and the dataset is marked truncated. */
+    maxRowsPerDatasetPerRun: 1e5
+  });
+
+  // ../../../!FluxIQ/packages/contracts/src/record-sets/is-plain-record.ts
+  function isPlainRecord(value) {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+  }
+
+  // ../../../!FluxIQ/packages/contracts/src/record-sets/schema.ts
+  var AUTOMATION_STUDIO_RECORD_VALUE_TYPES = Object.freeze(["string", "number", "boolean", "url", "datetime", "json"]);
+  var AUTOMATION_STUDIO_RECORD_FIELD_HANDLINGS = Object.freeze(["include", "exclude", "encrypt"]);
+  var AUTOMATION_STUDIO_RECORD_SCHEMA_LIMITS = Object.freeze({
+    maxFields: 200,
+    /** Letters, digits, `_`, and `-`, 1-100 characters. */
+    fieldIdPattern: /^[A-Za-z0-9_-]{1,100}$/u,
+    /** Ids that collide with object machinery when a row is read by key; refused. */
+    reservedFieldIds: Object.freeze(["__proto__", "constructor", "prototype"]),
+    labelMaxLength: 200
+  });
+
+  // ../../../!FluxIQ/packages/contracts/src/record-sets/parse-schema.ts
+  var SCHEMA_KEYS = /* @__PURE__ */ new Set(["schemaVersion", "fields", "primaryKey"]);
+  var FIELD_KEYS = /* @__PURE__ */ new Set(["id", "label", "valueType", "required", "handling"]);
+  var VALUE_TYPES = new Set(AUTOMATION_STUDIO_RECORD_VALUE_TYPES);
+  var HANDLINGS = new Set(AUTOMATION_STUDIO_RECORD_FIELD_HANDLINGS);
+  var RESERVED_FIELD_IDS = new Set(AUTOMATION_STUDIO_RECORD_SCHEMA_LIMITS.reservedFieldIds);
+  function parseAutomationStudioRecordSchema(value, options = {}) {
+    const allowEncrypt = options.allowEncrypt ?? false;
+    const issues = /* @__PURE__ */ new Set();
+    let schema;
+    try {
+      schema = parseSchema(value, allowEncrypt, issues);
+    } catch {
+      issues.add("record_schema.invalid");
+      schema = null;
+    }
+    if (schema === null || issues.size > 0) return { ok: false, issues: issues.size > 0 ? [...issues] : ["record_schema.invalid"] };
+    return { ok: true, schema };
+  }
+  function parseSchema(value, allowEncrypt, issues) {
+    if (!isPlainRecord(value)) {
+      issues.add("record_schema.not_object");
+      return null;
+    }
+    if (!Object.keys(value).every((key) => SCHEMA_KEYS.has(key))) issues.add("record_schema.unknown_key");
+    if (value.schemaVersion !== "0.1") issues.add("record_schema.invalid_schema_version");
+    const fields = parseFields(value.fields, allowEncrypt, issues);
+    const primaryKey = value.primaryKey === void 0 ? void 0 : parsePrimaryKey(value.primaryKey, fields, issues);
+    if (fields === null || primaryKey === null || issues.size > 0) return null;
+    const schema = { schemaVersion: "0.1", fields };
+    if (primaryKey !== void 0) schema.primaryKey = primaryKey;
+    return schema;
+  }
+  function parseFields(value, allowEncrypt, issues) {
+    if (!Array.isArray(value)) {
+      issues.add("record_schema.invalid_fields");
+      return null;
+    }
+    if (value.length === 0) {
+      issues.add("record_schema.no_fields");
+      return null;
+    }
+    if (value.length > AUTOMATION_STUDIO_RECORD_SCHEMA_LIMITS.maxFields) {
+      issues.add("record_schema.too_many_fields");
+      return null;
+    }
+    const ids = /* @__PURE__ */ new Set();
+    const labels = /* @__PURE__ */ new Set();
+    const fields = [];
+    let valid = true;
+    for (let index = 0; index < value.length; index += 1) {
+      const field = parseField(value[index], allowEncrypt, issues);
+      if (field === null) {
+        valid = false;
+        continue;
+      }
+      if (ids.has(field.id)) {
+        issues.add("record_schema.duplicate_field_id");
+        valid = false;
+      }
+      if (labels.has(field.label)) {
+        issues.add("record_schema.duplicate_field_label");
+        valid = false;
+      }
+      ids.add(field.id);
+      labels.add(field.label);
+      fields.push(field);
+    }
+    if (!valid) return null;
+    if (fields.every((field) => field.handling === "exclude")) {
+      issues.add("record_schema.no_stored_fields");
+      return null;
+    }
+    return fields;
+  }
+  function parseField(value, allowEncrypt, issues) {
+    if (!isPlainRecord(value)) {
+      issues.add("record_schema.invalid_field");
+      return null;
+    }
+    const found = [];
+    if (!Object.keys(value).every((key) => FIELD_KEYS.has(key))) found.push("record_schema.unknown_field_key");
+    const { id, label, valueType, required, handling } = value;
+    if (typeof id !== "string" || !AUTOMATION_STUDIO_RECORD_SCHEMA_LIMITS.fieldIdPattern.test(id)) found.push("record_schema.invalid_field_id");
+    else if (RESERVED_FIELD_IDS.has(id)) found.push("record_schema.reserved_field_id");
+    if (!isLabel(label)) found.push("record_schema.invalid_field_label");
+    if (!isValueType(valueType)) found.push("record_schema.invalid_value_type");
+    if (required !== void 0 && typeof required !== "boolean") found.push("record_schema.invalid_required");
+    if (handling !== void 0 && !isHandling(handling)) found.push("record_schema.invalid_handling");
+    if (handling === "encrypt" && !allowEncrypt) found.push("record_schema.encrypt_unavailable");
+    for (const issue of found) issues.add(issue);
+    if (found.length > 0 || typeof id !== "string" || !isLabel(label) || !isValueType(valueType)) return null;
+    const field = { id, label, valueType };
+    if (typeof required === "boolean") field.required = required;
+    if (isHandling(handling)) field.handling = handling;
+    return field;
+  }
+  function parsePrimaryKey(value, fields, issues) {
+    if (!Array.isArray(value) || value.length === 0 || value.length > AUTOMATION_STUDIO_RECORD_SCHEMA_LIMITS.maxFields || !value.every((item) => typeof item === "string")) {
+      issues.add("record_schema.invalid_primary_key");
+      return null;
+    }
+    if (fields === null) return null;
+    const byId = new Map(fields.map((field) => [field.id, field]));
+    const seen = /* @__PURE__ */ new Set();
+    let valid = true;
+    for (const id of value) {
+      const field = byId.get(id);
+      let issue = null;
+      if (seen.has(id)) issue = "record_schema.primary_key_duplicate_field";
+      else if (field === void 0) issue = "record_schema.primary_key_unknown_field";
+      else if (field.handling === "exclude") issue = "record_schema.primary_key_excluded_field";
+      else if (field.handling === "encrypt") issue = "record_schema.primary_key_encrypted_field";
+      if (issue !== null) {
+        issues.add(issue);
+        valid = false;
+      }
+      seen.add(id);
+    }
+    return valid ? [...value] : null;
+  }
+  function isLabel(value) {
+    return typeof value === "string" && value.trim().length > 0 && value.length <= AUTOMATION_STUDIO_RECORD_SCHEMA_LIMITS.labelMaxLength;
+  }
+  function isValueType(value) {
+    return typeof value === "string" && VALUE_TYPES.has(value);
+  }
+  function isHandling(value) {
+    return typeof value === "string" && HANDLINGS.has(value);
+  }
+
+  // ../../../!FluxIQ/packages/contracts/src/record-sets/records-path.ts
+  var SEGMENT_PATTERN = /^[A-Za-z0-9_-]{1,100}$/u;
+  var FORBIDDEN_SEGMENTS = /* @__PURE__ */ new Set(["__proto__", "constructor", "prototype"]);
+  function parseAutomationStudioRecordsPath(value) {
+    if (typeof value !== "string" || value.length === 0 || value.length > AUTOMATION_STUDIO_RECORD_OUTPUT_LIMITS.recordsPathMaxLength) return null;
+    const segments = value.split(".");
+    if (segments.length > AUTOMATION_STUDIO_RECORD_OUTPUT_LIMITS.recordsPathMaxSegments) return null;
+    for (const segment of segments) {
+      if (!SEGMENT_PATTERN.test(segment) || FORBIDDEN_SEGMENTS.has(segment)) return null;
+    }
+    return segments;
+  }
+
+  // ../../../!FluxIQ/packages/contracts/src/record-sets/parse-output.ts
+  var OUTPUT_KEYS = /* @__PURE__ */ new Set(["datasetId", "label", "recordsPath", "schema", "writeMode", "maxRecords"]);
+  var WRITE_MODES = new Set(AUTOMATION_STUDIO_RECORD_WRITE_MODES);
+  function parseAutomationStudioRecordOutput(value, options = {}) {
+    const issues = /* @__PURE__ */ new Set();
+    let output;
+    try {
+      output = parseOutput(value, options, issues);
+    } catch {
+      issues.add("record_output.invalid");
+      output = null;
+    }
+    if (output === null || issues.size > 0) return { ok: false, issues: issues.size > 0 ? [...issues] : ["record_output.invalid"] };
+    return { ok: true, output };
+  }
+  function parseOutput(value, options, issues) {
+    if (!isPlainRecord(value)) {
+      issues.add("record_output.not_object");
+      return null;
+    }
+    if (!Object.keys(value).every((key) => OUTPUT_KEYS.has(key))) issues.add("record_output.unknown_key");
+    const { datasetId, label, recordsPath, schema, writeMode, maxRecords } = value;
+    if (!isDatasetId(datasetId)) issues.add("record_output.invalid_dataset_id");
+    if (label !== void 0 && !isLabel2(label)) issues.add("record_output.invalid_label");
+    if (recordsPath === void 0) issues.add("record_output.missing_records_path");
+    else if (parseAutomationStudioRecordsPath(recordsPath) === null) issues.add("record_output.invalid_records_path");
+    if (!isWriteMode(writeMode)) issues.add("record_output.invalid_write_mode");
+    if (maxRecords !== void 0) {
+      if (typeof maxRecords !== "number" || !Number.isInteger(maxRecords) || maxRecords < 1) issues.add("record_output.invalid_max_records");
+      else if (maxRecords > AUTOMATION_STUDIO_RECORD_OUTPUT_LIMITS.maxRecordsCeiling) issues.add("record_output.max_records_above_ceiling");
+    }
+    const parsedSchema = parseAutomationStudioRecordSchema(schema, options);
+    if (!parsedSchema.ok) for (const issue of parsedSchema.issues) issues.add(issue);
+    if (issues.size > 0 || !parsedSchema.ok || !isDatasetId(datasetId) || typeof recordsPath !== "string" || !isWriteMode(writeMode)) return null;
+    const output = { datasetId, recordsPath, schema: parsedSchema.schema, writeMode };
+    if (typeof label === "string") output.label = label;
+    if (typeof maxRecords === "number") output.maxRecords = maxRecords;
+    return output;
+  }
+  function isDatasetId(value) {
+    return typeof value === "string" && value !== "." && value !== ".." && AUTOMATION_STUDIO_RECORD_OUTPUT_LIMITS.datasetIdPattern.test(value);
+  }
+  function isLabel2(value) {
+    return typeof value === "string" && value.trim().length > 0 && value.length <= AUTOMATION_STUDIO_RECORD_OUTPUT_LIMITS.labelMaxLength;
+  }
+  function isWriteMode(value) {
+    return typeof value === "string" && WRITE_MODES.has(value);
+  }
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/data/write-records.js
+  var WRITTEN_RECORDS_PATH = "records";
+  var ENCRYPT_UNAVAILABLE_ISSUE = "record_schema.encrypt_unavailable";
+  var writeRecordsNode = defineBuiltinNode({
+    id: "builtin.data.write-records",
+    label: "Write Records",
+    description: "Save a list of records to a table for this run.",
+    class: "data",
+    scope: "both",
+    inputs: [{ id: "records", label: "Records", valueType: "array", required: true }],
+    outputs: [{ id: "records", label: "Records", valueType: "array", role: "data" }],
+    parameters: [
+      {
+        id: "recordOutput",
+        label: "Save as table",
+        description: "The table these records are saved to, and which fields each record keeps. The records come from the Records input, so a records path is not used.",
+        valueType: "json",
+        defaultValue: null,
+        // A binding could replace the schema, and with it the excluded fields, at run time.
+        allowStateBinding: false,
+        ui: { control: "record-output" }
+      }
+    ],
+    icon: "database",
+    execute: (context) => writeRecords(context)
+  });
+  function writeRecords(context) {
+    const parsed = parseAutomationStudioRecordOutput(withWrittenRecordsPath(context.parameters.recordOutput));
+    if (!parsed.ok)
+      return invalidRecordOutput(parsed.issues);
+    return {
+      status: "success",
+      route: "success",
+      outputs: {},
+      effects: [{ type: "records.write", payload: { recordOutput: parsed.output, records: context.inputs.records ?? null } }]
+    };
+  }
+  function withWrittenRecordsPath(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      return value ?? null;
+    return { ...value, recordsPath: WRITTEN_RECORDS_PATH };
+  }
+  function invalidRecordOutput(issues) {
+    const encryptUnavailable = issues.includes(ENCRYPT_UNAVAILABLE_ISSUE);
+    const code = encryptUnavailable ? "record_output.encrypt_unavailable" : "record_output.invalid";
+    const failure = { category: "graph_validation_or_unknown_node", code, retryable: false };
+    return {
+      status: "failed",
+      route: "failed",
+      effects: [],
+      outputs: { error: { code, issues } },
+      message: encryptUnavailable ? "Write Records asks to encrypt a field, which is not available yet, so no records were saved." : "Write Records has no valid table to save to, so no records were saved.",
+      failure
+    };
+  }
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/data/index.js
+  var dataNodes = [constantNode, getVariableNode, setVariableNode, mapObjectNode, filterListNode, writeRecordsNode];
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/database/shared.js
+  function collectionName(value) {
+    return String(value ?? "").trim();
+  }
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/database/insert.js
+  var databaseInsertNode = defineBuiltinNode({
+    id: "builtin.database.insert",
+    label: "Create Record",
+    description: "Ask a host database adapter to create one record.",
+    class: "database",
+    scope: "both",
+    inputs: [{ id: "record", label: "Record", valueType: "object", required: true }],
+    outputs: [{ id: "record", label: "Record", valueType: "object" }],
+    parameters: [
+      { id: "collection", label: "Data table", description: "The saved record set/table where the new record should be created.", valueType: "string", required: true, ui: { control: "reference", referenceType: "database-collection", placeholder: "Choose a data table" } },
+      { id: "upsert", label: "Update matching record instead", description: "If a matching record already exists, update it instead of creating a duplicate.", valueType: "boolean", defaultValue: false },
+      { id: "conflictKey", label: "Match on field", description: "Field used to find an existing record when update-matching is enabled.", valueType: "string", defaultValue: "", ui: { control: "field", placeholder: "uniqueField" } },
+      { id: "returnRecord", label: "Return created record", description: "Send the created or updated record to the next node.", valueType: "boolean", defaultValue: true }
+    ],
+    icon: "file-input",
+    privileged: true,
+    execute: (context) => ({
+      status: "success",
+      route: "success",
+      outputs: { record: context.inputs.record ?? {} },
+      effects: [{ type: "database.insert.requested", payload: { collection: collectionName(context.parameters.collection), record: context.inputs.record ?? {}, upsert: context.parameters.upsert === true, conflictKey: context.parameters.conflictKey ?? "", returnRecord: context.parameters.returnRecord !== false } }]
+    })
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/database/query.js
+  var databaseQueryNode = defineBuiltinNode({
+    id: "builtin.database.query",
+    label: "Find Records",
+    description: "Ask a host database adapter to find records in a data table.",
+    class: "database",
+    scope: "both",
+    inputs: [],
+    outputs: [{ id: "records", label: "Records", valueType: "array" }],
+    parameters: [
+      { id: "collection", label: "Data table", description: "The saved record set/table to search.", valueType: "string", required: true, ui: { control: "reference", referenceType: "database-collection", placeholder: "Choose a data table" } },
+      { id: "where", label: "Only include records where", description: "Filter fields and values. Leave empty to include all records.", valueType: "object", defaultValue: {} },
+      { id: "limit", label: "Maximum records", description: "Largest number of records to return.", valueType: "number", defaultValue: 100 },
+      { id: "orderBy", label: "Sort by field", description: "Optional field used to sort the returned records.", valueType: "string", defaultValue: "", ui: { control: "field", placeholder: "fieldName" } },
+      {
+        id: "orderDirection",
+        label: "Sort direction",
+        description: "Choose whether lower values or higher values appear first.",
+        valueType: "string",
+        defaultValue: "asc",
+        options: [
+          { label: "Lowest first", value: "asc" },
+          { label: "Highest first", value: "desc" }
+        ]
+      }
+    ],
+    icon: "database",
+    execute: (context) => ({
+      status: "success",
+      route: "success",
+      outputs: { records: [] },
+      effects: [{ type: "database.query.requested", payload: { collection: collectionName(context.parameters.collection), where: context.parameters.where ?? {}, limit: context.parameters.limit ?? 100, orderBy: context.parameters.orderBy ?? "", orderDirection: context.parameters.orderDirection ?? "asc" } }]
+    })
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/database/update.js
+  var databaseUpdateNode = defineBuiltinNode({
+    id: "builtin.database.update",
+    label: "Update Records",
+    description: "Ask a host database adapter to update matching records.",
+    class: "database",
+    scope: "both",
+    inputs: [{ id: "patch", label: "Fields to change", valueType: "object", required: true }],
+    outputs: [{ id: "result", label: "Result", valueType: "object" }],
+    parameters: [
+      { id: "collection", label: "Data table", description: "The saved record set/table containing records to update.", valueType: "string", required: true, ui: { control: "reference", referenceType: "database-collection", placeholder: "Choose a data table" } },
+      { id: "where", label: "Only update records where", description: "Filter fields and values used to choose records. Be careful leaving this empty.", valueType: "object", defaultValue: {} },
+      { id: "limit", label: "Maximum records to update", description: "Safety limit for how many records this request may change.", valueType: "number", defaultValue: 1 },
+      { id: "dryRun", label: "Preview only", description: "When enabled, request a preview without actually changing records.", valueType: "boolean", defaultValue: false },
+      { id: "returnUpdated", label: "Return updated records", description: "Send updated records to the next node.", valueType: "boolean", defaultValue: true }
+    ],
+    icon: "database",
+    privileged: true,
+    execute: (context) => ({
+      status: "success",
+      route: "success",
+      outputs: { result: {} },
+      effects: [{ type: "database.update.requested", payload: { collection: collectionName(context.parameters.collection), where: context.parameters.where ?? {}, patch: context.inputs.patch ?? {}, limit: context.parameters.limit ?? 1, dryRun: context.parameters.dryRun === true, returnUpdated: context.parameters.returnUpdated !== false } }]
+    })
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/database/index.js
+  var databaseNodes = [databaseQueryNode, databaseInsertNode, databaseUpdateNode];
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/logic/shared.js
+  function compareValues(left, right, operator) {
+    return compareBasic(left, right, operator);
+  }
+  function everyBoolean(values) {
+    return values.every(booleanValue3);
+  }
+  function someBoolean(values) {
+    return values.some(booleanValue3);
+  }
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/logic/and.js
+  var andNode = defineBuiltinNode({
+    id: "builtin.logic.and",
+    label: "And",
+    description: "Return true when all input conditions are true.",
+    class: "logic",
+    scope: "both",
+    inputs: [{ id: "conditions", label: "Conditions", valueType: "boolean", required: true, multiple: true }],
+    outputs: [
+      { id: "true", label: "True", valueType: "any" },
+      { id: "false", label: "False", valueType: "any" },
+      { id: "result", label: "Result", valueType: "boolean" }
+    ],
+    parameters: [
+      {
+        id: "emptyBehavior",
+        label: "If no conditions arrive",
+        description: "Fallback result when this node receives no boolean inputs.",
+        valueType: "string",
+        defaultValue: "true",
+        options: [
+          { label: "Treat as true", value: "true" },
+          { label: "Treat as false", value: "false" }
+        ]
+      }
+    ],
+    icon: "ampersand",
+    execute: (context) => {
+      const conditions = arrayValue(context.inputs.conditions);
+      const result = conditions.length ? everyBoolean(conditions) : context.parameters.emptyBehavior !== "false";
+      return { status: "success", route: result ? "true" : "false", outputs: { result } };
+    }
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/logic/compare.js
+  var compareNode = defineBuiltinNode({
+    id: "builtin.logic.compare",
+    label: "Compare",
+    description: "Compare two values with a selected operator.",
+    class: "logic",
+    scope: "both",
+    inputs: [
+      { id: "left", label: "Left", valueType: "any", required: true },
+      { id: "right", label: "Right", valueType: "any", required: true }
+    ],
+    outputs: [
+      { id: "true", label: "True", valueType: "any" },
+      { id: "false", label: "False", valueType: "any" },
+      { id: "result", label: "Result", valueType: "boolean" }
+    ],
+    parameters: [
+      {
+        id: "operator",
+        label: "Operator",
+        description: "Choose how the left input should be checked against the right input or fallback value.",
+        valueType: "string",
+        defaultValue: "equals",
+        options: [
+          { value: "equals", label: "Equals" },
+          { value: "not-equals", label: "Does not equal" },
+          { value: "greater-than", label: "Greater than" },
+          { value: "greater-than-or-equal", label: "Greater than or equal" },
+          { value: "less-than", label: "Less than" },
+          { value: "less-than-or-equal", label: "Less than or equal" },
+          { value: "contains", label: "Contains" },
+          { value: "starts-with", label: "Starts with" },
+          { value: "ends-with", label: "Ends with" },
+          { value: "exists", label: "Exists" }
+        ]
+      },
+      { id: "rightDefault", label: "Fallback comparison value", description: "Used when nothing is connected to the Right input.", valueType: "any", defaultValue: null, ui: { control: "value" } },
+      { id: "caseSensitive", label: "Match capitalization exactly", description: "When disabled, text comparisons ignore capitalization.", valueType: "boolean", defaultValue: true }
+    ],
+    icon: "equal",
+    execute: (context) => {
+      const caseSensitive = context.parameters.caseSensitive !== false;
+      const left = !caseSensitive && typeof context.inputs.left === "string" ? context.inputs.left.toLowerCase() : context.inputs.left;
+      const rawRight = context.inputs.right ?? context.parameters.rightDefault;
+      const right = !caseSensitive && typeof rawRight === "string" ? rawRight.toLowerCase() : rawRight;
+      const result = compareValues(left, right, String(context.parameters.operator ?? "equals"));
+      return { status: "success", route: result ? "true" : "false", outputs: { result } };
+    }
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/logic/not.js
+  var notNode = defineBuiltinNode({
+    id: "builtin.logic.not",
+    label: "Not",
+    description: "Invert a boolean condition.",
+    class: "logic",
+    scope: "both",
+    inputs: [{ id: "condition", label: "Condition", valueType: "boolean", required: true }],
+    outputs: [
+      { id: "true", label: "True", valueType: "any" },
+      { id: "false", label: "False", valueType: "any" },
+      { id: "result", label: "Result", valueType: "boolean" }
+    ],
+    parameters: [{ id: "missingValue", label: "If condition is missing", description: "Boolean value to assume before this node flips it.", valueType: "boolean", defaultValue: false }],
+    icon: "badge-x",
+    execute: (context) => {
+      const value = context.inputs.condition === void 0 ? context.parameters.missingValue : context.inputs.condition;
+      const result = !booleanValue3(value);
+      return { status: "success", route: result ? "true" : "false", outputs: { result } };
+    }
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/logic/or.js
+  var orNode = defineBuiltinNode({
+    id: "builtin.logic.or",
+    label: "Or",
+    description: "Return true when any input condition is true.",
+    class: "logic",
+    scope: "both",
+    inputs: [{ id: "conditions", label: "Conditions", valueType: "boolean", required: true, multiple: true }],
+    outputs: [
+      { id: "true", label: "True", valueType: "any" },
+      { id: "false", label: "False", valueType: "any" },
+      { id: "result", label: "Result", valueType: "boolean" }
+    ],
+    parameters: [
+      {
+        id: "emptyBehavior",
+        label: "If no conditions arrive",
+        description: "Fallback result when this node receives no boolean inputs.",
+        valueType: "string",
+        defaultValue: "false",
+        options: [
+          { label: "Treat as false", value: "false" },
+          { label: "Treat as true", value: "true" }
+        ]
+      }
+    ],
+    icon: "list-tree",
+    execute: (context) => {
+      const conditions = arrayValue(context.inputs.conditions);
+      const result = conditions.length ? someBoolean(conditions) : context.parameters.emptyBehavior === "true";
+      return { status: "success", route: result ? "true" : "false", outputs: { result } };
+    }
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/logic/index.js
+  var logicNodes = [compareNode, andNode, orNode, notNode];
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/math/shared.js
+  var optionalPrecisionOptions = [
+    { label: "Do not round", value: "none" },
+    { label: "Whole number", value: "0" },
+    { label: "1 decimal place", value: "1" },
+    { label: "2 decimal places", value: "2" },
+    { label: "3 decimal places", value: "3" },
+    { label: "4 decimal places", value: "4" },
+    { label: "6 decimal places", value: "6" }
+  ];
+  var precisionOptions = optionalPrecisionOptions.filter((option) => option.value !== "none");
+  function binaryNumbers(context) {
+    return [numberValue2(context.inputs.left), numberValue2(context.inputs.right)];
+  }
+  function applyPrecision(value, precision) {
+    const places = Math.floor(numberValue2(precision, -1));
+    if (places < 0)
+      return value;
+    const multiplier = 10 ** Math.min(12, places);
+    return Math.round(value * multiplier) / multiplier;
+  }
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/math/add.js
+  var addNode = defineBuiltinNode({
+    id: "builtin.math.add",
+    label: "Add",
+    description: "Add two numeric values.",
+    class: "math",
+    scope: "both",
+    inputs: [
+      { id: "left", label: "Left", valueType: "number", required: true },
+      { id: "right", label: "Right", valueType: "number", required: true }
+    ],
+    outputs: [{ id: "result", label: "Result", valueType: "number" }],
+    parameters: [
+      { id: "offset", label: "Add after total", description: "Extra amount added after the two inputs are combined.", valueType: "number", defaultValue: 0 },
+      { id: "precision", label: "Round result to", description: "Optional rounding applied after the calculation.", valueType: "string", defaultValue: "none", options: optionalPrecisionOptions }
+    ],
+    icon: "calculator",
+    execute: (context) => {
+      const [left, right] = binaryNumbers(context);
+      return emptyResult({ result: applyPrecision(left + right + numberValue2(context.parameters.offset), context.parameters.precision) });
+    }
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/math/clamp.js
+  var clampNode = defineBuiltinNode({
+    id: "builtin.math.clamp",
+    label: "Clamp",
+    description: "Clamp a number between minimum and maximum bounds.",
+    class: "math",
+    scope: "both",
+    inputs: [{ id: "value", label: "Value", valueType: "number", required: true }],
+    outputs: [{ id: "result", label: "Result", valueType: "number" }],
+    parameters: [
+      { id: "min", label: "Lowest allowed value", description: "Numbers below this are raised to this value.", valueType: "number", defaultValue: 0 },
+      { id: "max", label: "Highest allowed value", description: "Numbers above this are lowered to this value.", valueType: "number", defaultValue: 1 }
+    ],
+    icon: "between-horizontal-start",
+    execute: (context) => {
+      const value = numberValue2(inputValue(context, "value"));
+      const min = numberValue2(context.parameters.min);
+      const max = numberValue2(context.parameters.max, 1);
+      return emptyResult({ result: Math.min(Math.max(value, Math.min(min, max)), Math.max(min, max)) });
+    }
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/math/divide.js
+  var divideNode = defineBuiltinNode({
+    id: "builtin.math.divide",
+    label: "Divide",
+    description: "Divide one numeric value by another.",
+    class: "math",
+    scope: "both",
+    inputs: [
+      { id: "left", label: "Left", valueType: "number", required: true },
+      { id: "right", label: "Right", valueType: "number", required: true }
+    ],
+    outputs: [{ id: "result", label: "Result", valueType: "number" }],
+    parameters: [
+      { id: "precision", label: "Round result to", description: "Optional rounding applied after division.", valueType: "string", defaultValue: "none", options: optionalPrecisionOptions },
+      {
+        id: "divideByZero",
+        label: "If dividing by zero",
+        description: "Choose what happens when the right input is zero.",
+        valueType: "string",
+        defaultValue: "fail",
+        options: [
+          { label: "Fail this path", value: "fail" },
+          { label: "Use fallback value", value: "fallback" },
+          { label: "Return empty value", value: "null" }
+        ]
+      },
+      { id: "fallback", label: "Fallback value", description: "Number to return when dividing by zero and fallback is selected.", valueType: "number", defaultValue: 0 }
+    ],
+    icon: "calculator",
+    execute: (context) => {
+      const [left, right] = binaryNumbers(context);
+      if (right === 0) {
+        if (context.parameters.divideByZero === "fallback")
+          return emptyResult({ result: numberValue2(context.parameters.fallback) });
+        if (context.parameters.divideByZero === "null")
+          return emptyResult({ result: null });
+        return { status: "failed", route: "failed", outputs: { result: null } };
+      }
+      return emptyResult({ result: applyPrecision(left / right, context.parameters.precision) });
+    }
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/math/multiply.js
+  var multiplyNode = defineBuiltinNode({
+    id: "builtin.math.multiply",
+    label: "Multiply",
+    description: "Multiply two numeric values.",
+    class: "math",
+    scope: "both",
+    inputs: [
+      { id: "left", label: "Left", valueType: "number", required: true },
+      { id: "right", label: "Right", valueType: "number", required: true }
+    ],
+    outputs: [{ id: "result", label: "Result", valueType: "number" }],
+    parameters: [{ id: "precision", label: "Round result to", description: "Optional rounding applied after multiplication.", valueType: "string", defaultValue: "none", options: optionalPrecisionOptions }],
+    icon: "calculator",
+    execute: (context) => {
+      const [left, right] = binaryNumbers(context);
+      return emptyResult({ result: applyPrecision(left * right, context.parameters.precision) });
+    }
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/math/round.js
+  var roundNode = defineBuiltinNode({
+    id: "builtin.math.round",
+    label: "Round",
+    description: "Round a numeric value to a configured precision.",
+    class: "math",
+    scope: "both",
+    inputs: [{ id: "value", label: "Value", valueType: "number", required: true }],
+    outputs: [{ id: "result", label: "Result", valueType: "number" }],
+    parameters: [
+      { id: "precision", label: "Decimal places to keep", description: "How many digits should remain after the decimal point.", valueType: "string", defaultValue: "0", options: precisionOptions },
+      {
+        id: "mode",
+        label: "Rounding method",
+        description: "Choose whether to round normally, always down, or always up.",
+        valueType: "string",
+        defaultValue: "nearest",
+        options: [
+          { label: "Nearest number", value: "nearest" },
+          { label: "Always down", value: "floor" },
+          { label: "Always up", value: "ceil" }
+        ]
+      }
+    ],
+    icon: "circle-dot",
+    execute: (context) => {
+      const precision = Math.max(0, Math.floor(numberValue2(context.parameters.precision)));
+      const multiplier = 10 ** precision;
+      const value = numberValue2(inputValue(context, "value")) * multiplier;
+      const rounded = context.parameters.mode === "floor" ? Math.floor(value) : context.parameters.mode === "ceil" ? Math.ceil(value) : Math.round(value);
+      return emptyResult({ result: rounded / multiplier });
+    }
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/math/subtract.js
+  var subtractNode = defineBuiltinNode({
+    id: "builtin.math.subtract",
+    label: "Subtract",
+    description: "Subtract one numeric value from another.",
+    class: "math",
+    scope: "both",
+    inputs: [
+      { id: "left", label: "Left", valueType: "number", required: true },
+      { id: "right", label: "Right", valueType: "number", required: true }
+    ],
+    outputs: [{ id: "result", label: "Result", valueType: "number" }],
+    parameters: [{ id: "precision", label: "Round result to", description: "Optional rounding applied after subtraction.", valueType: "string", defaultValue: "none", options: optionalPrecisionOptions }],
+    icon: "calculator",
+    execute: (context) => {
+      const [left, right] = binaryNumbers(context);
+      return emptyResult({ result: applyPrecision(left - right, context.parameters.precision) });
+    }
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/math/index.js
+  var mathNodes = [addNode, subtractNode, multiplyNode, divideNode, clampNode, roundNode];
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/policy/shared.js
+  function jsonParameter(value, fallback) {
+    if (value === void 0)
+      return fallback;
+    return value;
+  }
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/policy/action.js
+  var actionNode = defineBuiltinNode({
+    id: "builtin.policy.action",
+    label: "Run Output",
+    description: "Dispatch one importer-registered domain output.",
+    class: "policy",
+    scope: "policy",
+    inputs: [{ id: "ready", label: "Ready", valueType: "boolean" }],
+    outputs: [
+      { id: "success", label: "Success", valueType: "any" },
+      { id: "failed", label: "Failed", valueType: "any" },
+      { id: "records", label: "Records", valueType: "array", role: "data" }
+    ],
+    parameters: [
+      { id: "outputId", label: "Output to run", description: "Choose an importer-registered output node.", valueType: "string", required: true, ui: { control: "reference", referenceType: "action", placeholder: "Choose an output" } },
+      { id: "parameters", label: "Output payload", description: "Values passed to the selected output.", valueType: "object", defaultValue: {} },
+      { id: "confirmationInputId", label: "Confirmation input", description: "Action input stream that confirms the output occurred. Leave empty for no confirmation.", valueType: "string", defaultValue: "", ui: { control: "identifier", placeholder: "Registered action input ID" } },
+      { id: "confirmationTimeoutMs", label: "Confirmation timeout", description: "How long to wait for the confirmation input.", valueType: "number", defaultValue: 5e3 },
+      { id: "timeoutMs", label: "Give up after milliseconds", description: "Maximum time to wait before treating this action as failed.", valueType: "number", defaultValue: 5e3 },
+      { id: "requiresApproval", label: "Ask before running", description: "Require operator approval before this action executes.", valueType: "boolean", defaultValue: false },
+      {
+        id: "failureRoute",
+        label: "If the action fails",
+        description: "Usually failed. Success is available for intentionally ignoring errors.",
+        valueType: "string",
+        defaultValue: "failed",
+        options: [
+          { label: "Go to Failed", value: "failed" },
+          { label: "Continue as Success", value: "success" }
+        ]
+      },
+      {
+        id: "recordOutput",
+        label: "Save extracted records",
+        description: "Save the records this output returns as a table. Leave off to save none.",
+        valueType: "json",
+        defaultValue: null,
+        // A binding could replace the schema, and with it the excluded fields, at run time.
+        allowStateBinding: false,
+        ui: { control: "record-output" }
+      }
+    ],
+    icon: "zap",
+    privileged: true,
+    execute: (context) => {
+      const recordOutput = readRecordOutput(context.parameters.recordOutput);
+      if (!recordOutput.ok)
+        return recordOutputFailure(recordOutput.issues);
+      const payload = {
+        outputId: context.parameters.outputId ?? "",
+        parameters: jsonParameter(context.parameters.parameters, {}),
+        confirmationInputId: context.parameters.confirmationInputId ?? "",
+        confirmationTimeoutMs: context.parameters.confirmationTimeoutMs ?? 5e3,
+        timeoutMs: context.parameters.timeoutMs ?? 5e3,
+        requiresApproval: context.parameters.requiresApproval === true,
+        failureRoute: context.parameters.failureRoute ?? "failed"
+      };
+      if (recordOutput.output !== null)
+        payload.recordOutput = recordOutput.output;
+      return {
+        status: "success",
+        route: "success",
+        outputs: { success: true },
+        effects: [{ type: "policy.output.dispatch", payload }]
+      };
+    }
+  });
+  var ENCRYPT_UNAVAILABLE_ISSUE2 = "record_schema.encrypt_unavailable";
+  function readRecordOutput(value) {
+    if (value === void 0 || value === null)
+      return { ok: true, output: null };
+    return parseAutomationStudioRecordOutput(value);
+  }
+  function recordOutputFailure(issues) {
+    const encryptUnavailable = issues.includes(ENCRYPT_UNAVAILABLE_ISSUE2);
+    const code = encryptUnavailable ? "record_output.encrypt_unavailable" : "record_output.invalid";
+    const failure = {
+      category: "graph_validation_or_unknown_node",
+      code,
+      retryable: false,
+      stage: "dispatch"
+    };
+    return {
+      status: "failed",
+      route: "failed",
+      effects: [],
+      outputs: { error: { code, issues } },
+      message: encryptUnavailable ? "Save extracted records asks to encrypt a field, which is not available yet, so the output was not run." : "Save extracted records is not a valid record output, so the output was not run.",
+      failure
+    };
+  }
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/policy/expectation.js
+  var EXPECTATION_REJECTED_FAILURE = Object.freeze({
+    category: "expected_state_missing",
+    code: "core.policy.expectation_rejected",
+    retryable: true,
+    stage: "verification"
+  });
+  var expectationNode = defineBuiltinNode({
+    id: "builtin.policy.expectation",
+    label: "Expectation",
+    description: "Check whether expected task state is true after an action.",
+    class: "policy",
+    scope: "policy",
+    inputs: [{ id: "signals", label: "Signals", valueType: "signal", multiple: true }],
+    outputs: [
+      { id: "passed", label: "Passed", valueType: "boolean" },
+      { id: "failed", label: "Failed", valueType: "boolean" }
+    ],
+    parameters: [
+      { id: "conditions", label: "Expected conditions", description: "State checks this node should evaluate.", valueType: "array", defaultValue: [] },
+      {
+        id: "mode",
+        label: "Required matches",
+        description: "Choose whether every condition or just one condition must pass.",
+        valueType: "string",
+        defaultValue: "all",
+        options: [
+          { label: "All conditions must pass", value: "all" },
+          { label: "Any condition may pass", value: "any" }
+        ]
+      },
+      { id: "timeoutMs", label: "Wait up to milliseconds", description: "How long to wait for expected state to appear.", valueType: "number", defaultValue: 1e3 }
+    ],
+    icon: "list-checks",
+    execute: async (context) => {
+      const conditions = jsonParameter(context.parameters.conditions, []);
+      const mode = typeof context.parameters.mode === "string" ? context.parameters.mode : "all";
+      const timeoutMs = typeof context.parameters.timeoutMs === "number" ? context.parameters.timeoutMs : 1e3;
+      const effects = [{ type: "policy.expectation.checked", payload: { conditions, mode, timeoutMs } }];
+      const evaluation = await evaluateExpectation(context, conditions, mode, timeoutMs);
+      if (!evaluation || evaluation.passed) {
+        return { status: "success", route: "passed", outputs: { passed: true, failed: false }, effects };
+      }
+      return {
+        status: "failed",
+        route: "failed",
+        outputs: { passed: false, failed: true },
+        effects,
+        message: evaluation.message ?? "The host reported that the expected state does not hold.",
+        failure: evaluation.failure ?? { ...EXPECTATION_REJECTED_FAILURE }
+      };
+    }
+  });
+  async function evaluateExpectation(context, conditions, mode, timeoutMs) {
+    if (!context.expectationEvaluator)
+      return void 0;
+    return await context.expectationEvaluator(Array.isArray(conditions) ? conditions : [conditions], mode, timeoutMs, { source: "policy_node", ...context.signal ? { signal: context.signal } : {} });
+  }
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/policy/recovery.js
+  var recoveryNode = defineBuiltinNode({
+    id: "builtin.policy.recovery",
+    label: "Recovery",
+    description: "Choose how to recover after a failed task action.",
+    class: "policy",
+    scope: "policy",
+    inputs: [{ id: "failure", label: "Failure", valueType: "any" }],
+    outputs: [
+      { id: "recovered", label: "Recovered", valueType: "any" },
+      { id: "failed", label: "Failed", valueType: "any" }
+    ],
+    parameters: [
+      {
+        id: "strategy",
+        label: "Recovery strategy",
+        description: "What this policy should try after a failure.",
+        valueType: "string",
+        defaultValue: "retry",
+        options: [
+          { label: "Try the failed step again", value: "retry" },
+          { label: "Run a fallback action", value: "fallback-action" },
+          { label: "Stop this policy", value: "abort" }
+        ]
+      },
+      { id: "maxAttempts", label: "Maximum tries", description: "How many total attempts are allowed when retrying.", valueType: "number", defaultValue: 2 },
+      { id: "fallbackActionDefinitionId", label: "Fallback action", description: "Action to run when the fallback strategy is selected.", valueType: "string", defaultValue: "", ui: { control: "reference", referenceType: "action", placeholder: "Choose fallback action" } }
+    ],
+    icon: "shield-check",
+    execute: (context) => ({ status: "success", route: context.parameters.strategy === "abort" ? "failed" : "recovered", outputs: { recovered: context.inputs.failure ?? null, strategy: context.parameters.strategy ?? "retry", maxAttempts: context.parameters.maxAttempts ?? 2, fallbackActionDefinitionId: context.parameters.fallbackActionDefinitionId ?? "" } })
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/policy/index.js
+  var policyNodes = [actionNode, expectationNode, recoveryNode];
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/random/shared.js
+  function randomFloat(context) {
+    return context.random ? context.random() : Math.random();
+  }
+  function randomInRange(context) {
+    const min = numberValue2(context.parameters.min);
+    const max = numberValue2(context.parameters.max, 1);
+    const includeMax = context.parameters.includeMax === true;
+    const value = Math.min(min, max) + randomFloat(context) * Math.abs(max - min);
+    return includeMax ? Math.min(Math.max(min, max), value) : value;
+  }
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/random/jitter.js
+  var jitterNode = defineBuiltinNode({
+    id: "builtin.random.jitter",
+    label: "Jitter",
+    description: "Add bounded randomness to a numeric value.",
+    class: "random",
+    scope: "both",
+    inputs: [{ id: "value", label: "Value", valueType: "number", required: true }],
+    outputs: [{ id: "value", label: "Value", valueType: "number" }],
+    parameters: [
+      { id: "amount", label: "Maximum change", description: "Largest amount that can be randomly added or subtracted.", valueType: "number", defaultValue: 0.1 },
+      { id: "precision", label: "Round result to", description: "Optional rounding after jitter is applied.", valueType: "string", defaultValue: "none", options: optionalPrecisionOptions },
+      { id: "min", label: "Lowest allowed value", description: "Final value will not go below this number.", valueType: "number", defaultValue: -999999 },
+      { id: "max", label: "Highest allowed value", description: "Final value will not go above this number.", valueType: "number", defaultValue: 999999 }
+    ],
+    icon: "waves",
+    execute: (context) => {
+      const amount = Math.max(0, numberValue2(context.parameters.amount, 0.1));
+      const offset = (randomFloat(context) * 2 - 1) * amount;
+      const min = numberValue2(context.parameters.min, -999999);
+      const max = numberValue2(context.parameters.max, 999999);
+      const precision = Math.floor(numberValue2(context.parameters.precision, -1));
+      const raw = Math.min(Math.max(numberValue2(inputValue(context, "value")) + offset, Math.min(min, max)), Math.max(min, max));
+      if (precision >= 0) {
+        const multiplier = 10 ** Math.min(12, precision);
+        return emptyResult({ value: Math.round(raw * multiplier) / multiplier });
+      }
+      return emptyResult({ value: raw });
+    }
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/random/random-choice.js
+  var randomChoiceNode = defineBuiltinNode({
+    id: "builtin.random.choice",
+    label: "Random Choice",
+    description: "Select one value from a list.",
+    class: "random",
+    scope: "both",
+    inputs: [{ id: "choices", label: "Choices", valueType: "array", required: true }],
+    outputs: [{ id: "choice", label: "Choice", valueType: "any" }],
+    parameters: [
+      { id: "fallback", label: "If list is empty", description: "Value to return when there are no choices.", valueType: "any", defaultValue: null, ui: { control: "value" } },
+      { id: "allowEmpty", label: "Allow empty choices", description: "When disabled, an empty choice list makes this node fail.", valueType: "boolean", defaultValue: true }
+    ],
+    icon: "shuffle",
+    execute: (context) => {
+      const choices = arrayValue(context.inputs.choices);
+      if (!choices.length) {
+        if (context.parameters.allowEmpty === false)
+          return { status: "failed", route: "failed", outputs: { choice: context.parameters.fallback ?? null } };
+        return emptyResult({ choice: context.parameters.fallback ?? null });
+      }
+      return emptyResult({ choice: choices[Math.floor(randomFloat(context) * choices.length)] ?? context.parameters.fallback ?? null });
+    }
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/random/random-number.js
+  var randomNumberNode = defineBuiltinNode({
+    id: "builtin.random.number",
+    label: "Random Number",
+    description: "Produce a random number in a configured range.",
+    class: "random",
+    scope: "both",
+    inputs: [],
+    outputs: [{ id: "value", label: "Value", valueType: "number" }],
+    parameters: [
+      { id: "min", label: "Lowest possible number", description: "Start of the random range.", valueType: "number", defaultValue: 0 },
+      { id: "max", label: "Highest possible number", description: "End of the random range.", valueType: "number", defaultValue: 1 },
+      {
+        id: "mode",
+        label: "Number type",
+        description: "Choose whether to produce a decimal number or a whole number.",
+        valueType: "string",
+        defaultValue: "float",
+        options: [
+          { label: "Decimal number", value: "float" },
+          { label: "Whole number", value: "integer" }
+        ]
+      },
+      { id: "precision", label: "Decimal places to keep", description: "Only used for decimal numbers.", valueType: "string", defaultValue: "2", options: precisionOptions },
+      { id: "includeMax", label: "Include highest number", description: "Allow the random result to equal the highest possible number.", valueType: "boolean", defaultValue: false }
+    ],
+    icon: "dice-5",
+    execute: (context) => {
+      const value = randomInRange(context);
+      if (context.parameters.mode === "integer") {
+        const min = Math.ceil(numberValue2(context.parameters.min));
+        const max = Math.floor(numberValue2(context.parameters.max, 1));
+        const upper = context.parameters.includeMax === true ? max + 1 : max;
+        return emptyResult({ value: Math.floor(min + (context.random ? context.random() : Math.random()) * Math.max(1, upper - min)) });
+      }
+      const precision = Math.max(0, Math.min(12, Math.floor(numberValue2(context.parameters.precision, 2))));
+      const multiplier = 10 ** precision;
+      return emptyResult({ value: Math.round(value * multiplier) / multiplier });
+    }
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/random/weighted-choice.js
+  var weightedChoiceNode = defineBuiltinNode({
+    id: "builtin.random.weighted-choice",
+    label: "Weighted Choice",
+    description: "Select one value from weighted options.",
+    class: "random",
+    scope: "both",
+    inputs: [{ id: "choices", label: "Weighted choices", valueType: "array", required: true }],
+    outputs: [{ id: "choice", label: "Choice", valueType: "any" }],
+    parameters: [
+      { id: "defaultWeight", label: "Default chance weight", description: "Used for choices that do not provide their own weight.", valueType: "number", defaultValue: 1 },
+      { id: "fallback", label: "If no choice can be picked", description: "Value to return when the list is empty or all weights are zero.", valueType: "any", defaultValue: null, ui: { control: "value" } },
+      { id: "normalizeWeights", label: "Balance weights automatically", description: "Treat weights as relative chances instead of requiring them to add up to a specific total.", valueType: "boolean", defaultValue: true }
+    ],
+    icon: "scale",
+    execute: (context) => {
+      const choices = arrayValue(context.inputs.choices);
+      const defaultWeight = numberValue2(context.parameters.defaultWeight, 1);
+      const total = choices.reduce((sum, choice) => sum + Math.max(0, numberValue2(choice.weight, defaultWeight)), 0);
+      if (!choices.length || total <= 0)
+        return emptyResult({ choice: context.parameters.fallback ?? null });
+      let cursor = randomFloat(context) * total;
+      for (const choice of choices) {
+        cursor -= Math.max(0, numberValue2(choice.weight, defaultWeight));
+        if (cursor <= 0)
+          return emptyResult({ choice: choice.value ?? null });
+      }
+      return emptyResult({ choice: choices[0]?.value ?? context.parameters.fallback ?? null });
+    }
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/random/index.js
+  var randomNodes = [randomNumberNode, randomChoiceNode, weightedChoiceNode, jitterNode];
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/routine/approval.js
+  var approvalNode = defineBuiltinNode({
+    id: "builtin.routine.approval",
+    label: "Approval",
+    description: "Pause a routine until an operator approves or rejects it.",
+    class: "routine",
+    scope: "routine",
+    inputs: [{ id: "in", label: "In", valueType: "any" }],
+    outputs: [
+      { id: "approved", label: "Approved", valueType: "any" },
+      { id: "rejected", label: "Rejected", valueType: "any" }
+    ],
+    parameters: [
+      { id: "prompt", label: "Approval message", description: "Message shown to the operator who approves or rejects this step.", valueType: "string", defaultValue: "Approve this routine step?", ui: { control: "textarea", placeholder: "Approval message" } },
+      { id: "timeoutMs", label: "Auto-decide after milliseconds", description: "Use 0 to wait indefinitely.", valueType: "number", defaultValue: 0 },
+      {
+        id: "defaultRoute",
+        label: "If nobody responds",
+        description: "Route to use when the approval times out.",
+        valueType: "string",
+        defaultValue: "rejected",
+        options: [
+          { label: "Treat as rejected", value: "rejected" },
+          { label: "Treat as approved", value: "approved" }
+        ]
+      }
+    ],
+    icon: "badge-check",
+    execute: (context) => ({ status: "waiting", route: "approved", outputs: { approved: context.inputs.in ?? null, timeoutMs: context.parameters.timeoutMs ?? 0, defaultRoute: context.parameters.defaultRoute ?? "rejected" }, effects: [{ type: "routine.approval.requested", payload: { prompt: context.parameters.prompt ?? "", timeoutMs: context.parameters.timeoutMs ?? 0, defaultRoute: context.parameters.defaultRoute ?? "rejected" } }] })
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/routine/shared.js
+  function referenceId(value) {
+    return String(value ?? "").trim();
+  }
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/routine/subroutine.js
+  var subroutineNode = defineBuiltinNode({
+    id: "builtin.routine.subroutine",
+    label: "Subroutine",
+    description: "Run another routine as a reusable graph step.",
+    class: "routine",
+    scope: "routine",
+    inputs: [{ id: "in", label: "In", valueType: "any" }],
+    outputs: [
+      { id: "success", label: "Success", valueType: "any" },
+      { id: "failed", label: "Failed", valueType: "any" }
+    ],
+    parameters: [
+      { id: "routineId", label: "Routine to run", description: "Choose the saved routine this node should call.", valueType: "string", required: true, ui: { control: "reference", referenceType: "routine", placeholder: "Choose a routine" } },
+      { id: "inputs", label: "Values to pass in", description: "Input values made available to the called routine.", valueType: "object", defaultValue: {} },
+      {
+        id: "isolation",
+        label: "Context sharing",
+        description: "Choose whether the called routine can see the current routine's variables.",
+        valueType: "string",
+        defaultValue: "shared",
+        options: [
+          { label: "Share current variables", value: "shared" },
+          { label: "Use isolated variables", value: "isolated" }
+        ]
+      }
+    ],
+    icon: "boxes",
+    execute: (context) => ({
+      status: "success",
+      route: "success",
+      outputs: { success: context.inputs.in ?? null },
+      effects: [{ type: "routine.subroutine.requested", payload: { routineId: referenceId(context.parameters.routineId), inputs: context.parameters.inputs ?? {}, isolation: context.parameters.isolation ?? "shared" } }]
+    })
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/routine/task-policy.js
+  var taskPolicyNode = defineBuiltinNode({
+    id: "builtin.routine.task-policy",
+    label: "Run Task",
+    description: "Run a saved task policy from this routine.",
+    class: "routine",
+    scope: "routine",
+    inputs: [{ id: "in", label: "In", valueType: "any" }],
+    outputs: [
+      { id: "success", label: "Success", valueType: "any" },
+      { id: "failed", label: "Failed", valueType: "any" }
+    ],
+    parameters: [
+      { id: "taskId", label: "Task to run", description: "Choose the saved task this routine step should start.", valueType: "string", required: true, ui: { control: "reference", referenceType: "task", placeholder: "Choose a task" } },
+      { id: "policyId", label: "Specific policy version", description: "Optional override. Leave blank to use the task's default policy.", valueType: "string", defaultValue: "", ui: { control: "reference", referenceType: "policy", placeholder: "Default policy" } },
+      { id: "inputs", label: "Values to pass in", description: "Input values made available to the task.", valueType: "object", defaultValue: {} },
+      { id: "waitForCompletion", label: "Wait until task finishes", description: "When enabled, the routine pauses until this task reports success or failure.", valueType: "boolean", defaultValue: true }
+    ],
+    icon: "network",
+    execute: (context) => ({
+      status: "success",
+      route: "success",
+      outputs: { success: context.inputs.in ?? null },
+      effects: [{ type: "routine.task-policy.requested", payload: { taskId: referenceId(context.parameters.taskId), policyId: referenceId(context.parameters.policyId), inputs: context.parameters.inputs ?? {}, waitForCompletion: context.parameters.waitForCompletion !== false } }]
+    })
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/routine/index.js
+  var routineNodes = [taskPolicyNode, subroutineNode, approvalNode];
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/timing/shared.js
+  function durationMs(value, fallback) {
+    return Math.max(0, Math.floor(numberValue2(value, fallback)));
+  }
+  function durationFromUnit(value, unit, fallbackMs) {
+    const amount = numberValue2(value, fallbackMs);
+    if (unit === "seconds")
+      return durationMs(amount * 1e3, fallbackMs);
+    if (unit === "minutes")
+      return durationMs(amount * 6e4, fallbackMs);
+    return durationMs(amount, fallbackMs);
+  }
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/timing/debounce.js
+  var debounceNode = defineBuiltinNode({
+    id: "builtin.timing.debounce",
+    label: "Debounce",
+    description: "Continue only after a signal stops changing for a short time.",
+    class: "timing",
+    scope: "both",
+    inputs: [{ id: "signal", label: "Signal", valueType: "signal", required: true }],
+    outputs: [{ id: "stable", label: "Stable", valueType: "boolean" }],
+    parameters: [
+      { id: "windowMs", label: "Stable for milliseconds", description: "How long the signal must remain unchanged.", valueType: "number", defaultValue: 250 },
+      {
+        id: "edge",
+        label: "When to continue",
+        description: "Choose whether to continue at the start, end, or both sides of the stable window.",
+        valueType: "string",
+        defaultValue: "trailing",
+        options: [
+          { label: "After it stays stable", value: "trailing" },
+          { label: "Immediately, then wait", value: "leading" },
+          { label: "Both immediate and stable", value: "both" }
+        ]
+      }
+    ],
+    icon: "activity",
+    execute: (context) => emptyResult({ stable: Boolean(context.inputs.signal), windowMs: durationMs(context.parameters.windowMs, 250), edge: context.parameters.edge ?? "trailing" })
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/timing/retry.js
+  var retryNode = defineBuiltinNode({
+    id: "builtin.timing.retry",
+    label: "Retry",
+    description: "Retry a branch with bounded attempts and delay.",
+    class: "timing",
+    scope: "both",
+    inputs: [{ id: "in", label: "In", valueType: "any" }],
+    outputs: [
+      { id: "success", label: "Success", valueType: "any" },
+      { id: "failed", label: "Failed", valueType: "any" }
+    ],
+    parameters: [
+      { id: "attempts", label: "Maximum tries", description: "How many times this branch may be attempted.", valueType: "number", defaultValue: 3 },
+      { id: "delayMs", label: "Wait between tries", description: "Base delay in milliseconds before another attempt.", valueType: "number", defaultValue: 500 },
+      {
+        id: "backoff",
+        label: "Delay pattern",
+        description: "How the wait time changes after repeated failures.",
+        valueType: "string",
+        defaultValue: "fixed",
+        options: [
+          { label: "Same wait every time", value: "fixed" },
+          { label: "Increase steadily", value: "linear" },
+          { label: "Increase quickly", value: "exponential" }
+        ]
+      },
+      { id: "jitterMs", label: "Random extra wait", description: "Maximum random milliseconds added or subtracted from each delay.", valueType: "number", defaultValue: 0 }
+    ],
+    icon: "refresh-cw",
+    execute: (context) => emptyResult({ success: context.inputs.in ?? null, attempts: durationMs(context.parameters.attempts, 3), delayMs: durationMs(context.parameters.delayMs, 500), backoff: context.parameters.backoff ?? "fixed", jitterMs: durationMs(context.parameters.jitterMs, 0) })
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/timing/timeout.js
+  var timeoutNode = defineBuiltinNode({
+    id: "builtin.timing.timeout",
+    label: "Timeout",
+    description: "Fail or route when a branch takes too long.",
+    class: "timing",
+    scope: "both",
+    inputs: [{ id: "in", label: "In", valueType: "any" }],
+    outputs: [
+      { id: "success", label: "Success", valueType: "any" },
+      { id: "timeout", label: "Timeout", valueType: "any" }
+    ],
+    parameters: [
+      { id: "timeoutMs", label: "Give up after milliseconds", description: "Maximum time this branch may run before taking the timeout path.", valueType: "number", defaultValue: 5e3 },
+      { id: "timeoutRoute", label: "If time runs out", description: "Usually timeout. Success is available when waiting too long is acceptable.", valueType: "string", defaultValue: "timeout", options: [{ label: "Go to Timeout", value: "timeout" }, { label: "Continue as Success", value: "success" }] },
+      { id: "cancelOnTimeout", label: "Stop branch when time runs out", description: "Ask the runtime to cancel any still-running work in this branch.", valueType: "boolean", defaultValue: true }
+    ],
+    icon: "clock-alert",
+    execute: (context) => emptyResult({ success: context.inputs.in ?? null, timeoutMs: durationMs(context.parameters.timeoutMs, 5e3), timeoutRoute: context.parameters.timeoutRoute ?? "timeout", cancelOnTimeout: context.parameters.cancelOnTimeout !== false })
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/timing/wait.js
+  var waitNode = defineBuiltinNode({
+    id: "builtin.timing.wait",
+    label: "Wait",
+    description: "Pause execution for a fixed duration.",
+    class: "timing",
+    scope: "both",
+    inputs: [{ id: "in", label: "In", valueType: "any" }],
+    outputs: [{ id: "data", label: "Data", valueType: "any" }],
+    parameters: [
+      { id: "duration", label: "Wait amount", description: "How long this node should pause before continuing.", valueType: "number", defaultValue: 1e3 },
+      {
+        id: "unit",
+        label: "Time unit",
+        description: "Unit used for the wait amount.",
+        valueType: "string",
+        defaultValue: "milliseconds",
+        options: [
+          { label: "Milliseconds", value: "milliseconds" },
+          { label: "Seconds", value: "seconds" },
+          { label: "Minutes", value: "minutes" }
+        ]
+      },
+      { id: "jitterMs", label: "Random extra wait", description: "Maximum random milliseconds added or subtracted from the wait.", valueType: "number", defaultValue: 0 }
+    ],
+    icon: "timer",
+    execute: (context) => {
+      const base = durationFromUnit(context.parameters.duration, context.parameters.unit, 1e3);
+      const jitter = Math.max(0, Number(context.parameters.jitterMs ?? 0));
+      const random = context.random ? context.random() : 0.5;
+      return { status: "waiting", route: "success", outputs: { data: context.inputs.in ?? null, durationMs: Math.max(0, Math.round(base + (random * 2 - 1) * jitter)) } };
+    }
+  });
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/timing/index.js
+  var timingNodes = [waitNode, timeoutNode, retryNode, debounceNode];
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/registry.js
+  var automationNodeClassGroups = [
+    { id: "control-flow", label: "Control Flow", description: "Graph routing, branching, joining, and lifecycle nodes." },
+    { id: "policy", label: "Policy", description: "Task policy action, expectation, and recovery nodes." },
+    { id: "routine", label: "Routine", description: "Routine orchestration nodes that call tasks or subroutines." },
+    { id: "logic", label: "Logic", description: "Boolean and comparison nodes." },
+    { id: "math", label: "Math", description: "Numeric transform nodes." },
+    { id: "random", label: "Random", description: "Random number, choice, and jitter nodes." },
+    { id: "data", label: "Data", description: "Variable, constant, object, and list transform nodes." },
+    { id: "database", label: "Database", description: "Database request nodes delegated to host adapters." },
+    { id: "timing", label: "Timing", description: "Wait, timeout, retry, and debounce nodes." },
+    { id: "runtime", label: "Runtime", description: "Future runtime/debug-specific nodes." },
+    { id: "custom", label: "Custom", description: "Host-added node definitions loaded from .fluxiq." }
+  ];
+  var builtinAutomationNodeDefinitions = [
+    ...controlFlowNodes,
+    ...policyNodes,
+    ...routineNodes,
+    ...logicNodes,
+    ...mathNodes,
+    ...randomNodes,
+    ...dataNodes,
+    ...databaseNodes,
+    ...timingNodes
+  ];
+  var automationNodeClasses = automationNodeClassGroups.map((group) => group.id);
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/canonical-registry.js
+  var canonicalBuiltinAutomationNodeDefinitions = builtinAutomationNodeDefinitions.map(adaptBuiltinAutomationNodeDefinition);
+
+  // ../../../!FluxIQ/packages/fluxiq/dist/programs/automation-studio/nodes/layout.js
+  var automationStudioSourceNodeRoot = "packages/fluxiq/src/programs/automation-studio/nodes";
+  var automationStudioBuiltinNodeRoots = automationNodeClasses.filter((nodeClass) => nodeClass !== "custom" && nodeClass !== "runtime").map((nodeClass) => `${automationStudioSourceNodeRoot}/${nodeClass}`);
+  var automationStudioCustomNodeRoot = ".fluxiq/data/programs/automation-studio/nodes/custom";
+  var automationStudioCustomNodeFolders = automationNodeClasses.map((nodeClass) => `${automationStudioCustomNodeRoot}/${nodeClass}`);
+
+  // ../../domain/src/output-nodes/extract-list/issues.ts
+  var PROBE_REQUEST = { item: "*", fields: { probe: "*" } };
+  function webAutomationExtractListIssues(value) {
+    if (!isPlainObject(value)) return ["web.extract_list.not_object"];
+    const keys = declaredKeys();
+    const issues = /* @__PURE__ */ new Set();
+    if (Object.keys(value).some((key) => !keys.request.has(key))) issues.add("web.extract_list.unknown_key");
+    if (!readable({ item: value.item ?? null })) issues.add("web.extract_list.invalid_item");
+    if (value.itemElement !== void 0 && !readable({ itemElement: value.itemElement })) issues.add("web.extract_list.invalid_item_element");
+    addFieldIssues(value.fields, keys.fieldSpec, issues);
+    addPaginateIssues(value.paginate, keys.paginate, issues);
+    addItemBoundIssues(value, issues);
+    if (issues.size === 0 && webAutomationExtractListRequestValue(value) === void 0) issues.add("web.extract_list.unreadable");
+    return [...issues];
+  }
+  function addFieldIssues(fields, specKeys, issues) {
+    if (!isPlainObject(fields)) {
+      issues.add("web.extract_list.invalid_fields");
+      return;
+    }
+    const entries = Object.entries(fields);
+    if (entries.length === 0) {
+      issues.add("web.extract_list.no_fields");
+      return;
+    }
+    let fieldRefused = false;
+    for (const [key, field] of entries) {
+      if (isPlainObject(field) && Object.keys(field).some((specKey) => !specKeys.has(specKey))) issues.add("web.extract_list.unknown_field_key");
+      if (!isWebAutomationExtractFieldKey(key)) {
+        issues.add("web.extract_list.invalid_field_key");
+        fieldRefused = true;
+      } else if (!readable({ fields: { [key]: field, [key === "probe" ? "probe_2" : "probe"]: "*" } })) {
+        issues.add("web.extract_list.invalid_field");
+        fieldRefused = true;
+      }
+    }
+    if (!fieldRefused && !readable({ fields })) issues.add("web.extract_list.all_fields_excluded");
+  }
+  function addPaginateIssues(paginate, paginateKeys, issues) {
+    if (paginate === void 0) return;
+    if (isPlainObject(paginate) && Object.keys(paginate).some((key) => !paginateKeys.has(key))) issues.add("web.extract_list.unknown_paginate_key");
+    if (!readable({ paginate })) issues.add("web.extract_list.invalid_paginate");
+  }
+  function addItemBoundIssues(value, issues) {
+    const { maxItems, minItems } = value;
+    const maxItemsReadable = maxItems === void 0 || isPositiveInteger(maxItems);
+    if (!maxItemsReadable) issues.add("web.extract_list.invalid_max_items");
+    if (minItems === void 0) return;
+    if (!isNonNegativeInteger(minItems)) {
+      issues.add("web.extract_list.invalid_min_items");
+      return;
+    }
+    if (!readable(maxItemsReadable && maxItems !== void 0 ? { minItems, maxItems } : { minItems })) issues.add("web.extract_list.min_items_exceed_max");
+  }
+  function readable(overrides) {
+    return webAutomationExtractListRequestValue({ ...PROBE_REQUEST, ...overrides }) !== void 0;
+  }
+  var declared;
+  function declaredKeys() {
+    if (declared) return declared;
+    const schema = webAutomationExtractListSchema({});
+    const properties = child(schema, "properties");
+    declared = {
+      request: propertyNames(schema),
+      paginate: propertyNames(child(properties, "paginate")),
+      fieldSpec: propertyNames(child(child(child(properties, "fields"), "metadata"), "fieldSpec"))
+    };
+    return declared;
+  }
+  function propertyNames(schema) {
+    return new Set(Object.keys(child(schema, "properties") ?? {}));
+  }
+  function child(value, key) {
+    const next = value?.[key];
+    return isPlainObject(next) ? next : void 0;
+  }
+  function isPlainObject(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+  function isPositiveInteger(value) {
+    return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+  }
+  function isNonNegativeInteger(value) {
+    return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+  }
+
+  // ../../domain/src/output-nodes/extract-list/parameter-contract.ts
+  function webAutomationExtractListParameterContract(input) {
+    return input.parameterId === "extractList" ? webAutomationExtractListIssues(input.value) : [];
+  }
+
+  // ../../domain/src/output-nodes/extract-list/parameters.ts
+  function webAutomationExtractListParameters() {
+    return [
+      {
+        id: "extractList",
+        label: "List",
+        description: WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR,
+        valueType: "object",
+        example: structuredClone(WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE),
+        ui: { control: "value" }
+      },
+      {
+        id: "timeoutMs",
+        label: "Timeout",
+        description: "Milliseconds for the whole read. Left at the default, it grows with the pages the list may read.",
+        valueType: "number",
+        defaultValue: WEB_AUTOMATION_EXTRACT_PAGE_TIMEOUT_MS
+      },
+      {
+        id: "recordOutput",
+        label: "Save extracted records",
+        description: "The dataset the rows are saved into. Leave empty to save every field of the list under a dataset named after its fields.",
+        valueType: "json",
+        defaultValue: null,
+        allowStateBinding: false,
+        ui: { control: "record-output" }
+      }
+    ];
+  }
+
   // ../../domain/src/output-nodes/definitions.ts
-  var controlInput = { id: "in", label: "In", valueType: "signal", role: "control" };
+  var controlInput2 = { id: "in", label: "In", valueType: "signal", role: "control" };
   var outputPorts = [
     { id: "success", label: "Success", valueType: "any", role: "success" },
     { id: "failed", label: "Failed", valueType: "any", role: "failure" }
   ];
+  var recordsPort = { id: "records", label: "Records", valueType: "array", role: "data" };
   var recordsPathByOutput = {
-    "web.dom.extract_list": "result.extracted"
+    "web.dom.extract_list": WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH
+  };
+  var catalogTextByOutput = {
+    "web.dom.extract_list": { description: WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION, tags: WEB_AUTOMATION_EXTRACT_LIST_TAGS }
   };
   var expectedStateParameter = {
     id: "expectedState",
@@ -742,12 +3153,13 @@
       Array.isArray(definition.parameterSchema.required) ? definition.parameterSchema.required.filter((value) => typeof value === "string") : []
     );
     const recordsPath = recordsPathByOutput[definition.actionType];
+    const catalogText = catalogTextByOutput[definition.actionType];
     return {
       schemaVersion: "0.1",
       id: webAutomationOutputNodeId(definition.actionType),
       version: "1.0.0",
       label: definition.label,
-      description: definition.description,
+      description: catalogText?.description ?? definition.description,
       category: "web",
       source: {
         kind: "importer",
@@ -764,15 +3176,18 @@
         requiredPermissions: ["web-automation.action"]
       },
       outputAction: { fixedOutputId: definition.actionType },
-      inputs: [controlInput],
-      outputs: outputPorts,
+      inputs: [controlInput2],
+      outputs: recordsPath ? [...outputPorts, recordsPort] : outputPorts,
+      // Every web parameter may be filled from state unless it says otherwise.
+      // Only `recordOutput` does, for the reason Core gives its own: a binding
+      // could replace the dataset schema, and with it the excluded fields.
       parameters: [...parametersForOutput(definition.actionType), expectedStateParameter].map((parameter) => ({
         ...parameter,
         ...requiredParameters.has(parameter.id) ? { required: true } : {},
-        allowStateBinding: true
+        allowStateBinding: parameter.allowStateBinding ?? true
       })),
       icon: iconForOutput(definition.actionType),
-      tags: ["web-automation", "output"],
+      tags: ["web-automation", "output", ...catalogText?.tags ?? []],
       metadata: {
         domainId: WEB_AUTOMATION_DOMAIN_ID,
         outputId: definition.actionType,
@@ -824,10 +3239,7 @@
     if (outputId === "web.dom.capture_snapshot") return [];
     if (outputId === "web.dom.check") return [...selectorParameters, { id: "checked", label: "Checked", valueType: "boolean", defaultValue: true }];
     if (outputId === "web.dom.assert") return [...selectorParameters, structured("assert", "Assertion")];
-    if (outputId === "web.dom.extract_list") return [
-      structured("extractList", "List"),
-      { id: "timeoutMs", label: "Timeout", valueType: "number", defaultValue: 1e4 }
-    ];
+    if (outputId === "web.dom.extract_list") return webAutomationExtractListParameters();
     if (outputId === "web.dom.upload") return [...selectorParameters, structured("upload", "Files")];
     if (outputId === "web.dom.dialog") return [structured("dialog", "Dialog")];
     if (outputId === "web.browser.tab") return [structured("tab", "Tab")];
@@ -849,6 +3261,11 @@
     if (outputId === "web.browser.download") return "download";
     return "square-dot";
   }
+
+  // ../../domain/src/output-nodes/parameter-contracts.ts
+  var webAutomationOutputNodeParameterContracts = {
+    [webAutomationOutputNodeId("web.dom.extract_list")]: webAutomationExtractListParameterContract
+  };
 
   // ../../domain/src/sensitivity/signature.ts
   var SENSITIVE_CONTROL_TYPES = /* @__PURE__ */ new Set(["password", "one-time-code", "credit-card"]);
@@ -919,6 +3336,7 @@
   );
 
   // ../../domain/src/runtime/capabilities.ts
+  var WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID = "web.structure.detection";
   var webAutomationRuntimeCapabilities = [
     {
       id: "web.actions",
@@ -968,6 +3386,18 @@
       metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence] }
     },
     {
+      // `web.dom.capture_snapshot` answers `detectStructure` with the repeating
+      // structure it found (`extraction/structure-detection.ts`). A flag on an
+      // existing observe-only action rather than an action of its own, so it
+      // lists no action type: nothing new is executable. The authoring evidence
+      // runtime refuses its detection tool for a client that does not declare it.
+      id: WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID,
+      label: "Repeating-structure detection",
+      kind: "snapshot",
+      domainId: WEB_AUTOMATION_DOMAIN_ID,
+      metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, actionType: "web.dom.capture_snapshot", parameter: "detectStructure" }
+    },
+    {
       id: "web.recording.events",
       label: "Web recording events",
       kind: "recording",
@@ -984,38 +3414,6 @@
       metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, outputIds: WEB_AUTOMATION_ACTION_TYPES }
     }
   ];
-
-  // ../../domain/src/extraction/dataset-id.ts
-  var COMBINING_MARKS = new RegExp("\\p{M}+", "gu");
-
-  // ../../domain/src/extraction/label-key.ts
-  var MAX_KEY_LENGTH = 100;
-  var FALLBACK_KEY = "field";
-  var RESERVED_KEY_SUFFIX = "_field";
-  var OUTSIDE_KEY_CHARACTERS = /[^a-z0-9_-]+/u;
-  var COMBINING_MARKS2 = new RegExp("\\p{M}+", "gu");
-  function webAutomationExtractionFieldKey(label, taken) {
-    const words = label.toLowerCase().normalize("NFKD").replace(COMBINING_MARKS2, "").split(OUTSIDE_KEY_CHARACTERS).filter((word) => word.length > 0);
-    let key = words.join("_").slice(0, MAX_KEY_LENGTH) || FALLBACK_KEY;
-    if (!isWebAutomationExtractFieldKey(key)) key = `${key}${RESERVED_KEY_SUFFIX}`;
-    if (!taken.has(key)) return key;
-    for (let ordinal = 2; ; ordinal += 1) {
-      const suffix = `_${ordinal}`;
-      const candidate = `${key.slice(0, MAX_KEY_LENGTH - suffix.length)}${suffix}`;
-      if (!taken.has(candidate)) return candidate;
-    }
-  }
-
-  // ../../domain/src/extraction/signature.ts
-  var MAX_SIGNATURE_CLASSES = 3;
-  function webAutomationItemSignature(parts2) {
-    const role = parts2.role?.trim().toLowerCase() ?? "";
-    const classes = [...parts2.classes].sort().slice(0, MAX_SIGNATURE_CLASSES).join(".");
-    return `${parts2.tagName.toLowerCase()}|${role}|${webAutomationIdentifierShape(parts2.testId)}|${classes}`;
-  }
-  function webAutomationIdentifierShape(value) {
-    return value === void 0 ? "" : value.replace(/\d+/gu, "#");
-  }
 
   // ../../domain/src/runtime/failure/codes.ts
   var WEB_AUTOMATION_FAILURE_CODES = Object.freeze({
@@ -1396,8 +3794,8 @@
       } else if (node.nodeType === Node.ELEMENT_NODE && !isSensitiveFormControl(node)) {
         const children = node.childNodes;
         for (let index = children.length - 1; index >= 0; index -= 1) {
-          const child = children[index];
-          if (child) pending.push(child);
+          const child2 = children[index];
+          if (child2) pending.push(child2);
         }
       }
     }
@@ -1450,7 +3848,7 @@
     }
     if (!(node instanceof Element)) return;
     if (node === control || node.matches(NESTED_CONTROL_SELECTOR) || isSensitiveFormControl(node)) return;
-    for (const child of node.childNodes) collectLabelText(child, control, parts2, depth + 1);
+    for (const child2 of node.childNodes) collectLabelText(child2, control, parts2, depth + 1);
   }
   function nearbyLabel(element) {
     if (!isLabelableControl(element)) return void 0;
@@ -1796,8 +4194,8 @@
     if (!tagName && !role) return true;
     if (tagName && element.tagName.toLowerCase() === tagName) return true;
     if (!role) return false;
-    const declared = element.getAttribute("role")?.trim().toLowerCase();
-    return declared === role || implicitRole(element) === role;
+    const declared2 = element.getAttribute("role")?.trim().toLowerCase();
+    return declared2 === role || implicitRole(element) === role;
   }
 
   // src/content/identity/corroboration.ts
@@ -1841,7 +4239,7 @@
     section: "region",
     form: "form"
   };
-  function elementContext(element) {
+  function elementContext2(element) {
     const form = owningForm(element);
     const landmark = nearestLandmark(element);
     const context = present({
@@ -1852,8 +4250,8 @@
       landmark: landmark?.role,
       landmarkName: landmark ? landmarkName(landmark.element) : void 0,
       heading: nearestHeading(element),
-      listPosition: listPosition(element),
-      tablePosition: tablePosition(element)
+      listPosition: listPosition2(element),
+      tablePosition: tablePosition2(element)
     });
     return Object.keys(context).length ? context : void 0;
   }
@@ -1930,15 +4328,15 @@
     }
     return void 0;
   }
-  function listPosition(element) {
+  function listPosition2(element) {
     const item = element.closest(LIST_ITEM_SELECTOR);
     const parent = item?.parentElement;
     if (!item || !parent) return void 0;
-    const siblings = [...parent.children].filter((child) => child.matches(LIST_ITEM_SELECTOR));
+    const siblings = [...parent.children].filter((child2) => child2.matches(LIST_ITEM_SELECTOR));
     const index = siblings.indexOf(item);
     return index < 0 ? void 0 : { index: index + 1, total: siblings.length };
   }
-  function tablePosition(element) {
+  function tablePosition2(element) {
     const cell = element.closest("td,th");
     if (!(cell instanceof HTMLTableCellElement)) return void 0;
     const row = cell.closest("tr");
@@ -2389,7 +4787,7 @@
     if (label) descriptor.label = label;
     const markupRole = implicitRole(element);
     if (markupRole) descriptor.implicitRole = markupRole;
-    const context = elementContext(element);
+    const context = elementContext2(element);
     if (context) descriptor.context = context;
     const select = selectState(element);
     if (select) {
@@ -2415,7 +4813,7 @@
     while (current && current !== document.documentElement && parts2.length < 5) {
       const parent = current.parentElement;
       const tag = current.tagName.toLowerCase();
-      const siblings = parent ? [...parent.children].filter((child) => child.tagName === current?.tagName) : [];
+      const siblings = parent ? [...parent.children].filter((child2) => child2.tagName === current?.tagName) : [];
       const index = siblings.indexOf(current) + 1;
       parts2.unshift(siblings.length > 1 ? `${tag}:nth-of-type(${index})` : tag);
       current = parent;
@@ -3269,9 +5667,9 @@
 
   // src/content/actions/capture-snapshot.ts
   function captureSnapshotAction(action, deps, startedAt) {
-    return deps.success(action, startedAt, "Snapshot captured.", { status: "none", reason: "evidence-only" }, {
-      snapshot: deps.captureSnapshot()
-    });
+    const snapshot = deps.captureSnapshot();
+    const structure = action.detectStructure === void 0 ? void 0 : deps.detectStructure(action.detectStructure);
+    return deps.success(action, startedAt, "Snapshot captured.", { status: "none", reason: "evidence-only" }, { snapshot, structure });
   }
 
   // src/content/actions/wait-for-selector.ts
@@ -4694,8 +7092,8 @@
   function defaultActionFor(target, key, modifiers) {
     if (key === "Enter") return enterPressed(target);
     if (key === "Tab") return tabPressed(target, modifiers?.shift === true);
-    const refused = unsupportedDefault(target, key);
-    if (refused) return refused;
+    const refused2 = unsupportedDefault(target, key);
+    if (refused2) return refused2;
     if (isPrintable(key, modifiers) && (isTextField(target) || isEditableHost(target))) return characterTyped(target, key);
     return {
       dispatched: true,
@@ -5169,9 +7567,9 @@
     return { records, pagesRead: progress.pagesRead, truncated, timedOut, missingFields: [...missing].sort() };
   }
   function fieldReaders(fields) {
-    const declared = Object.entries(fields);
-    if (declared.length === 0) throw new Error("An extract_list request names no fields.");
-    const readers = declared.flatMap(([name, field]) => {
+    const declared2 = Object.entries(fields);
+    if (declared2.length === 0) throw new Error("An extract_list request names no fields.");
+    const readers = declared2.flatMap(([name, field]) => {
       const reader = normalizeExtractField(name, field);
       return reader === void 0 ? [] : [[name, reader]];
     });
@@ -5401,7 +7799,7 @@
     return void 0;
   }
   function positionSelector(element, tag) {
-    const siblings = Array.from(element.parentElement?.children ?? []).filter((child) => child.tagName === element.tagName);
+    const siblings = Array.from(element.parentElement?.children ?? []).filter((child2) => child2.tagName === element.tagName);
     const index = siblings.indexOf(element) + 1;
     if (index === 0) return void 0;
     return siblings.length > 1 ? `${tag}:nth-of-type(${index})` : tag;
@@ -5471,10 +7869,10 @@
     };
   }
   function sameTemplateSiblings(element, container) {
-    const signature = templateSignature2(element);
-    return Array.from(container.children).filter((child) => isRecordItemTag(child.tagName) && templateSignature2(child) === signature);
+    const signature = itemTemplateSignature(element);
+    return Array.from(container.children).filter((child2) => isRecordItemTag(child2.tagName) && itemTemplateSignature(child2) === signature);
   }
-  function templateSignature2(element) {
+  function itemTemplateSignature(element) {
     return webAutomationItemSignature({
       tagName: element.tagName,
       role: element.getAttribute("role"),
@@ -5484,6 +7882,150 @@
   }
   function meanCoverage(fields) {
     return fields.reduce((total, field) => total + field.coverage, 0) / fields.length;
+  }
+
+  // src/content/extraction/feed-signal.ts
+  var MAX_FEED_ANCESTOR_LEVELS = 6;
+  function isDeclaredFeed(items, container) {
+    if (items.some((item) => item.getAttribute("aria-setsize")?.trim() === "-1")) return true;
+    let level = container;
+    for (let depth = 0; level && depth < MAX_FEED_ANCESTOR_LEVELS; depth += 1, level = level.parentElement) {
+      if ((level.getAttribute("role") ?? "").toLowerCase().split(/\s+/u).includes("feed")) return true;
+    }
+    return false;
+  }
+
+  // src/content/extraction/largest-runs.ts
+  var MIN_ITEMS_PER_RUN3 = 3;
+  var MAX_SCANNED_ELEMENTS = 1e4;
+  var MAX_OFFERED_RUNS = 12;
+  var NON_DATA_CONTAINER_TAGS = /* @__PURE__ */ new Set(["HEAD", "SCRIPT", "STYLE", "TEMPLATE", "SELECT", "DATALIST", "OPTGROUP", "NOSCRIPT"]);
+  var NON_DATA_REGIONS = [
+    "nav",
+    "footer",
+    "svg",
+    "select",
+    "datalist",
+    '[role~="navigation"]',
+    '[role~="contentinfo"]',
+    '[role~="menu"]',
+    '[role~="menubar"]',
+    '[role~="listbox"]',
+    '[role~="tablist"]',
+    '[role~="tree"]'
+  ].join(",");
+  function largestRunsFirst() {
+    const runs = [];
+    const seen = /* @__PURE__ */ new Set();
+    let scanned = 0;
+    for (const element of document.body?.querySelectorAll("*") ?? []) {
+      scanned += 1;
+      if (scanned > MAX_SCANNED_ELEMENTS) break;
+      const container = element.parentElement;
+      if (!container || seen.has(container)) continue;
+      seen.add(container);
+      if (container.childElementCount < MIN_ITEMS_PER_RUN3 || !holdsData(container)) continue;
+      for (const items of templateGroups(container)) {
+        const first = items[0];
+        if (first && items.length >= MIN_ITEMS_PER_RUN3 && first.getClientRects().length > 0) runs.push({ first, size: items.length });
+      }
+    }
+    return runs.sort((left, right) => right.size - left.size).slice(0, MAX_OFFERED_RUNS).map((run) => run.first);
+  }
+  function holdsData(container) {
+    return !NON_DATA_CONTAINER_TAGS.has(container.tagName.toUpperCase()) && container.closest(NON_DATA_REGIONS) === null;
+  }
+  function templateGroups(container) {
+    const groups = /* @__PURE__ */ new Map();
+    for (const child2 of container.children) {
+      if (!isRecordItemTag(child2.tagName)) continue;
+      const signature = itemTemplateSignature(child2);
+      const group = groups.get(signature);
+      if (group) group.push(child2);
+      else groups.set(signature, [child2]);
+    }
+    return [...groups.values()];
+  }
+
+  // src/content/extraction/detect-structure.ts
+  function detectStructure(request) {
+    return request.selector === void 0 ? detectLargest() : detectAround(request.selector);
+  }
+  function detectAround(selector) {
+    const elements = queryAll(selector);
+    const first = elements[0];
+    if (!first) return refused("target_not_found");
+    if (elements.some(isWithinSensitiveControl)) return refused("sensitive_region");
+    const proposal = inferListFromElement(first);
+    if (!proposal) return refused("no_repeating_run");
+    if (elements.length > 1 && !allInsideItems(elements, queryAll(proposal.item))) return refused("ambiguous_target");
+    return detected(proposal);
+  }
+  function allInsideItems(elements, items) {
+    const itemSet = new Set(items);
+    return elements.every((element) => {
+      for (let current = element; current; current = current.parentElement) {
+        if (itemSet.has(current)) return true;
+      }
+      return false;
+    });
+  }
+  function detectLargest() {
+    let best;
+    let sensitiveSeen = false;
+    const tried = /* @__PURE__ */ new Set();
+    for (const first of largestRunsFirst()) {
+      if (isWithinSensitiveControl(first)) {
+        sensitiveSeen = true;
+        continue;
+      }
+      const proposal = inferListFromElement(first);
+      if (!proposal || tried.has(proposal.item)) continue;
+      tried.add(proposal.item);
+      const answer = detected(proposal);
+      if (!answer.ok) {
+        sensitiveSeen = true;
+        continue;
+      }
+      if (isFormNotData(answer.proposal)) continue;
+      if (best === void 0 || outranks(answer.proposal, best.proposal)) best = answer;
+    }
+    return best ?? refused(sensitiveSeen ? "sensitive_region" : "no_repeating_run");
+  }
+  function isFormNotData(proposal) {
+    return proposal.fields.every((field) => field.spec.handling === "exclude" || field.spec.kind === "value");
+  }
+  function outranks(candidate, incumbent) {
+    if (candidate.itemCount !== incumbent.itemCount) return candidate.itemCount > incumbent.itemCount;
+    const fields = readableFieldCount(candidate) - readableFieldCount(incumbent);
+    if (fields !== 0) return fields > 0;
+    return candidate.confidence > incumbent.confidence;
+  }
+  function detected(proposal) {
+    const items = queryAll(proposal.item);
+    if (readableFieldCount(proposal) === 0 || items.some(isWithinSensitiveControl)) return refused("sensitive_region");
+    if (proposal.pagination !== void 0 || !isDeclaredFeed(items, queryOne(proposal.container))) return { ok: true, proposal };
+    return { ok: true, proposal, infiniteScroll: true };
+  }
+  function readableFieldCount(proposal) {
+    return proposal.fields.filter((field) => field.spec.handling !== "exclude").length;
+  }
+  function refused(reason) {
+    return { ok: false, refused: reason };
+  }
+  function queryOne(selector) {
+    try {
+      return document.querySelector(selector);
+    } catch {
+      return null;
+    }
+  }
+  function queryAll(selector) {
+    try {
+      return Array.from(document.querySelectorAll(selector));
+    } catch {
+      return [];
+    }
   }
 
   // src/content/action-runtime/file-input.ts
@@ -5968,6 +8510,7 @@
     if (evidence.extracted !== void 0) result.extracted = evidence.extracted;
     if (evidence.extraction) result.extraction = evidence.extraction;
     if (evidence.dialog) result.dialog = evidence.dialog;
+    if (evidence.structure) result.structure = evidence.structure;
     if (evidence.resolution) result.resolution = evidence.resolution;
     return result;
   }
@@ -5985,6 +8528,7 @@
       checkActionability,
       keyboard,
       setCheckedState,
+      detectStructure,
       extractList,
       setInputFiles,
       dialogControl,
@@ -6046,8 +8590,8 @@
       return typeof definition.read?.mode === "string" ? value : void 0;
     }
     if (definition.form !== "list") return void 0;
-    const readable = typeof definition.request?.item === "string" && typeof definition.request.fields === "object" && definition.request.fields !== null;
-    return readable ? value : void 0;
+    const readable2 = typeof definition.request?.item === "string" && typeof definition.request.fields === "object" && definition.request.fields !== null;
+    return readable2 ? value : void 0;
   }
 
   // src/content/picker/overlay.ts

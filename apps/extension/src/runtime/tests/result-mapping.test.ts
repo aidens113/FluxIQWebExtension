@@ -32,6 +32,26 @@ function browserResult(overrides: Partial<BrowserActionResult> = {}): BrowserAct
   };
 }
 
+test("a snapshot's structure detection reaches the gateway payload, copied without anything a producer added", () => {
+  const structure = {
+    ok: true as const,
+    proposal: {
+      container: '[data-testid="product-list"]',
+      item: '[data-testid="product-card"]',
+      itemCount: 8,
+      fields: [{ key: "product-name", label: "product-name", spec: { kind: "text" as const, selector: '[data-testid="product-name"]', required: true }, coverage: 1 }],
+      pagination: { next: '[data-testid="pagination-next"]', maxPages: 3 },
+      confidence: 1
+    }
+  };
+  const noisy = { ...structure, sample: "Ember Scented Candle" };
+  const result = gatewayActionResultFromBrowserResult(browserResult({ actionType: "web.dom.capture_snapshot", structure: noisy as never }));
+  assert.deepEqual(result.payload?.structure, structure);
+  assert.equal(JSON.stringify(result).includes("Ember Scented Candle"), false);
+  const refused = gatewayActionResultFromBrowserResult(browserResult({ actionType: "web.dom.capture_snapshot", structure: { ok: false, refused: "sensitive_region" } }));
+  assert.deepEqual(refused.payload?.structure, { ok: false, refused: "sensitive_region" });
+});
+
 function statePathOf(value: unknown): unknown {
   return value && typeof value === "object" && "statePath" in value ? value.statePath : undefined;
 }
