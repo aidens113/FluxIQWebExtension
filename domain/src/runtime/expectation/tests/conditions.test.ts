@@ -13,7 +13,8 @@ import { webAutomationActionFromGatewayCommand, type WebAutomationActionCommand 
 import {
   describeWebAutomationExpectationCondition,
   webAutomationExpectationActionPayload,
-  webAutomationExpectationCondition
+  webAutomationExpectationCondition,
+  webAutomationExpectationConditionRefusal
 } from "../conditions";
 
 /** The command a payload becomes on the wire, read through the mapping the gateway actually uses. */
@@ -90,4 +91,67 @@ test("a long claim is bounded so it can be a failure record's expected value", (
   );
   assert.ok(description.length <= 160, description.length.toString());
   assert.ok(description.endsWith("…"));
+});
+
+// The refusals. These are the claims the page must not be asked, and each one
+// exists because the content script would otherwise answer it confidently and
+// wrongly (`content/action-runtime/assertion-evaluation.ts`).
+
+test("an absent claim naming no element is refused, because the page would report it as held", () => {
+  // The whole reason this refusal exists: `evaluateOnce` re-queries the target,
+  // finds nothing because there was nothing to query, and returns
+  // `{ held: true, verdict: "judged" }`. "The blocking banner is gone" would
+  // come back yes without anything having been looked at.
+  const condition = webAutomationExpectationCondition({ kind: "absent" }, 0);
+  assert.ok(condition, "the shape is readable; it is the claim that cannot be asked");
+  assert.equal(webAutomationExpectationConditionRefusal(condition), "a absent claim naming no element, which the page cannot be asked");
+});
+
+test("every element claim naming no element is refused; a page-wide text claim is not", () => {
+  for (const kind of ["exists", "absent", "visible", "enabled"]) {
+    const condition = webAutomationExpectationCondition({ kind }, 0);
+    assert.ok(webAutomationExpectationConditionRefusal(condition!), `${kind} with no selector must be refused`);
+    assert.equal(webAutomationExpectationConditionRefusal(webAutomationExpectationCondition({ kind, selector: "#x" }, 0)!), undefined);
+  }
+  // `text` with no selector is the authored claim "the page says X", judged
+  // against document.body, which is a real question with a real answer.
+  assert.equal(webAutomationExpectationConditionRefusal(webAutomationExpectationCondition({ kind: "text", expected: "Done" }, 0)!), undefined);
+});
+
+test("a url or text claim naming nothing to look for is refused, blank included", () => {
+  for (const kind of ["url", "text"]) {
+    for (const expected of [undefined, "", "   ", "\t\n"]) {
+      const condition = webAutomationExpectationCondition(expected === undefined ? { kind } : { kind, expected }, 0);
+      assert.ok(
+        webAutomationExpectationConditionRefusal(condition!),
+        `${kind} expecting ${JSON.stringify(expected)} must be refused`
+      );
+    }
+    assert.equal(webAutomationExpectationConditionRefusal(webAutomationExpectationCondition({ kind, expected: "/thanks" }, 0)!), undefined);
+  }
+});
+
+test("the two conditions a recovery verdict asks for are askable, and stay opaque to Core", () => {
+  // Landing on an expected URL after a recovery.
+  const landed = webAutomationExpectationCondition({ kind: "url", expected: "/order/confirmed" }, 2_000);
+  assert.equal(webAutomationExpectationConditionRefusal(landed!), undefined);
+  assert.deepEqual(webAutomationExpectationActionPayload(landed!), { assert: { kind: "url", expected: "/order/confirmed", timeoutMs: 2_000 } });
+
+  // The blocking banner recovery dismissed is gone.
+  const dismissed = webAutomationExpectationCondition({ selector: ".cookie-wall", assert: { kind: "absent" } }, 2_000);
+  assert.equal(webAutomationExpectationConditionRefusal(dismissed!), undefined);
+  assert.equal(wireCommand(webAutomationExpectationActionPayload(dismissed!)).assert?.kind, "absent");
+
+  // Neither claim is named by a test id, and neither description carries the
+  // element's identity anywhere Core would have to understand it.
+  for (const condition of [landed!, dismissed!]) {
+    const serialized = JSON.stringify(webAutomationExpectationActionPayload(condition));
+    assert.ok(!serialized.includes("data-testid"), serialized);
+  }
+});
+
+test("a refusal describes the claim and never the page", () => {
+  const refusal = webAutomationExpectationConditionRefusal(webAutomationExpectationCondition({ kind: "text", expected: " " }, 0)!);
+  assert.equal(refusal, "a text claim naming nothing to look for, which the page cannot be asked");
+  assert.ok((refusal ?? "").length <= 160);
 });
