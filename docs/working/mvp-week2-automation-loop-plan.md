@@ -429,8 +429,8 @@ The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
   origin (product-catalog-first-page 0/8 -> 8/8 on the real task's data);
   campaign tasks take declared secrets from their scenario's own fixture; a
   pre-bundle refusal carries the runner's reason, bounded and redacted.
-- Validation, each change alone in a clean worktree with the main checkout's
-  `node_modules` joined in: Core `F:/fxlab/verify-core` -> `tsc` exit 0 and
+- Validation: each change alone in a clean worktree with the main checkout's
+  `node_modules` joined in. Core `F:/fxlab/verify-core` -> `tsc` exit 0 and
   `vitest --no-file-parallelism` "792 passed" (creation), "812 passed"
   (evidence); this repository `F:/fxlab/verify-ext` -> domain "# pass 636"
   (W-3a), and with the Lab changes "# pass 1102" (test-runner), "# pass 73"
