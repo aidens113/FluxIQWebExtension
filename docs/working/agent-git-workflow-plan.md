@@ -1,7 +1,7 @@
 # Agent Git Workflow
 
 Status: Active
-Status detail: Design settled for tiering, naming, provenance and merge policy; four measured inputs (pair mechanics, orchestrator gap, worktree cost, generated-output conflicts) are in flight and the sections marked PENDING depend on them.
+Status detail: Implemented and exercised end to end on this repository; what remains is the Core-side paired-branch half and two prune jobs, all in Open Questions.
 Created: 2026-09-17
 Last updated: 2026-09-17
 Owner: Senior supervisor agent
@@ -13,23 +13,34 @@ Related: [AGENTS.md](../../AGENTS.md), [Agent Working Document Protocol](./agent
 
 ## Current State
 
-The design is settled and evidenced by four measurement reports under
-`agent-git-workflow-plan/reports/`. Implementation is part done.
+The design is settled, evidenced by four measurement reports under
+`agent-git-workflow-plan/reports/`, and **implemented and exercised end to
+end**. What remains is the Core-side half and two pieces of cleanup.
 
-**Landed.** Generated build output is untracked and line endings are normalized
-(`e46b987`); `AGENTS.md` carries the tiering rule and the worktree layout;
-`scripts/task/` is written, wired as `pnpm task`, and its argument, branch-name
-and layout tests pass 12/12. A pre-existing type error on `dev` was fixed on the
-way (`eff5097`) — `pnpm check` had been red, which would have made
-`pnpm task finish` refuse every task.
+**Working, and proven by running it rather than by testing around it.**
+`pnpm task start|list|finish|abandon` is live. Task `t001` was driven through
+the whole cycle on this repository: it opened a branch, took a commit carrying
+`Task: t001`, ran `pnpm check` at finish, merged `--no-ff` as
+`9712a2c Merge task t001: Test drive the task tooling`, and deleted its branch.
+`git log --first-parent` reads as a list of tasks, and
+`git revert -m 1 9712a2c` staged the inverse of the whole task cleanly. Two
+real worktrees (`t002`, `t003`) were provisioned, type-checked and removed.
 
-**In flight.** `scripts/worktree/` (the extraction from `scripts/lab/pair/`
-plus the create/remove/Core-sibling modules), the architecture policy documents
-that still assert the old tracking answer, and the `test-domain.mjs` outdir
-cleaning fix.
+**Landed.** Generated build output untracked and line endings normalized
+(`e46b987`); `scripts/worktree/` shared by the Lab and by tasks; `scripts/task/`
+as the lifecycle; the domain test outdir cleaned, which removed 211 dead files;
+the architecture documents corrected; `AGENTS.md` carrying the rule. Gates
+observed green together: `pnpm check`, `pnpm test`, `pnpm build`, and
+`git status` clean after a full build — which it never was while the bundles
+were tracked.
 
-**Not started.** End-to-end exercise of a real task through
-`start` → `finish` on a throwaway slug; the Core-side paired-branch half.
+**Fixed on the way, both pre-existing.** `pnpm check` was red on `dev`
+(`eff5097`), which would have made `pnpm task finish` refuse every task; and the
+domain test runner never cleaned its outdir.
+
+**Not done.** The Core-side paired-branch half; an age-based prune for the
+1.6 GB of abandoned scratch directories; `pnpm task prune` for an orphaned
+shared Core. All three are in Open Questions.
 
 Before this work, every agent worked in the single checkout at
 `F:\!FluxIQWebExtension` on `dev`. Workers edit that shared working tree and
@@ -61,9 +72,6 @@ because there is no per-agent commit to carry it.
 The governing constraint is that this must not slow ordinary work down. The
 design is therefore tiered: most changes keep exactly today's cost.
 
-**Next:** finish the four measurements, fill the PENDING sections, then build
-`scripts/task/`.
-
 ## Why Branch-Per-Agent Is The Wrong Unit Here
 
 A branch should bound a change, not a worker. Three reasons specific to this
@@ -88,7 +96,7 @@ mechanical rule below — not by taste.
 | --- | --- | --- | --- |
 | 0 — direct on `dev` | Supervisor edits at most two files it already understands: documentation, a ledger entry, config, a one-line fix. No brief exists. | Zero. Identical to today. | Nothing changes. |
 | 1 — task branch, shared checkout | Any unit of work that has a brief, when no other agent is running repository-wide validation at the same time. | Two git commands, at the start and the end. | A merge commit bounding the task, one-command revert, readable first-parent history. |
-| 2 — task branch plus worktree | Escalate when **any** of: another agent is running repository-wide validation concurrently; the work is experimental and may be thrown away; the work is a long Lab or build run that would otherwise observe other agents' edits. | Worktree creation plus install — PENDING, being measured. | Everything in Tier 1, plus a filesystem no other agent can perturb. |
+| 2 — task branch plus worktree | Escalate when **any** of: another agent is running repository-wide validation concurrently; the work is experimental and may be thrown away; the work is a long Lab or build run that would otherwise observe other agents' edits. | ~45s for the first worktree, ~21s for each one after it, measured. | Everything in Tier 1, plus a filesystem no other agent can perturb. |
 
 The escalation trigger is deliberately about **validation, not editing**.
 Concurrent workers editing disjoint files in one tree is already safe and stays
@@ -259,9 +267,30 @@ Measured on a real probe worktree pair, since removed.
 | Core build: contracts, fluxiq, client-gateway-websocket | 12.8s | OK |
 | `pnpm build` (extension) | 18.1s | OK |
 
-**~52.6s for the first worktree, ~4s for each one after it** under the flat
-layout that shares Core. Marginal disk is ~80 MB per worktree: pnpm hardlinks
-from `F:\.pnpm-store\v3`, proven by an identical inode across both checkouts.
+Marginal disk is ~80 MB per worktree: pnpm hardlinks from `F:\.pnpm-store\v3`,
+proven by an identical inode across both checkouts.
+
+### Measured again through the real tooling, 2026-09-17
+
+The probe above stopped at the first error and so saw only half the
+provisioning cost. Driving `pnpm task start --worktree` for real:
+
+| What | Observed |
+| --- | --- |
+| First worktree, Core created and built | 28.5s |
+| Second worktree, sharing that Core | **4.6s**, `coreCreated: false` |
+| Workspace build, needed by both | 16.5s |
+| A fresh worktree, end to end | ~45s first, ~21s after |
+| `pnpm check` inside a fresh worktree | passes, no manual step |
+
+The 4.6s second worktree is the design's central claim holding: the link
+resolved to `F:\fxwork\!FluxIQ\packages\fluxiq`, the Core the first task built.
+
+**Every `dist/` is gitignored, not just Core's.** A worktree that installed
+perfectly still failed with
+`TS2307: Cannot find module '@fluxiq-web-extension/test-evidence'` until the
+workspace itself was built. Provisioning therefore builds Core *and* the
+workspace; a worktree that cannot be validated in is not worth creating.
 
 This is cheap enough that Tier 2's trigger does **not** need tightening. The
 escalation rule stands as written.
@@ -283,13 +312,39 @@ by `git worktree prune`, never `worktree remove --force`.
 build. It matters only for Lab and live-provider runs, so copying it is a
 convenience, not a prerequisite.
 
-## Tracked Generated Output — PENDING
+## Tracked Generated Output — resolved by untracking
 
-`apps/extension/build/` (10 files) and `domain/.test-build/` (300 files) are
-tracked build output, and there is no `.gitattributes`. Parallel branches that
-each rebuild will collide in minified bundles and source maps, which cannot be
-hand-resolved. Whatever the chosen remedy, the workflow must never ask an agent
-to resolve such a conflict by hand. Depends on the generated-output report.
+Evidence: [reports/generated-output-conflicts.md](./agent-git-workflow-plan/reports/generated-output-conflicts.md).
+Done in `e46b987`.
+
+`apps/extension/build/` (10 files) and `domain/.test-build/` (300 files) were
+tracked build output — 13% of every tracked file, and 40% of every byte ever
+committed here — with no reason recorded anywhere. They are now untracked and
+regenerated on demand, and `.gitattributes` normalizes line endings.
+
+Why they could not stay:
+
+- Four of the five sourcemaps are seven-line files whose fourth line is a single
+  549KB–1.26MB string, so any rebuild rewrites that line and git's conflict
+  output is two such strings back to back. No tool resolves that.
+- **The maps were not reproducible across checkouts.** With `core.autocrlf=true`
+  and no attributes, `git checkout` wrote some sources with CRLF while
+  tool-written ones kept LF — both clean to git — and esbuild copied those bytes
+  verbatim into `sourcesContent`. Two branches could conflict without either
+  changing a byte of source.
+- 55 of the last 100 commits carried generated output, 52 of them mixed in with
+  source, and one three-file source edit fanned out to 68 generated files.
+
+Why untracking was safe: nothing read the committed copies.
+`apps/extension/build/` has no manifest, icons or HTML and is not a loadable
+extension; browsers and the Lab load `apps/extension/dist/<target>/`, already
+ignored. `domain/.test-build/` is written and imported inside one
+`test-domain.mjs` process, and both domain tsconfigs already excluded it. CI
+builds everything it uses. The repository had already made this exact decision
+once, in `44c2b29`, for `domain/.script-build/`.
+
+Proof it worked: `pnpm build` now leaves `git status` clean, where the same
+build previously dirtied ten tracked files.
 
 ## A Guard Untracking Removed, And Why That Is Accepted
 
@@ -389,6 +444,52 @@ The only hook proposed is a `commit-msg` hook requiring the `Task:` trailer on
 - Outcome: Partial
 - Follow-up: Fill the four PENDING sections from the worker reports, then build
   `scripts/task/`.
+
+### 2026-09-17 — Generated output untracked, line endings normalized
+- Agent: supervisor, on the generated-output report
+- Changed: .gitattributes (new), .gitignore, 310 files untracked from apps/extension/build and domain/.test-build
+- Why: the five sourcemaps are single lines of 549KB-1.26MB, so any rebuild on
+  two branches conflicts unresolvably, and CRLF leaking into sourcesContent made
+  the same commit build different bytes in different checkouts.
+- Validation: `git ls-files | wc -l` -> 2385 before, 2081 after; `pnpm build` then
+  `git status --short` -> clean, where the same build previously dirtied 10 tracked files.
+- Outcome: Accepted
+- Follow-up: none
+
+### 2026-09-17 — scripts/worktree and scripts/task built
+- Agent: supervisor, integrating one worker
+- Changed: scripts/worktree/ (15 modules, extraction plus create/remove/core-sibling), scripts/task/ (10 modules), scripts/lab/pair/ imports, package.json
+- Why: isolation belongs to a unit of work, and lab:pair turned out to move
+  worktrees but never create one, so creation and teardown were the gap.
+- Validation: `pnpm lab:test` -> 60 pass 0 fail; `pnpm task:test` -> 61 pass 0 fail;
+  `pnpm check`, `pnpm test`, `pnpm build` -> all exit 0.
+- Outcome: Accepted
+- Follow-up: none
+
+### 2026-09-17 — Task t001 driven end to end, two bugs found
+- Agent: supervisor
+- Changed: scripts/task/{task-id,locate,list,start,abandon,finish}.mjs, scripts/task/run-task.mjs
+- Why: every command failed on first run — the module destructured { stdout }
+  from runGit, which resolves to the string itself — and locate reported the main
+  checkout as a task worktree, which would have made finish refuse every task
+  worked on in place. Unit tests missed both because they cover pure functions.
+- Validation: `pnpm task start test-drive` -> t001; `pnpm task finish t001` ->
+  `{"validation":{"ran":true,"command":"pnpm check","passed":true}}`, merged as
+  9712a2c; `git revert -m 1 9712a2c --no-commit` -> staged the whole task inverse.
+- Outcome: Accepted
+- Follow-up: none
+
+### 2026-09-17 — Worktree provisioning completed and measured
+- Agent: supervisor
+- Changed: scripts/task/start.mjs
+- Why: a fresh worktree installed cleanly then failed every type check, because
+  every workspace dist/ is gitignored and not only Core's. The earlier probe saw
+  the Core half only, having stopped at the first error.
+- Validation: `pnpm task start check-drive --worktree` -> 26.5s; `pnpm check` in
+  F:/fxwork/t002-check-drive -> exit 0 with no manual step. Second worktree 4.6s
+  with coreCreated false, proving the shared Core.
+- Outcome: Accepted
+- Follow-up: prune the shared Core and the 1.6 GB of scratch; see Open Questions.
 
 ## Open Questions
 
