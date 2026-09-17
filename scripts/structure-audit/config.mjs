@@ -72,6 +72,24 @@ export const CONFIG = {
     }
   ],
 
+  // Path prefixes whose source must stay neutral about any single domain: the
+  // web-vocabulary rule reads every name declared or read under them and fails
+  // on a web or DOM word that is not already baselined.
+  //
+  // Empty here, which makes the rule inert, and it has to be. That rule exists
+  // to keep one domain's vocabulary out of the framework every domain shares.
+  // This repository *is* that domain: a selector, an xpath, a browser tab, a
+  // click and an iframe are its subject matter, and its whole job is to map
+  // them onto Core's neutral contracts. A list of paths here would fail on
+  // nearly every file and mean nothing.
+  //
+  // It is mirrored rather than deleted for two reasons. The rule and its tests
+  // are byte-identical across the two repositories, so `pnpm structure:test`
+  // here proves the copy Core runs is the copy that was tested; and if this
+  // repository ever vendors a package that must stay domain-neutral, the guard
+  // is already here and needs one path added. Core lists `packages`.
+  domainNeutralPaths: [],
+
   // Path prefixes exempt from the depth limit because a framework dictates
   // their layout. None here; Core exempts its Next.js app router.
   depthExemptPrefixes: [],
