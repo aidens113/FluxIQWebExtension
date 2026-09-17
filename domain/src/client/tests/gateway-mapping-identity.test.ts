@@ -22,9 +22,10 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio";
 import type { JsonObject } from "fluxiq/core";
-import { elementFingerprint, outputTargetFromPayload, webAutomationOutputPayload } from "../../output-nodes";
-import { createWebAutomationRecordingEvent } from "../gateway-mapping";
+import { adaptedTargetSupersedesRecording, elementFingerprint, outputTargetFromPayload, webAutomationOutputPayload } from "../../output-nodes";
+import { createWebAutomationRecordingEvent, webAutomationActionFromGatewayCommand } from "../gateway-mapping";
 
 /** The `identity-drift` fixture's baseline Save action, as the extension puts it on the wire. */
 const recordedSave: JsonObject = {
@@ -107,4 +108,72 @@ test("a signal the normalizer does not know does not reach the page", () => {
   assert.ok(fingerprint);
   assert.equal(fingerprint.accessibleName, undefined);
   assert.equal("ariaName" in fingerprint, false);
+});
+
+// --- A persisted repair, as the page receives it (D-1) -----------------------
+//
+// An applied repair leaves the recorded `element` on the node and writes the
+// domain's resolution into `target`. The page acts on `command.selector` and
+// judges the match by `command.element`, so both have to name the repaired
+// control. Until D-1 the selector did and the element did not, and the page's
+// veto refused the control the repair named (`identity-resolution.spec.ts`
+// holds the same case in Chromium). Core's dispatch step is run, not restated:
+// it is the step that drops the repair's `handles`.
+
+/** What `validateWebRuntimeTargetOverrideEvidence` resolves the renamed Save to (`renamed-save-override.test.ts`). */
+const repairedSave: JsonObject = {
+  handles: { element: "target.2" },
+  handleResolution: "named",
+  tagName: "button",
+  accessibleName: "Apply changes",
+  selector: "main > form > section:nth-of-type(1) > div > button:nth-of-type(1)",
+  metadata: { controlType: "submit", formId: "settings-form" }
+};
+
+type DispatchedCommand = Exclude<ReturnType<typeof webAutomationActionFromGatewayCommand>, { status: "rejected" }>;
+
+function recordedSaveNode(): JsonObject {
+  return webAutomationOutputPayload("web.dom.click", recordedClick(recordedSave).payload as JsonObject);
+}
+
+/** `prepareElementTargetAction` with no runtime candidates: `target` normalized, everything else untouched. */
+function preparedByCore(parameters: JsonObject): JsonObject {
+  const target = normalizeAutomationStudioElementTarget(parameters.target, { source: "runtime" })
+    ?? normalizeAutomationStudioElementTarget(parameters, { source: "runtime" });
+  assert.ok(target, "Core found an element target to prepare");
+  return { ...parameters, target: target as unknown as JsonObject };
+}
+
+/** The command the gateway dispatches for these parameters, with the wire target built as `dispatchWebAutomationOutput` builds it. */
+function dispatchedClick(commandId: string, parameters: JsonObject, target = outputTargetFromPayload(parameters)): DispatchedCommand {
+  const command = webAutomationActionFromGatewayCommand({ commandId, actionType: "web.dom.click", ...(target ? { target } : {}), parameters });
+  assert.equal("status" in command, false, `the click was not refused: ${JSON.stringify(command)}`);
+  return command as DispatchedCommand;
+}
+
+test("a persisted repair reaches the page as one element: the repaired selector and the repaired identity", () => {
+  const stored = { ...recordedSaveNode(), target: repairedSave };
+  for (const [shape, parameters] of [["as the node stores it", stored], ["as Core dispatches it", preparedByCore(stored)]] as const) {
+    const wireTarget = outputTargetFromPayload(parameters);
+    const command = dispatchedClick(`repair:${shape}`, parameters, wireTarget);
+    assert.equal(command.selector, repairedSave.selector, shape);
+    assert.deepEqual(command.element, { selector: repairedSave.selector, tagName: "button", accessibleName: "Apply changes" }, shape);
+    assert.deepEqual(command.element, wireTarget?.element, `${shape}: the declared field and the wire target name the same element`);
+  }
+});
+
+test("an unrepaired recorded node keeps the whole recording on the declared field after Core's rewrite", () => {
+  const node = recordedSaveNode();
+  const prepared = preparedByCore(node);
+  assert.equal(adaptedTargetSupersedesRecording(prepared), false);
+  const command = dispatchedClick("unrepaired", prepared);
+  assert.deepEqual(command.element, elementFingerprint(node.element), "context, label and the implied role all survive");
+  assert.equal(command.selector, "#save-settings");
+});
+
+test("a command whose wire target carried no element still takes the repair, never the recording", () => {
+  const prepared = preparedByCore({ ...recordedSaveNode(), target: repairedSave });
+  const command = dispatchedClick("repair:bare-wire-target", prepared, { selector: String(repairedSave.selector) });
+  assert.equal(command.element?.accessibleName, "Apply changes");
+  assert.equal(command.element?.testId, undefined);
 });

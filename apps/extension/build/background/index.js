@@ -252,6 +252,47 @@ function isWebAutomationExtractFieldKey(key) {
 }
 
 // ../../domain/src/output-nodes/targets/targets.ts
+function adaptedTargetSupersedesRecording(parameters) {
+  const adaptedTarget = objectValue(parameters.target);
+  if (!adaptedTarget) return false;
+  if (adaptedTarget.selectedCandidate !== void 0) return true;
+  if (isRepairResolution(adaptedTarget)) return true;
+  const named = firstElementFingerprint([adaptedTarget.element, adaptedTarget.fingerprint, adaptedTarget]);
+  if (!named) return false;
+  const recorded = recordedStrings(parameters);
+  return DESCRIPTIVE_SIGNALS.some((signal) => {
+    const value = named[signal];
+    return typeof value === "string" && value.trim() !== "" && !recorded.has(comparableText(value));
+  });
+}
+var DESCRIPTIVE_SIGNALS = ["visibleText", "text", "accessibleName", "label", "id", "testId", "tagName", "role", "implicitRole"];
+var CORE_SIGNAL_LENGTH = 1e3;
+function isRepairResolution(target) {
+  return objectValue(target.handles) !== void 0 && (target.handleResolution === "named" || target.handleResolution === "inferred");
+}
+function recordedStrings(parameters) {
+  const element = objectValue(parameters.element);
+  const described = [parameters, element].flatMap((source) => source ? [source, objectValue(source.metadata), objectValue(source.visualTarget)] : []);
+  const strings = /* @__PURE__ */ new Set();
+  for (const source of described) {
+    for (const value of [...Object.values(source ?? {}), ...Object.values(objectValue(source?.attributes) ?? {})]) {
+      if (typeof value !== "string") continue;
+      strings.add(comparableText(value));
+      strings.add(comparableText(value.trim().slice(0, CORE_SIGNAL_LENGTH)));
+    }
+  }
+  return strings;
+}
+function comparableText(value) {
+  return value.trim().toLowerCase();
+}
+function firstElementFingerprint(sources) {
+  for (const source of sources) {
+    const fingerprint = elementFingerprint(source);
+    if (fingerprint && Object.keys(fingerprint).length > 0) return fingerprint;
+  }
+  return void 0;
+}
 function elementFingerprint(value) {
   const element = objectValue(value);
   if (!element) return void 0;
@@ -4982,8 +5023,9 @@ function commandElementFingerprint(target, parameters) {
   return void 0;
 }
 function elementFingerprintSources(target, parameters) {
+  if (!adaptedTargetSupersedesRecording(parameters)) return [parameters.element, target.element, target.fingerprint];
   const adaptedTarget = jsonObject4(parameters.target);
-  return adaptedTarget?.selectedCandidate !== void 0 ? [target.element, target.fingerprint, parameters.element] : [parameters.element, target.element, target.fingerprint];
+  return [target.element, target.fingerprint, adaptedTarget?.element, adaptedTarget?.fingerprint, adaptedTarget, parameters.element];
 }
 function webAutomationActionResultPayload(result) {
   return compactJsonObject2({

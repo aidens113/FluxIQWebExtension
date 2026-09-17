@@ -9,6 +9,9 @@ export function outputTargetFromPayload(payload: JsonObject): WebAutomationOutpu
   const selectedCandidate = selectedTargetCandidate(adaptedTarget);
   const explicitVisualTarget = objectValue(adaptedTarget?.visualTarget) ?? objectValue(payload.visualTarget);
   const element = firstElementFingerprint(elementFingerprintSources(payload, adaptedTarget, adaptedFingerprint, selectedCandidate));
+  // The selector keeps the order it always had, adapted first. What changed is
+  // that the identity now follows it whenever the adaptation names another
+  // element, so the page judges the selector's match by the same description.
   const selector = stringValue(selectedCandidate?.selector)
     ?? stringValue(adaptedFingerprint?.selector)
     ?? stringValue(adaptedTarget?.selector)
@@ -24,38 +27,19 @@ export function outputTargetFromPayload(payload: JsonObject): WebAutomationOutpu
 }
 
 /**
- * Where the dispatched target's element identity comes from, richest
- * trustworthy source first — which is not always the adapted target.
- *
- * Core's `prepareElementTargetAction` runs on **every** policy output dispatch
- * (`runtime/io-policy.ts`). It normalizes an element target out of the
- * parameters and writes it back as `parameters.target`, which is the
- * `adaptedTarget` read above. Whether that copy is better than the recorded
- * `payload.element` depends entirely on whether Core matched anything, and
- * `selectedCandidate` on the adapted target is what says so:
- *
- * - **Core matched a runtime candidate.** The adapted target then describes the
- *   element the page really has — this is drift correction — and it wins over
- *   the recorded description, which may name an element that has since moved or
- *   been renamed. Discarding it in favour of a stale `payload.element` would
- *   silently undo the correction.
- * - **Core matched nothing**, which is every dispatch today, because nothing
- *   populates `candidates` yet. Core's `normalizeAutomationStudioElementTarget`
- *   now reads `parameters.element` beside the parameters' own keys, so
- *   `adaptedTarget.fingerprint` carries the recorded signals Core's fingerprint
- *   names. It has no `context`, `checked`, `name`, `href`, `inputType` or
- *   `value`, it folds `implicitRole` into `role`, and `adaptedTarget.element`
- *   does not come back at all. That is a lossy re-derivation of the same
- *   recorded element, not a newer one, so the recording wins. Before Core read
- *   the element, measured on the executed path against the `identity-drift`
- *   Save button: 11 identity signals on the recorded element (the twelfth,
- *   `label`, is one a `<button>` does not have), 1 on the adapted target, 11
- *   after this ordering.
- *
- * The rule is the one `client/gateway-mapping.ts` `elementFingerprintSources`
- * already applies to the declared `command.element`, deliberately stated the
- * same way here so the two ends of the same dispatch cannot disagree about
+ * Where the dispatched target's element identity comes from: the adapted
+ * target when it names another element, the recording otherwise.
+ * `adaptedTargetSupersedesRecording` decides which, and
+ * `client/gateway-mapping.ts` asks it the same question for the declared
+ * `command.element`, so the two ends of one dispatch cannot disagree about
  * which element is being acted on.
+ *
+ * The adapted sources are read the way Core reads a target: its own
+ * `element`, the runtime candidate it selected, its `fingerprint`, and the
+ * target itself when it is flat. The flat form is how the domain's repair
+ * resolution is stored on a node before Core rewrites it. A Core-shaped target
+ * has no fingerprint key at its top level, so it normalizes to nothing and is
+ * skipped.
  */
 function elementFingerprintSources(
   payload: JsonObject,
@@ -63,8 +47,100 @@ function elementFingerprintSources(
   adaptedFingerprint: JsonObject | undefined,
   selectedCandidate: JsonObject | undefined
 ): unknown[] {
-  const adapted = [adaptedTarget?.element, selectedCandidate, adaptedFingerprint];
-  return adaptedTarget?.selectedCandidate !== undefined ? [...adapted, payload.element] : [payload.element, ...adapted];
+  const adapted = [adaptedTarget?.element, selectedCandidate, adaptedFingerprint, adaptedTarget];
+  return adaptedTargetSupersedesRecording(payload) ? [...adapted, payload.element] : [payload.element, ...adapted];
+}
+
+/**
+ * Whether a node's `target` names the element to act on in place of the one
+ * its `element` recorded.
+ *
+ * The recorded description is the richer one, so it wins by default: Core has
+ * no `context`, `checked`, `name`, `href`, `inputType` or `value`, and it folds
+ * `implicitRole` into `role`. That default is right only while the target
+ * describes the *same* element. Three things say it describes another one:
+ *
+ * - **Core matched a runtime candidate** (`selectedCandidate`). The target then
+ *   describes the element the page really has, which is drift correction.
+ * - **It is the domain's own repair resolution**, as an applied repair stores
+ *   it (`runtime/llm-evidence/target-override.ts`: `handles` beside
+ *   `handleResolution`).
+ * - **It names a descriptive value the node's parameters do not hold.** This is
+ *   the same repair once it is dispatched, and it is the case that matters.
+ *   Core's `prepareElementTargetAction` runs on every policy output dispatch and
+ *   rewrites `parameters.target` through its element-target normalizer, which
+ *   drops `handles` and `handleResolution`. The repair arrives here as
+ *   `{ kind, fingerprint, source: "runtime" }`, indistinguishable by shape from
+ *   Core's re-derivation of an unrepaired node. It is told apart by content. A
+ *   re-derivation reads nothing but the node's own parameters, its `element`,
+ *   and their `metadata`, `visualTarget` and `attributes`. So every value it
+ *   names is one of their strings, trimmed and cut at Core's length bound. A
+ *   repair to a renamed control names a label the recording never held.
+ *
+ * Only descriptive signals are compared, never `selector` or `xpath`. A target
+ * that only *locates* the recorded control somewhere else keeps the recorded
+ * identity, and the page still checks the new location against it. The
+ * selector itself comes from the adapted target either way.
+ *
+ * Before this rule only the first case counted. An applied repair on a
+ * recorded Flow therefore dispatched the repaired selector with the stale
+ * recorded identity, and the page's veto refused the control the repair named
+ * (D-1, reports/w2-back-half-design.md). The measurement is in
+ * reports/w2-w1-repair-precedence.md.
+ *
+ * What it costs, named: a repair that happens to name only values the recording
+ * already holds keeps the recorded identity. That is the pre-D-1 behaviour, and
+ * the page then judges the repair by the recording.
+ */
+export function adaptedTargetSupersedesRecording(parameters: JsonObject): boolean {
+  const adaptedTarget = objectValue(parameters.target);
+  if (!adaptedTarget) return false;
+  if (adaptedTarget.selectedCandidate !== undefined) return true;
+  if (isRepairResolution(adaptedTarget)) return true;
+  const named = firstElementFingerprint([adaptedTarget.element, adaptedTarget.fingerprint, adaptedTarget]);
+  if (!named) return false;
+  const recorded = recordedStrings(parameters);
+  return DESCRIPTIVE_SIGNALS.some((signal) => {
+    const value = named[signal];
+    return typeof value === "string" && value.trim() !== "" && !recorded.has(comparableText(value));
+  });
+}
+
+/** The signals that say what an element is, as `elementFingerprint` names them. Where it sits is not among them. */
+const DESCRIPTIVE_SIGNALS = ["visibleText", "text", "accessibleName", "label", "id", "testId", "tagName", "role", "implicitRole"] as const satisfies readonly (keyof WebAutomationElementFingerprint)[];
+
+/** Core's `truncate` bound on every string its element-target normalizer keeps (`model/action-element-target.ts`). */
+const CORE_SIGNAL_LENGTH = 1_000;
+
+/** The shape `validateWebRuntimeTargetOverrideEvidence` resolves a repair to, before Core has rewritten it. */
+function isRepairResolution(target: JsonObject): boolean {
+  return objectValue(target.handles) !== undefined && (target.handleResolution === "named" || target.handleResolution === "inferred");
+}
+
+/**
+ * Every string Core's re-derivation of this node could have copied. It reads
+ * the node's parameters and their `element`, each with its `metadata` and
+ * `visualTarget`, and the `attributes` of any of those. Keys are ignored on
+ * purpose: Core folds `text` into `visibleText`, `implicitRole` into `role` and
+ * `elementId` into `id`, and whatever it folds, it folds from these values.
+ */
+function recordedStrings(parameters: JsonObject): Set<string> {
+  const element = objectValue(parameters.element);
+  const described = [parameters, element].flatMap((source) => source ? [source, objectValue(source.metadata), objectValue(source.visualTarget)] : []);
+  const strings = new Set<string>();
+  for (const source of described) {
+    for (const value of [...Object.values(source ?? {}), ...Object.values(objectValue(source?.attributes) ?? {})]) {
+      if (typeof value !== "string") continue;
+      strings.add(comparableText(value));
+      strings.add(comparableText(value.trim().slice(0, CORE_SIGNAL_LENGTH)));
+    }
+  }
+  return strings;
+}
+
+/** A value as the comparison sees it. Core trims but keeps case; ignoring case only makes a re-derivation easier to recognise. */
+function comparableText(value: string): string {
+  return value.trim().toLowerCase();
 }
 
 /**

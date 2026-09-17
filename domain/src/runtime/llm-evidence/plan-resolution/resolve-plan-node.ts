@@ -15,6 +15,13 @@
 // A handle's element in a child frame also writes `browserFrameId`, and a node
 // that already names a different frame is refused rather than silently moved.
 //
+// A resolved selector handle also writes `element`: who the element the model
+// was shown is, in the shape a recorded node carries it
+// (`element-identity.ts`). Without it Core reads a type node's `text` as the
+// element's identity and the page refuses the right control. The handle is the
+// authority on that identity, so an `element` the model wrote beside a handle
+// is replaced; beside a literal selector it is the model's own and stays.
+//
 // Nothing is guessed. A node with no handle is `unchanged` -- a literal
 // selector the model wrote stays exactly as it wrote it and is never reported
 // as resolved. A handle anywhere else, of the wrong kind for its slot, in the
@@ -73,10 +80,17 @@ const SELECTOR_NODE_IDS: ReadonlySet<string> = new Set(
     .map((definition) => webAutomationOutputNodeId(definition.actionType))
 );
 
+/** The web nodes whose schema takes an `element`: the only nodes a resolved target's identity is written onto. */
+const ELEMENT_NODE_IDS: ReadonlySet<string> = new Set(
+  webAutomationActionDefinitions
+    .filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "element" in definition.parameterSchema.properties)
+    .map((definition) => webAutomationOutputNodeId(definition.actionType))
+);
+
 /** The one node an extraction handle may name a request for. */
 const EXTRACT_LIST_NODE_ID = webAutomationOutputNodeId("web.dom.extract_list");
 
-type Resolved = { value: JsonValue; frameId: number | undefined };
+type Resolved = { value: JsonValue; frameId: number | undefined; element: JsonObject | undefined };
 
 const TARGET_ISSUES = {
   unknown: "web.handle.unknown",
@@ -112,6 +126,8 @@ export function resolveWebPlanNodeParameters(input: WebPlanNodeResolutionInput, 
 
   const parameters: JsonObject = {};
   for (const [key, value] of Object.entries(input.parameters)) parameters[key] = replaced.get(key)?.value ?? value;
+  const identity = replaced.get("selector")?.element;
+  if (identity !== undefined && ELEMENT_NODE_IDS.has(input.nodeDefinitionId)) parameters.element = identity;
   if (frameId !== undefined && frameId !== 0) parameters.browserFrameId = frameId;
   return { status: "resolved", parameters };
 }
@@ -125,7 +141,7 @@ function resolveTarget(value: Record<string, unknown>, scope: { projectId: strin
   if (value.location !== undefined && (typeof value.location !== "string" || value.location === "")) return "web.handle.malformed";
   const resolution = targets.resolve(scope, handle, value.location as string | undefined);
   if (!resolution.ok) return TARGET_ISSUES[resolution.code];
-  return { value: resolution.selector, frameId: resolution.frameId };
+  return { value: resolution.selector, frameId: resolution.frameId, element: resolution.element as unknown as JsonObject };
 }
 
 function resolveExtraction(value: Record<string, unknown>, scope: { projectId: string; flowId: string }, extractions: WebLlmExtractionHandles): Resolved | WebPlanHandleIssueCode {
@@ -143,7 +159,7 @@ function resolveExtraction(value: Record<string, unknown>, scope: { projectId: s
   // so a handle never resolves into a request the page would not run.
   const checked = webAutomationExtractListRequestValue(request);
   if (checked === undefined || checked.minItems !== request.minItems || checked.maxItems !== request.maxItems) return "web.handle.malformed";
-  return { value: request, frameId: resolution.binding.frameId };
+  return { value: request, frameId: resolution.binding.frameId, element: undefined };
 }
 
 /** A handle slot's value written as a handle: any object with a `handle` key. Its shape is judged by the slot. */

@@ -4,7 +4,9 @@
 // What these rows are really proving:
 // - a `selector` handle becomes the selector behind it -- the real one, which
 //   the packet the model read never contained -- and a child frame's element
-//   also names its frame;
+//   also names its frame. The node also carries its element's identity, which
+//   `plan-node-identity.test.ts` covers; here it is only part of the expected
+//   parameters;
 // - an extraction handle becomes the request the detection kept, with the
 //   plan's own bounds, held to the reader a dispatch is refused by;
 // - a node with no handle is `unchanged`: a literal selector is never passed
@@ -38,6 +40,14 @@ const FORM_URL = "https://example.test/form";
 const NAME_SELECTOR = 'input[name="name"]';
 const nameField: JsonObject = { tagName: "input", selector: NAME_SELECTOR, inputType: "text", accessibleName: "Name", attributes: { name: "name", type: "text" } };
 const submit: JsonObject = { tagName: "button", selector: "#submit", visibleText: "Submit" };
+/** Who those two are, as a resolved node carries them. */
+const NAME_IDENTITY: JsonObject = { tagName: "input", accessibleName: "Name", selector: NAME_SELECTOR };
+const SUBMIT_IDENTITY: JsonObject = { tagName: "button", visibleText: "Submit", selector: "#submit" };
+
+/** A click node resolved onto a described control that has only a tag, a selector and its text. */
+function clickResolvedTo(selector: string, tagName: string, visibleText: string) {
+  return { status: "resolved", parameters: { selector, element: { tagName, visibleText, selector } } };
+}
 
 type Page = { url: string; elements: JsonObject[]; structure?: JsonValue };
 
@@ -79,11 +89,11 @@ test("a selector handle becomes the selector the exploration was shown, which th
   // The live failure this exists for: the model guessed `input[name="Name"]`. Given the handle instead, the plan gets the real one.
   assert.deepEqual(resolve(runtime, TYPE_NODE, { selector: { handle: "target.1" }, text: "Ada", timeoutMs: 5_000 }), {
     status: "resolved",
-    parameters: { selector: NAME_SELECTOR, text: "Ada", timeoutMs: 5_000 }
+    parameters: { selector: NAME_SELECTOR, text: "Ada", timeoutMs: 5_000, element: NAME_IDENTITY }
   });
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: FORM_URL } }), { status: "resolved", parameters: { selector: "#submit" } });
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: FORM_URL } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
   // A node already naming the top frame keeps doing so.
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2" }, browserFrameId: 0 }), { status: "resolved", parameters: { selector: "#submit", browserFrameId: 0 } });
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2" }, browserFrameId: 0 }), { status: "resolved", parameters: { selector: "#submit", browserFrameId: 0, element: SUBMIT_IDENTITY } });
 });
 
 test("a node with no handle is unchanged, and a literal selector is never passed off as resolved", async () => {
@@ -153,19 +163,19 @@ test("handles are resolved per page: a recapture replaces a page, pages that dis
   // A recapture of the same page is the model's new view of it.
   page = { url: "https://example.test/a", elements: [{ tagName: "button", selector: "#renamed", visibleText: "Renamed" }] };
   await inspect(runtime);
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), { status: "resolved", parameters: { selector: "#renamed" } });
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), clickResolvedTo("#renamed", "button", "Renamed"));
 
   // Another page agreeing on the handle leaves it resolvable bare.
   page = { url: "https://example.test/b", elements: [{ tagName: "button", selector: "#renamed", visibleText: "Renamed" }] };
   await inspect(runtime);
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), { status: "resolved", parameters: { selector: "#renamed" } });
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), clickResolvedTo("#renamed", "button", "Renamed"));
 
   // One that disagrees makes it ambiguous bare, and each page still answers for itself.
   page = { url: "https://example.test/c", elements: [{ tagName: "a", selector: "#other", visibleText: "Other" }] };
   await inspect(runtime);
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), refusedWith("web.handle.ambiguous"));
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1", location: "https://example.test/c" } }), { status: "resolved", parameters: { selector: "#other" } });
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1", location: "https://example.test/a" } }), { status: "resolved", parameters: { selector: "#renamed" } });
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1", location: "https://example.test/c" } }), clickResolvedTo("#other", "a", "Other"));
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1", location: "https://example.test/a" } }), clickResolvedTo("#renamed", "button", "Renamed"));
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1", location: "https://example.test/never" } }), refusedWith("web.handle.unknown"));
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: "https://example.test/c" } }), refusedWith("web.handle.unknown"));
 
@@ -176,7 +186,7 @@ test("handles are resolved per page: a recapture replaces a page, pages that dis
   }
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1", location: "https://example.test/a" } }), refusedWith("web.handle.stale"));
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.3" } }), refusedWith("web.handle.stale"));
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), { status: "resolved", parameters: { selector: "#other" } });
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), clickResolvedTo("#other", "button", "Other"));
 });
 
 test("a handle is this project and Flow's alone, and a reveal's recapture is what the plan resolves against", async () => {
@@ -193,7 +203,7 @@ test("a handle is this project and Flow's alone, and a reveal's recapture is wha
   assert.deepEqual(resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" } }), refusedWith("web.handle.unknown"));
   const revealed = await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.reveal", toolId: WEB_LLM_REVEAL_TOOL_ID, value: { target: "target.1" } });
   assert.equal(revealed.resultCode, "web.action.succeeded");
-  assert.deepEqual(resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" } }), { status: "resolved", parameters: { selector: NAME_SELECTOR } });
+  assert.deepEqual(resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" } }), { status: "resolved", parameters: { selector: NAME_SELECTOR, element: NAME_IDENTITY } });
 });
 
 test("a misplaced or malformed handle refuses the whole node, by name", async () => {
@@ -236,17 +246,23 @@ test("a selector the page gave to several controls is refused rather than acted 
   await inspect(runtime);
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.3" } }), refusedWith("web.handle.not_unique"));
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: "https://example.test/catalog" } }), refusedWith("web.handle.not_unique"));
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), { status: "resolved", parameters: { selector: "#submit" } });
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" } }), { status: "resolved", parameters: { selector: "#submit", element: SUBMIT_IDENTITY } });
   // A page that describes the link alone does not make the other page's shared selector unique.
   page = { url: "https://example.test/other", elements: [submit, link("one")] };
   await inspect(runtime);
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2" } }), refusedWith("web.handle.not_unique"));
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: "https://example.test/other" } }), { status: "resolved", parameters: { selector: '[data-testid="product-link"]' } });
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: "https://example.test/other" } }), {
+    status: "resolved",
+    parameters: { selector: '[data-testid="product-link"]', element: { tagName: "a", accessibleName: "one", selector: '[data-testid="product-link"]' } }
+  });
   // In another frame, the same selector is a different address.
   const framedLink: JsonObject = { tagName: "a", selector: 'frame[4] >> [data-testid="product-link"]', accessibleName: "framed", attributes: { href: "/p/framed", "data-testid": "product-link", "data-fluxiq-frame-id": "4" } };
   page = { url: "https://example.test/framed", elements: [link("top"), framedLink] };
   await inspect(runtime);
-  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: "https://example.test/framed" } }), { status: "resolved", parameters: { selector: '[data-testid="product-link"]', browserFrameId: 4 } });
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.2", location: "https://example.test/framed" } }), {
+    status: "resolved",
+    parameters: { selector: '[data-testid="product-link"]', element: { tagName: "a", accessibleName: "framed", selector: '[data-testid="product-link"]' }, browserFrameId: 4 }
+  });
 });
 
 test("a child frame's element names its frame, and a node naming another frame is refused", async () => {
@@ -255,9 +271,9 @@ test("a child frame's element names its frame, and a node naming another frame i
   await inspect(runtime);
   assert.deepEqual(resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" }, text: "Ada" }), {
     status: "resolved",
-    parameters: { selector: NAME_SELECTOR, text: "Ada", browserFrameId: 7 }
+    parameters: { selector: NAME_SELECTOR, text: "Ada", element: NAME_IDENTITY, browserFrameId: 7 }
   });
-  assert.deepEqual(resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" }, browserFrameId: 7 }), { status: "resolved", parameters: { selector: NAME_SELECTOR, browserFrameId: 7 } });
+  assert.deepEqual(resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" }, browserFrameId: 7 }), { status: "resolved", parameters: { selector: NAME_SELECTOR, browserFrameId: 7, element: NAME_IDENTITY } });
   assert.deepEqual(resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" }, browserFrameId: 3 }), refusedWith("web.handle.frame_mismatch"));
   assert.deepEqual(resolve(runtime, TYPE_NODE, { selector: { handle: "target.2" }, browserFrameId: 0 }), refusedWith("web.handle.frame_mismatch"));
   assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: "target.1" }, browserFrameId: 7 }), refusedWith("web.handle.frame_mismatch"));

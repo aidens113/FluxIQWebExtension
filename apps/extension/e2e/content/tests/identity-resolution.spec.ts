@@ -53,6 +53,8 @@
 // middle two apart.
 
 import type { Page } from "@playwright/test";
+import { outputTargetFromPayload, webAutomationActionFromGatewayCommand, webAutomationOutputPayload } from "@fluxiq-web-extension/domain/client";
+import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio";
 import { expect, test } from "../index.js";
 import type { ContentHarness } from "../index.js";
 import {
@@ -267,6 +269,56 @@ test.describe("scored selection: Core's matcher decides what an exact strategy c
     expect((await harness.finalState()).state).toMatchObject({ mode: "renamed-redesign", saveCount: 0, discardCount: 0, savedInMode: null, status: "" });
   });
 
+  // D-1 (reports/w2-back-half-design.md). The row above is a recorded Flow with
+  // no repair. This is the same node once a correct repair has been approved
+  // and applied: its `target` names the renamed control, and its `element`
+  // still names the Save that was recorded. The repaired selector used to
+  // travel with the stale identity, so the veto refused the very control the
+  // repair named, as uncorroborated by "Save changes", and scoring failed at
+  // -0.104. The repair has to win on both halves, and the veto still has to
+  // refuse a wrong element when judged against the repair.
+  test("a persisted repair of the recorded Save resolves Apply changes on renamed-redesign, and the veto still refuses Discard", async ({ openHarness, page }) => {
+    const harness = await openHarness("identity-drift");
+    const recorded = await describe(harness, SAVE_BASELINE);
+    const bounds = await documentRect(harness, SAVE_BASELINE);
+
+    for (const [shape, point] of [["replay", {}], ["flow", { visualTarget: visualTarget({ documentBounds: bounds }) }]] as const) {
+      await armMode(harness, "renamed-redesign");
+      await expect(page.locator(REPAIRED_SAVE.selector)).toHaveText("Apply changes");
+      const clicks = await trackClicks(page);
+
+      const reply = await harness.runAction(dispatchedRepair(`persisted-repair:${shape}`, { element: recorded as unknown as NodePayload, ...point }));
+
+      expect(reply, `${shape}: ${reply.message}`).toMatchObject({
+        status: "succeeded",
+        element: { tagName: "button", accessibleName: "Apply changes" },
+        resolution: { strategy: "selector", candidateCount: 1 }
+      });
+      expect(await clicks()).toEqual(["Apply changes"]);
+      await expect
+        .poll(async () => (await harness.finalState()).state)
+        .toMatchObject({ mode: "renamed-redesign", savedInMode: "renamed-redesign", saveCount: 1, discardCount: 0 });
+    }
+
+    // The same repaired node after the page moved on again: Apply changes is
+    // gone, so the repaired selector now lands on Discard. Judged against the
+    // repair, Discard answers nothing it named, and nothing is pressed.
+    await armMode(harness, "renamed-redesign");
+    await page.locator(REPAIRED_SAVE.selector).evaluate((element) => element.remove());
+    await expect(page.locator(REPAIRED_SAVE.selector)).toHaveText("Discard changes");
+    const staleClicks = await trackClicks(page);
+
+    const refused = await harness.runAction(dispatchedRepair("persisted-repair:stale", { element: recorded as unknown as NodePayload, visualTarget: visualTarget({ documentBounds: bounds }) }));
+
+    expect(refused, refused.message).toMatchObject({ status: "failed", failure: TARGET_NOT_FOUND });
+    // Contradicted, not merely uncorroborated: Discard scores -0.13 against the
+    // repair, and the selector, the point and the fingerprint all land on it.
+    expect(refused.message).toContain('refused button[data-testid="discard-changes"] "Discard changes" scoring -0.13)');
+    expect(refused.message).not.toContain("Apply changes");
+    expect(await staleClicks()).toEqual([]);
+    expect((await harness.finalState()).state).toMatchObject({ saveCount: 0, discardCount: 0, savedInMode: null });
+  });
+
   test("reworded-aria: the surviving accessible name resolves the right control, and Discard is not touched", async ({ openHarness, page }) => {
     const harness = await openHarness("identity-drift");
     const recorded = await describe(harness, SAVE_BASELINE);
@@ -436,6 +488,42 @@ test.describe("a successful resolution says how sure it was", () => {
     expect(reply.resolution).toBeUndefined();
   });
 });
+
+/**
+ * What `validateWebRuntimeTargetOverrideEvidence` resolves the model's
+ * `{ element: "target.2" }` to on this page, copied from its output as
+ * `domain/src/runtime/llm-evidence/tests/renamed-save-override.test.ts` pins it.
+ * This is what an applied repair stores as the node's `target`.
+ */
+const REPAIRED_SAVE = {
+  handles: { element: "target.2" },
+  handleResolution: "named",
+  tagName: "button",
+  accessibleName: "Apply changes",
+  selector: "main > form > section:nth-of-type(1) > div > button:nth-of-type(1)",
+  metadata: { controlType: "submit", formId: "settings-form" }
+} as const;
+
+type NodePayload = Parameters<typeof webAutomationOutputPayload>[1];
+
+/**
+ * The command a live run dispatches for the recorded click once the repair is
+ * applied, built by the code that ships at every hop but one. The node is
+ * `webAutomationOutputPayload`'s, and the repair is written onto it as Core's
+ * adaptation apply writes it. Core's `prepareElementTargetAction` then rewrites
+ * `target` through its element-target normalizer, called here; with no runtime
+ * candidates it changes nothing else, and it drops `handles`. That private step
+ * is the one hop restated. The wire target and the command come from the
+ * domain's own mapping.
+ */
+function dispatchedRepair(commandId: string, recording: NodePayload): Parameters<ContentHarness["runAction"]>[0] {
+  const node = webAutomationOutputPayload("web.dom.click", recording);
+  const prepared = { ...node, target: normalizeAutomationStudioElementTarget({ ...REPAIRED_SAVE }, { source: "runtime" }) as unknown as NodePayload };
+  const target = outputTargetFromPayload(prepared);
+  const command = webAutomationActionFromGatewayCommand({ commandId, actionType: "web.dom.click", ...(target ? { target } : {}), parameters: prepared });
+  if ("status" in command) throw new Error(`the domain rejected the repaired click: ${command.message}`);
+  return command;
+}
 
 // The near-miss: a different action whose label contains the recorded one
 // (design A, reports/i-resolver-safety.md "(a)", rows R1-R4 and R7-R8). Save is

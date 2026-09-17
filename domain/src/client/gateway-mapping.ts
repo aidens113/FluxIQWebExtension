@@ -19,7 +19,7 @@ import {
 import { webAutomationExtractionSummaryValue, webAutomationRecordedExtraction, type WebAutomationExtractListRequest } from "../actions/extraction";
 import { webAutomationStructureDetectionValue } from "../extraction";
 import { webAutomationActionDefinitions } from "../actions/schemas";
-import { elementFingerprint, webAutomationUnresolvedSecretParameters, webAutomationUploadBindingPath } from "../output-nodes";
+import { adaptedTargetSupersedesRecording, elementFingerprint, webAutomationUnresolvedSecretParameters, webAutomationUploadBindingPath } from "../output-nodes";
 import { WEB_AUTOMATION_FAILURE_CODES, webAutomationFailureRecord } from "../runtime/failure";
 import { WEB_AUTOMATION_WITHHELD_COMPARISON_TEXT, isProducerRedactedComparison, isSensitiveElementDescriptor } from "../sensitivity";
 import { webAutomationReadActionParameters } from "./gateway-action-parameters";
@@ -224,27 +224,28 @@ function commandElementFingerprint(target: JsonObject, parameters: JsonObject): 
  * Core's `prepareElementTargetAction` runs on every policy output dispatch. It
  * normalizes an element target out of the parameters and writes it back as
  * `parameters.target`, and `output-nodes/targets.ts` `outputTargetFromPayload`
- * builds the wire `target.element` from that. Which of the two is better
- * depends on whether Core actually matched anything:
+ * builds the wire `target.element` from that. Which of the two is better is
+ * the question `adaptedTargetSupersedesRecording` answers, and the wire target
+ * was built by the same answer:
  *
- * - **It matched a runtime candidate** (`selectedCandidate` is set). The wire
- *   target then describes the element the page really has, and it wins over the
- *   recorded one, which may be stale.
- * - **It matched nothing**, which is every dispatch today, because nothing
- *   populates `candidates` yet. Core's normalization now reads
- *   `parameters.element` too, but into Core's fingerprint, which has no
- *   `context`, `checked`, `name`, `href`, `inputType` or `value`, so the target
- *   it writes back is still a lossy copy of the same recorded element (before
- *   that, `{ selector, statePath }`: 11 identity signals measured before Core
- *   prepared the target, 1 after). Taking the target first there would hand the
- *   page less than the untyped `options.element` beside it, which is the whole
+ * - **The target names another element**: Core matched a runtime candidate, or
+ *   a persisted repair renamed the control. The wire target then describes the
+ *   element to act on, and it wins over the recorded one, which is stale. The
+ *   adapted target on the parameters follows it, for a command whose wire
+ *   target carried no element of its own. Taking the recording first here is
+ *   D-1: the repaired selector travelled with the stale identity, and the
+ *   page's veto refused the control the repair named.
+ * - **It is Core's re-derivation of the recording**, which is every unrepaired
+ *   dispatch. Core's fingerprint has no `context`, `checked`, `name`, `href`,
+ *   `inputType` or `value`, so the target it writes back is a lossy copy of the
+ *   same recorded element. Taking the target first there would hand the page
+ *   less than the untyped `options.element` beside it, which is the whole
  *   reason a declared field is worth having.
  */
 function elementFingerprintSources(target: JsonObject, parameters: JsonObject): unknown[] {
+  if (!adaptedTargetSupersedesRecording(parameters)) return [parameters.element, target.element, target.fingerprint];
   const adaptedTarget = jsonObject(parameters.target);
-  return adaptedTarget?.selectedCandidate !== undefined
-    ? [target.element, target.fingerprint, parameters.element]
-    : [parameters.element, target.element, target.fingerprint];
+  return [target.element, target.fingerprint, adaptedTarget?.element, adaptedTarget?.fingerprint, adaptedTarget, parameters.element];
 }
 
 /**

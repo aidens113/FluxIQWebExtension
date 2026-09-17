@@ -17,12 +17,19 @@
 // it would act on whichever the page lists first. Such a handle resolves as
 // `not_unique`, as reveal refuses the same selector before it clicks.
 //
+// Each handle also keeps who its element is (`element-identity.ts`), which the
+// resolved node carries as `parameters.element`. Pages that agree on a bare
+// handle's selector but describe its element differently still resolve, since
+// they name one address, but with only the identity fields they agree on.
+//
 // Bounded twice: a Flow keeps its newest `RETAINED_PAGES_PER_FLOW` pages, and
 // the store keeps its newest `RETAINED_FLOWS` Flows. A page let go makes its
 // handles `stale` for that Flow; another Flow's handles are `unknown`, as they
 // are for the extraction handles (`structure/handles.ts`).
 
+import { present } from "../present";
 import type { WebLlmSnapshotBinding } from "../sanitize";
+import { webPlanElementIdentity, type WebPlanElementIdentity } from "./element-identity";
 
 const RETAINED_PAGES_PER_FLOW = 8;
 const RETAINED_FLOWS = 32;
@@ -32,7 +39,7 @@ const REMEMBERED_STALE_PAGES = 64;
 export type WebLlmTargetScope = { projectId: string; flowId: string };
 
 export type WebLlmTargetResolution =
-  | { ok: true; selector: string; frameId: number | undefined }
+  | { ok: true; selector: string; frameId: number | undefined; element: WebPlanElementIdentity }
   | { ok: false; code: "unknown" | "stale" | "ambiguous" | "not_unique" };
 
 export type WebLlmTargetPackets = {
@@ -41,7 +48,7 @@ export type WebLlmTargetPackets = {
   resolve(scope: WebLlmTargetScope, handle: string, location: string | undefined): WebLlmTargetResolution;
 };
 
-type PageTarget = { selector: string; frameId: number | undefined; shared: boolean };
+type PageTarget = { selector: string; frameId: number | undefined; element: WebPlanElementIdentity; shared: boolean };
 type PageTargets = Map<string, PageTarget>;
 type FlowPages = { pages: Map<string, PageTargets>; letGo: Set<string> };
 
@@ -65,7 +72,7 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
         if (selector === undefined) continue;
         const address = `${element.frameId ?? 0}\0${selector}`;
         uses.set(address, (uses.get(address) ?? 0) + 1);
-        targets.set(element.target, { selector, frameId: element.frameId, shared: false });
+        targets.set(element.target, { selector, frameId: element.frameId, element: webPlanElementIdentity(element, selector), shared: false });
       }
       for (const target of targets.values()) target.shared = (uses.get(`${target.frameId ?? 0}\0${target.selector}`) ?? 0) > 1;
       flow.pages.delete(location);
@@ -89,24 +96,54 @@ export function createWebLlmTargetPackets(): WebLlmTargetPackets {
         if (!page) return { ok: false, code: flow.letGo.has(location) ? "stale" : "unknown" };
         const target = page.get(handle);
         if (target === undefined) return { ok: false, code: "unknown" };
-        return target.shared ? { ok: false, code: "not_unique" } : { ok: true, selector: target.selector, frameId: target.frameId };
+        return target.shared ? { ok: false, code: "not_unique" } : resolved(target);
       }
       const seen = new Map<string, PageTarget>();
       for (const page of flow.pages.values()) {
         const target = page.get(handle);
         if (target === undefined) continue;
         const address = `${target.frameId ?? 0}\0${target.selector}`;
-        // One page sharing the selector makes the handle not unique wherever else it agrees.
         const known = seen.get(address);
-        seen.set(address, known?.shared ? known : target);
+        // One page sharing the selector makes the handle not unique wherever
+        // else it agrees, and the identity is only what every page said. A new
+        // record, so the pages' own stay as they were shown.
+        seen.set(address, known === undefined ? target : {
+          selector: known.selector,
+          frameId: known.frameId,
+          element: agreedIdentity(known.element, target.element),
+          shared: known.shared || target.shared
+        });
       }
       if (seen.size > 1) return { ok: false, code: "ambiguous" };
       const only = [...seen.values()][0];
       if (only?.shared) return { ok: false, code: "not_unique" };
-      if (only !== undefined) return { ok: true, selector: only.selector, frameId: only.frameId };
+      if (only !== undefined) return resolved(only);
       return { ok: false, code: flow.letGo.size > 0 ? "stale" : "unknown" };
     },
   };
+}
+
+/** A resolution whose identity is the caller's own copy, so nothing done to it reaches the store. */
+function resolved(target: PageTarget): WebLlmTargetResolution {
+  return { ok: true, selector: target.selector, frameId: target.frameId, element: structuredClone(target.element) };
+}
+
+/**
+ * What two pages' identities for one address agree on, field by field. They
+ * name the same address and not provably the same control, so the identity
+ * keeps only what both said rather than either page's version of it.
+ */
+function agreedIdentity(left: WebPlanElementIdentity, right: WebPlanElementIdentity): WebPlanElementIdentity {
+  const agreed = <T>(a: T, b: T): T | undefined => (JSON.stringify(a) === JSON.stringify(b) ? a : undefined);
+  return present<WebPlanElementIdentity>({
+    tagName: agreed(left.tagName, right.tagName),
+    role: agreed(left.role, right.role),
+    accessibleName: agreed(left.accessibleName, right.accessibleName),
+    visibleText: agreed(left.visibleText, right.visibleText),
+    selector: agreed(left.selector, right.selector),
+    inputType: agreed(left.inputType, right.inputType),
+    context: agreed(left.context, right.context)
+  });
 }
 
 function scopeKey(scope: WebLlmTargetScope): string {

@@ -8,7 +8,10 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { elementFingerprint, outputTargetFromPayload } from "../targets";
+import { normalizeAutomationStudioElementTarget } from "fluxiq/automation-studio";
+import type { JsonObject } from "fluxiq/core";
+import { webAutomationOutputPayload } from "../..";
+import { adaptedTargetSupersedesRecording, elementFingerprint, outputTargetFromPayload } from "../targets";
 
 test("identity signals are read from the descriptor's own fields", () => {
   const fingerprint = elementFingerprint({
@@ -148,7 +151,7 @@ test("Core matched but adapted only the fingerprint: the adaptation is still not
   assert.equal((target?.element as { selector?: string }).selector, "#settings-save-v2");
 });
 
-test("an adapted target's own element wins when Core matched, and loses when it did not", () => {
+test("an adapted target's own element wins when Core matched, and when it names another control", () => {
   const adaptedElement = { selector: "#settings-save-v2", tagName: "button", testId: "save-changes-v2" };
   const matched = outputTargetFromPayload({
     selector: "#save-settings",
@@ -156,12 +159,22 @@ test("an adapted target's own element wins when Core matched, and loses when it 
     target: { element: adaptedElement, selectedCandidate: { candidateId: "candidate.current", confidence: 0.9 } }
   });
   assert.equal((matched?.element as { testId?: string }).testId, "save-changes-v2");
+  // No candidate was matched, but the test id is one the recording never held,
+  // so this is not a copy of the recording. Until D-1 it lost to the recording,
+  // which is how a persisted repair reached the page wearing the stale identity.
   const unmatched = outputTargetFromPayload({
     selector: "#save-settings",
     element: recordedElement,
     target: { element: adaptedElement }
   });
-  assert.equal((unmatched?.element as { testId?: string }).testId, "save-changes", "an unmatched pass-through is a re-derivation, not an adaptation");
+  assert.equal((unmatched?.element as { testId?: string }).testId, "save-changes-v2", "an element the recording never described is an adaptation");
+  // A pass-through of the recording's own element is still a re-derivation.
+  const passThrough = outputTargetFromPayload({
+    selector: "#save-settings",
+    element: recordedElement,
+    target: { element: { selector: "#save-settings", tagName: "BUTTON", testId: "save-changes", visibleText: " Save changes " } }
+  });
+  assert.equal(signalCount(passThrough), 12, "the recording's own values, however Core spaced or cased them, keep the richer recording");
 });
 
 test("a source with no recognized signal does not shadow one that has them", () => {
@@ -185,6 +198,101 @@ test("the element ordering does not decide the selector or the emptiness guard",
   })?.selector, "#adapted");
   assert.equal(outputTargetFromPayload({ element: recordedElement })?.selector, "#save-settings", "an element-only payload still resolves its selector from the element");
   assert.equal(outputTargetFromPayload({ element: { tagName: "button", text: "Save" } }), undefined, "no selector and no visual target is still no target");
+});
+
+// --- A persisted repair beats the recorded element (D-1) ---------------------
+//
+// An applied repair writes the domain's resolution into the node's `target`
+// and leaves the recorded `element` beside it. Core then rewrites `target` on
+// every dispatch, which drops the `handles` that mark it as a repair. The rows
+// below run Core's own normalizer for that step rather than a copy of what it
+// returns, because the rule depends on what that step keeps and what it loses.
+
+/** What `validateWebRuntimeTargetOverrideEvidence` resolves the renamed Save to (`renamed-save-override.test.ts`). */
+const repairedSave = {
+  handles: { element: "target.2" },
+  handleResolution: "named",
+  tagName: "button",
+  accessibleName: "Apply changes",
+  selector: "main > form > section:nth-of-type(1) > div > button:nth-of-type(1)",
+  metadata: { controlType: "submit", formId: "settings-form" }
+};
+
+/** The recorded Save node, as `webAutomationOutputPayload` builds it for a click. */
+const recordedNode = (): JsonObject => webAutomationOutputPayload("web.dom.click", {
+  element: recordedElement,
+  visualTarget: { namespace: "web", statePath: "web.elements.button.save", documentBounds: { x: 10, y: 20, width: 90, height: 30 } }
+});
+
+/** `prepareElementTargetAction` with no runtime candidates: `target` normalized, everything else untouched. */
+function dispatched(parameters: JsonObject): JsonObject {
+  const target = normalizeAutomationStudioElementTarget(parameters.target, { source: "runtime" })
+    ?? normalizeAutomationStudioElementTarget(parameters, { source: "runtime" });
+  assert.ok(target, "Core found an element target to prepare");
+  return { ...parameters, target: target as unknown as JsonObject };
+}
+
+test("an applied repair, as the node stores it, names the element the page is asked for", () => {
+  const node = { ...recordedNode(), target: repairedSave };
+  assert.equal(adaptedTargetSupersedesRecording(node), true);
+  const target = outputTargetFromPayload(node);
+  assert.equal(target?.selector, repairedSave.selector);
+  assert.deepEqual(target?.element, { selector: repairedSave.selector, tagName: "button", accessibleName: "Apply changes" });
+});
+
+test("the same repair after Core's dispatch rewrite still names it, though its handles are gone", () => {
+  const node = dispatched({ ...recordedNode(), target: repairedSave });
+  assert.equal("handles" in (node.target as JsonObject), false, "Core's rewrite keeps no marker, which is why the rule reads content");
+  assert.equal(adaptedTargetSupersedesRecording(node), true);
+  const target = outputTargetFromPayload(node);
+  assert.equal(target?.selector, repairedSave.selector);
+  assert.deepEqual(target?.element, { selector: repairedSave.selector, tagName: "button", accessibleName: "Apply changes" });
+  assert.equal((target?.element as { testId?: string }).testId, undefined, "nothing of the stale Save rides along");
+});
+
+test("Core's rewrite of an unrepaired node is recognised as the recording, whatever the recording looked like", () => {
+  const longText = `Save ${"and keep going ".repeat(120)}`.trim();
+  const recordings: Array<[string, string, JsonObject]> = [
+    ["the identity-drift Save", "web.dom.click", { element: { ...recordedElement, role: "", context: { formId: "settings-form", heading: "Workspace settings" } } }],
+    ["a typed field, whose typed text is not its identity", "web.dom.type", { inputValue: "Aurora Field Team", element: { selector: "#display-name", tagName: "input", inputType: "text", name: "displayName", label: "Workspace name", implicitRole: "textbox" } }],
+    ["signals only in the attributes", "web.dom.click", { element: { selector: "button.go", tagName: "button", attributes: { "aria-label": "Go now", "data-testid": "go" } } }],
+    ["padded text and an upper-case tag", "web.dom.click", { element: { selector: "#pad", tagName: "BUTTON", visibleText: "  Save changes  ", text: " Save changes " } }],
+    ["text and an implied role only", "web.dom.click", { element: { selector: "#plain", tagName: "a", text: "Read more", implicitRole: "link", href: "https://example.test/more" } }],
+    ["text past Core's length bound", "web.dom.click", { element: { selector: "#long", tagName: "button", visibleText: longText } }],
+    ["a visual target beside the element", "web.dom.click", { element: { selector: "#v", tagName: "button", visibleText: "Next" }, visualTarget: { namespace: "web", statePath: "web.elements.next", entityId: "next", entityKind: "button" } }]
+  ];
+  assert.ok(longText.length > 1_000, "the fixture reaches Core's bound");
+  for (const [name, outputId, recording] of recordings) {
+    const node = webAutomationOutputPayload(outputId, recording);
+    const prepared = dispatched(node);
+    assert.equal(adaptedTargetSupersedesRecording(prepared), false, name);
+    assert.deepEqual(outputTargetFromPayload(prepared)?.element, outputTargetFromPayload(node)?.element, `${name}: the recording is dispatched whole`);
+  }
+});
+
+test("a target that only moves the recorded control keeps the recorded identity, and still moves the selector", () => {
+  const node = dispatched({ ...recordedNode(), target: { tagName: "button", accessibleName: "Save changes", visibleText: "Save changes", selector: "footer > button" } });
+  assert.equal(adaptedTargetSupersedesRecording(node), false);
+  const target = outputTargetFromPayload(node);
+  assert.equal(target?.selector, "footer > button");
+  assert.equal(signalCount(target), 12, "the page checks the new place against everything the recording knew");
+});
+
+test("a repair with no selector still carries its own identity, beside the recorded selector the page will check against it", () => {
+  // What the resolution is once the caller no longer holds the binding that issued the handle.
+  const fingerprintOnly = { handles: repairedSave.handles, handleResolution: "named", tagName: "button", accessibleName: "Apply changes", metadata: repairedSave.metadata };
+  const node = dispatched({ ...recordedNode(), target: fingerprintOnly });
+  const target = outputTargetFromPayload(node);
+  assert.deepEqual(target?.element, { tagName: "button", accessibleName: "Apply changes" });
+  assert.equal(target?.selector, "#save-settings", "the recorded selector is a hint the page vetoes by the repair, not by the recording");
+});
+
+test("handles without a resolution are not the domain's mark, and the content rule still decides", () => {
+  const sameControl = { ...recordedNode(), target: { handles: { element: "target.1" }, tagName: "button", accessibleName: "Save changes" } };
+  assert.equal(adaptedTargetSupersedesRecording(sameControl), false);
+  const otherControl = { ...recordedNode(), target: { handles: { element: "target.1" }, handleResolution: "guessed", tagName: "button", accessibleName: "Discard changes" } };
+  assert.equal(adaptedTargetSupersedesRecording(otherControl), true);
+  assert.equal(adaptedTargetSupersedesRecording(recordedNode()), false, "no target at all is the recording");
 });
 
 // --- Where the element sat ---------------------------------------------------
