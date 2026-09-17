@@ -100,21 +100,35 @@ repositories when a change spans this repository and Core.
 
 **Branch.** `task/t042-flow-editor-cleanup` off `dev`. Deleted after merge.
 
-**Worktree.** Tier 2 only. The layout is forced, not chosen:
+**Worktree.** Tier 2 only. `domain/package.json` links Core as
+`link:../../!FluxIQ/packages/fluxiq`, resolved from the worktree's `domain`
+directory, so Core must be the worktree's **sibling**. A worktree placed
+anywhere else cannot resolve Core and cannot install. `F:/fxwork/` is used
+rather than `F:/fxlab/` so authoring worktrees are never confused with the
+Lab's pinned, never-edited test worktrees.
+
+Because the link resolves to the *parent* directory, sibling worktrees share
+one Core — which is why nine Lab worktrees under `F:/fxlab` share the single
+`F:/fxlab/!FluxIQ`. Measurement (below) shows Core is 48.6s of a 52.6s setup,
+so sharing it is worth a great deal. Two layouts, chosen by whether the task
+edits Core:
 
 ```text
-F:/fxwork/t042/
-    !FluxIQWebExtension/   worktree of this repository on task/t042-...
-    !FluxIQ/               worktree of Core, detached at dev, or on Core's paired branch
+Default — flat, shared Core, ~4s per task:
+F:/fxwork/
+    !FluxIQ/               one worktree, detached at Core's dev, never edited
+    t042-flow-editor/      ext worktree on task/t042-flow-editor
+    t043-recorder-fix/     ext worktree on task/t043-recorder-fix
+
+Core-paired task — nested, private Core, ~53s:
+F:/fxwork/t044/
+    !FluxIQWebExtension/   ext worktree on task/t044-...
+    !FluxIQ/               Core worktree on Core's own task/t044-... branch
 ```
 
-`domain/package.json` links Core as `link:../../!FluxIQ/packages/fluxiq`,
-resolved from the worktree's `domain` directory, so it points at the worktree's
-**sibling**. A worktree placed anywhere else cannot resolve Core and cannot
-install. This is the same constraint `scripts/lab/pair.mjs` already lives
-under, which is why `F:/fxlab/!FluxIQ` exists. `F:/fxwork/` is used rather than
-`F:/fxlab/` so that authoring worktrees are never confused with the Lab's
-pinned, never-edited test worktrees.
+A task that edits Core must take the nested form, because the shared Core is
+detached and read-only; editing it would change what every other task builds
+against.
 
 **Provenance.** The supervisor writes trailers on each commit, alongside the
 existing `Co-Authored-By` line:
@@ -216,11 +230,42 @@ prove Core's identity properly, and it should copy `.env.local` in — while
 keeping the existing discipline of reporting a key by source and never reading
 its value.
 
-## Cost Of A Worktree — PENDING
+## Cost Of A Worktree — measured
 
-Measured standup cost of an authoring worktree: install, check, build, disk, and
-whether anything fails for a worktree-specific reason. Depends on the
-worktree-cost report. If the measured cost is high, Tier 2's trigger tightens.
+Evidence: [reports/worktree-cost.md](./agent-git-workflow-plan/reports/worktree-cost.md).
+Measured on a real probe worktree pair, since removed.
+
+| Step | Wall-clock | Result |
+| --- | --- | --- |
+| `git worktree add` (warm) | 1.1s | OK |
+| `pnpm install --frozen-lockfile` (extension) | 2.9s | OK |
+| `pnpm install --frozen-lockfile` (Core sibling) | 35.8s | OK, 301 packages, 0 downloaded |
+| Core build: contracts, fluxiq, client-gateway-websocket | 12.8s | OK |
+| `pnpm build` (extension) | 18.1s | OK |
+
+**~52.6s for the first worktree, ~4s for each one after it** under the flat
+layout that shares Core. Marginal disk is ~80 MB per worktree: pnpm hardlinks
+from `F:\.pnpm-store\v3`, proven by an identical inode across both checkouts.
+
+This is cheap enough that Tier 2's trigger does **not** need tightening. The
+escalation rule stands as written.
+
+**Core's `dist/` is gitignored**, so a fresh Core worktree has source but no
+types and `pnpm check` dies with `TS2307: Cannot find module
+'@fluxiq/contracts/automation-studio'`. Provisioning must install and build Core
+or the worktree cannot type-check at all. This is the whole reason the shared
+Core is worth having.
+
+**`git worktree remove --force` does not work here and must not be used.** Both
+probe removals failed with `failed to delete '...': Directory not empty`:
+`--force` covers modified tracked files but not `node_modules`. Worse, it is
+**not atomic** — it partly deleted the tree before aborting, leaving the `.git`
+file gone. `scripts/worktree/remove.mjs` therefore does `rm -rf` (3.6s) followed
+by `git worktree prune`, never `worktree remove --force`.
+
+**`.env.local` is absent from a fresh worktree** and broke neither check nor
+build. It matters only for Lab and live-provider runs, so copying it is a
+convenience, not a prerequisite.
 
 ## Tracked Generated Output — PENDING
 
