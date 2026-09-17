@@ -788,16 +788,15 @@ var WEB_AUTOMATION_EXTRACT_LIST_TAGS = [
 ];
 var WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
   "Scrape every item of a repeating list or table into a dataset, across pages.",
-  "The rows are saved without a recordOutput."
+  "Detect the list with web.detect_repeating_structure; name it in extractList by its handle.",
+  "It saves its rows itself: no recordOutput or save node needed."
 ].join(" ");
 var WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
-  "{ item, fields, paginate?, minItems?, maxItems? }. item: CSS selector of each record.",
-  'fields: { key: "css" (text) | "css@attr" | "column:Header" (table cell)',
-  `| { kind: ${WEB_AUTOMATION_EXTRACT_FIELD_KINDS.join("|")}, selector?, attribute?, header?, required?: false } };`,
-  "keys use A-Za-z0-9_-; field selectors are read inside each item.",
-  'paginate: { mode: "next", next: css, maxPages } | { mode: "loadMore", control: css, maxPages }',
-  `| { mode: "scroll", maxScrolls } | { mode: "numbered", pages: css, maxPages }, at most ${WEB_AUTOMATION_EXTRACT_MAX_PAGES}.`,
-  `minItems: default 1; 0 allows an empty list. maxItems: at most ${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}.`
+  `Detected: {handle: "extraction.N", fields?: {key: "detectedKey" | "detectedKey@href"}, paginate?: false (this page only)};`,
+  "fields: only those columns, renamed; a link column reads the absolute URL, @href the raw href.",
+  `Else {item: css, fields: {key: "css" | "css@attr" | "column:Header" | {kind: ${WEB_AUTOMATION_EXTRACT_FIELD_KINDS.join("|")}, selector?, attribute?, header?, required?: false}},`,
+  `paginate?: {mode: "next", next: css, maxPages} ("loadMore": control, "numbered": pages) | {mode: "scroll", maxScrolls}, max ${WEB_AUTOMATION_EXTRACT_MAX_PAGES}}.`,
+  `Keys A-Za-z0-9_-. Both take minItems (default 1; 0 allows none), maxItems (max ${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}).`
 ].join(" ");
 var WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE = {
   item: "li.product",

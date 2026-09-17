@@ -14,6 +14,11 @@
 // The store is bounded: past `RETAINED_EXTRACTION_HANDLES` the oldest handle is
 // let go, and asking for it afterwards is `stale_handle`, so a caller can tell
 // "detect it again" from "that was never a handle".
+//
+// `issuedFor` answers whether a project and Flow was shown a detected list at
+// all, kept or let go, so the plan resolver can tell a literal extraction the
+// model wrote with a detected list in hand -- a guess -- from one it wrote
+// before any detection. It forgets a let-go handle once the stale memory does.
 
 import type { WebAutomationExtractListRequest } from "../../../actions/extraction";
 import { present } from "../present";
@@ -66,6 +71,8 @@ export type WebLlmExtractionHandles = {
   reserve(): string;
   retain(scope: WebLlmExtractionHandleScope, binding: WebLlmExtractionBinding): void;
   resolve(scope: WebLlmExtractionHandleScope, handle: unknown): WebLlmExtractionHandleResolution;
+  /** Whether any handle this store still knows of, kept or let go, was issued for this project and Flow. */
+  issuedFor(scope: WebLlmExtractionHandleScope): boolean;
 };
 
 export function createWebLlmExtractionHandles(): WebLlmExtractionHandles {
@@ -99,6 +106,10 @@ export function createWebLlmExtractionHandles(): WebLlmExtractionHandles {
       const entry = retained.get(handle);
       if (entry?.scope === key) return { ok: true, binding: copyBinding(entry.binding) };
       return letGo.get(handle) === key ? { ok: false, code: "stale_handle" } : { ok: false, code: "unknown_handle" };
+    },
+    issuedFor(scope) {
+      const key = scopeKey(scope);
+      return [...retained.values()].some((entry) => entry.scope === key) || [...letGo.values()].includes(key);
     },
   };
 }

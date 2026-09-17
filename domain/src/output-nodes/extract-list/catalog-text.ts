@@ -15,6 +15,22 @@
 // from the request's own constants, and the tests check every pagination mode
 // and field kind appears in it, that it fits, and that the example is a request
 // the page would run.
+//
+// **A detected list comes first.** The model is never shown a selector, so a
+// literal request is a guess. Live, every catalog build that detected the list
+// still wrote one, because this text offered nothing else, and each read 8
+// cards with no name, price, rating or url (`run-mu4wwkbc-df6cfe60`). So the
+// description says to detect the list, and the grammar leads with the handle
+// form the resolver takes (`runtime/llm-evidence/plan-resolution/`): which
+// detected columns to keep and under which key, a link's href as written, and
+// reading only the page shown. The literal request follows for a list nothing
+// detected.
+//
+// **The node saves its own rows.** With the list resolved, the next live build
+// read all 8 cards with every field, then failed on a `write-records` node the
+// model added to save them, whose record output did not parse
+// (`run-mu4yk4u1-60a1c3a4`). "Saved without a recordOutput" had not said that
+// no other node is needed, so the description now does.
 
 import type { JsonObject } from "fluxiq/core";
 import {
@@ -40,21 +56,23 @@ export const WEB_AUTOMATION_EXTRACT_LIST_TAGS: readonly string[] = [
   "pagination"
 ];
 
-/** The node's description: what it is for, and that saving needs nothing more. */
+/** The node's description: what it is for, how its list is named, and that saving needs nothing more. */
 export const WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
   "Scrape every item of a repeating list or table into a dataset, across pages.",
-  "The rows are saved without a recordOutput."
+  "Detect the list with web.detect_repeating_structure; name it in extractList by its handle.",
+  "It saves its rows itself: no recordOutput or save node needed."
 ].join(" ");
 
-/** The shape of `extractList`, for a model to write one. */
+/**
+ * The shape of `extractList`, for a model to write one: the handle of a
+ * detected list first, then the literal request.
+ */
 export const WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
-  "{ item, fields, paginate?, minItems?, maxItems? }. item: CSS selector of each record.",
-  "fields: { key: \"css\" (text) | \"css@attr\" | \"column:Header\" (table cell)",
-  `| { kind: ${WEB_AUTOMATION_EXTRACT_FIELD_KINDS.join("|")}, selector?, attribute?, header?, required?: false } };`,
-  "keys use A-Za-z0-9_-; field selectors are read inside each item.",
-  "paginate: { mode: \"next\", next: css, maxPages } | { mode: \"loadMore\", control: css, maxPages }",
-  `| { mode: "scroll", maxScrolls } | { mode: "numbered", pages: css, maxPages }, at most ${WEB_AUTOMATION_EXTRACT_MAX_PAGES}.`,
-  `minItems: default 1; 0 allows an empty list. maxItems: at most ${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}.`
+  `Detected: {handle: "extraction.N", fields?: {key: "detectedKey" | "detectedKey@href"}, paginate?: false (this page only)};`,
+  "fields: only those columns, renamed; a link column reads the absolute URL, @href the raw href.",
+  `Else {item: css, fields: {key: "css" | "css@attr" | "column:Header" | {kind: ${WEB_AUTOMATION_EXTRACT_FIELD_KINDS.join("|")}, selector?, attribute?, header?, required?: false}},`,
+  `paginate?: {mode: "next", next: css, maxPages} ("loadMore": control, "numbered": pages) | {mode: "scroll", maxScrolls}, max ${WEB_AUTOMATION_EXTRACT_MAX_PAGES}}.`,
+  `Keys A-Za-z0-9_-. Both take minItems (default 1; 0 allows none), maxItems (max ${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}).`
 ].join(" ");
 
 /** One request the page would run: a paginated product list. */

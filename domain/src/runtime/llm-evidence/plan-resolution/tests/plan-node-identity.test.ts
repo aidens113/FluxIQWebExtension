@@ -155,7 +155,7 @@ test("no value reaches the identity: not a control's contents, not a cut name, n
   // The sanitizer never describes the password field, so no handle names it.
   assert.deepEqual(
     runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId: "flow.one", nodeDefinitionId: TYPE_NODE, parameters: { selector: { handle: "target.4" } } }),
-    { status: "refused", issueCodes: ["web.handle.unknown"] }
+    { status: "refused", issueCodes: ["web.handle.unknown", "web.handle.unknown:selector"] }
   );
 
   // And were one ever remembered, its identity would carry no name or text.
@@ -226,7 +226,7 @@ test("the handle decides the identity: a model-written element beside it is repl
   });
   assert.deepEqual(
     runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId: "flow.one", nodeDefinitionId: CLICK_NODE, parameters: { selector: { handle: "target.2" }, element: { handle: "target.1" } } }),
-    { status: "refused", issueCodes: ["web.handle.ambiguous"] }
+    { status: "refused", issueCodes: ["web.handle.ambiguous", "web.handle.ambiguous:element"] }
   );
   // A resolved identity is the caller's own copy: changing it changes nothing the store holds.
   const first = resolvedParameters(runtime, CLICK_NODE, { selector: { handle: "target.2" } });

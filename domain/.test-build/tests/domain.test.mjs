@@ -798,16 +798,15 @@ var WEB_AUTOMATION_EXTRACT_LIST_TAGS = [
 ];
 var WEB_AUTOMATION_EXTRACT_LIST_DESCRIPTION = [
   "Scrape every item of a repeating list or table into a dataset, across pages.",
-  "The rows are saved without a recordOutput."
+  "Detect the list with web.detect_repeating_structure; name it in extractList by its handle.",
+  "It saves its rows itself: no recordOutput or save node needed."
 ].join(" ");
 var WEB_AUTOMATION_EXTRACT_LIST_GRAMMAR = [
-  "{ item, fields, paginate?, minItems?, maxItems? }. item: CSS selector of each record.",
-  'fields: { key: "css" (text) | "css@attr" | "column:Header" (table cell)',
-  `| { kind: ${WEB_AUTOMATION_EXTRACT_FIELD_KINDS.join("|")}, selector?, attribute?, header?, required?: false } };`,
-  "keys use A-Za-z0-9_-; field selectors are read inside each item.",
-  'paginate: { mode: "next", next: css, maxPages } | { mode: "loadMore", control: css, maxPages }',
-  `| { mode: "scroll", maxScrolls } | { mode: "numbered", pages: css, maxPages }, at most ${WEB_AUTOMATION_EXTRACT_MAX_PAGES}.`,
-  `minItems: default 1; 0 allows an empty list. maxItems: at most ${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}.`
+  `Detected: {handle: "extraction.N", fields?: {key: "detectedKey" | "detectedKey@href"}, paginate?: false (this page only)};`,
+  "fields: only those columns, renamed; a link column reads the absolute URL, @href the raw href.",
+  `Else {item: css, fields: {key: "css" | "css@attr" | "column:Header" | {kind: ${WEB_AUTOMATION_EXTRACT_FIELD_KINDS.join("|")}, selector?, attribute?, header?, required?: false}},`,
+  `paginate?: {mode: "next", next: css, maxPages} ("loadMore": control, "numbered": pages) | {mode: "scroll", maxScrolls}, max ${WEB_AUTOMATION_EXTRACT_MAX_PAGES}}.`,
+  `Keys A-Za-z0-9_-. Both take minItems (default 1; 0 allows none), maxItems (max ${WEB_AUTOMATION_EXTRACT_MAX_ITEMS}).`
 ].join(" ");
 var WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE = {
   item: "li.product",
@@ -3968,217 +3967,112 @@ function elementParameter(role) {
   return { name: WEB_REPAIRABLE_ELEMENT_PARAMETER, role, required: true, description: ELEMENT_PARAMETER_DESCRIPTION };
 }
 
-// src/runtime/llm-evidence/plan-resolution/resolve-plan-node.ts
-var WEB_PLAN_HANDLE_ISSUE_CODES = [
-  "web.handle.malformed",
-  "web.handle.misplaced",
-  "web.handle.unknown",
-  "web.handle.stale",
-  "web.handle.ambiguous",
-  "web.handle.not_unique",
-  "web.handle.frame_mismatch"
-];
-var TARGET_HANDLE = /^target\.[1-9][0-9]?$/u;
-var EXTRACTION_HANDLE = /^extraction\.[1-9][0-9]{0,8}$/u;
-var MAX_SEARCH_DEPTH = 8;
-var SELECTOR_NODE_IDS = new Set(
-  webAutomationActionDefinitions.filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "selector" in definition.parameterSchema.properties).map((definition) => webAutomationOutputNodeId(definition.actionType))
-);
-var ELEMENT_NODE_IDS = new Set(
-  webAutomationActionDefinitions.filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "element" in definition.parameterSchema.properties).map((definition) => webAutomationOutputNodeId(definition.actionType))
-);
-var EXTRACT_LIST_NODE_ID = webAutomationOutputNodeId("web.dom.extract_list");
-var TARGET_ISSUES = {
-  unknown: "web.handle.unknown",
-  stale: "web.handle.stale",
-  ambiguous: "web.handle.ambiguous",
-  not_unique: "web.handle.not_unique"
-};
-function resolveWebPlanNodeParameters(input, stores) {
-  const scope = { projectId: input.projectId, flowId: input.flowId };
-  const issues = /* @__PURE__ */ new Set();
-  const replaced = /* @__PURE__ */ new Map();
-  for (const [key, value] of Object.entries(input.parameters)) {
-    const slot = key === "selector" && SELECTOR_NODE_IDS.has(input.nodeDefinitionId) ? "target" : key === "extractList" && input.nodeDefinitionId === EXTRACT_LIST_NODE_ID ? "extraction" : void 0;
-    if (slot === void 0 || !isHandleObject(value)) {
-      if (containsRecognisableHandle(value, 0)) issues.add("web.handle.misplaced");
-      continue;
+// src/runtime/llm-evidence/plan-resolution/extraction-columns.ts
+var COLUMN_OBJECT_KEYS = /* @__PURE__ */ new Set(["handle", "location", "key", "field", "column", "header", "attribute", "required", "kind"]);
+var COLUMN_NAME_KEYS = ["key", "field", "column"];
+var ATTRIBUTE_NAME = /^[A-Za-z_][A-Za-z0-9_.:-]{0,99}$/u;
+var HEADER_PREFIX = "column:";
+function keptWebExtractionColumns(fields, detected, path2) {
+  if (fields === void 0) return { ok: true, fields: structuredClone(detected) };
+  const kept = {};
+  const keep = (key, field, at) => {
+    if (Object.hasOwn(kept, key)) return { ok: false, issue: "web.handle.malformed", path: at };
+    kept[key] = field;
+    return void 0;
+  };
+  if (Array.isArray(fields)) {
+    if (fields.length === 0) return { ok: false, issue: "web.handle.malformed", path: path2 };
+    for (const [index, entry] of fields.entries()) {
+      const column = readColumn(entry, void 0, detected, [...path2, index]);
+      if (!column.ok) return column;
+      const refused2 = keep(column.key, column.field, [...path2, index]);
+      if (refused2) return refused2;
     }
-    const outcome = slot === "target" ? resolveTarget(value, scope, stores.targets) : resolveExtraction(value, scope, stores.extractions);
-    if (typeof outcome === "string") issues.add(outcome);
-    else replaced.set(key, outcome);
+    return { ok: true, fields: kept };
   }
-  if (issues.size > 0) return refused(issues);
-  if (replaced.size === 0) return { status: "unchanged" };
-  const frameId = handleFrame([...replaced.values()]);
-  const declared2 = declaredFrame(input.parameters.browserFrameId);
-  if (frameId === "mixed" || declared2 !== void 0 && declared2 !== (frameId ?? 0)) return refused(/* @__PURE__ */ new Set(["web.handle.frame_mismatch"]));
-  const parameters = {};
-  for (const [key, value] of Object.entries(input.parameters)) parameters[key] = replaced.get(key)?.value ?? value;
-  const identity = replaced.get("selector")?.element;
-  if (identity !== void 0 && ELEMENT_NODE_IDS.has(input.nodeDefinitionId)) parameters.element = identity;
-  if (frameId !== void 0 && frameId !== 0) parameters.browserFrameId = frameId;
-  return { status: "resolved", parameters };
-}
-function resolveTarget(value, scope, targets) {
-  if (Object.keys(value).some((key) => key !== "handle" && key !== "location")) return "web.handle.malformed";
-  const handle = value.handle;
-  if (typeof handle !== "string") return "web.handle.malformed";
-  if (EXTRACTION_HANDLE.test(handle)) return "web.handle.misplaced";
-  if (!TARGET_HANDLE.test(handle)) return "web.handle.malformed";
-  if (value.location !== void 0 && (typeof value.location !== "string" || value.location === "")) return "web.handle.malformed";
-  const resolution = targets.resolve(scope, handle, value.location);
-  if (!resolution.ok) return TARGET_ISSUES[resolution.code];
-  return { value: resolution.selector, frameId: resolution.frameId, element: resolution.element };
-}
-function resolveExtraction(value, scope, extractions) {
-  if (Object.keys(value).some((key) => key !== "handle" && key !== "minItems" && key !== "maxItems")) return "web.handle.malformed";
-  const handle = value.handle;
-  if (typeof handle !== "string") return "web.handle.malformed";
-  if (TARGET_HANDLE.test(handle)) return "web.handle.misplaced";
-  if (!EXTRACTION_HANDLE.test(handle)) return "web.handle.malformed";
-  const resolution = extractions.resolve(scope, handle);
-  if (!resolution.ok) return resolution.code === "stale_handle" ? "web.handle.stale" : "web.handle.unknown";
-  const request = resolution.binding.extractList;
-  if (value.minItems !== void 0) request.minItems = value.minItems;
-  if (value.maxItems !== void 0) request.maxItems = value.maxItems;
-  const checked = webAutomationExtractListRequestValue(request);
-  if (checked === void 0 || checked.minItems !== request.minItems || checked.maxItems !== request.maxItems) return "web.handle.malformed";
-  return { value: request, frameId: resolution.binding.frameId, element: void 0 };
-}
-function isHandleObject(value) {
-  return isJsonRecord(value) && Object.prototype.hasOwnProperty.call(value, "handle");
-}
-function containsRecognisableHandle(value, depth) {
-  if (depth > MAX_SEARCH_DEPTH) return false;
-  if (Array.isArray(value)) return value.some((entry) => containsRecognisableHandle(entry, depth + 1));
-  if (!isJsonRecord(value)) return false;
-  if (typeof value.handle === "string" && (TARGET_HANDLE.test(value.handle) || EXTRACTION_HANDLE.test(value.handle))) return true;
-  return Object.values(value).some((entry) => containsRecognisableHandle(entry, depth + 1));
-}
-function handleFrame(resolved2) {
-  const frames = new Set(resolved2.map((entry) => entry.frameId ?? 0));
-  if (frames.size > 1) return "mixed";
-  const only = [...frames][0];
-  return only === 0 ? void 0 : only;
-}
-function declaredFrame(value) {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
-}
-function refused(issues) {
-  return { status: "refused", issueCodes: WEB_PLAN_HANDLE_ISSUE_CODES.filter((code) => issues.has(code)) };
-}
-
-// src/runtime/llm-evidence/plan-resolution/element-identity.ts
-var CONTENT_TAGS = /* @__PURE__ */ new Set(["input", "textarea", "select"]);
-function webPlanElementIdentity(element, selector) {
-  const secret = isSensitiveFieldSignature({ inputType: element.inputType, controlType: element.controlType });
-  const context = present({
-    formId: uncut(element.form, WEB_LLM_EVIDENCE_BOUNDS.placement),
-    listPosition: element.item === void 0 ? void 0 : { index: element.item.index, total: element.item.total }
-  });
-  return present({
-    tagName: element.tag,
-    role: element.role,
-    accessibleName: secret ? void 0 : uncut(element.name, WEB_LLM_EVIDENCE_BOUNDS.text),
-    visibleText: secret || CONTENT_TAGS.has(element.tag) ? void 0 : uncut(element.text, WEB_LLM_EVIDENCE_BOUNDS.text),
-    selector,
-    inputType: element.inputType,
-    context: Object.keys(context).length > 0 ? context : void 0
-  });
-}
-function uncut(value, bound) {
-  return value !== void 0 && value.length < bound ? value : void 0;
-}
-
-// src/runtime/llm-evidence/plan-resolution/target-packets.ts
-var RETAINED_PAGES_PER_FLOW = 8;
-var RETAINED_FLOWS = 32;
-var REMEMBERED_STALE_PAGES = 64;
-function createWebLlmTargetPackets() {
-  const flows = /* @__PURE__ */ new Map();
-  return {
-    remember(scope, binding) {
-      const key = scopeKey(scope);
-      const flow = flows.get(key) ?? { pages: /* @__PURE__ */ new Map(), letGo: /* @__PURE__ */ new Set() };
-      flows.delete(key);
-      flows.set(key, flow);
-      for (const oldest of flows.keys()) {
-        if (flows.size <= RETAINED_FLOWS) break;
-        flows.delete(oldest);
-      }
-      const location = binding.evidence.location;
-      const targets = /* @__PURE__ */ new Map();
-      const uses = /* @__PURE__ */ new Map();
-      for (const element of binding.evidence.elements) {
-        const selector = binding.selectors.get(element.target);
-        if (selector === void 0) continue;
-        const address = `${element.frameId ?? 0}\0${selector}`;
-        uses.set(address, (uses.get(address) ?? 0) + 1);
-        targets.set(element.target, { selector, frameId: element.frameId, element: webPlanElementIdentity(element, selector), shared: false });
-      }
-      for (const target of targets.values()) target.shared = (uses.get(`${target.frameId ?? 0}\0${target.selector}`) ?? 0) > 1;
-      flow.pages.delete(location);
-      flow.pages.set(location, targets);
-      flow.letGo.delete(location);
-      for (const oldest of flow.pages.keys()) {
-        if (flow.pages.size <= RETAINED_PAGES_PER_FLOW) break;
-        flow.pages.delete(oldest);
-        flow.letGo.add(oldest);
-      }
-      for (const oldest of flow.letGo) {
-        if (flow.letGo.size <= REMEMBERED_STALE_PAGES) break;
-        flow.letGo.delete(oldest);
-      }
-    },
-    resolve(scope, handle, location) {
-      const flow = flows.get(scopeKey(scope));
-      if (!flow) return { ok: false, code: "unknown" };
-      if (location !== void 0) {
-        const page = flow.pages.get(location);
-        if (!page) return { ok: false, code: flow.letGo.has(location) ? "stale" : "unknown" };
-        const target = page.get(handle);
-        if (target === void 0) return { ok: false, code: "unknown" };
-        return target.shared ? { ok: false, code: "not_unique" } : resolved(target);
-      }
-      const seen = /* @__PURE__ */ new Map();
-      for (const page of flow.pages.values()) {
-        const target = page.get(handle);
-        if (target === void 0) continue;
-        const address = `${target.frameId ?? 0}\0${target.selector}`;
-        const known = seen.get(address);
-        seen.set(address, known === void 0 ? target : {
-          selector: known.selector,
-          frameId: known.frameId,
-          element: agreedIdentity(known.element, target.element),
-          shared: known.shared || target.shared
-        });
-      }
-      if (seen.size > 1) return { ok: false, code: "ambiguous" };
-      const only = [...seen.values()][0];
-      if (only?.shared) return { ok: false, code: "not_unique" };
-      if (only !== void 0) return resolved(only);
-      return { ok: false, code: flow.letGo.size > 0 ? "stale" : "unknown" };
+  if (!isJsonRecord(fields) || Object.keys(fields).length === 0) return { ok: false, issue: "web.handle.malformed", path: path2 };
+  for (const [key, entry] of Object.entries(fields)) {
+    const at = [...path2, key];
+    let column = readColumn(entry, key, detected, at);
+    let written = key;
+    if (!column.ok && column.issue === "web.handle.unknown_field" && typeof entry === "string" && isWebAutomationExtractFieldKey(entry)) {
+      const reversed = readColumn(key, void 0, detected, at);
+      if (reversed.ok) [column, written] = [reversed, entry];
     }
+    if (!column.ok) return column;
+    if (!isWebAutomationExtractFieldKey(written)) return { ok: false, issue: "web.handle.malformed", path: at };
+    const refused2 = keep(written, column.field, at);
+    if (refused2) return refused2;
+  }
+  return { ok: true, fields: kept };
+}
+function readColumn(entry, ownKey, detected, path2) {
+  if (typeof entry === "string") return namedColumn(entry, void 0, detected, path2);
+  if (!isJsonRecord(entry)) return { ok: false, issue: "web.handle.malformed", path: path2 };
+  const stray = Object.keys(entry).find((key) => !COLUMN_OBJECT_KEYS.has(key));
+  if (stray !== void 0) return { ok: false, issue: "web.handle.malformed", path: [...path2, stray] };
+  const names = [...new Set(COLUMN_NAME_KEYS.flatMap((key) => entry[key] === void 0 ? [] : [entry[key]]))];
+  if (names.length > 1 || names.some((name) => typeof name !== "string") || !optional(entry.attribute, "string") || !optional(entry.required, "boolean") || !optional(entry.header, "string")) {
+    return { ok: false, issue: "web.handle.malformed", path: path2 };
+  }
+  const header = entry.header;
+  const named = names[0] ?? (header !== void 0 ? `${HEADER_PREFIX}${header}` : Object.hasOwn(entry, "handle") ? ownKey : void 0);
+  if (named === void 0) return { ok: false, issue: "web.handle.malformed", path: path2 };
+  const column = namedColumn(named, entry.attribute, detected, path2);
+  if (!column.ok) return column;
+  if (entry.kind !== void 0 && (typeof column.field === "string" || entry.kind !== column.field.kind)) return { ok: false, issue: "web.handle.malformed", path: [...path2, "kind"] };
+  const spec = column.field;
+  if (entry.required === void 0 || typeof spec === "string") return column;
+  return {
+    ok: true,
+    key: column.key,
+    field: present({
+      kind: spec.kind,
+      selector: spec.selector,
+      attribute: spec.attribute,
+      header: spec.header,
+      required: entry.required,
+      handling: spec.handling,
+      element: spec.element
+    })
   };
 }
-function resolved(target) {
-  return { ok: true, selector: target.selector, frameId: target.frameId, element: structuredClone(target.element) };
+function namedColumn(name, attributeGiven, detected, path2) {
+  const at = name.indexOf("@");
+  if (at >= 0 && attributeGiven !== void 0) return { ok: false, issue: "web.handle.malformed", path: path2 };
+  const base = at < 0 ? name : name.slice(0, at);
+  const attribute = at < 0 ? attributeGiven : name.slice(at + 1);
+  const found = detectedKey(base, detected);
+  if (found !== void 0 && typeof found !== "string") return { ok: false, issue: found.issue, path: path2 };
+  if (found === void 0) return { ok: false, issue: "web.handle.unknown_field", path: path2 };
+  const spec = detected[found];
+  if (attribute === void 0) return { ok: true, key: found, field: structuredClone(spec) };
+  if (!ATTRIBUTE_NAME.test(attribute) || typeof spec === "string" || spec.kind === "column") return { ok: false, issue: "web.handle.malformed", path: path2 };
+  return {
+    ok: true,
+    key: found,
+    field: present({
+      kind: "attribute",
+      selector: spec.selector,
+      attribute,
+      header: void 0,
+      required: spec.required,
+      handling: void 0,
+      element: void 0
+    })
+  };
 }
-function agreedIdentity(left, right) {
-  const agreed = (a, b) => JSON.stringify(a) === JSON.stringify(b) ? a : void 0;
-  return present({
-    tagName: agreed(left.tagName, right.tagName),
-    role: agreed(left.role, right.role),
-    accessibleName: agreed(left.accessibleName, right.accessibleName),
-    visibleText: agreed(left.visibleText, right.visibleText),
-    selector: agreed(left.selector, right.selector),
-    inputType: agreed(left.inputType, right.inputType),
-    context: agreed(left.context, right.context)
-  });
+function detectedKey(name, detected) {
+  if (Object.hasOwn(detected, name)) return name;
+  const header = name.startsWith(HEADER_PREFIX) ? name.slice(HEADER_PREFIX.length) : name;
+  const folded = (text3) => text3.trim().replace(/\s+/gu, " ").toLowerCase();
+  const matches = Object.entries(detected).filter(([key, spec]) => !name.startsWith(HEADER_PREFIX) && key.toLowerCase() === name.toLowerCase() || typeof spec !== "string" && spec.kind === "column" && spec.header !== void 0 && folded(spec.header) === folded(header)).map(([key]) => key);
+  const unique = [...new Set(matches)];
+  if (unique.length > 1) return { issue: "web.handle.ambiguous" };
+  return unique[0];
 }
-function scopeKey(scope) {
-  return `${scope.projectId}\0${scope.flowId}`;
+function optional(value, type) {
+  return value === void 0 || typeof value === type;
 }
 
 // src/runtime/llm-evidence/structure/packet.ts
@@ -4258,7 +4152,7 @@ function boundPagination(pagination, infiniteScroll) {
 }
 
 // src/runtime/llm-evidence/structure/detect.ts
-var TARGET_HANDLE2 = /^target\.[1-9][0-9]?$/u;
+var TARGET_HANDLE = /^target\.[1-9][0-9]?$/u;
 var REFUSAL_CODES = {
   target_not_found: "target_unobserved",
   ambiguous_target: "target_unobserved",
@@ -4318,7 +4212,7 @@ function requestedTarget(value) {
   if (keys.some((key) => key !== "target")) recoverable("invalid_input");
   if (!keys.includes("target")) return void 0;
   const target = value.target;
-  if (typeof target !== "string" || !TARGET_HANDLE2.test(target)) recoverable("invalid_input");
+  if (typeof target !== "string" || !TARGET_HANDLE.test(target)) recoverable("invalid_input");
   return target;
 }
 
@@ -4346,7 +4240,7 @@ function createWebLlmExtractionHandles() {
     },
     retain(scope, binding) {
       if (!HANDLE_PATTERN.test(binding.handle) || retained.has(binding.handle)) throw new Error("extraction handle was not reserved for this binding");
-      retained.set(binding.handle, { scope: scopeKey2(scope), binding: copyBinding(binding) });
+      retained.set(binding.handle, { scope: scopeKey(scope), binding: copyBinding(binding) });
       for (const [oldest, entry] of retained) {
         if (retained.size <= RETAINED_EXTRACTION_HANDLES) break;
         forget(oldest, entry.scope);
@@ -4354,14 +4248,18 @@ function createWebLlmExtractionHandles() {
     },
     resolve(scope, handle) {
       if (typeof handle !== "string" || !HANDLE_PATTERN.test(handle)) return { ok: false, code: "unknown_handle" };
-      const key = scopeKey2(scope);
+      const key = scopeKey(scope);
       const entry = retained.get(handle);
       if (entry?.scope === key) return { ok: true, binding: copyBinding(entry.binding) };
       return letGo.get(handle) === key ? { ok: false, code: "stale_handle" } : { ok: false, code: "unknown_handle" };
+    },
+    issuedFor(scope) {
+      const key = scopeKey(scope);
+      return [...retained.values()].some((entry) => entry.scope === key) || [...letGo.values()].includes(key);
     }
   };
 }
-function scopeKey2(scope) {
+function scopeKey(scope) {
   return `${scope.projectId}\0${scope.flowId}`;
 }
 function copyBinding(binding) {
@@ -4372,6 +4270,428 @@ function copyBinding(binding) {
     extractList: structuredClone(binding.extractList),
     itemCount: binding.itemCount
   });
+}
+
+// src/runtime/llm-evidence/plan-resolution/handle-tokens.ts
+var TARGET_HANDLE2 = /^target\.[1-9][0-9]?$/u;
+var EXTRACTION_HANDLE = new RegExp(WEB_LLM_EXTRACTION_HANDLE_PATTERN, "u");
+var MAX_SEARCH_DEPTH = 8;
+function webPlanHandleKind(token) {
+  if (typeof token !== "string") return void 0;
+  if (TARGET_HANDLE2.test(token)) return "target";
+  return EXTRACTION_HANDLE.test(token) ? "extraction" : void 0;
+}
+function webPlanHandlesIn(value, path2 = []) {
+  if (path2.length > MAX_SEARCH_DEPTH) return [];
+  const found = [];
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => found.push(...webPlanHandlesIn(entry, [...path2, index])));
+    return found;
+  }
+  if (!isJsonRecord(value)) return found;
+  const own = webPlanHandleKind(value.handle);
+  if (own) found.push({ kind: own, path: path2 });
+  for (const [key, entry] of Object.entries(value)) found.push(...webPlanHandlesIn(entry, [...path2, key]));
+  return found;
+}
+
+// src/runtime/llm-evidence/plan-resolution/extraction-slot.ts
+var LIST_KEYS = /* @__PURE__ */ new Set(["handle", "location", "item", "fields", "columns", "paginate", "minItems", "maxItems"]);
+var REFERENCE_KEYS = /* @__PURE__ */ new Set(["handle", "location"]);
+function resolveWebExtractionSlot(value, scope, extractions) {
+  const handles = webPlanHandlesIn(value);
+  if (!isJsonRecord(value)) return handles[0] ? refused("web.handle.misplaced", handles[0].path) : { status: "literal" };
+  const references = referencesIn(value);
+  if (references.length === 0) return handles[0] ? refused("web.handle.misplaced", handles[0].path) : { status: "literal" };
+  const stray = handles.find((found) => !references.some((reference) => samePath(reference.path, found.path)));
+  if (stray) return refused("web.handle.misplaced", stray.path);
+  const unknownKey = Object.keys(value).find((key) => !LIST_KEYS.has(key));
+  if (unknownKey !== void 0) return refused("web.handle.malformed", [unknownKey]);
+  if (value.location !== void 0 && !Object.hasOwn(value, "handle")) return refused("web.handle.malformed", ["location"]);
+  if (value.fields !== void 0 && value.columns !== void 0) return refused("web.handle.malformed", ["columns"]);
+  const item = value.item;
+  if (item !== void 0 && typeof item !== "string" && !(isJsonRecord(item) && Object.hasOwn(item, "handle"))) return refused("web.handle.malformed", ["item"]);
+  if (isJsonRecord(item) && Object.keys(item).some((key) => !REFERENCE_KEYS.has(key))) return refused("web.handle.malformed", ["item"]);
+  const named = namedHandle(references);
+  if ("issue" in named) return named;
+  const resolution = extractions.resolve(scope, named.handle);
+  if (!resolution.ok) return refused(resolution.code === "stale_handle" ? "web.handle.stale" : "web.handle.unknown", named.path);
+  const binding = resolution.binding;
+  const elsewhere = references.find((reference) => reference.location !== void 0 && reference.location !== binding.location);
+  if (elsewhere) return refused("web.handle.unknown", [...elsewhere.path, "location"]);
+  const fieldsKey = value.columns !== void 0 ? "columns" : "fields";
+  const columns = keptWebExtractionColumns(value[fieldsKey], binding.extractList.fields, [fieldsKey]);
+  if (!columns.ok) return refused(columns.issue, columns.path);
+  const paginate = keptPagination(value.paginate, binding);
+  if (paginate === "malformed") return refused("web.handle.malformed", ["paginate"]);
+  const request = { item: binding.extractList.item, fields: columns.fields };
+  if (paginate !== void 0) request.paginate = paginate;
+  if (value.minItems !== void 0) request.minItems = value.minItems;
+  if (value.maxItems !== void 0) request.maxItems = value.maxItems;
+  const checked = webAutomationExtractListRequestValue(request);
+  if (checked === void 0) return refused("web.handle.malformed", []);
+  if (checked.minItems !== request.minItems) return refused("web.handle.malformed", ["minItems"]);
+  if (checked.maxItems !== request.maxItems) return refused("web.handle.malformed", ["maxItems"]);
+  return { status: "resolved", request, frameId: binding.frameId };
+}
+function referencesIn(value) {
+  const references = [];
+  if (Object.hasOwn(value, "handle")) references.push({ handle: value.handle, location: value.location, path: [] });
+  if (isJsonRecord(value.item) && Object.hasOwn(value.item, "handle")) references.push({ handle: value.item.handle, location: value.item.location, path: ["item"] });
+  for (const fieldsKey of ["fields", "columns"]) {
+    const fields = value[fieldsKey];
+    const entries = Array.isArray(fields) ? [...fields.entries()] : isJsonRecord(fields) ? Object.entries(fields) : [];
+    for (const [key, field] of entries) {
+      if (isJsonRecord(field) && Object.hasOwn(field, "handle")) references.push({ handle: field.handle, location: field.location, path: [fieldsKey, key] });
+    }
+  }
+  return references;
+}
+function namedHandle(references) {
+  let named;
+  for (const reference of references) {
+    const kind = webPlanHandleKind(reference.handle);
+    if (kind === "target") return refused("web.handle.misplaced", reference.path);
+    if (kind !== "extraction" || typeof reference.handle !== "string") return refused("web.handle.malformed", [...reference.path, "handle"]);
+    if (reference.location !== void 0 && (typeof reference.location !== "string" || reference.location === "")) return refused("web.handle.malformed", [...reference.path, "location"]);
+    if (named !== void 0 && named.handle !== reference.handle) return refused("web.handle.ambiguous", reference.path);
+    named ??= { handle: reference.handle, path: reference.path };
+  }
+  return named ?? refused("web.handle.malformed", []);
+}
+function keptPagination(paginate, binding) {
+  const detected = binding.extractList.paginate;
+  if (paginate === false) return void 0;
+  if (paginate === void 0 || paginate === true) return detected;
+  if (!isJsonRecord(paginate) || detected === void 0) return "malformed";
+  const bounded2 = structuredClone(detected);
+  const sameMode = paginate.mode === void 0 || paginate.mode === (detected.mode ?? "next");
+  if (!sameMode) return bounded2;
+  const bound = bounded2.mode === "scroll" ? paginate.maxScrolls : paginate.maxPages;
+  if (bound === void 0) return bounded2;
+  if (typeof bound !== "number" || !Number.isSafeInteger(bound) || bound < 1 || bound > WEB_AUTOMATION_EXTRACT_MAX_PAGES) return "malformed";
+  if (bounded2.mode === "scroll") bounded2.maxScrolls = bound;
+  else bounded2.maxPages = bound;
+  return bounded2;
+}
+function samePath(left, right) {
+  return left.length === right.length && left.every((step, index) => String(step) === String(right[index]));
+}
+function refused(issue, path2) {
+  return { status: "refused", issue, path: path2 };
+}
+
+// src/runtime/llm-evidence/plan-resolution/issue-position.ts
+var MAX_CODE_LENGTH = 100;
+var PARAMETER_ID = /^[a-z][A-Za-z0-9]{0,39}$/u;
+var GRAMMAR_KEYS = /* @__PURE__ */ new Set([
+  "handle",
+  "location",
+  "item",
+  "itemElement",
+  "fields",
+  "columns",
+  "paginate",
+  "minItems",
+  "maxItems",
+  "key",
+  "field",
+  "column",
+  "header",
+  "attribute",
+  "required",
+  "kind",
+  "selector",
+  "mode",
+  "next",
+  "control",
+  "pages",
+  "maxPages",
+  "maxScrolls",
+  "parameters",
+  "extractList",
+  "target",
+  "element",
+  "recordOutput",
+  "outputId"
+]);
+function webPlanPositionCode(code, parameters, path2) {
+  const segments = [];
+  let at = parameters;
+  for (const [depth, step] of path2.entries()) {
+    if (typeof step === "number") {
+      segments.push(String(step));
+      at = Array.isArray(at) ? at[step] : void 0;
+      continue;
+    }
+    const quotable = depth === 0 ? PARAMETER_ID.test(step) : GRAMMAR_KEYS.has(step);
+    segments.push(quotable ? step : String(isJsonRecord(at) ? Object.keys(at).indexOf(step) : 0));
+    at = isJsonRecord(at) ? at[step] : void 0;
+  }
+  let written = `${code}:${segments.length ? segments.join(".") : "parameters"}`;
+  while (written.length > MAX_CODE_LENGTH && segments.length > 1) {
+    segments.pop();
+    written = `${code}:${segments.join(".")}`;
+  }
+  return written.slice(0, MAX_CODE_LENGTH);
+}
+
+// src/runtime/llm-evidence/plan-resolution/resolve-plan-node.ts
+var WEB_PLAN_HANDLE_ISSUE_CODES = [
+  "web.handle.malformed",
+  "web.handle.misplaced",
+  "web.handle.unknown",
+  "web.handle.stale",
+  "web.handle.ambiguous",
+  "web.handle.not_unique",
+  "web.handle.frame_mismatch",
+  "web.handle.unknown_field",
+  "web.handle.extraction_required",
+  // The extraction node's `extractList` as `{ handle, fields?, paginate? }`, as its description spells out.
+  "web.handle.expected.extract_list.handle_fields_paginate",
+  // An element node's `selector` as `{ handle, location? }`.
+  "web.handle.expected.selector.handle_location"
+];
+var MAX_ISSUE_CODES = 16;
+var EXPECTED_PLACEMENT = {
+  extraction: "web.handle.expected.extract_list.handle_fields_paginate",
+  target: "web.handle.expected.selector.handle_location"
+};
+var PLACEMENT_REASONS = /* @__PURE__ */ new Set(["web.handle.malformed", "web.handle.misplaced", "web.handle.unknown_field", "web.handle.extraction_required"]);
+var SELECTOR_NODE_IDS = new Set(
+  webAutomationActionDefinitions.filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "selector" in definition.parameterSchema.properties).map((definition) => webAutomationOutputNodeId(definition.actionType))
+);
+var ELEMENT_NODE_IDS = new Set(
+  webAutomationActionDefinitions.filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "element" in definition.parameterSchema.properties).map((definition) => webAutomationOutputNodeId(definition.actionType))
+);
+var WEB_OUTPUT_IDS = new Set(webAutomationActionDefinitions.map((definition) => definition.actionType));
+var RUN_OUTPUT_NODE_ID = "builtin.policy.action";
+function isWebOutputId(value) {
+  return typeof value === "string" && WEB_OUTPUT_IDS.has(value);
+}
+var TARGET_SLOTS = ["selector", "target", "element"];
+function isTargetSlot(key, nodeDefinitionId) {
+  if (!SELECTOR_NODE_IDS.has(nodeDefinitionId) || !TARGET_SLOTS.includes(key)) return false;
+  return key !== "element" || ELEMENT_NODE_IDS.has(nodeDefinitionId);
+}
+var EXTRACT_LIST_NODE_ID = webAutomationOutputNodeId("web.dom.extract_list");
+var TARGET_ISSUES = {
+  unknown: "web.handle.unknown",
+  stale: "web.handle.stale",
+  ambiguous: "web.handle.ambiguous",
+  not_unique: "web.handle.not_unique"
+};
+function resolveWebPlanNodeParameters(input, stores) {
+  const scope = { projectId: input.projectId, flowId: input.flowId };
+  const outcome = input.nodeDefinitionId === RUN_OUTPUT_NODE_ID ? resolveRunOutput(input.parameters, scope, stores) : resolveNode(input.nodeDefinitionId, input.parameters, scope, stores);
+  return outcome.status === "refused" ? refusal(input.parameters, outcome.refusals) : outcome;
+}
+function resolveNode(nodeDefinitionId, parameters, scope, stores) {
+  const refusals = [];
+  const replaced = /* @__PURE__ */ new Map();
+  const extractionNode = nodeDefinitionId === EXTRACT_LIST_NODE_ID;
+  for (const [key, value] of Object.entries(parameters)) {
+    if (extractionNode && key === "extractList") {
+      const slot = resolveWebExtractionSlot(value, scope, stores.extractions);
+      if (slot.status === "resolved") replaced.set(key, { value: slot.request, frameId: slot.frameId, element: void 0 });
+      else if (slot.status === "refused") refusals.push({ code: slot.issue, kind: "extraction", path: [key, ...slot.path] });
+      else if (stores.extractions.issuedFor(scope)) refusals.push({ code: "web.handle.extraction_required", kind: "extraction", path: [key] });
+      continue;
+    }
+    if (isTargetSlot(key, nodeDefinitionId) && isHandleObject(value)) {
+      const outcome = resolveTarget(value, scope, stores.targets);
+      if (typeof outcome !== "string") replaced.set(key, outcome);
+      else refusals.push({ code: outcome, kind: outcome === "web.handle.misplaced" ? "extraction" : "target", path: [key] });
+      continue;
+    }
+    for (const found of webPlanHandlesIn(value)) {
+      refusals.push({ code: "web.handle.misplaced", kind: extractionNode ? "extraction" : found.kind, path: [key, ...found.path] });
+    }
+  }
+  if (refusals.length > 0) return { status: "refused", refusals };
+  if (replaced.size === 0) return { status: "unchanged" };
+  const named = TARGET_SLOTS.flatMap((slot) => {
+    const resolved3 = replaced.get(slot);
+    return resolved3 ? [{ slot, resolved: resolved3 }] : [];
+  });
+  const element = named[0]?.resolved;
+  const disagreeing = named.find(({ resolved: resolved3 }) => resolved3.value !== element?.value || (resolved3.frameId ?? 0) !== (element?.frameId ?? 0));
+  if (disagreeing) return { status: "refused", refusals: [{ code: "web.handle.ambiguous", kind: "target", path: [disagreeing.slot] }] };
+  const frameId = handleFrame([...replaced.values()]);
+  const declared2 = declaredFrame(parameters.browserFrameId);
+  if (frameId === "mixed" || declared2 !== void 0 && declared2 !== (frameId ?? 0)) {
+    return { status: "refused", refusals: [{ code: "web.handle.frame_mismatch", kind: void 0, path: frameId === "mixed" ? [] : ["browserFrameId"] }] };
+  }
+  const resolved2 = {};
+  for (const [key, value] of Object.entries(parameters)) {
+    if ((key === "target" || key === "element") && replaced.has(key)) continue;
+    resolved2[key] = replaced.get(key)?.value ?? value;
+  }
+  if (element) resolved2.selector = element.value;
+  const identity = element?.element;
+  if (identity !== void 0 && ELEMENT_NODE_IDS.has(nodeDefinitionId)) resolved2.element = identity;
+  if (frameId !== void 0 && frameId !== 0) resolved2.browserFrameId = frameId;
+  return { status: "resolved", parameters: resolved2 };
+}
+function resolveRunOutput(parameters, scope, stores) {
+  const { outputId, parameters: payload } = parameters;
+  const inner = isWebOutputId(outputId) && isJsonRecord(payload) ? resolveNode(webAutomationOutputNodeId(outputId), payload, scope, stores) : void 0;
+  const refusals = [];
+  for (const [key, value] of Object.entries(parameters)) {
+    if (key === "parameters" && inner !== void 0) continue;
+    for (const found of webPlanHandlesIn(value)) refusals.push({ code: "web.handle.misplaced", kind: found.kind, path: [key, ...found.path] });
+  }
+  if (inner?.status === "refused") {
+    for (const entry of inner.refusals) refusals.push({ code: entry.code, kind: entry.kind, path: ["parameters", ...entry.path] });
+  }
+  if (refusals.length > 0) return { status: "refused", refusals };
+  if (inner?.status !== "resolved") return { status: "unchanged" };
+  const resolved2 = {};
+  for (const [key, value] of Object.entries(parameters)) resolved2[key] = key === "parameters" ? inner.parameters : value;
+  return { status: "resolved", parameters: resolved2 };
+}
+function resolveTarget(value, scope, targets) {
+  if (Object.keys(value).some((key) => key !== "handle" && key !== "location")) return "web.handle.malformed";
+  const kind = webPlanHandleKind(value.handle);
+  if (kind === "extraction") return "web.handle.misplaced";
+  if (kind !== "target" || typeof value.handle !== "string") return "web.handle.malformed";
+  if (value.location !== void 0 && (typeof value.location !== "string" || value.location === "")) return "web.handle.malformed";
+  const resolution = targets.resolve(scope, value.handle, value.location);
+  if (!resolution.ok) return TARGET_ISSUES[resolution.code];
+  return { value: resolution.selector, frameId: resolution.frameId, element: resolution.element };
+}
+function isHandleObject(value) {
+  return isJsonRecord(value) && Object.prototype.hasOwnProperty.call(value, "handle");
+}
+function handleFrame(resolved2) {
+  const frames = new Set(resolved2.map((entry) => entry.frameId ?? 0));
+  if (frames.size > 1) return "mixed";
+  const only = [...frames][0];
+  return only === 0 ? void 0 : only;
+}
+function declaredFrame(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
+}
+function refusal(parameters, refusals) {
+  const codes = new Set(refusals.map((entry) => entry.code));
+  for (const entry of refusals) {
+    if (entry.kind !== void 0 && PLACEMENT_REASONS.has(entry.code)) codes.add(EXPECTED_PLACEMENT[entry.kind]);
+  }
+  const reasons = WEB_PLAN_HANDLE_ISSUE_CODES.filter((code) => codes.has(code));
+  const positions = [...new Set(refusals.map((entry) => webPlanPositionCode(entry.code, parameters, entry.path)))];
+  return { status: "refused", issueCodes: [...reasons, ...positions].slice(0, MAX_ISSUE_CODES) };
+}
+
+// src/runtime/llm-evidence/plan-resolution/element-identity.ts
+var CONTENT_TAGS = /* @__PURE__ */ new Set(["input", "textarea", "select"]);
+function webPlanElementIdentity(element, selector) {
+  const secret = isSensitiveFieldSignature({ inputType: element.inputType, controlType: element.controlType });
+  const context = present({
+    formId: uncut(element.form, WEB_LLM_EVIDENCE_BOUNDS.placement),
+    listPosition: element.item === void 0 ? void 0 : { index: element.item.index, total: element.item.total }
+  });
+  return present({
+    tagName: element.tag,
+    role: element.role,
+    accessibleName: secret ? void 0 : uncut(element.name, WEB_LLM_EVIDENCE_BOUNDS.text),
+    visibleText: secret || CONTENT_TAGS.has(element.tag) ? void 0 : uncut(element.text, WEB_LLM_EVIDENCE_BOUNDS.text),
+    selector,
+    inputType: element.inputType,
+    context: Object.keys(context).length > 0 ? context : void 0
+  });
+}
+function uncut(value, bound) {
+  return value !== void 0 && value.length < bound ? value : void 0;
+}
+
+// src/runtime/llm-evidence/plan-resolution/target-packets.ts
+var RETAINED_PAGES_PER_FLOW = 8;
+var RETAINED_FLOWS = 32;
+var REMEMBERED_STALE_PAGES = 64;
+function createWebLlmTargetPackets() {
+  const flows = /* @__PURE__ */ new Map();
+  return {
+    remember(scope, binding) {
+      const key = scopeKey2(scope);
+      const flow = flows.get(key) ?? { pages: /* @__PURE__ */ new Map(), letGo: /* @__PURE__ */ new Set() };
+      flows.delete(key);
+      flows.set(key, flow);
+      for (const oldest of flows.keys()) {
+        if (flows.size <= RETAINED_FLOWS) break;
+        flows.delete(oldest);
+      }
+      const location = binding.evidence.location;
+      const targets = /* @__PURE__ */ new Map();
+      const uses = /* @__PURE__ */ new Map();
+      for (const element of binding.evidence.elements) {
+        const selector = binding.selectors.get(element.target);
+        if (selector === void 0) continue;
+        const address = `${element.frameId ?? 0}\0${selector}`;
+        uses.set(address, (uses.get(address) ?? 0) + 1);
+        targets.set(element.target, { selector, frameId: element.frameId, element: webPlanElementIdentity(element, selector), shared: false });
+      }
+      for (const target of targets.values()) target.shared = (uses.get(`${target.frameId ?? 0}\0${target.selector}`) ?? 0) > 1;
+      flow.pages.delete(location);
+      flow.pages.set(location, targets);
+      flow.letGo.delete(location);
+      for (const oldest of flow.pages.keys()) {
+        if (flow.pages.size <= RETAINED_PAGES_PER_FLOW) break;
+        flow.pages.delete(oldest);
+        flow.letGo.add(oldest);
+      }
+      for (const oldest of flow.letGo) {
+        if (flow.letGo.size <= REMEMBERED_STALE_PAGES) break;
+        flow.letGo.delete(oldest);
+      }
+    },
+    resolve(scope, handle, location) {
+      const flow = flows.get(scopeKey2(scope));
+      if (!flow) return { ok: false, code: "unknown" };
+      if (location !== void 0) {
+        const page = flow.pages.get(location);
+        if (!page) return { ok: false, code: flow.letGo.has(location) ? "stale" : "unknown" };
+        const target = page.get(handle);
+        if (target === void 0) return { ok: false, code: "unknown" };
+        return target.shared ? { ok: false, code: "not_unique" } : resolved(target);
+      }
+      const seen = /* @__PURE__ */ new Map();
+      for (const page of flow.pages.values()) {
+        const target = page.get(handle);
+        if (target === void 0) continue;
+        const address = `${target.frameId ?? 0}\0${target.selector}`;
+        const known = seen.get(address);
+        seen.set(address, known === void 0 ? target : {
+          selector: known.selector,
+          frameId: known.frameId,
+          element: agreedIdentity(known.element, target.element),
+          shared: known.shared || target.shared
+        });
+      }
+      if (seen.size > 1) return { ok: false, code: "ambiguous" };
+      const only = [...seen.values()][0];
+      if (only?.shared) return { ok: false, code: "not_unique" };
+      if (only !== void 0) return resolved(only);
+      return { ok: false, code: flow.letGo.size > 0 ? "stale" : "unknown" };
+    }
+  };
+}
+function resolved(target) {
+  return { ok: true, selector: target.selector, frameId: target.frameId, element: structuredClone(target.element) };
+}
+function agreedIdentity(left, right) {
+  const agreed = (a, b) => JSON.stringify(a) === JSON.stringify(b) ? a : void 0;
+  return present({
+    tagName: agreed(left.tagName, right.tagName),
+    role: agreed(left.role, right.role),
+    accessibleName: agreed(left.accessibleName, right.accessibleName),
+    visibleText: agreed(left.visibleText, right.visibleText),
+    selector: agreed(left.selector, right.selector),
+    inputType: agreed(left.inputType, right.inputType),
+    context: agreed(left.context, right.context)
+  });
+}
+function scopeKey2(scope) {
+  return `${scope.projectId}\0${scope.flowId}`;
 }
 
 // src/runtime/llm-evidence/target-override.ts

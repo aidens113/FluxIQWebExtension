@@ -18,10 +18,12 @@
 //   them as it does for a recorded node. A node that names handles in several
 //   of these slots must name one element with them, or it is refused as
 //   `ambiguous`;
-// - the extraction node's `extractList` written `{ "handle": "extraction.N" }`
-//   -- optionally with `minItems` and `maxItems` -- becomes the
-//   `web.dom.extract_list` request the detection tool kept behind it
-//   (`structure/handles.ts`).
+// - the extraction node's `extractList` naming an `extraction.N` becomes the
+//   `web.dom.extract_list` request the detection tool kept behind it, cut to the
+//   columns and pages the plan asks for (`extraction-slot.ts`);
+// - Core's Run Output node (`builtin.policy.action`) naming a web output is
+//   resolved in its payload exactly as that output's own node is, since the
+//   payload is what the output runs with.
 //
 // A handle's element in a child frame also writes `browserFrameId`, and a node
 // that already names a different frame is refused rather than silently moved.
@@ -37,21 +39,38 @@
 //
 // Nothing is guessed. A node with no handle is `unchanged` -- a literal
 // selector the model wrote stays exactly as it wrote it and is never reported
-// as resolved. A handle anywhere else, of the wrong kind for its slot, in the
-// wrong shape, unknown to this project and Flow, let go by the bounded store,
-// naming different controls on different pages or in the node's slots, or
-// whose selector the page gave to several controls at once, refuses the whole
-// node with a named code, and nothing of it is resolved.
+// as resolved -- with one exception: once this Flow's exploration was shown a
+// detected list, a literal `extractList` can only be a guess at selectors the
+// model was never shown, and live every one of them read no field
+// (`run-mu4wwkbc-df6cfe60`), so it is refused as `extraction_required`. A
+// handle anywhere else, of the wrong kind for its slot, in the wrong shape,
+// unknown to this project and Flow, let go by the bounded store, naming
+// different controls on different pages or in the node's slots, or whose
+// selector the page gave to several controls at once, refuses the whole node,
+// and nothing of it is resolved.
+//
+// A refusal is all the model learns before it tries again, and a bare code did
+// not teach it: live builds repeated one refusal until they gave up
+// (`run-mu4xn1wz-6cdb8bbf`). So a refusal names its reasons, then where a
+// handle of that kind is accepted and in which shape, then `<reason>:<path>`
+// for each place it was refused at, quoted by position (`issue-position.ts`).
 
 import type { JsonObject, JsonValue } from "fluxiq/core";
-import { webAutomationExtractListRequestValue } from "../../../actions/extraction";
 import { webAutomationActionDefinitions } from "../../../actions/schemas";
+import type { WebAutomationActionType } from "../../../actions/types";
 import { webAutomationOutputNodeId } from "../../../output-nodes";
-import { isJsonRecord } from "../untrusted-json";
 import type { WebLlmExtractionHandles } from "../structure";
+import { isJsonRecord } from "../untrusted-json";
+import { resolveWebExtractionSlot } from "./extraction-slot";
+import { webPlanHandleKind, webPlanHandlesIn, type WebPlanHandleKind, type WebPlanValuePath } from "./handle-tokens";
+import { webPlanPositionCode } from "./issue-position";
 import type { WebLlmTargetPackets } from "./target-packets";
 
-/** Every reason a node's handles are refused. */
+/**
+ * Every code a refusal is made of, in the order a refusal lists them: why the
+ * node was refused, then where a handle of that kind is accepted and in which
+ * shape. Each reason is also followed by `<code>:<position>` for where it applied.
+ */
 export const WEB_PLAN_HANDLE_ISSUE_CODES = [
   "web.handle.malformed",
   "web.handle.misplaced",
@@ -59,10 +78,19 @@ export const WEB_PLAN_HANDLE_ISSUE_CODES = [
   "web.handle.stale",
   "web.handle.ambiguous",
   "web.handle.not_unique",
-  "web.handle.frame_mismatch"
+  "web.handle.frame_mismatch",
+  "web.handle.unknown_field",
+  "web.handle.extraction_required",
+  // The extraction node's `extractList` as `{ handle, fields?, paginate? }`, as its description spells out.
+  "web.handle.expected.extract_list.handle_fields_paginate",
+  // An element node's `selector` as `{ handle, location? }`.
+  "web.handle.expected.selector.handle_location"
 ] as const;
 
 export type WebPlanHandleIssueCode = (typeof WEB_PLAN_HANDLE_ISSUE_CODES)[number];
+
+/** One code of a refusal: a published code, or a reason followed by the position it applied at. */
+export type WebPlanHandleIssue = WebPlanHandleIssueCode | `${WebPlanHandleIssueCode}:${string}`;
 
 export type WebPlanNodeResolutionInput = {
   projectId: string;
@@ -74,17 +102,22 @@ export type WebPlanNodeResolutionInput = {
 export type WebPlanNodeResolution =
   | { status: "unchanged" }
   | { status: "resolved"; parameters: JsonObject }
-  | { status: "refused"; issueCodes: readonly WebPlanHandleIssueCode[] };
+  | { status: "refused"; issueCodes: readonly WebPlanHandleIssue[] };
 
 export type WebPlanHandleStores = {
   targets: WebLlmTargetPackets;
   extractions: WebLlmExtractionHandles;
 };
 
-const TARGET_HANDLE = /^target\.[1-9][0-9]?$/u;
-const EXTRACTION_HANDLE = /^extraction\.[1-9][0-9]{0,8}$/u;
-/** How deep a parameter is searched for a handle written somewhere no handle belongs. */
-const MAX_SEARCH_DEPTH = 8;
+/** Core's bound on the codes one refusal may carry (`plan-parameter-resolution.ts`). */
+const MAX_ISSUE_CODES = 16;
+
+/** Where a handle of each kind is accepted, named for a refusal that is about where or how it was written. */
+const EXPECTED_PLACEMENT = {
+  extraction: "web.handle.expected.extract_list.handle_fields_paginate",
+  target: "web.handle.expected.selector.handle_location"
+} as const satisfies Record<WebPlanHandleKind, WebPlanHandleIssueCode>;
+const PLACEMENT_REASONS: ReadonlySet<WebPlanHandleIssueCode> = new Set(["web.handle.malformed", "web.handle.misplaced", "web.handle.unknown_field", "web.handle.extraction_required"]);
 
 /** The web nodes whose schema takes a `selector`: the only nodes a target handle may name one for. */
 const SELECTOR_NODE_IDS: ReadonlySet<string> = new Set(
@@ -99,6 +132,14 @@ const ELEMENT_NODE_IDS: ReadonlySet<string> = new Set(
     .filter((definition) => isJsonRecord(definition.parameterSchema.properties) && "element" in definition.parameterSchema.properties)
     .map((definition) => webAutomationOutputNodeId(definition.actionType))
 );
+
+/** The outputs this domain registers, which Core's Run Output node may name. */
+const WEB_OUTPUT_IDS: ReadonlySet<string> = new Set(webAutomationActionDefinitions.map((definition) => definition.actionType));
+const RUN_OUTPUT_NODE_ID = "builtin.policy.action";
+
+function isWebOutputId(value: unknown): value is WebAutomationActionType {
+  return typeof value === "string" && WEB_OUTPUT_IDS.has(value);
+}
 
 /**
  * The parameters of an element node a target handle may be written in, in the
@@ -116,7 +157,14 @@ function isTargetSlot(key: string, nodeDefinitionId: string): boolean {
 /** The one node an extraction handle may name a request for. */
 const EXTRACT_LIST_NODE_ID = webAutomationOutputNodeId("web.dom.extract_list");
 
+type Scope = { projectId: string; flowId: string };
 type Resolved = { value: JsonValue; frameId: number | undefined; element: JsonObject | undefined };
+/** One reason a node was refused, the kind of handle it is about, and where. */
+type Refusal = { code: WebPlanHandleIssueCode; kind: WebPlanHandleKind | undefined; path: WebPlanValuePath };
+type NodeOutcome =
+  | { status: "unchanged" }
+  | { status: "resolved"; parameters: JsonObject }
+  | { status: "refused"; refusals: Refusal[] };
 
 const TARGET_ISSUES = {
   unknown: "web.handle.unknown",
@@ -127,92 +175,104 @@ const TARGET_ISSUES = {
 
 export function resolveWebPlanNodeParameters(input: WebPlanNodeResolutionInput, stores: WebPlanHandleStores): WebPlanNodeResolution {
   const scope = { projectId: input.projectId, flowId: input.flowId };
-  const issues = new Set<WebPlanHandleIssueCode>();
+  const outcome = input.nodeDefinitionId === RUN_OUTPUT_NODE_ID
+    ? resolveRunOutput(input.parameters, scope, stores)
+    : resolveNode(input.nodeDefinitionId, input.parameters, scope, stores);
+  return outcome.status === "refused" ? refusal(input.parameters, outcome.refusals) : outcome;
+}
+
+function resolveNode(nodeDefinitionId: string, parameters: JsonObject, scope: Scope, stores: WebPlanHandleStores): NodeOutcome {
+  const refusals: Refusal[] = [];
   const replaced = new Map<string, Resolved>();
-  for (const [key, value] of Object.entries(input.parameters)) {
-    const slot = isTargetSlot(key, input.nodeDefinitionId)
-      ? "target"
-      : key === "extractList" && input.nodeDefinitionId === EXTRACT_LIST_NODE_ID ? "extraction" : undefined;
-    // Outside a handle slot, and inside one below its top, a recognisable
-    // handle is misplaced; anything else there is not this resolver's.
-    if (slot === undefined || !isHandleObject(value)) {
-      if (containsRecognisableHandle(value, 0)) issues.add("web.handle.misplaced");
+  const extractionNode = nodeDefinitionId === EXTRACT_LIST_NODE_ID;
+  for (const [key, value] of Object.entries(parameters)) {
+    if (extractionNode && key === "extractList") {
+      const slot = resolveWebExtractionSlot(value, scope, stores.extractions);
+      if (slot.status === "resolved") replaced.set(key, { value: slot.request, frameId: slot.frameId, element: undefined });
+      else if (slot.status === "refused") refusals.push({ code: slot.issue, kind: "extraction", path: [key, ...slot.path] });
+      else if (stores.extractions.issuedFor(scope)) refusals.push({ code: "web.handle.extraction_required", kind: "extraction", path: [key] });
       continue;
     }
-    const outcome = slot === "target" ? resolveTarget(value, scope, stores.targets) : resolveExtraction(value, scope, stores.extractions);
-    if (typeof outcome === "string") issues.add(outcome);
-    else replaced.set(key, outcome);
+    if (isTargetSlot(key, nodeDefinitionId) && isHandleObject(value)) {
+      const outcome = resolveTarget(value, scope, stores.targets);
+      if (typeof outcome !== "string") replaced.set(key, outcome);
+      // A target slot refuses only an extraction handle as misplaced.
+      else refusals.push({ code: outcome, kind: outcome === "web.handle.misplaced" ? "extraction" : "target", path: [key] });
+      continue;
+    }
+    // Outside a handle slot, a recognisable handle is misplaced. On the
+    // extraction node it can only have been meant for the list.
+    for (const found of webPlanHandlesIn(value)) {
+      refusals.push({ code: "web.handle.misplaced", kind: extractionNode ? "extraction" : found.kind, path: [key, ...found.path] });
+    }
   }
-  if (issues.size > 0) return refused(issues);
+  if (refusals.length > 0) return { status: "refused", refusals };
   if (replaced.size === 0) return { status: "unchanged" };
 
   // Slots naming the element must all name the same one; which of two the node acts on is not this resolver's to pick.
-  const named = TARGET_SLOTS.flatMap((slot) => replaced.get(slot) ?? []);
-  const element = named[0];
-  if (element && named.some((other) => other.value !== element.value || (other.frameId ?? 0) !== (element.frameId ?? 0))) {
-    return refused(new Set<WebPlanHandleIssueCode>(["web.handle.ambiguous"]));
-  }
+  const named = TARGET_SLOTS.flatMap((slot) => {
+    const resolved = replaced.get(slot);
+    return resolved ? [{ slot, resolved }] : [];
+  });
+  const element = named[0]?.resolved;
+  const disagreeing = named.find(({ resolved }) => resolved.value !== element?.value || (resolved.frameId ?? 0) !== (element?.frameId ?? 0));
+  if (disagreeing) return { status: "refused", refusals: [{ code: "web.handle.ambiguous", kind: "target", path: [disagreeing.slot] }] };
 
   const frameId = handleFrame([...replaced.values()]);
-  const declared = declaredFrame(input.parameters.browserFrameId);
-  if (frameId === "mixed" || (declared !== undefined && declared !== (frameId ?? 0))) return refused(new Set<WebPlanHandleIssueCode>(["web.handle.frame_mismatch"]));
+  const declared = declaredFrame(parameters.browserFrameId);
+  if (frameId === "mixed" || (declared !== undefined && declared !== (frameId ?? 0))) {
+    return { status: "refused", refusals: [{ code: "web.handle.frame_mismatch", kind: undefined, path: frameId === "mixed" ? [] : ["browserFrameId"] }] };
+  }
 
-  const parameters: JsonObject = {};
-  for (const [key, value] of Object.entries(input.parameters)) {
+  const resolved: JsonObject = {};
+  for (const [key, value] of Object.entries(parameters)) {
     // A `target` handle was where the element was named, not an adapted target
     // to keep; an `element` handle is written as the identity below.
     if ((key === "target" || key === "element") && replaced.has(key)) continue;
-    parameters[key] = replaced.get(key)?.value ?? value;
+    resolved[key] = replaced.get(key)?.value ?? value;
   }
-  if (element) parameters.selector = element.value;
+  if (element) resolved.selector = element.value;
   const identity = element?.element;
-  if (identity !== undefined && ELEMENT_NODE_IDS.has(input.nodeDefinitionId)) parameters.element = identity;
-  if (frameId !== undefined && frameId !== 0) parameters.browserFrameId = frameId;
-  return { status: "resolved", parameters };
+  if (identity !== undefined && ELEMENT_NODE_IDS.has(nodeDefinitionId)) resolved.element = identity;
+  if (frameId !== undefined && frameId !== 0) resolved.browserFrameId = frameId;
+  return { status: "resolved", parameters: resolved };
 }
 
-function resolveTarget(value: Record<string, unknown>, scope: { projectId: string; flowId: string }, targets: WebLlmTargetPackets): Resolved | WebPlanHandleIssueCode {
+/** Core's Run Output node: a web output's payload resolved as that output's own node, and a handle anywhere else misplaced. */
+function resolveRunOutput(parameters: JsonObject, scope: Scope, stores: WebPlanHandleStores): NodeOutcome {
+  const { outputId, parameters: payload } = parameters;
+  const inner = isWebOutputId(outputId) && isJsonRecord(payload)
+    ? resolveNode(webAutomationOutputNodeId(outputId), payload as JsonObject, scope, stores)
+    : undefined;
+  const refusals: Refusal[] = [];
+  for (const [key, value] of Object.entries(parameters)) {
+    if (key === "parameters" && inner !== undefined) continue;
+    for (const found of webPlanHandlesIn(value)) refusals.push({ code: "web.handle.misplaced", kind: found.kind, path: [key, ...found.path] });
+  }
+  if (inner?.status === "refused") {
+    for (const entry of inner.refusals) refusals.push({ code: entry.code, kind: entry.kind, path: ["parameters", ...entry.path] });
+  }
+  if (refusals.length > 0) return { status: "refused", refusals };
+  if (inner?.status !== "resolved") return { status: "unchanged" };
+  const resolved: JsonObject = {};
+  for (const [key, value] of Object.entries(parameters)) resolved[key] = key === "parameters" ? inner.parameters : value;
+  return { status: "resolved", parameters: resolved };
+}
+
+function resolveTarget(value: Record<string, unknown>, scope: Scope, targets: WebLlmTargetPackets): Resolved | WebPlanHandleIssueCode {
   if (Object.keys(value).some((key) => key !== "handle" && key !== "location")) return "web.handle.malformed";
-  const handle = value.handle;
-  if (typeof handle !== "string") return "web.handle.malformed";
-  if (EXTRACTION_HANDLE.test(handle)) return "web.handle.misplaced";
-  if (!TARGET_HANDLE.test(handle)) return "web.handle.malformed";
+  const kind = webPlanHandleKind(value.handle);
+  if (kind === "extraction") return "web.handle.misplaced";
+  if (kind !== "target" || typeof value.handle !== "string") return "web.handle.malformed";
   if (value.location !== undefined && (typeof value.location !== "string" || value.location === "")) return "web.handle.malformed";
-  const resolution = targets.resolve(scope, handle, value.location as string | undefined);
+  const resolution = targets.resolve(scope, value.handle, value.location as string | undefined);
   if (!resolution.ok) return TARGET_ISSUES[resolution.code];
   return { value: resolution.selector, frameId: resolution.frameId, element: resolution.element as unknown as JsonObject };
-}
-
-function resolveExtraction(value: Record<string, unknown>, scope: { projectId: string; flowId: string }, extractions: WebLlmExtractionHandles): Resolved | WebPlanHandleIssueCode {
-  if (Object.keys(value).some((key) => key !== "handle" && key !== "minItems" && key !== "maxItems")) return "web.handle.malformed";
-  const handle = value.handle;
-  if (typeof handle !== "string") return "web.handle.malformed";
-  if (TARGET_HANDLE.test(handle)) return "web.handle.misplaced";
-  if (!EXTRACTION_HANDLE.test(handle)) return "web.handle.malformed";
-  const resolution = extractions.resolve(scope, handle);
-  if (!resolution.ok) return resolution.code === "stale_handle" ? "web.handle.stale" : "web.handle.unknown";
-  const request: JsonObject = resolution.binding.extractList as unknown as JsonObject;
-  if (value.minItems !== undefined) request.minItems = value.minItems as JsonValue;
-  if (value.maxItems !== undefined) request.maxItems = value.maxItems as JsonValue;
-  // The bounds the plan added are held to the reader a dispatch is refused by,
-  // so a handle never resolves into a request the page would not run.
-  const checked = webAutomationExtractListRequestValue(request);
-  if (checked === undefined || checked.minItems !== request.minItems || checked.maxItems !== request.maxItems) return "web.handle.malformed";
-  return { value: request, frameId: resolution.binding.frameId, element: undefined };
 }
 
 /** A handle slot's value written as a handle: any object with a `handle` key. Its shape is judged by the slot. */
 function isHandleObject(value: unknown): value is Record<string, unknown> {
   return isJsonRecord(value) && Object.prototype.hasOwnProperty.call(value, "handle");
-}
-
-/** Whether a value holds, at any depth, an object whose `handle` is a target or extraction handle. */
-function containsRecognisableHandle(value: unknown, depth: number): boolean {
-  if (depth > MAX_SEARCH_DEPTH) return false;
-  if (Array.isArray(value)) return value.some((entry) => containsRecognisableHandle(entry, depth + 1));
-  if (!isJsonRecord(value)) return false;
-  if (typeof value.handle === "string" && (TARGET_HANDLE.test(value.handle) || EXTRACTION_HANDLE.test(value.handle))) return true;
-  return Object.values(value).some((entry) => containsRecognisableHandle(entry, depth + 1));
 }
 
 /** The frame every resolved handle is in, `undefined` for the top frame, or `mixed` when they disagree. */
@@ -228,6 +288,13 @@ function declaredFrame(value: unknown): number | undefined {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 }
 
-function refused(issues: Set<WebPlanHandleIssueCode>): WebPlanNodeResolution {
-  return { status: "refused", issueCodes: WEB_PLAN_HANDLE_ISSUE_CODES.filter((code) => issues.has(code)) };
+/** A refusal's codes: its reasons in a fixed order, where each kind of handle it is about is accepted, then each reason's position. */
+function refusal(parameters: JsonObject, refusals: Refusal[]): WebPlanNodeResolution {
+  const codes = new Set<WebPlanHandleIssueCode>(refusals.map((entry) => entry.code));
+  for (const entry of refusals) {
+    if (entry.kind !== undefined && PLACEMENT_REASONS.has(entry.code)) codes.add(EXPECTED_PLACEMENT[entry.kind]);
+  }
+  const reasons = WEB_PLAN_HANDLE_ISSUE_CODES.filter((code) => codes.has(code));
+  const positions = [...new Set(refusals.map((entry) => webPlanPositionCode(entry.code, parameters, entry.path) as WebPlanHandleIssue))];
+  return { status: "refused", issueCodes: [...reasons, ...positions].slice(0, MAX_ISSUE_CODES) };
 }

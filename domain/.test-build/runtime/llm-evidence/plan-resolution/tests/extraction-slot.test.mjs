@@ -1,4 +1,4 @@
-// src/runtime/llm-evidence/structure/tests/detect.test.ts
+// src/runtime/llm-evidence/plan-resolution/tests/extraction-slot.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -295,94 +295,33 @@ function webAutomationExtractListSchema(elementFingerprintSchema2) {
   };
 }
 
-// src/extraction/dataset-id.ts
-var COMBINING_MARKS = new RegExp("\\p{M}+", "gu");
-
-// src/extraction/label-key.ts
-var COMBINING_MARKS2 = new RegExp("\\p{M}+", "gu");
-
-// src/extraction/structure-detection.ts
-var WEB_AUTOMATION_STRUCTURE_DETECTION_REFUSALS = ["target_not_found", "ambiguous_target", "no_repeating_run", "sensitive_region"];
-function webAutomationStructureDetectionValue(value) {
-  const detection = record(value);
-  if (!detection) return void 0;
-  if (detection.ok === false) {
-    const refused2 = WEB_AUTOMATION_STRUCTURE_DETECTION_REFUSALS.find((code) => code === detection.refused);
-    return refused2 === void 0 ? void 0 : { ok: false, refused: refused2 };
-  }
-  if (detection.ok !== true) return void 0;
-  if (detection.infiniteScroll !== void 0 && detection.infiniteScroll !== true) return void 0;
-  const proposal = proposalValue(detection.proposal);
-  if (!proposal) return void 0;
-  return detection.infiniteScroll === true ? { ok: true, proposal, infiniteScroll: true } : { ok: true, proposal };
-}
-function proposalValue(value) {
-  const proposal = record(value);
-  if (!proposal || typeof proposal.container !== "string" || proposal.container === "") return void 0;
-  if (!Array.isArray(proposal.fields) || proposal.fields.length === 0) return void 0;
-  const itemCount = count(proposal.itemCount);
-  const confidence = unitInterval(proposal.confidence);
-  const fields = proposal.fields.map(fieldValue2);
-  if (itemCount === void 0 || confidence === void 0) return void 0;
-  const named = fields.filter((field) => field !== void 0);
-  if (named.length !== fields.length || new Set(named.map((field) => field.key)).size !== named.length) return void 0;
-  const request = webAutomationExtractListRequestValue({
-    item: proposal.item,
-    fields: Object.fromEntries(named.map((field) => [field.key, field.spec])),
-    paginate: proposal.pagination
-  });
-  if (!request) return void 0;
-  const copied = [];
-  for (const field of named) {
-    const spec = request.fields[field.key];
-    if (spec === void 0 || typeof spec === "string") return void 0;
-    copied.push({ key: field.key, label: field.label, spec, coverage: field.coverage });
-  }
-  const pagination = request.paginate;
-  return pagination === void 0 ? { container: proposal.container, item: request.item, itemCount, fields: copied, confidence } : { container: proposal.container, item: request.item, itemCount, fields: copied, pagination, confidence };
-}
-function fieldValue2(value) {
-  const field = record(value);
-  const spec = record(field?.spec);
-  if (!field || !spec || spec.element !== void 0) return void 0;
-  if (typeof field.key !== "string" || typeof field.label !== "string") return void 0;
-  const coverage = unitInterval(field.coverage);
-  return coverage === void 0 ? void 0 : { key: field.key, label: field.label, spec, coverage };
-}
-function record(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
-}
-function count(value) {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
-}
-function unitInterval(value) {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1 ? value : void 0;
-}
-
 // src/constants.ts
 var WEB_AUTOMATION_DOMAIN_ID = "web-automation";
 
-// src/actions/types.ts
-var WEB_AUTOMATION_ACTION_TYPES = [
-  "web.browser.navigate",
-  "web.dom.click",
-  "web.dom.type",
-  "web.dom.clear",
-  "web.dom.select",
-  "web.dom.scroll",
-  "web.dom.keypress",
-  "web.dom.wait_for_selector",
-  "web.dom.wait_for_text",
-  "web.dom.extract",
-  "web.dom.capture_snapshot",
-  "web.dom.check",
-  "web.dom.assert",
-  "web.dom.extract_list",
-  "web.dom.upload",
-  "web.dom.dialog",
-  "web.browser.tab",
-  "web.browser.download"
-];
+// src/actions/safety.ts
+var WEB_AUTOMATION_ACTION_SAFETY = {
+  "web.browser.navigate": "review",
+  "web.dom.click": "review",
+  "web.dom.type": "review",
+  "web.dom.clear": "review",
+  "web.dom.select": "review",
+  "web.dom.scroll": "review",
+  "web.dom.keypress": "review",
+  "web.dom.wait_for_selector": "safe",
+  "web.dom.wait_for_text": "safe",
+  "web.dom.extract": "safe",
+  "web.dom.capture_snapshot": "safe",
+  // Added in Week 1 (decision D6). An assertion and a list extraction only read
+  // the page, so they are safe; check, upload, and dialog change it, and a tab
+  // or download acts on the browser, so all five need approval.
+  "web.dom.check": "review",
+  "web.dom.assert": "safe",
+  "web.dom.extract_list": "safe",
+  "web.dom.upload": "review",
+  "web.dom.dialog": "review",
+  "web.browser.tab": "review",
+  "web.browser.download": "review"
+};
 
 // src/actions/schemas.ts
 var elementFingerprintSchema = {
@@ -688,31 +627,6 @@ var webAutomationActionDefinitions = [
   }
 ];
 
-// src/actions/safety.ts
-var WEB_AUTOMATION_ACTION_SAFETY = {
-  "web.browser.navigate": "review",
-  "web.dom.click": "review",
-  "web.dom.type": "review",
-  "web.dom.clear": "review",
-  "web.dom.select": "review",
-  "web.dom.scroll": "review",
-  "web.dom.keypress": "review",
-  "web.dom.wait_for_selector": "safe",
-  "web.dom.wait_for_text": "safe",
-  "web.dom.extract": "safe",
-  "web.dom.capture_snapshot": "safe",
-  // Added in Week 1 (decision D6). An assertion and a list extraction only read
-  // the page, so they are safe; check, upload, and dialog change it, and a tab
-  // or download acts on the browser, so all five need approval.
-  "web.dom.check": "review",
-  "web.dom.assert": "safe",
-  "web.dom.extract_list": "safe",
-  "web.dom.upload": "review",
-  "web.dom.dialog": "review",
-  "web.browser.tab": "review",
-  "web.browser.download": "review"
-};
-
 // src/output-nodes/extract-list/catalog-text.ts
 var WEB_AUTOMATION_EXTRACT_LIST_TAGS = [
   "scrape",
@@ -747,8 +661,154 @@ var WEB_AUTOMATION_EXTRACT_LIST_EXAMPLE = {
   paginate: { mode: "next", next: "a.next", maxPages: 5 }
 };
 
+// src/extraction/dataset-id.ts
+var MAX_ID_LENGTH = 200;
+var NONCE_PATTERN = /^[A-Za-z0-9._-]{1,64}$/u;
+var SEPARATOR = ":";
+var FALLBACK_NAME = "dataset";
+var OUTSIDE_NAME_CHARACTERS = /[^a-z0-9._-]+/u;
+var COMBINING_MARKS = new RegExp("\\p{M}+", "gu");
+function webAutomationDatasetId(label, nonce) {
+  if (!NONCE_PATTERN.test(nonce)) {
+    throw new RangeError("A dataset id nonce must be 1 to 64 characters of A-Z, a-z, 0-9, '.', '_' or '-'.");
+  }
+  const words = label.toLowerCase().normalize("NFKD").replace(COMBINING_MARKS, "").split(OUTSIDE_NAME_CHARACTERS).filter((word) => word.length > 0);
+  const name = words.join("-").slice(0, MAX_ID_LENGTH - SEPARATOR.length - nonce.length) || FALLBACK_NAME;
+  return `${name}${SEPARATOR}${nonce}`;
+}
+
+// src/extraction/label-key.ts
+var COMBINING_MARKS2 = new RegExp("\\p{M}+", "gu");
+
+// src/extraction/structure-detection.ts
+var WEB_AUTOMATION_STRUCTURE_DETECTION_REFUSALS = ["target_not_found", "ambiguous_target", "no_repeating_run", "sensitive_region"];
+function webAutomationStructureDetectionValue(value) {
+  const detection = record(value);
+  if (!detection) return void 0;
+  if (detection.ok === false) {
+    const refused2 = WEB_AUTOMATION_STRUCTURE_DETECTION_REFUSALS.find((code) => code === detection.refused);
+    return refused2 === void 0 ? void 0 : { ok: false, refused: refused2 };
+  }
+  if (detection.ok !== true) return void 0;
+  if (detection.infiniteScroll !== void 0 && detection.infiniteScroll !== true) return void 0;
+  const proposal = proposalValue(detection.proposal);
+  if (!proposal) return void 0;
+  return detection.infiniteScroll === true ? { ok: true, proposal, infiniteScroll: true } : { ok: true, proposal };
+}
+function proposalValue(value) {
+  const proposal = record(value);
+  if (!proposal || typeof proposal.container !== "string" || proposal.container === "") return void 0;
+  if (!Array.isArray(proposal.fields) || proposal.fields.length === 0) return void 0;
+  const itemCount = count(proposal.itemCount);
+  const confidence = unitInterval(proposal.confidence);
+  const fields = proposal.fields.map(fieldValue2);
+  if (itemCount === void 0 || confidence === void 0) return void 0;
+  const named = fields.filter((field) => field !== void 0);
+  if (named.length !== fields.length || new Set(named.map((field) => field.key)).size !== named.length) return void 0;
+  const request = webAutomationExtractListRequestValue({
+    item: proposal.item,
+    fields: Object.fromEntries(named.map((field) => [field.key, field.spec])),
+    paginate: proposal.pagination
+  });
+  if (!request) return void 0;
+  const copied = [];
+  for (const field of named) {
+    const spec = request.fields[field.key];
+    if (spec === void 0 || typeof spec === "string") return void 0;
+    copied.push({ key: field.key, label: field.label, spec, coverage: field.coverage });
+  }
+  const pagination = request.paginate;
+  return pagination === void 0 ? { container: proposal.container, item: request.item, itemCount, fields: copied, confidence } : { container: proposal.container, item: request.item, itemCount, fields: copied, pagination, confidence };
+}
+function fieldValue2(value) {
+  const field = record(value);
+  const spec = record(field?.spec);
+  if (!field || !spec || spec.element !== void 0) return void 0;
+  if (typeof field.key !== "string" || typeof field.label !== "string") return void 0;
+  const coverage = unitInterval(field.coverage);
+  return coverage === void 0 ? void 0 : { key: field.key, label: field.label, spec, coverage };
+}
+function record(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+}
+function count(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : void 0;
+}
+function unitInterval(value) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1 ? value : void 0;
+}
+
+// src/output-nodes/extract-list/record-output.ts
+var DEFAULT_MAX_RECORDS = 1e3;
+var MAX_RECORDS_CEILING = 1e4;
+var LABEL_MAX_LENGTH = 200;
+function webAutomationRecordOutput(definition) {
+  const taken = /* @__PURE__ */ new Set();
+  const fields = Object.entries(definition.request.fields).map(([key, field]) => {
+    const spec = typeof field === "string" ? void 0 : field;
+    return {
+      id: key,
+      label: distinctLabel(definition.fieldLabels[key] ?? key, key, taken),
+      // A link's target is a URL; everything else the page reads is text. A
+      // number on the page is text too, because nothing has parsed it.
+      valueType: spec?.kind === "link" ? "url" : "string",
+      // A field is required unless it was picked as optional: an optional field
+      // the page cannot read is `null`, which Core stores as an absent key (D16).
+      required: spec?.required !== false,
+      ...spec?.handling !== void 0 ? { handling: spec.handling } : {}
+    };
+  });
+  return {
+    datasetId: definition.datasetId,
+    label: definition.label,
+    schema: { schemaVersion: "0.1", fields },
+    writeMode: "append",
+    maxRecords: Math.min(definition.request.maxItems ?? DEFAULT_MAX_RECORDS, MAX_RECORDS_CEILING)
+  };
+}
+function distinctLabel(label, key, taken) {
+  const preferred = label.slice(0, LABEL_MAX_LENGTH);
+  const distinct = taken.has(preferred) ? `${preferred} (${key})`.slice(0, LABEL_MAX_LENGTH) : preferred;
+  const unique = taken.has(distinct) ? key.slice(0, LABEL_MAX_LENGTH) : distinct;
+  taken.add(unique);
+  return unique;
+}
+
 // src/output-nodes/extract-list/records-path.ts
 var WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH = "result.extracted";
+
+// src/output-nodes/extract-list/derived-record-output.ts
+var LABEL_MAX_LENGTH2 = 200;
+var LABEL_PREFIX = "Extracted list: ";
+var DIGEST_SEEDS = [2166136261, 84696351];
+var FNV_PRIME = 16777619;
+function webAutomationDerivedRecordOutput(request) {
+  const label = derivedLabel(request);
+  return {
+    ...webAutomationRecordOutput({ datasetId: webAutomationDatasetId(label, shapeDigest(request)), label, request, fieldLabels: {} }),
+    recordsPath: WEB_AUTOMATION_EXTRACT_LIST_RECORDS_PATH
+  };
+}
+function derivedLabel(request) {
+  const kept = Object.entries(request.fields).filter(([, field]) => typeof field === "string" || field.handling !== "exclude").map(([key]) => key);
+  return `${LABEL_PREFIX}${kept.join(", ")}`.slice(0, LABEL_MAX_LENGTH2);
+}
+function shapeDigest(request) {
+  const shape = JSON.stringify([request.item, Object.entries(request.fields).map(([key, field]) => [key, fieldShape(field)])]);
+  return DIGEST_SEEDS.map((seed) => fnv1a(shape, seed)).join("");
+}
+function fieldShape(field) {
+  if (typeof field === "string") return field;
+  return [field.kind, field.selector ?? null, field.attribute ?? null, field.header ?? null, field.required ?? null, field.handling ?? null];
+}
+function fnv1a(text, seed) {
+  let hash = seed >>> 0;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, FNV_PRIME) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+}
 
 // src/output-nodes/extract-list/dispatch.ts
 import { parseAutomationStudioRecordOutput } from "fluxiq/automation-studio/nodes";
@@ -1022,6 +1082,28 @@ function iconForOutput(outputId) {
   return "square-dot";
 }
 
+// src/actions/types.ts
+var WEB_AUTOMATION_ACTION_TYPES = [
+  "web.browser.navigate",
+  "web.dom.click",
+  "web.dom.type",
+  "web.dom.clear",
+  "web.dom.select",
+  "web.dom.scroll",
+  "web.dom.keypress",
+  "web.dom.wait_for_selector",
+  "web.dom.wait_for_text",
+  "web.dom.extract",
+  "web.dom.capture_snapshot",
+  "web.dom.check",
+  "web.dom.assert",
+  "web.dom.extract_list",
+  "web.dom.upload",
+  "web.dom.dialog",
+  "web.browser.tab",
+  "web.browser.download"
+];
+
 // src/output-nodes/parameter-contracts.ts
 var webAutomationOutputNodeParameterContracts = {
   [webAutomationOutputNodeId("web.dom.extract_list")]: webAutomationExtractListParameterContract
@@ -1058,141 +1140,6 @@ function isSensitiveElementDescriptor(descriptor) {
 function stringField(value) {
   return typeof value === "string" ? value : void 0;
 }
-
-// src/io/input-model.ts
-var WEB_AUTOMATION_INPUT_IDS = {
-  browserState: "web.browser.state",
-  recordingEvidence: "web.recording.evidence",
-  navigationRequested: "web.user.navigation_requested",
-  elementClicked: "web.user.element_clicked",
-  textEntered: "web.user.text_entered",
-  fieldCleared: "web.user.field_cleared",
-  optionSelected: "web.user.option_selected",
-  checkboxToggled: "web.user.checkbox_toggled",
-  keyPressed: "web.user.key_pressed",
-  pageScrolled: "web.user.page_scrolled",
-  filesChosen: "web.user.files_chosen",
-  tabSwitched: "web.user.tab_switched",
-  tabClosed: "web.user.tab_closed",
-  // One input, for the one form of extraction the product can define: a list,
-  // which saves a dataset.
-  //
-  // The single-value form had its own input -- an input maps to exactly one
-  // output, and the two forms run different verbs -- and nothing could ever
-  // produce it. The worker refuses to start a `value` pick and refuses one that
-  // arrives anyway (`background/extraction/control.ts`), `confirm.ts` refuses a
-  // `value` definition on the run path, and the picker's recorded event attaches
-  // no element for one. A registered action input that no event can reach
-  // advertises a trigger that never fires, which is the mirror of an unmapped
-  // input becoming executable, so it is not registered.
-  //
-  // The domain still *reads* a value definition
-  // (`actions/extraction/recorded-definition.ts`) and `web.dom.extract` remains
-  // an output a Flow may author; a recorded one stays passive evidence. When the
-  // picker can record a single value, this is one id and one row again.
-  dataExtractionDefined: "web.user.data_extraction_defined"
-};
-var stateInputDefinitions = [
-  { id: WEB_AUTOMATION_INPUT_IDS.browserState, title: "Browser state", description: "Current browser, tab, and compact DOM state available for policy conditions.", role: "state" },
-  { id: WEB_AUTOMATION_INPUT_IDS.recordingEvidence, title: "Web recording evidence", description: "Passive browser observations that may inform recordings but never execute a policy.", role: "event" }
-];
-var actionInputDefinitions = [
-  [WEB_AUTOMATION_INPUT_IDS.navigationRequested, "Navigation requested", "web.browser.navigate"],
-  [WEB_AUTOMATION_INPUT_IDS.elementClicked, "Element clicked", "web.dom.click"],
-  [WEB_AUTOMATION_INPUT_IDS.textEntered, "Text entered", "web.dom.type"],
-  [WEB_AUTOMATION_INPUT_IDS.fieldCleared, "Field cleared", "web.dom.clear"],
-  [WEB_AUTOMATION_INPUT_IDS.optionSelected, "Option selected", "web.dom.select"],
-  [WEB_AUTOMATION_INPUT_IDS.checkboxToggled, "Checkbox toggled", "web.dom.check"],
-  [WEB_AUTOMATION_INPUT_IDS.keyPressed, "Key pressed", "web.dom.keypress"],
-  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"],
-  [WEB_AUTOMATION_INPUT_IDS.filesChosen, "Files chosen", "web.dom.upload"],
-  [WEB_AUTOMATION_INPUT_IDS.tabSwitched, "Tab switched", "web.browser.tab"],
-  [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"],
-  [WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined, "Data extraction defined", "web.dom.extract_list"]
-];
-var OUTPUT_FOR_ACTION_INPUT = new Map(
-  actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
-);
-
-// src/runtime/capabilities.ts
-var WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID = "web.structure.detection";
-var webAutomationRuntimeCapabilities = [
-  {
-    id: "web.actions",
-    label: "Web actions",
-    kind: "action",
-    domainId: WEB_AUTOMATION_DOMAIN_ID,
-    actionTypes: WEB_AUTOMATION_ACTION_TYPES,
-    outputIds: WEB_AUTOMATION_ACTION_TYPES
-  },
-  {
-    id: "web.snapshots",
-    label: "Web snapshots",
-    kind: "snapshot",
-    domainId: WEB_AUTOMATION_DOMAIN_ID,
-    inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence]
-  },
-  {
-    id: "web.state",
-    label: "Web state",
-    kind: "state",
-    domainId: WEB_AUTOMATION_DOMAIN_ID,
-    inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState, WEB_AUTOMATION_INPUT_IDS.recordingEvidence]
-  },
-  {
-    id: "web.flow-runtime",
-    label: "Web flow runtime",
-    kind: "flow",
-    domainId: WEB_AUTOMATION_DOMAIN_ID,
-    metadata: { executionHost: "fluxiq-core", actionTransport: "extension" }
-  }
-];
-var webAutomationGatewayCapabilities = [
-  {
-    id: "web.context.state",
-    label: "Web context state",
-    kind: "state",
-    domainId: WEB_AUTOMATION_DOMAIN_ID,
-    inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState],
-    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState] }
-  },
-  {
-    id: "web.structured.snapshot",
-    label: "Structured web snapshots",
-    kind: "snapshot",
-    domainId: WEB_AUTOMATION_DOMAIN_ID,
-    inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence],
-    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence] }
-  },
-  {
-    // `web.dom.capture_snapshot` answers `detectStructure` with the repeating
-    // structure it found (`extraction/structure-detection.ts`). A flag on an
-    // existing observe-only action rather than an action of its own, so it
-    // lists no action type: nothing new is executable. The authoring evidence
-    // runtime refuses its detection tool for a client that does not declare it.
-    id: WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID,
-    label: "Repeating-structure detection",
-    kind: "snapshot",
-    domainId: WEB_AUTOMATION_DOMAIN_ID,
-    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, actionType: "web.dom.capture_snapshot", parameter: "detectStructure" }
-  },
-  {
-    id: "web.recording.events",
-    label: "Web recording events",
-    kind: "recording",
-    domainId: WEB_AUTOMATION_DOMAIN_ID,
-    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID }
-  },
-  {
-    id: "web.actions",
-    label: "Web actions",
-    kind: "action",
-    domainId: WEB_AUTOMATION_DOMAIN_ID,
-    actionTypes: WEB_AUTOMATION_ACTION_TYPES,
-    outputIds: WEB_AUTOMATION_ACTION_TYPES,
-    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, outputIds: WEB_AUTOMATION_ACTION_TYPES }
-  }
-];
 
 // src/runtime/llm-evidence/limits.ts
 import { AUTOMATION_STUDIO_LLM_MAX_FAILURE_EVIDENCE_BYTES } from "fluxiq/automation-studio";
@@ -1925,12 +1872,12 @@ function exactKeys(value, allowed) {
   if (Object.keys(value).some((key) => !keys.has(key)) || allowed.some((key) => !Object.prototype.hasOwnProperty.call(value, key))) recoverable("invalid_input");
 }
 async function defaultSleep(ms, signal) {
-  await new Promise((resolve) => {
-    const timer = setTimeout(resolve, ms);
+  await new Promise((resolve2) => {
+    const timer = setTimeout(resolve2, ms);
     timer.unref?.();
     signal?.addEventListener("abort", () => {
       clearTimeout(timer);
-      resolve();
+      resolve2();
     }, { once: true });
   });
 }
@@ -2862,6 +2809,141 @@ function elementFingerprint2(element, selectors) {
   });
 }
 
+// src/io/input-model.ts
+var WEB_AUTOMATION_INPUT_IDS = {
+  browserState: "web.browser.state",
+  recordingEvidence: "web.recording.evidence",
+  navigationRequested: "web.user.navigation_requested",
+  elementClicked: "web.user.element_clicked",
+  textEntered: "web.user.text_entered",
+  fieldCleared: "web.user.field_cleared",
+  optionSelected: "web.user.option_selected",
+  checkboxToggled: "web.user.checkbox_toggled",
+  keyPressed: "web.user.key_pressed",
+  pageScrolled: "web.user.page_scrolled",
+  filesChosen: "web.user.files_chosen",
+  tabSwitched: "web.user.tab_switched",
+  tabClosed: "web.user.tab_closed",
+  // One input, for the one form of extraction the product can define: a list,
+  // which saves a dataset.
+  //
+  // The single-value form had its own input -- an input maps to exactly one
+  // output, and the two forms run different verbs -- and nothing could ever
+  // produce it. The worker refuses to start a `value` pick and refuses one that
+  // arrives anyway (`background/extraction/control.ts`), `confirm.ts` refuses a
+  // `value` definition on the run path, and the picker's recorded event attaches
+  // no element for one. A registered action input that no event can reach
+  // advertises a trigger that never fires, which is the mirror of an unmapped
+  // input becoming executable, so it is not registered.
+  //
+  // The domain still *reads* a value definition
+  // (`actions/extraction/recorded-definition.ts`) and `web.dom.extract` remains
+  // an output a Flow may author; a recorded one stays passive evidence. When the
+  // picker can record a single value, this is one id and one row again.
+  dataExtractionDefined: "web.user.data_extraction_defined"
+};
+var stateInputDefinitions = [
+  { id: WEB_AUTOMATION_INPUT_IDS.browserState, title: "Browser state", description: "Current browser, tab, and compact DOM state available for policy conditions.", role: "state" },
+  { id: WEB_AUTOMATION_INPUT_IDS.recordingEvidence, title: "Web recording evidence", description: "Passive browser observations that may inform recordings but never execute a policy.", role: "event" }
+];
+var actionInputDefinitions = [
+  [WEB_AUTOMATION_INPUT_IDS.navigationRequested, "Navigation requested", "web.browser.navigate"],
+  [WEB_AUTOMATION_INPUT_IDS.elementClicked, "Element clicked", "web.dom.click"],
+  [WEB_AUTOMATION_INPUT_IDS.textEntered, "Text entered", "web.dom.type"],
+  [WEB_AUTOMATION_INPUT_IDS.fieldCleared, "Field cleared", "web.dom.clear"],
+  [WEB_AUTOMATION_INPUT_IDS.optionSelected, "Option selected", "web.dom.select"],
+  [WEB_AUTOMATION_INPUT_IDS.checkboxToggled, "Checkbox toggled", "web.dom.check"],
+  [WEB_AUTOMATION_INPUT_IDS.keyPressed, "Key pressed", "web.dom.keypress"],
+  [WEB_AUTOMATION_INPUT_IDS.pageScrolled, "Page scrolled", "web.dom.scroll"],
+  [WEB_AUTOMATION_INPUT_IDS.filesChosen, "Files chosen", "web.dom.upload"],
+  [WEB_AUTOMATION_INPUT_IDS.tabSwitched, "Tab switched", "web.browser.tab"],
+  [WEB_AUTOMATION_INPUT_IDS.tabClosed, "Tab closed", "web.browser.tab"],
+  [WEB_AUTOMATION_INPUT_IDS.dataExtractionDefined, "Data extraction defined", "web.dom.extract_list"]
+];
+var OUTPUT_FOR_ACTION_INPUT = new Map(
+  actionInputDefinitions.map(([inputId, , outputId]) => [inputId, outputId])
+);
+
+// src/runtime/capabilities.ts
+var WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID = "web.structure.detection";
+var webAutomationRuntimeCapabilities = [
+  {
+    id: "web.actions",
+    label: "Web actions",
+    kind: "action",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    actionTypes: WEB_AUTOMATION_ACTION_TYPES,
+    outputIds: WEB_AUTOMATION_ACTION_TYPES
+  },
+  {
+    id: "web.snapshots",
+    label: "Web snapshots",
+    kind: "snapshot",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence]
+  },
+  {
+    id: "web.state",
+    label: "Web state",
+    kind: "state",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState, WEB_AUTOMATION_INPUT_IDS.recordingEvidence]
+  },
+  {
+    id: "web.flow-runtime",
+    label: "Web flow runtime",
+    kind: "flow",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    metadata: { executionHost: "fluxiq-core", actionTransport: "extension" }
+  }
+];
+var webAutomationGatewayCapabilities = [
+  {
+    id: "web.context.state",
+    label: "Web context state",
+    kind: "state",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState],
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputIds: [WEB_AUTOMATION_INPUT_IDS.browserState] }
+  },
+  {
+    id: "web.structured.snapshot",
+    label: "Structured web snapshots",
+    kind: "snapshot",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence],
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, inputIds: [WEB_AUTOMATION_INPUT_IDS.recordingEvidence] }
+  },
+  {
+    // `web.dom.capture_snapshot` answers `detectStructure` with the repeating
+    // structure it found (`extraction/structure-detection.ts`). A flag on an
+    // existing observe-only action rather than an action of its own, so it
+    // lists no action type: nothing new is executable. The authoring evidence
+    // runtime refuses its detection tool for a client that does not declare it.
+    id: WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID,
+    label: "Repeating-structure detection",
+    kind: "snapshot",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, actionType: "web.dom.capture_snapshot", parameter: "detectStructure" }
+  },
+  {
+    id: "web.recording.events",
+    label: "Web recording events",
+    kind: "recording",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID }
+  },
+  {
+    id: "web.actions",
+    label: "Web actions",
+    kind: "action",
+    domainId: WEB_AUTOMATION_DOMAIN_ID,
+    actionTypes: WEB_AUTOMATION_ACTION_TYPES,
+    outputIds: WEB_AUTOMATION_ACTION_TYPES,
+    metadata: { domainId: WEB_AUTOMATION_DOMAIN_ID, outputIds: WEB_AUTOMATION_ACTION_TYPES }
+  }
+];
+
 // src/runtime/llm-evidence/tools.ts
 var TARGET_HANDLE_PATTERN2 = "^target\\.[1-9][0-9]?$";
 var RETAINED_SELECTOR_BINDINGS = 8;
@@ -3049,20 +3131,6 @@ function createWebAutomationLlmEvidenceRuntime(gateway) {
       return resolveWebPlanNodeParameters(input, { targets: targetPackets, extractions: extractionHandles });
     }
   };
-}
-function bindWebAutomationLlmEvidenceRuntime(fluxiq) {
-  fluxiq.programs.automationStudio.bindLlmEvidenceRuntime(createWebAutomationLlmEvidenceRuntime({
-    eligibleSessionIds: () => eligibleWebSessionIds(fluxiq),
-    structureDetectionSessionIds: () => eligibleWebSessionIds(fluxiq, WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID),
-    executeAction: (sessionId, command) => fluxiq.programs.automationStudioClientGateway.executeAction(sessionId, command)
-  }));
-}
-function eligibleWebSessionIds(fluxiq, alsoDeclaring) {
-  return fluxiq.programs.clientGateway.snapshot().sessions.filter(
-    (session) => session.status === "ready" && session.clientType === "extension" && !session.activeRecordingId && session.capabilities.some(
-      (capability) => capability.id === "web.actions" && (capability.metadata?.domainId === WEB_AUTOMATION_DOMAIN_ID || capability.actionTypes?.includes("web.dom.capture_snapshot"))
-    ) && (alsoDeclaring === void 0 || session.capabilities.some((capability) => capability.id === alsoDeclaring))
-  ).map((session) => session.sessionId);
 }
 function packetKey(evidence) {
   return `${evidence.location}\0${evidence.elements.map((element) => element.target).join(",")}`;
@@ -3427,299 +3495,251 @@ var CAPTURED_DETECTIONS = {
   }
 };
 
-// src/runtime/llm-evidence/structure/tests/detect.test.ts
-var SCOPE = { projectId: "project.one", flowId: "flow.one" };
-var PACKET_KEYS = /* @__PURE__ */ new Set([
-  "schemaVersion",
-  "trust",
-  "location",
-  "extraction",
-  "target",
-  "itemCount",
-  "fields",
-  "pagination",
-  "confidence",
-  "fieldsTruncated",
-  "key",
-  "label",
-  "kind",
-  "coverage"
-]);
-var EXPECTED_PAGINATION = {
-  "product-catalog-largest": "next_link",
-  "data-table-largest": "none",
-  "member-directory-largest": "none",
-  "infinite-feed-largest": "infinite_scroll",
-  "infinite-feed-load-more": "load_more_button"
+// src/runtime/llm-evidence/plan-resolution/tests/extraction-slot.test.ts
+var EXTRACT_LIST_NODE = webAutomationOutputNodeId("web.dom.extract_list");
+var CLICK_NODE = webAutomationOutputNodeId("web.dom.click");
+var CATALOG = CAPTURED_DETECTIONS["product-catalog-largest"];
+var EXTRACTION_HINT = "web.handle.expected.extract_list.handle_fields_paginate";
+var TARGET_HINT = "web.handle.expected.selector.handle_location";
+var CARD = '[data-testid="product-card"]';
+var testId = (id) => `[data-testid="${id}"]`;
+var NEXT = { next: testId("pagination-next"), maxPages: 3 };
+var CARD_FIELDS = {
+  name: { kind: "text", selector: testId("product-name"), required: true },
+  price: { kind: "text", selector: testId("product-price"), required: true },
+  rating: { kind: "text", selector: testId("product-rating"), required: true },
+  url: { kind: "attribute", selector: testId("product-link"), attribute: "href", required: true }
 };
-function fakeGateway(page, declares = true) {
-  const commands = [];
-  const executeAction = async (_sessionId, command) => {
-    commands.push({ actionType: command.actionType, parameters: command.parameters });
-    if (command.actionType !== "web.dom.capture_snapshot") return { status: "succeeded" };
-    const current = page();
-    const snapshot = { url: current.url, title: current.title ?? "Fixture", interactiveElements: current.elements ?? [] };
-    if (command.parameters.detectStructure === void 0 || current.structure === void 0) return { status: "succeeded", payload: { snapshot } };
-    return { status: "succeeded", payload: { snapshot, structure: current.structure } };
-  };
-  const gateway = declares ? { eligibleSessionIds: () => ["session.one"], structureDetectionSessionIds: () => ["session.one"], executeAction } : { eligibleSessionIds: () => ["session.one"], executeAction };
-  return { gateway, commands };
-}
-function captured(name) {
-  const capture2 = CAPTURED_DETECTIONS[name];
-  return { url: capture2.url, title: capture2.title, structure: structuredClone(capture2.structure) };
-}
-function withElements(page, elements) {
-  const next = { url: page.url, elements };
-  if (page.title !== void 0) next.title = page.title;
-  if (page.structure !== void 0) next.structure = page.structure;
-  return next;
-}
-function proposalOf(structure) {
-  assert.equal(structure.ok, true);
-  if (!structure.ok) throw new Error("not a detection");
-  return structure;
-}
-var callCount = 0;
-async function detect(runtime, value = {}, options = {}) {
-  callCount += 1;
-  const scope = options.scope ?? SCOPE;
-  const callId = `call.detect.${callCount}`;
-  return await runtime.executeTool(options.maxEvidenceBytes === void 0 ? { projectId: scope.projectId, flowId: scope.flowId, callId, toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value } : { projectId: scope.projectId, flowId: scope.flowId, callId, toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value, maxEvidenceBytes: options.maxEvidenceBytes });
-}
-function rejection(code) {
-  return { kind: "llm_evidence_tool_execution", evidence: { schemaVersion: "web-llm-tool-result.v1", ok: false, code }, effectApplied: false, resultCode: `web.action.rejected.${code}` };
-}
-function keysOf(value, into = /* @__PURE__ */ new Set()) {
-  if (Array.isArray(value)) for (const entry of value) keysOf(entry, into);
-  else if (value && typeof value === "object") {
-    for (const [key, entry] of Object.entries(value)) {
-      into.add(key);
-      keysOf(entry, into);
-    }
-  }
-  return into;
-}
-function selectorsOf(structure) {
-  const detection = proposalOf(structure);
-  const pagination = detection.proposal.pagination;
-  const paginationSelectors = pagination === void 0 ? [] : "next" in pagination ? [pagination.next] : "control" in pagination ? [pagination.control] : "pages" in pagination ? [pagination.pages] : [];
-  return [
-    detection.proposal.container,
-    detection.proposal.item,
-    ...detection.proposal.fields.flatMap((field) => field.spec.selector === void 0 ? [] : [field.spec.selector]),
-    ...paginationSelectors
-  ];
-}
-function stringsOf(value, into = []) {
-  if (typeof value === "string") into.push(value);
-  else if (Array.isArray(value)) for (const entry of value) stringsOf(entry, into);
-  else if (value && typeof value === "object") for (const entry of Object.values(value)) stringsOf(entry, into);
-  return into;
-}
-function assertNothingAddressable(packet, structure) {
-  const unexpected = [...keysOf(packet)].filter((key) => !PACKET_KEYS.has(key));
-  assert.deepEqual(unexpected, [], "the packet carries only allowlisted keys");
-  const wire = JSON.stringify(packet);
-  for (const selector of selectorsOf(structure)) assert.equal(wire.includes(selector), false, `the packet does not quote ${selector}`);
-  for (const text of stringsOf(packet)) assert.equal(/data-testid|[[\]#>=]/u.test(text), false, `the packet holds nothing selector-shaped: ${text}`);
-}
-function readableSpec2(spec) {
-  const copy = { kind: spec.kind };
-  if (spec.selector !== void 0) copy.selector = spec.selector;
-  if (spec.attribute !== void 0) copy.attribute = spec.attribute;
-  if (spec.header !== void 0) copy.header = spec.header;
-  if (spec.required !== void 0) copy.required = spec.required;
-  return copy;
-}
-test("every real detection becomes a selector-free packet and a handle that resolves to the request the page proposed", async () => {
-  for (const [name, capture2] of Object.entries(CAPTURED_DETECTIONS)) {
-    assert.deepEqual(webAutomationStructureDetectionValue(capture2.structure), capture2.structure, `${name} survives the wire copy unchanged`);
-  }
-  for (const name of Object.keys(CAPTURED_DETECTIONS)) {
-    const page = captured(name);
-    const detection = proposalOf(page.structure);
-    const { gateway, commands } = fakeGateway(() => page);
-    const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
-    const result = await detect(runtime);
-    assert.equal(result.resultCode, WEB_LLM_STRUCTURE_RESULT_CODE, name);
-    assert.equal(result.effectApplied, false, name);
-    assert.deepEqual(commands, [{ actionType: "web.dom.capture_snapshot", parameters: { detectStructure: {} } }], name);
-    const packet = result.evidence;
-    assertNothingAddressable(packet, page.structure);
-    assert.equal(packet.schemaVersion, "web-llm-structure.v1");
-    assert.equal(packet.trust, "untrusted-page-evidence");
-    assert.equal(packet.location, page.url, name);
-    assert.match(packet.extraction, /^extraction\.[1-9][0-9]*$/u);
-    assert.equal(packet.itemCount, detection.proposal.itemCount, name);
-    assert.equal(packet.pagination, EXPECTED_PAGINATION[name], name);
-    assert.equal(packet.confidence, detection.proposal.confidence, name);
-    assert.deepEqual(packet.fields, detection.proposal.fields.map((field) => ({ key: field.key, label: field.label, kind: field.spec.kind, coverage: field.coverage })), name);
-    assert.equal(packet.target, void 0);
-    assert.equal(packet.fieldsTruncated, void 0);
-    const resolved2 = runtime.resolveExtractionHandle({ ...SCOPE, handle: packet.extraction });
-    assert.equal(resolved2.ok, true, name);
-    if (!resolved2.ok) continue;
-    const expectedPaginate = detection.proposal.pagination ?? (detection.infiniteScroll ? { mode: "scroll", maxScrolls: WEB_AUTOMATION_EXTRACT_MAX_PAGES } : void 0);
-    const item = detection.proposal.item;
-    const fields = Object.fromEntries(detection.proposal.fields.map((field) => [field.key, readableSpec2(field.spec)]));
-    const expected = expectedPaginate === void 0 ? { item, fields } : { item, fields, paginate: expectedPaginate };
-    assert.deepEqual(resolved2.binding, { handle: packet.extraction, location: page.url, extractList: expected, itemCount: detection.proposal.itemCount }, name);
-    assert.deepEqual(webAutomationExtractListRequestValue(resolved2.binding.extractList), resolved2.binding.extractList, name);
-  }
-});
-test("a target handle an inspect issued is bound through its selector, even one every card shares", async () => {
-  const link = (frame) => frame === void 0 ? { tagName: "a", selector: '[data-testid="product-link"]', accessibleName: "A product", attributes: { href: "/scenarios/product-catalog/products/a", "data-testid": "product-link" } } : { tagName: "a", selector: `frame[${frame}] >> [data-testid="product-link"]`, accessibleName: "A product", attributes: { href: "/p", "data-testid": "product-link", "data-fluxiq-frame-id": String(frame) } };
-  const next = { tagName: "button", selector: '[data-testid="pagination-next"]', visibleText: "Next" };
-  let page = withElements(captured("product-catalog-largest"), [next, link(), link()]);
-  const { gateway, commands } = fakeGateway(() => page);
-  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
-  const inspected = await runtime.executeTool({ ...SCOPE, callId: "call.inspect", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
-  const handles = inspected.evidence.elements;
-  assert.deepEqual(handles.map((element) => [element.target, element.tag]), [["target.1", "button"], ["target.2", "a"], ["target.3", "a"]]);
-  commands.length = 0;
-  const around = await detect(runtime, { target: "target.2" });
-  assert.equal(around.resultCode, WEB_LLM_STRUCTURE_RESULT_CODE);
-  assert.equal(around.evidence.target, "target.2");
-  assert.deepEqual(commands, [
-    { actionType: "web.dom.capture_snapshot", parameters: {} },
-    { actionType: "web.dom.capture_snapshot", parameters: { detectStructure: { selector: '[data-testid="product-link"]' } } }
-  ]);
-  assertNothingAddressable(around.evidence, page.structure);
-  assert.deepEqual(await detect(runtime, { target: "target.9" }), rejection("target_unobserved"));
-  page = { ...page, elements: [next] };
-  assert.deepEqual(await detect(runtime, { target: "target.2" }), rejection("target_unobserved"));
-  page = { ...page, url: "http://127.0.0.1:4173/scenarios/product-catalog/page/2", elements: [next, link(), link()] };
-  assert.deepEqual(await detect(runtime, { target: "target.2" }), rejection("target_unobserved"));
-  page = withElements(captured("product-catalog-largest"), [link(7)]);
-  await runtime.executeTool({ ...SCOPE, callId: "call.inspect.frame", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
-  commands.length = 0;
-  const framed = await detect(runtime, { target: "target.1" });
-  assert.equal(framed.resultCode, WEB_LLM_STRUCTURE_RESULT_CODE);
-  assert.deepEqual(commands[1], { actionType: "web.dom.capture_snapshot", parameters: { detectStructure: { selector: '[data-testid="product-link"]' }, browserFrameId: 7 } });
-  const binding = runtime.resolveExtractionHandle({ ...SCOPE, handle: framed.evidence.extraction });
-  assert.equal(binding.ok && binding.binding.frameId, 7);
-});
-test("the page's refusals and a malformed call reach the model as bare codes", async () => {
-  const cases = [
-    ["target_not_found", "target_unobserved"],
-    ["ambiguous_target", "target_unobserved"],
-    ["no_repeating_run", "no_repeating_structure"],
-    ["sensitive_region", "sensitive_value"]
-  ];
-  for (const [refused2, code] of cases) {
-    const { gateway: gateway2 } = fakeGateway(() => ({ url: "https://example.test/list", structure: { ok: false, refused: refused2 } }));
-    assert.deepEqual(await detect(createWebAutomationLlmEvidenceRuntime(gateway2)), rejection(code), refused2);
-  }
-  const { gateway, commands } = fakeGateway(() => captured("data-table-largest"));
-  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
-  for (const value of [{ extra: 1 }, { target: "nope" }, { target: 3 }, { target: "target.1", extra: true }]) {
-    assert.deepEqual(await detect(runtime, value), rejection("invalid_input"), JSON.stringify(value));
-  }
-  assert.deepEqual(commands, [], "a malformed call reaches no page");
-});
-test("sensitive fields are dropped from both halves, and a producer's stray text never reaches the model", async () => {
-  const page = captured("data-table-largest");
-  const structure = page.structure;
-  const hostile = "Hostile sample value 4111 1111 1111 1111";
-  structure.note = hostile;
-  structure.proposal.sample = hostile;
-  structure.proposal.fields[0].sample = hostile;
-  structure.proposal.fields[1].label = `Category ${"x".repeat(300)}`;
-  structure.proposal.fields.push({ key: "secret", label: "secret", spec: { kind: "value", selector: 'input[type="password"]', handling: "exclude", required: true }, coverage: 1 });
-  const { gateway } = fakeGateway(() => page);
-  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
-  const result = await detect(runtime);
-  const packet = result.evidence;
-  assert.deepEqual(packet.fields.map((field) => field.key), ["product", "category", "price", "stock"]);
-  assert.equal(JSON.stringify(result).includes("Hostile"), false);
-  assert.equal(JSON.stringify(result).includes("secret"), false);
-  assert.equal(packet.fields[1].label.length, 80);
-  const resolved2 = runtime.resolveExtractionHandle({ ...SCOPE, handle: packet.extraction });
-  assert.equal(resolved2.ok, true);
-  if (resolved2.ok) assert.deepEqual(Object.keys(resolved2.binding.extractList.fields), ["product", "category", "price", "stock"]);
-  const allSensitive = captured("data-table-largest");
-  for (const field of allSensitive.structure.proposal.fields) field.spec.handling = "exclude";
-  assert.equal(webAutomationStructureDetectionValue(allSensitive.structure), void 0);
-  const faulty = createWebAutomationLlmEvidenceRuntime(fakeGateway(() => allSensitive).gateway);
-  await assert.rejects(detect(faulty), /without a structure detection/u);
-});
-test("the byte budget cuts fields from both halves together, and a packet that cannot fit is a fault", async () => {
-  const { gateway } = fakeGateway(() => captured("product-catalog-largest"));
-  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
-  const result = await detect(runtime, {}, { maxEvidenceBytes: 600 });
-  const packet = result.evidence;
-  assert.equal(packet.fieldsTruncated, true);
-  assert.ok(packet.fields.length >= 1 && packet.fields.length < 7, `${packet.fields.length} fields kept`);
-  assert.ok(new TextEncoder().encode(JSON.stringify(packet)).byteLength <= 600);
-  const resolved2 = runtime.resolveExtractionHandle({ ...SCOPE, handle: packet.extraction });
-  assert.equal(resolved2.ok, true);
-  if (resolved2.ok) assert.deepEqual(Object.keys(resolved2.binding.extractList.fields), packet.fields.map((field) => field.key));
-  await assert.rejects(detect(runtime, {}, { maxEvidenceBytes: 120 }), /exceeds the evidence byte limit/u);
-});
-test("unknown, foreign and stale handles are refused, and a resolved binding cannot be changed from outside", async () => {
-  const { gateway } = fakeGateway(() => captured("infinite-feed-largest"));
-  const runtime = createWebAutomationLlmEvidenceRuntime(gateway);
-  const issued = [];
-  for (let index = 0; index <= RETAINED_EXTRACTION_HANDLES; index += 1) {
-    issued.push((await detect(runtime)).evidence.extraction);
-  }
-  assert.equal(new Set(issued).size, issued.length, "every detection issues its own handle");
-  const [oldest, ...kept] = issued;
-  const newest = kept.at(-1);
-  for (const handle of ["", "target.1", "extraction.0", "extraction.01", "extraction.999", " extraction.1", 42, null]) {
-    assert.deepEqual(runtime.resolveExtractionHandle({ ...SCOPE, handle }), { ok: false, code: "unknown_handle" }, String(handle));
-  }
-  assert.deepEqual(runtime.resolveExtractionHandle({ ...SCOPE, handle: oldest }), { ok: false, code: "stale_handle" });
-  assert.equal(runtime.resolveExtractionHandle({ ...SCOPE, handle: newest }).ok, true);
-  for (const scope of [{ ...SCOPE, flowId: "flow.two" }, { ...SCOPE, projectId: "project.two" }]) {
-    assert.deepEqual(runtime.resolveExtractionHandle({ ...scope, handle: newest }), { ok: false, code: "unknown_handle" });
-    assert.deepEqual(runtime.resolveExtractionHandle({ ...scope, handle: oldest }), { ok: false, code: "unknown_handle" });
-  }
-  const foreign = (await detect(runtime, {}, { scope: { ...SCOPE, flowId: "flow.two" } })).evidence.extraction;
-  assert.deepEqual(runtime.resolveExtractionHandle({ ...SCOPE, handle: foreign }), { ok: false, code: "unknown_handle" });
-  assert.equal(runtime.resolveExtractionHandle({ ...SCOPE, flowId: "flow.two", handle: foreign }).ok, true);
-  const first = runtime.resolveExtractionHandle({ ...SCOPE, handle: newest });
-  assert.equal(first.ok, true);
-  if (!first.ok) return;
-  first.binding.extractList.item = "body";
-  first.binding.extractList.paginate = void 0;
-  const second = runtime.resolveExtractionHandle({ ...SCOPE, handle: newest });
-  assert.equal(second.ok && second.binding.extractList.item, '[data-testid="feed-item"]');
-  assert.deepEqual(second.ok && second.binding.extractList.paginate, { mode: "scroll", maxScrolls: WEB_AUTOMATION_EXTRACT_MAX_PAGES });
-});
-test("a client that cannot detect is a fault rather than a refusal", async () => {
-  const undeclared = createWebAutomationLlmEvidenceRuntime(fakeGateway(() => captured("data-table-largest"), false).gateway);
-  await assert.rejects(detect(undeclared), /does not declare repeating-structure detection/u);
-  const silent = createWebAutomationLlmEvidenceRuntime(fakeGateway(() => ({ url: "https://example.test/list" })).gateway);
-  await assert.rejects(detect(silent), /without a structure detection/u);
-  const failing = createWebAutomationLlmEvidenceRuntime({
+var RENAMED = { name: "product-name", price: "product-price", rating: "product-rating", url: "product-link@href" };
+function runtimeOver(capture2) {
+  return createWebAutomationLlmEvidenceRuntime({
     eligibleSessionIds: () => ["session.one"],
     structureDetectionSessionIds: () => ["session.one"],
-    executeAction: async () => ({ status: "failed" })
-  });
-  await assert.rejects(detect(failing), /capture failed/u);
-});
-test("the production binding offers detection only to a client that declares it", async () => {
-  let bound;
-  const actions = { id: "web.actions", actionTypes: ["web.dom.capture_snapshot"] };
-  let capabilities = [actions];
-  const fluxiq = {
-    programs: {
-      automationStudio: { bindLlmEvidenceRuntime: (runtime) => {
-        bound = runtime;
-      } },
-      clientGateway: { snapshot: () => ({ sessions: [{ sessionId: "web", status: "ready", clientType: "extension", capabilities }] }) },
-      automationStudioClientGateway: {
-        executeAction: async () => {
-          const page = captured("data-table-largest");
-          return { status: "succeeded", payload: { snapshot: { url: page.url, title: page.title, interactiveElements: [] }, structure: page.structure } };
-        }
-      }
+    executeAction: async (_sessionId, command) => {
+      if (command.actionType !== "web.dom.capture_snapshot") return { status: "succeeded" };
+      const snapshot = { url: capture2.url, title: capture2.title, interactiveElements: [] };
+      return { status: "succeeded", payload: { snapshot, structure: structuredClone(capture2.structure) } };
     }
-  };
-  bindWebAutomationLlmEvidenceRuntime(fluxiq);
-  await assert.rejects(detect(bound), /does not declare repeating-structure detection/u);
-  capabilities = [actions, { id: WEB_AUTOMATION_STRUCTURE_DETECTION_CAPABILITY_ID, kind: "snapshot" }];
-  assert.equal((await detect(bound)).resultCode, WEB_LLM_STRUCTURE_RESULT_CODE);
+  });
+}
+var detections = 0;
+async function detect(runtime, flowId = "flow.one") {
+  detections += 1;
+  const result = await runtime.executeTool({ projectId: "project.one", flowId, callId: `call.detect.${detections}`, toolId: WEB_LLM_DETECT_STRUCTURE_TOOL_ID, value: {} });
+  assert.equal(result.resultCode, "web.structure.detected");
+  return result.evidence;
+}
+function resolve(runtime, nodeDefinitionId, parameters, flowId = "flow.one") {
+  return runtime.resolvePlanNodeParameters({ projectId: "project.one", flowId, nodeDefinitionId, parameters });
+}
+function resolvedList(extractList) {
+  return { status: "resolved", parameters: { extractList } };
+}
+function refusedAt(reason, position, hint) {
+  return { status: "refused", issueCodes: [reason, ...hint ? [hint] : [], `${reason}:${position}`] };
+}
+test("a detected list keeps the columns the plan names, under the plan's keys, on the page shown", async () => {
+  const runtime = runtimeOver(CATALOG);
+  const shown = await detect(runtime);
+  assert.deepEqual(shown.fields.map((field) => field.key), ["product-image_src", "product-image_alt", "product-name", "product-link", "product-price", "product-rating", "stock-badge"]);
+  const resolved2 = resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: shown.extraction, fields: RENAMED, paginate: false } });
+  assert.deepEqual(resolved2, resolvedList({ item: CARD, fields: CARD_FIELDS }));
+  const request = resolved2.status === "resolved" ? resolved2.parameters.extractList : void 0;
+  const read = webAutomationExtractListRequestValue(request);
+  assert.notEqual(read, void 0);
+  assert.deepEqual(webAutomationExtractListIssues(request), []);
+  assert.equal(webAutomationDerivedRecordOutput(read).label, "Extracted list: name, price, rating, url");
+  assert.deepEqual(
+    resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: shown.extraction, fields: { url: "product-link" }, paginate: false } }),
+    resolvedList({ item: CARD, fields: { url: { kind: "link", selector: testId("product-link"), required: true } } })
+  );
+});
+test("the handle keeps every detected column and the detected pagination unless the plan says otherwise", async () => {
+  const runtime = runtimeOver(CATALOG);
+  const { extraction } = await detect(runtime);
+  const whole = resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction } });
+  const request = whole.status === "resolved" ? whole.parameters.extractList : {};
+  assert.deepEqual(Object.keys(request.fields), ["product-image_src", "product-image_alt", "product-name", "product-link", "product-price", "product-rating", "stock-badge"]);
+  assert.deepEqual(request.paginate, NEXT);
+  const rows = [
+    [true, NEXT],
+    [{ mode: "next", next: "a.next" }, NEXT],
+    [{ mode: "next", next: "a.next", maxPages: 2 }, { ...NEXT, maxPages: 2 }],
+    [{ maxPages: 1 }, { ...NEXT, maxPages: 1 }],
+    [{ mode: "numbered", pages: "button.page", maxPages: 2 }, NEXT]
+  ];
+  for (const [paginate, expected] of rows) {
+    assert.deepEqual(
+      resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: "product-name" }, paginate } }),
+      resolvedList({ item: CARD, fields: { name: CARD_FIELDS.name }, paginate: expected }),
+      JSON.stringify(paginate)
+    );
+  }
+  assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { title: "product-name", name: "product-name" }, paginate: false, minItems: 0, maxItems: 8 }, timeoutMs: 2e4 }), {
+    status: "resolved",
+    parameters: { extractList: { item: CARD, fields: { title: CARD_FIELDS.name, name: CARD_FIELDS.name }, minItems: 0, maxItems: 8 }, timeoutMs: 2e4 }
+  });
+});
+test("the list may be named with the location its evidence reported, at the item, or at each field", async () => {
+  const runtime = runtimeOver(CATALOG);
+  const { extraction, location } = await detect(runtime);
+  assert.equal(location, "http://127.0.0.1:4173/scenarios/product-catalog/");
+  const reference = { handle: extraction, location };
+  const byField = (extra) => Object.fromEntries(Object.entries(RENAMED).map(([key, column]) => [key, { ...extra, key: column }]));
+  const placements = [
+    // Core tells the model to add the location after exploring more than one place.
+    { ...reference, fields: RENAMED, paginate: false },
+    // The list named where a literal request names its items; a guessed item beside a handle is replaced by the detected one.
+    { item: reference, fields: RENAMED, paginate: false },
+    { item: { handle: extraction }, fields: RENAMED, paginate: false },
+    // Each column named by the list's handle and the detected key it reads.
+    { item: "li.product", fields: byField({ handle: extraction }), paginate: false },
+    { fields: byField(reference), paginate: false },
+    // `columns` for `fields`, and the map written the other way round.
+    { handle: extraction, columns: RENAMED, paginate: false },
+    { handle: extraction, fields: { "product-name": "name", "product-price": "price", "product-rating": "rating", "product-link@href": "url" }, paginate: false },
+    // A column named by an object, a key in another case, or `@attr` written as its own key.
+    {
+      handle: extraction,
+      fields: { name: { key: "Product-Name" }, price: { field: "product-price" }, rating: "PRODUCT-RATING", url: { column: "product-link", attribute: "href", kind: "attribute" } },
+      paginate: false
+    }
+  ];
+  for (const extractList of placements) {
+    assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList }), resolvedList({ item: CARD, fields: CARD_FIELDS }), JSON.stringify(extractList));
+  }
+  assert.deepEqual(
+    resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { "product-price": { handle: extraction }, name: { key: "product-name", required: false } }, paginate: false } }),
+    resolvedList({ item: CARD, fields: { "product-price": CARD_FIELDS.price, name: { ...CARD_FIELDS.name, required: false } } })
+  );
+  assert.deepEqual(
+    resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: ["product-name", "product-link@href"], paginate: false } }),
+    resolvedList({ item: CARD, fields: { "product-name": CARD_FIELDS.name, "product-link": CARD_FIELDS.url } })
+  );
+});
+test("a table's columns may be named by header, and a feed's by attribute, with its scroll bounded", async () => {
+  const table = runtimeOver(CAPTURED_DETECTIONS["data-table-largest"]);
+  const rows = await detect(table);
+  const header = (name) => ({ kind: "column", header: name, required: true });
+  const inventory = { product: header("Product"), category: header("Category"), price: header("Price"), stock: header("Stock") };
+  const item = CAPTURED_DETECTIONS["data-table-largest"].structure.ok ? CAPTURED_DETECTIONS["data-table-largest"].structure.proposal.item : "";
+  for (const fields of [
+    { product: "column:Product", category: "Category", price: "price", stock: { header: "Stock" } },
+    ["product", "category", "price", "stock"],
+    { product: { handle: rows.extraction }, category: { handle: rows.extraction }, price: { handle: rows.extraction }, stock: { handle: rows.extraction } }
+  ]) {
+    assert.deepEqual(resolve(table, EXTRACT_LIST_NODE, { extractList: { handle: rows.extraction, fields } }), resolvedList({ item, fields: inventory }), JSON.stringify(fields));
+  }
+  assert.deepEqual(resolve(table, EXTRACT_LIST_NODE, { extractList: { item: { handle: rows.extraction }, fields: { cheapest: "column:Price" }, maxItems: 1 } }), resolvedList({ item, fields: { cheapest: inventory.price }, maxItems: 1 }));
+  assert.deepEqual(resolve(table, EXTRACT_LIST_NODE, { extractList: { handle: rows.extraction, fields: { price: "price@title" } } }), refusedAt("web.handle.malformed", "extractList.fields.0", EXTRACTION_HINT));
+  const feed = runtimeOver(CAPTURED_DETECTIONS["infinite-feed-largest"]);
+  const posts = await detect(feed);
+  assert.equal(posts.pagination, "infinite_scroll");
+  assert.deepEqual(
+    resolve(feed, EXTRACT_LIST_NODE, { extractList: { handle: posts.extraction, fields: { title: "feed-item-title", author: "feed-item-author", published: "feed-item-time@datetime" }, paginate: { mode: "scroll", maxScrolls: 10 }, maxItems: 40 } }),
+    resolvedList({
+      item: testId("feed-item"),
+      fields: {
+        title: { kind: "text", selector: testId("feed-item-title"), required: true },
+        author: { kind: "text", selector: testId("feed-item-author"), required: true },
+        published: { kind: "attribute", selector: testId("feed-item-time"), attribute: "datetime", required: true }
+      },
+      paginate: { mode: "scroll", maxScrolls: 10 },
+      maxItems: 40
+    })
+  );
+  assert.deepEqual(resolve(feed, EXTRACT_LIST_NODE, { extractList: { handle: posts.extraction, paginate: { mode: "scroll", maxScrolls: 51 } } }), refusedAt("web.handle.malformed", "extractList.paginate", EXTRACTION_HINT));
+});
+test("a Run Output node naming a web output resolves its payload as that output's own node would", async () => {
+  const runtime = runtimeOver(CATALOG);
+  const { extraction } = await detect(runtime);
+  assert.deepEqual(resolve(runtime, "builtin.policy.action", { outputId: "web.dom.extract_list", parameters: { extractList: { handle: extraction, fields: RENAMED, paginate: false } }, timeoutMs: 3e4 }), {
+    status: "resolved",
+    parameters: { outputId: "web.dom.extract_list", parameters: { extractList: { item: CARD, fields: CARD_FIELDS } }, timeoutMs: 3e4 }
+  });
+  assert.deepEqual(resolve(runtime, "builtin.policy.action", { outputId: "other.output", parameters: { extractList: { handle: extraction } } }), refusedAt("web.handle.misplaced", "parameters.extractList", EXTRACTION_HINT));
+  assert.deepEqual(resolve(runtime, "builtin.policy.action", { outputId: "web.dom.extract_list", parameters: {}, recordOutput: { handle: extraction } }), refusedAt("web.handle.misplaced", "recordOutput", EXTRACTION_HINT));
+});
+test("what cannot name one detected list or column is refused with where the handle goes and where it went wrong", async () => {
+  const runtime = runtimeOver(CATALOG);
+  const { extraction } = await detect(runtime);
+  const second = (await detect(runtime)).extraction;
+  assert.notEqual(second, extraction);
+  const unknownField = [
+    { handle: extraction, fields: { name: "name" } },
+    { handle: extraction, fields: { name: ".product-name" } },
+    { handle: extraction, fields: { name: "column:Name" } },
+    { item: { handle: extraction }, fields: { name: { handle: extraction, key: "title" } } },
+    { handle: extraction, fields: { name: { handle: extraction } } }
+  ];
+  for (const extractList of unknownField) {
+    assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList }), refusedAt("web.handle.unknown_field", "extractList.fields.0", EXTRACTION_HINT), JSON.stringify(extractList));
+  }
+  const malformed = [
+    [{ handle: extraction, fields: {} }, "extractList.fields"],
+    [{ handle: extraction, fields: [] }, "extractList.fields"],
+    [{ handle: extraction, fields: [7] }, "extractList.fields.0"],
+    [{ handle: extraction, fields: { "a name": "product-name" } }, "extractList.fields.0"],
+    [{ handle: extraction, fields: { title: "product-name", other: "product-name", "a name": "stock-badge" } }, "extractList.fields.2"],
+    [{ handle: extraction, fields: { name: { kind: "text", selector: ".name" } } }, "extractList.fields.0.selector"],
+    [{ handle: extraction, fields: { name: { key: "product-name", kind: "link" } } }, "extractList.fields.0.kind"],
+    [{ handle: extraction, fields: { name: { key: "product-name", field: "product-price" } } }, "extractList.fields.0"],
+    [{ handle: extraction, fields: { url: "product-link@" } }, "extractList.fields.0"],
+    [{ handle: extraction, fields: { url: "product-link@on click" } }, "extractList.fields.0"],
+    [{ handle: extraction, fields: { name: { handle: extraction, key: "product-name", extra: 1 } } }, "extractList.fields.0.2"],
+    [{ handle: extraction, fields: ["product-name", "product-name"] }, "extractList.fields.1"],
+    [{ handle: extraction, fields: RENAMED, columns: RENAMED }, "extractList.columns"],
+    [{ handle: extraction, paginate: "next" }, "extractList.paginate"],
+    [{ handle: extraction, paginate: { maxPages: 500 } }, "extractList.paginate"],
+    [{ handle: extraction, itemElement: { tagName: "li" } }, "extractList.itemElement"],
+    [{ handle: extraction, location: "" }, "extractList.location"],
+    [{ handle: 7 }, "extractList.handle"],
+    [{ handle: extraction, minItems: 9, maxItems: 8 }, "extractList"],
+    [{ handle: extraction, minItems: -1 }, "extractList"],
+    [{ item: { handle: extraction, extra: true }, fields: RENAMED }, "extractList.item"],
+    [{ item: 7, fields: { name: { handle: extraction, key: "product-name" } } }, "extractList.item"]
+  ];
+  for (const [extractList, position] of malformed) {
+    assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList }), refusedAt("web.handle.malformed", position, EXTRACTION_HINT), JSON.stringify(extractList));
+  }
+  assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { name: { handle: second, key: "product-name" } } } }), refusedAt("web.handle.ambiguous", "extractList.fields.0"));
+  assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList: { item: { handle: extraction }, fields: { name: { handle: second } } } }), refusedAt("web.handle.ambiguous", "extractList.fields.0"));
+  assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, location: "http://127.0.0.1:4173/elsewhere" } }), refusedAt("web.handle.unknown", "extractList.location"));
+  assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList: { item: { handle: extraction } } }, "flow.two"), refusedAt("web.handle.unknown", "extractList.item"));
+  const misplaced = [
+    [{ extractList: { handle: extraction, paginate: { next: { handle: extraction } } } }, "extractList.paginate.next"],
+    [{ extractList: { handle: "target.1" } }, "extractList"],
+    [{ extractList: { item: { handle: "target.1" }, fields: { name: "td" } } }, "extractList.item"],
+    [{ extractList: { item: "li", fields: { name: { kind: "text", selector: { handle: "target.1" } } } } }, "extractList.fields.0.selector"],
+    [{ target: { handle: extraction } }, "target"],
+    [{ selector: { handle: "target.1" } }, "selector"]
+  ];
+  for (const [parameters, position] of misplaced) {
+    assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, parameters), refusedAt("web.handle.misplaced", position, EXTRACTION_HINT), JSON.stringify(parameters));
+  }
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: { handle: extraction } }), refusedAt("web.handle.misplaced", "selector", EXTRACTION_HINT));
+  assert.deepEqual(resolve(runtime, CLICK_NODE, { selector: "#go", text: { handle: "target.1" } }), refusedAt("web.handle.misplaced", "text", TARGET_HINT));
+});
+test("a refusal quotes where it went wrong by position, never a key or value the model chose", async () => {
+  const runtime = runtimeOver(CATALOG);
+  const { extraction } = await detect(runtime);
+  const refusal2 = resolve(runtime, EXTRACT_LIST_NODE, { extractList: { handle: extraction, fields: { Jane_Doe: "product-name", "Card 4111": "Card 4111" } } });
+  assert.deepEqual(refusal2, refusedAt("web.handle.unknown_field", "extractList.fields.1", EXTRACTION_HINT));
+  assert.equal(JSON.stringify(refusal2).includes("Jane"), false);
+  assert.equal(JSON.stringify(refusal2).includes("4111"), false);
+  const deep = resolve(runtime, "builtin.data.transform", { records: [{ nested: { deeper: { deepest: { again: { handle: extraction } } } } }] });
+  assert.equal(deep.status, "refused");
+  for (const code of deep.status === "refused" ? deep.issueCodes : []) assert.match(code, /^[a-z0-9_.:-]{1,100}$/iu, code);
+  assert.deepEqual(deep, refusedAt("web.handle.misplaced", "records.0.0.0.0.0", EXTRACTION_HINT));
+});
+test("once the Flow was shown a detected list, a literal request is refused as a guess; before that it is the model's own", async () => {
+  const runtime = runtimeOver(CATALOG);
+  const literal = { item: "li", fields: RENAMED };
+  await runtime.executeTool({ projectId: "project.one", flowId: "flow.one", callId: "call.inspect", toolId: WEB_LLM_INSPECT_TOOL_ID, value: {} });
+  assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList: literal }), { status: "unchanged" });
+  await detect(runtime);
+  assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList: literal }), refusedAt("web.handle.extraction_required", "extractList", EXTRACTION_HINT));
+  assert.deepEqual(resolve(runtime, "builtin.policy.action", { outputId: "web.dom.extract_list", parameters: { extractList: literal } }), refusedAt("web.handle.extraction_required", "parameters.extractList", EXTRACTION_HINT));
+  assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { extractList: literal }, "flow.two"), { status: "unchanged" });
+  assert.deepEqual(resolve(runtime, EXTRACT_LIST_NODE, { timeoutMs: 5e3 }), { status: "unchanged" });
 });

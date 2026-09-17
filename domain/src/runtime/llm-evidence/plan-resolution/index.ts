@@ -2,11 +2,13 @@
 // handles its packets showed it (`target-packets.ts` remembers them per Flow
 // and page) and the extraction handles the detection tool issued, into the
 // selectors and `extractList` requests the node runs with
-// (`resolve-plan-node.ts`).
+// (`resolve-plan-node.ts`, with the extraction node's list in
+// `extraction-slot.ts` and its columns in `extraction-columns.ts`).
 
 export {
   resolveWebPlanNodeParameters,
   WEB_PLAN_HANDLE_ISSUE_CODES,
+  type WebPlanHandleIssue,
   type WebPlanHandleIssueCode,
   type WebPlanHandleStores,
   type WebPlanNodeResolution,
