@@ -133,7 +133,14 @@ Later campaigns run from the isolated pair (`pnpm lab:pair`).
    C-11, C-12 (extend mode for non-blank Flows), C-13, L-3, L-4, per
    `reports/w2-back-half-design.md` section 8. Rerun the campaign from the
    pair after each batch of fixes.
-4. Before pushing: full checks in both repositories; `pnpm docs:reference` in
+4. Queued, no owner yet: a declared fixture secret shorter than the scan's
+   8-character minimum should be recorded unattested with its reason instead
+   of failing the run (`packages/test-runner/src/redaction-attestation/
+   scenario-redaction-literals.ts:42`), while a machine-supplied short value
+   still refuses; reshape the card-secret refusal task into a Flow that
+   builds and whose run is refused; W-3b (plan resolution remembers recovery
+   packets) with C-11; Core `llm-flow-bootstrap.md` for the new build codes.
+5. Before pushing: full checks in both repositories; `pnpm docs:reference` in
    Core.
 
 **Blockers:** none. The user's direction is recorded as L12-L16. The earlier
@@ -409,6 +416,39 @@ The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
 
 ## Work Ledger
 
+### 2026-09-17 — The model could not refuse: the loop's shape, not the context
+- Agent: `w2-model-context-audit` (investigation; report
+  `reports/w2-model-context-audit.md`), prompted by the user asking whether
+  the model gets appropriate page context and the ability to explore.
+- Validation: ten fixture pages captured through this repository's own
+  content harness in headless Chromium, then through the real domain
+  sanitizer and Core's annotation, with the request bodies compared
+  byte-for-byte against the live campaign's own packets: product-catalog
+  5,848 = 5,848, infinite-feed 5,030 = 5,030, navigation 792 = 792,
+  identity-drift 3,382 vs 3,380.
+- The page context was sufficient in four of the six refusal tasks; the
+  deletion notice and "Page not found" do reach the model. What forced a
+  substitute target: under `diagnose_and_adapt` the structured schema is
+  `patches` minItems 1, maxItems 1, a target override with at least one
+  handle, so **no schema-valid refusal exists**. The only refusal switch is
+  `stillAchievable: "no"` at the diagnosis, which no prompt mentions and
+  which `recovery/plan.ts:106` makes cancel exploration, so "look first, then
+  refuse" is impossible. Core already skips a patch call that could only
+  return a substitute (`annotation/annotate.ts:245-251`), but not for these
+  classes.
+- Also measured: a repair is offered 2 of the 6 declared exploration tools
+  (`harness-options/registry.ts:248-253` withholds mutating ones; creation
+  passes `allowSideEffectsWithoutPolicy` at `service.ts:1910`); the patch
+  request omits the diagnosis just made; the 3,000-byte failure budget
+  strips every price and rating from product-catalog and all 240 rows from
+  member-directory; and `recoveryContext.failure.expected` carries a raw CSS
+  selector and page text to the model although `recovery/context.ts:270-273`
+  says it does not.
+- Dispatched: the refusal worker redirected onto the loop shape (a
+  `no_repair` branch, a sentence that says refusing is allowed, the extended
+  skip, refusal after exploration); `w2-repair-sees-more` for the tool
+  parity, the carried diagnosis, the evidence budget and the selector leak.
+
 ### 2026-09-17 — The build keeps going, evidence is screened, and the judge reads a URL
 - Agents: `w2-creation-loop-keeps-going` (Core `ab2583c`), `w2-c7b-evidence-protection`
   (Core `b0f1407`), W-3a (`5e583ef`), `w2-judge-same-origin-urls` (`5ec0016`),
@@ -436,6 +476,12 @@ The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
   (W-3a), and with the Lab changes "# pass 1102" (test-runner), "# pass 73"
   (lab), "# pass 242" (scenario-lab), audit passed. Service tests time out at
   5 s when run in parallel under load; serial runs are clean.
+- Hazard, recorded: this repository's domain tests resolve `fluxiq` to Core's
+  built `dist` in the main checkout, so a worker rebuilding Core there puts
+  its in-flight code into everyone's runs. Three `repair-proposal` failures
+  on 2026-09-17 came from that, not from the change under test (proven by
+  running the same tests with the change reverted). Before the final checks
+  and the next campaign, rebuild Core's `dist` from the committed tree.
 - Found and fixed: `demo-workspace/tests/adaptation-lane.test.ts` scanned its
   subject's source for a bare newline, so a fresh Windows checkout failed it
   (second line-ending defect today's worktrees exposed).
