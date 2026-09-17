@@ -42,9 +42,9 @@ import { detectRepeatingStructure, type WebLlmExtractionHandles } from "../struc
 import { recoverable, RecoverableToolRejection, toolRejection } from "../tool-rejection";
 import { boundedIdentifier } from "../untrusted-json";
 import { webLlmToolRejectionResultCode, WEB_LLM_ACTION_RESULT_CODE, WEB_LLM_INSPECT_RESULT_CODE } from "../vocabulary";
+import { webAutomationExplorationScope } from "./exploration-terms";
 import { webRecoverySafeActionVerdict } from "./safety";
 import {
-  webAutomationExplorationScope,
   WEB_RECOVERY_ACT_OPTION_ID,
   WEB_RECOVERY_DETECT_OPTION_ID,
   WEB_RECOVERY_INSPECT_OPTION_ID,

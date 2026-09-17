@@ -1,16 +1,10 @@
-// The words this bundle puts on the wire, and the one place Core is told how
-// to read them.
+// The ids this bundle registers its options under: the one list every other
+// file in this directory names an option by, so a renamed option is renamed
+// once and an option that exists nowhere else cannot be referred to.
 //
-// Core cannot interpret `web.action.rejected.target_unsafe`, and must never
-// learn to: the refusal is a statement about a browser control, and Core has no
-// browser in it. So the translation lives here, in the domain that owns the
-// meaning, and its output is Core's own closed vocabulary of stop reasons.
-// Anything this function does not classify is ordinary feedback -- the model
-// is told no and tries something else -- which is the default, because a
-// refusal that ends the whole exploration is the exception.
-
-import type { AutomationStudioExplorationStopReason } from "fluxiq/automation-studio";
-import { webLlmToolRejectionResultCode } from "../vocabulary";
+// How Core is told to read one of this domain's refusals, and what a scope
+// means here, live beside this in `exploration-terms.ts`: those are read while
+// an exploration runs, these are what the bundle is built from.
 
 /** Every option this bundle registers, in the order it registers them. */
 export const WEB_RECOVERY_HARNESS_OPTION_IDS = [
@@ -30,47 +24,3 @@ export const WEB_RECOVERY_ACT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[2];
 export const WEB_RECOVERY_WAIT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[3];
 export const WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
 export const WEB_RECOVERY_DETECT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[5];
-
-/**
- * This domain's refusals, in Core's vocabulary.
- *
- * Only the two that are genuinely terminal are classified. The rest --
- * `invalid_input`, `no_progress`, `target_unobserved`, `sensitive_value` and
- * `no_repeating_structure` -- are deliberately left unclassified and listed
- * here so the omission is a decision a reader can see rather than a gap:
- *
- * - `invalid_input` and `target_unobserved` are the model getting it wrong, and
- *   it can get it right on the next turn.
- * - `no_progress` means the page did not change, which the loop's own repeat
- *   detection and the budget's repeat limit already bound.
- * - `sensitive_value` is raised by one option, structure detection, for a list
- *   whose every field is a sensitive control. Nothing was read or shown: the
- *   answer is "that list is all secrets", and the model can name another
- *   target or another page, so it is an answer rather than a stop. Core's stop
- *   vocabulary has no reason it would fit, and forcing it into
- *   `destructive_action_refused` would end an exploration that was never
- *   unsafe. The inspect and act options never raise it; the sanitizer drops a
- *   secret-bearing control before the model can name it.
- * - `no_repeating_structure` is detection saying the page has no readable list
- *   there, which is an answer, not a stop.
- *
- * Every unclassified refusal is still charged against the action budget, so a
- * model that does nothing but get refused ends in `budget_exhausted` rather
- * than in an exploration that quietly found nothing.
- */
-export function webAutomationExplorationRefusalClassifier(resultCode: string): AutomationStudioExplorationStopReason | undefined {
-  if (resultCode === webLlmToolRejectionResultCode("target_unsafe")) return "destructive_action_refused";
-  if (resultCode === webLlmToolRejectionResultCode("out_of_scope") || resultCode === webLlmToolRejectionResultCode("cross_origin")) return "out_of_scope_refused";
-  return undefined;
-}
-
-/**
- * What "where the exploration is" means for this domain: the page's origin.
- *
- * Core holds the scope policy and compares opaque strings; it never learns that
- * this domain spells a scope as an origin, which is exactly what lets a domain
- * with no pages use the same policy for its own idea of where it is.
- */
-export function webAutomationExplorationScope(location: string): string {
-  return new URL(location).origin;
-}

@@ -3854,6 +3854,16 @@ function copyBinding(binding) {
   });
 }
 
+// src/runtime/llm-evidence/harness-options/exploration-terms.ts
+function webAutomationExplorationRefusalClassifier(resultCode) {
+  if (resultCode === webLlmToolRejectionResultCode("target_unsafe")) return "destructive_action_refused";
+  if (resultCode === webLlmToolRejectionResultCode("out_of_scope") || resultCode === webLlmToolRejectionResultCode("cross_origin")) return "out_of_scope_refused";
+  return void 0;
+}
+function webAutomationExplorationScope(location) {
+  return new URL(location).origin;
+}
+
 // src/runtime/llm-evidence/harness-options/safety.ts
 var WEB_RECOVERY_COMMITTING_WORDS = /\b(?:submit|save|apply|approve|confirm|purchase|buy|pay|checkout|order|transfer|withdraw|delete|remove|destroy|erase|discard|reset|revoke|unsubscribe|send|publish|post|upload|sign|accept)\b/iu;
 var WEB_RECOVERY_DISMISSAL_WORDS = /\b(?:close|dismiss|cancel|back|later|skip|no thanks|not now|got it|understood|continue browsing)\b/iu;
@@ -3903,14 +3913,6 @@ var WEB_RECOVERY_ACT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[2];
 var WEB_RECOVERY_WAIT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[3];
 var WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
 var WEB_RECOVERY_DETECT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[5];
-function webAutomationExplorationRefusalClassifier(resultCode) {
-  if (resultCode === webLlmToolRejectionResultCode("target_unsafe")) return "destructive_action_refused";
-  if (resultCode === webLlmToolRejectionResultCode("out_of_scope") || resultCode === webLlmToolRejectionResultCode("cross_origin")) return "out_of_scope_refused";
-  return void 0;
-}
-function webAutomationExplorationScope(location) {
-  return new URL(location).origin;
-}
 
 // src/runtime/llm-evidence/harness-options/execute.ts
 var WEB_RECOVERY_WAIT_BOUNDS = Object.freeze({ minMs: 100, maxMs: 5e3, defaultMs: 1e3 });

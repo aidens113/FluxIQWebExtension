@@ -1095,6 +1095,16 @@ function copyBinding(binding) {
 // src/runtime/llm-evidence/harness-options/execute.ts
 import { automationStudioExplorationScopeAllows } from "fluxiq/automation-studio";
 
+// src/runtime/llm-evidence/harness-options/exploration-terms.ts
+function webAutomationExplorationRefusalClassifier(resultCode) {
+  if (resultCode === webLlmToolRejectionResultCode("target_unsafe")) return "destructive_action_refused";
+  if (resultCode === webLlmToolRejectionResultCode("out_of_scope") || resultCode === webLlmToolRejectionResultCode("cross_origin")) return "out_of_scope_refused";
+  return void 0;
+}
+function webAutomationExplorationScope(location) {
+  return new URL(location).origin;
+}
+
 // src/runtime/llm-evidence/harness-options/safety.ts
 var WEB_RECOVERY_COMMITTING_WORDS = /\b(?:submit|save|apply|approve|confirm|purchase|buy|pay|checkout|order|transfer|withdraw|delete|remove|destroy|erase|discard|reset|revoke|unsubscribe|send|publish|post|upload|sign|accept)\b/iu;
 var WEB_RECOVERY_DISMISSAL_WORDS = /\b(?:close|dismiss|cancel|back|later|skip|no thanks|not now|got it|understood|continue browsing)\b/iu;
@@ -1144,14 +1154,6 @@ var WEB_RECOVERY_ACT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[2];
 var WEB_RECOVERY_WAIT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[3];
 var WEB_RECOVERY_NAVIGATE_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[4];
 var WEB_RECOVERY_DETECT_OPTION_ID = WEB_RECOVERY_HARNESS_OPTION_IDS[5];
-function webAutomationExplorationRefusalClassifier(resultCode) {
-  if (resultCode === webLlmToolRejectionResultCode("target_unsafe")) return "destructive_action_refused";
-  if (resultCode === webLlmToolRejectionResultCode("out_of_scope") || resultCode === webLlmToolRejectionResultCode("cross_origin")) return "out_of_scope_refused";
-  return void 0;
-}
-function webAutomationExplorationScope(location) {
-  return new URL(location).origin;
-}
 
 // src/runtime/llm-evidence/harness-options/execute.ts
 var WEB_RECOVERY_WAIT_BOUNDS = Object.freeze({ minMs: 100, maxMs: 5e3, defaultMs: 1e3 });
@@ -1460,17 +1462,6 @@ test("refuses a bounded wait that changed nothing rather than returning the same
   const changed = await run(settling.registry, "web.recovery.wait_for_change", { maxWaitMs: 9999999 });
   assert.equal(changed.resultCode, "web.inspect.succeeded");
   assert.equal(changed.effectApplied, false);
-});
-test("translates only the terminal refusals into Core's stop reasons", () => {
-  assert.equal(webAutomationExplorationRefusalClassifier("web.action.rejected.target_unsafe"), "destructive_action_refused");
-  assert.equal(webAutomationExplorationRefusalClassifier("web.action.rejected.out_of_scope"), "out_of_scope_refused");
-  assert.equal(webAutomationExplorationRefusalClassifier("web.action.rejected.cross_origin"), "out_of_scope_refused");
-  for (const code of ["web.action.rejected.invalid_input", "web.action.rejected.no_progress", "web.action.rejected.target_unobserved", "web.action.rejected.sensitive_value", "web.action.rejected.no_repeating_structure", "web.inspect.succeeded", "web.action.succeeded", "web.structure.detected"]) {
-    assert.equal(webAutomationExplorationRefusalClassifier(code), void 0, code);
-  }
-});
-test("tells Core where it is in Core's own terms, which are opaque strings", () => {
-  assert.equal(webAutomationExplorationScope("https://example.test/a/b?c=d"), "https://example.test");
 });
 test("ends a run that asked for a destructive click in unsafe_action_blocked, through Core's own runner", async () => {
   const { registry, commands } = registeredWith();

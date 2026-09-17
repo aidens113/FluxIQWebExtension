@@ -1,8 +1,10 @@
-// The web domain's runtime harness options: the five actions Core's exploration
+// The web domain's runtime harness options: the six actions Core's exploration
 // loop may take on a page, registered into Core's registry rather than built
-// into Core. The safety ladder is exported because it is the decision decision
-// L3 governs, and a reader looking for "what stops it clicking Delete" should
-// find it named rather than buried in a tool implementation.
+// into Core. The safety ladder is exported because it is the decision L3
+// governs, and a reader looking for "what stops it clicking Delete" should
+// find it named rather than buried in a tool implementation. The two terms
+// Core asks this domain to interpret while an exploration runs -- how to read
+// a refusal, and what a scope means here -- are exported beside them.
 export {
   webAutomationRecoveryHarnessOptionBundle,
   webAutomationRecoveryHarnessOptions
@@ -16,10 +18,10 @@ export {
   type WebRecoveryActionVerdict,
   type WebRecoverySafetyRung
 } from "./safety";
+export { webAutomationExplorationRefusalClassifier, webAutomationExplorationScope } from "./exploration-terms";
 export {
-  webAutomationExplorationRefusalClassifier,
-  webAutomationExplorationScope,
   WEB_RECOVERY_ACT_OPTION_ID,
+  WEB_RECOVERY_DETECT_OPTION_ID,
   WEB_RECOVERY_HARNESS_OPTION_IDS,
   WEB_RECOVERY_INSPECT_OPTION_ID,
   WEB_RECOVERY_NAVIGATE_OPTION_ID,
