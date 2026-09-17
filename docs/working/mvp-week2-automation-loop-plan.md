@@ -54,29 +54,43 @@ pre-send (fixed `5300d47`), and earlier reports had read "gate invoked" as
 `snapshots/live-llm.json`, never from the verdict. The user's standing rule
 holds: nothing is demonstrated until it runs against the real key.
 
-**Not started:** loop phases 2.4-2.9, and X6. Phase 2.4 depends on R0, which is now done, so it is unblocked.
+**The two scoping reports are stale; verify before briefing from them.**
+`w2-scope-context-recovery` and `w2-scope-repair-reuse` describe `ee25ac9`, not
+HEAD. Five briefs drawn from them on 2026-09-17 sent workers at two defects
+already fixed. Re-check any file:line they give.
 
-**The fixed call limit is now understood as the defect, not a constraint to
-design around (user decision, 2026-09-16).** His words: "I want you to allow as
-many calls as are needed for iteration of adaptations! Stop setting hard limits
-like this. It should be allowed to automatically explore and whatnot within
-reason. Ofc we'll work to reduce tokens where needed, but this hard limit is
-causing a lot of problems." Every live blocker that day traced back to a
-recovery mode hard-capped at two provider calls, which also forbade the
-evidence request the model's first move asked for; the archived ledger entries
-carry the run ids and the measurements.
+**2.4's stated defect does not reproduce, proven by execution.**
+`runtimePatchRestoredExpectedState` was deleted in Core `a2de143`. Two guards
+now hold it: `expectedRouteCheck` (`flow-change/verdict.ts:138`) and
+`failedDeclaredRoute` (`flow-change/trial.ts:167`). Remove either alone and the
+test still passes; remove both and it fails. The test pinning this is in
+`runtime/tests/live-patch.test.ts`. **2.4's real remaining work** is that
+`decideAutomationStudioChangeVerdict` answers "was this change proved?", not
+"can the run resume, and where?": there is no `resumable`, and `resumeFrom` is
+emitted only on a `verified` verdict, so an `unverifiable` change with a
+well-defined continuation yields no resume point. Extend that verdict; do not
+build a second one under `recovery/`. `records.minimum` has a reader
+(`verdict.ts:165`) and no writer — the inert X4 seam, not a defect.
 
-The replacement model: an adaptation iterates while it is making progress, and
-stops on a guard that means something -- the per-run estimated cost ceiling, the
-per-run token budget, the recovery deadline in wall-clock time, or a new
-no-progress guard for a loop that is repeating itself or returning no new
-evidence. A call ceiling survives only as a far-away, configurable backstop
-against a runaway loop, never as a per-mode constant. Token efficiency is a
-separate exercise; starving the loop of calls is not how cost is controlled.
+**The opaque target landed and extract-list refusal is deliberate.** Core's
+target is `{handles}` (`runtime/llm/harness/structured-response.ts:127`) and the
+domain resolves fingerprint-first. `webAutomationExtractListDispatch` never
+reads `target`, so a repaired extract-list target is written where nothing reads
+it and the run proceeds unchanged — which is why `4f4efde` removed the
+compatibility. Restoring it fails 6 tests. **X6's real shape** is an
+`extractList` parameter-override re-issue path, not a target-map entry.
 
-The generalizable lesson, recorded because it was missed for most of a day: when
-a designed-in limit keeps generating blockers, the limit is the defect. Report
-it as such instead of engineering successive workarounds inside it.
+**Not started:** 2.4's resume point, 2.6, 2.7, 2.8, 2.9, X6.
+
+**The fixed call limit was the defect, not a constraint to design around (user
+decision, 2026-09-16).** An adaptation iterates while it is making progress and
+stops on a guard that means something: the per-run cost ceiling, the token
+budget, the recovery deadline, or a no-progress guard for a loop repeating
+itself or returning no new evidence. A call ceiling survives only as a
+far-away, configurable backstop, never as a per-mode constant; starving the loop
+of calls is not how cost is controlled. The generalizable lesson, missed for
+most of a day: when a designed-in limit keeps generating blockers, the limit is
+the defect. Report it as such instead of engineering workarounds inside it.
 
 **The exploration runs in production, as of 2026-09-16**, wired through
 `AS/runtime/recovery/annotation/` with four negative probes proving it is
@@ -96,9 +110,6 @@ by the supervisor reintroducing the exact cycle, observing the audit fail with
 a message naming the three ways out, and reverting. The shared values live in
 the new `runtime/loop-limits/`, which neither directory owns.
 
-**Both repositories pass their structure audit at the 2026-09-17 pause**; the
-per-change test counts are in that day's ledger entries.
-
 **Concurrency is five workers, not nine.** Both crashes happened with nine heavy
 workers running on a machine with a known memory fault, so this is recorded as a
 real resource limit rather than caution.
@@ -106,48 +117,36 @@ real resource limit rather than caution.
 **Live-testing campaign (user direction, 2026-09-16):** "get to a point where
 we have at least basic automation able to be created & repaired by simply
 pointing the instructions at a demo, and having it explore and auto-create
-flows", across "lots of different demos", including flows that navigate demo
-sites and scrape data. Runs serving that goal need no per-run approval. The
-full campaign (`test-runs/campaigns/2026-09-17T02-23-20-255Z`, 36 creation and
-14 repair tasks, Core `8409ca2` from `F:/fxlab/lab-core`) finished 15 of 50:
-forms 6/6, extraction 4/14, navigate-and-extract 1/16, repair 4/14. Scraping
-fails three ways (fields missing from records, a repeated tool request ending
-the build, malformed record-output or handle placement); six refusal tasks
-proposed a substitute control instead of refusing; four tasks never started.
+flows", across "lots of different demos". **Runs serving that goal need no
+per-run approval**, reinforced 2026-09-17. The last full campaign finished 15 of
+50 — forms 6/6, extraction 4/14, navigate-and-extract 1/16, repair 4/14 — and
+its run id and three scraping failure modes are in that day's ledger entry.
 Later campaigns run from the isolated pair (`pnpm lab:pair`).
 
-**Resuming after 2026-09-17:** every worker dispatched that day landed and is
-committed; no worker is in flight. The user asked to pause before anything
-else for a review of the version-control policy, so **do not push** until he
-has given it. The first measurement after that is a full campaign from the
-pair (`pnpm lab:pair --ext <rev> --core <rev>`, then the printed environment
-plus `DEEPSEEK_API_KEY` read from the main checkout's `.env.local`), with the
-campaign's repair tasks switched to `--llm-task repair` (diff in
-`reports/w2-l2-repair-lane.md`). The last full campaign was 15 of 50 and
-predates every fix below.
+**The 2026-09-17 hold is discharged.** It asked that nothing be pushed until
+the user reviewed the version-control policy; that policy is
+`agent-git-workflow-plan.md`, now built, driven end to end and pushed, so the
+hold no longer applies. The next measurement is a full campaign from the
+isolated pair (`pnpm lab:pair --ext <rev> --core <rev>`, then the printed
+environment plus `DEEPSEEK_API_KEY` from the main checkout's `.env.local`), with
+repair tasks on `--llm-task repair` (`reports/w2-l2-repair-lane.md`). The last
+full campaign was 15 of 50 and predates every fix since.
 
 **Next steps, in order:**
-1. In flight (Core): C-6 trial and judge, now also the recorded-step target in
-   the trial rerun and the file-based applier; C-7 exploration packets reach
-   the repair; `w2-creation-loop-keeps-going` (duplicate requests answered,
-   unusable-decision feedback names the accepted shape, extract_list contract
-   in the catalog); Core docs for today's changes.
-2. In flight (this repository): `w2-created-scrape-fields` (field selectors
-   and handle placement for created scrapers; edits only after the campaign
-   ends); `w2-lab-pair` (an isolated `F:/fxlab/lab-ext` + `F:/fxlab/!FluxIQ`
-   pair, so campaigns stop freezing edits here).
-3. After the campaign: W-3 extraction repair, L-5 fixtures, L-2 repair lane,
-   the `xpathFor` id-anchor fix (with the identity specs); then C-9, C-10,
-   C-11, C-12 (extend mode for non-blank Flows), C-13, L-3, L-4, per
-   `reports/w2-back-half-design.md` section 8. Rerun the campaign from the
-   pair after each batch of fixes.
-4. Queued, no owner yet: a declared fixture secret shorter than the scan's
-   8-character minimum should be recorded unattested with its reason instead
-   of failing the run (`packages/test-runner/src/redaction-attestation/
+1. 2.4's resume point: extend `decideAutomationStudioChangeVerdict` with
+   `resumable` and a `resumeFrom` that survives an `unverifiable` verdict.
+2. Rerun the campaign from the pair, then W-3 extraction repair, L-5 fixtures,
+   L-2 repair lane, the `xpathFor` id-anchor fix; then C-9 to C-13 (extend mode
+   for non-blank Flows), L-3, L-4, per `reports/w2-back-half-design.md` §8.
+   Rerun the campaign after each batch.
+3. Then 2.6, 2.7, 2.8, 2.9 and X6, X6 being an `extractList` parameter-override
+   re-issue path rather than a target-map entry.
+4. Queued, no owner: a declared fixture secret shorter than the scan's
+   8-character minimum should be recorded unattested with its reason rather
+   than failing the run (`packages/test-runner/src/redaction-attestation/
    scenario-redaction-literals.ts:42`), while a machine-supplied short value
-   still refuses; reshape the card-secret refusal task into a Flow that
-   builds and whose run is refused; W-3b (plan resolution remembers recovery
-   packets) with C-11; Core `llm-flow-bootstrap.md` for the new build codes.
+   still refuses; reshape the card-secret refusal task into a Flow that builds
+   and whose run is refused; W-3b with C-11; Core `llm-flow-bootstrap.md`.
 5. Before pushing: full checks in both repositories; `pnpm docs:reference` in
    Core.
 
