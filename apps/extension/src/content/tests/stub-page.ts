@@ -47,6 +47,16 @@ class StubElement extends StubNode {
     return this.childNodes[0] ?? null;
   }
 
+  /** The DOM's own reflection: the empty string when the attribute is absent, never null. */
+  get id(): string {
+    return this.attributeValues.get("id") ?? "";
+  }
+
+  /** Element children only, as `Element.children` gives them -- what `xpathFor` counts siblings in. */
+  get children(): StubElement[] {
+    return this.childNodes.filter((node): node is StubElement => node instanceof StubElement);
+  }
+
   override get textContent(): string {
     return this.childNodes.map((node) => node.textContent).join("");
   }

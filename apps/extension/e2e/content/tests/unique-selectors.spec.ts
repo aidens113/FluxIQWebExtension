@@ -55,11 +55,13 @@ type SelectorVerdict = {
  * "The element described" is established two independent ways, because the
  * selector under test cannot be its own oracle:
  *
- * - the descriptor's xpath, when it names exactly one node. `xpathFor` writes
- *   an id anchor as `/*[@id="x"]`, which XPath reads as "the root element, if
- *   its id is x", so an id-anchored xpath never resolves as written; it is read
- *   here as the `//*[@id="x"]` it was meant to be. (That defect is reported,
- *   not fixed here: it changes which replays the xpath fallback rescues.)
+ * - the descriptor's xpath, when it names exactly one node, evaluated exactly
+ *   as recorded. It used to be rewritten here before evaluation, because
+ *   `xpathFor` wrote an id anchor as `/*[@id="x"]` -- an absolute step, which
+ *   XPath reads as "the document element, if its id is x" -- so no id-anchored
+ *   xpath resolved and this oracle silently fell back to geometry alone for
+ *   every element carrying an id. The anchor is now `//*[@id="x"]` and the
+ *   recorded string is evaluated untouched.
  * - the descriptor's page geometry, when the match has a box of its own: the
  *   match must sit exactly where the described element sat.
  */
@@ -71,8 +73,7 @@ async function verdicts(page: Page, descriptors: readonly DomElementDescriptor[]
     let checks = 0;
     let agrees = match !== undefined;
     if (match && xpath) {
-      const readable = xpath.startsWith("/*[@id=") ? `/${xpath}` : xpath;
-      const byXpath = document.evaluate(readable, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+      const byXpath = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
       if (byXpath.snapshotLength === 1) {
         checks += 1;
         agrees &&= byXpath.snapshotItem(0) === match;
@@ -200,6 +201,157 @@ test("a selector never quotes page text or a value, so a sensitive region's cont
   for (const descriptor of snapshot.interactiveElements) expect(descriptor.selector).not.toContain(secret);
   const evidence = JSON.stringify(snapshot.evidence ?? {});
   expect(evidence).not.toContain(secret);
+});
+
+// The five shapes `xpathFor` can write, resolved in a real browser against the
+// element each was written for. The unit test
+// (`src/content/tests/element-finder.test.ts`) pins the exact text of each;
+// what only Chromium can say is whether the text is an expression its XPath
+// engine accepts and points at the right node -- which is the half that was
+// wrong. An id-anchored path resolved to nothing, and an id holding a quote was
+// not an expression at all: `"say\"hi"` made `document.evaluate` throw, and it
+// is called on the replay path with no `try` around it, so a page that named a
+// control that way failed the action outright rather than missing the xpath and
+// carrying on to the next strategy.
+const QUOTED_IDS = [
+  { label: "fx-x-plain", id: "fx-x-plain-id" },
+  { label: "fx-x-double", id: `fx-x say"hi"` },
+  { label: "fx-x-single", id: `fx-x it's` },
+  { label: "fx-x-both", id: `fx-x it's a "quote"` }
+] as const;
+
+test("every xpath shape resolves, in the browser, to exactly the element it was written for", async ({ openHarness }) => {
+  const harness = await openHarness("product-catalog");
+  // Built through the DOM rather than as markup, so an id carrying a quote is
+  // the id intended and not whatever the HTML parser made of it.
+  await harness.page.evaluate((ids) => {
+    const container = document.createElement("div");
+    const button = (label: string) => {
+      const element = document.createElement("button");
+      element.type = "button";
+      // `title` is on the descriptor's attribute allowlist, so it is how a
+      // described element is paired back to the case that made it.
+      element.title = label;
+      element.textContent = label;
+      return element;
+    };
+    for (const { label, id } of ids) {
+      const element = button(label);
+      element.setAttribute("id", id);
+      container.append(element);
+    }
+    // An id on an ancestor rather than on the element: the anchor is the
+    // ancestor's, and the steps below it have to be kept.
+    const ancestor = document.createElement("div");
+    ancestor.id = "fx-x-ancestor";
+    ancestor.append(document.createElement("span"), button("fx-x-ancestor-child"));
+    // And no id anywhere above it, which is the one shape that stays absolute.
+    container.append(ancestor, button("fx-x-no-id"));
+    document.body.append(container);
+  }, QUOTED_IDS);
+
+  const snapshot = await harness.capture();
+  const labels = [...QUOTED_IDS.map((quoted) => quoted.label), "fx-x-ancestor-child", "fx-x-no-id"];
+  const described = labels.map((label) => {
+    const descriptor = snapshot.interactiveElements.find((element) => element.attributes?.["title"] === label);
+    expect(descriptor, `${label} is described`).toBeDefined();
+    expect(descriptor!.xpath, `${label} carries an xpath`).toBeDefined();
+    return { label, xpath: descriptor!.xpath! };
+  });
+
+  // An id is unique, so the anchored form is what an id-bearing element must
+  // get; the descendant `//` is the part that was broken.
+  for (const { label, xpath } of described) {
+    if (label === "fx-x-no-id") expect(xpath.startsWith("//"), `${label}: no id above it, so the path stays absolute`).toBe(false);
+    else expect(xpath, `${label}: anchored on the id, as a descendant step`).toMatch(/^\/\/\*\[@id=/);
+  }
+
+  const resolved = await harness.page.evaluate((entries) => entries.map(({ label, xpath }) => {
+    const intended = document.querySelector(`[title="${label}"]`);
+    try {
+      const found = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+      return { label, matches: found.snapshotLength, isIntended: found.snapshotItem(0) === intended, threw: null as string | null };
+    } catch (error) {
+      // An invalid expression throws rather than missing, which is why this is
+      // caught and reported as a result instead of failing the page call.
+      return { label, matches: -1, isIntended: false, threw: String(error) };
+    }
+  }), described);
+
+  expect(resolved).toEqual(described.map(({ label }) => ({ label, matches: 1, isIntended: true, threw: null })));
+});
+
+// The premise behind the guard in `element-finder.ts`, checked against a real
+// XPath engine rather than asserted: the form the old writer emitted for an id
+// holding a double quote does not miss, it *throws*. That is why a stored xpath
+// is inspected before it is evaluated -- a throw leaves `resolveTarget`
+// entirely and fails the action, where a strategy finding nothing would have
+// let the id, test id, name and class-set lookups below it run.
+test("the form an id with a quote used to be recorded in throws in the browser rather than missing", async ({ openHarness }) => {
+  const harness = await openHarness("product-catalog");
+  const outcomes = await harness.page.evaluate(() => {
+    const attempt = (xpath: string) => {
+      try {
+        document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+        return "evaluated";
+      } catch {
+        return "threw";
+      }
+    };
+    return {
+      // What a recording made before the fix carries for the id `say"hi`.
+      stored: attempt(`/*[@id="say\\"hi"]`),
+      // And what the same id is written as now.
+      written: attempt(`//*[@id='say"hi']`),
+      // A backslash beside a quote is ordinary, not an escape: this one is read.
+      backslash: attempt(`//*[@id='a\\"b']`)
+    };
+  });
+  expect(outcomes).toEqual({ stored: "threw", written: "evaluated", backslash: "evaluated" });
+});
+
+// How much of a real page the broken anchor covered, measured rather than
+// argued: every id-anchored xpath on the catalog is evaluated as recorded and
+// again in the form it used to be written in. The second number is what the
+// replay fallback was actually getting for those elements.
+test("on a real page, the anchored xpaths resolve where the form they used to be written in resolved nothing", async ({ openHarness }) => {
+  const harness = await openHarness("product-catalog");
+  const snapshot = await harness.capture();
+  const anchored = snapshot.interactiveElements
+    .filter((descriptor) => descriptor.xpath?.startsWith("//*[@id=") ?? false)
+    .map((descriptor) => ({ selector: descriptor.selector, xpath: descriptor.xpath! }));
+  expect(anchored.length, "the catalog describes elements whose xpath is id-anchored").toBeGreaterThan(0);
+
+  const counts = await harness.page.evaluate((entries) => {
+    const resolve = (xpath: string): Element | null => {
+      try {
+        const found = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+        return found.snapshotLength === 1 ? found.snapshotItem(0) as Element : null;
+      } catch {
+        // The old form was still a valid expression whenever the id held no
+        // quote, so nothing here is thrown; an id with a quote is the case
+        // that threw, and the row above covers it.
+        return null;
+      }
+    };
+    let now = 0;
+    let before = 0;
+    for (const { selector, xpath } of entries) {
+      const intended = document.querySelector(selector);
+      if (resolve(xpath) === intended) now += 1;
+      // The single-slash form this xpath used to be written as.
+      if (resolve(xpath.slice(1)) === intended) before += 1;
+    }
+    return { now, before, total: entries.length };
+  }, anchored);
+
+  expect(counts.now, "every id-anchored xpath now resolves to the element it names").toBe(counts.total);
+  expect(counts.before, "and none of them did in the form they used to be written in").toBe(0);
+  test.info().annotations.push({
+    type: "measurement",
+    description: `product-catalog: ${counts.total} of ${snapshot.interactiveElements.length} described elements carry an id-anchored xpath; ` +
+      `${counts.now} resolve as recorded, ${counts.before} resolved in the old single-slash form`
+  });
 });
 
 test("a large page is described with unique selectors without making the snapshot slow", async ({ openHarness }) => {
