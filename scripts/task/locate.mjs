@@ -4,7 +4,7 @@
 // is still seen. A task with no worktree is a task worked on in the main
 // checkout, which is the ordinary case.
 
-import { runGit } from "../worktree/index.mjs";
+import { runGit, samePath } from "../worktree/index.mjs";
 import { parseTaskBranch } from "./branch-name.mjs";
 
 export async function listWorktrees(repositoryRoot) {
@@ -34,7 +34,13 @@ export async function locateTask(repositoryRoot, id) {
   if (branches.length > 1) throw new Error(`Task ${id} has ${branches.length} branches (${branches.join(", ")}); an id names one unit of work, so resolve this by hand.`);
 
   const branch = branches[0];
-  const worktree = (await listWorktrees(repositoryRoot)).find((entry) => entry.branch === branch) ?? null;
+  // The main checkout is a worktree too, and when a task is worked on there it
+  // carries the task branch. It must not be reported as the task having a
+  // worktree of its own: that is the difference between a task whose tree can
+  // be removed and merged from elsewhere, and one that has to be switched back
+  // to the integration branch before it can be merged at all.
+  const worktree = (await listWorktrees(repositoryRoot))
+    .find((entry) => entry.branch === branch && !samePath(entry.root, repositoryRoot)) ?? null;
 
   return { id, branch, slug: parseTaskBranch(branch)?.slug ?? null, worktree };
 }
