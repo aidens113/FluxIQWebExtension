@@ -423,6 +423,11 @@ The briefs produced `w2-scope-context-recovery` and `w2-scope-repair-reuse`.
   created, reviewed, **applied**, and the Flow was **replayed without the
   model**. That is fail -> diagnose -> repair -> apply -> deterministic re-run,
   live, once.
+- Then the whole lane in one invocation, 17:22, `pnpm demo:llm:adapt:focused`
+  (same private Core): two DeepSeek calls (diagnosis 2,924 in / 407 out, patch
+  3,016 / 229), approved, applied, post-apply validation succeeded, final
+  replay `abf586e0` with **0 provider calls**, safety passed, leak attestation
+  passed. An operator revert of an applied repair also worked (17:19).
 - Validation: from the worker's report only; to be rerun by the supervisor on
   shared code once the index fix lands.
 - Found: **silent loss of run audit.** After that apply and replay, and two
