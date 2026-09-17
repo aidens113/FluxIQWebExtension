@@ -22,9 +22,10 @@ model has had its say — refuse a proposed control that is not the one the step
 acted on. `identity-drift-repair-renamed-save` still resolves, held by a test on
 the real Chromium capture of that page.
 
-Eleven tests fail in five files I do not own — seven in two domain test files,
-four in three Core test files — and each needs one fixture or path line. Exact
-diffs are in **Changes needed in files I do not own**. Nothing of mine is red.
+The supervisor applied all six hand-over diffs and committed the Core half as
+`a830217`. Two domain rows then needed a decision rather than a diff; both are
+settled in **The two rows the supervisor sent back**, and the domain suite is
+now **663 passed / 663**.
 
 ## What the evidence showed, and what the audit changed
 
@@ -92,7 +93,7 @@ own 15-second test timeout rather than vitest's 5-second default.
 | `npm run build` in `packages/fluxiq` | exit 0, twice (the domain imports Core's `dist`, so this is what carries the new contract to it) |
 | `npx tsc -p tsconfig.json --noEmit` and `npx tsc -p tsconfig.test.json` (domain) | exit 0 both |
 | `npx tsc --noEmit -p packages/fluxiq` (Core), rerun at the end | **exit 2, and not mine**: every error is in `runtime/flow-bootstrap/plan/authoring/json-plan.ts` and `matching.ts`, another worker's in-flight files. My own last clean run was exit 0 before their edit landed. `npm run build` fails on the same two files, so Core's `dist` could not be rebuilt at the end; the `dist` on disk does carry every change the domain reads, which is what the domain run below was against. |
-| `pnpm --filter @fluxiq-web-extension/domain test` | **663 tests, 656 pass, 7 fail** on the final run (the count grows as other workers add tests). All seven are in `tests/tools.test.ts` (3) and `tests/recovery-selector-hints.test.ts` (4), neither mine; each fails because its fixture's failed action carries no recorded target, so the check answers `recorded_target_unknown`, or because a refusal changed from `ambiguous` to `absent`. An eighth failure appeared and was mine to fix: another worker raised the failure-evidence byte budget to Core's new figure mid-run, and `renamed-save-override.test.ts` asserted a literal 3,000; it now asserts `WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure`, which is what that row was about. |
+| `pnpm --filter @fluxiq-web-extension/domain test` | **663 tests, 663 passed, 0 failed.** Seven failed before the hand-over diffs were applied, all in `tests/tools.test.ts` (3) and `tests/recovery-selector-hints.test.ts` (4): each fixture's failed action carried no recorded target, so the check answered `recorded_target_unknown`, or a refusal changed from `ambiguous` to `absent`. The diffs closed five; the last two are decided in the section below. One further failure was mine to fix along the way: another worker raised the failure-evidence byte budget to Core's new figure mid-run, and `renamed-save-override.test.ts` asserted a literal 3,000, so it now asserts `WEB_LLM_EVIDENCE_BYTE_BUDGETS.failure`, which is what that row was about. |
 | `node scripts/structure-audit.mjs` (Core) | **passed** (156 warnings, 354 baselined) when I ran it after my own changes. A rerun at the end reports **27 violations, none mine**: another worker has an untracked new rule in flight (`scripts/structure-audit/rules/web-vocabulary.mjs`, with no baseline recorded yet — it flags pre-existing names such as `DOMException` in `deepseek-provider.ts:792`), and their new `runtime/flow-bootstrap/plan/authoring/` directory trips the prefix-group and naming rules. My new `runtime/live-patch/` directory draws nothing. |
 | `node scripts/structure-audit.mjs` (this repository) | **passed** (63 warnings, 122 baselined) on the final run. Mid-task it reported four violations in another worker's uncommitted `packages/test-runner` work; they have since been fixed by that worker. My files draw two advisory warnings: `domain/src/runtime/llm-evidence/` is now 16 files (advisory 15, limit 25) and `live-patch.ts` is 610 lines (advisory 400, limit 800). |
 
@@ -229,6 +230,41 @@ because another worker is active in that directory:
   `runtime_patch` call, exactly as a diagnosis already could (one line).
 - `llm/harness/index.ts`: the vocabulary, its guard and the result parser are
   exported (four lines).
+
+## The two rows the supervisor sent back, and what they decided
+
+After the hand-over diffs were applied, two domain rows still failed. Both were
+mine to decide, because `recorded_target_unknown` is now a refusal a live run
+can show. **The refusals are right and the rows were wrong**, so the rows now
+name the control they expect to resolve.
+
+- `recovery-selector-hints.test.ts`, "a handle no packet issued is still
+  refused…": its last line still passed the bare `CLICK`, so the check was asked
+  to judge a repair with nothing said about what the step had addressed, and
+  answered `recorded_target_unknown`. That row is about a selector hint being
+  absent from a packet the domain did not issue, not about equivalence, so it
+  now passes `asRecorded(altered, "target.1")` — the control it expects to
+  resolve. Its `asRecorded` helper also no longer writes
+  `accessibleName: undefined`, which `exactOptionalPropertyTypes` rejects: a
+  handle the packet never issued names no control, and the recording is then a
+  button and nothing more.
+- `tools.test.ts`, "a packet this domain did not issue is refused as
+  unrecognized…": this one failed with `target_unanchored`, not
+  `recorded_target_unknown` — my hand-over diff gave it a recorded
+  "Place order" button, but that row builds its own packet whose one control is
+  "Go". The recorded control is now "Go", and the row's subject — an
+  unrecognized packet refused before the target is read, an issued one not — is
+  what it tests again.
+
+**Why the refusal stands.** Core passes `recordedTarget` whenever the failed
+node's payload holds an `element` or a `target` object, and both paths that
+matter do: a recorded step carries `parameters.element` from the recording, and
+a bootstrap-created step carries one from `webPlanElementIdentity`. A node that
+holds neither has no identity to repair *from*, and accepting a repair there
+means re-pointing an action at a control nothing can show is the one it acted
+on — the defect this whole task is about. The cost, stated plainly: a node whose
+payload carries only a selector is now unrepairable, and says so by name in the
+run record rather than being repaired on a guess.
 
 ## Not verified
 
