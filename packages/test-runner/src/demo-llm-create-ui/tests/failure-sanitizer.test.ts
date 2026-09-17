@@ -256,7 +256,9 @@ test("generation failures retain only Core-validated bounded diagnostics", async
     { ok: false, error: "Flow Bootstrap generation failed (flow_bootstrap.provider_response_malformed).", payload: { diagnostic: { ...diagnostic, rawResponse: "private-response-value" } } },
     { ok: false, error: "private-prompt-value", payload: { diagnostic } },
     { ok: false, error: "Flow Bootstrap generation failed (flow_bootstrap.provider_response_malformed).", payload: { diagnostic }, rawPrompt: "private-prompt-value" },
-    { ok: false, error: "Flow Bootstrap generation failed (flow_bootstrap.provider_response_malformed).", payload: { diagnostic: { ...diagnostic, accounting: { ...diagnostic.accounting, totalTokens: 50001 } } } },
+    // A token count no build could spend. It was 50,001 until Core made the
+    // accounting a build's totals rather than one request's; see the row below.
+    { ok: false, error: "Flow Bootstrap generation failed (flow_bootstrap.provider_response_malformed).", payload: { diagnostic: { ...diagnostic, accounting: { ...diagnostic.accounting, totalTokens: Number.MAX_SAFE_INTEGER } } } },
   ]) {
     const rejected = await readSanitizedGenerationFailure(response(400, JSON.stringify(unsafe)));
     assert.equal(rejected.code, "generation.http-400");
@@ -266,6 +268,16 @@ test("generation failures retain only Core-validated bounded diagnostics", async
     assert.equal(rejected.accountingKnown, false);
     assert.equal(JSON.stringify(rejected).includes("private"), false);
   }
+
+  // An iterating build adds up every call, so its totals may pass one
+  // request's 50,000 and are kept.
+  const iteratingBuild = await readSanitizedGenerationFailure(response(400, JSON.stringify({
+    ok: false,
+    error: "Flow Bootstrap generation failed (flow_bootstrap.provider_response_malformed).",
+    payload: { diagnostic: { ...diagnostic, accounting: { ...diagnostic.accounting, inputTokens: 45_001, outputTokens: 5_000, totalTokens: 50_001 } } },
+  })));
+  assert.equal(iteratingBuild.parsed, true);
+  assert.equal(iteratingBuild.totalTokens, 50_001);
 
   const unreadable = await readSanitizedGenerationFailure({ status: () => 503, headers: () => ({}), text: async () => { throw new Error("credential-shaped-sensitive-value"); } });
   assert.equal(unreadable.code, "generation.http-503");

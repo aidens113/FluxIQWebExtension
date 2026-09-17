@@ -4,13 +4,14 @@
 // digest, the Flow must still be blank at approval, and the provider-call
 // audit recorded when it was proposed must survive the apply unchanged.
 
-import type { Page } from "@playwright/test";
+import type { Page, Request } from "@playwright/test";
 import type { BrowserEvidenceRecorder } from "../browser-evidence.js";
 import { ExistingFluxIQControlClient } from "../existing-fluxiq-control.js";
 import { inspectAppliedCreation, parseAppliedExecutionDigest } from "./adaptation-lifecycle.js";
+import { watchAppliedBinding } from "./applied-binding.js";
 import type { LiveCreationTopology } from "./creation-outcomes.js";
 import { exactVirtualizedHierarchyObject, exactVisible, review } from "./panel-interaction.js";
-import { fail } from "./runner-fail.js";
+import { fail, inspectionFail } from "./runner-fail.js";
 
 export type ApplyExistingEvidenceGuidedCreationInput = Readonly<{
   page: Page;
@@ -58,13 +59,54 @@ export async function approveApplyExistingEvidenceGuidedCreationViaUi(input: App
     || (await control.getExactFlow(projectId, flowId)).contentHash !== blankContentHash) {
     fail("Approved evidence-guided proposal or blank Flow changed before apply");
   }
-  const applyResponse = await review(page, evidence, pin, "Apply Adaptation", "Apply Changes", "exploration-apply-apply");
-  const resultingDigest = parseAppliedExecutionDigest(await applyResponse.json(), applyResponse.ok(), baseExecutionDigest);
-  const topology = await inspectAppliedCreation(control, projectId, flowId, baseExecutionDigest, resultingDigest);
-  const applied = await control.getFlowAdaptation(projectId, flowId, adaptationId);
-  if (applied.status !== "applied" || applied.appliedMutationCount === undefined || applied.appliedMutationCount < 1) {
-    fail("The exact evidence-guided proposal did not persist as applied");
+  const laterRequests = new Map<string, number>();
+  let applyAnswered = false;
+  const observeLater = (request: Request) => {
+    if (!applyAnswered || request.method() !== "POST") return;
+    const match = /^\/api\/programs\/([a-z0-9-]{1,30})\/([a-z0-9-]{1,32})$/u.exec(new URL(request.url()).pathname);
+    if (match) laterRequests.set(`${match[1]}.${match[2]}`, (laterRequests.get(`${match[1]}.${match[2]}`) ?? 0) + 1);
+  };
+  page.context().on("request", observeLater);
+  try {
+    const applyResponse = await review(page, evidence, pin, "Apply Adaptation", "Apply Changes", "exploration-apply-apply");
+    applyAnswered = true;
+    const resultingDigest = parseAppliedExecutionDigest(await applyResponse.json(), applyResponse.ok(), baseExecutionDigest);
+    // Read once before the inspection below, which reads the new graph's
+    // viewport: that tells a change made by the read apart from one made by
+    // the panel or by Core after apply.
+    const beforeInspection = (await control.getFlowAdaptation(projectId, flowId, adaptationId)).bootstrapBinding;
+    const heldBeforeInspection = Boolean(beforeInspection?.appliedExecutionDigest)
+      && beforeInspection?.currentExecutionDigest === beforeInspection?.appliedExecutionDigest;
+    const topology = await inspectAppliedCreation(control, projectId, flowId, baseExecutionDigest, resultingDigest);
+    const applied = await control.getFlowAdaptation(projectId, flowId, adaptationId);
+    if (applied.status !== "applied" || applied.appliedMutationCount === undefined || applied.appliedMutationCount < 1) {
+      fail("The exact evidence-guided proposal did not persist as applied");
+    }
+    if (applied.evidenceLoop?.providerCallCount !== historicalProviderCallCount) fail("Proposal apply changed the persisted provider-call audit");
+    // The next step runs this Flow as the application Core recorded, so the
+    // binding must still be that application once the panel has settled.
+    let settingsRevision: number | undefined;
+    const watch = await watchAppliedBinding(async () => {
+      const binding = (await control.getFlowAdaptation(projectId, flowId, adaptationId)).bootstrapBinding;
+      settingsRevision = binding?.currentSettingsRevision;
+      return { ...(binding?.appliedExecutionDigest ? { applied: binding.appliedExecutionDigest } : {}), ...(binding?.currentExecutionDigest ? { current: binding.currentExecutionDigest } : {}) };
+    }, { settleMs: APPLIED_BINDING_SETTLE_MS, intervalMs: 500, expectedApplied: resultingDigest });
+    for (const [endpoint, count] of [...laterRequests].slice(0, 16)) {
+      await evidence.diagnostic("panel", "exploration-apply-later-request", endpoint.slice(0, 64), { count });
+    }
+    if (watch.driftedAtMs !== undefined) {
+      await evidence.diagnostic("panel", "exploration-apply-binding", "exploration_apply.applied_binding_drifted", {
+        driftedAtMs: Math.min(watch.driftedAtMs, 1_000_000), reads: watch.reads, heldBeforeInspection,
+        settingsRevisionKnown: settingsRevision !== undefined, settingsRevision: Math.min(settingsRevision ?? 0, 1_000_000),
+        laterRequestKinds: laterRequests.size,
+      });
+      inspectionFail("The applied Flow's execution state moved away from the application Core recorded", "exploration_apply.applied_binding_drifted");
+    }
+    return topology;
+  } finally {
+    page.context().off("request", observeLater);
   }
-  if (applied.evidenceLoop?.providerCallCount !== historicalProviderCallCount) fail("Proposal apply changed the persisted provider-call audit");
-  return topology;
 }
+
+/** How long the applied binding must hold after apply before the step reports success. */
+const APPLIED_BINDING_SETTLE_MS = 5_000;

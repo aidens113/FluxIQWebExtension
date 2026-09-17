@@ -10,6 +10,7 @@ import { ExistingFluxIQControlClient } from "../existing-fluxiq-control.js";
 import type { BuildApproveApplyCreationInput } from "./build-flow-ui.js";
 import type { EvidenceGuidedCreationCheckpoint } from "./creation-outcomes.js";
 import { readSanitizedGenerationFailure } from "./generation-failure.js";
+import { recordExplorationGenerationFailure } from "./exploration-failure-evidence.js";
 import { assertProviderFreeGenerationReadiness } from "./generation-readiness.js";
 import { finite, identifier, integer, record, text } from "./json-shapes.js";
 import { EVIDENCE_GUIDED_CREATION_COMMAND_TIMEOUT_MS, EVIDENCE_GUIDED_CREATION_LIMITS, LLM_HIGH_TOKEN_CONFIRMATION_THRESHOLD } from "./limits.js";
@@ -69,25 +70,7 @@ export async function proposeEvidenceGuidedCreationViaUi(input: Omit<BuildApprov
   }
   if (terminal.kind === "response" && (!terminal.response.ok() || !generationBody || typeof generationBody !== "object" || Array.isArray(generationBody) || (generationBody as Record<string, unknown>).ok !== true)) {
     const failure = await readSanitizedGenerationFailure(terminal.response);
-    for (const [index, step] of (failure.evidenceSteps ?? []).entries()) {
-      await evidence.diagnostic("panel", "exploration-tool-result", `${step.toolId}.${step.resultCode ?? "outcome_unknown"}`, {
-        sequence: index + 1,
-        effectAppliedKnown: step.effectApplied !== undefined,
-        effectApplied: step.effectApplied === true,
-      });
-    }
-    await evidence.diagnostic("panel", "exploration-generation-rejected", failure.reasonCode ?? failure.code, {
-      httpStatus: failure.status,
-      providerCallCount: failure.providerCallCount,
-      responseParsed: failure.parsed,
-      ...(failure.evidenceLoop ? { evidenceIterationCount: failure.evidenceLoop.iterationCount, evidenceDecisionCount: failure.evidenceLoop.decisionCount, evidenceToolCallCount: failure.evidenceLoop.toolCallCount, evidenceBytes: failure.evidenceLoop.evidenceBytes } : {}),
-      ...(failure.evidenceSteps ? {
-        evidenceTraceStepCount: failure.evidenceSteps.length,
-        evidenceEffectAppliedCount: failure.evidenceSteps.filter(step => step.effectApplied === true).length,
-        evidenceEffectNotAppliedCount: failure.evidenceSteps.filter(step => step.effectApplied === false).length,
-        evidenceResultCodeCount: failure.evidenceSteps.filter(step => step.resultCode !== undefined).length,
-      } : {}),
-    });
+    await recordExplorationGenerationFailure(evidence, failure);
     fail(`Evidence-guided Flow generation failed (${failure.code})`);
   }
   const proposed = await control.listFlowAdaptations(projectId, flowId, "proposed");
